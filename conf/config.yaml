@@ -1,0 +1,65 @@
+# conf/config.yaml
+
+# Hydra sẽ lần lượt nạp các file thuộc từng config group.
+defaults:
+  - dataset: fashioniq
+  - model: blip2_qure
+  - protocol: fashioniq_original
+  - objective: qure_pairwise
+  - experiment: default
+  - _self_
+
+# Seed chung của toàn bộ experiment.
+seed: 42
+
+# Những thiết lập liên quan đến môi trường chạy.
+runtime:
+  # auto: ưu tiên CUDA, sau đó MPS, cuối cùng là CPU.
+  device: auto
+
+  # Chỉ số GPU, ví dụ cuda:0.
+  accelerator_index: 0
+
+  # Trainer sẽ sử dụng giá trị này sau này.
+  # Các giá trị dự kiến: fp32, fp16, bf16.
+  precision: fp16
+
+  # Ưu tiên khả năng tái hiện kết quả.
+  deterministic: true
+
+  # benchmark=true có thể tăng tốc cuDNN nhưng có thể giảm tính deterministic.
+  benchmark: false
+
+  # Tạm thời chưa bật torch.compile.
+  compile: false
+
+# Các đường dẫn dùng chung.
+paths:
+  # Có thể override bằng biến môi trường CIR_DATA_ROOT.
+  data_root: ${oc.env:CIR_DATA_ROOT,data}
+
+  # Nơi lưu frozen encoder features.
+  cache_root: ${oc.env:CIR_CACHE_ROOT,features}
+
+  # Hydra tự thay bằng output directory của run hiện tại.
+  output_root: ${hydra:runtime.output_dir}
+
+# Logging cơ bản. Chưa cần gắn WandB ở bootstrap phase.
+logging:
+  level: INFO
+  log_every_n_steps: 20
+
+hydra:
+  # Không tự động cd vào output directory.
+  # Nhờ vậy các đường dẫn tương đối vẫn tính từ project root.
+  job:
+    chdir: false
+
+  # Một run bình thường.
+  run:
+    dir: outputs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+  # Nhiều run bằng Hydra multirun.
+  sweep:
+    dir: outputs/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
