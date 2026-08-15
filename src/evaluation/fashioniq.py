@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from pathlib import Path
 import torch
+import json
 
 from datasets.fashioniq import FashionIQAnnotation, build_pair_union_gallery, load_fashioniq_split_ids
 
@@ -13,7 +14,7 @@ query 1     0.8   0.2   0.1   0.7   0.3
 query 2     0.1   0.2   0.95  0.3   0.4
 """
 
-""""
+"""
 annotations của VAL
       ↓
 build_fashioniq_gallery(...)
@@ -137,3 +138,20 @@ def macro_average_fashioniq(category_results: dict[str, dict[str, float]]) -> di
         "recall_at_10": recall_at_10,
         "recall_at_50": recall_at_50,
     }
+
+def load_features(feature_dir):
+    feature_dir = Path(feature_dir)
+
+    features = torch.load(feature_dir / "images.pt", map_location="cpu")
+    with (feature_dir / "name_to_idx.json").open("r") as file:
+        name_to_idx = json.load(file)
+
+    return features, name_to_idx
+
+def get_features_by_ids(image_ids: Sequence[str], features: torch.Tensor, name_to_idx: dict[str, int]) -> torch.Tensor:
+    indices = [
+        name_to_idx[image_id]
+        for image_id in image_ids
+    ]
+
+    return features[indices]
