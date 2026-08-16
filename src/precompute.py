@@ -84,7 +84,7 @@ def main():
     split = "val"
     split_root = Path("data/fashionIQ_dataset/image_splits")
     image_root = Path("data/fashionIQ_dataset/images")
-    output_dir = Path("features/fashioniq/fgclip2_large/val")
+    output_dir = Path(f"features/fashioniq/fgclip2_large/{split}")
     image_ids = load_all_image_ids(split_root=split_root, split=split)
     print(f"Images: {len(image_ids)}")
     image_store = DirectoryImageStore(image_root=image_root)
