@@ -132,17 +132,6 @@ class TAPER(nn.Module):
         self.teacher.eval()
         return self
 
-    def _pool_reference(self, reference_features: Tensor) -> Tensor:
-        if reference_features.ndim == 2:
-            pooled = reference_features
-        elif reference_features.ndim == 3:
-            pooled = reference_features.mean(dim=1)
-        else:
-            raise ValueError("reference_features must be [B,D] or [B,N,D]")
-        if pooled.shape[-1] != self.reference_dim:
-            raise ValueError(f"reference dim must be {self.reference_dim}")
-        return pooled
-
     def _pool_text(self, text_states: Tensor, mask: Tensor) -> Tensor:
         mask_f = mask.to(text_states.dtype).unsqueeze(-1)
         return (text_states * mask_f).sum(1) / mask_f.sum(1).clamp_min(1.0)
@@ -220,9 +209,16 @@ class TAPER(nn.Module):
         }
 
     def initialize_state(self, reference_features: Tensor) -> tuple[Tensor, Tensor]:
-        pooled_reference = self._pool_reference(reference_features)
-        z0 = self.reference_to_state(pooled_reference)
-        return z0, z0
+        if reference_features.ndim != 2:
+            raise ValueError("reference_features must be [B,D]")
+
+        if reference_features.shape[-1] != self.reference_dim:
+            raise ValueError(f"reference dim must be {self.reference_dim}")
+
+        reference_state = self.reference_to_state(reference_features)
+        z0 = reference_state
+        return z0, reference_state
+
 
     def _joint_router_scores(self, state: Tensor, edit_slots: Tensor, reference_state: Tensor) -> Tensor:
         """Score every candidate active-slot x primitive pair [B,L,K]."""
