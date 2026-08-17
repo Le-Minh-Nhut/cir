@@ -8,6 +8,9 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from datasets.common import CIRBatch
+from evaluation.fashioniq import get_features_by_ids
+
 
 def _compute_total_loss(loss_dict: dict[str, Tensor], loss_weights: dict[str, float]) -> Tensor:
     """Combine model-specific loss components."""
@@ -39,6 +42,7 @@ def _set_epoch(train_loader: DataLoader, epoch: int) -> None:
 
 
 def train_one_epoch(
+    prepare_batch_fn,
     model, # model được train 
     train_loader: DataLoader, # DataLoader của tập train
     optimizer: Optimizer,
@@ -59,7 +63,7 @@ def train_one_epoch(
 
     for batch in progress:
         optimizer.zero_grad(set_to_none=True)
-
+        batch = prepare_batch_fn(batch, device)
         with torch.autocast(device_type=device.type, enabled=amp_enabled):
             loss_dict = model.compute_loss(batch) # model nhận batch, chạy forward và tính các loss riêng
 
@@ -88,6 +92,25 @@ def train_one_epoch(
 
     return metrics
 
+def prepare_batch(batch: CIRBatch, device: torch.device, image_features: torch.Tensor, name_to_idx: dict[str, int], text_encoder) -> dict[str, object]:
+    reference_features = get_features_by_ids(image_ids=batch.reference_ids, features=image_features, name_to_idx=name_to_idx).to(device)
+    target_ids = []
+    for target_id in batch.target_ids:
+        if target_id is None:
+            raise ValueError("Training sample is missing target_id")
+
+        target_ids.append(target_id)
+
+    target_features = get_features_by_ids(image_ids=target_ids, features=image_features, name_to_idx=name_to_idx).to(device)
+    text_states, text_attention_mask = text_encoder(batch.modification_texts, device=device)
+
+    return {
+        "reference_features": reference_features,
+        "target_features": target_features,
+        "text_states": text_states,
+        "text_attention_mask": text_attention_mask,
+        "target_ids": target_ids,
+    }
 
 def fit(
     model: nn.Module,
@@ -101,6 +124,7 @@ def fit(
     primary_metric: str,
     output_dir: str | Path,
     use_amp: bool = True,
+    prepare_batch_fn
 ) -> None:
 
     model.to(device)
@@ -129,6 +153,7 @@ def fit(
             epoch=epoch,
             loss_weights=loss_weights,
             use_amp=use_amp,
+            prepare_batch_fn=prepare_batch_fn,
         )
 
         model.eval()

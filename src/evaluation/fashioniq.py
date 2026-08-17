@@ -1,8 +1,9 @@
 from collections.abc import Sequence
 from pathlib import Path
 import torch
-import json
+from torch.utils.data import DataLoader
 
+from cache.features import get_features_by_ids
 from datasets.fashioniq import FashionIQAnnotation, build_pair_union_gallery, load_fashioniq_split_ids
 
 
@@ -12,9 +13,7 @@ from datasets.fashioniq import FashionIQAnnotation, build_pair_union_gallery, lo
 query 0     0.1   0.9   0.3   0.2   0.4
 query 1     0.8   0.2   0.1   0.7   0.3
 query 2     0.1   0.2   0.95  0.3   0.4
-"""
 
-"""
 annotations của VAL
       ↓
 build_fashioniq_gallery(...)
@@ -71,7 +70,7 @@ def recall_at_k(scores: torch.Tensor, target_ids: Sequence[str], gallery_ids: Se
     target_tensor = torch.tensor(target_indices, device=rankings.device,).unsqueeze(1) 
     hits_per_query = top_k.eq(target_tensor).any(dim=1) # dim=1 thì cho phép nó coi từng hàng để ra True False duyêt theo cột bất kì nào True 
 
-    return hits_per_query.float().mean().item()
+    return hits_per_query.float().mean().item() * 100.0
 
 def evaluate_fashioniq_recall(scores: torch.Tensor, target_ids: Sequence[str], gallery_ids: Sequence[str]) -> dict[str, float]:
     return {
@@ -89,10 +88,10 @@ def evaluate_fashioniq_recall(scores: torch.Tensor, target_ids: Sequence[str], g
         ),
     }
 
-def build_original_gallery(split_root: str | Path, category: str) -> list[str]:
+def build_original_gallery(split_root: str | Path, category: str, split: str) -> list[str]:
     gallery_ids = load_fashioniq_split_ids(
         split_root=split_root,
-        split="val",
+        split=split,
         category=category,
     )
 
@@ -105,12 +104,12 @@ def build_val_gallery(annotations: Sequence[FashionIQAnnotation]) -> list[str]:
     assert len(set(gallery_ids)) == len(gallery_ids)
     return gallery_ids
 
-def build_fashioniq_gallery(protocol: str, split_root: str | Path, category: str, annotations: Sequence[FashionIQAnnotation]) -> list[str]:
+def build_fashioniq_gallery(protocol: str, split_root: str | Path, category: str, annotations: Sequence[FashionIQAnnotation], split: str,) -> list[str]:
     if protocol == "fashioniq_original":
-        return build_original_gallery(split_root=split_root, category=category,)
+        return build_original_gallery(split_root=split_root, category=category, split=split)
 
     if protocol == "fashioniq_val":
-        return build_val_gallery(annotations=annotations,)
+        return build_val_gallery(annotations=annotations, split=split)
 
     raise ValueError(f"Unsupported FashionIQ protocol: {protocol}")
 
@@ -137,21 +136,48 @@ def macro_average_fashioniq(category_results: dict[str, dict[str, float]]) -> di
     return {
         "recall_at_10": recall_at_10,
         "recall_at_50": recall_at_50,
+        "mean_recall": (recall_at_10 + recall_at_50) / 2,
     }
 
-def load_features(feature_dir):
-    feature_dir = Path(feature_dir)
+def evaluate_fashioniq(model, val_loaders: dict[str, DataLoader], val_annotations, *, protocol: str, split_root: str | Path, split: str, image_features: torch.Tensor, name_to_idx: dict[str, int], text_encoder, device: torch.device) -> dict[str, float]:
+    category_results = {}
 
-    features = torch.load(feature_dir / "images.pt", map_location="cpu")
-    with (feature_dir / "name_to_idx.json").open("r") as file:
-        name_to_idx = json.load(file)
+    for category, val_loader in val_loaders.items():
+        annotations = val_annotations[category]
 
-    return features, name_to_idx
+        gallery_ids = build_fashioniq_gallery(protocol=protocol, split_root=split_root, split=split, category=category, annotations=annotations)
+        gallery_features = get_features_by_ids(image_ids=gallery_ids, features=image_features, name_to_idx=name_to_idx).to(device)
+        score_batches = []
+        target_ids = []
 
-def get_features_by_ids(image_ids: Sequence[str], features: torch.Tensor, name_to_idx: dict[str, int]) -> torch.Tensor:
-    indices = [
-        name_to_idx[image_id]
-        for image_id in image_ids
-    ]
+        for batch in val_loader:
+            reference_features = get_features_by_ids(image_ids=batch.reference_ids, features=image_features, name_to_idx=name_to_idx).to(device)
+            text_states, text_attention_mask = text_encoder(batch.modification_texts, device=device)
+            output = model.retrieve(reference_features=reference_features, text_states=text_states, text_attention_mask=text_attention_mask, gallery_features=gallery_features)
+            score_batches.append(output["scores"].cpu())
 
-    return features[indices]
+            for target_id in batch.target_ids:
+                if target_id is None:
+                    raise ValueError("Validation sample is missing target_id")
+                target_ids.append(target_id)
+
+        scores = torch.cat(score_batches, dim=0)
+        category_results[category] = evaluate_fashioniq_category(scores=scores, target_ids=target_ids, gallery_ids=gallery_ids)
+    average = macro_average_fashioniq(category_results)
+
+    metrics = {
+        "recall_at_10": average["recall_at_10"],
+        "recall_at_50": average["recall_at_50"],
+        "mean_recall": average["mean_recall"],
+    }
+
+    for category, result in category_results.items():
+        metrics[f"{category}_recall_at_10"] = (
+            result["recall_at_10"]
+        )
+
+        metrics[f"{category}_recall_at_50"] = (
+            result["recall_at_50"]
+        )
+
+    return metrics

@@ -1,15 +1,28 @@
+import argparse
+import json
 from pathlib import Path
 import torch
-from transformers import AutoImageProcessor, AutoModelForCausalLM
-from datasets.fashioniq import load_fashioniq_split_ids
 import torch.nn.functional as F
 from tqdm import tqdm
+from transformers import AutoImageProcessor, AutoModelForCausalLM
 from datasets.common import DirectoryImageStore
-import json
+from datasets.fashioniq import load_fashioniq_split_ids
 
 
 CATEGORIES = ("dress", "shirt", "toptee")
+VALID_SPLITS = ("train", "val")
 MODEL_NAME = "qihoo360/fg-clip2-large"
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--dataset-root", type=Path, default=Path("data/fashionIQ_dataset"))
+    parser.add_argument("--output-root", type=Path, default=Path("features/fashioniq/fgclip2_large"))
+    parser.add_argument("--splits", nargs="+", choices=VALID_SPLITS, default=["train", "val"])
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+
+    return parser.parse_args()
 
 def load_all_image_ids(split_root: str | Path, split: str) -> list[str]:
     image_ids = []
@@ -44,7 +57,7 @@ def encode_batch(model, processor, images, device):
 def precompute(image_ids, image_store, model, processor, device, batch_size):
     feature_batches = []
 
-    for start in tqdm(range(0, len(image_ids), batch_size)):
+    for start in tqdm(range(0, len(image_ids), batch_size), desc="Encoding images"):
         batch_ids = image_ids[start:start + batch_size]
 
         images = [
@@ -63,42 +76,72 @@ def precompute(image_ids, image_store, model, processor, device, batch_size):
 
     return torch.cat(feature_batches, dim=0)
 
-def save_features(features, image_ids, output_dir):
+def save_features(features: torch.Tensor, image_ids: list[str], output_dir: str | Path) -> None:
     output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True,)
 
+    if features.ndim != 2:
+        raise ValueError(f"Expected image features [N, D], got {tuple(features.shape)}")
+
+    if features.shape[0] != len(image_ids):
+        raise ValueError(f"Feature count does not match image ID count: {features.shape[0]} != {len(image_ids)}")
+
+    if len(set(image_ids)) != len(image_ids):
+        raise ValueError("image_ids contains duplicates")
+
+    if not torch.isfinite(features).all():
+        raise ValueError("Image features contain NaN or Inf")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
     torch.save(features, output_dir / "images.pt")
 
     name_to_idx = {
         image_id: index
-        for index, image_id
-        in enumerate(image_ids)
+        for index, image_id in enumerate(image_ids)
     }
 
-    with (output_dir / "name_to_idx.json").open("w") as file:
-        json.dump(name_to_idx, file)
+    with (output_dir / "name_to_idx.json").open("w", encoding="utf-8") as file:
+        json.dump(name_to_idx,file, indent=2)
+
 
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    split = "val"
-    split_root = Path("data/fashionIQ_dataset/image_splits")
-    image_root = Path("data/fashionIQ_dataset/images")
-    output_dir = Path(f"features/fashioniq/fgclip2_large/{split}")
-    image_ids = load_all_image_ids(split_root=split_root, split=split)
-    print(f"Images: {len(image_ids)}")
+    args = parse_args()
+
+    if args.batch_size < 1:
+        raise ValueError("--batch-size must be >= 1")
+
+    device = torch.device(args.device)
+    split_root = args.dataset_root / "image_splits"
+    image_root = args.dataset_root / "images"
+
+    if not split_root.is_dir():
+        raise FileNotFoundError(f"FashionIQ image_splits not found: {split_root}")
+
+    if not image_root.is_dir():
+        raise FileNotFoundError(f"FashionIQ images not found: {image_root}")
+
+    print(f"Device: {device}")
+    print(f"Dataset root: {args.dataset_root}")
     image_store = DirectoryImageStore(image_root=image_root)
     model, processor = load_fgclip2(device=device)
-    features = precompute(
-        image_ids=image_ids,
-        image_store=image_store,
-        model=model,
-        processor=processor,
-        device=device,
-        batch_size=8,
-    )
-    print(features.shape)
-    save_features(features=features,image_ids=image_ids, output_dir=output_dir)
+    for split in args.splits:
+        print(f"\n=== FashionIQ {split} ===")
+
+        image_ids = load_all_image_ids(split_root=split_root, split=split,)
+        print(f"Images: {len(image_ids)}")
+        features = precompute(
+            image_ids=image_ids,
+            image_store=image_store,
+            model=model,
+            processor=processor,
+            device=device,
+            batch_size=args.batch_size,
+        )
+        output_dir = args.output_root / split
+        save_features(features=features, image_ids=image_ids, output_dir=output_dir)
+
+        print(f"Features: {tuple(features.shape)}")
+        print(f"Saved to: {output_dir}")
 
 
 if __name__ == "__main__":
