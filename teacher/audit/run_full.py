@@ -810,7 +810,27 @@ def parse_args():
     parser.add_argument("--tme-conda-env", type=str, default=None)
     parser.add_argument("--sprc-python", type=Path, default=None)
     parser.add_argument("--sprc-conda-env", type=str, default=None)
+    parser.add_argument(
+        "--hint-python",
+        type=Path,
+        default=None,
+    )
+    parser.add_argument(
+        "--hint-conda-env",
+        type=str,
+        default=None,
+    )
 
+    parser.add_argument(
+        "--qure-python",
+        type=Path,
+        default=None,
+    )
+    parser.add_argument(
+        "--qure-conda-env",
+        type=str,
+        default=None,
+    )
     parser.add_argument("--encoder-checkpoint", type=Path, default=None)
     parser.add_argument(
         "--encoder-root",
@@ -851,6 +871,66 @@ def parse_args():
         default=Path("teacher/repos/SPRC"),
     )
     parser.add_argument(
+        "--hint-checkpoint",
+        type=Path,
+        default=None,
+    )
+
+    parser.add_argument(
+        "--hint-root",
+        type=Path,
+        default=Path(
+            "teacher/repos/ICASSP26-HINT"
+        ),
+    )
+
+    parser.add_argument(
+        "--hint-image-root",
+        type=Path,
+        default=None,
+        help=(
+            "Optional HINT-specific FashionIQ image root. "
+            "If omitted, <fashioniq-root>/resized_image is "
+            "preferred when present; otherwise "
+            "<fashioniq-root>/images is used."
+        ),
+    )
+
+    parser.add_argument(
+        "--hint-correction-root",
+        type=Path,
+        default=None,
+        help=(
+            "Optional HINT FashionIQ correction-dictionary "
+            "directory. If omitted, <fashioniq-root>/captions "
+            "is used when it contains all three dictionaries."
+        ),
+    )
+    parser.add_argument(
+        "--qure-checkpoint",
+        type=Path,
+        default=None,
+    )
+
+    parser.add_argument(
+        "--qure-root",
+        type=Path,
+        default=Path(
+            "teacher/repos/QuRe"
+        ),
+    )
+
+    parser.add_argument(
+        "--qure-config",
+        type=Path,
+        default=None,
+        help=(
+            "QuRe FashionIQ eval config. "
+            "Defaults to "
+            "<qure-root>/configs/fashionIQ/eval.json."
+        ),
+    )
+    parser.add_argument(
         "--sprc-backbone",
         choices=("pretrain", "pretrain_vitL"),
         default="pretrain_vitL",
@@ -887,17 +967,56 @@ def main():
     ensure_cases_file(cases, root)
     output_root = args.output_root.resolve()
     output_root.mkdir(parents=True, exist_ok=True)
+    qure_root = args.qure_root.resolve()
 
+    if args.qure_config is not None:
+        qure_config = (
+            args.qure_config.resolve()
+        )
+    else:
+        qure_config = (
+            qure_root
+            / "configs"
+            / "fashionIQ"
+            / "eval.json"
+        ).resolve()
+
+    if not qure_config.exists():
+        raise FileNotFoundError(
+            f"QuRe eval config not found: "
+            f"{qure_config}"
+        )
     env_config = load_env_config(args.env_config)
     runtimes = {
         "encoder": resolve_teacher_runtime(
-            "encoder", args.encoder_python, args.encoder_conda_env, env_config
+            "encoder",
+            args.encoder_python,
+            args.encoder_conda_env,
+            env_config,
         ),
         "tme": resolve_teacher_runtime(
-            "tme", args.tme_python, args.tme_conda_env, env_config
+            "tme",
+            args.tme_python,
+            args.tme_conda_env,
+            env_config,
         ),
         "sprc": resolve_teacher_runtime(
-            "sprc", args.sprc_python, args.sprc_conda_env, env_config
+            "sprc",
+            args.sprc_python,
+            args.sprc_conda_env,
+            env_config,
+        ),
+        "hint": resolve_teacher_runtime(
+            "hint",
+            args.hint_python,
+            args.hint_conda_env,
+            env_config,
+        ),
+        "qure": resolve_teacher_runtime(
+            "qure",
+            args.qure_python,
+            args.qure_conda_env,
+            env_config,
         ),
     }
     validate_runtime_isolation(runtimes)
@@ -911,11 +1030,16 @@ def main():
 
     if args.encoder_image_root is not None:
         encoder_image_root = args.encoder_image_root.resolve()
+    if args.hint_image_root is not None:
+        hint_image_root = (
+            args.hint_image_root.resolve()
+        )
     elif (root / "resized_image").exists():
-        encoder_image_root = (root / "resized_image").resolve()
+        hint_image_root = (
+            root / "resized_image"
+        ).resolve()
     else:
-        encoder_image_root = image_root
-
+        hint_image_root = image_root
     repo_root = Path(__file__).resolve().parents[2]
     encoder_checkpoint = discover_checkpoint(
         args.encoder_checkpoint,
@@ -934,13 +1058,61 @@ def main():
         "SPRC",
         preferred_name="sprc_fiq_vitl.pt",
     )
+    hint_checkpoint = discover_checkpoint(
+        args.hint_checkpoint,
+        repo_root / "teacher/checkpoints/hint",
+        "HINT",
+    )
+
+    qure_checkpoint = discover_checkpoint(
+        args.qure_checkpoint,
+        repo_root / "teacher/checkpoints/qure",
+        "QuRe",
+        preferred_name="model.pth",
+    )
 
     print("Resolved inputs:")
     print("  FashionIQ images:", image_root)
-    print("  ENCODER images:", encoder_image_root)
-    print("  ENCODER checkpoint:", encoder_checkpoint)
-    print("  TME checkpoint:", tme_checkpoint)
-    print("  SPRC checkpoint:", sprc_checkpoint)
+
+    print(
+        "  ENCODER images:",
+        encoder_image_root,
+    )
+
+    print(
+        "  ENCODER checkpoint:",
+        encoder_checkpoint,
+    )
+
+    print(
+        "  TME checkpoint:",
+        tme_checkpoint,
+    )
+
+    print(
+        "  SPRC checkpoint:",
+        sprc_checkpoint,
+    )
+
+    print(
+        "  TG-CIR checkpoint:",
+        tgcir_checkpoint,
+    )
+
+    print(
+        "  CSMCIR checkpoint:",
+        csmcir_checkpoint,
+    )
+
+    print("Resolved isolated runtimes:")
+
+    for teacher, runtime in runtimes.items():
+        print(
+            f"  {teacher}: "
+            f"{runtime['kind']}="
+            f"{runtime['value']} "
+            f"(source={runtime['source']})"
+        )
     print("Resolved isolated runtimes:")
     for teacher, runtime in runtimes.items():
         print(
@@ -961,17 +1133,37 @@ def main():
     if args.limit is not None:
         common += ["--limit", str(args.limit)]
 
-    correction_root = args.encoder_correction_root
-    if correction_root is None:
+    encoder_correction_root = (
+        args.encoder_correction_root
+    )
+
+    if encoder_correction_root is None:
         candidate = root / "captions"
+
         required = [
             candidate / "correction_dict_dress.json",
             candidate / "correction_dict_shirt.json",
             candidate / "correction_dict_toptee.json",
         ]
-        if all(path.exists() for path in required):
-            correction_root = candidate
 
+        if all(path.exists() for path in required):
+            encoder_correction_root = candidate
+
+    hint_correction_root = (
+        args.hint_correction_root
+    )
+
+    if hint_correction_root is None:
+        candidate = root / "captions"
+
+        required = [
+            candidate / "correction_dict_dress.json",
+            candidate / "correction_dict_shirt.json",
+            candidate / "correction_dict_toptee.json",
+        ]
+
+        if all(path.exists() for path in required):
+            hint_correction_root = candidate
     jobs = [
         (
             "encoder",
@@ -983,9 +1175,9 @@ def main():
                 *(
                     [
                         "--correction-root",
-                        str(correction_root.resolve()),
+                        str(encoder_correction_root.resolve()),
                     ]
-                    if correction_root is not None
+                    if encoder_correction_root is not None
                     else []
                 ),
             ],
@@ -1007,6 +1199,50 @@ def main():
                 "--image-root", str(image_root),
                 "--sprc-root", str(args.sprc_root.resolve()),
                 "--backbone", args.sprc_backbone,
+            ],
+        ),
+        (
+            "hint",
+            runtimes["hint"]["prefix"],
+            [
+                "--checkpoint",
+                str(hint_checkpoint),
+
+                "--image-root",
+                str(hint_image_root),
+
+                "--hint-root",
+                str(
+                    args.hint_root.resolve()
+                ),
+
+                *(
+                    [
+                        "--correction-root",
+                        str(
+                            hint_correction_root.resolve()
+                        ),
+                    ]
+                    if hint_correction_root is not None
+                    else []
+                ),
+            ],
+        ),
+        (
+            "qure",
+            runtimes["qure"]["prefix"],
+            [
+                "--checkpoint",
+                str(qure_checkpoint),
+
+                "--image-root",
+                str(image_root),
+
+                "--qure-root",
+                str(qure_root),
+
+                "--qure-config",
+                str(qure_config),
             ],
         ),
     ]

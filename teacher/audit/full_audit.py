@@ -799,7 +799,7 @@ def collect_qformer_queries(
         if teacher == "tme":
             vit_states = adapter.encode_vit_states(model, images)
             reference_repr = adapter.encode_reference(model, vit_states)
-        elif teacher == {"sprc", "qure"}:
+        elif teacher in {"sprc", "qure"}:
             reference_repr = adapter.encode_reference(model, images)
         else:
             raise ValueError(teacher)
@@ -1588,7 +1588,7 @@ def select_published_native_policy(
     teacher_name: str,
     retrieval_native: dict,
 ) -> dict:
-    policy = "exclude_reference" if teacher_name == {"ENCODER", "HINT"} else "include_reference"
+    policy = "exclude_reference" if teacher_name in {"ENCODER", "HINT"} else "include_reference"
     return {
         "policy": policy,
         "quality": native_retrieval_quality(retrieval_native)[policy]["full"],
