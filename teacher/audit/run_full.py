@@ -1030,6 +1030,10 @@ def main():
 
     if args.encoder_image_root is not None:
         encoder_image_root = args.encoder_image_root.resolve()
+    elif (root / "resized_image").exists():
+        encoder_image_root = (root / "resized_image").resolve()
+    else:
+        encoder_image_root = image_root
     if args.hint_image_root is not None:
         hint_image_root = (
             args.hint_image_root.resolve()
@@ -1073,50 +1077,21 @@ def main():
 
     print("Resolved inputs:")
     print("  FashionIQ images:", image_root)
+    print("  ENCODER images:", encoder_image_root)
+    print("  HINT images:", hint_image_root)
 
-    print(
-        "  ENCODER images:",
-        encoder_image_root,
-    )
-
-    print(
-        "  ENCODER checkpoint:",
-        encoder_checkpoint,
-    )
-
-    print(
-        "  TME checkpoint:",
-        tme_checkpoint,
-    )
-
-    print(
-        "  SPRC checkpoint:",
-        sprc_checkpoint,
-    )
-
-    print(
-        "  TG-CIR checkpoint:",
-        tgcir_checkpoint,
-    )
-
-    print(
-        "  CSMCIR checkpoint:",
-        csmcir_checkpoint,
-    )
+    print("  ENCODER checkpoint:", encoder_checkpoint)
+    print("  TME checkpoint:", tme_checkpoint)
+    print("  SPRC checkpoint:", sprc_checkpoint)
+    print("  HINT checkpoint:", hint_checkpoint)
+    print("  QuRe checkpoint:", qure_checkpoint)
+    print("  QuRe config:", qure_config)
 
     print("Resolved isolated runtimes:")
-
     for teacher, runtime in runtimes.items():
         print(
             f"  {teacher}: "
-            f"{runtime['kind']}="
-            f"{runtime['value']} "
-            f"(source={runtime['source']})"
-        )
-    print("Resolved isolated runtimes:")
-    for teacher, runtime in runtimes.items():
-        print(
-            f"  {teacher}: {runtime['kind']}={runtime['value']} "
+            f"{runtime['kind']}={runtime['value']} "
             f"(source={runtime['source']})"
         )
 
