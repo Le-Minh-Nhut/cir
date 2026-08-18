@@ -539,6 +539,19 @@ class TAPER(nn.Module):
         finally:
             self.train(was_training)
 
+    def compute_stage1_loss(self, batch: Mapping[str, object]) -> dict[str, Tensor]:
+        reference = batch["teacher_reference_features"]
+        text = batch["text_states"]
+        attention_mask = batch["text_attention_mask"]
+        output = self.build_edit_slots(reference, text, attention_mask)
+        return self._slot_regularizers(
+            output["slot_masks"],
+            output["slot_effects"],
+            output["slot_gates"],
+            attention_mask,
+            batch.get("text_content_mask"),
+        )
+
     @torch.no_grad()
     def retrieve(self, *, reference_features: Tensor, text_states: Tensor, text_attention_mask: Tensor, gallery_features: Tensor, topk: int | None = None) -> dict[str, Tensor]:
         if gallery_features.ndim != 2 or gallery_features.shape[-1] != self.query_dim:
