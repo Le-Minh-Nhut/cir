@@ -21,33 +21,24 @@ CATEGORIES = ("dress", "shirt", "toptee")
 QUERY_VARIANTS = ("full", "minus_1", "minus_2", "swap", "null")
 EPS = 1e-8
 
-
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
-
 
 def _ensure_repo_on_path() -> None:
     root = _repo_root()
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
-
 def load_cases(path: Path, limit: int | None = None) -> list[dict]:
     with path.open("r", encoding="utf-8") as file:
         cases = json.load(file)
-
     if limit is None or limit <= 0:
         return cases
-
     limited = []
     for category in CATEGORIES:
-        category_cases = [
-            case for case in cases
-            if case["category"] == category
-        ]
+        category_cases = [case for case in cases if case["category"] == category]
         limited.extend(category_cases[:limit])
     return limited
-
 
 def load_split_ids(split_root: Path, category: str) -> list[str]:
     path = split_root / f"split.{category}.val.json"
@@ -56,7 +47,6 @@ def load_split_ids(split_root: Path, category: str) -> list[str]:
     if not image_ids:
         raise ValueError(f"Empty FashionIQ gallery: {path}")
     return image_ids
-
 
 def build_pair_union_gallery_ids(category_cases: list[dict]) -> list[str]:
     """Reproduce ENCODER's upstream FashionIQ val-split gallery."""
@@ -71,22 +61,16 @@ def build_pair_union_gallery_ids(category_cases: list[dict]) -> list[str]:
         raise ValueError("Cannot build an empty pair-union gallery")
     return gallery_ids
 
-
 def resolve_image_path(image_root: Path, image_id: str, category: str) -> Path:
     candidates: list[Path] = []
     for ext in (".jpg", ".png", ".jpeg"):
         candidates.append(image_root / category / f"{image_id}{ext}")
     for ext in (".jpg", ".png", ".jpeg"):
         candidates.append(image_root / f"{image_id}{ext}")
-
     for path in candidates:
         if path.exists():
             return path
-    raise FileNotFoundError(
-        f"Could not find FashionIQ image id={image_id!r}, category={category!r} "
-        f"under {image_root}"
-    )
-
+    raise FileNotFoundError(f"Could not find FashionIQ image id={image_id!r}, category={category!r} under {image_root}")
 
 def load_image_batch(
     image_ids: list[str],
@@ -100,7 +84,6 @@ def load_image_batch(
         with Image.open(path) as image:
             tensors.append(preprocess(image.convert("RGB")))
     return torch.stack(tensors)
-
 
 def load_case_image_batch(
     cases: list[dict],
@@ -118,81 +101,61 @@ def load_case_image_batch(
             tensors.append(preprocess(image.convert("RGB")))
     return torch.stack(tensors)
 
-
 def compose_single_caption(caption: str) -> str:
     return caption.strip(".?, ").capitalize()
-
 
 def compose_ordered(caption_1: str, caption_2: str) -> str:
     return f"{compose_single_caption(caption_1)} and {caption_2.strip('.?, ')}"
 
-
 def compose_swapped(caption_1: str, caption_2: str) -> str:
     return f"{compose_single_caption(caption_2)} and {caption_1.strip('.?, ')}"
 
-
 def normalize_edit_label(text: str) -> str:
-    punctuation_to_space = str.maketrans(
-        {character: " " for character in string.punctuation}
-    )
+    punctuation_to_space = str.maketrans({character: " " for character in string.punctuation})
     return " ".join(text.lower().translate(punctuation_to_space).split())
-
 
 def validate_cases(cases: list[dict]) -> None:
     required = {
-        "sample_id", "category", "reference_id", "target_id",
-        "caption_1", "caption_2", "full_text",
-        "minus_1_text", "minus_2_text",
+        "sample_id",
+        "category",
+        "reference_id",
+        "target_id",
+        "caption_1",
+        "caption_2",
+        "full_text",
+        "minus_1_text",
+        "minus_2_text",
     }
     if not cases:
         raise ValueError("Audit case list is empty")
-
     seen = set()
     category_counts = Counter()
     for index, case in enumerate(cases):
         missing = required.difference(case)
         if missing:
-            raise KeyError(
-                f"Audit case {index} missing keys: {sorted(missing)}"
-            )
-
+            raise KeyError(f"Audit case {index} missing keys: {sorted(missing)}")
         sample_id = case["sample_id"]
         if sample_id in seen:
             raise ValueError(f"Duplicate audit sample_id: {sample_id}")
         seen.add(sample_id)
-
         category = case["category"]
         if category not in CATEGORIES:
-            raise ValueError(
-                f"Invalid FashionIQ category in {sample_id}: {category}"
-            )
+            raise ValueError(f"Invalid FashionIQ category in {sample_id}: {category}")
         category_counts[category] += 1
-
         if not case["reference_id"] or not case["target_id"]:
             raise ValueError(f"Missing reference/target ID in {sample_id}")
-
         expected_full = compose_ordered(case["caption_1"], case["caption_2"])
         expected_minus_1 = compose_single_caption(case["caption_2"])
         expected_minus_2 = compose_single_caption(case["caption_1"])
-
         if case["full_text"] != expected_full:
-            raise ValueError(
-                f"{sample_id}: full_text violates locked ordered_and protocol"
-            )
+            raise ValueError(f"{sample_id}: full_text violates locked ordered_and protocol")
         if case["minus_1_text"] != expected_minus_1:
             raise ValueError(f"{sample_id}: minus_1_text mismatch")
         if case["minus_2_text"] != expected_minus_2:
             raise ValueError(f"{sample_id}: minus_2_text mismatch")
-
-    missing_categories = [
-        category for category in CATEGORIES
-        if category_counts[category] == 0
-    ]
+    missing_categories = [category for category in CATEGORIES if category_counts[category] == 0]
     if missing_categories:
-        raise ValueError(
-            f"Audit cases missing categories: {missing_categories}"
-        )
-
+        raise ValueError(f"Audit cases missing categories: {missing_categories}")
 
 def summarize(values: torch.Tensor) -> dict[str, float]:
     values = values.detach().float().cpu().reshape(-1)
@@ -205,7 +168,6 @@ def summarize(values: torch.Tensor) -> dict[str, float]:
         "min": values.min().item(),
         "max": values.max().item(),
     }
-
 
 def effect_metrics(
     q_full_pre: torch.Tensor,
@@ -225,11 +187,8 @@ def effect_metrics(
         "full_minus_cosine": summarize(full_minus_cosine),
         "cosine_drop": summarize(cosine_drop),
         "near_zero_absolute_fraction": (delta_norm < 1e-6).float().mean().item(),
-        "near_zero_relative_fraction": (
-            relative_effect_norm < 1e-3
-        ).float().mean().item(),
+        "near_zero_relative_fraction": (relative_effect_norm < 1e-3).float().mean().item(),
     }
-
 
 def pairwise_mean_cosine(directions: torch.Tensor) -> float | None:
     n = directions.shape[0]
@@ -240,7 +199,6 @@ def pairwise_mean_cosine(directions: torch.Tensor) -> float | None:
     pair_count = n * (n - 1) // 2
     return pair_sum / pair_count
 
-
 def pair_weighted_same_edit_consistency(
     effects: torch.Tensor,
     labels: list[str],
@@ -248,17 +206,12 @@ def pair_weighted_same_edit_consistency(
 ) -> dict:
     if effects.ndim != 2 or effects.shape[0] != len(labels):
         raise ValueError("effects/labels shape mismatch")
-
     norms = effects.norm(dim=-1)
     valid = norms > EPS
     effects = effects[valid]
     labels = [label for label, keep in zip(labels, valid.tolist()) if keep]
-
     counts = Counter(labels)
-    allowed = {
-        label for label, count in counts.items()
-        if label and count >= min_group_count
-    }
+    allowed = {label for label, count in counts.items() if label and count >= min_group_count}
     keep_indices = [i for i, label in enumerate(labels) if label in allowed]
     if len(keep_indices) < 2:
         return {
@@ -266,14 +219,11 @@ def pair_weighted_same_edit_consistency(
             "num_effects": len(keep_indices),
             "num_repeated_groups": len(allowed),
         }
-
     directions = F.normalize(effects[keep_indices], dim=-1)
     kept_labels = [labels[i] for i in keep_indices]
     n = len(kept_labels)
-
     total_pairs = n * (n - 1) // 2
     total_sum = (directions.sum(0).pow(2).sum().item() - n) / 2.0
-
     same_pairs = 0
     same_sum = 0.0
     group_sizes = {}
@@ -287,13 +237,11 @@ def pair_weighted_same_edit_consistency(
         pair_sum = (group.sum(0).pow(2).sum().item() - len(idx)) / 2.0
         same_pairs += pair_count
         same_sum += pair_sum
-
     diff_pairs = total_pairs - same_pairs
     diff_sum = total_sum - same_sum
     same_mean = same_sum / same_pairs if same_pairs else None
     diff_mean = diff_sum / diff_pairs if diff_pairs else None
     gap = None if same_mean is None or diff_mean is None else same_mean - diff_mean
-
     return {
         "status": "ok",
         "num_effects": n,
@@ -305,7 +253,6 @@ def pair_weighted_same_edit_consistency(
         "same_vs_different_gap": gap,
         "group_sizes": group_sizes,
     }
-
 
 def balanced_same_edit_consistency(
     effects: torch.Tensor,
@@ -332,29 +279,18 @@ def balanced_same_edit_consistency(
     """
     if effects.ndim != 2 or effects.shape[0] != len(labels):
         raise ValueError("effects/labels shape mismatch")
-
     raw_labels = list(labels)
     raw_counts = Counter(raw_labels)
-    raw_allowed = {
-        label for label, count in raw_counts.items()
-        if label and count >= min_group_count
-    }
-    raw_eligible_effects = sum(
-        raw_counts[label] for label in raw_allowed
-    )
-
+    raw_allowed = {label for label, count in raw_counts.items() if label and count >= min_group_count}
+    raw_eligible_effects = sum(raw_counts[label] for label in raw_allowed)
     norms = effects.norm(dim=-1)
     valid = norms > EPS
     valid_fraction = valid.float().mean().item()
     effects = effects[valid]
     labels = [label for label, keep in zip(labels, valid.tolist()) if keep]
     directions = F.normalize(effects, dim=-1)
-
     counts = Counter(labels)
-    allowed = sorted(
-        label for label, count in counts.items()
-        if label and count >= min_group_count
-    )
+    allowed = sorted(label for label, count in counts.items() if label and count >= min_group_count)
     common_meta = {
         "min_group_count": int(min_group_count),
         "num_effects_raw": len(raw_labels),
@@ -362,9 +298,7 @@ def balanced_same_edit_consistency(
         "direction_valid_fraction": valid_fraction,
         "num_repeated_groups_before_zero_filter": len(raw_allowed),
         "num_repeated_groups_after_zero_filter": len(allowed),
-        "repeated_group_effect_coverage_before_zero_filter": (
-            raw_eligible_effects / max(len(raw_labels), 1)
-        ),
+        "repeated_group_effect_coverage_before_zero_filter": (raw_eligible_effects / max(len(raw_labels), 1)),
     }
     if len(allowed) < 2:
         return {
@@ -372,7 +306,6 @@ def balanced_same_edit_consistency(
             "num_repeated_groups": len(allowed),
             **common_meta,
         }
-
     groups = {}
     means = {}
     intra = {}
@@ -383,9 +316,8 @@ def balanced_same_edit_consistency(
         if value is None:
             continue
         groups[label] = group
-        means[label] = group.mean(dim=0)  # deliberately NOT normalized
+        means[label] = group.mean(dim=0)
         intra[label] = value
-
     usable = sorted(intra)
     if len(usable) < 2:
         return {
@@ -393,32 +325,28 @@ def balanced_same_edit_consistency(
             "num_repeated_groups": len(usable),
             **common_meta,
         }
-
     rows = []
     gaps = []
     used_effects = 0
     for label in usable:
-        cross = torch.stack([
-            torch.dot(means[label], means[other])
-            for other in usable
-            if other != label
-        ])
+        cross = torch.stack([torch.dot(means[label], means[other]) for other in usable if other != label])
         different = cross.mean().item()
         gap = intra[label] - different
         gaps.append(gap)
         valid_count = int(groups[label].shape[0])
         raw_count = int(raw_counts[label])
         used_effects += valid_count
-        rows.append({
-            "label": label,
-            "raw_count": raw_count,
-            "valid_direction_count": valid_count,
-            "valid_direction_fraction": valid_count / raw_count,
-            "same_pairwise_cosine": intra[label],
-            "different_pairwise_cosine_macro_other_groups": different,
-            "gap": gap,
-        })
-
+        rows.append(
+            {
+                "label": label,
+                "raw_count": raw_count,
+                "valid_direction_count": valid_count,
+                "valid_direction_fraction": valid_count / raw_count,
+                "same_pairwise_cosine": intra[label],
+                "different_pairwise_cosine_macro_other_groups": different,
+                "gap": gap,
+            }
+        )
     gap_tensor = torch.tensor(gaps, dtype=torch.float32)
     same_tensor = torch.tensor(
         [row["same_pairwise_cosine"] for row in rows],
@@ -428,23 +356,16 @@ def balanced_same_edit_consistency(
         [row["different_pairwise_cosine_macro_other_groups"] for row in rows],
         dtype=torch.float32,
     )
-
     generator = torch.Generator().manual_seed(seed)
     boot = []
     n_groups = len(rows)
     for _ in range(bootstrap_samples):
-        sample_idx = torch.randint(
-            0, n_groups, (n_groups,), generator=generator
-        )
+        sample_idx = torch.randint(0, n_groups, (n_groups,), generator=generator)
         boot.append(gap_tensor[sample_idx].mean())
     boot_tensor = torch.stack(boot)
-
     return {
         "status": "ok",
-        "label_definition": (
-            "normalized exact FashionIQ caption string; compound captions "
-            "remain distinct exact-phrase groups"
-        ),
+        "label_definition": ("normalized exact FashionIQ caption string; compound captions remain distinct exact-phrase groups"),
         **common_meta,
         "num_repeated_groups": n_groups,
         "used_effect_fraction": used_effects / max(len(raw_labels), 1),
@@ -458,13 +379,9 @@ def balanced_same_edit_consistency(
             torch.quantile(boot_tensor, 0.975).item(),
         ],
         "bootstrap_unit": "edit_group",
-        "bootstrap_caveat": (
-            "Robustness interval only: per-group gaps share the other-group "
-            "baseline, so edit groups are not fully independent."
-        ),
+        "bootstrap_caveat": ("Robustness interval only: per-group gaps share the other-group baseline, so edit groups are not fully independent."),
         "groups": rows,
     }
-
 
 def compound_compositionality(
     q_null_pre: torch.Tensor,
@@ -484,13 +401,9 @@ def compound_compositionality(
     e12 = q_full_pre - q_null_pre
     additive = e1 + e2
     residual = e12 - additive
-
     cosine = F.cosine_similarity(e12, additive, dim=-1)
     relative_residual = residual.norm(dim=-1) / e12.norm(dim=-1).clamp_min(EPS)
-    interaction_ratio = residual.norm(dim=-1) / (
-        e1.norm(dim=-1) + e2.norm(dim=-1)
-    ).clamp_min(EPS)
-
+    interaction_ratio = residual.norm(dim=-1) / (e1.norm(dim=-1) + e2.norm(dim=-1)).clamp_min(EPS)
     return {
         "status": "ok_operational_null",
         "baseline": "empty_modification_string",
@@ -498,7 +411,6 @@ def compound_compositionality(
         "relative_additivity_residual": summarize(relative_residual),
         "interaction_ratio": summarize(interaction_ratio),
     }
-
 
 def caption_order_geometry_robustness(
     q_full_pre: torch.Tensor,
@@ -519,28 +431,19 @@ def caption_order_geometry_robustness(
     effect_1_swapped = q_swap_pre - q_single_2_pre
     effect_2_original = q_full_pre - q_single_1_pre
     effect_2_swapped = q_swap_pre - q_single_1_pre
-
     cos_1 = F.cosine_similarity(effect_1_original, effect_1_swapped, dim=-1)
     cos_2 = F.cosine_similarity(effect_2_original, effect_2_swapped, dim=-1)
-    rel_1 = (effect_1_original - effect_1_swapped).norm(dim=-1) / (
-        effect_1_original.norm(dim=-1).clamp_min(EPS)
-    )
-    rel_2 = (effect_2_original - effect_2_swapped).norm(dim=-1) / (
-        effect_2_original.norm(dim=-1).clamp_min(EPS)
-    )
-
+    rel_1 = (effect_1_original - effect_1_swapped).norm(dim=-1) / (effect_1_original.norm(dim=-1).clamp_min(EPS))
+    rel_2 = (effect_2_original - effect_2_swapped).norm(dim=-1) / (effect_2_original.norm(dim=-1).clamp_min(EPS))
     return {
         "status": "ok",
         "counterfactual": "caption_order_swap",
-        "full_vs_swapped_query_cosine": summarize(
-            F.cosine_similarity(q_full, q_swap, dim=-1)
-        ),
+        "full_vs_swapped_query_cosine": summarize(F.cosine_similarity(q_full, q_swap, dim=-1)),
         "effect_1_direction_cosine": summarize(cos_1),
         "effect_2_direction_cosine": summarize(cos_2),
         "effect_1_relative_change": summarize(rel_1),
         "effect_2_relative_change": summarize(rel_2),
     }
-
 
 def _rank_statistics(
     scores: torch.Tensor,
@@ -550,12 +453,10 @@ def _rank_statistics(
 ) -> dict[str, torch.Tensor]:
     if scores.ndim != 2:
         raise ValueError(f"scores must be [B,G], got {tuple(scores.shape)}")
-
     scores = scores.float()
     target_idx = target_idx.to(scores.device)
     reference_idx = reference_idx.to(scores.device)
     batch_idx = torch.arange(scores.shape[0], device=scores.device)
-
     working = scores.clone()
     if exclude_reference:
         valid_reference = reference_idx != target_idx
@@ -564,23 +465,16 @@ def _rank_statistics(
                 batch_idx[valid_reference],
                 reference_idx[valid_reference],
             ] = -torch.inf
-
     target_score = working[batch_idx, target_idx]
-
     target_masked = working.clone()
     target_masked[batch_idx, target_idx] = -torch.inf
     best_negative = target_masked.max(dim=-1).values
-
-    # 1-based rank. Exact score ties are rare; strict > avoids arbitrary tie
-    # breaking from unstable argsort implementations.
     rank = 1 + (working > target_score.unsqueeze(-1)).sum(dim=-1)
-
     return {
         "target_score": target_score.detach().cpu(),
         "best_negative_score": best_negative.detach().cpu(),
         "rank": rank.detach().cpu().long(),
     }
-
 
 class RetrievalCollector:
     def __init__(self) -> None:
@@ -594,7 +488,6 @@ class RetrievalCollector:
                     "best_negative_score": [],
                     "rank": [],
                 }
-
     def add_batch(
         self,
         category: str,
@@ -604,7 +497,6 @@ class RetrievalCollector:
     ) -> None:
         batch_size = target_idx.numel()
         self.categories.extend([category] * batch_size)
-
         for policy, exclude_reference in (
             ("include_reference", False),
             ("exclude_reference", True),
@@ -618,24 +510,18 @@ class RetrievalCollector:
                 )
                 for key, value in stats.items():
                     self.data[policy][variant][key].append(value)
-
     def finalize(self) -> dict:
         out = {"categories": self.categories, "policies": {}}
         for policy, policy_data in self.data.items():
             out["policies"][policy] = {}
             for variant, variant_data in policy_data.items():
-                out["policies"][policy][variant] = {
-                    key: torch.cat(parts, dim=0)
-                    for key, parts in variant_data.items()
-                }
+                out["policies"][policy][variant] = {key: torch.cat(parts, dim=0) for key, parts in variant_data.items()}
         return out
-
 
 def recall_summary(ranks: torch.Tensor, categories: list[str]) -> dict:
     ranks = ranks.long()
     if len(categories) != ranks.numel():
         raise ValueError("rank/category length mismatch")
-
     def metrics(mask: torch.Tensor) -> dict[str, float]:
         selected = ranks[mask]
         return {
@@ -644,31 +530,21 @@ def recall_summary(ranks: torch.Tensor, categories: list[str]) -> dict:
             "r5": (selected <= 5).float().mean().item() * 100,
             "r10": (selected <= 10).float().mean().item() * 100,
             "r50": (selected <= 50).float().mean().item() * 100,
-            "mean_r10_r50": (
-                (selected <= 10).float().mean().item() * 100
-                + (selected <= 50).float().mean().item() * 100
-            ) / 2.0,
+            "mean_r10_r50": ((selected <= 10).float().mean().item() * 100 + (selected <= 50).float().mean().item() * 100) / 2.0,
         }
-
     all_mask = torch.ones(ranks.numel(), dtype=torch.bool)
     result = {"overall": metrics(all_mask), "per_category": {}}
     for category in CATEGORIES:
         mask = torch.tensor([x == category for x in categories], dtype=torch.bool)
         result["per_category"][category] = metrics(mask)
-
-    macro_r10 = sum(
-        result["per_category"][x]["r10"] for x in CATEGORIES
-    ) / len(CATEGORIES)
-    macro_r50 = sum(
-        result["per_category"][x]["r50"] for x in CATEGORIES
-    ) / len(CATEGORIES)
+    macro_r10 = sum(result["per_category"][x]["r10"] for x in CATEGORIES) / len(CATEGORIES)
+    macro_r50 = sum(result["per_category"][x]["r50"] for x in CATEGORIES) / len(CATEGORIES)
     result["macro"] = {
         "r10": macro_r10,
         "r50": macro_r50,
         "mean_r10_r50": (macro_r10 + macro_r50) / 2.0,
     }
     return result
-
 
 def native_retrieval_quality(retrieval: dict) -> dict:
     result = {}
@@ -680,7 +556,6 @@ def native_retrieval_quality(retrieval: dict) -> dict:
         }
     return result
 
-
 def _conditional_fraction(
     event: torch.Tensor,
     condition: torch.Tensor,
@@ -689,7 +564,6 @@ def _conditional_fraction(
     if not condition.any():
         return None
     return event[condition].float().mean().item()
-
 
 def _conditional_summary(
     values: torch.Tensor,
@@ -700,7 +574,6 @@ def _conditional_summary(
         return None
     return summarize(values[condition])
 
-
 def _necessity_tensors(
     full: dict[str, torch.Tensor],
     minus: dict[str, torch.Tensor],
@@ -709,7 +582,6 @@ def _necessity_tensors(
     minus_margin = minus["target_score"] - minus["best_negative_score"]
     full_rank = full["rank"].float()
     minus_rank = minus["rank"].float()
-
     return {
         "score_drop": full["target_score"] - minus["target_score"],
         "rank_degradation": minus_rank - full_rank,
@@ -721,7 +593,6 @@ def _necessity_tensors(
         "minus_r50": minus_rank <= 50,
     }
 
-
 def _necessity_one(
     full: dict[str, torch.Tensor],
     minus: dict[str, torch.Tensor],
@@ -732,71 +603,31 @@ def _necessity_one(
         "rank_degradation": summarize(values["rank_degradation"]),
         "log_rank_ratio": summarize(values["log_rank_ratio"]),
         "margin_drop": summarize(values["margin_drop"]),
-        "rank_worse_fraction": (
-            values["rank_degradation"] > 0
-        ).float().mean().item(),
-        "target_score_lower_fraction": (
-            values["score_drop"] > 0
-        ).float().mean().item(),
-        "margin_worse_fraction": (
-            values["margin_drop"] > 0
-        ).float().mean().item(),
-        "rank_worse_fraction_given_full_r50": _conditional_fraction(
-            values["rank_degradation"] > 0, values["full_r50"]
-        ),
-        "margin_worse_fraction_given_full_r50": _conditional_fraction(
-            values["margin_drop"] > 0, values["full_r50"]
-        ),
+        "rank_worse_fraction": (values["rank_degradation"] > 0).float().mean().item(),
+        "target_score_lower_fraction": (values["score_drop"] > 0).float().mean().item(),
+        "margin_worse_fraction": (values["margin_drop"] > 0).float().mean().item(),
+        "rank_worse_fraction_given_full_r50": _conditional_fraction(values["rank_degradation"] > 0, values["full_r50"]),
+        "margin_worse_fraction_given_full_r50": _conditional_fraction(values["margin_drop"] > 0, values["full_r50"]),
         "num_full_r10": int(values["full_r10"].sum().item()),
         "num_full_r50": int(values["full_r50"].sum().item()),
-        "escape_r10_fraction_given_full_r10": _conditional_fraction(
-            ~values["minus_r10"], values["full_r10"]
-        ),
-        "escape_r50_fraction_given_full_r50": _conditional_fraction(
-            ~values["minus_r50"], values["full_r50"]
-        ),
-        "rank_degradation_given_full_r10": _conditional_summary(
-            values["rank_degradation"], values["full_r10"]
-        ),
-        "rank_degradation_given_full_r50": _conditional_summary(
-            values["rank_degradation"], values["full_r50"]
-        ),
-        "log_rank_ratio_given_full_r10": _conditional_summary(
-            values["log_rank_ratio"], values["full_r10"]
-        ),
-        "log_rank_ratio_given_full_r50": _conditional_summary(
-            values["log_rank_ratio"], values["full_r50"]
-        ),
-        "margin_drop_given_full_r50": _conditional_summary(
-            values["margin_drop"], values["full_r50"]
-        ),
+        "escape_r10_fraction_given_full_r10": _conditional_fraction(~values["minus_r10"], values["full_r10"]),
+        "escape_r50_fraction_given_full_r50": _conditional_fraction(~values["minus_r50"], values["full_r50"]),
+        "rank_degradation_given_full_r10": _conditional_summary(values["rank_degradation"], values["full_r10"]),
+        "rank_degradation_given_full_r50": _conditional_summary(values["rank_degradation"], values["full_r50"]),
+        "log_rank_ratio_given_full_r10": _conditional_summary(values["log_rank_ratio"], values["full_r10"]),
+        "log_rank_ratio_given_full_r50": _conditional_summary(values["log_rank_ratio"], values["full_r50"]),
+        "margin_drop_given_full_r50": _conditional_summary(values["margin_drop"], values["full_r50"]),
     }
-
 
 def teacher_edit_retrieval_sensitivity_metrics(retrieval: dict) -> dict:
     result = {}
     for policy, policy_data in retrieval["policies"].items():
-        effect_1 = _necessity_one(
-            policy_data["full"], policy_data["minus_1"]
-        )
-        effect_2 = _necessity_one(
-            policy_data["full"], policy_data["minus_2"]
-        )
-        all_text = _necessity_one(
-            policy_data["full"], policy_data["null"]
-        )
-
-        t1 = _necessity_tensors(
-            policy_data["full"], policy_data["minus_1"]
-        )
-        t2 = _necessity_tensors(
-            policy_data["full"], policy_data["minus_2"]
-        )
-        combined = {
-            key: torch.cat([t1[key], t2[key]], dim=0)
-            for key in t1
-        }
-
+        effect_1 = _necessity_one(policy_data["full"], policy_data["minus_1"])
+        effect_2 = _necessity_one(policy_data["full"], policy_data["minus_2"])
+        all_text = _necessity_one(policy_data["full"], policy_data["null"])
+        t1 = _necessity_tensors(policy_data["full"], policy_data["minus_1"])
+        t2 = _necessity_tensors(policy_data["full"], policy_data["minus_2"])
+        combined = {key: torch.cat([t1[key], t2[key]], dim=0) for key in t1}
         result[policy] = {
             "interpretation": (
                 "Single-caption removals probe caption-level decomposition; "
@@ -809,45 +640,22 @@ def teacher_edit_retrieval_sensitivity_metrics(retrieval: dict) -> dict:
             "all_text_removal": all_text,
             "combined_single_caption_removals": {
                 "target_score_drop": summarize(combined["score_drop"]),
-                "rank_degradation": summarize(
-                    combined["rank_degradation"]
-                ),
+                "rank_degradation": summarize(combined["rank_degradation"]),
                 "log_rank_ratio": summarize(combined["log_rank_ratio"]),
                 "margin_drop": summarize(combined["margin_drop"]),
-                "rank_worse_fraction": (
-                    combined["rank_degradation"] > 0
-                ).float().mean().item(),
-                "score_lower_fraction": (
-                    combined["score_drop"] > 0
-                ).float().mean().item(),
-                "margin_worse_fraction": (
-                    combined["margin_drop"] > 0
-                ).float().mean().item(),
-                "rank_worse_fraction_given_full_r50": _conditional_fraction(
-                    combined["rank_degradation"] > 0, combined["full_r50"]
-                ),
-                "margin_worse_fraction_given_full_r50": _conditional_fraction(
-                    combined["margin_drop"] > 0, combined["full_r50"]
-                ),
-                "num_full_r50_effects": int(
-                    combined["full_r50"].sum().item()
-                ),
-                "escape_r50_fraction_given_full_r50": _conditional_fraction(
-                    ~combined["minus_r50"], combined["full_r50"]
-                ),
-                "rank_degradation_given_full_r50": _conditional_summary(
-                    combined["rank_degradation"], combined["full_r50"]
-                ),
-                "log_rank_ratio_given_full_r50": _conditional_summary(
-                    combined["log_rank_ratio"], combined["full_r50"]
-                ),
-                "margin_drop_given_full_r50": _conditional_summary(
-                    combined["margin_drop"], combined["full_r50"]
-                ),
+                "rank_worse_fraction": (combined["rank_degradation"] > 0).float().mean().item(),
+                "score_lower_fraction": (combined["score_drop"] > 0).float().mean().item(),
+                "margin_worse_fraction": (combined["margin_drop"] > 0).float().mean().item(),
+                "rank_worse_fraction_given_full_r50": _conditional_fraction(combined["rank_degradation"] > 0, combined["full_r50"]),
+                "margin_worse_fraction_given_full_r50": _conditional_fraction(combined["margin_drop"] > 0, combined["full_r50"]),
+                "num_full_r50_effects": int(combined["full_r50"].sum().item()),
+                "escape_r50_fraction_given_full_r50": _conditional_fraction(~combined["minus_r50"], combined["full_r50"]),
+                "rank_degradation_given_full_r50": _conditional_summary(combined["rank_degradation"], combined["full_r50"]),
+                "log_rank_ratio_given_full_r50": _conditional_summary(combined["log_rank_ratio"], combined["full_r50"]),
+                "margin_drop_given_full_r50": _conditional_summary(combined["margin_drop"], combined["full_r50"]),
             },
         }
     return result
-
 
 def retrieval_order_robustness(retrieval: dict) -> dict:
     result = {}
@@ -855,18 +663,11 @@ def retrieval_order_robustness(retrieval: dict) -> dict:
         full = policy_data["full"]
         swap = policy_data["swap"]
         result[policy] = {
-            "target_score_absolute_change": summarize(
-                (full["target_score"] - swap["target_score"]).abs()
-            ),
-            "target_rank_absolute_change": summarize(
-                (full["rank"].float() - swap["rank"].float()).abs()
-            ),
-            "same_target_rank_fraction": (
-                full["rank"] == swap["rank"]
-            ).float().mean().item(),
+            "target_score_absolute_change": summarize((full["target_score"] - swap["target_score"]).abs()),
+            "target_rank_absolute_change": summarize((full["rank"].float() - swap["rank"].float()).abs()),
+            "same_target_rank_fraction": (full["rank"] == swap["rank"]).float().mean().item(),
         }
     return result
-
 
 def score_vector_gallery(
     query: torch.Tensor,
@@ -874,27 +675,23 @@ def score_vector_gallery(
 ) -> torch.Tensor:
     return query @ target_features.T
 
-
 def score_token_gallery(
     query: torch.Tensor,
     target_features: torch.Tensor,
 ) -> torch.Tensor:
-    # [B,D] x [G,T,D] -> [B,G,T] -> max token similarity.
-    return torch.einsum("bd,gtd->bgt", query, target_features).max(dim=-1).values
 
+    return torch.einsum("bd,gtd->bgt", query, target_features).max(dim=-1).values
 
 def build_encoder_query_texts(cases: list[dict], adapter, correction_dicts) -> dict[str, list[str]]:
     full = adapter.prepare_texts(cases, "full_text", correction_dicts)
     minus_1 = adapter.prepare_texts(cases, "minus_1_text", correction_dicts)
     minus_2 = adapter.prepare_texts(cases, "minus_2_text", correction_dicts)
-
     swapped = []
     for case in cases:
         correction = correction_dicts[case["category"]]
         cap1 = adapter.correct_encoder_text(case["caption_1"], correction)
         cap2 = adapter.correct_encoder_text(case["caption_2"], correction)
         swapped.append(f"{cap2} and {cap1}")
-
     return {
         "full": full,
         "minus_1": minus_1,
@@ -903,19 +700,36 @@ def build_encoder_query_texts(cases: list[dict], adapter, correction_dicts) -> d
         "null": [""] * len(cases),
     }
 
+def build_hint_query_texts(cases: list[dict], adapter, correction_dicts) -> dict[str, list[str]]:
+    full = adapter.prepare_texts(
+        cases,
+        "full_text",
+        correction_dicts,
+    )
+    minus_1 = adapter.prepare_texts(cases, "minus_1_text", correction_dicts)
+    minus_2 = adapter.prepare_texts(cases, "minus_2_text", correction_dicts)
+    swapped = []
+    for case in cases:
+        correction = correction_dicts[case["category"]]
+        cap1 = adapter.correct_hint_text(case["caption_1"], correction)
+        cap2 = adapter.correct_hint_text(case["caption_2"], correction)
+        swapped.append(f"{cap2} and {cap1}")
+    return {
+        "full": full,
+        "minus_1": minus_1,
+        "minus_2": minus_2,
+        "swap": swapped,
+        "null": [""] * len(cases),
+    }
 
 def build_standard_query_texts(cases: list[dict]) -> dict[str, list[str]]:
     return {
         "full": [case["full_text"] for case in cases],
         "minus_1": [case["minus_1_text"] for case in cases],
         "minus_2": [case["minus_2_text"] for case in cases],
-        "swap": [
-            compose_swapped(case["caption_1"], case["caption_2"])
-            for case in cases
-        ],
+        "swap": [compose_swapped(case["caption_1"], case["caption_2"]) for case in cases],
         "null": [""] * len(cases),
     }
-
 
 def _append_query_output(
     store: dict[str, list[torch.Tensor]],
@@ -926,12 +740,10 @@ def _append_query_output(
     store[f"q_{variant}_pre_norm"].append(pre.detach().cpu())
     store[f"q_{variant}"].append(normalized.detach().cpu())
 
-
 def _finalize_query_store(
     store: dict[str, list[torch.Tensor]],
 ) -> dict[str, torch.Tensor]:
     return {key: torch.cat(value, dim=0) for key, value in store.items()}
-
 
 def collect_encoder_queries(
     model,
@@ -947,23 +759,19 @@ def collect_encoder_queries(
     for variant in ("full", "minus_1", "minus_2", "swap", "null"):
         store[f"q_{variant}_pre_norm"] = []
         store[f"q_{variant}"] = []
-
     for start in range(0, len(cases), batch_size):
-        batch = cases[start:start + batch_size]
+        batch = cases[start : start + batch_size]
         images = load_case_image_batch(
             cases=batch,
             image_root=image_root,
             preprocess=preprocess,
         ).to(device)
-
         texts = build_encoder_query_texts(batch, adapter, correction_dicts)
         for variant in ("full", "minus_1", "minus_2", "swap", "null"):
             pre, normalized = adapter.compose_query(model, images, texts[variant])
             _append_query_output(store, variant, pre, normalized)
-
         del images
     return _finalize_query_store(store)
-
 
 def collect_qformer_queries(
     model,
@@ -980,25 +788,21 @@ def collect_qformer_queries(
     for variant in ("full", "minus_1", "minus_2", "swap", "null"):
         store[f"q_{variant}_pre_norm"] = []
         store[f"q_{variant}"] = []
-
     for start in range(0, len(cases), batch_size):
-        batch = cases[start:start + batch_size]
+        batch = cases[start : start + batch_size]
         images = load_case_image_batch(
             cases=batch,
             image_root=image_root,
             preprocess=preprocess,
         ).to(device)
-
         texts = build_standard_query_texts(batch)
-
         if teacher == "tme":
             vit_states = adapter.encode_vit_states(model, images)
             reference_repr = adapter.encode_reference(model, vit_states)
-        elif teacher == "sprc":
+        elif teacher == {"sprc", "qure"}:
             reference_repr = adapter.encode_reference(model, images)
         else:
             raise ValueError(teacher)
-
         for variant in ("full", "minus_1", "minus_2", "swap", "null"):
             pre, normalized = adapter.compose_query(
                 model,
@@ -1007,10 +811,46 @@ def collect_qformer_queries(
                 txt_processor,
             )
             _append_query_output(store, variant, pre, normalized)
-
         del images, reference_repr
     return _finalize_query_store(store)
 
+def collect_hint_queries(
+    model,
+    preprocess,
+    txt_processor,
+    correction_dicts,
+    cases: list[dict],
+    image_root: Path,
+    device: torch.device,
+    batch_size: int,
+    adapter,
+) -> dict[str, torch.Tensor]:
+    store: dict[str, list[torch.Tensor]] = {}
+    for variant in QUERY_VARIANTS:
+        store[f"q_{variant}_pre_norm"] = []
+        store[f"q_{variant}"] = []
+    for start in range(0, len(cases), batch_size):
+        batch = cases[start : start + batch_size]
+        images = load_case_image_batch(
+            cases=batch,
+            image_root=image_root,
+            preprocess=preprocess,
+        ).to(device)
+        reference_embeds = adapter.encode_reference(
+            model=model,
+            reference_images=images,
+        )
+        texts = build_hint_query_texts(batch, adapter, correction_dicts)
+        for variant in QUERY_VARIANTS:
+            pre, normalized = adapter.compose_query_from_reference(
+                model=model,
+                reference_embeds=reference_embeds,
+                texts=texts[variant],
+                txt_processor=txt_processor,
+            )
+            _append_query_output(store, variant, pre, normalized)
+        del images, reference_embeds
+    return _finalize_query_store(store)
 
 def build_encoder_gallery(
     model,
@@ -1023,14 +863,13 @@ def build_encoder_gallery(
 ) -> torch.Tensor:
     parts = []
     for start in range(0, len(image_ids), batch_size):
-        ids = image_ids[start:start + batch_size]
+        ids = image_ids[start : start + batch_size]
         images = load_image_batch(ids, category, image_root, preprocess).to(device)
         with torch.no_grad():
             features = model.extract_retrieval_target(images)
         parts.append(features.detach().float().cpu())
         del images, features
     return torch.cat(parts, dim=0)
-
 
 def build_tme_gallery(
     model,
@@ -1044,7 +883,7 @@ def build_tme_gallery(
 ) -> torch.Tensor:
     parts = []
     for start in range(0, len(image_ids), batch_size):
-        ids = image_ids[start:start + batch_size]
+        ids = image_ids[start : start + batch_size]
         images = load_image_batch(ids, category, image_root, preprocess).to(device)
         vit_states = adapter.encode_vit_states(model, images)
         with torch.no_grad():
@@ -1053,7 +892,6 @@ def build_tme_gallery(
         parts.append(z_target.detach().float().cpu())
         del images, vit_states, f_target, z_target
     return torch.cat(parts, dim=0)
-
 
 def build_sprc_gallery(
     model,
@@ -1066,7 +904,7 @@ def build_sprc_gallery(
 ) -> torch.Tensor:
     parts = []
     for start in range(0, len(image_ids), batch_size):
-        ids = image_ids[start:start + batch_size]
+        ids = image_ids[start : start + batch_size]
         images = load_image_batch(ids, category, image_root, preprocess).to(device)
         with torch.no_grad():
             target_features, _ = model.extract_target_features(images)
@@ -1074,6 +912,63 @@ def build_sprc_gallery(
         del images, target_features
     return torch.cat(parts, dim=0)
 
+def build_qure_gallery(
+    model,
+    preprocess,
+    image_ids: list[str],
+    category: str,
+    image_root: Path,
+    device: torch.device,
+    batch_size: int,
+    adapter,
+) -> torch.Tensor:
+    parts = []
+    for start in range(
+        0,
+        len(image_ids),
+        batch_size,
+    ):
+        ids = image_ids[start : start + batch_size]
+        images = load_image_batch(
+            ids,
+            category,
+            image_root,
+            preprocess,
+        ).to(device)
+        target_features = adapter.encode_target(
+            model=model,
+            images=images,
+        )
+        if target_features.ndim != 3:
+            raise ValueError(f"QuRe native target representation must be [B,T,D], got {tuple(target_features.shape)}")
+        parts.append(target_features.detach().float().cpu())
+        del images, target_features
+    return torch.cat(
+        parts,
+        dim=0,
+    )
+
+def build_hint_gallery(
+    model,
+    preprocess,
+    image_ids: list[str],
+    category: str,
+    image_root: Path,
+    device: torch.device,
+    batch_size: int,
+) -> torch.Tensor:
+    parts = []
+    for start in range(0, len(image_ids), batch_size):
+        ids = image_ids[start : start + batch_size]
+        images = load_image_batch(ids, category, image_root, preprocess).to(device)
+        with torch.no_grad():
+            native_features = model.extract_retrieval_target(images)
+        if native_features.ndim != 3:
+            raise ValueError(f"HINT target features must be rank-3, got {tuple(native_features.shape)}")
+        target_tokens = native_features.permute(0, 2, 1).contiguous()
+        parts.append(target_tokens.detach().float().cpu())
+        del images, native_features, target_tokens
+    return torch.cat(parts, dim=0)
 
 def score_all_queries(
     query_store: dict[str, torch.Tensor],
@@ -1087,41 +982,23 @@ def score_all_queries(
 ) -> dict:
     collector = RetrievalCollector()
     gallery_sizes = {}
-
     for category in CATEGORIES:
-        category_indices = [
-            i for i, case in enumerate(cases)
-            if case["category"] == category
-        ]
+        category_indices = [i for i, case in enumerate(cases) if case["category"] == category]
         category_cases = [cases[i] for i in category_indices]
         if not category_cases:
             raise ValueError(f"No audit cases for category={category}")
-
         gallery_ids = gallery_id_provider(category, category_cases)
         gallery_sizes[category] = len(gallery_ids)
         name_to_idx = {name: i for i, name in enumerate(gallery_ids)}
         if len(name_to_idx) != len(gallery_ids):
             raise ValueError(f"{category}: duplicate gallery image IDs")
-
-        missing_targets = [
-            case["target_id"] for case in category_cases
-            if case["target_id"] not in name_to_idx
-        ]
-        missing_refs = [
-            case["reference_id"] for case in category_cases
-            if case["reference_id"] not in name_to_idx
-        ]
+        missing_targets = [case["target_id"] for case in category_cases if case["target_id"] not in name_to_idx]
+        missing_refs = [case["reference_id"] for case in category_cases if case["reference_id"] not in name_to_idx]
         if missing_targets or missing_refs:
-            raise KeyError(
-                f"{category}: gallery mismatch. "
-                f"missing_targets={len(missing_targets)} "
-                f"missing_refs={len(missing_refs)}"
-            )
-
+            raise KeyError(f"{category}: gallery mismatch. missing_targets={len(missing_targets)} missing_refs={len(missing_refs)}")
         target_features = gallery_builder(gallery_ids, category).to(device)
-
         for start in range(0, len(category_indices), score_batch_size):
-            idx = category_indices[start:start + score_batch_size]
+            idx = category_indices[start : start + score_batch_size]
             batch_cases = [cases[i] for i in idx]
             target_idx = torch.tensor(
                 [name_to_idx[c["target_id"]] for c in batch_cases],
@@ -1131,7 +1008,6 @@ def score_all_queries(
                 [name_to_idx[c["reference_id"]] for c in batch_cases],
                 dtype=torch.long,
             )
-
             score_by_variant = {}
             for variant in QUERY_VARIANTS:
                 query = query_store[f"q_{variant}"][idx].to(device)
@@ -1139,45 +1015,34 @@ def score_all_queries(
                     scores = score_fn(query, target_features)
                 expected = (len(idx), len(gallery_ids))
                 if scores.shape != expected:
-                    raise ValueError(
-                        f"{category}/{variant}: scorer shape "
-                        f"{tuple(scores.shape)} != {expected}"
-                    )
+                    raise ValueError(f"{category}/{variant}: scorer shape {tuple(scores.shape)} != {expected}")
                 if not torch.isfinite(scores).all():
-                    raise ValueError(
-                        f"{category}/{variant}: scores contain NaN/Inf"
-                    )
+                    raise ValueError(f"{category}/{variant}: scores contain NaN/Inf")
                 score_by_variant[variant] = scores.detach()
-
             collector.add_batch(
                 category=category,
                 score_by_variant=score_by_variant,
                 target_idx=target_idx,
                 reference_idx=reference_idx,
             )
-
         del target_features
         if device.type == "cuda":
             torch.cuda.empty_cache()
-
     output = collector.finalize()
     output["protocol_name"] = protocol_name
     output["gallery_sizes"] = gallery_sizes
     return output
-
 
 def full_gallery_provider(split_root: Path):
     def provider(category: str, _category_cases: list[dict]) -> list[str]:
         return load_split_ids(split_root, category)
     return provider
 
-
 def pair_union_gallery_provider(
     _category: str,
     category_cases: list[dict],
 ) -> list[str]:
     return build_pair_union_gallery_ids(category_cases)
-
 
 def _autograd_connectivity_probe(
     query: torch.Tensor,
@@ -1190,21 +1055,17 @@ def _autograd_connectivity_probe(
             "boundary": boundary,
             "reason": "Query tensor does not require gradients.",
         }
-
     d = query.numel()
     device, dtype = query.device, query.dtype
     probes = [
         torch.ones_like(query),
-        torch.linspace(
-            -1.0, 1.0, d, device=device, dtype=dtype
-        ).reshape_as(query),
+        torch.linspace(-1.0, 1.0, d, device=device, dtype=dtype).reshape_as(query),
         torch.where(
             torch.arange(d, device=device).reshape_as(query) % 2 == 0,
             torch.ones((), device=device, dtype=dtype),
             -torch.ones((), device=device, dtype=dtype),
         ),
     ]
-
     values = []
     for index, grad_output in enumerate(probes):
         grad = torch.autograd.grad(
@@ -1214,15 +1075,8 @@ def _autograd_connectivity_probe(
             retain_graph=index < len(probes) - 1,
             allow_unused=True,
         )[0]
-        values.append(
-            None if grad is None
-            else float(grad.detach().abs().item())
-        )
-
-    finite_nonzero = [
-        v for v in values
-        if v is not None and math.isfinite(v) and v > 1e-12
-    ]
+        values.append(None if grad is None else float(grad.detach().abs().item()))
+    finite_nonzero = [v for v in values if v is not None and math.isfinite(v) and v > 1e-12]
     return {
         "status": "pass" if finite_nonzero else "fail",
         "boundary": boundary,
@@ -1234,7 +1088,6 @@ def _autograd_connectivity_probe(
             "final TAPER slot-mask parameterization."
         ),
     }
-
 
 def probe_encoder_differentiability(
     model,
@@ -1257,16 +1110,11 @@ def probe_encoder_differentiability(
         image_root,
         preprocess,
     ).to(device)
-    text = build_encoder_query_texts(
-        [case], adapter, correction_dicts
-    )["full"]
-
+    text = build_encoder_query_texts([case], adapter, correction_dicts)["full"]
     alpha = torch.tensor(0.0, device=device, requires_grad=True)
     original_text_out = model.backbone.text_out
-
     def patched_text_out(tokens):
         pooled, local = original_text_out(tokens)
-
         def pattern_like(x: torch.Tensor) -> torch.Tensor:
             axis = torch.linspace(
                 -1.0,
@@ -1278,12 +1126,10 @@ def probe_encoder_differentiability(
             shape = [1] * x.ndim
             shape[-1] = x.shape[-1]
             return axis.view(*shape).expand_as(x).detach()
-
         return (
             pooled + 1e-2 * alpha * pattern_like(pooled),
             local + 1e-2 * alpha * pattern_like(local),
         )
-
     model.backbone.text_out = patched_text_out
     try:
         fuse_local, _, _, _, _ = model.compose_feature(image, text)
@@ -1303,7 +1149,6 @@ def probe_encoder_differentiability(
         model.backbone.text_out = original_text_out
         model.zero_grad(set_to_none=True)
 
-
 def _qformer_word_embedding_module(model):
     candidates = [
         getattr(getattr(model.Qformer, "bert", None), "embeddings", None),
@@ -1313,7 +1158,6 @@ def _qformer_word_embedding_module(model):
         if embeddings is not None and hasattr(embeddings, "word_embeddings"):
             return embeddings.word_embeddings
     raise AttributeError("Could not locate Q-Former word_embeddings module")
-
 
 def probe_tme_differentiability(
     model,
@@ -1333,7 +1177,6 @@ def probe_tme_differentiability(
     with torch.no_grad():
         vit_states = adapter.encode_vit_states(model, image)
         reference_tokens = adapter.encode_reference(model, vit_states).detach()
-
     text = txt_processor(case["full_text"])
     text_tokens = model.tokenizer(
         [text],
@@ -1342,7 +1185,6 @@ def probe_tme_differentiability(
         max_length=model.max_txt_len,
         return_tensors="pt",
     ).to(device)
-
     reference_attention_mask = torch.ones(
         reference_tokens.shape[:-1],
         dtype=torch.long,
@@ -1352,10 +1194,8 @@ def probe_tme_differentiability(
         [reference_attention_mask, text_tokens.attention_mask],
         dim=1,
     )
-
     alpha = torch.tensor(0.0, device=device, requires_grad=True)
     word_embeddings = _qformer_word_embedding_module(model)
-
     def hook(_module, _inputs, output):
         axis = torch.linspace(
             -1.0,
@@ -1368,16 +1208,13 @@ def probe_tme_differentiability(
         shape[-1] = output.shape[-1]
         perturb = axis.view(*shape).expand_as(output).detach()
         return output + 1e-2 * alpha * perturb
-
     handle = word_embeddings.register_forward_hook(hook)
     try:
         query = model.encode_fusion(reference_tokens, text_tokens)
         return _autograd_connectivity_probe(
             query=query,
             alpha=alpha,
-            boundary=(
-                "TME encode_fusion / Q-Former word-embedding perturbation"
-            ),
+            boundary=("TME encode_fusion / Q-Former word-embedding perturbation"),
         )
     except Exception as exc:
         return {
@@ -1388,7 +1225,6 @@ def probe_tme_differentiability(
     finally:
         handle.remove()
         model.zero_grad(set_to_none=True)
-
 
 def probe_sprc_differentiability(
     model,
@@ -1407,7 +1243,6 @@ def probe_sprc_differentiability(
     ).to(device)
     with torch.no_grad():
         reference_embeds = adapter.encode_reference(model, image).detach()
-
     text = txt_processor(case["full_text"])
     text_tokens = model.tokenizer(
         [text],
@@ -1416,7 +1251,6 @@ def probe_sprc_differentiability(
         max_length=model.max_txt_len,
         return_tensors="pt",
     ).to(device)
-
     image_atts = torch.ones(
         reference_embeds.size()[:-1],
         dtype=torch.long,
@@ -1432,10 +1266,8 @@ def probe_sprc_differentiability(
         [query_atts, text_tokens.attention_mask],
         dim=1,
     )
-
     alpha = torch.tensor(0.0, device=device, requires_grad=True)
     word_embeddings = _qformer_word_embedding_module(model)
-
     def hook(_module, _inputs, output):
         axis = torch.linspace(
             -1.0,
@@ -1448,7 +1280,6 @@ def probe_sprc_differentiability(
         shape[-1] = output.shape[-1]
         perturb = axis.view(*shape).expand_as(output).detach()
         return output + 1e-2 * alpha * perturb
-
     handle = word_embeddings.register_forward_hook(hook)
     try:
         fusion_output = model.Qformer.bert(
@@ -1459,24 +1290,18 @@ def probe_sprc_differentiability(
             encoder_attention_mask=image_atts,
             return_dict=True,
         )
-        second_stage_query = fusion_output.last_hidden_state[
-            :, : query_tokens.size(1), :
-        ]
+        second_stage_query = fusion_output.last_hidden_state[:, : query_tokens.size(1), :]
         text_output = model.Qformer.bert(
             text_tokens.input_ids,
             query_embeds=second_stage_query,
             attention_mask=attention_mask,
             return_dict=True,
         )
-        query_pre = model.text_proj(
-            text_output.last_hidden_state[:, query_tokens.size(1), :]
-        )
+        query_pre = model.text_proj(text_output.last_hidden_state[:, query_tokens.size(1), :])
         return _autograd_connectivity_probe(
             query=query_pre,
             alpha=alpha,
-            boundary=(
-                "SPRC two-stage Q-Former word-embedding perturbation"
-            ),
+            boundary=("SPRC two-stage Q-Former word-embedding perturbation"),
         )
     except Exception as exc:
         return {
@@ -1488,6 +1313,210 @@ def probe_sprc_differentiability(
         handle.remove()
         model.zero_grad(set_to_none=True)
 
+def probe_hint_differentiability(
+    model,
+    preprocess,
+    txt_processor,
+    correction_dicts,
+    case: dict,
+    image_root: Path,
+    device: torch.device,
+    adapter,
+) -> dict:
+    image = load_image_batch(
+        [case["reference_id"]],
+        case["category"],
+        image_root,
+        preprocess,
+    ).to(device)
+    with torch.no_grad():
+        reference_embeds = adapter.encode_reference(
+            model=model,
+            reference_images=image,
+        ).detach()
+    raw_text = build_hint_query_texts(
+        [case],
+        adapter,
+        correction_dicts,
+    )["full"][0]
+    processed_text = txt_processor(raw_text)
+    text_tokens = model.tokenizer(
+        [processed_text],
+        padding="max_length",
+        truncation=True,
+        max_length=model.max_txt_len,
+        return_tensors="pt",
+    ).to(device)
+    image_atts = torch.ones(
+        reference_embeds.size()[:-1],
+        dtype=torch.long,
+        device=device,
+    )
+    query_tokens = model.query_tokens.expand(
+        1,
+        -1,
+        -1,
+    ).detach()
+    if query_tokens.size(1) != 32:
+        return {
+            "status": "fail",
+            "boundary": "HINT Q-Former",
+            "reason": (f"HINT native retrieval expects 32 query tokens, got {query_tokens.size(1)}"),
+        }
+    query_atts = torch.ones(
+        query_tokens.size()[:-1],
+        dtype=torch.long,
+        device=device,
+    )
+    attention_mask = torch.cat(
+        [
+            query_atts,
+            text_tokens.attention_mask,
+        ],
+        dim=1,
+    )
+    alpha = torch.tensor(
+        0.0,
+        device=device,
+        requires_grad=True,
+    )
+    word_embeddings = _qformer_word_embedding_module(model)
+    def hook(_module, _inputs, output):
+        axis = torch.linspace(
+            -1.0,
+            1.0,
+            output.shape[-1],
+            dtype=output.dtype,
+            device=output.device,
+        )
+        shape = [1] * output.ndim
+        shape[-1] = output.shape[-1]
+        perturb = axis.view(*shape).expand_as(output).detach()
+        return output + 1e-2 * alpha * perturb
+    handle = word_embeddings.register_forward_hook(hook)
+    try:
+        fusion_output = model.Qformer.bert(
+            text_tokens.input_ids,
+            query_embeds=query_tokens,
+            attention_mask=attention_mask,
+            encoder_hidden_states=reference_embeds,
+            encoder_attention_mask=image_atts,
+            return_dict=True,
+        )
+        query_pre = model.text_proj(fusion_output.last_hidden_state[:, query_tokens.size(1), :])
+        return _autograd_connectivity_probe(
+            query=query_pre,
+            alpha=alpha,
+            boundary=("HINT Q-Former word-embedding continuous perturbation"),
+        )
+    except Exception as exc:
+        return {
+            "status": "error",
+            "boundary": "HINT Q-Former word embeddings",
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+    finally:
+        handle.remove()
+        model.zero_grad(set_to_none=True)
+
+def probe_qure_differentiability(
+    model,
+    preprocess,
+    txt_processor,
+    case: dict,
+    image_root: Path,
+    device: torch.device,
+    adapter,
+) -> dict:
+    image = load_image_batch(
+        [case["reference_id"]],
+        case["category"],
+        image_root,
+        preprocess,
+    ).to(device)
+    with torch.no_grad():
+        reference_states = adapter.encode_reference(
+            model=model,
+            images=image,
+        ).detach()
+    processed_text = txt_processor(case["full_text"])
+    text_tokens = model.tokenizer(
+        [processed_text],
+        padding="max_length",
+        truncation=True,
+        max_length=model.max_txt_len,
+        return_tensors="pt",
+    ).to(device)
+    reference_attention_mask = torch.ones(
+        reference_states.size()[:-1],
+        dtype=torch.long,
+        device=device,
+    )
+    query_tokens = model.query_tokens.expand(
+        1,
+        -1,
+        -1,
+    ).detach()
+    query_attention_mask = torch.ones(
+        query_tokens.size()[:-1],
+        dtype=torch.long,
+        device=device,
+    )
+    attention_mask = torch.cat(
+        [
+            query_attention_mask,
+            text_tokens.attention_mask,
+        ],
+        dim=1,
+    )
+    alpha = torch.tensor(
+        0.0,
+        device=device,
+        requires_grad=True,
+    )
+    word_embeddings = _qformer_word_embedding_module(model)
+    def hook(
+        _module,
+        _inputs,
+        output,
+    ):
+        axis = torch.linspace(
+            -1.0,
+            1.0,
+            output.shape[-1],
+            dtype=output.dtype,
+            device=output.device,
+        )
+        shape = [1] * output.ndim
+        shape[-1] = output.shape[-1]
+        perturb = axis.view(*shape).expand_as(output).detach()
+        return output + 1e-2 * alpha * perturb
+    handle = word_embeddings.register_forward_hook(hook)
+    try:
+        query_output = model.Qformer.bert(
+            text_tokens.input_ids,
+            query_embeds=query_tokens,
+            attention_mask=attention_mask,
+            encoder_hidden_states=reference_states,
+            encoder_attention_mask=(reference_attention_mask),
+            return_dict=True,
+        )
+        query_token_states = query_output.last_hidden_state[:, : query_tokens.size(1), :]
+        query_pre = model.text_proj(query_token_states).mean(dim=1)
+        return _autograd_connectivity_probe(
+            query=query_pre,
+            alpha=alpha,
+            boundary=("QuRe Q-Former word-embedding continuous perturbation"),
+        )
+    except Exception as exc:
+        return {
+            "status": "error",
+            "boundary": ("QuRe Q-Former word embeddings"),
+            "reason": (f"{type(exc).__name__}: {exc}"),
+        }
+    finally:
+        handle.remove()
+        model.zero_grad(set_to_none=True)
 
 def balanced_geometry_by_category(
     cases: list[dict],
@@ -1500,40 +1529,25 @@ def balanced_geometry_by_category(
     results = {}
     valid_gaps = []
     for category_index, category in enumerate(CATEGORIES):
-        indices = [
-            i for i, case in enumerate(cases)
-            if case["category"] == category
-        ]
-        effects = torch.cat(
-            [delta_1[indices], delta_2[indices]], dim=0
-        )
-        labels = (
-            [normalize_edit_label(cases[i]["caption_1"]) for i in indices]
-            + [normalize_edit_label(cases[i]["caption_2"]) for i in indices]
-        )
+        indices = [i for i, case in enumerate(cases) if case["category"] == category]
+        effects = torch.cat([delta_1[indices], delta_2[indices]], dim=0)
+        labels = [normalize_edit_label(cases[i]["caption_1"]) for i in indices] + [normalize_edit_label(cases[i]["caption_2"]) for i in indices]
         result = balanced_same_edit_consistency(
-            effects, labels, min_group_count,
-            bootstrap_samples, seed + category_index + 1,
+            effects,
+            labels,
+            min_group_count,
+            bootstrap_samples,
+            seed + category_index + 1,
         )
         results[category] = result
-        if (
-            result.get("status") == "ok"
-            and result.get("macro_same_vs_different_gap") is not None
-        ):
+        if result.get("status") == "ok" and result.get("macro_same_vs_different_gap") is not None:
             valid_gaps.append(result["macro_same_vs_different_gap"])
-
     return {
         "per_category": results,
-        "macro_category_gap": (
-            None if not valid_gaps
-            else sum(valid_gaps) / len(valid_gaps)
-        ),
-        "min_category_gap": (
-            None if not valid_gaps else min(valid_gaps)
-        ),
+        "macro_category_gap": (None if not valid_gaps else sum(valid_gaps) / len(valid_gaps)),
+        "min_category_gap": (None if not valid_gaps else min(valid_gaps)),
         "num_categories_with_valid_gap": len(valid_gaps),
     }
-
 
 def geometry_group_count_sensitivity(
     cases: list[dict],
@@ -1563,34 +1577,24 @@ def geometry_group_count_sensitivity(
         out[str(threshold)] = {
             "macro_category_gap": result.get("macro_category_gap"),
             "min_category_gap": result.get("min_category_gap"),
-            "num_categories_with_valid_gap": result.get(
-                "num_categories_with_valid_gap"
-            ),
+            "num_categories_with_valid_gap": result.get("num_categories_with_valid_gap"),
             "per_category_num_groups": {
-                category: category_result.get("num_repeated_groups")
-                for category, category_result
-                in result["per_category"].items()
+                category: category_result.get("num_repeated_groups") for category, category_result in result["per_category"].items()
             },
         }
     return out
-
 
 def select_published_native_policy(
     teacher_name: str,
     retrieval_native: dict,
 ) -> dict:
-    policy = (
-        "exclude_reference"
-        if teacher_name == "ENCODER"
-        else "include_reference"
-    )
+    policy = "exclude_reference" if teacher_name == {"ENCODER", "HINT"} else "include_reference"
     return {
         "policy": policy,
         "quality": native_retrieval_quality(retrieval_native)[policy]["full"],
         "gallery_sizes": retrieval_native.get("gallery_sizes"),
         "protocol_name": retrieval_native.get("protocol_name"),
     }
-
 
 def build_report(
     teacher_name: str,
@@ -1609,12 +1613,10 @@ def build_report(
     q_m2_pre = query_store["q_minus_2_pre_norm"].float()
     q_swap_pre = query_store["q_swap_pre_norm"].float()
     q_null_pre = query_store["q_null_pre_norm"].float()
-
     q_full = query_store["q_full"].float()
     q_m1 = query_store["q_minus_1"].float()
     q_m2 = query_store["q_minus_2"].float()
     q_swap = query_store["q_swap"].float()
-
     delta_1 = q_full_pre - q_m1_pre
     delta_2 = q_full_pre - q_m2_pre
     delta_1_unit = q_full - q_m1
@@ -1623,14 +1625,20 @@ def build_report(
     labels_2 = [normalize_edit_label(c["caption_2"]) for c in cases]
     all_effects = torch.cat([delta_1, delta_2], dim=0)
     all_labels = labels_1 + labels_2
-
     balanced_overall = balanced_same_edit_consistency(
-        all_effects, all_labels, min_group_count,
-        bootstrap_samples, seed,
+        all_effects,
+        all_labels,
+        min_group_count,
+        bootstrap_samples,
+        seed,
     )
     balanced_categories = balanced_geometry_by_category(
-        cases, delta_1, delta_2, min_group_count,
-        bootstrap_samples, seed,
+        cases,
+        delta_1,
+        delta_2,
+        min_group_count,
+        bootstrap_samples,
+        seed,
     )
     balanced_unit = balanced_same_edit_consistency(
         torch.cat([delta_1_unit, delta_2_unit], dim=0),
@@ -1640,24 +1648,20 @@ def build_report(
         seed + 100,
     )
     balanced_unit_categories = balanced_geometry_by_category(
-        cases, delta_1_unit, delta_2_unit, min_group_count,
-        bootstrap_samples, seed + 100,
+        cases,
+        delta_1_unit,
+        delta_2_unit,
+        min_group_count,
+        bootstrap_samples,
+        seed + 100,
     )
-    pre_norm_group_count_sensitivity = geometry_group_count_sensitivity(
-        cases, delta_1, delta_2, bootstrap_samples, seed
-    )
-    normalized_group_count_sensitivity = geometry_group_count_sensitivity(
-        cases, delta_1_unit, delta_2_unit, bootstrap_samples, seed + 500
-    )
-
+    pre_norm_group_count_sensitivity = geometry_group_count_sensitivity(cases, delta_1, delta_2, bootstrap_samples, seed)
+    normalized_group_count_sensitivity = geometry_group_count_sensitivity(cases, delta_1_unit, delta_2_unit, bootstrap_samples, seed + 500)
     common_policy_data = retrieval_common["policies"]["include_reference"]
     comparison_payload = {
         "categories": list(retrieval_common["categories"]),
-        "common_full_gallery_include_reference_full_ranks": (
-            common_policy_data["full"]["rank"].tolist()
-        ),
+        "common_full_gallery_include_reference_full_ranks": (common_policy_data["full"]["rank"].tolist()),
     }
-
     return {
         "teacher": teacher_name,
         "audit_version": 6,
@@ -1666,22 +1670,12 @@ def build_report(
         "query_dimension": int(q_full.shape[-1]),
         "protocol": {
             "dataset": "FashionIQ val",
-            "common_comparison": (
-                "official full split.<category>.val.json gallery; both "
-                "include-reference and exclude-reference reported"
-            ),
-            "published_native": (
-                "teacher-specific upstream evaluator reproduced separately"
-            ),
+            "common_comparison": ("official full split.<category>.val.json gallery; both include-reference and exclude-reference reported"),
+            "published_native": ("teacher-specific upstream evaluator reproduced separately"),
             "native_scorer": True,
             "geometry_query_preprocessing": "deterministic teacher-valid path",
-            "compound_null": (
-                "empty modification string; operational diagnostic only"
-            ),
-            "counterfactual": (
-                "caption conjunction order swap only; not a comprehensive "
-                "counterfactual suite"
-            ),
+            "compound_null": ("empty modification string; operational diagnostic only"),
+            "counterfactual": ("caption conjunction order swap only; not a comprehensive counterfactual suite"),
             "natural_geometry_semantics": (
                 "Exact repeated FashionIQ captions are a high-precision proxy "
                 "for repeated modification instructions, NOT guaranteed atomic "
@@ -1691,28 +1685,18 @@ def build_report(
         },
         "effect_1": effect_metrics(q_full_pre, q_m1_pre, q_full, q_m1),
         "effect_2": effect_metrics(q_full_pre, q_m2_pre, q_full, q_m2),
-        "within_sample_effect_cosine": summarize(
-            F.cosine_similarity(delta_1, delta_2, dim=-1)
-        ),
-        "same_edit_directional_consistency_pair_weighted": (
-            pair_weighted_same_edit_consistency(
-                all_effects, all_labels, min_group_count
-            )
-        ),
+        "within_sample_effect_cosine": summarize(F.cosine_similarity(delta_1, delta_2, dim=-1)),
+        "same_edit_directional_consistency_pair_weighted": (pair_weighted_same_edit_consistency(all_effects, all_labels, min_group_count)),
         "same_edit_directional_consistency_balanced": {
             "space": "pre_norm_query_space",
             **balanced_overall,
         },
-        "same_edit_directional_consistency_balanced_by_category": (
-            balanced_categories
-        ),
+        "same_edit_directional_consistency_balanced_by_category": (balanced_categories),
         "same_edit_directional_consistency_unit_query_space": {
             "space": "l2_normalized_query_space",
             **balanced_unit,
         },
-        "same_edit_directional_consistency_unit_query_by_category": (
-            balanced_unit_categories
-        ),
+        "same_edit_directional_consistency_unit_query_by_category": (balanced_unit_categories),
         "geometry_group_count_sensitivity": {
             "selection_role": (
                 "robustness_only_not_an_independent_vote; reports whether "
@@ -1723,12 +1707,8 @@ def build_report(
             "l2_normalized_query": normalized_group_count_sensitivity,
         },
         "retrieval_quality": {
-            "common_full_gallery": native_retrieval_quality(
-                retrieval_common
-            ),
-            "published_native": select_published_native_policy(
-                teacher_name, retrieval_native
-            ),
+            "common_full_gallery": native_retrieval_quality(retrieval_common),
+            "published_native": select_published_native_policy(teacher_name, retrieval_native),
         },
         "teacher_edit_retrieval_sensitivity": {
             "selection_role": (
@@ -1746,8 +1726,7 @@ def build_report(
         },
         "compound_compositionality": {
             "selection_role": (
-                "exploratory_only_not_for_teacher_selection: natural FashionIQ "
-                "caption pairs are not guaranteed controlled atomic A/B factors"
+                "exploratory_only_not_for_teacher_selection: natural FashionIQ caption pairs are not guaranteed controlled atomic A/B factors"
             ),
             **compound_compositionality(
                 q_null_pre=q_null_pre,
@@ -1774,8 +1753,7 @@ def build_report(
         },
         "differentiable_intervention_probe": {
             "selection_role": (
-                "gradient-access gate only: failure is fatal, pass is necessary "
-                "but does NOT validate the exact TAPER erasure operator"
+                "gradient-access gate only: failure is fatal, pass is necessary but does NOT validate the exact TAPER erasure operator"
             ),
             **differentiability,
         },
@@ -1823,10 +1801,7 @@ def build_report(
                 "Does the composer contain an uncontrolled text bypass around the proposed intervention point?",
                 "Does the teacher impose an explicit decomposition ontology that could confound TAPER mechanism claims?",
             ],
-            "role": (
-                "qualitative architecture/information-flow review; do not "
-                "convert this into an arbitrary numeric quality score"
-            ),
+            "role": ("qualitative architecture/information-flow review; do not convert this into an arbitrary numeric quality score"),
         },
         "dual_encoder_bridge_gate": {
             "status": "conditional_not_applicable_until_encoder_choice",
@@ -1840,7 +1815,6 @@ def build_report(
         "comparison_payload": comparison_payload,
     }
 
-
 def git_repo_provenance(
     repo_root: Path,
     expected_audited_commit: str,
@@ -1849,17 +1823,14 @@ def git_repo_provenance(
     def git(*args: str) -> str:
         result = subprocess.run(
             ["git", "-C", str(repo_root), *args],
-            check=True, capture_output=True, text=True,
+            check=True,
+            capture_output=True,
+            text=True,
         )
         return result.stdout.strip()
     try:
         head = git("rev-parse", "HEAD")
-        tracked_changes = [
-            line for line in git(
-                "status", "--porcelain", "--untracked-files=no"
-            ).splitlines()
-            if line.strip()
-        ]
+        tracked_changes = [line for line in git("status", "--porcelain", "--untracked-files=no").splitlines() if line.strip()]
         return {
             "status": "ok",
             "repo_root": str(repo_root),
@@ -1877,25 +1848,25 @@ def git_repo_provenance(
             "reason": f"{type(exc).__name__}: {exc}",
         }
 
-
 @contextmanager
 def capture_load_state_dict_results():
     original = torch.nn.Module.load_state_dict
     records = []
     def wrapped(module, *args, **kwargs):
         result = original(module, *args, **kwargs)
-        records.append({
-            "module_class": module.__class__.__name__,
-            "missing_keys": list(result.missing_keys),
-            "unexpected_keys": list(result.unexpected_keys),
-        })
+        records.append(
+            {
+                "module_class": module.__class__.__name__,
+                "missing_keys": list(result.missing_keys),
+                "unexpected_keys": list(result.unexpected_keys),
+            }
+        )
         return result
     torch.nn.Module.load_state_dict = wrapped
     try:
         yield records
     finally:
         torch.nn.Module.load_state_dict = original
-
 
 def checkpoint_load_audit(
     records: list[dict],
@@ -1921,12 +1892,43 @@ def checkpoint_load_audit(
         "unexpected_key_count": len(unexpected),
         "missing_keys": missing,
         "unexpected_keys": unexpected,
-        "interpretation": (
-            "warning can be intentional for fine-tuning checkpoints, but "
-            "must be reviewed before final teacher lock"
-        ),
+        "interpretation": ("warning can be intentional for fine-tuning checkpoints, but must be reviewed before final teacher lock"),
     }
 
+def checkpoint_load_audit_allow_full_object(
+    records: list[dict],
+    checkpoint_path: Path,
+    model,
+) -> dict:
+    if records:
+        return checkpoint_load_audit(
+            records,
+            checkpoint_path,
+        )
+    checkpoint_path = checkpoint_path.resolve()
+    if not isinstance(model, torch.nn.Module):
+        return {
+            "status": "unavailable",
+            "checkpoint": str(checkpoint_path),
+            "checkpoint_size_bytes": checkpoint_path.stat().st_size,
+            "reason": ("No load_state_dict call captured and loaded object is not an nn.Module."),
+        }
+    return {
+        "status": "clean",
+        "load_mode": "full_serialized_module",
+        "checkpoint": str(checkpoint_path),
+        "checkpoint_size_bytes": checkpoint_path.stat().st_size,
+        "loaded_module_class": model.__class__.__name__,
+        "missing_key_count": 0,
+        "unexpected_key_count": 0,
+        "missing_keys": [],
+        "unexpected_keys": [],
+        "interpretation": (
+            "Checkpoint was loaded successfully as a complete "
+            "serialized nn.Module; no load_state_dict call is "
+            "expected for this upstream checkpoint format."
+        ),
+    }
 
 def tensor_parity(
     ours: torch.Tensor,
@@ -1939,24 +1941,22 @@ def tensor_parity(
     native = native.detach().float().cpu()
     if ours.shape != native.shape:
         return {
-            "status": "fail", "name": name,
-            "reason": (
-                f"shape mismatch ours={tuple(ours.shape)} "
-                f"native={tuple(native.shape)}"
-            ),
+            "status": "fail",
+            "name": name,
+            "reason": (f"shape mismatch ours={tuple(ours.shape)} native={tuple(native.shape)}"),
         }
     diff = (ours - native).abs()
-    cosine = F.cosine_similarity(
-        ours.reshape(ours.shape[0], -1),
-        native.reshape(native.shape[0], -1),
-        dim=-1,
-    ).mean().item()
+    cosine = (
+        F.cosine_similarity(
+            ours.reshape(ours.shape[0], -1),
+            native.reshape(native.shape[0], -1),
+            dim=-1,
+        )
+        .mean()
+        .item()
+    )
     return {
-        "status": (
-            "pass"
-            if torch.allclose(ours, native, atol=atol, rtol=rtol)
-            else "fail"
-        ),
+        "status": ("pass" if torch.allclose(ours, native, atol=atol, rtol=rtol) else "fail"),
         "name": name,
         "shape": list(ours.shape),
         "max_abs_error": diff.max().item(),
@@ -1966,58 +1966,46 @@ def tensor_parity(
         "rtol": rtol,
     }
 
-
 def assert_native_parity(parity: dict, teacher_name: str) -> None:
     if parity.get("status") != "pass":
-        raise RuntimeError(
-            f"{teacher_name} native-interface parity failed: {parity}"
-        )
-
+        raise RuntimeError(f"{teacher_name} native-interface parity failed: {parity}")
 
 def encoder_native_parity_probe(
-    model, preprocess, correction_dicts, cases,
-    image_root, device, adapter,
+    model,
+    preprocess,
+    correction_dicts,
+    cases,
+    image_root,
+    device,
+    adapter,
 ) -> dict:
     batch = cases[: min(2, len(cases))]
     images = load_case_image_batch(batch, image_root, preprocess).to(device)
-    texts = build_encoder_query_texts(
-        batch, adapter, correction_dicts
-    )["full"]
+    texts = build_encoder_query_texts(batch, adapter, correction_dicts)["full"]
     with torch.no_grad():
         _, ours = adapter.compose_query(model, images, texts)
         native = model.extract_retrieval_compose(images, texts)
-        target_cases = [
-            {**case, "reference_id": case["target_id"]}
-            for case in batch
-        ]
-        target_images = load_case_image_batch(
-            target_cases, image_root, preprocess
-        ).to(device)
+        target_cases = [{**case, "reference_id": case["target_id"]} for case in batch]
+        target_images = load_case_image_batch(target_cases, image_root, preprocess).to(device)
         target_features = model.extract_retrieval_target(target_images)
         ours_scores = score_vector_gallery(ours, target_features)
         native_scores = native @ target_features.T
-    qcheck = tensor_parity(
-        ours, native,
-        "ENCODER adapter query vs extract_retrieval_compose"
-    )
-    scheck = tensor_parity(
-        ours_scores, native_scores,
-        "ENCODER scorer vs native dot product"
-    )
+    qcheck = tensor_parity(ours, native, "ENCODER adapter query vs extract_retrieval_compose")
+    scheck = tensor_parity(ours_scores, native_scores, "ENCODER scorer vs native dot product")
     return {
-        "status": (
-            "pass"
-            if qcheck["status"] == "pass"
-            and scheck["status"] == "pass"
-            else "fail"
-        ),
-        "query": qcheck, "scorer": scheck,
+        "status": ("pass" if qcheck["status"] == "pass" and scheck["status"] == "pass" else "fail"),
+        "query": qcheck,
+        "scorer": scheck,
     }
 
-
 def tme_native_parity_probe(
-    model, preprocess, txt_processor, cases,
-    image_root, device, adapter,
+    model,
+    preprocess,
+    txt_processor,
+    cases,
+    image_root,
+    device,
+    adapter,
 ) -> dict:
     batch = cases[: min(2, len(cases))]
     images = load_case_image_batch(batch, image_root, preprocess).to(device)
@@ -2025,97 +2013,248 @@ def tme_native_parity_probe(
     reference_tokens = adapter.encode_reference(model, vit_states)
     raw_texts = [case["full_text"] for case in batch]
     with torch.no_grad():
-        _, ours = adapter.compose_query(
-            model, reference_tokens, raw_texts, txt_processor
-        )
+        _, ours = adapter.compose_query(model, reference_tokens, raw_texts, txt_processor)
         processed = [txt_processor(text) for text in raw_texts]
         text_tokens = model.tokenizer(
-            processed, padding="max_length", truncation=True,
-            max_length=model.max_txt_len, return_tensors="pt",
+            processed,
+            padding="max_length",
+            truncation=True,
+            max_length=model.max_txt_len,
+            return_tensors="pt",
         ).to(device)
-        native_query = model.encode_fusion(
-            reference_tokens, text_tokens
-        )
-
-        target_cases = [
-            {**case, "reference_id": case["target_id"]}
-            for case in batch
-        ]
-        target_images = load_case_image_batch(
-            target_cases, image_root, preprocess
-        ).to(device)
+        native_query = model.encode_fusion(reference_tokens, text_tokens)
+        target_cases = [{**case, "reference_id": case["target_id"]} for case in batch]
+        target_images = load_case_image_batch(target_cases, image_root, preprocess).to(device)
         target_vit = adapter.encode_vit_states(model, target_images)
         f_target = model.encode_image(target_vit)
         z_target = F.normalize(model.vision_proj(f_target), dim=-1)
         ours_scores = score_token_gallery(ours, z_target)
-        native_scores = model.inference(
-            reference_tokens, f_target, processed
-        )
+        native_scores = model.inference(reference_tokens, f_target, processed)
         if native_scores.ndim == 1:
             native_scores = native_scores.unsqueeze(0)
-
-    qcheck = tensor_parity(
-        ours, native_query, "TME adapter query vs encode_fusion"
-    )
-    scheck = tensor_parity(
-        ours_scores, native_scores,
-        "TME scorer vs model.inference"
-    )
+    qcheck = tensor_parity(ours, native_query, "TME adapter query vs encode_fusion")
+    scheck = tensor_parity(ours_scores, native_scores, "TME scorer vs model.inference")
     return {
-        "status": (
-            "pass"
-            if qcheck["status"] == "pass"
-            and scheck["status"] == "pass"
-            else "fail"
-        ),
-        "query": qcheck, "scorer": scheck,
+        "status": ("pass" if qcheck["status"] == "pass" and scheck["status"] == "pass" else "fail"),
+        "query": qcheck,
+        "scorer": scheck,
     }
 
-
 def sprc_native_parity_probe(
-    model, preprocess, txt_processor, cases,
-    image_root, device, adapter,
+    model,
+    preprocess,
+    txt_processor,
+    cases,
+    image_root,
+    device,
+    adapter,
 ) -> dict:
     batch = cases[: min(2, len(cases))]
     images = load_case_image_batch(batch, image_root, preprocess).to(device)
     reference_embeds = adapter.encode_reference(model, images)
     raw_texts = [case["full_text"] for case in batch]
     with torch.no_grad():
-        _, ours = adapter.compose_query(
-            model, reference_embeds, raw_texts, txt_processor
-        )
-        target_cases = [
-            {**case, "reference_id": case["target_id"]}
-            for case in batch
-        ]
-        target_images = load_case_image_batch(
-            target_cases, image_root, preprocess
-        ).to(device)
+        _, ours = adapter.compose_query(model, reference_embeds, raw_texts, txt_processor)
+        target_cases = [{**case, "reference_id": case["target_id"]} for case in batch]
+        target_images = load_case_image_batch(target_cases, image_root, preprocess).to(device)
         target_features, _ = model.extract_target_features(target_images)
         processed = [txt_processor(text) for text in raw_texts]
         ours_scores = score_token_gallery(ours, target_features)
-        native_scores = model.inference(
-            reference_embeds, target_features, processed
-        )
+        native_scores = model.inference(reference_embeds, target_features, processed)
         if native_scores.ndim == 1:
             native_scores = native_scores.unsqueeze(0)
-    scheck = tensor_parity(
-        ours_scores, native_scores,
-        "SPRC adapter/scorer vs model.inference"
-    )
+    scheck = tensor_parity(ours_scores, native_scores, "SPRC adapter/scorer vs model.inference")
     return {
         "status": scheck["status"],
         "scorer": scheck,
-        "note": (
-            "SPRC native inference does not expose the intermediate query; "
-            "parity is tested end-to-end at the score boundary."
-        ),
+        "note": ("SPRC native inference does not expose the intermediate query; parity is tested end-to-end at the score boundary."),
+    }
+
+def hint_native_parity_probe(
+    model,
+    preprocess,
+    txt_processor,
+    correction_dicts,
+    cases,
+    image_root,
+    device,
+    adapter,
+) -> dict:
+    batch = cases[: min(2, len(cases))]
+    images = load_case_image_batch(
+        batch,
+        image_root,
+        preprocess,
+    ).to(device)
+    reference_embeds = adapter.encode_reference(
+        model=model,
+        reference_images=images,
+    )
+    raw_texts = build_hint_query_texts(
+        batch,
+        adapter,
+        correction_dicts,
+    )["full"]
+    with torch.no_grad():
+        _, ours = adapter.compose_query_from_reference(
+            model=model,
+            reference_embeds=reference_embeds,
+            texts=raw_texts,
+            txt_processor=txt_processor,
+        )
+        processed = [txt_processor(text) for text in raw_texts]
+        native_query_4d = model.extract_retrieval_compose(
+            images,
+            processed,
+        )
+        native_query = native_query_4d.squeeze(1).squeeze(1)
+        target_cases = [
+            {
+                **case,
+                "reference_id": case["target_id"],
+            }
+            for case in batch
+        ]
+        target_images = load_case_image_batch(
+            target_cases,
+            image_root,
+            preprocess,
+        ).to(device)
+        native_target = model.extract_retrieval_target(target_images)
+        target_tokens = native_target.permute(
+            0,
+            2,
+            1,
+        ).contiguous()
+        ours_scores = score_token_gallery(
+            ours,
+            target_tokens,
+        )
+        native_scores = (
+            torch.matmul(
+                native_query_4d,
+                native_target,
+            )
+            .squeeze(-2)
+            .max(dim=-1)
+            .values
+        )
+    qcheck = tensor_parity(
+        ours,
+        native_query,
+        "HINT adapter query vs extract_retrieval_compose",
+    )
+    scheck = tensor_parity(
+        ours_scores,
+        native_scores,
+        "HINT scorer vs upstream matmul-max scorer",
+    )
+    return {
+        "status": ("pass" if qcheck["status"] == "pass" and scheck["status"] == "pass" else "fail"),
+        "query": qcheck,
+        "scorer": scheck,
+    }
+
+def qure_native_parity_probe(
+    model,
+    preprocess,
+    txt_processor,
+    cases,
+    image_root,
+    device,
+    adapter,
+) -> dict:
+    batch = cases[: min(2, len(cases))]
+    images = load_case_image_batch(
+        batch,
+        image_root,
+        preprocess,
+    ).to(device)
+    reference_states = adapter.encode_reference(
+        model=model,
+        images=images,
+    )
+    raw_texts = [case["full_text"] for case in batch]
+    with torch.no_grad():
+        _, ours_query = adapter.compose_query(
+            model=model,
+            reference_states=reference_states,
+            texts=raw_texts,
+            txt_processor=txt_processor,
+        )
+        fake_query_loader = [
+            (
+                images,
+                raw_texts,
+                [case["target_id"] for case in batch],
+            )
+        ]
+        native_query, native_target_names = model.extract_query_features_fiq(
+            fake_query_loader,
+            True,
+            {"eval": txt_processor},
+            device,
+        )
+        target_cases = [
+            {
+                **case,
+                "reference_id": case["target_id"],
+            }
+            for case in batch
+        ]
+        target_images = load_case_image_batch(
+            target_cases,
+            image_root,
+            preprocess,
+        ).to(device)
+        ours_target = adapter.encode_target(
+            model=model,
+            images=target_images,
+        )
+        fake_target_loader = [
+            (
+                target_images,
+                [case["target_id"] for case in batch],
+            )
+        ]
+        native_target, native_target_names_2 = model.extract_target_features(
+            fake_target_loader,
+            True,
+            device,
+        )
+        ours_scores = score_token_gallery(
+            ours_query,
+            ours_target,
+        )
+        native_scores = model.score(
+            native_query,
+            native_target,
+        )
+    qcheck = tensor_parity(
+        ours_query,
+        native_query,
+        "QuRe adapter query vs extract_query_features_fiq",
+    )
+    tcheck = tensor_parity(
+        ours_target,
+        native_target,
+        "QuRe target tokens vs extract_target_features",
+    )
+    scheck = tensor_parity(
+        ours_scores,
+        native_scores,
+        "QuRe score_token_gallery vs model.score",
+    )
+    return {
+        "status": ("pass" if (qcheck["status"] == "pass" and tcheck["status"] == "pass" and scheck["status"] == "pass") else "fail"),
+        "query": qcheck,
+        "target": tcheck,
+        "scorer": scheck,
     }
 
 def run_encoder(args, cases, device):
     _ensure_repo_on_path()
     from teacher.adapters import encoder as adapter
-
     with capture_load_state_dict_results() as load_records:
         model, preprocess_train, preprocess_val = adapter.build_encoder(
             args.encoder_root.resolve(),
@@ -2123,47 +2262,55 @@ def run_encoder(args, cases, device):
             device,
         )
     integrity = {
-        "checkpoint_load": checkpoint_load_audit(
-            load_records, args.checkpoint
-        ),
+        "checkpoint_load": checkpoint_load_audit(load_records, args.checkpoint),
         "upstream_repo": git_repo_provenance(
             args.encoder_root,
             "29a2a31d6a56f677bf450c3be7cdaef423fb7018",
         ),
     }
-    correction_dicts = adapter.load_correction_dicts(
-        args.correction_root.resolve()
-    )
-
+    correction_dicts = adapter.load_correction_dicts(args.correction_root.resolve())
     parity = encoder_native_parity_probe(
-        model, preprocess_val, correction_dicts, cases,
-        args.image_root, device, adapter,
+        model,
+        preprocess_val,
+        correction_dicts,
+        cases,
+        args.image_root,
+        device,
+        adapter,
     )
     integrity["native_interface_parity"] = parity
     assert_native_parity(parity, "ENCODER")
-
     query_store = collect_encoder_queries(
-        model=model, preprocess=preprocess_val,
-        correction_dicts=correction_dicts, cases=cases,
-        image_root=args.image_root, device=device,
-        batch_size=args.batch_size, adapter=adapter,
+        model=model,
+        preprocess=preprocess_val,
+        correction_dicts=correction_dicts,
+        cases=cases,
+        image_root=args.image_root,
+        device=device,
+        batch_size=args.batch_size,
+        adapter=adapter,
     )
     query_store_native = collect_encoder_queries(
-        model=model, preprocess=preprocess_train,
-        correction_dicts=correction_dicts, cases=cases,
-        image_root=args.image_root, device=device,
-        batch_size=args.batch_size, adapter=adapter,
+        model=model,
+        preprocess=preprocess_train,
+        correction_dicts=correction_dicts,
+        cases=cases,
+        image_root=args.image_root,
+        device=device,
+        batch_size=args.batch_size,
+        adapter=adapter,
     )
-
-    # Cache full-gallery target features once; native pair-union is a subset.
     gallery_cache = {}
     def gallery_builder(ids, category):
         if category not in gallery_cache:
             full_ids = load_split_ids(args.split_root, category)
             full_features = build_encoder_gallery(
-                model=model, preprocess=preprocess_val,
-                image_ids=full_ids, category=category,
-                image_root=args.image_root, device=device,
+                model=model,
+                preprocess=preprocess_val,
+                image_ids=full_ids,
+                category=category,
+                image_root=args.image_root,
+                device=device,
                 batch_size=args.gallery_batch_size,
             )
             gallery_cache[category] = (
@@ -2173,41 +2320,40 @@ def run_encoder(args, cases, device):
         name_to_idx, full_features = gallery_cache[category]
         indices = [name_to_idx[name] for name in ids]
         return full_features[indices]
-
     retrieval_common = score_all_queries(
-        query_store=query_store, cases=cases,
+        query_store=query_store,
+        cases=cases,
         gallery_builder=gallery_builder,
-        score_fn=score_vector_gallery, device=device,
+        score_fn=score_vector_gallery,
+        device=device,
         score_batch_size=args.score_batch_size,
         gallery_id_provider=full_gallery_provider(args.split_root),
-        protocol_name=(
-            "common_full_gallery_deterministic_query_preprocess_val"
-        ),
+        protocol_name=("common_full_gallery_deterministic_query_preprocess_val"),
     )
     retrieval_native = score_all_queries(
-        query_store=query_store_native, cases=cases,
+        query_store=query_store_native,
+        cases=cases,
         gallery_builder=gallery_builder,
-        score_fn=score_vector_gallery, device=device,
+        score_fn=score_vector_gallery,
+        device=device,
         score_batch_size=args.score_batch_size,
         gallery_id_provider=pair_union_gallery_provider,
-        protocol_name=(
-            "ENCODER_upstream_val-split_pair-union_gallery_"
-            "query_preprocess_train_target_preprocess_val"
-        ),
+        protocol_name=("ENCODER_upstream_val-split_pair-union_gallery_query_preprocess_train_target_preprocess_val"),
     )
-
     diff = probe_encoder_differentiability(
-        model=model, preprocess=preprocess_val,
-        correction_dicts=correction_dicts, case=cases[0],
-        image_root=args.image_root, device=device, adapter=adapter,
+        model=model,
+        preprocess=preprocess_val,
+        correction_dicts=correction_dicts,
+        case=cases[0],
+        image_root=args.image_root,
+        device=device,
+        adapter=adapter,
     )
     return query_store, retrieval_common, retrieval_native, diff, integrity
-
 
 def run_tme(args, cases, device):
     _ensure_repo_on_path()
     from teacher.adapters import tme as adapter
-
     with capture_load_state_dict_results() as load_records:
         model, txt_processor, preprocess = adapter.build_tme(
             args.tme_root.resolve(),
@@ -2215,59 +2361,70 @@ def run_tme(args, cases, device):
             device,
         )
     integrity = {
-        "checkpoint_load": checkpoint_load_audit(
-            load_records, args.checkpoint
-        ),
+        "checkpoint_load": checkpoint_load_audit(load_records, args.checkpoint),
         "upstream_repo": git_repo_provenance(
             args.tme_root,
             "7fe811992820d30828e24065eb0c7a7ba099dd3b",
         ),
     }
-
     parity = tme_native_parity_probe(
-        model, preprocess, txt_processor, cases,
-        args.image_root, device, adapter,
+        model,
+        preprocess,
+        txt_processor,
+        cases,
+        args.image_root,
+        device,
+        adapter,
     )
     integrity["native_interface_parity"] = parity
     assert_native_parity(parity, "TME")
-
     query_store = collect_qformer_queries(
-        model=model, preprocess=preprocess,
-        txt_processor=txt_processor, cases=cases,
-        image_root=args.image_root, device=device,
-        batch_size=args.batch_size, teacher="tme", adapter=adapter,
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        cases=cases,
+        image_root=args.image_root,
+        device=device,
+        batch_size=args.batch_size,
+        teacher="tme",
+        adapter=adapter,
     )
-
     def gallery_builder(ids, category):
         return build_tme_gallery(
-            model=model, preprocess=preprocess,
-            image_ids=ids, category=category,
-            image_root=args.image_root, device=device,
-            batch_size=args.gallery_batch_size, adapter=adapter,
+            model=model,
+            preprocess=preprocess,
+            image_ids=ids,
+            category=category,
+            image_root=args.image_root,
+            device=device,
+            batch_size=args.gallery_batch_size,
+            adapter=adapter,
         )
-
     retrieval_common = score_all_queries(
-        query_store=query_store, cases=cases,
+        query_store=query_store,
+        cases=cases,
         gallery_builder=gallery_builder,
-        score_fn=score_token_gallery, device=device,
+        score_fn=score_token_gallery,
+        device=device,
         score_batch_size=args.score_batch_size,
         gallery_id_provider=full_gallery_provider(args.split_root),
         protocol_name="TME_upstream_full_gallery",
     )
     retrieval_native = retrieval_common
-
     diff = probe_tme_differentiability(
-        model=model, preprocess=preprocess,
-        txt_processor=txt_processor, case=cases[0],
-        image_root=args.image_root, device=device, adapter=adapter,
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        case=cases[0],
+        image_root=args.image_root,
+        device=device,
+        adapter=adapter,
     )
     return query_store, retrieval_common, retrieval_native, diff, integrity
-
 
 def run_sprc(args, cases, device):
     _ensure_repo_on_path()
     from teacher.adapters import sprc as adapter
-
     with capture_load_state_dict_results() as load_records:
         model, txt_processor, preprocess = adapter.build_sprc(
             args.sprc_root.resolve(),
@@ -2276,54 +2433,256 @@ def run_sprc(args, cases, device):
             device,
         )
     integrity = {
-        "checkpoint_load": checkpoint_load_audit(
-            load_records, args.checkpoint
-        ),
+        "checkpoint_load": checkpoint_load_audit(load_records, args.checkpoint),
         "upstream_repo": git_repo_provenance(
             args.sprc_root,
             "2935a5397732260d1db6fa577e5926f963e36f0f",
         ),
     }
-
     parity = sprc_native_parity_probe(
-        model, preprocess, txt_processor, cases,
-        args.image_root, device, adapter,
+        model,
+        preprocess,
+        txt_processor,
+        cases,
+        args.image_root,
+        device,
+        adapter,
     )
     integrity["native_interface_parity"] = parity
     assert_native_parity(parity, "SPRC")
-
     query_store = collect_qformer_queries(
-        model=model, preprocess=preprocess,
-        txt_processor=txt_processor, cases=cases,
-        image_root=args.image_root, device=device,
-        batch_size=args.batch_size, teacher="sprc", adapter=adapter,
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        cases=cases,
+        image_root=args.image_root,
+        device=device,
+        batch_size=args.batch_size,
+        teacher="sprc",
+        adapter=adapter,
     )
-
     def gallery_builder(ids, category):
         return build_sprc_gallery(
-            model=model, preprocess=preprocess,
-            image_ids=ids, category=category,
-            image_root=args.image_root, device=device,
+            model=model,
+            preprocess=preprocess,
+            image_ids=ids,
+            category=category,
+            image_root=args.image_root,
+            device=device,
             batch_size=args.gallery_batch_size,
         )
-
     retrieval_common = score_all_queries(
-        query_store=query_store, cases=cases,
+        query_store=query_store,
+        cases=cases,
         gallery_builder=gallery_builder,
-        score_fn=score_token_gallery, device=device,
+        score_fn=score_token_gallery,
+        device=device,
         score_batch_size=args.score_batch_size,
         gallery_id_provider=full_gallery_provider(args.split_root),
         protocol_name="SPRC_upstream_full_gallery",
     )
     retrieval_native = retrieval_common
-
     diff = probe_sprc_differentiability(
-        model=model, preprocess=preprocess,
-        txt_processor=txt_processor, case=cases[0],
-        image_root=args.image_root, device=device, adapter=adapter,
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        case=cases[0],
+        image_root=args.image_root,
+        device=device,
+        adapter=adapter,
     )
     return query_store, retrieval_common, retrieval_native, diff, integrity
 
+def run_hint(args, cases, device):
+    _ensure_repo_on_path()
+    from teacher.adapters import hint as adapter
+    hint_root = args.hint_root.resolve()
+    checkpoint_path = args.checkpoint.resolve()
+    correction_root = args.correction_root.resolve()
+    with capture_load_state_dict_results() as load_records:
+        model, txt_processor, preprocess = adapter.build_hint(
+            hint_root=hint_root,
+            checkpoint_path=checkpoint_path,
+            device=device,
+        )
+    integrity = {
+        "checkpoint_load": checkpoint_load_audit_allow_full_object(
+            load_records,
+            checkpoint_path,
+            model,
+        ),
+        "upstream_repo": git_repo_provenance(
+            hint_root,
+            "bec50b6c8c19111893b617979502b948d1cea5b2",
+        ),
+    }
+    correction_dicts = adapter.load_correction_dicts(correction_root)
+    parity = hint_native_parity_probe(
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        correction_dicts=correction_dicts,
+        cases=cases,
+        image_root=args.image_root,
+        device=device,
+        adapter=adapter,
+    )
+    integrity["native_interface_parity"] = parity
+    assert_native_parity(
+        parity,
+        "HINT",
+    )
+    query_store = collect_hint_queries(
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        correction_dicts=correction_dicts,
+        cases=cases,
+        image_root=args.image_root,
+        device=device,
+        batch_size=args.batch_size,
+        adapter=adapter,
+    )
+    def gallery_builder(ids, category):
+        return build_hint_gallery(
+            model=model,
+            preprocess=preprocess,
+            image_ids=ids,
+            category=category,
+            image_root=args.image_root,
+            device=device,
+            batch_size=args.gallery_batch_size,
+        )
+    retrieval_common = score_all_queries(
+        query_store=query_store,
+        cases=cases,
+        gallery_builder=gallery_builder,
+        score_fn=score_token_gallery,
+        device=device,
+        score_batch_size=args.score_batch_size,
+        gallery_id_provider=full_gallery_provider(args.split_root),
+        protocol_name=("HINT_common_full_gallery_native_matmul_max"),
+    )
+    retrieval_native = retrieval_common
+    diff = probe_hint_differentiability(
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        correction_dicts=correction_dicts,
+        case=cases[0],
+        image_root=args.image_root,
+        device=device,
+        adapter=adapter,
+    )
+    return (
+        query_store,
+        retrieval_common,
+        retrieval_native,
+        diff,
+        integrity,
+    )
+
+def run_qure(
+    args,
+    cases,
+    device,
+):
+    _ensure_repo_on_path()
+    from teacher.adapters import qure as adapter
+    qure_root = args.qure_root.resolve()
+    qure_config = args.qure_config.resolve()
+    checkpoint_path = args.checkpoint.resolve()
+    with capture_load_state_dict_results() as load_records:
+        (
+            model,
+            txt_processor,
+            preprocess,
+        ) = adapter.build_qure(
+            qure_root=qure_root,
+            config_path=qure_config,
+            checkpoint_path=checkpoint_path,
+            device=device,
+        )
+    integrity = {
+        "checkpoint_load": (
+            checkpoint_load_audit(
+                load_records,
+                checkpoint_path,
+            )
+        ),
+        "upstream_repo": (
+            git_repo_provenance(
+                qure_root,
+                "6a50a27c307e151b95533d05ffdfa126fbe5550a",
+            )
+        ),
+    }
+    parity = qure_native_parity_probe(
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        cases=cases,
+        image_root=args.image_root,
+        device=device,
+        adapter=adapter,
+    )
+    integrity["native_interface_parity"] = parity
+    assert_native_parity(
+        parity,
+        "QuRe",
+    )
+    query_store = collect_qformer_queries(
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        cases=cases,
+        image_root=args.image_root,
+        device=device,
+        batch_size=args.batch_size,
+        teacher="qure",
+        adapter=adapter,
+    )
+    def gallery_builder(
+        ids,
+        category,
+    ):
+        return build_qure_gallery(
+            model=model,
+            preprocess=preprocess,
+            image_ids=ids,
+            category=category,
+            image_root=args.image_root,
+            device=device,
+            batch_size=(args.gallery_batch_size),
+            adapter=adapter,
+        )
+    retrieval_common = score_all_queries(
+        query_store=query_store,
+        cases=cases,
+        gallery_builder=gallery_builder,
+        score_fn=score_token_gallery,
+        device=device,
+        score_batch_size=(args.score_batch_size),
+        gallery_id_provider=(full_gallery_provider(args.split_root)),
+        protocol_name=("QuRe_common_full_gallery_native_query_token_max_scorer"),
+    )
+    retrieval_native = retrieval_common
+    diff = probe_qure_differentiability(
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        case=cases[0],
+        image_root=args.image_root,
+        device=device,
+        adapter=adapter,
+    )
+    return (
+        query_store,
+        retrieval_common,
+        retrieval_native,
+        diff,
+        integrity,
+    )
 
 def discover_correction_root(*roots: Path) -> Path:
     required = {
@@ -2342,11 +2701,7 @@ def discover_correction_root(*roots: Path) -> Path:
             names = {path.name for path in parent.glob("correction_dict_*.json")}
             if required.issubset(names):
                 return parent
-    raise FileNotFoundError(
-        "Could not auto-discover all three ENCODER FashionIQ correction dictionaries. "
-        "Pass --correction-root explicitly."
-    )
-
+    raise FileNotFoundError("Could not auto-discover all three ENCODER FashionIQ correction dictionaries. Pass --correction-root explicitly.")
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -2359,7 +2714,7 @@ def parse_args():
     parser.add_argument(
         "--teacher",
         required=True,
-        choices=("encoder", "tme", "sprc"),
+        choices=("encoder", "tme", "sprc", "hint", "qure"),
     )
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument(
@@ -2379,7 +2734,6 @@ def parse_args():
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--artifact-output", type=Path, default=None)
-
     parser.add_argument(
         "--encoder-root",
         type=Path,
@@ -2401,11 +2755,25 @@ def parse_args():
         default=Path("teacher/repos/SPRC"),
     )
     parser.add_argument(
+        "--hint-root",
+        type=Path,
+        default=Path("teacher/repos/ICASSP26-HINT"),
+    )
+    parser.add_argument(
+        "--qure-root",
+        type=Path,
+        default=Path("teacher/repos/QuRe"),
+    )
+    parser.add_argument(
+        "--qure-config",
+        type=Path,
+        default=Path("teacher/repos/QuRe/configs/fashionIQ/eval.json"),
+    )
+    parser.add_argument(
         "--backbone",
         choices=("pretrain", "pretrain_vitL"),
         default="pretrain_vitL",
     )
-
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--gallery-batch-size", type=int, default=16)
     parser.add_argument("--score-batch-size", type=int, default=32)
@@ -2413,17 +2781,13 @@ def parse_args():
         "--limit",
         type=int,
         default=None,
-        help=(
-            "Debug only: maximum validation queries PER CATEGORY. "
-            "Omit for the full FashionIQ validation set."
-        ),
+        help=("Debug only: maximum validation queries PER CATEGORY. Omit for the full FashionIQ validation set."),
     )
     parser.add_argument("--min-group-count", type=int, default=2)
     parser.add_argument("--bootstrap-samples", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default="cuda:0")
     return parser.parse_args()
-
 
 def main():
     args = parse_args()
@@ -2433,44 +2797,101 @@ def main():
     args.output = args.output.resolve()
     if args.artifact_output is not None:
         args.artifact_output = args.artifact_output.resolve()
-
-    if args.teacher == "encoder" and args.correction_root is None:
-        args.correction_root = discover_correction_root(
-            args.encoder_root.resolve(),
-            (_repo_root() / "teacher/checkpoints/encoder").resolve(),
+    if args.teacher in {"encoder", "hint"} and args.correction_root is None:
+        search_roots = [
             (_repo_root() / "data/FashionIQ").resolve(),
-        )
-
+        ]
+        if args.teacher == "encoder":
+            search_roots.extend(
+                [
+                    args.encoder_root.resolve(),
+                    (_repo_root() / "teacher/checkpoints/encoder").resolve(),
+                ]
+            )
+        else:
+            search_roots.extend(
+                [
+                    args.hint_root.resolve(),
+                    (_repo_root() / "teacher/checkpoints/hint").resolve(),
+                ]
+            )
+        args.correction_root = discover_correction_root(*search_roots)
+    if args.correction_root is not None:
+        args.correction_root = args.correction_root.resolve()
     cases = load_cases(args.cases, args.limit)
     validate_cases(cases)
-
     if not torch.cuda.is_available():
-        raise RuntimeError(
-            "Finalist teacher adapters are GPU-oriented; run on CUDA."
-        )
+        raise RuntimeError("Finalist teacher adapters are GPU-oriented; run on CUDA.")
     device = torch.device(args.device)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
-
     if args.teacher == "encoder":
         (
-            query_store, retrieval_common, retrieval_native,
-            differentiability, integrity,
-        ) = run_encoder(args, cases, device)
+            query_store,
+            retrieval_common,
+            retrieval_native,
+            differentiability,
+            integrity,
+        ) = run_encoder(
+            args,
+            cases,
+            device,
+        )
         teacher_name = "ENCODER"
     elif args.teacher == "tme":
         (
-            query_store, retrieval_common, retrieval_native,
-            differentiability, integrity,
-        ) = run_tme(args, cases, device)
+            query_store,
+            retrieval_common,
+            retrieval_native,
+            differentiability,
+            integrity,
+        ) = run_tme(
+            args,
+            cases,
+            device,
+        )
         teacher_name = "TME"
-    else:
+    elif args.teacher == "sprc":
         (
-            query_store, retrieval_common, retrieval_native,
-            differentiability, integrity,
-        ) = run_sprc(args, cases, device)
+            query_store,
+            retrieval_common,
+            retrieval_native,
+            differentiability,
+            integrity,
+        ) = run_sprc(
+            args,
+            cases,
+            device,
+        )
         teacher_name = "SPRC"
-
+    elif args.teacher == "hint":
+        (
+            query_store,
+            retrieval_common,
+            retrieval_native,
+            differentiability,
+            integrity,
+        ) = run_hint(
+            args,
+            cases,
+            device,
+        )
+        teacher_name = "HINT"
+    elif args.teacher == "qure":
+        (
+            query_store,
+            retrieval_common,
+            retrieval_native,
+            differentiability,
+            integrity,
+        ) = run_qure(
+            args,
+            cases,
+            device,
+        )
+        teacher_name = "QuRe"
+    else:
+        raise ValueError(f"Unsupported teacher: {args.teacher}")
     report = build_report(
         teacher_name=teacher_name,
         cases=cases,
@@ -2483,11 +2904,9 @@ def main():
         bootstrap_samples=args.bootstrap_samples,
         seed=args.seed,
     )
-
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", encoding="utf-8") as file:
         json.dump(report, file, indent=2, ensure_ascii=False)
-
     if args.artifact_output is not None:
         args.artifact_output.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
@@ -2502,15 +2921,9 @@ def main():
             },
             args.artifact_output,
         )
-
-    common = report["retrieval_quality"]["common_full_gallery"][
-        "include_reference"
-    ]["full"]
+    common = report["retrieval_quality"]["common_full_gallery"]["include_reference"]["full"]
     balanced = report["same_edit_directional_consistency_balanced"]
-    sensitivity = report["teacher_edit_retrieval_sensitivity"]["metrics"][
-        "include_reference"
-    ]["combined_single_caption_removals"]
-
+    sensitivity = report["teacher_edit_retrieval_sensitivity"]["metrics"]["include_reference"]["combined_single_caption_removals"]
     print()
     print(f"=== {teacher_name} TEACHER SHORTLIST AUDIT V6 ===")
     print("queries:", report["num_queries"])
@@ -2536,7 +2949,6 @@ def main():
         report["differentiable_intervention_probe"]["status"],
     )
     print("Saved:", args.output)
-
 
 if __name__ == "__main__":
     main()
