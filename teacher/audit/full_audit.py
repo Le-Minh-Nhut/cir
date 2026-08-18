@@ -2234,6 +2234,533 @@ def checkpoint_load_audit_allow_full_object(
         ),
     }
 
+
+def tgcir_origin_checkpoint_audit(
+    records: list[dict],
+    checkpoint_path: Path,
+    model,
+) -> dict:
+    """
+    Audit TG-CIR first-stage/origin checkpoint loading.
+
+    Upstream TG-CIR intentionally reconstructs the text-side TokenLearner
+    and text masks from their image-side counterparts when
+    load_ckpt(..., is_origin=True) is used.
+    """
+
+    raw = checkpoint_load_audit(
+        records,
+        checkpoint_path,
+    )
+
+    expected_missing = {
+        *{
+            f"backbone.tokenlearn_text.tokenizers.{i}.conv.0.weight"
+            for i in range(8)
+        },
+        *{
+            f"backbone.tokenlearn_text.tokenizers.{i}.conv.0.bias"
+            for i in range(8)
+        },
+        "backbone.masks_text.weight",
+    }
+
+    actual_missing = set(
+        raw.get("missing_keys", [])
+    )
+    actual_unexpected = set(
+        raw.get("unexpected_keys", [])
+    )
+
+    missing_pattern_ok = (
+        actual_missing == expected_missing
+    )
+
+    unexpected_pattern_ok = (
+        actual_unexpected == {"loss_T"}
+    )
+
+    recovery_checks = {}
+
+    recovery_ok = True
+
+    for i, (image_tokenizer, text_tokenizer) in enumerate(
+        zip(
+            model.backbone.tokenlearn.tokenizers,
+            model.backbone.tokenlearn_text.tokenizers,
+        )
+    ):
+        weight_equal = torch.equal(
+            image_tokenizer.conv[0].weight,
+            text_tokenizer.conv[0].weight,
+        )
+
+        bias_equal = torch.equal(
+            image_tokenizer.conv[0].bias,
+            text_tokenizer.conv[0].bias,
+        )
+
+        recovery_checks[f"tokenizer_{i}"] = {
+            "weight_equal": weight_equal,
+            "bias_equal": bias_equal,
+        }
+
+        recovery_ok &= (
+            weight_equal
+            and bias_equal
+        )
+
+    masks_equal = torch.equal(
+        model.backbone.masks.weight,
+        model.backbone.masks_text.weight,
+    )
+
+    recovery_checks["masks_equal"] = masks_equal
+    recovery_ok &= masks_equal
+
+    clean = (
+        missing_pattern_ok
+        and unexpected_pattern_ok
+        and recovery_ok
+    )
+
+    return {
+        "status": "clean" if clean else "warning",
+        "load_mode": "tgcir_upstream_origin_reconstruction",
+        "checkpoint": raw["checkpoint"],
+        "checkpoint_size_bytes": raw[
+            "checkpoint_size_bytes"
+        ],
+
+        # Preserve the raw load_state_dict evidence.
+        "raw_missing_key_count": len(actual_missing),
+        "raw_unexpected_key_count": len(actual_unexpected),
+        "raw_missing_keys": sorted(actual_missing),
+        "raw_unexpected_keys": sorted(actual_unexpected),
+
+        "expected_origin_missing_pattern": (
+            missing_pattern_ok
+        ),
+        "expected_origin_unexpected_pattern": (
+            unexpected_pattern_ok
+        ),
+        "post_load_recovery_pass": recovery_ok,
+        "post_load_recovery_checks": recovery_checks,
+
+        # Existing tournament code expects these fields.
+        # Semantically there are no unresolved missing/unexpected
+        # inference weights after successful upstream recovery.
+        "missing_key_count": 0 if clean else len(actual_missing),
+        "unexpected_key_count": 0 if clean else len(actual_unexpected),
+        "missing_keys": [] if clean else sorted(actual_missing),
+        "unexpected_keys": [] if clean else sorted(actual_unexpected),
+
+        "interpretation": (
+            "TG-CIR first-stage checkpoint is intentionally incomplete "
+            "for tokenlearn_text/masks_text. Upstream is_origin=True "
+            "reconstructs those weights from the corresponding image-side "
+            "modules. loss_T is an extra checkpoint entry not required by "
+            "the loaded CIRPlus inference model."
+            if clean
+            else
+            "TG-CIR checkpoint does not match the expected upstream "
+            "first-stage/origin reconstruction pattern."
+        ),
+    }
+
+
+
+def encoder_checkpoint_audit(
+    records: list[dict],
+    checkpoint_path: Path,
+    model,
+) -> dict:
+    """
+    ENCODER checkpoint audit.
+
+    The audited FashionIQ checkpoint contains two obsolete
+    binding_decoder.fc keys which are absent from the current audited
+    upstream model definition. They are accepted only when:
+      - no current model weights are missing,
+      - the unexpected-key set is exactly the known two-key set,
+      - the loaded model does not expose binding_decoder.fc,
+      - those obsolete keys are absent from the current model state_dict.
+    """
+    raw = checkpoint_load_audit(
+        records,
+        checkpoint_path,
+    )
+
+    if raw.get("status") == "clean":
+        raw["load_mode"] = "exact_state_dict"
+        return raw
+
+    expected_unexpected = {
+        "backbone.binding_decoder.fc.0.weight",
+        "backbone.binding_decoder.fc.0.bias",
+    }
+
+    missing = set(raw.get("missing_keys", []))
+    unexpected = set(raw.get("unexpected_keys", []))
+
+    backbone = getattr(model, "backbone", None)
+    binding_decoder = getattr(
+        backbone,
+        "binding_decoder",
+        None,
+    )
+
+    obsolete_fc_absent = (
+        binding_decoder is not None
+        and not hasattr(binding_decoder, "fc")
+    )
+
+    current_state_keys = set(model.state_dict().keys())
+    obsolete_keys_absent_from_model = (
+        expected_unexpected.isdisjoint(
+            current_state_keys
+        )
+    )
+
+    clean = (
+        not missing
+        and unexpected == expected_unexpected
+        and obsolete_fc_absent
+        and obsolete_keys_absent_from_model
+    )
+
+    return {
+        "status": "clean" if clean else "warning",
+        "load_mode": (
+            "encoder_obsolete_checkpoint_keys_review"
+        ),
+        "checkpoint": raw["checkpoint"],
+        "checkpoint_size_bytes": raw[
+            "checkpoint_size_bytes"
+        ],
+        "loaded_module_class": raw.get(
+            "loaded_module_class"
+        ),
+
+        # Preserve raw evidence.
+        "raw_missing_key_count": len(missing),
+        "raw_unexpected_key_count": len(unexpected),
+        "raw_missing_keys": sorted(missing),
+        "raw_unexpected_keys": sorted(unexpected),
+
+        "expected_obsolete_key_pattern": (
+            unexpected == expected_unexpected
+        ),
+        "binding_decoder_fc_absent": (
+            obsolete_fc_absent
+        ),
+        "obsolete_keys_absent_from_current_state_dict": (
+            obsolete_keys_absent_from_model
+        ),
+
+        # Tournament consumes these unresolved counts.
+        "missing_key_count": (
+            0 if clean else len(missing)
+        ),
+        "unexpected_key_count": (
+            0 if clean else len(unexpected)
+        ),
+        "missing_keys": (
+            [] if clean else sorted(missing)
+        ),
+        "unexpected_keys": (
+            [] if clean else sorted(unexpected)
+        ),
+
+        "interpretation": (
+            "The two raw unexpected keys belong to an obsolete "
+            "binding_decoder.fc checkpoint submodule that is absent "
+            "from the audited current ENCODER model. No current model "
+            "weights are missing. Raw evidence is retained."
+            if clean
+            else
+            "ENCODER checkpoint does not match the narrowly approved "
+            "obsolete-key pattern and requires manual review."
+        ),
+    }
+
+
+def csmcir_checkpoint_audit(
+    records: list[dict],
+    checkpoint_path: Path,
+    model,
+) -> dict:
+    """
+    CSMCIR retrieval checkpoint audit.
+
+    token_importance is accepted only when:
+      - no model keys are missing,
+      - it is the sole unexpected checkpoint key,
+      - the runtime model exposes token_importance,
+      - token_importance is not registered in the current state_dict,
+      - native retrieval inference methods do not reference it.
+
+    Native-interface parity remains a separate mandatory gate.
+    """
+    import inspect
+
+    raw = checkpoint_load_audit(
+        records,
+        checkpoint_path,
+    )
+
+    if raw.get("status") == "clean":
+        raw["load_mode"] = "exact_state_dict"
+        return raw
+
+    missing = set(raw.get("missing_keys", []))
+    unexpected = set(
+        raw.get("unexpected_keys", [])
+    )
+
+    expected_unexpected = {"token_importance"}
+
+    attribute_exists = hasattr(
+        model,
+        "token_importance",
+    )
+
+    registered_in_state_dict = (
+        "token_importance"
+        in model.state_dict()
+    )
+
+    method_review = {}
+    inference_dependency_free = True
+
+    for method_name in (
+        "inference",
+        "inference_tsen",
+    ):
+        if not hasattr(type(model), method_name):
+            method_review[method_name] = {
+                "source_available": False,
+                "mentions_token_importance": None,
+            }
+            inference_dependency_free = False
+            continue
+
+        try:
+            source = inspect.getsource(
+                getattr(type(model), method_name)
+            )
+            mentions = (
+                "token_importance" in source
+            )
+            method_review[method_name] = {
+                "source_available": True,
+                "mentions_token_importance": (
+                    mentions
+                ),
+            }
+            if mentions:
+                inference_dependency_free = False
+        except Exception as exc:
+            method_review[method_name] = {
+                "source_available": False,
+                "mentions_token_importance": None,
+                "reason": (
+                    f"{type(exc).__name__}: {exc}"
+                ),
+            }
+            inference_dependency_free = False
+
+    clean = (
+        not missing
+        and unexpected == expected_unexpected
+        and attribute_exists
+        and not registered_in_state_dict
+        and inference_dependency_free
+    )
+
+    return {
+        "status": "clean" if clean else "warning",
+        "load_mode": (
+            "csmcir_native_retrieval_checkpoint_review"
+        ),
+        "checkpoint": raw["checkpoint"],
+        "checkpoint_size_bytes": raw[
+            "checkpoint_size_bytes"
+        ],
+        "loaded_module_class": raw.get(
+            "loaded_module_class"
+        ),
+
+        # Preserve raw evidence.
+        "raw_missing_key_count": len(missing),
+        "raw_unexpected_key_count": len(unexpected),
+        "raw_missing_keys": sorted(missing),
+        "raw_unexpected_keys": sorted(unexpected),
+
+        "expected_token_importance_pattern": (
+            unexpected == expected_unexpected
+        ),
+        "token_importance_attribute_exists": (
+            attribute_exists
+        ),
+        "token_importance_registered_in_state_dict": (
+            registered_in_state_dict
+        ),
+        "native_retrieval_dependency_free": (
+            inference_dependency_free
+        ),
+        "native_retrieval_method_review": (
+            method_review
+        ),
+
+        "missing_key_count": (
+            0 if clean else len(missing)
+        ),
+        "unexpected_key_count": (
+            0 if clean else len(unexpected)
+        ),
+        "missing_keys": (
+            [] if clean else sorted(missing)
+        ),
+        "unexpected_keys": (
+            [] if clean else sorted(unexpected)
+        ),
+
+        "interpretation": (
+            "The raw checkpoint contains token_importance, but the "
+            "audited runtime model does not register it in state_dict "
+            "and the native retrieval inference methods do not "
+            "reference it. Native-interface parity remains an "
+            "independent required fidelity gate."
+            if clean
+            else
+            "CSMCIR checkpoint does not satisfy the narrowly approved "
+            "native-retrieval exception and requires manual review."
+        ),
+    }
+
+
+def git_repo_provenance_with_compat_patch(
+    repo_root: Path,
+    expected_audited_commit: str,
+    allowed_file: str,
+    expected_diff_sha256: str,
+    reason: str,
+) -> dict:
+    """
+    Preserve tracked_worktree_clean truthfully, but allow one exact,
+    fingerprinted compatibility patch as reproducible provenance.
+    """
+    import hashlib
+
+    base = git_repo_provenance(
+        repo_root,
+        expected_audited_commit,
+    )
+
+    if base.get("status") != "ok":
+        base["provenance_pass"] = False
+        return base
+
+    # A fully clean matching snapshot always passes.
+    if (
+        base.get("matches_audited_snapshot") is True
+        and base.get("tracked_worktree_clean") is True
+    ):
+        base["approved_compatibility_patch"] = False
+        base["provenance_pass"] = True
+        return base
+
+    repo_root = repo_root.resolve()
+
+    tracked_changes = base.get(
+        "tracked_changes",
+        [],
+    )
+
+    changed_paths = []
+    for line in tracked_changes:
+        if len(line) >= 4:
+            changed_paths.append(line[3:])
+
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "diff",
+                "--no-ext-diff",
+                "--no-color",
+                "HEAD",
+                "--",
+                allowed_file,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        diff_text = result.stdout
+        actual_sha256 = hashlib.sha256(
+            diff_text.encode("utf-8")
+        ).hexdigest()
+    except Exception as exc:
+        base["approved_compatibility_patch"] = False
+        base["provenance_pass"] = False
+        base["compatibility_patch_error"] = (
+            f"{type(exc).__name__}: {exc}"
+        )
+        return base
+
+    exact_file_scope = (
+        changed_paths == [allowed_file]
+    )
+
+    exact_diff_match = (
+        actual_sha256
+        == expected_diff_sha256
+    )
+
+    approved = (
+        base.get("matches_audited_snapshot") is True
+        and exact_file_scope
+        and exact_diff_match
+    )
+
+    base.update(
+        {
+            # Keep this FALSE when the repo is patched.
+            "tracked_worktree_clean": (
+                base.get(
+                    "tracked_worktree_clean"
+                )
+            ),
+            "approved_compatibility_patch": (
+                approved
+            ),
+            "compatibility_patch": {
+                "file": allowed_file,
+                "reason": reason,
+                "expected_diff_sha256": (
+                    expected_diff_sha256
+                ),
+                "actual_diff_sha256": (
+                    actual_sha256
+                ),
+                "exact_file_scope": (
+                    exact_file_scope
+                ),
+                "exact_diff_match": (
+                    exact_diff_match
+                ),
+            },
+            "provenance_pass": approved,
+        }
+    )
+
+    return base
+
+
 def tensor_parity(
     ours: torch.Tensor,
     native: torch.Tensor,
@@ -2779,7 +3306,11 @@ def run_encoder(args, cases, device):
             device,
         )
     integrity = {
-        "checkpoint_load": checkpoint_load_audit(load_records, args.checkpoint),
+        "checkpoint_load": encoder_checkpoint_audit(
+            load_records,
+            args.checkpoint,
+            model,
+        ),
         "upstream_repo": git_repo_provenance(
             args.encoder_root,
             "29a2a31d6a56f677bf450c3be7cdaef423fb7018",
@@ -3015,24 +3546,28 @@ def run_tgcir(args, cases, device):
     _ensure_repo_on_path()
     from teacher.adapters import tgcir as adapter
 
+    tgcir_root = args.tgcir_root.resolve()
+    checkpoint_path = args.checkpoint.resolve()
+
     with capture_load_state_dict_results() as load_records:
         (
             model,
             txt_processor,
             preprocess,
         ) = adapter.build_tgcir(
-            args.tgcir_root.resolve(),
-            args.checkpoint.resolve(),
+            tgcir_root,
+            checkpoint_path,
             device,
         )
 
     integrity = {
-        "checkpoint_load": checkpoint_load_audit(
+        "checkpoint_load": tgcir_origin_checkpoint_audit(
             load_records,
-            args.checkpoint,
+            checkpoint_path,
+            model,
         ),
         "upstream_repo": git_repo_provenance(
-            args.tgcir_root.resolve(),
+            tgcir_root,
             "84005f643ccaacf999982694ad5631df92cef098",
         ),
     }
@@ -3130,13 +3665,21 @@ def run_csmcir(args, cases, device):
     )
 
     integrity = {
-        "checkpoint_load": checkpoint_load_audit(
+        "checkpoint_load": csmcir_checkpoint_audit(
             load_records,
             args.checkpoint,
+            model,
         ),
-        "upstream_repo": git_repo_provenance(
+        "upstream_repo": git_repo_provenance_with_compat_patch(
             args.csmcir_root.resolve(),
             "774f94e2076ff17ea91703a6239d2a08f0e1a44e",
+            "src/lavis/models/__init__.py",
+            "87fb74265ee2e2fb712be2a4e75cc064d63e5a500ae2a02fcfd9863b77a633a8",
+            (
+                "Disable imports of modules absent from the audited "
+                "upstream repository snapshot; retrieval model "
+                "implementation itself is not modified."
+            ),
         ),
     }
 

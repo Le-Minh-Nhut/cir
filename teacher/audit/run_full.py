@@ -558,6 +558,10 @@ def get_summary(report: dict) -> dict:
         "checkpoint_load_status": checkpoint["status"],
         "repo_snapshot_match": repo.get("matches_audited_snapshot"),
         "repo_tracked_clean": repo.get("tracked_worktree_clean"),
+        "repo_provenance_pass": repo.get(
+            "provenance_pass",
+            repo.get("tracked_worktree_clean"),
+        ),
     }
 
 
@@ -1136,8 +1140,8 @@ def main():
             blockers.append("checkpoint_load_requires_review")
         if row["repo_snapshot_match"] is not True:
             blockers.append("upstream_repo_snapshot_not_verified")
-        if row["repo_tracked_clean"] is not True:
-            blockers.append("upstream_repo_tracked_cleanliness_not_verified")
+        if row["repo_provenance_pass"] is not True:
+            blockers.append("upstream_repo_provenance_not_verified")
         # Natural FashionIQ whole-caption deletion is only a screening proxy.
         # Final lock requires controlled atomic evidence and the exact train-time
         # intervention path.

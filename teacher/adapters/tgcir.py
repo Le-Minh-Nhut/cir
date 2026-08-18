@@ -22,7 +22,7 @@ def build_tgcir(
         device=device,
     ).to(device)
 
-    model.load_ckpt(str(checkpoint_path))
+    model.load_ckpt(str(checkpoint_path), is_origin=True,)
     model.eval()
 
     for p in model.parameters():
