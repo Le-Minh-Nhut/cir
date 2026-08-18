@@ -799,7 +799,7 @@ def collect_qformer_queries(
         if teacher == "tme":
             vit_states = adapter.encode_vit_states(model, images)
             reference_repr = adapter.encode_reference(model, vit_states)
-        elif teacher in {"sprc", "qure"}:
+        elif teacher in {"sprc", "tgcir", "csmcir"}:
             reference_repr = adapter.encode_reference(model, images)
         else:
             raise ValueError(teacher)
@@ -911,6 +911,90 @@ def build_sprc_gallery(
         parts.append(target_features.detach().float().cpu())
         del images, target_features
     return torch.cat(parts, dim=0)
+
+
+def build_tgcir_gallery(
+    model,
+    preprocess,
+    image_ids,
+    category,
+    image_root,
+    device,
+    batch_size,
+    adapter,
+):
+    parts = []
+
+    for start in range(0, len(image_ids), batch_size):
+        ids = image_ids[start : start + batch_size]
+
+        images = load_image_batch(
+            ids,
+            category,
+            image_root,
+            preprocess,
+        ).to(device)
+
+        features = adapter.encode_target(
+            model,
+            images,
+        )
+
+        parts.append(
+            features.detach().float().cpu()
+        )
+
+        del images, features
+
+    return torch.cat(parts, dim=0)
+
+
+def build_csmcir_gallery(
+    model,
+    preprocess,
+    image_ids,
+    category,
+    image_root,
+    device,
+    batch_size,
+    adapter,
+    caption_dicts,
+):
+    parts = []
+
+    for start in range(0, len(image_ids), batch_size):
+        ids = image_ids[start : start + batch_size]
+
+        images = load_image_batch(
+            ids,
+            category,
+            image_root,
+            preprocess,
+        ).to(device)
+
+        captions = [
+            adapter.target_caption(
+                caption_dicts,
+                category,
+                image_id,
+            )
+            for image_id in ids
+        ]
+
+        features = adapter.encode_target(
+            model,
+            images,
+            captions,
+        )
+
+        parts.append(
+            features.detach().float().cpu()
+        )
+
+        del images, features
+
+    return torch.cat(parts, dim=0)
+
 
 def build_qure_gallery(
     model,
@@ -1518,6 +1602,226 @@ def probe_qure_differentiability(
         handle.remove()
         model.zero_grad(set_to_none=True)
 
+
+def probe_tgcir_differentiability(
+    model,
+    preprocess,
+    txt_processor,
+    case,
+    image_root,
+    device,
+    adapter,
+):
+    image = load_image_batch(
+        [case["reference_id"]],
+        case["category"],
+        image_root,
+        preprocess,
+    ).to(device)
+
+    with torch.no_grad():
+        reference_tokens = adapter.encode_reference(
+            model,
+            image,
+        ).detach()
+
+    alpha = torch.tensor(
+        0.0,
+        device=device,
+        requires_grad=True,
+    )
+
+    embedding = model.backbone.clip.token_embedding
+
+    def hook(_module, _inputs, output):
+        axis = torch.linspace(
+            -1.0,
+            1.0,
+            output.shape[-1],
+            device=output.device,
+            dtype=output.dtype,
+        )
+
+        perturb = axis.view(
+            *([1] * (output.ndim - 1)),
+            output.shape[-1],
+        ).expand_as(output).detach()
+
+        return output + 1e-2 * alpha * perturb
+
+    handle = embedding.register_forward_hook(hook)
+
+    try:
+        texts = [txt_processor(case["full_text"])]
+
+        mod_tokens = model.backbone.extract_text_fea(
+            texts
+        )
+
+        remain_mask = model.s_remain_map(
+            torch.cat(
+                [reference_tokens, mod_tokens],
+                dim=-1,
+            )
+        )
+
+        fused = (
+            remain_mask * reference_tokens
+            + (1.0 - remain_mask) * mod_tokens
+        )
+
+        query_pre = fused.mean(dim=1)
+
+        return _autograd_connectivity_probe(
+            query=query_pre,
+            alpha=alpha,
+            boundary=(
+                "TG-CIR CLIP text-token embedding "
+                "continuous perturbation"
+            ),
+        )
+
+    except Exception as exc:
+        return {
+            "status": "error",
+            "boundary": "TG-CIR CLIP text embeddings",
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+
+    finally:
+        handle.remove()
+        model.zero_grad(set_to_none=True)
+
+
+def probe_csmcir_differentiability(
+    model,
+    preprocess,
+    txt_processor,
+    case,
+    image_root,
+    device,
+    adapter,
+):
+    image = load_image_batch(
+        [case["reference_id"]],
+        case["category"],
+        image_root,
+        preprocess,
+    ).to(device)
+
+    with torch.no_grad():
+        reference_embeds = adapter.encode_reference(
+            model,
+            image,
+        ).detach()
+
+    processed = txt_processor(
+        case["full_text"]
+    )
+
+    text_tokens = model.tokenizer(
+        [processed],
+        padding="max_length",
+        truncation=True,
+        max_length=model.max_txt_len,
+        return_tensors="pt",
+    ).to(device)
+
+    query_tokens = model.query_tokens.expand(
+        1,
+        -1,
+        -1,
+    ).detach()
+
+    query_atts = torch.ones(
+        query_tokens.size()[:-1],
+        dtype=torch.long,
+        device=device,
+    )
+
+    image_atts = torch.ones(
+        reference_embeds.size()[:-1],
+        dtype=torch.long,
+        device=device,
+    )
+
+    attention_mask = torch.cat(
+        [
+            query_atts,
+            text_tokens.attention_mask,
+        ],
+        dim=1,
+    )
+
+    alpha = torch.tensor(
+        0.0,
+        device=device,
+        requires_grad=True,
+    )
+
+    word_embeddings = (
+        _qformer_word_embedding_module(model)
+    )
+
+    def hook(_module, _inputs, output):
+        axis = torch.linspace(
+            -1.0,
+            1.0,
+            output.shape[-1],
+            dtype=output.dtype,
+            device=output.device,
+        )
+
+        perturb = axis.view(
+            *([1] * (output.ndim - 1)),
+            output.shape[-1],
+        ).expand_as(output).detach()
+
+        return output + 1e-2 * alpha * perturb
+
+    handle = word_embeddings.register_forward_hook(
+        hook
+    )
+
+    try:
+        fusion_output = model.Qformer.bert(
+            text_tokens.input_ids,
+            query_embeds=query_tokens,
+            attention_mask=attention_mask,
+            encoder_hidden_states=reference_embeds,
+            encoder_attention_mask=image_atts,
+            return_dict=True,
+        )
+
+        query_pre = model.text_proj(
+            fusion_output.last_hidden_state[
+                :,
+                query_tokens.size(1),
+                :
+            ]
+        )
+
+        return _autograd_connectivity_probe(
+            query=query_pre,
+            alpha=alpha,
+            boundary=(
+                "CSMCIR Q-Former word-embedding "
+                "continuous perturbation"
+            ),
+        )
+
+    except Exception as exc:
+        return {
+            "status": "error",
+            "boundary": "CSMCIR Q-Former embeddings",
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+
+    finally:
+        handle.remove()
+        model.zero_grad(set_to_none=True)
+
+
 def balanced_geometry_by_category(
     cases: list[dict],
     delta_1: torch.Tensor,
@@ -1588,7 +1892,7 @@ def select_published_native_policy(
     teacher_name: str,
     retrieval_native: dict,
 ) -> dict:
-    policy = "exclude_reference" if teacher_name in {"ENCODER", "HINT"} else "include_reference"
+    policy = "exclude_reference" if teacher_name == "ENCODER" else "include_reference"
     return {
         "policy": policy,
         "quality": native_retrieval_quality(retrieval_native)[policy]["full"],
@@ -2252,6 +2556,219 @@ def qure_native_parity_probe(
         "scorer": scheck,
     }
 
+
+def tgcir_native_parity_probe(
+    model,
+    preprocess,
+    txt_processor,
+    cases,
+    image_root,
+    device,
+    adapter,
+):
+    batch = cases[: min(2, len(cases))]
+
+    images = load_case_image_batch(
+        batch,
+        image_root,
+        preprocess,
+    ).to(device)
+
+    reference_tokens = adapter.encode_reference(
+        model,
+        images,
+    )
+
+    texts = [
+        case["full_text"]
+        for case in batch
+    ]
+
+    with torch.no_grad():
+        _, ours_query = adapter.compose_query(
+            model,
+            reference_tokens,
+            texts,
+            txt_processor,
+        )
+
+        native_query = model.img_txt_fusion(
+            reference_tokens,
+            texts,
+        )
+
+        target_cases = [
+            {
+                **case,
+                "reference_id": case["target_id"],
+            }
+            for case in batch
+        ]
+
+        target_images = load_case_image_batch(
+            target_cases,
+            image_root,
+            preprocess,
+        ).to(device)
+
+        target_features = adapter.encode_target(
+            model,
+            target_images,
+        )
+
+        ours_scores = score_vector_gallery(
+            ours_query,
+            target_features,
+        )
+
+        native_scores = (
+            native_query
+            @ target_features.T
+        )
+
+    qcheck = tensor_parity(
+        ours_query,
+        native_query,
+        "TG-CIR adapter query vs img_txt_fusion",
+    )
+
+    scheck = tensor_parity(
+        ours_scores,
+        native_scores,
+        "TG-CIR scorer vs native dot product",
+    )
+
+    return {
+        "status": (
+            "pass"
+            if (
+                qcheck["status"] == "pass"
+                and scheck["status"] == "pass"
+            )
+            else "fail"
+        ),
+        "query": qcheck,
+        "scorer": scheck,
+    }
+
+
+def csmcir_native_parity_probe(
+    model,
+    preprocess,
+    txt_processor,
+    cases,
+    image_root,
+    device,
+    adapter,
+    caption_dicts,
+):
+    batch = cases[: min(2, len(cases))]
+
+    images = load_case_image_batch(
+        batch,
+        image_root,
+        preprocess,
+    ).to(device)
+
+    reference_embeds = adapter.encode_reference(
+        model,
+        images,
+    )
+
+    raw_texts = [
+        case["full_text"]
+        for case in batch
+    ]
+
+    processed = [
+        txt_processor(text)
+        for text in raw_texts
+    ]
+
+    target_cases = [
+        {
+            **case,
+            "reference_id": case["target_id"],
+        }
+        for case in batch
+    ]
+
+    target_images = load_case_image_batch(
+        target_cases,
+        image_root,
+        preprocess,
+    ).to(device)
+
+    target_captions = [
+        adapter.target_caption(
+            caption_dicts,
+            case["category"],
+            case["target_id"],
+        )
+        for case in batch
+    ]
+
+    with torch.no_grad():
+        _, ours_query = adapter.compose_query(
+            model,
+            reference_embeds,
+            raw_texts,
+            txt_processor,
+        )
+
+        target_features = adapter.encode_target(
+            model,
+            target_images,
+            target_captions,
+        )
+
+        ours_scores = score_token_gallery(
+            ours_query,
+            target_features,
+        )
+
+        (
+            native_token_scores,
+            native_query,
+        ) = model.inference_tsen(
+            reference_embeds,
+            target_features,
+            processed,
+            processed,
+        )
+
+        native_scores = (
+            native_token_scores
+            .max(dim=-1)
+            .values
+        )
+
+    qcheck = tensor_parity(
+        ours_query,
+        native_query,
+        "CSMCIR adapter query vs inference_tsen",
+    )
+
+    scheck = tensor_parity(
+        ours_scores,
+        native_scores,
+        "CSMCIR scorer vs native inference",
+    )
+
+    return {
+        "status": (
+            "pass"
+            if (
+                qcheck["status"] == "pass"
+                and scheck["status"] == "pass"
+            )
+            else "fail"
+        ),
+        "query": qcheck,
+        "scorer": scheck,
+    }
+
+
 def run_encoder(args, cases, device):
     _ensure_repo_on_path()
     from teacher.adapters import encoder as adapter
@@ -2493,6 +3010,212 @@ def run_sprc(args, cases, device):
     )
     return query_store, retrieval_common, retrieval_native, diff, integrity
 
+
+def run_tgcir(args, cases, device):
+    _ensure_repo_on_path()
+    from teacher.adapters import tgcir as adapter
+
+    with capture_load_state_dict_results() as load_records:
+        (
+            model,
+            txt_processor,
+            preprocess,
+        ) = adapter.build_tgcir(
+            args.tgcir_root.resolve(),
+            args.checkpoint.resolve(),
+            device,
+        )
+
+    integrity = {
+        "checkpoint_load": checkpoint_load_audit(
+            load_records,
+            args.checkpoint,
+        ),
+        "upstream_repo": git_repo_provenance(
+            args.tgcir_root.resolve(),
+            "84005f643ccaacf999982694ad5631df92cef098",
+        ),
+    }
+
+    parity = tgcir_native_parity_probe(
+        model,
+        preprocess,
+        txt_processor,
+        cases,
+        args.image_root,
+        device,
+        adapter,
+    )
+
+    integrity["native_interface_parity"] = parity
+    assert_native_parity(parity, "TG-CIR")
+
+    query_store = collect_qformer_queries(
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        cases=cases,
+        image_root=args.image_root,
+        device=device,
+        batch_size=args.batch_size,
+        teacher="tgcir",
+        adapter=adapter,
+    )
+
+    def gallery_builder(ids, category):
+        return build_tgcir_gallery(
+            model=model,
+            preprocess=preprocess,
+            image_ids=ids,
+            category=category,
+            image_root=args.image_root,
+            device=device,
+            batch_size=args.gallery_batch_size,
+            adapter=adapter,
+        )
+
+    retrieval_common = score_all_queries(
+        query_store=query_store,
+        cases=cases,
+        gallery_builder=gallery_builder,
+        score_fn=score_vector_gallery,
+        device=device,
+        score_batch_size=args.score_batch_size,
+        gallery_id_provider=full_gallery_provider(
+            args.split_root
+        ),
+        protocol_name=(
+            "TG-CIR_native_full_gallery_dot_product"
+        ),
+    )
+
+    retrieval_native = retrieval_common
+
+    diff = probe_tgcir_differentiability(
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        case=cases[0],
+        image_root=args.image_root,
+        device=device,
+        adapter=adapter,
+    )
+
+    return (
+        query_store,
+        retrieval_common,
+        retrieval_native,
+        diff,
+        integrity,
+    )
+
+
+def run_csmcir(args, cases, device):
+    _ensure_repo_on_path()
+    from teacher.adapters import csmcir as adapter
+
+    with capture_load_state_dict_results() as load_records:
+        (
+            model,
+            txt_processor,
+            preprocess,
+        ) = adapter.build_csmcir(
+            args.csmcir_root.resolve(),
+            args.checkpoint.resolve(),
+            device,
+        )
+
+    caption_dicts = adapter.load_target_captions(
+        args.csmcir_root.resolve()
+    )
+
+    integrity = {
+        "checkpoint_load": checkpoint_load_audit(
+            load_records,
+            args.checkpoint,
+        ),
+        "upstream_repo": git_repo_provenance(
+            args.csmcir_root.resolve(),
+            "774f94e2076ff17ea91703a6239d2a08f0e1a44e",
+        ),
+    }
+
+    parity = csmcir_native_parity_probe(
+        model,
+        preprocess,
+        txt_processor,
+        cases,
+        args.image_root,
+        device,
+        adapter,
+        caption_dicts,
+    )
+
+    integrity["native_interface_parity"] = parity
+    assert_native_parity(parity, "CSMCIR")
+
+    query_store = collect_qformer_queries(
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        cases=cases,
+        image_root=args.image_root,
+        device=device,
+        batch_size=args.batch_size,
+        teacher="csmcir",
+        adapter=adapter,
+    )
+
+    def gallery_builder(ids, category):
+        return build_csmcir_gallery(
+            model=model,
+            preprocess=preprocess,
+            image_ids=ids,
+            category=category,
+            image_root=args.image_root,
+            device=device,
+            batch_size=args.gallery_batch_size,
+            adapter=adapter,
+            caption_dicts=caption_dicts,
+        )
+
+    retrieval_common = score_all_queries(
+        query_store=query_store,
+        cases=cases,
+        gallery_builder=gallery_builder,
+        score_fn=score_token_gallery,
+        device=device,
+        score_batch_size=args.score_batch_size,
+        gallery_id_provider=full_gallery_provider(
+            args.split_root
+        ),
+        protocol_name=(
+            "CSMCIR_native_target_caption_gallery_"
+            "QFormer_token_max"
+        ),
+    )
+
+    retrieval_native = retrieval_common
+
+    diff = probe_csmcir_differentiability(
+        model=model,
+        preprocess=preprocess,
+        txt_processor=txt_processor,
+        case=cases[0],
+        image_root=args.image_root,
+        device=device,
+        adapter=adapter,
+    )
+
+    return (
+        query_store,
+        retrieval_common,
+        retrieval_native,
+        diff,
+        integrity,
+    )
+
+
 def run_hint(args, cases, device):
     _ensure_repo_on_path()
     from teacher.adapters import hint as adapter
@@ -2714,7 +3437,7 @@ def parse_args():
     parser.add_argument(
         "--teacher",
         required=True,
-        choices=("encoder", "tme", "sprc", "hint", "qure"),
+        choices=("encoder", "tme", "sprc", "tgcir", "csmcir"),
     )
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument(
@@ -2770,6 +3493,16 @@ def parse_args():
         default=Path("teacher/repos/QuRe/configs/fashionIQ/eval.json"),
     )
     parser.add_argument(
+        "--tgcir-root",
+        type=Path,
+        default=Path("teacher/repos/SPN4CIR/tgcir"),
+    )
+    parser.add_argument(
+        "--csmcir-root",
+        type=Path,
+        default=Path("teacher/repos/CSMCIR"),
+    )
+    parser.add_argument(
         "--backbone",
         choices=("pretrain", "pretrain_vitL"),
         default="pretrain_vitL",
@@ -2797,25 +3530,12 @@ def main():
     args.output = args.output.resolve()
     if args.artifact_output is not None:
         args.artifact_output = args.artifact_output.resolve()
-    if args.teacher in {"encoder", "hint"} and args.correction_root is None:
-        search_roots = [
+    if args.teacher == "encoder" and args.correction_root is None:
+        args.correction_root = discover_correction_root(
+            args.encoder_root.resolve(),
+            (_repo_root() / "teacher/checkpoints/encoder").resolve(),
             (_repo_root() / "data/FashionIQ").resolve(),
-        ]
-        if args.teacher == "encoder":
-            search_roots.extend(
-                [
-                    args.encoder_root.resolve(),
-                    (_repo_root() / "teacher/checkpoints/encoder").resolve(),
-                ]
-            )
-        else:
-            search_roots.extend(
-                [
-                    args.hint_root.resolve(),
-                    (_repo_root() / "teacher/checkpoints/hint").resolve(),
-                ]
-            )
-        args.correction_root = discover_correction_root(*search_roots)
+        )
     if args.correction_root is not None:
         args.correction_root = args.correction_root.resolve()
     cases = load_cases(args.cases, args.limit)
@@ -2864,32 +3584,32 @@ def main():
             device,
         )
         teacher_name = "SPRC"
-    elif args.teacher == "hint":
+    elif args.teacher == "tgcir":
         (
             query_store,
             retrieval_common,
             retrieval_native,
             differentiability,
             integrity,
-        ) = run_hint(
+        ) = run_tgcir(
             args,
             cases,
             device,
         )
-        teacher_name = "HINT"
-    elif args.teacher == "qure":
+        teacher_name = "TG-CIR"
+    elif args.teacher == "csmcir":
         (
             query_store,
             retrieval_common,
             retrieval_native,
             differentiability,
             integrity,
-        ) = run_qure(
+        ) = run_csmcir(
             args,
             cases,
             device,
         )
-        teacher_name = "QuRe"
+        teacher_name = "CSMCIR"
     else:
         raise ValueError(f"Unsupported teacher: {args.teacher}")
     report = build_report(
