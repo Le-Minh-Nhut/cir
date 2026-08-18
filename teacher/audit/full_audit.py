@@ -2678,12 +2678,31 @@ def git_repo_provenance_with_compat_patch(
         [],
     )
 
-    changed_paths = []
-    for line in tracked_changes:
-        if len(line) >= 4:
-            changed_paths.append(line[3:])
-
+    # Do not parse paths from `git status --porcelain` here.
+    # git_repo_provenance() currently strips stdout, which can remove
+    # the leading status-column space from entries such as:
+    #   " M path/to/file"
+    # Use git diff --name-only instead for exact tracked file scope.
     try:
+        changed_paths_result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "diff",
+                "--name-only",
+                "HEAD",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        changed_paths = [
+            line.strip()
+            for line in changed_paths_result.stdout.splitlines()
+            if line.strip()
+        ]
+
         result = subprocess.run(
             [
                 "git",
