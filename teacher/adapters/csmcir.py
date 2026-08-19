@@ -5,28 +5,33 @@ from pathlib import Path
 
 import torch
 import torch.nn.functional as F
+from contextlib import contextmanager
 
+@contextmanager
+def temporary_cwd(path: Path):
+    old_cwd = Path.cwd()
+    try:
+        os.chdir(path)
+        yield
+    finally:
+        os.chdir(old_cwd)
 
-def build_csmcir(
-    csmcir_root: Path,
-    checkpoint_path: Path,
-    device: torch.device,
-):
+def build_csmcir(csmcir_root: Path, checkpoint_path: Path, device: torch.device):
     csmcir_root = csmcir_root.resolve()
     src_root = csmcir_root / "src"
 
     sys.path.insert(0, str(src_root))
-    os.chdir(csmcir_root)
 
-    from data_utils_csmcir import targetpad_transform
-    from lavis.models import load_model_and_preprocess
+    with temporary_cwd(csmcir_root):
+        from data_utils_csmcir import targetpad_transform
+        from lavis.models import load_model_and_preprocess
 
-    model, _, txt_processors = load_model_and_preprocess(
-        name="blip2_cir_align_prompt_csmcir",
-        model_type="pretrain",
-        is_eval=False,
-        device=device,
-    )
+        model, _, txt_processors = load_model_and_preprocess(
+            name="blip2_cir_align_prompt_csmcir",
+            model_type="pretrain",
+            is_eval=False,
+            device=device,
+        )
 
     checkpoint = torch.load(
         checkpoint_path,
@@ -136,14 +141,9 @@ def target_caption(
 
 
 @torch.no_grad()
-def encode_reference(
-    model,
-    images: torch.Tensor,
-) -> torch.Tensor:
+def encode_reference(model, images: torch.Tensor) -> torch.Tensor:
     with model.maybe_autocast():
-        embeds = model.ln_vision(
-            model.visual_encoder(images)
-        )
+        embeds = model.ln_vision(model.visual_encoder(images))
 
     return embeds.float()
 

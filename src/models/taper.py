@@ -146,7 +146,7 @@ class TAPER(nn.Module):
         batch_ids = torch.arange(slots.shape[0], device=slots.device)
         return slots[batch_ids, slot_ids]
 
-    def build_edit_slots(self, reference_features: Tensor, text_states: Tensor, text_attention_mask: Tensor) -> dict[str, Tensor]:
+    def build_edit_slots(self, reference_features: Tensor, text_states: Tensor, text_attention_mask: Tensor, text_content_mask: Tensor | None = None,) -> dict[str, Tensor]:
         """M -> A -> s -> counterfactual delta -> u -> slot gate g."""
         if text_states.ndim != 3 or text_attention_mask.ndim != 2:
             raise ValueError("text_states must be [B,N,D] and mask must be [B,N]")
@@ -156,7 +156,19 @@ class TAPER(nn.Module):
             raise ValueError(f"text dim must be {self.text_dim}")
 
         batch_size, num_tokens, _ = text_states.shape
-        valid = text_attention_mask.to(torch.bool)
+        attention_valid = text_attention_mask.to(torch.bool)
+        if text_content_mask is None:
+            slot_valid = attention_valid
+        else:
+            if text_content_mask.shape != text_attention_mask.shape:
+                raise ValueError(
+                    "text_content_mask must match text_attention_mask"
+                )
+
+            slot_valid = (
+                attention_valid
+                & text_content_mask.to(torch.bool)
+            )
 
         queries = self.slot_query_projection(self.slot_queries)       # [L,Ds]
         keys = self.text_key_projection(text_states)                  # [B,N,Ds]
@@ -164,7 +176,7 @@ class TAPER(nn.Module):
         logits = logits / math.sqrt(self.slot_dim) / self.mask_temperature
 
         # Independent token membership. Padding never belongs to a slot.
-        slot_masks = torch.sigmoid(logits) * valid[:, None, :].to(text_states.dtype)
+        slot_masks = torch.sigmoid(logits)* slot_valid[:, None, :].to(text_states.dtype)
 
         mask_mass = slot_masks.sum(2, keepdim=True).clamp_min(1e-6)
         slot_semantics = (torch.einsum("bln,bnd->bld", slot_masks, text_states) / mask_mass)

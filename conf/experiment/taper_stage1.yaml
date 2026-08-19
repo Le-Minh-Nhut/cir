@@ -1,0 +1,110 @@
+# Frozen CSMCIR -> TAPER Edit Slot Stage-1
+
+stage1:
+  teacher:
+    _target_: teachers.csmcir.CSMCIRStage1Teacher
+
+    csmcir_root: teacher/repos/CSMCIR
+    checkpoint_path: teacher/checkpoints/csmcir/fashioniq_tuned_clip_best.pt
+    device: cuda
+
+  # --------------------------------------------------
+  # Teacher-native caches
+  # --------------------------------------------------
+  features:
+    train_reference_dir: features/fashioniq/csmcir/train_reference_teacher
+    val_reference_dir: features/fashioniq/csmcir/val_reference_teacher
+    val_gallery_dir: features/fashioniq/csmcir/val_gallery_teacher
+
+  # --------------------------------------------------
+  # Stage-1 TAPER
+  # --------------------------------------------------
+  model:
+    # Q-Former raw word embedding dimension
+    text_dim: 768
+
+    # UNUSED in Stage-1.
+    # Kept only because TAPER constructor currently requires it.
+    reference_dim: 1408
+
+    # CSMCIR text_proj output
+    teacher_query_dim: 256
+
+    # UNUSED in Stage-1
+    query_dim: 256
+
+    slot_dim: 512
+    state_dim: 512
+
+    num_slots: 4
+
+    # UNUSED in Stage-1
+    num_primitives: 8
+
+    mask_temperature: 1.0
+
+    # UNUSED in Stage-1
+    router_temperature: 1.0
+    retrieval_temperature: 0.07
+
+    neutral_mode: zero
+
+    slot_gate_threshold: 0.5
+    hard_slot_gating_during_training: false
+
+    overlap_margin: 0.60
+    effect_diversity_margin: 0.50
+
+    # UNUSED in Stage-1
+    alpha_max: 1.0
+
+  # --------------------------------------------------
+  # Training
+  # --------------------------------------------------
+  batch_size: 4
+  eval_batch_size: 8
+  num_workers: 4
+
+  num_epochs: 30
+
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+
+  # Keep deterministic FashionIQ caption construction.
+  train_caption_policy: ordered_and
+
+  # V0 starting weights.
+  # These are starting hyperparameters, NOT claimed optimal.
+  loss_weights:
+    slot_sparse_loss: 1.0
+    slot_coverage_loss: 1.0
+    slot_overlap_loss: 1.0
+    slot_effect_diversity_loss: 1.0
+    slot_gate_sparsity_loss: 0.1
+
+  # --------------------------------------------------
+  # TCFR / health evaluation
+  # --------------------------------------------------
+  evaluation:
+    teacher_score_mode: max_token
+
+    # Teacher must retrieve GT inside top-10
+    # for the query to enter TCFR denominator.
+    teacher_success_k: 10
+
+    hard_negative_k: 10
+
+    exclude_reference_from_candidates: true
+
+    gallery_chunk_size: 512
+
+    slot_gate_threshold: 0.5
+
+    # V0: log health metrics first.
+    # Don't reject checkpoints with arbitrary thresholds yet.
+    health:
+      max_zero_active_rate: null
+      max_all_active_rate: null
+      max_harmful_active_slot_rate: null
+      max_mask_overlap_violation_rate: null
+      max_effect_redundancy_violation_rate: null

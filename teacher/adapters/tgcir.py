@@ -36,12 +36,7 @@ def encode_reference(model, images: torch.Tensor) -> torch.Tensor:
     return model.img_embed(images)
 
 
-def compose_query(
-    model,
-    reference_tokens: torch.Tensor,
-    texts: list[str],
-    txt_processor=None,
-):
+def compose_query(model, reference_tokens: torch.Tensor, texts: list[str], txt_processor=None):
     if txt_processor is not None:
         texts = [txt_processor(text) for text in texts]
 

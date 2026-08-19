@@ -5,7 +5,6 @@ import math
 from collections import defaultdict
 from contextlib import nullcontext
 from pathlib import Path
-
 import hydra
 import torch
 from hydra.utils import instantiate
@@ -14,24 +13,12 @@ from torch import Tensor, nn
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-
 from cache.features import get_features_by_ids, load_features
 from datasets.common import CIRBatch, collate_cir_samples
-from datasets.fashioniq import (
-    FashionIQDataset,
-    load_fashioniq_split_ids,
-)
-from evaluation.edit_slot_stage1 import (
-    build_tcfr_cache,
-    evaluate_stage1_edit_slots,
-)
+from datasets.fashioniq import FashionIQDataset, load_fashioniq_split_ids
+from evaluation.edit_slot_stage1 import build_tcfr_cache, evaluate_stage1_edit_slots,
 from models.taper import TAPER
-from runtime import (
-    collect_environment_metadata,
-    configure_torch_runtime,
-    resolve_device,
-    seed_everything,
-)
+from runtime import collect_environment_metadata, configure_torch_runtime, resolve_device, seed_everything
 
 CATEGORIES = ("dress", "shirt", "toptee")
 
@@ -225,29 +212,7 @@ def prepare_stage1_batch(
         prepared["text_content_mask"] = text_content_mask
     return prepared
 
-def compute_stage1_losses(
-    model: TAPER,
-    batch: dict[str, object],
-) -> dict[str, Tensor]:
-    """
-    Strict Stage-1 path:
-
-        M
-        -> slot masks A
-        -> semantic pooling
-        -> teacher counterfactual
-        -> delta
-        -> edit slots u
-        -> gates g
-        -> slot regularizers
-
-    No:
-        Router
-        Primitive Bank
-        Executor
-        q0
-        retrieval_loss
-    """
+def compute_stage1_losses(model: TAPER, batch: dict[str, object]) -> dict[str, Tensor]:
     reference_features = batch["reference_features"]
     text_states = batch["text_states"]
     text_attention_mask = batch["text_attention_mask"]
@@ -257,12 +222,15 @@ def compute_stage1_losses(
         raise TypeError("text_states must be Tensor")
     if not isinstance(text_attention_mask, Tensor):
         raise TypeError("text_attention_mask must be Tensor")
+    
+    content_mask = batch.get("text_content_mask")
+    if content_mask is not None and not isinstance(content_mask, Tensor):
+        raise TypeError("text_content_mask must be Tensor")
     slot_output = model.build_edit_slots(
         reference_features=reference_features,
         text_states=text_states,
         text_attention_mask=text_attention_mask,
     )
-    content_mask = batch.get("text_content_mask")
     if content_mask is not None and not isinstance(content_mask, Tensor):
         raise TypeError("text_content_mask must be Tensor")
     return model._slot_regularizers(
@@ -291,21 +259,7 @@ def compute_total_loss(
     assert total_loss is not None
     return total_loss
 
-def configure_stage1_trainable_parameters(
-    model: TAPER,
-) -> list[nn.Parameter]:
-    """
-    Stage 1 trains only:
-
-        slot_queries
-        slot_query_projection
-        text_key_projection
-        slot_mlp
-        slot_gate
-        neutral_embedding (only when learned)
-
-    Everything downstream remains frozen.
-    """
+def configure_stage1_trainable_parameters(model: TAPER) -> list[nn.Parameter]:
     for parameter in model.parameters():
         parameter.requires_grad_(False)
     parameters: list[nn.Parameter] = []
@@ -423,18 +377,6 @@ def train_stage1_one_epoch(
 def get_stage1_state_dict(
     model: TAPER,
 ) -> dict[str, Tensor]:
-    """
-    Save only Edit-Slot Stage-1 weights.
-
-    Do NOT save random/untrained:
-        primitive bank
-        router
-        executor
-        query head
-        reference_to_state
-
-    Teacher weights are also excluded.
-    """
     stage1_state: dict[str, Tensor] = {}
     for name, tensor in model.state_dict().items():
         keep = name in STAGE1_STATE_EXACT_KEYS or name.startswith(STAGE1_STATE_PREFIXES)
@@ -500,23 +442,7 @@ def append_metrics(
             + "\n"
         )
 
-def build_stage1_model(
-    cfg: DictConfig,
-    device: torch.device,
-) -> TAPER:
-    """
-    cfg.stage1.teacher must be a Hydra-instantiable frozen
-    runtime teacher adapter.
-
-    Required teacher methods:
-        encode_text_tokens(texts)
-        compose(
-            reference_features,
-            text_states,
-            text_attention_mask,
-            normalize=False,
-        )
-    """
+def build_stage1_model(cfg: DictConfig, device: torch.device) -> TAPER:
     teacher = instantiate(cfg.stage1.teacher)
     if not isinstance(teacher, nn.Module):
         raise TypeError("cfg.stage1.teacher must instantiate an nn.Module")
@@ -553,46 +479,27 @@ def build_stage1_model(
     configure_stage1_trainable_parameters(model)
     return model
 
-@hydra.main(
-    version_base=None,
-    config_path="../conf",
-    config_name="config",
-)
+@hydra.main(version_base=None, config_path="../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     if "stage1" not in cfg:
         raise KeyError(
             "Missing cfg.stage1. Create the Stage-1 config before running src/train_stage1.py."
         )
-    seed_everything(
-        seed=int(cfg.seed),
-        deterministic=bool(cfg.runtime.deterministic),
-    )
-    configure_torch_runtime(
-        deterministic=bool(cfg.runtime.deterministic),
-        benchmark=bool(cfg.runtime.benchmark),
-    )
-    device = resolve_device(
-        device_name=str(cfg.runtime.device),
-        accelerator_index=int(cfg.runtime.accelerator_index),
-    )
+    seed_everything(seed=int(cfg.seed), deterministic=bool(cfg.runtime.deterministic))
+    configure_torch_runtime(deterministic=bool(cfg.runtime.deterministic), benchmark=bool(cfg.runtime.benchmark),)
+    device = resolve_device(device_name=str(cfg.runtime.device), accelerator_index=int(cfg.runtime.accelerator_index),)
     print(f"Device: {device}")
     print(f"Precision: {cfg.runtime.precision}")
     dataset_root = Path(cfg.dataset.root)
     annotation_root = dataset_root / "captions"
     split_root = dataset_root / "image_splits"
     output_dir = Path(cfg.paths.output_root) / "stage1"
-    output_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    output_dir.mkdir(parents=True, exist_ok=True)
     best_path = output_dir / "best.pt"
     last_path = output_dir / "last.pt"
     metrics_path = output_dir / "metrics.jsonl"
     environment_path = output_dir / "environment.json"
-    with environment_path.open(
-        "w",
-        encoding="utf-8",
-    ) as file:
+    with environment_path.open("w", encoding="utf-8") as file:
         json.dump(
             collect_environment_metadata(),
             file,
@@ -623,16 +530,16 @@ def main(cfg: DictConfig) -> None:
         val_reference_features,
         val_reference_name_to_idx,
     ) = load_features(Path(cfg.stage1.features.val_reference_dir))
-    (
-        teacher_gallery_features,
-        teacher_gallery_name_to_idx,
-    ) = load_features(Path(cfg.stage1.features.val_gallery_dir))
-    if train_reference_features.ndim != 2:
-        raise ValueError("train_reference_features must be [N,D]")
-    if val_reference_features.ndim != 2:
-        raise ValueError("val_reference_features must be [N,D]")
-    if teacher_gallery_features.ndim != 2:
-        raise ValueError("teacher_gallery_features must be [G,D]")
+    teacher_galleries = {}
+    for category in CATEGORIES:
+        features, name_to_idx = load_features(Path(cfg.stage1.features.val_gallery_dir) / category)
+        teacher_galleries[category] = (features, name_to_idx)
+    if train_reference_features.ndim < 2:
+        raise ValueError("train_reference_features must have shape [N,...,D]")
+    if val_reference_features.ndim < 2:
+        raise ValueError("val_reference_features must have shape [N,...,D]")
+    if teacher_gallery_features.ndim < 2:
+        raise ValueError("teacher_gallery_features must have shape [G,...,D]")
     if not torch.isfinite(train_reference_features).all():
         raise ValueError("train teacher reference cache contains NaN or Inf")
     if not torch.isfinite(val_reference_features).all():

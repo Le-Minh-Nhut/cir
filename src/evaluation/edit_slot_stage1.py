@@ -38,9 +38,7 @@ def _validate_gallery(gallery: Tensor, name_to_idx: Mapping[str, int], score_mod
     if set(indices) != set(range(gallery.shape[0])):
         raise ValueError("teacher gallery name_to_idx must cover contiguous [0,G)")
 
-def _score_queries(
-    queries: Tensor, gallery: Tensor, *, score_mode: str, gallery_chunk_size: int
-) -> Tensor:
+def _score_queries(queries: Tensor, gallery: Tensor, *, score_mode: str, gallery_chunk_size: int) -> Tensor:
     """[Q,D] x teacher-native gallery -> [Q,G]."""
     if queries.ndim != 2:
         raise ValueError("queries must be [Q,D]")
@@ -434,9 +432,7 @@ def build_tcfr_cache(
                 target_ids.append(target_id)
             if any((sample_id in cache for sample_id in sample_ids)):
                 raise ValueError("duplicate validation sample_id")
-            target_indices = _ids_to_indices(
-                target_ids, local_index, device=device, field_name="target_id"
-            )
+            target_indices = _ids_to_indices(target_ids, local_index, device=device, field_name="target_id")
             reference_indices = (
                 _ids_to_indices(
                     reference_ids, local_index, device=device, field_name="reference_id"
@@ -521,7 +517,10 @@ def evaluate_stage1_edit_slots(
                 raise NotImplementedError("V0 Stage-1 evaluator is FashionIQ-only")
             batch = prepare_batch_fn(raw_batch)
             out = model.build_edit_slots(
-                batch["reference_features"], batch["text_states"], batch["text_attention_mask"]
+                reference_features=batch["reference_features"],
+                text_states=batch["text_states"],
+                text_attention_mask=batch["text_attention_mask"],
+                text_content_mask=batch.get("text_content_mask"),
             )
             masks = out["slot_masks"]
             effects = out["slot_effects"]
@@ -558,20 +557,11 @@ def evaluate_stage1_edit_slots(
                 if sample_id not in tcfr_cache:
                     raise KeyError(f"TCFR cache missing sample={sample_id}")
                 cached = tcfr_cache[sample_id]
-                if (
-                    cached["category"] != category
-                    or cached["reference_id"] != reference_ids[row]
-                    or cached["target_id"] != target_ids[row]
-                ):
+                if cached["category"] != category or cached["reference_id"] != reference_ids[row] or cached["target_id"] != target_ids[row]:
                     raise ValueError(f"stale/misaligned TCFR cache for sample={sample_id}")
                 cached_rows.append(cached)
-            target_indices = _ids_to_indices(
-                target_ids, local_index, device=device, field_name="target_id"
-            )
-            reference_indices = (
-                _ids_to_indices(
-                    reference_ids, local_index, device=device, field_name="reference_id"
-                )
+            target_indices = _ids_to_indices(target_ids, local_index, device=device, field_name="target_id")
+            reference_indices = (_ids_to_indices(reference_ids, local_index, device=device, field_name="reference_id")
                 if exclude_reference
                 else None
             )
@@ -584,9 +574,7 @@ def evaluate_stage1_edit_slots(
                 dtype=torch.float32,
                 device=device,
             )
-            full_ranks = torch.tensor(
-                [cached["teacher_full_rank"] for cached in cached_rows], device=device
-            )
+            full_ranks = torch.tensor([cached["teacher_full_rank"] for cached in cached_rows], device=device)
             qualified = torch.tensor(
                 [cached["teacher_qualified"] for cached in cached_rows],
                 dtype=torch.bool,
@@ -594,12 +582,8 @@ def evaluate_stage1_edit_slots(
             )
             candidate_indices = torch.cat([target_indices[:, None], negative_indices], dim=1)
             candidates = gallery[candidate_indices]
-            full_candidate_scores = _score_paired_candidates(
-                q_full[:, None, :], candidates, score_mode=score_mode
-            )[:, 0]
-            current_full_margin = full_candidate_scores[:, 0] - full_candidate_scores[:, 1:].mean(
-                dim=1
-            )
+            full_candidate_scores = _score_paired_candidates(q_full[:, None, :], candidates, score_mode=score_mode)[:, 0]
+            current_full_margin = full_candidate_scores[:, 0] - full_candidate_scores[:, 1:].mean(dim=1)
             if not torch.allclose(current_full_margin, full_margin, rtol=1e-4, atol=1e-5):
                 max_error = float((current_full_margin - full_margin).abs().max().item())
                 raise RuntimeError(
