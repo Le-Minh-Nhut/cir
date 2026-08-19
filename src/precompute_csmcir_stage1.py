@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument("--dataset-root", type=Path, default=Path("data/FashionIQ"))
     parser.add_argument("--csmcir-root", type=Path, default=Path("teacher/repos/CSMCIR"))
     parser.add_argument("--checkpoint", type=Path, default=Path("teacher/checkpoints/csmcir/fashioniq_tuned_clip_best.pt"))
-    parser.add_argument("--output-root", type=Path, default=Path("features/fashioniq/csmcir_stage1"))
+    parser.add_argument("--output-root", type=Path, default=Path("features/fashioniq/csmcir"))
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--device", type=str, default="cuda")
     return parser.parse_args()

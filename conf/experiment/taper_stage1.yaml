@@ -62,11 +62,11 @@ stage1:
   # --------------------------------------------------
   # Training
   # --------------------------------------------------
-  batch_size: 4
-  eval_batch_size: 8
-  num_workers: 4
+  batch_size: 32
+  eval_batch_size: 32
+  num_workers: 6
 
-  num_epochs: 30
+  num_epochs: 100
 
   lr: 1.0e-4
   weight_decay: 1.0e-4
@@ -81,7 +81,7 @@ stage1:
     slot_coverage_loss: 1.0
     slot_overlap_loss: 1.0
     slot_effect_diversity_loss: 1.0
-    slot_gate_sparsity_loss: 0.1
+    slot_gate_sparsity_loss: 0.0
 
   # --------------------------------------------------
   # TCFR / health evaluation

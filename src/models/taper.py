@@ -432,11 +432,14 @@ class TAPER(nn.Module):
         return (log_denominator - log_numerator).mean()
 
     def _slot_regularizers(self, slot_masks: Tensor, slot_effects: Tensor, slot_gates: Tensor, text_attention_mask: Tensor, text_content_mask: Tensor | None = None) -> dict[str, Tensor]:
-        attention_valid = text_attention_mask[:, None, :].to(slot_masks.dtype)
-        attention_count = attention_valid.sum().clamp_min(1.0)
-        gated_masks = slot_masks * slot_gates[:, :, None]
+        if text_content_mask is not None:
+            sparse_valid = (text_content_mask.to(torch.bool) & text_attention_mask.to(torch.bool))[:, None, :].to(slot_masks.dtype)
+        else:
+            sparse_valid = text_attention_mask[:, None, :].to(slot_masks.dtype)
 
-        sparse = (gated_masks * attention_valid).sum() / (attention_count * self.num_slots)
+        sparse_count = sparse_valid.sum().clamp_min(1.0)
+        gated_masks = slot_masks * slot_gates[:, :, None]
+        sparse = (gated_masks * sparse_valid).sum() / (sparse_count * self.num_slots)
         if text_content_mask is None:
             coverage = slot_masks.new_zeros(())
         else:
@@ -455,7 +458,7 @@ class TAPER(nn.Module):
             eye = torch.eye(self.num_slots, device=slot_masks.device, dtype=torch.bool)[None]
             offdiag = ~eye
             pair_weight = (slot_gates[:, :, None] * slot_gates[:, None, :])
-            mask_vectors = F.normalize(slot_masks * attention_valid, dim=-1, eps=1e-6)
+            mask_vectors = F.normalize(slot_masks * sparse_valid, dim=-1, eps=1e-6)
             mask_similarity = mask_vectors @ mask_vectors.transpose(1, 2)
             overlap_penalty = F.relu(mask_similarity - self.overlap_margin)
             overlap_weight = pair_weight * offdiag.to(pair_weight.dtype)
@@ -555,13 +558,24 @@ class TAPER(nn.Module):
         reference = batch["teacher_reference_features"]
         text = batch["text_states"]
         attention_mask = batch["text_attention_mask"]
-        output = self.build_edit_slots(reference, text, attention_mask)
+        content_mask = batch.get("text_content_mask")
+
+        if content_mask is not None and not isinstance(content_mask, Tensor):
+            raise TypeError("text_content_mask must be a Tensor when provided")
+
+        output = self.build_edit_slots(
+            reference_features=reference,
+            text_states=text,
+            text_attention_mask=attention_mask,
+            text_content_mask=content_mask,
+        )
+
         return self._slot_regularizers(
-            output["slot_masks"],
-            output["slot_effects"],
-            output["slot_gates"],
-            attention_mask,
-            batch.get("text_content_mask"),
+            slot_masks=output["slot_masks"],
+            slot_effects=output["slot_effects"],
+            slot_gates=output["slot_gates"],
+            text_attention_mask=attention_mask,
+            text_content_mask=content_mask,
         )
 
     @torch.no_grad()
