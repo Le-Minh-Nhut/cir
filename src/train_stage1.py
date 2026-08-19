@@ -232,8 +232,6 @@ def compute_stage1_losses(model: TAPER, batch: dict[str, object]) -> dict[str, T
         text_attention_mask=text_attention_mask,
         text_content_mask=content_mask,
     )
-    if content_mask is not None and not isinstance(content_mask, Tensor):
-        raise TypeError("text_content_mask must be Tensor")
     return model._slot_regularizers(
         slot_masks=slot_output["slot_masks"],
         slot_effects=slot_output["slot_effects"],

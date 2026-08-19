@@ -88,23 +88,26 @@ def validation_gallery_entries_for_category(split_root: Path, category: str) -> 
     ]
 
 
-def load_csmcir_target_captions(csmcir_root: Path) -> dict[str, dict]:
+def load_csmcir_target_captions(csmcir_root: Path) -> dict:
     root = csmcir_root.resolve() / "COT_ours2" / "fashioniq"
     result = {}
+
     for category in CATEGORIES:
         path = root / f"{category}_cot_val.json"
 
         if not path.is_file():
             raise FileNotFoundError(f"Missing CSMCIR target caption file: {path}")
 
-        with path.open("r", encoding="utf-8") as file:
-            result[category] = json.load(file)
+        with path.open("r", encoding="utf-8",) as file:
+            result.update(json.load(file))
 
     return result
 
+def get_target_caption(caption_dict: dict, *, image_id: str) -> str:
+    if image_id not in caption_dict:
+        raise KeyError(f"Missing CSMCIR target caption: {image_id}")
 
-def get_target_caption(caption_dicts: dict[str, dict], *, category: str, image_id: str) -> str:
-    entry = caption_dicts[category][image_id]
+    entry = caption_dict[image_id]
     if isinstance(entry, str):
         return entry
 
@@ -112,10 +115,8 @@ def get_target_caption(caption_dicts: dict[str, dict], *, category: str, image_i
         return entry["Final_Caption"]
 
     raise ValueError(
-        "Unsupported CSMCIR "
-        "target-caption entry for "
-        f"{category}/{image_id}: "
-        f"{entry!r}"
+        "Unsupported CSMCIR target-caption "
+        f"entry for {image_id}: {entry!r}"
     )
 
 
@@ -229,7 +230,6 @@ def precompute_gallery(
         captions = [
             get_target_caption(
                 caption_dicts,
-                category=category,
                 image_id=image_id,
             )
             for image_id, category in batch_entries

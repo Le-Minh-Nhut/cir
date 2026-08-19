@@ -1,3 +1,4 @@
+# @package _global_
 # Frozen CSMCIR -> TAPER Edit Slot Stage-1
 
 stage1:
@@ -94,7 +95,7 @@ stage1:
 
     hard_negative_k: 10
 
-    exclude_reference_from_candidates: true
+    exclude_reference_from_candidates: false
 
     gallery_chunk_size: 512
 

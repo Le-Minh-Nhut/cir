@@ -232,7 +232,12 @@ def compute_stage1_health(
         raise ValueError("text_attention_mask must be [B,N]")
     active = slot_gates >= gate_threshold
     active_count = active.sum(dim=1)
-    valid = text_attention_mask.to(slot_masks.dtype)[:, None, :]
+    if text_content_mask is not None:
+        valid_mask = text_content_mask.bool() & text_attention_mask.bool()
+    else:
+        valid_mask = text_attention_mask.bool()
+
+    valid = valid_mask.to(slot_masks.dtype)[:, None, :]
     masks = slot_masks * valid
     mass = masks.sum(dim=2) / valid.sum(dim=2).clamp_min(1.0)
     out = {
