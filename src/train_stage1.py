@@ -480,6 +480,13 @@ def build_stage1_model(cfg: DictConfig, device: torch.device) -> TAPER:
     configure_stage1_trainable_parameters(model)
     return model
 
+def assert_finite_chunked(features: Tensor, *, name: str, chunk_rows: int = 32) -> None:
+    for start in range(0, features.shape[0], chunk_rows,):
+        end = min(start + chunk_rows, features.shape[0],)
+
+        if not torch.isfinite(features[start:end]).all().item():
+            raise ValueError(f"{name} contains NaN/Inf in rows {start}:{end}")
+
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     if "stage1" not in cfg:
@@ -537,16 +544,20 @@ def main(cfg: DictConfig) -> None:
         teacher_galleries[category] = (features, name_to_idx)
     if train_reference_features.ndim < 2:
         raise ValueError("train_reference_features must have shape [N,...,D]")
+
     if val_reference_features.ndim < 2:
         raise ValueError("val_reference_features must have shape [N,...,D]")
-    if teacher_gallery_features.ndim < 2:
-        raise ValueError("teacher_gallery_features must have shape [G,...,D]")
-    if not torch.isfinite(train_reference_features).all():
-        raise ValueError("train teacher reference cache contains NaN or Inf")
-    if not torch.isfinite(val_reference_features).all():
-        raise ValueError("val teacher reference cache contains NaN or Inf")
-    if not torch.isfinite(teacher_gallery_features).all():
-        raise ValueError("teacher gallery cache contains NaN or Inf")
+
+    assert_finite_chunked(train_reference_features, name="train teacher reference cache")
+    assert_finite_chunked(val_reference_features, name="val teacher reference cache")
+    for category, (gallery_features, gallery_name_to_idx) in teacher_galleries.items():
+        if gallery_features.ndim < 2:
+            raise ValueError(f"{category} teacher gallery must have shape [G,...,D]")
+
+        if gallery_features.shape[0] != len(gallery_name_to_idx):
+            raise ValueError(f"{category} teacher gallery feature/index count mismatch")
+
+        assert_finite_chunked(gallery_features, name=f"{category} teacher gallery")
     gallery_ids_by_category: dict[str, list[str]] = {}
     for category in CATEGORIES:
         gallery_ids_by_category[category] = load_fashioniq_split_ids(
