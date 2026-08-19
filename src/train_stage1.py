@@ -269,11 +269,11 @@ def configure_stage1_trainable_parameters(model: TAPER) -> list[nn.Parameter]:
     parameters: list[nn.Parameter] = []
     model.slot_queries.requires_grad_(True)
     parameters.append(model.slot_queries)
+    # Stage-1A ablation:
+    # learn decomposition only. slot_mlp / slot_gate remain frozen.
     modules = (
         model.slot_query_projection,
         model.text_key_projection,
-        model.slot_mlp,
-        model.slot_gate,
     )
     for module in modules:
         for parameter in module.parameters():

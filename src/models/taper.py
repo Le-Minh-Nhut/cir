@@ -438,8 +438,12 @@ class TAPER(nn.Module):
             sparse_valid = text_attention_mask[:, None, :].to(slot_masks.dtype)
 
         sparse_count = sparse_valid.sum().clamp_min(1.0)
-        gated_masks = slot_masks * slot_gates[:, :, None]
-        sparse = (gated_masks * sparse_valid).sum() / (sparse_count * self.num_slots)
+
+        # Stage-1A decomposition must be learned from masks/effects themselves.
+        # Gate is a later necessity variable and must not provide an escape route
+        # from structural supervision.
+        structural_masks = slot_masks * sparse_valid
+        sparse = structural_masks.sum() / (sparse_count * self.num_slots)
         if text_content_mask is None:
             coverage = slot_masks.new_zeros(())
         else:
@@ -447,7 +451,7 @@ class TAPER(nn.Module):
                 raise ValueError("text_content_mask must match text_attention_mask")
             coverage_valid = (text_content_mask.to(torch.bool) & text_attention_mask.to(torch.bool))[:, None, :].to(slot_masks.dtype)
             coverage_count = coverage_valid.sum().clamp_min(1.0)
-            max_claim = gated_masks.max(1, keepdim=True).values
+            max_claim = structural_masks.max(1, keepdim=True).values
             coverage = (((1.0 - max_claim) ** 2) * coverage_valid).sum() / coverage_count
 
         gate_sparsity = slot_gates.mean()
@@ -457,17 +461,43 @@ class TAPER(nn.Module):
         else:
             eye = torch.eye(self.num_slots, device=slot_masks.device, dtype=torch.bool)[None]
             offdiag = ~eye
-            pair_weight = (slot_gates[:, :, None] * slot_gates[:, None, :])
-            mask_vectors = F.normalize(slot_masks * sparse_valid, dim=-1, eps=1e-6)
+            pair_valid = offdiag.expand(
+                slot_masks.shape[0],
+                -1,
+                -1,
+            )
+
+            mask_vectors = F.normalize(
+                structural_masks,
+                dim=-1,
+                eps=1e-6,
+            )
             mask_similarity = mask_vectors @ mask_vectors.transpose(1, 2)
-            overlap_penalty = F.relu(mask_similarity - self.overlap_margin)
-            overlap_weight = pair_weight * offdiag.to(pair_weight.dtype)
-            overlap = (overlap_penalty * overlap_weight).sum() / overlap_weight.sum().clamp_min(1e-6)
-            effect_vectors = F.normalize(slot_effects, dim=-1, eps=1e-6)
-            effect_similarity = effect_vectors @ effect_vectors.transpose(1, 2)
-            effect_penalty = F.relu(effect_similarity - self.effect_diversity_margin)
-            effect_weight = pair_weight * offdiag.to(pair_weight.dtype)
-            effect_diversity = (effect_penalty * effect_weight).sum() / effect_weight.sum().clamp_min(1e-6)
+            overlap_penalty = F.relu(
+                mask_similarity - self.overlap_margin
+            )
+            overlap_weight = pair_valid.to(mask_similarity.dtype)
+            overlap = (
+                (overlap_penalty * overlap_weight).sum()
+                / overlap_weight.sum().clamp_min(1.0)
+            )
+
+            effect_vectors = F.normalize(
+                slot_effects,
+                dim=-1,
+                eps=1e-6,
+            )
+            effect_similarity = (
+                effect_vectors @ effect_vectors.transpose(1, 2)
+            )
+            effect_penalty = F.relu(
+                effect_similarity - self.effect_diversity_margin
+            )
+            effect_weight = pair_valid.to(effect_similarity.dtype)
+            effect_diversity = (
+                (effect_penalty * effect_weight).sum()
+                / effect_weight.sum().clamp_min(1.0)
+            )
 
         return {
             "slot_sparse_loss": sparse,
