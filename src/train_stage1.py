@@ -16,7 +16,7 @@ from tqdm import tqdm
 from cache.features import get_features_by_ids, load_features
 from datasets.common import CIRBatch, collate_cir_samples
 from datasets.fashioniq import FashionIQDataset, load_fashioniq_split_ids
-from evaluation.edit_slot_stage1 import build_tcfr_cache, evaluate_stage1_edit_slots,
+from evaluation.edit_slot_stage1 import build_tcfr_cache, evaluate_stage1_edit_slots
 from models.taper import TAPER
 from runtime import collect_environment_metadata, configure_torch_runtime, resolve_device, seed_everything
 
@@ -230,6 +230,7 @@ def compute_stage1_losses(model: TAPER, batch: dict[str, object]) -> dict[str, T
         reference_features=reference_features,
         text_states=text_states,
         text_attention_mask=text_attention_mask,
+        text_content_mask=content_mask,
     )
     if content_mask is not None and not isinstance(content_mask, Tensor):
         raise TypeError("text_content_mask must be Tensor")
@@ -630,9 +631,8 @@ def main(cfg: DictConfig) -> None:
             model=model,
             val_loaders=val_loaders,
             prepare_batch_fn=prepare_val_batch,
-            teacher_gallery_features=(teacher_gallery_features),
-            teacher_gallery_name_to_idx=(teacher_gallery_name_to_idx),
-            gallery_ids_by_category=(gallery_ids_by_category),
+            teacher_galleries=teacher_galleries,
+            gallery_ids_by_category=gallery_ids_by_category,
             config=evaluation_config,
             device=device,
         )
@@ -656,20 +656,18 @@ def main(cfg: DictConfig) -> None:
         )
         model.eval()
         with torch.no_grad():
-            (
-                val_metrics,
-                current_anchor,
-            ) = evaluate_stage1_edit_slots(
-                model=model,
-                val_loaders=val_loaders,
-                prepare_batch_fn=prepare_val_batch,
-                teacher_gallery_features=(teacher_gallery_features),
-                teacher_gallery_name_to_idx=(teacher_gallery_name_to_idx),
-                gallery_ids_by_category=(gallery_ids_by_category),
-                tcfr_cache=tcfr_cache,
-                previous_anchor=previous_anchor,
-                config=evaluation_config,
-                device=device,
+            val_metrics, current_anchor = (
+                evaluate_stage1_edit_slots(
+                    model=model,
+                    val_loaders=val_loaders,
+                    prepare_batch_fn=prepare_val_batch,
+                    teacher_galleries=teacher_galleries,
+                    gallery_ids_by_category=gallery_ids_by_category,
+                    tcfr_cache=tcfr_cache,
+                    previous_anchor=previous_anchor,
+                    config=evaluation_config,
+                    device=device,
+                )
             )
         previous_anchor = current_anchor
         if primary_metric not in val_metrics:

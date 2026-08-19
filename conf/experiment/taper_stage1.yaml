@@ -12,8 +12,8 @@ stage1:
   # Teacher-native caches
   # --------------------------------------------------
   features:
-    train_reference_dir: features/fashioniq/csmcir/train_reference_teacher
-    val_reference_dir: features/fashioniq/csmcir/val_reference_teacher
+    train_reference_dir: features/fashioniq/csmcir/train_reference
+    val_reference_dir: features/fashioniq/csmcir/val_reference
     val_gallery_dir: features/fashioniq/csmcir/val_gallery_teacher
 
   # --------------------------------------------------

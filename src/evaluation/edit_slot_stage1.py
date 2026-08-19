@@ -382,8 +382,7 @@ def build_tcfr_cache(
     model,
     val_loaders: Mapping[str, DataLoader],
     prepare_batch_fn,
-    teacher_gallery_features: Tensor,
-    teacher_gallery_name_to_idx: Mapping[str, int],
+    teacher_galleries: Mapping[str, tuple[Tensor, Mapping[str, int]]],
     gallery_ids_by_category: Mapping[str, Sequence[str]],
     config: Mapping[str, object],
     device: torch.device,
@@ -395,11 +394,16 @@ def build_tcfr_cache(
     gallery_chunk_size = int(config.get("gallery_chunk_size", 1024))
     if teacher_success_k < 1 or hard_negative_k < 1:
         raise ValueError("teacher_success_k and hard_negative_k must be >= 1")
-    _validate_gallery(teacher_gallery_features, teacher_gallery_name_to_idx, score_mode)
     model.eval()
-    cache: dict[str, dict[str, object]] = {}
+    cache = {}
+
     for category, val_loader in val_loaders.items():
-        gallery_ids, gallery, local_index = _get_category_gallery(
+        if category not in teacher_galleries:
+            raise KeyError(f"Missing teacher gallery for category={category}")
+
+        (teacher_gallery_features, teacher_gallery_name_to_idx) = teacher_galleries[category]
+        _validate_gallery(teacher_gallery_features, teacher_gallery_name_to_idx, score_mode)
+        (gallery_ids, gallery, local_index) = _get_category_gallery(
             category,
             gallery_ids_by_category,
             teacher_gallery_features,
@@ -408,10 +412,7 @@ def build_tcfr_cache(
         )
         for raw_batch in val_loader:
             if any(raw_batch.ground_truth_ids):
-                raise NotImplementedError(
-                    "V0 evaluator is FashionIQ/single-positive only. Add benchmark-aware "
-                    "known-positive exclusion before CIRR."
-                )
+                raise NotImplementedError("V0 evaluator is FashionIQ/single-positive only. Add benchmark-aware known-positive exclusion before CIRR.")
             batch = prepare_batch_fn(raw_batch)
             q_full = model.teacher.compose(
                 batch["reference_features"],
@@ -480,8 +481,7 @@ def evaluate_stage1_edit_slots(
     model,
     val_loaders: Mapping[str, DataLoader],
     prepare_batch_fn,
-    teacher_gallery_features: Tensor,
-    teacher_gallery_name_to_idx: Mapping[str, int],
+    teacher_galleries: Mapping[str, tuple[Tensor, Mapping[str, int]]],
     gallery_ids_by_category: Mapping[str, Sequence[str]],
     tcfr_cache: Mapping[str, Mapping[str, object]],
     previous_anchor: Mapping[str, object] | None,
@@ -495,7 +495,6 @@ def evaluate_stage1_edit_slots(
     if "slot_gate_threshold" in config:
         if abs(float(config["slot_gate_threshold"]) - gate_threshold) > 1e-08:
             raise ValueError("evaluation gate threshold != model.slot_gate_threshold")
-    _validate_gallery(teacher_gallery_features, teacher_gallery_name_to_idx, score_mode)
     model.eval()
     qualified_all, tcfr_all, soft_all = ([], [], [])
     harmful_all, rank_hurt_all, full_rank_all = ([], [], [])
@@ -505,13 +504,12 @@ def evaluate_stage1_edit_slots(
     coverage_available = True
     stability_records: dict[str, dict[str, Tensor]] = {}
     for category, val_loader in val_loaders.items():
-        _, gallery, local_index = _get_category_gallery(
-            category,
-            gallery_ids_by_category,
-            teacher_gallery_features,
-            teacher_gallery_name_to_idx,
-            device,
-        )
+        if category not in teacher_galleries:
+            raise KeyError(f"Missing teacher gallery for category={category}")
+
+        (teacher_gallery_features, teacher_gallery_name_to_idx) = teacher_galleries[category]
+        _validate_gallery(teacher_gallery_features, teacher_gallery_name_to_idx, score_mode)
+        _, gallery, local_index = (_get_category_gallery(category, gallery_ids_by_category, teacher_gallery_features, teacher_gallery_name_to_idx, device))
         for raw_batch in val_loader:
             if any(raw_batch.ground_truth_ids):
                 raise NotImplementedError("V0 Stage-1 evaluator is FashionIQ-only")
@@ -647,7 +645,11 @@ def evaluate_stage1_edit_slots(
             if "content_union_coverage" in health:
                 coverage_all.append(health["content_union_coverage"].cpu())
             for row, sample_id in enumerate(sample_ids):
-                valid_tokens = batch["text_attention_mask"][row].bool()
+                content_mask = batch.get("text_content_mask")
+                if content_mask is not None:
+                    valid_tokens = content_mask[row].bool()
+                else:
+                    valid_tokens = batch["text_attention_mask"][row].bool()
                 if not valid_tokens.any():
                     raise ValueError(f"sample={sample_id} has no valid text token")
                 stability_records[sample_id] = {
