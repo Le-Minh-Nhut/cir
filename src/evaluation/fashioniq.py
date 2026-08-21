@@ -109,7 +109,7 @@ def build_fashioniq_gallery(protocol: str, split_root: str | Path, category: str
         return build_original_gallery(split_root=split_root, category=category, split=split)
 
     if protocol == "fashioniq_val":
-        return build_val_gallery(annotations=annotations, split=split)
+        return build_val_gallery(annotations)
 
     raise ValueError(f"Unsupported FashionIQ protocol: {protocol}")
 
@@ -139,21 +139,54 @@ def macro_average_fashioniq(category_results: dict[str, dict[str, float]]) -> di
         "mean_recall": (recall_at_10 + recall_at_50) / 2,
     }
 
-def evaluate_fashioniq(model, val_loaders: dict[str, DataLoader], val_annotations, *, protocol: str, split_root: str | Path, split: str, image_features: torch.Tensor, name_to_idx: dict[str, int], text_encoder, device: torch.device) -> dict[str, float]:
+def evaluate_fashioniq(
+    model,
+    val_loaders,
+    val_annotations,
+    *,
+    protocol,
+    split_root,
+    split,
+    retrieval_features,
+    native_features,
+    name_to_idx,
+    teacher,
+    device,
+):
     category_results = {}
 
     for category, val_loader in val_loaders.items():
         annotations = val_annotations[category]
 
-        gallery_ids = build_fashioniq_gallery(protocol=protocol, split_root=split_root, split=split, category=category, annotations=annotations)
-        gallery_features = get_features_by_ids(image_ids=gallery_ids, features=image_features, name_to_idx=name_to_idx).to(device)
+        gallery_ids = build_fashioniq_gallery(
+            protocol=protocol,
+            split_root=split_root,
+            split=split,
+            category=category,
+            annotations=annotations,
+        )
+
+        gallery_features = get_features_by_ids(gallery_ids, retrieval_features, name_to_idx).to(device)
+
         score_batches = []
         target_ids = []
 
         for batch in val_loader:
-            reference_features = get_features_by_ids(image_ids=batch.reference_ids, features=image_features, name_to_idx=name_to_idx).to(device)
-            text_states, text_attention_mask = text_encoder(batch.modification_texts, device=device)
-            output = model.retrieve(reference_features=reference_features, text_states=text_states, text_attention_mask=text_attention_mask, gallery_features=gallery_features)
+            reference_native = get_features_by_ids(batch.reference_ids, native_features, name_to_idx).to(device)
+            reference_features = reference_native[:, 0, :]
+            teacher_text_states, attention_mask, content_mask = teacher.encode_text_tokens(batch.modification_texts)
+            text_states = teacher.encode_contextual_text_tokens(reference_native, teacher_text_states, attention_mask)
+
+            output = model.retrieve(
+                reference_features=reference_features,
+                teacher_reference_features=reference_native,
+                text_states=text_states,
+                teacher_text_states=teacher_text_states,
+                text_attention_mask=attention_mask,
+                text_content_mask=content_mask,
+                gallery_features=gallery_features,
+            )
+
             score_batches.append(output["scores"].cpu())
 
             for target_id in batch.target_ids:
@@ -161,8 +194,9 @@ def evaluate_fashioniq(model, val_loaders: dict[str, DataLoader], val_annotation
                     raise ValueError("Validation sample is missing target_id")
                 target_ids.append(target_id)
 
-        scores = torch.cat(score_batches, dim=0)
+        scores = torch.cat(score_batches)
         category_results[category] = evaluate_fashioniq_category(scores=scores, target_ids=target_ids, gallery_ids=gallery_ids)
+
     average = macro_average_fashioniq(category_results)
 
     metrics = {
@@ -172,12 +206,7 @@ def evaluate_fashioniq(model, val_loaders: dict[str, DataLoader], val_annotation
     }
 
     for category, result in category_results.items():
-        metrics[f"{category}_recall_at_10"] = (
-            result["recall_at_10"]
-        )
-
-        metrics[f"{category}_recall_at_50"] = (
-            result["recall_at_50"]
-        )
+        metrics[f"{category}_recall_at_10"] = result["recall_at_10"]
+        metrics[f"{category}_recall_at_50"] = result["recall_at_50"]
 
     return metrics

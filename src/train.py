@@ -10,7 +10,9 @@ from cache.features import load_features
 from datasets.common import collate_cir_samples
 from datasets.fashioniq import FashionIQDataset
 from evaluation.fashioniq import evaluate_fashioniq
+from models.taper import TAPER
 from runtime import configure_torch_runtime, resolve_device, seed_everything
+from teachers.csmcir import CSMCIRStage1Teacher
 from training.engine import fit, prepare_batch
 
 
@@ -22,12 +24,12 @@ def build_train_loader(annotation_root: str | Path, *, batch_size: int, num_work
     return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, collate_fn=collate_cir_samples, pin_memory=True)
 
 
-def build_val_loaders(annotation_root: str | Path, *, batch_size: int, num_workers: int) -> tuple[dict[str, DataLoader], dict[str, list]]:
+def build_val_loaders(annotation_root: str | Path, *, batch_size: int, num_workers: int):
     val_loaders = {}
     val_annotations = {}
 
     for category in CATEGORIES:
-        dataset = FashionIQDataset(annotation_root=annotation_root, split="val", categories=[category], caption_policy="ordered_and",)
+        dataset = FashionIQDataset(annotation_root=annotation_root, split="val", categories=[category], caption_policy="ordered_and")
         val_loaders[category] = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_cir_samples, pin_memory=True)
         val_annotations[category] = dataset.annotations
 
@@ -40,28 +42,97 @@ def main(cfg: DictConfig) -> None:
     configure_torch_runtime(deterministic=cfg.runtime.deterministic, benchmark=cfg.runtime.benchmark)
     device = resolve_device(device_name=cfg.runtime.device, accelerator_index=cfg.runtime.accelerator_index)
 
-    print(f"Device: {device}")
+    print("Device:", device)
+
     dataset_root = Path(cfg.dataset.root)
     annotation_root = dataset_root / "captions"
     split_root = dataset_root / "image_splits"
     cache_root = Path(cfg.paths.cache_root)
-    train_feature_dir = cache_root / "fashioniq" / "fgclip2_large" / "train"
-    val_feature_dir = cache_root / "fashioniq" / "fgclip2_large" / "val"
 
+    train_retrieval, train_retrieval_idx = load_features(cache_root / "fashioniq" / "csmcir" / "train" / "retrieval")
+    train_native, train_native_idx = load_features(cache_root / "fashioniq" / "csmcir" / "train" / "native")
+    val_retrieval, val_retrieval_idx = load_features(cache_root / "fashioniq" / "csmcir" / "val" / "retrieval")
+    val_native, val_native_idx = load_features(cache_root / "fashioniq" / "csmcir" / "val" / "native")
 
-    train_loader = build_train_loader(annotation_root=annotation_root, batch_size=cfg.experiment.batch_size, num_workers=cfg.experiment.num_workers, seed=cfg.seed)
-    val_loaders, val_annotations = build_val_loaders(annotation_root=annotation_root, batch_size=cfg.experiment.eval_batch_size, num_workers=cfg.experiment.num_workers)
+    if train_retrieval_idx != train_native_idx:
+        raise ValueError("Train retrieval/native caches are not aligned")
 
-    print(f"Train queries: {len(train_loader.dataset)}")
-    for category, loader in val_loaders.items():
-        print(f"Val {category}: {len(loader.dataset)} queries")
+    if val_retrieval_idx != val_native_idx:
+        raise ValueError("Val retrieval/native caches are not aligned")
 
-    train_features, train_name_to_idx = load_features(train_feature_dir)
-    val_features, val_name_to_idx = load_features(val_feature_dir)
-    print("Train image features:", tuple(train_features.shape))
-    print("Val image features:", tuple(val_features.shape))
+    print("Train retrieval:", tuple(train_retrieval.shape))
+    print("Train native:", tuple(train_native.shape))
+    print("Val retrieval:", tuple(val_retrieval.shape))
+    print("Val native:", tuple(val_native.shape))
 
-    raise RuntimeError("Training wiring reached the teacher/text-encoder boundary. Teacher and text encoder must be selected before TAPER can be instantiated.")
+    train_loader = build_train_loader(
+        annotation_root=annotation_root,
+        batch_size=cfg.experiment.batch_size,
+        num_workers=cfg.experiment.num_workers,
+        seed=cfg.seed,
+    )
+
+    val_loaders, val_annotations = build_val_loaders(
+        annotation_root=annotation_root,
+        batch_size=cfg.experiment.eval_batch_size,
+        num_workers=cfg.experiment.num_workers,
+    )
+
+    teacher = CSMCIRStage1Teacher(
+        csmcir_root="teacher/repos/CSMCIR",
+        checkpoint_path="teacher/checkpoints/csmcir/fashioniq_tuned_clip_best.pt",
+        device=str(device),
+    ).to(device).eval()
+
+    model = TAPER(
+        teacher,
+        text_dim=768,
+        reference_dim=1408,
+        teacher_text_dim=768,
+        teacher_query_dim=256,
+        query_dim=256,
+        slot_dim=512,
+        state_dim=512,
+        num_slots=4,
+        num_primitives=8,
+    ).to(device)
+
+    optimizer = AdamW(
+        (p for p in model.parameters() if p.requires_grad),
+        lr=cfg.experiment.lr,
+        weight_decay=cfg.experiment.weight_decay,
+    )
+
+    prepare_batch_fn = lambda batch, device: prepare_batch(batch, device, train_retrieval, train_native, train_retrieval_idx, teacher)
+
+    def evaluate_fn(model):
+        return evaluate_fashioniq(
+            model,
+            val_loaders,
+            val_annotations,
+            protocol=cfg.protocol.name,
+            split_root=split_root,
+            split="val",
+            retrieval_features=val_retrieval,
+            native_features=val_native,
+            name_to_idx=val_retrieval_idx,
+            teacher=teacher,
+            device=device,
+        )
+
+    fit(
+        model,
+        train_loader,
+        optimizer,
+        evaluate_fn,
+        num_epochs=cfg.experiment.num_epochs,
+        device=device,
+        loss_weights={"retrieval_loss": 1.0},
+        primary_metric="mean_recall",
+        output_dir=cfg.paths.output_root,
+        use_amp=True,
+        prepare_batch_fn=prepare_batch_fn,
+    )
 
 
 if __name__ == "__main__":

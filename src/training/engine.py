@@ -92,23 +92,33 @@ def train_one_epoch(
 
     return metrics
 
-def prepare_batch(batch: CIRBatch, device: torch.device, image_features: torch.Tensor, name_to_idx: dict[str, int], text_encoder) -> dict[str, object]:
-    reference_features = get_features_by_ids(image_ids=batch.reference_ids, features=image_features, name_to_idx=name_to_idx).to(device)
-    target_ids = []
-    for target_id in batch.target_ids:
-        if target_id is None:
-            raise ValueError("Training sample is missing target_id")
+def prepare_batch(
+    batch: CIRBatch,
+    device: torch.device,
+    retrieval_features: torch.Tensor,
+    native_features: torch.Tensor,
+    name_to_idx: dict[str, int],
+    teacher,
+) -> dict[str, object]:
+    target_ids = list(batch.target_ids)
 
-        target_ids.append(target_id)
+    if any(target_id is None for target_id in target_ids):
+        raise ValueError("Training sample is missing target_id")
 
-    target_features = get_features_by_ids(image_ids=target_ids, features=image_features, name_to_idx=name_to_idx).to(device)
-    text_states, text_attention_mask = text_encoder(batch.modification_texts, device=device)
+    reference_native = get_features_by_ids(batch.reference_ids, native_features, name_to_idx).to(device)
+    target_features = get_features_by_ids(target_ids, retrieval_features, name_to_idx).to(device)
+    reference_features = reference_native[:, 0, :]
+    teacher_text_states, attention_mask, content_mask = teacher.encode_text_tokens(batch.modification_texts)
+    text_states = teacher.encode_contextual_text_tokens(reference_native, teacher_text_states, attention_mask)
 
     return {
         "reference_features": reference_features,
+        "teacher_reference_features": reference_native,
         "target_features": target_features,
         "text_states": text_states,
-        "text_attention_mask": text_attention_mask,
+        "teacher_text_states": teacher_text_states,
+        "text_attention_mask": attention_mask,
+        "text_content_mask": content_mask,
         "target_ids": target_ids,
     }
 

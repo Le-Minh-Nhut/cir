@@ -73,12 +73,7 @@ def unique_reference_entries(annotation_root: Path, split: str) -> list[tuple[st
 
 
 def validation_gallery_entries_for_category(split_root: Path, category: str) -> list[tuple[str, str]]:
-    image_ids = load_fashioniq_split_ids(
-        split_root=split_root,
-        split="val",
-        category=category,
-    )
-
+    image_ids = load_fashioniq_split_ids(split_root=split_root, split="val", category=category)
     if len(set(image_ids)) != len(image_ids):
         raise RuntimeError(f"Duplicate image IDs inside FashionIQ category={category}")
 
@@ -114,10 +109,7 @@ def get_target_caption(caption_dict: dict, *, image_id: str) -> str:
     if isinstance(entry, dict) and "Final_Caption" in entry:
         return entry["Final_Caption"]
 
-    raise ValueError(
-        "Unsupported CSMCIR target-caption "
-        f"entry for {image_id}: {entry!r}"
-    )
+    raise ValueError(f"Unsupported CSMCIR target-caption entry for {image_id}: {entry!r}")
 
 
 def save_features(features: torch.Tensor, entries: list[tuple[str, str]], output_dir: Path) -> None:
@@ -147,10 +139,7 @@ def save_features(features: torch.Tensor, entries: list[tuple[str, str]], output
     with (output_dir / "name_to_idx.json").open("w", encoding="utf-8") as file:
         json.dump(name_to_idx, file, indent=2)
 
-def assert_finite_chunked(
-    features: torch.Tensor,
-    chunk_rows: int = 32,
-) -> None:
+def assert_finite_chunked(features: torch.Tensor, chunk_rows: int = 32) -> None:
     for start in range(0, features.shape[0], chunk_rows):
         end = min(start + chunk_rows, features.shape[0],)
 
@@ -200,6 +189,58 @@ def precompute_references(
 
     return output
 
+def split_entries(split_root: Path, split: str) -> list[tuple[str, str]]:
+    entries = []
+    seen = set()
+
+    for category in CATEGORIES:
+        image_ids = load_fashioniq_split_ids(split_root=split_root, split=split, category=category)
+
+        for image_id in image_ids:
+            if image_id in seen:
+                continue
+
+            seen.add(image_id)
+            entries.append((image_id, category))
+
+    return entries
+
+@torch.inference_mode()
+def precompute_images(teacher, entries, image_root, batch_size, device):
+    retrieval_output = None
+    native_output = None
+
+    for start in tqdm(range(0, len(entries), batch_size), desc="CSMCIR images"):
+        batch_entries = entries[start:start + batch_size]
+
+        images = torch.stack([
+            load_image(
+                image_root=image_root,
+                image_id=image_id,
+                category=category,
+                preprocess=teacher.preprocess,
+            )
+            for image_id, category in batch_entries
+        ]).to(device)
+
+        retrieval, native = teacher.encode_image_tokens(images)
+        retrieval = retrieval.cpu()
+        native = native.cpu()
+
+        if retrieval_output is None:
+            retrieval_output = torch.empty((len(entries), *retrieval.shape[1:]), dtype=retrieval.dtype)
+            native_output = torch.empty((len(entries), *native.shape[1:]), dtype=native.dtype)
+
+        end = start + len(batch_entries)
+        retrieval_output[start:end].copy_(retrieval)
+        native_output[start:end].copy_(native)
+
+        del images, retrieval, native
+
+    if retrieval_output is None or native_output is None:
+        raise RuntimeError("No image features produced")
+
+    return retrieval_output, native_output
 
 @torch.inference_mode()
 def precompute_gallery(
@@ -260,74 +301,37 @@ def main():
         raise ValueError("--batch-size must be >= 1")
 
     dataset_root = args.dataset_root.resolve()
-    annotation_root = dataset_root / "captions"
     split_root = dataset_root / "image_splits"
     image_root = dataset_root / "images"
     device = torch.device(args.device)
 
-    teacher = (
-        CSMCIRStage1Teacher(
-            csmcir_root=(args.csmcir_root),
-            checkpoint_path=(args.checkpoint),
-            device=args.device,
-        ).to(device).eval()
-    )
+    teacher = CSMCIRStage1Teacher(
+        csmcir_root=args.csmcir_root,
+        checkpoint_path=args.checkpoint,
+        device=args.device,
+    ).to(device).eval()
 
-    train_entries = unique_reference_entries(annotation_root, split="train")
-    print("Train references:", len(train_entries))
+    for split in ("train", "val"):
+        entries = split_entries(split_root, split)
 
-    train_features = (
-        precompute_references(
+        print(f"{split} images:", len(entries))
+
+        retrieval, native = precompute_images(
             teacher=teacher,
-            entries=train_entries,
+            entries=entries,
             image_root=image_root,
             batch_size=args.batch_size,
             device=device,
         )
-    )
 
-    print("Train reference shape:", tuple(train_features.shape))
+        print(f"{split} retrieval:", tuple(retrieval.shape))
+        print(f"{split} native:", tuple(native.shape))
 
-    save_features(train_features, train_entries, args.output_root / "train_reference")
-    del train_features
+        save_features(retrieval, entries, args.output_root / split / "retrieval")
+        save_features(native, entries, args.output_root / split / "native")
 
-    import gc
-    gc.collect()
-    val_entries = unique_reference_entries(annotation_root, split="val")
-    print("Val references:", len(val_entries))
+        del retrieval, native
 
-    val_features = (
-        precompute_references(
-            teacher=teacher,
-            entries=val_entries,
-            image_root=image_root,
-            batch_size=args.batch_size,
-            device=device,
-        )
-    )
-
-    print("Val reference shape:", tuple(val_features.shape))
-    save_features(val_features, val_entries, args.output_root / "val_reference")
-    del val_features
-    gc.collect()
-    caption_dicts = load_csmcir_target_captions(args.csmcir_root)
-    for category in CATEGORIES:
-        gallery_entries = validation_gallery_entries_for_category(split_root=split_root, category=category)
-
-        print(f"Val gallery {category}:", len(gallery_entries))
-        gallery_features = precompute_gallery(
-            teacher=teacher,
-            entries=gallery_entries,
-            caption_dicts=caption_dicts,
-            image_root=image_root,
-            batch_size=args.batch_size,
-            device=device,
-        )
-        print(f"Val gallery {category} shape:", tuple(gallery_features.shape))
-        save_features(gallery_features, gallery_entries, args.output_root / "val_gallery_teacher" / category,)
-
-        del gallery_features
-        gc.collect()
     print()
     print("DONE")
     print("Saved under:", args.output_root)

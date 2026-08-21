@@ -614,16 +614,11 @@ class TAPER(nn.Module):
 
         raise TypeError("target_ids must be a Tensor or a non-string sequence")
 
-    def _retrieval_loss(
-        self,
-        query: Tensor,
-        targets: Tensor,
-        target_ids: object | None = None,
-    ) -> Tensor:
+    def _retrieval_loss(self, query: Tensor, targets: Tensor, target_ids: object | None = None) -> Tensor:
         if query.shape[0] != targets.shape[0]:
             raise ValueError("query and target batch sizes must match")
-        targets = F.normalize(targets, dim=-1)
-        logits = (query @ targets.t()) / self.retrieval_temperature
+
+        logits = self._retrieval_scores(query, targets) / self.retrieval_temperature
 
         if target_ids is None:
             labels = torch.arange(query.shape[0], device=query.device)
@@ -634,6 +629,17 @@ class TAPER(nn.Module):
         log_numerator = torch.logsumexp(positive_logits, dim=1)
         log_denominator = torch.logsumexp(logits, dim=1)
         return (log_denominator - log_numerator).mean()
+
+    def _retrieval_scores(self, query: Tensor, candidates: Tensor) -> Tensor:
+        if query.ndim != 2 or query.shape[-1] != self.query_dim:
+            raise ValueError(f"query must be [B,{self.query_dim}]")
+
+        if candidates.ndim != 3 or candidates.shape[-1] != self.query_dim:
+            raise ValueError(f"candidates must be [N,K,{self.query_dim}]")
+
+        candidates = F.normalize(candidates, dim=-1)
+        token_scores = torch.einsum("bd,nkd->bnk", query, candidates)
+        return token_scores.amax(dim=-1)
 
     def _assignment_diagnostics(
         self,
@@ -732,8 +738,8 @@ class TAPER(nn.Module):
         assert isinstance(mask, Tensor)
         assert isinstance(targets, Tensor)
 
-        if targets.ndim != 2 or targets.shape[-1] != self.query_dim:
-            raise ValueError(f"target_features must be [B,{self.query_dim}]")
+        if targets.ndim != 3 or targets.shape[-1] != self.query_dim:
+            raise ValueError(f"target_features must be [B,K,{self.query_dim}]")
         if targets.shape[0] != reference.shape[0]:
             raise ValueError("target_features batch size must match reference_features batch size")
 
@@ -832,22 +838,19 @@ class TAPER(nn.Module):
         teacher_text_states: Tensor | None = None,
         topk: int | None = None,
     ) -> dict[str, Tensor]:
-        if gallery_features.ndim != 2 or gallery_features.shape[-1] != self.query_dim:
-            raise ValueError(f"gallery_features must be [G,{self.query_dim}]")
+        if gallery_features.ndim != 3 or gallery_features.shape[-1] != self.query_dim:
+            raise ValueError(f"gallery_features must be [G,K,{self.query_dim}]")
 
         was_training = self.training
         self.eval()
         try:
             output = self.forward(
-                reference_features,
-                text_states,
-                text_attention_mask,
+                reference_features, text_states, text_attention_mask,
                 text_content_mask=text_content_mask,
                 teacher_reference_features=teacher_reference_features,
                 teacher_text_states=teacher_text_states,
             )
-            gallery = F.normalize(gallery_features, dim=-1)
-            scores = output["q0"] @ gallery.t()
+            scores = self._retrieval_scores(output["q0"], gallery_features)
             result = {
                 **output,
                 "scores": scores,
@@ -856,7 +859,7 @@ class TAPER(nn.Module):
                 if topk < 1:
                     raise ValueError("topk must be >= 1 when provided")
 
-                k = min(topk, gallery.shape[0])
+                k = min(topk, gallery_features.shape[0])
                 top_scores, top_indices = scores.topk(k, dim=1)
                 result.update({"top_scores": top_scores, "top_indices": top_indices,})
             return result
