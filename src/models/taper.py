@@ -33,6 +33,7 @@ class TAPER(nn.Module):
         overlap_margin: float = 0.60,
         effect_diversity_margin: float = 0.50,
         alpha_max: float = 1.0,
+        counterfactual_chunk_size: int = 8,
     ) -> None:
         super().__init__()
 
@@ -48,6 +49,8 @@ class TAPER(nn.Module):
             raise ValueError("alpha_max must be > 0")
         if gate_mode not in {"legacy_soft_train_hard_eval", "straight_through_hard"}:
             raise ValueError("gate_mode must be 'legacy_soft_train_hard_eval' or " "'straight_through_hard'")
+        if counterfactual_chunk_size < 1:
+            raise ValueError("counterfactual_chunk_size must be >= 1")
 
         self.teacher = teacher
         self.text_dim = text_dim
@@ -73,6 +76,7 @@ class TAPER(nn.Module):
         self.overlap_margin = overlap_margin
         self.effect_diversity_margin = effect_diversity_margin
         self.alpha_max = alpha_max
+        self.counterfactual_chunk_size = counterfactual_chunk_size
 
         self.teacher.eval()
         for parameter in self.teacher.parameters():
@@ -192,6 +196,61 @@ class TAPER(nn.Module):
         slot_semantics = weighted_sum / slot_mass.clamp_min(1.0).unsqueeze(-1)
         return slot_semantics, slot_mass, slot_activity
 
+    def _compose_counterfactual_queries(
+        self,
+        *,
+        teacher_reference_features: Tensor,
+        teacher_text_states: Tensor,
+        text_attention_mask: Tensor,
+        slot_masks: Tensor,
+        neutral: Tensor,
+    ) -> Tensor:
+        batch_size, num_tokens, _ = teacher_text_states.shape
+
+        total = batch_size * self.num_slots
+        outputs = []
+
+        for start in range(0, total, self.counterfactual_chunk_size,):
+            end = min(start + self.counterfactual_chunk_size, total)
+            flat_ids = torch.arange(start, end, device=teacher_text_states.device)
+            batch_ids = torch.div(flat_ids, self.num_slots, rounding_mode="floor")
+            slot_ids = flat_ids % self.num_slots
+            chunk_masks = slot_masks[batch_ids, slot_ids, :].unsqueeze(-1)
+            chunk_teacher_text = teacher_text_states[batch_ids]
+            chunk_neutral = neutral[batch_ids]
+            counterfactual_text = ((1.0 - chunk_masks) * chunk_teacher_text + chunk_masks * chunk_neutral)
+            counterfactual_reference = teacher_reference_features[batch_ids]
+            counterfactual_mask = text_attention_mask[batch_ids]
+            q_chunk = self.teacher.compose(
+                counterfactual_reference,
+                counterfactual_text,
+                counterfactual_mask,
+                normalize=False,
+            )
+
+            expected_chunk_shape = (end - start, self.teacher_query_dim)
+
+            if q_chunk.shape != expected_chunk_shape:
+                raise ValueError(
+                    "counterfactual teacher query chunk "
+                    f"must be {expected_chunk_shape}, "
+                    f"got {tuple(q_chunk.shape)}"
+                )
+
+            outputs.append(q_chunk)
+
+        q_minus_flat = torch.cat(outputs, dim=0)
+        expected_shape = (total, self.teacher_query_dim)
+
+        if q_minus_flat.shape != expected_shape:
+            raise ValueError(
+                "counterfactual teacher query must be "
+                f"{expected_shape}, "
+                f"got {tuple(q_minus_flat.shape)}"
+            )
+
+        return q_minus_flat.reshape(batch_size, self.num_slots, self.teacher_query_dim)
+
     def build_edit_slots(
         self,
         reference_features: Tensor,
@@ -233,27 +292,13 @@ class TAPER(nn.Module):
             raise ValueError(f"teacher query must be {expected_shape}, got {tuple(q_full.shape)}")
 
         neutral = self._neutral_text(teacher_text_states, text_attention_mask)
-        masks = slot_masks.unsqueeze(-1)
-        counterfactual_text = (
-            (1.0 - masks) * teacher_text_states.unsqueeze(1)
-            + masks * neutral.unsqueeze(1)
-        ).reshape(batch_size * self.num_slots, num_tokens, self.teacher_text_dim)
-
-        counterfactual_mask = (
-            text_attention_mask[:, None, :]
-            .expand(batch_size, self.num_slots, num_tokens)
-            .reshape(batch_size * self.num_slots, num_tokens)
+        q_minus = self._compose_counterfactual_queries(
+            teacher_reference_features=teacher_reference_features,
+            teacher_text_states=teacher_text_states,
+            text_attention_mask=text_attention_mask,
+            slot_masks=slot_masks,
+            neutral=neutral,
         )
-        counterfactual_reference = teacher_reference_features.repeat_interleave(self.num_slots, dim=0)
-
-        q_minus_flat = self.teacher.compose(counterfactual_reference, counterfactual_text, counterfactual_mask, normalize=False)
-        expected_minus_shape = (
-            batch_size * self.num_slots,
-            self.teacher_query_dim,
-        )
-        if q_minus_flat.shape != expected_minus_shape:
-            raise ValueError("counterfactual teacher query must be " f"{expected_minus_shape}, got {tuple(q_minus_flat.shape)}")
-        q_minus = q_minus_flat.reshape(batch_size, self.num_slots, self.teacher_query_dim)
 
         slot_effects = q_full.unsqueeze(1) - q_minus
 
@@ -646,8 +691,10 @@ class TAPER(nn.Module):
         *,
         null_probs: Tensor,
         slot_masks: Tensor,
+        slot_mass: Tensor,
         slot_effects: Tensor,
         slot_gates: Tensor,
+        hard_active_slot_mask: Tensor,
         text_attention_mask: Tensor,
         text_content_mask: Tensor | None = None,
     ) -> dict[str, Tensor]:
@@ -667,6 +714,24 @@ class TAPER(nn.Module):
         assignment_entropy = (entropy_per_token * valid_f).sum() / denom
         null_rate = (null_probs * valid_f).sum() / denom
         edit_rate = ((1.0 - null_probs) * valid_f).sum() / denom
+        ownership_winner = all_probs.argmax(dim=1)
+        null_winner = ownership_winner.eq(0)
+        null_argmax_fraction = (null_winner.to(slot_masks.dtype) * valid_f).sum() / denom
+        has_valid_content = valid.any(dim=1)
+        all_null_argmax = (null_winner | ~valid).all(dim=1) & has_valid_content
+        valid_sample_count = has_valid_content.to(slot_masks.dtype).sum().clamp_min(1.0)
+        all_null_argmax_sample_fraction = all_null_argmax.to(slot_masks.dtype).sum() / valid_sample_count
+        edit_mass_per_sample = slot_mass.sum(dim=1)
+        edit_mass_fraction = edit_mass_per_sample.sum() / denom
+        ownership_active_slot_count = (slot_mass >= 0.10).to(slot_masks.dtype).sum(dim=1).mean()
+        execution_hard_active_slot_count = hard_active_slot_mask.to(slot_masks.dtype).sum(dim=1).mean()
+        nontrivial_edit = edit_mass_per_sample >= 0.10
+        dominant_slot_share_per_sample = slot_mass.max(dim=1).values/ edit_mass_per_sample.clamp_min(1e-12)
+        nontrivial_count = nontrivial_edit.to(slot_masks.dtype).sum().clamp_min(1.0)
+        dominant_slot_share = (dominant_slot_share_per_sample * nontrivial_edit.to(slot_masks.dtype)).sum() / nontrivial_count
+        near_monopoly_fraction = (
+            (dominant_slot_share_per_sample >= 0.90) & nontrivial_edit
+        ).to(slot_masks.dtype).sum() / nontrivial_count
 
         zero = slot_masks.sum() * 0.0
         if self.num_slots == 1:
@@ -684,14 +749,27 @@ class TAPER(nn.Module):
             overlap = mask_similarity[:, upper].mean()
             effect_similarity_mean = effect_similarity[:, upper].mean()
 
-        return {
+        diagnostics = {
             "assignment_entropy": assignment_entropy,
             "null_ownership_rate": null_rate,
             "edit_ownership_rate": edit_rate,
+
+            "edit_mass_fraction": edit_mass_fraction,
+            "null_argmax_fraction": null_argmax_fraction,
+            "all_null_argmax_sample_fraction":all_null_argmax_sample_fraction,
+            "ownership_active_slot_count": ownership_active_slot_count,
+            "execution_hard_active_slot_count": execution_hard_active_slot_count,
+            "dominant_slot_share": dominant_slot_share,
+            "near_monopoly_fraction": near_monopoly_fraction,
             "slot_overlap_mean": overlap,
             "slot_effect_similarity_mean": effect_similarity_mean,
             "slot_gate_mean": slot_gates.mean(),
         }
+
+        for slot_id in range(self.num_slots):
+            diagnostics[f"slot_{slot_id}_mass_mean"] = slot_mass[:, slot_id].mean()
+
+        return diagnostics
 
     def _slot_regularizers(
         self,
@@ -760,8 +838,10 @@ class TAPER(nn.Module):
         diagnostics = self._assignment_diagnostics(
             null_probs=output["null_probs"],
             slot_masks=output["slot_masks"],
+            slot_mass=output["slot_mass"],
             slot_effects=output["slot_effects"],
             slot_gates=output["slot_gates"],
+            hard_active_slot_mask=output["hard_active_slot_mask"],
             text_attention_mask=mask,
             text_content_mask=content_mask,
         )

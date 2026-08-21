@@ -1,6 +1,6 @@
 name: taper_e2e
 
-batch_size: 8
+batch_size: 32
 eval_batch_size: 16
 num_workers: 4
 
@@ -9,8 +9,8 @@ num_epochs: 100
 lr: 1.0e-4
 weight_decay: 1.0e-4
 
-train_caption_policy: randomized_four_way
-val_caption_policy: ordered_and
+train_caption_policy: normalized_ordered_and
+val_caption_policy: normalized_ordered_and
 
 loss_weights:
   retrieval_loss: 1.0
@@ -40,6 +40,7 @@ model:
   st_gate_recovery: false
 
   alpha_max: 1.0
+  counterfactual_chunk_size: 16
 
 teacher:
   csmcir_root: teacher/repos/CSMCIR

@@ -3,7 +3,7 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
 
-from cache.features import get_features_by_ids
+from cache.features import get_features_by_ids, TextFeatureCache, get_text_features_by_sample_ids
 from datasets.fashioniq import FashionIQAnnotation, build_pair_union_gallery, load_fashioniq_split_ids
 
 
@@ -151,8 +151,8 @@ def evaluate_fashioniq(
     native_features,
     retrieval_name_to_idx,
     native_name_to_idx,
-    teacher,
     device,
+    text_cache: TextFeatureCache,
 ):
     category_results = {}
 
@@ -174,8 +174,12 @@ def evaluate_fashioniq(
         for batch in val_loader:
             reference_native = get_features_by_ids(batch.reference_ids, native_features, native_name_to_idx,).to(device)
             reference_features = reference_native[:, 0, :]
-            teacher_text_states, attention_mask, content_mask = teacher.encode_text_tokens(batch.modification_texts)
-            text_states = teacher.encode_contextual_text_tokens(reference_native, teacher_text_states, attention_mask)
+
+            (text_states, teacher_text_states, attention_mask, content_mask) = get_text_features_by_sample_ids(batch.sample_ids, batch.modification_texts, text_cache)
+            text_states = text_states.to(device=device, dtype=torch.float32)
+            teacher_text_states = teacher_text_states.to(device=device, dtype=torch.float32)
+            attention_mask = attention_mask.to(device=device, dtype=torch.bool)
+            content_mask = content_mask.to(device=device, dtype=torch.bool)
 
             output = model.retrieve(
                 reference_features=reference_features,

@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from datasets.common import CIRBatch
 from evaluation.fashioniq import get_features_by_ids
+from cache.features import TextFeatureCache, get_features_by_ids, get_text_features_by_sample_ids
 
 
 def _compute_total_loss(loss_dict: dict[str, Tensor], loss_weights: dict[str, float]) -> Tensor:
@@ -99,7 +100,7 @@ def prepare_batch(
     native_features: torch.Tensor,
     retrieval_name_to_idx,
     native_name_to_idx,
-    teacher,
+    text_cache: TextFeatureCache,
 ) -> dict[str, object]:
     target_ids = list(batch.target_ids)
 
@@ -109,8 +110,30 @@ def prepare_batch(
     reference_native = get_features_by_ids(batch.reference_ids, native_features, native_name_to_idx).to(device, dtype=torch.float32)
     target_features = get_features_by_ids(target_ids, retrieval_features, retrieval_name_to_idx).to(device, dtype=torch.float32)
     reference_features = reference_native[:, 0, :]
-    teacher_text_states, attention_mask, content_mask = teacher.encode_text_tokens(batch.modification_texts)
-    text_states = teacher.encode_contextual_text_tokens(reference_native, teacher_text_states, attention_mask)
+    (text_states, teacher_text_states, attention_mask, content_mask) = get_text_features_by_sample_ids(batch.sample_ids, batch.modification_texts, text_cache)
+    text_states = text_states.to(
+        device=device,
+        dtype=torch.float32,
+        # non_blocking=True,
+    )
+
+    teacher_text_states = teacher_text_states.to(
+        device=device,
+        dtype=torch.float32,
+        # non_blocking=True,
+    )
+
+    attention_mask = attention_mask.to(
+        device=device,
+        dtype=torch.bool,
+        # non_blocking=True,
+    )
+
+    content_mask = content_mask.to(
+        device=device,
+        dtype=torch.bool,
+        # non_blocking=True,
+    )
 
     return {
         "reference_features": reference_features,
@@ -192,7 +215,19 @@ def fit(
 
             print(f"Saved best.pt | {primary_metric}={best_metric:.4f}")
 
-        print(f"Epoch {epoch + 1}/{num_epochs} | train_loss={train_metrics['total_loss']:.4f} | {primary_metric}={current_metric:.4f} | best={best_metric:.4f}")
+        print(
+            f"Epoch {epoch + 1}/{num_epochs} | "
+            f"loss={train_metrics['total_loss']:.4f} | "
+            f"{primary_metric}={current_metric:.4f} | "
+            f"best={best_metric:.4f} | "
+            f"null={train_metrics.get('diagnostic/null_ownership_rate', float('nan')):.3f} | "
+            f"null_argmax={train_metrics.get('diagnostic/null_argmax_fraction', float('nan')):.3f} | "
+            f"all_null={train_metrics.get('diagnostic/all_null_argmax_sample_fraction', float('nan')):.3f} | "
+            f"active_slots={train_metrics.get('diagnostic/ownership_active_slot_count', float('nan')):.2f} | "
+            f"hard_active={train_metrics.get('diagnostic/execution_hard_active_slot_count', float('nan')):.2f} | "
+            f"dominant={train_metrics.get('diagnostic/dominant_slot_share', float('nan')):.3f} | "
+            f"monopoly={train_metrics.get('diagnostic/near_monopoly_fraction', float('nan')):.3f}"
+        )
 
 
         if wandb.run is not None:
