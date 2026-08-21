@@ -835,16 +835,17 @@ class TAPER(nn.Module):
         losses = {
             "retrieval_loss": self._retrieval_loss(output["q0"], targets, batch.get("target_ids"))
         }
-        diagnostics = self._assignment_diagnostics(
-            null_probs=output["null_probs"],
-            slot_masks=output["slot_masks"],
-            slot_mass=output["slot_mass"],
-            slot_effects=output["slot_effects"],
-            slot_gates=output["slot_gates"],
-            hard_active_slot_mask=output["hard_active_slot_mask"],
-            text_attention_mask=mask,
-            text_content_mask=content_mask,
-        )
+        with torch.no_grad():
+            diagnostics = self._assignment_diagnostics(
+                null_probs=output["null_probs"],
+                slot_masks=output["slot_masks"],
+                slot_mass=output["slot_mass"],
+                slot_effects=output["slot_effects"],
+                slot_gates=output["slot_gates"],
+                hard_active_slot_mask=output["hard_active_slot_mask"],
+                text_attention_mask=mask,
+                text_content_mask=content_mask,
+            )
         losses.update({f"diagnostic/{k}": v for k, v in diagnostics.items()})
         return losses
 

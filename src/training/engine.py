@@ -9,7 +9,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from datasets.common import CIRBatch
-from evaluation.fashioniq import get_features_by_ids
 from cache.features import TextFeatureCache, get_features_by_ids, get_text_features_by_sample_ids
 
 
