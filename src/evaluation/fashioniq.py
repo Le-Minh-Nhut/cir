@@ -149,7 +149,8 @@ def evaluate_fashioniq(
     split,
     retrieval_features,
     native_features,
-    name_to_idx,
+    retrieval_name_to_idx,
+    native_name_to_idx,
     teacher,
     device,
 ):
@@ -166,13 +167,12 @@ def evaluate_fashioniq(
             annotations=annotations,
         )
 
-        gallery_features = get_features_by_ids(gallery_ids, retrieval_features, name_to_idx).to(device)
-
+        gallery_features = get_features_by_ids(gallery_ids, retrieval_features, retrieval_name_to_idx).to(device)
         score_batches = []
         target_ids = []
 
         for batch in val_loader:
-            reference_native = get_features_by_ids(batch.reference_ids, native_features, name_to_idx).to(device)
+            reference_native = get_features_by_ids(batch.reference_ids, native_features, native_name_to_idx,).to(device)
             reference_features = reference_native[:, 0, :]
             teacher_text_states, attention_mask, content_mask = teacher.encode_text_tokens(batch.modification_texts)
             text_states = teacher.encode_contextual_text_tokens(reference_native, teacher_text_states, attention_mask)

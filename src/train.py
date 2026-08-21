@@ -108,7 +108,7 @@ def main(cfg: DictConfig) -> None:
         weight_decay=cfg.experiment.weight_decay,
     )
 
-    prepare_batch_fn = lambda batch, device: prepare_batch(batch, device, train_retrieval, train_native, train_retrieval_idx, teacher)
+    prepare_batch_fn = lambda batch, device: prepare_batch(batch, device, train_retrieval, train_native, train_retrieval_idx, train_native_idx, teacher)
 
     def evaluate_fn(model):
         return evaluate_fashioniq(
@@ -120,7 +120,8 @@ def main(cfg: DictConfig) -> None:
             split="val",
             retrieval_features=val_retrieval,
             native_features=val_native,
-            name_to_idx=val_retrieval_idx,
+            retrieval_name_to_idx=val_retrieval_idx,
+            native_name_to_idx=val_native_idx,
             teacher=teacher,
             device=device,
         )
@@ -132,13 +133,11 @@ def main(cfg: DictConfig) -> None:
         evaluate_fn,
         num_epochs=cfg.experiment.num_epochs,
         device=device,
-        loss_weights={"retrieval_loss": 1.0},
+        loss_weights=dict(cfg.experiment.loss_weights),
         primary_metric="mean_recall",
         output_dir=cfg.paths.output_root,
-        use_amp=True,
-        prepare_batch_fn=prepare_batch_fn,
-        loss_weights=dict(cfg.experiment.loss_weights),
         use_amp=cfg.runtime.precision == "fp16",
+        prepare_batch_fn=prepare_batch_fn,
     )
 
 
