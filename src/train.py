@@ -54,12 +54,6 @@ def main(cfg: DictConfig) -> None:
     val_retrieval, val_retrieval_idx = load_features(cache_root / "fashioniq" / "csmcir" / "val" / "retrieval")
     val_native, val_native_idx = load_features(cache_root / "fashioniq" / "csmcir" / "val" / "native")
 
-    if train_retrieval_idx != train_native_idx:
-        raise ValueError("Train retrieval/native caches are not aligned")
-
-    if val_retrieval_idx != val_native_idx:
-        raise ValueError("Val retrieval/native caches are not aligned")
-
     print("Train retrieval:", tuple(train_retrieval.shape))
     print("Train native:", tuple(train_native.shape))
     print("Val retrieval:", tuple(val_retrieval.shape))
@@ -79,22 +73,33 @@ def main(cfg: DictConfig) -> None:
     )
 
     teacher = CSMCIRStage1Teacher(
-        csmcir_root="teacher/repos/CSMCIR",
-        checkpoint_path="teacher/checkpoints/csmcir/fashioniq_tuned_clip_best.pt",
+        csmcir_root=cfg.experiment.teacher.csmcir_root,
+        checkpoint_path=cfg.experiment.teacher.checkpoint_path,
         device=str(device),
     ).to(device).eval()
 
+    m = cfg.experiment.model
+
     model = TAPER(
         teacher,
-        text_dim=768,
-        reference_dim=1408,
-        teacher_text_dim=768,
-        teacher_query_dim=256,
-        query_dim=256,
-        slot_dim=512,
-        state_dim=512,
-        num_slots=4,
-        num_primitives=8,
+        text_dim=m.text_dim,
+        reference_dim=m.reference_dim,
+        teacher_text_dim=m.teacher_text_dim,
+        teacher_query_dim=m.teacher_query_dim,
+        query_dim=m.query_dim,
+        slot_dim=m.slot_dim,
+        state_dim=m.state_dim,
+        num_slots=m.num_slots,
+        num_primitives=m.num_primitives,
+        mask_temperature=m.mask_temperature,
+        router_temperature=m.router_temperature,
+        retrieval_temperature=m.retrieval_temperature,
+        neutral_mode=m.neutral_mode,
+        slot_gate_threshold=m.slot_gate_threshold,
+        hard_slot_gating_during_training=m.hard_slot_gating_during_training,
+        gate_mode=m.gate_mode,
+        st_gate_recovery=m.st_gate_recovery,
+        alpha_max=m.alpha_max,
     ).to(device)
 
     optimizer = AdamW(
@@ -132,6 +137,8 @@ def main(cfg: DictConfig) -> None:
         output_dir=cfg.paths.output_root,
         use_amp=True,
         prepare_batch_fn=prepare_batch_fn,
+        loss_weights=dict(cfg.experiment.loss_weights),
+        use_amp=cfg.runtime.precision == "fp16",
     )
 
 

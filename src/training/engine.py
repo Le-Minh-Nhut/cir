@@ -97,16 +97,17 @@ def prepare_batch(
     device: torch.device,
     retrieval_features: torch.Tensor,
     native_features: torch.Tensor,
-    name_to_idx: dict[str, int],
+    retrieval_name_to_idx,
+    native_name_to_idx,
     teacher,
 ) -> dict[str, object]:
     target_ids = list(batch.target_ids)
 
     if any(target_id is None for target_id in target_ids):
         raise ValueError("Training sample is missing target_id")
-
-    reference_native = get_features_by_ids(batch.reference_ids, native_features, name_to_idx).to(device)
-    target_features = get_features_by_ids(target_ids, retrieval_features, name_to_idx).to(device)
+    
+    reference_native = get_features_by_ids(batch.reference_ids, native_features, native_name_to_idx).to(device, dtype=torch.float32)
+    target_features = get_features_by_ids(target_ids, retrieval_features, retrieval_name_to_idx).to(device, dtype=torch.float32)
     reference_features = reference_native[:, 0, :]
     teacher_text_states, attention_mask, content_mask = teacher.encode_text_tokens(batch.modification_texts)
     text_states = teacher.encode_contextual_text_tokens(reference_native, teacher_text_states, attention_mask)
@@ -120,6 +121,13 @@ def prepare_batch(
         "text_attention_mask": attention_mask,
         "text_content_mask": content_mask,
         "target_ids": target_ids,
+    }
+
+def taper_state_dict(model):
+    return {
+        name: value
+        for name, value in model.state_dict().items()
+        if not name.startswith("teacher.")
     }
 
 def fit(
@@ -174,13 +182,13 @@ def fit(
         current_metric = float(val_metrics[primary_metric])
 
         # Always keep the latest model.
-        torch.save(model.state_dict(), last_model_path,)
+        torch.save(taper_state_dict(model), last_model_path)
 
         if current_metric > best_metric:
             best_metric = current_metric
             best_epoch = epoch + 1
 
-            torch.save(model.state_dict(), best_model_path,)
+            torch.save(taper_state_dict(model), best_model_path)
 
             print(f"Saved best.pt | {primary_metric}={best_metric:.4f}")
 

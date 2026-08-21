@@ -7,6 +7,7 @@ from pathlib import Path
 import torch
 from PIL import Image
 from tqdm import tqdm
+import numpy as np
 
 from datasets.fashioniq import load_fashioniq_annotations, load_fashioniq_split_ids
 from teachers.csmcir import CSMCIRStage1Teacher
@@ -25,6 +26,59 @@ def parse_args():
     parser.add_argument("--device", type=str, default="cuda")
     return parser.parse_args()
 
+@torch.inference_mode()
+def precompute_to_disk(
+    teacher,
+    entries,
+    image_root,
+    batch_size,
+    device,
+    output_dir,
+    kind,
+):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    mmap = None
+
+    for start in tqdm(range(0, len(entries), batch_size), desc=f"CSMCIR {kind}"):
+        batch_entries = entries[start:start + batch_size]
+
+        images = torch.stack([
+            load_image(image_root=image_root, image_id=image_id, category=category, preprocess=teacher.preprocess)
+            for image_id, category in batch_entries
+        ]).to(device)
+
+        if kind == "retrieval":
+            features, _ = teacher.encode_image_tokens(images)
+        elif kind == "native":
+            features = teacher.encode_reference(images)
+        else:
+            raise ValueError(f"Unsupported feature kind: {kind}")
+
+        features = features.float().cpu()
+
+        if mmap is None:
+            shape = (len(entries), *features.shape[1:])
+            mmap = np.lib.format.open_memmap(output_dir / "images.npy", mode="w+", dtype=np.float32, shape=shape)
+
+        end = start + len(batch_entries)
+        mmap[start:end] = features.numpy()
+        mmap.flush()
+
+        del images, features
+
+    if mmap is None:
+        raise RuntimeError("No features produced")
+
+    image_ids = [image_id for image_id, _ in entries]
+
+    with (output_dir / "name_to_idx.json").open("w", encoding="utf-8") as file:
+        json.dump(
+            {image_id: i for i, image_id in enumerate(image_ids)},
+            file,
+            indent=2,
+        )
+
+    del mmap
 
 def resolve_image_path(image_root: Path, image_id: str, category: str) -> Path:
     candidates = []
