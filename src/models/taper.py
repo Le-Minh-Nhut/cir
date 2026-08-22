@@ -315,11 +315,25 @@ class TAPER(nn.Module):
 
         batch_size, num_tokens, _ = text_states.shape
         slot_states = self.slot_queries.unsqueeze(0).expand(batch_size, -1,-1)
+        refine_slot_states = []
+        refine_slot_masses = []
+        refine_update_norms = []
         for refine_idx in range(self.num_refine_iters):
+            refine_slot_states.append(slot_states)
             ownership_logits, null_probs, slot_masks = self._competitive_ownership(text_states=text_states, slot_valid=slot_valid, slot_states=slot_states)
             if refine_idx + 1 < self.num_refine_iters:
-                slot_states, _, _ = self._refine_slot_states(slot_states=slot_states, text_states=text_states, slot_masks=slot_masks)
+                old_states = slot_states
+                slot_states, round_mass, _ = self._refine_slot_states(
+                    slot_states=slot_states,
+                    text_states=text_states,
+                    slot_masks=slot_masks,
+                )
 
+                refine_slot_masses.append(round_mass)
+                refine_update_norms.append(
+                    (slot_states - old_states).norm(dim=-1)
+                )
+        
         slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
         q_full = self.teacher.compose(teacher_reference_features, teacher_text_states, text_attention_mask, normalize=False)
         expected_shape = (batch_size, self.teacher_query_dim)
@@ -360,6 +374,9 @@ class TAPER(nn.Module):
             "slot_gates": slot_gates,
             "q_teacher_full": q_full,
             "q_teacher_minus": q_minus,
+            "refine_slot_states": torch.stack(refine_slot_states, dim=1),  # [B,T,L,D]
+            "refine_update_norms": torch.stack(refine_update_norms, dim=1),  # [B,T-1,L]
+            "refine_slot_masses": torch.stack(refine_slot_masses, dim=1),
         }
 
     def initialize_state(self, reference_features: Tensor) -> tuple[Tensor, Tensor]:
