@@ -451,9 +451,10 @@ class TAPER(nn.Module):
             "refine_slot_masks": torch.stack(refine_slot_masks, dim=1),  # [B,T,L,N]
             "refine_null_probs": torch.stack(refine_null_probs, dim=1),  # [B,T,N]
             "refine_ownership_logits": torch.stack(refine_ownership_logits, dim=1),  # [B,T,L+1,N]
-            "refine_residuals": torch.stack(refine_residuals, dim=1),  # [B,T,N]
+            "refine_residuals": torch.stack(refine_residuals, dim=1), 
             "refine_consumed_residuals": refine_consumed_residuals_tensor,
-
+            "refine_other_claims": torch.stack(refine_other_claims, dim=1),
+            "refine_proposal_slot_masks": torch.stack(refine_proposal_slot_masks, dim=1),
         }
 
     def initialize_state(self, reference_features: Tensor) -> tuple[Tensor, Tensor]:
