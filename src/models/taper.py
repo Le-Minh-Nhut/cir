@@ -371,7 +371,7 @@ class TAPER(nn.Module):
         for refine_idx in range(self.num_refine_iters):
             refine_slot_states.append(slot_states)
             refine_residuals.append(residual)
-            ownership_logits, null_probs, slot_masks = self._competitive_ownership(text_states=text_states, slot_valid=slot_valid, slot_states=slot_states)
+            ownership_logits, null_probs, slot_masks = self._competitive_ownership(text_states=text_states, slot_valid=slot_valid, slot_states=slot_states, residual=residual)
             refine_ownership_logits.append(ownership_logits)
             refine_null_probs.append(null_probs)
             refine_slot_masks.append(slot_masks)
@@ -387,7 +387,7 @@ class TAPER(nn.Module):
                 refine_update_norms.append((slot_states - old_states).norm(dim=-1))
                 residual, consumed = self._update_residual(residual=residual, slot_masks=slot_masks, slot_valid=slot_valid)
 
-        refine_consumed_residuals.append(consumed)
+                refine_consumed_residuals.append(consumed)
         
         slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
         q_full = self.teacher.compose(teacher_reference_features, teacher_text_states, text_attention_mask, normalize=False)
@@ -416,6 +416,11 @@ class TAPER(nn.Module):
             refine_update_norms_tensor = torch.stack(refine_update_norms, dim=1)
         else:
             refine_update_norms_tensor = slot_states.new_empty(batch_size, 0, self.num_slots)
+
+        if refine_consumed_residuals:
+            refine_consumed_residuals_tensor = torch.stack(refine_consumed_residuals, dim=1)
+        else:
+            refine_consumed_residuals_tensor = text_states.new_empty(batch_size, 0, num_tokens)
         return {
             "edit_slots": edit_slots,
             "raw_edit_slots": raw_edit_slots,
@@ -438,6 +443,9 @@ class TAPER(nn.Module):
             "refine_slot_masks": torch.stack(refine_slot_masks, dim=1),  # [B,T,L,N]
             "refine_null_probs": torch.stack(refine_null_probs, dim=1),  # [B,T,N]
             "refine_ownership_logits": torch.stack(refine_ownership_logits, dim=1),  # [B,T,L+1,N]
+            "refine_residuals": torch.stack(refine_residuals, dim=1),  # [B,T,N]
+            "refine_consumed_residuals": refine_consumed_residuals_tensor,
+
         }
 
     def initialize_state(self, reference_features: Tensor) -> tuple[Tensor, Tensor]:
