@@ -318,9 +318,16 @@ class TAPER(nn.Module):
         refine_slot_states = []
         refine_slot_masses = []
         refine_update_norms = []
+
+        refine_slot_masks = []
+        refine_null_probs = []
+        refine_ownership_logits = []
         for refine_idx in range(self.num_refine_iters):
             refine_slot_states.append(slot_states)
             ownership_logits, null_probs, slot_masks = self._competitive_ownership(text_states=text_states, slot_valid=slot_valid, slot_states=slot_states)
+            refine_ownership_logits.append(ownership_logits)
+            refine_null_probs.append(null_probs)
+            refine_slot_masks.append(slot_masks)
             refine_slot_masses.append(slot_masks.sum(dim=2))
             if refine_idx + 1 < self.num_refine_iters:
                 old_states = slot_states
@@ -376,9 +383,11 @@ class TAPER(nn.Module):
             "q_teacher_full": q_full,
             "q_teacher_minus": q_minus,
             "refine_slot_states": torch.stack(refine_slot_states, dim=1),  # [B,T,L,D]
-            "refine_update_norms": torch.stack(refine_update_norms, dim=1),  # [B,T-1,L]
             "refine_slot_masses": torch.stack(refine_slot_masses, dim=1),
             "refine_update_norms": refine_update_norms_tensor,
+            "refine_slot_masks": torch.stack(refine_slot_masks, dim=1),  # [B,T,L,N]
+            "refine_null_probs": torch.stack(refine_null_probs, dim=1),  # [B,T,N]
+            "refine_ownership_logits": torch.stack(refine_ownership_logits, dim=1),  # [B,T,L+1,N]
         }
 
     def initialize_state(self, reference_features: Tensor) -> tuple[Tensor, Tensor]:
