@@ -110,7 +110,7 @@ class TAPER(nn.Module):
         self.state_norm = nn.LayerNorm(state_dim)
         # TAPER V3 contract: valid controlled residual transitions are followed by LN.
         # Invalid steps bypass this module and preserve the previous state exactly.
-        self.state_update_norm = nn.LayerNorm(state_dim)
+        # self.state_update_norm = nn.LayerNorm(state_dim)
 
         self.query_head = nn.Sequential(nn.Linear(state_dim, query_dim), nn.GELU(), nn.Linear(query_dim, query_dim))
 
@@ -434,7 +434,8 @@ class TAPER(nn.Module):
             * self.alpha_max
         )
         update = alpha[:, None] * proposed_delta
-        shadow_next = detached_call(self.state_update_norm, state.detach() + update)
+        # shadow_next = detached_call(self.state_update_norm, state.detach() + update)
+        shadow_next = state.detach() + update
         return torch.where(has_available[:, None], shadow_next, state.detach())
 
     def execute(
