@@ -211,13 +211,7 @@ class TAPER(nn.Module):
 
         return ownership_logits, null_probs, slot_masks
 
-    def _sequential_residual_round(
-        self,
-        slot_states: Tensor,
-        text_states: Tensor,
-        slot_valid: Tensor,
-        *,
-        update_states: bool,
+    def _sequential_residual_round(self, slot_states: Tensor, text_states: Tensor, slot_valid: Tensor, *, update_states: bool,
     ) -> tuple[
         Tensor,  # next_slot_states
         Tensor,  # allocation_logits
@@ -229,178 +223,46 @@ class TAPER(nn.Module):
         Tensor,  # slot_order
     ]:
         batch_size, num_tokens, _ = text_states.shape
-
-        expected = (
-            batch_size,
-            self.num_slots,
-            self.slot_dim,
-        )
-
+        expected = (batch_size, self.num_slots, self.slot_dim)
         if slot_states.shape != expected:
-            raise ValueError(
-                f"slot_states must be {expected}, "
-                f"got {tuple(slot_states.shape)}"
-            )
+            raise ValueError(f"slot_states must be {expected}, got {tuple(slot_states.shape)}")
 
-        # Paper: evidence is initialized as fully unexplained
-        # at the beginning of the refinement iteration.
         residual = slot_valid.to(text_states.dtype)
-
-        if (
-            self.training
-            and self.randomize_slot_order_during_training
-        ):
-            slot_order = torch.randperm(
-                self.num_slots,
-                device=text_states.device,
-            )
+        if self.training and self.randomize_slot_order_during_training:
+            slot_order_list = torch.randperm(self.num_slots, device="cpu")
         else:
-            # Paper: fixed canonical order at inference.
-            slot_order = torch.arange(
-                self.num_slots,
-                device=text_states.device,
-            )
-
+            slot_order_list = list(range(self.num_slots))
+        slot_order = torch.tensor(slot_order_list, dtype=torch.long, device=text_states.device)
         old_states = list(slot_states.unbind(dim=1))
         next_states = list(old_states)
-
-        slot_attentions: list[Tensor | None] = [
-            None
-        ] * self.num_slots
-
-        slot_claims: list[Tensor | None] = [
-            None
-        ] * self.num_slots
-
-        slot_score_logits: list[Tensor | None] = [
-            None
-        ] * self.num_slots
-
+        slot_attentions: list[Tensor | None] = [None] * self.num_slots
+        slot_claims: list[Tensor | None] = [None] * self.num_slots
+        slot_score_logits: list[Tensor | None] = [None] * self.num_slots
         residual_steps = [residual]
 
-        for slot_index_tensor in slot_order:
-            slot_id = int(slot_index_tensor.item())
-
+        for slot_id in slot_order_list:
+            # slot_id = int(slot_index_tensor.item())
             current_slot = old_states[slot_id]
+            effective_text = text_states * residual.unsqueeze(-1)
+            keys = self.text_key_projection(effective_text)
+            values = self.text_value_projection(effective_text)
+            query = self.slot_query_projection(current_slot)
 
-            # ---------------------------------------------------------
-            # PAPER CORE #1:
-            # Evidence scales BOTH keys and values.
-            # ---------------------------------------------------------
-            effective_text = (
-                text_states
-                * residual.unsqueeze(-1)
-            )
-
-            keys = self.text_key_projection(
-                effective_text
-            )
-
-            values = self.text_value_projection(
-                effective_text
-            )
-
-            query = self.slot_query_projection(
-                current_slot
-            )
-
-            logits = torch.einsum(
-                "bd,bnd->bn",
-                query,
-                keys,
-            )
-
-            logits = (
-                logits
-                / math.sqrt(self.slot_dim)
-                / self.mask_temperature
-            )
-
-            # ---------------------------------------------------------
-            # PAPER CORE #2:
-            # explicit log-evidence attention bias
-            # ---------------------------------------------------------
-            logits = (
-                logits
-                + self.residual_bias_strength
-                * torch.log(
-                    residual.clamp_min(
-                        self.residual_eps
-                    )
-                )
-            )
-
-            attention = self._masked_token_softmax(
-                logits,
-                slot_valid,
-            )
-
-            # ---------------------------------------------------------
-            # PAPER CORE #3:
-            # context uses attention over residual-scaled VALUES.
-            # ---------------------------------------------------------
-            evidence = torch.einsum(
-                "bn,bnd->bd",
-                attention,
-                values,
-            )
+            logits = torch.einsum("bd,bnd->bn", query, keys)
+            logits = logits / math.sqrt(self.slot_dim) / self.mask_temperature
+            logits = logits + self.residual_bias_strength * torch.log(residual.clamp_min(self.residual_eps))
+            attention = self._masked_token_softmax(logits, slot_valid)
+            evidence = torch.einsum("bn,bnd->bd", attention, values)
 
             if update_states:
-                candidate = self.slot_update(
-                    evidence,
-                    current_slot,
-                )
+                candidate = self.slot_update(evidence, current_slot)
+                has_evidence = attention.sum(dim=-1) > 0
+                next_states[slot_id] = torch.where(has_evidence[:, None], candidate, current_slot)
 
-                has_evidence = (
-                    attention.sum(dim=-1) > 0
-                )
-
-                next_states[slot_id] = torch.where(
-                    has_evidence[:, None],
-                    candidate,
-                    current_slot,
-                )
-
-            # ---------------------------------------------------------
-            # PAPER CORE #4:
-            # multiplicative evidence depletion.
-            #
-            # power=1 → linear
-            # power=2 → quadratic
-            # ---------------------------------------------------------
-            proposed_residual = (
-                residual
-                * (
-                    1.0
-                    - attention.pow(
-                        self.residual_depletion_power
-                    )
-                )
-            )
-
-            proposed_residual = torch.where(
-                slot_valid,
-                proposed_residual.clamp_min(
-                    self.residual_eps
-                ),
-                torch.zeros_like(
-                    proposed_residual
-                ),
-            )
-
-            # TAPER adapter:
-            # explicit amount of explanatory capacity
-            # consumed by this slot.
-            consumed = (
-                residual
-                - proposed_residual
-            ).clamp_min(0.0)
-
-            consumed = torch.where(
-                slot_valid,
-                consumed,
-                torch.zeros_like(consumed),
-            )
+            proposed_residual = residual * (1.0 - attention.pow(self.residual_depletion_power))
+            proposed_residual = torch.where(slot_valid, proposed_residual.clamp_min(self.residual_eps), torch.zeros_like(proposed_residual))
+            consumed = (residual - proposed_residual).clamp_min(0.0)
+            consumed = torch.where(slot_valid, consumed, torch.zeros_like(consumed))
 
             slot_attentions[slot_id] = attention
             slot_claims[slot_id] = consumed
@@ -409,84 +271,24 @@ class TAPER(nn.Module):
             residual = proposed_residual
             residual_steps.append(residual)
 
-        next_slot_states = torch.stack(
-            next_states,
-            dim=1,
-        )
-
-        attentions = torch.stack(
-            [x for x in slot_attentions],
-            dim=1,
-        )
-
-        claims = torch.stack(
-            [x for x in slot_claims],
-            dim=1,
-        )
-
-        score_logits = torch.stack(
-            [x for x in slot_score_logits],
-            dim=1,
-        )
-
-        residual_trajectory = torch.stack(
-            residual_steps,
-            dim=1,
-        )  # [B,L+1,N]
-
-        # -------------------------------------------------------------
-        # TAPER-specific NULL mapping:
-        #
-        # Whatever explanatory capacity remains after every sequential
-        # slot is the NULL / unexplained sink.
-        # -------------------------------------------------------------
-        null_probs = torch.where(
-            slot_valid,
-            residual,
-            torch.ones_like(residual),
-        )
-
-        allocation_probs = torch.cat(
-            [
-                null_probs[:, None, :],
-                claims,
-            ],
-            dim=1,
-        )
-
-        # Conservation must hold token-wise:
-        #
-        # NULL + sum(slot claims) = 1
-        conservation_error = (
-            allocation_probs.sum(dim=1)
-            - 1.0
-        ).abs().amax()
+        next_slot_states = torch.stack(next_states, dim=1)
+        attentions = torch.stack([x for x in slot_attentions], dim=1)
+        claims = torch.stack([x for x in slot_claims], dim=1)
+        score_logits = torch.stack([x for x in slot_score_logits], dim=1)
+        residual_trajectory = torch.stack(residual_steps, dim=1)  # [B,L+1,N]
+        null_probs = torch.where(slot_valid, residual, torch.ones_like(residual))
+        allocation_probs = torch.cat([null_probs[:, None, :], claims], dim=1)
+        conservation_error = (allocation_probs.sum(dim=1) - 1.0).abs().amax()
 
         if conservation_error.detach().item() > 1e-4:
-            raise RuntimeError(
-                "sequential residual allocation "
-                "violates conservation: "
-                f"{conservation_error.item():.6g}"
-            )
+            raise RuntimeError(f"sequential residual allocation violates conservation: {conservation_error.item():.6g}")
 
-        # Compatibility with existing diagnostics.
-        # These are allocation log-probabilities,
-        # NOT the raw sequential scoring logits.
-        allocation_logits = torch.log(
-            allocation_probs.clamp_min(
-                self.residual_eps
-            )
-        )
-
+        allocation_logits = torch.log(allocation_probs.clamp_min(self.residual_eps))
         if not torch.isfinite(next_slot_states).all():
-            raise FloatingPointError(
-                "non-finite sequential slot state"
-            )
+            raise FloatingPointError("non-finite sequential slot state")
 
         if not torch.isfinite(residual).all():
-            raise FloatingPointError(
-                "non-finite residual evidence"
-            )
+            raise FloatingPointError("non-finite residual evidence")
 
         return (
             next_slot_states,
@@ -499,44 +301,18 @@ class TAPER(nn.Module):
             slot_order,
         )
 
-    def _masked_token_softmax(
-        self,
-        logits: Tensor,
-        slot_valid: Tensor,
-    ) -> Tensor:
+    def _masked_token_softmax(self, logits: Tensor, slot_valid: Tensor) -> Tensor:
         if logits.shape != slot_valid.shape:
-            raise ValueError(
-                f"logits and slot_valid must match, "
-                f"got {tuple(logits.shape)} and {tuple(slot_valid.shape)}"
-            )
+            raise ValueError(f"logits and slot_valid must match, got {tuple(logits.shape)} and {tuple(slot_valid.shape)}")
 
         invalid_logit = torch.finfo(logits.dtype).min
-
-        masked_logits = logits.masked_fill(
-            ~slot_valid,
-            invalid_logit,
-        )
-
-        attention = F.softmax(
-            masked_logits,
-            dim=-1,  # CRITICAL: softmax over TOKENS
-        )
-
-        # Makes the all-invalid edge case exactly zero.
-        attention = (
-            attention
-            * slot_valid.to(attention.dtype)
-        )
-
-        attention = attention / attention.sum(
-            dim=-1,
-            keepdim=True,
-        ).clamp_min(self.residual_eps)
+        masked_logits = logits.masked_fill(~slot_valid, invalid_logit,)
+        attention = F.softmax(masked_logits, dim=-1)
+        attention = attention* slot_valid.to(attention.dtype)
+        attention = attention / attention.sum(dim=-1, keepdim=True).clamp_min(self.residual_eps)
 
         if not torch.isfinite(attention).all():
-            raise FloatingPointError(
-                "non-finite sequential token attention"
-            )
+            raise FloatingPointError("non-finite sequential token attention")
 
         return attention
 
