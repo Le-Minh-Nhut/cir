@@ -229,7 +229,7 @@ class TAPER(nn.Module):
 
         residual = slot_valid.to(text_states.dtype)
         if self.training and self.randomize_slot_order_during_training:
-            slot_order_list = torch.randperm(self.num_slots, device="cpu")
+            slot_order_list = torch.randperm(self.num_slots, device="cpu").tolist()
         else:
             slot_order_list = list(range(self.num_slots))
         slot_order = torch.tensor(slot_order_list, dtype=torch.long, device=text_states.device)

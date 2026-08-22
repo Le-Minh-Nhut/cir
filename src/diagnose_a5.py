@@ -120,6 +120,59 @@ def pairwise_cosine_mean(
     selected = values[pair_active]
     return selected.mean().item(), selected.numel()
 
+def max_pairwise_cosine_mean(
+    x: torch.Tensor,
+) -> tuple[float, int]:
+    """
+    Paper-style slot-collapse metric.
+
+    For each sample:
+        1. compute cosine for every slot pair i < j
+        2. take the maximum cosine
+
+    Then average that worst-pair cosine across the batch.
+
+    x: [B,L,D]
+    """
+    if x.ndim != 3:
+        raise ValueError(
+            f"x must be [B,L,D], got {tuple(x.shape)}"
+        )
+
+    b, l, _ = x.shape
+
+    if l < 2:
+        return float("nan"), 0
+
+    x = F.normalize(
+        x.float(),
+        dim=-1,
+        eps=1e-6,
+    )
+
+    similarity = (
+        x @ x.transpose(1, 2)
+    )  # [B,L,L]
+
+    upper = torch.triu(
+        torch.ones(
+            l,
+            l,
+            dtype=torch.bool,
+            device=x.device,
+        ),
+        diagonal=1,
+    )
+
+    # [B, number_of_slot_pairs]
+    pair_values = similarity[:, upper]
+
+    # Worst / most-collapsed pair in each sample.
+    sample_max = pair_values.max(
+        dim=1
+    ).values
+
+    return sample_max.mean().item(), b
 
 def masked_mean(
     values: torch.Tensor,
@@ -438,6 +491,18 @@ def collect_a51c_diagnostics(
             f"round_{round_id}/slot_attention_pair_cos",
             attention_cos,
             max(attention_pairs, 1),
+        )
+
+        attention_max_cos, attention_max_count = (
+            max_pairwise_cosine_mean(
+                valid_attentions
+            )
+        )
+
+        meter.add(
+            f"round_{round_id}/slot_attention_max_pair_cos",
+            attention_max_cos,
+            max(attention_max_count, 1),
         )
 
         # Raw attention token entropy and top-1 confidence.
@@ -1405,19 +1470,28 @@ def main(cfg: DictConfig) -> None:
         )
 
     print(
-        "\n--- Raw sequential attention cosine "
-        "(PRIMARY collapse metric) ---"
+        "\n--- Raw sequential attention cosine ---"
     )
+
     for round_id in range(
         int(m.num_refine_iters)
     ):
-        key = (
+        mean_key = (
             f"round_{round_id}/"
             "slot_attention_pair_cos"
         )
+
+        max_key = (
+            f"round_{round_id}/"
+            "slot_attention_max_pair_cos"
+        )
+
         print(
             f"round {round_id}: "
-            f"{structural.get(key, float('nan')):.6f}"
+            f"mean_pair="
+            f"{structural.get(mean_key, float('nan')):.6f} "
+            f"worst_pair="
+            f"{structural.get(max_key, float('nan')):.6f}"
         )
 
     print(
