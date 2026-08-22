@@ -134,7 +134,6 @@ def main(cfg: DictConfig) -> None:
         alpha_max=m.alpha_max,
         counterfactual_chunk_size=m.counterfactual_chunk_size,
         num_refine_iters=m.num_refine_iters,
-        num_refine_iters=m.num_refine_iters,
         residual_bias_strength=m.residual_bias_strength,
         residual_depletion_power=m.residual_depletion_power,
         residual_eps=m.residual_eps,

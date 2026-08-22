@@ -669,40 +669,16 @@ class TAPER(nn.Module):
         refine_slot_masks = []
         refine_null_probs = []
         refine_ownership_logits = []
-        slot_states = (
-            self.slot_queries
-            .unsqueeze(0)
-            .expand(batch_size, -1, -1)
-        )
-
-        refine_slot_states = []
-        refine_slot_masses = []
-        refine_update_norms = []
-
-        refine_slot_masks = []
-        refine_null_probs = []
-        refine_ownership_logits = []
+        slot_states = self.slot_queries.unsqueeze(0).expand(batch_size, -1, -1)
 
         refine_slot_attentions = []
         refine_sequential_score_logits = []
         refine_residual_trajectories = []
         refine_slot_orders = []
-
-        for refine_idx in range(
-            self.num_refine_iters
-        ):
-            refine_slot_states.append(
-                slot_states
-            )
-
+        for refine_idx in range(self.num_refine_iters):
+            refine_slot_states.append(slot_states)
             old_states = slot_states
-
-            # Same A5.0 scientific contract:
-            # no useless GRU update after final scoring round.
-            update_states = (
-                refine_idx + 1
-                < self.num_refine_iters
-            )
+            update_states = refine_idx + 1 < self.num_refine_iters
 
             (
                 next_slot_states,
@@ -720,46 +696,16 @@ class TAPER(nn.Module):
                 update_states=update_states,
             )
 
-            refine_ownership_logits.append(
-                ownership_logits
-            )
-
-            refine_null_probs.append(
-                null_probs
-            )
-
-            refine_slot_masks.append(
-                slot_masks
-            )
-
-            refine_slot_masses.append(
-                slot_masks.sum(dim=2)
-            )
-
-            refine_slot_attentions.append(
-                slot_attentions
-            )
-
-            refine_sequential_score_logits.append(
-                sequential_score_logits
-            )
-
-            refine_residual_trajectories.append(
-                residual_trajectory
-            )
-
-            refine_slot_orders.append(
-                slot_order
-            )
-
+            refine_ownership_logits.append(ownership_logits)
+            refine_null_probs.append(null_probs)
+            refine_slot_masks.append(slot_masks)
+            refine_slot_masses.append(slot_masks.sum(dim=2))
+            refine_slot_attentions.append(slot_attentions)
+            refine_sequential_score_logits.append(sequential_score_logits)
+            refine_residual_trajectories.append(residual_trajectory)
+            refine_slot_orders.append(slot_order)
             if update_states:
-                refine_update_norms.append(
-                    (
-                        next_slot_states
-                        - old_states
-                    ).norm(dim=-1)
-                )
-
+                refine_update_norms.append((next_slot_states - old_states).norm(dim=-1))
                 slot_states = next_slot_states
         
         slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
