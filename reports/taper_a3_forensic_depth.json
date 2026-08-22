@@ -1,0 +1,597 @@
+{
+  "checkpoint": "outputs/2026-08-22/04-18-29/best.pt",
+  "protocol": "fashioniq_original",
+  "max_queries_per_category": 256,
+  "gradient_batches": 0,
+  "inference": {
+    "retrieval": {
+      "full": {
+        "recall_at_10": 40.625,
+        "recall_at_50": 67.83854166666667,
+        "mean_recall": 54.231770833333336,
+        "categories": {
+          "dress": {
+            "recall_at_10": 39.0625,
+            "recall_at_50": 68.359375
+          },
+          "shirt": {
+            "recall_at_10": 37.109375,
+            "recall_at_50": 64.84375
+          },
+          "toptee": {
+            "recall_at_10": 45.703125,
+            "recall_at_50": 70.3125
+          }
+        }
+      },
+      "reference_only": {
+        "recall_at_10": 2.9947916666666665,
+        "recall_at_50": 9.635416666666666,
+        "mean_recall": 6.315104166666666,
+        "categories": {
+          "dress": {
+            "recall_at_10": 1.5625,
+            "recall_at_50": 5.859375
+          },
+          "shirt": {
+            "recall_at_10": 5.078125,
+            "recall_at_50": 14.453125
+          },
+          "toptee": {
+            "recall_at_10": 2.34375,
+            "recall_at_50": 8.59375
+          }
+        }
+      },
+      "full_cap1": {
+        "recall_at_10": 25.78125,
+        "recall_at_50": 47.786458333333336,
+        "mean_recall": 36.78385416666667,
+        "categories": {
+          "dress": {
+            "recall_at_10": 20.703125,
+            "recall_at_50": 43.75
+          },
+          "shirt": {
+            "recall_at_10": 27.34375,
+            "recall_at_50": 46.875
+          },
+          "toptee": {
+            "recall_at_10": 29.296875,
+            "recall_at_50": 52.734375
+          }
+        }
+      },
+      "full_cap2": {
+        "recall_at_10": 38.932291666666664,
+        "recall_at_50": 61.979166666666664,
+        "mean_recall": 50.455729166666664,
+        "categories": {
+          "dress": {
+            "recall_at_10": 38.671875,
+            "recall_at_50": 62.109375
+          },
+          "shirt": {
+            "recall_at_10": 37.5,
+            "recall_at_50": 60.15625
+          },
+          "toptee": {
+            "recall_at_10": 40.625,
+            "recall_at_50": 63.671875
+          }
+        }
+      },
+      "full_cap3": {
+        "recall_at_10": 40.755208333333336,
+        "recall_at_50": 66.796875,
+        "mean_recall": 53.77604166666667,
+        "categories": {
+          "dress": {
+            "recall_at_10": 39.0625,
+            "recall_at_50": 68.359375
+          },
+          "shirt": {
+            "recall_at_10": 38.671875,
+            "recall_at_50": 63.671875
+          },
+          "toptee": {
+            "recall_at_10": 44.53125,
+            "recall_at_50": 68.359375
+          }
+        }
+      },
+      "full_cap4": {
+        "recall_at_10": 40.625,
+        "recall_at_50": 67.83854166666667,
+        "mean_recall": 54.231770833333336,
+        "categories": {
+          "dress": {
+            "recall_at_10": 39.0625,
+            "recall_at_50": 68.359375
+          },
+          "shirt": {
+            "recall_at_10": 37.109375,
+            "recall_at_50": 64.84375
+          },
+          "toptee": {
+            "recall_at_10": 45.703125,
+            "recall_at_50": 70.3125
+          }
+        }
+      },
+      "keep_0": {
+        "recall_at_10": 25.78125,
+        "recall_at_50": 47.916666666666664,
+        "mean_recall": 36.84895833333333,
+        "categories": {
+          "dress": {
+            "recall_at_10": 20.703125,
+            "recall_at_50": 43.75
+          },
+          "shirt": {
+            "recall_at_10": 27.34375,
+            "recall_at_50": 46.875
+          },
+          "toptee": {
+            "recall_at_10": 29.296875,
+            "recall_at_50": 53.125
+          }
+        }
+      },
+      "keep_1": {
+        "recall_at_10": 25.78125,
+        "recall_at_50": 47.786458333333336,
+        "mean_recall": 36.78385416666667,
+        "categories": {
+          "dress": {
+            "recall_at_10": 20.703125,
+            "recall_at_50": 44.140625
+          },
+          "shirt": {
+            "recall_at_10": 27.34375,
+            "recall_at_50": 46.875
+          },
+          "toptee": {
+            "recall_at_10": 29.296875,
+            "recall_at_50": 52.34375
+          }
+        }
+      },
+      "keep_2": {
+        "recall_at_10": 25.78125,
+        "recall_at_50": 48.046875,
+        "mean_recall": 36.9140625,
+        "categories": {
+          "dress": {
+            "recall_at_10": 20.703125,
+            "recall_at_50": 43.75
+          },
+          "shirt": {
+            "recall_at_10": 27.34375,
+            "recall_at_50": 47.265625
+          },
+          "toptee": {
+            "recall_at_10": 29.296875,
+            "recall_at_50": 53.125
+          }
+        }
+      },
+      "keep_3": {
+        "recall_at_10": 25.78125,
+        "recall_at_50": 47.916666666666664,
+        "mean_recall": 36.84895833333333,
+        "categories": {
+          "dress": {
+            "recall_at_10": 20.703125,
+            "recall_at_50": 44.53125
+          },
+          "shirt": {
+            "recall_at_10": 27.34375,
+            "recall_at_50": 46.875
+          },
+          "toptee": {
+            "recall_at_10": 29.296875,
+            "recall_at_50": 52.34375
+          }
+        }
+      },
+      "mean_x1": {
+        "recall_at_10": 25.78125,
+        "recall_at_50": 47.786458333333336,
+        "mean_recall": 36.78385416666667,
+        "categories": {
+          "dress": {
+            "recall_at_10": 20.703125,
+            "recall_at_50": 44.140625
+          },
+          "shirt": {
+            "recall_at_10": 27.34375,
+            "recall_at_50": 46.875
+          },
+          "toptee": {
+            "recall_at_10": 29.296875,
+            "recall_at_50": 52.34375
+          }
+        }
+      },
+      "mean_x2": {
+        "recall_at_10": 38.932291666666664,
+        "recall_at_50": 61.979166666666664,
+        "mean_recall": 50.455729166666664,
+        "categories": {
+          "dress": {
+            "recall_at_10": 38.671875,
+            "recall_at_50": 62.109375
+          },
+          "shirt": {
+            "recall_at_10": 37.5,
+            "recall_at_50": 60.15625
+          },
+          "toptee": {
+            "recall_at_10": 40.625,
+            "recall_at_50": 63.671875
+          }
+        }
+      },
+      "mean_x3": {
+        "recall_at_10": 40.755208333333336,
+        "recall_at_50": 66.796875,
+        "mean_recall": 53.77604166666667,
+        "categories": {
+          "dress": {
+            "recall_at_10": 39.0625,
+            "recall_at_50": 68.359375
+          },
+          "shirt": {
+            "recall_at_10": 38.671875,
+            "recall_at_50": 63.671875
+          },
+          "toptee": {
+            "recall_at_10": 44.53125,
+            "recall_at_50": 68.359375
+          }
+        }
+      },
+      "mean_x4": {
+        "recall_at_10": 40.625,
+        "recall_at_50": 67.96875,
+        "mean_recall": 54.296875,
+        "categories": {
+          "dress": {
+            "recall_at_10": 39.0625,
+            "recall_at_50": 68.75
+          },
+          "shirt": {
+            "recall_at_10": 37.109375,
+            "recall_at_50": 64.84375
+          },
+          "toptee": {
+            "recall_at_10": 45.703125,
+            "recall_at_50": 70.3125
+          }
+        }
+      },
+      "slot0_x4": {
+        "recall_at_10": 40.494791666666664,
+        "recall_at_50": 67.70833333333333,
+        "mean_recall": 54.1015625,
+        "categories": {
+          "dress": {
+            "recall_at_10": 38.671875,
+            "recall_at_50": 68.359375
+          },
+          "shirt": {
+            "recall_at_10": 37.109375,
+            "recall_at_50": 64.84375
+          },
+          "toptee": {
+            "recall_at_10": 45.703125,
+            "recall_at_50": 69.921875
+          }
+        }
+      },
+      "slot1_x4": {
+        "recall_at_10": 40.755208333333336,
+        "recall_at_50": 67.96875,
+        "mean_recall": 54.36197916666667,
+        "categories": {
+          "dress": {
+            "recall_at_10": 39.453125,
+            "recall_at_50": 68.75
+          },
+          "shirt": {
+            "recall_at_10": 37.109375,
+            "recall_at_50": 64.84375
+          },
+          "toptee": {
+            "recall_at_10": 45.703125,
+            "recall_at_50": 70.3125
+          }
+        }
+      },
+      "slot2_x4": {
+        "recall_at_10": 40.494791666666664,
+        "recall_at_50": 67.96875,
+        "mean_recall": 54.23177083333333,
+        "categories": {
+          "dress": {
+            "recall_at_10": 38.671875,
+            "recall_at_50": 68.75
+          },
+          "shirt": {
+            "recall_at_10": 37.109375,
+            "recall_at_50": 64.84375
+          },
+          "toptee": {
+            "recall_at_10": 45.703125,
+            "recall_at_50": 70.3125
+          }
+        }
+      },
+      "slot3_x4": {
+        "recall_at_10": 40.755208333333336,
+        "recall_at_50": 67.96875,
+        "mean_recall": 54.36197916666667,
+        "categories": {
+          "dress": {
+            "recall_at_10": 39.453125,
+            "recall_at_50": 68.75
+          },
+          "shirt": {
+            "recall_at_10": 37.109375,
+            "recall_at_50": 64.84375
+          },
+          "toptee": {
+            "recall_at_10": 45.703125,
+            "recall_at_50": 70.3125
+          }
+        }
+      },
+      "hardize_current": {
+        "recall_at_10": 22.786458333333332,
+        "recall_at_50": 43.619791666666664,
+        "mean_recall": 33.203125,
+        "categories": {
+          "dress": {
+            "recall_at_10": 15.625,
+            "recall_at_50": 35.9375
+          },
+          "shirt": {
+            "recall_at_10": 27.734375,
+            "recall_at_50": 49.21875
+          },
+          "toptee": {
+            "recall_at_10": 25.0,
+            "recall_at_50": 45.703125
+          }
+        }
+      }
+    },
+    "ownership_margins": {
+      "all_destination": {
+        "n": 9322,
+        "mean": 0.9830379486083984,
+        "std": 0.9843942523002625,
+        "min": 6.486475467681885e-05,
+        "p10": 0.020737702026963234,
+        "p25": 0.19130033254623413,
+        "median": 0.773354172706604,
+        "p75": 1.4129239320755005,
+        "p90": 2.153884172439575,
+        "max": 6.211116790771484,
+        "frac_abs_le_1e-3": 0.006650933064520359,
+        "frac_abs_le_1e-2": 0.05588929355144501,
+        "frac_abs_le_1e-1": 0.21486805379390717
+      },
+      "edit_only": {
+        "n": 9322,
+        "mean": 0.03556036949157715,
+        "std": 0.02808007039129734,
+        "min": 6.109476089477539e-06,
+        "p10": 0.005132576916366816,
+        "p25": 0.013373255729675293,
+        "median": 0.029358431696891785,
+        "p75": 0.051507435739040375,
+        "p90": 0.07511795312166214,
+        "max": 0.17007571458816528,
+        "frac_abs_le_1e-3": 0.020918257534503937,
+        "frac_abs_le_1e-2": 0.19105342030525208,
+        "frac_abs_le_1e-1": 0.9679253101348877
+      }
+    },
+    "execution_controls": {
+      "full_cap1_valid_steps": {
+        "n": 768,
+        "mean": 0.9973958134651184,
+        "std": 0.05096454545855522,
+        "min": 0.0,
+        "p10": 1.0,
+        "p25": 1.0,
+        "median": 1.0,
+        "p75": 1.0,
+        "p90": 1.0,
+        "max": 1.0,
+        "frac_abs_le_1e-3": 0.0026041667442768812,
+        "frac_abs_le_1e-2": 0.0026041667442768812,
+        "frac_abs_le_1e-1": 0.0026041667442768812
+      },
+      "full_cap2_valid_steps": {
+        "n": 768,
+        "mean": 1.9947916269302368,
+        "std": 0.10192909091711044,
+        "min": 0.0,
+        "p10": 2.0,
+        "p25": 2.0,
+        "median": 2.0,
+        "p75": 2.0,
+        "p90": 2.0,
+        "max": 2.0,
+        "frac_abs_le_1e-3": 0.0026041667442768812,
+        "frac_abs_le_1e-2": 0.0026041667442768812,
+        "frac_abs_le_1e-1": 0.0026041667442768812
+      },
+      "full_cap3_valid_steps": {
+        "n": 768,
+        "mean": 2.9921875,
+        "std": 0.15289363265037537,
+        "min": 0.0,
+        "p10": 3.0,
+        "p25": 3.0,
+        "median": 3.0,
+        "p75": 3.0,
+        "p90": 3.0,
+        "max": 3.0,
+        "frac_abs_le_1e-3": 0.0026041667442768812,
+        "frac_abs_le_1e-2": 0.0026041667442768812,
+        "frac_abs_le_1e-1": 0.0026041667442768812
+      },
+      "full_cap4_valid_steps": {
+        "n": 768,
+        "mean": 3.9895832538604736,
+        "std": 0.2038581818342209,
+        "min": 0.0,
+        "p10": 4.0,
+        "p25": 4.0,
+        "median": 4.0,
+        "p75": 4.0,
+        "p90": 4.0,
+        "max": 4.0,
+        "frac_abs_le_1e-3": 0.0026041667442768812,
+        "frac_abs_le_1e-2": 0.0026041667442768812,
+        "frac_abs_le_1e-1": 0.0026041667442768812
+      },
+      "mean_x1_valid_steps": {
+        "n": 768,
+        "mean": 0.9973958134651184,
+        "std": 0.05096454545855522,
+        "min": 0.0,
+        "p10": 1.0,
+        "p25": 1.0,
+        "median": 1.0,
+        "p75": 1.0,
+        "p90": 1.0,
+        "max": 1.0,
+        "frac_abs_le_1e-3": 0.0026041667442768812,
+        "frac_abs_le_1e-2": 0.0026041667442768812,
+        "frac_abs_le_1e-1": 0.0026041667442768812
+      },
+      "mean_x2_valid_steps": {
+        "n": 768,
+        "mean": 1.9947916269302368,
+        "std": 0.10192909091711044,
+        "min": 0.0,
+        "p10": 2.0,
+        "p25": 2.0,
+        "median": 2.0,
+        "p75": 2.0,
+        "p90": 2.0,
+        "max": 2.0,
+        "frac_abs_le_1e-3": 0.0026041667442768812,
+        "frac_abs_le_1e-2": 0.0026041667442768812,
+        "frac_abs_le_1e-1": 0.0026041667442768812
+      },
+      "mean_x3_valid_steps": {
+        "n": 768,
+        "mean": 2.9921875,
+        "std": 0.15289363265037537,
+        "min": 0.0,
+        "p10": 3.0,
+        "p25": 3.0,
+        "median": 3.0,
+        "p75": 3.0,
+        "p90": 3.0,
+        "max": 3.0,
+        "frac_abs_le_1e-3": 0.0026041667442768812,
+        "frac_abs_le_1e-2": 0.0026041667442768812,
+        "frac_abs_le_1e-1": 0.0026041667442768812
+      },
+      "mean_x4_valid_steps": {
+        "n": 768,
+        "mean": 3.9895832538604736,
+        "std": 0.2038581818342209,
+        "min": 0.0,
+        "p10": 4.0,
+        "p25": 4.0,
+        "median": 4.0,
+        "p75": 4.0,
+        "p90": 4.0,
+        "max": 4.0,
+        "frac_abs_le_1e-3": 0.0026041667442768812,
+        "frac_abs_le_1e-2": 0.0026041667442768812,
+        "frac_abs_le_1e-1": 0.0026041667442768812
+      },
+      "slot0_x4_valid_steps": {
+        "n": 768,
+        "mean": 3.9895832538604736,
+        "std": 0.2038581818342209,
+        "min": 0.0,
+        "p10": 4.0,
+        "p25": 4.0,
+        "median": 4.0,
+        "p75": 4.0,
+        "p90": 4.0,
+        "max": 4.0,
+        "frac_abs_le_1e-3": 0.0026041667442768812,
+        "frac_abs_le_1e-2": 0.0026041667442768812,
+        "frac_abs_le_1e-1": 0.0026041667442768812
+      },
+      "slot1_x4_valid_steps": {
+        "n": 768,
+        "mean": 3.9895832538604736,
+        "std": 0.2038581818342209,
+        "min": 0.0,
+        "p10": 4.0,
+        "p25": 4.0,
+        "median": 4.0,
+        "p75": 4.0,
+        "p90": 4.0,
+        "max": 4.0,
+        "frac_abs_le_1e-3": 0.0026041667442768812,
+        "frac_abs_le_1e-2": 0.0026041667442768812,
+        "frac_abs_le_1e-1": 0.0026041667442768812
+      },
+      "slot2_x4_valid_steps": {
+        "n": 768,
+        "mean": 3.9895832538604736,
+        "std": 0.2038581818342209,
+        "min": 0.0,
+        "p10": 4.0,
+        "p25": 4.0,
+        "median": 4.0,
+        "p75": 4.0,
+        "p90": 4.0,
+        "max": 4.0,
+        "frac_abs_le_1e-3": 0.0026041667442768812,
+        "frac_abs_le_1e-2": 0.0026041667442768812,
+        "frac_abs_le_1e-1": 0.0026041667442768812
+      },
+      "slot3_x4_valid_steps": {
+        "n": 768,
+        "mean": 3.9895832538604736,
+        "std": 0.2038581818342209,
+        "min": 0.0,
+        "p10": 4.0,
+        "p25": 4.0,
+        "median": 4.0,
+        "p75": 4.0,
+        "p90": 4.0,
+        "max": 4.0,
+        "frac_abs_le_1e-3": 0.0026041667442768812,
+        "frac_abs_le_1e-2": 0.0026041667442768812,
+        "frac_abs_le_1e-1": 0.0026041667442768812
+      }
+    }
+  },
+  "gradient": {
+    "skipped": true
+  },
+  "interpretation_guide": {
+    "keep_one": "If every keep_i remains close to FULL, each slot likely carries most of the global modification.",
+    "full_cap_vs_mean": "Compare FULL_capK against mean_xK at the same K. If they are close, real slot-specific information contributes little beyond recurrent execution depth; the gap FULL_capK-mean_xK estimates residual complementary slot information.",
+    "mean_depth_curve": "If mean_x1 < mean_x2 < mean_x3 < mean_x4 and mean_x4 is near FULL, retrieval benefit scales with repeated execution depth even when slot identity is destroyed.",
+    "duplicate_single_slot_x4": "If slot0_x4..slot3_x4 are each near FULL, any single original slot already contains a near-global edit program and four copies mainly provide recurrent compute tickets.",
+    "hardize_current": "If hardize_current collapses retrieval, the trained A3 checkpoint materially relies on fractional soft ownership tails.",
+    "edit_only_margin": "If edit-only top1-top2 logit margins are near zero, deterministic A4 argmax will be highly tie-sensitive/arbitrary.",
+    "gradient_cosine": "If slot-query gradient cosine is consistently near +1, retrieval loss is actively pushing slot queries in similar directions."
+  }
+}
