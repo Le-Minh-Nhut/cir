@@ -38,6 +38,8 @@ class TAPER(nn.Module):
     ) -> None:
         super().__init__()
 
+        if num_refine_iters < 1:
+            raise ValueError("num_refine_iters must be >= 1")
         if num_slots < 1 or num_primitives < 1:
             raise ValueError("num_slots and num_primitives must be >= 1")
         if min(mask_temperature, router_temperature, retrieval_temperature) <= 0:
@@ -196,15 +198,21 @@ class TAPER(nn.Module):
         if slot_states.shape != (batch_size, self.num_slots, self.slot_dim):
             raise ValueError("slot_states has invalid shape")
 
-        if slot_masks.shape[:2] != (batch_size, self.num_slots):
-            raise ValueError("slot_masks must be [B,L,N]")
+        expected_slot_mask_shape = (batch_size, self.num_slots, text_states.shape[1])
+
+        if slot_masks.shape != expected_slot_mask_shape:
+            raise ValueError(f"slot_masks must be {expected_slot_mask_shape}, got {tuple(slot_masks.shape)}")
 
         text_values = self.text_value_projection(text_states)  # [B, N, Ds]
         slot_evidence, slot_mass, slot_activity = self._mass_aware_slot_pool(text_values, slot_masks)
+        if not torch.isfinite(slot_evidence).all():
+            raise FloatingPointError("non-finite iterative slot evidence")
         b, l, d = slot_states.shape
         candidate_states = self.slot_update(slot_evidence.reshape(b * l, d), slot_states.reshape(b * l, d)).reshape(b, l, d)
         active = slot_mass > 0
         next_slot_states = torch.where(active.unsqueeze(-1), candidate_states, slot_states,)
+        if not torch.isfinite(next_slot_states).all():
+            raise FloatingPointError("non-finite refined slot states")
 
         return (next_slot_states, slot_mass, slot_activity)
 
