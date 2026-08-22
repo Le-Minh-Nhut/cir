@@ -134,6 +134,9 @@ def main(cfg: DictConfig) -> None:
         alpha_max=m.alpha_max,
         counterfactual_chunk_size=m.counterfactual_chunk_size,
         num_refine_iters=m.num_refine_iters,
+        residual_strength=m.residual_strength,
+        residual_depletion=m.residual_depletion,
+        residual_eps=m.residual_eps,
     ).to(device)
 
     optimizer = AdamW(

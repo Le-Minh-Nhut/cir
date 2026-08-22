@@ -34,10 +34,18 @@ class TAPER(nn.Module):
         effect_diversity_margin: float = 0.50,
         alpha_max: float = 1.0,
         counterfactual_chunk_size: int = 8,
-        num_refine_iters: int = 3
+        num_refine_iters: int = 3,
+        residual_strength: float = 1.0,
+        residual_depletion: float = 0.5,
+        residual_eps: float = 1e-6,
     ) -> None:
         super().__init__()
-
+        if residual_strength < 0:
+            raise ValueError("residual_strength must be >= 0")
+        if not 0.0 <= residual_depletion <= 1.0:
+            raise ValueError("residual_depletion must be in [0, 1]")
+        if residual_eps <= 0:
+            raise ValueError("residual_eps must be > 0")
         if num_refine_iters < 1:
             raise ValueError("num_refine_iters must be >= 1")
         if num_slots < 1 or num_primitives < 1:
@@ -121,6 +129,10 @@ class TAPER(nn.Module):
 
         self.query_head = nn.Sequential(nn.Linear(state_dim, query_dim), nn.GELU(), nn.Linear(query_dim, query_dim))
 
+        self.residual_strength = residual_strength
+        self.residual_depletion = residual_depletion
+        self.residual_eps = residual_eps
+
     def train(self, mode: bool = True) -> "TAPER":
         super().train(mode)
         # The teacher is a frozen functional measuring instrument.
@@ -167,7 +179,7 @@ class TAPER(nn.Module):
 
         return attention_valid, slot_valid
 
-    def _competitive_ownership(self, text_states: Tensor, slot_valid: Tensor, slot_states: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    def _competitive_ownership(self, text_states: Tensor, slot_valid: Tensor, slot_states: Tensor, residual: Tensor | None = None,) -> tuple[Tensor, Tensor, Tensor]:
         batch_size = text_states.shape[0]
 
         if slot_states.shape != (batch_size, self.num_slots, self.slot_dim):
@@ -183,6 +195,18 @@ class TAPER(nn.Module):
         null_logits = torch.where(slot_valid, logits[:, 0, :], torch.zeros_like(logits[:, 0, :]))
         invalid_logit = torch.finfo(logits.dtype).min
         edit_logits = logits[:, 1:, :].masked_fill(~valid, invalid_logit)
+
+        if residual is not None:
+            if residual.shape != slot_valid.shape:
+                raise ValueError(f"residual must be {tuple(slot_valid.shape)}, got {tuple(residual.shape)}")
+            if not torch.isfinite(residual).all():
+                raise FloatingPointError("residual contains NaN or Inf")
+
+            residual_safe = residual.clamp_min(self.residual_eps)
+            residual_penalty = self.residual_strength* torch.log(residual_safe)
+            edit_logits = edit_logits + residual_penalty[:, None, :]
+
+        edit_logits = edit_logits.masked_fill(~valid, invalid_logit)
         ownership_logits = torch.cat([null_logits[:, None, :], edit_logits], dim=1)
         ownership = F.softmax(ownership_logits, dim=1)
         if not torch.isfinite(ownership).all():
@@ -192,6 +216,24 @@ class TAPER(nn.Module):
         slot_masks = ownership[:, 1:, :]
 
         return ownership_logits, null_probs, slot_masks
+
+    def _update_residual(self, residual: Tensor, slot_masks: Tensor, slot_valid: Tensor) -> tuple[Tensor, Tensor]:
+        if residual.shape != slot_valid.shape:
+            raise ValueError("residual and slot_valid must match")
+        if slot_masks.shape[:1] != residual.shape[:1]:
+            raise ValueError("slot_masks batch mismatch")
+
+        total_edit_claim = slot_masks.sum(dim=1).clamp(0.0, 1.0)
+        consumed = self.residual_depletion * residual * total_edit_claim
+        next_residual = residual - consumed
+        next_residual = next_residual.clamp(0.0, 1.0)
+        next_residual = torch.where(slot_valid, next_residual, torch.zeros_like(next_residual))
+        consumed = torch.where(slot_valid, consumed, torch.zeros_like(consumed))
+
+        if not torch.isfinite(next_residual).all():
+            raise FloatingPointError("non-finite residual evidence")
+
+        return next_residual, consumed
 
     def _refine_slot_states(self, slot_states: Tensor, text_states: Tensor, slot_masks: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         batch_size = text_states.shape[0]
@@ -322,8 +364,13 @@ class TAPER(nn.Module):
         refine_slot_masks = []
         refine_null_probs = []
         refine_ownership_logits = []
+
+        residual = slot_valid.to(text_states.dtype)
+        refine_residuals = []
+        refine_consumed_residuals = []
         for refine_idx in range(self.num_refine_iters):
             refine_slot_states.append(slot_states)
+            refine_residuals.append(residual)
             ownership_logits, null_probs, slot_masks = self._competitive_ownership(text_states=text_states, slot_valid=slot_valid, slot_states=slot_states)
             refine_ownership_logits.append(ownership_logits)
             refine_null_probs.append(null_probs)
@@ -338,6 +385,9 @@ class TAPER(nn.Module):
                 )
 
                 refine_update_norms.append((slot_states - old_states).norm(dim=-1))
+                residual, consumed = self._update_residual(residual=residual, slot_masks=slot_masks, slot_valid=slot_valid)
+
+        refine_consumed_residuals.append(consumed)
         
         slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
         q_full = self.teacher.compose(teacher_reference_features, teacher_text_states, text_attention_mask, normalize=False)
