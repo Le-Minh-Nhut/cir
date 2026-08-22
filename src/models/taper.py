@@ -321,18 +321,16 @@ class TAPER(nn.Module):
         for refine_idx in range(self.num_refine_iters):
             refine_slot_states.append(slot_states)
             ownership_logits, null_probs, slot_masks = self._competitive_ownership(text_states=text_states, slot_valid=slot_valid, slot_states=slot_states)
+            refine_slot_masses.append(slot_masks.sum(dim=2))
             if refine_idx + 1 < self.num_refine_iters:
                 old_states = slot_states
-                slot_states, round_mass, _ = self._refine_slot_states(
+                slot_states, _, _ = self._refine_slot_states(
                     slot_states=slot_states,
                     text_states=text_states,
                     slot_masks=slot_masks,
                 )
 
-                refine_slot_masses.append(round_mass)
-                refine_update_norms.append(
-                    (slot_states - old_states).norm(dim=-1)
-                )
+                refine_update_norms.append((slot_states - old_states).norm(dim=-1))
         
         slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
         q_full = self.teacher.compose(teacher_reference_features, teacher_text_states, text_attention_mask, normalize=False)
@@ -357,7 +355,10 @@ class TAPER(nn.Module):
         slot_gate_logits = self.slot_gate(edit_slots).squeeze(-1)
         raw_slot_gates = torch.sigmoid(slot_gate_logits)
         slot_gates = torch.where(slot_activity > 0, raw_slot_gates, torch.zeros_like(raw_slot_gates))
-
+        if refine_update_norms:
+            refine_update_norms_tensor = torch.stack(refine_update_norms, dim=1)
+        else:
+            refine_update_norms_tensor = slot_states.new_empty(batch_size, 0, self.num_slots)
         return {
             "edit_slots": edit_slots,
             "raw_edit_slots": raw_edit_slots,
@@ -377,6 +378,7 @@ class TAPER(nn.Module):
             "refine_slot_states": torch.stack(refine_slot_states, dim=1),  # [B,T,L,D]
             "refine_update_norms": torch.stack(refine_update_norms, dim=1),  # [B,T-1,L]
             "refine_slot_masses": torch.stack(refine_slot_masses, dim=1),
+            "refine_update_norms": refine_update_norms_tensor,
         }
 
     def initialize_state(self, reference_features: Tensor) -> tuple[Tensor, Tensor]:
