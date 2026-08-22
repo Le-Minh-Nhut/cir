@@ -35,7 +35,7 @@ model:
   neutral_mode: zero
 
   slot_gate_threshold: 0.4
-  # hard_slot_gating_during_training: false
+  hard_slot_gating_during_training: false
   # gate_mode: legacy_soft_train_hard_eval
   # st_gate_recovery: false
   gate_mode: straight_through_hard

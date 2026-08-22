@@ -177,7 +177,11 @@ class TAPER(nn.Module):
         edit_logits = logits[:, 1:, :].masked_fill(~valid, invalid_logit)
         ownership_logits = torch.cat([null_logits[:, None, :], edit_logits], dim=1)
 
-        ownership = F.softmax(ownership_logits, dim=1)
+        soft = F.softmax(ownership_logits, dim=1)
+        winner = soft.argmax(dim=1)
+        hard = F.one_hot(winner, num_classes=self.num_slots + 1).permute(0, 2, 1).to(soft.dtype)
+        ownership = hard + soft - soft.detach()
+
         if not torch.isfinite(ownership).all():
             raise FloatingPointError("non-finite competitive slot ownership")
 
