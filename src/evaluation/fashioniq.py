@@ -2,6 +2,9 @@ from collections.abc import Sequence
 from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
+import math
+from collections import defaultdict
+import torch.nn.functional as F
 
 from cache.features import get_features_by_ids, TextFeatureCache, get_text_features_by_sample_ids
 from datasets.fashioniq import FashionIQAnnotation, build_pair_union_gallery, load_fashioniq_split_ids
@@ -42,6 +45,106 @@ evaluate_fashioniq_category(
       ↓
 R@10, R@50
 """
+
+class ScalarAccumulator:
+    def __init__(self):
+        self.sums = defaultdict(float)
+        self.counts = defaultdict(int)
+
+    def add(self, name: str, values: torch.Tensor) -> None:
+        values = values.detach().float().reshape(-1)
+
+        finite = torch.isfinite(values)
+        values = values[finite]
+
+        if values.numel() == 0:
+            return
+
+        self.sums[name] += values.sum().item()
+        self.counts[name] += values.numel()
+
+    def mean(self, name: str) -> float:
+        if self.counts[name] == 0:
+            return float("nan")
+
+        return self.sums[name] / self.counts[name]
+
+def active_pair_cosine_per_sample(x: torch.Tensor, active_slots: torch.Tensor) -> torch.Tensor:
+    """
+    x:            [B, L, D]
+    active_slots: [B, L] bool
+
+    Return:
+        cosine trung bình giữa các cặp active slot
+        cho từng sample có >= 2 active slots.
+
+        Shape [M], M <= B.
+    """
+
+    if x.ndim != 3:
+        raise ValueError("x must be [B,L,D]")
+
+    if active_slots.shape != x.shape[:2]:
+        raise ValueError("active_slots must match x[:2]")
+
+    _, num_slots, _ = x.shape
+    normalized = F.normalize(x.float(), dim=-1, eps=1e-6)
+    similarity = normalized @ normalized.transpose(1, 2)
+    upper = torch.triu(torch.ones(num_slots, num_slots, dtype=torch.bool, device=x.device,), diagonal=1)
+    pair_valid = (active_slots[:, :, None] & active_slots[:, None, :] & upper[None, :, :])
+    pair_count = pair_valid.sum(dim=(1, 2))
+    pair_sum = (similarity * pair_valid.to(similarity.dtype)).sum(dim=(1, 2))
+    valid_samples = pair_count > 0
+
+    return pair_sum[valid_samples] / pair_count[valid_samples]
+
+def update_a4_slot_diagnostics(
+    accumulator: ScalarAccumulator,
+    output: dict[str, torch.Tensor],
+    content_mask: torch.Tensor,
+    attention_mask: torch.Tensor,
+) -> None:
+    valid = attention_mask.to(torch.bool) & content_mask.to(torch.bool)
+
+    ownership_logits = output["ownership_logits"].float()
+    soft = F.softmax(ownership_logits, dim=1)
+    num_destinations = soft.shape[1]
+    soft_entropy = -(soft.clamp_min(1e-12)* soft.clamp_min(1e-12).log()).sum(dim=1)
+    soft_entropy = soft_entropy / math.log(num_destinations)
+    top2 = soft.topk(k=2, dim=1).values
+    soft_winner_confidence = top2[:, 0, :]
+    soft_top1_top2_margin = top2[:, 0, :] - top2[:, 1, :]
+    accumulator.add("soft_entropy", soft_entropy[valid])
+    accumulator.add("soft_top1_top2_margin", soft_top1_top2_margin[valid],)
+    accumulator.add("soft_winner_confidence", soft_winner_confidence[valid])
+    slot_mass = output["slot_mass"]
+    active_slots = slot_mass > 0.0
+    num_slots = slot_mass.shape[1]
+    active_count = active_slots.sum(dim=1)
+    accumulator.add("multi_active_sample_rate", (active_count >= 2).float())
+
+    for slot_id in range(num_slots):
+        accumulator.add(f"slot_{slot_id}_nonempty_rate", active_slots[:, slot_id].float())
+
+    semantic_cos = active_pair_cosine_per_sample(output["slot_semantics"], active_slots)
+    effect_cos = active_pair_cosine_per_sample(output["slot_effects"], active_slots)
+    edit_slot_cos = active_pair_cosine_per_sample(output["edit_slots"], active_slots)
+    accumulator.add("active_pair_semantic_cosine", semantic_cos)
+    accumulator.add("active_pair_teacher_effect_cosine", effect_cos)
+    accumulator.add("active_pair_edit_slot_cosine", edit_slot_cos)
+    slot_gates = output["slot_gates"]
+    hard_active = output["hard_active_slot_mask"]
+    for slot_id in range(num_slots):
+        accumulator.add(f"slot_{slot_id}_gate_mean", slot_gates[:, slot_id])
+        accumulator.add(f"slot_{slot_id}_hard_active_rate", hard_active[:, slot_id].float())
+
+    trace_slot_ids = output["trace_slot_ids"]
+    trace_valid = output["trace_valid_mask"].to(torch.bool)
+    valid_steps_per_sample = trace_valid.sum(dim=1).float()
+    accumulator.add("valid_execution_steps_mean", valid_steps_per_sample)
+    for slot_id in range(num_slots):
+        executed = (trace_slot_ids.eq(slot_id) & trace_valid).any(dim=1).float()
+        accumulator.add(f"slot_{slot_id}_execution_rate", executed)
 
 def recall_at_k(scores: torch.Tensor, target_ids: Sequence[str], gallery_ids: Sequence[str], k: int) -> float:
     assert scores.ndim == 2
@@ -155,6 +258,7 @@ def evaluate_fashioniq(
     text_cache: TextFeatureCache,
 ):
     category_results = {}
+    slot_diagnostics = ScalarAccumulator()
 
     for category, val_loader in val_loaders.items():
         annotations = val_annotations[category]
@@ -190,6 +294,7 @@ def evaluate_fashioniq(
                 text_content_mask=content_mask,
                 gallery_features=gallery_features,
             )
+            update_a4_slot_diagnostics(accumulator=slot_diagnostics, output=output, content_mask=content_mask)
 
             score_batches.append(output["scores"].cpu())
 
@@ -209,8 +314,35 @@ def evaluate_fashioniq(
         "mean_recall": average["mean_recall"],
     }
 
+    diagnostic_names = [
+        "soft_entropy",
+        "soft_top1_top2_margin",
+        "soft_winner_confidence",
+        "multi_active_sample_rate",
+
+
+        "active_pair_semantic_cosine",
+        "active_pair_teacher_effect_cosine",
+        "active_pair_edit_slot_cosine",
+
+        "valid_execution_steps_mean",
+    ]
+
     for category, result in category_results.items():
         metrics[f"{category}_recall_at_10"] = result["recall_at_10"]
         metrics[f"{category}_recall_at_50"] = result["recall_at_50"]
+
+    for name in diagnostic_names:
+        metrics[f"slot/{name}"] = slot_diagnostics.mean(name)
+
+    for slot_id in range(model.num_slots):
+        for metric_name in (
+            "nonempty_rate",
+            "gate_mean",
+            "hard_active_rate",
+            "execution_rate",
+        ):
+            key = f"slot_{slot_id}_{metric_name}"
+            metrics[f"slot/{key}"] = slot_diagnostics.mean(key)
 
     return metrics
