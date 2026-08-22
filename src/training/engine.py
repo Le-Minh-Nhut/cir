@@ -228,6 +228,27 @@ def fit(
             f"monopoly={train_metrics.get('diagnostic/near_monopoly_fraction', float('nan')):.3f}"
         )
 
+        print(
+            "A4 VAL | "
+            f"soft_H={val_metrics.get('slot/soft_entropy', float('nan')):.3f} | "
+            f"margin={val_metrics.get('slot/soft_top1_top2_margin', float('nan')):.3f} | "
+            f"conf={val_metrics.get('slot/soft_winner_confidence', float('nan')):.3f} | "
+            f"multi={val_metrics.get('slot/multi_active_sample_rate', float('nan')):.3f} | "
+            f"sem_cos={val_metrics.get('slot/active_pair_semantic_cosine', float('nan')):.3f} | "
+            f"effect_cos={val_metrics.get('slot/active_pair_teacher_effect_cosine', float('nan')):.3f} | "
+            f"edit_cos={val_metrics.get('slot/active_pair_edit_slot_cosine', float('nan')):.3f} | "
+            f"exec_steps={val_metrics.get('slot/valid_execution_steps_mean', float('nan')):.2f}"
+        )
+
+        for slot_id in range(model.num_slots):
+            print(
+                f"  S{slot_id} | "
+                f"nonempty={val_metrics.get(f'slot/slot_{slot_id}_nonempty_rate', float('nan')):.3f} | "
+                f"gate={val_metrics.get(f'slot/slot_{slot_id}_gate_mean', float('nan')):.3f} | "
+                f"hard_active={val_metrics.get(f'slot/slot_{slot_id}_hard_active_rate', float('nan')):.3f} | "
+                f"exec={val_metrics.get(f'slot/slot_{slot_id}_execution_rate', float('nan')):.3f}"
+            )
+
 
         if wandb.run is not None:
             log_data = {

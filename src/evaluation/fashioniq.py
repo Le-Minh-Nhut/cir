@@ -294,7 +294,7 @@ def evaluate_fashioniq(
                 text_content_mask=content_mask,
                 gallery_features=gallery_features,
             )
-            update_a4_slot_diagnostics(accumulator=slot_diagnostics, output=output, content_mask=content_mask)
+            update_a4_slot_diagnostics(accumulator=slot_diagnostics, output=output, content_mask=content_mask, attention_mask=attention_mask)
 
             score_batches.append(output["scores"].cpu())
 
