@@ -1,0 +1,857 @@
+{
+  "checkpoint": "/home/heheboiz/data/cir/outputs/2026-08-22/04-18-29/best.pt",
+  "protocol": "fashioniq_original",
+  "max_queries_per_category": 256,
+  "retrieval": {
+    "full": {
+      "recall_at_10": 40.625,
+      "recall_at_50": 67.83854166666667,
+      "mean_recall": 54.231770833333336,
+      "categories": {
+        "dress": {
+          "recall_at_10": 39.0625,
+          "recall_at_50": 68.359375
+        },
+        "shirt": {
+          "recall_at_10": 37.109375,
+          "recall_at_50": 64.84375
+        },
+        "toptee": {
+          "recall_at_10": 45.703125,
+          "recall_at_50": 70.3125
+        }
+      }
+    },
+    "reference_only": {
+      "recall_at_10": 2.9947916666666665,
+      "recall_at_50": 9.635416666666666,
+      "mean_recall": 6.315104166666666,
+      "categories": {
+        "dress": {
+          "recall_at_10": 1.5625,
+          "recall_at_50": 5.859375
+        },
+        "shirt": {
+          "recall_at_10": 5.078125,
+          "recall_at_50": 14.453125
+        },
+        "toptee": {
+          "recall_at_10": 2.34375,
+          "recall_at_50": 8.59375
+        }
+      }
+    },
+    "drop_0": {
+      "recall_at_10": 40.755208333333336,
+      "recall_at_50": 66.796875,
+      "mean_recall": 53.77604166666667,
+      "categories": {
+        "dress": {
+          "recall_at_10": 39.0625,
+          "recall_at_50": 68.359375
+        },
+        "shirt": {
+          "recall_at_10": 38.671875,
+          "recall_at_50": 63.671875
+        },
+        "toptee": {
+          "recall_at_10": 44.53125,
+          "recall_at_50": 68.359375
+        }
+      }
+    },
+    "drop_1": {
+      "recall_at_10": 40.755208333333336,
+      "recall_at_50": 66.796875,
+      "mean_recall": 53.77604166666667,
+      "categories": {
+        "dress": {
+          "recall_at_10": 39.0625,
+          "recall_at_50": 68.359375
+        },
+        "shirt": {
+          "recall_at_10": 38.671875,
+          "recall_at_50": 63.671875
+        },
+        "toptee": {
+          "recall_at_10": 44.53125,
+          "recall_at_50": 68.359375
+        }
+      }
+    },
+    "drop_2": {
+      "recall_at_10": 40.755208333333336,
+      "recall_at_50": 66.796875,
+      "mean_recall": 53.77604166666667,
+      "categories": {
+        "dress": {
+          "recall_at_10": 39.0625,
+          "recall_at_50": 68.359375
+        },
+        "shirt": {
+          "recall_at_10": 38.671875,
+          "recall_at_50": 63.671875
+        },
+        "toptee": {
+          "recall_at_10": 44.53125,
+          "recall_at_50": 68.359375
+        }
+      }
+    },
+    "drop_3": {
+      "recall_at_10": 40.755208333333336,
+      "recall_at_50": 66.796875,
+      "mean_recall": 53.77604166666667,
+      "categories": {
+        "dress": {
+          "recall_at_10": 39.0625,
+          "recall_at_50": 68.359375
+        },
+        "shirt": {
+          "recall_at_10": 38.671875,
+          "recall_at_50": 63.671875
+        },
+        "toptee": {
+          "recall_at_10": 44.53125,
+          "recall_at_50": 68.359375
+        }
+      }
+    }
+  },
+  "reference_gap": {
+    "delta_recall_at_10": 37.630208333333336,
+    "delta_recall_at_50": 58.20312500000001,
+    "delta_mean_recall": 47.91666666666667
+  },
+  "causal_slot_drop": {
+    "slot_0": {
+      "delta_recall_at_10": -0.1302083333333357,
+      "delta_recall_at_50": 1.0416666666666714,
+      "delta_mean_recall": 0.4557291666666643
+    },
+    "slot_1": {
+      "delta_recall_at_10": -0.1302083333333357,
+      "delta_recall_at_50": 1.0416666666666714,
+      "delta_mean_recall": 0.4557291666666643
+    },
+    "slot_2": {
+      "delta_recall_at_10": -0.1302083333333357,
+      "delta_recall_at_50": 1.0416666666666714,
+      "delta_mean_recall": 0.4557291666666643
+    },
+    "slot_3": {
+      "delta_recall_at_10": -0.1302083333333357,
+      "delta_recall_at_50": 1.0416666666666714,
+      "delta_mean_recall": 0.4557291666666643
+    }
+  },
+  "diagnostics": {
+    "normalized_assignment_entropy": 0.8782436599334081,
+    "ownership_pair_similarity": 0.9992184763153394,
+    "semantic_pair_similarity": 0.9999361137549082,
+    "effect_pair_similarity": 0.9988276536266009,
+    "edit_slot_pair_similarity": 0.9999419475595156,
+    "query_reference_cosine": 0.3226725223163764,
+    "query_reference_l2": 1.1571571429570515,
+    "state_change_pair_similarity": 0.8503297502004757,
+    "slot_gate_mean": 0.871886226038138,
+    "slot_effect_norm": 0.1386565314605832,
+    "slot_semantic_norm": 13.273140152295431,
+    "edit_slot_norm": 22.920918623606365,
+    "actual_state_change_norm": 6.238986412684123,
+    "valid_execution_steps": 3.9895833333333335,
+    "hard_active_slots": 3.9895833333333335,
+    "transition_alpha": 0.9999056460029463,
+    "route_confidence": 0.06539705278979269,
+    "selected_gate": 0.8729859992044713,
+    "slot_0_mass": 1.8707916090885799,
+    "slot_0_gate": 0.8715478306015333,
+    "slot_1_mass": 1.8179894189039867,
+    "slot_1_gate": 0.8718550751606623,
+    "slot_2_mass": 1.811868776877721,
+    "slot_2_gate": 0.8722141310572624,
+    "slot_3_mass": 1.8088866422573726,
+    "slot_3_gate": 0.871927889684836,
+    "projected_slot_query_pair_similarity": 0.9316126704216003
+  },
+  "primitive_counts": [
+    790,
+    95,
+    17,
+    1826,
+    9,
+    309,
+    18,
+    0
+  ],
+  "primitive_fractions": [
+    0.25783289817232374,
+    0.03100522193211488,
+    0.005548302872062663,
+    0.5959530026109661,
+    0.00293733681462141,
+    0.10084856396866841,
+    0.00587467362924282,
+    0.0
+  ],
+  "selected_slot_counts": [
+    766,
+    766,
+    766,
+    766
+  ],
+  "selected_slot_fractions": [
+    0.25,
+    0.25,
+    0.25,
+    0.25
+  ],
+  "heuristic_flags": [
+    "OWNERSHIP-DIFFUSE/SYMMETRY suspected: high normalized entropy + highly similar token ownership maps.",
+    "SEMANTIC/FUNCTIONAL SYMMETRY suspected: slot semantics and teacher effects are highly similar.",
+    "CAUSAL SLOT REDUNDANCY suspected: text/execution matters globally, but dropping any individual slot barely changes retrieval.",
+    "EXECUTION-DIRECTION COLLAPSE suspected: different execution steps produce highly similar state-change directions."
+  ],
+  "worst_examples": [
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:178",
+      "text": "a solid and is much shorter",
+      "target_id": "B001HK23TS",
+      "full_rank": 2768,
+      "reference_rank": 2301,
+      "drop_ranks": [
+        2763,
+        2762,
+        2763,
+        2762
+      ],
+      "slot_mass": [
+        1.1496596336364746,
+        1.1884214878082275,
+        1.1645615100860596,
+        1.177062749862671
+      ],
+      "null_mean": 0.22004909813404083,
+      "entropy": 0.9899053573608398,
+      "ownership_similarity": 0.9993314743041992,
+      "semantic_similarity": 0.9999288320541382,
+      "effect_similarity": 0.9978288412094116,
+      "edit_slot_similarity": 0.9999219179153442,
+      "primitive_trace": [
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "category": "toptee",
+      "sample_id": "fashioniq:val:toptee:218",
+      "text": "has shorter sleeves and less grey and white crew neck tee",
+      "target_id": "B0089OJC08",
+      "full_rank": 2713,
+      "reference_rank": 4630,
+      "drop_ranks": [
+        3075,
+        3055,
+        3034,
+        3058
+      ],
+      "slot_mass": [
+        0.9641360640525818,
+        0.9306081533432007,
+        0.9065477252006531,
+        0.9377682209014893
+      ],
+      "null_mean": 0.6600853800773621,
+      "entropy": 0.549125611782074,
+      "ownership_similarity": 0.9985404014587402,
+      "semantic_similarity": 0.9997944235801697,
+      "effect_similarity": 0.9978090524673462,
+      "edit_slot_similarity": 0.9997029304504395,
+      "primitive_trace": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "category": "shirt",
+      "sample_id": "fashioniq:val:shirt:235",
+      "text": "is darker and has different graphics and is a darker color and has art printed on front",
+      "target_id": "B006OWP8GO",
+      "full_rank": 2712,
+      "reference_rank": 3141,
+      "drop_ranks": [
+        2783,
+        2783,
+        2782,
+        2782
+      ],
+      "slot_mass": [
+        2.8321714401245117,
+        2.843348741531372,
+        2.749155044555664,
+        2.788546085357666
+      ],
+      "null_mean": 0.34039875864982605,
+      "entropy": 0.9407127499580383,
+      "ownership_similarity": 0.9993966817855835,
+      "semantic_similarity": 0.9999725222587585,
+      "effect_similarity": 0.9993283152580261,
+      "edit_slot_similarity": 0.9999785423278809,
+      "primitive_trace": [
+        5,
+        5,
+        5,
+        6
+      ]
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:2",
+      "text": "is a solid red color and shorter and tighter with more blue and white",
+      "target_id": "B00CMPE0C0",
+      "full_rank": 2344,
+      "reference_rank": 3182,
+      "drop_ranks": [
+        2396,
+        2398,
+        2390,
+        2398
+      ],
+      "slot_mass": [
+        1.3649559020996094,
+        1.2700657844543457,
+        1.2212772369384766,
+        1.2845885753631592
+      ],
+      "null_mean": 0.6327937841415405,
+      "entropy": 0.7000153660774231,
+      "ownership_similarity": 0.9991278052330017,
+      "semantic_similarity": 0.9999405741691589,
+      "effect_similarity": 0.9982864856719971,
+      "edit_slot_similarity": 0.9999440908432007,
+      "primitive_trace": [
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "category": "toptee",
+      "sample_id": "fashioniq:val:toptee:248",
+      "text": "has a big image in the middle and short sleeves and has shorter sleeves",
+      "target_id": "B005DHWXF0",
+      "full_rank": 2319,
+      "reference_rank": 4627,
+      "drop_ranks": [
+        2530,
+        2524,
+        2530,
+        2526
+      ],
+      "slot_mass": [
+        1.596551537513733,
+        1.4955577850341797,
+        1.4631412029266357,
+        1.5000758171081543
+      ],
+      "null_mean": 0.5674766302108765,
+      "entropy": 0.7408818006515503,
+      "ownership_similarity": 0.9988107681274414,
+      "semantic_similarity": 0.999919056892395,
+      "effect_similarity": 0.998699426651001,
+      "edit_slot_similarity": 0.9999141693115234,
+      "primitive_trace": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "category": "shirt",
+      "sample_id": "fashioniq:val:shirt:166",
+      "text": "is light grey with a black pattern and is darker",
+      "target_id": "B00D6KCEI2",
+      "full_rank": 2057,
+      "reference_rank": 4201,
+      "drop_ranks": [
+        2343,
+        2339,
+        2344,
+        2338
+      ],
+      "slot_mass": [
+        1.6359124183654785,
+        1.647639513015747,
+        1.5951626300811768,
+        1.6132911443710327
+      ],
+      "null_mean": 0.3507995009422302,
+      "entropy": 0.9070379137992859,
+      "ownership_similarity": 0.9993081092834473,
+      "semantic_similarity": 0.9999582171440125,
+      "effect_similarity": 0.999169111251831,
+      "edit_slot_similarity": 0.9999595880508423,
+      "primitive_trace": [
+        3,
+        0,
+        2,
+        2
+      ]
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:82",
+      "text": "is darker and has shorter sleeves and does not cover the shoulders",
+      "target_id": "B0095WSNZ8",
+      "full_rank": 2013,
+      "reference_rank": 1347,
+      "drop_ranks": [
+        1969,
+        1971,
+        1967,
+        1971
+      ],
+      "slot_mass": [
+        1.2024885416030884,
+        1.1432826519012451,
+        1.1278109550476074,
+        1.1609688997268677
+      ],
+      "null_mean": 0.6137874126434326,
+      "entropy": 0.6362170577049255,
+      "ownership_similarity": 0.9993097186088562,
+      "semantic_similarity": 0.9999405145645142,
+      "effect_similarity": 0.9990004301071167,
+      "edit_slot_similarity": 0.9999324679374695,
+      "primitive_trace": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "category": "shirt",
+      "sample_id": "fashioniq:val:shirt:199",
+      "text": "has short sleeves and a logo and has shorter leaves",
+      "target_id": "B006AN59CA",
+      "full_rank": 1849,
+      "reference_rank": 4371,
+      "drop_ranks": [
+        1878,
+        1877,
+        1878,
+        1876
+      ],
+      "slot_mass": [
+        1.5054147243499756,
+        1.6120599508285522,
+        1.4908956289291382,
+        1.5863397121429443
+      ],
+      "null_mean": 0.3805290758609772,
+      "entropy": 0.8690446615219116,
+      "ownership_similarity": 0.9984926581382751,
+      "semantic_similarity": 0.9998660087585449,
+      "effect_similarity": 0.9983830451965332,
+      "edit_slot_similarity": 0.9998807907104492,
+      "primitive_trace": [
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:105",
+      "text": "has longer sleeves and lighter in color and is solid colors with short sleeves",
+      "target_id": "B001FWNNC4",
+      "full_rank": 1840,
+      "reference_rank": 2937,
+      "drop_ranks": [
+        1872,
+        1872,
+        1870,
+        1872
+      ],
+      "slot_mass": [
+        2.0821948051452637,
+        1.9565472602844238,
+        1.9671216011047363,
+        1.978559970855713
+      ],
+      "null_mean": 0.42968398332595825,
+      "entropy": 0.8804683685302734,
+      "ownership_similarity": 0.9988956451416016,
+      "semantic_similarity": 0.9999253749847412,
+      "effect_similarity": 0.9956607818603516,
+      "edit_slot_similarity": 0.9999212026596069,
+      "primitive_trace": [
+        3,
+        3,
+        3,
+        0
+      ]
+    },
+    {
+      "category": "toptee",
+      "sample_id": "fashioniq:val:toptee:209",
+      "text": "is less revealing and has longer sleeves with a graphic",
+      "target_id": "B00B3XTZQI",
+      "full_rank": 1667,
+      "reference_rank": 4542,
+      "drop_ranks": [
+        1805,
+        1807,
+        1813,
+        1804
+      ],
+      "slot_mass": [
+        1.430510401725769,
+        1.4369020462036133,
+        1.4167054891586304,
+        1.4132684469223022
+      ],
+      "null_mean": 0.43026137351989746,
+      "entropy": 0.800798773765564,
+      "ownership_similarity": 0.9988617897033691,
+      "semantic_similarity": 0.9999086260795593,
+      "effect_similarity": 0.9992347955703735,
+      "edit_slot_similarity": 0.9998878240585327,
+      "primitive_trace": [
+        3,
+        3,
+        0,
+        0
+      ]
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:180",
+      "text": "more vintage styled and sleeveless and is darker in color and sleeveless",
+      "target_id": "B007WASVRK",
+      "full_rank": 1636,
+      "reference_rank": 1951,
+      "drop_ranks": [
+        1633,
+        1637,
+        1633,
+        1635
+      ],
+      "slot_mass": [
+        1.7061136960983276,
+        1.6872652769088745,
+        1.5917372703552246,
+        1.6906254291534424
+      ],
+      "null_mean": 0.5231613516807556,
+      "entropy": 0.8088231682777405,
+      "ownership_similarity": 0.9992667436599731,
+      "semantic_similarity": 0.9999398589134216,
+      "effect_similarity": 0.9989055395126343,
+      "edit_slot_similarity": 0.9999459981918335,
+      "primitive_trace": [
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "category": "toptee",
+      "sample_id": "fashioniq:val:toptee:71",
+      "text": "is darker and looser and has a bigger logo and more blue in it",
+      "target_id": "B009S8OYTS",
+      "full_rank": 1624,
+      "reference_rank": 4186,
+      "drop_ranks": [
+        1757,
+        1758,
+        1756,
+        1757
+      ],
+      "slot_mass": [
+        2.3440983295440674,
+        2.205615997314453,
+        2.255662202835083,
+        2.1967506408691406
+      ],
+      "null_mean": 0.39985817670822144,
+      "entropy": 0.8917226195335388,
+      "ownership_similarity": 0.998839259147644,
+      "semantic_similarity": 0.9999327659606934,
+      "effect_similarity": 0.9995644092559814,
+      "edit_slot_similarity": 0.9999486207962036,
+      "primitive_trace": [
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "category": "shirt",
+      "sample_id": "fashioniq:val:shirt:253",
+      "text": "is black colored short sleeved shirt with white colored art and is darker",
+      "target_id": "B000JI5NY6",
+      "full_rank": 1417,
+      "reference_rank": 3480,
+      "drop_ranks": [
+        1522,
+        1522,
+        1522,
+        1523
+      ],
+      "slot_mass": [
+        2.270930051803589,
+        2.423109531402588,
+        2.243011713027954,
+        2.3458073139190674
+      ],
+      "null_mean": 0.33693864941596985,
+      "entropy": 0.9371677041053772,
+      "ownership_similarity": 0.999183177947998,
+      "semantic_similarity": 0.9999556541442871,
+      "effect_similarity": 0.9989556074142456,
+      "edit_slot_similarity": 0.9999660849571228,
+      "primitive_trace": [
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "category": "shirt",
+      "sample_id": "fashioniq:val:shirt:61",
+      "text": "has a simpler chest logo and is more faded",
+      "target_id": "B002SBOJHY",
+      "full_rank": 1359,
+      "reference_rank": 3348,
+      "drop_ranks": [
+        1508,
+        1504,
+        1519,
+        1504
+      ],
+      "slot_mass": [
+        1.5957067012786865,
+        1.6878626346588135,
+        1.6882840394973755,
+        1.6433312892913818
+      ],
+      "null_mean": 0.2649794816970825,
+      "entropy": 0.8914856314659119,
+      "ownership_similarity": 0.9982144236564636,
+      "semantic_similarity": 0.999802827835083,
+      "effect_similarity": 0.9949517250061035,
+      "edit_slot_similarity": 0.999832034111023,
+      "primitive_trace": [
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "category": "shirt",
+      "sample_id": "fashioniq:val:shirt:79",
+      "text": "is more comic and is darker in color",
+      "target_id": "B00FPBE0X2",
+      "full_rank": 1259,
+      "reference_rank": 1004,
+      "drop_ranks": [
+        1091,
+        1090,
+        1085,
+        1091
+      ],
+      "slot_mass": [
+        1.3644683361053467,
+        1.3957488536834717,
+        1.3347580432891846,
+        1.3679598569869995
+      ],
+      "null_mean": 0.3171330988407135,
+      "entropy": 0.9458886384963989,
+      "ownership_similarity": 0.9995759725570679,
+      "semantic_similarity": 0.9999793767929077,
+      "effect_similarity": 0.9997576475143433,
+      "edit_slot_similarity": 0.9999813437461853,
+      "primitive_trace": [
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:112",
+      "text": "strapless and has longer sleeves and a logo",
+      "target_id": "B002UD5URS",
+      "full_rank": 1163,
+      "reference_rank": 3786,
+      "drop_ranks": [
+        1489,
+        1483,
+        1478,
+        1487
+      ],
+      "slot_mass": [
+        1.4795448780059814,
+        1.5459413528442383,
+        1.4649568796157837,
+        1.5224969387054443
+      ],
+      "null_mean": 0.3318955898284912,
+      "entropy": 0.9340584874153137,
+      "ownership_similarity": 0.9992181062698364,
+      "semantic_similarity": 0.9999277591705322,
+      "effect_similarity": 0.9988676309585571,
+      "edit_slot_similarity": 0.9999229311943054,
+      "primitive_trace": [
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "category": "toptee",
+      "sample_id": "fashioniq:val:toptee:74",
+      "text": "has shorter sleeves and a design and has short sleeves",
+      "target_id": "B007RGHP1W",
+      "full_rank": 1131,
+      "reference_rank": 2732,
+      "drop_ranks": [
+        1201,
+        1195,
+        1206,
+        1199
+      ],
+      "slot_mass": [
+        1.2680819034576416,
+        1.1700716018676758,
+        1.1910555362701416,
+        1.1864418983459473
+      ],
+      "null_mean": 0.5184348821640015,
+      "entropy": 0.7540874481201172,
+      "ownership_similarity": 0.9989628195762634,
+      "semantic_similarity": 0.9999036192893982,
+      "effect_similarity": 0.9988759756088257,
+      "edit_slot_similarity": 0.9999064207077026,
+      "primitive_trace": [
+        3,
+        3,
+        0,
+        0
+      ]
+    },
+    {
+      "category": "shirt",
+      "sample_id": "fashioniq:val:shirt:242",
+      "text": "way less attractive and is more colorful",
+      "target_id": "B004JJVF48",
+      "full_rank": 1098,
+      "reference_rank": 4580,
+      "drop_ranks": [
+        1303,
+        1301,
+        1300,
+        1301
+      ],
+      "slot_mass": [
+        0.9764926433563232,
+        0.9634408950805664,
+        0.9547961354255676,
+        0.9541763663291931
+      ],
+      "null_mean": 0.4501562714576721,
+      "entropy": 0.7666817307472229,
+      "ownership_similarity": 0.9995204210281372,
+      "semantic_similarity": 0.9999686479568481,
+      "effect_similarity": 0.9994044303894043,
+      "edit_slot_similarity": 0.9999572038650513,
+      "primitive_trace": [
+        3,
+        3,
+        3,
+        3
+      ]
+    },
+    {
+      "category": "toptee",
+      "sample_id": "fashioniq:val:toptee:252",
+      "text": "is black colored with sleeves and is black with white print and full sleeves on the crew neck",
+      "target_id": "B005ISP19Y",
+      "full_rank": 1089,
+      "reference_rank": 3254,
+      "drop_ranks": [
+        1147,
+        1150,
+        1149,
+        1148
+      ],
+      "slot_mass": [
+        2.4882140159606934,
+        2.4765877723693848,
+        2.3592162132263184,
+        2.4464735984802246
+      ],
+      "null_mean": 0.4571949243545532,
+      "entropy": 0.8713976740837097,
+      "ownership_similarity": 0.9992294311523438,
+      "semantic_similarity": 0.9999440908432007,
+      "effect_similarity": 0.9994620084762573,
+      "edit_slot_similarity": 0.9999436140060425,
+      "primitive_trace": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "category": "shirt",
+      "sample_id": "fashioniq:val:shirt:38",
+      "text": "is smaller in size and brighter in color and is lighter",
+      "target_id": "B00BQ3R3CI",
+      "full_rank": 1060,
+      "reference_rank": 1199,
+      "drop_ranks": [
+        1064,
+        1063,
+        1059,
+        1063
+      ],
+      "slot_mass": [
+        1.6806845664978027,
+        1.6145739555358887,
+        1.5992350578308105,
+        1.6208832263946533
+      ],
+      "null_mean": 0.4076930284500122,
+      "entropy": 0.892608106136322,
+      "ownership_similarity": 0.9995881915092468,
+      "semantic_similarity": 0.9999841451644897,
+      "effect_similarity": 0.9995847940444946,
+      "edit_slot_similarity": 0.9999804496765137,
+      "primitive_trace": [
+        3,
+        3,
+        3,
+        3
+      ]
+    }
+  ]
+}
