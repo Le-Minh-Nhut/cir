@@ -381,8 +381,8 @@ class TAPER(nn.Module):
         # invalid steps preserve state exactly and do not reapply LayerNorm.
         proposed_next = self.state_update_norm(state + state_update)
         next_state = torch.where(valid_step[:, None], proposed_next, state)
-        proposed_next = state + state_update
-        next_state = torch.where(valid_step[:, None], proposed_next, state)
+        # proposed_next = state + state_update
+        # next_state = torch.where(valid_step[:, None], proposed_next, state)
         actual_change = next_state - state
         proposed_delta = torch.where(valid_step[:, None], proposed_delta, torch.zeros_like(proposed_delta))
         alpha = torch.where(valid_step, alpha, torch.zeros_like(alpha))
