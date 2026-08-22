@@ -370,29 +370,32 @@ class TAPER(nn.Module):
         refine_null_probs = []
         refine_ownership_logits = []
 
-        residual = slot_valid.to(text_states.dtype)
+        residual = slot_valid[:, None, :].expand(-1, self.num_slots, -1).to(text_states.dtype)
         refine_residuals = []
         refine_consumed_residuals = []
+        refine_other_claims = []
+        refine_proposal_slot_masks = []
+
         for refine_idx in range(self.num_refine_iters):
             refine_slot_states.append(slot_states)
+            (_,_,proposal_slot_masks) = self._competitive_ownership(text_states=text_states,slot_valid=slot_valid, slot_states=slot_states, residual=residual)
+            refine_proposal_slot_masks.append(proposal_slot_masks)
+            (residual, consumed, other_claim) = self._update_residual(residual=residual, slot_masks=proposal_slot_masks, slot_valid=slot_valid)
+            (ownership_logits, null_probs, slot_masks) = self._competitive_ownership(text_states=text_states, slot_valid=slot_valid, slot_states=slot_states, residual=residual)
+
             refine_residuals.append(residual)
-            ownership_logits, null_probs, slot_masks = self._competitive_ownership(text_states=text_states, slot_valid=slot_valid, slot_states=slot_states, residual=residual)
+            refine_consumed_residuals.append(consumed)
+            refine_other_claims.append(other_claim)
+
             refine_ownership_logits.append(ownership_logits)
             refine_null_probs.append(null_probs)
             refine_slot_masks.append(slot_masks)
             refine_slot_masses.append(slot_masks.sum(dim=2))
             if refine_idx + 1 < self.num_refine_iters:
                 old_states = slot_states
-                slot_states, _, _ = self._refine_slot_states(
-                    slot_states=slot_states,
-                    text_states=text_states,
-                    slot_masks=slot_masks,
-                )
 
+                slot_states, _, _ = self._refine_slot_states(slot_states=slot_states, text_states=text_states, slot_masks=slot_masks)
                 refine_update_norms.append((slot_states - old_states).norm(dim=-1))
-                residual, consumed = self._update_residual(residual=residual, slot_masks=slot_masks, slot_valid=slot_valid)
-
-                refine_consumed_residuals.append(consumed)
         
         slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
         q_full = self.teacher.compose(teacher_reference_features, teacher_text_states, text_attention_mask, normalize=False)
