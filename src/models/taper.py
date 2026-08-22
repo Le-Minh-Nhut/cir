@@ -34,6 +34,7 @@ class TAPER(nn.Module):
         effect_diversity_margin: float = 0.50,
         alpha_max: float = 1.0,
         counterfactual_chunk_size: int = 8,
+        num_refine_iters: int = 3
     ) -> None:
         super().__init__()
 
@@ -112,6 +113,10 @@ class TAPER(nn.Module):
         # Invalid steps bypass this module and preserve the previous state exactly.
         # self.state_update_norm = nn.LayerNorm(state_dim)
 
+        self.num_refine_iters = num_refine_iters
+        self.text_value_projection = nn.Linear(text_dim, slot_dim, bias=False,)
+        self.slot_update = nn.GRUCell(input_size=slot_dim, hidden_size=slot_dim)
+
         self.query_head = nn.Sequential(nn.Linear(state_dim, query_dim), nn.GELU(), nn.Linear(query_dim, query_dim))
 
     def train(self, mode: bool = True) -> "TAPER":
@@ -160,30 +165,48 @@ class TAPER(nn.Module):
 
         return attention_valid, slot_valid
 
-    def _competitive_ownership(
-        self,
-        text_states: Tensor,
-        slot_valid: Tensor,
-    ) -> tuple[Tensor, Tensor, Tensor]:
-        all_queries = torch.cat([self.null_query, self.slot_queries], dim=0)
-        queries = self.slot_query_projection(all_queries)  # [L+1, Ds]
-        keys = self.text_key_projection(text_states)  # [B, N, Ds]
-        logits = torch.einsum("ld,bnd->bln", queries, keys)
-        logits = logits / math.sqrt(self.slot_dim) / self.mask_temperature
+    def _competitive_ownership(self, text_states: Tensor, slot_valid: Tensor, slot_states: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        batch_size = text_states.shape[0]
 
+        if slot_states.shape != (batch_size, self.num_slots, self.slot_dim):
+            raise ValueError(f"slot_states must be [B,{self.num_slots},{self.slot_dim}], got {tuple(slot_states.shape)}")
+
+        null_states = self.null_query.unsqueeze(0).expand(batch_size, -1, -1)  # [B, 1, Ds]
+        all_states = torch.cat([null_states, slot_states], dim=1)  # [B, L+1, Ds]
+        queries = self.slot_query_projection(all_states)  # [B, L+1, Ds]
+        keys = self.text_key_projection(text_states)  # [B, N, Ds]
+        logits = torch.einsum("bld,bnd->bln", queries, keys)
+        logits = logits / math.sqrt(self.slot_dim) / self.mask_temperature
         valid = slot_valid[:, None, :]
         null_logits = torch.where(slot_valid, logits[:, 0, :], torch.zeros_like(logits[:, 0, :]))
         invalid_logit = torch.finfo(logits.dtype).min
         edit_logits = logits[:, 1:, :].masked_fill(~valid, invalid_logit)
         ownership_logits = torch.cat([null_logits[:, None, :], edit_logits], dim=1)
-
         ownership = F.softmax(ownership_logits, dim=1)
         if not torch.isfinite(ownership).all():
             raise FloatingPointError("non-finite competitive slot ownership")
 
         null_probs = ownership[:, 0, :]
         slot_masks = ownership[:, 1:, :]
+
         return ownership_logits, null_probs, slot_masks
+
+    def _refine_slot_states(self, slot_states: Tensor, text_states: Tensor, slot_masks: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        batch_size = text_states.shape[0]
+        if slot_states.shape != (batch_size, self.num_slots, self.slot_dim):
+            raise ValueError("slot_states has invalid shape")
+
+        if slot_masks.shape[:2] != (batch_size, self.num_slots):
+            raise ValueError("slot_masks must be [B,L,N]")
+
+        text_values = self.text_value_projection(text_states)  # [B, N, Ds]
+        slot_evidence, slot_mass, slot_activity = self._mass_aware_slot_pool(text_values, slot_masks)
+        b, l, d = slot_states.shape
+        candidate_states = self.slot_update(slot_evidence.reshape(b * l, d), slot_states.reshape(b * l, d)).reshape(b, l, d)
+        active = slot_mass > 0
+        next_slot_states = torch.where(active.unsqueeze(-1), candidate_states, slot_states,)
+
+        return (next_slot_states, slot_mass, slot_activity)
 
     @staticmethod
     def _mass_aware_slot_pool(
@@ -283,9 +306,13 @@ class TAPER(nn.Module):
         _, slot_valid = self._validate_text_inputs(text_states, text_attention_mask, text_content_mask)
 
         batch_size, num_tokens, _ = text_states.shape
-        ownership_logits, null_probs, slot_masks = self._competitive_ownership(text_states, slot_valid)
-        slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
+        slot_states = self.slot_queries.unsqueeze(0).expand(batch_size, -1,-1)
+        for refine_idx in range(self.num_refine_iters):
+            ownership_logits, null_probs, slot_masks = self._competitive_ownership(text_states=text_states, slot_valid=slot_valid, slot_states=slot_states)
+            if refine_idx + 1 < self.num_refine_iters:
+                slot_states, _, _ = self._refine_slot_states(slot_states=slot_states, text_states=text_states, slot_masks=slot_masks)
 
+        slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
         q_full = self.teacher.compose(teacher_reference_features, teacher_text_states, text_attention_mask, normalize=False)
         expected_shape = (batch_size, self.teacher_query_dim)
         if q_full.shape != expected_shape:

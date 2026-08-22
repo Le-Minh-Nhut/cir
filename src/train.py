@@ -129,6 +129,7 @@ def main(cfg: DictConfig) -> None:
         st_gate_recovery=m.st_gate_recovery,
         alpha_max=m.alpha_max,
         counterfactual_chunk_size=m.counterfactual_chunk_size,
+        num_refine_iters=m.num_refine_iters,
     ).to(device)
 
     optimizer = AdamW(
