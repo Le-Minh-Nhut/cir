@@ -134,6 +134,11 @@ def main(cfg: DictConfig) -> None:
         alpha_max=m.alpha_max,
         counterfactual_chunk_size=m.counterfactual_chunk_size,
         num_refine_iters=m.num_refine_iters,
+        num_refine_iters=m.num_refine_iters,
+        residual_bias_strength=m.residual_bias_strength,
+        residual_depletion_power=m.residual_depletion_power,
+        residual_eps=m.residual_eps,
+        randomize_slot_order_during_training=(m.randomize_slot_order_during_training),
     ).to(device)
 
     optimizer = AdamW(

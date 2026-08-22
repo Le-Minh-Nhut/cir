@@ -45,6 +45,10 @@ model:
   counterfactual_chunk_size: 32
 
   num_refine_iters: 3
+  residual_bias_strength: 1.0
+  residual_depletion_power: 1.0
+  residual_eps: 1.0e-6
+  randomize_slot_order_during_training: true
 
 teacher:
   csmcir_root: teacher/repos/CSMCIR
