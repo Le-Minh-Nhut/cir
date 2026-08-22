@@ -197,15 +197,16 @@ class TAPER(nn.Module):
         edit_logits = logits[:, 1:, :].masked_fill(~valid, invalid_logit)
 
         if residual is not None:
-            if residual.shape != slot_valid.shape:
-                raise ValueError(f"residual must be {tuple(slot_valid.shape)}, got {tuple(residual.shape)}")
+            expected_residual_shape = (batch_size, self.num_slots, text_states.shape[1])
+            if residual.shape != expected_residual_shape:
+                raise ValueError(f"residual must be {expected_residual_shape}, got {tuple(residual.shape)}")
+
             if not torch.isfinite(residual).all():
                 raise FloatingPointError("residual contains NaN or Inf")
 
-            residual_safe = residual.clamp_min(self.residual_eps)
-            residual_penalty = self.residual_strength* torch.log(residual_safe)
-            edit_logits = edit_logits + residual_penalty[:, None, :]
-
+            log_residual = torch.log(residual.clamp_min(self.residual_eps))
+            relative_log_residual = log_residual- log_residual.mean(dim=1,keepdim=True)
+            edit_logits = edit_logits + self.residual_strength * relative_log_residual
         edit_logits = edit_logits.masked_fill(~valid, invalid_logit)
         ownership_logits = torch.cat([null_logits[:, None, :], edit_logits], dim=1)
         ownership = F.softmax(ownership_logits, dim=1)
@@ -217,23 +218,27 @@ class TAPER(nn.Module):
 
         return ownership_logits, null_probs, slot_masks
 
-    def _update_residual(self, residual: Tensor, slot_masks: Tensor, slot_valid: Tensor) -> tuple[Tensor, Tensor]:
-        if residual.shape != slot_valid.shape:
-            raise ValueError("residual and slot_valid must match")
-        if slot_masks.shape[:1] != residual.shape[:1]:
-            raise ValueError("slot_masks batch mismatch")
+    def _update_residual(self, residual: Tensor, slot_masks: Tensor, slot_valid: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        expected_shape = slot_masks.shape
+        if residual.shape != expected_shape:
+            raise ValueError(f"residual must be {expected_shape}, got {tuple(residual.shape)}")
 
-        total_edit_claim = slot_masks.sum(dim=1).clamp(0.0, 1.0)
-        consumed = self.residual_depletion * residual * total_edit_claim
-        next_residual = residual - consumed
-        next_residual = next_residual.clamp(0.0, 1.0)
-        next_residual = torch.where(slot_valid, next_residual, torch.zeros_like(next_residual))
-        consumed = torch.where(slot_valid, consumed, torch.zeros_like(consumed))
+        if slot_masks.shape[1] != self.num_slots:
+            raise ValueError("slot_masks has invalid slot dimension")
 
+        total_edit_claim = slot_masks.sum(dim=1, keepdim=True)
+        other_claim = (total_edit_claim - slot_masks).clamp(0.0, 1.0)
+        retention = (1.0 - self.residual_depletion * other_claim).clamp(0.0, 1.0)
+        next_residual = residual * retention
+        valid = slot_valid[:, None, :]
+        next_residual = torch.where(valid, next_residual, torch.zeros_like(next_residual))
+        consumed = residual - next_residual
+        consumed = torch.where(valid, consumed, torch.zeros_like(consumed))
+        other_claim = torch.where(valid, other_claim, torch.zeros_like(other_claim))
         if not torch.isfinite(next_residual).all():
-            raise FloatingPointError("non-finite residual evidence")
+            raise FloatingPointError("non-finite claim-conditioned residual")
 
-        return next_residual, consumed
+        return (next_residual, consumed, other_claim)
 
     def _refine_slot_states(self, slot_states: Tensor, text_states: Tensor, slot_masks: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         batch_size = text_states.shape[0]
