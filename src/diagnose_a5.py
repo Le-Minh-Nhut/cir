@@ -122,18 +122,8 @@ def pairwise_cosine_mean(
 
 def max_pairwise_cosine_mean(
     x: torch.Tensor,
+    active: torch.Tensor | None = None,
 ) -> tuple[float, int]:
-    """
-    Paper-style slot-collapse metric.
-
-    For each sample:
-        1. compute cosine for every slot pair i < j
-        2. take the maximum cosine
-
-    Then average that worst-pair cosine across the batch.
-
-    x: [B,L,D]
-    """
     if x.ndim != 3:
         raise ValueError(
             f"x must be [B,L,D], got {tuple(x.shape)}"
@@ -152,7 +142,7 @@ def max_pairwise_cosine_mean(
 
     similarity = (
         x @ x.transpose(1, 2)
-    )  # [B,L,L]
+    )
 
     upper = torch.triu(
         torch.ones(
@@ -164,28 +154,52 @@ def max_pairwise_cosine_mean(
         diagonal=1,
     )
 
-    # [B, number_of_slot_pairs]
     pair_values = similarity[:, upper]
 
-    # Worst / most-collapsed pair in each sample.
-    sample_max = pair_values.max(
+    # All-slot version.
+    if active is None:
+        sample_max = pair_values.max(
+            dim=1
+        ).values
+
+        return sample_max.mean().item(), b
+
+    if active.shape != x.shape[:2]:
+        raise ValueError(
+            f"active must be {tuple(x.shape[:2])}, "
+            f"got {tuple(active.shape)}"
+        )
+
+    pair_active = (
+        active[:, :, None]
+        & active[:, None, :]
+    )[:, upper]
+
+    # Paper metric only makes sense when >= 2 slots are active.
+    has_active_pair = pair_active.any(
+        dim=1
+    )
+
+    if not has_active_pair.any():
+        return float("nan"), 0
+
+    masked_pairs = pair_values.masked_fill(
+        ~pair_active,
+        float("-inf"),
+    )
+
+    sample_max = masked_pairs.max(
         dim=1
     ).values
 
-    return sample_max.mean().item(), b
+    selected = sample_max[
+        has_active_pair
+    ]
 
-def masked_mean(
-    values: torch.Tensor,
-    mask: torch.Tensor,
-) -> torch.Tensor:
-    if values.shape != mask.shape:
-        raise ValueError(
-            f"values and mask must match, got "
-            f"{tuple(values.shape)} vs {tuple(mask.shape)}"
-        )
-    mask_f = mask.to(values.dtype)
-    return (values * mask_f).sum() / mask_f.sum().clamp_min(1.0)
-
+    return (
+        selected.mean().item(),
+        selected.numel(),
+    )
 
 # ---------------------------------------------------------------------
 # One execution -> retrieval query
@@ -503,6 +517,23 @@ def collect_a51c_diagnostics(
             f"round_{round_id}/slot_attention_max_pair_cos",
             attention_max_cos,
             max(attention_max_count, 1),
+        )
+
+        hard_active = output[
+            "hard_active_slot_mask"
+        ]
+
+        attention_active_max_cos, attention_active_max_count = (
+            max_pairwise_cosine_mean(
+                valid_attentions,
+                active=hard_active,
+            )
+        )
+
+        meter.add(
+            f"round_{round_id}/slot_attention_max_active_pair_cos",
+            attention_active_max_cos,
+            max(attention_active_max_count, 1),
         )
 
         # Raw attention token entropy and top-1 confidence.
@@ -1481,17 +1512,24 @@ def main(cfg: DictConfig) -> None:
             "slot_attention_pair_cos"
         )
 
-        max_key = (
+        all_max_key = (
             f"round_{round_id}/"
             "slot_attention_max_pair_cos"
+        )
+
+        active_max_key = (
+            f"round_{round_id}/"
+            "slot_attention_max_active_pair_cos"
         )
 
         print(
             f"round {round_id}: "
             f"mean_pair="
             f"{structural.get(mean_key, float('nan')):.6f} "
-            f"worst_pair="
-            f"{structural.get(max_key, float('nan')):.6f}"
+            f"worst_all="
+            f"{structural.get(all_max_key, float('nan')):.6f} "
+            f"worst_active="
+            f"{structural.get(active_max_key, float('nan')):.6f}"
         )
 
     print(
