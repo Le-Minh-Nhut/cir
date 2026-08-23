@@ -201,6 +201,22 @@ def max_pairwise_cosine_mean(
         selected.numel(),
     )
 
+def masked_mean(
+    values: torch.Tensor,
+    mask: torch.Tensor,
+) -> torch.Tensor:
+    if values.shape != mask.shape:
+        raise ValueError(
+            f"values and mask must match, got "
+            f"{tuple(values.shape)} vs {tuple(mask.shape)}"
+        )
+
+    mask_f = mask.to(values.dtype)
+
+    return (
+        values * mask_f
+    ).sum() / mask_f.sum().clamp_min(1.0)
+
 # ---------------------------------------------------------------------
 # One execution -> retrieval query
 # ---------------------------------------------------------------------

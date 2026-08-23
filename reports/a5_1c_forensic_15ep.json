@@ -1,0 +1,750 @@
+{
+  "experiment": "A5.1c Sequential Residual Claiming",
+  "checkpoint": "outputs/2026-08-23/07-10-17/best.pt",
+  "config": {
+    "num_refine_iters": 3,
+    "num_slots": 4,
+    "num_primitives": 8,
+    "mask_temperature": 1.0,
+    "residual_bias_strength": 1.0,
+    "residual_depletion_power": 1.0,
+    "residual_eps": 1e-06,
+    "randomize_slot_order_during_training": true,
+    "gate_mode": "legacy_soft_train_hard_eval",
+    "st_gate_recovery": false
+  },
+  "metric_semantics": {
+    "slot_attention_pair_cos": "pairwise cosine of raw sequential token-attention vectors alpha_s; primary attention-collapse metric",
+    "slot_claim_pair_cos": "pairwise cosine of residual claims/consumed evidence; can differ mechanically due to depletion",
+    "null_mass": "mean final unexplained residual after all slots within a refinement round"
+  },
+  "structural": {
+    "round_0/slot_state_pair_cos": 0.05161635579598295,
+    "round_0/slot_state_norm": 0.4733266830444336,
+    "round_0/slot_attention_pair_cos": 0.9999892112620651,
+    "round_0/slot_attention_max_pair_cos": 0.9999965655795754,
+    "round_0/slot_attention_max_active_pair_cos": 0.9999965654879976,
+    "round_0/slot_attention_entropy": 2.4617709639937955,
+    "round_0/slot_attention_top1": 0.08939290647840802,
+    "round_0/slot_claim_pair_cos": 0.9999868437112804,
+    "round_0/slot_0_claim_mass": 1.0,
+    "round_0/slot_1_claim_mass": 0.9112266676817485,
+    "round_0/slot_2_claim_mass": 0.8310763235402076,
+    "round_0/slot_3_claim_mass": 0.7586171230638122,
+    "round_0/allocation_conservation_max_error": 0.0,
+    "round_0/allocation_entropy": 0.9869733897698582,
+    "round_0/allocation_winner_confidence": 0.712031831143078,
+    "round_0/allocation_top1_top2_margin": 0.6297797992602817,
+    "round_0/null_mass": 0.7120262605744908,
+    "round_0/sequential_score_logit_std": 0.10521150454077077,
+    "round_0/sequential_score_logit_abs_mean": 0.1444287643899906,
+    "round_0/residual_max_increase": 0.0,
+    "round_0/residual_initial_mean": 1.0,
+    "round_0/residual_final_mean": 0.7120262605744908,
+    "round_0/residual_consumed_mean": 0.28797374117851504,
+    "round_0/residual_after_step_0_mean": 1.0,
+    "round_0/residual_after_step_1_mean": 0.9177434138511258,
+    "round_0/residual_after_step_2_mean": 0.8427890122424967,
+    "round_0/residual_after_step_3_mean": 0.7744275100322089,
+    "round_0/residual_after_step_4_mean": 0.7120262605744908,
+    "round_1/slot_state_pair_cos": 0.9977607040348998,
+    "round_1/slot_state_norm": 5.483740000410917,
+    "round_1/slot_attention_pair_cos": 0.9923755557751878,
+    "round_1/slot_attention_max_pair_cos": 0.9986222775038728,
+    "round_1/slot_attention_max_active_pair_cos": 0.9986220874241669,
+    "round_1/slot_attention_entropy": 2.4139865650300014,
+    "round_1/slot_attention_top1": 0.13375535188738177,
+    "round_1/slot_claim_pair_cos": 0.9836869610651852,
+    "round_1/slot_0_claim_mass": 0.9999999999900923,
+    "round_1/slot_1_claim_mass": 0.899894917859359,
+    "round_1/slot_2_claim_mass": 0.8177291313978903,
+    "round_1/slot_3_claim_mass": 0.7469576500316567,
+    "round_1/allocation_conservation_max_error": 1.254834626850329e-09,
+    "round_1/allocation_entropy": 0.9644513064949438,
+    "round_1/allocation_winner_confidence": 0.7151199126309767,
+    "round_1/allocation_top1_top2_margin": 0.6317234752366842,
+    "round_1/null_mass": 0.7150153292546177,
+    "round_1/sequential_score_logit_std": 0.6053044849525535,
+    "round_1/sequential_score_logit_abs_mean": 1.1061472736107214,
+    "round_1/residual_max_increase": 0.0,
+    "round_1/residual_initial_mean": 1.0,
+    "round_1/residual_final_mean": 0.7150153292546177,
+    "round_1/residual_consumed_mean": 0.2849846664953006,
+    "round_1/residual_after_step_0_mean": 1.0,
+    "round_1/residual_after_step_1_mean": 0.9177434138511258,
+    "round_1/residual_after_step_2_mean": 0.8437211252165752,
+    "round_1/residual_after_step_3_mean": 0.7764575227216718,
+    "round_1/residual_after_step_4_mean": 0.7150153292546177,
+    "round_2/slot_state_pair_cos": 0.9988484015549592,
+    "round_2/slot_state_norm": 8.402209960241267,
+    "round_2/slot_attention_pair_cos": 0.9867827197873688,
+    "round_2/slot_attention_max_pair_cos": 0.9979218847534441,
+    "round_2/slot_attention_max_active_pair_cos": 0.9979211832444692,
+    "round_2/slot_attention_entropy": 2.3545159752619393,
+    "round_2/slot_attention_top1": 0.1634462855241083,
+    "round_2/slot_claim_pair_cos": 0.9694486275671962,
+    "round_2/slot_0_claim_mass": 1.0,
+    "round_2/slot_1_claim_mass": 0.8861969542947221,
+    "round_2/slot_2_claim_mass": 0.8003713857541059,
+    "round_2/slot_3_claim_mass": 0.7301265782716267,
+    "round_2/allocation_conservation_max_error": 1.0979802984940378e-08,
+    "round_2/allocation_entropy": 0.936572305387183,
+    "round_2/allocation_winner_confidence": 0.7197385959375406,
+    "round_2/allocation_top1_top2_margin": 0.6358874705719371,
+    "round_2/null_mass": 0.7189543360552978,
+    "round_2/sequential_score_logit_std": 0.9380130764097842,
+    "round_2/sequential_score_logit_abs_mean": 1.6275977535599349,
+    "round_2/residual_max_increase": 0.0,
+    "round_2/residual_initial_mean": 1.0,
+    "round_2/residual_final_mean": 0.7189543360552978,
+    "round_2/residual_consumed_mean": 0.28104566576331336,
+    "round_2/residual_after_step_0_mean": 1.0,
+    "round_2/residual_after_step_1_mean": 0.9177434138511258,
+    "round_2/residual_after_step_2_mean": 0.8448478750437215,
+    "round_2/residual_after_step_3_mean": 0.779012056021922,
+    "round_2/residual_after_step_4_mean": 0.7189543360552978,
+    "update_0_to_1/mean_norm": 5.452671210975089,
+    "update_0_to_1/slot_0_norm": 6.132546528777543,
+    "update_0_to_1/slot_1_norm": 5.655366887675321,
+    "update_0_to_1/slot_2_norm": 5.216609204782451,
+    "update_0_to_1/slot_3_norm": 4.806162081183271,
+    "update_1_to_2/mean_norm": 3.0904297749809126,
+    "update_1_to_2/slot_0_norm": 3.355117581824356,
+    "update_1_to_2/slot_1_norm": 3.163745221384662,
+    "update_1_to_2/slot_2_norm": 3.0009888519156487,
+    "update_1_to_2/slot_3_norm": 2.841867433860898,
+    "final/semantic_pair_cos_all": 0.9967284628011762,
+    "final/semantic_pair_cos_active": 0.9967284628011762,
+    "final/effect_pair_cos_all": 0.9627337130777379,
+    "final/effect_pair_cos_active": 0.9627337130777379,
+    "final/edit_slot_pair_cos_all": 0.9916305689814877,
+    "final/edit_slot_pair_cos_active": 0.9916305689814877,
+    "final/dominant_slot_share": 0.2933826482597184,
+    "final/active_slot_count": 4.0,
+    "final/slot_0_gate": 0.9530681803366764,
+    "final/slot_0_hard_active_rate": 0.999501329787234,
+    "final/slot_1_gate": 0.952928351614862,
+    "final/slot_1_hard_active_rate": 0.999501329787234,
+    "final/slot_2_gate": 0.9536321939642918,
+    "final/slot_2_hard_active_rate": 0.9996675531914894,
+    "final/slot_3_gate": 0.9548190339626943,
+    "final/slot_3_hard_active_rate": 0.9996675531914894,
+    "execution/valid_steps_per_sample": 3.9983377659574466,
+    "execution/slot_0_execution_rate": 0.999501329787234,
+    "execution/slot_1_execution_rate": 0.999501329787234,
+    "execution/slot_2_execution_rate": 0.9996675531914894,
+    "execution/slot_3_execution_rate": 0.9996675531914894,
+    "execution/route_confidence": 0.12621851455737124,
+    "execution/transition_strength": 0.9996691198086138,
+    "execution/actual_state_change_norm": 6.706970120404064,
+    "execution/primitive_0_fraction": 0.00020786563565311383,
+    "execution/primitive_1_fraction": 0.9967988692109421,
+    "execution/primitive_2_fraction": 0.0,
+    "execution/primitive_3_fraction": 0.0,
+    "execution/primitive_4_fraction": 0.0029516920262742164,
+    "execution/primitive_5_fraction": 4.1573127130622764e-05,
+    "execution/primitive_6_fraction": 0.0,
+    "execution/primitive_7_fraction": 0.0
+  },
+  "retrieval": {
+    "FULL": {
+      "recall_at_10": 47.530178229014076,
+      "recall_at_50": 70.53050398826599,
+      "mean_recall": 59.03034110864003,
+      "categories": {
+        "dress": {
+          "recall_at_10": 44.27367448806763,
+          "recall_at_50": 68.46802234649658
+        },
+        "shirt": {
+          "recall_at_10": 46.76153063774109,
+          "recall_at_50": 69.28361058235168
+        },
+        "toptee": {
+          "recall_at_10": 51.55532956123352,
+          "recall_at_50": 73.8398790359497
+        }
+      }
+    },
+    "REFERENCE_ONLY": {
+      "recall_at_10": 0.8996783600499233,
+      "recall_at_50": 3.3754462376236916,
+      "mean_recall": 2.1375622988368073,
+      "categories": {
+        "dress": {
+          "recall_at_10": 1.2394645251333714,
+          "recall_at_50": 3.916708007454872
+        },
+        "shirt": {
+          "recall_at_10": 0.49067712388932705,
+          "recall_at_50": 2.8949951753020287
+        },
+        "toptee": {
+          "recall_at_10": 0.9688934311270714,
+          "recall_at_50": 3.314635530114174
+        }
+      }
+    },
+    "DROP_S0": {
+      "recall_at_10": 46.433322628339134,
+      "recall_at_50": 69.15322542190552,
+      "mean_recall": 57.79327402512233,
+      "categories": {
+        "dress": {
+          "recall_at_10": 43.331679701805115,
+          "recall_at_50": 68.51760149002075
+        },
+        "shirt": {
+          "recall_at_10": 45.53483724594116,
+          "recall_at_50": 66.68302416801453
+        },
+        "toptee": {
+          "recall_at_10": 50.43345093727112,
+          "recall_at_50": 72.25905060768127
+        }
+      }
+    },
+    "DROP_S1": {
+      "recall_at_10": 46.849533915519714,
+      "recall_at_50": 69.31746403376262,
+      "mean_recall": 58.08349897464117,
+      "categories": {
+        "dress": {
+          "recall_at_10": 43.777889013290405,
+          "recall_at_50": 68.71591210365295
+        },
+        "shirt": {
+          "recall_at_10": 45.87831199169159,
+          "recall_at_50": 66.97742938995361
+        },
+        "toptee": {
+          "recall_at_10": 50.89240074157715,
+          "recall_at_50": 72.25905060768127
+        }
+      }
+    },
+    "DROP_S2": {
+      "recall_at_10": 46.999043226242065,
+      "recall_at_50": 69.74759499231975,
+      "mean_recall": 58.37331910928091,
+      "categories": {
+        "dress": {
+          "recall_at_10": 44.075360894203186,
+          "recall_at_50": 69.01338696479797
+        },
+        "shirt": {
+          "recall_at_10": 45.92737853527069,
+          "recall_at_50": 67.66437888145447
+        },
+        "toptee": {
+          "recall_at_10": 50.99439024925232,
+          "recall_at_50": 72.56501913070679
+        }
+      }
+    },
+    "DROP_S3": {
+      "recall_at_10": 47.14851280053457,
+      "recall_at_50": 69.7464386622111,
+      "mean_recall": 58.44747573137283,
+      "categories": {
+        "dress": {
+          "recall_at_10": 44.17451620101929,
+          "recall_at_50": 68.86464953422546
+        },
+        "shirt": {
+          "recall_at_10": 46.123650670051575,
+          "recall_at_50": 67.86064505577087
+        },
+        "toptee": {
+          "recall_at_10": 51.14737153053284,
+          "recall_at_50": 72.51402139663696
+        }
+      }
+    },
+    "KEEP_S0": {
+      "recall_at_10": 25.787561635176342,
+      "recall_at_50": 48.750038941701256,
+      "mean_recall": 37.2688002884388,
+      "categories": {
+        "dress": {
+          "recall_at_10": 28.011900186538696,
+          "recall_at_50": 52.10708975791931
+        },
+        "shirt": {
+          "recall_at_10": 24.97546672821045,
+          "recall_at_50": 46.565261483192444
+        },
+        "toptee": {
+          "recall_at_10": 24.375317990779877,
+          "recall_at_50": 47.577765583992004
+        }
+      }
+    },
+    "KEEP_S1": {
+      "recall_at_10": 22.47452288866043,
+      "recall_at_50": 44.022464752197266,
+      "mean_recall": 33.24849382042885,
+      "categories": {
+        "dress": {
+          "recall_at_10": 25.086763501167297,
+          "recall_at_50": 47.3475456237793
+        },
+        "shirt": {
+          "recall_at_10": 21.78606539964676,
+          "recall_at_50": 42.39450395107269
+        },
+        "toptee": {
+          "recall_at_10": 20.550739765167236,
+          "recall_at_50": 42.32534468173981
+        }
+      }
+    },
+    "KEEP_S2": {
+      "recall_at_10": 19.29669479529063,
+      "recall_at_50": 39.67833618323008,
+      "mean_recall": 29.487515489260353,
+      "categories": {
+        "dress": {
+          "recall_at_10": 22.31036126613617,
+          "recall_at_50": 43.579572439193726
+        },
+        "shirt": {
+          "recall_at_10": 18.547596037387848,
+          "recall_at_50": 38.07654678821564
+        },
+        "toptee": {
+          "recall_at_10": 17.03212708234787,
+          "recall_at_50": 37.378889322280884
+        }
+      }
+    },
+    "KEEP_S3": {
+      "recall_at_10": 16.640330851078033,
+      "recall_at_50": 35.93735794226328,
+      "mean_recall": 26.288844396670658,
+      "categories": {
+        "dress": {
+          "recall_at_10": 19.43480372428894,
+          "recall_at_50": 40.059494972229004
+        },
+        "shirt": {
+          "recall_at_10": 15.799804031848907,
+          "recall_at_50": 34.24926400184631
+        },
+        "toptee": {
+          "recall_at_10": 14.686384797096252,
+          "recall_at_50": 33.50331485271454
+        }
+      }
+    },
+    "REPEAT_S0_X1": {
+      "recall_at_10": 25.787561635176342,
+      "recall_at_50": 48.750038941701256,
+      "mean_recall": 37.2688002884388,
+      "categories": {
+        "dress": {
+          "recall_at_10": 28.011900186538696,
+          "recall_at_50": 52.10708975791931
+        },
+        "shirt": {
+          "recall_at_10": 24.97546672821045,
+          "recall_at_50": 46.565261483192444
+        },
+        "toptee": {
+          "recall_at_10": 24.375317990779877,
+          "recall_at_50": 47.577765583992004
+        }
+      }
+    },
+    "REPEAT_S0_X2": {
+      "recall_at_10": 44.33241387208303,
+      "recall_at_50": 67.30074683825175,
+      "mean_recall": 55.81658035516739,
+      "categories": {
+        "dress": {
+          "recall_at_10": 42.88547337055206,
+          "recall_at_50": 67.47645139694214
+        },
+        "shirt": {
+          "recall_at_10": 42.73797869682312,
+          "recall_at_50": 64.81844782829285
+        },
+        "toptee": {
+          "recall_at_10": 47.3737895488739,
+          "recall_at_50": 69.60734128952026
+        }
+      }
+    },
+    "REPEAT_S0_X3": {
+      "recall_at_10": 47.26487696170807,
+      "recall_at_50": 70.24696071942647,
+      "mean_recall": 58.75591884056727,
+      "categories": {
+        "dress": {
+          "recall_at_10": 44.71988081932068,
+          "recall_at_50": 69.11254525184631
+        },
+        "shirt": {
+          "recall_at_10": 45.92737853527069,
+          "recall_at_50": 68.40039491653442
+        },
+        "toptee": {
+          "recall_at_10": 51.14737153053284,
+          "recall_at_50": 73.22794198989868
+        }
+      }
+    },
+    "REPEAT_S0_X4": {
+      "recall_at_10": 47.645257910092674,
+      "recall_at_50": 70.73229153951009,
+      "mean_recall": 59.18877472480138,
+      "categories": {
+        "dress": {
+          "recall_at_10": 44.81903910636902,
+          "recall_at_50": 68.76549124717712
+        },
+        "shirt": {
+          "recall_at_10": 46.66339457035065,
+          "recall_at_50": 69.23454403877258
+        },
+        "toptee": {
+          "recall_at_10": 51.45334005355835,
+          "recall_at_50": 74.19683933258057
+        }
+      }
+    },
+    "REPEAT_S1_X1": {
+      "recall_at_10": 22.47452288866043,
+      "recall_at_50": 44.022464752197266,
+      "mean_recall": 33.24849382042885,
+      "categories": {
+        "dress": {
+          "recall_at_10": 25.086763501167297,
+          "recall_at_50": 47.3475456237793
+        },
+        "shirt": {
+          "recall_at_10": 21.78606539964676,
+          "recall_at_50": 42.39450395107269
+        },
+        "toptee": {
+          "recall_at_10": 20.550739765167236,
+          "recall_at_50": 42.32534468173981
+        }
+      }
+    },
+    "REPEAT_S1_X2": {
+      "recall_at_10": 43.083637952804565,
+      "recall_at_50": 65.97054600715637,
+      "mean_recall": 54.52709197998047,
+      "categories": {
+        "dress": {
+          "recall_at_10": 42.43926703929901,
+          "recall_at_50": 66.38572216033936
+        },
+        "shirt": {
+          "recall_at_10": 41.06967747211456,
+          "recall_at_50": 63.346415758132935
+        },
+        "toptee": {
+          "recall_at_10": 45.74196934700012,
+          "recall_at_50": 68.17950010299683
+        }
+      }
+    },
+    "REPEAT_S1_X3": {
+      "recall_at_10": 47.066052754720054,
+      "recall_at_50": 69.69720125198364,
+      "mean_recall": 58.38162700335185,
+      "categories": {
+        "dress": {
+          "recall_at_10": 43.976202607154846,
+          "recall_at_50": 68.8150703907013
+        },
+        "shirt": {
+          "recall_at_10": 46.07458412647247,
+          "recall_at_50": 67.76251196861267
+        },
+        "toptee": {
+          "recall_at_10": 51.14737153053284,
+          "recall_at_50": 72.51402139663696
+        }
+      }
+    },
+    "REPEAT_S1_X4": {
+      "recall_at_10": 47.51223623752594,
+      "recall_at_50": 70.62992453575134,
+      "mean_recall": 59.07108038663864,
+      "categories": {
+        "dress": {
+          "recall_at_10": 44.37282979488373,
+          "recall_at_50": 68.46802234649658
+        },
+        "shirt": {
+          "recall_at_10": 46.76153063774109,
+          "recall_at_50": 69.47988271713257
+        },
+        "toptee": {
+          "recall_at_10": 51.402348279953,
+          "recall_at_50": 73.94186854362488
+        }
+      }
+    },
+    "REPEAT_S2_X1": {
+      "recall_at_10": 19.29669479529063,
+      "recall_at_50": 39.67833618323008,
+      "mean_recall": 29.487515489260353,
+      "categories": {
+        "dress": {
+          "recall_at_10": 22.31036126613617,
+          "recall_at_50": 43.579572439193726
+        },
+        "shirt": {
+          "recall_at_10": 18.547596037387848,
+          "recall_at_50": 38.07654678821564
+        },
+        "toptee": {
+          "recall_at_10": 17.03212708234787,
+          "recall_at_50": 37.378889322280884
+        }
+      }
+    },
+    "REPEAT_S2_X2": {
+      "recall_at_10": 41.7867511510849,
+      "recall_at_50": 64.62214191754659,
+      "mean_recall": 53.20444653431574,
+      "categories": {
+        "dress": {
+          "recall_at_10": 41.15022420883179,
+          "recall_at_50": 65.69162011146545
+        },
+        "shirt": {
+          "recall_at_10": 39.793914556503296,
+          "recall_at_50": 61.678117513656616
+        },
+        "toptee": {
+          "recall_at_10": 44.41611468791962,
+          "recall_at_50": 66.4966881275177
+        }
+      }
+    },
+    "REPEAT_S2_X3": {
+      "recall_at_10": 46.48371537526449,
+      "recall_at_50": 69.05187964439392,
+      "mean_recall": 57.76779750982921,
+      "categories": {
+        "dress": {
+          "recall_at_10": 43.529996275901794,
+          "recall_at_50": 68.51760149002075
+        },
+        "shirt": {
+          "recall_at_10": 45.43670117855072,
+          "recall_at_50": 66.63395762443542
+        },
+        "toptee": {
+          "recall_at_10": 50.48444867134094,
+          "recall_at_50": 72.00407981872559
+        }
+      }
+    },
+    "REPEAT_S2_X4": {
+      "recall_at_10": 47.39989439646403,
+      "recall_at_50": 70.24825811386108,
+      "mean_recall": 58.82407625516255,
+      "categories": {
+        "dress": {
+          "recall_at_10": 43.877044320106506,
+          "recall_at_50": 68.36886405944824
+        },
+        "shirt": {
+          "recall_at_10": 46.614328026771545,
+          "recall_at_50": 68.84199976921082
+        },
+        "toptee": {
+          "recall_at_10": 51.70831084251404,
+          "recall_at_50": 73.5339105129242
+        }
+      }
+    },
+    "REPEAT_S3_X1": {
+      "recall_at_10": 16.640330851078033,
+      "recall_at_50": 35.93735794226328,
+      "mean_recall": 26.288844396670658,
+      "categories": {
+        "dress": {
+          "recall_at_10": 19.43480372428894,
+          "recall_at_50": 40.059494972229004
+        },
+        "shirt": {
+          "recall_at_10": 15.799804031848907,
+          "recall_at_50": 34.24926400184631
+        },
+        "toptee": {
+          "recall_at_10": 14.686384797096252,
+          "recall_at_50": 33.50331485271454
+        }
+      }
+    },
+    "REPEAT_S3_X2": {
+      "recall_at_10": 40.32373825709025,
+      "recall_at_50": 63.1238063176473,
+      "mean_recall": 51.723772287368774,
+      "categories": {
+        "dress": {
+          "recall_at_10": 39.86118137836456,
+          "recall_at_50": 64.20426368713379
+        },
+        "shirt": {
+          "recall_at_10": 38.22374939918518,
+          "recall_at_50": 60.35328507423401
+        },
+        "toptee": {
+          "recall_at_10": 42.88628399372101,
+          "recall_at_50": 64.8138701915741
+        }
+      }
+    },
+    "REPEAT_S3_X3": {
+      "recall_at_10": 45.60358921686808,
+      "recall_at_50": 68.2674507300059,
+      "mean_recall": 56.935519973436996,
+      "categories": {
+        "dress": {
+          "recall_at_10": 43.034207820892334,
+          "recall_at_50": 67.87307858467102
+        },
+        "shirt": {
+          "recall_at_10": 44.21001076698303,
+          "recall_at_50": 65.99607467651367
+        },
+        "toptee": {
+          "recall_at_10": 49.56654906272888,
+          "recall_at_50": 70.93319892883301
+        }
+      }
+    },
+    "REPEAT_S3_X4": {
+      "recall_at_10": 47.03288475672404,
+      "recall_at_50": 69.53469514846802,
+      "mean_recall": 58.283789952596024,
+      "categories": {
+        "dress": {
+          "recall_at_10": 43.282103538513184,
+          "recall_at_50": 67.62518882751465
+        },
+        "shirt": {
+          "recall_at_10": 46.5161919593811,
+          "recall_at_50": 68.05691719055176
+        },
+        "toptee": {
+          "recall_at_10": 51.30035877227783,
+          "recall_at_50": 72.92197942733765
+        }
+      }
+    },
+    "MEAN_SLOT_X1": {
+      "recall_at_10": 21.308522423108418,
+      "recall_at_50": 42.508418361345925,
+      "mean_recall": 31.908470392227173,
+      "categories": {
+        "dress": {
+          "recall_at_10": 23.996034264564514,
+          "recall_at_50": 45.86018919944763
+        },
+        "shirt": {
+          "recall_at_10": 20.755642652511597,
+          "recall_at_50": 40.97154140472412
+        },
+        "toptee": {
+          "recall_at_10": 19.173890352249146,
+          "recall_at_50": 40.69352447986603
+        }
+      }
+    },
+    "MEAN_SLOT_X2": {
+      "recall_at_10": 42.86613464355469,
+      "recall_at_50": 65.47161340713501,
+      "mean_recall": 54.16887402534485,
+      "categories": {
+        "dress": {
+          "recall_at_10": 42.14179515838623,
+          "recall_at_50": 66.03867411613464
+        },
+        "shirt": {
+          "recall_at_10": 41.02060794830322,
+          "recall_at_50": 62.75760531425476
+        },
+        "toptee": {
+          "recall_at_10": 45.43600082397461,
+          "recall_at_50": 67.61856079101562
+        }
+      }
+    },
+    "MEAN_SLOT_X3": {
+      "recall_at_10": 46.948652466138206,
+      "recall_at_50": 69.366059700648,
+      "mean_recall": 58.1573560833931,
+      "categories": {
+        "dress": {
+          "recall_at_10": 43.877044320106506,
+          "recall_at_50": 68.76549124717712
+        },
+        "shirt": {
+          "recall_at_10": 46.02551460266113,
+          "recall_at_50": 67.12462902069092
+        },
+        "toptee": {
+          "recall_at_10": 50.94339847564697,
+          "recall_at_50": 72.20805883407593
+        }
+      }
+    },
+    "MEAN_SLOT_X4": {
+      "recall_at_10": 47.431098421414696,
+      "recall_at_50": 70.51414847373962,
+      "mean_recall": 58.97262344757716,
+      "categories": {
+        "dress": {
+          "recall_at_10": 44.37282979488373,
+          "recall_at_50": 68.46802234649658
+        },
+        "shirt": {
+          "recall_at_10": 46.467125415802,
+          "recall_at_50": 69.23454403877258
+        },
+        "toptee": {
+          "recall_at_10": 51.45334005355835,
+          "recall_at_50": 73.8398790359497
+        }
+      }
+    }
+  },
+  "derived": {
+    "full_mean_recall": 59.03034110864003,
+    "reference_only_mean_recall": 2.1375622988368073,
+    "modification_gain": 56.892778809803225,
+    "KEEP_S0/gain_fraction": 0.6174990697334072,
+    "KEEP_S1/gain_fraction": 0.5468344519714565,
+    "KEEP_S2/gain_fraction": 0.4807280249371623,
+    "KEEP_S3/gain_fraction": 0.424505229012866,
+    "REPEAT_S0_X1/gain_fraction": 0.6174990697334072,
+    "REPEAT_S0_X2/gain_fraction": 0.9435119742662512,
+    "REPEAT_S0_X3/gain_fraction": 0.9951765008879215,
+    "REPEAT_S0_X4/gain_fraction": 1.0027847754930552,
+    "REPEAT_S1_X1/gain_fraction": 0.5468344519714565,
+    "REPEAT_S1_X2/gain_fraction": 0.9208467362138478,
+    "REPEAT_S1_X3/gain_fraction": 0.9885976020356313,
+    "REPEAT_S1_X4/gain_fraction": 1.0007160711579022,
+    "REPEAT_S2_X1/gain_fraction": 0.4807280249371623,
+    "REPEAT_S2_X2/gain_fraction": 0.8975986988823189,
+    "REPEAT_S2_X3/gain_fraction": 0.9778083682108129,
+    "REPEAT_S2_X4/gain_fraction": 0.9963744985252516,
+    "REPEAT_S3_X1/gain_fraction": 0.424505229012866,
+    "REPEAT_S3_X2/gain_fraction": 0.8715730014577482,
+    "REPEAT_S3_X3/gain_fraction": 0.9631794899277785,
+    "REPEAT_S3_X4/gain_fraction": 0.9868779277148725,
+    "MEAN_SLOT_X1/gain_fraction": 0.5232809631766575,
+    "MEAN_SLOT_X2/gain_fraction": 0.9145503667601221,
+    "MEAN_SLOT_X3/gain_fraction": 0.984655609314402,
+    "MEAN_SLOT_X4/gain_fraction": 0.9989855011080436
+  }
+}
