@@ -42,7 +42,7 @@ class TAPER(nn.Module):
             raise ValueError("qasa_tau must be in (0, 1]")
         if not 0.0 < qasa_rho <= 1.0:
             raise ValueError("qasa_rho must be in (0, 1]")
-        if not 0.0 <= qasa_mu <= 1.0:
+        if not 0.0 <= qasa_mu < 1.0:
             raise ValueError("qasa_mu must be in [0, 1]")
         if qasa_eps <= 0:
             raise ValueError("qasa_eps must be > 0")
@@ -85,7 +85,6 @@ class TAPER(nn.Module):
 
         # Ephemeral Edit Slot queries + one non-executable NULL competitor.
         self.slot_queries = nn.Parameter(torch.randn(num_slots, slot_dim) * 0.02)
-        self.null_query = nn.Parameter(torch.randn(1, slot_dim) * 0.02)
         self.slot_query_projection = nn.Linear(slot_dim, slot_dim, bias=False)
         self.text_key_projection = nn.Linear(text_dim, slot_dim, bias=False)
 
@@ -162,56 +161,20 @@ class TAPER(nn.Module):
 
         return attention_valid, slot_valid
 
-    def _competitive_ownership(
-        self,
-        text_states: Tensor,
-        slot_valid: Tensor,
-    ) -> tuple[Tensor, Tensor, Tensor]:
-        all_queries = torch.cat([self.null_query, self.slot_queries], dim=0)
-        queries = self.slot_query_projection(all_queries)  # [L+1, Ds]
-        keys = self.text_key_projection(text_states)  # [B, N, Ds]
+    def _competitive_ownership(self, text_states: Tensor, slot_valid: Tensor) -> tuple[Tensor, Tensor]:
+        queries = self.slot_query_projection(self.slot_queries)  # [L, Ds]
+        keys = self.text_key_projection(text_states)  # [B,N,Ds]
         logits = torch.einsum("ld,bnd->bln", queries, keys)
         logits = logits / math.sqrt(self.slot_dim) / self.mask_temperature
-
         valid = slot_valid[:, None, :]
-        null_logits = torch.where(slot_valid, logits[:, 0, :], torch.zeros_like(logits[:, 0, :]))
         invalid_logit = torch.finfo(logits.dtype).min
-        edit_logits = logits[:, 1:, :].masked_fill(~valid, invalid_logit)
-        ownership_logits = torch.cat([null_logits[:, None, :], edit_logits], dim=1)
-
-        ownership = F.softmax(ownership_logits, dim=1)
+        logits = logits.masked_fill(~valid, invalid_logit)
+        ownership = F.softmax(logits, dim=1)
+        ownership = ownership * valid.to(ownership.dtype)
         if not torch.isfinite(ownership).all():
-            raise FloatingPointError("non-finite competitive slot ownership")
+            raise FloatingPointError("non-finite slot ownership")
 
-        null_probs = ownership[:, 0, :]
-        slot_masks = ownership[:, 1:, :]
-        return ownership_logits, null_probs, slot_masks
-
-    def _qasa_attention(self, ownership_logits: Tensor, slot_valid: Tensor) -> tuple[Tensor, Tensor]:
-        if ownership_logits.ndim != 3:
-            raise ValueError("ownership_logits must be [B,1+L,N]")
-        if ownership_logits.shape[1] != self.num_slots + 1:
-            raise ValueError("ownership_logits slot axis mismatch")
-
-        if slot_valid.shape != (ownership_logits.shape[0], ownership_logits.shape[2]):
-            raise ValueError("slot_valid shape mismatch")
-
-        edit_logits = ownership_logits[:, 1:, :]
-        qasa_attention = F.softmax(edit_logits, dim=1)
-        ownership_winner = ownership_logits.argmax(dim=1)
-        edit_wins = ownership_winner.ne(0)
-        qasa_valid = slot_valid.to(torch.bool) & edit_wins
-        qasa_attention = (
-            qasa_attention
-            * qasa_valid[:, None, :].to(
-                qasa_attention.dtype
-            )
-        )
-
-        if not torch.isfinite(qasa_attention).all():
-            raise FloatingPointError("non-finite QASA attention")
-
-        return qasa_attention, qasa_valid
+        return logits, ownership
 
     def _qasa_select_slots(self, attention: Tensor, valid: Tensor) -> dict[str, Tensor]:
         if attention.ndim != 3:
@@ -381,7 +344,7 @@ class TAPER(nn.Module):
         _, slot_valid = self._validate_text_inputs(text_states, text_attention_mask, text_content_mask)
 
         batch_size, num_tokens, _ = text_states.shape
-        ownership_logits, null_probs, slot_masks = self._competitive_ownership(text_states, slot_valid)
+        ownership_logits, slot_masks = self._competitive_ownership(text_states, slot_valid)
         slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
 
         q_full = self.teacher.compose(teacher_reference_features, teacher_text_states, text_attention_mask, normalize=False)
@@ -403,11 +366,15 @@ class TAPER(nn.Module):
         raw_edit_slots = self.slot_mlp(torch.cat([slot_semantics, slot_effects], dim=-1))
         edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
 
-        qasa_attention, qasa_valid = self._qasa_attention(ownership_logits, slot_valid)
+        qasa_attention = slot_masks
+        qasa_valid = slot_valid
         qasa = self._qasa_select_slots(qasa_attention, qasa_valid)
         if (not self.training and not self.qasa_apply_at_eval):
-            has_edit_evidence = qasa_valid.any(dim=1, keepdim=True)
-            selected_mask = has_edit_evidence.expand(-1, self.num_slots)
+            selected_mask = torch.ones(
+                qasa["qasa_selected_mask"].shape,
+                dtype=torch.bool,
+                device=qasa["qasa_selected_mask"].device,
+            )
         else:
             selected_mask = qasa["qasa_selected_mask"]
 
@@ -415,7 +382,6 @@ class TAPER(nn.Module):
             "edit_slots": edit_slots,
             "raw_edit_slots": raw_edit_slots,
             "ownership_logits": ownership_logits,
-            "null_probs": null_probs,
             "slot_masks": slot_masks,
             "slot_semantics": slot_semantics,
             "slot_mass": slot_mass,
@@ -698,7 +664,6 @@ class TAPER(nn.Module):
     def _assignment_diagnostics(
         self,
         *,
-        null_probs: Tensor,
         slot_masks: Tensor,
         slot_mass: Tensor,
         slot_effects: Tensor,
@@ -708,7 +673,7 @@ class TAPER(nn.Module):
         hard_active_slot_mask: Tensor,
         text_attention_mask: Tensor,
         text_content_mask: Tensor | None = None,
-    ) -> dict[str, Tensor]:
+    ):
         """Non-prescriptive diagnostics for the competitive NULL formulation."""
 
         if text_content_mask is not None:
@@ -760,24 +725,17 @@ class TAPER(nn.Module):
             overlap = mask_similarity[:, upper].mean()
             effect_similarity_mean = effect_similarity[:, upper].mean()
 
-        diagnostics = {
-            "assignment_entropy": assignment_entropy,
-            "null_ownership_rate": null_rate,
-            "edit_ownership_rate": edit_rate,
-
-            "edit_mass_fraction": edit_mass_fraction,
-            "null_argmax_fraction": null_argmax_fraction,
-            "all_null_argmax_sample_fraction":all_null_argmax_sample_fraction,
-            "ownership_active_slot_count": ownership_active_slot_count,
-            "execution_hard_active_slot_count": execution_hard_active_slot_count,
-            "dominant_slot_share": dominant_slot_share,
-            "near_monopoly_fraction": near_monopoly_fraction,
-            "slot_overlap_mean": overlap,
-            "slot_effect_similarity_mean": effect_similarity_mean,
-            "qasa_selected_slot_count": qasa_selected_mask.to(slot_masks.dtype).sum(dim=1).mean(),
-            "qasa_quality_mean": qasa_quality.mean(),
-            "qasa_final_coverage_mean": qasa_final_coverage.mean(),
-        }
+        diagnostics = self._assignment_diagnostics(
+            slot_masks=output["slot_masks"],
+            slot_mass=output["slot_mass"],
+            slot_effects=output["slot_effects"],
+            hard_active_slot_mask=output["hard_active_slot_mask"],
+            text_attention_mask=mask,
+            text_content_mask=content_mask,
+            qasa_selected_mask=output["qasa_selected_mask"],
+            qasa_quality=output["qasa_quality"],
+            qasa_final_coverage=output["qasa_final_coverage"],
+        )
 
         for slot_id in range(self.num_slots):
             diagnostics[f"slot_{slot_id}_mass_mean"] = slot_mass[:, slot_id].mean()
@@ -850,7 +808,6 @@ class TAPER(nn.Module):
         }
         with torch.no_grad():
             diagnostics = self._assignment_diagnostics(
-                null_probs=output["null_probs"],
                 slot_masks=output["slot_masks"],
                 slot_mass=output["slot_mass"],
                 slot_effects=output["slot_effects"],
@@ -903,7 +860,6 @@ class TAPER(nn.Module):
                 "dropped_queries": torch.stack(dropped_queries, dim=1),
                 "slot_mass": slots["slot_mass"],
                 "slot_activity": slots["slot_activity"],
-                "null_probs": slots["null_probs"],
                 "hard_active_slot_mask": full_execution["hard_active_slot_mask"],
                 "qasa_selected_mask": slots["qasa_selected_mask"],
                 "qasa_quality": slots["qasa_quality"],
