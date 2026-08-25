@@ -83,7 +83,7 @@ class TAPER(nn.Module):
         for parameter in self.teacher.parameters():
             parameter.requires_grad_(False)
 
-        # Ephemeral Edit Slot queries + one non-executable NULL competitor.
+        # Ephemeral competing Edit Slot queries.
         self.slot_queries = nn.Parameter(torch.randn(num_slots, slot_dim) * 0.02)
         self.slot_query_projection = nn.Linear(slot_dim, slot_dim, bias=False)
         self.text_key_projection = nn.Linear(text_dim, slot_dim, bias=False)
@@ -154,7 +154,7 @@ class TAPER(nn.Module):
 
         attention_valid = text_attention_mask.to(torch.bool)
         if text_content_mask is None:
-            raise ValueError("text_content_mask is required for competitive NULL ownership so " "special/content tokens are excluded explicitly")
+            raise ValueError("text_content_mask is required so special/padding tokens are excluded from Edit-Slot ownership")
         if text_content_mask.shape != text_attention_mask.shape:
             raise ValueError("text_content_mask must match text_attention_mask")
         slot_valid = attention_valid & text_content_mask.to(torch.bool)
@@ -179,8 +179,10 @@ class TAPER(nn.Module):
     def _qasa_select_slots(self, attention: Tensor, valid: Tensor) -> dict[str, Tensor]:
         if attention.ndim != 3:
             raise ValueError("attention must be [B,L,N]")
-
+        attention = attention.float()
+        valid = valid.to(torch.bool)
         b, l, n = attention.shape
+
         if l != self.num_slots:
             raise ValueError("attention slot dimension mismatch")
         if valid.shape != (b, n):
@@ -194,7 +196,8 @@ class TAPER(nn.Module):
         winner_one_hot = winner_one_hot * valid_f[:, None, :]
         total_mass = (attention* valid_f[:, None, :]).sum(dim=-1)  # [B,L]
         winning_mass = (attention* winner_one_hot).sum(dim=-1)
-        quality = winning_mass / total_mass.clamp_min(self.qasa_eps)
+        # quality = winning_mass / total_mass.clamp_min(self.qasa_eps)
+        quality = winning_mass / (total_mass + self.qasa_eps)
         quality = torch.where(total_mass > self.qasa_eps, quality, torch.zeros_like(quality))
         quality_for_selection = quality.detach()
         attention_for_selection = attention.detach()
@@ -219,7 +222,8 @@ class TAPER(nn.Module):
                 if selected[batch_id].any():
                     already_covered = covered & valid_tokens
                     mass_on_covered = attention_for_selection[batch_id, slot_id, already_covered].sum()
-                    novelty = 1.0 - mass_on_covered / slot_mass.clamp_min(self.qasa_eps)
+                    # novelty = 1.0 - mass_on_covered / slot_mass.clamp_min(self.qasa_eps)
+                    novelty = 1.0 - mass_on_covered / (slot_mass + self.qasa_eps)
                 else:
                     novelty = torch.ones((), dtype=dtype, device=device)
                 if novelty < self.qasa_mu:
@@ -366,8 +370,10 @@ class TAPER(nn.Module):
         raw_edit_slots = self.slot_mlp(torch.cat([slot_semantics, slot_effects], dim=-1))
         edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
 
-        qasa_attention = slot_masks
-        qasa_valid = slot_valid
+        qasa_attention = F.softmax(ownership_logits.float(), dim=1)
+        qasa_attention = qasa_attention * slot_valid[:, None, :].to(qasa_attention.dtype)
+        qasa_valid = slot_valid.to(torch.bool)
+        qasa = self._qasa_select_slots(qasa_attention, qasa_valid)
         qasa = self._qasa_select_slots(qasa_attention, qasa_valid)
         if (not self.training and not self.qasa_apply_at_eval):
             selected_mask = torch.ones(
@@ -673,42 +679,27 @@ class TAPER(nn.Module):
         hard_active_slot_mask: Tensor,
         text_attention_mask: Tensor,
         text_content_mask: Tensor | None = None,
-    ):
-        """Non-prescriptive diagnostics for the competitive NULL formulation."""
-
+    ) -> dict[str, Tensor]:
         if text_content_mask is not None:
             valid = text_attention_mask.to(torch.bool) & text_content_mask.to(torch.bool)
         else:
             valid = text_attention_mask.to(torch.bool)
+
         valid_f = valid.to(slot_masks.dtype)
         denom = valid_f.sum().clamp_min(1.0)
-
-        all_probs = torch.cat([null_probs[:, None, :], slot_masks], dim=1)
-        entropy_per_token = -(
-            all_probs.clamp_min(1e-12) * all_probs.clamp_min(1e-12).log()
-        ).sum(dim=1)
+        probs = slot_masks.clamp_min(1e-12)
+        entropy_per_token = -(probs * probs.log()).sum(dim=1)
         assignment_entropy = (entropy_per_token * valid_f).sum() / denom
-        null_rate = (null_probs * valid_f).sum() / denom
-        edit_rate = ((1.0 - null_probs) * valid_f).sum() / denom
-        ownership_winner = all_probs.argmax(dim=1)
-        null_winner = ownership_winner.eq(0)
-        null_argmax_fraction = (null_winner.to(slot_masks.dtype) * valid_f).sum() / denom
-        has_valid_content = valid.any(dim=1)
-        all_null_argmax = (null_winner | ~valid).all(dim=1) & has_valid_content
-        valid_sample_count = has_valid_content.to(slot_masks.dtype).sum().clamp_min(1.0)
-        all_null_argmax_sample_fraction = all_null_argmax.to(slot_masks.dtype).sum() / valid_sample_count
-        edit_mass_per_sample = slot_mass.sum(dim=1)
-        edit_mass_fraction = edit_mass_per_sample.sum() / denom
-        ownership_active_slot_count = (slot_mass >= 0.10).to(slot_masks.dtype).sum(dim=1).mean()
+        ownership_winner = slot_masks.argmax(dim=1)
+        winner_one_hot = F.one_hot(ownership_winner, num_classes=self.num_slots).permute(0, 2, 1)
+        winner_one_hot = winner_one_hot & valid[:, None, :]
+        winner_count = winner_one_hot.sum(dim=2)
+        ownership_active_slot_count = (winner_count > 0).to(slot_masks.dtype).sum(dim=1).mean()
         execution_hard_active_slot_count = hard_active_slot_mask.to(slot_masks.dtype).sum(dim=1).mean()
-        nontrivial_edit = edit_mass_per_sample >= 0.10
-        dominant_slot_share_per_sample = slot_mass.max(dim=1).values/ edit_mass_per_sample.clamp_min(1e-12)
-        nontrivial_count = nontrivial_edit.to(slot_masks.dtype).sum().clamp_min(1.0)
-        dominant_slot_share = (dominant_slot_share_per_sample * nontrivial_edit.to(slot_masks.dtype)).sum() / nontrivial_count
-        near_monopoly_fraction = (
-            (dominant_slot_share_per_sample >= 0.90) & nontrivial_edit
-        ).to(slot_masks.dtype).sum() / nontrivial_count
-
+        total_mass_per_sample = slot_mass.sum(dim=1)
+        dominant_slot_share_per_sample = slot_mass.max(dim=1).values / total_mass_per_sample.clamp_min(1e-12)
+        dominant_slot_share = dominant_slot_share_per_sample.mean()
+        near_monopoly_fraction = (dominant_slot_share_per_sample >= 0.90).to(slot_masks.dtype).mean()
         zero = slot_masks.sum() * 0.0
         if self.num_slots == 1:
             overlap = zero
@@ -717,28 +708,29 @@ class TAPER(nn.Module):
             masked = slot_masks * valid_f[:, None, :]
             mask_vectors = F.normalize(masked, dim=-1, eps=1e-6)
             mask_similarity = mask_vectors @ mask_vectors.transpose(1, 2)
-
             effect_vectors = F.normalize(slot_effects, dim=-1, eps=1e-6)
             effect_similarity = effect_vectors @ effect_vectors.transpose(1, 2)
-
             upper = torch.triu(torch.ones(self.num_slots, self.num_slots, dtype=torch.bool, device=slot_masks.device), diagonal=1)
             overlap = mask_similarity[:, upper].mean()
             effect_similarity_mean = effect_similarity[:, upper].mean()
 
-        diagnostics = self._assignment_diagnostics(
-            slot_masks=output["slot_masks"],
-            slot_mass=output["slot_mass"],
-            slot_effects=output["slot_effects"],
-            hard_active_slot_mask=output["hard_active_slot_mask"],
-            text_attention_mask=mask,
-            text_content_mask=content_mask,
-            qasa_selected_mask=output["qasa_selected_mask"],
-            qasa_quality=output["qasa_quality"],
-            qasa_final_coverage=output["qasa_final_coverage"],
-        )
+        diagnostics = {
+            "assignment_entropy": assignment_entropy,
+            "ownership_active_slot_count":ownership_active_slot_count,
+            "execution_hard_active_slot_count": execution_hard_active_slot_count,
+            "dominant_slot_share": dominant_slot_share,
+            "near_monopoly_fraction": near_monopoly_fraction,
+            "slot_overlap_mean": overlap,
+            "slot_effect_similarity_mean": effect_similarity_mean,
+            "qasa_selected_slot_count": qasa_selected_mask.to(slot_masks.dtype).sum(dim=1).mean(),
+            "qasa_quality_mean": qasa_quality.mean(),
+            "qasa_final_coverage_mean": qasa_final_coverage.mean(),
+        }
 
         for slot_id in range(self.num_slots):
             diagnostics[f"slot_{slot_id}_mass_mean"] = slot_mass[:, slot_id].mean()
+            diagnostics[f"slot_{slot_id}_winner_count_mean"] = winner_count[:, slot_id].to(slot_masks.dtype).mean()
+            diagnostics[f"slot_{slot_id}_quality_mean"] = qasa_quality[:, slot_id].mean()
 
         return diagnostics
 
