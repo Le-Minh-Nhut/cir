@@ -771,8 +771,8 @@ class TAPER(nn.Module):
         text_content_mask: Tensor | None = None,
     ) -> dict[str, Tensor]:
 
-        del slot_masks, slot_effects, slot_gates, text_attention_mask
-        del text_content_mask, null_probs
+        del slot_masks, slot_effects, text_attention_mask
+        del text_content_mask
         raise RuntimeError(
             "Standalone Stage-1 structural losses are incompatible with "
             "Train this formulation end-to-end with "
