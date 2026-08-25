@@ -33,14 +33,11 @@ model:
   retrieval_temperature: 0.07
 
   neutral_mode: zero
-
-  slot_gate_threshold: 0.4
-  # hard_slot_gating_during_training: false
-  # gate_mode: legacy_soft_train_hard_eval
-  # st_gate_recovery: false
-  gate_mode: straight_through_hard
-  st_gate_recovery: true
-
+  qasa_tau: 0.5
+  qasa_rho: 0.8
+  qasa_mu: 0.3
+  qasa_eps: 1.0e-8
+  qasa_apply_at_eval: true
   alpha_max: 1.0
   counterfactual_chunk_size: 32
 

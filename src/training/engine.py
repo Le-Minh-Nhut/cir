@@ -226,6 +226,12 @@ def fit(
             f"hard_active={train_metrics.get('diagnostic/execution_hard_active_slot_count', float('nan')):.2f} | "
             f"dominant={train_metrics.get('diagnostic/dominant_slot_share', float('nan')):.3f} | "
             f"monopoly={train_metrics.get('diagnostic/near_monopoly_fraction', float('nan')):.3f}"
+            f" | qasa_k="
+            f"{train_metrics.get('diagnostic/qasa_selected_slot_count',float('nan')):.2f}"
+            f" | qasa_q="
+            f"{train_metrics.get('diagnostic/qasa_quality_mean', float('nan')):.3f}"
+            f" | qasa_cov="
+            f"{train_metrics.get('diagnostic/qasa_final_coverage_mean', float('nan')):.3f}"
         )
 
 

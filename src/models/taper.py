@@ -26,29 +26,34 @@ class TAPER(nn.Module):
         router_temperature: float = 1.0,
         retrieval_temperature: float = 0.07,
         neutral_mode: str = "zero",
-        slot_gate_threshold: float = 0.5,
-        hard_slot_gating_during_training: bool = False,
-        gate_mode: str = "legacy_soft_train_hard_eval",
-        st_gate_recovery: bool = False,
         overlap_margin: float = 0.60,
         effect_diversity_margin: float = 0.50,
         alpha_max: float = 1.0,
         counterfactual_chunk_size: int = 8,
+        qasa_tau: float = 0.5,
+        qasa_rho: float = 0.8,
+        qasa_mu: float = 0.3,
+        qasa_eps: float = 1e-8,
+        qasa_apply_at_eval: bool = True,
     ) -> None:
         super().__init__()
 
+        if not 0.0 < qasa_tau <= 1.0:
+            raise ValueError("qasa_tau must be in (0, 1]")
+        if not 0.0 < qasa_rho <= 1.0:
+            raise ValueError("qasa_rho must be in (0, 1]")
+        if not 0.0 <= qasa_mu <= 1.0:
+            raise ValueError("qasa_mu must be in [0, 1]")
+        if qasa_eps <= 0:
+            raise ValueError("qasa_eps must be > 0")
         if num_slots < 1 or num_primitives < 1:
             raise ValueError("num_slots and num_primitives must be >= 1")
         if min(mask_temperature, router_temperature, retrieval_temperature) <= 0:
             raise ValueError("all temperatures must be > 0")
         if neutral_mode not in {"zero", "mean", "learned"}:
             raise ValueError("neutral_mode must be: zero, mean, or learned")
-        if not 0.0 <= slot_gate_threshold <= 1.0:
-            raise ValueError("slot_gate_threshold must be in [0, 1]")
         if alpha_max <= 0:
             raise ValueError("alpha_max must be > 0")
-        if gate_mode not in {"legacy_soft_train_hard_eval", "straight_through_hard"}:
-            raise ValueError("gate_mode must be 'legacy_soft_train_hard_eval' or " "'straight_through_hard'")
         if counterfactual_chunk_size < 1:
             raise ValueError("counterfactual_chunk_size must be >= 1")
 
@@ -69,10 +74,6 @@ class TAPER(nn.Module):
         self.router_temperature = router_temperature
         self.retrieval_temperature = retrieval_temperature
         self.neutral_mode = neutral_mode
-        self.slot_gate_threshold = slot_gate_threshold
-        self.hard_slot_gating_during_training = hard_slot_gating_during_training
-        self.gate_mode = gate_mode
-        self.st_gate_recovery = bool(st_gate_recovery)
         self.overlap_margin = overlap_margin
         self.effect_diversity_margin = effect_diversity_margin
         self.alpha_max = alpha_max
@@ -94,10 +95,6 @@ class TAPER(nn.Module):
             self.register_buffer("neutral_embedding", torch.zeros(self.teacher_text_dim))
 
         self.slot_mlp = nn.Sequential(nn.Linear(text_dim + teacher_query_dim, slot_dim), nn.GELU(), nn.Linear(slot_dim, slot_dim), nn.LayerNorm(slot_dim))
-
-        self.slot_gate = nn.Sequential(nn.LayerNorm(slot_dim), nn.Linear(slot_dim, slot_dim), nn.GELU(), nn.Linear(slot_dim, 1))
-        nn.init.constant_(self.slot_gate[-1].bias, 1.0)
-
         self.reference_to_state = nn.Sequential(nn.Linear(reference_dim, state_dim), nn.GELU(), nn.Linear(state_dim, state_dim), nn.LayerNorm(state_dim))
 
         self.primitive_bank = nn.Parameter(torch.randn(num_primitives, state_dim) * 0.02)
@@ -113,6 +110,11 @@ class TAPER(nn.Module):
         # self.state_update_norm = nn.LayerNorm(state_dim)
 
         self.query_head = nn.Sequential(nn.Linear(state_dim, query_dim), nn.GELU(), nn.Linear(query_dim, query_dim))
+        self.qasa_tau = qasa_tau
+        self.qasa_rho = qasa_rho
+        self.qasa_mu = qasa_mu
+        self.qasa_eps = qasa_eps
+        self.qasa_apply_at_eval = bool(qasa_apply_at_eval)
 
     def train(self, mode: bool = True) -> "TAPER":
         super().train(mode)
@@ -184,6 +186,102 @@ class TAPER(nn.Module):
         null_probs = ownership[:, 0, :]
         slot_masks = ownership[:, 1:, :]
         return ownership_logits, null_probs, slot_masks
+
+    def _qasa_attention(self, ownership_logits: Tensor, slot_valid: Tensor) -> tuple[Tensor, Tensor]:
+        if ownership_logits.ndim != 3:
+            raise ValueError("ownership_logits must be [B,1+L,N]")
+        if ownership_logits.shape[1] != self.num_slots + 1:
+            raise ValueError("ownership_logits slot axis mismatch")
+
+        if slot_valid.shape != (ownership_logits.shape[0], ownership_logits.shape[2]):
+            raise ValueError("slot_valid shape mismatch")
+
+        edit_logits = ownership_logits[:, 1:, :]
+        qasa_attention = F.softmax(edit_logits, dim=1)
+        ownership_winner = ownership_logits.argmax(dim=1)
+        edit_wins = ownership_winner.ne(0)
+        qasa_valid = slot_valid.to(torch.bool) & edit_wins
+        qasa_attention = (
+            qasa_attention
+            * qasa_valid[:, None, :].to(
+                qasa_attention.dtype
+            )
+        )
+
+        if not torch.isfinite(qasa_attention).all():
+            raise FloatingPointError("non-finite QASA attention")
+
+        return qasa_attention, qasa_valid
+
+    def _qasa_select_slots(self, attention: Tensor, valid: Tensor) -> dict[str, Tensor]:
+        if attention.ndim != 3:
+            raise ValueError("attention must be [B,L,N]")
+
+        b, l, n = attention.shape
+        if l != self.num_slots:
+            raise ValueError("attention slot dimension mismatch")
+        if valid.shape != (b, n):
+            raise ValueError("valid shape mismatch")
+
+        dtype = attention.dtype
+        device = attention.device
+        valid_f = valid.to(dtype)
+        winner = attention.argmax(dim=1)  # [B,N]
+        winner_one_hot = F.one_hot(winner, num_classes=l).permute(0, 2, 1).to(dtype)
+        winner_one_hot = winner_one_hot * valid_f[:, None, :]
+        total_mass = (attention* valid_f[:, None, :]).sum(dim=-1)  # [B,L]
+        winning_mass = (attention* winner_one_hot).sum(dim=-1)
+        quality = winning_mass / total_mass.clamp_min(self.qasa_eps)
+        quality = torch.where(total_mass > self.qasa_eps, quality, torch.zeros_like(quality))
+        quality_for_selection = quality.detach()
+        attention_for_selection = attention.detach()
+        valid_for_selection = valid.detach()
+        selected = torch.zeros(b, l, dtype=torch.bool, device=device)
+        final_coverage = torch.zeros(b, dtype=dtype, device=device)
+        novelty_skip_count = torch.zeros(b, dtype=dtype, device=device)
+        for batch_id in range(b):
+            valid_tokens = valid_for_selection[batch_id]
+            num_valid = int(valid_tokens.sum().item())
+            if num_valid == 0:
+                continue
+
+            order = torch.argsort(quality_for_selection[batch_id], descending=True, stable=True)
+            covered = torch.zeros(n, dtype=torch.bool, device=device)
+            for slot_id_tensor in order:
+                slot_id = int(slot_id_tensor.item())
+                slot_mass = attention_for_selection[batch_id, slot_id, valid_tokens].sum()
+                if slot_mass <= self.qasa_eps:
+                    continue
+
+                if selected[batch_id].any():
+                    already_covered = covered & valid_tokens
+                    mass_on_covered = attention_for_selection[batch_id, slot_id, already_covered].sum()
+                    novelty = 1.0 - mass_on_covered / slot_mass.clamp_min(self.qasa_eps)
+                else:
+                    novelty = torch.ones((), dtype=dtype, device=device)
+                if novelty < self.qasa_mu:
+                    novelty_skip_count[batch_id] += 1.0
+
+                    continue
+
+                selected[batch_id, slot_id] = True
+
+                selected_attention = attention_for_selection[batch_id, selected[batch_id], :].sum(dim=0)
+                covered = (selected_attention >= self.qasa_tau) & valid_tokens
+                coverage = covered.sum().to(dtype) / float(num_valid)
+                final_coverage[batch_id] = coverage
+                if coverage >= self.qasa_rho:
+                    break
+
+        selected_count = selected.sum(dim=1)
+
+        return {
+            "qasa_quality": quality,
+            "qasa_selected_mask": selected,
+            "qasa_selected_count": selected_count,
+            "qasa_final_coverage": final_coverage,
+            "qasa_novelty_skip_count": novelty_skip_count,
+        }
 
     @staticmethod
     def _mass_aware_slot_pool(
@@ -305,9 +403,13 @@ class TAPER(nn.Module):
         raw_edit_slots = self.slot_mlp(torch.cat([slot_semantics, slot_effects], dim=-1))
         edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
 
-        slot_gate_logits = self.slot_gate(edit_slots).squeeze(-1)
-        raw_slot_gates = torch.sigmoid(slot_gate_logits)
-        slot_gates = torch.where(slot_activity > 0, raw_slot_gates, torch.zeros_like(raw_slot_gates))
+        qasa_attention, qasa_valid = self._qasa_attention(ownership_logits, slot_valid)
+        qasa = self._qasa_select_slots(qasa_attention, qasa_valid)
+        if (not self.training and not self.qasa_apply_at_eval):
+            has_edit_evidence = qasa_valid.any(dim=1, keepdim=True)
+            selected_mask = has_edit_evidence.expand(-1, self.num_slots)
+        else:
+            selected_mask = qasa["qasa_selected_mask"]
 
         return {
             "edit_slots": edit_slots,
@@ -318,11 +420,15 @@ class TAPER(nn.Module):
             "slot_semantics": slot_semantics,
             "slot_mass": slot_mass,
             "slot_activity": slot_activity,
-            "slot_peak_ownership": slot_masks.amax(dim=2),
+            "slot_peak_ownership": (slot_masks.amax(dim=2)),
             "slot_effects": slot_effects,
-            "slot_gate_logits": slot_gate_logits,
-            "raw_slot_gates": raw_slot_gates,
-            "slot_gates": slot_gates,
+            "qasa_attention": qasa_attention,
+            "qasa_valid_mask": qasa_valid,
+            "qasa_quality": qasa["qasa_quality"],
+            "qasa_selected_mask": selected_mask,
+            "qasa_selected_count": (selected_mask.sum(dim=1)),
+            "qasa_final_coverage": qasa["qasa_final_coverage"],
+            "qasa_novelty_skip_count": qasa["qasa_novelty_skip_count"],
             "q_teacher_full": q_full,
             "q_teacher_minus": q_minus,
         }
@@ -362,86 +468,33 @@ class TAPER(nn.Module):
         slot: Tensor,
         primitive: Tensor,
         reference_state: Tensor,
-        selected_slot_gate: Tensor,
         valid_step: Tensor,
     ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         state_context = self.state_norm(state)
         x = torch.cat([state_context, slot, primitive, reference_state], dim=-1)
-
         proposed_delta = self.transition_delta(x)
         alpha = self.transition_strength(x).squeeze(-1) * self.alpha_max
-        effective_strength = alpha * selected_slot_gate
-        state_update = effective_strength[:, None] * proposed_delta
-
-        # TAPER V3: valid transitions are normalized after the controlled residual;
-        # invalid steps preserve state exactly and do not reapply LayerNorm.
-        # proposed_next = self.state_update_norm(state + state_update)
-        # next_state = torch.where(valid_step[:, None], proposed_next, state)
+        state_update = alpha[:, None] * proposed_delta
         proposed_next = state + state_update
         next_state = torch.where(valid_step[:, None], proposed_next, state)
         actual_change = next_state - state
-        proposed_delta = torch.where(valid_step[:, None], proposed_delta, torch.zeros_like(proposed_delta))
-        alpha = torch.where(valid_step, alpha, torch.zeros_like(alpha))
-
-        return next_state, proposed_delta, alpha, actual_change
-
-    def _st_gate_recovery_shadow(
-        self,
-        state: Tensor,
-        edit_slots: Tensor,
-        slot_gates: Tensor,
-        reference_state: Tensor,
-        available_slots: Tensor,
-    ) -> Tensor:
-        if available_slots.shape != slot_gates.shape:
-            raise ValueError("available_slots must match slot_gates")
-
-        available_f = available_slots.to(slot_gates.dtype)
-        has_available = available_slots.any(dim=1)
-        if not has_available.any():
-            return state.detach()
-
-        with torch.no_grad():
-            router_scores = self._joint_router_scores(state.detach(), edit_slots.detach(), reference_state.detach())
-
-        gate_eps = 1e-6
-        shadow_logits = router_scores + torch.log(slot_gates.clamp_min(gate_eps))[:, :, None]
-        shadow_logits = shadow_logits.masked_fill(~available_slots[:, :, None], -1e4)
-        conditional_route = F.softmax(shadow_logits.reshape(state.shape[0], -1) / self.router_temperature, dim=-1).reshape(state.shape[0], self.num_slots, self.num_primitives)
-        conditional_route = conditional_route * has_available[:, None, None].to(conditional_route.dtype)
-
-        # Smooth probability that at least one currently available gate participates.
-        soft_any = 1.0 - torch.prod(1.0 - slot_gates.clamp(0.0, 1.0) * available_f, dim=1)
-        shadow_route = conditional_route * soft_any[:, None, None]
-
-        selected_slot = torch.einsum("bl,bld->bd", shadow_route.sum(2), edit_slots.detach())
-        selected_primitive = torch.einsum("bk,kd->bd", shadow_route.sum(1), self.primitive_bank.detach())
-
-        state_context = self.state_norm(state.detach()).detach()
-        x = torch.cat([state_context, selected_slot, selected_primitive, reference_state.detach()], dim=-1)
-
-        def detached_call(module: nn.Module, arg: Tensor) -> Tensor:
-            params_and_buffers = {
-                name: value.detach()
-                for name, value in module.named_parameters()
-            }
-            params_and_buffers.update({name: value.detach() for name, value in module.named_buffers()})
-            return torch.func.functional_call(module, params_and_buffers, (arg,))
-
-        proposed_delta = detached_call(self.transition_delta, x)
-        alpha = (
-            detached_call(self.transition_strength, x).squeeze(-1)
-            * self.alpha_max
+        proposed_delta = torch.where(
+            valid_step[:, None],
+            proposed_delta,
+            torch.zeros_like(proposed_delta),
         )
-        update = alpha[:, None] * proposed_delta
-        # shadow_next = detached_call(self.state_update_norm, state.detach() + update)
-        shadow_next = state.detach() + update
-        return torch.where(has_available[:, None], shadow_next, state.detach())
+        alpha = torch.where(
+            valid_step,
+            alpha,
+            torch.zeros_like(alpha),
+        )
+
+        return (next_state, proposed_delta, alpha, actual_change)
 
     def execute(
         self,
         edit_slots: Tensor,
-        slot_gates: Tensor,
+        selected_slots: Tensor,
         z0: Tensor,
         reference_state: Tensor,
         *,
@@ -449,8 +502,10 @@ class TAPER(nn.Module):
     ) -> dict[str, Tensor]:
         if edit_slots.ndim != 3 or edit_slots.shape[1] != self.num_slots:
             raise ValueError("edit_slots must be [B,num_slots,slot_dim]")
-        if slot_gates.shape != edit_slots.shape[:2]:
-            raise ValueError("slot_gates must be [B,num_slots]")
+        if selected_slots.shape != (edit_slots.shape[0], self.num_slots):
+            raise ValueError("selected_slots must be [B,num_slots]")
+        if selected_slots.dtype != torch.bool:
+            raise TypeError("selected_slots must be bool")
 
         b = edit_slots.shape[0]
         device = edit_slots.device
@@ -460,115 +515,68 @@ class TAPER(nn.Module):
             disabled_slots = torch.zeros(b, self.num_slots, dtype=torch.bool, device=device)
         else:
             if disabled_slots.shape != (b, self.num_slots):
-                raise ValueError("disabled_slots must be [B,num_slots]")
-            disabled_slots = disabled_slots.to(device=device, dtype=torch.bool)
+                raise ValueError("disabled_slots shape mismatch")
 
+            disabled_slots = disabled_slots.to(device=device, dtype=torch.bool)
+        active_slots = (selected_slots & ~disabled_slots)
         state = z0
         completed = torch.zeros(b, self.num_slots, dtype=torch.bool, device=device)
-        hard_active_slots = (
-            slot_gates.detach() >= self.slot_gate_threshold
-        ) & ~disabled_slots
-        if self.gate_mode == "straight_through_hard":
-            hard_gate_values = hard_active_slots.to(dtype)
-            gate_values = (
-                hard_gate_values + slot_gates - slot_gates.detach()
-            )
-        else:
-            gate_values = slot_gates
-        recovery_used = torch.zeros(b, dtype=torch.bool, device=device)
-
         checkpoints = [state]
-        slot_trace: list[Tensor] = []
-        primitive_trace: list[Tensor] = []
-        valid_trace: list[Tensor] = []
-        active_trace: list[Tensor] = []
-        selected_gate_trace: list[Tensor] = []
-        route_confidences: list[Tensor] = []
-        proposed_deltas: list[Tensor] = []
-        actual_state_changes: list[Tensor] = []
-        transition_strengths: list[Tensor] = []
-
+        slot_trace = []
+        primitive_trace = []
+        valid_trace = []
+        active_trace = []
+        route_confidences = []
+        proposed_deltas = []
+        actual_state_changes = []
+        transition_strengths = []
         slot_to_step = torch.full((b, self.num_slots), -1, dtype=torch.long, device=device)
 
         for step in range(self.num_slots):
-            if self.gate_mode == "straight_through_hard":
-                # Forward candidate eligibility is identical in train and eval.
-                candidate_mask = ~completed & hard_active_slots
-            elif self.training and not self.hard_slot_gating_during_training:
-                candidate_mask = (
-                    ~completed
-                    & ~disabled_slots
-                    & (slot_gates.detach() > 0.0)
-                )
-            else:
-                candidate_mask = ~completed & hard_active_slots
-
+            candidate_mask = ~completed & active_slots
             valid_step = candidate_mask.any(dim=1)
             scores = self._joint_router_scores(state, edit_slots, reference_state)
-
-            gate_bias = torch.log(slot_gates.clamp_min(1e-6))[:, :, None]
-            scores = scores + gate_bias
             scores = scores.masked_fill(~candidate_mask[:, :, None], -1e4)
-
             flat_scores = scores.reshape(b, -1)
             soft = F.softmax(flat_scores / self.router_temperature, dim=-1).reshape(b, self.num_slots, self.num_primitives)
-
             hard_index = flat_scores.argmax(dim=-1)
             raw_slot_ids = torch.div(hard_index, self.num_primitives, rounding_mode="floor")
             raw_primitive_ids = hard_index % self.num_primitives
-
-            hard = F.one_hot(hard_index, num_classes=self.num_slots * self.num_primitives).to(dtype).reshape_as(soft)
+            hard = F.one_hot(
+                hard_index,
+                num_classes=self.num_slots * self.num_primitives,
+            ).to(dtype).reshape_as(soft)
             route = hard + soft - soft.detach()
             route = route * valid_step[:, None, None].to(dtype)
-
             selected_slot = torch.einsum("bl,bld->bd", route.sum(2), edit_slots)
             selected_primitive = torch.einsum("bk,kd->bd", route.sum(1), self.primitive_bank)
-            selected_gate = torch.einsum("bl,bl->b", route.sum(2), gate_values)
-            next_state, proposed_delta, alpha, actual_change = self._transition(state, selected_slot, selected_primitive, reference_state, selected_gate, valid_step)
-
-            if (
-                self.training
-                and self.gate_mode == "straight_through_hard"
-                and self.st_gate_recovery
-            ):
-                available_for_recovery = (
-                    ~completed
-                    & ~disabled_slots
-                    & (slot_gates.detach() > 0.0)
-                )
-                recovery_mask = (
-                    ~valid_step
-                    & ~recovery_used
-                    & available_for_recovery.any(dim=1)
-                )
-                if recovery_mask.any():
-                    shadow_next = self._st_gate_recovery_shadow(state, edit_slots, slot_gates, reference_state, available_for_recovery)
-                    # Zero-valued forward, nonzero backward surrogate.
-                    next_state = next_state + recovery_mask[:, None].to(dtype) * (
-                        shadow_next - shadow_next.detach()
-                    )
-                    actual_change = next_state - state
-                    recovery_used = recovery_used | recovery_mask
-
+            (next_state, proposed_delta, alpha, actual_change) = self._transition(state, selected_slot, selected_primitive, reference_state, valid_step)
             confidence = soft.reshape(b, -1).gather(1, hard_index[:, None]).squeeze(1)
-            confidence = torch.where(valid_step, confidence, torch.zeros_like(confidence))
-            slot_ids = torch.where(valid_step, raw_slot_ids, torch.full_like(raw_slot_ids, -1))
-            primitive_ids = torch.where(valid_step, raw_primitive_ids, torch.full_like(raw_primitive_ids, -1))
-            selected_gate = torch.where(valid_step, selected_gate, torch.zeros_like(selected_gate))
-            selected_is_hard_active = valid_step & (
-                selected_gate.detach() >= self.slot_gate_threshold
+            confidence = torch.where(
+                valid_step,
+                confidence,
+                torch.zeros_like(confidence),
+            )
+            slot_ids = torch.where(
+                valid_step,
+                raw_slot_ids,
+                torch.full_like(raw_slot_ids, -1),
+            )
+
+            primitive_ids = torch.where(
+                valid_step,
+                raw_primitive_ids,
+                torch.full_like(raw_primitive_ids, -1),
             )
 
             slot_trace.append(slot_ids)
             primitive_trace.append(primitive_ids)
             valid_trace.append(valid_step)
-            active_trace.append(selected_is_hard_active)
-            selected_gate_trace.append(selected_gate)
+            active_trace.append(valid_step)
             route_confidences.append(confidence)
             proposed_deltas.append(proposed_delta)
             actual_state_changes.append(actual_change)
             transition_strengths.append(alpha)
-
             valid_batches = valid_step.nonzero(as_tuple=False).squeeze(1)
             if valid_batches.numel() > 0:
                 chosen_slots = raw_slot_ids[valid_batches]
@@ -586,13 +594,12 @@ class TAPER(nn.Module):
             "trace_primitive_ids": torch.stack(primitive_trace, dim=1),
             "trace_valid_mask": torch.stack(valid_trace, dim=1),
             "trace_active_mask": torch.stack(active_trace, dim=1),
-            "trace_selected_slot_gates": torch.stack(selected_gate_trace, dim=1),
             "route_confidences": torch.stack(route_confidences, dim=1),
             "proposed_state_deltas": torch.stack(proposed_deltas, dim=1),
             "actual_state_changes": torch.stack(actual_state_changes, dim=1),
             "transition_strengths": torch.stack(transition_strengths, dim=1),
             "slot_to_step": slot_to_step,
-            "hard_active_slot_mask": hard_active_slots,
+            "hard_active_slot_mask": active_slots,
         }
 
     def make_query(self, final_state: Tensor) -> Tensor:
@@ -623,8 +630,7 @@ class TAPER(nn.Module):
         if disable_execution:
             disabled_slots = torch.ones(slot_output["edit_slots"].shape[:2], dtype=torch.bool, device=slot_output["edit_slots"].device)
 
-        execution = self.execute(slot_output["edit_slots"], slot_output["slot_gates"], z0, reference_state, disabled_slots=disabled_slots)
-
+        execution = self.execute(slot_output["edit_slots"], slot_output["qasa_selected_mask"], z0, reference_state, disabled_slots=disabled_slots)
         q0 = self.make_query(execution["final_state"])
         q_reference_only = self.make_query(z0)
 
@@ -696,7 +702,9 @@ class TAPER(nn.Module):
         slot_masks: Tensor,
         slot_mass: Tensor,
         slot_effects: Tensor,
-        slot_gates: Tensor,
+        qasa_selected_mask: Tensor,
+        qasa_quality: Tensor,
+        qasa_final_coverage: Tensor,
         hard_active_slot_mask: Tensor,
         text_attention_mask: Tensor,
         text_content_mask: Tensor | None = None,
@@ -766,7 +774,9 @@ class TAPER(nn.Module):
             "near_monopoly_fraction": near_monopoly_fraction,
             "slot_overlap_mean": overlap,
             "slot_effect_similarity_mean": effect_similarity_mean,
-            "slot_gate_mean": slot_gates.mean(),
+            "qasa_selected_slot_count": qasa_selected_mask.to(slot_masks.dtype).sum(dim=1).mean(),
+            "qasa_quality_mean": qasa_quality.mean(),
+            "qasa_final_coverage_mean": qasa_final_coverage.mean(),
         }
 
         for slot_id in range(self.num_slots):
@@ -844,10 +854,12 @@ class TAPER(nn.Module):
                 slot_masks=output["slot_masks"],
                 slot_mass=output["slot_mass"],
                 slot_effects=output["slot_effects"],
-                slot_gates=output["slot_gates"],
                 hard_active_slot_mask=output["hard_active_slot_mask"],
                 text_attention_mask=mask,
                 text_content_mask=content_mask,
+                qasa_selected_mask=output["qasa_selected_mask"],
+                qasa_quality=output["qasa_quality"],
+                qasa_final_coverage=output["qasa_final_coverage"],
             )
         losses.update({f"diagnostic/{k}": v for k, v in diagnostics.items()})
         return losses
@@ -875,7 +887,7 @@ class TAPER(nn.Module):
                 teacher_text_states=teacher_text_states,
             )
             z0, reference_state = self.initialize_state(reference_features)
-            full_execution = self.execute(slots["edit_slots"], slots["slot_gates"], z0, reference_state)
+            full_execution = self.execute(slots["edit_slots"], slots["qasa_selected_mask"], z0, reference_state)
             full_query = self.make_query(full_execution["final_state"])
 
             dropped_queries = []
@@ -883,19 +895,18 @@ class TAPER(nn.Module):
             for slot_id in range(self.num_slots):
                 disabled = torch.zeros(b, self.num_slots, dtype=torch.bool, device=reference_features.device)
                 disabled[:, slot_id] = True
-                execution = self.execute(slots["edit_slots"], slots["slot_gates"], z0, reference_state, disabled_slots=disabled)
+                execution = self.execute(slots["edit_slots"], slots["qasa_selected_mask"], z0, reference_state, disabled_slots=disabled)
                 dropped_queries.append(self.make_query(execution["final_state"]))
 
             return {
                 "full_query": full_query,
                 "dropped_queries": torch.stack(dropped_queries, dim=1),
-                "slot_gates": slots["slot_gates"],
                 "slot_mass": slots["slot_mass"],
                 "slot_activity": slots["slot_activity"],
                 "null_probs": slots["null_probs"],
-                "hard_active_slot_mask": full_execution[
-                    "hard_active_slot_mask"
-                ],
+                "hard_active_slot_mask": full_execution["hard_active_slot_mask"],
+                "qasa_selected_mask": slots["qasa_selected_mask"],
+                "qasa_quality": slots["qasa_quality"],
             }
         finally:
             self.train(was_training)
