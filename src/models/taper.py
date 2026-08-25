@@ -43,7 +43,7 @@ class TAPER(nn.Module):
         if not 0.0 < qasa_rho <= 1.0:
             raise ValueError("qasa_rho must be in (0, 1]")
         if not 0.0 <= qasa_mu < 1.0:
-            raise ValueError("qasa_mu must be in [0, 1]")
+            raise ValueError("qasa_mu must be in [0, 1)")
         if qasa_eps <= 0:
             raise ValueError("qasa_eps must be > 0")
         if num_slots < 1 or num_primitives < 1:
@@ -176,6 +176,32 @@ class TAPER(nn.Module):
 
         return logits, ownership
 
+    @torch.no_grad()
+    def _qasa_attention_fp32(self, text_states: Tensor, slot_valid: Tensor) -> Tensor:
+        if text_states.ndim != 3:
+            raise ValueError("text_states must be [B,N,D]")
+        if slot_valid.shape != text_states.shape[:2]:
+            raise ValueError("slot_valid must match text_states [B,N]")
+
+        with torch.autocast(device_type=text_states.device.type, enabled=False):
+            text_fp32 = text_states.float()
+            queries = F.linear(self.slot_queries.float(), self.slot_query_projection.weight.float(), bias=None)  # [L, Ds]
+            keys = F.linear(text_fp32, self.text_key_projection.weight.float(), bias=None)  # [B,N,Ds]
+            logits = torch.einsum("ld,bnd->bln", queries, keys)
+            logits = logits / math.sqrt(self.slot_dim) / self.mask_temperature
+            valid = slot_valid[:, None, :]
+            invalid_logit = torch.finfo(torch.float32).min
+            logits = logits.masked_fill(~valid, invalid_logit)
+            attention = F.softmax(logits, dim=1,)
+            attention = attention * valid.to(attention.dtype)
+        if attention.dtype != torch.float32:
+            raise RuntimeError("QASA attention must be FP32")
+
+        if not torch.isfinite(attention).all():
+            raise FloatingPointError("non-finite QASA attention")
+
+        return attention
+
     def _qasa_select_slots(self, attention: Tensor, valid: Tensor) -> dict[str, Tensor]:
         if attention.ndim != 3:
             raise ValueError("attention must be [B,L,N]")
@@ -198,7 +224,7 @@ class TAPER(nn.Module):
         winning_mass = (attention* winner_one_hot).sum(dim=-1)
         # quality = winning_mass / total_mass.clamp_min(self.qasa_eps)
         quality = winning_mass / (total_mass + self.qasa_eps)
-        quality = torch.where(total_mass > self.qasa_eps, quality, torch.zeros_like(quality))
+        # quality = torch.where(total_mass > self.qasa_eps, quality, torch.zeros_like(quality))
         quality_for_selection = quality.detach()
         attention_for_selection = attention.detach()
         valid_for_selection = valid.detach()
@@ -216,8 +242,8 @@ class TAPER(nn.Module):
             for slot_id_tensor in order:
                 slot_id = int(slot_id_tensor.item())
                 slot_mass = attention_for_selection[batch_id, slot_id, valid_tokens].sum()
-                if slot_mass <= self.qasa_eps:
-                    continue
+                # if slot_mass <= self.qasa_eps:
+                #     continue
 
                 if selected[batch_id].any():
                     already_covered = covered & valid_tokens
@@ -370,10 +396,12 @@ class TAPER(nn.Module):
         raw_edit_slots = self.slot_mlp(torch.cat([slot_semantics, slot_effects], dim=-1))
         edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
 
-        qasa_attention = F.softmax(ownership_logits.float(), dim=1)
-        qasa_attention = qasa_attention * slot_valid[:, None, :].to(qasa_attention.dtype)
+        # qasa_attention = F.softmax(ownership_logits.float(), dim=1)
+        # qasa_attention = qasa_attention * slot_valid[:, None, :].to(qasa_attention.dtype)
+        # qasa_valid = slot_valid.to(torch.bool)
+        # qasa = self._qasa_select_slots(qasa_attention, qasa_valid)
+        qasa_attention = self._qasa_attention_fp32(text_states, slot_valid)
         qasa_valid = slot_valid.to(torch.bool)
-        qasa = self._qasa_select_slots(qasa_attention, qasa_valid)
         qasa = self._qasa_select_slots(qasa_attention, qasa_valid)
         if (not self.training and not self.qasa_apply_at_eval):
             selected_mask = torch.ones(
@@ -738,18 +766,16 @@ class TAPER(nn.Module):
         self,
         slot_masks: Tensor,
         slot_effects: Tensor,
-        slot_gates: Tensor,
         text_attention_mask: Tensor,
-        text_content_mask: Tensor | None = None,
         *,
-        null_probs: Tensor | None = None,
+        text_content_mask: Tensor | None = None,
     ) -> dict[str, Tensor]:
 
         del slot_masks, slot_effects, slot_gates, text_attention_mask
         del text_content_mask, null_probs
         raise RuntimeError(
             "Standalone Stage-1 structural losses are incompatible with "
-            "competitive NULL ownership. Train this formulation end-to-end with "
+            "Train this formulation end-to-end with "
             "retrieval supervision; keep assignment statistics as diagnostics."
         )
 
