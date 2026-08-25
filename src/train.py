@@ -1,5 +1,9 @@
 from pathlib import Path
-
+import os
+os.environ.setdefault(
+    "CUBLAS_WORKSPACE_CONFIG",
+    ":4096:8",
+)
 import hydra
 import torch
 from omegaconf import DictConfig
