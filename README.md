@@ -1,1048 +1,1357 @@
-# A3.2 Contextual-Key / Local-Value — Failure Diagnosis README
+# CIR / TAPER A3.3 — VALUE SOURCE × SLOT EFFECT 2×2 ABLATION DIAGNOSTIC CHECKPOINT
 
-**Date:** 2026-08-26  
-**Branch:** `exp/e2e-a3.2-contextual-key-local-value`  
-**Parent reference:** `exp/e2e-a3.1-qasa-slot-filter-eval-winner`
-
----
-
-## 1. Mục đích
-
-Tài liệu này là checkpoint chẩn đoán cho nhánh A3.2 sau khi thử hai chế độ:
-
-- `soft_shared`
-- `hard_st_exclusive`
-
-Hypothesis ban đầu của A3.2:
-
-> Edit Slots collapse vì VALUE mang quá nhiều thông tin global/contextual và vì cùng một token có thể bị copy mềm sang nhiều slots.
-
-A3.2 cô lập information path như sau:
-
-- **KEY / ownership / QASA:** vẫn dùng contextual Q-Former text states.
-- **VALUE:** dùng raw CSMCIR word embeddings `teacher_text_states`.
-- **`slot_effects = q_full - q_minus`:** vẫn được tính cho diagnostic nhưng không còn feed vào Edit Slot latent.
-- Assignment có toggle giữa `soft_shared` và `hard_st_exclusive`.
-
-Mục tiêu của tài liệu này là ghi lại chính xác cái gì đã được chứng minh, cái gì bị falsify, và failure mode còn lại là gì.
+**Date:** 2026-08-27  
+**Repository:** `Le-Minh-Nhut/cir`  
+**Branch:** `exp/e2e-a3.3-value-source-slot-effect-ablation`  
+**Experiment:** clean 2×2 factorial ablation over VALUE source and direct `slot_effects` injection  
+**Assignment mode held fixed:** `soft_shared`  
+**Validation samples:** 6016  
+**P0 audit:** exact `2^K` coalition intervention with 4 Edit Slots
 
 ---
 
-## 2. Kiến trúc đang test
+# 0. PURPOSE
 
-### 2.1 Contextual KEY
+A3.1 → A3.2 changed two major information pathways at the same time:
 
-Ownership vẫn được tính từ contextual text states:
+1. VALUE source changed from contextual/post-Q-Former to raw/pre-Q-Former;
+2. direct teacher counterfactual `slot_effects = q_full - q_minus` was removed from the Edit-Slot latent.
 
-```python
-ownership_logits, soft_slot_masks = self._competitive_ownership(
-    text_states,
-    slot_valid,
-)
-```
+Therefore the previous Recall drop could not be causally attributed.
 
-`text_states` là Q-Former text states đã contextualized và reference-conditioned.
+A3.3 exists to answer one clean question:
 
-Ý nghĩa:
+> **Was A3.2 weak because raw VALUE itself is weak, because removing `slot_effects` removed a powerful information highway, or because both changes interact?**
 
-```text
-whole caption + reference context
-             |
-             v
-       contextual KEY
-             |
-             v
-      token-slot scores
-```
+The experiment deliberately does **not** introduce:
 
-KEY được phép global vì nhiệm vụ của nó là quyết định token nên thuộc slot nào.
+- hard-exclusive VALUE;
+- Entmax / Sinkhorn / OT;
+- balance loss;
+- functional error ownership;
+- residual pursuit;
+- new multi-error loss;
+- local microencoder.
 
-### 2.2 Raw / local VALUE
-
-VALUE không còn lấy từ contextual Q-Former states. Nó lấy từ:
-
-```text
-teacher_text_states
-```
-
-được cache từ raw word embedding lookup trước Q-Former contextualization.
-
-Sau assignment:
-
-```python
-slot_semantics = pool(
-    teacher_text_states,
-    value_slot_masks,
-)
-
-raw_edit_slots = self.slot_mlp(slot_semantics)
-```
-
-Không concatenate `slot_effects`.
-
-### 2.3 `soft_shared`
-
-```text
-contextual KEY
-      |
-      v
-soft ownership
-      |
-      v
-raw token VALUE
-```
-
-Một token có thể contribute vào nhiều slots.
-
-Ví dụ:
-
-```text
-red:
-S0 = 0.60
-S1 = 0.20
-S2 = 0.10
-S3 = 0.10
-```
-
-### 2.4 `hard_st_exclusive`
-
-Forward:
-
-```text
-contextual KEY
-      |
-      v
-soft scores
-      |
-      v
-argmax/token
-      |
-      v
-one hard owner
-      |
-      v
-raw token VALUE
-```
-
-Mỗi valid token chỉ contribute vào đúng một VALUE slot.
-
-Backward dùng Straight-Through:
-
-```python
-value_slot_masks = (
-    hard_slot_masks
-    + soft_slot_masks
-    - soft_slot_masks.detach()
-)
-```
-
-Forward hard, backward vẫn có gradient qua soft ownership.
+Only two factors vary.
 
 ---
 
-## 3. Baseline A3.1 trước A3.2
+# 1. THE 2×2 FACTORIAL DESIGN
 
-P0 audit reference checkpoint A3.1:
+| Run | VALUE source | `slot_effect_in_value` | Interpretation |
+|---|---|---:|---|
+| **A** | contextual/post-Q-Former | ON | A3.1-like information path |
+| **B** | raw/pre-Q-Former | ON | isolate VALUE-source change while preserving teacher effect |
+| **C** | contextual/post-Q-Former | OFF | isolate removal of direct teacher effect |
+| **D** | raw/pre-Q-Former | OFF | A3.2-soft information setting |
 
-| Metric | A3.1 |
+All four runs use:
+
+```yaml
+slot_value_assignment: soft_shared
+num_slots: 4
+seed: 42
+num_epochs: 10
+retrieval objective: unchanged
+QASA: unchanged
+Executor: unchanged
+```
+
+The purpose is causal attribution, not architecture optimization.
+
+---
+
+# 2. CHECKPOINTS
+
+```text
+A contextual + effect ON
+outputs/2026-08-26/23-40-11/best.pt
+
+B raw + effect ON
+outputs/2026-08-27/00-08-41/best.pt
+
+C contextual + effect OFF
+outputs/2026-08-27/00-35-54/best.pt
+
+D raw + effect OFF
+outputs/2026-08-27/00-59-21/best.pt
+```
+
+P0 reports:
+
+```text
+reports/a3_3_2x2/A_contextual_effect_on_p0_full.json
+reports/a3_3_2x2/B_raw_effect_on_p0_full.json
+reports/a3_3_2x2/C_contextual_effect_off_p0_full.json
+reports/a3_3_2x2/D_raw_effect_off_p0_full.json
+```
+
+---
+
+# 3. TRAINING RESULT — FIRST-ORDER PERFORMANCE VIEW
+
+Best training Mean Recall:
+
+| Run | Best Mean Recall |
 |---|---:|
-| Hard partition mean K | 1.175 |
-| Dominant hard token share | 0.976 |
-| Gradient error-mode rank | 2.837 |
-| Functional Phi effective rank | 1.018 |
-| Functionally useful slots | 3.903 |
-| QASA functional precision | 0.974 |
-| QASA functional recall | 0.497 |
-| Median best SINGLE/FULL | 0.790 |
-| Median best REPEAT/FULL | 1.037 |
-| Median MEANxK/FULL | 1.000 |
-| Mean K95 | 2.514 |
-| Mean K99 | 2.959 |
-| qasa_full Mean Recall | 58.58 |
-| all_slots_full Mean Recall | 58.88 |
-| reference_only Mean Recall | 8.10 |
+| **A** contextual + effect ON | **58.5844** |
+| **B** raw + effect ON | **56.7696** |
+| **C** contextual + effect OFF | **58.7502** |
+| **D** raw + effect OFF | **41.4585** |
 
-Interpretation baseline:
+At first glance:
 
 ```text
-gradient error-mode rank ≈ 2.84
+A ≈ C
+B moderately below A
+D catastrophically below all others
 ```
 
-Task có nhiều error directions, nhưng:
+This already falsifies the simple explanations:
 
 ```text
-Phi rank ≈ 1.02
+"slot_effects alone are the main source of A3.1 performance"
 ```
 
-learned slot effects gần như chỉ nằm trên một functional direction.
-
-Ngoài ra:
+and
 
 ```text
-REPEAT/FULL ≈ 1.04
-MEANxK/FULL ≈ 1.00
+"raw VALUE alone necessarily destroys performance"
 ```
 
-cho thấy slot identity/content không thực sự cần thiết; một representation gần-global cộng với nhiều executor tickets có thể tái tạo gần toàn bộ gain.
+The actual story is an interaction.
 
 ---
 
-## 4. Training results A3.2
+# 4. CLEAN CAUSAL CONTRASTS
 
-### 4.1 HARD — `hard_st_exclusive`
+Let endpoint Mean Recall be `R`.
 
-Checkpoint:
-
-```text
-outputs/2026-08-26/20-48-08/best.pt
-```
-
-10-epoch training:
+Observed:
 
 ```text
-best Mean Recall ≈ 43.27
+R_A = 58.5844
+R_B = 56.7696
+R_C = 58.7502
+R_D = 41.4585
 ```
 
-Cuối training:
+## 4.1 Effect of changing VALUE when `slot_effects = ON`
+
+\[
+A - B = 58.5844 - 56.7696 = 1.8148
+\]
+
+So with teacher counterfactual effects available:
 
 ```text
-value_k          ≈ 2.06
-value_dominant   ≈ 0.792
-value_empty      ≈ 0.486
+contextual VALUE -> raw VALUE
+costs only ~1.81 Mean Recall
 ```
 
-Performance giảm mạnh so với A3.1 reference checkpoint.
+This is a surprisingly small drop.
 
-### 4.2 SOFT — `soft_shared`
+Therefore:
 
-Checkpoint:
-
-```text
-outputs/2026-08-26/21-22-35/best.pt
-```
-
-10-epoch training:
-
-```text
-best Mean Recall ≈ 42.68
-```
-
-Cuối training hard-argmax diagnostic:
-
-```text
-value_k          ≈ 1.03
-value_dominant   ≈ 0.994
-value_empty      ≈ 0.743
-```
-
-Soft mode học tới gần monopoly tuyệt đối theo argmax ownership.
+> **Raw VALUE is not intrinsically incapable of supporting strong retrieval when the global teacher-effect pathway remains available.**
 
 ---
 
-## 5. Local-value failure diagnosis — HARD
+## 4.2 Effect of removing `slot_effects` when VALUE is contextual
 
-Checkpoint:
+\[
+C - A = 58.7502 - 58.5844 = +0.1658
+\]
 
-```text
-/home/heheboiz/data/cir/outputs/2026-08-26/20-48-08/best.pt
-```
+Removing `slot_effects` under contextual VALUE causes essentially no loss.
 
-Full validation: 6016 queries.
+In this run it is even slightly better, but the difference is too small to interpret as a true improvement from one seed.
 
-### 5.1 Retrieval interventions
+Therefore:
 
-| Variant | Mean Recall |
-|---|---:|
-| deployed_qasa | **43.25** |
-| raw_hard_qasa | 43.25 |
-| raw_hard_qasa_nonempty | 43.26 |
-| raw_hard_all_nonempty | 43.35 |
-| raw_soft_qasa | 42.76 |
-| raw_soft_all | 36.54 |
-| contextual_hard_qasa_nonempty | 21.88 |
-| contextual_soft_qasa | 23.02 |
-| teacher_full | **64.94** |
-| reference_only | 13.81 |
-| empty_selected_only | 13.78 |
-
-### 5.2 Routing / ownership
-
-```text
-hard_value_effective_k         = 1.9456
-hard_value_dominant_share      = 0.8267
-hard_value_empty_slot_fraction = 0.5136
-```
-
-Hard privacy không còn cho token bị copy sang nhiều VALUE slots, nhưng model thích nghi bằng cách tạo một **giant slot**:
-
-- chỉ khoảng 1.95 / 4 slots có token,
-- slot lớn nhất ăn ~82.7% token,
-- ~51.4% slot positions empty.
-
-### 5.3 QASA mismatch
-
-```text
-qasa_selected_empty_fraction                 = 0.0427
-qasa_selected_nonempty_precision             = 0.9573
-qasa_hard_nonempty_recall                    = 0.9083
-hard_owned_token_fraction_unselected_by_qasa = 0.0214
-```
-
-Mismatch có thật nhưng nhỏ.
-
-```text
-deployed_qasa          = 43.254
-raw_hard_qasa_nonempty = 43.263
-```
-
-Chặn QASA-selected empty slots chỉ tăng khoảng `+0.008 Mean Recall`.
-
-**Kết luận:** QASA/value-support mismatch không phải root cause của performance failure.
-
-### 5.4 Empty-slot executor contract issue
-
-```text
-executor/empty_selected_actual_change_norm_sum = 0.0524
-```
-
-Một slot có hard VALUE = zero nhưng nếu QASA chọn nó, Executor vẫn có thể thay đổi state.
-
-Đây là behavior không sạch về contract:
-
-```text
-empty VALUE
-   nhưng
-selected by QASA
-   ->
-non-zero state transition
-```
-
-Nên sửa về lâu dài thành exact no-op cho empty VALUE slot. Tuy nhiên retrieval intervention cho thấy issue này **không giải thích performance drop**.
-
-### 5.5 Raw vs contextual token geometry
-
-```text
-raw word embedding pairwise cosine   = 0.2374
-contextual embedding pairwise cosine = 0.7247
-```
-
-Đây là evidence mạnh rằng Q-Former contextual tokens đã bị global/contextualized rất nhiều.
-
-Hypothesis:
-
-> final contextual text tokens quá global
-
-được hỗ trợ bởi token geometry.
-
-Nhưng hypothesis:
-
-> chỉ cần bỏ contextual VALUE là slots sẽ tự specialization
-
-bị bác bỏ bởi A3.2.
+> **Contextual/post-Q-Former VALUE already carries almost everything needed for endpoint retrieval; the explicit teacher effect is largely redundant when contextual VALUE exists.**
 
 ---
 
-## 6. Local-value failure diagnosis — SOFT
+## 4.3 Effect of removing `slot_effects` when VALUE is raw
 
-Checkpoint:
+\[
+B - D = 56.7696 - 41.4585 = 15.3111
+\]
 
-```text
-/home/heheboiz/data/cir/outputs/2026-08-26/21-22-35/best.pt
-```
+This is the largest contrast in the entire experiment.
 
-Full validation: 6016 queries.
-
-### 6.1 Retrieval interventions
-
-| Variant | Mean Recall |
-|---|---:|
-| deployed_qasa | **42.67** |
-| raw_hard_qasa | 42.59 |
-| raw_hard_qasa_nonempty | 42.59 |
-| raw_hard_all_nonempty | 42.59 |
-| raw_soft_qasa | **42.67** |
-| raw_soft_all | 37.20 |
-| contextual_hard_qasa_nonempty | 30.37 |
-| contextual_soft_qasa | 30.50 |
-| teacher_full | **64.94** |
-| reference_only | 12.86 |
-| empty_selected_only | 12.86 |
-
-### 6.2 Ownership collapse
-
-Hard-argmax diagnostic của soft ownership:
+When raw VALUE is used:
 
 ```text
-hard_value_effective_k         = 1.000
-hard_value_dominant_share      = 1.000
-hard_value_empty_slot_fraction = 0.750
+slot_effects ON  -> 56.77
+slot_effects OFF -> 41.46
 ```
 
-Đây là absolute winner monopoly:
+Therefore:
 
-```text
-mọi valid token
-    ->
-cùng một winning slot
-```
+> **Raw VALUE loses a major semantic/global information source, and `slot_effects` almost completely compensates for that loss.**
 
-Soft VALUE vẫn cho các slot khác fractional mass, nhưng ownership ranking đã collapse hoàn toàn.
-
-### 6.3 Hard-vs-soft frozen intervention
-
-```text
-raw_soft_qasa = 42.67
-raw_hard_qasa = 42.59
-```
-
-Difference chỉ ~`0.08 Mean Recall`.
-
-Không có evidence rằng chỉ riêng hard assignment là nguyên nhân gây tụt performance.
-
-Quan trọng hơn, hai model đã được train from scratch riêng:
-
-```text
-HARD best ≈ 43.27
-SOFT best ≈ 42.68
-```
-
-=> `soft_shared` không cứu được performance hoặc collapse.
+This is the strongest causal result of A3.3.
 
 ---
 
-## 7. P0 Functional Audit — HARD
+# 5. FACTOR INTERACTION
 
-Checkpoint:
-
-```text
-outputs/2026-08-26/20-48-08/best.pt
-```
-
-### 7.1 Results
-
-| Metric | HARD A3.2 |
-|---|---:|
-| Hard partition mean K | 1.946 |
-| Dominant hard token share | 0.827 |
-| Gradient error-mode rank | **2.672** |
-| Functional Phi effective rank | **1.059** |
-| Functionally useful slots | 3.673 |
-| QASA functional precision | 0.911 |
-| QASA functional recall | 0.471 |
-| Median best SINGLE/FULL | **1.010** |
-| Median best REPEAT/FULL | **1.668** |
-| Median MEANxK/FULL | **0.276** |
-| Mean K95 | **1.286** |
-| Mean K99 | **1.611** |
-| qasa_full Mean Recall | 43.25 |
-| all_slots_full Mean Recall | 43.18 |
-| reference_only Mean Recall | 13.81 |
-
-### 7.2 Functional interpretation
-
-Task vẫn có nhiều error modes:
+If the two factors were independent, we would expect approximately:
 
 ```text
-gradient rank = 2.672
+effect(VALUE source) + effect(slot_effect removal)
 ```
 
-nhưng learned functional effects vẫn gần rank-1:
+But observed behavior is strongly non-additive.
+
+Difference-in-differences:
+
+\[
+(A-B) - (C-D)
+\]
+
+with:
+
+\[
+A-B = 1.8148
+\]
+
+and:
+
+\[
+C-D = 17.2917
+\]
+
+so:
+
+\[
+\Delta_{\text{interaction}} \approx -15.4769
+\]
+
+Equivalent interpretation:
+
+> `slot_effects` matter very little with contextual VALUE but matter enormously with raw VALUE.
+
+Thus the two information highways are highly substitutable:
 
 ```text
-Phi rank = 1.059
+contextual VALUE
+        OR
+teacher counterfactual slot_effects
 ```
 
-Hard privacy **không tạo functional decomposition**.
+Either one can largely support strong retrieval.
 
-#### SINGLE/FULL
+Removing both at once exposes the weak D regime.
+
+---
+
+# 6. P0 MASTER TABLE
+
+| Metric | A contextual + effect ON | B raw + effect ON | C contextual + effect OFF | D raw + effect OFF |
+|---|---:|---:|---:|---:|
+| Mean Recall, QASA | **58.58** | 56.78 | **58.75** | 41.47 |
+| all-slots Mean Recall | 58.88 | 43.43 | 58.81 | 34.99 |
+| Hard partition mean K | 1.175 | **1.000** | 2.079 | **1.000** |
+| Dominant hard token share | 0.976 | **1.000** | 0.714 | **1.000** |
+| Gradient error-mode rank | 2.837 | 2.826 | 2.839 | 2.637 |
+| Functional Phi effective rank | 1.018 | 1.160 | **0.996** | 1.168 |
+| Functionally useful slots | 3.903 | 3.905 | 3.908 | 3.898 |
+| QASA functional precision | 0.974 | 0.916 | **0.977** | 0.930 |
+| QASA functional recall | 0.497 | 0.232 | **0.521** | 0.238 |
+| best SINGLE/FULL | 0.790 | **1.042** | 0.777 | **1.034** |
+| best REPEAT/FULL | 1.037 | **1.448** | 1.020 | **1.754** |
+| MEANxK/FULL | 1.000 | 1.038 | 1.000 | 0.972 |
+| K95 | 2.514 | 1.891 | 2.559 | 1.837 |
+| K99 | 2.959 | 2.069 | 3.011 | 2.038 |
+
+---
+
+# 7. TASK GEOMETRY IS CONSISTENTLY MULTI-MODE
+
+Across all four runs:
 
 ```text
-median best SINGLE/FULL = 1.010
+A gradient rank = 2.837
+B gradient rank = 2.826
+C gradient rank = 2.839
+D gradient rank = 2.637
 ```
 
-Một slot đơn lẻ trung vị đã đạt hoặc vượt forced-all FULL gain.
+This is important because the retrieval problem presents roughly `2.6–2.8` effective error directions regardless of which architecture cell is used.
 
-#### REPEAT/FULL
+Therefore the collapse cannot be dismissed as:
 
 ```text
-median best REPEAT/FULL = 1.668
+"the benchmark naturally only needs one edit direction"
 ```
 
-Copy một slot vào tất cả executor tickets có thể tạo gain ~1.67× forced-all FULL.
+The external task geometry stays multi-mode.
+
+---
+
+# 8. FUNCTIONAL SLOT GEOMETRY REMAINS APPROXIMATELY RANK-1 IN ALL FOUR RUNS
+
+Functional Phi effective rank:
+
+```text
+A = 1.018
+B = 1.160
+C = 0.996
+D = 1.168
+```
+
+Despite very different:
+
+- VALUE information;
+- ownership geometry;
+- endpoint Recall;
+- presence/absence of teacher effects;
+
+all four models converge to nearly rank-1 functional behavior.
+
+This is one of the strongest results of the experiment.
+
+\[
+\text{task rank} \approx 2.6-2.8
+\]
+
+while
+
+\[
+\text{slot functional rank} \approx 1.0-1.17.
+\]
+
+Therefore:
+
+> **Neither contextual VALUE nor raw VALUE nor `slot_effects` creates true functional slot decomposition.**
+
+They mostly change how much information the collapsed solution can carry.
+
+---
+
+# 9. RUN A — CONTEXTUAL VALUE + SLOT EFFECT ON
+
+A is effectively the A3.1-like information-rich setting.
+
+Results:
+
+```text
+Mean Recall                    = 58.58
+hard K                         = 1.175
+dominant share                 = 0.976
+gradient rank                  = 2.837
+Phi rank                       = 1.018
+SINGLE/FULL                    = 0.790
+REPEAT/FULL                    = 1.037
+MEANxK/FULL                    = 1.000
+K95/K99                        = 2.514 / 2.959
+```
+
+## Diagnosis
+
+A has excellent endpoint retrieval but almost complete functional degeneracy.
+
+The representation gives each slot access to highly contextual/global information and also provides direct teacher counterfactual effects.
+
+The model therefore solves the task strongly without learning distinct functional edit factors.
+
+`MEANxK/FULL = 1.000` is especially revealing:
+
+```text
+destroy slot identity
+average their content
+repeat the mean
+```
+
+and the system still recovers effectively all forced-full gain.
+
+A is thus:
+
+> **high performance, low identifiability, low functional specialization.**
+
+---
+
+# 10. RUN C — CONTEXTUAL VALUE + SLOT EFFECT OFF
+
+C is the cleanest test of whether `slot_effects` caused A3.1's strong performance.
+
+Results:
+
+```text
+Mean Recall                    = 58.75
+hard K                         = 2.079
+dominant share                 = 0.714
+gradient rank                  = 2.839
+Phi rank                       = 0.996
+SINGLE/FULL                    = 0.777
+REPEAT/FULL                    = 1.020
+MEANxK/FULL                    = 1.000
+K95/K99                        = 2.559 / 3.011
+```
+
+## Main conclusion
+
+Removing the explicit teacher effect:
+
+```text
+A -> C
+```
+
+does **not** hurt endpoint Recall.
+
+Therefore the prior belief:
+
+```text
+A3.1 may be strong mainly because q_full - q_minus is injected directly
+```
+
+is falsified as a primary explanation.
+
+More importantly, C has a much healthier hard ownership diagnostic:
+
+```text
+K:        1.175 -> 2.079
+dominant: 0.976 -> 0.714
+```
+
+but functional Phi rank gets no better:
+
+```text
+1.018 -> 0.996
+```
+
+This is an especially clean demonstration that:
+
+\[
+\boxed{\text{token ownership diversity} \neq \text{functional specialization}}
+\]
+
+C can distribute token winners across ~2 slots while all slots still act in nearly one functional direction.
+
+---
+
+# 11. RUN B — RAW VALUE + SLOT EFFECT ON
+
+B is the most informative shortcut cell.
+
+Results:
+
+```text
+Mean Recall                    = 56.78
+all-slots Mean Recall          = 43.43
+hard K                         = 1.000
+dominant share                 = 1.000
+gradient rank                  = 2.826
+Phi rank                       = 1.160
+SINGLE/FULL                    = 1.042
+REPEAT/FULL                    = 1.448
+MEANxK/FULL                    = 1.038
+K95/K99                        = 1.891 / 2.069
+QASA functional recall         = 0.232
+```
+
+## 11.1 Absolute routing monopoly
+
+Every valid token has the same argmax winner:
+
+```text
+hard K = 1.000
+dominant = 1.000
+```
+
+So raw VALUE + teacher effect does not encourage decomposition.
+
+The routing has fully collapsed.
+
+---
+
+## 11.2 Strong retrieval survives anyway
+
+Despite absolute token monopoly:
+
+```text
+Mean Recall = 56.78
+```
+
+which is only ~1.8 below A.
+
+Therefore high retrieval performance clearly does **not** require healthy token specialization.
+
+---
+
+## 11.3 Teacher effect acts as a bypass/rescue pathway
+
+The clean comparison:
+
+```text
+B = raw + effect ON  = 56.78
+D = raw + effect OFF = 41.47
+```
+
+shows that when raw VALUE loses contextual/global semantics, `slot_effects` supplies enough information to restore most endpoint quality.
+
+Thus `slot_effects` behaves as a powerful compensating information channel.
+
+This is not automatically a bug: the effect vector contains legitimate teacher counterfactual information.
+
+But for the research goal of latent edit-factor decomposition, it is a shortcut because it allows strong retrieval without forcing Edit Slots to extract and specialize their own information.
+
+---
+
+## 11.4 QASA versus all-slots gap is huge
+
+B:
+
+```text
+qasa_full Mean      = 56.78
+all_slots_full Mean = 43.43
+```
+
+Difference:
+
+\[
++13.35
+\]
+
+This means blindly forcing all slots is much worse than QASA selecting a subset.
+
+Combined with:
+
+```text
+SINGLE/FULL = 1.042
+```
+
+the model is behaving like:
+
+```text
+one useful/global slot
++
+harmful or redundant additional slots
+```
+
+rather than a complementary coalition.
+
+---
+
+# 12. RUN D — RAW VALUE + SLOT EFFECT OFF
+
+D is the information-restricted cell.
+
+Results:
+
+```text
+Mean Recall                    = 41.47
+all-slots Mean Recall          = 34.99
+hard K                         = 1.000
+dominant share                 = 1.000
+gradient rank                  = 2.637
+Phi rank                       = 1.168
+SINGLE/FULL                    = 1.034
+REPEAT/FULL                    = 1.754
+MEANxK/FULL                    = 0.972
+K95/K99                        = 1.837 / 2.038
+```
+
+## Diagnosis
+
+D removes both powerful global information highways:
+
+```text
+contextual post-Q-Former VALUE
+AND
+teacher counterfactual slot_effects
+```
+
+The resulting raw weighted word-embedding representation is much weaker.
+
+But importantly, it **still does not specialize**.
+
+Instead the model collapses even harder:
+
+```text
+hard K = 1
+dominant = 1
+SINGLE/FULL > 1
+REPEAT/FULL = 1.754
+Phi rank ≈ 1.17
+```
+
+Therefore A3.2's failure was not:
+
+```text
+"the model almost specialized but representation was simply too weak"
+```
+
+It is:
+
+```text
+representation became weak
+AND
+functional decomposition still never emerged
+```
+
+This distinguishes two separate problems:
+
+1. **representation sufficiency**
+2. **functional credit specialization**
+
+Both must be solved.
+
+---
+
+# 13. THE MOST IMPORTANT RESULT: TWO SUBSTITUTE GLOBAL INFORMATION HIGHWAYS
+
+A3.3 reveals a previously hidden structure.
+
+## Highway 1 — contextual VALUE
+
+```text
+post-Q-Former text tokens
+```
+
+These vectors are already globally/contextually enriched.
+
+C proves this highway alone is sufficient:
+
+```text
+contextual + effect OFF -> 58.75
+```
+
+---
+
+## Highway 2 — teacher counterfactual effect
+
+```text
+slot_effects = q_full - q_minus
+```
+
+B proves this highway can compensate when VALUE becomes raw:
+
+```text
+raw + effect ON -> 56.78
+```
+
+---
+
+## Remove both
+
+D:
+
+```text
+raw + effect OFF -> 41.47
+```
+
+Therefore the old A3.1 representation was overdetermined:
+
+```text
+contextual information path
++
+teacher counterfactual information path
+```
+
+Either can support a strong collapsed solution.
+
+This explains why removing only one does not force specialization.
+
+---
+
+# 14. A3.2 REINTERPRETED
+
+Previous A3.2 changed:
+
+```text
+contextual -> raw VALUE
+slot_effect ON -> OFF
+```
+
+simultaneously.
+
+The 2×2 now proves that most of its Recall collapse was caused by the **combination**, not by either isolated change.
+
+Quantitatively:
+
+```text
+A -> B : -1.81
+A -> C : +0.17
+A -> D : -17.13
+```
+
+So the A3.2 degradation should no longer be described as:
+
+> "raw VALUE destroyed performance."
+
+The correct statement is:
+
+> **Raw VALUE becomes too weak when the teacher counterfactual information highway is also removed.**
+
+---
+
+# 15. REPRESENTATION POWER AND SPECIALIZATION ARE ORTHOGONAL
+
+The four runs occupy different points in two dimensions.
+
+| Run | Representation / information power | Functional specialization |
+|---|---|---|
+| A | high | poor |
+| B | high due to effect bypass | poor |
+| C | high due to contextual VALUE | poor |
+| D | low | poor |
+
+This is the central scientific lesson.
+
+Improving representation power can restore Recall:
+
+```text
+D -> B
+D -> C
+```
+
+but does not make Phi rank approach task rank.
+
+Restricting representation power can remove shortcuts:
+
+```text
+A -> D
+```
+
+but does not automatically create specialization either.
+
+Thus:
+
+\[
+\boxed{\text{good information} \neq \text{specialization pressure}}
+\]
+
+and
+
+\[
+\boxed{\text{removing information shortcuts} \neq \text{creating specialization}}
+\]
+
+---
+
+# 16. WHY C IS ESPECIALLY IMPORTANT
+
+C has:
+
+```text
+hard K = 2.079
+dominant = 0.714
+```
+
+which superficially looks much healthier than A/B/D.
+
+Yet:
+
+```text
+Phi rank = 0.996
+MEANxK/FULL = 1.000
+REPEAT/FULL = 1.020
+```
+
+This is almost a controlled counterexample to any claim that better ownership metrics prove specialization.
+
+The tokens are split more broadly.
+
+The function is not.
+
+Therefore future experiments must never use only:
+
+- slot mass;
+- active slot count;
+- winner entropy;
+- mask overlap;
+- QASA K;
+
+as evidence for successful decomposition.
+
+They are routing-health metrics only.
+
+---
+
+# 17. WHY "FUNCTIONALLY USEFUL SLOTS ≈ 4" IS MISLEADING
+
+All four runs report:
+
+```text
+~3.9 functionally useful slots
+```
+
+while Phi rank remains ~1.
+
+This means each slot can have some positive marginal effect while those effects are highly redundant/collinear.
+
+Therefore:
+
+```text
+positive usefulness != unique responsibility
+```
+
+A correct specialization claim requires:
+
+- multiple independent functional directions;
+- low clone recovery;
+- coalition complementarity;
+- distinct error-mode ownership.
+
+---
+
+# 18. REPEAT ADVERSARY RESULTS
+
+```text
+A REPEAT/FULL = 1.037
+B REPEAT/FULL = 1.448
+C REPEAT/FULL = 1.020
+D REPEAT/FULL = 1.754
+```
 
 Interpretation:
 
-> Executor/recurrent compute vẫn có thể amplify một single functional direction qua nhiều execution tickets.
+- A/C: a repeated single slot can approximately match full coalition;
+- B/D: a repeated single slot massively outperforms the intended coalition.
 
-Hard information isolation không giải quyết compute-ticket degeneracy.
+This remains strong evidence for an executor-ticket / repeated-compute shortcut.
 
-#### MEANxK/FULL
-
-```text
-baseline A3.1 = 1.000
-A3.2 HARD     = 0.276
-```
-
-Đây là thay đổi quan trọng.
-
-Hard private VALUE đã phá được **mean-slot clone symmetry** ở representation level.
-
-Nhưng vì:
+Especially in D:
 
 ```text
-Phi rank       ≈ 1.06
-SINGLE/FULL    ≈ 1.01
-REPEAT/FULL    ≈ 1.67
+REPEAT/FULL = 1.754
 ```
 
-nên representation khác nhau **không đồng nghĩa** với function khác nhau.
+one slot repeated through all executor opportunities recovers ~175% of full coalition gain.
 
-Failure mode chuyển từ:
+Therefore functional collapse is not only an information problem.
 
-```text
-global/mean clone collapse
-```
-
-sang:
-
-```text
-giant functional slot + weak/empty auxiliary slots
-```
-
-#### K95 / K99
-
-```text
-K95 = 1.286
-K99 = 1.611
-```
-
-Phần lớn full functional gain chỉ cần rất ít slots.
+The recurrent execution structure still allows one useful direction to be amplified repeatedly.
 
 ---
 
-## 8. P0 Functional Audit — SOFT
-
-Checkpoint:
+# 19. SINGLE-SLOT RESULTS
 
 ```text
-outputs/2026-08-26/21-22-35/best.pt
+A SINGLE/FULL = 0.790
+B SINGLE/FULL = 1.042
+C SINGLE/FULL = 0.777
+D SINGLE/FULL = 1.034
 ```
 
-### 8.1 Results
+A/C information-rich contextual runs still benefit somewhat from coalition participation.
 
-| Metric | SOFT A3.2 |
-|---|---:|
-| Hard partition mean K | **1.000** |
-| Dominant hard token share | **1.000** |
-| Gradient error-mode rank | **2.654** |
-| Functional Phi effective rank | **1.166** |
-| Functionally useful slots | 3.888 |
-| QASA functional precision | 0.921 |
-| QASA functional recall | 0.236 |
-| Median best SINGLE/FULL | **1.041** |
-| Median best REPEAT/FULL | **1.659** |
-| Median MEANxK/FULL | **0.910** |
-| Mean K95 | 1.761 |
-| Mean K99 | 1.982 |
-| qasa_full Mean Recall | 42.67 |
-| all_slots_full Mean Recall | 37.20 |
-| reference_only Mean Recall | 12.86 |
-
-### 8.2 Interpretation
-
-Ownership collapse hoàn toàn:
+But B/D raw runs have:
 
 ```text
-K = 1
-dominant share = 1
+best one slot >= full coalition
 ```
 
-Task error structure vẫn:
+This is direct evidence of a giant functional owner.
 
-```text
-gradient rank = 2.654
-```
-
-nhưng functional Phi:
-
-```text
-Phi rank = 1.166
-```
-
-vẫn thấp.
-
-```text
-SINGLE/FULL = 1.041
-REPEAT/FULL = 1.659
-MEANxK/FULL = 0.910
-```
-
-Một single slot vẫn đủ hoặc tốt hơn full coalition, và repeating một slot qua các execution tickets vẫn cực mạnh.
+For B/D, extra slots are not complementary; they can be neutral or harmful.
 
 ---
 
-## 9. So sánh A3.1 vs A3.2 HARD vs A3.2 SOFT
+# 20. MEAN-SLOT ADVERSARY
 
-| Metric | A3.1 | A3.2 HARD | A3.2 SOFT |
-|---|---:|---:|---:|
-| Mean Recall qasa | **58.58** | 43.25 | 42.67 |
-| Hard K | 1.175 | 1.946 | **1.000** |
-| Dominant token share | 0.976 | 0.827 | **1.000** |
-| Gradient rank | 2.837 | 2.672 | 2.654 |
-| Phi rank | 1.018 | 1.059 | 1.166 |
-| SINGLE/FULL | 0.790 | **1.010** | **1.041** |
-| REPEAT/FULL | 1.037 | **1.668** | **1.659** |
-| MEANxK/FULL | 1.000 | **0.276** | 0.910 |
-| K95 | 2.514 | **1.286** | 1.761 |
-| K99 | 2.959 | **1.611** | 1.982 |
+```text
+A = 1.000
+B = 1.038
+C = 1.000
+D = 0.972
+```
+
+All four are close to 1.
+
+Therefore even when ownership geometry changes, replacing slot identity with the mean remains almost sufficient.
+
+This is extremely strong evidence that learned slot identities are not functionally essential.
+
+The representation may contain different token mixtures, but the downstream system is insensitive to which slot means what.
 
 ---
 
-## 10. Hypothesis audit
+# 21. QASA IS NOT CREATING DECOMPOSITION
 
-### H1 — Contextual Q-Former tokens quá global
+QASA functional recall:
 
-**Status: SUPPORTED**
+```text
+A = 0.497
+B = 0.232
+C = 0.521
+D = 0.238
+```
+
+Precision remains high:
+
+```text
+~0.92-0.98
+```
+
+Interpretation:
+
+- when QASA selects a slot, it often selects a useful one;
+- but many useful/redundant slots are not required;
+- especially in raw regimes B/D, the deployed system behaves strongly around a very small selected functional core.
+
+This is consistent with QASA acting as a useful selector, not as a force that creates distinct functional factors.
+
+---
+
+# 22. HYPOTHESIS STATUS AFTER A3.3
+
+## H1 — `slot_effects` are the main source of A3.1 performance
+
+**Status: REJECTED AS A GENERAL CLAIM**
 
 Evidence:
 
 ```text
-raw token pairwise cosine        = 0.237
-contextual token pairwise cosine = 0.725
+A = 58.58
+C = 58.75
 ```
 
-Contextual representations đồng dạng hóa token rất mạnh.
+Contextual VALUE without `slot_effects` preserves performance.
 
-### H2 — Soft token sharing là nguyên nhân chính của collapse
+---
 
-**Status: REJECTED AS PRIMARY CAUSE**
+## H2 — contextual VALUE is the main source of performance
 
-Soft A3.2 collapse:
+**Status: PARTIALLY REJECTED**
+
+Evidence:
 
 ```text
-K = 1.0
-dominant = 1.0
+B = 56.78
 ```
 
-Hard A3.2:
+Raw VALUE can still achieve strong performance if teacher effects are present.
+
+Contextual VALUE is one strong information highway, not the only one.
+
+---
+
+## H3 — raw VALUE is intrinsically too weak
+
+**Status: CONTEXT-DEPENDENT**
+
+Raw alone:
 
 ```text
-K ≈ 1.95
-dominant ≈ 0.83
+D = 41.47
 ```
 
-Hard làm token partition bớt monopoly hơn nhưng functional decomposition vẫn gần rank-1 và performance không hồi phục.
+Raw plus teacher effect:
 
-### H3 — Hard exclusivity tự nó đủ để tạo specialization
+```text
+B = 56.78
+```
+
+Therefore raw VALUE lacks sufficient information on its own in this architecture, but the failure is not intrinsic to routing or optimization alone.
+
+---
+
+## H4 — removing the teacher effect should force slots to specialize
 
 **Status: REJECTED**
 
-Evidence HARD:
+C:
 
 ```text
-Phi rank    = 1.059
-SINGLE/FULL = 1.010
-REPEAT/FULL = 1.668
-K95         = 1.286
+Phi rank = 0.996
+MEANxK/FULL = 1.000
 ```
 
-Slots có thể khác raw content nhưng vẫn không phân chia functional responsibility.
+No functional specialization emerges.
 
-### H4 — Raw/local VALUE tự nó đủ để giải quyết collapse
+---
+
+## H5 — removing contextual VALUE should force slots to specialize
 
 **Status: REJECTED**
 
-Cả soft và hard raw VALUE đều:
-
-- Recall thấp ~42–43.
-- Functional Phi gần rank-1.
-- Một slot đơn đủ hoặc tốt hơn full.
-- Repeat một slot qua nhiều executor steps cực mạnh.
-
-### H5 — Retrieval task thực sự chỉ cần một edit direction
-
-**Status: NOT SUPPORTED**
-
-Gradient error-mode rank vẫn khoảng:
+B/D:
 
 ```text
-2.65 – 2.67
+hard K = 1
+Phi ~1.16
+SINGLE >=1
 ```
 
-Task local retrieval error geometry có nhiều independent directions.
+It instead causes giant-slot monopoly.
 
-Vấn đề là learned slots không ownership các directions đó.
+---
 
-### H6 — Retrieval-only objective không tạo đủ pressure functional specialization
+## H6 — better token partitioning implies better functional specialization
 
-**Status: STRONGLY SUPPORTED BY CURRENT EVIDENCE**
+**Status: STRONGLY REJECTED**
 
-Current objective chỉ yêu cầu:
-
-```text
-final query -> target
-```
-
-Nó không yêu cầu:
+C is the clean counterexample:
 
 ```text
-slot 0 owns error mode A
-slot 1 owns error mode B
-slot 2 owns residual C
-...
-```
-
-Vì vậy model có nghiệm rẻ hơn:
-
-```text
-one giant useful slot
-+
-unused / weak / redundant slots
-+
-repeated executor compute
+hard K = 2.079
+dominant = 0.714
+Phi rank = 0.996
 ```
 
 ---
 
-## 11. Kết luận khoa học chính
+## H7 — task itself is essentially one-dimensional
 
-### 11.1 Information isolation có tác dụng nhưng không đủ
+**Status: REJECTED BY CURRENT P0**
 
-A3.2 HARD đã phá được một phần clone symmetry:
-
-```text
-MEANxK/FULL
-1.000 -> 0.276
-```
-
-và hard token K tăng:
+Gradient rank remains:
 
 ```text
-1.175 -> 1.946
+2.637–2.839
 ```
 
-Do đó hard/private VALUE **có thay đổi representation structure thật**.
-
-Nhưng functional Phi:
-
-```text
-1.018 -> 1.059
-```
-
-gần như không cải thiện.
-
-Kết luận:
-
-> **Representation diversity != functional specialization.**
-
-### 11.2 Collapse đã đổi hình thức
-
-A3.1:
-
-```text
-near-global slot representations
-+
-mean/repeat clone behavior
-```
-
-A3.2 HARD:
-
-```text
-private token supports
-+
-giant functional slot
-+
-many empty/weak slots
-+
-single slot amplified by executor tickets
-```
-
-A3.2 SOFT:
-
-```text
-absolute winner monopoly
-+
-soft leakage to other slots
-+
-global/mean-like functional behavior
-```
-
-### 11.3 Core failure hiện tại
-
-```text
-TOKEN OWNERSHIP
-    !=
-FUNCTIONAL ERROR OWNERSHIP
-```
-
-A3.2 chỉ cưỡng chế hoặc thay đổi token-information ownership.
-
-Nó chưa cưỡng chế mỗi slot phải giải quyết một residual/error direction khác mà slot trước chưa giải quyết.
+in every cell.
 
 ---
 
-## 12. Warning về contextual-V intervention
+## H8 — endpoint retrieval objective lacks direct specialization pressure
 
-Các frozen probes:
+**Status: STRONGLY SUPPORTED**
 
-```text
-contextual_hard_qasa_nonempty
-contextual_soft_qasa
-```
-
-rất thấp.
-
-Không được kết luận đơn giản rằng contextual VALUE intrinsically tệ hơn raw VALUE.
-
-`slot_mlp` của checkpoint A3.2 được train trên distribution của raw word embeddings. Thay trực tiếp contextual Q-Former states vào frozen `slot_mlp` tạo distribution shift lớn.
-
-Probe này chỉ nói:
-
-> frozen raw-trained slot pipeline không chịu được representation swap.
-
-Muốn so raw-vs-contextual VALUE công bằng phải train riêng từ scratch.
+Every representational regime converges to functional rank ~1 despite task rank ~2.7.
 
 ---
 
-## 13. Những kết luận KHÔNG được phép rút ra
+# 23. WHAT THIS EXPERIMENT FALSIFIES
 
-Không được kết luận:
+A3.3 falsifies the following broad strategy:
 
-1. `hard assignment` là nguyên nhân duy nhất làm Recall giảm.
-2. `raw embedding` intrinsically tốt hơn contextual embedding.
-3. `QASA` là nguyên nhân chính của collapse.
-4. `K=1` nghĩa task chỉ có một edit factor.
-5. `functionally useful slots ≈ 4` nghĩa bốn slots đã specialization.
-6. representation cosine thấp nghĩa functional decomposition đã thành công.
+> Keep removing global information paths until specialization automatically appears.
 
----
+Why?
 
-## 14. Contract issue cần ghi nhớ
+Because:
 
-Trong HARD run, empty VALUE slot có thể execute:
+- A has many shortcuts and collapses;
+- C removes one shortcut and collapses;
+- B removes the other shortcut but retains teacher effects and collapses;
+- D removes both and still collapses.
 
-```text
-empty selected state-change norm ≈ 0.0524
-```
+The only thing that changes reliably is endpoint power, not functional factorization.
 
-Nên sửa contract sau:
-
-```text
-effective_selected
-=
-qasa_selected
-&
-value_nonempty
-```
-
-ít nhất cho hard-exclusive mode.
-
-Tuy nhiên đây là cleanup/correctness issue, **không phải root cause** theo retrieval intervention.
+Therefore information isolation is necessary for some scientific claims, but it is not a sufficient learning mechanism.
 
 ---
 
-## 15. Decision after A3.2
+# 24. WHAT THE NEXT ARCHITECTURE MUST SOLVE
 
-Điều đã học được:
+Two problems are now cleanly separated.
+
+## Problem A — representation sufficiency
+
+D shows raw pre-Q-Former weighted embeddings are too weak on their own.
+
+Possible later fix:
 
 ```text
-Global contextual VALUE leakage
-    -> có thật
-
-Soft sharing leakage
-    -> có thật
-
-Nhưng cắt cả hai
-    -> vẫn không tạo functional specialization
+restricted local microencoder
 ```
 
-Do đó không nên tiếp tục chỉ chỉnh:
+that preserves:
 
-- temperature,
-- hard/soft,
-- QASA threshold,
-- token balance,
-- slot count,
-- Entmax/Sinkhorn/OT,
+- local phrase composition;
+- order;
+- negation;
+- binding;
 
-với kỳ vọng chúng tự sinh functional decomposition.
+without reopening whole-caption/global leakage.
 
-Các cơ chế này chủ yếu thay assignment geometry, trong khi failure còn lại là functional ownership.
+But this is only a representation repair.
 
 ---
 
-## 16. Hướng experiment tiếp theo
+## Problem B — functional specialization pressure
 
-Next experiment phải đánh trực tiếp vào:
+All A/B/C/D show Phi rank near 1.
 
-```text
-FUNCTIONAL ERROR OWNERSHIP
-```
-
-thay vì chỉ:
+This requires a learning mechanism that says:
 
 ```text
-TOKEN OWNERSHIP
+slot 0 already solved error subspace E0
+slot 1 should receive reward for residual E1
+clone of slot 0 should receive little/no marginal reward
 ```
 
-Candidate direction:
+Candidate theory mechanisms already identified:
 
-1. Xây per-negative retrieval error directions.
-2. Slot đầu claim một subset/error direction.
-3. Project/remove phần error direction đã được slot đó giải quyết.
-4. Slot tiếp theo chỉ được reward cho residual error chưa được giải quyết.
-5. Clone direction phải có marginal gain gần zero.
-6. Không ép semantic labels.
-7. Không ép balanced token count.
-8. Cho phép `K_eff = 1` khi query thật sự chỉ cần một factor.
-9. Audit bằng exact coalitions, SINGLE, DROP, REPEAT, MEAN, K95/K99.
+- multi-error gradient matrix `G`;
+- per-negative functional signature `Phi`;
+- functional ownership assignment;
+- block residual pursuit;
+- pair lookahead;
+- direct clone/repeat penalty or acceptance test;
+- matched-compute executor control.
 
-Core principle:
-
-```text
-token ownership
-      ↓
-không đủ
-
-functional residual ownership
-      ↓
-pressure cần test tiếp
-```
+This is now the higher-priority scientific problem.
 
 ---
 
-## 17. Commands / reports đã dùng
+# 25. SHOULD THE NEXT STEP BE A LOCAL MICROENCODER?
 
-### HARD local-value diagnosis
+Not immediately as the sole experiment.
 
-```bash
-python src/diagnose_taper_local_value_failure.py \
-  --checkpoint /home/heheboiz/data/cir/outputs/2026-08-26/20-48-08/best.pt \
-  --slot-value-assignment hard_st_exclusive \
-  --max-queries-per-category 0 \
-  --json-output reports/taper_local_value_failure_full.json
+A3.3 tells us:
+
+```text
+raw representation is weak
 ```
 
-### SOFT local-value diagnosis
+so a microencoder is justified eventually.
 
-```bash
-python src/diagnose_taper_local_value_failure.py \
-  --checkpoint /home/heheboiz/data/cir/outputs/2026-08-26/21-22-35/best.pt \
-  --slot-value-assignment soft_shared \
-  --max-queries-per-category 0 \
-  --json-output reports/a3_2_soft_local_value_failure_full.json
+But:
+
+```text
+contextual representation is strong
+and still Phi ≈ 1
 ```
 
-### HARD P0
+Therefore a better encoder by itself will almost certainly restore performance without solving the central decomposition failure.
 
-```bash
-python src/audit_taper_merit_p0.py \
-  --checkpoint /home/heheboiz/data/cir/outputs/2026-08-26/20-48-08/best.pt \
-  --slot-value-assignment hard_st_exclusive \
-  --max-queries-per-category 0 \
-  --hard-negatives 16 \
-  --json-output reports/a3_2_hard_merit_p0_full.json
+A microencoder should be treated as:
+
+```text
+representation capacity repair
 ```
 
-### SOFT P0
+not:
 
-```bash
-python src/audit_taper_merit_p0.py \
-  --checkpoint /home/heheboiz/data/cir/outputs/2026-08-26/21-22-35/best.pt \
-  --slot-value-assignment soft_shared \
-  --max-queries-per-category 0 \
-  --hard-negatives 16 \
-  --json-output reports/a3_2_soft_merit_p0_full.json
+```text
+specialization mechanism
 ```
+
+The two should be audited separately.
 
 ---
 
-## 18. Final diagnosis
+# 26. SHOULD FUNCTIONAL ERROR OWNERSHIP BE IMPLEMENTED NOW?
 
-A3.2 không thất bại vô ích.
+Current evidence supports moving to it.
 
-Nó đã tách được hai vấn đề trước đây bị trộn lẫn:
+Why:
+
+1. task error rank is consistently >2.6;
+2. functional Phi rank stays ~1 under every information cell;
+3. token ownership diversity can improve without functional rank improving;
+4. giant-slot and clone/repeat attacks remain strong;
+5. changing information source no longer appears capable of solving the core collapse.
+
+Therefore the next high-value experiment should target:
 
 ```text
-INFORMATION COLLAPSE
+FUNCTIONAL ERROR OWNERSHIP / BLOCK MULTI-ERROR PURSUIT
+```
+
+while keeping representation choices explicit and controlled.
+
+A reasonable staged strategy:
+
+```text
+Stage F0:
+use a strong representation setting as a controlled baseline
+(e.g. contextual VALUE, slot_effect OFF)
+
+Stage F1:
+add functional multi-error ownership only
+
+Stage F2:
+if functional specialization appears,
+then replace contextual VALUE with a restricted local microencoder
+and test whether specialization survives without global leakage
+```
+
+This prevents confounding representation weakness with failure of the new learning mechanism.
+
+---
+
+# 27. RECOMMENDED BASELINE FOR THE NEXT FUNCTIONAL EXPERIMENT
+
+Among A-D, **C** is scientifically attractive as the next controlled baseline:
+
+```text
+contextual VALUE
+slot_effect OFF
+soft_shared
+Mean Recall = 58.75
+```
+
+Reasons:
+
+1. strong endpoint performance;
+2. removes direct teacher counterfactual effect bypass;
+3. has healthier token ownership than A/B/D;
+4. still has unmistakable functional collapse:
+   - Phi rank ≈ 1;
+   - MEANxK/FULL = 1;
+   - REPEAT/FULL ≈ 1.
+
+Thus C provides a strong, non-catastrophically-weak substrate on which to test whether functional error ownership actually changes Phi geometry.
+
+Important caveat:
+
+```text
+contextual VALUE is still globally enriched
+```
+
+so C is not a final clean decomposition architecture.
+
+It is a good **mechanism-development baseline**.
+
+After functional pressure works, information isolation must be revisited.
+
+---
+
+# 28. ACCEPTANCE CRITERIA FOR THE NEXT FUNCTIONAL MECHANISM
+
+Do not call the next experiment successful merely because:
+
+```text
+hard K increases
+slot entropy increases
+mask overlap decreases
+active slot count increases
+```
+
+Required P0 movement should include:
+
+```text
+functional Phi rank materially > 1
+and move toward gradient task rank
+
+SINGLE/FULL decreases on genuinely multi-error samples
+
+REPEAT/FULL clearly < 1
+
+MEANxK/FULL clearly < 1 where slot identity should matter
+
+K95/K99 increase when multiple slots are genuinely necessary
+
+QASA functional recall improves without merely selecting redundant slots
+
+endpoint Recall remains usable
+```
+
+A reasonable qualitative target is:
+
+```text
+task rank ≈ 2.7
+Phi rank should stop living around 1.0–1.2
+```
+
+Exact numerical thresholds should not be fixed before observing variance across seeds.
+
+---
+
+# 29. RED-TEAM CHECKS FOR THE NEXT EXPERIMENT
+
+Any proposed specialization mechanism should be attacked with:
+
+## Clone attack
+
+```text
+copy best slot into all positions
+```
+
+If Recall is preserved or improves, identity is still unnecessary.
+
+## Mean attack
+
+```text
+mean slots -> repeat across positions
+```
+
+If performance stays ~FULL, representation remains clone-like.
+
+## Single-slot attack
+
+If one slot recovers full coalition on multi-error queries, giant functional ownership remains.
+
+## Matched-compute attack
+
+Compare:
+
+```text
+K distinct slots for T steps
 vs
-FUNCTIONAL COLLAPSE
+1 slot repeated for same T steps
 ```
 
-Kết quả hiện tại cho thấy:
+to separate specialization from extra compute.
+
+## Exact coalition audit
+
+With K=4, enumerate all 16 coalitions.
+
+No proxy metric should replace this.
+
+## Error-mode audit
+
+Measure task gradient rank and compare with learned Phi rank.
+
+The mechanism only succeeds if learned functional dimensionality tracks real task dimensionality more closely.
+
+---
+
+# 30. FINAL DIAGNOSIS
+
+The A3.3 2×2 ablation resolves the causal ambiguity left by A3.1 → A3.2.
+
+The observed system contains **two largely substitutable high-information pathways**:
 
 ```text
-Contextual/global information leakage
-    là một vấn đề thật.
-
-Nhưng:
-cắt leakage không tự tạo slot specialization.
-
-Model chuyển sang:
-giant-slot / single-direction / executor-ticket solution.
+1. contextual/post-Q-Former VALUE
+2. teacher counterfactual slot_effects
 ```
 
-Kết luận hiện tại:
-
-> **Edit-slot collapse không còn có thể giải thích chỉ bằng token globalization hay soft ownership leakage. Failure còn lại là thiếu pressure để các slots ownership các functional retrieval errors khác nhau.**
-
-Đây là checkpoint để tránh quay lại lặp lại các experiment routing-only mà A3.2 đã falsify.
-
-## A3.2 Executor Shortcut Forensic — Result
-
-To test whether the downstream Executor was the main cause of functional slot collapse, we ran a frozen-checkpoint forensic analysis on all 6,016 FashionIQ validation queries.
-
-The test explicitly isolated two hypotheses:
-
-1. **Slot-content ignoring:** whether the Executor produces nearly the same transition when the real slot is replaced by a zero or shuffled slot.
-2. **Compute-ticket shortcut:** whether repeatedly executing the same dominant slot can substitute for using multiple distinct slots.
-
-### Results
-
-Slot-content dependence was clearly present:
-
-- median real-vs-zero relative transition difference: **0.985**
-- median real-vs-zero transition cosine: **0.427**
-- median real-vs-shuffled relative transition difference: **1.190**
-- median real-vs-shuffled transition cosine: **0.286**
-
-Therefore, the Executor is **not simply ignoring Edit Slot content**. Replacing the actual slot with zero or with another sample's slot substantially changes both the magnitude and direction of the state update.
-
-Repeated execution of the same dominant slot does amplify the amount of state/query movement:
-
-- repeated ×K_eff / single query movement: **1.338×**
-- repeated ×4 / single query movement: **1.598×**
-
-However, this extra recurrent computation does **not** improve retrieval:
-
-| Intervention | Mean Recall |
-|---|---:|
-| Original hard-nonempty slots | **43.346** |
-| Dominant slot ×1 | **42.296** |
-| Dominant slot ×K_eff | **41.455** |
-| Dominant slot ×4 | **35.826** |
-
-Performance decreases as the same slot is repeated. Therefore, recurrent execution depth cannot simply replace genuine multi-slot information.
-
-### Updated Diagnosis
-
-These results substantially weaken the hypothesis that the Executor is the primary source of A3.2 functional collapse.
-
-The current evidence instead indicates:
-
-> **The Edit Slots are representationally different, and the Executor is sensitive to those differences, but training does not provide sufficient pressure for the slots to acquire distinct functional responsibilities.**
-
-The failure is therefore more likely located in the **slot-learning / routing dynamics** rather than in the Executor itself.
-
-A plausible training shortcut is:
+Either is sufficient to support strong retrieval:
 
 ```text
-one slot becomes slightly more useful
-        ↓
-selected / reinforced more often
-        ↓
-receives more useful retrieval signal
-        ↓
-becomes the giant slot
-        ↓
-remaining slots stay weak, auxiliary, or empty
+A = 58.58
+B = 56.78
+C = 58.75
+```
+
+Removing both produces the weak D regime:
+
+```text
+D = 41.47
+```
+
+However this performance story is almost orthogonal to the specialization story.
+
+Across every cell:
+
+```text
+task gradient rank ≈ 2.6–2.8
+functional Phi rank ≈ 1.0–1.17
+```
+
+and clone/single/repeat adversaries remain strong.
+
+Therefore the central failure is no longer best described as:
+
+```text
+"the slots see too much global information"
+```
+
+or:
+
+```text
+"raw VALUE is too weak"
+```
+
+The deeper diagnosis is:
+
+> **The model has no learning pressure that assigns distinct retrieval-error responsibilities to distinct slots. Information-rich pathways make the collapsed solution powerful; information-poor pathways make it weak; neither condition creates functional decomposition by itself.**
+
+---
+
+# 31. ONE-SENTENCE CHECKPOINT
+
+> **A3.3 proves that contextual VALUE and teacher `slot_effects` are substitute information highways: either can rescue endpoint Recall, but all four 2×2 cells remain functionally near rank-1, so the core unsolved problem is explicit functional error ownership—not merely VALUE locality or removal of global information shortcuts.**
