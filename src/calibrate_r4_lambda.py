@@ -14,6 +14,7 @@ from models.taper import TAPER
 
 
 DEFAULT_LAMBDAS = (1.0, 0.75, 0.5, 0.35, 0.25, 0.15)
+DEFAULT_THETAS = (0.25, 0.20, 0.15, 0.10, 0.05)
 CATEGORIES = ("dress", "shirt", "toptee")
 TOKEN_METRICS = (
     "r4_preprojection_token_mass_mean",
@@ -53,9 +54,16 @@ def positive_float(value: str) -> float:
     return parsed
 
 
+def theta_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed) or not 0 <= parsed < 1:
+        raise argparse.ArgumentTypeError("theta values must be finite and in [0, 1)")
+    return parsed
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="No-training R4a QI-SCA lambda geometry calibration."
+        description="No-training R4a QI-SCA theta/lambda geometry calibration."
     )
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--dataset-root", type=Path, default=Path("data/FashionIQ"))
@@ -64,6 +72,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--config",
         type=Path,
         default=Path("conf/experiment/taper_e2e.yaml"),
+    )
+    parser.add_argument(
+        "--thetas",
+        nargs="+",
+        type=theta_float,
+        default=list(DEFAULT_THETAS),
     )
     parser.add_argument(
         "--lambdas",
@@ -157,7 +171,7 @@ def _check_first_batch_invariance(
             )
         if not equal:
             raise RuntimeError(
-                f"QASA/pre-routing invariant changed across lambda sweep: {name}"
+                f"QASA/pre-routing invariant changed across theta/lambda grid: {name}"
             )
     return baseline
 
@@ -165,9 +179,14 @@ def _check_first_batch_invariance(
 @torch.no_grad()
 def calibrate_model(
     model: TAPER,
+    thetas: Sequence[float],
     lambdas: Sequence[float],
     batch_factory: Callable[[], Iterable[dict[str, Tensor]]],
 ) -> tuple[list[dict[str, object]], int]:
+    if not thetas:
+        raise ValueError("theta sweep must not be empty")
+    if any(not math.isfinite(value) or not 0 <= value < 1 for value in thetas):
+        raise ValueError("all theta values must be finite and in [0, 1)")
     if not lambdas:
         raise ValueError("lambda sweep must not be empty")
     if any(not math.isfinite(value) or value <= 0 for value in lambdas):
@@ -176,126 +195,137 @@ def calibrate_model(
     force_r4a(model)
     model.eval()
     versions_before = parameter_versions(model)
+    original_theta = model.r4_theta
     original_lambda = model.r4_lambda
     first_batch_baseline: dict[str, Tensor] | None = None
     expected_queries: int | None = None
     results: list[dict[str, object]] = []
 
     try:
-        for lambda_value in lambdas:
-            model.r4_lambda = float(lambda_value)
-            aggregate = WeightedMetrics()
-            slot_active = torch.zeros(model.num_slots, dtype=torch.float64)
-            soft_dominant = torch.zeros(model.num_slots, dtype=torch.float64)
-            num_queries = 0
+        for theta in thetas:
+            model.r4_theta = float(theta)
+            for lambda_value in lambdas:
+                model.r4_lambda = float(lambda_value)
+                aggregate = WeightedMetrics()
+                slot_active = torch.zeros(model.num_slots, dtype=torch.float64)
+                soft_dominant = torch.zeros(model.num_slots, dtype=torch.float64)
+                num_queries = 0
 
-            for batch_index, batch in enumerate(batch_factory()):
-                text_states = batch["text_states"]
-                attention_mask = batch["text_attention_mask"]
-                content_mask = batch["text_content_mask"]
-                output = model.build_edit_slots(
-                    text_states,
-                    attention_mask,
-                    text_content_mask=content_mask,
-                )
-                if batch_index == 0:
-                    first_batch_baseline = _check_first_batch_invariance(
-                        first_batch_baseline,
-                        output,
+                for batch_index, batch in enumerate(batch_factory()):
+                    text_states = batch["text_states"]
+                    attention_mask = batch["text_attention_mask"]
+                    content_mask = batch["text_content_mask"]
+                    output = model.build_edit_slots(
+                        text_states,
+                        attention_mask,
+                        text_content_mask=content_mask,
+                    )
+                    if batch_index == 0:
+                        first_batch_baseline = _check_first_batch_invariance(
+                            first_batch_baseline,
+                            output,
+                        )
+
+                    valid = attention_mask.to(torch.bool) & content_mask.to(torch.bool)
+                    valid_count = float(valid.sum())
+                    sample_count = int(text_states.shape[0])
+                    active = output["routing_active_mask"]
+                    active_count = float(active.sum())
+                    valid_per_sample = valid.sum(dim=1)
+                    active_valid_positions = float(
+                        (active * valid_per_sample[:, None]).sum()
+                    )
+                    upper = torch.triu(
+                        torch.ones(
+                            model.num_slots,
+                            model.num_slots,
+                            dtype=torch.bool,
+                            device=active.device,
+                        ),
+                        diagonal=1,
+                    )
+                    active_pairs = active[:, :, None] & active[:, None, :]
+                    active_pair_count = float((active_pairs & upper[None]).sum())
+
+                    diagnostics = model._assignment_diagnostics(
+                        slot_masks=output["slot_masks"],
+                        slot_mass=output["slot_mass"],
+                        routing_masks=output["routing_masks"],
+                        routing_slot_mass=output["routing_slot_mass"],
+                        routing_support_count=output["routing_support_count"],
+                        qasa_selected_mask=output["qasa_selected_mask"],
+                        qasa_quality=output["qasa_quality"],
+                        qasa_final_coverage=output["qasa_final_coverage"],
+                        hard_active_slot_mask=output["execution_selected_mask"],
+                        text_attention_mask=attention_mask,
+                        text_content_mask=content_mask,
+                        r4_preprojection=output["r4_preprojection"],
+                    )
+                    for name in TOKEN_METRICS:
+                        aggregate.add(name, diagnostics[name], valid_count)
+                    for name in MAX_METRICS:
+                        aggregate.add_max(name, diagnostics[name])
+                    for name in SAMPLE_METRICS:
+                        aggregate.add(name, diagnostics[name], sample_count)
+                    for name in ACTIVE_SLOT_METRICS:
+                        aggregate.add(name, diagnostics[name], active_count)
+                    aggregate.add(
+                        "routing_zero_fraction",
+                        diagnostics["routing_zero_fraction"],
+                        active_valid_positions,
+                    )
+                    aggregate.add(
+                        "routing_support_overlap_mean",
+                        diagnostics["routing_support_overlap_mean"],
+                        active_pair_count,
+                    )
+                    aggregate.add(
+                        "routing_slot_mass_mean",
+                        diagnostics["routing_slot_mass_mean"],
+                        sample_count * model.num_slots,
                     )
 
-                valid = attention_mask.to(torch.bool) & content_mask.to(torch.bool)
-                valid_count = float(valid.sum())
-                sample_count = int(text_states.shape[0])
-                active = output["routing_active_mask"]
-                active_count = float(active.sum())
-                valid_per_sample = valid.sum(dim=1)
-                active_valid_positions = float(
-                    (active * valid_per_sample[:, None]).sum()
-                )
-                upper = torch.triu(
-                    torch.ones(
-                        model.num_slots,
-                        model.num_slots,
-                        dtype=torch.bool,
-                        device=active.device,
-                    ),
-                    diagonal=1,
-                )
-                active_pairs = active[:, :, None] & active[:, None, :]
-                active_pair_count = float((active_pairs & upper[None]).sum())
+                    slot_active += active.detach().cpu().sum(dim=0).double()
+                    soft_dominant_ids = (
+                        output["slot_mass"].argmax(dim=1).detach().cpu()
+                    )
+                    soft_dominant += torch.bincount(
+                        soft_dominant_ids,
+                        minlength=model.num_slots,
+                    ).double()
+                    num_queries += sample_count
 
-                diagnostics = model._assignment_diagnostics(
-                    slot_masks=output["slot_masks"],
-                    slot_mass=output["slot_mass"],
-                    routing_masks=output["routing_masks"],
-                    routing_slot_mass=output["routing_slot_mass"],
-                    routing_support_count=output["routing_support_count"],
-                    qasa_selected_mask=output["qasa_selected_mask"],
-                    qasa_quality=output["qasa_quality"],
-                    qasa_final_coverage=output["qasa_final_coverage"],
-                    hard_active_slot_mask=output["execution_selected_mask"],
-                    text_attention_mask=attention_mask,
-                    text_content_mask=content_mask,
-                    r4_preprojection=output["r4_preprojection"],
-                )
-                for name in TOKEN_METRICS:
-                    aggregate.add(name, diagnostics[name], valid_count)
-                for name in MAX_METRICS:
-                    aggregate.add_max(name, diagnostics[name])
-                for name in SAMPLE_METRICS:
-                    aggregate.add(name, diagnostics[name], sample_count)
-                for name in ACTIVE_SLOT_METRICS:
-                    aggregate.add(name, diagnostics[name], active_count)
-                aggregate.add(
-                    "routing_zero_fraction",
-                    diagnostics["routing_zero_fraction"],
-                    active_valid_positions,
-                )
-                aggregate.add(
-                    "routing_support_overlap_mean",
-                    diagnostics["routing_support_overlap_mean"],
-                    active_pair_count,
-                )
-                aggregate.add(
-                    "routing_slot_mass_mean",
-                    diagnostics["routing_slot_mass_mean"],
-                    sample_count * model.num_slots,
-                )
+                if expected_queries is None:
+                    expected_queries = num_queries
+                elif num_queries != expected_queries:
+                    raise RuntimeError(
+                        "theta/lambda grid points processed different query counts"
+                    )
+                if num_queries == 0:
+                    raise RuntimeError("calibration processed zero queries")
 
-                slot_active += active.detach().cpu().sum(dim=0).double()
-                soft_dominant_ids = output["slot_mass"].argmax(dim=1).detach().cpu()
-                soft_dominant += torch.bincount(
-                    soft_dominant_ids,
-                    minlength=model.num_slots,
-                ).double()
-                num_queries += sample_count
-
-            if expected_queries is None:
-                expected_queries = num_queries
-            elif num_queries != expected_queries:
-                raise RuntimeError("lambda sweeps processed different query counts")
-            if num_queries == 0:
-                raise RuntimeError("calibration processed zero queries")
-
-            metrics = aggregate.finalize()
-            for name in REQUIRED_METRICS:
-                metrics.setdefault(name, 0.0)
-            results.append(
-                {
-                    "lambda": float(lambda_value),
-                    "metrics": metrics,
-                    "slot_active_frequency": {
-                        str(slot_id): float(slot_active[slot_id] / num_queries)
-                        for slot_id in range(model.num_slots)
-                    },
-                    "soft_dominant_slot_frequency": {
-                        str(slot_id): float(soft_dominant[slot_id] / num_queries)
-                        for slot_id in range(model.num_slots)
-                    },
-                }
-            )
+                metrics = aggregate.finalize()
+                for name in REQUIRED_METRICS:
+                    metrics.setdefault(name, 0.0)
+                results.append(
+                    {
+                        "theta": float(theta),
+                        "lambda": float(lambda_value),
+                        "metrics": metrics,
+                        "slot_active_frequency": {
+                            str(slot_id): float(slot_active[slot_id] / num_queries)
+                            for slot_id in range(model.num_slots)
+                        },
+                        "soft_dominant_slot_frequency": {
+                            str(slot_id): float(
+                                soft_dominant[slot_id] / num_queries
+                            )
+                            for slot_id in range(model.num_slots)
+                        },
+                    }
+                )
     finally:
+        model.r4_theta = original_theta
         model.r4_lambda = original_lambda
 
     if parameter_versions(model) != versions_before:
@@ -312,16 +342,52 @@ def write_report(path: Path, report: dict[str, object]) -> None:
     )
 
 
-def print_table(results: Sequence[dict[str, object]]) -> None:
+def print_tables(results: Sequence[dict[str, object]]) -> None:
+    theta_results = [
+        result
+        for result in results
+        if math.isclose(float(result["lambda"]), 1.0, rel_tol=0.0, abs_tol=1e-12)
+    ]
+    if not theta_results:
+        raise ValueError("lambda sweep must include 1.0 for theta support calibration")
+
+    print()
+    print("THETA SUPPORT CALIBRATION (lambda=1.0)")
+    print()
+    slot_ids = range(len(theta_results[0]["slot_active_frequency"]))
+    slot_columns = "  ".join(f"S{slot_id}_active" for slot_id in slot_ids)
+    print(
+        "theta  active_slots  fully_unassigned  support_frac  overlap  "
+        f"{slot_columns}"
+    )
+    for result in theta_results:
+        metrics = result["metrics"]
+        frequencies = result["slot_active_frequency"]
+        assert isinstance(metrics, dict)
+        assert isinstance(frequencies, dict)
+        formatted_frequencies = "  ".join(
+            f"{100 * float(frequencies[str(slot_id)]):>8.2f}%"
+            for slot_id in slot_ids
+        )
+        print(
+            f"{float(result['theta']):>5.2f}  "
+            f"{float(metrics['routing_active_slot_count']):>12.3f}  "
+            f"{100 * float(metrics['routing_fully_unassigned_token_fraction']):>15.2f}%  "
+            f"{float(metrics['routing_support_fraction_mean']):>12.3f}  "
+            f"{float(metrics['routing_support_overlap_mean']):>7.3f}  "
+            f"{formatted_frequencies}"
+        )
+
     print()
     print(
-        "lambda  pre_mass  violation  binding  unassigned  active_slots  "
-        "support_frac  overlap"
+        "theta  lambda  pre_mass  violation  binding  unassigned  "
+        "active_slots  support_frac  overlap"
     )
     for result in results:
         metrics = result["metrics"]
         assert isinstance(metrics, dict)
         print(
+            f"{float(result['theta']):>5.2f}  "
             f"{float(result['lambda']):>6.2f}  "
             f"{float(metrics['r4_preprojection_token_mass_mean']):>8.3f}  "
             f"{100 * float(metrics['r4_preprojection_token_budget_violation_fraction']):>8.2f}%  "
@@ -332,7 +398,7 @@ def print_table(results: Sequence[dict[str, object]]) -> None:
             f"{float(metrics.get('routing_support_overlap_mean', 0.0)):>7.3f}"
         )
     print()
-    print("Per-slot routing active frequency:")
+    print("Per-slot routing active frequency by grid point:")
     for result in results:
         frequencies = result["slot_active_frequency"]
         assert isinstance(frequencies, dict)
@@ -340,7 +406,10 @@ def print_table(results: Sequence[dict[str, object]]) -> None:
             f"S{slot_id}={100 * float(frequencies[str(slot_id)]):.2f}%"
             for slot_id in range(len(frequencies))
         )
-        print(f"lambda={float(result['lambda']):.2f}: {formatted}")
+        print(
+            f"theta={float(result['theta']):.2f} "
+            f"lambda={float(result['lambda']):.2f}: {formatted}"
+        )
 
     print()
     print("Per-slot soft dominant frequency (pre-routing ownership):")
@@ -351,7 +420,10 @@ def print_table(results: Sequence[dict[str, object]]) -> None:
             f"S{slot_id}={100 * float(frequencies[str(slot_id)]):.2f}%"
             for slot_id in range(len(frequencies))
         )
-        print(f"lambda={float(result['lambda']):.2f}: {formatted}")
+        print(
+            f"theta={float(result['theta']):.2f} "
+            f"lambda={float(result['lambda']):.2f}: {formatted}"
+        )
 
 
 def main(argv: Sequence[str] | None = None) -> None:
@@ -380,6 +452,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         raise ValueError("--num-workers must be >= 0")
     if args.max_queries_per_category < 0:
         raise ValueError("--max-queries-per-category must be >= 0")
+    if not any(
+        math.isclose(value, 1.0, rel_tol=0.0, abs_tol=1e-12)
+        for value in args.lambdas
+    ):
+        raise ValueError(
+            "--lambdas must include 1.0 for the theta support summary"
+        )
     if args.device.startswith("cuda") and not torch.cuda.is_available():
         raise RuntimeError("CUDA requested but unavailable")
 
@@ -473,22 +552,27 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     print("Calibration mode: R4a QI-SCA")
     print("Capacity enabled:", model.r4_capacity_enabled)
-    print("Theta:", model.r4_theta)
     print("Checkpoint:", args.checkpoint)
+    print("Theta sweep:", " ".join(str(value) for value in args.thetas))
     print("Lambda sweep:", " ".join(str(value) for value in args.lambdas))
 
-    results, num_queries = calibrate_model(model, args.lambdas, batch_factory)
+    results, num_queries = calibrate_model(
+        model,
+        args.thetas,
+        args.lambdas,
+        batch_factory,
+    )
     report: dict[str, object] = {
         "checkpoint": str(args.checkpoint),
-        "theta": model.r4_theta,
         "capacity_enabled": model.r4_capacity_enabled,
         "routing_mode": model.routing_mode,
         "num_queries": num_queries,
+        "thetas": [float(value) for value in args.thetas],
         "lambdas": [float(value) for value in args.lambdas],
         "results": results,
     }
     write_report(args.json_output, report)
-    print_table(results)
+    print_tables(results)
     print(f"Saved calibration report: {args.json_output}")
 
 
