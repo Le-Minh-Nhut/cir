@@ -24,7 +24,17 @@ from teachers.csmcir_compose import CSMCIRComposeTeacher
 
 
 CATEGORIES = ("dress", "shirt", "toptee")
+SLOT_VALUE_SOURCES = tuple(sorted(TAPER.SLOT_VALUE_SOURCES))
 SLOT_VALUE_ASSIGNMENTS = tuple(sorted(TAPER.SLOT_VALUE_ASSIGNMENTS))
+
+
+def parse_bool(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
+    raise argparse.ArgumentTypeError("expected true or false")
 
 
 def parse_args():
@@ -39,6 +49,18 @@ def parse_args():
         "--config",
         type=Path,
         default=Path("conf/experiment/taper_e2e.yaml"),
+    )
+    p.add_argument(
+        "--slot-value-source",
+        choices=SLOT_VALUE_SOURCES,
+        default=None,
+        help="Override model.slot_value_source; must match checkpoint provenance.",
+    )
+    p.add_argument(
+        "--slot-effect-in-value",
+        type=parse_bool,
+        default=None,
+        help="Override model.slot_effect_in_value (true/false); must match provenance.",
     )
     p.add_argument(
         "--slot-value-assignment",
@@ -160,7 +182,12 @@ def load_checkpoint(model: TAPER, path: Path):
         state = state["state_dict"]
 
     expected_provenance = model.experiment_provenance()
-    if checkpoint_provenance is not None and checkpoint_provenance != expected_provenance:
+    if checkpoint_provenance is None:
+        raise RuntimeError(
+            "Checkpoint is missing experiment_provenance; refusing to infer an "
+            "A3.3 ablation cell from tensor shapes."
+        )
+    if checkpoint_provenance != expected_provenance:
         raise RuntimeError(
             "Checkpoint experiment provenance mismatch: "
             f"expected={expected_provenance}, cached={checkpoint_provenance}"
@@ -169,9 +196,9 @@ def load_checkpoint(model: TAPER, path: Path):
         missing, unexpected = model.load_state_dict(state, strict=False)
     except RuntimeError as error:
         raise RuntimeError(
-            "Incompatible TAPER checkpoint. This experiment changes slot_mlp "
-            "from contextual+effect input to teacher-raw-only input and must be "
-            "trained from scratch; do not load an A3.1 TAPER checkpoint."
+            "Incompatible TAPER checkpoint for the configured VALUE-source/effect "
+            "ablation cell. Train each cell from scratch and load it only with "
+            "matching experiment provenance."
         ) from error
     bad_missing = [k for k in missing if not k.startswith("teacher.")]
     if bad_missing:
@@ -320,6 +347,10 @@ def run(args):
     checkpoint = args.checkpoint or newest_checkpoint(args.outputs_root)
     device = torch.device(args.device)
     cfg = OmegaConf.load(args.config)
+    if args.slot_value_source is not None:
+        cfg.model.slot_value_source = args.slot_value_source
+    if args.slot_effect_in_value is not None:
+        cfg.model.slot_effect_in_value = args.slot_effect_in_value
     if args.slot_value_assignment is not None:
         cfg.model.slot_value_assignment = args.slot_value_assignment
 
@@ -432,8 +463,9 @@ def run(args):
         "checkpoint": str(checkpoint),
         "experiment_provenance": model.experiment_provenance(),
         "protocol": (
-            "QASA-faithful inference: token-wise argmax over slot attention; "
-            "no QASA selection mask; no Executor; no retrieval."
+            "QASA-faithful diagnostic hard-argmax partition over slot attention; "
+            "this is not actual soft VALUE support when slot_value_assignment="
+            "soft_shared; no QASA selection mask; no Executor; no retrieval."
         ),
         "num_slots": model.num_slots,
         "summary": summary,

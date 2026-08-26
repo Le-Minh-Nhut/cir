@@ -9,6 +9,12 @@ from torch import Tensor, nn
 
 
 class TAPER(nn.Module):
+    SLOT_VALUE_SOURCES = frozenset(
+        {
+            "contextual",
+            "teacher_raw",
+        }
+    )
     SLOT_VALUE_ASSIGNMENTS = frozenset(
         {
             "soft_shared",
@@ -66,10 +72,13 @@ class TAPER(nn.Module):
             raise ValueError("alpha_max must be > 0")
         if counterfactual_chunk_size < 1:
             raise ValueError("counterfactual_chunk_size must be >= 1")
-        if slot_value_source != "teacher_raw":
-            raise ValueError("slot_value_source must be 'teacher_raw' for this experiment")
-        if slot_effect_in_value:
-            raise ValueError("slot_effect_in_value must be false for this experiment")
+        if slot_value_source not in self.SLOT_VALUE_SOURCES:
+            raise ValueError(
+                "slot_value_source must be one of: "
+                f"{sorted(self.SLOT_VALUE_SOURCES)}"
+            )
+        if not isinstance(slot_effect_in_value, bool):
+            raise TypeError("slot_effect_in_value must be a bool")
         if slot_value_assignment not in self.SLOT_VALUE_ASSIGNMENTS:
             raise ValueError(
                 "slot_value_assignment must be one of: "
@@ -100,6 +109,14 @@ class TAPER(nn.Module):
         self.slot_value_source = slot_value_source
         self.slot_effect_in_value = bool(slot_effect_in_value)
         self.slot_value_assignment = slot_value_assignment
+        value_dim = (
+            self.text_dim
+            if self.slot_value_source == "contextual"
+            else self.teacher_text_dim
+        )
+        slot_mlp_input_dim = value_dim
+        if self.slot_effect_in_value:
+            slot_mlp_input_dim += self.teacher_query_dim
 
         self.teacher.eval()
         for parameter in self.teacher.parameters():
@@ -116,7 +133,7 @@ class TAPER(nn.Module):
             self.register_buffer("neutral_embedding", torch.zeros(self.teacher_text_dim))
 
         self.slot_mlp = nn.Sequential(
-            nn.Linear(self.teacher_text_dim, slot_dim),
+            nn.Linear(slot_mlp_input_dim, slot_dim),
             nn.GELU(),
             nn.Linear(slot_dim, slot_dim),
             nn.LayerNorm(slot_dim),
@@ -534,9 +551,14 @@ class TAPER(nn.Module):
                 value_hard_slot_masks,
                 slot_valid,
             )
+        value_states = (
+            text_states
+            if self.slot_value_source == "contextual"
+            else teacher_text_states
+        )
         slot_semantics, value_slot_mass, value_slot_activity = (
             self._mass_aware_slot_pool(
-                teacher_text_states,
+                value_states,
                 value_slot_masks,
             )
         )
@@ -558,7 +580,12 @@ class TAPER(nn.Module):
 
         slot_effects = q_full.unsqueeze(1) - q_minus
 
-        raw_edit_slots = self.slot_mlp(slot_semantics)
+        slot_mlp_input = (
+            torch.cat([slot_semantics, slot_effects], dim=-1)
+            if self.slot_effect_in_value
+            else slot_semantics
+        )
+        raw_edit_slots = self.slot_mlp(slot_mlp_input)
         edit_slots = raw_edit_slots * value_slot_activity.unsqueeze(-1)
 
         # qasa_attention = F.softmax(ownership_logits.float(), dim=1)
@@ -593,13 +620,18 @@ class TAPER(nn.Module):
             "value_slot_activity": value_slot_activity,
             "slot_peak_ownership": (soft_slot_masks.amax(dim=2)),
             "slot_effects": slot_effects,
-            "slot_value_source_teacher_raw": torch.ones(
-                (),
+            "slot_value_source_contextual": torch.tensor(
+                self.slot_value_source == "contextual",
                 dtype=torch.bool,
                 device=soft_slot_masks.device,
             ),
-            "slot_effect_used_in_latent": torch.zeros(
-                (),
+            "slot_value_source_teacher_raw": torch.tensor(
+                self.slot_value_source == "teacher_raw",
+                dtype=torch.bool,
+                device=soft_slot_masks.device,
+            ),
+            "slot_effect_used_in_latent": torch.tensor(
+                self.slot_effect_in_value,
                 dtype=torch.bool,
                 device=soft_slot_masks.device,
             ),
@@ -1036,12 +1068,15 @@ class TAPER(nn.Module):
         losses = {
             "retrieval_loss": self._retrieval_loss(output["q0"], targets, batch.get("target_ids"))
         }
+        losses["diagnostic/slot_value_source_contextual"] = losses[
+            "retrieval_loss"
+        ].new_tensor(float(self.slot_value_source == "contextual"))
         losses["diagnostic/slot_value_source_teacher_raw"] = losses[
             "retrieval_loss"
-        ].new_ones(())
+        ].new_tensor(float(self.slot_value_source == "teacher_raw"))
         losses["diagnostic/slot_effect_used_in_latent"] = losses[
             "retrieval_loss"
-        ].new_zeros(())
+        ].new_tensor(float(self.slot_effect_in_value))
         losses["diagnostic/slot_value_assignment_soft_shared"] = losses[
             "retrieval_loss"
         ].new_tensor(float(self.slot_value_assignment == "soft_shared"))

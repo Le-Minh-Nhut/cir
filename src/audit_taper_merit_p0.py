@@ -20,6 +20,7 @@ from cache.features import (
 from evaluate_qasa_inference import (
     CATEGORIES,
     SLOT_VALUE_ASSIGNMENTS,
+    SLOT_VALUE_SOURCES,
     build_model,
     build_val_loaders,
     load_checkpoint,
@@ -45,6 +46,18 @@ def parse_args():
         "--config",
         type=Path,
         default=Path("conf/experiment/taper_e2e.yaml"),
+    )
+    p.add_argument(
+        "--slot-value-source",
+        choices=SLOT_VALUE_SOURCES,
+        default=None,
+        help="Override model.slot_value_source; must match checkpoint provenance.",
+    )
+    p.add_argument(
+        "--slot-effect-in-value",
+        choices=("true", "false"),
+        default=None,
+        help="Override model.slot_effect_in_value; must match checkpoint provenance.",
     )
     p.add_argument(
         "--slot-value-assignment",
@@ -592,6 +605,10 @@ def load_runtime(args):
 
     device = torch.device(args.device)
     cfg = OmegaConf.load(args.config)
+    if getattr(args, "slot_value_source", None) is not None:
+        cfg.model.slot_value_source = args.slot_value_source
+    if getattr(args, "slot_effect_in_value", None) is not None:
+        cfg.model.slot_effect_in_value = args.slot_effect_in_value == "true"
     if args.slot_value_assignment is not None:
         cfg.model.slot_value_assignment = args.slot_value_assignment
     annotation_root = args.dataset_root / "captions"
@@ -1173,6 +1190,7 @@ def run(args):
                 "Hard negatives are mined once per sample from negative_source and frozen for every intervention.",
                 "Target image is used only by this audit as the positive retrieval candidate; no semantic slot labels are required.",
                 "REPEAT copies one original slot into all K positions; MEAN copies the per-sample mean slot into all K positions.",
+                "Hard-partition metrics are diagnostic argmax partitions; under soft_shared they are not the actual soft VALUE support.",
                 "The script is frozen-checkpoint evaluation only and does not modify training.",
             ],
         },

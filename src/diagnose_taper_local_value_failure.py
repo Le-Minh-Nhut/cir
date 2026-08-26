@@ -41,6 +41,7 @@ from evaluation.fashioniq import build_fashioniq_gallery
 
 
 VALUE_MODES = ("soft_shared", "hard_st_exclusive")
+VALUE_SOURCES = ("contextual", "teacher_raw")
 
 
 def parse_args():
@@ -54,6 +55,18 @@ def parse_args():
     p.add_argument("--dataset-root", type=Path, default=Path("data/FashionIQ"))
     p.add_argument("--cache-root", type=Path, default=Path("features"))
     p.add_argument("--config", type=Path, default=Path("conf/experiment/taper_e2e.yaml"))
+    p.add_argument(
+        "--slot-value-source",
+        choices=VALUE_SOURCES,
+        default=None,
+        help="Normally inferred from checkpoint provenance.",
+    )
+    p.add_argument(
+        "--slot-effect-in-value",
+        choices=("true", "false"),
+        default=None,
+        help="Normally inferred from checkpoint provenance.",
+    )
     p.add_argument(
         "--slot-value-assignment",
         choices=VALUE_MODES,
@@ -145,11 +158,22 @@ def mean_token_pair_cosine(states: torch.Tensor, valid: torch.Tensor) -> torch.T
     )
 
 
-def rebuild_edit_slots(model, *, value_states: torch.Tensor, value_masks: torch.Tensor):
+def rebuild_edit_slots(
+    model,
+    *,
+    value_states: torch.Tensor,
+    value_masks: torch.Tensor,
+    slot_effects: torch.Tensor,
+):
     slot_semantics, slot_mass, slot_activity = model._mass_aware_slot_pool(
         value_states, value_masks
     )
-    raw_edit_slots = model.slot_mlp(slot_semantics)
+    slot_mlp_input = (
+        torch.cat([slot_semantics, slot_effects], dim=-1)
+        if model.slot_effect_in_value
+        else slot_semantics
+    )
+    raw_edit_slots = model.slot_mlp(slot_mlp_input)
     edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
     return {
         "slot_semantics": slot_semantics,
@@ -357,6 +381,12 @@ def diagnosis_from_report(report: dict) -> list[dict]:
 @torch.no_grad()
 def run(args):
     provenance = load_checkpoint_provenance(args.checkpoint)
+    provenance_source = provenance.get("slot_value_source")
+    if args.slot_value_source is None and provenance_source in VALUE_SOURCES:
+        args.slot_value_source = provenance_source
+    provenance_effect = provenance.get("slot_effect_in_value")
+    if args.slot_effect_in_value is None and isinstance(provenance_effect, bool):
+        args.slot_effect_in_value = "true" if provenance_effect else "false"
     provenance_mode = provenance.get("slot_value_assignment")
     if args.slot_value_assignment is None and provenance_mode in VALUE_MODES:
         args.slot_value_assignment = provenance_mode
@@ -469,11 +499,13 @@ def run(args):
                 model,
                 value_states=x["teacher_text_states"],
                 value_masks=hard_masks,
+                slot_effects=slot_output["slot_effects"],
             )
             raw_soft = rebuild_edit_slots(
                 model,
                 value_states=x["teacher_text_states"],
                 value_masks=soft_masks,
+                slot_effects=slot_output["slot_effects"],
             )
 
             contextual_available = x["text_states"].shape[-1] == model.teacher_text_dim
@@ -483,14 +515,30 @@ def run(args):
                     model,
                     value_states=x["text_states"],
                     value_masks=hard_masks,
+                    slot_effects=slot_output["slot_effects"],
                 )
                 contextual_soft = rebuild_edit_slots(
                     model,
                     value_states=x["text_states"],
                     value_masks=soft_masks,
+                    slot_effects=slot_output["slot_effects"],
                 )
 
-            expected = raw_soft if model.slot_value_assignment == "soft_shared" else raw_hard
+            deployed_raw = (
+                raw_soft
+                if model.slot_value_assignment == "soft_shared"
+                else raw_hard
+            )
+            deployed_contextual = (
+                contextual_soft
+                if model.slot_value_assignment == "soft_shared"
+                else contextual_hard
+            )
+            expected = (
+                deployed_contextual
+                if model.slot_value_source == "contextual"
+                else deployed_raw
+            )
             stats.add(
                 "smoke/deployed_reconstruction_max_abs_diff",
                 (expected["edit_slots"] - slot_output["edit_slots"])
@@ -747,6 +795,10 @@ def run(args):
                 "soft/raw/contextual variants are frozen-checkpoint inference probes. "
                 "They localize bottlenecks but are NOT substitutes for retraining each "
                 "mode from scratch for a fair ablation."
+            ),
+            "hard_partition_semantics": (
+                "All hard ownership metrics use the diagnostic argmax partition; "
+                "under soft_shared this is not the actual soft VALUE support."
             ),
             "variant_meanings": {
                 "deployed_qasa": "Exact checkpoint deployment path.",
