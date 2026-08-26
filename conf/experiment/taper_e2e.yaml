@@ -4,7 +4,7 @@ batch_size: 64
 eval_batch_size: 32
 num_workers: 8
 
-num_epochs: 100
+num_epochs: 10
 
 lr: 1.0e-4
 weight_decay: 1.0e-4

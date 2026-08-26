@@ -1,0 +1,2134 @@
+{
+  "checkpoint": "/home/heheboiz/data/cir/outputs/2026-08-26/20-48-08/best.pt",
+  "checkpoint_provenance": {
+    "slot_value_source": "teacher_raw",
+    "slot_effect_in_value": false,
+    "slot_value_assignment": "hard_st_exclusive"
+  },
+  "loaded_model_provenance": {
+    "slot_value_source": "teacher_raw",
+    "slot_effect_in_value": false,
+    "slot_value_assignment": "hard_st_exclusive"
+  },
+  "num_samples": 6016,
+  "protocol": {
+    "dataset_protocol": "fashioniq_original",
+    "max_queries_per_category": 0,
+    "important_caveat": "soft/raw/contextual variants are frozen-checkpoint inference probes. They localize bottlenecks but are NOT substitutes for retraining each mode from scratch for a fair ablation.",
+    "variant_meanings": {
+      "deployed_qasa": "Exact checkpoint deployment path.",
+      "raw_hard_qasa": "Raw VALUE + hard exclusive ownership + original QASA.",
+      "raw_hard_qasa_nonempty": "Same as raw_hard_qasa, but QASA-selected hard-empty VALUE slots are blocked.",
+      "raw_hard_all_nonempty": "Execute every hard-nonempty VALUE slot, bypassing QASA selection.",
+      "raw_soft_qasa": "Same checkpoint, but raw VALUE is soft-shared at inference.",
+      "raw_soft_all": "Soft-shared raw VALUE and force all slots to execute.",
+      "contextual_hard_qasa_nonempty": "Leak probe: contextual Q-Former VALUE with same hard support; hard-empty selected slots blocked.",
+      "contextual_soft_qasa": "Leak upper-bound probe: contextual VALUE + soft sharing.",
+      "empty_selected_only": "Execute only QASA-selected slots that own ZERO hard VALUE tokens.",
+      "teacher_full": "Frozen CSMCIR global composed query, when dimensions match.",
+      "reference_only": "No edit execution."
+    }
+  },
+  "recall": {
+    "deployed_qasa": {
+      "recall_at_10": 31.45819133787659,
+      "recall_at_50": 55.0501203447659,
+      "mean_recall": 43.25415584132124,
+      "per_category": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 29.350520575111553,
+          "recall_at_50": 55.280118988596925
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 31.0107948969578,
+          "recall_at_50": 51.226692836113834
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 34.013258541560425,
+          "recall_at_50": 58.64354920958694
+        }
+      }
+    },
+    "raw_hard_qasa": {
+      "recall_at_10": 31.45819133787659,
+      "recall_at_50": 55.0501203447659,
+      "mean_recall": 43.25415584132124,
+      "per_category": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 29.350520575111553,
+          "recall_at_50": 55.280118988596925
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 31.0107948969578,
+          "recall_at_50": 51.226692836113834
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 34.013258541560425,
+          "recall_at_50": 58.64354920958694
+        }
+      }
+    },
+    "raw_hard_qasa_nonempty": {
+      "recall_at_10": 31.475359757618275,
+      "recall_at_50": 55.049648408577745,
+      "mean_recall": 43.26250408309801,
+      "per_category": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 29.400099157164107,
+          "recall_at_50": 55.32969757064948
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 30.961727183513247,
+          "recall_at_50": 51.226692836113834
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 34.06425293217746,
+          "recall_at_50": 58.592554818969916
+        }
+      }
+    },
+    "raw_hard_all_nonempty": {
+      "recall_at_10": 31.541162887036183,
+      "recall_at_50": 55.15099496408765,
+      "mean_recall": 43.34607892556192,
+      "per_category": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 29.697570649479424,
+          "recall_at_50": 55.32969757064948
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 30.912659470068697,
+          "recall_at_50": 51.27576054955839
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 34.013258541560425,
+          "recall_at_50": 58.847526772055076
+        }
+      }
+    },
+    "raw_soft_qasa": {
+      "recall_at_10": 30.649950249548784,
+      "recall_at_50": 54.869840443834,
+      "mean_recall": 42.759895346691394,
+      "per_category": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 29.05304908279623,
+          "recall_at_50": 54.238968765493304
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 29.342492639842984,
+          "recall_at_50": 51.47203140333661
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 33.55430902600714,
+          "recall_at_50": 58.898521162672104
+        }
+      }
+    },
+    "raw_soft_all": {
+      "recall_at_10": 24.902689313936563,
+      "recall_at_50": 48.17020523835839,
+      "mean_recall": 36.53644727614748,
+      "per_category": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 22.756569162121963,
+          "recall_at_50": 46.10808130887457
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 24.975466143277725,
+          "recall_at_50": 45.87831207065751
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 26.976032636409993,
+          "recall_at_50": 52.524222335543094
+        }
+      }
+    },
+    "contextual_hard_qasa_nonempty": {
+      "recall_at_10": 14.011937430369693,
+      "recall_at_50": 29.75224085185556,
+      "mean_recall": 21.882089141112626,
+      "per_category": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 9.370352007932572,
+          "recall_at_50": 25.68170550322261
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 16.143277723258095,
+          "recall_at_50": 31.55053974484789
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 16.52218255991841,
+          "recall_at_50": 32.02447730749618
+        }
+      }
+    },
+    "contextual_soft_qasa": {
+      "recall_at_10": 14.998323905775711,
+      "recall_at_50": 31.036716672737853,
+      "mean_recall": 23.017520289256783,
+      "per_category": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 10.36192364898364,
+          "recall_at_50": 26.623698562221122
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 16.683022571148186,
+          "recall_at_50": 32.72816486751717
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 17.95002549719531,
+          "recall_at_50": 33.758286588475265
+        }
+      }
+    },
+    "reference_only": {
+      "recall_at_10": 7.7728546934117055,
+      "recall_at_50": 19.840936185420404,
+      "mean_recall": 13.806895439416055,
+      "per_category": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 4.709965294992563,
+          "recall_at_50": 15.666831928606841
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 10.500490677134446,
+          "recall_at_50": 23.356231599607458
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 8.108108108108109,
+          "recall_at_50": 20.499745028046913
+        }
+      }
+    },
+    "teacher_full": {
+      "recall_at_10": 54.87693602311385,
+      "recall_at_50": 75.00123238373037,
+      "mean_recall": 64.93908420342211,
+      "per_category": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 50.52057511155181,
+          "recall_at_50": 72.68220128904314
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 56.23159960745829,
+          "recall_at_50": 73.99411187438665
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 57.87863335033146,
+          "recall_at_50": 78.32738398776135
+        }
+      }
+    },
+    "empty_selected_only": {
+      "recall_at_10": 7.756630146046348,
+      "recall_at_50": 19.80805408692137,
+      "mean_recall": 13.782342116483859,
+      "per_category": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 4.561229548834904,
+          "recall_at_50": 15.617253346554289
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 10.549558390579,
+          "recall_at_50": 23.307163886162904
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 8.15910249872514,
+          "recall_at_50": 20.499745028046913
+        }
+      }
+    }
+  },
+  "stats": {
+    "routing/hard_value_effective_k": {
+      "n": 6016,
+      "mean": 1.9456449747085571,
+      "std": 0.6403988599777222,
+      "min": 1.0,
+      "p10": 1.0,
+      "median": 2.0,
+      "p90": 3.0,
+      "p95": 3.0,
+      "p99": 3.0,
+      "max": 3.0
+    },
+    "routing/hard_value_dominant_share": {
+      "n": 6016,
+      "mean": 0.8267220258712769,
+      "std": 0.1461281180381775,
+      "min": 0.3333333432674408,
+      "p10": 0.6153846383094788,
+      "median": 0.8461538553237915,
+      "p90": 1.0,
+      "p95": 1.0,
+      "p99": 1.0,
+      "max": 1.0
+    },
+    "routing/hard_value_empty_slot_fraction": {
+      "n": 6016,
+      "mean": 0.5135887861251831,
+      "std": 0.16009971499443054,
+      "min": 0.25,
+      "p10": 0.25,
+      "median": 0.5,
+      "p90": 0.75,
+      "p95": 0.75,
+      "p99": 0.75,
+      "max": 0.75
+    },
+    "routing/qasa_selected_count": {
+      "n": 6016,
+      "mean": 1.8359375,
+      "std": 0.6567810773849487,
+      "min": 1.0,
+      "p10": 1.0,
+      "median": 2.0,
+      "p90": 3.0,
+      "p95": 3.0,
+      "p99": 3.0,
+      "max": 3.0
+    },
+    "routing/qasa_selected_nonempty_precision": {
+      "n": 6016,
+      "mean": 0.9572805762290955,
+      "std": 0.12883378565311432,
+      "min": 0.5,
+      "p10": 0.6666666865348816,
+      "median": 1.0,
+      "p90": 1.0,
+      "p95": 1.0,
+      "p99": 1.0,
+      "max": 1.0
+    },
+    "routing/qasa_hard_nonempty_recall": {
+      "n": 6016,
+      "mean": 0.9082724452018738,
+      "std": 0.18218860030174255,
+      "min": 0.3333333432674408,
+      "p10": 0.5,
+      "median": 1.0,
+      "p90": 1.0,
+      "p95": 1.0,
+      "p99": 1.0,
+      "max": 1.0
+    },
+    "routing/qasa_selected_empty_fraction": {
+      "n": 6016,
+      "mean": 0.042719416320323944,
+      "std": 0.12883378565311432,
+      "min": 0.0,
+      "p10": 0.0,
+      "median": 0.0,
+      "p90": 0.3333333432674408,
+      "p95": 0.5,
+      "p99": 0.5,
+      "max": 0.5
+    },
+    "routing/hard_owned_token_fraction_unselected_by_qasa": {
+      "n": 6016,
+      "mean": 0.02141181379556656,
+      "std": 0.04518788680434227,
+      "min": 0.0,
+      "p10": 0.0,
+      "median": 0.0,
+      "p90": 0.09090909361839294,
+      "p95": 0.125,
+      "p99": 0.1875,
+      "max": 0.2142857164144516
+    },
+    "routing/soft_top1_probability": {
+      "n": 73137,
+      "mean": 0.626693606376648,
+      "std": 0.22029855847358704,
+      "min": 0.26256102323532104,
+      "p10": 0.3237850069999695,
+      "median": 0.632098913192749,
+      "p90": 0.9233881235122681,
+      "p95": 0.9560326337814331,
+      "p99": 0.9861474633216858,
+      "max": 0.9996618032455444
+    },
+    "routing/soft_top1_margin": {
+      "n": 73137,
+      "mean": 0.4658004343509674,
+      "std": 0.31051966547966003,
+      "min": 6.3478946685791016e-06,
+      "p10": 0.04421794414520264,
+      "median": 0.47403907775878906,
+      "p90": 0.8861330151557922,
+      "p95": 0.933701753616333,
+      "p99": 0.9781578183174133,
+      "max": 0.9994269609451294
+    },
+    "routing/soft_entropy_per_token": {
+      "n": 73137,
+      "mean": 0.9365521669387817,
+      "std": 0.3793068528175354,
+      "min": 0.0033157840371131897,
+      "p10": 0.3494192063808441,
+      "median": 1.0291948318481445,
+      "p90": 1.3592123985290527,
+      "p95": 1.371394157409668,
+      "p99": 1.3789469003677368,
+      "max": 1.3847918510437012
+    },
+    "smoke/deployed_reconstruction_max_abs_diff": {
+      "n": 6016,
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "p10": 0.0,
+      "median": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "executor/empty_selected_actual_change_norm_sum": {
+      "n": 6016,
+      "mean": 0.05241097882390022,
+      "std": 0.17059537768363953,
+      "min": 0.0,
+      "p10": 0.0,
+      "median": 0.0,
+      "p90": 0.183561772108078,
+      "p95": 0.4832514524459839,
+      "p99": 0.7962254881858826,
+      "max": 1.897278070449829
+    },
+    "executor/empty_selected_query_l2_from_reference": {
+      "n": 6016,
+      "mean": 0.0030158371664583683,
+      "std": 0.00974391121417284,
+      "min": 0.0,
+      "p10": 0.0,
+      "median": 0.0,
+      "p90": 0.010154840536415577,
+      "p95": 0.02820071205496788,
+      "p99": 0.0457867756485939,
+      "max": 0.10280563682317734
+    },
+    "executor/empty_selected_query_cosine_distance_from_reference": {
+      "n": 6016,
+      "mean": 5.197770587983541e-05,
+      "std": 0.00021035636018496007,
+      "min": -2.384185791015625e-07,
+      "p10": -1.1920928955078125e-07,
+      "median": 0.0,
+      "p90": 5.1528215408325195e-05,
+      "p95": 0.00039759278297424316,
+      "p99": 0.0010481808567419648,
+      "max": 0.005284428596496582
+    },
+    "representation/raw_hard/edit_slot_effective_rank": {
+      "n": 6016,
+      "mean": 1.8034104108810425,
+      "std": 0.546501636505127,
+      "min": 1.0,
+      "p10": 1.0,
+      "median": 1.8847846984863281,
+      "p90": 2.6666297912597656,
+      "p95": 2.807314872741699,
+      "p99": 2.923978805541992,
+      "max": 2.983150005340576
+    },
+    "representation/raw_hard/edit_slot_pairwise_cosine": {
+      "n": 4610,
+      "mean": -0.0043738544918596745,
+      "std": 0.20757807791233063,
+      "min": -0.7127406001091003,
+      "p10": -0.2628709077835083,
+      "median": -0.007151501718908548,
+      "p90": 0.262932687997818,
+      "p95": 0.3449784815311432,
+      "p99": 0.5211931467056274,
+      "max": 0.8823424577713013
+    },
+    "representation/raw_hard/slot_semantic_norm": {
+      "n": 24064,
+      "mean": 0.26148685812950134,
+      "std": 0.2912670969963074,
+      "min": 0.0,
+      "p10": 0.0,
+      "median": 0.0,
+      "p90": 0.6733107566833496,
+      "p95": 0.7806587815284729,
+      "p99": 0.9584226608276367,
+      "max": 1.3206076622009277
+    },
+    "representation/raw_soft/edit_slot_effective_rank": {
+      "n": 6016,
+      "mean": 1.46347975730896,
+      "std": 0.23596318066120148,
+      "min": 1.0181889533996582,
+      "p10": 1.1700897216796875,
+      "median": 1.4424281120300293,
+      "p90": 1.7938740253448486,
+      "p95": 1.893711805343628,
+      "p99": 2.064363718032837,
+      "max": 2.4353444576263428
+    },
+    "representation/raw_soft/edit_slot_pairwise_cosine": {
+      "n": 6016,
+      "mean": 0.7243221402168274,
+      "std": 0.13396842777729034,
+      "min": 0.2378610372543335,
+      "p10": 0.54485023021698,
+      "median": 0.735532283782959,
+      "p90": 0.8897006511688232,
+      "p95": 0.9209450483322144,
+      "p99": 0.9607409834861755,
+      "max": 0.9883753657341003
+    },
+    "representation/raw_soft/slot_semantic_norm": {
+      "n": 24064,
+      "mean": 0.41379767656326294,
+      "std": 0.08651668578386307,
+      "min": 0.02538762055337429,
+      "p10": 0.3281644582748413,
+      "median": 0.4123693108558655,
+      "p90": 0.5056740045547485,
+      "p95": 0.5503650307655334,
+      "p99": 0.6463196873664856,
+      "max": 0.8611723184585571
+    },
+    "representation/contextual_hard/edit_slot_effective_rank": {
+      "n": 6016,
+      "mean": 1.2001771926879883,
+      "std": 0.19611304998397827,
+      "min": 1.0,
+      "p10": 1.0,
+      "median": 1.156069278717041,
+      "p90": 1.4729106426239014,
+      "p95": 1.5934489965438843,
+      "p99": 1.8338223695755005,
+      "max": 2.524632453918457
+    },
+    "representation/contextual_hard/edit_slot_pairwise_cosine": {
+      "n": 4610,
+      "mean": 0.7893292307853699,
+      "std": 0.13353177905082703,
+      "min": 0.09328317642211914,
+      "p10": 0.5987968444824219,
+      "median": 0.8237244486808777,
+      "p90": 0.9241510629653931,
+      "p95": 0.9392899870872498,
+      "p99": 0.9603371620178223,
+      "max": 0.9810233116149902
+    },
+    "representation/contextual_hard/slot_semantic_norm": {
+      "n": 24064,
+      "mean": 6.807716369628906,
+      "std": 7.058837413787842,
+      "min": 0.0,
+      "p10": 0.0,
+      "median": 0.0,
+      "p90": 15.034518241882324,
+      "p95": 15.95107650756836,
+      "p99": 17.06601333618164,
+      "max": 17.700517654418945
+    },
+    "representation/contextual_soft/edit_slot_effective_rank": {
+      "n": 6016,
+      "mean": 1.0516481399536133,
+      "std": 0.046189889311790466,
+      "min": 1.0016332864761353,
+      "p10": 1.0124175548553467,
+      "median": 1.0381803512573242,
+      "p90": 1.1068854331970215,
+      "p95": 1.1388938426971436,
+      "p99": 1.230032205581665,
+      "max": 1.4273395538330078
+    },
+    "representation/contextual_soft/edit_slot_pairwise_cosine": {
+      "n": 6016,
+      "mean": 0.9674370884895325,
+      "std": 0.02643829956650734,
+      "min": 0.7741906642913818,
+      "p10": 0.9328527450561523,
+      "median": 0.9752116203308105,
+      "p90": 0.9916470050811768,
+      "p95": 0.9939674139022827,
+      "p99": 0.996878445148468,
+      "max": 0.9988415837287903
+    },
+    "representation/contextual_soft/slot_semantic_norm": {
+      "n": 24064,
+      "mean": 12.566222190856934,
+      "std": 2.162898302078247,
+      "min": 0.9049147367477417,
+      "p10": 10.138228416442871,
+      "median": 13.119928359985352,
+      "p90": 14.335241317749023,
+      "p95": 14.619894027709961,
+      "p99": 15.08403205871582,
+      "max": 16.07717514038086
+    },
+    "tokens/raw_word_embedding_pairwise_cosine": {
+      "n": 6016,
+      "mean": 0.2373780608177185,
+      "std": 0.025909297168254852,
+      "min": 0.11066891998052597,
+      "p10": 0.21054619550704956,
+      "median": 0.23383384943008423,
+      "p90": 0.26882994174957275,
+      "p95": 0.2838413715362549,
+      "p99": 0.3228966295719147,
+      "max": 0.4065578579902649
+    },
+    "tokens/contextual_embedding_pairwise_cosine": {
+      "n": 6016,
+      "mean": 0.7247484922409058,
+      "std": 0.040283843874931335,
+      "min": 0.5950765609741211,
+      "p10": 0.674473762512207,
+      "median": 0.7227014303207397,
+      "p90": 0.7765365839004517,
+      "p95": 0.7953107357025146,
+      "p99": 0.829123854637146,
+      "max": 0.8929772973060608
+    },
+    "representation/raw_vs_contextual_same_hard_support_cosine": {
+      "n": 11705,
+      "mean": 0.07761078327894211,
+      "std": 0.03803648427128792,
+      "min": -0.04499513655900955,
+      "p10": 0.03417252004146576,
+      "median": 0.07461050152778625,
+      "p90": 0.12106902152299881,
+      "p95": 0.1446174681186676,
+      "p99": 0.20210401713848114,
+      "max": 0.2835693955421448
+    },
+    "retrieval/deployed_qasa/target_rank": {
+      "n": 6016,
+      "mean": 242.7769317626953,
+      "std": 581.106201171875,
+      "min": 1.0,
+      "p10": 2.0,
+      "median": 37.0,
+      "p90": 665.5,
+      "p95": 1250.0,
+      "p99": 3031.95263671875,
+      "max": 6151.0
+    },
+    "retrieval/deployed_qasa/target_margin": {
+      "n": 6016,
+      "mean": -0.11536642909049988,
+      "std": 0.10048533976078033,
+      "min": -0.637389063835144,
+      "p10": -0.2512201964855194,
+      "median": -0.09882843494415283,
+      "p90": -0.0038113296031951904,
+      "p95": 0.013169988989830017,
+      "p99": 0.046812161803245544,
+      "max": 0.10332632064819336
+    },
+    "retrieval/raw_hard_qasa/target_rank": {
+      "n": 6016,
+      "mean": 242.7769317626953,
+      "std": 581.106201171875,
+      "min": 1.0,
+      "p10": 2.0,
+      "median": 37.0,
+      "p90": 665.5,
+      "p95": 1250.0,
+      "p99": 3031.95263671875,
+      "max": 6151.0
+    },
+    "retrieval/raw_hard_qasa/target_margin": {
+      "n": 6016,
+      "mean": -0.11536642909049988,
+      "std": 0.10048533976078033,
+      "min": -0.637389063835144,
+      "p10": -0.2512201964855194,
+      "median": -0.09882843494415283,
+      "p90": -0.0038113296031951904,
+      "p95": 0.013169988989830017,
+      "p99": 0.046812161803245544,
+      "max": 0.10332632064819336
+    },
+    "retrieval/raw_hard_qasa_nonempty/target_rank": {
+      "n": 6016,
+      "mean": 242.74783325195312,
+      "std": 581.0718383789062,
+      "min": 1.0,
+      "p10": 2.0,
+      "median": 38.0,
+      "p90": 665.5,
+      "p95": 1247.75,
+      "p99": 3016.6015625,
+      "max": 6151.0
+    },
+    "retrieval/raw_hard_qasa_nonempty/target_margin": {
+      "n": 6016,
+      "mean": -0.11535230278968811,
+      "std": 0.10047632455825806,
+      "min": -0.637389063835144,
+      "p10": -0.2509061396121979,
+      "median": -0.09883978962898254,
+      "p90": -0.0038113296031951904,
+      "p95": 0.013095155358314514,
+      "p99": 0.046812161803245544,
+      "max": 0.10309082269668579
+    },
+    "retrieval/raw_hard_all_nonempty/target_rank": {
+      "n": 6016,
+      "mean": 242.35122680664062,
+      "std": 580.5423583984375,
+      "min": 1.0,
+      "p10": 2.0,
+      "median": 37.0,
+      "p90": 665.5,
+      "p95": 1247.0,
+      "p99": 3003.95068359375,
+      "max": 6180.0
+    },
+    "retrieval/raw_hard_all_nonempty/target_margin": {
+      "n": 6016,
+      "mean": -0.11535461992025375,
+      "std": 0.10051428526639938,
+      "min": -0.637389063835144,
+      "p10": -0.2509061396121979,
+      "median": -0.0989983081817627,
+      "p90": -0.003703206777572632,
+      "p95": 0.013244569301605225,
+      "p99": 0.04677283763885498,
+      "max": 0.10309082269668579
+    },
+    "retrieval/raw_soft_qasa/target_rank": {
+      "n": 6016,
+      "mean": 234.77377319335938,
+      "std": 560.5174560546875,
+      "min": 1.0,
+      "p10": 2.0,
+      "median": 38.0,
+      "p90": 632.5,
+      "p95": 1169.25,
+      "p99": 2916.7001953125,
+      "max": 6161.0
+    },
+    "retrieval/raw_soft_qasa/target_margin": {
+      "n": 6016,
+      "mean": -0.11427740007638931,
+      "std": 0.09884601831436157,
+      "min": -0.6321802735328674,
+      "p10": -0.24838665127754211,
+      "median": -0.09685344994068146,
+      "p90": -0.0051996707916259766,
+      "p95": 0.012122392654418945,
+      "p99": 0.0453350655734539,
+      "max": 0.11242058873176575
+    },
+    "retrieval/raw_soft_all/target_rank": {
+      "n": 6016,
+      "mean": 278.2165832519531,
+      "std": 601.8294067382812,
+      "min": 1.0,
+      "p10": 2.0,
+      "median": 57.0,
+      "p90": 762.5,
+      "p95": 1389.25,
+      "p99": 3216.65478515625,
+      "max": 6322.0
+    },
+    "retrieval/raw_soft_all/target_margin": {
+      "n": 6016,
+      "mean": -0.12452804297208786,
+      "std": 0.09991030395030975,
+      "min": -0.6090084910392761,
+      "p10": -0.2610087990760803,
+      "median": -0.10770559310913086,
+      "p90": -0.012423813343048096,
+      "p95": 0.004353314638137817,
+      "p99": 0.03832142800092697,
+      "max": 0.10659739375114441
+    },
+    "retrieval/contextual_hard_qasa_nonempty/target_rank": {
+      "n": 6016,
+      "mean": 719.8465576171875,
+      "std": 1102.3780517578125,
+      "min": 1.0,
+      "p10": 6.0,
+      "median": 216.0,
+      "p90": 2273.5,
+      "p95": 3265.25,
+      "p99": 4979.55029296875,
+      "max": 6335.0
+    },
+    "retrieval/contextual_hard_qasa_nonempty/target_margin": {
+      "n": 6016,
+      "mean": -0.2029932290315628,
+      "std": 0.12491850554943085,
+      "min": -0.6483902335166931,
+      "p10": -0.3768104910850525,
+      "median": -0.189211905002594,
+      "p90": -0.051533058285713196,
+      "p95": -0.02627377212047577,
+      "p99": 0.008716699667274952,
+      "max": 0.07655477523803711
+    },
+    "retrieval/contextual_soft_qasa/target_rank": {
+      "n": 6016,
+      "mean": 686.4915161132812,
+      "std": 1080.378173828125,
+      "min": 1.0,
+      "p10": 6.0,
+      "median": 194.0,
+      "p90": 2167.5,
+      "p95": 3122.25,
+      "p99": 4954.55029296875,
+      "max": 6335.0
+    },
+    "retrieval/contextual_soft_qasa/target_margin": {
+      "n": 6016,
+      "mean": -0.1974874883890152,
+      "std": 0.12471307814121246,
+      "min": -0.646482527256012,
+      "p10": -0.3724319040775299,
+      "median": -0.18247202038764954,
+      "p90": -0.047356098890304565,
+      "p95": -0.02261658012866974,
+      "p99": 0.012883380986750126,
+      "max": 0.09820735454559326
+    },
+    "retrieval/reference_only/target_rank": {
+      "n": 6016,
+      "mean": 1051.3505859375,
+      "std": 1327.207763671875,
+      "min": 1.0,
+      "p10": 15.0,
+      "median": 468.0,
+      "p90": 3135.5,
+      "p95": 4010.0,
+      "p99": 5391.0,
+      "max": 6333.0
+    },
+    "retrieval/reference_only/target_margin": {
+      "n": 6016,
+      "mean": -0.24599623680114746,
+      "std": 0.12745217978954315,
+      "min": -0.6547882556915283,
+      "p10": -0.42029204964637756,
+      "median": -0.23330067098140717,
+      "p90": -0.08793725073337555,
+      "p95": -0.057784564793109894,
+      "p99": -0.016141075640916824,
+      "max": 0.04690387845039368
+    },
+    "retrieval/teacher_full/target_rank": {
+      "n": 6016,
+      "mean": 116.67802429199219,
+      "std": 398.32281494140625,
+      "min": 1.0,
+      "p10": 1.0,
+      "median": 7.0,
+      "p90": 243.5,
+      "p95": 576.0,
+      "p99": 2161.6015625,
+      "max": 5967.0
+    },
+    "retrieval/teacher_full/target_margin": {
+      "n": 6016,
+      "mean": -0.048308756202459335,
+      "std": 0.06919711083173752,
+      "min": -0.40213340520858765,
+      "p10": -0.1375860869884491,
+      "median": -0.0387347936630249,
+      "p90": 0.02694365382194519,
+      "p95": 0.04886661469936371,
+      "p99": 0.09410186111927032,
+      "max": 0.17172777652740479
+    },
+    "retrieval/empty_selected_only/target_rank": {
+      "n": 6016,
+      "mean": 1050.5655517578125,
+      "std": 1326.3714599609375,
+      "min": 1.0,
+      "p10": 15.0,
+      "median": 469.0,
+      "p90": 3137.0,
+      "p95": 4000.75,
+      "p99": 5391.0,
+      "max": 6333.0
+    },
+    "retrieval/empty_selected_only/target_margin": {
+      "n": 6016,
+      "mean": -0.24607278406620026,
+      "std": 0.12748737633228302,
+      "min": -0.6547882556915283,
+      "p10": -0.42090821266174316,
+      "median": -0.23337046802043915,
+      "p90": -0.08809824287891388,
+      "p95": -0.05769676715135574,
+      "p99": -0.016141075640916824,
+      "max": 0.04690387845039368
+    },
+    "query_shift/raw_hard_qasa/l2_from_deployed": {
+      "n": 6016,
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "p10": 0.0,
+      "median": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 0.0,
+      "max": 0.0
+    },
+    "query_shift/raw_hard_qasa/cosine_distance_from_deployed": {
+      "n": 6016,
+      "mean": -3.9759548542406264e-08,
+      "std": 6.567647403699084e-08,
+      "min": -2.384185791015625e-07,
+      "p10": -1.1920928955078125e-07,
+      "median": 0.0,
+      "p90": 0.0,
+      "p95": 0.0,
+      "p99": 5.960464477539063e-08,
+      "max": 1.7881393432617188e-07
+    },
+    "query_shift/raw_hard_qasa_nonempty/l2_from_deployed": {
+      "n": 6016,
+      "mean": 0.0014830894069746137,
+      "std": 0.005405466537922621,
+      "min": 0.0,
+      "p10": 0.0,
+      "median": 0.0,
+      "p90": 0.0028685233555734158,
+      "p95": 0.012523704208433628,
+      "p99": 0.02788853459060192,
+      "max": 0.07779228687286377
+    },
+    "query_shift/raw_hard_qasa_nonempty/cosine_distance_from_deployed": {
+      "n": 6016,
+      "mean": 1.5668987543904223e-05,
+      "std": 8.518853428540751e-05,
+      "min": -2.384185791015625e-07,
+      "p10": -1.1920928955078125e-07,
+      "median": 0.0,
+      "p90": 4.112720489501953e-06,
+      "p95": 7.832050323486328e-05,
+      "p99": 0.0003888548235408962,
+      "max": 0.003025650978088379
+    },
+    "query_shift/raw_hard_all_nonempty/l2_from_deployed": {
+      "n": 6016,
+      "mean": 0.011332860216498375,
+      "std": 0.03940454125404358,
+      "min": 0.0,
+      "p10": 0.0,
+      "median": 0.0,
+      "p90": 0.025318611413240433,
+      "p95": 0.052172355353832245,
+      "p99": 0.2284674495458603,
+      "max": 0.6435925364494324
+    },
+    "query_shift/raw_hard_all_nonempty/cosine_distance_from_deployed": {
+      "n": 6016,
+      "mean": 0.0008405329426750541,
+      "std": 0.006359643768519163,
+      "min": -2.384185791015625e-07,
+      "p10": -1.1920928955078125e-07,
+      "median": 0.0,
+      "p90": 0.0003205239772796631,
+      "p95": 0.0013609826564788818,
+      "p99": 0.02609863504767418,
+      "max": 0.2071055769920349
+    },
+    "query_shift/raw_soft_qasa/l2_from_deployed": {
+      "n": 6016,
+      "mean": 0.19844084978103638,
+      "std": 0.12901894748210907,
+      "min": 0.007533370982855558,
+      "p10": 0.05398176237940788,
+      "median": 0.1785450577735901,
+      "p90": 0.3739014267921448,
+      "p95": 0.44367650151252747,
+      "p99": 0.5894429087638855,
+      "max": 0.8983899354934692
+    },
+    "query_shift/raw_soft_qasa/cosine_distance_from_deployed": {
+      "n": 6016,
+      "mean": 0.028012283146381378,
+      "std": 0.03607964143157005,
+      "min": 2.8192996978759766e-05,
+      "p10": 0.001456916332244873,
+      "median": 0.01593911647796631,
+      "p90": 0.06990107893943787,
+      "p95": 0.09842436015605927,
+      "p99": 0.17372150719165802,
+      "max": 0.40355223417282104
+    },
+    "query_shift/raw_soft_all/l2_from_deployed": {
+      "n": 6016,
+      "mean": 0.40818068385124207,
+      "std": 0.1741723269224167,
+      "min": 0.02190810814499855,
+      "p10": 0.1705990433692932,
+      "median": 0.41012704372406006,
+      "p90": 0.6296128630638123,
+      "p95": 0.7065461277961731,
+      "p99": 0.838864266872406,
+      "max": 1.1011821031570435
+    },
+    "query_shift/raw_soft_all/cosine_distance_from_deployed": {
+      "n": 6016,
+      "mean": 0.0984736979007721,
+      "std": 0.07753816992044449,
+      "min": 0.00023996829986572266,
+      "p10": 0.014551907777786255,
+      "median": 0.08410206437110901,
+      "p90": 0.19820615649223328,
+      "p95": 0.24960367381572723,
+      "p99": 0.3518465459346771,
+      "max": 0.6063010096549988
+    },
+    "query_shift/contextual_hard_qasa_nonempty/l2_from_deployed": {
+      "n": 6016,
+      "mean": 0.6436526775360107,
+      "std": 0.14325813949108124,
+      "min": 0.2054593563079834,
+      "p10": 0.4608428478240967,
+      "median": 0.6409716010093689,
+      "p90": 0.8312696814537048,
+      "p95": 0.8884075284004211,
+      "p99": 0.9921221137046814,
+      "max": 1.1417104005813599
+    },
+    "query_shift/contextual_hard_qasa_nonempty/cosine_distance_from_deployed": {
+      "n": 6016,
+      "mean": 0.2174057811498642,
+      "std": 0.09487731754779816,
+      "min": 0.021106719970703125,
+      "p10": 0.1061880886554718,
+      "median": 0.20542225241661072,
+      "p90": 0.34550464153289795,
+      "p95": 0.394633948802948,
+      "p99": 0.49215319752693176,
+      "max": 0.6517512798309326
+    },
+    "query_shift/contextual_soft_qasa/l2_from_deployed": {
+      "n": 6016,
+      "mean": 0.6350770592689514,
+      "std": 0.14217257499694824,
+      "min": 0.20574705302715302,
+      "p10": 0.45516806840896606,
+      "median": 0.6305803656578064,
+      "p90": 0.8229215741157532,
+      "p95": 0.8800972700119019,
+      "p99": 0.978504478931427,
+      "max": 1.140222191810608
+    },
+    "query_shift/contextual_soft_qasa/cosine_distance_from_deployed": {
+      "n": 6016,
+      "mean": 0.21176792681217194,
+      "std": 0.09321403503417969,
+      "min": 0.021165788173675537,
+      "p10": 0.10358887910842896,
+      "median": 0.19881576299667358,
+      "p90": 0.33859992027282715,
+      "p95": 0.3872855603694916,
+      "p99": 0.47873562574386597,
+      "max": 0.6500533819198608
+    },
+    "query_shift/reference_only/l2_from_deployed": {
+      "n": 6016,
+      "mean": 0.7453106641769409,
+      "std": 0.16395951807498932,
+      "min": 0.2054903209209442,
+      "p10": 0.5266441702842712,
+      "median": 0.7500321269035339,
+      "p90": 0.9511249661445618,
+      "p95": 1.0083245038986206,
+      "p99": 1.1105542182922363,
+      "max": 1.3320417404174805
+    },
+    "query_shift/reference_only/cosine_distance_from_deployed": {
+      "n": 6016,
+      "mean": 0.2911854088306427,
+      "std": 0.12200266867876053,
+      "min": 0.021113097667694092,
+      "p10": 0.1386769711971283,
+      "median": 0.28127408027648926,
+      "p90": 0.45231932401657104,
+      "p95": 0.5083591341972351,
+      "p99": 0.6166653633117676,
+      "max": 0.8871675729751587
+    },
+    "query_shift/teacher_full/l2_from_deployed": {
+      "n": 6016,
+      "mean": 0.9869740009307861,
+      "std": 0.07893099635839462,
+      "min": 0.7635545134544373,
+      "p10": 0.8944090008735657,
+      "median": 0.9778978824615479,
+      "p90": 1.093008041381836,
+      "p95": 1.1320905685424805,
+      "p99": 1.210720181465149,
+      "max": 1.3427947759628296
+    },
+    "query_shift/teacher_full/cosine_distance_from_deployed": {
+      "n": 6016,
+      "mean": 0.4901737868785858,
+      "std": 0.08012941479682922,
+      "min": 0.2915077209472656,
+      "p10": 0.3999837040901184,
+      "median": 0.478142112493515,
+      "p90": 0.5973331928253174,
+      "p95": 0.6408144235610962,
+      "p99": 0.7329216599464417,
+      "max": 0.9015490412712097
+    },
+    "query_shift/empty_selected_only/l2_from_deployed": {
+      "n": 6016,
+      "mean": 0.7446064352989197,
+      "std": 0.1639557033777237,
+      "min": 0.2054903209209442,
+      "p10": 0.5260077714920044,
+      "median": 0.7490352392196655,
+      "p90": 0.9505560398101807,
+      "p95": 1.007836103439331,
+      "p99": 1.1105284690856934,
+      "max": 1.3320417404174805
+    },
+    "query_shift/empty_selected_only/cosine_distance_from_deployed": {
+      "n": 6016,
+      "mean": 0.2906600832939148,
+      "std": 0.12187178432941437,
+      "min": 0.021113097667694092,
+      "p10": 0.138342022895813,
+      "median": 0.2805268466472626,
+      "p90": 0.4517784118652344,
+      "p95": 0.5078668594360352,
+      "p99": 0.6166368126869202,
+      "max": 0.8871675729751587
+    }
+  },
+  "examples": [
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:2",
+      "modification_text": "is a solid red color and shorter and tighter with more blue and white",
+      "target_id": "B00CMPE0C0",
+      "qasa_selected_slots": [
+        0,
+        3
+      ],
+      "hard_nonempty_slots": [
+        0,
+        3
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        12,
+        0,
+        0,
+        2
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.8571428656578064,
+      "rank_deployed": 2814,
+      "rank_raw_hard": 2814,
+      "rank_raw_hard_nonempty": 2814,
+      "rank_raw_soft": 1316,
+      "rank_contextual_hard_nonempty": 2741,
+      "soft_rank_rescue": 1498,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": 73
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:285",
+      "modification_text": "has longer sleeves and white",
+      "target_id": "B0085JAH88",
+      "qasa_selected_slots": [
+        0
+      ],
+      "hard_nonempty_slots": [
+        0
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        5,
+        0,
+        0,
+        0
+      ],
+      "hard_effective_k": 1,
+      "hard_dominant_share": 1.0,
+      "rank_deployed": 1667,
+      "rank_raw_hard": 1667,
+      "rank_raw_hard_nonempty": 1667,
+      "rank_raw_soft": 1640,
+      "rank_contextual_hard_nonempty": 423,
+      "soft_rank_rescue": 27,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": 1244
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:228",
+      "modification_text": "various colors stockings with holes and is a sexy leg cover",
+      "target_id": "B004HX2DYW",
+      "qasa_selected_slots": [
+        0,
+        1
+      ],
+      "hard_nonempty_slots": [
+        0
+      ],
+      "qasa_selected_empty_slots": [
+        1
+      ],
+      "hard_winner_counts": [
+        11,
+        0,
+        0,
+        0
+      ],
+      "hard_effective_k": 1,
+      "hard_dominant_share": 1.0,
+      "rank_deployed": 2496,
+      "rank_raw_hard": 2496,
+      "rank_raw_hard_nonempty": 2503,
+      "rank_raw_soft": 1366,
+      "rank_contextual_hard_nonempty": 3655,
+      "soft_rank_rescue": 1130,
+      "nonempty_rank_rescue": -7,
+      "contextual_rank_rescue": -1152
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:199",
+      "modification_text": "is a lighter color and is more concealing and is more patterned",
+      "target_id": "B0087D7OJ2",
+      "qasa_selected_slots": [
+        0,
+        3
+      ],
+      "hard_nonempty_slots": [
+        0,
+        3
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        10,
+        0,
+        0,
+        3
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.7692307829856873,
+      "rank_deployed": 1786,
+      "rank_raw_hard": 1786,
+      "rank_raw_hard_nonempty": 1786,
+      "rank_raw_soft": 1736,
+      "rank_contextual_hard_nonempty": 916,
+      "soft_rank_rescue": 50,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": 870
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:150",
+      "modification_text": "is less revealing and has a pattern and less of a v neck",
+      "target_id": "B00575VVGU",
+      "qasa_selected_slots": [
+        0,
+        1
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        6,
+        7,
+        0,
+        0
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.5384615659713745,
+      "rank_deployed": 2480,
+      "rank_raw_hard": 2480,
+      "rank_raw_hard_nonempty": 2480,
+      "rank_raw_soft": 2494,
+      "rank_contextual_hard_nonempty": 1690,
+      "soft_rank_rescue": -14,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": 790
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:59",
+      "modification_text": "is a short dress with a v neck and is a tan coloring with fabric overlapping on top",
+      "target_id": "B00B5VXRTO",
+      "qasa_selected_slots": [
+        0,
+        1,
+        3
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1,
+        3
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        9,
+        1,
+        0,
+        8
+      ],
+      "hard_effective_k": 3,
+      "hard_dominant_share": 0.5,
+      "rank_deployed": 1671,
+      "rank_raw_hard": 1671,
+      "rank_raw_hard_nonempty": 1671,
+      "rank_raw_soft": 1123,
+      "rank_contextual_hard_nonempty": 882,
+      "soft_rank_rescue": 548,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": 789
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:105",
+      "modification_text": "has longer sleeves and lighter in color and is solid colors with short sleeves",
+      "target_id": "B001FWNNC4",
+      "qasa_selected_slots": [
+        0,
+        3
+      ],
+      "hard_nonempty_slots": [
+        0,
+        3
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        13,
+        0,
+        0,
+        1
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.9285714030265808,
+      "rank_deployed": 1881,
+      "rank_raw_hard": 1881,
+      "rank_raw_hard_nonempty": 1881,
+      "rank_raw_soft": 1297,
+      "rank_contextual_hard_nonempty": 2908,
+      "soft_rank_rescue": 584,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -1027
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:60",
+      "modification_text": "is solid nude color and has straps instead of long sleeves and has two colors",
+      "target_id": "B007ORZ1PG",
+      "qasa_selected_slots": [
+        0,
+        1,
+        2
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1
+      ],
+      "qasa_selected_empty_slots": [
+        2
+      ],
+      "hard_winner_counts": [
+        11,
+        4,
+        0,
+        0
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.7333333492279053,
+      "rank_deployed": 618,
+      "rank_raw_hard": 618,
+      "rank_raw_hard_nonempty": 652,
+      "rank_raw_soft": 40,
+      "rank_contextual_hard_nonempty": 502,
+      "soft_rank_rescue": 578,
+      "nonempty_rank_rescue": -34,
+      "contextual_rank_rescue": 150
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:91",
+      "modification_text": "has a brighter color and is more of a boot with shorter heels and is a shoe",
+      "target_id": "B00D4JNBC8",
+      "qasa_selected_slots": [
+        0,
+        1
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1,
+        3
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        15,
+        1,
+        0,
+        1
+      ],
+      "hard_effective_k": 3,
+      "hard_dominant_share": 0.8823529481887817,
+      "rank_deployed": 817,
+      "rank_raw_hard": 817,
+      "rank_raw_hard_nonempty": 817,
+      "rank_raw_soft": 281,
+      "rank_contextual_hard_nonempty": 909,
+      "soft_rank_rescue": 536,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -92
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:187",
+      "modification_text": "is shorter with thick straps and is a shorter dress",
+      "target_id": "B007XVBUZI",
+      "qasa_selected_slots": [
+        0
+      ],
+      "hard_nonempty_slots": [
+        0
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        10,
+        0,
+        0,
+        0
+      ],
+      "hard_effective_k": 1,
+      "hard_dominant_share": 1.0,
+      "rank_deployed": 1587,
+      "rank_raw_hard": 1587,
+      "rank_raw_hard_nonempty": 1587,
+      "rank_raw_soft": 1476,
+      "rank_contextual_hard_nonempty": 1100,
+      "soft_rank_rescue": 111,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": 487
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:180",
+      "modification_text": "more vintage styled and sleeveless and is darker in color and sleeveless",
+      "target_id": "B007WASVRK",
+      "qasa_selected_slots": [
+        0,
+        1
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1,
+        3
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        10,
+        3,
+        0,
+        1
+      ],
+      "hard_effective_k": 3,
+      "hard_dominant_share": 0.7142857313156128,
+      "rank_deployed": 1873,
+      "rank_raw_hard": 1873,
+      "rank_raw_hard_nonempty": 1873,
+      "rank_raw_soft": 1439,
+      "rank_contextual_hard_nonempty": 1577,
+      "soft_rank_rescue": 434,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": 296
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:315",
+      "modification_text": "is shorter and shorter",
+      "target_id": "B004MMFVQ0",
+      "qasa_selected_slots": [
+        0
+      ],
+      "hard_nonempty_slots": [
+        0
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        4,
+        0,
+        0,
+        0
+      ],
+      "hard_effective_k": 1,
+      "hard_dominant_share": 1.0,
+      "rank_deployed": 855,
+      "rank_raw_hard": 855,
+      "rank_raw_hard_nonempty": 855,
+      "rank_raw_soft": 853,
+      "rank_contextual_hard_nonempty": 477,
+      "soft_rank_rescue": 2,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": 378
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:173",
+      "modification_text": "is more patterned with shorter sleeves and blue and has sleeves",
+      "target_id": "B0085U9J5E",
+      "qasa_selected_slots": [
+        0,
+        1
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        10,
+        1,
+        0,
+        0
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.9090909361839294,
+      "rank_deployed": 429,
+      "rank_raw_hard": 429,
+      "rank_raw_hard_nonempty": 429,
+      "rank_raw_soft": 453,
+      "rank_contextual_hard_nonempty": 82,
+      "soft_rank_rescue": -24,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": 347
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:280",
+      "modification_text": "is yellow with zipper in front and is blue and shorter sleeved",
+      "target_id": "B00B5MK7N2",
+      "qasa_selected_slots": [
+        0,
+        1,
+        3
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1,
+        3
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        7,
+        5,
+        0,
+        1
+      ],
+      "hard_effective_k": 3,
+      "hard_dominant_share": 0.5384615659713745,
+      "rank_deployed": 1864,
+      "rank_raw_hard": 1864,
+      "rank_raw_hard_nonempty": 1864,
+      "rank_raw_soft": 1575,
+      "rank_contextual_hard_nonempty": 2328,
+      "soft_rank_rescue": 289,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -464
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:292",
+      "modification_text": "is a halter and solid color and light dark color",
+      "target_id": "B008BDJDE2",
+      "qasa_selected_slots": [
+        0,
+        1
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1,
+        3
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        9,
+        1,
+        0,
+        1
+      ],
+      "hard_effective_k": 3,
+      "hard_dominant_share": 0.8181818127632141,
+      "rank_deployed": 538,
+      "rank_raw_hard": 538,
+      "rank_raw_hard_nonempty": 538,
+      "rank_raw_soft": 277,
+      "rank_contextual_hard_nonempty": 2050,
+      "soft_rank_rescue": 261,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -1512
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:170",
+      "modification_text": "has a high low hem and no words and is pink and flowing",
+      "target_id": "B00EOXSEN4",
+      "qasa_selected_slots": [
+        0,
+        1,
+        2
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1,
+        3
+      ],
+      "qasa_selected_empty_slots": [
+        2
+      ],
+      "hard_winner_counts": [
+        9,
+        2,
+        0,
+        2
+      ],
+      "hard_effective_k": 3,
+      "hard_dominant_share": 0.692307710647583,
+      "rank_deployed": 299,
+      "rank_raw_hard": 299,
+      "rank_raw_hard_nonempty": 284,
+      "rank_raw_soft": 574,
+      "rank_contextual_hard_nonempty": 28,
+      "soft_rank_rescue": -275,
+      "nonempty_rank_rescue": 15,
+      "contextual_rank_rescue": 256
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:99",
+      "modification_text": "is longer and more asian inspired and is longer and shiny black",
+      "target_id": "B000RL3V58",
+      "qasa_selected_slots": [
+        0,
+        1
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        10,
+        2,
+        0,
+        0
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.8333333134651184,
+      "rank_deployed": 575,
+      "rank_raw_hard": 575,
+      "rank_raw_hard_nonempty": 575,
+      "rank_raw_soft": 332,
+      "rank_contextual_hard_nonempty": 2936,
+      "soft_rank_rescue": 243,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -2361
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:289",
+      "modification_text": "and is a lighter color and is sleeveless",
+      "target_id": "B009LGQ9EA",
+      "qasa_selected_slots": [
+        0,
+        3
+      ],
+      "hard_nonempty_slots": [
+        0,
+        3
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        8,
+        0,
+        0,
+        1
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.8888888955116272,
+      "rank_deployed": 1391,
+      "rank_raw_hard": 1391,
+      "rank_raw_hard_nonempty": 1391,
+      "rank_raw_soft": 2307,
+      "rank_contextual_hard_nonempty": 1156,
+      "soft_rank_rescue": -916,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": 235
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:8",
+      "modification_text": "is longer and more elegant and is longer and sleeveless",
+      "target_id": "B0077SM1Z0",
+      "qasa_selected_slots": [
+        0,
+        1
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        8,
+        3,
+        0,
+        0
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.7272727489471436,
+      "rank_deployed": 522,
+      "rank_raw_hard": 522,
+      "rank_raw_hard_nonempty": 522,
+      "rank_raw_soft": 289,
+      "rank_contextual_hard_nonempty": 2589,
+      "soft_rank_rescue": 233,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -2067
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:319",
+      "modification_text": "is white colored with british flag and is a t shirt with the british flag in the background and a phone booth in the front",
+      "target_id": "B00CTKTIQ6",
+      "qasa_selected_slots": [
+        0,
+        1
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        22,
+        3,
+        0,
+        0
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.8799999952316284,
+      "rank_deployed": 594,
+      "rank_raw_hard": 594,
+      "rank_raw_hard_nonempty": 594,
+      "rank_raw_soft": 363,
+      "rank_contextual_hard_nonempty": 2606,
+      "soft_rank_rescue": 231,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -2012
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:243",
+      "modification_text": "has longer sleeves and is sexier and is black and more dressy",
+      "target_id": "B00GNU62GM",
+      "qasa_selected_slots": [
+        0
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        13,
+        1,
+        0,
+        0
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.9285714030265808,
+      "rank_deployed": 1027,
+      "rank_raw_hard": 1027,
+      "rank_raw_hard_nonempty": 1027,
+      "rank_raw_soft": 797,
+      "rank_contextual_hard_nonempty": 2410,
+      "soft_rank_rescue": 230,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -1383
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:218",
+      "modification_text": "is shorter in length and one stripe down middle",
+      "target_id": "B004CZ7WUU",
+      "qasa_selected_slots": [
+        0
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        8,
+        1,
+        0,
+        0
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.8888888955116272,
+      "rank_deployed": 217,
+      "rank_raw_hard": 217,
+      "rank_raw_hard_nonempty": 217,
+      "rank_raw_soft": 334,
+      "rank_contextual_hard_nonempty": 1,
+      "soft_rank_rescue": -117,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": 216
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:283",
+      "modification_text": "is body suit in solid color and is black and less revealing",
+      "target_id": "B00428LYOM",
+      "qasa_selected_slots": [
+        0,
+        1
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        8,
+        4,
+        0,
+        0
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.6666666865348816,
+      "rank_deployed": 2371,
+      "rank_raw_hard": 2371,
+      "rank_raw_hard_nonempty": 2371,
+      "rank_raw_soft": 2156,
+      "rank_contextual_hard_nonempty": 3779,
+      "soft_rank_rescue": 215,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -1408
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:313",
+      "modification_text": "has more fringes and more sleeves and red and black dress",
+      "target_id": "B00655A1TE",
+      "qasa_selected_slots": [
+        0
+      ],
+      "hard_nonempty_slots": [
+        0
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        12,
+        0,
+        0,
+        0
+      ],
+      "hard_effective_k": 1,
+      "hard_dominant_share": 1.0,
+      "rank_deployed": 787,
+      "rank_raw_hard": 787,
+      "rank_raw_hard_nonempty": 787,
+      "rank_raw_soft": 574,
+      "rank_contextual_hard_nonempty": 2717,
+      "soft_rank_rescue": 213,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -1930
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:69",
+      "modification_text": "is lighter and has shorter sleeves and is black and less revealing",
+      "target_id": "B007RB7J4K",
+      "qasa_selected_slots": [
+        0,
+        1
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        9,
+        3,
+        0,
+        0
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.75,
+      "rank_deployed": 309,
+      "rank_raw_hard": 309,
+      "rank_raw_hard_nonempty": 309,
+      "rank_raw_soft": 111,
+      "rank_contextual_hard_nonempty": 438,
+      "soft_rank_rescue": 198,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -129
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:84",
+      "modification_text": "is more of headwear and is a zebra head and not a dress",
+      "target_id": "B00DS1XAXM",
+      "qasa_selected_slots": [
+        0
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        13,
+        1,
+        0,
+        0
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.9285714030265808,
+      "rank_deployed": 1163,
+      "rank_raw_hard": 1163,
+      "rank_raw_hard_nonempty": 1163,
+      "rank_raw_soft": 965,
+      "rank_contextual_hard_nonempty": 2702,
+      "soft_rank_rescue": 198,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -1539
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:49",
+      "modification_text": "shorter skirt and na",
+      "target_id": "B00BFPGAGM",
+      "qasa_selected_slots": [
+        0
+      ],
+      "hard_nonempty_slots": [
+        0
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        4,
+        0,
+        0,
+        0
+      ],
+      "hard_effective_k": 1,
+      "hard_dominant_share": 1.0,
+      "rank_deployed": 2216,
+      "rank_raw_hard": 2216,
+      "rank_raw_hard_nonempty": 2216,
+      "rank_raw_soft": 2034,
+      "rank_contextual_hard_nonempty": 2274,
+      "soft_rank_rescue": 182,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -58
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:168",
+      "modification_text": "has open shoulders straps and fitted with no belt and light color",
+      "target_id": "B002TYZD02",
+      "qasa_selected_slots": [
+        0,
+        1
+      ],
+      "hard_nonempty_slots": [
+        0,
+        1,
+        3
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        8,
+        2,
+        0,
+        2
+      ],
+      "hard_effective_k": 3,
+      "hard_dominant_share": 0.6666666865348816,
+      "rank_deployed": 534,
+      "rank_raw_hard": 534,
+      "rank_raw_hard_nonempty": 534,
+      "rank_raw_soft": 357,
+      "rank_contextual_hard_nonempty": 716,
+      "soft_rank_rescue": 177,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -182
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:300",
+      "modification_text": "patterned and much longer and is a faded yellow",
+      "target_id": "B001QCXH4W",
+      "qasa_selected_slots": [
+        0
+      ],
+      "hard_nonempty_slots": [
+        0,
+        3
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        8,
+        0,
+        0,
+        1
+      ],
+      "hard_effective_k": 2,
+      "hard_dominant_share": 0.8888888955116272,
+      "rank_deployed": 396,
+      "rank_raw_hard": 396,
+      "rank_raw_hard_nonempty": 396,
+      "rank_raw_soft": 228,
+      "rank_contextual_hard_nonempty": 1456,
+      "soft_rank_rescue": 168,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -1060
+    },
+    {
+      "category": "dress",
+      "sample_id": "fashioniq:val:dress:118",
+      "modification_text": "is longer sleeved with black skirt and is long sleeve and darker pattern with black skirt",
+      "target_id": "B00ETGEI1I",
+      "qasa_selected_slots": [
+        0
+      ],
+      "hard_nonempty_slots": [
+        0
+      ],
+      "qasa_selected_empty_slots": [],
+      "hard_winner_counts": [
+        17,
+        0,
+        0,
+        0
+      ],
+      "hard_effective_k": 1,
+      "hard_dominant_share": 1.0,
+      "rank_deployed": 966,
+      "rank_raw_hard": 966,
+      "rank_raw_hard_nonempty": 966,
+      "rank_raw_soft": 828,
+      "rank_contextual_hard_nonempty": 1556,
+      "soft_rank_rescue": 138,
+      "nonempty_rank_rescue": 0,
+      "contextual_rank_rescue": -590
+    }
+  ],
+  "diagnosis": [
+    {
+      "name": "qasa_vs_hard_value_support_mismatch",
+      "severity": "low",
+      "evidence": {
+        "mean_qasa_selected_empty_fraction": 0.042719416320323944,
+        "mean_recall_gain_when_masking_empty_selected_slots": 0.00834824177676552,
+        "mean_hard_owned_token_fraction_unselected_by_qasa": 0.02141181379556656
+      },
+      "interpretation": "QASA is computed from soft contextual attention while VALUE may be hard-exclusive. A QASA-selected slot can therefore own zero hard VALUE tokens, while a hard-nonempty slot can be left unselected."
+    },
+    {
+      "name": "empty_slot_executor_is_not_noop_when_selected",
+      "severity": "high",
+      "evidence": {
+        "mean_sum_actual_state_change_norm_empty_selected_only": 0.05241097882390022
+      },
+      "interpretation": "An edit slot with zero VALUE can still trigger a nonzero executor transition if QASA selects it, because execute() gates on selection, not VALUE activity."
+    },
+    {
+      "name": "hard_assignment_bottleneck_probe",
+      "severity": "low",
+      "evidence": {
+        "frozen_checkpoint_soft_minus_hard_mean_recall": -0.4942604946298488,
+        "raw_hard_qasa_mean_recall": 43.25415584132124,
+        "raw_soft_qasa_mean_recall": 42.759895346691394
+      },
+      "interpretation": "This is an inference-only intervention on a checkpoint trained in one mode, so it is not a fair final soft-vs-hard comparison. A large positive delta nevertheless suggests hard exclusivity itself is a bottleneck."
+    },
+    {
+      "name": "raw_value_information_bottleneck_probe",
+      "severity": "low",
+      "evidence": {
+        "contextual_hard_minus_raw_hard_nonempty_mean_recall": -21.380414941985382,
+        "raw_hard_qasa_nonempty_mean_recall": 43.26250408309801,
+        "contextual_hard_qasa_nonempty_mean_recall": 21.882089141112626
+      },
+      "interpretation": "A large contextual-V rescue suggests raw mean-pooled word embeddings are too weak (e.g. loss of phrase context/order/composition). This is a leak probe, not a proposed final architecture."
+    },
+    {
+      "name": "hard_partition_collapse",
+      "severity": "high",
+      "evidence": {
+        "mean_hard_value_effective_k": 1.9456449747085571,
+        "mean_hard_value_dominant_share": 0.8267220258712769
+      },
+      "interpretation": "Hard privacy prevents token copying, but it does not itself prevent a giant slot from winning most tokens."
+    },
+    {
+      "name": "global_teacher_upper_bound_gap",
+      "severity": "high",
+      "evidence": {
+        "teacher_full_mean_recall": 64.93908420342211,
+        "deployed_mean_recall": 43.25415584132124,
+        "teacher_minus_deployed": 21.68492836210087,
+        "contextual_soft_probe_mean_recall": 23.017520289256783
+      },
+      "interpretation": "If the teacher/global path is much stronger while VALUE interventions do not rescue the model, the remaining bottleneck is likely slot construction/executor capacity rather than token assignment alone."
+    }
+  ]
+}
