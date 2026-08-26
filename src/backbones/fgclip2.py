@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import re
 from typing import Any
 
 import torch
@@ -11,8 +12,34 @@ from transformers import AutoImageProcessor, AutoModelForCausalLM, AutoTokenizer
 
 
 FGCLIP2_LARGE_MODEL_ID = "qihoo360/fg-clip2-large"
+FGCLIP2_LARGE_REVISION = "4d1d5dc35c716902f07c172dbfc23b82a7bc6bf3"
 FGCLIP2_LARGE_DIM = 1024
 FGCLIP2_SHORT_TEXT_LENGTH = 64
+FGCLIP2_PATCH_SIZE = 16
+FGCLIP2_DYNAMIC_PATCH_BUDGETS = (128, 256, 576, 784, 1024)
+FGCLIP2_PATCH_POLICY_NAME = "official_fgclip2_dynamic"
+
+
+def validate_fgclip2_revision(revision: str) -> str:
+    if not revision or re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise ValueError("FG-CLIP2 revision must be a full immutable 40-character git SHA")
+    return revision
+
+
+def determine_max_num_patches(image: Image.Image) -> int:
+    """Mirror ``determine_max_value`` from the pinned official README."""
+
+    width, height = image.size
+    patch_count = (width // FGCLIP2_PATCH_SIZE) * (height // FGCLIP2_PATCH_SIZE)
+    if patch_count > 784:
+        return 1024
+    if patch_count > 576:
+        return 784
+    if patch_count > 256:
+        return 576
+    if patch_count > 128:
+        return 256
+    return 128
 
 
 class FGCLIP2Backbone(nn.Module):
@@ -22,8 +49,8 @@ class FGCLIP2Backbone(nn.Module):
         self,
         *,
         model_id: str = FGCLIP2_LARGE_MODEL_ID,
+        revision: str = FGCLIP2_LARGE_REVISION,
         max_text_length: int = FGCLIP2_SHORT_TEXT_LENGTH,
-        max_num_patches: int = 784,
         dtype: torch.dtype | None = None,
     ) -> None:
         super().__init__()
@@ -37,23 +64,27 @@ class FGCLIP2Backbone(nn.Module):
                 "FG-CLIP2 short-text mode requires max_text_length=64; "
                 "audit truncation before changing text strategy"
             )
-        if max_num_patches < 1:
-            raise ValueError("max_num_patches must be >= 1")
+        revision = validate_fgclip2_revision(revision)
 
-        load_kwargs: dict[str, Any] = {"trust_remote_code": True}
+        load_kwargs: dict[str, Any] = {
+            "revision": revision,
+            "trust_remote_code": True,
+        }
         if dtype is not None:
             load_kwargs["dtype"] = dtype
 
         self.model_id = model_id
+        self.revision = revision
         self.max_text_length = max_text_length
-        self.max_num_patches = max_num_patches
         self.model = AutoModelForCausalLM.from_pretrained(model_id, **load_kwargs)
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_id,
+            revision=revision,
             trust_remote_code=True,
         )
         self.image_processor = AutoImageProcessor.from_pretrained(
             model_id,
+            revision=revision,
             trust_remote_code=True,
         )
 
@@ -157,13 +188,32 @@ class FGCLIP2Backbone(nn.Module):
         if not images:
             raise ValueError("images must not be empty")
 
-        inputs = self.image_processor(
-            images=list(images),
-            max_num_patches=self.max_num_patches,
-            return_tensors="pt",
-        ).to(self.device)
-        features = self.model.get_image_features(**inputs)
-        features = F.normalize(features.float(), dim=-1)
+        grouped_indices: dict[int, list[int]] = {}
+        for index, image in enumerate(images):
+            budget = determine_max_num_patches(image)
+            grouped_indices.setdefault(budget, []).append(index)
+
+        ordered_features: Tensor | None = None
+        for budget, indices in grouped_indices.items():
+            grouped_images = [images[index] for index in indices]
+            inputs = self.image_processor(
+                images=grouped_images,
+                max_num_patches=budget,
+                return_tensors="pt",
+            ).to(self.device)
+            grouped_features = self.model.get_image_features(**inputs)
+            grouped_features = F.normalize(grouped_features.float(), dim=-1)
+            if ordered_features is None:
+                ordered_features = torch.empty(
+                    len(images),
+                    grouped_features.shape[-1],
+                    dtype=grouped_features.dtype,
+                    device=grouped_features.device,
+                )
+            ordered_features[indices] = grouped_features
+
+        assert ordered_features is not None
+        features = ordered_features
 
         expected_shape = (len(images), FGCLIP2_LARGE_DIM)
         if tuple(features.shape) != expected_shape:

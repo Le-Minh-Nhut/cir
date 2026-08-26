@@ -17,6 +17,21 @@ def load_feature_manifest(feature_dir) -> dict:
     return manifest
 
 
+def validate_feature_manifest(
+    manifest: dict,
+    *,
+    model_id: str,
+    revision: str,
+    cache_name: str,
+) -> None:
+    if manifest.get("model_id") != model_id or manifest.get("revision") != revision:
+        raise ValueError(
+            f"Wrong model/revision in {cache_name} cache manifest: "
+            f"model_id={manifest.get('model_id')!r}, "
+            f"revision={manifest.get('revision')!r}"
+        )
+
+
 def load_features(feature_dir):
     feature_dir = Path(feature_dir)
 

@@ -39,4 +39,5 @@ model:
 
 backbone:
   model_id: qihoo360/fg-clip2-large
+  revision: 4d1d5dc35c716902f07c172dbfc23b82a7bc6bf3
   max_text_length: 64

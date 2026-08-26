@@ -5,7 +5,17 @@ from omegaconf import DictConfig
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
-from cache.features import load_feature_manifest, load_features, load_text_features
+from cache.features import (
+    load_feature_manifest,
+    load_features,
+    load_text_features,
+    validate_feature_manifest,
+)
+from backbones.fgclip2 import (
+    FGCLIP2_LARGE_MODEL_ID,
+    FGCLIP2_LARGE_REVISION,
+    validate_fgclip2_revision,
+)
 from datasets.common import collate_cir_samples
 from datasets.fashioniq import FashionIQDataset, load_correction_dict
 from evaluation.fashioniq import evaluate_fashioniq
@@ -66,20 +76,24 @@ def main(cfg: DictConfig) -> None:
     correction_dicts = load_fashioniq_correction_dicts(annotation_root)
     split_root = dataset_root / "image_splits"
     cache_root = Path(cfg.paths.cache_root)
-    if str(cfg.experiment.backbone.model_id) != "qihoo360/fg-clip2-large":
+    if str(cfg.experiment.backbone.model_id) != FGCLIP2_LARGE_MODEL_ID:
         raise ValueError(
             "A3.2 requires exactly backbone.model_id=qihoo360/fg-clip2-large"
         )
+    expected_revision = validate_fgclip2_revision(str(cfg.experiment.backbone.revision))
+    if expected_revision != FGCLIP2_LARGE_REVISION:
+        raise ValueError(f"A3.2 requires revision={FGCLIP2_LARGE_REVISION}")
 
     feature_root = cache_root / "fashioniq" / "fgclip2-large"
     for split in ("train", "val"):
         for feature_kind in ("images", "text"):
             manifest = load_feature_manifest(feature_root / split / feature_kind)
-            if manifest.get("model_id") != "qihoo360/fg-clip2-large":
-                raise ValueError(
-                    f"Wrong checkpoint in {split}/{feature_kind} cache manifest: "
-                    f"{manifest.get('model_id')!r}"
-                )
+            validate_feature_manifest(
+                manifest,
+                model_id=str(cfg.experiment.backbone.model_id),
+                revision=expected_revision,
+                cache_name=f"{split}/{feature_kind}",
+            )
     train_images, train_image_idx = load_features(feature_root / "train" / "images")
     val_images, val_image_idx = load_features(feature_root / "val" / "images")
 

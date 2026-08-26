@@ -11,9 +11,15 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from backbones.fgclip2 import (
+    FGCLIP2_LARGE_MODEL_ID,
+    FGCLIP2_LARGE_REVISION,
+    validate_fgclip2_revision,
+)
 from cache.features import (
     get_text_features_by_sample_ids,
     load_text_features,
+    validate_feature_manifest,
 )
 from datasets.common import collate_cir_samples
 from datasets.fashioniq import FashionIQDataset, load_correction_dict
@@ -103,8 +109,11 @@ def build_val_loaders(
 
 def build_model(cfg, device: torch.device) -> TAPER:
     m = cfg.model
-    if str(cfg.backbone.model_id) != "qihoo360/fg-clip2-large":
+    if str(cfg.backbone.model_id) != FGCLIP2_LARGE_MODEL_ID:
         raise ValueError("A3.2 requires qihoo360/fg-clip2-large")
+    revision = validate_fgclip2_revision(str(cfg.backbone.revision))
+    if revision != FGCLIP2_LARGE_REVISION:
+        raise ValueError(f"A3.2 requires revision={FGCLIP2_LARGE_REVISION}")
 
     return TAPER(
         text_dim=m.text_dim,
@@ -293,10 +302,12 @@ def run(args):
 
     feature_root = args.cache_root / "fashioniq" / "fgclip2-large" / "val"
     text_cache = load_text_features(feature_root / "text")
-    if text_cache.manifest.get("model_id") != "qihoo360/fg-clip2-large":
-        raise ValueError(
-            "QASA evaluation requires a qihoo360/fg-clip2-large text cache"
-        )
+    validate_feature_manifest(
+        text_cache.manifest,
+        model_id=str(cfg.backbone.model_id),
+        revision=str(cfg.backbone.revision),
+        cache_name="val/text",
+    )
 
     model = build_model(cfg, device)
     load_checkpoint(model, checkpoint)

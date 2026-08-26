@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 from pathlib import Path
 
@@ -10,8 +11,14 @@ from tqdm import tqdm
 
 from backbones.fgclip2 import (
     FGCLIP2Backbone,
+    FGCLIP2_DYNAMIC_PATCH_BUDGETS,
     FGCLIP2_LARGE_DIM,
     FGCLIP2_LARGE_MODEL_ID,
+    FGCLIP2_LARGE_REVISION,
+    FGCLIP2_PATCH_POLICY_NAME,
+    FGCLIP2_PATCH_SIZE,
+    determine_max_num_patches,
+    validate_fgclip2_revision,
 )
 from datasets.common import DirectoryImageStore
 from datasets.fashioniq import load_fashioniq_split_ids
@@ -39,9 +46,9 @@ def parse_args() -> argparse.Namespace:
         "--model-id",
         default=FGCLIP2_LARGE_MODEL_ID,
     )
+    parser.add_argument("--revision", default=FGCLIP2_LARGE_REVISION)
     parser.add_argument("--splits", nargs="+", choices=VALID_SPLITS, default=list(VALID_SPLITS))
     parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--max-num-patches", type=int, default=784)
     parser.add_argument(
         "--device",
         default="cuda" if torch.cuda.is_available() else "cpu",
@@ -59,6 +66,48 @@ def load_all_image_ids(split_root: Path, split: str) -> list[str]:
                 seen.add(image_id)
                 image_ids.append(image_id)
     return image_ids
+
+
+def build_image_manifest(
+    *,
+    split: str,
+    backbone: FGCLIP2Backbone,
+    num_samples: int,
+    images_shape: tuple[int, ...],
+    images_dtype: str,
+    patch_budget_counts: Counter[int],
+    parity_samples: int,
+    parity_max_abs_error: float,
+) -> dict:
+    return {
+        "dataset": "FashionIQ",
+        "split": split,
+        "feature_kind": "fgclip2_global_image",
+        "model_id": backbone.model_id,
+        "revision": backbone.revision,
+        "normalized": True,
+        "preprocessing": {
+            "patch_policy": FGCLIP2_PATCH_POLICY_NAME,
+            "patch_policy_source": (
+                "https://huggingface.co/qihoo360/fg-clip2-large/blob/"
+                f"{backbone.revision}/README.md#retrieval"
+            ),
+            "patch_size": FGCLIP2_PATCH_SIZE,
+            "patch_count_formula": "(width // 16) * (height // 16)",
+            "threshold_comparison": "strict_greater_than",
+            "possible_patch_budgets": list(FGCLIP2_DYNAMIC_PATCH_BUDGETS),
+        },
+        "patch_budget_counts": {
+            str(budget): int(patch_budget_counts.get(budget, 0))
+            for budget in FGCLIP2_DYNAMIC_PATCH_BUDGETS
+        },
+        "num_samples": num_samples,
+        "images_shape": list(images_shape),
+        "images_dtype": images_dtype,
+        "requires_grad": False,
+        "parity_samples": parity_samples,
+        "parity_max_abs_error": parity_max_abs_error,
+    }
 
 
 @torch.inference_mode()
@@ -83,6 +132,7 @@ def precompute_split(
 
     parity_ids: list[str] = []
     parity_direct: torch.Tensor | None = None
+    patch_budget_counts: Counter[int] = Counter()
     for start in tqdm(
         range(0, len(image_ids), batch_size),
         desc=f"FG-CLIP2 images [{split}]",
@@ -90,6 +140,7 @@ def precompute_split(
     ):
         batch_ids = image_ids[start : start + batch_size]
         images = [image_store.load(image_id) for image_id in batch_ids]
+        patch_budget_counts.update(determine_max_num_patches(image) for image in images)
         encoded = backbone.encode_image_global(images)
         if encoded.requires_grad:
             raise RuntimeError("Image precompute unexpectedly recorded gradients")
@@ -123,20 +174,16 @@ def precompute_split(
                 f"max_abs_error={parity_max_abs_error}"
             )
 
-    manifest = {
-        "dataset": "FashionIQ",
-        "split": split,
-        "feature_kind": "fgclip2_global_image",
-        "model_id": backbone.model_id,
-        "normalized": True,
-        "max_num_patches": backbone.max_num_patches,
-        "num_samples": len(image_ids),
-        "images_shape": list(reloaded.shape),
-        "images_dtype": str(reloaded.dtype),
-        "requires_grad": False,
-        "parity_samples": len(parity_ids),
-        "parity_max_abs_error": parity_max_abs_error,
-    }
+    manifest = build_image_manifest(
+        split=split,
+        backbone=backbone,
+        num_samples=len(image_ids),
+        images_shape=tuple(reloaded.shape),
+        images_dtype=str(reloaded.dtype),
+        patch_budget_counts=patch_budget_counts,
+        parity_samples=len(parity_ids),
+        parity_max_abs_error=parity_max_abs_error,
+    )
     with (output_dir / "manifest.json").open("w", encoding="utf-8") as file:
         json.dump(manifest, file, indent=2)
 
@@ -150,6 +197,16 @@ def main() -> None:
         raise ValueError("--batch-size must be >= 1")
     if args.parity_samples < 0:
         raise ValueError("--parity-samples must be >= 0")
+    if tuple(part.lower() for part in args.cache_root.parts[-2:]) != (
+        "fashioniq",
+        "fgclip2-large",
+    ):
+        raise ValueError(
+            "FG-CLIP2 caches must remain under a fashioniq/fgclip2-large directory"
+        )
+    revision = validate_fgclip2_revision(args.revision)
+    if revision != FGCLIP2_LARGE_REVISION:
+        raise ValueError(f"A3.2 requires revision={FGCLIP2_LARGE_REVISION}")
 
     device = torch.device(args.device)
     if device.type == "cuda" and not torch.cuda.is_available():
@@ -164,7 +221,7 @@ def main() -> None:
 
     backbone = FGCLIP2Backbone(
         model_id=args.model_id,
-        max_num_patches=args.max_num_patches,
+        revision=revision,
     ).to(device)
     backbone.eval()
     if any(parameter.requires_grad for parameter in backbone.model.parameters()):

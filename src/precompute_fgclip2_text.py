@@ -14,7 +14,9 @@ from backbones.fgclip2 import (
     FGCLIP2Backbone,
     FGCLIP2_LARGE_DIM,
     FGCLIP2_LARGE_MODEL_ID,
+    FGCLIP2_LARGE_REVISION,
     FGCLIP2_SHORT_TEXT_LENGTH,
+    validate_fgclip2_revision,
 )
 from datasets.common import collate_cir_samples
 from datasets.fashioniq import FashionIQDataset, load_correction_dict
@@ -40,6 +42,7 @@ def parse_args() -> argparse.Namespace:
         default=Path("features/fashioniq/fgclip2-large"),
     )
     parser.add_argument("--model-id", default=FGCLIP2_LARGE_MODEL_ID)
+    parser.add_argument("--revision", default=FGCLIP2_LARGE_REVISION)
     parser.add_argument("--splits", nargs="+", choices=VALID_SPLITS, default=list(VALID_SPLITS))
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--num-workers", type=int, default=0)
@@ -110,6 +113,41 @@ def print_token_audit(audit: dict[str, float | int]) -> None:
     print("FashionIQ FG-CLIP2-Large token-length preflight")
     for key, value in audit.items():
         print(f"  {key}: {value}")
+
+
+def build_text_manifest(
+    *,
+    split: str,
+    backbone: FGCLIP2Backbone,
+    num_samples: int,
+    states_shape: tuple[int, ...],
+    attention_shape: tuple[int, ...],
+    content_shape: tuple[int, ...],
+    states_dtype: str,
+    mask_dtype: str,
+    token_audit: dict[str, float | int],
+    parity_samples: int,
+    parity_max_abs_error: float,
+) -> dict:
+    return {
+        "dataset": "FashionIQ",
+        "split": split,
+        "feature_kind": "fgclip2_contextual_text_tokens",
+        "model_id": backbone.model_id,
+        "revision": backbone.revision,
+        "caption_policy": CAPTION_POLICY,
+        "max_text_length": backbone.max_text_length,
+        "num_samples": num_samples,
+        "states_shape": list(states_shape),
+        "attention_mask_shape": list(attention_shape),
+        "content_mask_shape": list(content_shape),
+        "states_dtype": states_dtype,
+        "mask_dtype": mask_dtype,
+        "requires_grad": False,
+        "token_length_preflight": token_audit,
+        "parity_samples": parity_samples,
+        "parity_max_abs_error": parity_max_abs_error,
+    }
 
 
 @torch.inference_mode()
@@ -223,24 +261,19 @@ def precompute_split(
         if not torch.equal(direct_content, saved_content):
             raise RuntimeError("FG-CLIP2 content-mask cache parity failed")
 
-    manifest = {
-        "dataset": "FashionIQ",
-        "split": split,
-        "feature_kind": "fgclip2_contextual_text_tokens",
-        "model_id": backbone.model_id,
-        "caption_policy": CAPTION_POLICY,
-        "max_text_length": backbone.max_text_length,
-        "num_samples": len(dataset),
-        "states_shape": list(cached_states.shape),
-        "attention_mask_shape": list(cached_attention.shape),
-        "content_mask_shape": list(cached_content.shape),
-        "states_dtype": str(cached_states.dtype),
-        "mask_dtype": str(cached_attention.dtype),
-        "requires_grad": False,
-        "token_length_preflight": token_audit,
-        "parity_samples": len(parity_rows),
-        "parity_max_abs_error": parity_max_abs_error,
-    }
+    manifest = build_text_manifest(
+        split=split,
+        backbone=backbone,
+        num_samples=len(dataset),
+        states_shape=tuple(cached_states.shape),
+        attention_shape=tuple(cached_attention.shape),
+        content_shape=tuple(cached_content.shape),
+        states_dtype=str(cached_states.dtype),
+        mask_dtype=str(cached_attention.dtype),
+        token_audit=token_audit,
+        parity_samples=len(parity_rows),
+        parity_max_abs_error=parity_max_abs_error,
+    )
     with (output_dir / "manifest.json").open("w", encoding="utf-8") as file:
         json.dump(manifest, file, indent=2)
 
@@ -254,10 +287,20 @@ def main() -> None:
         raise ValueError(
             f"This experiment requires exactly {FGCLIP2_LARGE_MODEL_ID!r}"
         )
+    revision = validate_fgclip2_revision(args.revision)
+    if revision != FGCLIP2_LARGE_REVISION:
+        raise ValueError(f"A3.2 requires revision={FGCLIP2_LARGE_REVISION}")
     if args.batch_size < 1 or args.num_workers < 0:
         raise ValueError("Invalid batch-size/num-workers")
     if args.parity_samples < 0:
         raise ValueError("--parity-samples must be >= 0")
+    if tuple(part.lower() for part in args.cache_root.parts[-2:]) != (
+        "fashioniq",
+        "fgclip2-large",
+    ):
+        raise ValueError(
+            "FG-CLIP2 caches must remain under a fashioniq/fgclip2-large directory"
+        )
 
     annotation_root = args.dataset_root / "captions"
     correction_dicts = load_correction_dicts(annotation_root)
@@ -272,6 +315,7 @@ def main() -> None:
     ]
     tokenizer = AutoTokenizer.from_pretrained(
         args.model_id,
+        revision=revision,
         trust_remote_code=True,
     )
     token_audit = audit_token_lengths(tokenizer, all_captions)
@@ -284,6 +328,7 @@ def main() -> None:
         raise RuntimeError("CUDA requested but unavailable")
     backbone = FGCLIP2Backbone(
         model_id=args.model_id,
+        revision=revision,
         max_text_length=FGCLIP2_SHORT_TEXT_LENGTH,
     ).to(device)
     backbone.eval()
