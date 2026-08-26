@@ -5,7 +5,12 @@ from collections.abc import Mapping, Sequence
 
 import torch
 import torch.nn.functional as F
+from entmax import entmax15
 from torch import Tensor, nn
+
+
+# Small enough to detect Entmax support while remaining representable in FP16.
+R1_ROUTING_SUPPORT_EPS = 1e-6
 
 
 class TAPER(nn.Module):
@@ -255,6 +260,55 @@ class TAPER(nn.Module):
         slot_semantics = weighted_sum / slot_mass.clamp_min(1.0).unsqueeze(-1)
         return slot_semantics, slot_mass, slot_activity
 
+    def _token_entmax_routing(
+        self,
+        ownership_logits: Tensor,
+        slot_valid: Tensor,
+        selected_mask: Tensor,
+    ) -> Tensor:
+        if ownership_logits.ndim != 3:
+            raise ValueError("ownership_logits must be [B,L,N]")
+        b, num_slots, n = ownership_logits.shape
+        if num_slots != self.num_slots:
+            raise ValueError("ownership_logits slot dimension mismatch")
+        if slot_valid.shape != (b, n):
+            raise ValueError("slot_valid must be [B,N]")
+        if selected_mask.shape != (b, num_slots):
+            raise ValueError("selected_mask must be [B,L]")
+        if selected_mask.dtype != torch.bool:
+            raise TypeError("selected_mask must be bool")
+
+        valid = slot_valid.to(device=ownership_logits.device, dtype=torch.bool)
+        selected = selected_mask.to(device=ownership_logits.device)
+        active_rows = selected & valid.any(dim=1, keepdim=True)
+
+        # Entmax is numerically sensitive under AMP. Compute only selected rows
+        # with at least one content token in FP32, while retaining autograd to
+        # the original ownership logits.
+        with torch.autocast(device_type=ownership_logits.device.type, enabled=False):
+            logits_fp32 = ownership_logits.float()
+            routing_fp32 = torch.zeros_like(logits_fp32)
+            if active_rows.any():
+                row_valid = valid[:, None, :].expand_as(ownership_logits)[active_rows]
+                active_logits = logits_fp32[active_rows]
+                active_logits = active_logits.masked_fill(
+                    ~row_valid,
+                    torch.finfo(torch.float32).min,
+                )
+                active_routing = entmax15(active_logits, dim=-1)
+                active_routing = active_routing * row_valid.to(active_routing.dtype)
+                routing_fp32[active_rows] = active_routing
+
+            routing_fp32 = routing_fp32 * valid[:, None, :].to(routing_fp32.dtype)
+            routing_fp32 = routing_fp32 * selected[:, :, None].to(routing_fp32.dtype)
+
+        routing = routing_fp32.to(dtype=ownership_logits.dtype)
+        if not torch.isfinite(routing).all():
+            raise FloatingPointError("non-finite R1 token routing")
+        if (routing < 0).any():
+            raise FloatingPointError("negative R1 token routing")
+        return routing
+
     @torch.no_grad()
     def qasa_inference_partition(self, attention: Tensor, valid: Tensor) -> dict[str, Tensor]:
         if attention.ndim != 3:
@@ -302,11 +356,6 @@ class TAPER(nn.Module):
 
         ownership_logits, slot_masks = self._competitive_ownership(text_states, slot_valid)
         slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
-        edit_slots = slot_semantics * slot_activity.unsqueeze(-1)
-        # qasa_attention = F.softmax(ownership_logits.float(), dim=1)
-        # qasa_attention = qasa_attention * slot_valid[:, None, :].to(qasa_attention.dtype)
-        # qasa_valid = slot_valid.to(torch.bool)
-        # qasa = self._qasa_select_slots(qasa_attention, qasa_valid)
         qasa_attention = self._qasa_attention_fp32(text_states, slot_valid)
         qasa_valid = slot_valid.to(torch.bool)
         qasa = self._qasa_select_slots(qasa_attention, qasa_valid)
@@ -320,6 +369,21 @@ class TAPER(nn.Module):
         else:
             selected_mask = qasa["qasa_selected_mask"]
 
+        routing_masks = self._token_entmax_routing(
+            ownership_logits,
+            slot_valid,
+            selected_mask,
+        )
+        (
+            routing_slot_semantics,
+            routing_slot_mass,
+            routing_slot_activity,
+        ) = self._mass_aware_slot_pool(text_states, routing_masks)
+        edit_slots = routing_slot_semantics * routing_slot_activity.unsqueeze(-1)
+        routing_support_count = (
+            (routing_masks > R1_ROUTING_SUPPORT_EPS) & slot_valid[:, None, :]
+        ).sum(dim=-1)
+
         return {
             "edit_slots": edit_slots,
             "ownership_logits": ownership_logits,
@@ -328,6 +392,11 @@ class TAPER(nn.Module):
             "slot_mass": slot_mass,
             "slot_activity": slot_activity,
             "slot_peak_ownership": (slot_masks.amax(dim=2)),
+            "routing_masks": routing_masks,
+            "routing_slot_semantics": routing_slot_semantics,
+            "routing_slot_mass": routing_slot_mass,
+            "routing_slot_activity": routing_slot_activity,
+            "routing_support_count": routing_support_count,
             "qasa_attention": qasa_attention,
             "qasa_valid_mask": qasa_valid,
             "qasa_quality": qasa["qasa_quality"],
@@ -600,6 +669,9 @@ class TAPER(nn.Module):
         *,
         slot_masks: Tensor,
         slot_mass: Tensor,
+        routing_masks: Tensor,
+        routing_slot_mass: Tensor,
+        routing_support_count: Tensor,
         qasa_selected_mask: Tensor,
         qasa_quality: Tensor,
         qasa_final_coverage: Tensor,
@@ -637,6 +709,56 @@ class TAPER(nn.Module):
             upper = torch.triu(torch.ones(self.num_slots, self.num_slots, dtype=torch.bool, device=slot_masks.device), diagonal=1)
             overlap = mask_similarity[:, upper].mean()
 
+        routing_support = (
+            (routing_masks > R1_ROUTING_SUPPORT_EPS) & valid[:, None, :]
+        )
+        expected_support_count = routing_support.sum(dim=-1)
+        if not torch.equal(routing_support_count, expected_support_count):
+            raise RuntimeError("routing_support_count does not match routing_masks")
+        routing_active = routing_slot_mass > R1_ROUTING_SUPPORT_EPS
+        routing_active_f = routing_active.to(slot_masks.dtype)
+        routing_active_total = routing_active_f.sum()
+        support_count_f = routing_support_count.to(slot_masks.dtype)
+        valid_count = valid.sum(dim=-1).to(slot_masks.dtype)
+        support_fraction = support_count_f / valid_count[:, None].clamp_min(1.0)
+        routing_support_mean = (
+            support_count_f * routing_active_f
+        ).sum() / routing_active_total.clamp_min(1.0)
+        routing_support_fraction_mean = (
+            support_fraction * routing_active_f
+        ).sum() / routing_active_total.clamp_min(1.0)
+        active_valid_positions = (
+            routing_active[:, :, None] & valid[:, None, :]
+        )
+        routing_zero_count = (active_valid_positions & ~routing_support).sum().to(slot_masks.dtype)
+        routing_zero_fraction = routing_zero_count / active_valid_positions.sum().to(
+            slot_masks.dtype
+        ).clamp_min(1.0)
+
+        if self.num_slots == 1:
+            routing_support_overlap = zero
+        else:
+            support_f = routing_support.to(slot_masks.dtype)
+            intersection = support_f @ support_f.transpose(1, 2)
+            support_size = support_f.sum(dim=-1)
+            union = support_size[:, :, None] + support_size[:, None, :] - intersection
+            pair_is_active = routing_active[:, :, None] & routing_active[:, None, :]
+            upper = torch.triu(
+                torch.ones(
+                    self.num_slots,
+                    self.num_slots,
+                    dtype=torch.bool,
+                    device=slot_masks.device,
+                ),
+                diagonal=1,
+            )
+            pair_is_active = pair_is_active & upper[None, :, :]
+            jaccard = intersection / union.clamp_min(1.0)
+            pair_count = pair_is_active.sum().to(slot_masks.dtype)
+            routing_support_overlap = (
+                jaccard * pair_is_active.to(jaccard.dtype)
+            ).sum() / pair_count.clamp_min(1.0)
+
         diagnostics = {
             "assignment_entropy": assignment_entropy,
             "ownership_active_slot_count":ownership_active_slot_count,
@@ -647,12 +769,22 @@ class TAPER(nn.Module):
             "qasa_selected_slot_count": qasa_selected_mask.to(slot_masks.dtype).sum(dim=1).mean(),
             "qasa_quality_mean": qasa_quality.mean(),
             "qasa_final_coverage_mean": qasa_final_coverage.mean(),
+            "routing_support_mean": routing_support_mean,
+            "routing_support_max": support_count_f.max(),
+            "routing_support_fraction_mean": routing_support_fraction_mean,
+            "routing_zero_fraction": routing_zero_fraction,
+            "routing_active_slot_count": routing_active_f.sum(dim=1).mean(),
+            "routing_support_overlap_mean": routing_support_overlap,
         }
 
         for slot_id in range(self.num_slots):
             diagnostics[f"slot_{slot_id}_mass_mean"] = slot_mass[:, slot_id].mean()
             diagnostics[f"slot_{slot_id}_winner_count_mean"] = winner_count[:, slot_id].to(slot_masks.dtype).mean()
             diagnostics[f"slot_{slot_id}_quality_mean"] = qasa_quality[:, slot_id].mean()
+            slot_active = routing_active_f[:, slot_id]
+            diagnostics[f"routing_slot_{slot_id}_support_mean"] = (
+                support_count_f[:, slot_id] * slot_active
+            ).sum() / slot_active.sum().clamp_min(1.0)
 
         return diagnostics
 
@@ -697,6 +829,9 @@ class TAPER(nn.Module):
             diagnostics = self._assignment_diagnostics(
                 slot_masks=output["slot_masks"],
                 slot_mass=output["slot_mass"],
+                routing_masks=output["routing_masks"],
+                routing_slot_mass=output["routing_slot_mass"],
+                routing_support_count=output["routing_support_count"],
                 hard_active_slot_mask=output["hard_active_slot_mask"],
                 text_attention_mask=mask,
                 text_content_mask=content_mask,

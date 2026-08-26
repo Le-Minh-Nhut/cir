@@ -222,6 +222,10 @@ def fit(
 
             print(f"Saved best.pt | {primary_metric}={best_metric:.4f}")
 
+        routing_slot_support = ",".join(
+            f"{train_metrics.get(f'diagnostic/routing_slot_{slot_id}_support_mean', float('nan')):.2f}"
+            for slot_id in range(getattr(model, "num_slots", 0))
+        )
         print(
             f"Epoch {epoch + 1}/{num_epochs} | "
             f"loss={train_metrics['total_loss']:.4f} | "
@@ -237,6 +241,19 @@ def fit(
             f"{train_metrics.get('diagnostic/qasa_quality_mean', float('nan')):.3f}"
             f" | qasa_cov="
             f"{train_metrics.get('diagnostic/qasa_final_coverage_mean', float('nan')):.3f}"
+            f" | routing_support_mean="
+            f"{train_metrics.get('diagnostic/routing_support_mean', float('nan')):.2f}"
+            f" | routing_support_max="
+            f"{train_metrics.get('diagnostic/routing_support_max', float('nan')):.2f}"
+            f" | routing_support_fraction_mean="
+            f"{train_metrics.get('diagnostic/routing_support_fraction_mean', float('nan')):.3f}"
+            f" | routing_zero_fraction="
+            f"{train_metrics.get('diagnostic/routing_zero_fraction', float('nan')):.3f}"
+            f" | routing_active_slot_count="
+            f"{train_metrics.get('diagnostic/routing_active_slot_count', float('nan')):.2f}"
+            f" | routing_support_overlap_mean="
+            f"{train_metrics.get('diagnostic/routing_support_overlap_mean', float('nan')):.3f}"
+            f" | routing_slot_support=[{routing_slot_support}]"
         )
 
 
