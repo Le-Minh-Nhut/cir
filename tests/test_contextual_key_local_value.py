@@ -123,9 +123,9 @@ def clone_inputs(inputs: dict[str, Tensor]) -> dict[str, Tensor]:
 @pytest.mark.parametrize(
     ("slot_value_source", "slot_effect_in_value", "expected_input_dim"),
     [
-        ("teacher_raw", False, 6),
+        ("teacher_raw", False, 9),
         ("teacher_raw", True, 9),
-        ("contextual", False, 5),
+        ("contextual", False, 8),
         ("contextual", True, 8),
     ],
 )
@@ -146,6 +146,35 @@ def test_experiment_contract_and_slot_mlp_input_dimension(
     }
     assert isinstance(model.slot_mlp[0], nn.Linear)
     assert model.slot_mlp[0].in_features == expected_input_dim
+
+
+@pytest.mark.parametrize("slot_value_source", ["contextual", "teacher_raw"])
+def test_effect_toggle_has_matched_trainable_parameter_capacity(
+    slot_value_source: str,
+) -> None:
+    model_off = make_model(
+        slot_value_source=slot_value_source,
+        slot_effect_in_value=False,
+        slot_value_assignment="soft_shared",
+    )
+    model_on = make_model(
+        slot_value_source=slot_value_source,
+        slot_effect_in_value=True,
+        slot_value_assignment="soft_shared",
+    )
+
+    trainable_off = sum(
+        parameter.numel()
+        for parameter in model_off.parameters()
+        if parameter.requires_grad
+    )
+    trainable_on = sum(
+        parameter.numel()
+        for parameter in model_on.parameters()
+        if parameter.requires_grad
+    )
+    assert trainable_off == trainable_on
+    assert model_off.slot_mlp[0].weight.shape == model_on.slot_mlp[0].weight.shape
 
 
 def test_constructor_rejects_invalid_ablation_values() -> None:
@@ -561,7 +590,7 @@ def test_contextual_key_and_teacher_raw_value_are_separate(
     "slot_value_assignment",
     ["soft_shared", "hard_st_exclusive"],
 )
-def test_slot_mlp_receives_semantics_only_and_ignores_slot_effects(
+def test_effect_off_feeds_zero_channel_and_keeps_true_effect_diagnostic(
     slot_value_assignment: str,
 ) -> None:
     model = make_model(slot_value_assignment=slot_value_assignment)
@@ -576,8 +605,21 @@ def test_slot_mlp_receives_semantics_only_and_ignores_slot_effects(
     handle.remove()
 
     assert len(captured_inputs) == 1
-    assert captured_inputs[0].shape[-1] == model.teacher_text_dim
-    torch.testing.assert_close(captured_inputs[0], baseline["slot_semantics"])
+    assert captured_inputs[0].shape[-1] == (
+        model.teacher_text_dim + model.teacher_query_dim
+    )
+    torch.testing.assert_close(
+        captured_inputs[0][..., : model.teacher_text_dim],
+        baseline["slot_semantics"],
+    )
+    assert torch.equal(
+        captured_inputs[0][..., model.teacher_text_dim :],
+        torch.zeros_like(captured_inputs[0][..., model.teacher_text_dim :]),
+    )
+    assert torch.equal(
+        baseline["slot_effect_input"],
+        torch.zeros_like(baseline["slot_effect_input"]),
+    )
 
     reference_changed = clone_inputs(inputs)
     reference_changed["teacher_reference_features"] += 100.0
@@ -588,6 +630,43 @@ def test_slot_mlp_receives_semantics_only_and_ignores_slot_effects(
     torch.testing.assert_close(changed["raw_edit_slots"], baseline["raw_edit_slots"])
     torch.testing.assert_close(changed["edit_slots"], baseline["edit_slots"])
     assert not bool(baseline["slot_effect_used_in_latent"].item())
+
+
+@pytest.mark.parametrize("slot_value_source", ["contextual", "teacher_raw"])
+@pytest.mark.parametrize("slot_effect_in_value", [False, True])
+def test_slot_mlp_effect_channel_matches_toggle(
+    slot_value_source: str,
+    slot_effect_in_value: bool,
+) -> None:
+    model = make_model(
+        slot_value_source=slot_value_source,
+        slot_effect_in_value=slot_effect_in_value,
+        slot_value_assignment="soft_shared",
+    )
+    inputs = make_inputs()
+    captured_inputs: list[Tensor] = []
+
+    def capture_input(_module: nn.Module, args: tuple[Tensor, ...]) -> None:
+        captured_inputs.append(args[0].detach().clone())
+
+    handle = model.slot_mlp[0].register_forward_pre_hook(capture_input)
+    output = build_slots(model, inputs)
+    handle.remove()
+
+    value_dim = (
+        model.text_dim
+        if slot_value_source == "contextual"
+        else model.teacher_text_dim
+    )
+    mlp_input = captured_inputs[0]
+    torch.testing.assert_close(mlp_input[..., :value_dim], output["slot_semantics"])
+    expected_effect = (
+        output["slot_effects"]
+        if slot_effect_in_value
+        else torch.zeros_like(output["slot_effects"])
+    )
+    torch.testing.assert_close(mlp_input[..., value_dim:], expected_effect)
+    torch.testing.assert_close(output["slot_effect_input"], expected_effect)
 
 
 @pytest.mark.parametrize("slot_value_source", ["contextual", "teacher_raw"])
@@ -621,6 +700,52 @@ def test_slot_effect_toggle_controls_latent_input(
         assert bool(baseline["slot_effect_used_in_latent"].item()) is (
             slot_effect_in_value
         )
+
+
+@pytest.mark.parametrize("slot_value_source", ["contextual", "teacher_raw"])
+def test_effect_toggle_differs_only_by_effect_information_when_effect_is_zero(
+    slot_value_source: str,
+) -> None:
+    model_off = make_model(
+        slot_value_source=slot_value_source,
+        slot_effect_in_value=False,
+        slot_value_assignment="soft_shared",
+    )
+    model_on = make_model(
+        slot_value_source=slot_value_source,
+        slot_effect_in_value=True,
+        slot_value_assignment="soft_shared",
+    )
+    model_on.load_state_dict(model_off.state_dict())
+    inputs = make_inputs()
+
+    def zero_compose(
+        reference_features: Tensor,
+        _text_states: Tensor,
+        _attention_mask: Tensor,
+        *,
+        normalize: bool = False,
+    ) -> Tensor:
+        del normalize
+        return reference_features.new_zeros(
+            reference_features.shape[0],
+            model_off.teacher_query_dim,
+        )
+
+    with patch.object(model_off.teacher, "compose", side_effect=zero_compose):
+        output_off = build_slots(model_off, inputs)
+    with patch.object(model_on.teacher, "compose", side_effect=zero_compose):
+        output_on = build_slots(model_on, inputs)
+
+    assert torch.equal(
+        output_off["slot_effects"], torch.zeros_like(output_off["slot_effects"])
+    )
+    assert torch.equal(
+        output_on["slot_effects"], torch.zeros_like(output_on["slot_effects"])
+    )
+    torch.testing.assert_close(output_on["slot_semantics"], output_off["slot_semantics"])
+    torch.testing.assert_close(output_on["raw_edit_slots"], output_off["raw_edit_slots"])
+    torch.testing.assert_close(output_on["edit_slots"], output_off["edit_slots"])
 
 
 @pytest.mark.parametrize(
@@ -709,7 +834,13 @@ def test_zero_slot_and_invalid_tokens_keep_existing_contract(
         inputs["teacher_text_states"],
         zero_masks,
     )
-    edit_slots = model.slot_mlp(semantics) * activity.unsqueeze(-1)
+    zero_effect = semantics.new_zeros(
+        *semantics.shape[:-1],
+        model.teacher_query_dim,
+    )
+    edit_slots = model.slot_mlp(
+        torch.cat([semantics, zero_effect], dim=-1)
+    ) * activity.unsqueeze(-1)
 
     assert torch.equal(mass, torch.zeros_like(mass))
     assert torch.equal(activity, torch.zeros_like(activity))
@@ -891,16 +1022,16 @@ def test_full_compute_loss_forward_backward_smoke(
     assert all(parameter.grad is None for parameter in model.teacher.parameters())
 
 
-def test_a31_slot_mlp_shape_is_incompatible() -> None:
+def test_historical_unmatched_capacity_slot_mlp_shape_is_incompatible() -> None:
     model = make_model()
-    a31_state = model.state_dict()
-    a31_state["slot_mlp.0.weight"] = torch.randn(
+    historical_state = model.state_dict()
+    historical_state["slot_mlp.0.weight"] = torch.randn(
         model.slot_dim,
-        model.text_dim + model.teacher_query_dim,
+        model.teacher_text_dim,
     )
 
     with pytest.raises(RuntimeError, match="size mismatch for slot_mlp.0.weight"):
-        model.load_state_dict(a31_state, strict=False)
+        model.load_state_dict(historical_state, strict=False)
 
 
 @pytest.mark.parametrize(
@@ -938,7 +1069,7 @@ def test_checkpoint_records_experiment_provenance(
     }
 
 
-def test_evaluator_rejects_a31_and_wrong_provenance(
+def test_evaluator_rejects_historical_shape_and_wrong_provenance(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -949,20 +1080,20 @@ def test_evaluator_rejects_a31_and_wrong_provenance(
     from evaluate_qasa_inference import load_checkpoint
 
     model = make_model()
-    a31_state = model.state_dict()
-    a31_state["slot_mlp.0.weight"] = torch.randn(
+    historical_state = model.state_dict()
+    historical_state["slot_mlp.0.weight"] = torch.randn(
         model.slot_dim,
-        model.text_dim + model.teacher_query_dim,
+        model.teacher_text_dim,
     )
-    a31_path = tmp_path / "a31.pt"
-    torch.save(a31_state, a31_path)
+    historical_path = tmp_path / "historical-unmatched-capacity.pt"
+    torch.save(historical_state, historical_path)
     with pytest.raises(RuntimeError, match="missing experiment_provenance"):
-        load_checkpoint(model, a31_path)
+        load_checkpoint(model, historical_path)
 
     incompatible_path = tmp_path / "incompatible-shape.pt"
     torch.save(
         {
-            "model_state_dict": a31_state,
+            "model_state_dict": historical_state,
             "experiment_provenance": model.experiment_provenance(),
         },
         incompatible_path,
@@ -1003,6 +1134,24 @@ def test_evaluator_rejects_a31_and_wrong_provenance(
         )
         with pytest.raises(RuntimeError, match="provenance mismatch"):
             load_checkpoint(model, wrong_path)
+
+    effect_on_model = make_model(slot_effect_in_value=True)
+    effect_on_state = {
+        name: value
+        for name, value in effect_on_model.state_dict().items()
+        if not name.startswith("teacher.")
+    }
+    assert effect_on_model.slot_mlp[0].weight.shape == model.slot_mlp[0].weight.shape
+    effect_off_provenance_path = tmp_path / "effect-off-into-effect-on.pt"
+    torch.save(
+        {
+            "model_state_dict": effect_on_state,
+            "experiment_provenance": model.experiment_provenance(),
+        },
+        effect_off_provenance_path,
+    )
+    with pytest.raises(RuntimeError, match="provenance mismatch"):
+        load_checkpoint(effect_on_model, effect_off_provenance_path)
 
     matching_path = tmp_path / "matching.pt"
     torch.save(

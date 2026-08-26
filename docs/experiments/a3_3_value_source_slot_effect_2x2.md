@@ -31,9 +31,27 @@ The counterfactual signal is unchanged:
 slot_effects = q_full.unsqueeze(1) - q_minus
 ```
 
-When enabled it is concatenated with pooled `slot_semantics`; when disabled the
-MLP receives only `slot_semantics`. The Executor, QASA, teacher, cache, retrieval
-loss, optimizer, schedule, and FashionIQ evaluation protocol are unchanged.
+Effect ON and OFF use identical `slot_mlp` capacity. The MLP always receives
+`value_dim + teacher_query_dim` inputs:
+
+```text
+effect ON:  [slot_semantics ; slot_effects]
+effect OFF: [slot_semantics ; zeros_like(slot_effects)]
+```
+
+The true counterfactual `slot_effects` tensor is still computed and returned for
+diagnostics in the OFF cells. Therefore A → C and B → D are matched-capacity
+interventions. With the FashionIQ dimensions, all four cells use a 1024-wide
+first `slot_mlp` input.
+
+An important caveat is that enabling the slot-effect pathway restores not only
+the counterfactual values in the forward latent, but also the differentiable
+path through `q_minus` to the ownership masks. ON/OFF must therefore be
+interpreted as **slot-effect pathway ON/OFF**, not merely as adding/removing 256
+feature values.
+
+The Executor, QASA, teacher, cache, retrieval loss, optimizer, schedule, and
+FashionIQ evaluation protocol are unchanged.
 
 ## Comparisons
 

@@ -114,9 +114,7 @@ class TAPER(nn.Module):
             if self.slot_value_source == "contextual"
             else self.teacher_text_dim
         )
-        slot_mlp_input_dim = value_dim
-        if self.slot_effect_in_value:
-            slot_mlp_input_dim += self.teacher_query_dim
+        slot_mlp_input_dim = value_dim + self.teacher_query_dim
 
         self.teacher.eval()
         for parameter in self.teacher.parameters():
@@ -580,10 +578,14 @@ class TAPER(nn.Module):
 
         slot_effects = q_full.unsqueeze(1) - q_minus
 
-        slot_mlp_input = (
-            torch.cat([slot_semantics, slot_effects], dim=-1)
+        slot_effect_input = (
+            slot_effects
             if self.slot_effect_in_value
-            else slot_semantics
+            else torch.zeros_like(slot_effects)
+        )
+        slot_mlp_input = torch.cat(
+            [slot_semantics, slot_effect_input],
+            dim=-1,
         )
         raw_edit_slots = self.slot_mlp(slot_mlp_input)
         edit_slots = raw_edit_slots * value_slot_activity.unsqueeze(-1)
@@ -620,6 +622,7 @@ class TAPER(nn.Module):
             "value_slot_activity": value_slot_activity,
             "slot_peak_ownership": (soft_slot_masks.amax(dim=2)),
             "slot_effects": slot_effects,
+            "slot_effect_input": slot_effect_input,
             "slot_value_source_contextual": torch.tensor(
                 self.slot_value_source == "contextual",
                 dtype=torch.bool,

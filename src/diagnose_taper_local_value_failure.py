@@ -168,11 +168,12 @@ def rebuild_edit_slots(
     slot_semantics, slot_mass, slot_activity = model._mass_aware_slot_pool(
         value_states, value_masks
     )
-    slot_mlp_input = (
-        torch.cat([slot_semantics, slot_effects], dim=-1)
+    effect_input = (
+        slot_effects
         if model.slot_effect_in_value
-        else slot_semantics
+        else torch.zeros_like(slot_effects)
     )
+    slot_mlp_input = torch.cat([slot_semantics, effect_input], dim=-1)
     raw_edit_slots = model.slot_mlp(slot_mlp_input)
     edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
     return {
