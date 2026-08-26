@@ -85,6 +85,7 @@ def main(cfg: DictConfig) -> None:
     print("Val text:", tuple(val_text.states.shape))
     print("Slot value source:", cfg.experiment.model.slot_value_source)
     print("Slot effect in value:", cfg.experiment.model.slot_effect_in_value)
+    print("Slot value assignment:", cfg.experiment.model.slot_value_assignment)
 
     train_loader = build_train_loader(
         annotation_root=annotation_root,
@@ -134,6 +135,7 @@ def main(cfg: DictConfig) -> None:
         counterfactual_chunk_size=m.counterfactual_chunk_size,
         slot_value_source=m.slot_value_source,
         slot_effect_in_value=m.slot_effect_in_value,
+        slot_value_assignment=m.slot_value_assignment,
     ).to(device)
 
     optimizer = AdamW(

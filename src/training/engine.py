@@ -238,6 +238,12 @@ def fit(
             f"{train_metrics.get('diagnostic/qasa_quality_mean', float('nan')):.3f}"
             f" | qasa_cov="
             f"{train_metrics.get('diagnostic/qasa_final_coverage_mean', float('nan')):.3f}"
+            f" | value_k="
+            f"{train_metrics.get('diagnostic/value_hard_effective_k', float('nan')):.2f}"
+            f" | value_dominant="
+            f"{train_metrics.get('diagnostic/value_dominant_token_share', float('nan')):.3f}"
+            f" | value_empty="
+            f"{train_metrics.get('diagnostic/value_empty_slot_fraction', float('nan')):.3f}"
         )
 
 

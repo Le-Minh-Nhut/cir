@@ -43,6 +43,7 @@ model:
 
   slot_value_source: teacher_raw
   slot_effect_in_value: false
+  slot_value_assignment: hard_st_exclusive
 
 teacher:
   csmcir_root: teacher/repos/CSMCIR

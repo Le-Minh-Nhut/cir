@@ -37,6 +37,7 @@ class TAPER(nn.Module):
         qasa_apply_at_eval: bool = True,
         slot_value_source: str = "teacher_raw",
         slot_effect_in_value: bool = False,
+        slot_value_assignment: str = "hard_st_exclusive",
     ) -> None:
         super().__init__()
 
@@ -62,6 +63,10 @@ class TAPER(nn.Module):
             raise ValueError("slot_value_source must be 'teacher_raw' for this experiment")
         if slot_effect_in_value:
             raise ValueError("slot_effect_in_value must be false for this experiment")
+        if slot_value_assignment != "hard_st_exclusive":
+            raise ValueError(
+                "slot_value_assignment must be 'hard_st_exclusive' for this experiment"
+            )
 
         self.teacher = teacher
         self.text_dim = text_dim
@@ -86,6 +91,7 @@ class TAPER(nn.Module):
         self.counterfactual_chunk_size = counterfactual_chunk_size
         self.slot_value_source = slot_value_source
         self.slot_effect_in_value = bool(slot_effect_in_value)
+        self.slot_value_assignment = slot_value_assignment
 
         self.teacher.eval()
         for parameter in self.teacher.parameters():
@@ -138,6 +144,7 @@ class TAPER(nn.Module):
         return {
             "slot_value_source": self.slot_value_source,
             "slot_effect_in_value": self.slot_effect_in_value,
+            "slot_value_assignment": self.slot_value_assignment,
         }
 
     def _pool_text(self, text_states: Tensor, mask: Tensor) -> Tensor:
@@ -194,6 +201,54 @@ class TAPER(nn.Module):
             raise FloatingPointError("non-finite slot ownership")
 
         return logits, ownership
+
+    def _hard_value_assignment(
+        self,
+        soft_slot_masks: Tensor,
+        slot_valid: Tensor,
+    ) -> tuple[Tensor, Tensor]:
+        """Build a forward-hard/backward-soft exclusive VALUE partition."""
+        if soft_slot_masks.ndim != 3:
+            raise ValueError("soft_slot_masks must be [B,L,N]")
+        batch_size, num_slots, num_tokens = soft_slot_masks.shape
+        if num_slots != self.num_slots:
+            raise ValueError("soft_slot_masks slot dimension mismatch")
+        if slot_valid.shape != (batch_size, num_tokens):
+            raise ValueError("slot_valid must be [B,N]")
+        if not torch.isfinite(soft_slot_masks).all():
+            raise FloatingPointError("non-finite soft slot ownership")
+
+        slot_valid = slot_valid.to(torch.bool)
+        winner = soft_slot_masks.argmax(dim=1)
+        hard_slot_masks = F.one_hot(
+            winner,
+            num_classes=self.num_slots,
+        ).permute(0, 2, 1).to(soft_slot_masks.dtype)
+        hard_slot_masks = hard_slot_masks * slot_valid[:, None, :].to(
+            hard_slot_masks.dtype
+        )
+
+        hard_mass_per_token = hard_slot_masks.sum(dim=1)
+        if slot_valid.any() and not torch.equal(
+            hard_mass_per_token[slot_valid],
+            torch.ones_like(hard_mass_per_token[slot_valid]),
+        ):
+            raise RuntimeError("Every valid token must have exactly one VALUE owner")
+        if (~slot_valid).any() and hard_mass_per_token[~slot_valid].any():
+            raise RuntimeError("Invalid tokens must have no VALUE owner")
+
+        # Forward equals the hard partition exactly. Backward is the identity
+        # with respect to the pre-existing soft competitive ownership.
+        value_slot_masks = hard_slot_masks + (
+            soft_slot_masks - soft_slot_masks.detach()
+        )
+        value_slot_masks = value_slot_masks * slot_valid[:, None, :].to(
+            value_slot_masks.dtype
+        )
+        if not torch.equal(value_slot_masks.detach(), hard_slot_masks):
+            raise RuntimeError("Straight-through VALUE mask must be forward-hard")
+
+        return hard_slot_masks, value_slot_masks
 
     @torch.no_grad()
     def _qasa_attention_fp32(self, text_states: Tensor, slot_valid: Tensor) -> Tensor:
@@ -429,11 +484,21 @@ class TAPER(nn.Module):
         _, slot_valid = self._validate_text_inputs(text_states, text_attention_mask, text_content_mask)
 
         batch_size, num_tokens, _ = text_states.shape
-        ownership_logits, slot_masks = self._competitive_ownership(text_states, slot_valid)
-        slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(
-            teacher_text_states,
-            slot_masks,
+        ownership_logits, soft_slot_masks = self._competitive_ownership(
+            text_states,
+            slot_valid,
         )
+        value_hard_slot_masks, value_slot_masks = self._hard_value_assignment(
+            soft_slot_masks,
+            slot_valid,
+        )
+        slot_semantics, value_slot_mass, value_slot_activity = (
+            self._mass_aware_slot_pool(
+                teacher_text_states,
+                value_slot_masks,
+            )
+        )
+        soft_slot_mass = soft_slot_masks.sum(dim=2)
 
         q_full = self.teacher.compose(teacher_reference_features, teacher_text_states, text_attention_mask, normalize=False)
         expected_shape = (batch_size, self.teacher_query_dim)
@@ -445,14 +510,14 @@ class TAPER(nn.Module):
             teacher_reference_features=teacher_reference_features,
             teacher_text_states=teacher_text_states,
             text_attention_mask=text_attention_mask,
-            slot_masks=slot_masks,
+            slot_masks=soft_slot_masks,
             neutral=neutral,
         )
 
         slot_effects = q_full.unsqueeze(1) - q_minus
 
         raw_edit_slots = self.slot_mlp(slot_semantics)
-        edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
+        edit_slots = raw_edit_slots * value_slot_activity.unsqueeze(-1)
 
         # qasa_attention = F.softmax(ownership_logits.float(), dim=1)
         # qasa_attention = qasa_attention * slot_valid[:, None, :].to(qasa_attention.dtype)
@@ -475,21 +540,30 @@ class TAPER(nn.Module):
             "edit_slots": edit_slots,
             "raw_edit_slots": raw_edit_slots,
             "ownership_logits": ownership_logits,
-            "slot_masks": slot_masks,
+            "slot_masks": soft_slot_masks,
+            "value_hard_slot_masks": value_hard_slot_masks,
+            "value_slot_masks": value_slot_masks,
             "slot_semantics": slot_semantics,
-            "slot_mass": slot_mass,
-            "slot_activity": slot_activity,
-            "slot_peak_ownership": (slot_masks.amax(dim=2)),
+            "slot_mass": soft_slot_mass,
+            "slot_activity": value_slot_activity,
+            "value_slot_mass": value_slot_mass,
+            "value_slot_activity": value_slot_activity,
+            "slot_peak_ownership": (soft_slot_masks.amax(dim=2)),
             "slot_effects": slot_effects,
             "slot_value_source_teacher_raw": torch.ones(
                 (),
                 dtype=torch.bool,
-                device=slot_masks.device,
+                device=soft_slot_masks.device,
             ),
             "slot_effect_used_in_latent": torch.zeros(
                 (),
                 dtype=torch.bool,
-                device=slot_masks.device,
+                device=soft_slot_masks.device,
+            ),
+            "slot_value_assignment_hard_st_exclusive": torch.ones(
+                (),
+                dtype=torch.bool,
+                device=soft_slot_masks.device,
             ),
             "qasa_attention": qasa_attention,
             "qasa_valid_mask": qasa_valid,
@@ -770,6 +844,7 @@ class TAPER(nn.Module):
         *,
         slot_masks: Tensor,
         slot_mass: Tensor,
+        value_hard_slot_masks: Tensor,
         slot_effects: Tensor,
         qasa_selected_mask: Tensor,
         qasa_quality: Tensor,
@@ -798,6 +873,19 @@ class TAPER(nn.Module):
         dominant_slot_share_per_sample = slot_mass.max(dim=1).values / total_mass_per_sample.clamp_min(1e-12)
         dominant_slot_share = dominant_slot_share_per_sample.mean()
         near_monopoly_fraction = (dominant_slot_share_per_sample >= 0.90).to(slot_masks.dtype).mean()
+        value_winner_count = value_hard_slot_masks.sum(dim=2)
+        value_valid_count = valid_f.sum(dim=1)
+        value_hard_effective_k = (
+            (value_winner_count > 0).to(slot_masks.dtype).sum(dim=1).mean()
+        )
+        value_dominant_share_per_sample = (
+            value_winner_count.max(dim=1).values
+            / value_valid_count.clamp_min(1.0)
+        )
+        value_dominant_token_share = value_dominant_share_per_sample.mean()
+        value_empty_slot_fraction = (
+            (value_winner_count == 0).to(slot_masks.dtype).mean()
+        )
         zero = slot_masks.sum() * 0.0
         if self.num_slots == 1:
             overlap = zero
@@ -818,6 +906,9 @@ class TAPER(nn.Module):
             "execution_hard_active_slot_count": execution_hard_active_slot_count,
             "dominant_slot_share": dominant_slot_share,
             "near_monopoly_fraction": near_monopoly_fraction,
+            "value_hard_effective_k": value_hard_effective_k,
+            "value_dominant_token_share": value_dominant_token_share,
+            "value_empty_slot_fraction": value_empty_slot_fraction,
             "slot_overlap_mean": overlap,
             "slot_effect_similarity_mean": effect_similarity_mean,
             "qasa_selected_slot_count": qasa_selected_mask.to(slot_masks.dtype).sum(dim=1).mean(),
@@ -829,6 +920,9 @@ class TAPER(nn.Module):
             diagnostics[f"slot_{slot_id}_mass_mean"] = slot_mass[:, slot_id].mean()
             diagnostics[f"slot_{slot_id}_winner_count_mean"] = winner_count[:, slot_id].to(slot_masks.dtype).mean()
             diagnostics[f"slot_{slot_id}_quality_mean"] = qasa_quality[:, slot_id].mean()
+            diagnostics[f"value_hard_winner_count_slot_{slot_id}"] = (
+                value_winner_count[:, slot_id].to(slot_masks.dtype).mean()
+            )
 
         return diagnostics
 
@@ -900,10 +994,14 @@ class TAPER(nn.Module):
         losses["diagnostic/slot_effect_used_in_latent"] = losses[
             "retrieval_loss"
         ].new_zeros(())
+        losses["diagnostic/slot_value_assignment_hard_st_exclusive"] = losses[
+            "retrieval_loss"
+        ].new_ones(())
         with torch.no_grad():
             diagnostics = self._assignment_diagnostics(
                 slot_masks=output["slot_masks"],
                 slot_mass=output["slot_mass"],
+                value_hard_slot_masks=output["value_hard_slot_masks"],
                 slot_effects=output["slot_effects"],
                 hard_active_slot_mask=output["hard_active_slot_mask"],
                 text_attention_mask=mask,

@@ -1,4 +1,4 @@
-# A3.2: Contextual key, local/private value
+# A3.2: Contextual key, hard-private local value
 
 Parent branch: `exp/e2e-a3.1-qasa-slot-filter-eval-winner`
 
@@ -21,7 +21,11 @@ contextual/reference-conditioned Q-Former text states
                          v
                 ownership KEY + QASA
                          |
-                    slot masks
+                 soft slot masks
+                         |
+                token-wise argmax
+                         |
+             hard exclusive support
                          |
                          v
 raw CSMCIR Q-Former word embeddings (teacher_states.npy)
@@ -35,15 +39,25 @@ raw CSMCIR Q-Former word embeddings (teacher_states.npy)
                      Edit Slots
 ```
 
+Every valid content token contributes VALUE to exactly one candidate slot in
+the forward pass. Padding and special tokens contribute to no slot. The hard
+mask uses a straight-through estimator: its forward value is exactly the
+one-hot partition, while its backward derivative follows the original soft
+competitive ownership. This retains gradients for the slot queries and KEY
+projections without allowing continuous soft routing weights to encode VALUE.
+
 The counterfactual teacher quantities `q_full`, `q_minus`, and `slot_effects`
-are still computed and returned for existing diagnostics. `slot_effects` is not
-an input to `slot_mlp` or any other Edit-Slot latent construction.
+are still computed from the original soft ownership and returned for existing
+diagnostics. `slot_effects` is not an input to `slot_mlp` or any other Edit-Slot
+latent construction. QASA also remains on its independent FP32 contextual soft
+attention path and does not gate VALUE ownership.
 
 Experiment provenance is explicit:
 
 ```yaml
 slot_value_source: teacher_raw
 slot_effect_in_value: false
+slot_value_assignment: hard_st_exclusive
 ```
 
 The first `slot_mlp` layer therefore has `teacher_text_dim` inputs (768 in the
@@ -54,19 +68,22 @@ reused unchanged.
 
 ## Preserved controls
 
-The contextual KEY, competitive ownership, content mask, QASA algorithm and
-thresholds, frozen teacher, Executor, Router, Primitive Bank, retrieval loss,
-optimizer, schedule, captions, and FashionIQ evaluation protocol are unchanged.
-No new loss, supervision, regularizer, routing algorithm, or semantic label is
-introduced.
+The contextual KEY, soft competitive ownership diagnostics, content mask, QASA
+algorithm and thresholds, frozen teacher, Executor, Router, Primitive Bank,
+retrieval loss, optimizer, schedule, captions, and FashionIQ evaluation
+protocol are unchanged. No new loss, supervision, regularizer, balancing
+constraint, quota, sequential claiming, or semantic label is introduced.
 
 ## Falsification criterion
 
+This intervention does not guarantee specialization. A giant slot may still
+win every valid token, leaving all other VALUE slots exactly empty; this is an
+intended falsification mode rather than an error to balance away.
+
 After retraining, if functional Phi effective rank remains near one and both
-REPEAT/FULL and MEANxK/FULL remain near one, isolating local token values is not
-sufficient to produce functional specialization. That result would motivate a
-later multi-error functional-ownership experiment; it is not corrected inside
-this ablation.
+REPEAT/FULL and MEANxK/FULL remain near one, hard information isolation alone
+is not sufficient to produce functional specialization. Stop at that result;
+do not add another mechanism inside this ablation.
 
 ## Commands
 

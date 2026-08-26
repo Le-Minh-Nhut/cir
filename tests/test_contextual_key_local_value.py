@@ -40,7 +40,7 @@ class DummyComposeTeacher(nn.Module):
         return query
 
 
-def make_model() -> TAPER:
+def make_model(*, num_slots: int = 2) -> TAPER:
     torch.manual_seed(0)
     model = TAPER(
         DummyComposeTeacher(query_dim=3),
@@ -51,21 +51,24 @@ def make_model() -> TAPER:
         query_dim=3,
         slot_dim=4,
         state_dim=4,
-        num_slots=2,
+        num_slots=num_slots,
         num_primitives=2,
         counterfactual_chunk_size=2,
         slot_value_source="teacher_raw",
         slot_effect_in_value=False,
+        slot_value_assignment="hard_st_exclusive",
     )
     with torch.no_grad():
-        model.slot_queries.copy_(
-            torch.tensor(
-                [
-                    [1.0, 0.0, 0.0, 0.0],
-                    [-1.0, 0.0, 0.0, 0.0],
-                ]
-            )
+        queries = torch.zeros(num_slots, 4)
+        directions = (
+            (0, 1.0),
+            (0, -1.0),
+            (1, 1.0),
+            (1, -1.0),
         )
+        for slot_id, (dimension, value) in enumerate(directions[:num_slots]):
+            queries[slot_id, dimension] = value
+        model.slot_queries.copy_(queries)
         model.slot_query_projection.weight.copy_(torch.eye(4))
         model.text_key_projection.weight.zero_()
         model.text_key_projection.weight[0, 0] = 1.0
@@ -117,6 +120,7 @@ def test_experiment_contract_and_slot_mlp_input_dimension() -> None:
     assert model.experiment_provenance() == {
         "slot_value_source": "teacher_raw",
         "slot_effect_in_value": False,
+        "slot_value_assignment": "hard_st_exclusive",
     }
     assert isinstance(model.slot_mlp[0], nn.Linear)
     assert model.slot_mlp[0].in_features == model.teacher_text_dim == 6
@@ -141,6 +145,16 @@ def test_experiment_contract_and_slot_mlp_input_dimension() -> None:
             teacher_query_dim=3,
             query_dim=3,
             slot_effect_in_value=True,
+        )
+    with pytest.raises(ValueError, match="slot_value_assignment"):
+        TAPER(
+            DummyComposeTeacher(3),
+            text_dim=5,
+            reference_dim=7,
+            teacher_text_dim=6,
+            teacher_query_dim=3,
+            query_dim=3,
+            slot_value_assignment="soft",
         )
 
 
@@ -184,6 +198,126 @@ def test_text_cache_preserves_contextual_raw_token_alignment(tmp_path: Path) -> 
     torch.testing.assert_close(raw[0], torch.from_numpy(teacher_states[1]))
     torch.testing.assert_close(loaded_attention[0], torch.from_numpy(attention[1]))
     torch.testing.assert_close(loaded_content[0], torch.from_numpy(content[1]))
+
+
+def test_value_assignment_is_exactly_hard_and_exclusive() -> None:
+    model = make_model()
+    inputs = make_inputs()
+    output = build_slots(model, inputs)
+    valid = (
+        inputs["text_attention_mask"].bool()
+        & inputs["text_content_mask"].bool()
+    )
+    hard = output["value_hard_slot_masks"]
+    hard_mass_per_token = hard.sum(dim=1)
+
+    assert hard.shape == output["slot_masks"].shape == (1, model.num_slots, 5)
+    assert torch.equal(
+        hard_mass_per_token[valid],
+        torch.ones_like(hard_mass_per_token[valid]),
+    )
+    assert torch.equal(
+        hard_mass_per_token[~valid],
+        torch.zeros_like(hard_mass_per_token[~valid]),
+    )
+    assert torch.all((hard == 0) | (hard == 1))
+    torch.testing.assert_close(output["value_slot_masks"].detach(), hard)
+
+    soft_mass_per_token = output["slot_masks"].sum(dim=1)
+    torch.testing.assert_close(
+        soft_mass_per_token[valid],
+        torch.ones_like(soft_mass_per_token[valid]),
+    )
+
+
+def test_st_forward_is_hard_and_backward_is_soft_identity() -> None:
+    model = make_model()
+    soft = torch.tensor(
+        [
+            [
+                [0.0, 0.70, 0.40, 0.20],
+                [0.0, 0.30, 0.60, 0.80],
+            ]
+        ],
+        requires_grad=True,
+    )
+    valid = torch.tensor([[False, True, True, True]])
+    hard, value_masks = model._hard_value_assignment(soft, valid)
+    weights = torch.arange(value_masks.numel(), dtype=value_masks.dtype).reshape_as(
+        value_masks
+    )
+
+    torch.testing.assert_close(value_masks.detach(), hard)
+    (value_masks * weights).sum().backward()
+
+    expected_gradient = weights * valid[:, None, :].to(weights.dtype)
+    torch.testing.assert_close(soft.grad, expected_gradient)
+
+
+def test_soft_probabilities_with_same_winners_cannot_encode_value() -> None:
+    model = make_model()
+    valid = torch.tensor([[True, True, True]])
+    soft_a = torch.tensor(
+        [[[0.70, 0.10, 0.60], [0.30, 0.90, 0.40]]],
+        requires_grad=True,
+    )
+    soft_b = torch.tensor(
+        [[[0.26, 0.25, 0.51], [0.25, 0.75, 0.49]]],
+        requires_grad=True,
+    )
+    raw_values = torch.tensor(
+        [
+            [
+                [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+                [10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+                [7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            ]
+        ]
+    )
+    hard_a, value_a = model._hard_value_assignment(soft_a, valid)
+    hard_b, value_b = model._hard_value_assignment(soft_b, valid)
+    semantics_a, mass_a, activity_a = model._mass_aware_slot_pool(
+        raw_values,
+        value_a,
+    )
+    semantics_b, mass_b, activity_b = model._mass_aware_slot_pool(
+        raw_values,
+        value_b,
+    )
+
+    assert not torch.allclose(soft_a, soft_b)
+    assert torch.equal(hard_a, hard_b)
+    torch.testing.assert_close(semantics_a.detach(), semantics_b.detach())
+    torch.testing.assert_close(mass_a.detach(), mass_b.detach())
+    torch.testing.assert_close(activity_a.detach(), activity_b.detach())
+
+
+def test_qasa_selection_does_not_gate_value_ownership() -> None:
+    model = make_model()
+    inputs = make_inputs()
+    baseline = build_slots(model, inputs)
+    qasa_override = {
+        "qasa_quality": torch.zeros(1, model.num_slots),
+        "qasa_selected_mask": torch.zeros(1, model.num_slots, dtype=torch.bool),
+        "qasa_selected_count": torch.zeros(1, dtype=torch.long),
+        "qasa_final_coverage": torch.zeros(1),
+        "qasa_novelty_skip_count": torch.zeros(1),
+    }
+
+    with patch.object(
+        model,
+        "_qasa_select_slots",
+        return_value=qasa_override,
+    ):
+        no_qasa_slots = build_slots(model, inputs)
+
+    assert not no_qasa_slots["qasa_selected_mask"].any()
+    torch.testing.assert_close(
+        no_qasa_slots["value_hard_slot_masks"],
+        baseline["value_hard_slot_masks"],
+    )
+    torch.testing.assert_close(no_qasa_slots["slot_semantics"], baseline["slot_semantics"])
+    torch.testing.assert_close(no_qasa_slots["edit_slots"], baseline["edit_slots"])
 
 
 def test_contextual_key_and_teacher_raw_value_are_separate() -> None:
@@ -286,6 +420,18 @@ def test_fixed_support_blocks_contextual_information_from_value() -> None:
             baseline["slot_semantics"][:, 1],
         )
 
+        second_support_changed = clone_inputs(inputs)
+        second_support_changed["teacher_text_states"][0, 2, :] -= 20.0
+        changed_second_support = build_slots(model, second_support_changed)
+        torch.testing.assert_close(
+            changed_second_support["slot_semantics"][:, 0],
+            baseline["slot_semantics"][:, 0],
+        )
+        assert not torch.allclose(
+            changed_second_support["slot_semantics"][:, 1],
+            baseline["slot_semantics"][:, 1],
+        )
+
         outside_slot_zero = clone_inputs(inputs)
         outside_slot_zero["teacher_text_states"][0, 3, :] += 30.0
         changed_outside = build_slots(model, outside_slot_zero)
@@ -319,6 +465,12 @@ def test_zero_slot_and_invalid_tokens_keep_existing_contract() -> None:
         output["slot_masks"].masked_select(invalid[:, None, :]),
         torch.zeros_like(output["slot_masks"].masked_select(invalid[:, None, :])),
     )
+    assert torch.equal(
+        output["value_hard_slot_masks"].masked_select(invalid[:, None, :]),
+        torch.zeros_like(
+            output["value_hard_slot_masks"].masked_select(invalid[:, None, :])
+        ),
+    )
 
     invalid_raw_changed = clone_inputs(inputs)
     invalid_raw_changed["teacher_text_states"][0, 0, :] += 10_000.0
@@ -326,6 +478,37 @@ def test_zero_slot_and_invalid_tokens_keep_existing_contract() -> None:
     changed = build_slots(model, invalid_raw_changed)
     torch.testing.assert_close(changed["slot_semantics"], output["slot_semantics"])
     torch.testing.assert_close(changed["edit_slots"], output["edit_slots"])
+
+
+def test_giant_value_slot_is_allowed_and_other_slots_are_empty() -> None:
+    model = make_model(num_slots=4)
+    inputs = make_inputs()
+    valid = (
+        inputs["text_attention_mask"].bool()
+        & inputs["text_content_mask"].bool()
+    )
+    soft_masks = torch.zeros(1, model.num_slots, 5)
+    soft_masks[:, 0, valid[0]] = 0.70
+    soft_masks[:, 1:, valid[0]] = 0.10
+    logits = torch.zeros_like(soft_masks)
+
+    with patch.object(
+        model,
+        "_competitive_ownership",
+        return_value=(logits, soft_masks),
+    ):
+        output = build_slots(model, inputs)
+
+    expected_mass = torch.tensor([[3.0, 0.0, 0.0, 0.0]])
+    torch.testing.assert_close(output["value_slot_mass"].detach(), expected_mass)
+    torch.testing.assert_close(
+        output["value_slot_activity"].detach(),
+        torch.tensor([[1.0, 0.0, 0.0, 0.0]]),
+    )
+    assert torch.equal(
+        output["edit_slots"][:, 1:],
+        torch.zeros_like(output["edit_slots"][:, 1:]),
+    )
 
 
 def test_teacher_stays_frozen_and_local_value_path_backpropagates() -> None:
@@ -377,6 +560,19 @@ def test_full_compute_loss_forward_backward_smoke() -> None:
     assert torch.isfinite(retrieval_loss)
     assert losses["diagnostic/slot_value_source_teacher_raw"].item() == 1.0
     assert losses["diagnostic/slot_effect_used_in_latent"].item() == 0.0
+    assert (
+        losses["diagnostic/slot_value_assignment_hard_st_exclusive"].item()
+        == 1.0
+    )
+    for name in (
+        "diagnostic/value_hard_effective_k",
+        "diagnostic/value_dominant_token_share",
+        "diagnostic/value_empty_slot_fraction",
+        "diagnostic/value_hard_winner_count_slot_0",
+        "diagnostic/value_hard_winner_count_slot_1",
+    ):
+        assert name in losses
+        assert torch.isfinite(losses[name])
 
     retrieval_loss.backward()
     trainable_gradients = [
@@ -427,6 +623,7 @@ def test_checkpoint_records_experiment_provenance(
     assert restored["experiment_provenance"] == {
         "slot_value_source": "teacher_raw",
         "slot_effect_in_value": False,
+        "slot_value_assignment": "hard_st_exclusive",
     }
 
 
@@ -463,6 +660,7 @@ def test_evaluator_rejects_a31_and_wrong_provenance(
             "experiment_provenance": {
                 "slot_value_source": "contextual",
                 "slot_effect_in_value": True,
+                "slot_value_assignment": "soft",
             },
         },
         wrong_path,

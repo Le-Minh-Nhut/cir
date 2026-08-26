@@ -135,6 +135,7 @@ def build_model(cfg, device: torch.device) -> TAPER:
         counterfactual_chunk_size=m.counterfactual_chunk_size,
         slot_value_source=m.slot_value_source,
         slot_effect_in_value=m.slot_effect_in_value,
+        slot_value_assignment=m.slot_value_assignment,
     ).to(device)
 
 
