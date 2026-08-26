@@ -50,10 +50,20 @@ class TAPERFGCLIP2ContractTest(unittest.TestCase):
         self.assertEqual(output["edit_slots"].shape, (2, 4, 1024))
         self.assertEqual(output["slot_masks"].shape, (2, 4, 8))
         self.assertEqual(output["slot_semantics"].shape, (2, 4, 1024))
+        self.assertEqual(output["routing_masks"].shape, (2, 4, 8))
+        self.assertEqual(output["routing_slot_semantics"].shape, (2, 4, 1024))
+        self.assertEqual(output["routing_support_count"].shape, (2, 4))
         self.assertEqual(output["reference_state"].shape, (2, 512))
         self.assertEqual(output["final_state"].shape, (2, 512))
         self.assertEqual(output["q0"].shape, (2, 1024))
         self.assertEqual(output["qasa_attention"].dtype, torch.float32)
+        self.assertTrue(
+            torch.allclose(
+                output["qasa_attention"],
+                output["slot_masks"].float(),
+                atol=1e-6,
+            )
+        )
         self.assertEqual(self.model.router[0].in_features, 2560)
 
         invalid_ownership = output["slot_masks"] * (~valid[:, None, :])
@@ -64,10 +74,28 @@ class TAPERFGCLIP2ContractTest(unittest.TestCase):
         )
         self.assertTrue(torch.isfinite(output["slot_masks"]).all())
         self.assertTrue(torch.isfinite(output["slot_mass"]).all())
+        self.assertTrue(torch.isfinite(output["routing_masks"]).all())
+        self.assertTrue((output["routing_masks"] >= 0).all())
+        invalid_routing = output["routing_masks"] * (~valid[:, None, :])
+        self.assertEqual(torch.count_nonzero(invalid_routing).item(), 0)
+        unselected_routing = output["routing_masks"] * (
+            ~output["qasa_selected_mask"][:, :, None]
+        )
+        self.assertEqual(torch.count_nonzero(unselected_routing).item(), 0)
+        active = output["qasa_selected_mask"] & valid.any(dim=1, keepdim=True)
+        routing_mass = output["routing_masks"].sum(dim=-1)
+        self.assertTrue(
+            torch.allclose(
+                routing_mass[active],
+                torch.ones_like(routing_mass[active]),
+                atol=1e-6,
+            )
+        )
         self.assertTrue(
             torch.allclose(
                 output["edit_slots"],
-                output["slot_semantics"] * output["slot_activity"].unsqueeze(-1),
+                output["routing_slot_semantics"]
+                * output["routing_slot_activity"].unsqueeze(-1),
             )
         )
 
@@ -87,6 +115,17 @@ class TAPERFGCLIP2ContractTest(unittest.TestCase):
         )
         loss = losses["retrieval_loss"]
         self.assertTrue(torch.isfinite(loss))
+        for name in (
+            "routing_support_mean",
+            "routing_support_max",
+            "routing_support_fraction_mean",
+            "routing_zero_fraction",
+            "routing_active_slot_count",
+            "routing_support_overlap_mean",
+        ):
+            self.assertIn(f"diagnostic/{name}", losses)
+        for slot_id in range(self.model.num_slots):
+            self.assertIn(f"diagnostic/routing_slot_{slot_id}_support_mean", losses)
         loss.backward()
         trainable = [parameter for parameter in self.model.parameters() if parameter.requires_grad]
         self.assertTrue(trainable)
@@ -99,7 +138,17 @@ class TAPERFGCLIP2ContractTest(unittest.TestCase):
             self.attention,
             text_content_mask=torch.zeros_like(self.content),
         )
-        for key in ("slot_masks", "slot_mass", "slot_activity", "edit_slots"):
+        for key in (
+            "slot_masks",
+            "slot_mass",
+            "slot_activity",
+            "routing_masks",
+            "routing_slot_mass",
+            "routing_slot_activity",
+            "routing_slot_semantics",
+            "routing_support_count",
+            "edit_slots",
+        ):
             self.assertEqual(torch.count_nonzero(empty[key]).item(), 0, key)
         self.assertEqual(empty["qasa_attention"].dtype, torch.float32)
         self.assertTrue(torch.isfinite(empty["qasa_attention"]).all())
