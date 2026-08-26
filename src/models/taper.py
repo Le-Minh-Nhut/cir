@@ -876,6 +876,10 @@ class TAPER(nn.Module):
                 "dropped_queries": torch.stack(dropped_queries, dim=1),
                 "slot_mass": slots["slot_mass"],
                 "slot_activity": slots["slot_activity"],
+                "routing_slot_mass": slots["routing_slot_mass"],
+                "routing_slot_activity": slots["routing_slot_activity"],
+                "routing_support_count": slots["routing_support_count"],
+                "routing_masks": slots["routing_masks"],
                 "hard_active_slot_mask": full_execution["hard_active_slot_mask"],
                 "qasa_selected_mask": slots["qasa_selected_mask"],
                 "qasa_quality": slots["qasa_quality"],
@@ -886,10 +890,9 @@ class TAPER(nn.Module):
     def compute_stage1_loss(self, batch: Mapping[str, object]) -> dict[str, Tensor]:
         del batch
         raise RuntimeError(
-            "compute_stage1_loss() is intentionally disabled for competitive "
-            "NULL ownership. This branch requires end-to-end retrieval "
-            "supervision; the previous structural Stage-1 objective is not "
-            "mathematically compatible with a learnable NULL sink."
+            "compute_stage1_loss() is intentionally disabled for the current "
+            "end-to-end competitive Edit-Slot/QASA routing experiment. This "
+            "branch requires end-to-end retrieval supervision."
         )
 
     @torch.no_grad()

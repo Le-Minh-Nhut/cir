@@ -229,6 +229,62 @@ class TAPEREntmaxRoutingTest(unittest.TestCase):
             self.assertIsNotNone(parameter.grad)
             self.assertTrue(torch.isfinite(parameter.grad).all())
 
+    def test_slot_drop_queries_returns_actual_sparse_routing_diagnostics(self) -> None:
+        torch.manual_seed(29)
+        model = tiny_taper().eval()
+        reference = torch.randn(2, 4)
+        text = torch.randn(2, 6, 4)
+        attention = torch.ones(2, 6, dtype=torch.bool)
+        content = torch.tensor(
+            [
+                [False, True, True, True, True, False],
+                [False, True, True, True, False, False],
+            ]
+        )
+
+        slots = model.build_edit_slots(
+            text,
+            attention,
+            text_content_mask=content,
+        )
+        dropped = model.slot_drop_queries(
+            reference_features=reference,
+            text_states=text,
+            text_attention_mask=attention,
+            text_content_mask=content,
+        )
+
+        for key in (
+            "routing_slot_mass",
+            "routing_slot_activity",
+            "routing_support_count",
+            "routing_masks",
+        ):
+            self.assertIn(key, dropped)
+        torch.testing.assert_close(
+            dropped["routing_slot_mass"],
+            slots["routing_slot_mass"],
+        )
+        torch.testing.assert_close(
+            dropped["routing_slot_activity"],
+            slots["routing_slot_activity"],
+        )
+        self.assertTrue(
+            torch.equal(
+                dropped["routing_support_count"],
+                slots["routing_support_count"],
+            )
+        )
+        torch.testing.assert_close(
+            dropped["routing_masks"],
+            slots["routing_masks"],
+        )
+        torch.testing.assert_close(dropped["slot_mass"], slots["slot_mass"])
+        torch.testing.assert_close(
+            dropped["slot_activity"],
+            slots["slot_activity"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
