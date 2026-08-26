@@ -253,6 +253,18 @@ def fit(
             f"{train_metrics.get('diagnostic/routing_active_slot_count', float('nan')):.2f}"
             f" | routing_support_overlap_mean="
             f"{train_metrics.get('diagnostic/routing_support_overlap_mean', float('nan')):.3f}"
+            f" | routing_token_mass_mean="
+            f"{train_metrics.get('diagnostic/routing_token_mass_mean', float('nan')):.3f}"
+            f" | routing_unassigned_mass_mean="
+            f"{train_metrics.get('diagnostic/routing_unassigned_mass_mean', float('nan')):.3f}"
+            f" | routing_fully_unassigned_fraction="
+            f"{train_metrics.get('diagnostic/routing_fully_unassigned_token_fraction', float('nan')):.3f}"
+            f" | routing_slot_mass_mean="
+            f"{train_metrics.get('diagnostic/routing_slot_mass_mean', float('nan')):.3f}"
+            f" | routing_capacity_utilization_mean="
+            f"{train_metrics.get('diagnostic/routing_capacity_utilization_mean', float('nan')):.3f}"
+            f" | routing_capacity_binding_fraction="
+            f"{train_metrics.get('diagnostic/routing_capacity_binding_fraction', float('nan')):.3f}"
             f" | routing_slot_support=[{routing_slot_support}]"
         )
 

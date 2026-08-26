@@ -39,6 +39,13 @@ model:
   qasa_apply_at_eval: true
   alpha_max: 1.0
 
+  routing_mode: qisca
+  r4_theta: 0.25
+  r4_lambda: 1.0
+  r4_capacity_enabled: false
+  r4_slot_capacity: 2.0
+  r4_solver_iters: 64
+
 backbone:
   model_id: qihoo360/fg-clip2-large
   revision: 4d1d5dc35c716902f07c172dbfc23b82a7bc6bf3

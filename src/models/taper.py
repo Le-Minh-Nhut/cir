@@ -11,9 +11,12 @@ from torch import Tensor, nn
 
 # Small enough to detect Entmax support while remaining representable in FP16.
 R1_ROUTING_SUPPORT_EPS = 1e-6
+R4_CAPACITY_BINDING_TOL = 1e-4
 
 
 class TAPER(nn.Module):
+    ROUTING_MODES = frozenset({"entmax15", "qisca"})
+
     def __init__(
         self,
         *,
@@ -33,6 +36,12 @@ class TAPER(nn.Module):
         qasa_mu: float = 0.3,
         qasa_eps: float = 1e-8,
         qasa_apply_at_eval: bool = True,
+        routing_mode: str = "entmax15",
+        r4_theta: float = 0.25,
+        r4_lambda: float = 1.0,
+        r4_capacity_enabled: bool = False,
+        r4_slot_capacity: float = 2.0,
+        r4_solver_iters: int = 64,
     ) -> None:
         super().__init__()
 
@@ -55,6 +64,22 @@ class TAPER(nn.Module):
             raise ValueError("all temperatures must be > 0")
         if alpha_max <= 0:
             raise ValueError("alpha_max must be > 0")
+        if routing_mode not in self.ROUTING_MODES:
+            raise ValueError(
+                f"routing_mode must be one of: {sorted(self.ROUTING_MODES)}"
+            )
+        if not math.isfinite(r4_theta) or not 0.0 <= r4_theta < 1.0:
+            raise ValueError("r4_theta must be in [0, 1)")
+        if not math.isfinite(r4_lambda) or r4_lambda <= 0:
+            raise ValueError("r4_lambda must be > 0")
+        if not isinstance(r4_capacity_enabled, bool):
+            raise TypeError("r4_capacity_enabled must be a bool")
+        if r4_capacity_enabled and (
+            not math.isfinite(r4_slot_capacity) or r4_slot_capacity <= 0
+        ):
+            raise ValueError("r4_slot_capacity must be > 0 when capacity is enabled")
+        if r4_solver_iters < 1:
+            raise ValueError("r4_solver_iters must be >= 1")
 
         self.text_dim = text_dim
         self.reference_dim = reference_dim
@@ -68,6 +93,12 @@ class TAPER(nn.Module):
         self.router_temperature = router_temperature
         self.retrieval_temperature = retrieval_temperature
         self.alpha_max = alpha_max
+        self.routing_mode = routing_mode
+        self.r4_theta = float(r4_theta)
+        self.r4_lambda = float(r4_lambda)
+        self.r4_capacity_enabled = r4_capacity_enabled
+        self.r4_slot_capacity = float(r4_slot_capacity)
+        self.r4_solver_iters = int(r4_solver_iters)
 
         # Ephemeral competing Edit Slot queries.
         self.slot_queries = nn.Parameter(torch.randn(num_slots, slot_dim) * 0.02)
@@ -309,6 +340,138 @@ class TAPER(nn.Module):
             raise FloatingPointError("negative R1 token routing")
         return routing
 
+    @staticmethod
+    def _project_nonnegative_l1_ball(
+        values: Tensor,
+        radius: float,
+        *,
+        dim: int = -1,
+    ) -> Tensor:
+        """Euclidean projection onto {x >= 0, sum(x, dim) <= radius}."""
+        if values.ndim < 1:
+            raise ValueError("values must have at least one dimension")
+        if not math.isfinite(radius) or radius < 0:
+            raise ValueError("radius must be finite and >= 0")
+        if values.shape[dim] < 1:
+            raise ValueError("projection dimension must be non-empty")
+        if radius == 0:
+            return torch.zeros_like(values)
+
+        positive = values.clamp_min(0)
+        feasible = positive.sum(dim=dim, keepdim=True) <= radius
+
+        sorted_values, _ = torch.sort(values, dim=dim, descending=True)
+        cumulative = sorted_values.cumsum(dim=dim) - radius
+        dimension = values.shape[dim]
+        indices = torch.arange(
+            1,
+            dimension + 1,
+            dtype=values.dtype,
+            device=values.device,
+        )
+        view_shape = [1] * values.ndim
+        view_shape[dim] = dimension
+        indices = indices.view(view_shape)
+        support = sorted_values - cumulative / indices > 0
+        support_size = support.sum(dim=dim, keepdim=True).clamp_min(1)
+        threshold_candidates = cumulative / indices
+        threshold = threshold_candidates.gather(dim, support_size - 1)
+        simplex_projection = (values - threshold).clamp_min(0)
+        return torch.where(feasible, positive, simplex_projection)
+
+    def _qisca_routing(
+        self,
+        soft_competition: Tensor,
+        slot_valid: Tensor,
+        selected_mask: Tensor,
+    ) -> Tensor:
+        """Project QASA's pre-sparse slot competition onto the R4 polytope."""
+        if soft_competition.ndim != 3:
+            raise ValueError("soft_competition must be [B,L,N]")
+        b, num_slots, n = soft_competition.shape
+        if num_slots != self.num_slots:
+            raise ValueError("soft_competition slot dimension mismatch")
+        if slot_valid.shape != (b, n):
+            raise ValueError("slot_valid must be [B,N]")
+        if selected_mask.shape != (b, num_slots):
+            raise ValueError("selected_mask must be [B,L]")
+        if selected_mask.dtype != torch.bool:
+            raise TypeError("selected_mask must be bool")
+
+        valid = slot_valid.to(device=soft_competition.device, dtype=torch.bool)
+        selected = selected_mask.to(device=soft_competition.device)
+        allowed = selected[:, :, None] & valid[:, None, :]
+
+        # FP32 keeps sorting/thresholding stable under autocast. Conversion does
+        # not detach, so gradients flow to the pre-sparse ownership tensor.
+        with torch.autocast(device_type=soft_competition.device.type, enabled=False):
+            competition_fp32 = soft_competition.float()
+            allowed_f = allowed.to(torch.float32)
+            scaled_utility = (
+                (competition_fp32 - self.r4_theta) / self.r4_lambda
+            ) * allowed_f
+
+            def project_tokens(values: Tensor) -> Tensor:
+                masked = values * allowed_f
+                projected = self._project_nonnegative_l1_ball(
+                    masked.transpose(1, 2),
+                    1.0,
+                    dim=-1,
+                ).transpose(1, 2)
+                return projected * allowed_f
+
+            if not self.r4_capacity_enabled:
+                routing_fp32 = project_tokens(scaled_utility)
+            else:
+                def project_slots(values: Tensor) -> Tensor:
+                    masked = values * allowed_f
+                    projected = self._project_nonnegative_l1_ball(
+                        masked,
+                        self.r4_slot_capacity,
+                        dim=-1,
+                    )
+                    return projected * allowed_f
+
+                # Dykstra projection onto the intersection of token budgets and
+                # slot capacities. Correction tensors are essential: plain
+                # alternating projections do not generally yield the Euclidean
+                # projection onto the intersection.
+                routing_fp32 = scaled_utility
+                token_correction = torch.zeros_like(routing_fp32)
+                slot_correction = torch.zeros_like(routing_fp32)
+                for _ in range(self.r4_solver_iters):
+                    token_input = routing_fp32 + token_correction
+                    token_projected = project_tokens(token_input)
+                    token_correction = (
+                        token_input - token_projected
+                    ) * allowed_f
+
+                    slot_input = token_projected + slot_correction
+                    routing_fp32 = project_slots(slot_input)
+                    slot_correction = (
+                        slot_input - routing_fp32
+                    ) * allowed_f
+
+                # The finite unroll is followed by a feasibility projection.
+                # Token projection only decreases a nonnegative capacity-feasible
+                # iterate, so it preserves every slot-column capacity.
+                routing_fp32 = project_tokens(routing_fp32) * allowed_f
+
+        # Keep the constrained assignment in FP32 so reduced-precision rounding
+        # cannot violate token/capacity inequalities after projection.
+        routing = routing_fp32
+        if not torch.isfinite(routing).all():
+            raise FloatingPointError("non-finite R4 QI-SCA routing")
+        if (routing < 0).any():
+            raise FloatingPointError("negative R4 QI-SCA routing")
+        if (routing.sum(dim=1) > 1.0 + 1e-5).any():
+            raise FloatingPointError("R4 token assignment budget was violated")
+        if self.r4_capacity_enabled and (
+            routing.sum(dim=-1) > self.r4_slot_capacity + 1e-4
+        ).any():
+            raise FloatingPointError("R4 slot capacity was violated")
+        return routing
+
     @torch.no_grad()
     def qasa_inference_partition(self, attention: Tensor, valid: Tensor) -> dict[str, Tensor]:
         if attention.ndim != 3:
@@ -369,11 +532,20 @@ class TAPER(nn.Module):
         else:
             selected_mask = qasa["qasa_selected_mask"]
 
-        routing_masks = self._token_entmax_routing(
-            ownership_logits,
-            slot_valid,
-            selected_mask,
-        )
+        if self.routing_mode == "entmax15":
+            routing_masks = self._token_entmax_routing(
+                ownership_logits,
+                slot_valid,
+                selected_mask,
+            )
+        else:
+            # slot_masks is P^Q = softmax_slots(Z): the differentiable copy of
+            # the same pre-sparse competition measured by QASA in FP32.
+            routing_masks = self._qisca_routing(
+                slot_masks,
+                slot_valid,
+                selected_mask,
+            )
         (
             routing_slot_semantics,
             routing_slot_mass,
@@ -397,6 +569,21 @@ class TAPER(nn.Module):
             "routing_slot_mass": routing_slot_mass,
             "routing_slot_activity": routing_slot_activity,
             "routing_support_count": routing_support_count,
+            "routing_mode_entmax15": torch.tensor(
+                self.routing_mode == "entmax15",
+                dtype=torch.bool,
+                device=routing_masks.device,
+            ),
+            "routing_mode_qisca": torch.tensor(
+                self.routing_mode == "qisca",
+                dtype=torch.bool,
+                device=routing_masks.device,
+            ),
+            "r4_capacity_enabled": torch.tensor(
+                self.r4_capacity_enabled,
+                dtype=torch.bool,
+                device=routing_masks.device,
+            ),
             "qasa_attention": qasa_attention,
             "qasa_valid_mask": qasa_valid,
             "qasa_quality": qasa["qasa_quality"],
@@ -776,6 +963,43 @@ class TAPER(nn.Module):
             "routing_active_slot_count": routing_active_f.sum(dim=1).mean(),
             "routing_support_overlap_mean": routing_support_overlap,
         }
+
+        routing_token_mass = routing_masks.sum(dim=1)
+        routing_unassigned_mass = (1.0 - routing_token_mass).clamp(0.0, 1.0)
+        diagnostics["routing_token_mass_mean"] = (
+            routing_token_mass * valid_f
+        ).sum() / denom
+        diagnostics["routing_token_mass_max"] = routing_token_mass.masked_fill(
+            ~valid,
+            0.0,
+        ).max()
+        diagnostics["routing_unassigned_mass_mean"] = (
+            routing_unassigned_mass * valid_f
+        ).sum() / denom
+        diagnostics["routing_fully_unassigned_token_fraction"] = (
+            (routing_token_mass <= R1_ROUTING_SUPPORT_EPS).to(slot_masks.dtype)
+            * valid_f
+        ).sum() / denom
+        diagnostics["routing_slot_mass_mean"] = routing_slot_mass.mean()
+        diagnostics["routing_slot_mass_max"] = routing_slot_mass.max()
+        if self.routing_mode == "qisca" and self.r4_capacity_enabled:
+            selected_f = qasa_selected_mask.to(slot_masks.dtype)
+            selected_count = selected_f.sum().clamp_min(1.0)
+            utilization = routing_slot_mass / self.r4_slot_capacity
+            binding = (
+                (routing_slot_mass - self.r4_slot_capacity).abs()
+                <= R4_CAPACITY_BINDING_TOL
+            ).to(slot_masks.dtype)
+            diagnostics["routing_capacity_utilization_mean"] = (
+                utilization * selected_f
+            ).sum() / selected_count
+            diagnostics["routing_capacity_binding_fraction"] = (
+                binding * selected_f
+            ).sum() / selected_count
+        else:
+            not_applicable = routing_masks.new_full((), float("nan"))
+            diagnostics["routing_capacity_utilization_mean"] = not_applicable
+            diagnostics["routing_capacity_binding_fraction"] = not_applicable
 
         for slot_id in range(self.num_slots):
             diagnostics[f"slot_{slot_id}_mass_mean"] = slot_mass[:, slot_id].mean()

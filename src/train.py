@@ -170,7 +170,22 @@ def main(cfg: DictConfig) -> None:
         qasa_eps=m.qasa_eps,
         qasa_apply_at_eval=m.qasa_apply_at_eval,
         alpha_max=m.alpha_max,
+        routing_mode=m.routing_mode,
+        r4_theta=m.r4_theta,
+        r4_lambda=m.r4_lambda,
+        r4_capacity_enabled=m.r4_capacity_enabled,
+        r4_slot_capacity=m.r4_slot_capacity,
+        r4_solver_iters=m.r4_solver_iters,
     ).to(device)
+
+    print("Routing mode:", model.routing_mode)
+    if model.routing_mode == "qisca":
+        print("R4 theta:", model.r4_theta)
+        print("R4 lambda:", model.r4_lambda)
+        print("R4 capacity enabled:", model.r4_capacity_enabled)
+        if model.r4_capacity_enabled:
+            print("R4 slot capacity:", model.r4_slot_capacity)
+            print("R4 solver iterations:", model.r4_solver_iters)
 
     optimizer = AdamW(
         (p for p in model.parameters() if p.requires_grad),

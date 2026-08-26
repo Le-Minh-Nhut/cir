@@ -149,6 +149,12 @@ def build_model(cfg, device: torch.device) -> TAPER:
         qasa_eps=m.qasa_eps,
         qasa_apply_at_eval=m.qasa_apply_at_eval,
         alpha_max=m.alpha_max,
+        routing_mode=m.routing_mode,
+        r4_theta=m.r4_theta,
+        r4_lambda=m.r4_lambda,
+        r4_capacity_enabled=m.r4_capacity_enabled,
+        r4_slot_capacity=m.r4_slot_capacity,
+        r4_solver_iters=m.r4_solver_iters,
     ).to(device)
 
 
