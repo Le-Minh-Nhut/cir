@@ -987,3 +987,62 @@ Kết luận hiện tại:
 > **Edit-slot collapse không còn có thể giải thích chỉ bằng token globalization hay soft ownership leakage. Failure còn lại là thiếu pressure để các slots ownership các functional retrieval errors khác nhau.**
 
 Đây là checkpoint để tránh quay lại lặp lại các experiment routing-only mà A3.2 đã falsify.
+
+## A3.2 Executor Shortcut Forensic — Result
+
+To test whether the downstream Executor was the main cause of functional slot collapse, we ran a frozen-checkpoint forensic analysis on all 6,016 FashionIQ validation queries.
+
+The test explicitly isolated two hypotheses:
+
+1. **Slot-content ignoring:** whether the Executor produces nearly the same transition when the real slot is replaced by a zero or shuffled slot.
+2. **Compute-ticket shortcut:** whether repeatedly executing the same dominant slot can substitute for using multiple distinct slots.
+
+### Results
+
+Slot-content dependence was clearly present:
+
+- median real-vs-zero relative transition difference: **0.985**
+- median real-vs-zero transition cosine: **0.427**
+- median real-vs-shuffled relative transition difference: **1.190**
+- median real-vs-shuffled transition cosine: **0.286**
+
+Therefore, the Executor is **not simply ignoring Edit Slot content**. Replacing the actual slot with zero or with another sample's slot substantially changes both the magnitude and direction of the state update.
+
+Repeated execution of the same dominant slot does amplify the amount of state/query movement:
+
+- repeated ×K_eff / single query movement: **1.338×**
+- repeated ×4 / single query movement: **1.598×**
+
+However, this extra recurrent computation does **not** improve retrieval:
+
+| Intervention | Mean Recall |
+|---|---:|
+| Original hard-nonempty slots | **43.346** |
+| Dominant slot ×1 | **42.296** |
+| Dominant slot ×K_eff | **41.455** |
+| Dominant slot ×4 | **35.826** |
+
+Performance decreases as the same slot is repeated. Therefore, recurrent execution depth cannot simply replace genuine multi-slot information.
+
+### Updated Diagnosis
+
+These results substantially weaken the hypothesis that the Executor is the primary source of A3.2 functional collapse.
+
+The current evidence instead indicates:
+
+> **The Edit Slots are representationally different, and the Executor is sensitive to those differences, but training does not provide sufficient pressure for the slots to acquire distinct functional responsibilities.**
+
+The failure is therefore more likely located in the **slot-learning / routing dynamics** rather than in the Executor itself.
+
+A plausible training shortcut is:
+
+```text
+one slot becomes slightly more useful
+        ↓
+selected / reinforced more often
+        ↓
+receives more useful retrieval signal
+        ↓
+becomes the giant slot
+        ↓
+remaining slots stay weak, auxiliary, or empty
