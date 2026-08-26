@@ -15,15 +15,13 @@ class TAPER(nn.Module):
         text_dim: int,
         reference_dim: int,
         query_dim: int,
-        slot_dim: int = 512,
+        slot_dim: int = 1024,
         state_dim: int = 512,
         num_slots: int = 4,
         num_primitives: int = 8,
         mask_temperature: float = 1.0,
         router_temperature: float = 1.0,
         retrieval_temperature: float = 0.07,
-        overlap_margin: float = 0.60,
-        effect_diversity_margin: float = 0.50,
         alpha_max: float = 1.0,
         qasa_tau: float = 0.5,
         qasa_rho: float = 0.8,
@@ -43,6 +41,11 @@ class TAPER(nn.Module):
             raise ValueError("qasa_eps must be > 0")
         if num_slots < 1 or num_primitives < 1:
             raise ValueError("num_slots and num_primitives must be >= 1")
+        if slot_dim != text_dim:
+            raise ValueError(
+                "slot_dim must equal text_dim because Edit Slots are pooled text "
+                "states with no learned post-pooling projection"
+            )
         if min(mask_temperature, router_temperature, retrieval_temperature) <= 0:
             raise ValueError("all temperatures must be > 0")
         if alpha_max <= 0:
@@ -59,8 +62,6 @@ class TAPER(nn.Module):
         self.mask_temperature = mask_temperature
         self.router_temperature = router_temperature
         self.retrieval_temperature = retrieval_temperature
-        self.overlap_margin = overlap_margin
-        self.effect_diversity_margin = effect_diversity_margin
         self.alpha_max = alpha_max
 
         # Ephemeral competing Edit Slot queries.
@@ -174,9 +175,9 @@ class TAPER(nn.Module):
             raise ValueError("attention must be [B,L,N]")
         attention = attention.float()
         valid = valid.to(torch.bool)
-        b, l, n = attention.shape
+        b, num_slots, n = attention.shape
 
-        if l != self.num_slots:
+        if num_slots != self.num_slots:
             raise ValueError("attention slot dimension mismatch")
         if valid.shape != (b, n):
             raise ValueError("valid shape mismatch")
@@ -185,7 +186,7 @@ class TAPER(nn.Module):
         device = attention.device
         valid_f = valid.to(dtype)
         winner = attention.argmax(dim=1)  # [B,N]
-        winner_one_hot = F.one_hot(winner, num_classes=l).permute(0, 2, 1).to(dtype)
+        winner_one_hot = F.one_hot(winner, num_classes=num_slots).permute(0, 2, 1).to(dtype)
         winner_one_hot = winner_one_hot * valid_f[:, None, :]
         total_mass = (attention* valid_f[:, None, :]).sum(dim=-1)  # [B,L]
         winning_mass = (attention* winner_one_hot).sum(dim=-1)
@@ -195,7 +196,7 @@ class TAPER(nn.Module):
         quality_for_selection = quality.detach()
         attention_for_selection = attention.detach()
         valid_for_selection = valid.detach()
-        selected = torch.zeros(b, l, dtype=torch.bool, device=device)
+        selected = torch.zeros(b, num_slots, dtype=torch.bool, device=device)
         final_coverage = torch.zeros(b, dtype=dtype, device=device)
         novelty_skip_count = torch.zeros(b, dtype=dtype, device=device)
         for batch_id in range(b):
@@ -258,14 +259,14 @@ class TAPER(nn.Module):
     def qasa_inference_partition(self, attention: Tensor, valid: Tensor) -> dict[str, Tensor]:
         if attention.ndim != 3:
             raise ValueError("attention must be [B,L,N]")
-        b, l, n = attention.shape
-        if l != self.num_slots:
+        b, num_slots, n = attention.shape
+        if num_slots != self.num_slots:
             raise ValueError("attention slot dimension mismatch")
         if valid.shape != (b, n):
             raise ValueError("valid must be [B,N]")
         valid = valid.to(torch.bool)
         winner = attention.argmax(dim=1)  # [B,N]
-        hard_regions = F.one_hot(winner, num_classes=l).permute(0, 2, 1).to(torch.bool)  # [B,L,N]
+        hard_regions = F.one_hot(winner, num_classes=num_slots).permute(0, 2, 1).to(torch.bool)  # [B,L,N]
         hard_regions = hard_regions & valid[:, None, :]
         winner_ids = torch.where(valid, winner, torch.full_like(winner, -1))
         nonempty_slots = hard_regions.any(dim=2)  # [B,L]
@@ -292,20 +293,13 @@ class TAPER(nn.Module):
 
     def build_edit_slots(
         self,
-        reference_features: Tensor,
         text_states: Tensor,
         text_attention_mask: Tensor,
         *,
         text_content_mask: Tensor | None = None,
     ) -> dict[str, Tensor]:
-        if reference_features.ndim != 2:
-            raise ValueError("reference_features must be [B,D] for TAPER state initialization")
-        if reference_features.shape[0] != text_states.shape[0]:
-            raise ValueError("reference_features and text_states batch sizes do not match")
-
         _, slot_valid = self._validate_text_inputs(text_states, text_attention_mask, text_content_mask)
 
-        batch_size, num_tokens, _ = text_states.shape
         ownership_logits, slot_masks = self._competitive_ownership(text_states, slot_valid)
         slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
         edit_slots = slot_semantics * slot_activity.unsqueeze(-1)
@@ -362,13 +356,13 @@ class TAPER(nn.Module):
     ) -> Tensor:
         """Score every candidate active-slot x primitive pair [B,L,K]."""
 
-        b, l, _ = edit_slots.shape
+        b, num_slots, _ = edit_slots.shape
         k = self.num_primitives
 
-        state_x = state[:, None, None, :].expand(b, l, k, -1)
-        slot_x = edit_slots[:, :, None, :].expand(b, l, k, -1)
-        primitive_x = self.primitive_bank[None, None, :, :].expand(b, l, k, -1)
-        reference_x = reference_state[:, None, None, :].expand(b, l, k, -1)
+        state_x = state[:, None, None, :].expand(b, num_slots, k, -1)
+        slot_x = edit_slots[:, :, None, :].expand(b, num_slots, k, -1)
+        primitive_x = self.primitive_bank[None, None, :, :].expand(b, num_slots, k, -1)
+        reference_x = reference_state[:, None, None, :].expand(b, num_slots, k, -1)
 
         x = torch.cat([state_x, slot_x, primitive_x, reference_x], dim=-1)
         return self.router(x).squeeze(-1)
@@ -523,13 +517,10 @@ class TAPER(nn.Module):
         text_attention_mask: Tensor,
         *,
         text_content_mask: Tensor | None = None,
-        teacher_reference_features: Tensor | None = None,
-        teacher_text_states: Tensor | None = None,
         disable_execution: bool = False,
         disabled_slots: Tensor | None = None,
     ) -> dict[str, Tensor]:
         slot_output = self.build_edit_slots(
-            reference_features,
             text_states,
             text_attention_mask,
             text_content_mask=text_content_mask,
@@ -639,7 +630,6 @@ class TAPER(nn.Module):
         zero = slot_masks.sum() * 0.0
         if self.num_slots == 1:
             overlap = zero
-            effect_similarity_mean = zero
         else:
             masked = slot_masks * valid_f[:, None, :]
             mask_vectors = F.normalize(masked, dim=-1, eps=1e-6)
@@ -654,7 +644,6 @@ class TAPER(nn.Module):
             "dominant_slot_share": dominant_slot_share,
             "near_monopoly_fraction": near_monopoly_fraction,
             "slot_overlap_mean": overlap,
-            "slot_effect_similarity_mean": effect_similarity_mean,
             "qasa_selected_slot_count": qasa_selected_mask.to(slot_masks.dtype).sum(dim=1).mean(),
             "qasa_quality_mean": qasa_quality.mean(),
             "qasa_final_coverage_mean": qasa_final_coverage.mean(),
@@ -666,22 +655,6 @@ class TAPER(nn.Module):
             diagnostics[f"slot_{slot_id}_quality_mean"] = qasa_quality[:, slot_id].mean()
 
         return diagnostics
-
-    def _slot_regularizers(
-        self,
-        slot_masks: Tensor,
-        text_attention_mask: Tensor,
-        *,
-        text_content_mask: Tensor | None = None,
-    ) -> dict[str, Tensor]:
-
-        del slot_masks, slot_effects, text_attention_mask
-        del text_content_mask
-        raise RuntimeError(
-            "Standalone Stage-1 structural losses are incompatible with "
-            "Train this formulation end-to-end with "
-            "retrieval supervision; keep assignment statistics as diagnostics."
-        )
 
     def compute_loss(self, batch: Mapping[str, object]) -> dict[str, Tensor]:
         required = {
@@ -724,7 +697,6 @@ class TAPER(nn.Module):
             diagnostics = self._assignment_diagnostics(
                 slot_masks=output["slot_masks"],
                 slot_mass=output["slot_mass"],
-                slot_effects=output["slot_effects"],
                 hard_active_slot_mask=output["hard_active_slot_mask"],
                 text_attention_mask=mask,
                 text_content_mask=content_mask,
@@ -748,7 +720,6 @@ class TAPER(nn.Module):
         self.eval()
         try:
             slots = self.build_edit_slots(
-                reference_features,
                 text_states,
                 text_attention_mask,
                 text_content_mask=text_content_mask,

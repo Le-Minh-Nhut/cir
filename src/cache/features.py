@@ -1,8 +1,20 @@
 from pathlib import Path
 from collections.abc import Sequence
+from dataclasses import dataclass
 import torch
 import json
 import numpy as np
+
+
+def load_feature_manifest(feature_dir) -> dict:
+    path = Path(feature_dir) / "manifest.json"
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing feature manifest: {path}")
+    with path.open("r", encoding="utf-8") as file:
+        manifest = json.load(file)
+    if not isinstance(manifest, dict):
+        raise TypeError(f"Feature manifest must be a JSON object: {path}")
+    return manifest
 
 
 def load_features(feature_dir):
@@ -29,13 +41,9 @@ def get_features_by_ids(image_ids: Sequence[str], features: torch.Tensor, name_t
     indices = [name_to_idx[image_id] for image_id in image_ids]
     return features[indices]
 
-from dataclasses import dataclass
-
-
 @dataclass(frozen=True)
 class TextFeatureCache:
     states: torch.Tensor
-    teacher_states: torch.Tensor
     attention_mask: torch.Tensor
     content_mask: torch.Tensor
 
@@ -49,7 +57,6 @@ def load_text_features(feature_dir) -> TextFeatureCache:
 
     required = (
         "states.npy",
-        "teacher_states.npy",
         "attention_mask.npy",
         "content_mask.npy",
         "sample_to_idx.json",
@@ -67,13 +74,6 @@ def load_text_features(feature_dir) -> TextFeatureCache:
     states = torch.from_numpy(
         np.load(
             feature_dir / "states.npy",
-            mmap_mode="c",
-        )
-    )
-
-    teacher_states = torch.from_numpy(
-        np.load(
-            feature_dir / "teacher_states.npy",
             mmap_mode="c",
         )
     )
@@ -102,16 +102,17 @@ def load_text_features(feature_dir) -> TextFeatureCache:
     ).open("r", encoding="utf-8") as file:
         captions = json.load(file)
 
-    with (
-        feature_dir / "manifest.json"
-    ).open("r", encoding="utf-8") as file:
-        manifest = json.load(file)
+    manifest = load_feature_manifest(feature_dir)
 
     num_samples = len(sample_to_idx)
 
+    if states.ndim != 3:
+        raise ValueError(f"states must be [Q,N,D], got {tuple(states.shape)}")
+    if attention_mask.ndim != 2 or content_mask.ndim != 2:
+        raise ValueError("attention_mask and content_mask must be [Q,N]")
+
     arrays = {
         "states": states,
-        "teacher_states": teacher_states,
         "attention_mask": attention_mask,
         "content_mask": content_mask,
     }
@@ -128,11 +129,6 @@ def load_text_features(feature_dir) -> TextFeatureCache:
             "Text-cache sample IDs and caption IDs differ"
         )
 
-    if states.shape[:2] != teacher_states.shape[:2]:
-        raise ValueError(
-            "states and teacher_states [Q,N] mismatch"
-        )
-
     if attention_mask.shape != states.shape[:2]:
         raise ValueError(
             "attention_mask shape mismatch"
@@ -143,9 +139,11 @@ def load_text_features(feature_dir) -> TextFeatureCache:
             "content_mask shape mismatch"
         )
 
+    if (content_mask.to(torch.bool) & ~attention_mask.to(torch.bool)).any():
+        raise ValueError("content_mask contains positions outside attention_mask")
+
     return TextFeatureCache(
         states=states,
-        teacher_states=teacher_states,
         attention_mask=attention_mask,
         content_mask=content_mask,
         sample_to_idx=sample_to_idx,
@@ -180,7 +178,6 @@ def get_text_features_by_sample_ids(sample_ids: Sequence[str], modification_text
 
     return (
         cache.states[indices],
-        cache.teacher_states[indices],
         cache.attention_mask[indices],
         cache.content_mask[indices],
     )

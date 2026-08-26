@@ -95,10 +95,8 @@ def train_one_epoch(
 def prepare_batch(
     batch: CIRBatch,
     device: torch.device,
-    retrieval_features: torch.Tensor,
-    native_features: torch.Tensor,
-    retrieval_name_to_idx,
-    native_name_to_idx,
+    image_features: torch.Tensor,
+    image_name_to_idx: dict[str, int],
     text_cache: TextFeatureCache,
 ) -> dict[str, object]:
     target_ids = list(batch.target_ids)
@@ -106,17 +104,33 @@ def prepare_batch(
     if any(target_id is None for target_id in target_ids):
         raise ValueError("Training sample is missing target_id")
     
-    reference_native = get_features_by_ids(batch.reference_ids, native_features, native_name_to_idx).to(device, dtype=torch.float32)
-    target_features = get_features_by_ids(target_ids, retrieval_features, retrieval_name_to_idx).to(device, dtype=torch.float32)
-    reference_features = reference_native[:, 0, :]
-    (text_states, teacher_text_states, attention_mask, content_mask) = get_text_features_by_sample_ids(batch.sample_ids, batch.modification_texts, text_cache)
-    text_states = text_states.to(
-        device=device,
-        dtype=torch.float32,
-        # non_blocking=True,
+    cached_reference = get_features_by_ids(
+        batch.reference_ids,
+        image_features,
+        image_name_to_idx,
+    ).to(device=device, dtype=torch.float32)
+    target_features = get_features_by_ids(
+        target_ids,
+        image_features,
+        image_name_to_idx,
+    ).to(device=device, dtype=torch.float32)
+    if cached_reference.ndim != 3 or cached_reference.shape[1:] != (1, 1024):
+        raise ValueError(
+            "FG-CLIP2-Large reference cache must be [B,1,1024], "
+            f"got {tuple(cached_reference.shape)}"
+        )
+    if target_features.ndim != 3 or target_features.shape[1:] != (1, 1024):
+        raise ValueError(
+            "FG-CLIP2-Large target cache must be [B,1,1024], "
+            f"got {tuple(target_features.shape)}"
+        )
+    reference_features = cached_reference[:, 0, :]
+    (text_states, attention_mask, content_mask) = get_text_features_by_sample_ids(
+        batch.sample_ids,
+        batch.modification_texts,
+        text_cache,
     )
-
-    teacher_text_states = teacher_text_states.to(
+    text_states = text_states.to(
         device=device,
         dtype=torch.float32,
         # non_blocking=True,
@@ -136,21 +150,15 @@ def prepare_batch(
 
     return {
         "reference_features": reference_features,
-        "teacher_reference_features": reference_native,
         "target_features": target_features,
         "text_states": text_states,
-        "teacher_text_states": teacher_text_states,
         "text_attention_mask": attention_mask,
         "text_content_mask": content_mask,
         "target_ids": target_ids,
     }
 
 def taper_state_dict(model):
-    return {
-        name: value
-        for name, value in model.state_dict().items()
-        if not name.startswith("teacher.")
-    }
+    return model.state_dict()
 
 def fit(
     model: nn.Module,

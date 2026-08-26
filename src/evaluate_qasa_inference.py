@@ -12,15 +12,12 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from cache.features import (
-    get_features_by_ids,
     get_text_features_by_sample_ids,
-    load_features,
     load_text_features,
 )
 from datasets.common import collate_cir_samples
 from datasets.fashioniq import FashionIQDataset, load_correction_dict
 from models.taper import TAPER
-from teachers.csmcir_compose import CSMCIRComposeTeacher
 
 
 CATEGORIES = ("dress", "shirt", "toptee")
@@ -28,7 +25,7 @@ CATEGORIES = ("dress", "shirt", "toptee")
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="QASA-faithful hard-partition evaluation for TAPER A3.1."
+        description="QASA-faithful hard-partition evaluation for TAPER A3.2."
     )
     p.add_argument("--checkpoint", type=Path, default=None)
     p.add_argument("--outputs-root", type=Path, default=Path("outputs"))
@@ -106,17 +103,12 @@ def build_val_loaders(
 
 def build_model(cfg, device: torch.device) -> TAPER:
     m = cfg.model
-    teacher = CSMCIRComposeTeacher(
-        csmcir_root=cfg.teacher.csmcir_root,
-        checkpoint_path=cfg.teacher.checkpoint_path,
-    ).to(device).eval()
+    if str(cfg.backbone.model_id) != "qihoo360/fg-clip2-large":
+        raise ValueError("A3.2 requires qihoo360/fg-clip2-large")
 
     return TAPER(
-        teacher,
         text_dim=m.text_dim,
         reference_dim=m.reference_dim,
-        teacher_text_dim=m.teacher_text_dim,
-        teacher_query_dim=m.teacher_query_dim,
         query_dim=m.query_dim,
         slot_dim=m.slot_dim,
         state_dim=m.state_dim,
@@ -125,14 +117,12 @@ def build_model(cfg, device: torch.device) -> TAPER:
         mask_temperature=m.mask_temperature,
         router_temperature=m.router_temperature,
         retrieval_temperature=m.retrieval_temperature,
-        neutral_mode=m.neutral_mode,
         qasa_tau=m.qasa_tau,
         qasa_rho=m.qasa_rho,
         qasa_mu=m.qasa_mu,
         qasa_eps=m.qasa_eps,
         qasa_apply_at_eval=m.qasa_apply_at_eval,
         alpha_max=m.alpha_max,
-        counterfactual_chunk_size=m.counterfactual_chunk_size,
     ).to(device)
 
 
@@ -147,12 +137,7 @@ def load_checkpoint(model: TAPER, path: Path):
     elif isinstance(state, dict) and "state_dict" in state:
         state = state["state_dict"]
 
-    missing, unexpected = model.load_state_dict(state, strict=False)
-    bad_missing = [k for k in missing if not k.startswith("teacher.")]
-    if bad_missing:
-        raise RuntimeError("Missing non-teacher keys:\n" + "\n".join(bad_missing))
-    if unexpected:
-        raise RuntimeError("Unexpected checkpoint keys:\n" + "\n".join(unexpected))
+    model.load_state_dict(state, strict=True)
 
     print(f"Loaded checkpoint: {path}")
 
@@ -186,8 +171,8 @@ class Accumulator:
         valid_mask: torch.Tensor,
         qasa_attention: torch.Tensor,
     ):
-        b, l, _ = qasa_attention.shape
-        if l != self.num_slots:
+        b, num_slots, _ = qasa_attention.shape
+        if num_slots != self.num_slots:
             raise RuntimeError("slot count mismatch")
 
         valid_count = valid_mask.sum(dim=1).clamp_min(1)
@@ -306,9 +291,12 @@ def run(args):
         correction_dicts=correction_dicts,
     )
 
-    feature_root = args.cache_root / "fashioniq" / "csmcir" / "val"
-    native_features, native_idx = load_features(feature_root / "native")
+    feature_root = args.cache_root / "fashioniq" / "fgclip2-large" / "val"
     text_cache = load_text_features(feature_root / "text")
+    if text_cache.manifest.get("model_id") != "qihoo360/fg-clip2-large":
+        raise ValueError(
+            "QASA evaluation requires a qihoo360/fg-clip2-large text cache"
+        )
 
     model = build_model(cfg, device)
     load_checkpoint(model, checkpoint)
@@ -325,14 +313,7 @@ def run(args):
             if args.max_queries_per_category and processed >= args.max_queries_per_category:
                 break
 
-            reference_native = get_features_by_ids(
-                batch.reference_ids,
-                native_features,
-                native_idx,
-            ).to(device=device, dtype=torch.float32)
-            reference_features = reference_native[:, 0, :]
-
-            text_states, teacher_text_states, attention_mask, content_mask = (
+            text_states, attention_mask, content_mask = (
                 get_text_features_by_sample_ids(
                     batch.sample_ids,
                     batch.modification_texts,
@@ -340,19 +321,15 @@ def run(args):
                 )
             )
             text_states = text_states.to(device=device, dtype=torch.float32)
-            teacher_text_states = teacher_text_states.to(device=device, dtype=torch.float32)
             attention_mask = attention_mask.to(device=device, dtype=torch.bool)
             content_mask = content_mask.to(device=device, dtype=torch.bool)
 
             # QASA-faithful evaluation only:
             # no model.forward(), no Executor, no retrieval, no qasa_selected_mask.
             out = model.build_edit_slots(
-                reference_features,
                 text_states,
                 attention_mask,
                 text_content_mask=content_mask,
-                teacher_reference_features=reference_native,
-                teacher_text_states=teacher_text_states,
             )
 
             winner_ids = out["qasa_inference_winner_ids"]

@@ -16,13 +16,11 @@ loss_weights:
   retrieval_loss: 1.0
 
 model:
-  text_dim: 768
-  reference_dim: 1408
-  teacher_text_dim: 768
-  teacher_query_dim: 256
-  query_dim: 256
+  text_dim: 1024
+  reference_dim: 1024
+  query_dim: 1024
 
-  slot_dim: 512
+  slot_dim: 1024
   state_dim: 512
 
   num_slots: 4
@@ -32,15 +30,13 @@ model:
   router_temperature: 1.0
   retrieval_temperature: 0.07
 
-  neutral_mode: zero
   qasa_tau: 0.5
   qasa_rho: 0.8
   qasa_mu: 0.3
   qasa_eps: 1.0e-8
   qasa_apply_at_eval: true
   alpha_max: 1.0
-  counterfactual_chunk_size: 32
 
-teacher:
-  csmcir_root: teacher/repos/CSMCIR
-  checkpoint_path: teacher/checkpoints/csmcir/fashioniq_tuned_clip_best.pt
+backbone:
+  model_id: qihoo360/fg-clip2-large
+  max_text_length: 64

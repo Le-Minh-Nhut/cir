@@ -1,3 +1,3 @@
 name: fashioniq
-root: ${paths.data_root}/FashionIQ
+root: ${paths.data_root}/fashionIQ_dataset
 split: train

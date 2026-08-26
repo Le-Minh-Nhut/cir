@@ -1,7 +1,6 @@
 from collections.abc import Sequence
 from pathlib import Path
 import torch
-from torch.utils.data import DataLoader
 
 from cache.features import get_features_by_ids, TextFeatureCache, get_text_features_by_sample_ids
 from datasets.fashioniq import FashionIQAnnotation, build_pair_union_gallery, load_fashioniq_split_ids
@@ -147,10 +146,8 @@ def evaluate_fashioniq(
     protocol,
     split_root,
     split,
-    retrieval_features,
-    native_features,
-    retrieval_name_to_idx,
-    native_name_to_idx,
+    image_features,
+    image_name_to_idx,
     device,
     text_cache: TextFeatureCache,
 ):
@@ -167,25 +164,44 @@ def evaluate_fashioniq(
             annotations=annotations,
         )
 
-        gallery_features = get_features_by_ids(gallery_ids, retrieval_features, retrieval_name_to_idx).to(device)
+        gallery_features = get_features_by_ids(
+            gallery_ids,
+            image_features,
+            image_name_to_idx,
+        ).to(device=device, dtype=torch.float32)
+        if gallery_features.ndim != 3 or gallery_features.shape[1:] != (1, 1024):
+            raise ValueError(
+                "FG-CLIP2-Large gallery cache must be [G,1,1024], "
+                f"got {tuple(gallery_features.shape)}"
+            )
         score_batches = []
         target_ids = []
 
         for batch in val_loader:
-            reference_native = get_features_by_ids(batch.reference_ids, native_features, native_name_to_idx,).to(device)
-            reference_features = reference_native[:, 0, :]
+            cached_reference = get_features_by_ids(
+                batch.reference_ids,
+                image_features,
+                image_name_to_idx,
+            ).to(device=device, dtype=torch.float32)
+            if cached_reference.ndim != 3 or cached_reference.shape[1:] != (1, 1024):
+                raise ValueError(
+                    "FG-CLIP2-Large reference cache must be [B,1,1024], "
+                    f"got {tuple(cached_reference.shape)}"
+                )
+            reference_features = cached_reference[:, 0, :]
 
-            (text_states, teacher_text_states, attention_mask, content_mask) = get_text_features_by_sample_ids(batch.sample_ids, batch.modification_texts, text_cache)
+            (text_states, attention_mask, content_mask) = get_text_features_by_sample_ids(
+                batch.sample_ids,
+                batch.modification_texts,
+                text_cache,
+            )
             text_states = text_states.to(device=device, dtype=torch.float32)
-            teacher_text_states = teacher_text_states.to(device=device, dtype=torch.float32)
             attention_mask = attention_mask.to(device=device, dtype=torch.bool)
             content_mask = content_mask.to(device=device, dtype=torch.bool)
 
             output = model.retrieve(
                 reference_features=reference_features,
-                teacher_reference_features=reference_native,
                 text_states=text_states,
-                teacher_text_states=teacher_text_states,
                 text_attention_mask=attention_mask,
                 text_content_mask=content_mask,
                 gallery_features=gallery_features,

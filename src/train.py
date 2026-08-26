@@ -1,18 +1,16 @@
 from pathlib import Path
 
 import hydra
-import torch
 from omegaconf import DictConfig
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
-from cache.features import load_features, load_text_features
+from cache.features import load_feature_manifest, load_features, load_text_features
 from datasets.common import collate_cir_samples
 from datasets.fashioniq import FashionIQDataset, load_correction_dict
 from evaluation.fashioniq import evaluate_fashioniq
 from models.taper import TAPER
 from runtime import configure_torch_runtime, resolve_device, seed_everything
-from teachers.csmcir_compose import CSMCIRComposeTeacher
 from training.engine import fit, prepare_batch
 
 
@@ -68,19 +66,28 @@ def main(cfg: DictConfig) -> None:
     correction_dicts = load_fashioniq_correction_dicts(annotation_root)
     split_root = dataset_root / "image_splits"
     cache_root = Path(cfg.paths.cache_root)
+    if str(cfg.experiment.backbone.model_id) != "qihoo360/fg-clip2-large":
+        raise ValueError(
+            "A3.2 requires exactly backbone.model_id=qihoo360/fg-clip2-large"
+        )
 
-    train_retrieval, train_retrieval_idx = load_features(cache_root / "fashioniq" / "csmcir" / "train" / "retrieval")
-    train_native, train_native_idx = load_features(cache_root / "fashioniq" / "csmcir" / "train" / "native")
-    val_retrieval, val_retrieval_idx = load_features(cache_root / "fashioniq" / "csmcir" / "val" / "retrieval")
-    val_native, val_native_idx = load_features(cache_root / "fashioniq" / "csmcir" / "val" / "native")
+    feature_root = cache_root / "fashioniq" / "fgclip2-large"
+    for split in ("train", "val"):
+        for feature_kind in ("images", "text"):
+            manifest = load_feature_manifest(feature_root / split / feature_kind)
+            if manifest.get("model_id") != "qihoo360/fg-clip2-large":
+                raise ValueError(
+                    f"Wrong checkpoint in {split}/{feature_kind} cache manifest: "
+                    f"{manifest.get('model_id')!r}"
+                )
+    train_images, train_image_idx = load_features(feature_root / "train" / "images")
+    val_images, val_image_idx = load_features(feature_root / "val" / "images")
 
-    train_text = load_text_features(cache_root / "fashioniq" / "csmcir" / "train" / "text")
-    val_text = load_text_features(cache_root / "fashioniq" / "csmcir" / "val" / "text")
+    train_text = load_text_features(feature_root / "train" / "text")
+    val_text = load_text_features(feature_root / "val" / "text")
 
-    print("Train retrieval:", tuple(train_retrieval.shape))
-    print("Train native:", tuple(train_native.shape))
-    print("Val retrieval:", tuple(val_retrieval.shape))
-    print("Val native:", tuple(val_native.shape))
+    print("Train FG-CLIP2 images:", tuple(train_images.shape))
+    print("Val FG-CLIP2 images:", tuple(val_images.shape))
     print("Train text:", tuple(train_text.states.shape))
     print("Val text:", tuple(val_text.states.shape))
 
@@ -101,19 +108,11 @@ def main(cfg: DictConfig) -> None:
         correction_dicts=correction_dicts,
     )
 
-    teacher = CSMCIRComposeTeacher(
-        csmcir_root=cfg.experiment.teacher.csmcir_root,
-        checkpoint_path=cfg.experiment.teacher.checkpoint_path,
-    ).to(device).eval()
-
     m = cfg.experiment.model
 
     model = TAPER(
-        teacher,
         text_dim=m.text_dim,
         reference_dim=m.reference_dim,
-        teacher_text_dim=m.teacher_text_dim,
-        teacher_query_dim=m.teacher_query_dim,
         query_dim=m.query_dim,
         slot_dim=m.slot_dim,
         state_dim=m.state_dim,
@@ -122,14 +121,12 @@ def main(cfg: DictConfig) -> None:
         mask_temperature=m.mask_temperature,
         router_temperature=m.router_temperature,
         retrieval_temperature=m.retrieval_temperature,
-        neutral_mode=m.neutral_mode,
         qasa_tau=m.qasa_tau,
         qasa_rho=m.qasa_rho,
         qasa_mu=m.qasa_mu,
         qasa_eps=m.qasa_eps,
         qasa_apply_at_eval=m.qasa_apply_at_eval,
         alpha_max=m.alpha_max,
-        counterfactual_chunk_size=m.counterfactual_chunk_size,
     ).to(device)
 
     optimizer = AdamW(
@@ -138,7 +135,14 @@ def main(cfg: DictConfig) -> None:
         weight_decay=cfg.experiment.weight_decay,
     )
 
-    prepare_batch_fn = lambda batch, device: prepare_batch(batch, device, train_retrieval, train_native, train_retrieval_idx, train_native_idx, train_text)
+    def prepare_batch_fn(batch, batch_device):
+        return prepare_batch(
+            batch,
+            batch_device,
+            train_images,
+            train_image_idx,
+            train_text,
+        )
 
     def evaluate_fn(model):
         return evaluate_fashioniq(
@@ -148,10 +152,8 @@ def main(cfg: DictConfig) -> None:
             protocol=cfg.protocol.name,
             split_root=split_root,
             split="val",
-            retrieval_features=val_retrieval,
-            native_features=val_native,
-            retrieval_name_to_idx=val_retrieval_idx,
-            native_name_to_idx=val_native_idx,
+            image_features=val_images,
+            image_name_to_idx=val_image_idx,
             text_cache=val_text,
             device=device,
         )
