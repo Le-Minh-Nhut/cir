@@ -545,6 +545,7 @@ class TAPER(nn.Module):
             "value_slot_masks": value_slot_masks,
             "slot_semantics": slot_semantics,
             "slot_mass": soft_slot_mass,
+            "soft_slot_mass": soft_slot_mass,
             "slot_activity": value_slot_activity,
             "value_slot_mass": value_slot_mass,
             "value_slot_activity": value_slot_activity,

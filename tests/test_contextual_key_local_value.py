@@ -262,7 +262,7 @@ def test_soft_probabilities_with_same_winners_cannot_encode_value() -> None:
         requires_grad=True,
     )
     soft_b = torch.tensor(
-        [[[0.26, 0.25, 0.51], [0.25, 0.75, 0.49]]],
+        [[[0.51, 0.25, 0.51], [0.49, 0.75, 0.49]]],
         requires_grad=True,
     )
     raw_values = torch.tensor(
@@ -658,9 +658,8 @@ def test_evaluator_rejects_a31_and_wrong_provenance(
         {
             "model_state_dict": model_state,
             "experiment_provenance": {
-                "slot_value_source": "contextual",
-                "slot_effect_in_value": True,
-                "slot_value_assignment": "soft",
+                "slot_value_source": "teacher_raw",
+                "slot_effect_in_value": False,
             },
         },
         wrong_path,
@@ -677,3 +676,61 @@ def test_evaluator_rejects_a31_and_wrong_provenance(
         matching_path,
     )
     load_checkpoint(model, matching_path)
+
+
+def test_p0_audit_uses_hard_private_shared_model_builder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    omegaconf_stub = types.ModuleType("omegaconf")
+    omegaconf_stub.OmegaConf = object
+    monkeypatch.setitem(sys.modules, "omegaconf", omegaconf_stub)
+
+    import evaluate_qasa_inference
+
+    monkeypatch.setattr(
+        evaluate_qasa_inference,
+        "CSMCIRComposeTeacher",
+        lambda **_kwargs: DummyComposeTeacher(query_dim=3),
+    )
+    sys.modules.pop("audit_taper_merit_p0", None)
+    from audit_taper_merit_p0 import build_model as audit_build_model
+
+    model_config = types.SimpleNamespace(
+        text_dim=5,
+        reference_dim=7,
+        teacher_text_dim=6,
+        teacher_query_dim=3,
+        query_dim=3,
+        slot_dim=4,
+        state_dim=4,
+        num_slots=2,
+        num_primitives=2,
+        mask_temperature=1.0,
+        router_temperature=1.0,
+        retrieval_temperature=0.07,
+        neutral_mode="zero",
+        qasa_tau=0.5,
+        qasa_rho=0.8,
+        qasa_mu=0.3,
+        qasa_eps=1e-8,
+        qasa_apply_at_eval=True,
+        alpha_max=1.0,
+        counterfactual_chunk_size=2,
+        slot_value_source="teacher_raw",
+        slot_effect_in_value=False,
+        slot_value_assignment="hard_st_exclusive",
+    )
+    cfg = types.SimpleNamespace(
+        model=model_config,
+        teacher=types.SimpleNamespace(
+            csmcir_root="unused",
+            checkpoint_path="unused",
+        ),
+    )
+    model = audit_build_model(cfg, torch.device("cpu"))
+
+    assert model.experiment_provenance() == {
+        "slot_value_source": "teacher_raw",
+        "slot_effect_in_value": False,
+        "slot_value_assignment": "hard_st_exclusive",
+    }

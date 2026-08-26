@@ -108,8 +108,28 @@ python src/evaluate_qasa_inference.py \
 
 Set `--max-queries-per-category 0` for the complete validation set.
 
-The requested `src/audit_taper_merit_p0.py` is not present in this branch or
-its parent. The older `src/forensic_taper_a3.py` is also incompatible with the
-parent's current TAPER/QASA API (`slot_gates`/`null_probs` assumptions), so it
-is not presented as a valid P0 command. A full P0 audit remains blocked until
-the actual current audit implementation is supplied or restored.
+Run a quick P0 functional audit:
+
+```bash
+python src/audit_taper_merit_p0.py \
+  --checkpoint outputs/REPLACE_WITH_RUN/best.pt \
+  --dataset-root data/FashionIQ \
+  --cache-root features \
+  --config conf/experiment/taper_e2e.yaml \
+  --device cuda \
+  --max-queries-per-category 256 \
+  --json-output reports/a3_2_hard_private_value_p0_quick.json
+```
+
+Run the full P0 functional audit:
+
+```bash
+python src/audit_taper_merit_p0.py \
+  --checkpoint outputs/REPLACE_WITH_RUN/best.pt \
+  --dataset-root data/FashionIQ \
+  --cache-root features \
+  --config conf/experiment/taper_e2e.yaml \
+  --device cuda \
+  --max-queries-per-category 0 \
+  --json-output reports/a3_2_hard_private_value_p0_full.json
+```

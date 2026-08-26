@@ -30,7 +30,8 @@ from evaluation.fashioniq import build_fashioniq_gallery
 def parse_args():
     p = argparse.ArgumentParser(
         description=(
-            "TAPER-MERIT P0 frozen-checkpoint audit for the A3.1 QASA/teacher branch. "
+            "TAPER-MERIT P0 frozen-checkpoint audit for the contextual-key/"
+            "local-value QASA teacher branch. "
             "Measures exact slot coalitions, SINGLE/DROP/REPEAT/MEAN recovery, "
             "per-hard-negative functional effects, and QASA-vs-functional agreement. "
             "This script never trains or mutates the checkpoint."
@@ -1146,6 +1147,7 @@ def run(args):
 
     report = {
         "checkpoint": str(args.checkpoint),
+        "experiment_provenance": model.experiment_provenance(),
         "num_samples": total_samples,
         "num_slots": num_slots,
         "protocol": {
