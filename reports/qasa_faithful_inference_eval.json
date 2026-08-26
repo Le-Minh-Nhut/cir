@@ -1,0 +1,605 @@
+{
+  "checkpoint": "outputs/2026-08-26/03-49-22/best.pt",
+  "protocol": "QASA-faithful inference: token-wise argmax over slot attention; no QASA selection mask; no Executor; no retrieval.",
+  "num_slots": 4,
+  "summary": {
+    "samples": 6016,
+    "valid_tokens": 73137,
+    "mean_effective_k": 1.1748670212765957,
+    "k_distribution": {
+      "0": 0.0,
+      "1": 0.8254654255319149,
+      "2": 0.17420212765957446,
+      "3": 0.0003324468085106383,
+      "4": 0.0
+    },
+    "k1_fraction": 0.8254654255319149,
+    "mean_dominant_hard_share": 0.9761429371985983,
+    "mean_hard_winner_entropy": 0.04687100057144395,
+    "mean_soft_top1_probability": 0.43322318253364966,
+    "mean_soft_top1_top2_margin": 0.15999869971555916,
+    "mean_near_tie_fraction_margin_le_0_01": 0.014870640617408889,
+    "per_slot": {
+      "0": {
+        "mean_winner_tokens_per_sample": 0.0004986702127659574,
+        "nonempty_rate": 0.0004986702127659574,
+        "mean_hard_token_share": 4.6970705412566026e-05
+      },
+      "1": {
+        "mean_winner_tokens_per_sample": 0.31964760638297873,
+        "nonempty_rate": 0.17436835106382978,
+        "mean_hard_token_share": 0.023810096686963548
+      },
+      "2": {
+        "mean_winner_tokens_per_sample": 0.0,
+        "nonempty_rate": 0.0,
+        "mean_hard_token_share": 0.0
+      },
+      "3": {
+        "mean_winner_tokens_per_sample": 11.836934840425531,
+        "nonempty_rate": 1.0,
+        "mean_hard_token_share": 0.9761429336219234
+      }
+    },
+    "per_category": {
+      "dress": {
+        "samples": 2017,
+        "mean_effective_k": 1.1650966782350025,
+        "mean_dominant_hard_share": 0.9782819516243885
+      },
+      "shirt": {
+        "samples": 2038,
+        "mean_effective_k": 1.1805691854759568,
+        "mean_dominant_hard_share": 0.9746233544242042
+      },
+      "toptee": {
+        "samples": 1961,
+        "mean_effective_k": 1.1789903110657827,
+        "mean_dominant_hard_share": 0.975522089466521
+      }
+    }
+  },
+  "examples": [
+    {
+      "sample_id": "fashioniq:val:dress:0",
+      "modification_text": "is shiny and silver with shorter sleeves and fit and flare",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        11
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.4189603328704834,
+      "mean_top1_top2_margin": 0.12673719227313995
+    },
+    {
+      "sample_id": "fashioniq:val:dress:1",
+      "modification_text": "is grey with black design and is a light printed short dress",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        12
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.4503508508205414,
+      "mean_top1_top2_margin": 0.17531180381774902
+    },
+    {
+      "sample_id": "fashioniq:val:dress:2",
+      "modification_text": "is a solid red color and shorter and tighter with more blue and white",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        14
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.4491032361984253,
+      "mean_top1_top2_margin": 0.1720498502254486
+    },
+    {
+      "sample_id": "fashioniq:val:dress:3",
+      "modification_text": "is a plain white feminine t shirt and is a tan shirt",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        12
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.43835777044296265,
+      "mean_top1_top2_margin": 0.18551203608512878
+    },
+    {
+      "sample_id": "fashioniq:val:dress:4",
+      "modification_text": "has thin straps and different pattern and more autumn colored and longer",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        12
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.4349532127380371,
+      "mean_top1_top2_margin": 0.14928552508354187
+    },
+    {
+      "sample_id": "fashioniq:val:dress:5",
+      "modification_text": "is longer and more sculptural and rushed solid green",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        12
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.3870816230773926,
+      "mean_top1_top2_margin": 0.0943085178732872
+    },
+    {
+      "sample_id": "fashioniq:val:dress:6",
+      "modification_text": "is gold and strapless and button front longer sleeves",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        10
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.4034798741340637,
+      "mean_top1_top2_margin": 0.10038282722234726
+    },
+    {
+      "sample_id": "fashioniq:val:dress:7",
+      "modification_text": "is longer and less casual and sleeveless and is a sleeveless black dress",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        15
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.4234251379966736,
+      "mean_top1_top2_margin": 0.15831558406352997
+    },
+    {
+      "sample_id": "fashioniq:val:dress:8",
+      "modification_text": "is longer and more elegant and is longer and sleeveless",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        11
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.43704745173454285,
+      "mean_top1_top2_margin": 0.15360301733016968
+    },
+    {
+      "sample_id": "fashioniq:val:dress:9",
+      "modification_text": "has longer sleeves and a different color and has longer sleeves and is more casual",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        15
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.4764240086078644,
+      "mean_top1_top2_margin": 0.2197999507188797
+    },
+    {
+      "sample_id": "fashioniq:val:dress:10",
+      "modification_text": "its blue with higher neckline and is more blue and higher at the neckline",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        16
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.43430420756340027,
+      "mean_top1_top2_margin": 0.16536834836006165
+    },
+    {
+      "sample_id": "fashioniq:val:dress:11",
+      "modification_text": "is softly colored and has no shoulder straps and looser skirt",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        12
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.4918196201324463,
+      "mean_top1_top2_margin": 0.2417408674955368
+    },
+    {
+      "sample_id": "fashioniq:val:dress:12",
+      "modification_text": "is white with black polka dots and is not see through",
+      "effective_k": 2,
+      "winner_counts": [
+        0,
+        1,
+        0,
+        10
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        1,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.4359204173088074,
+      "mean_top1_top2_margin": 0.15864117443561554
+    },
+    {
+      "sample_id": "fashioniq:val:dress:13",
+      "modification_text": "has more black designs and has a paint pattern",
+      "effective_k": 2,
+      "winner_counts": [
+        0,
+        1,
+        0,
+        8
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        1,
+        3
+      ],
+      "mean_top1_probability": 0.405244380235672,
+      "mean_top1_top2_margin": 0.09405377507209778
+    },
+    {
+      "sample_id": "fashioniq:val:dress:14",
+      "modification_text": "is more black and elegant and is solid black and has shorter sleeves",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        13
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.443503201007843,
+      "mean_top1_top2_margin": 0.1805671751499176
+    },
+    {
+      "sample_id": "fashioniq:val:dress:15",
+      "modification_text": "is blue print with short sleeves and is a blue print",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        11
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.4101513624191284,
+      "mean_top1_top2_margin": 0.09808964282274246
+    },
+    {
+      "sample_id": "fashioniq:val:dress:16",
+      "modification_text": "is a solid color with square neckline and the dress is brown with straps",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        15
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.4342205226421356,
+      "mean_top1_top2_margin": 0.1726403534412384
+    },
+    {
+      "sample_id": "fashioniq:val:dress:17",
+      "modification_text": "is off the shoulder with one shorter sleeve and has longer sleeves",
+      "effective_k": 2,
+      "winner_counts": [
+        0,
+        1,
+        0,
+        11
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        1,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.40160131454467773,
+      "mean_top1_top2_margin": 0.0955546647310257
+    },
+    {
+      "sample_id": "fashioniq:val:dress:18",
+      "modification_text": "has more flair and smaller print and is shorter",
+      "effective_k": 2,
+      "winner_counts": [
+        0,
+        1,
+        0,
+        8
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        1,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.39702001214027405,
+      "mean_top1_top2_margin": 0.09657356888055801
+    },
+    {
+      "sample_id": "fashioniq:val:dress:19",
+      "modification_text": "is longer and fun and is white and green",
+      "effective_k": 1,
+      "winner_counts": [
+        0,
+        0,
+        0,
+        9
+      ],
+      "winner_ids_valid_tokens": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "mean_top1_probability": 0.39600318670272827,
+      "mean_top1_top2_margin": 0.086760014295578
+    }
+  ]
+}
