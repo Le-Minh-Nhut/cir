@@ -15,11 +15,26 @@ routing_mode: qisca
 ```
 
 QASA is unchanged and always measures the pre-sparse slot-softmax competition.
-For QI-SCA, that same differentiable tensor is denoted `P^Q`. QASA's selected
-mask only permits a slot to consume evidence; masking never renormalizes `P^Q`.
-A slot executes only when it is both QASA-selected and has routing mass greater
-than the routing support epsilon. A selected but fully rejected slot receives no
-Executor step, primitive, or reference-only transition.
+For QI-SCA, that same differentiable tensor is denoted `P^Q`; candidate masking
+never renormalizes it.
+
+## Solver candidates
+
+```yaml
+r4_candidate_mode: qasa_selected  # existing R4a control
+r4_candidate_mode: all_real_slots # capacitated spillover experiment
+```
+
+In `qasa_selected`, QASA's hard mask defines the QI-SCA candidate coordinates.
+Execution requires both QASA permission and positive routing mass, preserving
+the existing R4a behavior.
+
+In `all_real_slots`, QASA is still computed and reported unchanged, but every
+real slot may participate in QI-SCA. Execution then follows positive routing
+mass, including for a non-QASA-selected slot that receives capacitated
+assignment. A zero-evidence slot never receives an Executor step in either
+mode. This isolates whether column congestion lets alternative real-slot
+utilities survive instead of hard-pruning them before optimization.
 
 QI-SCA forms
 
@@ -48,7 +63,11 @@ R4b adds the fixed shared constraint
 sum_tokens A[slot, token] <= r4_slot_capacity
 ```
 
-and uses 64 fixed Dykstra iterations with correction tensors for the token and
+`r4_slot_capacity` is fractional assignment mass, not a token count. The shared
+default `2.0` is retained only as a provisional smoke-test value; it was not
+derived from R4a support cardinality and is not claimed optimal.
+
+R4b uses 64 fixed Dykstra iterations with correction tensors for the token and
 slot projection sets. The default 64 iterations matched a 512-iteration
 reference on deterministic unit-test problems while keeping the training path
 differentiable. The initial capacity value is not claimed optimal; R4a should be
@@ -61,6 +80,7 @@ routing_mode: qisca
 r4_theta: 0.25
 r4_lambda: 1.0
 r4_capacity_enabled: false
+r4_candidate_mode: qasa_selected
 r4_slot_capacity: 2.0
 r4_solver_iters: 64
 ```
@@ -97,16 +117,28 @@ python src/train.py experiment=taper_e2e \
 # R4a: joint token competition, rejection, no capacity
 python src/train.py experiment=taper_e2e \
   experiment.model.routing_mode=qisca \
-  experiment.model.r4_capacity_enabled=false
+  experiment.model.r4_capacity_enabled=false \
+  experiment.model.r4_candidate_mode=qasa_selected
 
-# R4b: identical QI-SCA objective plus slot capacity
+# R4b spillover: identical QI-SCA objective, all real candidates, slot capacity
 python src/train.py experiment=taper_e2e \
   experiment.model.routing_mode=qisca \
+  experiment.model.r4_theta=0.15 \
+  experiment.model.r4_lambda=0.45 \
   experiment.model.r4_capacity_enabled=true \
+  experiment.model.r4_candidate_mode=all_real_slots \
   experiment.model.r4_slot_capacity=2.0
 ```
 
 R4 must not be called successful merely because it is sparse. The intended
-forensic signals are lower support overlap and S0 winner dominance, more useful
-non-S0 slot-drop effects, and competitive retrieval. Equal slot utilization is
-not required or forced.
+forensic signals are multiple routed/executed slots under congestion, nonzero
+mass on non-QASA candidates, lower fixed-slot functional dominance, useful
+non-S0 slot-drop effects, and competitive retrieval. Low overlap alone is not
+success: it can be zero because only one slot survived. Equal slot utilization
+is not required or forced.
+
+For an initial short smoke run, stop and audit if QASA and routed slot counts
+rapidly approach one together, if capacity binding approaches 100% while
+unassigned mass becomes extreme, or if a binding dominant slot produces
+approximately zero non-QASA routed mass. Those outcomes would not establish
+the intended redistribution mechanism.

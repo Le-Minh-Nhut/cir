@@ -153,6 +153,7 @@ def build_model(cfg, device: torch.device) -> TAPER:
         r4_theta=m.r4_theta,
         r4_lambda=m.r4_lambda,
         r4_capacity_enabled=m.r4_capacity_enabled,
+        r4_candidate_mode=m.r4_candidate_mode,
         r4_slot_capacity=m.r4_slot_capacity,
         r4_solver_iters=m.r4_solver_iters,
     ).to(device)

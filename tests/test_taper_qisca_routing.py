@@ -17,6 +17,7 @@ def tiny_taper(
     r4_lambda: float = 1.0,
     solver_iters: int = 64,
     routing_mode: str = "qisca",
+    candidate_mode: str = "qasa_selected",
 ) -> TAPER:
     torch.manual_seed(41)
     return TAPER(
@@ -31,6 +32,7 @@ def tiny_taper(
         r4_theta=theta,
         r4_lambda=r4_lambda,
         r4_capacity_enabled=capacity_enabled,
+        r4_candidate_mode=candidate_mode,
         r4_slot_capacity=capacity,
         r4_solver_iters=solver_iters,
     )
@@ -128,6 +130,8 @@ class TAPERQISCARoutingTest(unittest.TestCase):
             tiny_taper(capacity_enabled=True, capacity=0.0)
         with self.assertRaisesRegex(ValueError, "r4_solver_iters"):
             tiny_taper(solver_iters=0)
+        with self.assertRaisesRegex(ValueError, "r4_candidate_mode"):
+            tiny_taper(candidate_mode="invalid")
 
     def test_r4a_token_budget_and_exact_row_projection(self) -> None:
         model = tiny_taper(theta=0.10, capacity_enabled=False)
@@ -344,6 +348,209 @@ class TAPERQISCARoutingTest(unittest.TestCase):
         )
         self.assertEqual(torch.count_nonzero(routing).item(), 0)
 
+    def test_all_real_slots_capacity_redistributes_to_secondary_slot(self) -> None:
+        competition = torch.tensor([[[0.70, 0.70], [0.30, 0.30]]])
+        valid = torch.ones(1, 2, dtype=torch.bool)
+        qasa_only_s0 = torch.tensor([[True, False]])
+        common = dict(
+            text_dim=2,
+            slot_dim=2,
+            reference_dim=2,
+            query_dim=2,
+            state_dim=2,
+            num_slots=2,
+            num_primitives=1,
+            routing_mode="qisca",
+            r4_theta=0.0,
+            r4_lambda=0.5,
+            r4_slot_capacity=0.8,
+            r4_solver_iters=64,
+        )
+        no_capacity = TAPER(
+            **common,
+            r4_capacity_enabled=False,
+            r4_candidate_mode="all_real_slots",
+        )
+        spillover = TAPER(
+            **common,
+            r4_capacity_enabled=True,
+            r4_candidate_mode="all_real_slots",
+        )
+        hard_pruned = TAPER(
+            **common,
+            r4_capacity_enabled=True,
+            r4_candidate_mode="qasa_selected",
+        )
+
+        unconstrained = no_capacity._qisca_routing(
+            competition,
+            valid,
+            qasa_only_s0,
+        )
+        redistributed = spillover._qisca_routing(
+            competition,
+            valid,
+            qasa_only_s0,
+        )
+        rejected = hard_pruned._qisca_routing(
+            competition,
+            valid,
+            qasa_only_s0,
+        )
+
+        self.assertGreater(
+            float(unconstrained[:, 0].sum()),
+            float(unconstrained[:, 1].sum()),
+        )
+        torch.testing.assert_close(
+            redistributed.sum(dim=-1),
+            torch.tensor([[0.8, 0.8]]),
+            atol=1e-5,
+            rtol=1e-5,
+        )
+        self.assertGreater(
+            float(redistributed[:, 1].sum()),
+            float(unconstrained[:, 1].sum()),
+        )
+        self.assertEqual(torch.count_nonzero(rejected[:, 1]).item(), 0)
+        torch.testing.assert_close(
+            rejected[:, 0].sum(),
+            torch.tensor(0.8),
+            atol=1e-5,
+            rtol=1e-5,
+        )
+        self.assertGreater(
+            float(redistributed.sum()),
+            float(rejected.sum()),
+        )
+
+    def test_non_qasa_spillover_slot_executes_and_is_traced(self) -> None:
+        model = TAPER(
+            text_dim=2,
+            slot_dim=2,
+            reference_dim=2,
+            query_dim=2,
+            state_dim=2,
+            num_slots=2,
+            num_primitives=2,
+            routing_mode="qisca",
+            r4_theta=0.0,
+            r4_lambda=0.5,
+            r4_capacity_enabled=True,
+            r4_candidate_mode="all_real_slots",
+            r4_slot_capacity=0.8,
+        )
+        reference = torch.tensor([[0.2, -0.1]])
+        text = torch.tensor([[[1.0, 0.0], [0.0, 1.0]]])
+        valid = torch.ones(1, 2, dtype=torch.bool)
+        competition = torch.tensor([[[0.70, 0.70], [0.30, 0.30]]])
+        logits = competition.log()
+
+        def select_s0(
+            _attention: torch.Tensor,
+            _valid: torch.Tensor,
+        ) -> dict[str, torch.Tensor]:
+            return {
+                "qasa_quality": torch.ones(1, 2),
+                "qasa_selected_mask": torch.tensor([[True, False]]),
+                "qasa_selected_count": torch.tensor([1]),
+                "qasa_final_coverage": torch.ones(1),
+                "qasa_novelty_skip_count": torch.zeros(1),
+            }
+
+        with (
+            patch.object(
+                model,
+                "_competitive_ownership",
+                return_value=(logits, competition),
+            ),
+            patch.object(model, "_qasa_select_slots", side_effect=select_s0),
+        ):
+            output = model(
+                reference,
+                text,
+                valid,
+                text_content_mask=valid,
+            )
+            dropped = model.slot_drop_queries(
+                reference_features=reference,
+                text_states=text,
+                text_attention_mask=valid,
+                text_content_mask=valid,
+            )
+
+        self.assertFalse(bool(output["qasa_selected_mask"][0, 1]))
+        self.assertGreater(float(output["routing_slot_mass"][0, 1]), 0.0)
+        self.assertTrue(bool(output["routing_active_mask"][0, 1]))
+        self.assertTrue(bool(output["execution_selected_mask"][0, 1]))
+        self.assertTrue(bool(output["hard_active_slot_mask"][0, 1]))
+        self.assertGreaterEqual(int(output["slot_to_step"][0, 1]), 0)
+        self.assertEqual(int(output["trace_valid_mask"].sum()), 2)
+        torch.testing.assert_close(
+            dropped["execution_selected_mask"],
+            output["execution_selected_mask"],
+        )
+        torch.testing.assert_close(dropped["slot_to_step"], output["slot_to_step"])
+        torch.testing.assert_close(
+            dropped["trace_valid_mask"],
+            output["trace_valid_mask"],
+        )
+
+        diagnostics = model._assignment_diagnostics(
+            slot_masks=output["slot_masks"],
+            slot_mass=output["slot_mass"],
+            routing_masks=output["routing_masks"],
+            routing_slot_mass=output["routing_slot_mass"],
+            routing_support_count=output["routing_support_count"],
+            qasa_selected_mask=output["qasa_selected_mask"],
+            qasa_quality=output["qasa_quality"],
+            qasa_final_coverage=output["qasa_final_coverage"],
+            hard_active_slot_mask=output["hard_active_slot_mask"],
+            text_attention_mask=valid,
+            text_content_mask=valid,
+            r4_preprojection=output["r4_preprojection"],
+            routing_candidate_mask=output["routing_candidate_mask"],
+        )
+        self.assertEqual(
+            float(diagnostics["routing_non_qasa_active_slot_count"]),
+            1.0,
+        )
+        self.assertGreater(float(diagnostics["routing_non_qasa_mass_mean"]), 0.0)
+        self.assertGreater(
+            float(diagnostics["routing_non_qasa_mass_fraction"]),
+            0.0,
+        )
+        self.assertEqual(
+            float(diagnostics["execution_non_qasa_active_slot_count"]),
+            1.0,
+        )
+
+    def test_zero_mass_non_qasa_candidate_does_not_execute(self) -> None:
+        model = TAPER(
+            text_dim=2,
+            slot_dim=2,
+            reference_dim=2,
+            query_dim=2,
+            state_dim=2,
+            num_slots=2,
+            num_primitives=1,
+            routing_mode="qisca",
+            r4_theta=0.25,
+            r4_lambda=1.0,
+            r4_capacity_enabled=True,
+            r4_candidate_mode="all_real_slots",
+            r4_slot_capacity=1.0,
+        )
+        competition = torch.tensor([[[0.80], [0.20]]])
+        selected = torch.tensor([[True, False]])
+        valid = torch.ones(1, 1, dtype=torch.bool)
+        routing = model._qisca_routing(competition, valid, selected)
+        active = routing.sum(dim=-1) > 1e-6
+        execution = model._r4_candidate_mask(selected, valid) & active
+        self.assertEqual(float(routing[0, 1, 0]), 0.0)
+        self.assertFalse(bool(active[0, 1]))
+        self.assertFalse(bool(execution[0, 1]))
+
     def test_invalid_inactive_and_zero_content_are_exactly_zero(self) -> None:
         model = tiny_taper(theta=0.10)
         competition = torch.full((2, 4, 3), 0.25)
@@ -358,6 +565,16 @@ class TAPERQISCARoutingTest(unittest.TestCase):
         self.assertEqual(torch.count_nonzero(routing[0, 3]).item(), 0)
         self.assertEqual(torch.count_nonzero(routing[:, :, 1]).item(), 0)
         self.assertEqual(torch.count_nonzero(routing[1]).item(), 0)
+
+    def test_all_real_slots_admits_non_qasa_slots_but_not_invalid_tokens(self) -> None:
+        model = tiny_taper(theta=0.10, candidate_mode="all_real_slots")
+        competition = torch.full((1, 4, 3), 0.25)
+        valid = torch.tensor([[True, False, True]])
+        selected = torch.tensor([[True, False, False, False]])
+        routing = model._qisca_routing(competition, valid, selected)
+
+        self.assertTrue((routing[0, 1:, valid[0]] > 0).all())
+        self.assertEqual(torch.count_nonzero(routing[:, :, ~valid[0]]).item(), 0)
 
     def test_capacity_toggle_controls_only_column_constraint(self) -> None:
         competition = torch.tensor(
@@ -494,7 +711,7 @@ class TAPERQISCARoutingTest(unittest.TestCase):
         self.assertGreater(float(maximization), 0.0)
 
     def test_qisca_gradient_reaches_ownership_parameters(self) -> None:
-        model = tiny_taper(theta=0.10)
+        model = tiny_taper(theta=0.10, candidate_mode="all_real_slots")
         text = torch.randn(2, 6, 4)
         valid = torch.tensor(
             [
@@ -504,7 +721,9 @@ class TAPERQISCARoutingTest(unittest.TestCase):
         )
         logits, competition = model._competitive_ownership(text, valid)
         del logits
-        selected = torch.ones(2, 4, dtype=torch.bool)
+        selected = torch.tensor(
+            [[True, False, False, False], [True, False, False, False]]
+        )
         routing = model._qisca_routing(competition, valid, selected)
         weights = torch.arange(
             routing.numel(),
@@ -522,7 +741,12 @@ class TAPERQISCARoutingTest(unittest.TestCase):
             self.assertGreater(float(parameter.grad.abs().sum()), 0.0)
 
     def test_qisca_full_forward_is_finite_under_autocast(self) -> None:
-        model = tiny_taper(theta=0.10)
+        model = tiny_taper(
+            theta=0.10,
+            capacity_enabled=True,
+            capacity=0.8,
+            candidate_mode="all_real_slots",
+        )
         reference = torch.randn(2, 4)
         text = torch.randn(2, 6, 4)
         attention = torch.ones(2, 6, dtype=torch.bool)
@@ -552,6 +776,49 @@ class TAPERQISCARoutingTest(unittest.TestCase):
         ):
             self.assertIsNotNone(parameter.grad)
             self.assertTrue(torch.isfinite(parameter.grad).all())
+
+    def test_qasa_is_invariant_across_candidate_and_capacity_modes(self) -> None:
+        qasa_candidates = tiny_taper(
+            capacity_enabled=False,
+            candidate_mode="qasa_selected",
+            theta=0.10,
+        )
+        all_candidates = tiny_taper(
+            capacity_enabled=True,
+            capacity=0.8,
+            candidate_mode="all_real_slots",
+            theta=0.10,
+        )
+        all_candidates.load_state_dict(qasa_candidates.state_dict())
+        text = torch.randn(2, 6, 4)
+        attention = torch.ones(2, 6, dtype=torch.bool)
+        content = torch.tensor(
+            [
+                [False, True, True, True, True, False],
+                [False, True, True, True, False, False],
+            ]
+        )
+        qasa_output = qasa_candidates.build_edit_slots(
+            text,
+            attention,
+            text_content_mask=content,
+        )
+        all_output = all_candidates.build_edit_slots(
+            text,
+            attention,
+            text_content_mask=content,
+        )
+
+        for name in (
+            "ownership_logits",
+            "slot_masks",
+            "qasa_attention",
+            "qasa_quality",
+            "qasa_selected_mask",
+            "qasa_selected_count",
+            "qasa_final_coverage",
+        ):
+            torch.testing.assert_close(qasa_output[name], all_output[name])
 
     def test_r1_regression_and_qasa_invariance_across_routing_modes(self) -> None:
         entmax_model = tiny_taper(routing_mode="entmax15")
@@ -668,6 +935,42 @@ class TAPERQISCARoutingTest(unittest.TestCase):
         )
         self.assertTrue(
             math.isfinite(float(diagnostics["routing_capacity_utilization_mean"]))
+        )
+        self.assertAlmostEqual(
+            float(diagnostics["routing_capacity_binding_fraction"]),
+            0.25,
+        )
+
+    def test_capacity_diagnostics_use_all_real_solver_candidates(self) -> None:
+        model = tiny_taper(
+            capacity_enabled=True,
+            capacity=0.5,
+            candidate_mode="all_real_slots",
+        )
+        soft = torch.full((1, 4, 2), 0.25)
+        routing = torch.tensor(
+            [[[0.25, 0.25], [0.125, 0.125], [0.0, 0.0], [0.0, 0.0]]]
+        )
+        qasa_selected = torch.tensor([[True, False, False, False]])
+        valid = torch.ones(1, 2, dtype=torch.bool)
+        candidates = model._r4_candidate_mask(qasa_selected, valid)
+        diagnostics = model._assignment_diagnostics(
+            slot_masks=soft,
+            slot_mass=soft.sum(dim=-1),
+            routing_masks=routing,
+            routing_slot_mass=routing.sum(dim=-1),
+            routing_support_count=(routing > 1e-6).sum(dim=-1),
+            qasa_selected_mask=qasa_selected,
+            qasa_quality=torch.ones(1, 4),
+            qasa_final_coverage=torch.ones(1),
+            hard_active_slot_mask=routing.sum(dim=-1) > 1e-6,
+            text_attention_mask=valid,
+            text_content_mask=valid,
+            routing_candidate_mask=candidates,
+        )
+        self.assertAlmostEqual(
+            float(diagnostics["routing_capacity_utilization_mean"]),
+            0.375,
         )
         self.assertAlmostEqual(
             float(diagnostics["routing_capacity_binding_fraction"]),

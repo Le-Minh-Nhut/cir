@@ -111,6 +111,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def force_r4a(model: TAPER) -> None:
     model.routing_mode = "qisca"
     model.r4_capacity_enabled = False
+    model.r4_candidate_mode = "qasa_selected"
 
 
 def parameter_versions(model: TAPER) -> tuple[int, ...]:
@@ -260,6 +261,7 @@ def calibrate_model(
                         text_attention_mask=attention_mask,
                         text_content_mask=content_mask,
                         r4_preprojection=output["r4_preprojection"],
+                        routing_candidate_mask=output["routing_candidate_mask"],
                     )
                     for name in TOKEN_METRICS:
                         aggregate.add(name, diagnostics[name], valid_count)
@@ -552,6 +554,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     print("Calibration mode: R4a QI-SCA")
     print("Capacity enabled:", model.r4_capacity_enabled)
+    print("Candidate mode:", model.r4_candidate_mode)
     print("Checkpoint:", args.checkpoint)
     print("Theta sweep:", " ".join(str(value) for value in args.thetas))
     print("Lambda sweep:", " ".join(str(value) for value in args.lambdas))
@@ -565,6 +568,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     report: dict[str, object] = {
         "checkpoint": str(args.checkpoint),
         "capacity_enabled": model.r4_capacity_enabled,
+        "candidate_mode": model.r4_candidate_mode,
         "routing_mode": model.routing_mode,
         "num_queries": num_queries,
         "thetas": [float(value) for value in args.thetas],

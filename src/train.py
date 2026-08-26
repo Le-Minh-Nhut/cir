@@ -174,6 +174,7 @@ def main(cfg: DictConfig) -> None:
         r4_theta=m.r4_theta,
         r4_lambda=m.r4_lambda,
         r4_capacity_enabled=m.r4_capacity_enabled,
+        r4_candidate_mode=m.r4_candidate_mode,
         r4_slot_capacity=m.r4_slot_capacity,
         r4_solver_iters=m.r4_solver_iters,
     ).to(device)
@@ -183,6 +184,7 @@ def main(cfg: DictConfig) -> None:
         print("R4 theta:", model.r4_theta)
         print("R4 lambda:", model.r4_lambda)
         print("R4 capacity enabled:", model.r4_capacity_enabled)
+        print("R4 candidate mode:", model.r4_candidate_mode)
         if model.r4_capacity_enabled:
             print("R4 slot capacity:", model.r4_slot_capacity)
             print("R4 solver iterations:", model.r4_solver_iters)

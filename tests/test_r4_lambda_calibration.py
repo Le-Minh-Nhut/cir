@@ -90,6 +90,7 @@ def test_force_r4a_disables_capacity_and_selects_qisca() -> None:
     force_r4a(model)
     assert model.routing_mode == "qisca"
     assert model.r4_capacity_enabled is False
+    assert model.r4_candidate_mode == "qasa_selected"
 
 
 def test_one_model_is_reused_and_hyperparameters_are_restored() -> None:
@@ -124,6 +125,7 @@ def test_one_model_is_reused_and_hyperparameters_are_restored() -> None:
         torch.testing.assert_close(parameter, expected, rtol=0, atol=0)
     assert model.routing_mode == "qisca"
     assert model.r4_capacity_enabled is False
+    assert model.r4_candidate_mode == "qasa_selected"
     assert model.r4_theta == original_theta
     assert model.r4_lambda == original_lambda
 
@@ -216,6 +218,7 @@ def test_calibration_json_schema_is_stable(tmp_path: Path) -> None:
     report = {
         "checkpoint": "checkpoint.pt",
         "capacity_enabled": model.r4_capacity_enabled,
+        "candidate_mode": model.r4_candidate_mode,
         "routing_mode": model.routing_mode,
         "num_queries": num_queries,
         "thetas": [0.25, 0.10],
@@ -229,6 +232,7 @@ def test_calibration_json_schema_is_stable(tmp_path: Path) -> None:
     assert set(restored) == {
         "checkpoint",
         "capacity_enabled",
+        "candidate_mode",
         "routing_mode",
         "num_queries",
         "thetas",
@@ -237,6 +241,7 @@ def test_calibration_json_schema_is_stable(tmp_path: Path) -> None:
     }
     assert restored["routing_mode"] == "qisca"
     assert restored["capacity_enabled"] is False
+    assert restored["candidate_mode"] == "qasa_selected"
     assert len(restored["results"]) == 4
     for result in restored["results"]:
         assert set(result) == {

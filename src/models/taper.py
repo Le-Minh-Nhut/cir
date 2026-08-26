@@ -17,6 +17,7 @@ R4_TOKEN_BUDGET_TOL = 1e-5
 
 class TAPER(nn.Module):
     ROUTING_MODES = frozenset({"entmax15", "qisca"})
+    R4_CANDIDATE_MODES = frozenset({"qasa_selected", "all_real_slots"})
 
     def __init__(
         self,
@@ -41,6 +42,7 @@ class TAPER(nn.Module):
         r4_theta: float = 0.25,
         r4_lambda: float = 1.0,
         r4_capacity_enabled: bool = False,
+        r4_candidate_mode: str = "qasa_selected",
         r4_slot_capacity: float = 2.0,
         r4_solver_iters: int = 64,
     ) -> None:
@@ -75,6 +77,11 @@ class TAPER(nn.Module):
             raise ValueError("r4_lambda must be > 0")
         if not isinstance(r4_capacity_enabled, bool):
             raise TypeError("r4_capacity_enabled must be a bool")
+        if r4_candidate_mode not in self.R4_CANDIDATE_MODES:
+            raise ValueError(
+                "r4_candidate_mode must be one of: "
+                f"{sorted(self.R4_CANDIDATE_MODES)}"
+            )
         if r4_capacity_enabled and (
             not math.isfinite(r4_slot_capacity) or r4_slot_capacity <= 0
         ):
@@ -98,6 +105,7 @@ class TAPER(nn.Module):
         self.r4_theta = float(r4_theta)
         self.r4_lambda = float(r4_lambda)
         self.r4_capacity_enabled = r4_capacity_enabled
+        self.r4_candidate_mode = r4_candidate_mode
         self.r4_slot_capacity = float(r4_slot_capacity)
         self.r4_solver_iters = int(r4_solver_iters)
 
@@ -302,10 +310,32 @@ class TAPER(nn.Module):
         selected_mask: Tensor,
     ) -> Tensor:
         """Positive QI-SCA geometry before token/capacity projection."""
-        allowed = selected_mask[:, :, None] & slot_valid[:, None, :]
+        candidates = self._r4_candidate_mask(selected_mask, slot_valid)
+        allowed = candidates[:, :, None] & slot_valid[:, None, :]
         return (
             (soft_competition.float() - self.r4_theta) / self.r4_lambda
         ).clamp_min(0.0) * allowed.to(torch.float32)
+
+    def _r4_candidate_mask(
+        self,
+        qasa_selected_mask: Tensor,
+        slot_valid: Tensor,
+    ) -> Tensor:
+        if qasa_selected_mask.ndim != 2:
+            raise ValueError("qasa_selected_mask must be [B,L]")
+        if qasa_selected_mask.shape[1] != self.num_slots:
+            raise ValueError("qasa_selected_mask slot dimension mismatch")
+        if qasa_selected_mask.dtype != torch.bool:
+            raise TypeError("qasa_selected_mask must be bool")
+        if slot_valid.ndim != 2 or slot_valid.shape[0] != qasa_selected_mask.shape[0]:
+            raise ValueError("slot_valid must be [B,N]")
+
+        has_content = slot_valid.to(torch.bool).any(dim=1, keepdim=True)
+        if self.r4_candidate_mode == "qasa_selected":
+            candidates = qasa_selected_mask
+        else:
+            candidates = torch.ones_like(qasa_selected_mask)
+        return candidates & has_content
 
     def _token_entmax_routing(
         self,
@@ -415,8 +445,10 @@ class TAPER(nn.Module):
             raise TypeError("selected_mask must be bool")
 
         valid = slot_valid.to(device=soft_competition.device, dtype=torch.bool)
-        selected = selected_mask.to(device=soft_competition.device)
-        allowed = selected[:, :, None] & valid[:, None, :]
+        candidates = self._r4_candidate_mask(selected_mask, valid).to(
+            device=soft_competition.device
+        )
+        allowed = candidates[:, :, None] & valid[:, None, :]
 
         # FP32 keeps sorting/thresholding stable under autocast. Conversion does
         # not detach, so gradients flow to the pre-sparse ownership tensor.
@@ -549,6 +581,7 @@ class TAPER(nn.Module):
             selected_mask = qasa["qasa_selected_mask"]
 
         if self.routing_mode == "entmax15":
+            routing_candidate_mask = selected_mask
             r4_preprojection = torch.zeros_like(slot_masks, dtype=torch.float32)
             routing_masks = self._token_entmax_routing(
                 ownership_logits,
@@ -556,6 +589,10 @@ class TAPER(nn.Module):
                 selected_mask,
             )
         else:
+            routing_candidate_mask = self._r4_candidate_mask(
+                selected_mask,
+                slot_valid,
+            )
             # slot_masks is P^Q = softmax_slots(Z): the differentiable copy of
             # the same pre-sparse competition measured by QASA in FP32.
             r4_preprojection = self._qisca_preprojection(
@@ -578,7 +615,7 @@ class TAPER(nn.Module):
             (routing_masks > R1_ROUTING_SUPPORT_EPS) & slot_valid[:, None, :]
         ).sum(dim=-1)
         routing_active_mask = routing_slot_mass > R1_ROUTING_SUPPORT_EPS
-        execution_selected_mask = selected_mask & routing_active_mask
+        execution_selected_mask = routing_candidate_mask & routing_active_mask
 
         return {
             "edit_slots": edit_slots,
@@ -593,6 +630,7 @@ class TAPER(nn.Module):
             "routing_slot_mass": routing_slot_mass,
             "routing_slot_activity": routing_slot_activity,
             "routing_support_count": routing_support_count,
+            "routing_candidate_mask": routing_candidate_mask,
             "routing_active_mask": routing_active_mask,
             "execution_selected_mask": execution_selected_mask,
             "r4_preprojection": r4_preprojection,
@@ -608,6 +646,16 @@ class TAPER(nn.Module):
             ),
             "r4_capacity_enabled": torch.tensor(
                 self.r4_capacity_enabled,
+                dtype=torch.bool,
+                device=routing_masks.device,
+            ),
+            "r4_candidate_mode_qasa_selected": torch.tensor(
+                self.r4_candidate_mode == "qasa_selected",
+                dtype=torch.bool,
+                device=routing_masks.device,
+            ),
+            "r4_candidate_mode_all_real_slots": torch.tensor(
+                self.r4_candidate_mode == "all_real_slots",
                 dtype=torch.bool,
                 device=routing_masks.device,
             ),
@@ -899,6 +947,7 @@ class TAPER(nn.Module):
         text_attention_mask: Tensor,
         text_content_mask: Tensor | None = None,
         r4_preprojection: Tensor | None = None,
+        routing_candidate_mask: Tensor | None = None,
     ) -> dict[str, Tensor]:
         if text_content_mask is not None:
             valid = text_attention_mask.to(torch.bool) & text_content_mask.to(torch.bool)
@@ -998,6 +1047,24 @@ class TAPER(nn.Module):
             "routing_support_overlap_mean": routing_support_overlap,
         }
 
+        non_qasa = ~qasa_selected_mask
+        non_qasa_active = routing_active & non_qasa
+        execution_non_qasa_active = hard_active_slot_mask & non_qasa
+        non_qasa_mass = (
+            routing_slot_mass * non_qasa.to(routing_slot_mass.dtype)
+        ).sum(dim=1)
+        total_routing_mass = routing_slot_mass.sum(dim=1)
+        diagnostics["routing_non_qasa_active_slot_count"] = (
+            non_qasa_active.to(slot_masks.dtype).sum(dim=1).mean()
+        )
+        diagnostics["routing_non_qasa_mass_mean"] = non_qasa_mass.mean()
+        diagnostics["routing_non_qasa_mass_fraction"] = (
+            non_qasa_mass / total_routing_mass.clamp_min(1e-12)
+        ).mean()
+        diagnostics["execution_non_qasa_active_slot_count"] = (
+            execution_non_qasa_active.to(slot_masks.dtype).sum(dim=1).mean()
+        )
+
         routing_token_mass = routing_masks.sum(dim=1)
         routing_unassigned_mass = (1.0 - routing_token_mass).clamp(0.0, 1.0)
         diagnostics["routing_token_mass_mean"] = (
@@ -1052,19 +1119,25 @@ class TAPER(nn.Module):
             ] = r4_not_applicable
             diagnostics["r4_token_budget_binding_fraction"] = r4_not_applicable
         if self.routing_mode == "qisca" and self.r4_capacity_enabled:
-            selected_f = qasa_selected_mask.to(slot_masks.dtype)
-            selected_count = selected_f.sum().clamp_min(1.0)
+            if routing_candidate_mask is None:
+                candidate_mask = qasa_selected_mask
+            else:
+                if routing_candidate_mask.shape != qasa_selected_mask.shape:
+                    raise ValueError("routing_candidate_mask shape mismatch")
+                candidate_mask = routing_candidate_mask.to(torch.bool)
+            candidate_f = candidate_mask.to(slot_masks.dtype)
+            candidate_count = candidate_f.sum().clamp_min(1.0)
             utilization = routing_slot_mass / self.r4_slot_capacity
             binding = (
                 (routing_slot_mass - self.r4_slot_capacity).abs()
                 <= R4_CAPACITY_BINDING_TOL
             ).to(slot_masks.dtype)
             diagnostics["routing_capacity_utilization_mean"] = (
-                utilization * selected_f
-            ).sum() / selected_count
+                utilization * candidate_f
+            ).sum() / candidate_count
             diagnostics["routing_capacity_binding_fraction"] = (
-                binding * selected_f
-            ).sum() / selected_count
+                binding * candidate_f
+            ).sum() / candidate_count
         else:
             not_applicable = routing_masks.new_full((), float("nan"))
             diagnostics["routing_capacity_utilization_mean"] = not_applicable
@@ -1132,6 +1205,7 @@ class TAPER(nn.Module):
                 qasa_quality=output["qasa_quality"],
                 qasa_final_coverage=output["qasa_final_coverage"],
                 r4_preprojection=output["r4_preprojection"],
+                routing_candidate_mask=output["routing_candidate_mask"],
             )
         losses.update({f"diagnostic/{k}": v for k, v in diagnostics.items()})
         return losses
@@ -1185,9 +1259,12 @@ class TAPER(nn.Module):
                 "routing_slot_activity": slots["routing_slot_activity"],
                 "routing_support_count": slots["routing_support_count"],
                 "routing_masks": slots["routing_masks"],
+                "routing_candidate_mask": slots["routing_candidate_mask"],
                 "routing_active_mask": slots["routing_active_mask"],
                 "execution_selected_mask": slots["execution_selected_mask"],
                 "hard_active_slot_mask": full_execution["hard_active_slot_mask"],
+                "slot_to_step": full_execution["slot_to_step"],
+                "trace_valid_mask": full_execution["trace_valid_mask"],
                 "qasa_selected_mask": slots["qasa_selected_mask"],
                 "qasa_quality": slots["qasa_quality"],
             }
