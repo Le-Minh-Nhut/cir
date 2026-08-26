@@ -11,12 +11,9 @@ from torch import Tensor, nn
 class TAPER(nn.Module):
     def __init__(
         self,
-        teacher: nn.Module,
         *,
         text_dim: int,
         reference_dim: int,
-        teacher_text_dim: int | None = None,
-        teacher_query_dim: int,
         query_dim: int,
         slot_dim: int = 512,
         state_dim: int = 512,
@@ -57,13 +54,8 @@ class TAPER(nn.Module):
         if counterfactual_chunk_size < 1:
             raise ValueError("counterfactual_chunk_size must be >= 1")
 
-        self.teacher = teacher
         self.text_dim = text_dim
-        self.teacher_text_dim = text_dim if teacher_text_dim is None else teacher_text_dim
-        if self.teacher_text_dim < 1:
-            raise ValueError("teacher_text_dim must be >= 1")
         self.reference_dim = reference_dim
-        self.teacher_query_dim = teacher_query_dim
         self.query_dim = query_dim
         self.slot_dim = slot_dim
         self.state_dim = state_dim
@@ -93,7 +85,6 @@ class TAPER(nn.Module):
         else:
             self.register_buffer("neutral_embedding", torch.zeros(self.teacher_text_dim))
 
-        self.slot_mlp = nn.Sequential(nn.Linear(text_dim + teacher_query_dim, slot_dim), nn.GELU(), nn.Linear(slot_dim, slot_dim), nn.LayerNorm(slot_dim))
         self.reference_to_state = nn.Sequential(nn.Linear(reference_dim, state_dim), nn.GELU(), nn.Linear(state_dim, state_dim), nn.LayerNorm(state_dim))
 
         self.primitive_bank = nn.Parameter(torch.randn(num_primitives, state_dim) * 0.02)
@@ -117,18 +108,12 @@ class TAPER(nn.Module):
 
     def train(self, mode: bool = True) -> "TAPER":
         super().train(mode)
-        # The teacher is a frozen functional measuring instrument.
         self.teacher.eval()
         return self
 
     def _pool_text(self, text_states: Tensor, mask: Tensor) -> Tensor:
         mask_f = mask.to(text_states.dtype).unsqueeze(-1)
         return (text_states * mask_f).sum(1) / mask_f.sum(1).clamp_min(1.0)
-
-    def _neutral_text(self, text_states: Tensor, mask: Tensor) -> Tensor:
-        if self.neutral_mode in {"zero", "learned"}:
-            return self.neutral_embedding.view(1, 1, -1).expand_as(text_states)
-        return self._pool_text(text_states, mask).unsqueeze(1).expand_as(text_states)
 
     @staticmethod
     def _gather_slots(slots: Tensor, slot_ids: Tensor) -> Tensor:
@@ -323,89 +308,18 @@ class TAPER(nn.Module):
             "qasa_inference_winner_counts": winner_counts,
         }
 
-    def _compose_counterfactual_queries(
-        self,
-        *,
-        teacher_reference_features: Tensor,
-        teacher_text_states: Tensor,
-        text_attention_mask: Tensor,
-        slot_masks: Tensor,
-        neutral: Tensor,
-    ) -> Tensor:
-        batch_size, num_tokens, _ = teacher_text_states.shape
-
-        total = batch_size * self.num_slots
-        outputs = []
-
-        for start in range(0, total, self.counterfactual_chunk_size,):
-            end = min(start + self.counterfactual_chunk_size, total)
-            flat_ids = torch.arange(start, end, device=teacher_text_states.device)
-            batch_ids = torch.div(flat_ids, self.num_slots, rounding_mode="floor")
-            slot_ids = flat_ids % self.num_slots
-            chunk_masks = slot_masks[batch_ids, slot_ids, :].unsqueeze(-1)
-            chunk_teacher_text = teacher_text_states[batch_ids]
-            chunk_neutral = neutral[batch_ids]
-            counterfactual_text = ((1.0 - chunk_masks) * chunk_teacher_text + chunk_masks * chunk_neutral)
-            counterfactual_reference = teacher_reference_features[batch_ids]
-            counterfactual_mask = text_attention_mask[batch_ids]
-            q_chunk = self.teacher.compose(
-                counterfactual_reference,
-                counterfactual_text,
-                counterfactual_mask,
-                normalize=False,
-            )
-
-            expected_chunk_shape = (end - start, self.teacher_query_dim)
-
-            if q_chunk.shape != expected_chunk_shape:
-                raise ValueError(
-                    "counterfactual teacher query chunk "
-                    f"must be {expected_chunk_shape}, "
-                    f"got {tuple(q_chunk.shape)}"
-                )
-
-            outputs.append(q_chunk)
-
-        q_minus_flat = torch.cat(outputs, dim=0)
-        expected_shape = (total, self.teacher_query_dim)
-
-        if q_minus_flat.shape != expected_shape:
-            raise ValueError(
-                "counterfactual teacher query must be "
-                f"{expected_shape}, "
-                f"got {tuple(q_minus_flat.shape)}"
-            )
-
-        return q_minus_flat.reshape(batch_size, self.num_slots, self.teacher_query_dim)
-
     def build_edit_slots(
         self,
         reference_features: Tensor,
         text_states: Tensor,
         text_attention_mask: Tensor,
-        text_content_mask: Tensor | None = None,
         *,
-        teacher_reference_features: Tensor | None = None,
-        teacher_text_states: Tensor | None = None,
+        text_content_mask: Tensor | None = None,
     ) -> dict[str, Tensor]:
         if reference_features.ndim != 2:
             raise ValueError("reference_features must be [B,D] for TAPER state initialization")
         if reference_features.shape[0] != text_states.shape[0]:
             raise ValueError("reference_features and text_states batch sizes do not match")
-        if teacher_reference_features is None:
-            raise ValueError("teacher_reference_features is required explicitly; do not silently " "reuse TAPER reference_features for the frozen teacher")
-        if teacher_text_states is None:
-            raise ValueError("teacher_text_states is required explicitly; do not silently reuse " "contextual TAPER text_states as teacher-native inputs")
-        if teacher_reference_features.shape[0] != text_states.shape[0]:
-            raise ValueError("teacher_reference_features batch size does not match text_states")
-        if teacher_text_states.ndim != 3 or teacher_text_states.shape[:2] != text_states.shape[:2]:
-            raise ValueError("teacher_text_states must be [B,N,D_teacher] aligned with text_states")
-        if teacher_text_states.shape[-1] != self.teacher_text_dim:
-            raise ValueError(f"teacher text dim must be {self.teacher_text_dim}")
-        if not torch.isfinite(teacher_text_states).all():
-            raise ValueError("teacher_text_states contains NaN or Inf")
-        if not torch.isfinite(teacher_reference_features).all():
-            raise ValueError("teacher_reference_features contains NaN or Inf")
 
         _, slot_valid = self._validate_text_inputs(text_states, text_attention_mask, text_content_mask)
 
@@ -413,23 +327,10 @@ class TAPER(nn.Module):
         ownership_logits, slot_masks = self._competitive_ownership(text_states, slot_valid)
         slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
 
-        q_full = self.teacher.compose(teacher_reference_features, teacher_text_states, text_attention_mask, normalize=False)
         expected_shape = (batch_size, self.teacher_query_dim)
-        if q_full.shape != expected_shape:
-            raise ValueError(f"teacher query must be {expected_shape}, got {tuple(q_full.shape)}")
 
-        neutral = self._neutral_text(teacher_text_states, text_attention_mask)
-        q_minus = self._compose_counterfactual_queries(
-            teacher_reference_features=teacher_reference_features,
-            teacher_text_states=teacher_text_states,
-            text_attention_mask=text_attention_mask,
-            slot_masks=slot_masks,
-            neutral=neutral,
-        )
-
-        slot_effects = q_full.unsqueeze(1) - q_minus
-
-        raw_edit_slots = self.slot_mlp(torch.cat([slot_semantics, slot_effects], dim=-1))
+        raw_edit_slots = self.slot_mlp(slot_semantics)
+        edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
         edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
 
         # qasa_attention = F.softmax(ownership_logits.float(), dim=1)
@@ -458,7 +359,6 @@ class TAPER(nn.Module):
             "slot_mass": slot_mass,
             "slot_activity": slot_activity,
             "slot_peak_ownership": (slot_masks.amax(dim=2)),
-            "slot_effects": slot_effects,
             "qasa_attention": qasa_attention,
             "qasa_valid_mask": qasa_valid,
             "qasa_quality": qasa["qasa_quality"],
@@ -467,8 +367,6 @@ class TAPER(nn.Module):
             "qasa_final_coverage": qasa["qasa_final_coverage"],
             "qasa_novelty_skip_count": qasa["qasa_novelty_skip_count"],
             **qasa_inference,
-            "q_teacher_full": q_full,
-            "q_teacher_minus": q_minus,
         }
 
     def initialize_state(self, reference_features: Tensor) -> tuple[Tensor, Tensor]:
