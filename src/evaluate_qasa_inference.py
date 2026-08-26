@@ -20,9 +20,15 @@ from cache.features import (
     get_text_features_by_sample_ids,
     load_text_features,
     validate_feature_manifest,
+    validate_text_cache_subdir,
 )
 from datasets.common import collate_cir_samples
-from datasets.fashioniq import FashionIQDataset, load_correction_dict
+from datasets.fashioniq import (
+    CORRECTION_POLICIES,
+    FashionIQDataset,
+    load_correction_dict,
+    validate_correction_policy,
+)
 from models.taper import TAPER
 
 
@@ -45,6 +51,17 @@ def parse_args():
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--num-workers", type=int, default=4)
     p.add_argument("--device", type=str, default="cuda")
+    p.add_argument(
+        "--correction-policy",
+        choices=sorted(CORRECTION_POLICIES),
+        default=None,
+        help="Override the experiment config correction policy.",
+    )
+    p.add_argument(
+        "--text-cache-subdir",
+        default=None,
+        help="Override the experiment config text cache subdirectory.",
+    )
     p.add_argument(
         "--max-queries-per-category",
         type=int,
@@ -289,9 +306,20 @@ def run(args):
     checkpoint = args.checkpoint or newest_checkpoint(args.outputs_root)
     device = torch.device(args.device)
     cfg = OmegaConf.load(args.config)
+    correction_policy = validate_correction_policy(
+        args.correction_policy or str(cfg.correction_policy)
+    )
+    text_cache_subdir = validate_text_cache_subdir(
+        args.text_cache_subdir or str(cfg.text_cache_subdir),
+        correction_policy,
+    )
 
     annotation_root = args.dataset_root / "captions"
-    correction_dicts = load_correction_dicts(annotation_root)
+    correction_dicts = (
+        load_correction_dicts(annotation_root)
+        if correction_policy == "fashioniq"
+        else None
+    )
     loaders = build_val_loaders(
         annotation_root=annotation_root,
         batch_size=args.batch_size,
@@ -301,12 +329,13 @@ def run(args):
     )
 
     feature_root = args.cache_root / "fashioniq" / "fgclip2-large" / "val"
-    text_cache = load_text_features(feature_root / "text")
+    text_cache = load_text_features(feature_root / text_cache_subdir)
     validate_feature_manifest(
         text_cache.manifest,
         model_id=str(cfg.backbone.model_id),
         revision=str(cfg.backbone.revision),
-        cache_name="val/text",
+        cache_name=f"val/{text_cache_subdir}",
+        correction_policy=correction_policy,
     )
 
     model = build_model(cfg, device)

@@ -11,6 +11,8 @@ weight_decay: 1.0e-4
 
 train_caption_policy: normalized_ordered_and
 val_caption_policy: normalized_ordered_and
+correction_policy: fashioniq
+text_cache_subdir: text
 
 loss_weights:
   retrieval_loss: 1.0

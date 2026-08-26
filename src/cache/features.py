@@ -1,6 +1,7 @@
 from pathlib import Path
 from collections.abc import Sequence
 from dataclasses import dataclass
+import warnings
 import torch
 import json
 import numpy as np
@@ -23,6 +24,7 @@ def validate_feature_manifest(
     model_id: str,
     revision: str,
     cache_name: str,
+    correction_policy: str | None = None,
 ) -> None:
     if manifest.get("model_id") != model_id or manifest.get("revision") != revision:
         raise ValueError(
@@ -30,6 +32,43 @@ def validate_feature_manifest(
             f"model_id={manifest.get('model_id')!r}, "
             f"revision={manifest.get('revision')!r}"
         )
+    if correction_policy is not None:
+        cached_policy = manifest.get("correction_policy")
+        legacy_corrected_cache = cache_name in {"train/text", "val/text"}
+        if (
+            cached_policy is None
+            and correction_policy == "fashioniq"
+            and legacy_corrected_cache
+        ):
+            warnings.warn(
+                f"Legacy corrected {cache_name} cache manifest has no "
+                "correction_policy; treating it as 'fashioniq'",
+                stacklevel=2,
+            )
+        elif cached_policy != correction_policy:
+            raise ValueError(
+                f"Wrong correction policy in {cache_name} cache manifest: "
+                f"expected={correction_policy!r}, cached={cached_policy!r}"
+            )
+
+
+def validate_text_cache_subdir(text_cache_subdir: str, correction_policy: str) -> str:
+    if correction_policy not in {"fashioniq", "none"}:
+        raise ValueError(
+            f"Unsupported FashionIQ correction policy {correction_policy!r}"
+        )
+    path = Path(text_cache_subdir)
+    if (
+        not text_cache_subdir
+        or path.name != text_cache_subdir
+        or text_cache_subdir in {".", "..", "images"}
+    ):
+        raise ValueError("text_cache_subdir must be one safe directory name")
+    if correction_policy == "none" and text_cache_subdir == "text":
+        raise ValueError(
+            "correction_policy='none' cannot write to the corrected baseline text/ cache"
+        )
+    return text_cache_subdir
 
 
 def load_features(feature_dir):

@@ -18,8 +18,14 @@ from backbones.fgclip2 import (
     FGCLIP2_SHORT_TEXT_LENGTH,
     validate_fgclip2_revision,
 )
+from cache.features import validate_text_cache_subdir
 from datasets.common import collate_cir_samples
-from datasets.fashioniq import FashionIQDataset, load_correction_dict
+from datasets.fashioniq import (
+    CORRECTION_POLICIES,
+    FashionIQDataset,
+    load_correction_dict,
+    validate_correction_policy,
+)
 
 
 CATEGORIES = ("dress", "shirt", "toptee")
@@ -43,6 +49,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--model-id", default=FGCLIP2_LARGE_MODEL_ID)
     parser.add_argument("--revision", default=FGCLIP2_LARGE_REVISION)
+    parser.add_argument(
+        "--correction-policy",
+        choices=sorted(CORRECTION_POLICIES),
+        default="fashioniq",
+    )
+    parser.add_argument("--text-cache-subdir", default="text")
     parser.add_argument("--splits", nargs="+", choices=VALID_SPLITS, default=list(VALID_SPLITS))
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--num-workers", type=int, default=0)
@@ -72,7 +84,7 @@ def load_correction_dicts(annotation_root: Path) -> dict[str, dict[str, str]]:
 def build_dataset(
     annotation_root: Path,
     split: str,
-    correction_dicts: dict[str, dict[str, str]],
+    correction_dicts: dict[str, dict[str, str]] | None,
 ) -> FashionIQDataset:
     return FashionIQDataset(
         annotation_root=annotation_root,
@@ -128,14 +140,17 @@ def build_text_manifest(
     token_audit: dict[str, float | int],
     parity_samples: int,
     parity_max_abs_error: float,
+    correction_policy: str = "fashioniq",
 ) -> dict:
-    return {
+    correction_policy = validate_correction_policy(correction_policy)
+    manifest = {
         "dataset": "FashionIQ",
         "split": split,
         "feature_kind": "fgclip2_contextual_text_tokens",
         "model_id": backbone.model_id,
         "revision": backbone.revision,
         "caption_policy": CAPTION_POLICY,
+        "correction_policy": correction_policy,
         "max_text_length": backbone.max_text_length,
         "num_samples": num_samples,
         "states_shape": list(states_shape),
@@ -148,6 +163,11 @@ def build_text_manifest(
         "parity_samples": parity_samples,
         "parity_max_abs_error": parity_max_abs_error,
     }
+    if correction_policy == "fashioniq":
+        manifest["correction_dictionary_files"] = [
+            f"correction_dict_{category}.json" for category in CATEGORIES
+        ]
+    return manifest
 
 
 @torch.inference_mode()
@@ -161,6 +181,7 @@ def precompute_split(
     num_workers: int,
     parity_samples: int,
     token_audit: dict[str, float | int],
+    correction_policy: str,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     loader = DataLoader(
@@ -271,6 +292,7 @@ def precompute_split(
         states_dtype=str(cached_states.dtype),
         mask_dtype=str(cached_attention.dtype),
         token_audit=token_audit,
+        correction_policy=correction_policy,
         parity_samples=len(parity_rows),
         parity_max_abs_error=parity_max_abs_error,
     )
@@ -294,6 +316,11 @@ def main() -> None:
         raise ValueError("Invalid batch-size/num-workers")
     if args.parity_samples < 0:
         raise ValueError("--parity-samples must be >= 0")
+    correction_policy = validate_correction_policy(args.correction_policy)
+    text_cache_subdir = validate_text_cache_subdir(
+        args.text_cache_subdir,
+        correction_policy,
+    )
     if tuple(part.lower() for part in args.cache_root.parts[-2:]) != (
         "fashioniq",
         "fgclip2-large",
@@ -303,7 +330,11 @@ def main() -> None:
         )
 
     annotation_root = args.dataset_root / "captions"
-    correction_dicts = load_correction_dicts(annotation_root)
+    correction_dicts = (
+        load_correction_dicts(annotation_root)
+        if correction_policy == "fashioniq"
+        else None
+    )
     datasets = {
         split: build_dataset(annotation_root, split, correction_dicts)
         for split in args.splits
@@ -340,11 +371,12 @@ def main() -> None:
             split=split,
             dataset=dataset,
             backbone=backbone,
-            output_dir=args.cache_root / split / "text",
+            output_dir=args.cache_root / split / text_cache_subdir,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             parity_samples=args.parity_samples,
             token_audit=token_audit,
+            correction_policy=correction_policy,
         )
 
 

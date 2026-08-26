@@ -14,6 +14,7 @@ from cache.features import (
     load_features,
     load_text_features,
     validate_feature_manifest,
+    validate_text_cache_subdir,
 )
 from backbones.fgclip2 import (
     FGCLIP2_LARGE_MODEL_ID,
@@ -21,7 +22,11 @@ from backbones.fgclip2 import (
     validate_fgclip2_revision,
 )
 from datasets.common import collate_cir_samples
-from datasets.fashioniq import FashionIQDataset, load_correction_dict
+from datasets.fashioniq import (
+    FashionIQDataset,
+    load_correction_dict,
+    validate_correction_policy,
+)
 from evaluation.fashioniq import evaluate_fashioniq
 from models.taper import TAPER
 from runtime import configure_torch_runtime, resolve_device, seed_everything
@@ -44,12 +49,12 @@ def load_fashioniq_correction_dicts(annotation_root: str | Path) -> dict[str, di
     return correction_dicts
 
 
-def build_train_loader(annotation_root: str | Path, *, batch_size: int, num_workers: int, seed: int, caption_policy: str, correction_dicts: dict[str, dict[str, str]],) -> DataLoader:
+def build_train_loader(annotation_root: str | Path, *, batch_size: int, num_workers: int, seed: int, caption_policy: str, correction_dicts: dict[str, dict[str, str]] | None,) -> DataLoader:
     dataset = FashionIQDataset(annotation_root=annotation_root, split="train", categories=CATEGORIES, caption_policy=caption_policy, seed=seed, correction_dicts=correction_dicts)
     return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, collate_fn=collate_cir_samples, pin_memory=True)
 
 
-def build_val_loaders(annotation_root: str | Path, *, batch_size: int, num_workers: int, caption_policy: str, correction_dicts: dict[str, dict[str, str]]):
+def build_val_loaders(annotation_root: str | Path, *, batch_size: int, num_workers: int, caption_policy: str, correction_dicts: dict[str, dict[str, str]] | None):
     val_loaders = {}
     val_annotations = {}
 
@@ -77,7 +82,18 @@ def main(cfg: DictConfig) -> None:
 
     dataset_root = Path(cfg.dataset.root)
     annotation_root = dataset_root / "captions"
-    correction_dicts = load_fashioniq_correction_dicts(annotation_root)
+    correction_policy = validate_correction_policy(
+        str(cfg.experiment.correction_policy)
+    )
+    text_cache_subdir = validate_text_cache_subdir(
+        str(cfg.experiment.text_cache_subdir),
+        correction_policy,
+    )
+    correction_dicts = (
+        load_fashioniq_correction_dicts(annotation_root)
+        if correction_policy == "fashioniq"
+        else None
+    )
     split_root = dataset_root / "image_splits"
     cache_root = Path(cfg.paths.cache_root)
     if str(cfg.experiment.backbone.model_id) != FGCLIP2_LARGE_MODEL_ID:
@@ -90,24 +106,33 @@ def main(cfg: DictConfig) -> None:
 
     feature_root = cache_root / "fashioniq" / "fgclip2-large"
     for split in ("train", "val"):
-        for feature_kind in ("images", "text"):
-            manifest = load_feature_manifest(feature_root / split / feature_kind)
-            validate_feature_manifest(
-                manifest,
-                model_id=str(cfg.experiment.backbone.model_id),
-                revision=expected_revision,
-                cache_name=f"{split}/{feature_kind}",
-            )
+        image_manifest = load_feature_manifest(feature_root / split / "images")
+        validate_feature_manifest(
+            image_manifest,
+            model_id=str(cfg.experiment.backbone.model_id),
+            revision=expected_revision,
+            cache_name=f"{split}/images",
+        )
+        text_manifest = load_feature_manifest(feature_root / split / text_cache_subdir)
+        validate_feature_manifest(
+            text_manifest,
+            model_id=str(cfg.experiment.backbone.model_id),
+            revision=expected_revision,
+            cache_name=f"{split}/{text_cache_subdir}",
+            correction_policy=correction_policy,
+        )
     train_images, train_image_idx = load_features(feature_root / "train" / "images")
     val_images, val_image_idx = load_features(feature_root / "val" / "images")
 
-    train_text = load_text_features(feature_root / "train" / "text")
-    val_text = load_text_features(feature_root / "val" / "text")
+    train_text = load_text_features(feature_root / "train" / text_cache_subdir)
+    val_text = load_text_features(feature_root / "val" / text_cache_subdir)
 
     print("Train FG-CLIP2 images:", tuple(train_images.shape))
     print("Val FG-CLIP2 images:", tuple(val_images.shape))
     print("Train text:", tuple(train_text.states.shape))
     print("Val text:", tuple(val_text.states.shape))
+    print("Correction policy:", correction_policy)
+    print("Text cache subdirectory:", text_cache_subdir)
 
     train_loader = build_train_loader(
         annotation_root=annotation_root,
