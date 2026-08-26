@@ -22,11 +22,9 @@ class TAPER(nn.Module):
         mask_temperature: float = 1.0,
         router_temperature: float = 1.0,
         retrieval_temperature: float = 0.07,
-        neutral_mode: str = "zero",
         overlap_margin: float = 0.60,
         effect_diversity_margin: float = 0.50,
         alpha_max: float = 1.0,
-        counterfactual_chunk_size: int = 8,
         qasa_tau: float = 0.5,
         qasa_rho: float = 0.8,
         qasa_mu: float = 0.3,
@@ -47,12 +45,8 @@ class TAPER(nn.Module):
             raise ValueError("num_slots and num_primitives must be >= 1")
         if min(mask_temperature, router_temperature, retrieval_temperature) <= 0:
             raise ValueError("all temperatures must be > 0")
-        if neutral_mode not in {"zero", "mean", "learned"}:
-            raise ValueError("neutral_mode must be: zero, mean, or learned")
         if alpha_max <= 0:
             raise ValueError("alpha_max must be > 0")
-        if counterfactual_chunk_size < 1:
-            raise ValueError("counterfactual_chunk_size must be >= 1")
 
         self.text_dim = text_dim
         self.reference_dim = reference_dim
@@ -65,25 +59,14 @@ class TAPER(nn.Module):
         self.mask_temperature = mask_temperature
         self.router_temperature = router_temperature
         self.retrieval_temperature = retrieval_temperature
-        self.neutral_mode = neutral_mode
         self.overlap_margin = overlap_margin
         self.effect_diversity_margin = effect_diversity_margin
         self.alpha_max = alpha_max
-        self.counterfactual_chunk_size = counterfactual_chunk_size
-
-        self.teacher.eval()
-        for parameter in self.teacher.parameters():
-            parameter.requires_grad_(False)
 
         # Ephemeral competing Edit Slot queries.
         self.slot_queries = nn.Parameter(torch.randn(num_slots, slot_dim) * 0.02)
         self.slot_query_projection = nn.Linear(slot_dim, slot_dim, bias=False)
         self.text_key_projection = nn.Linear(text_dim, slot_dim, bias=False)
-
-        if neutral_mode == "learned":
-            self.neutral_embedding = nn.Parameter(torch.zeros(self.teacher_text_dim))
-        else:
-            self.register_buffer("neutral_embedding", torch.zeros(self.teacher_text_dim))
 
         self.reference_to_state = nn.Sequential(nn.Linear(reference_dim, state_dim), nn.GELU(), nn.Linear(state_dim, state_dim), nn.LayerNorm(state_dim))
 
@@ -108,7 +91,6 @@ class TAPER(nn.Module):
 
     def train(self, mode: bool = True) -> "TAPER":
         super().train(mode)
-        self.teacher.eval()
         return self
 
     def _pool_text(self, text_states: Tensor, mask: Tensor) -> Tensor:
@@ -326,13 +308,7 @@ class TAPER(nn.Module):
         batch_size, num_tokens, _ = text_states.shape
         ownership_logits, slot_masks = self._competitive_ownership(text_states, slot_valid)
         slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
-
-        expected_shape = (batch_size, self.teacher_query_dim)
-
-        raw_edit_slots = self.slot_mlp(slot_semantics)
-        edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
-        edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
-
+        edit_slots = slot_semantics * slot_activity.unsqueeze(-1)
         # qasa_attention = F.softmax(ownership_logits.float(), dim=1)
         # qasa_attention = qasa_attention * slot_valid[:, None, :].to(qasa_attention.dtype)
         # qasa_valid = slot_valid.to(torch.bool)
@@ -352,7 +328,6 @@ class TAPER(nn.Module):
 
         return {
             "edit_slots": edit_slots,
-            "raw_edit_slots": raw_edit_slots,
             "ownership_logits": ownership_logits,
             "slot_masks": slot_masks,
             "slot_semantics": slot_semantics,
@@ -558,8 +533,6 @@ class TAPER(nn.Module):
             text_states,
             text_attention_mask,
             text_content_mask=text_content_mask,
-            teacher_reference_features=teacher_reference_features,
-            teacher_text_states=teacher_text_states,
         )
         z0, reference_state = self.initialize_state(reference_features)
 
@@ -636,7 +609,6 @@ class TAPER(nn.Module):
         *,
         slot_masks: Tensor,
         slot_mass: Tensor,
-        slot_effects: Tensor,
         qasa_selected_mask: Tensor,
         qasa_quality: Tensor,
         qasa_final_coverage: Tensor,
@@ -672,11 +644,8 @@ class TAPER(nn.Module):
             masked = slot_masks * valid_f[:, None, :]
             mask_vectors = F.normalize(masked, dim=-1, eps=1e-6)
             mask_similarity = mask_vectors @ mask_vectors.transpose(1, 2)
-            effect_vectors = F.normalize(slot_effects, dim=-1, eps=1e-6)
-            effect_similarity = effect_vectors @ effect_vectors.transpose(1, 2)
             upper = torch.triu(torch.ones(self.num_slots, self.num_slots, dtype=torch.bool, device=slot_masks.device), diagonal=1)
             overlap = mask_similarity[:, upper].mean()
-            effect_similarity_mean = effect_similarity[:, upper].mean()
 
         diagnostics = {
             "assignment_entropy": assignment_entropy,
@@ -701,7 +670,6 @@ class TAPER(nn.Module):
     def _slot_regularizers(
         self,
         slot_masks: Tensor,
-        slot_effects: Tensor,
         text_attention_mask: Tensor,
         *,
         text_content_mask: Tensor | None = None,
@@ -718,9 +686,7 @@ class TAPER(nn.Module):
     def compute_loss(self, batch: Mapping[str, object]) -> dict[str, Tensor]:
         required = {
             "reference_features",
-            "teacher_reference_features",
             "text_states",
-            "teacher_text_states",
             "text_attention_mask",
             "text_content_mask",
             "target_features",
@@ -747,16 +713,10 @@ class TAPER(nn.Module):
             raise ValueError("target_features batch size must match reference_features batch size")
 
         content_mask = batch["text_content_mask"]
-        teacher_reference = batch["teacher_reference_features"]
-        teacher_text = batch["teacher_text_states"]
         if not isinstance(content_mask, Tensor):
             raise TypeError("text_content_mask must be a Tensor")
-        if not isinstance(teacher_reference, Tensor):
-            raise TypeError("teacher_reference_features must be a Tensor")
-        if not isinstance(teacher_text, Tensor):
-            raise TypeError("teacher_text_states must be a Tensor")
 
-        output = self.forward(reference, text, mask, text_content_mask=content_mask, teacher_reference_features=teacher_reference, teacher_text_states=teacher_text)
+        output = self.forward(reference, text, mask, text_content_mask=content_mask)
         losses = {
             "retrieval_loss": self._retrieval_loss(output["q0"], targets, batch.get("target_ids"))
         }
@@ -783,8 +743,6 @@ class TAPER(nn.Module):
         text_states: Tensor,
         text_attention_mask: Tensor,
         text_content_mask: Tensor | None = None,
-        teacher_reference_features: Tensor | None = None,
-        teacher_text_states: Tensor | None = None,
     ) -> dict[str, Tensor]:
         was_training = self.training
         self.eval()
@@ -794,8 +752,6 @@ class TAPER(nn.Module):
                 text_states,
                 text_attention_mask,
                 text_content_mask=text_content_mask,
-                teacher_reference_features=teacher_reference_features,
-                teacher_text_states=teacher_text_states,
             )
             z0, reference_state = self.initialize_state(reference_features)
             full_execution = self.execute(slots["edit_slots"], slots["qasa_selected_mask"], z0, reference_state)
@@ -839,8 +795,6 @@ class TAPER(nn.Module):
         text_attention_mask: Tensor,
         gallery_features: Tensor,
         text_content_mask: Tensor | None = None,
-        teacher_reference_features: Tensor | None = None,
-        teacher_text_states: Tensor | None = None,
         topk: int | None = None,
     ) -> dict[str, Tensor]:
         if gallery_features.ndim != 3 or gallery_features.shape[-1] != self.query_dim:
@@ -852,8 +806,6 @@ class TAPER(nn.Module):
             output = self.forward(
                 reference_features, text_states, text_attention_mask,
                 text_content_mask=text_content_mask,
-                teacher_reference_features=teacher_reference_features,
-                teacher_text_states=teacher_text_states,
             )
             scores = self._retrieval_scores(output["q0"], gallery_features)
             result = {
