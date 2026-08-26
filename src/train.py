@@ -83,6 +83,8 @@ def main(cfg: DictConfig) -> None:
     print("Val native:", tuple(val_native.shape))
     print("Train text:", tuple(train_text.states.shape))
     print("Val text:", tuple(val_text.states.shape))
+    print("Slot value source:", cfg.experiment.model.slot_value_source)
+    print("Slot effect in value:", cfg.experiment.model.slot_effect_in_value)
 
     train_loader = build_train_loader(
         annotation_root=annotation_root,
@@ -130,6 +132,8 @@ def main(cfg: DictConfig) -> None:
         qasa_apply_at_eval=m.qasa_apply_at_eval,
         alpha_max=m.alpha_max,
         counterfactual_chunk_size=m.counterfactual_chunk_size,
+        slot_value_source=m.slot_value_source,
+        slot_effect_in_value=m.slot_effect_in_value,
     ).to(device)
 
     optimizer = AdamW(

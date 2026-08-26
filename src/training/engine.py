@@ -145,11 +145,20 @@ def prepare_batch(
         "target_ids": target_ids,
     }
 
-def taper_state_dict(model):
-    return {
+def taper_checkpoint(model):
+    model_state_dict = {
         name: value
         for name, value in model.state_dict().items()
         if not name.startswith("teacher.")
+    }
+    provenance = (
+        model.experiment_provenance()
+        if hasattr(model, "experiment_provenance")
+        else {}
+    )
+    return {
+        "model_state_dict": model_state_dict,
+        "experiment_provenance": provenance,
     }
 
 def fit(
@@ -204,13 +213,13 @@ def fit(
         current_metric = float(val_metrics[primary_metric])
 
         # Always keep the latest model.
-        torch.save(taper_state_dict(model), last_model_path)
+        torch.save(taper_checkpoint(model), last_model_path)
 
         if current_metric > best_metric:
             best_metric = current_metric
             best_epoch = epoch + 1
 
-            torch.save(taper_state_dict(model), best_model_path)
+            torch.save(taper_checkpoint(model), best_model_path)
 
             print(f"Saved best.pt | {primary_metric}={best_metric:.4f}")
 

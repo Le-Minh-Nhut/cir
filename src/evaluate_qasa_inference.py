@@ -28,7 +28,7 @@ CATEGORIES = ("dress", "shirt", "toptee")
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="QASA-faithful hard-partition evaluation for TAPER A3.1."
+        description="QASA-faithful hard-partition evaluation for TAPER."
     )
     p.add_argument("--checkpoint", type=Path, default=None)
     p.add_argument("--outputs-root", type=Path, default=Path("outputs"))
@@ -133,6 +133,8 @@ def build_model(cfg, device: torch.device) -> TAPER:
         qasa_apply_at_eval=m.qasa_apply_at_eval,
         alpha_max=m.alpha_max,
         counterfactual_chunk_size=m.counterfactual_chunk_size,
+        slot_value_source=m.slot_value_source,
+        slot_effect_in_value=m.slot_effect_in_value,
     ).to(device)
 
 
@@ -142,12 +144,27 @@ def load_checkpoint(model: TAPER, path: Path):
     except TypeError:
         state = torch.load(path, map_location="cpu")
 
+    checkpoint_provenance = None
     if isinstance(state, dict) and "model_state_dict" in state:
+        checkpoint_provenance = state.get("experiment_provenance")
         state = state["model_state_dict"]
     elif isinstance(state, dict) and "state_dict" in state:
         state = state["state_dict"]
 
-    missing, unexpected = model.load_state_dict(state, strict=False)
+    expected_provenance = model.experiment_provenance()
+    if checkpoint_provenance is not None and checkpoint_provenance != expected_provenance:
+        raise RuntimeError(
+            "Checkpoint experiment provenance mismatch: "
+            f"expected={expected_provenance}, cached={checkpoint_provenance}"
+        )
+    try:
+        missing, unexpected = model.load_state_dict(state, strict=False)
+    except RuntimeError as error:
+        raise RuntimeError(
+            "Incompatible TAPER checkpoint. This experiment changes slot_mlp "
+            "from contextual+effect input to teacher-raw-only input and must be "
+            "trained from scratch; do not load an A3.1 TAPER checkpoint."
+        ) from error
     bad_missing = [k for k in missing if not k.startswith("teacher.")]
     if bad_missing:
         raise RuntimeError("Missing non-teacher keys:\n" + "\n".join(bad_missing))
@@ -403,6 +420,7 @@ def run(args):
     summary = acc.finalize()
     report = {
         "checkpoint": str(checkpoint),
+        "experiment_provenance": model.experiment_provenance(),
         "protocol": (
             "QASA-faithful inference: token-wise argmax over slot attention; "
             "no QASA selection mask; no Executor; no retrieval."

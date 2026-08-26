@@ -35,6 +35,8 @@ class TAPER(nn.Module):
         qasa_mu: float = 0.3,
         qasa_eps: float = 1e-8,
         qasa_apply_at_eval: bool = True,
+        slot_value_source: str = "teacher_raw",
+        slot_effect_in_value: bool = False,
     ) -> None:
         super().__init__()
 
@@ -56,6 +58,10 @@ class TAPER(nn.Module):
             raise ValueError("alpha_max must be > 0")
         if counterfactual_chunk_size < 1:
             raise ValueError("counterfactual_chunk_size must be >= 1")
+        if slot_value_source != "teacher_raw":
+            raise ValueError("slot_value_source must be 'teacher_raw' for this experiment")
+        if slot_effect_in_value:
+            raise ValueError("slot_effect_in_value must be false for this experiment")
 
         self.teacher = teacher
         self.text_dim = text_dim
@@ -78,6 +84,8 @@ class TAPER(nn.Module):
         self.effect_diversity_margin = effect_diversity_margin
         self.alpha_max = alpha_max
         self.counterfactual_chunk_size = counterfactual_chunk_size
+        self.slot_value_source = slot_value_source
+        self.slot_effect_in_value = bool(slot_effect_in_value)
 
         self.teacher.eval()
         for parameter in self.teacher.parameters():
@@ -93,7 +101,12 @@ class TAPER(nn.Module):
         else:
             self.register_buffer("neutral_embedding", torch.zeros(self.teacher_text_dim))
 
-        self.slot_mlp = nn.Sequential(nn.Linear(text_dim + teacher_query_dim, slot_dim), nn.GELU(), nn.Linear(slot_dim, slot_dim), nn.LayerNorm(slot_dim))
+        self.slot_mlp = nn.Sequential(
+            nn.Linear(self.teacher_text_dim, slot_dim),
+            nn.GELU(),
+            nn.Linear(slot_dim, slot_dim),
+            nn.LayerNorm(slot_dim),
+        )
         self.reference_to_state = nn.Sequential(nn.Linear(reference_dim, state_dim), nn.GELU(), nn.Linear(state_dim, state_dim), nn.LayerNorm(state_dim))
 
         self.primitive_bank = nn.Parameter(torch.randn(num_primitives, state_dim) * 0.02)
@@ -120,6 +133,12 @@ class TAPER(nn.Module):
         # The teacher is a frozen functional measuring instrument.
         self.teacher.eval()
         return self
+
+    def experiment_provenance(self) -> dict[str, str | bool]:
+        return {
+            "slot_value_source": self.slot_value_source,
+            "slot_effect_in_value": self.slot_effect_in_value,
+        }
 
     def _pool_text(self, text_states: Tensor, mask: Tensor) -> Tensor:
         mask_f = mask.to(text_states.dtype).unsqueeze(-1)
@@ -411,7 +430,10 @@ class TAPER(nn.Module):
 
         batch_size, num_tokens, _ = text_states.shape
         ownership_logits, slot_masks = self._competitive_ownership(text_states, slot_valid)
-        slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
+        slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(
+            teacher_text_states,
+            slot_masks,
+        )
 
         q_full = self.teacher.compose(teacher_reference_features, teacher_text_states, text_attention_mask, normalize=False)
         expected_shape = (batch_size, self.teacher_query_dim)
@@ -429,7 +451,7 @@ class TAPER(nn.Module):
 
         slot_effects = q_full.unsqueeze(1) - q_minus
 
-        raw_edit_slots = self.slot_mlp(torch.cat([slot_semantics, slot_effects], dim=-1))
+        raw_edit_slots = self.slot_mlp(slot_semantics)
         edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
 
         # qasa_attention = F.softmax(ownership_logits.float(), dim=1)
@@ -459,6 +481,16 @@ class TAPER(nn.Module):
             "slot_activity": slot_activity,
             "slot_peak_ownership": (slot_masks.amax(dim=2)),
             "slot_effects": slot_effects,
+            "slot_value_source_teacher_raw": torch.ones(
+                (),
+                dtype=torch.bool,
+                device=slot_masks.device,
+            ),
+            "slot_effect_used_in_latent": torch.zeros(
+                (),
+                dtype=torch.bool,
+                device=slot_masks.device,
+            ),
             "qasa_attention": qasa_attention,
             "qasa_valid_mask": qasa_valid,
             "qasa_quality": qasa["qasa_quality"],
@@ -862,6 +894,12 @@ class TAPER(nn.Module):
         losses = {
             "retrieval_loss": self._retrieval_loss(output["q0"], targets, batch.get("target_ids"))
         }
+        losses["diagnostic/slot_value_source_teacher_raw"] = losses[
+            "retrieval_loss"
+        ].new_ones(())
+        losses["diagnostic/slot_effect_used_in_latent"] = losses[
+            "retrieval_loss"
+        ].new_zeros(())
         with torch.no_grad():
             diagnostics = self._assignment_diagnostics(
                 slot_masks=output["slot_masks"],

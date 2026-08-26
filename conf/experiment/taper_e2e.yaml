@@ -41,6 +41,9 @@ model:
   alpha_max: 1.0
   counterfactual_chunk_size: 32
 
+  slot_value_source: teacher_raw
+  slot_effect_in_value: false
+
 teacher:
   csmcir_root: teacher/repos/CSMCIR
   checkpoint_path: teacher/checkpoints/csmcir/fashioniq_tuned_clip_best.pt
