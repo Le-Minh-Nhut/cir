@@ -40,7 +40,11 @@ class DummyComposeTeacher(nn.Module):
         return query
 
 
-def make_model(*, num_slots: int = 2) -> TAPER:
+def make_model(
+    *,
+    num_slots: int = 2,
+    slot_value_assignment: str = "hard_st_exclusive",
+) -> TAPER:
     torch.manual_seed(0)
     model = TAPER(
         DummyComposeTeacher(query_dim=3),
@@ -56,7 +60,7 @@ def make_model(*, num_slots: int = 2) -> TAPER:
         counterfactual_chunk_size=2,
         slot_value_source="teacher_raw",
         slot_effect_in_value=False,
-        slot_value_assignment="hard_st_exclusive",
+        slot_value_assignment=slot_value_assignment,
     )
     with torch.no_grad():
         queries = torch.zeros(num_slots, 4)
@@ -115,7 +119,8 @@ def clone_inputs(inputs: dict[str, Tensor]) -> dict[str, Tensor]:
 
 
 def test_experiment_contract_and_slot_mlp_input_dimension() -> None:
-    model = make_model()
+    model = make_model(slot_value_assignment="hard_st_exclusive")
+    soft_model = make_model(slot_value_assignment="soft_shared")
 
     assert model.experiment_provenance() == {
         "slot_value_source": "teacher_raw",
@@ -125,6 +130,7 @@ def test_experiment_contract_and_slot_mlp_input_dimension() -> None:
     assert isinstance(model.slot_mlp[0], nn.Linear)
     assert model.slot_mlp[0].in_features == model.teacher_text_dim == 6
     assert model.slot_mlp[0].in_features != model.text_dim + model.teacher_query_dim
+    assert soft_model.experiment_provenance()["slot_value_assignment"] == "soft_shared"
 
     with pytest.raises(ValueError, match="slot_value_source"):
         TAPER(
@@ -154,7 +160,7 @@ def test_experiment_contract_and_slot_mlp_input_dimension() -> None:
             teacher_text_dim=6,
             teacher_query_dim=3,
             query_dim=3,
-            slot_value_assignment="soft",
+            slot_value_assignment="invalid",
         )
 
 
@@ -201,7 +207,7 @@ def test_text_cache_preserves_contextual_raw_token_alignment(tmp_path: Path) -> 
 
 
 def test_value_assignment_is_exactly_hard_and_exclusive() -> None:
-    model = make_model()
+    model = make_model(slot_value_assignment="hard_st_exclusive")
     inputs = make_inputs()
     output = build_slots(model, inputs)
     valid = (
@@ -230,6 +236,33 @@ def test_value_assignment_is_exactly_hard_and_exclusive() -> None:
     )
 
 
+def test_soft_shared_value_masks_and_pooling_use_soft_ownership() -> None:
+    model = make_model(slot_value_assignment="soft_shared")
+    inputs = make_inputs()
+    output = build_slots(model, inputs)
+    expected_semantics, expected_mass, expected_activity = (
+        model._mass_aware_slot_pool(
+            inputs["teacher_text_states"],
+            output["slot_masks"],
+        )
+    )
+
+    torch.testing.assert_close(output["value_slot_masks"], output["slot_masks"])
+    torch.testing.assert_close(output["slot_semantics"], expected_semantics)
+    torch.testing.assert_close(output["value_slot_mass"], expected_mass)
+    torch.testing.assert_close(output["value_slot_activity"], expected_activity)
+    assert bool(output["slot_value_assignment_soft_shared"].item())
+    assert not bool(
+        output["slot_value_assignment_hard_st_exclusive"].item()
+    )
+
+    diagnostic_hard = output["value_hard_slot_masks"]
+    assert torch.equal(
+        diagnostic_hard.argmax(dim=1),
+        output["slot_masks"].argmax(dim=1),
+    )
+
+
 def test_st_forward_is_hard_and_backward_is_soft_identity() -> None:
     model = make_model()
     soft = torch.tensor(
@@ -255,7 +288,7 @@ def test_st_forward_is_hard_and_backward_is_soft_identity() -> None:
 
 
 def test_soft_probabilities_with_same_winners_cannot_encode_value() -> None:
-    model = make_model()
+    model = make_model(slot_value_assignment="hard_st_exclusive")
     valid = torch.tensor([[True, True, True]])
     soft_a = torch.tensor(
         [[[0.70, 0.10, 0.60], [0.30, 0.90, 0.40]]],
@@ -292,6 +325,53 @@ def test_soft_probabilities_with_same_winners_cannot_encode_value() -> None:
     torch.testing.assert_close(activity_a.detach(), activity_b.detach())
 
 
+def test_soft_shared_value_reacts_to_probabilities_with_same_winners() -> None:
+    model = make_model(slot_value_assignment="soft_shared")
+    soft_a = torch.tensor(
+        [[[0.70, 0.10, 0.60], [0.30, 0.90, 0.40]]]
+    )
+    soft_b = torch.tensor(
+        [[[0.51, 0.25, 0.51], [0.49, 0.75, 0.49]]]
+    )
+    raw_values = torch.tensor(
+        [
+            [
+                [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+                [10.0, 20.0, 30.0, 40.0, 50.0, 60.0],
+                [7.0, 8.0, 9.0, 10.0, 11.0, 12.0],
+            ]
+        ]
+    )
+
+    assert torch.equal(soft_a.argmax(dim=1), soft_b.argmax(dim=1))
+    semantics_a, _, _ = model._mass_aware_slot_pool(raw_values, soft_a)
+    semantics_b, _, _ = model._mass_aware_slot_pool(raw_values, soft_b)
+    assert not torch.allclose(semantics_a, semantics_b)
+    assert (soft_a[:, :, 0] > 0).all()
+    assert (soft_b[:, :, 0] > 0).all()
+
+
+def test_key_and_qasa_are_identical_across_value_modes() -> None:
+    model_soft = make_model(slot_value_assignment="soft_shared")
+    model_hard = make_model(slot_value_assignment="hard_st_exclusive")
+    inputs = make_inputs()
+    soft_output = build_slots(model_soft, inputs)
+    hard_output = build_slots(model_hard, inputs)
+
+    for name in (
+        "ownership_logits",
+        "slot_masks",
+        "qasa_attention",
+        "qasa_quality",
+        "qasa_selected_mask",
+    ):
+        torch.testing.assert_close(soft_output[name], hard_output[name])
+    assert not torch.allclose(
+        soft_output["slot_semantics"],
+        hard_output["slot_semantics"],
+    )
+
+
 def test_qasa_selection_does_not_gate_value_ownership() -> None:
     model = make_model()
     inputs = make_inputs()
@@ -320,8 +400,14 @@ def test_qasa_selection_does_not_gate_value_ownership() -> None:
     torch.testing.assert_close(no_qasa_slots["edit_slots"], baseline["edit_slots"])
 
 
-def test_contextual_key_and_teacher_raw_value_are_separate() -> None:
-    model = make_model()
+@pytest.mark.parametrize(
+    "slot_value_assignment",
+    ["soft_shared", "hard_st_exclusive"],
+)
+def test_contextual_key_and_teacher_raw_value_are_separate(
+    slot_value_assignment: str,
+) -> None:
+    model = make_model(slot_value_assignment=slot_value_assignment)
     inputs = make_inputs()
     baseline = build_slots(model, inputs)
 
@@ -348,8 +434,14 @@ def test_contextual_key_and_teacher_raw_value_are_separate() -> None:
     assert not torch.allclose(changed_key["qasa_attention"], baseline["qasa_attention"])
 
 
-def test_slot_mlp_receives_semantics_only_and_ignores_slot_effects() -> None:
-    model = make_model()
+@pytest.mark.parametrize(
+    "slot_value_assignment",
+    ["soft_shared", "hard_st_exclusive"],
+)
+def test_slot_mlp_receives_semantics_only_and_ignores_slot_effects(
+    slot_value_assignment: str,
+) -> None:
+    model = make_model(slot_value_assignment=slot_value_assignment)
     inputs = make_inputs()
     captured_inputs: list[Tensor] = []
 
@@ -375,8 +467,14 @@ def test_slot_mlp_receives_semantics_only_and_ignores_slot_effects() -> None:
     assert not bool(baseline["slot_effect_used_in_latent"].item())
 
 
-def test_fixed_support_blocks_contextual_information_from_value() -> None:
-    model = make_model()
+@pytest.mark.parametrize(
+    "slot_value_assignment",
+    ["soft_shared", "hard_st_exclusive"],
+)
+def test_fixed_support_blocks_contextual_information_from_value(
+    slot_value_assignment: str,
+) -> None:
+    model = make_model(slot_value_assignment=slot_value_assignment)
     inputs = make_inputs()
     fixed_masks = torch.tensor(
         [
@@ -441,8 +539,14 @@ def test_fixed_support_blocks_contextual_information_from_value() -> None:
         )
 
 
-def test_zero_slot_and_invalid_tokens_keep_existing_contract() -> None:
-    model = make_model()
+@pytest.mark.parametrize(
+    "slot_value_assignment",
+    ["soft_shared", "hard_st_exclusive"],
+)
+def test_zero_slot_and_invalid_tokens_keep_existing_contract(
+    slot_value_assignment: str,
+) -> None:
+    model = make_model(slot_value_assignment=slot_value_assignment)
     inputs = make_inputs()
     zero_masks = torch.zeros(1, model.num_slots, 5)
     semantics, mass, activity = model._mass_aware_slot_pool(
@@ -480,16 +584,28 @@ def test_zero_slot_and_invalid_tokens_keep_existing_contract() -> None:
     torch.testing.assert_close(changed["edit_slots"], output["edit_slots"])
 
 
-def test_giant_value_slot_is_allowed_and_other_slots_are_empty() -> None:
-    model = make_model(num_slots=4)
+@pytest.mark.parametrize(
+    "slot_value_assignment",
+    ["soft_shared", "hard_st_exclusive"],
+)
+def test_giant_value_slot_is_allowed_and_other_slots_are_empty(
+    slot_value_assignment: str,
+) -> None:
+    model = make_model(
+        num_slots=4,
+        slot_value_assignment=slot_value_assignment,
+    )
     inputs = make_inputs()
     valid = (
         inputs["text_attention_mask"].bool()
         & inputs["text_content_mask"].bool()
     )
     soft_masks = torch.zeros(1, model.num_slots, 5)
-    soft_masks[:, 0, valid[0]] = 0.70
-    soft_masks[:, 1:, valid[0]] = 0.10
+    if slot_value_assignment == "soft_shared":
+        soft_masks[:, 0, valid[0]] = 1.0
+    else:
+        soft_masks[:, 0, valid[0]] = 0.70
+        soft_masks[:, 1:, valid[0]] = 0.10
     logits = torch.zeros_like(soft_masks)
 
     with patch.object(
@@ -511,8 +627,14 @@ def test_giant_value_slot_is_allowed_and_other_slots_are_empty() -> None:
     )
 
 
-def test_teacher_stays_frozen_and_local_value_path_backpropagates() -> None:
-    model = make_model().train()
+@pytest.mark.parametrize(
+    "slot_value_assignment",
+    ["soft_shared", "hard_st_exclusive"],
+)
+def test_teacher_stays_frozen_and_local_value_path_backpropagates(
+    slot_value_assignment: str,
+) -> None:
+    model = make_model(slot_value_assignment=slot_value_assignment).train()
     inputs = make_inputs()
     output = build_slots(model, inputs)
     weights = torch.arange(
@@ -535,8 +657,14 @@ def test_teacher_stays_frozen_and_local_value_path_backpropagates() -> None:
         assert torch.isfinite(parameter.grad).all()
 
 
-def test_full_compute_loss_forward_backward_smoke() -> None:
-    model = make_model().train()
+@pytest.mark.parametrize(
+    "slot_value_assignment",
+    ["soft_shared", "hard_st_exclusive"],
+)
+def test_full_compute_loss_forward_backward_smoke(
+    slot_value_assignment: str,
+) -> None:
+    model = make_model(slot_value_assignment=slot_value_assignment).train()
     single = make_inputs()
     batch_inputs = {
         name: torch.cat([value, value.clone()], dim=0)
@@ -560,9 +688,12 @@ def test_full_compute_loss_forward_backward_smoke() -> None:
     assert torch.isfinite(retrieval_loss)
     assert losses["diagnostic/slot_value_source_teacher_raw"].item() == 1.0
     assert losses["diagnostic/slot_effect_used_in_latent"].item() == 0.0
+    assert losses["diagnostic/slot_value_assignment_soft_shared"].item() == float(
+        slot_value_assignment == "soft_shared"
+    )
     assert (
         losses["diagnostic/slot_value_assignment_hard_st_exclusive"].item()
-        == 1.0
+        == float(slot_value_assignment == "hard_st_exclusive")
     )
     for name in (
         "diagnostic/value_hard_effective_k",
@@ -597,9 +728,14 @@ def test_a31_slot_mlp_shape_is_incompatible() -> None:
         model.load_state_dict(a31_state, strict=False)
 
 
+@pytest.mark.parametrize(
+    "slot_value_assignment",
+    ["soft_shared", "hard_st_exclusive"],
+)
 def test_checkpoint_records_experiment_provenance(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    slot_value_assignment: str,
 ) -> None:
     wandb_stub = types.ModuleType("wandb")
     wandb_stub.run = None
@@ -608,7 +744,7 @@ def test_checkpoint_records_experiment_provenance(
 
     from training.engine import taper_checkpoint
 
-    model = make_model()
+    model = make_model(slot_value_assignment=slot_value_assignment)
     checkpoint = taper_checkpoint(model)
     assert checkpoint["experiment_provenance"] == model.experiment_provenance()
     assert checkpoint["model_state_dict"]
@@ -623,7 +759,7 @@ def test_checkpoint_records_experiment_provenance(
     assert restored["experiment_provenance"] == {
         "slot_value_source": "teacher_raw",
         "slot_effect_in_value": False,
-        "slot_value_assignment": "hard_st_exclusive",
+        "slot_value_assignment": slot_value_assignment,
     }
 
 
@@ -660,6 +796,7 @@ def test_evaluator_rejects_a31_and_wrong_provenance(
             "experiment_provenance": {
                 "slot_value_source": "teacher_raw",
                 "slot_effect_in_value": False,
+                "slot_value_assignment": "soft_shared",
             },
         },
         wrong_path,
@@ -727,10 +864,42 @@ def test_p0_audit_uses_hard_private_shared_model_builder(
             checkpoint_path="unused",
         ),
     )
-    model = audit_build_model(cfg, torch.device("cpu"))
+    for assignment in ("soft_shared", "hard_st_exclusive"):
+        model_config.slot_value_assignment = assignment
+        model = audit_build_model(cfg, torch.device("cpu"))
+        assert model.experiment_provenance() == {
+            "slot_value_source": "teacher_raw",
+            "slot_effect_in_value": False,
+            "slot_value_assignment": assignment,
+        }
 
-    assert model.experiment_provenance() == {
-        "slot_value_source": "teacher_raw",
-        "slot_effect_in_value": False,
-        "slot_value_assignment": "hard_st_exclusive",
-    }
+
+def test_evaluation_clis_accept_explicit_value_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    omegaconf_stub = types.ModuleType("omegaconf")
+    omegaconf_stub.OmegaConf = object
+    monkeypatch.setitem(sys.modules, "omegaconf", omegaconf_stub)
+
+    from audit_taper_merit_p0 import parse_args as parse_p0_args
+    from evaluate_qasa_inference import parse_args as parse_qasa_args
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["evaluate_qasa_inference.py", "--slot-value-assignment", "soft_shared"],
+    )
+    assert parse_qasa_args().slot_value_assignment == "soft_shared"
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "audit_taper_merit_p0.py",
+            "--checkpoint",
+            "checkpoint.pt",
+            "--slot-value-assignment",
+            "hard_st_exclusive",
+        ],
+    )
+    assert parse_p0_args().slot_value_assignment == "hard_st_exclusive"

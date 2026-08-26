@@ -19,6 +19,7 @@ from cache.features import (
 )
 from evaluate_qasa_inference import (
     CATEGORIES,
+    SLOT_VALUE_ASSIGNMENTS,
     build_model,
     build_val_loaders,
     load_checkpoint,
@@ -44,6 +45,12 @@ def parse_args():
         "--config",
         type=Path,
         default=Path("conf/experiment/taper_e2e.yaml"),
+    )
+    p.add_argument(
+        "--slot-value-assignment",
+        choices=SLOT_VALUE_ASSIGNMENTS,
+        default=None,
+        help="Override model.slot_value_assignment; must match checkpoint provenance.",
     )
     p.add_argument(
         "--protocol",
@@ -585,6 +592,8 @@ def load_runtime(args):
 
     device = torch.device(args.device)
     cfg = OmegaConf.load(args.config)
+    if args.slot_value_assignment is not None:
+        cfg.model.slot_value_assignment = args.slot_value_assignment
     annotation_root = args.dataset_root / "captions"
     split_root = args.dataset_root / "image_splits"
 

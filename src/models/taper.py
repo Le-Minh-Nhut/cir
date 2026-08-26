@@ -9,6 +9,13 @@ from torch import Tensor, nn
 
 
 class TAPER(nn.Module):
+    SLOT_VALUE_ASSIGNMENTS = frozenset(
+        {
+            "soft_shared",
+            "hard_st_exclusive",
+        }
+    )
+
     def __init__(
         self,
         teacher: nn.Module,
@@ -63,9 +70,10 @@ class TAPER(nn.Module):
             raise ValueError("slot_value_source must be 'teacher_raw' for this experiment")
         if slot_effect_in_value:
             raise ValueError("slot_effect_in_value must be false for this experiment")
-        if slot_value_assignment != "hard_st_exclusive":
+        if slot_value_assignment not in self.SLOT_VALUE_ASSIGNMENTS:
             raise ValueError(
-                "slot_value_assignment must be 'hard_st_exclusive' for this experiment"
+                "slot_value_assignment must be one of: "
+                f"{sorted(self.SLOT_VALUE_ASSIGNMENTS)}"
             )
 
         self.teacher = teacher
@@ -202,12 +210,12 @@ class TAPER(nn.Module):
 
         return logits, ownership
 
-    def _hard_value_assignment(
+    def _hard_partition_from_soft(
         self,
         soft_slot_masks: Tensor,
         slot_valid: Tensor,
-    ) -> tuple[Tensor, Tensor]:
-        """Build a forward-hard/backward-soft exclusive VALUE partition."""
+    ) -> Tensor:
+        """Build the diagnostic hard winner partition from soft ownership."""
         if soft_slot_masks.ndim != 3:
             raise ValueError("soft_slot_masks must be [B,L,N]")
         batch_size, num_slots, num_tokens = soft_slot_masks.shape
@@ -233,10 +241,36 @@ class TAPER(nn.Module):
             hard_mass_per_token[slot_valid],
             torch.ones_like(hard_mass_per_token[slot_valid]),
         ):
-            raise RuntimeError("Every valid token must have exactly one VALUE owner")
+            raise RuntimeError("Every valid token must have exactly one hard winner")
         if (~slot_valid).any() and hard_mass_per_token[~slot_valid].any():
-            raise RuntimeError("Invalid tokens must have no VALUE owner")
+            raise RuntimeError("Invalid tokens must have no hard winner")
 
+        return hard_slot_masks
+
+    def _hard_value_assignment(
+        self,
+        soft_slot_masks: Tensor,
+        slot_valid: Tensor,
+    ) -> tuple[Tensor, Tensor]:
+        """Build a forward-hard/backward-soft exclusive VALUE partition."""
+        slot_valid = slot_valid.to(torch.bool)
+        hard_slot_masks = self._hard_partition_from_soft(
+            soft_slot_masks,
+            slot_valid,
+        )
+        value_slot_masks = self._straight_through_value_assignment(
+            soft_slot_masks,
+            hard_slot_masks,
+            slot_valid,
+        )
+        return hard_slot_masks, value_slot_masks
+
+    @staticmethod
+    def _straight_through_value_assignment(
+        soft_slot_masks: Tensor,
+        hard_slot_masks: Tensor,
+        slot_valid: Tensor,
+    ) -> Tensor:
         # Forward equals the hard partition exactly. Backward is the identity
         # with respect to the pre-existing soft competitive ownership.
         value_slot_masks = hard_slot_masks + (
@@ -248,7 +282,7 @@ class TAPER(nn.Module):
         if not torch.equal(value_slot_masks.detach(), hard_slot_masks):
             raise RuntimeError("Straight-through VALUE mask must be forward-hard")
 
-        return hard_slot_masks, value_slot_masks
+        return value_slot_masks
 
     @torch.no_grad()
     def _qasa_attention_fp32(self, text_states: Tensor, slot_valid: Tensor) -> Tensor:
@@ -488,10 +522,18 @@ class TAPER(nn.Module):
             text_states,
             slot_valid,
         )
-        value_hard_slot_masks, value_slot_masks = self._hard_value_assignment(
+        value_hard_slot_masks = self._hard_partition_from_soft(
             soft_slot_masks,
             slot_valid,
         )
+        if self.slot_value_assignment == "soft_shared":
+            value_slot_masks = soft_slot_masks
+        else:
+            value_slot_masks = self._straight_through_value_assignment(
+                soft_slot_masks,
+                value_hard_slot_masks,
+                slot_valid,
+            )
         slot_semantics, value_slot_mass, value_slot_activity = (
             self._mass_aware_slot_pool(
                 teacher_text_states,
@@ -561,8 +603,13 @@ class TAPER(nn.Module):
                 dtype=torch.bool,
                 device=soft_slot_masks.device,
             ),
-            "slot_value_assignment_hard_st_exclusive": torch.ones(
-                (),
+            "slot_value_assignment_soft_shared": torch.tensor(
+                self.slot_value_assignment == "soft_shared",
+                dtype=torch.bool,
+                device=soft_slot_masks.device,
+            ),
+            "slot_value_assignment_hard_st_exclusive": torch.tensor(
+                self.slot_value_assignment == "hard_st_exclusive",
                 dtype=torch.bool,
                 device=soft_slot_masks.device,
             ),
@@ -995,9 +1042,12 @@ class TAPER(nn.Module):
         losses["diagnostic/slot_effect_used_in_latent"] = losses[
             "retrieval_loss"
         ].new_zeros(())
+        losses["diagnostic/slot_value_assignment_soft_shared"] = losses[
+            "retrieval_loss"
+        ].new_tensor(float(self.slot_value_assignment == "soft_shared"))
         losses["diagnostic/slot_value_assignment_hard_st_exclusive"] = losses[
             "retrieval_loss"
-        ].new_ones(())
+        ].new_tensor(float(self.slot_value_assignment == "hard_st_exclusive"))
         with torch.no_grad():
             diagnostics = self._assignment_diagnostics(
                 slot_masks=output["slot_masks"],
