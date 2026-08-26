@@ -1,0 +1,188 @@
+{
+  "checkpoint": "/home/heheboiz/data/cir/outputs/2026-08-26/22-51-06/best.pt",
+  "functional_slot_drop": {
+    "macro_retrieval_after_drop": {
+      "0": {
+        "mean_recall": 22.030173987150192,
+        "recall_at_10": 13.626861075560251,
+        "recall_at_50": 30.43348689874013
+      },
+      "1": {
+        "mean_recall": 31.59502074122429,
+        "recall_at_10": 21.442776421705883,
+        "recall_at_50": 41.7472650607427
+      },
+      "2": {
+        "mean_recall": 32.11036895712217,
+        "recall_at_10": 22.023266057173412,
+        "recall_at_50": 42.19747185707092
+      },
+      "3": {
+        "mean_recall": 32.13597014546394,
+        "recall_at_10": 22.005493938922882,
+        "recall_at_50": 42.266446352005005
+      }
+    },
+    "per_category": {
+      "dress": {
+        "0": {
+          "recall_at_10": 10.808131098747253,
+          "recall_at_50": 26.07833445072174
+        },
+        "1": {
+          "recall_at_10": 18.344075977802277,
+          "recall_at_50": 39.46455121040344
+        },
+        "2": {
+          "recall_at_10": 19.18691098690033,
+          "recall_at_50": 39.910757541656494
+        },
+        "3": {
+          "recall_at_10": 19.33564692735672,
+          "recall_at_50": 40.009915828704834
+        }
+      },
+      "shirt": {
+        "0": {
+          "recall_at_10": 15.947006642818451,
+          "recall_at_50": 33.75858664512634
+        },
+        "1": {
+          "recall_at_10": 23.6997053027153,
+          "recall_at_50": 42.73797869682312
+        },
+        "2": {
+          "recall_at_10": 24.190382659435272,
+          "recall_at_50": 43.08145344257355
+        },
+        "3": {
+          "recall_at_10": 24.14131462574005,
+          "recall_at_50": 42.934247851371765
+        }
+      },
+      "toptee": {
+        "0": {
+          "recall_at_10": 14.125445485115051,
+          "recall_at_50": 31.463539600372314
+        },
+        "1": {
+          "recall_at_10": 22.284547984600067,
+          "recall_at_50": 43.039265275001526
+        },
+        "2": {
+          "recall_at_10": 22.69250452518463,
+          "recall_at_50": 43.60020458698273
+        },
+        "3": {
+          "recall_at_10": 22.539520263671875,
+          "recall_at_50": 43.855175375938416
+        }
+      }
+    }
+  },
+  "num_queries": 6016,
+  "protocol": "fashioniq_original",
+  "r1_contract": {
+    "backbone": "qihoo360/fg-clip2-large",
+    "correction_policy": "fashioniq",
+    "revision": "4d1d5dc35c716902f07c172dbfc23b82a7bc6bf3",
+    "routing": "token-axis entmax-1.5 after QASA selection",
+    "support_eps": 1e-06,
+    "text_cache_subdir": "text"
+  },
+  "retrieval": {
+    "full": {
+      "mean_recall": 32.270265122254685,
+      "recall_at_10": 22.12461233139038,
+      "recall_at_50": 42.415917913118996
+    },
+    "per_category_full": {
+      "dress": {
+        "recall_at_10": 19.18691098690033,
+        "recall_at_50": 40.109074115753174
+      },
+      "shirt": {
+        "recall_at_10": 24.239450693130493,
+        "recall_at_50": 43.13051998615265
+      },
+      "toptee": {
+        "recall_at_10": 22.94747531414032,
+        "recall_at_50": 44.00815963745117
+      }
+    },
+    "per_category_reference_only": {
+      "dress": {
+        "recall_at_10": 5.205751210451126,
+        "recall_at_50": 15.418939292430878
+      },
+      "shirt": {
+        "recall_at_10": 10.89303269982338,
+        "recall_at_50": 26.643767952919006
+      },
+      "toptee": {
+        "recall_at_10": 8.210097253322601,
+        "recall_at_50": 21.060682833194733
+      }
+    },
+    "reference_only": {
+      "mean_recall": 14.57204520702362,
+      "recall_at_10": 8.102960387865702,
+      "recall_at_50": 21.041130026181538
+    }
+  },
+  "slot_frequency": {
+    "qasa_selected_slot_counts": {
+      "0": 6016,
+      "1": 2261,
+      "2": 262,
+      "3": 486
+    },
+    "routing_active_slot_counts": {
+      "0": 6016,
+      "1": 2261,
+      "2": 262,
+      "3": 486
+    },
+    "soft_dominant_slot_counts": {
+      "0": 6015,
+      "1": 0,
+      "2": 1,
+      "3": 0
+    }
+  },
+  "structure": {
+    "qasa_final_coverage": 0.9585900560338446,
+    "qasa_quality_all_slots": 0.2522884003342466,
+    "qasa_quality_selected_slots": 0.7537516025786705,
+    "qasa_selected_slots": 1.5001662234042554,
+    "routing_active_slots": 1.5001662234042554,
+    "routing_slot_0_support_fraction_when_active": 0.3368708600706242,
+    "routing_slot_0_support_when_active": 3.8944481382978724,
+    "routing_slot_1_support_fraction_when_active": 0.486828578356777,
+    "routing_slot_1_support_when_active": 5.840336134453781,
+    "routing_slot_2_support_fraction_when_active": 0.4530544703584591,
+    "routing_slot_2_support_when_active": 6.5038167938931295,
+    "routing_slot_3_support_fraction_when_active": 0.4781774172689689,
+    "routing_slot_3_support_when_active": 7.62962962962963,
+    "routing_support_fraction_mean": 0.3766608030555096,
+    "routing_support_jaccard": 0.680317613300256,
+    "routing_support_mean": 4.412705000410688,
+    "routing_zero_fraction": 0.6233391999564273,
+    "slot_drop_0_query_cosine_change": 0.1358030156252232,
+    "slot_drop_1_query_cosine_change": 0.006762654996140206,
+    "slot_drop_2_query_cosine_change": 0.0010971973174588477,
+    "slot_drop_3_query_cosine_change": 0.0024254525654969065,
+    "soft_active_slots": 1.141123670212766,
+    "soft_dominant_share": 0.5591015102381401,
+    "soft_near_monopoly": 0.0,
+    "soft_slot_0_mass": 6.515099865324954,
+    "soft_slot_0_winner_count": 11.726728723404255,
+    "soft_slot_1_mass": 1.756798635137842,
+    "soft_slot_1_winner_count": 0.01163563829787234,
+    "soft_slot_2_mass": 1.924192504679903,
+    "soft_slot_2_winner_count": 0.0789561170212766,
+    "soft_slot_3_mass": 1.725285305621776,
+    "soft_slot_3_winner_count": 0.1040558510638298,
+    "valid_content_tokens": 11.921376329787234
+  }
+}

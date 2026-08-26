@@ -1,786 +1,1418 @@
-# A3.2 — FG-CLIP2-Large / No-CSMCIR: Slot-Collapse Diagnosis
+# A6 / R1 — FG-CLIP2 + Token-Axis Entmax-1.5
+## Branch Diagnosis and Experiment Checkpoint
 
-**Branch:** `exp/e2e-a3.2-fgclip2-no-csmcir`  
-**Audited remote HEAD:** `48408986240dca7781478372b960822dacab87e1` (`v4`)  
-**Experiment status:** **FAILED AS A MULTI-SLOT DECOMPOSITION EXPERIMENT**  
-**Retrieval status:** still learns/improves despite decomposition collapse  
-**Primary forensic conclusion:** replacing the previous representation/teacher path with frozen FG-CLIP2-Large token states **does not by itself prevent Edit-Slot collapse**.
-
----
-
-## 1. Why this branch exists
-
-A3.2 was designed to isolate a specific hypothesis from the previous TAPER experiments:
-
-> The previous text representation may be too globally mixed / insufficiently local, making it difficult for multiple Edit Slots to specialize. If a stronger fine-grained text representation is supplied directly, slot decomposition may become easier and collapse may reduce.
-
-To test this, the branch removes the active CSMCIR teacher path and uses frozen **FG-CLIP2-Large** features directly:
-
-```text
-FG-CLIP2-Large contextual text token states [B,N,1024]
-                       ↓
-             competitive ownership
-                       ↓
-              mass-aware pooling
-                       ↓
-              Edit Slots [B,4,1024]
-                       ↓
-                     QASA
-                       ↓
-                   Executor
-        ↑                              
-FG-CLIP2 reference image [B,1024]
-                       ↓
-                query [B,1024]
-                       ↓
-      FG-CLIP2 gallery retrieval
-```
-
-The intended scientific isolation is important:
-
-- no active CSMCIR teacher composition;
-- no `slot_effect` teacher counterfactual;
-- no learned MLP/projection after slot pooling;
-- Edit Slots use pooled FG-CLIP2 token semantics directly;
-- QASA and Executor remain;
-- optimization is end-to-end through retrieval loss.
-
-Therefore this experiment asks whether **representation replacement alone**, while keeping the decomposition/execution structure, is sufficient to rescue multi-slot specialization.
+**Repository:** `Le-Minh-Nhut/cir`  
+**Branch:** `exp/e2e-a6-fgclip2-entmax`  
+**Audited remote HEAD:** `8be6337517d5dedd2c13e1f7c1feb14b16cd1ebc` (`v2`)  
+**Backbone:** `qihoo360/fg-clip2-large`  
+**Experiment:** R1 — token-axis Entmax-1.5 sparse routing after QASA selection  
+**Dataset / protocol used by the reported run:** FashionIQ validation, `fashioniq_original`  
+**Primary training objective:** retrieval loss only  
+**Number of Edit Slots:** 4  
+**NULL / dustbin slot:** none  
 
 ---
 
-## 2. Frozen FG-CLIP2 feature contract
+# 1. Executive conclusion
 
-The branch pins:
+This branch answers a narrow but important question:
+
+> If every active Edit Slot is forced to consume only a sparse, adaptive subset of text tokens instead of pooling densely from most of the sentence, does the previous giant-slot / slot-collapse failure disappear?
+
+The answer is **partially yes**.
+
+R1 produces a large and useful change:
+
+- retrieval improves strongly;
+- actual token routing becomes sparse;
+- the previous near-total **soft-mass monopoly** disappears;
+- a slot no longer needs to read most/all of the sentence to be useful.
+
+However, R1 does **not** solve the deeper decomposition problem:
+
+- slot `S0` is still the dominant soft-ownership slot in `6015 / 6016` validation examples;
+- QASA selects `S0` in `6016 / 6016` examples;
+- sparse token supports across simultaneously active slots overlap heavily (`Jaccard ≈ 0.680`);
+- removing `S0` causes a `-10.24` mean-recall drop;
+- removing `S1`, `S2`, or `S3` causes only `-0.68`, `-0.16`, and `-0.13`.
+
+Therefore the correct diagnosis is:
+
+> **R1 largely fixes evidence-density collapse, but functional slot collapse remains.**
+
+Or more simply:
 
 ```text
-model_id = qihoo360/fg-clip2-large
-revision = 4d1d5dc35c716902f07c172dbfc23b82a7bc6bf3
+Before R1:
+one slot reads almost everything
+and does almost everything.
+
+After R1:
+one slot reads only a small subset,
+but still does most of the useful work.
 ```
 
-Feature dimensions:
-
-```text
-text_dim      = 1024
-slot_dim      = 1024
-reference_dim = 1024
-query_dim     = 1024
-state_dim     = 512
-num_slots     = 4
-num_primitives = 8
-```
-
-Observed cache shapes in the actual run:
-
-```text
-Train FG-CLIP2 images: (45429, 1, 1024)
-Val   FG-CLIP2 images: (15415, 1, 1024)
-Train text:            (18000, 64, 1024)
-Val   text:            (6016, 64, 1024)
-```
-
-FG-CLIP2 is frozen and precomputed offline. Training TAPER therefore optimizes the slot decomposition, QASA-dependent execution path, reference-state mapping, primitive/router/transition machinery, and query head—not the FG-CLIP2 backbone itself.
+This is a materially better failure mode, and it provides direct empirical motivation for moving from **independent per-slot sparse selection** to a **joint token-slot assignment mechanism** such as R4/QI-SCA.
 
 ---
 
-## 3. Exact Edit-Slot mechanism being diagnosed
+# 2. Why this branch exists
 
-### 3.1 Competitive ownership
+The preceding FG-CLIP2 experiment showed a rapid winner-take-all collapse in the token-to-slot ownership stage.
 
-For each valid text token `n` and Edit Slot `j`, current code computes approximately:
+Even though retrieval kept improving, the learned decomposition converged toward:
+
+```text
+all useful modification evidence
+            ↓
+       one Edit Slot
+            ↓
+       QASA selects it
+            ↓
+          Executor
+            ↓
+      retrieval improves
+```
+
+The central R1 hypothesis was deliberately smaller than "solve slot specialization":
+
+> Perhaps each slot becomes global because dense pooling lets it consume too much of the sentence.  
+> If each slot receives an adaptive exact-zero token subset, the model may stop relying on one global sentence summary.
+
+R1 therefore tests **sparse evidence consumption only**.
+
+It does not add balancing losses, semantic labels, capacity constraints, NULL slots, top-k routing, OT, or a new supervision signal.
+
+---
+
+# 3. Exact R1 architectural change
+
+The branch preserves two distinct views of the same text-to-slot logits.
+
+Let:
+
+- `B` = batch size,
+- `L` = number of Edit Slots,
+- `N` = text-token count,
+- `Z ∈ R^(B×L×N)` = learned token-slot ownership logits.
+
+## 3.1 Pre-sparse soft competition — preserved for QASA
+
+The original competitive ownership remains:
 
 \[
-z_{jn} = \frac{q_j^\top k_n}{\sqrt{D}\,T}
+P^{soft}_{b,k,n}
+=
+\operatorname{softmax}_{k}(Z_{b,k,n}).
 \]
 
-followed by a softmax **across Edit Slots**:
+The softmax is across the **slot axis**.
+
+For every valid content token:
 
 \[
-p(j\mid n)=\operatorname{softmax}_j(z_{jn}).
+\sum_k P^{soft}_{b,k,n}=1.
 \]
 
-Thus for each valid token:
+This tensor remains available as:
+
+```text
+slot_masks
+```
+
+and its mass:
+
+```text
+slot_mass
+```
+
+is still used for the original ownership-collapse diagnostics.
+
+This is important: R1 does **not** redefine the old diagnostics so that the results look artificially better.
+
+---
+
+## 3.2 QASA remains pre-sparse
+
+QASA is run from the original soft competitive view.
+
+Conceptually:
+
+```text
+ownership logits
+      ↓
+softmax across slots
+      ↓
+pre-sparse soft competition
+      ↓
+QASA
+      ↓
+selected_mask
+```
+
+R1 Entmax routing is downstream of this selection.
+
+Therefore QASA answers:
+
+> Which real Edit Slots are allowed to participate?
+
+while Entmax answers:
+
+> Which content tokens does each selected slot actually consume?
+
+There is no post-QASA probability renormalization that would inflate surviving-slot confidence.
+
+---
+
+## 3.3 R1 sparse token routing
+
+For each QASA-selected slot `k`, R1 applies fixed Entmax-1.5 across the **token axis**:
 
 \[
-\sum_{j=1}^{4} p(j\mid n)=1.
-\]
-
-### 3.2 Critical implementation fact: no explicit NULL/dustbin in this branch
-
-The active `_competitive_ownership` implementation currently contains only the four Edit Slots. There is no separate NULL query/logit participating in this softmax.
-
-Therefore this run is specifically diagnosing:
-
-> **4-way Edit-Slot competition without an explicit NULL/dustbin owner.**
-
-There is a stale error string elsewhere in `compute_stage1_loss()` mentioning “competitive NULL ownership”, but that string does **not** match the actual active `_competitive_ownership` implementation in this branch.
-
-This distinction should be preserved when comparing A3.2 with earlier NULL/dustbin hypotheses.
-
-### 3.3 Mass-aware pooling
-
-Current slot pooling is:
-
-\[
-m_j = \sum_n p(j\mid n)
-\]
-
-\[
-s_j = \frac{\sum_n p(j\mid n)h_n}{\max(m_j,1)}
-\]
-
-with activity:
-
-\[
-a_j = \min(m_j,1)
-\]
-
-and final Edit Slot:
-
-\[
-e_j=s_j a_j.
+R_{b,k,:}
+=
+\operatorname{Entmax}_{1.5}(Z_{b,k,:}).
 \]
 
 In code-equivalent form:
 
 ```python
-slot_mass = slot_masks.sum(dim=2)
-weighted_sum = einsum(slot_masks, text_states)
-slot_activity = slot_mass.clamp(max=1.0)
-slot_semantics = weighted_sum / slot_mass.clamp_min(1.0)
-edit_slots = slot_semantics * slot_activity.unsqueeze(-1)
+routing = entmax15(masked_logits, dim=-1)
 ```
 
-There is deliberately **no learned post-pooling transform**.
+because `ownership_logits` has shape:
+
+```text
+[B, L, N]
+       ^
+     tokens
+```
+
+Invalid/padding/special tokens are masked out using the repository's canonical content-token mask.
+
+QASA-unselected slots receive exactly zero routing mass.
+
+The important distinction is:
+
+```text
+SOFT OWNERSHIP VIEW
+-------------------
+normalize across slots
+used by QASA
+used by old collapse diagnostics
+
+
+R1 ROUTING VIEW
+---------------
+normalize/sparsify across tokens
+used to build actual Edit Slots
+used by Executor
+```
 
 ---
 
-## 4. Objective actually optimized
+## 3.4 Actual Edit Slots now come from Entmax routing
 
-The active training objective is only:
+The R1 Edit Slot is pooled from `routing_masks`, not from dense `slot_masks`.
+
+Conceptually:
+
+\[
+m_k^{route} = \sum_n R_{k,n}
+\]
+
+\[
+s_k^{route}
+=
+\frac{\sum_n R_{k,n} h_n}
+{\max(m_k^{route},1)}
+\]
+
+followed by the existing activity handling.
+
+Thus the actual downstream path is:
+
+```text
+text token states
+      ↓
+ownership logits
+      ↓
+QASA selection
+      ↓
+token-axis Entmax-1.5
+      ↓
+sparse routing_masks
+      ↓
+sparse slot pooling
+      ↓
+Edit Slots
+      ↓
+Executor
+      ↓
+query
+      ↓
+retrieval loss
+```
+
+---
+
+# 4. What R1 deliberately does NOT change
+
+This experiment is intentionally isolated.
+
+R1 does not introduce:
+
+- explicit NULL/dustbin ownership;
+- fixed top-k token selection;
+- token-slot capacity;
+- adaptive capacity;
+- learned Entmax alpha;
+- load-balancing loss;
+- diversity loss;
+- orthogonality loss;
+- anti-collapse auxiliary loss;
+- semantic slot labels;
+- Sinkhorn / OT;
+- R4 QI-SCA;
+- a new retrieval objective.
+
+The only intended scientific intervention is:
+
+> **actual Edit Slots consume token-axis Entmax-1.5 sparse support.**
+
+---
+
+# 5. Experiment configuration
+
+The audited branch config uses:
 
 ```yaml
+batch_size: 64
+eval_batch_size: 32
+num_workers: 8
+num_epochs: 10
+
+lr: 1.0e-4
+weight_decay: 1.0e-4
+
 loss_weights:
   retrieval_loss: 1.0
+
+model:
+  text_dim: 1024
+  reference_dim: 1024
+  query_dim: 1024
+  slot_dim: 1024
+  state_dim: 512
+  num_slots: 4
+  num_primitives: 8
+
+  mask_temperature: 1.0
+  router_temperature: 1.0
+  retrieval_temperature: 0.07
+
+  qasa_tau: 0.5
+  qasa_rho: 0.8
+  qasa_mu: 0.3
+  qasa_eps: 1.0e-8
+  qasa_apply_at_eval: true
 ```
 
-The slot diagnostics are computed under `torch.no_grad()` and appended only for logging. They do **not** produce optimization pressure.
+Text cache used by the reported run:
 
-Therefore the optimizer is never explicitly told that it should prefer:
+```text
+Correction policy: fashioniq
+Text cache subdirectory: text
+Train text shape: (18000, 64, 1024)
+Val text shape:   (6016, 64, 1024)
+```
 
-- multiple non-empty slots;
-- balanced ownership;
-- semantic diversity;
-- low slot overlap;
-- low monopoly;
-- one-edit-per-slot behavior;
-- a minimum number of active slots;
-- capacity constraints;
-- coverage distributed across slots.
+The run emitted warnings that the existing corrected text-cache manifest is legacy and lacks an explicit `correction_policy`; the loader treated it as `fashioniq`.
 
-It is rewarded only for producing a query representation that retrieves the target image.
-
-This fact is central to interpreting the collapse.
+This warning is a cache-metadata compatibility warning, not an Entmax failure.
 
 ---
 
-## 5. Meaning of the logged diagnostics
+# 6. Pre-R1 baseline
 
-The relevant metrics in this branch are not heuristic names; they have specific code definitions.
+The supplied pre-Entmax baseline used the same general FG-CLIP2/QASA/Executor family but pooled from the dense soft ownership.
 
-### `active_slots`
+## 6.1 Baseline training trajectory
 
-Logged from `diagnostic/ownership_active_slot_count`.
+| Epoch | Loss | Mean Recall | Active Slots | Hard Active | Dominant | Monopoly | QASA K | QASA Q | QASA Cov |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 2.6230 | 12.6373 | 2.00 | 2.11 | 0.269 | 0.000 | 2.11 | 0.253 | 0.984 |
+| 2 | 2.1097 | 16.2211 | 1.60 | 1.74 | 0.567 | 0.257 | 1.74 | 0.277 | 0.986 |
+| 3 | 1.8804 | 18.7428 | 1.03 | 1.02 | 0.984 | 0.959 | 1.02 | 0.252 | 0.999 |
+| 4 | 1.7140 | 19.8364 | 1.05 | 1.02 | 0.985 | 0.955 | 1.02 | 0.256 | 0.997 |
+| 5 | 1.6030 | 22.9903 | 1.00 | 1.00 | 0.998 | 1.000 | 1.00 | 0.251 | 1.000 |
+| 6 | 1.5066 | 24.1009 | 1.32 | 1.14 | 0.972 | 0.948 | 1.14 | 0.325 | 0.986 |
+| 7 | 1.4297 | 24.2163 | 1.40 | 1.10 | 0.951 | 0.869 | 1.10 | 0.342 | 0.975 |
+| 8 | 1.3711 | 25.7875 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
+| 9 | 1.3247 | 26.3065 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
+| 10 | 1.2632 | 26.3314 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
 
-For every valid token, the slot with maximal ownership probability is taken as the hard winner. `active_slots` is the average number of slots that win **at least one** valid token.
-
-Interpretation:
-
-```text
-4.0 → all four slots win at least one token on average
-1.0 → all valid tokens have the same hard-winning slot
-```
-
-### `hard_active`
-
-Logged from `diagnostic/execution_hard_active_slot_count`.
-
-This is the mean number of slots actually marked active for execution after QASA selection (minus explicitly disabled slots, if any).
-
-### `dominant`
-
-Logged from `diagnostic/dominant_slot_share`:
-
-\[
-\frac{\max_j m_j}{\sum_j m_j}
-\]
-
-averaged over samples.
-
-Unlike `active_slots`, this uses **soft ownership mass**, not only argmax winners.
-
-Therefore:
+The failure was extremely clear:
 
 ```text
-dominant ≈ 1.0
-```
+Epoch 1:
+dominant = 0.269
+monopoly = 0.000
 
-means one slot owns almost all of the actual soft assignment mass, not merely that it wins a close argmax.
+Epoch 3:
+dominant = 0.984
+monopoly = 0.959
 
-### `monopoly`
+Epoch 5:
+dominant = 0.998
+monopoly = 1.000
 
-Logged from `diagnostic/near_monopoly_fraction`.
-
-For each sample, monopoly is true when:
-
-\[
-\text{dominant slot share} \ge 0.90.
-\]
-
-The printed value is the fraction of samples satisfying this condition.
-
-Thus:
-
-```text
+Epoch 10:
+dominant = 1.000
 monopoly = 1.000
 ```
 
-means essentially every training sample in the averaged epoch statistics has at least 90% of ownership mass concentrated in one slot.
+Retrieval continued improving despite this collapse.
 
-### `qasa_k`
+Thus dense ownership allowed a stable shortcut in which one slot could absorb essentially the whole modification and remain sufficient for retrieval.
 
-Mean number of slots selected by QASA.
+---
 
-### `qasa_q`
+# 7. R1 training result
 
-Mean QASA quality **across all slots**, not merely selected slots.
+The Entmax run reached:
 
-This matters greatly in the collapsed regime. If one slot has quality ≈1 and the other three have quality ≈0, then:
+```text
+Epoch 10/10
+loss        = 1.0813
+mean_recall = 32.2703
+active_slots= 1.13
+hard_active = 1.47
+dominant    = 0.568
+monopoly    = 0.000
+qasa_k      = 1.47
+qasa_q      = 0.252
+qasa_cov    = 0.958
+
+routing_support_mean ≈ 4.46
+routing_support_max  ≈ 12.10
+routing_overlap_mean ≈ 0.667
+routing_slot_support ≈ [3.77, 5.60, 7.20, 5.35]
+```
+
+The best checkpoint was the final epoch:
+
+```text
+best mean_recall = 32.2703
+```
+
+---
+
+# 8. Direct baseline vs R1 comparison
+
+| Metric | Pre-R1 baseline | R1 Entmax | Change |
+|---|---:|---:|---:|
+| Mean Recall | 26.3314 | **32.2703** | **+5.9389** |
+| Relative Mean Recall | 1.000× | **1.2256×** | **+22.56%** |
+| Active slots | 1.00 | 1.13 | +0.13 |
+| Hard active / QASA K | 1.00 | 1.47 | +0.47 |
+| Soft dominant share | 1.000 | **0.568** | -0.432 |
+| Near-monopoly fraction | 1.000 | **0.000** | -1.000 |
+| QASA coverage | 1.000 | 0.958 | -0.042 |
+| Actual sparse support | dense baseline | **~4.46 tokens/active slot** | sparse |
+
+The retrieval gain is large for a single run:
 
 \[
-\frac{1+0+0+0}{4}=0.25.
+32.2703 - 26.3314 = +5.9389
 \]
 
-Therefore the observed `qasa_q ≈ 0.250` is fully consistent with **one useful slot + three useless slots**. It is not evidence that selected-slot quality is only 0.25.
+absolute mean-recall points.
 
-### `qasa_cov`
-
-Mean final token coverage obtained by QASA's selected slots according to its thresholded coverage rule.
-
-In a collapsed solution, `qasa_cov = 1.0` can be achieved by **one slot covering everything**. Therefore high QASA coverage does not imply semantic decomposition.
-
----
-
-## 6. Observed collapse trajectory
-
-Actual run log:
-
-| Epoch | Loss | Mean Recall | Active Slots | Hard Active | Dominant Share | Monopoly Fraction | QASA K | QASA Q | QASA Coverage |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 2.6225 | 12.6952 | 2.03 | 2.06 | 0.265 | 0.000 | 2.06 | 0.253 | 0.968 |
-| 2 | 2.1159 | 16.2049 | 1.37 | 1.57 | 0.659 | 0.384 | 1.57 | 0.257 | 0.988 |
-| 3 | 1.8784 | 19.2868 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
-| 4 | 1.7052 | 21.4593 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
-| 5 | 1.5927 | 23.3709 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
-| 6 | 1.4969 | 24.3342 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
-| 7 | 1.4250 | 24.6440 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
-| 8 | 1.3635 | 26.0462 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
-| 9 | 1.3258 | 26.0715 | 1.07 | 1.03 | 0.972 | 0.933 | 1.03 | 0.259 | 0.995 |
-| 10 | 1.2611 | 26.5121 | 1.00 | 1.00 | 0.999 | 1.000 | 1.00 | 0.250 | 1.000 |
-
-### Immediate reading
-
-The transition is extremely fast:
-
-```text
-Epoch 1
-active_slots = 2.03
-monopoly     = 0.000
-        ↓
-Epoch 2
-active_slots = 1.37
-monopoly     = 0.384
-        ↓
-Epoch 3
-active_slots = 1.00
-dominant     = 1.000
-monopoly     = 1.000
-```
-
-By epoch 3, the decomposition is functionally collapsed.
-
-Epoch 9 shows a small transient relaxation (`active_slots=1.07`, `dominant=0.972`), but epoch 10 immediately returns to near-perfect monopoly. This does not look like healthy specialization emerging late; it looks like a stable one-slot attractor with minor optimization noise.
-
----
-
-## 7. The strongest empirical finding
-
-The most important result is **not merely that collapse happened**.
-
-It is that retrieval continued improving **after the decomposition had already collapsed**:
-
-```text
-Epoch 3 : mean_recall = 19.2868  | monopoly = 1.000
-Epoch 4 : mean_recall = 21.4593  | monopoly = 1.000
-Epoch 5 : mean_recall = 23.3709  | monopoly = 1.000
-Epoch 6 : mean_recall = 24.3342  | monopoly = 1.000
-Epoch 7 : mean_recall = 24.6440  | monopoly = 1.000
-Epoch 8 : mean_recall = 26.0462  | monopoly = 1.000
-Epoch 10: mean_recall = 26.5121  | monopoly = 1.000
-```
-
-Therefore, for this architecture and run:
+Relative to the baseline:
 
 \[
-\boxed{\text{retrieval improvement is compatible with complete slot collapse}}
+\frac{32.2703}{26.3314} - 1
+\approx 22.56\%.
 \]
 
-The optimizer has discovered a valid shortcut:
+This is strong evidence that sparse token consumption is useful in this setup.
 
-```text
-all modification evidence
-        ↓
-one dominant Edit Slot
-        ↓
-QASA selects that slot
-        ↓
-Executor performs the useful computation
-        ↓
-retrieval loss decreases
-```
-
-The retrieval objective has no reason to reject this solution.
-
-This is a much stronger diagnosis than simply observing low slot diversity.
+However, this is still one reported seed/run; it should not be interpreted as a statistically established improvement until replicated.
 
 ---
 
-## 8. Where does the failure occur?
+# 9. Full validation forensic result
 
-### 8.1 Collapse is already present before Executor
+A dedicated R1 diagnostic was run on the trained checkpoint.
 
-`active_slots` and `dominant` are computed from `slot_masks` / `slot_mass`, before the Executor performs recurrent transitions.
-
-At epoch 3:
+## 9.1 Retrieval
 
 ```text
-active_slots = 1.00
-dominant     = 1.000
+Full retrieval:
+R@10 = 22.12
+R@50 = 42.42
+Mean = 32.27
+
+Reference only:
+R@10 =  8.10
+R@50 = 21.04
+Mean = 14.57
 ```
 
-Therefore the failure is already present in the **token-to-slot ownership stage**.
-
-The Executor is receiving an already collapsed decomposition.
-
-### 8.2 It is not merely a hard-argmax artifact
-
-If only `active_slots=1.0` were observed, one could argue that probabilities might still be relatively soft and merely share the same argmax.
-
-But simultaneously:
-
-```text
-dominant ≈ 1.0
-monopoly ≈ 1.0
-```
-
-The dominant metric uses the actual soft slot mass. Therefore the distribution itself has concentrated, not merely the hard winner.
-
-### 8.3 QASA is downstream of the collapse
-
-QASA sees the attention induced by the same learned slot-query/key system. Once a single slot owns almost all evidence, QASA selecting one slot is rational under its own criteria.
-
-The observed regime:
-
-```text
-qasa_k   = 1.00
-qasa_q   = 0.250
-qasa_cov = 1.000
-```
-
-is approximately what is expected from:
-
-```text
-Slot A: useful / wins everything / covers everything
-Slot B: useless
-Slot C: useless
-Slot D: useless
-```
-
-QASA is therefore **not the origin of the first collapse signal**, and in the current integration it does not restore lost specialization.
-
----
-
-## 9. Likely optimization mechanism
-
-The competitive ownership operation creates a natural winner-take-all feedback loop.
-
-Suppose one slot starts slightly better for a subset of tokens:
-
-```text
-S0  0.24
-S1  0.24
-S2  0.28   ← small initial advantage
-S3  0.24
-```
-
-Because retrieval is the only optimized objective, if S2 happens to contribute more useful modification information, downstream gradients can strengthen the query/key configuration that routes even more evidence to S2:
-
-```text
-0.28 → 0.40 → 0.65 → 0.90 → ~1.00
-```
-
-As S2 captures more tokens, its pooled semantic vector becomes an increasingly complete representation of the whole modification. That makes it even more sufficient for retrieval, producing further useful gradient through the same path.
-
-This is a self-reinforcing symmetry-breaking process:
+The full modification path therefore adds approximately:
 
 \[
-\text{small assignment advantage}
-\rightarrow
-\text{more information captured}
-\rightarrow
-\text{greater downstream usefulness}
-\rightarrow
-\text{more favorable gradient}
-\rightarrow
-\text{larger assignment advantage}.
+32.27 - 14.57 = 17.70
 \]
 
-### Additional reinforcing mechanism: slot activity scaling
+mean-recall points over reference-only retrieval.
 
-For a low-mass slot:
-
-\[
-a_j=\min(m_j,1).
-\]
-
-Once its mass falls below 1, its final Edit Slot is explicitly attenuated:
-
-\[
-e_j=s_j m_j \quad (m_j<1).
-\]
-
-A dominant slot with `m_j >= 1` remains at full activity `a_j=1`, while a dying slot gets progressively smaller in magnitude.
-
-This is **not established as the initial cause**, because early in training multiple slots can all have mass above 1. However, once a loser crosses below unit mass, this mechanism can make recovery harder and reinforce an already-developing monopoly.
-
-This should be treated as a mechanism-level risk to test, not yet as a proven sole root cause.
+This confirms that the modification branch remains functionally important.
 
 ---
 
-## 10. What this experiment falsifies
-
-### Falsified / strongly rejected for the current setup
-
-#### H1 — “Replacing the old text representation with FG-CLIP2-Large alone will prevent slot collapse.”
-
-**Rejected.**
-
-Collapse reaches approximately complete monopoly by epoch 3.
-
-#### H2 — “Removing CSMCIR teacher dependence is sufficient to rescue multi-slot decomposition.”
-
-**Rejected as a sufficient intervention.**
-
-A3.2 has no active CSMCIR teacher composition, yet collapse remains severe.
-
-This does **not** prove that the teacher had zero effect in earlier branches. It shows only that teacher removal alone is not enough.
-
-#### H3 — “QASA selection alone is enough to preserve multiple meaningful Edit Slots.”
-
-**Rejected for this integration.**
-
-QASA converges to selecting the already dominant single slot.
-
-#### H4 — “A strong retrieval score necessarily implies useful compositional slot decomposition.”
-
-**Rejected.**
-
-Retrieval improves substantially while the slot system remains collapsed.
-
----
-
-## 11. What this experiment does NOT falsify
-
-The result must not be overinterpreted.
-
-It does **not** establish that:
-
-- FG-CLIP2 token representations are perfectly local;
-- encoder global mixing is irrelevant;
-- correction dictionaries have no effect;
-- a NULL/dustbin mechanism cannot help;
-- balanced assignment cannot help;
-- sparse assignment cannot help;
-- capacity constraints cannot help;
-- OT/Sinkhorn/partial OT cannot help;
-- entropy/diversity/anti-monopoly pressure cannot help;
-- iterative slot refinement cannot help under a different objective;
-- the Executor is optimal;
-- four slots is the correct number of slots.
-
-The narrow conclusion is:
-
-\[
-\boxed{
-\text{better/different frozen token representation alone is insufficient}
-}
-\]
-
-for preventing collapse in the current competitive-ownership + retrieval-only setup.
-
----
-
-## 12. Root-cause scope after A3.2
-
-The evidence now shifts the priority away from treating the encoder as the sole bottleneck.
-
-The strongest remaining problem is **identifiability / optimization pressure**:
-
-> Why should four interchangeable slots learn four distinct semantic responsibilities when one slot can encode enough modification information to optimize retrieval?
-
-With only retrieval supervision, many internal decompositions can produce the same useful final query. A one-slot solution is therefore not forbidden.
-
-The current experiment provides direct evidence that the model is willing to exploit that equivalence.
-
-A useful high-level statement is:
-
-\[
-\boxed{
-\text{multi-slot structure exists architecturally, but is not identified by the objective}
-}
-\]
-
-This is currently a stronger working diagnosis than “the encoder is too global.”
-
----
-
-## 13. Why high QASA coverage is misleading here
-
-The final epochs look superficially excellent if one reads only QASA coverage:
+# 10. Soft ownership forensic
 
 ```text
-qasa_cov = 1.000
+valid_content_tokens  = 11.9214
+soft_active_slots     = 1.1411
+soft_dominant_share   = 0.5591
+soft_near_monopoly    = 0.0000
 ```
 
-But coverage asks whether selected slots cover sufficient token regions—not whether those regions are decomposed across multiple independent semantic slots.
-
-A collapsed attention map can satisfy coverage trivially:
+At first glance this looks much healthier than the pre-R1 collapse because:
 
 ```text
-one slot owns every valid token
-        ↓
-select that one slot
-        ↓
-all valid tokens are covered
-        ↓
-coverage = 1.0
+dominant ≈ 0.56
+monopoly = 0
 ```
+
+rather than:
+
+```text
+dominant ≈ 1.00
+monopoly = 1
+```
+
+However the dominant-slot identity reveals a more subtle collapse:
+
+```text
+soft dominant slot counts:
+S0 = 6015
+S1 =    0
+S2 =    1
+S3 =    0
+```
+
+across `6016` validation examples.
 
 Therefore:
 
 \[
-\boxed{\text{coverage} \neq \text{specialization}}
+P(\text{S0 is dominant}) \approx \frac{6015}{6016} \approx 99.983\%.
+\]
+
+This is not the old **probability-mass monopoly**, but it is still an extreme **winner-identity monopoly**.
+
+The current regime is approximately:
+
+```text
+S0: usually only moderately larger than the others
+    but almost always the largest
+
+S1/S2/S3:
+receive non-trivial soft probability mass
+but almost never become the strongest owner
+```
+
+This explains why:
+
+```text
+soft_dominant_share ≈ 0.56
+```
+
+can coexist with:
+
+```text
+S0 dominant in 6015 / 6016 examples.
+```
+
+This distinction is important.
+
+---
+
+# 11. QASA forensic
+
+```text
+qasa_selected_slots         = 1.5002
+qasa_quality_all_slots      = 0.2523
+qasa_quality_selected_slots = 0.7538
+qasa_final_coverage         = 0.9586
+```
+
+Selection frequency:
+
+```text
+S0 selected: 6016 / 6016 = 100.0%
+S1 selected: 2261 / 6016 ≈ 37.58%
+S2 selected:  262 / 6016 ≈  4.36%
+S3 selected:  486 / 6016 ≈  8.08%
+```
+
+Important interpretation:
+
+QASA does **not** always collapse to a single selected slot.
+
+On average it selects approximately `1.5` slots.
+
+It also gives the selected set a high average quality:
+
+```text
+selected-slot quality ≈ 0.754
+```
+
+Therefore the main remaining failure cannot be summarized as:
+
+> "QASA always throws away every slot except S0."
+
+Instead:
+
+> QASA sometimes keeps additional slots, but those extra slots contribute little to final retrieval.
+
+This points downstream toward **functional redundancy / asymmetric utility**, not merely a selection-count problem.
+
+---
+
+# 12. Actual Entmax routing forensic
+
+The actual routing statistics are:
+
+```text
+routing_active_slots          = 1.5002
+routing_support_mean          = 4.4127 tokens
+routing_support_fraction_mean = 0.3767
+routing_zero_fraction         = 0.6233
+routing_support_jaccard       = 0.6803
+```
+
+The mean instruction contains:
+
+```text
+11.9214 valid content tokens
+```
+
+while an active slot consumes only:
+
+```text
+4.4127 tokens on average
+```
+
+or approximately:
+
+\[
+\frac{4.4127}{11.9214} \approx 37.0\%.
+\]
+
+The diagnostic reports a directly averaged support fraction of:
+
+```text
+37.67%
+```
+
+and:
+
+```text
+62.33%
+```
+
+of valid slot-token routing positions are zero.
+
+This is a clear R1 success.
+
+The actual Edit Slots no longer require dense access to the sentence.
+
+---
+
+# 13. Per-slot sparse support
+
+Conditional on each slot being active:
+
+| Slot | Mean support | Mean support fraction |
+|---|---:|---:|
+| S0 | 3.894 | 0.337 |
+| S1 | 5.840 | 0.487 |
+| S2 | 6.504 | 0.453 |
+| S3 | 7.630 | 0.478 |
+
+An important observation:
+
+> `S0` is **not** the slot reading the most tokens.
+
+In fact, when active, `S0` reads the smallest support among the four slots.
+
+Yet `S0` is by far the most functionally important slot.
+
+Therefore the remaining "giant slot" failure is no longer equivalent to:
+
+```text
+giant slot = slot with largest token support
+```
+
+R1 separates two notions that were previously entangled.
+
+---
+
+# 14. Two different giant-slot failures
+
+The experiment now gives a useful conceptual distinction.
+
+## 14.1 Evidence giant
+
+Definition:
+
+> A slot consumes most/all of the sentence.
+
+Pre-R1 this was severe.
+
+R1 result:
+
+```text
+routing support ≈ 37.7% of valid tokens
+routing zero fraction ≈ 62.3%
+```
+
+Verdict:
+
+> **Strongly reduced / largely solved by R1.**
+
+---
+
+## 14.2 Functional giant
+
+Definition:
+
+> One slot carries most of the useful downstream modification computation.
+
+This is tested directly by slot-drop ablation.
+
+R1 result:
+
+```text
+Full mean recall = 32.270
+```
+
+Drop each slot:
+
+```text
+Drop S0 = 22.030   delta = -10.240
+Drop S1 = 31.595   delta =  -0.675
+Drop S2 = 32.110   delta =  -0.160
+Drop S3 = 32.136   delta =  -0.134
+```
+
+Verdict:
+
+> **Still severe.**
+
+Thus R1 transforms the failure from:
+
+```text
+S0 sees almost everything
+and does almost everything
+```
+
+into:
+
+```text
+S0 sees only a small sparse subset
+but still does most of the useful work.
+```
+
+This is a substantially more informative failure mode.
+
+---
+
+# 15. Functional slot-drop interpretation
+
+The strongest evidence of remaining collapse is the slot-drop test.
+
+## 15.1 S0
+
+```text
+Full   = 32.270
+Drop S0= 22.030
+
+Δ = -10.240
+```
+
+Removing S0 destroys almost one third of the full mean-recall score in absolute terms.
+
+S0 is clearly critical.
+
+## 15.2 Other slots
+
+```text
+Drop S1: -0.675
+Drop S2: -0.160
+Drop S3: -0.134
+```
+
+These changes are tiny relative to the S0 ablation.
+
+The slot-drop effects are **not additive causal contributions** because the executor is nonlinear and slots can compensate for one another.
+
+Therefore one must not sum these deltas and interpret them as a decomposition of total retrieval performance.
+
+Nevertheless, their scale asymmetry is too large to ignore.
+
+The model remains functionally dominated by S0.
+
+---
+
+# 16. Reference-only comparison provides useful nuance
+
+Reference-only mean recall is:
+
+```text
+14.57
+```
+
+After dropping S0:
+
+```text
+22.03
+```
+
+So even without S0, the model remains:
+
+\[
+22.03 - 14.57 = 7.46
+\]
+
+points above reference-only retrieval.
+
+Therefore it would be too strong to say:
+
+> "S1/S2/S3 contain absolutely no useful modification information."
+
+They collectively still support a non-trivial modification signal.
+
+The more accurate conclusion is:
+
+> **useful modification information exists outside S0, but S0 remains overwhelmingly the most important individual slot.**
+
+---
+
+# 17. Routing overlap is the next major structural problem
+
+The sparse support Jaccard is:
+
+```text
+0.6803
+```
+
+This is high.
+
+Entmax makes each slot sparse independently, but it does not enforce cross-slot exclusivity.
+
+Therefore this remains legal:
+
+```text
+token A
+├── selected by S0
+├── selected by S1
+└── selected by S3
+```
+
+A stylized failure could look like:
+
+```text
+instruction:
+"make the red dress have longer sleeves"
+
+S0: red, dress, longer
+S1: red, dress, longer, sleeves
+S2: dress, longer, sleeves
+```
+
+Each slot is sparse.
+
+But the slots are not necessarily decomposing different evidence.
+
+This is exactly the limitation expected from independent token-axis Entmax.
+
+---
+
+# 18. Why the old soft diagnostics alone would have been misleading
+
+If only these metrics were observed:
+
+```text
+dominant = 0.559
+monopoly = 0.000
+```
+
+one might conclude that slot collapse was solved.
+
+That conclusion would be wrong.
+
+The full forensic suite shows:
+
+```text
+dominant slot identity:
+S0 = 6015 / 6016
+
+functional slot-drop:
+S0 = -10.24
+others = -0.13 to -0.68
+
+routing overlap:
+0.680
+```
+
+Thus a model can avoid a >90% soft-mass monopoly while still learning a highly asymmetric decomposition.
+
+Future experiments must therefore report at least three distinct families of diagnostics:
+
+```text
+1. soft ownership statistics
+2. sparse support / routing statistics
+3. functional ablation statistics
+```
+
+No single family is sufficient.
+
+---
+
+# 19. Hypothesis verdicts
+
+## H1 — Dense sentence access contributes to the previous failure
+
+**Supported.**
+
+R1 reduces actual support to about `4.4 / 11.9` content tokens and strongly improves retrieval.
+
+The intervention and improvement are consistent with the hypothesis that dense token averaging was harmful.
+
+Because this is one run, it is evidence rather than final statistical proof.
+
+---
+
+## H2 — Exact-zero adaptive sparsity alone eliminates the giant-slot problem
+
+**Rejected if "giant slot" means functional dominance.**
+
+R1 eliminates the old dense-evidence giant but S0 remains functionally dominant.
+
+---
+
+## H3 — Entmax alone creates useful multi-slot decomposition
+
+**Rejected.**
+
+The slots remain highly asymmetric and their support overlap is high.
+
+---
+
+## H4 — QASA alone can recover specialization after sparse routing
+
+**Not supported.**
+
+QASA keeps approximately `1.5` slots on average, but the additional slots have very small individual functional ablation effects.
+
+---
+
+## H5 — Sparse routing can improve CIR performance even without successful slot specialization
+
+**Supported by this run.**
+
+Mean recall improves from:
+
+```text
+26.3314 → 32.2703
+```
+
+even though strong functional asymmetry remains.
+
+This is an important result:
+
+> better retrieval and better decomposition are related but not identical goals.
+
+---
+
+# 20. What R1 taught us about the optimization failure
+
+The pre-R1 mental model was:
+
+```text
+one slot wins
+    ↓
+it receives more tokens
+    ↓
+it builds a more complete sentence representation
+    ↓
+it becomes more useful
+    ↓
+it wins even harder
+```
+
+R1 breaks an important part of this loop:
+
+```text
+winning slot
+    ↓
+cannot simply average the whole sentence
+    ↓
+must choose sparse evidence
+```
+
+This is likely why the old soft probability monopoly is reduced.
+
+But a second shortcut remains:
+
+```text
+S0 consistently discovers the most useful token subset
+        ↓
+S0 becomes the safest downstream edit representation
+        ↓
+Executor relies mostly on S0
+        ↓
+retrieval gradients continue rewarding S0
+        ↓
+other slots remain secondary/redundant
+```
+
+R1 has no mechanism saying:
+
+```text
+"that evidence is already claimed by another slot"
+```
+
+or:
+
+```text
+"you are using the same evidence as another slot"
+```
+
+or:
+
+```text
+"one slot should pay a cost for absorbing too much total assignment."
+```
+
+This is the missing pressure.
+
+---
+
+# 21. Why simply making Entmax even sparser is not the obvious next step
+
+One possible response would be:
+
+> increase sparsity further.
+
+The forensic data argues against treating this as the main problem.
+
+S0 currently uses only:
+
+```text
+3.894 tokens
+≈ 33.7% of the instruction when active
+```
+
+yet it is still dominant in nearly every sample and has the largest functional effect by far.
+
+Therefore:
+
+```text
+"make S0 read fewer tokens"
+```
+
+is no longer sufficient as the primary theory.
+
+The next mechanism should address:
+
+```text
+who gets which evidence
+```
+
+rather than only:
+
+```text
+how many tokens each slot sees.
+```
+
+This is why R2 learned-alpha is not the most informative immediate experiment.
+
+---
+
+# 22. Implication for R4 / QI-SCA
+
+The R1 failure directly motivates **joint sparse assignment**.
+
+R1 currently behaves conceptually as:
+
+```text
+S0 independently chooses a sparse token set
+S1 independently chooses a sparse token set
+S2 independently chooses a sparse token set
+S3 independently chooses a sparse token set
+```
+
+Nothing prevents duplicate claims.
+
+R4 instead proposes one global token-slot assignment matrix:
+
+\[
+A \in \mathbb{R}_{\ge 0}^{N\times L}
+\]
+
+with constraints such as:
+
+\[
+\sum_k A_{n,k} \le 1
 \]
 
 and:
 
 \[
-\boxed{\text{QASA K}=1,\ \text{coverage}=1\text{ is compatible with total collapse}.}
+\sum_n A_{n,k} \le c_k.
 \]
 
-This metric distinction should be preserved in all later analyses.
+The first constraint creates direct token-level competition:
 
----
+> a token has limited assignment mass that must be shared among slots.
 
-## 14. Retrieval metric definition
+The second adds a congestion/capacity mechanism:
 
-The current FashionIQ evaluation computes per-category `Recall@10` and `Recall@50`, macro-averages them across categories, then reports:
+> a slot cannot absorb unlimited total routing mass.
+
+Together with implicit rejection:
 
 \[
-\text{mean\_recall}
-=
-\frac{\text{macro Recall@10}+\text{macro Recall@50}}{2}.
+q_n = 1-\sum_k A_{n,k},
 \]
 
-The branch is configured for `fashioniq_original` gallery construction through the project configuration unless locally overridden.
-
-Thus the reported `26.5121` is a retrieval metric, **not** a slot-specialization score.
+a token may also remain unassigned.
 
 ---
 
-## 15. Important reproducibility discrepancy to preserve
+# 23. Important warning for R4 design
 
-The observed terminal run prints:
+The R1 result also changes how R4 should be interpreted.
+
+A naive story would be:
+
+> "R4 is needed because S0 still reads too many tokens."
+
+That is **not** what the data says.
+
+S0 only reads about `3.9` tokens when active.
+
+Therefore a fixed slot capacity larger than this may do almost nothing.
+
+The real justification for R4 is now primarily:
+
+1. **joint token competition**;
+2. **reduced duplicate claims**;
+3. **implicit rejection**;
+4. **congestion feedback when a slot starts absorbing too much assignment mass**.
+
+Capacity alone is not guaranteed to solve functional dominance.
+
+R4 must be evaluated as a joint assignment mechanism, not merely as "Entmax with a smaller maximum token count."
+
+---
+
+# 24. What R4 must beat
+
+R1 establishes a much stronger control than the previous dense baseline.
+
+Any R4 experiment should compare against:
 
 ```text
-Epoch 1/10
-...
-Epoch 10/10
+R1 Mean Recall:
+32.2703
+
+R1 routing support:
+4.4127 tokens
+
+R1 support fraction:
+0.3767
+
+R1 zero fraction:
+0.6233
+
+R1 support Jaccard:
+0.6803
+
+R1 soft dominant share:
+0.5591
+
+R1 soft dominant identity:
+S0 = 6015 / 6016
+
+R1 QASA selected slots:
+1.5002
+
+R1 slot-drop:
+S0 = -10.240
+S1 = -0.675
+S2 = -0.160
+S3 = -0.134
 ```
 
-so the executed run used **10 epochs**.
+R4 is not successful merely because it is sparse.
 
-However, the audited remote HEAD `4840898...` currently contains:
+R1 already achieved sparsity.
 
-```yaml
-num_epochs: 100
+R4 should demonstrate improvement in **assignment structure and functional non-redundancy** without destroying retrieval.
+
+---
+
+# 25. Recommended R4 success criteria
+
+These should be treated as directional scientific criteria, not arbitrary hard thresholds.
+
+A better model should ideally show:
+
+### Retrieval
+
+```text
+mean recall remains competitive with R1
 ```
 
-in `conf/experiment/taper_e2e.yaml`.
+Preferably no large regression from `32.27`.
 
-Therefore at least one of the following was true for the local run:
+### Evidence sparsity
 
-1. the local config had an uncommitted `num_epochs: 10` change; or
-2. another local override/change affected the runtime.
+```text
+support remains substantially below full sentence length
+```
 
-Before treating this run as a fully reproducible archival result, save:
+R1 already gives a strong baseline of approximately `37.7%`.
+
+### Cross-slot redundancy
+
+```text
+routing support Jaccard decreases from 0.680
+```
+
+This is one of the clearest structural targets.
+
+### Slot identity monopoly
+
+```text
+one fixed slot should no longer be dominant in ~100% of examples
+```
+
+R1 currently has S0 dominant in `6015 / 6016`.
+
+### Functional non-redundancy
+
+Slot-drop effects should become less extremely concentrated in S0.
+
+The goal is not equal effects by force.
+
+The goal is that multiple slots measurably matter on the examples where they are active.
+
+### QASA consistency
+
+Slots selected by QASA should have downstream functional relevance more often.
+
+R1 currently selects additional slots much more frequently than their individual slot-drop effects would suggest.
+
+---
+
+# 26. Additional diagnostics that should be preserved in all future branches
+
+Do not remove the following R1 diagnostics when implementing R4.
+
+## Pre-sparse ownership
+
+- ownership active-slot count;
+- dominant soft-mass share;
+- near-monopoly fraction;
+- dominant slot identity frequency;
+- per-slot winner counts.
+
+## QASA
+
+- selected slot count;
+- quality across all slots;
+- quality across selected slots;
+- coverage;
+- per-slot selection frequency.
+
+## Sparse routing
+
+- support mean;
+- support max;
+- support fraction;
+- zero fraction;
+- support Jaccard;
+- per-slot support conditional on activity.
+
+## Functional
+
+- full retrieval;
+- reference-only retrieval;
+- single-slot drop;
+- query change after slot drop.
+
+These metrics diagnose different failure modes and should not be collapsed into one "slot diversity" number.
+
+---
+
+# 27. Current scientific status of the branch
+
+```text
+R1 / TOKEN-AXIS ENTMAX-1.5
+==========================================
+
+Mechanical implementation:
+PASS
+
+Content-token masking:
+PASS
+
+QASA remains pre-sparse:
+PASS
+
+Actual Edit Slots use sparse routing:
+PASS
+
+Exact-zero routing:
+PASS
+
+Dense-evidence giant:
+STRONGLY REDUCED
+
+Soft >90% monopoly:
+RESOLVED IN THIS RUN
+
+Retrieval:
+STRONG IMPROVEMENT
+
+Winner-identity monopoly:
+FAILED
+S0 dominates 6015 / 6016 examples
+
+Cross-slot support independence:
+FAILED / HIGH REDUNDANCY
+Jaccard = 0.6803
+
+Functional specialization:
+FAILED
+Drop S0 = -10.24
+Drop others <= -0.675
+
+Overall:
+R1 IS A SUCCESSFUL ABLATION,
+BUT NOT A COMPLETE DECOMPOSITION SOLUTION.
+```
+
+---
+
+# 28. Key conceptual result
+
+The most useful result from this branch is not simply the `+5.94` retrieval gain.
+
+It is the separation of two previously conflated failures:
+
+\[
+\boxed{
+\text{evidence density}
+\neq
+\text{functional dominance}
+}
+\]
+
+R1 shows that a slot can become sparse without becoming non-dominant.
+
+Specifically:
+
+```text
+S0 reads only ~3.9 tokens
+but remains dominant in almost every example
+and causes a -10.24 recall drop when removed.
+```
+
+Therefore future work should not optimize only for "few tokens per slot."
+
+It must address **competitive allocation of useful evidence and functional redundancy across slots**.
+
+---
+
+# 29. Final verdict
+
+The branch should be preserved as a strong control/checkpoint.
+
+Its result is:
+
+> **Token-axis Entmax-1.5 is useful and materially improves retrieval while eliminating the previous dense soft-mass monopoly. However, independent sparse routing does not produce functional multi-slot decomposition. The remaining failure is dominated by S0 identity monopoly, high cross-slot support overlap, and extreme slot-drop asymmetry.**
+
+The next justified experiment is a joint sparse assignment mechanism such as R4/QI-SCA.
+
+The motivation for R4 is no longer vague.
+
+It is empirically tied to three observed R1 failure signals:
+
+```text
+1. S0 dominant in 6015 / 6016 examples
+2. routing support Jaccard = 0.6803
+3. Drop S0 = -10.24 while all other drops are < -0.7
+```
+
+Those are the failure modes the next experiment must attack.
+
+---
+
+# 30. Reproduction commands
+
+## Train R1
 
 ```bash
-git status
-git diff
+python src/train.py experiment=taper_e2e dataset.root=<FASHIONIQ_ROOT>
 ```
 
-and the exact Hydra resolved config/output directory.
+## Run R1 forensic diagnosis
 
-This discrepancy does **not** affect the collapse diagnosis—the collapse already occurs by epoch 3—but it matters for exact experiment provenance.
+Using the dedicated R1 diagnostic script:
 
----
+```bash
+python src/diagnose_taper_r1_entmax.py \
+  --checkpoint outputs/<RUN>/best.pt \
+  --dataset-root <FASHIONIQ_ROOT>
+```
 
-## 16. Recommended branch verdict
-
-Do **not** continue this run to 100 epochs merely to see whether collapse disappears.
-
-The relevant question for A3.2 has already been answered cleanly:
+Expected report:
 
 ```text
-Can frozen FG-CLIP2-Large direct token semantics,
-without active CSMCIR teacher composition,
-prevent the current Edit-Slot system from collapsing?
-
-Observed answer: NO.
+reports/taper_r1_entmax_diagnosis.json
 ```
 
-The branch should be preserved as a negative-result baseline rather than repeatedly modified until it succeeds.
+A quick smoke diagnosis can be run with:
 
-Suggested status label:
-
-```text
-A3.2 — FGCLIP2 direct semantics
-RESULT: RETRIEVAL LEARNS, MULTI-SLOT DECOMPOSITION COLLAPSES
+```bash
+python src/diagnose_taper_r1_entmax.py \
+  --checkpoint outputs/<RUN>/best.pt \
+  --dataset-root <FASHIONIQ_ROOT> \
+  --max-queries-per-category 256
 ```
 
 ---
 
-## 17. What should be attacked next
+# 31. Provenance of this checkpoint
 
-The next research branch should primarily attack the **assignment/objective geometry**, not merely swap another encoder.
+This README is based on:
 
-The target property should be explicit:
+1. the audited remote branch `exp/e2e-a6-fgclip2-entmax`;
+2. remote HEAD `8be6337517d5dedd2c13e1f7c1feb14b16cd1ebc`;
+3. the branch's R1 Entmax/QASA implementation and diagnostics;
+4. the supplied 10-epoch pre-R1 baseline log;
+5. the supplied 10-epoch R1 training log;
+6. the full R1 forensic output over `6016` validation queries.
 
-> Make the one-slot solution either impossible, capacity-limited, or objectively worse than a genuine multi-part decomposition—without forcing arbitrary uniformity when the text truly contains only one edit.
-
-Relevant families already under consideration include:
-
-- explicit NULL/dustbin ownership;
-- sparse but non-monopolistic assignment;
-- balanced/capacity-constrained transport;
-- partial/unbalanced optimal transport;
-- Entmax/Sparsemax-style support selection;
-- anti-monopoly or load-balancing pressure;
-- information/capacity bottlenecks per slot;
-- coverage/exclusivity constraints that distinguish “one slot covers all” from genuine decomposition.
-
-These are **next research directions**, not conclusions of A3.2. They should be evaluated in separate branches so this negative result remains clean.
-
----
-
-## 18. Minimal forensic checks worth preserving from this run
-
-If the run output/checkpoint is still available, archive at minimum:
-
-```text
-best.pt
-last.pt
-resolved Hydra config
-terminal/log output
-branch SHA
-git diff / git status
-FG-CLIP2 image manifests
-FG-CLIP2 text manifests
-```
-
-For a later deeper postmortem, the most useful additional measurements would be:
-
-1. per-slot `slot_mass_mean` by epoch;
-2. per-slot hard winner counts by epoch;
-3. assignment entropy by epoch;
-4. slot overlap by epoch;
-5. which physical slot ID becomes the monopolist;
-6. whether monopolist identity is seed-dependent;
-7. gradients/norms of slot queries during epochs 1–3;
-8. checkpoint-level slot-drop functional tests.
-
-These tests would characterize **how** symmetry breaks, but they are not required to establish that collapse occurred.
-
----
-
-# Final diagnosis
-
-The experiment produced a very clear negative result.
-
-A3.2 successfully removed the active teacher dependency and replaced the old representation path with frozen FG-CLIP2-Large contextual token states. Despite this, the four-way competitive slot system rapidly converged to a one-slot monopoly:
-
-\[
-\text{active slots}: 2.03 \rightarrow 1.37 \rightarrow 1.00
-\]
-
-\[
-\text{dominant share}: 0.265 \rightarrow 0.659 \rightarrow 1.000
-\]
-
-\[
-\text{monopoly fraction}: 0.000 \rightarrow 0.384 \rightarrow 1.000.
-\]
-
-At the same time:
-
-\[
-\text{mean recall}: 12.70 \rightarrow 26.51.
-\]
-
-The central scientific observation is therefore:
-
-\[
-\boxed{
-\text{the retrieval objective can continue improving after the intended decomposition has died}
-}
-\]
-
-and the central scope update is:
-
-\[
-\boxed{
-\text{representation quality/locality alone is not sufficient to identify multiple Edit Slots}
-}
-\]
-
-The next phase should treat **one-slot shortcut / decomposition identifiability / competitive-assignment dynamics** as first-class root-cause targets.
-
----
-
-## Branch status summary
-
-```text
-FG-CLIP2 cache contract          PASS
-Frozen backbone isolation        PASS
-No active CSMCIR teacher         PASS
-Direct 1024-D pooled Edit Slots  PASS
-Retrieval optimization           WORKING
-QASA execution path              WORKING MECHANICALLY
-Multi-slot specialization        FAIL
-Slot-collapse prevention         FAIL
-One-slot shortcut eliminated     FAIL
-Main hypothesis of A3.2          REJECTED AS SUFFICIENT
-```
-
-**Preserve this branch as evidence. Do not rewrite its failure away.**
+The causal interpretations above are explicitly marked as interpretations.  
+The numerical results are the observed values from the supplied runs.
