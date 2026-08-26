@@ -1,936 +1,786 @@
-# A3.1 — QASA-Faithful Hard-Partition Evaluation
+# A3.2 — FG-CLIP2-Large / No-CSMCIR: Slot-Collapse Diagnosis
 
-**Branch:** `exp/e2e-a3.1-qasa-slot-filter-eval-winner`  
-**Parent experiment:** `exp/e2e-a3.1-qasa-slot-filter`  
-**Purpose:** Evaluate the learned Edit-Slot attention using the same hard token-to-slot inference principle used by QASA.  
-**Training:** unchanged from A3.1  
-**Checkpoint:** reuse the trained A3.1 `best.pt`  
-**Executor during this evaluation:** not used  
-**Retrieval during this evaluation:** not used  
-**QASA Quality / Coverage / Novelty mask during this evaluation:** not used
+**Branch:** `exp/e2e-a3.2-fgclip2-no-csmcir`  
+**Audited remote HEAD:** `48408986240dca7781478372b960822dacab87e1` (`v4`)  
+**Experiment status:** **FAILED AS A MULTI-SLOT DECOMPOSITION EXPERIMENT**  
+**Retrieval status:** still learns/improves despite decomposition collapse  
+**Primary forensic conclusion:** replacing the previous representation/teacher path with frozen FG-CLIP2-Large token states **does not by itself prevent Edit-Slot collapse**.
 
 ---
 
-# 1. Why this branch exists
+## 1. Why this branch exists
 
-The previous A3.1 experiment trained TAPER with QASA-style slot selection:
+A3.2 was designed to isolate a specific hypothesis from the previous TAPER experiments:
+
+> The previous text representation may be too globally mixed / insufficiently local, making it difficult for multiple Edit Slots to specialize. If a stronger fine-grained text representation is supplied directly, slot decomposition may become easier and collapse may reduce.
+
+To test this, the branch removes the active CSMCIR teacher path and uses frozen **FG-CLIP2-Large** features directly:
 
 ```text
-Edit-Slot attention
-        ↓
-QASA Quality
-        ↓
-Novelty / Coverage
-        ↓
-selected slots
-        ↓
-Router / Executor
-        ↓
-retrieval objective
+FG-CLIP2-Large contextual text token states [B,N,1024]
+                       ↓
+             competitive ownership
+                       ↓
+              mass-aware pooling
+                       ↓
+              Edit Slots [B,4,1024]
+                       ↓
+                     QASA
+                       ↓
+                   Executor
+        ↑                              
+FG-CLIP2 reference image [B,1024]
+                       ↓
+                query [B,1024]
+                       ↓
+      FG-CLIP2 gallery retrieval
 ```
 
-A3.1 obtained reasonably strong retrieval performance, but its internal diagnostics suggested severe lack of slot specialization.
+The intended scientific isolation is important:
 
-The key question left open was:
+- no active CSMCIR teacher composition;
+- no `slot_effect` teacher counterfactual;
+- no learned MLP/projection after slot pooling;
+- Edit Slots use pooled FG-CLIP2 token semantics directly;
+- QASA and Executor remain;
+- optimization is end-to-end through retrieval loss.
 
-> If the learned slot attention is evaluated using the QASA inference rule itself, does it actually produce a meaningful adaptive partition of the text into multiple Edit Slots?
-
-This branch answers only that question.
-
-It does not introduce a new training mechanism.
+Therefore this experiment asks whether **representation replacement alone**, while keeping the decomposition/execution structure, is sufficient to rescue multi-slot specialization.
 
 ---
 
-# 2. Evaluation protocol
+## 2. Frozen FG-CLIP2 feature contract
 
-The evaluation uses the learned QASA attention:
-
-\[
-A \in \mathbb{R}^{B\times L\times N},
-\]
-
-where:
-
-- \(B\) = batch size;
-- \(L\) = number of Edit Slots;
-- \(N\) = number of text tokens.
-
-For every valid content token \(t\), the winning slot is:
-
-\[
-w_t=\arg\max_i A_{t,i}.
-\]
-
-The hard region of slot \(i\) is:
-
-\[
-S_i=\{t\mid w_t=i\}.
-\]
-
-Therefore each valid token is assigned to exactly one slot.
-
-The effective number of slots for one sample is:
-
-\[
-K_{\text{eff}}
-=
-\left|
-\left\{
-i:
-|S_i|>0
-\right\}
-\right|.
-\]
-
-The evaluation path is therefore:
+The branch pins:
 
 ```text
-qasa_attention
-      ↓
-argmax over slots for each token
-      ↓
-hard token partition
-      ↓
-effective K + partition statistics
+model_id = qihoo360/fg-clip2-large
+revision = 4d1d5dc35c716902f07c172dbfc23b82a7bc6bf3
 ```
 
----
-
-# 3. What this branch deliberately does NOT do
-
-This branch does not use:
+Feature dimensions:
 
 ```text
-qasa_selected_mask
-QASA Quality ranking
-QASA Coverage threshold
-QASA Novelty filtering
-Router
-Executor
-retrieval query
-retrieval metrics
+text_dim      = 1024
+slot_dim      = 1024
+reference_dim = 1024
+query_dim     = 1024
+state_dim     = 512
+num_slots     = 4
+num_primitives = 8
 ```
 
-for the headline evaluation.
+Observed cache shapes in the actual run:
 
-This is important because the objective is to inspect the learned decomposition itself rather than asking whether a particular TAPER execution policy can still obtain retrieval performance.
+```text
+Train FG-CLIP2 images: (45429, 1, 1024)
+Val   FG-CLIP2 images: (15415, 1, 1024)
+Train text:            (18000, 64, 1024)
+Val   text:            (6016, 64, 1024)
+```
 
-The training checkpoint remains the same.
-
-Only the evaluation interpretation changes.
+FG-CLIP2 is frozen and precomputed offline. Training TAPER therefore optimizes the slot decomposition, QASA-dependent execution path, reference-state mapping, primitive/router/transition machinery, and query head—not the FG-CLIP2 backbone itself.
 
 ---
 
-# 4. Hard-partition implementation
+## 3. Exact Edit-Slot mechanism being diagnosed
 
-The core implementation is:
+### 3.1 Competitive ownership
+
+For each valid text token `n` and Edit Slot `j`, current code computes approximately:
+
+\[
+z_{jn} = \frac{q_j^\top k_n}{\sqrt{D}\,T}
+\]
+
+followed by a softmax **across Edit Slots**:
+
+\[
+p(j\mid n)=\operatorname{softmax}_j(z_{jn}).
+\]
+
+Thus for each valid token:
+
+\[
+\sum_{j=1}^{4} p(j\mid n)=1.
+\]
+
+### 3.2 Critical implementation fact: no explicit NULL/dustbin in this branch
+
+The active `_competitive_ownership` implementation currently contains only the four Edit Slots. There is no separate NULL query/logit participating in this softmax.
+
+Therefore this run is specifically diagnosing:
+
+> **4-way Edit-Slot competition without an explicit NULL/dustbin owner.**
+
+There is a stale error string elsewhere in `compute_stage1_loss()` mentioning “competitive NULL ownership”, but that string does **not** match the actual active `_competitive_ownership` implementation in this branch.
+
+This distinction should be preserved when comparing A3.2 with earlier NULL/dustbin hypotheses.
+
+### 3.3 Mass-aware pooling
+
+Current slot pooling is:
+
+\[
+m_j = \sum_n p(j\mid n)
+\]
+
+\[
+s_j = \frac{\sum_n p(j\mid n)h_n}{\max(m_j,1)}
+\]
+
+with activity:
+
+\[
+a_j = \min(m_j,1)
+\]
+
+and final Edit Slot:
+
+\[
+e_j=s_j a_j.
+\]
+
+In code-equivalent form:
 
 ```python
-winner = attention.argmax(dim=1)  # [B, N]
-
-hard_regions = F.one_hot(
-    winner,
-    num_classes=num_slots,
-).permute(0, 2, 1).to(torch.bool)
-
-hard_regions = hard_regions & valid[:, None, :]
+slot_mass = slot_masks.sum(dim=2)
+weighted_sum = einsum(slot_masks, text_states)
+slot_activity = slot_mass.clamp(max=1.0)
+slot_semantics = weighted_sum / slot_mass.clamp_min(1.0)
+edit_slots = slot_semantics * slot_activity.unsqueeze(-1)
 ```
 
-Invalid, special, and padding tokens are excluded.
-
-A slot is considered present only when it wins at least one valid token:
-
-```python
-nonempty_slots = hard_regions.any(dim=2)
-
-effective_k = nonempty_slots.sum(dim=1)
-```
-
-The implementation also verifies that:
-
-```text
-every valid token belongs to exactly one slot
-every invalid token belongs to no slot
-effective K never exceeds the configured number of slots
-```
+There is deliberately **no learned post-pooling transform**.
 
 ---
 
-# 5. Metrics
+## 4. Objective actually optimized
 
-The evaluator reports the following quantities.
+The active training objective is only:
 
-## 5.1 Mean effective K
-
-\[
-\mathbb E[K_{\text{eff}}].
-\]
-
-This directly answers:
-
-> How many Edit Slots actually receive at least one token?
-
----
-
-## 5.2 K distribution
-
-For \(L=4\):
-
-```text
-P(K=1)
-P(K=2)
-P(K=3)
-P(K=4)
+```yaml
+loss_weights:
+  retrieval_loss: 1.0
 ```
 
-This reveals whether the model truly uses a variable number of slots or collapses toward a single hard region.
+The slot diagnostics are computed under `torch.no_grad()` and appended only for logging. They do **not** produce optimization pressure.
+
+Therefore the optimizer is never explicitly told that it should prefer:
+
+- multiple non-empty slots;
+- balanced ownership;
+- semantic diversity;
+- low slot overlap;
+- low monopoly;
+- one-edit-per-slot behavior;
+- a minimum number of active slots;
+- capacity constraints;
+- coverage distributed across slots.
+
+It is rewarded only for producing a query representation that retrieves the target image.
+
+This fact is central to interpreting the collapse.
 
 ---
 
-## 5.3 Dominant hard token share
+## 5. Meaning of the logged diagnostics
 
-For one sample:
+The relevant metrics in this branch are not heuristic names; they have specific code definitions.
 
-\[
-D=
-\max_i
-\frac{|S_i|}
-{N_{\text{valid}}}.
-\]
+### `active_slots`
 
-If:
+Logged from `diagnostic/ownership_active_slot_count`.
 
-\[
-D\approx1,
-\]
-
-one slot wins almost all content tokens.
-
----
-
-## 5.4 Hard winner entropy
-
-Let:
-
-\[
-p_i=\frac{|S_i|}{N_{\text{valid}}}.
-\]
-
-The normalized entropy is:
-
-\[
-H=
--\frac{\sum_i p_i\log p_i}
-{\log L}.
-\]
+For every valid token, the slot with maximal ownership probability is taken as the hard winner. `active_slots` is the average number of slots that win **at least one** valid token.
 
 Interpretation:
 
 ```text
-H ≈ 1
-→ hard winners distributed across slots
-
-H ≈ 0
-→ hard winners concentrated in one slot
+4.0 → all four slots win at least one token on average
+1.0 → all valid tokens have the same hard-winning slot
 ```
 
----
+### `hard_active`
 
-## 5.5 Soft top-1 probability
+Logged from `diagnostic/execution_hard_active_slot_count`.
 
-For each valid token:
+This is the mean number of slots actually marked active for execution after QASA selection (minus explicitly disabled slots, if any).
+
+### `dominant`
+
+Logged from `diagnostic/dominant_slot_share`:
 
 \[
-p_{\max}(t)=\max_i A_{t,i}.
+\frac{\max_j m_j}{\sum_j m_j}
 \]
 
-The evaluator reports its mean.
+averaged over samples.
 
-This helps distinguish:
+Unlike `active_slots`, this uses **soft ownership mass**, not only argmax winners.
 
-```text
-confident hard winner
-```
-
-from:
+Therefore:
 
 ```text
-argmax winner created from an almost-uniform soft distribution
+dominant ≈ 1.0
 ```
 
----
+means one slot owns almost all of the actual soft assignment mass, not merely that it wins a close argmax.
 
-## 5.6 Top-1 / Top-2 margin
+### `monopoly`
 
-For each token:
+Logged from `diagnostic/near_monopoly_fraction`.
+
+For each sample, monopoly is true when:
 
 \[
-m_t
-=
-A_{t,(1)}
--
-A_{t,(2)}.
+\text{dominant slot share} \ge 0.90.
 \]
 
-This measures how strongly the winning slot beats the runner-up.
-
----
-
-## 5.7 Near-tie fraction
-
-A token is counted as near-tied when:
-
-\[
-A_{t,(1)}-A_{t,(2)}
-\le0.01.
-\]
-
-This checks whether a hard winner monopoly could simply be an artifact of nearly exact numerical ties.
-
----
-
-## 5.8 Per-slot statistics
-
-For each slot:
-
-```text
-winner tokens / sample
-non-empty rate
-hard token share
-```
-
-These reveal whether the collapse is symmetric or whether one particular slot monopolizes the hard partition.
-
----
-
-# 6. Full validation result
-
-The evaluator was run on the full FashionIQ validation split.
-
-```text
-Samples:              6016
-Valid content tokens: 73137
-```
-
-Headline result:
-
-```text
-Mean effective K: 1.1749
-```
-
-Therefore, despite having four Edit Slots, the learned hard partition uses only slightly more than one slot on average.
-
----
-
-# 7. Effective-K distribution
-
-Measured:
-
-| Effective K | Fraction |
-|---:|---:|
-| 0 | 0.00% |
-| 1 | **82.55%** |
-| 2 | 17.42% |
-| 3 | 0.03% |
-| 4 | **0.00%** |
+The printed value is the fraction of samples satisfying this condition.
 
 Thus:
 
+```text
+monopoly = 1.000
+```
+
+means essentially every training sample in the averaged epoch statistics has at least 90% of ownership mass concentrated in one slot.
+
+### `qasa_k`
+
+Mean number of slots selected by QASA.
+
+### `qasa_q`
+
+Mean QASA quality **across all slots**, not merely selected slots.
+
+This matters greatly in the collapsed regime. If one slot has quality ≈1 and the other three have quality ≈0, then:
+
+\[
+\frac{1+0+0+0}{4}=0.25.
+\]
+
+Therefore the observed `qasa_q ≈ 0.250` is fully consistent with **one useful slot + three useless slots**. It is not evidence that selected-slot quality is only 0.25.
+
+### `qasa_cov`
+
+Mean final token coverage obtained by QASA's selected slots according to its thresholded coverage rule.
+
+In a collapsed solution, `qasa_cov = 1.0` can be achieved by **one slot covering everything**. Therefore high QASA coverage does not imply semantic decomposition.
+
+---
+
+## 6. Observed collapse trajectory
+
+Actual run log:
+
+| Epoch | Loss | Mean Recall | Active Slots | Hard Active | Dominant Share | Monopoly Fraction | QASA K | QASA Q | QASA Coverage |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 2.6225 | 12.6952 | 2.03 | 2.06 | 0.265 | 0.000 | 2.06 | 0.253 | 0.968 |
+| 2 | 2.1159 | 16.2049 | 1.37 | 1.57 | 0.659 | 0.384 | 1.57 | 0.257 | 0.988 |
+| 3 | 1.8784 | 19.2868 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
+| 4 | 1.7052 | 21.4593 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
+| 5 | 1.5927 | 23.3709 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
+| 6 | 1.4969 | 24.3342 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
+| 7 | 1.4250 | 24.6440 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
+| 8 | 1.3635 | 26.0462 | 1.00 | 1.00 | 1.000 | 1.000 | 1.00 | 0.250 | 1.000 |
+| 9 | 1.3258 | 26.0715 | 1.07 | 1.03 | 0.972 | 0.933 | 1.03 | 0.259 | 0.995 |
+| 10 | 1.2611 | 26.5121 | 1.00 | 1.00 | 0.999 | 1.000 | 1.00 | 0.250 | 1.000 |
+
+### Immediate reading
+
+The transition is extremely fast:
+
+```text
+Epoch 1
+active_slots = 2.03
+monopoly     = 0.000
+        ↓
+Epoch 2
+active_slots = 1.37
+monopoly     = 0.384
+        ↓
+Epoch 3
+active_slots = 1.00
+dominant     = 1.000
+monopoly     = 1.000
+```
+
+By epoch 3, the decomposition is functionally collapsed.
+
+Epoch 9 shows a small transient relaxation (`active_slots=1.07`, `dominant=0.972`), but epoch 10 immediately returns to near-perfect monopoly. This does not look like healthy specialization emerging late; it looks like a stable one-slot attractor with minor optimization noise.
+
+---
+
+## 7. The strongest empirical finding
+
+The most important result is **not merely that collapse happened**.
+
+It is that retrieval continued improving **after the decomposition had already collapsed**:
+
+```text
+Epoch 3 : mean_recall = 19.2868  | monopoly = 1.000
+Epoch 4 : mean_recall = 21.4593  | monopoly = 1.000
+Epoch 5 : mean_recall = 23.3709  | monopoly = 1.000
+Epoch 6 : mean_recall = 24.3342  | monopoly = 1.000
+Epoch 7 : mean_recall = 24.6440  | monopoly = 1.000
+Epoch 8 : mean_recall = 26.0462  | monopoly = 1.000
+Epoch 10: mean_recall = 26.5121  | monopoly = 1.000
+```
+
+Therefore, for this architecture and run:
+
+\[
+\boxed{\text{retrieval improvement is compatible with complete slot collapse}}
+\]
+
+The optimizer has discovered a valid shortcut:
+
+```text
+all modification evidence
+        ↓
+one dominant Edit Slot
+        ↓
+QASA selects that slot
+        ↓
+Executor performs the useful computation
+        ↓
+retrieval loss decreases
+```
+
+The retrieval objective has no reason to reject this solution.
+
+This is a much stronger diagnosis than simply observing low slot diversity.
+
+---
+
+## 8. Where does the failure occur?
+
+### 8.1 Collapse is already present before Executor
+
+`active_slots` and `dominant` are computed from `slot_masks` / `slot_mass`, before the Executor performs recurrent transitions.
+
+At epoch 3:
+
+```text
+active_slots = 1.00
+dominant     = 1.000
+```
+
+Therefore the failure is already present in the **token-to-slot ownership stage**.
+
+The Executor is receiving an already collapsed decomposition.
+
+### 8.2 It is not merely a hard-argmax artifact
+
+If only `active_slots=1.0` were observed, one could argue that probabilities might still be relatively soft and merely share the same argmax.
+
+But simultaneously:
+
+```text
+dominant ≈ 1.0
+monopoly ≈ 1.0
+```
+
+The dominant metric uses the actual soft slot mass. Therefore the distribution itself has concentrated, not merely the hard winner.
+
+### 8.3 QASA is downstream of the collapse
+
+QASA sees the attention induced by the same learned slot-query/key system. Once a single slot owns almost all evidence, QASA selecting one slot is rational under its own criteria.
+
+The observed regime:
+
+```text
+qasa_k   = 1.00
+qasa_q   = 0.250
+qasa_cov = 1.000
+```
+
+is approximately what is expected from:
+
+```text
+Slot A: useful / wins everything / covers everything
+Slot B: useless
+Slot C: useless
+Slot D: useless
+```
+
+QASA is therefore **not the origin of the first collapse signal**, and in the current integration it does not restore lost specialization.
+
+---
+
+## 9. Likely optimization mechanism
+
+The competitive ownership operation creates a natural winner-take-all feedback loop.
+
+Suppose one slot starts slightly better for a subset of tokens:
+
+```text
+S0  0.24
+S1  0.24
+S2  0.28   ← small initial advantage
+S3  0.24
+```
+
+Because retrieval is the only optimized objective, if S2 happens to contribute more useful modification information, downstream gradients can strengthen the query/key configuration that routes even more evidence to S2:
+
+```text
+0.28 → 0.40 → 0.65 → 0.90 → ~1.00
+```
+
+As S2 captures more tokens, its pooled semantic vector becomes an increasingly complete representation of the whole modification. That makes it even more sufficient for retrieval, producing further useful gradient through the same path.
+
+This is a self-reinforcing symmetry-breaking process:
+
+\[
+\text{small assignment advantage}
+\rightarrow
+\text{more information captured}
+\rightarrow
+\text{greater downstream usefulness}
+\rightarrow
+\text{more favorable gradient}
+\rightarrow
+\text{larger assignment advantage}.
+\]
+
+### Additional reinforcing mechanism: slot activity scaling
+
+For a low-mass slot:
+
+\[
+a_j=\min(m_j,1).
+\]
+
+Once its mass falls below 1, its final Edit Slot is explicitly attenuated:
+
+\[
+e_j=s_j m_j \quad (m_j<1).
+\]
+
+A dominant slot with `m_j >= 1` remains at full activity `a_j=1`, while a dying slot gets progressively smaller in magnitude.
+
+This is **not established as the initial cause**, because early in training multiple slots can all have mass above 1. However, once a loser crosses below unit mass, this mechanism can make recovery harder and reinforce an already-developing monopoly.
+
+This should be treated as a mechanism-level risk to test, not yet as a proven sole root cause.
+
+---
+
+## 10. What this experiment falsifies
+
+### Falsified / strongly rejected for the current setup
+
+#### H1 — “Replacing the old text representation with FG-CLIP2-Large alone will prevent slot collapse.”
+
+**Rejected.**
+
+Collapse reaches approximately complete monopoly by epoch 3.
+
+#### H2 — “Removing CSMCIR teacher dependence is sufficient to rescue multi-slot decomposition.”
+
+**Rejected as a sufficient intervention.**
+
+A3.2 has no active CSMCIR teacher composition, yet collapse remains severe.
+
+This does **not** prove that the teacher had zero effect in earlier branches. It shows only that teacher removal alone is not enough.
+
+#### H3 — “QASA selection alone is enough to preserve multiple meaningful Edit Slots.”
+
+**Rejected for this integration.**
+
+QASA converges to selecting the already dominant single slot.
+
+#### H4 — “A strong retrieval score necessarily implies useful compositional slot decomposition.”
+
+**Rejected.**
+
+Retrieval improves substantially while the slot system remains collapsed.
+
+---
+
+## 11. What this experiment does NOT falsify
+
+The result must not be overinterpreted.
+
+It does **not** establish that:
+
+- FG-CLIP2 token representations are perfectly local;
+- encoder global mixing is irrelevant;
+- correction dictionaries have no effect;
+- a NULL/dustbin mechanism cannot help;
+- balanced assignment cannot help;
+- sparse assignment cannot help;
+- capacity constraints cannot help;
+- OT/Sinkhorn/partial OT cannot help;
+- entropy/diversity/anti-monopoly pressure cannot help;
+- iterative slot refinement cannot help under a different objective;
+- the Executor is optimal;
+- four slots is the correct number of slots.
+
+The narrow conclusion is:
+
 \[
 \boxed{
-82.55\%
-\text{ of validation samples contain only one non-empty hard slot}
+\text{better/different frozen token representation alone is insufficient}
 }
 \]
 
-and:
+for preventing collapse in the current competitive-ownership + retrieval-only setup.
+
+---
+
+## 12. Root-cause scope after A3.2
+
+The evidence now shifts the priority away from treating the encoder as the sole bottleneck.
+
+The strongest remaining problem is **identifiability / optimization pressure**:
+
+> Why should four interchangeable slots learn four distinct semantic responsibilities when one slot can encode enough modification information to optimize retrieval?
+
+With only retrieval supervision, many internal decompositions can produce the same useful final query. A one-slot solution is therefore not forbidden.
+
+The current experiment provides direct evidence that the model is willing to exploit that equivalence.
+
+A useful high-level statement is:
 
 \[
 \boxed{
-K=4
-\text{ never occurs}
+\text{multi-slot structure exists architecturally, but is not identified by the objective}
 }
 \]
 
-on the evaluated validation set.
-
-This is already strong evidence of hard winner collapse.
+This is currently a stronger working diagnosis than “the encoder is too global.”
 
 ---
 
-# 8. Dominant hard region
+## 13. Why high QASA coverage is misleading here
 
-Measured:
-
-\[
-\boxed{
-\text{Mean dominant hard share}=0.9761
-}
-\]
-
-Therefore the dominant slot receives, on average:
-
-\[
-\boxed{97.61\%}
-\]
-
-of all valid content tokens.
-
-In plain terms, the typical learned partition is approximately:
+The final epochs look superficially excellent if one reads only QASA coverage:
 
 ```text
-dominant slot  → almost every token
-other slots    → zero or a very small number of tokens
+qasa_cov = 1.000
 ```
 
-rather than:
+But coverage asks whether selected slots cover sufficient token regions—not whether those regions are decomposed across multiple independent semantic slots.
+
+A collapsed attention map can satisfy coverage trivially:
 
 ```text
-slot A → one edit component
-slot B → another edit component
-slot C → another edit component
-slot D → another edit component
+one slot owns every valid token
+        ↓
+select that one slot
+        ↓
+all valid tokens are covered
+        ↓
+coverage = 1.0
 ```
-
----
-
-# 9. Hard winner entropy
-
-Measured:
-
-\[
-\boxed{
-H_{\text{hard}}=0.0469
-}
-\]
-
-The normalized entropy is extremely close to zero.
-
-This independently confirms that hard token assignments are highly concentrated.
-
-Thus the effective-K failure is not merely caused by one slot winning one extra token.
-
-The full token distribution itself is almost monopolistic.
-
----
-
-# 10. Which slot collapses the system?
-
-Per-slot result:
-
-| Slot | Winner tokens / sample | Non-empty rate | Hard token share |
-|---|---:|---:|---:|
-| S0 | 0.000 | 0.05% | 0.0000 |
-| S1 | 0.320 | 17.44% | 0.0238 |
-| S2 | 0.000 | 0.00% | 0.0000 |
-| **S3** | **11.837** | **100.00%** | **0.9761** |
-
-The failure is therefore highly asymmetric.
-
-The observed structure is approximately:
-
-```text
-                 ┌─ S0: ~0%
-text tokens ─────┼─ S1: ~2.38%
-                 ├─ S2: 0%
-                 └─ S3: ~97.61%
-```
-
-Most importantly:
-
-\[
-\boxed{
-S3\text{ is non-empty in }100\%\text{ of samples}
-}
-\]
-
-while:
-
-\[
-S2
-\]
-
-never wins a token.
-
-This is a near-complete hard winner monopoly.
-
----
-
-# 11. Is the monopoly just an argmax tie artifact?
-
-No strong evidence supports that explanation.
-
-Measured:
-
-```text
-Mean soft top1 probability = 0.4332
-Mean top1-top2 margin      = 0.1600
-Near-tie fraction <= 0.01  = 1.49%
-```
-
-If the attention were essentially tied:
-
-```text
-S0 = 0.251
-S1 = 0.249
-S2 = 0.250
-S3 = 0.250
-```
-
-then hard `argmax` could create misleading winner assignments due to tiny numerical differences.
-
-That is not what the aggregate statistics show.
-
-The average winning probability is:
-
-\[
-0.4332
-\]
-
-and the average winner margin is:
-
-\[
-0.1600.
-\]
-
-Only:
-
-\[
-1.49\%
-\]
-
-of valid tokens have a top-1/top-2 gap below or equal to `0.01`.
-
-Therefore the S3 monopoly is not adequately explained as numerical tie-breaking.
-
-The learned attention contains a real and systematic ranking advantage for the dominant slot.
-
----
-
-# 12. Category-level consistency
-
-Measured:
-
-| Category | Samples | Mean K | Dominant hard share |
-|---|---:|---:|---:|
-| dress | 2017 | 1.1651 | 0.9783 |
-| shirt | 2038 | 1.1806 | 0.9746 |
-| toptee | 1961 | 1.1790 | 0.9755 |
-
-The same failure appears across all three FashionIQ categories.
-
-Thus the collapse is not isolated to one clothing class.
-
-The behavior is dataset-wide.
-
----
-
-# 13. Agreement with the previous forensic diagnostic
-
-The previous A3.1 diagnostic measured:
-
-```text
-ownership/winner_active_slot_count ≈ 1.1810
-```
-
-The new QASA-faithful evaluator measures:
-
-```text
-mean effective K = 1.1749
-```
-
-These two independently computed quantities are extremely close.
-
-This agreement strongly increases confidence that the collapse is real rather than a bug in one evaluator.
-
----
-
-# 14. Why this matters for the previous QASA metrics
-
-During A3.1 training, the model often reported approximately:
-
-```text
-QASA selected K ≈ 2
-QASA coverage   ≈ 1
-```
-
-At first glance, this could appear to suggest that multiple useful slots exist.
-
-The QASA-faithful hard partition now shows:
-
-```text
-effective K ≈ 1.17
-dominant hard share ≈ 97.61%
-```
-
-These observations are not contradictory.
-
-They measure different things.
-
----
-
-## 14.1 QASA training selection uses soft coverage
-
-With four nearly uniform slots:
-
-\[
-A_{t,i}=0.25.
-\]
-
-For:
-
-\[
-\tau=0.5,
-\]
-
-two slots already satisfy:
-
-\[
-0.25+0.25=0.5.
-\]
-
-Therefore two diffuse slots can jointly mark every token as covered even when no meaningful decomposition exists.
-
----
-
-## 14.2 QASA inference uses hard winners
-
-The hard partition asks instead:
-
-\[
-\arg\max_i A_{t,i}.
-\]
-
-This exposes which slot actually wins each token.
-
-The result is:
-
-\[
-S3
-\]
-
-winning almost all tokens.
 
 Therefore:
 
 \[
-\boxed{
-\text{high soft coverage can coexist with severe hard winner collapse}
-}
-\]
-
-and, in this experiment:
-
-\[
-\boxed{
-\text{soft coverage masked the true hard assignment failure}
-}
-\]
-
----
-
-# 15. Relation to the previous causal diagnosis
-
-The QASA-faithful evaluation is not the only evidence of failure.
-
-The previous A3.1 forensic analysis reported:
-
-```text
-ownership pairwise cosine             = 0.9806
-ownership pairwise JS                 = 0.0070
-slot-effect pairwise cosine           = 0.7795
-slot-effect effective rank            = 1.2777
-forced-only causal cosine             = 0.9936
-drop-direction causal cosine          = 0.9820
-Executor state-change cosine          = 0.9890
-Slot ↔ Primitive NMI                  = 0.0075
-```
-
-Together with the new hard-partition result:
-
-```text
-Mean effective K                      = 1.1749
-K=1 fraction                          = 82.55%
-Dominant hard token share             = 97.61%
-```
-
-the evidence now spans four levels:
-
-```text
-SOFT OWNERSHIP
-different slots have very similar token maps
-        ↓
-HARD QASA INFERENCE
-S3 wins almost every token
-        ↓
-REPRESENTATION / CAUSAL EFFECT
-different slots produce nearly the same edit direction
-        ↓
-EXECUTION
-different slots create nearly the same state transition
-```
-
-Therefore the decomposition failure is not localized to one diagnostic layer.
-
----
-
-# 16. Final scientific interpretation
-
-The branch strongly rejects the hypothesis:
-
-\[
-\boxed{
-\text{QASA-style selection alone is sufficient to create TAPER Edit-Slot specialization}
-}
-\]
-
-The observed behavior is instead:
-
-```text
-multiple nominal slots
-       ↓
-highly overlapping soft attention
-       ↓
-one slot gains a systematic winner advantage
-       ↓
-hard inference collapses to almost one region
-       ↓
-remaining slot functions are still causally redundant
-```
-
-The most precise description is:
-
-\[
-\boxed{
-\text{diffuse soft ownership}
-+
-\text{near-complete hard winner collapse}
-+
-\text{functional redundancy}
-}
-\]
-
----
-
-# 17. What this branch proves
-
-This branch provides strong evidence that, for the current TAPER adaptation:
-
-1. QASA-style hard inference does not reveal a hidden clean decomposition.
-2. More than 82% of validation samples produce only one non-empty hard slot.
-3. The dominant slot receives approximately 97.6% of hard token assignments.
-4. The collapse is consistent across dress, shirt, and toptee.
-5. The collapse is not adequately explained by near-tied attention.
-6. The result agrees with an independent forensic diagnostic.
-7. Soft QASA coverage is not a reliable indicator of semantic Edit-Slot decomposition in this setting.
-
----
-
-# 18. What this branch does NOT prove
-
-This branch does not prove that QASA itself is generally invalid.
-
-It only establishes failure for the current adaptation:
-
-```text
-TAPER
-+
-text-token Edit Slots
-+
-one-shot slot competition
-+
-retrieval supervision
-+
-QASA-style training selection
-```
-
-QASA was originally developed in a different object-centric setting.
-
-Therefore the scientifically correct conclusion is:
-
-> QASA selection does not supply enough specialization pressure for the current TAPER Edit Slots.
-
-The result should not be generalized beyond that scope.
-
----
-
-# 19. Main research implication
-
-The central problem is no longer:
-
-> How should we select fewer slots?
-
-The experiment shows that the more fundamental problem occurs earlier:
-
-> Why should different slots learn different causal roles at all?
-
-The current system effectively performs:
-
-```text
-SELECT
-  ↓
-hope specialization appears
-```
-
-but the evidence suggests the research sequence should instead be:
-
-```text
-SPECIALIZE
-    ↓
-verify distinct causal roles
-    ↓
-SELECT / PRUNE
-```
-
-In short:
-
-\[
-\boxed{
-\textbf{specialize first, select later}
-}
-\]
-
----
-
-# 20. Implication for future experiments
-
-Future work should focus on mechanisms that create distinct causal responsibility rather than additional slot-selection heuristics.
-
-Possible families include:
-
-```text
-exclusive responsibility
-residual / unexplained evidence
-sequential explaining-away
-slot-specific causal contribution
-adaptive anti-redundancy
-structured bottlenecks
-role-conditioned execution
-```
-
-However, any proposed mechanism must be audited against trivial solutions.
-
-For example:
-
-```text
-orthogonal embeddings
-```
-
-do not automatically imply:
-
-```text
-different semantic roles
-```
-
-and:
-
-```text
-different attention maps
-```
-
-do not automatically imply:
-
-```text
-different causal functions
-```
-
-Therefore future experiments should retain the causal probes introduced in A3.1.
-
----
-
-# 21. Recommended success criteria for later branches
-
-A future specialization mechanism should ideally improve several independent diagnostics simultaneously.
-
-At minimum:
-
-```text
-hard effective K increases when the caption contains multiple edit factors
-dominant hard share decreases substantially
-ownership maps become less redundant
-slot-effect effective rank increases
-forced-only causal cosine decreases
-Executor state-change cosine decreases
-Slot↔Primitive dependence becomes non-trivial when semantically justified
-retrieval performance does not catastrophically degrade
-```
-
-No single metric should be used as proof of specialization.
-
----
-
-# 22. Running the evaluator
-
-Quick evaluation:
-
-```bash
-python src/evaluate_qasa_inference.py \
-  --checkpoint /path/to/A3.1/best.pt \
-  --max-queries-per-category 512
-```
-
-Full validation:
-
-```bash
-python src/evaluate_qasa_inference.py \
-  --checkpoint /path/to/A3.1/best.pt \
-  --max-queries-per-category 0
-```
-
-The report is saved to:
-
-```text
-reports/qasa_faithful_inference_eval.json
-```
-
----
-
-# 23. Final verdict
-
-\[
-\boxed{
-\textbf{A3.1 QASA-faithful inference confirms severe hard winner collapse}
-}
-\]
-
-Numerically:
-
-\[
-\boxed{
-\mathbb E[K_{\text{eff}}]=1.1749
-}
-\]
-
-\[
-\boxed{
-P(K=1)=82.55\%
-}
-\]
-
-\[
-\boxed{
-\text{dominant hard token share}=97.61\%
-}
+\boxed{\text{coverage} \neq \text{specialization}}
 \]
 
 and:
 
 \[
-\boxed{
-S3\text{ is non-empty in }100\%\text{ of validation samples}
-}
+\boxed{\text{QASA K}=1,\ \text{coverage}=1\text{ is compatible with total collapse}.}
 \]
 
-The final conclusion is therefore:
+This metric distinction should be preserved in all later analyses.
 
-> **QASA-style slot selection can prune TAPER Edit Slots, but the learned slots do not self-organize into distinct semantic or causal roles. The QASA-faithful hard partition instead exposes a near-complete winner collapse dominated by S3.**
+---
 
-This branch should be retained as a clean negative-control result demonstrating that:
+## 14. Retrieval metric definition
+
+The current FashionIQ evaluation computes per-category `Recall@10` and `Recall@50`, macro-averages them across categories, then reports:
+
+\[
+\text{mean\_recall}
+=
+\frac{\text{macro Recall@10}+\text{macro Recall@50}}{2}.
+\]
+
+The branch is configured for `fashioniq_original` gallery construction through the project configuration unless locally overridden.
+
+Thus the reported `26.5121` is a retrieval metric, **not** a slot-specialization score.
+
+---
+
+## 15. Important reproducibility discrepancy to preserve
+
+The observed terminal run prints:
+
+```text
+Epoch 1/10
+...
+Epoch 10/10
+```
+
+so the executed run used **10 epochs**.
+
+However, the audited remote HEAD `4840898...` currently contains:
+
+```yaml
+num_epochs: 100
+```
+
+in `conf/experiment/taper_e2e.yaml`.
+
+Therefore at least one of the following was true for the local run:
+
+1. the local config had an uncommitted `num_epochs: 10` change; or
+2. another local override/change affected the runtime.
+
+Before treating this run as a fully reproducible archival result, save:
+
+```bash
+git status
+git diff
+```
+
+and the exact Hydra resolved config/output directory.
+
+This discrepancy does **not** affect the collapse diagnosis—the collapse already occurs by epoch 3—but it matters for exact experiment provenance.
+
+---
+
+## 16. Recommended branch verdict
+
+Do **not** continue this run to 100 epochs merely to see whether collapse disappears.
+
+The relevant question for A3.2 has already been answered cleanly:
+
+```text
+Can frozen FG-CLIP2-Large direct token semantics,
+without active CSMCIR teacher composition,
+prevent the current Edit-Slot system from collapsing?
+
+Observed answer: NO.
+```
+
+The branch should be preserved as a negative-result baseline rather than repeatedly modified until it succeeds.
+
+Suggested status label:
+
+```text
+A3.2 — FGCLIP2 direct semantics
+RESULT: RETRIEVAL LEARNS, MULTI-SLOT DECOMPOSITION COLLAPSES
+```
+
+---
+
+## 17. What should be attacked next
+
+The next research branch should primarily attack the **assignment/objective geometry**, not merely swap another encoder.
+
+The target property should be explicit:
+
+> Make the one-slot solution either impossible, capacity-limited, or objectively worse than a genuine multi-part decomposition—without forcing arbitrary uniformity when the text truly contains only one edit.
+
+Relevant families already under consideration include:
+
+- explicit NULL/dustbin ownership;
+- sparse but non-monopolistic assignment;
+- balanced/capacity-constrained transport;
+- partial/unbalanced optimal transport;
+- Entmax/Sparsemax-style support selection;
+- anti-monopoly or load-balancing pressure;
+- information/capacity bottlenecks per slot;
+- coverage/exclusivity constraints that distinguish “one slot covers all” from genuine decomposition.
+
+These are **next research directions**, not conclusions of A3.2. They should be evaluated in separate branches so this negative result remains clean.
+
+---
+
+## 18. Minimal forensic checks worth preserving from this run
+
+If the run output/checkpoint is still available, archive at minimum:
+
+```text
+best.pt
+last.pt
+resolved Hydra config
+terminal/log output
+branch SHA
+git diff / git status
+FG-CLIP2 image manifests
+FG-CLIP2 text manifests
+```
+
+For a later deeper postmortem, the most useful additional measurements would be:
+
+1. per-slot `slot_mass_mean` by epoch;
+2. per-slot hard winner counts by epoch;
+3. assignment entropy by epoch;
+4. slot overlap by epoch;
+5. which physical slot ID becomes the monopolist;
+6. whether monopolist identity is seed-dependent;
+7. gradients/norms of slot queries during epochs 1–3;
+8. checkpoint-level slot-drop functional tests.
+
+These tests would characterize **how** symmetry breaks, but they are not required to establish that collapse occurred.
+
+---
+
+# Final diagnosis
+
+The experiment produced a very clear negative result.
+
+A3.2 successfully removed the active teacher dependency and replaced the old representation path with frozen FG-CLIP2-Large contextual token states. Despite this, the four-way competitive slot system rapidly converged to a one-slot monopoly:
+
+\[
+\text{active slots}: 2.03 \rightarrow 1.37 \rightarrow 1.00
+\]
+
+\[
+\text{dominant share}: 0.265 \rightarrow 0.659 \rightarrow 1.000
+\]
+
+\[
+\text{monopoly fraction}: 0.000 \rightarrow 0.384 \rightarrow 1.000.
+\]
+
+At the same time:
+
+\[
+\text{mean recall}: 12.70 \rightarrow 26.51.
+\]
+
+The central scientific observation is therefore:
 
 \[
 \boxed{
-\text{selection} \neq \text{specialization}
+\text{the retrieval objective can continue improving after the intended decomposition has died}
 }
 \]
 
-and that high soft coverage can hide severe hard assignment collapse.
+and the central scope update is:
+
+\[
+\boxed{
+\text{representation quality/locality alone is not sufficient to identify multiple Edit Slots}
+}
+\]
+
+The next phase should treat **one-slot shortcut / decomposition identifiability / competitive-assignment dynamics** as first-class root-cause targets.
+
+---
+
+## Branch status summary
+
+```text
+FG-CLIP2 cache contract          PASS
+Frozen backbone isolation        PASS
+No active CSMCIR teacher         PASS
+Direct 1024-D pooled Edit Slots  PASS
+Retrieval optimization           WORKING
+QASA execution path              WORKING MECHANICALLY
+Multi-slot specialization        FAIL
+Slot-collapse prevention         FAIL
+One-slot shortcut eliminated     FAIL
+Main hypothesis of A3.2          REJECTED AS SUFFICIENT
+```
+
+**Preserve this branch as evidence. Do not rewrite its failure away.**
