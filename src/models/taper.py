@@ -287,6 +287,42 @@ class TAPER(nn.Module):
         slot_semantics = weighted_sum / slot_mass.clamp_min(1.0).unsqueeze(-1)
         return slot_semantics, slot_mass, slot_activity
 
+    @torch.no_grad()
+    def qasa_inference_partition(self, attention: Tensor, valid: Tensor) -> dict[str, Tensor]:
+        if attention.ndim != 3:
+            raise ValueError("attention must be [B,L,N]")
+        b, l, n = attention.shape
+        if l != self.num_slots:
+            raise ValueError("attention slot dimension mismatch")
+        if valid.shape != (b, n):
+            raise ValueError("valid must be [B,N]")
+        valid = valid.to(torch.bool)
+        winner = attention.argmax(dim=1)  # [B,N]
+        hard_regions = F.one_hot(winner, num_classes=l).permute(0, 2, 1).to(torch.bool)  # [B,L,N]
+        hard_regions = hard_regions & valid[:, None, :]
+        winner_ids = torch.where(valid, winner, torch.full_like(winner, -1))
+        nonempty_slots = hard_regions.any(dim=2)  # [B,L]
+        effective_k = nonempty_slots.sum(dim=1)   # [B]
+        winner_counts = hard_regions.sum(dim=2)   # [B,L]
+        hard_sum = hard_regions.sum(dim=1)  # [B,N]
+        if not torch.equal(hard_sum[valid], torch.ones_like(hard_sum[valid])):
+            raise RuntimeError("Every valid token must belong to exactly one slot")
+
+        if (~valid).any():
+            if hard_sum[~valid].any():
+                raise RuntimeError("Invalid/special tokens must belong to no slot")
+
+        if (effective_k > self.num_slots).any():
+            raise RuntimeError("effective_k cannot exceed num_slots")
+
+        return {
+            "qasa_inference_winner_ids": winner_ids,
+            "qasa_inference_hard_regions": hard_regions,
+            "qasa_inference_nonempty_slots": nonempty_slots,
+            "qasa_inference_effective_k": effective_k,
+            "qasa_inference_winner_counts": winner_counts,
+        }
+
     def _compose_counterfactual_queries(
         self,
         *,
@@ -403,6 +439,7 @@ class TAPER(nn.Module):
         qasa_attention = self._qasa_attention_fp32(text_states, slot_valid)
         qasa_valid = slot_valid.to(torch.bool)
         qasa = self._qasa_select_slots(qasa_attention, qasa_valid)
+        qasa_inference = self.qasa_inference_partition(qasa_attention, qasa_valid)
         if (not self.training and not self.qasa_apply_at_eval):
             selected_mask = torch.ones(
                 qasa["qasa_selected_mask"].shape,
@@ -429,6 +466,7 @@ class TAPER(nn.Module):
             "qasa_selected_count": (selected_mask.sum(dim=1)),
             "qasa_final_coverage": qasa["qasa_final_coverage"],
             "qasa_novelty_skip_count": qasa["qasa_novelty_skip_count"],
+            **qasa_inference,
             "q_teacher_full": q_full,
             "q_teacher_minus": q_minus,
         }
