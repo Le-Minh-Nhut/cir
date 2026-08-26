@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import unittest
+from unittest.mock import patch
 
 import torch
 
@@ -13,6 +14,7 @@ def tiny_taper(
     capacity_enabled: bool = False,
     capacity: float = 1.0,
     theta: float = 0.25,
+    r4_lambda: float = 1.0,
     solver_iters: int = 64,
     routing_mode: str = "qisca",
 ) -> TAPER:
@@ -27,7 +29,7 @@ def tiny_taper(
         num_primitives=2,
         routing_mode=routing_mode,
         r4_theta=theta,
-        r4_lambda=1.0,
+        r4_lambda=r4_lambda,
         r4_capacity_enabled=capacity_enabled,
         r4_slot_capacity=capacity,
         r4_solver_iters=solver_iters,
@@ -62,6 +64,46 @@ class SubSimplexProjectionTest(unittest.TestCase):
             ).item(),
             0,
         )
+
+
+class MassAwarePoolingTest(unittest.TestCase):
+    def test_assignment_mass_is_applied_exactly_once(self) -> None:
+        states = torch.tensor([[[2.0, -4.0]]])
+        cases = (
+            (0.0, [0.0, 0.0], 0.0, [0.0, 0.0]),
+            (0.2, [2.0, -4.0], 0.2, [0.4, -0.8]),
+            (1.0, [2.0, -4.0], 1.0, [2.0, -4.0]),
+            (2.0, [2.0, -4.0], 1.0, [2.0, -4.0]),
+        )
+        for mass, expected_semantics, expected_activity, expected_edit in cases:
+            with self.subTest(mass=mass):
+                masks = torch.tensor([[[mass]]])
+                semantics, slot_mass, activity = TAPER._mass_aware_slot_pool(
+                    states,
+                    masks,
+                )
+                edit_slots = semantics * activity.unsqueeze(-1)
+                torch.testing.assert_close(slot_mass, torch.tensor([[mass]]))
+                torch.testing.assert_close(
+                    semantics,
+                    torch.tensor([[expected_semantics]]),
+                )
+                torch.testing.assert_close(
+                    activity,
+                    torch.tensor([[expected_activity]]),
+                )
+                torch.testing.assert_close(
+                    edit_slots,
+                    torch.tensor([[expected_edit]]),
+                )
+
+    def test_r1_unit_mass_pooling_is_unchanged(self) -> None:
+        states = torch.tensor([[[1.0, 3.0], [5.0, 7.0]]])
+        masks = torch.tensor([[[0.25, 0.75]]])
+        semantics, mass, activity = TAPER._mass_aware_slot_pool(states, masks)
+        torch.testing.assert_close(mass, torch.ones(1, 1))
+        torch.testing.assert_close(activity, torch.ones(1, 1))
+        torch.testing.assert_close(semantics, torch.tensor([[[4.0, 6.0]]]))
 
 
 class TAPERQISCARoutingTest(unittest.TestCase):
@@ -110,6 +152,101 @@ class TAPERQISCARoutingTest(unittest.TestCase):
         self.assertTrue((routing >= 0).all())
         self.assertTrue((routing.sum(dim=1) <= 1.0 + 1e-6).all())
 
+    def _token_budget_diagnostics(
+        self,
+        model: TAPER,
+        competition: torch.Tensor,
+        preprojection: torch.Tensor,
+        routing: torch.Tensor,
+    ) -> dict[str, torch.Tensor]:
+        valid = torch.ones(1, competition.shape[-1], dtype=torch.bool)
+        return model._assignment_diagnostics(
+            slot_masks=competition,
+            slot_mass=competition.sum(dim=-1),
+            routing_masks=routing,
+            routing_slot_mass=routing.sum(dim=-1),
+            routing_support_count=(routing > 1e-6).sum(dim=-1),
+            qasa_selected_mask=self.selected,
+            qasa_quality=torch.ones(1, 4),
+            qasa_final_coverage=torch.ones(1),
+            hard_active_slot_mask=routing.sum(dim=-1) > 1e-6,
+            text_attention_mask=valid,
+            text_content_mask=valid,
+            r4_preprojection=preprojection,
+        )
+
+    def test_default_lambda_can_leave_token_budget_inactive(self) -> None:
+        model = tiny_taper(theta=0.25, r4_lambda=1.0)
+        competition = torch.tensor([[[0.70], [0.10], [0.10], [0.10]]])
+        valid = torch.ones(1, 1, dtype=torch.bool)
+        preprojection = model._qisca_preprojection(
+            competition,
+            valid,
+            self.selected,
+        )
+        routing = model._qisca_routing(competition, valid, self.selected)
+        diagnostics = self._token_budget_diagnostics(
+            model,
+            competition,
+            preprojection,
+            routing,
+        )
+
+        self.assertLessEqual(float(preprojection.sum(dim=1)), 1.0)
+        torch.testing.assert_close(routing, preprojection)
+        self.assertEqual(
+            float(
+                diagnostics[
+                    "r4_preprojection_token_budget_violation_fraction"
+                ]
+            ),
+            0.0,
+        )
+        self.assertEqual(
+            float(diagnostics["r4_preprojection_token_budget_excess_mean"]),
+            0.0,
+        )
+        self.assertEqual(
+            float(diagnostics["r4_token_budget_binding_fraction"]),
+            0.0,
+        )
+
+    def test_smaller_lambda_activates_token_budget_projection(self) -> None:
+        model = tiny_taper(theta=0.25, r4_lambda=0.25)
+        competition = torch.tensor([[[0.70], [0.10], [0.10], [0.10]]])
+        valid = torch.ones(1, 1, dtype=torch.bool)
+        preprojection = model._qisca_preprojection(
+            competition,
+            valid,
+            self.selected,
+        )
+        routing = model._qisca_routing(competition, valid, self.selected)
+        diagnostics = self._token_budget_diagnostics(
+            model,
+            competition,
+            preprojection,
+            routing,
+        )
+
+        self.assertGreater(float(preprojection.sum(dim=1)), 1.0)
+        torch.testing.assert_close(routing.sum(dim=1), torch.ones(1, 1))
+        self.assertEqual(
+            float(
+                diagnostics[
+                    "r4_preprojection_token_budget_violation_fraction"
+                ]
+            ),
+            1.0,
+        )
+        self.assertGreater(
+            float(diagnostics["r4_preprojection_token_budget_excess_mean"]),
+            0.0,
+        )
+        self.assertEqual(
+            float(diagnostics["r4_token_budget_binding_fraction"]),
+            1.0,
+        )
+
     def test_implicit_rejection_and_clear_winner(self) -> None:
         rejected_model = tiny_taper(theta=0.30)
         uniform = torch.full((1, 4, 1), 0.25)
@@ -126,6 +263,75 @@ class TAPERQISCARoutingTest(unittest.TestCase):
         routed = winner_model._qisca_routing(clear, valid, self.selected)
         self.assertGreater(float(routed[0, 0, 0]), 0.0)
         self.assertEqual(torch.count_nonzero(routed[0, 1:, 0]).item(), 0)
+
+    def test_qasa_selected_zero_evidence_slot_never_executes(self) -> None:
+        model = TAPER(
+            text_dim=2,
+            slot_dim=2,
+            reference_dim=2,
+            query_dim=2,
+            state_dim=2,
+            num_slots=2,
+            num_primitives=2,
+            routing_mode="qisca",
+            r4_theta=0.30,
+            r4_lambda=1.0,
+            r4_capacity_enabled=False,
+        )
+        reference = torch.tensor([[0.2, -0.1]])
+        text = torch.tensor([[[1.0, 0.0], [0.0, 1.0]]])
+        valid = torch.ones(1, 2, dtype=torch.bool)
+        competition = torch.tensor([[[0.80, 0.80], [0.20, 0.20]]])
+        logits = competition.log()
+
+        def select_both(
+            _attention: torch.Tensor,
+            _valid: torch.Tensor,
+        ) -> dict[str, torch.Tensor]:
+            return {
+                "qasa_quality": torch.ones(1, 2),
+                "qasa_selected_mask": torch.ones(1, 2, dtype=torch.bool),
+                "qasa_selected_count": torch.tensor([2]),
+                "qasa_final_coverage": torch.ones(1),
+                "qasa_novelty_skip_count": torch.zeros(1),
+            }
+
+        with (
+            patch.object(
+                model,
+                "_competitive_ownership",
+                return_value=(logits, competition),
+            ),
+            patch.object(model, "_qasa_select_slots", side_effect=select_both),
+        ):
+            output = model(
+                reference,
+                text,
+                valid,
+                text_content_mask=valid,
+            )
+
+        self.assertTrue(bool(output["qasa_selected_mask"][0, 1]))
+        self.assertGreater(float(output["routing_slot_mass"][0, 0]), 0.0)
+        self.assertEqual(float(output["routing_slot_mass"][0, 1]), 0.0)
+        self.assertFalse(bool(output["routing_active_mask"][0, 1]))
+        self.assertFalse(bool(output["execution_selected_mask"][0, 1]))
+        self.assertFalse(bool(output["hard_active_slot_mask"][0, 1]))
+        self.assertEqual(int(output["slot_to_step"][0, 1]), -1)
+        self.assertEqual(int(output["trace_valid_mask"].sum()), 1)
+
+        changed_slots = output["edit_slots"].clone()
+        changed_slots[:, 1] = 10_000.0
+        changed_execution = model.execute(
+            changed_slots,
+            output["execution_selected_mask"],
+            output["z0"],
+            output["reference_state"],
+        )
+        torch.testing.assert_close(
+            changed_execution["final_state"],
+            output["final_state"],
+        )
 
     def test_qasa_mask_does_not_renormalize_selected_slot(self) -> None:
         model = tiny_taper(theta=0.30)
@@ -391,6 +597,24 @@ class TAPERQISCARoutingTest(unittest.TestCase):
             ),
             atol=1e-6,
             rtol=1e-6,
+        )
+        entmax_forward = entmax_model(
+            torch.randn(2, 4),
+            text,
+            attention,
+            text_content_mask=content,
+        )
+        self.assertTrue(
+            torch.equal(
+                entmax_forward["execution_selected_mask"],
+                entmax_forward["qasa_selected_mask"],
+            )
+        )
+        self.assertTrue(
+            torch.equal(
+                entmax_forward["hard_active_slot_mask"],
+                entmax_forward["qasa_selected_mask"],
+            )
         )
 
     def test_r4_diagnostics_report_rejection_and_capacity_na(self) -> None:

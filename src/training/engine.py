@@ -265,6 +265,16 @@ def fit(
             f"{train_metrics.get('diagnostic/routing_capacity_utilization_mean', float('nan')):.3f}"
             f" | routing_capacity_binding_fraction="
             f"{train_metrics.get('diagnostic/routing_capacity_binding_fraction', float('nan')):.3f}"
+            f" | r4_preprojection_token_mass_mean="
+            f"{train_metrics.get('diagnostic/r4_preprojection_token_mass_mean', float('nan')):.3f}"
+            f" | r4_preprojection_token_mass_max="
+            f"{train_metrics.get('diagnostic/r4_preprojection_token_mass_max', float('nan')):.3f}"
+            f" | r4_preprojection_token_budget_violation_fraction="
+            f"{train_metrics.get('diagnostic/r4_preprojection_token_budget_violation_fraction', float('nan')):.3f}"
+            f" | r4_preprojection_token_budget_excess_mean="
+            f"{train_metrics.get('diagnostic/r4_preprojection_token_budget_excess_mean', float('nan')):.3f}"
+            f" | r4_token_budget_binding_fraction="
+            f"{train_metrics.get('diagnostic/r4_token_budget_binding_fraction', float('nan')):.3f}"
             f" | routing_slot_support=[{routing_slot_support}]"
         )
 

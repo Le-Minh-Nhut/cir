@@ -17,6 +17,9 @@ routing_mode: qisca
 QASA is unchanged and always measures the pre-sparse slot-softmax competition.
 For QI-SCA, that same differentiable tensor is denoted `P^Q`. QASA's selected
 mask only permits a slot to consume evidence; masking never renormalizes `P^Q`.
+A slot executes only when it is both QASA-selected and has routing mass greater
+than the routing support epsilon. A selected but fully rejected slot receives no
+Executor step, primitive, or reference-only transition.
 
 QI-SCA forms
 
@@ -65,6 +68,24 @@ r4_solver_iters: 64
 `theta=0.25` corresponds to uniform competition over four real Edit Slots. It
 is not adjusted for QASA-selected count. Theta, lambda, and capacity are fixed,
 not learned or annealed.
+
+With `lambda=1` and nonnegative theta, `sum(relu(P^Q - theta)) <= 1`, so the
+token budget can be inactive. Preprojection mass, violation/excess, and
+postprojection binding diagnostics are logged explicitly; lambda remains 1.0
+until a deliberate calibration experiment is performed.
+
+## Pooling semantics
+
+For assignment mass `m` and weighted evidence `w = sum_n A_n x_n`, pooling uses
+
+```text
+slot_semantics = w / max(m, eps)
+slot_activity  = min(m, 1)
+edit_slot      = slot_semantics * slot_activity
+```
+
+Thus `0 < m < 1` gives `edit_slot = w`: assignment mass is applied once, not
+twice. `m=0` remains exactly zero, while R1's usual `m≈1` behavior is unchanged.
 
 ## Commands
 

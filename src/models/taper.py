@@ -12,6 +12,7 @@ from torch import Tensor, nn
 # Small enough to detect Entmax support while remaining representable in FP16.
 R1_ROUTING_SUPPORT_EPS = 1e-6
 R4_CAPACITY_BINDING_TOL = 1e-4
+R4_TOKEN_BUDGET_TOL = 1e-5
 
 
 class TAPER(nn.Module):
@@ -288,8 +289,23 @@ class TAPER(nn.Module):
         slot_mass = slot_masks.sum(dim=2)  # [B, L], expected owned-token count
         weighted_sum = torch.einsum("bln,bnd->bld", slot_masks, text_states)
         slot_activity = slot_mass.clamp(max=1.0)
-        slot_semantics = weighted_sum / slot_mass.clamp_min(1.0).unsqueeze(-1)
+        # Semantics is the weighted mean of evidence. Activity applies assignment
+        # mass once for mass < 1 and saturates at one for mass >= 1. The previous
+        # clamp_min(1) denominator applied sub-unit routing mass twice.
+        slot_semantics = weighted_sum / slot_mass.clamp_min(1e-12).unsqueeze(-1)
         return slot_semantics, slot_mass, slot_activity
+
+    def _qisca_preprojection(
+        self,
+        soft_competition: Tensor,
+        slot_valid: Tensor,
+        selected_mask: Tensor,
+    ) -> Tensor:
+        """Positive QI-SCA geometry before token/capacity projection."""
+        allowed = selected_mask[:, :, None] & slot_valid[:, None, :]
+        return (
+            (soft_competition.float() - self.r4_theta) / self.r4_lambda
+        ).clamp_min(0.0) * allowed.to(torch.float32)
 
     def _token_entmax_routing(
         self,
@@ -533,6 +549,7 @@ class TAPER(nn.Module):
             selected_mask = qasa["qasa_selected_mask"]
 
         if self.routing_mode == "entmax15":
+            r4_preprojection = torch.zeros_like(slot_masks, dtype=torch.float32)
             routing_masks = self._token_entmax_routing(
                 ownership_logits,
                 slot_valid,
@@ -541,6 +558,11 @@ class TAPER(nn.Module):
         else:
             # slot_masks is P^Q = softmax_slots(Z): the differentiable copy of
             # the same pre-sparse competition measured by QASA in FP32.
+            r4_preprojection = self._qisca_preprojection(
+                slot_masks,
+                slot_valid,
+                selected_mask,
+            )
             routing_masks = self._qisca_routing(
                 slot_masks,
                 slot_valid,
@@ -555,6 +577,8 @@ class TAPER(nn.Module):
         routing_support_count = (
             (routing_masks > R1_ROUTING_SUPPORT_EPS) & slot_valid[:, None, :]
         ).sum(dim=-1)
+        routing_active_mask = routing_slot_mass > R1_ROUTING_SUPPORT_EPS
+        execution_selected_mask = selected_mask & routing_active_mask
 
         return {
             "edit_slots": edit_slots,
@@ -569,6 +593,9 @@ class TAPER(nn.Module):
             "routing_slot_mass": routing_slot_mass,
             "routing_slot_activity": routing_slot_activity,
             "routing_support_count": routing_support_count,
+            "routing_active_mask": routing_active_mask,
+            "execution_selected_mask": execution_selected_mask,
+            "r4_preprojection": r4_preprojection,
             "routing_mode_entmax15": torch.tensor(
                 self.routing_mode == "entmax15",
                 dtype=torch.bool,
@@ -786,7 +813,13 @@ class TAPER(nn.Module):
         if disable_execution:
             disabled_slots = torch.ones(slot_output["edit_slots"].shape[:2], dtype=torch.bool, device=slot_output["edit_slots"].device)
 
-        execution = self.execute(slot_output["edit_slots"], slot_output["qasa_selected_mask"], z0, reference_state, disabled_slots=disabled_slots)
+        execution = self.execute(
+            slot_output["edit_slots"],
+            slot_output["execution_selected_mask"],
+            z0,
+            reference_state,
+            disabled_slots=disabled_slots,
+        )
         q0 = self.make_query(execution["final_state"])
         q_reference_only = self.make_query(z0)
 
@@ -865,6 +898,7 @@ class TAPER(nn.Module):
         hard_active_slot_mask: Tensor,
         text_attention_mask: Tensor,
         text_content_mask: Tensor | None = None,
+        r4_preprojection: Tensor | None = None,
     ) -> dict[str, Tensor]:
         if text_content_mask is not None:
             valid = text_attention_mask.to(torch.bool) & text_content_mask.to(torch.bool)
@@ -982,6 +1016,41 @@ class TAPER(nn.Module):
         ).sum() / denom
         diagnostics["routing_slot_mass_mean"] = routing_slot_mass.mean()
         diagnostics["routing_slot_mass_max"] = routing_slot_mass.max()
+        if self.routing_mode == "qisca" and r4_preprojection is not None:
+            preprojection_token_mass = r4_preprojection.sum(dim=1)
+            preprojection_excess = (preprojection_token_mass - 1.0).clamp_min(0.0)
+            diagnostics["r4_preprojection_token_mass_mean"] = (
+                preprojection_token_mass * valid_f
+            ).sum() / denom
+            diagnostics["r4_preprojection_token_mass_max"] = (
+                preprojection_token_mass.masked_fill(~valid, 0.0).max()
+            )
+            diagnostics["r4_preprojection_token_budget_violation_fraction"] = (
+                (
+                    preprojection_token_mass > 1.0 + R4_TOKEN_BUDGET_TOL
+                ).to(slot_masks.dtype)
+                * valid_f
+            ).sum() / denom
+            diagnostics["r4_preprojection_token_budget_excess_mean"] = (
+                preprojection_excess * valid_f
+            ).sum() / denom
+            diagnostics["r4_token_budget_binding_fraction"] = (
+                (
+                    (routing_token_mass - 1.0).abs() <= R4_TOKEN_BUDGET_TOL
+                ).to(slot_masks.dtype)
+                * valid_f
+            ).sum() / denom
+        else:
+            r4_not_applicable = routing_masks.new_full((), float("nan"))
+            diagnostics["r4_preprojection_token_mass_mean"] = r4_not_applicable
+            diagnostics["r4_preprojection_token_mass_max"] = r4_not_applicable
+            diagnostics[
+                "r4_preprojection_token_budget_violation_fraction"
+            ] = r4_not_applicable
+            diagnostics[
+                "r4_preprojection_token_budget_excess_mean"
+            ] = r4_not_applicable
+            diagnostics["r4_token_budget_binding_fraction"] = r4_not_applicable
         if self.routing_mode == "qisca" and self.r4_capacity_enabled:
             selected_f = qasa_selected_mask.to(slot_masks.dtype)
             selected_count = selected_f.sum().clamp_min(1.0)
@@ -1062,6 +1131,7 @@ class TAPER(nn.Module):
                 qasa_selected_mask=output["qasa_selected_mask"],
                 qasa_quality=output["qasa_quality"],
                 qasa_final_coverage=output["qasa_final_coverage"],
+                r4_preprojection=output["r4_preprojection"],
             )
         losses.update({f"diagnostic/{k}": v for k, v in diagnostics.items()})
         return losses
@@ -1084,7 +1154,12 @@ class TAPER(nn.Module):
                 text_content_mask=text_content_mask,
             )
             z0, reference_state = self.initialize_state(reference_features)
-            full_execution = self.execute(slots["edit_slots"], slots["qasa_selected_mask"], z0, reference_state)
+            full_execution = self.execute(
+                slots["edit_slots"],
+                slots["execution_selected_mask"],
+                z0,
+                reference_state,
+            )
             full_query = self.make_query(full_execution["final_state"])
 
             dropped_queries = []
@@ -1092,7 +1167,13 @@ class TAPER(nn.Module):
             for slot_id in range(self.num_slots):
                 disabled = torch.zeros(b, self.num_slots, dtype=torch.bool, device=reference_features.device)
                 disabled[:, slot_id] = True
-                execution = self.execute(slots["edit_slots"], slots["qasa_selected_mask"], z0, reference_state, disabled_slots=disabled)
+                execution = self.execute(
+                    slots["edit_slots"],
+                    slots["execution_selected_mask"],
+                    z0,
+                    reference_state,
+                    disabled_slots=disabled,
+                )
                 dropped_queries.append(self.make_query(execution["final_state"]))
 
             return {
@@ -1104,6 +1185,8 @@ class TAPER(nn.Module):
                 "routing_slot_activity": slots["routing_slot_activity"],
                 "routing_support_count": slots["routing_support_count"],
                 "routing_masks": slots["routing_masks"],
+                "routing_active_mask": slots["routing_active_mask"],
+                "execution_selected_mask": slots["execution_selected_mask"],
                 "hard_active_slot_mask": full_execution["hard_active_slot_mask"],
                 "qasa_selected_mask": slots["qasa_selected_mask"],
                 "qasa_quality": slots["qasa_quality"],

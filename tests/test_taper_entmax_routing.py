@@ -259,6 +259,8 @@ class TAPEREntmaxRoutingTest(unittest.TestCase):
             "routing_slot_activity",
             "routing_support_count",
             "routing_masks",
+            "routing_active_mask",
+            "execution_selected_mask",
         ):
             self.assertIn(key, dropped)
         torch.testing.assert_close(
@@ -278,6 +280,18 @@ class TAPEREntmaxRoutingTest(unittest.TestCase):
         torch.testing.assert_close(
             dropped["routing_masks"],
             slots["routing_masks"],
+        )
+        self.assertTrue(
+            torch.equal(
+                dropped["routing_active_mask"],
+                slots["routing_active_mask"],
+            )
+        )
+        self.assertTrue(
+            torch.equal(
+                dropped["execution_selected_mask"],
+                slots["execution_selected_mask"],
+            )
         )
         torch.testing.assert_close(dropped["slot_mass"], slots["slot_mass"])
         torch.testing.assert_close(
