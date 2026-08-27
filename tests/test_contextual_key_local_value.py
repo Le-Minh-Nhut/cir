@@ -32,6 +32,7 @@ DEFAULT_FUNCTIONAL_PROVENANCE = {
     "assignment_mode": "rank_gated_greedy_capacity",
     "credit_isolation": "detach_competitor_logits",
     "pair_residual_mode": "unsolved_only",
+    "credit_schedule": "first_round",
 }
 
 
@@ -1252,6 +1253,7 @@ def test_p0_audit_uses_hard_private_shared_model_builder(
             assignment_mode="rank_gated_greedy_capacity",
             credit_isolation="detach_competitor_logits",
             pair_residual_mode="unsolved_only",
+            credit_schedule="first_round",
         ),
         teacher=types.SimpleNamespace(
             csmcir_root="unused",

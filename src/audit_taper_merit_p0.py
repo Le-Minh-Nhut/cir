@@ -72,6 +72,12 @@ def parse_args():
         help="Override functional ownership provenance; must match checkpoint.",
     )
     p.add_argument(
+        "--functional-credit-schedule",
+        choices=("first_round", "conditional_residual"),
+        default=None,
+        help="Override functional credit schedule; must match checkpoint.",
+    )
+    p.add_argument(
         "--protocol",
         type=str,
         default="fashioniq_original",
@@ -621,6 +627,8 @@ def load_runtime(args):
         cfg.functional_ownership.enabled = (
             args.functional_ownership_enabled == "true"
         )
+    if args.functional_credit_schedule is not None:
+        cfg.functional_ownership.credit_schedule = args.functional_credit_schedule
     annotation_root = args.dataset_root / "captions"
     split_root = args.dataset_root / "image_splits"
 

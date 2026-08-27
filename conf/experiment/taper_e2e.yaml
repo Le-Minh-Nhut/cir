@@ -33,6 +33,7 @@ functional_ownership:
   assignment_mode: rank_gated_greedy_capacity
   credit_isolation: detach_competitor_logits
   pair_residual_mode: unsolved_only
+  credit_schedule: conditional_residual
 
 model:
   text_dim: 768

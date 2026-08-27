@@ -74,6 +74,12 @@ def parse_args():
         default=None,
         help="Override functional ownership provenance (true/false).",
     )
+    p.add_argument(
+        "--functional-credit-schedule",
+        choices=("first_round", "conditional_residual"),
+        default=None,
+        help="Override functional credit schedule; must match provenance.",
+    )
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--num-workers", type=int, default=4)
     p.add_argument("--device", type=str, default="cuda")
@@ -188,6 +194,7 @@ def build_model(cfg, device: torch.device) -> TAPER:
         functional_assignment_mode=f.assignment_mode,
         functional_credit_isolation=f.credit_isolation,
         functional_pair_residual_mode=f.pair_residual_mode,
+        functional_credit_schedule=f.credit_schedule,
     ).to(device)
 
 
@@ -378,6 +385,8 @@ def run(args):
         cfg.model.slot_value_assignment = args.slot_value_assignment
     if args.functional_ownership_enabled is not None:
         cfg.functional_ownership.enabled = args.functional_ownership_enabled
+    if args.functional_credit_schedule is not None:
+        cfg.functional_ownership.credit_schedule = args.functional_credit_schedule
 
     annotation_root = args.dataset_root / "captions"
     correction_dicts = load_correction_dicts(annotation_root)

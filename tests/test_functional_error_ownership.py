@@ -10,6 +10,10 @@ from torch import Tensor, nn
 
 from models.functional_ownership import (
     block_residual_credit,
+    build_conditional_residual_plan,
+    coalition_index,
+    coalition_masks,
+    conditional_phi,
     functional_credit_loss,
     functional_mode_assignment,
     pair_synergy_credit,
@@ -50,6 +54,7 @@ def make_model(
     enabled: bool,
     pair_lookahead: bool = True,
     rank_threshold: float = 0.25,
+    credit_schedule: str = "first_round",
 ) -> TAPER:
     torch.manual_seed(17)
     return TAPER(
@@ -75,6 +80,7 @@ def make_model(
         functional_temperature=0.07,
         functional_pair_lookahead=pair_lookahead,
         functional_rank_threshold=rank_threshold,
+        functional_credit_schedule=credit_schedule,
     )
 
 
@@ -423,6 +429,263 @@ def test_pairwise_modes_remain_unaggregated() -> None:
     assert torch.isfinite(loss).all()
 
 
+def _plan(
+    losses: Tensor,
+    *,
+    rank: float = 2.0,
+    pair_lookahead: bool = True,
+) -> dict[str, Tensor]:
+    num_slots = (losses.shape[1]).bit_length() - 1
+    return build_conditional_residual_plan(
+        losses,
+        torch.ones(losses.shape[0], num_slots, dtype=torch.bool),
+        torch.full((losses.shape[0],), rank),
+        pair_lookahead=pair_lookahead,
+    )
+
+
+def test_exact_conditional_clone_is_rejected_after_first_owner() -> None:
+    losses = torch.tensor(
+        [[
+            [4.0, 4.0],  # EMPTY
+            [2.0, 4.0],  # S0
+            [2.0, 4.0],  # S1: E1 clone
+            [2.0, 4.0],  # S0+S1: no conditional E1 gain
+            [4.0, 2.0],  # S2
+            [2.0, 2.0],
+            [2.0, 2.0],
+            [2.0, 2.0],
+        ]]
+    )
+    plan = _plan(losses)
+    assert torch.equal(
+        plan["new_block_mask"][0, :2],
+        torch.tensor([[True, False, False], [False, False, True]]),
+    )
+    assert plan["mode_credit"][0, 0, 0] > 0
+    assert plan["mode_credit"][0, 1, 1] > 0
+    assert not plan["new_block_mask"][0, :, 1].any()
+
+
+def test_initial_assignment_can_lie_but_conditional_plan_rejects_job() -> None:
+    losses = torch.tensor(
+        [[
+            [5.0, 5.0],
+            [1.0, 5.0],  # S0 solves E1.
+            [5.0, 2.0],  # S1 appears to solve E2 from EMPTY.
+            [1.0, 5.0],  # After S0, S1 adds no E2 improvement.
+            [5.0, 5.0],
+            [1.0, 5.0],
+            [5.0, 2.0],
+            [1.0, 5.0],
+        ]]
+    )
+    empty_effect = torch.stack(
+        [losses[:, 0] - losses[:, 1 << slot] for slot in range(3)],
+        dim=1,
+    )
+    initial = functional_mode_assignment(
+        empty_effect,
+        torch.ones(1, 3, dtype=torch.bool),
+        torch.tensor([2.0]),
+    )
+    assert initial["training_assignment"][0, 1, 1]
+
+    plan = _plan(losses, pair_lookahead=False)
+    assert plan["accepted_mask"].sum() == 1
+    assert plan["new_block_mask"][0, 0, 0]
+    assert not plan["new_block_mask"][0, :, 1].any()
+    assert plan["stop_no_gain"][0]
+
+
+def test_conditional_plan_keeps_independent_specialists() -> None:
+    losses = torch.tensor(
+        [[
+            [4.0, 4.0],
+            [2.0, 4.0],
+            [4.0, 2.0],
+            [2.0, 2.0],
+        ]]
+    )
+    plan = _plan(losses)
+    assert plan["accepted_mask"].sum() == 2
+    assert torch.equal(
+        plan["new_block_mask"][0, :2],
+        torch.tensor([[True, False], [False, True]]),
+    )
+
+
+def test_conditional_plan_allows_true_rank_one() -> None:
+    losses = torch.tensor(
+        [[
+            [4.0, 4.0],
+            [2.0, 2.0],
+            [2.0, 2.0],
+            [2.0, 2.0],
+        ]]
+    )
+    plan = _plan(losses, rank=1.0)
+    assert plan["accepted_mask"].sum() == 1
+
+
+def test_conditional_plan_reports_giant_only_residual_without_fake_split() -> None:
+    losses = torch.tensor(
+        [[
+            [5.0, 5.0],
+            [1.0, 1.0],
+            [5.0, 5.0],
+            [1.0, 1.0],
+            [5.0, 5.0],
+            [1.0, 1.0],
+            [5.0, 5.0],
+            [1.0, 1.0],
+        ]]
+    )
+    plan = _plan(losses, pair_lookahead=False)
+    assert plan["accepted_mask"].sum() == 1
+    assert plan["new_block_mask"][0, 0, 0]
+    assert plan["unresolved_modes"][0].any()
+    assert plan["stop_no_gain"][0]
+
+
+def test_conditional_pair_lookahead_preserves_xor_block() -> None:
+    losses = torch.tensor(
+        [[
+            [5.0, 5.0],
+            [5.0, 5.0],
+            [5.0, 5.0],
+            [1.0, 1.0],
+        ]]
+    )
+    plan = _plan(losses)
+    assert plan["accepted_mask"].sum() == 1
+    assert torch.equal(
+        plan["new_block_mask"][0, 0],
+        torch.tensor([True, True]),
+    )
+    assert plan["mode_credit"][0, 0].gt(0).all()
+
+
+def test_coalition_helpers_are_exact_and_deterministic() -> None:
+    masks = coalition_masks(3, torch.device("cpu"))
+    assert masks.shape == (8, 3)
+    assert torch.equal(coalition_index(masks), torch.arange(8))
+    losses = torch.arange(16, dtype=torch.float32).reshape(1, 8, 2)
+    phi = conditional_phi(losses, torch.tensor([1]), slot_id=2)
+    torch.testing.assert_close(phi, losses[:, 1] - losses[:, 5])
+
+
+def test_later_conditional_step_gradient_reaches_only_new_slot_query() -> None:
+    model = make_model(
+        enabled=True,
+        credit_schedule="conditional_residual",
+    ).train()
+    batch = make_batch()
+    output = model.forward(
+        batch["reference_features"],
+        batch["text_states"],
+        batch["text_attention_mask"],
+        text_content_mask=batch["text_content_mask"],
+        teacher_reference_features=batch["teacher_reference_features"],
+        teacher_text_states=batch["teacher_text_states"],
+    )
+    isolated = model._functional_credit_isolated_edit_slots(
+        output,
+        batch["text_states"],
+    )
+    new_block = torch.zeros(4, 1, 3, dtype=torch.bool)
+    new_block[:, 0, 1] = True
+    queries = model._functional_conditional_step_queries(
+        deployed_edit_slots=output["edit_slots"],
+        isolated_edit_slots=isolated,
+        new_block_mask=new_block,
+        next_coalition_index=torch.full((4, 1), 3, dtype=torch.long),
+        candidate_slots=torch.ones(4, 3, dtype=torch.bool),
+        z0=output["z0"],
+        reference_state=output["reference_state"],
+    )
+    model.zero_grad(set_to_none=True)
+    queries.sum().backward()
+    assert model.slot_queries.grad is not None
+    assert model.slot_queries.grad[1].abs().sum() > 0
+    torch.testing.assert_close(
+        model.slot_queries.grad[[0, 2]],
+        torch.zeros_like(model.slot_queries.grad[[0, 2]]),
+        rtol=0.0,
+        atol=1e-10,
+    )
+    assert model.slot_mlp[0].weight.grad is not None
+    assert model.query_head[0].weight.grad is not None
+
+
+def test_conditional_step_forward_matches_ordinary_forced_coalition() -> None:
+    model = make_model(
+        enabled=True,
+        credit_schedule="conditional_residual",
+    ).eval()
+    batch = make_batch()
+    output = model.forward(
+        batch["reference_features"],
+        batch["text_states"],
+        batch["text_attention_mask"],
+        text_content_mask=batch["text_content_mask"],
+        teacher_reference_features=batch["teacher_reference_features"],
+        teacher_text_states=batch["teacher_text_states"],
+    )
+    isolated = model._functional_credit_isolated_edit_slots(
+        output,
+        batch["text_states"],
+    )
+    candidates = torch.ones(4, 3, dtype=torch.bool)
+    ordinary, _ = model._functional_coalition_queries(
+        edit_slots=output["edit_slots"],
+        candidate_slots=candidates,
+        z0=output["z0"],
+        reference_state=output["reference_state"],
+    )
+    new_block = torch.zeros(4, 1, 3, dtype=torch.bool)
+    new_block[:, 0, 1] = True
+    isolated_query = model._functional_conditional_step_queries(
+        deployed_edit_slots=output["edit_slots"],
+        isolated_edit_slots=isolated,
+        new_block_mask=new_block,
+        next_coalition_index=torch.full((4, 1), 3, dtype=torch.long),
+        candidate_slots=candidates,
+        z0=output["z0"],
+        reference_state=output["reference_state"],
+    )
+    assert torch.equal(isolated_query[:, 0], ordinary[:, 3])
+
+
+def test_disabled_conditional_schedule_preserves_first_round_forward() -> None:
+    first = make_model(enabled=False, credit_schedule="first_round").eval()
+    conditional = make_model(
+        enabled=False,
+        credit_schedule="conditional_residual",
+    ).eval()
+    conditional.load_state_dict(first.state_dict())
+    batch = make_batch()
+    with torch.no_grad():
+        first_output = first.forward(
+            batch["reference_features"],
+            batch["text_states"],
+            batch["text_attention_mask"],
+            text_content_mask=batch["text_content_mask"],
+            teacher_reference_features=batch["teacher_reference_features"],
+            teacher_text_states=batch["teacher_text_states"],
+        )
+        conditional_output = conditional.forward(
+            batch["reference_features"],
+            batch["text_states"],
+            batch["text_attention_mask"],
+            text_content_mask=batch["text_content_mask"],
+            teacher_reference_features=batch["teacher_reference_features"],
+            teacher_text_states=batch["teacher_text_states"],
+        )
+    assert torch.equal(first_output["edit_slots"], conditional_output["edit_slots"])
+    assert torch.equal(first_output["q0"], conditional_output["q0"])
+
+
 def test_full_functional_compute_loss_backward_and_fixed_executor_steps() -> None:
     model = make_model(enabled=True).train()
     batch = make_batch()
@@ -464,6 +727,32 @@ def test_full_functional_compute_loss_backward_and_fixed_executor_steps() -> Non
         teacher_text_states=batch["teacher_text_states"],
     )
     assert output["trace_valid_mask"].shape[1] == model.num_slots
+
+
+def test_full_conditional_compute_loss_backward() -> None:
+    model = make_model(
+        enabled=True,
+        credit_schedule="conditional_residual",
+    ).train()
+    losses = model.compute_loss(make_batch())
+    assert torch.isfinite(losses["functional_loss"])
+    assert losses["functional_loss"].requires_grad
+    for key in (
+        "functional/conditional_steps",
+        "functional/conditional_credited_slots",
+        "functional/conditional_credited_modes",
+        "functional/conditional_residual_gain",
+        "functional/conditional_stop_no_gain_fraction",
+        "functional/conditional_clone_rejection_fraction",
+        "functional/conditional_pair_fraction",
+    ):
+        assert key in losses
+        assert torch.isfinite(losses[key])
+    (losses["retrieval_loss"] + 0.1 * losses["functional_loss"]).backward()
+    for parameter in model.parameters():
+        if parameter.requires_grad and parameter.grad is not None:
+            assert torch.isfinite(parameter.grad).all()
+    assert all(parameter.grad is None for parameter in model.teacher.parameters())
 
 
 def test_disabled_baseline_preserves_run_c_forward_and_zero_auxiliary() -> None:
@@ -550,6 +839,41 @@ def test_checkpoint_provenance_rejects_rank_gate_mismatch(
     )
     with pytest.raises(RuntimeError, match="provenance mismatch"):
         load_checkpoint(destination, path)
+
+
+def test_checkpoint_provenance_rejects_credit_schedule_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    omegaconf_stub = types.ModuleType("omegaconf")
+    omegaconf_stub.OmegaConf = object
+    monkeypatch.setitem(sys.modules, "omegaconf", omegaconf_stub)
+    from evaluate_qasa_inference import load_checkpoint
+
+    source = make_model(enabled=True, credit_schedule="first_round")
+    destination = make_model(
+        enabled=True,
+        credit_schedule="conditional_residual",
+    )
+    path = tmp_path / "first-round.pt"
+    torch.save(
+        {
+            "model_state_dict": {
+                key: value
+                for key, value in source.state_dict().items()
+                if not key.startswith("teacher.")
+            },
+            "experiment_provenance": source.experiment_provenance(),
+        },
+        path,
+    )
+    with pytest.raises(RuntimeError, match="provenance mismatch"):
+        load_checkpoint(destination, path)
+
+
+def test_credit_schedule_validation() -> None:
+    with pytest.raises(ValueError, match="functional_credit_schedule"):
+        make_model(enabled=True, credit_schedule="not-a-schedule")
 
 
 def test_functional_mode_rejects_non_run_c_architecture() -> None:

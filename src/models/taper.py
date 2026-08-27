@@ -8,6 +8,8 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 
 from models.functional_ownership import (
+    build_conditional_residual_plan,
+    coalition_masks,
     functional_mode_assignment,
     functional_credit_loss,
     gradient_error_mode_rank,
@@ -76,6 +78,7 @@ class TAPER(nn.Module):
         functional_assignment_mode: str = "rank_gated_greedy_capacity",
         functional_credit_isolation: str = "detach_competitor_logits",
         functional_pair_residual_mode: str = "unsolved_only",
+        functional_credit_schedule: str = "first_round",
     ) -> None:
         super().__init__()
 
@@ -155,6 +158,14 @@ class TAPER(nn.Module):
             raise ValueError(
                 "functional_pair_residual_mode must be 'unsolved_only'"
             )
+        if functional_credit_schedule not in {
+            "first_round",
+            "conditional_residual",
+        }:
+            raise ValueError(
+                "functional_credit_schedule must be 'first_round' or "
+                "'conditional_residual'"
+            )
         if functional_ownership_enabled and (
             slot_value_source != "contextual"
             or slot_effect_in_value
@@ -206,6 +217,7 @@ class TAPER(nn.Module):
         self.functional_assignment_mode = functional_assignment_mode
         self.functional_credit_isolation = functional_credit_isolation
         self.functional_pair_residual_mode = functional_pair_residual_mode
+        self.functional_credit_schedule = functional_credit_schedule
         value_dim = (
             self.text_dim
             if self.slot_value_source == "contextual"
@@ -282,6 +294,7 @@ class TAPER(nn.Module):
                 "assignment_mode": self.functional_assignment_mode,
                 "credit_isolation": self.functional_credit_isolation,
                 "pair_residual_mode": self.functional_pair_residual_mode,
+                "credit_schedule": self.functional_credit_schedule,
             },
         }
 
@@ -1137,6 +1150,122 @@ class TAPER(nn.Module):
         )
         return queries, pairs
 
+    def _functional_coalition_queries(
+        self,
+        *,
+        edit_slots: Tensor,
+        candidate_slots: Tensor,
+        z0: Tensor,
+        reference_state: Tensor,
+    ) -> tuple[Tensor, Tensor]:
+        """Execute every exact real-slot coalition in integer-mask order."""
+        batch_size = edit_slots.shape[0]
+        masks = coalition_masks(self.num_slots, edit_slots.device)
+        selected = masks[None] & candidate_slots[:, None]
+        num_coalitions = masks.shape[0]
+        flat_slots = edit_slots[:, None].expand(
+            -1, num_coalitions, -1, -1
+        ).reshape(
+            batch_size * num_coalitions,
+            self.num_slots,
+            self.slot_dim,
+        )
+        flat_selected = selected.reshape(
+            batch_size * num_coalitions,
+            self.num_slots,
+        )
+        flat_z0 = z0[:, None].expand(-1, num_coalitions, -1).reshape(
+            batch_size * num_coalitions,
+            self.state_dim,
+        )
+        flat_reference = reference_state[:, None].expand(
+            -1, num_coalitions, -1
+        ).reshape(
+            batch_size * num_coalitions,
+            self.state_dim,
+        )
+        execution = self.execute(
+            flat_slots,
+            flat_selected,
+            flat_z0,
+            flat_reference,
+        )
+        queries = self.make_query(execution["final_state"]).reshape(
+            batch_size,
+            num_coalitions,
+            self.query_dim,
+        )
+        return queries, masks
+
+    def _functional_conditional_step_queries(
+        self,
+        *,
+        deployed_edit_slots: Tensor,
+        isolated_edit_slots: Tensor,
+        new_block_mask: Tensor,
+        next_coalition_index: Tensor,
+        candidate_slots: Tensor,
+        z0: Tensor,
+        reference_state: Tensor,
+    ) -> Tensor:
+        """Execute planned coalitions with gradients only through new blocks."""
+        batch_size, num_steps, num_slots = new_block_mask.shape
+        if num_slots != self.num_slots:
+            raise ValueError("new_block_mask slot dimension mismatch")
+        if next_coalition_index.shape != (batch_size, num_steps):
+            raise ValueError("next_coalition_index must be [B,T]")
+        if isolated_edit_slots.shape != deployed_edit_slots.shape:
+            raise ValueError("isolated/deployed Edit Slot shape mismatch")
+
+        live_delta = isolated_edit_slots - isolated_edit_slots.detach()
+        step_slots = deployed_edit_slots.detach()[:, None] + (
+            new_block_mask[..., None].to(live_delta.dtype)
+            * live_delta[:, None]
+        )
+        deployed_values = deployed_edit_slots.detach()[:, None].expand_as(
+            step_slots
+        )
+        if not torch.equal(step_slots.detach(), deployed_values):
+            raise RuntimeError(
+                "conditional-credit slots must preserve exact Run-C values"
+            )
+
+        all_masks = coalition_masks(self.num_slots, deployed_edit_slots.device)
+        safe_indices = next_coalition_index.clamp_min(0)
+        selected = all_masks[safe_indices] & candidate_slots[:, None]
+        selected &= (next_coalition_index >= 0)[..., None]
+
+        flat_slots = step_slots.reshape(
+            batch_size * num_steps,
+            self.num_slots,
+            self.slot_dim,
+        )
+        flat_selected = selected.reshape(
+            batch_size * num_steps,
+            self.num_slots,
+        )
+        flat_z0 = z0[:, None].expand(-1, num_steps, -1).reshape(
+            batch_size * num_steps,
+            self.state_dim,
+        )
+        flat_reference = reference_state[:, None].expand(
+            -1, num_steps, -1
+        ).reshape(
+            batch_size * num_steps,
+            self.state_dim,
+        )
+        execution = self.execute(
+            flat_slots,
+            flat_selected,
+            flat_z0,
+            flat_reference,
+        )
+        return self.make_query(execution["final_state"]).reshape(
+            batch_size,
+            num_steps,
+            self.query_dim,
+        )
+
     def _functional_credit_isolated_edit_slots(
         self,
         output: Mapping[str, Tensor],
@@ -1204,8 +1333,207 @@ class TAPER(nn.Module):
             "functional/giant_owner_fraction": zero.detach(),
             "functional/ownership_row_similarity": zero.detach(),
             "functional/unresolved_multimode_fraction": zero.detach(),
+            "functional/initial_owned_mode_count": zero.detach(),
+            "functional/conditional_steps": zero.detach(),
+            "functional/conditional_credited_slots": zero.detach(),
+            "functional/conditional_credited_modes": zero.detach(),
+            "functional/conditional_residual_gain": zero.detach(),
+            "functional/conditional_stop_no_gain_fraction": zero.detach(),
+            "functional/conditional_clone_rejection_fraction": zero.detach(),
+            "functional/conditional_pair_fraction": zero.detach(),
             "functional/loss": zero.detach(),
         }
+
+    def _conditional_residual_functional_loss(
+        self,
+        output: Mapping[str, Tensor],
+        text_states: Tensor,
+        candidates: Tensor,
+    ) -> dict[str, Tensor]:
+        """Train only exact positive marginals that remain after coalition A."""
+        candidate_slots = (
+            output["value_slot_activity"] > self.functional_credit_eps
+        )
+        isolated_edit_slots = self._functional_credit_isolated_edit_slots(
+            output,
+            text_states,
+        )
+
+        # The exact 2^L oracle is a detached measuring instrument. It chooses
+        # conditional jobs but never receives gradient itself.
+        with torch.no_grad():
+            coalition_queries, _ = self._functional_coalition_queries(
+                edit_slots=output["edit_slots"].detach(),
+                candidate_slots=candidate_slots,
+                z0=output["z0"].detach(),
+                reference_state=output["reference_state"].detach(),
+            )
+            coalition_loss = pairwise_error_modes(
+                coalition_queries,
+                candidates,
+                margin=self.functional_margin,
+                temperature=self.functional_temperature,
+            )
+            error_rank_per_sample = gradient_error_mode_rank(
+                output["q0"].detach(),
+                candidates,
+                margin=self.functional_margin,
+                temperature=self.functional_temperature,
+            )
+            plan = build_conditional_residual_plan(
+                coalition_loss,
+                candidate_slots,
+                error_rank_per_sample,
+                rank_gate_enabled=self.functional_rank_gate_enabled,
+                rank_threshold=self.functional_rank_threshold,
+                mode_capacity=self.functional_mode_capacity,
+                allow_unassigned_modes=self.functional_allow_unassigned_modes,
+                pair_lookahead=self.functional_pair_lookahead,
+                eps=self.functional_credit_eps,
+            )
+
+            empty_loss = coalition_loss[:, 0]
+            singleton_loss = torch.stack(
+                [
+                    coalition_loss[:, 1 << slot_id]
+                    for slot_id in range(self.num_slots)
+                ],
+                dim=1,
+            )
+            singleton_effect = empty_loss[:, None] - singleton_loss
+            initial_ownership = functional_mode_assignment(
+                singleton_effect,
+                candidate_slots,
+                error_rank_per_sample,
+                rank_gate_enabled=self.functional_rank_gate_enabled,
+                rank_threshold=self.functional_rank_threshold,
+                mode_capacity=self.functional_mode_capacity,
+                allow_unassigned_modes=self.functional_allow_unassigned_modes,
+                eps=self.functional_credit_eps,
+            )
+
+        step_queries = self._functional_conditional_step_queries(
+            deployed_edit_slots=output["edit_slots"],
+            isolated_edit_slots=isolated_edit_slots,
+            new_block_mask=plan["new_block_mask"],
+            next_coalition_index=plan["next_coalition_index"],
+            candidate_slots=candidate_slots,
+            z0=output["z0"],
+            reference_state=output["reference_state"],
+        )
+        next_loss = pairwise_error_modes(
+            step_queries,
+            candidates,
+            margin=self.functional_margin,
+            temperature=self.functional_temperature,
+        )
+        safe_base = plan["base_coalition_index"].clamp_min(0)
+        batch_ids = torch.arange(
+            coalition_loss.shape[0], device=coalition_loss.device
+        )[:, None]
+        base_loss = coalition_loss[batch_ids, safe_base]
+        conditional_objective = next_loss - base_loss.detach()
+        functional_loss = functional_credit_loss(
+            conditional_objective,
+            plan["mode_credit"],
+            eps=self.functional_credit_eps,
+        )
+
+        accepted = plan["accepted_mask"]
+        credited_slots = (
+            plan["new_block_mask"] & accepted[..., None]
+        ).any(dim=1)
+        credited_modes = (
+            (plan["mode_credit"] > self.functional_credit_eps)
+            & accepted[..., None]
+        ).any(dim=1)
+        pair_steps = (
+            plan["new_block_mask"].sum(dim=-1) == 2
+        ) & accepted
+        accepted_count = accepted.sum(dim=1)
+        credited_mode_count = credited_modes.sum(dim=1)
+        conditional_gain = plan["mode_credit"].sum(dim=(1, 2)) / (
+            plan["mode_credit"].gt(self.functional_credit_eps)
+            .sum(dim=(1, 2))
+            .clamp_min(1)
+        )
+
+        initial_training_modes = initial_ownership[
+            "training_assignment"
+        ].any(dim=1)
+        result = {
+            "functional_loss": functional_loss,
+            "functional/error_mode_rank": error_rank_per_sample.mean(),
+            # Historical A3.4 diagnostics remain explicitly initial-state.
+            "functional/residual_active_modes": initial_ownership[
+                "residual_active_modes"
+            ].mean(),
+            "functional/credited_slots": initial_ownership[
+                "training_assignment"
+            ].any(dim=2).to(next_loss.dtype).sum(dim=1).mean(),
+            "functional/unique_mode_coverage": initial_ownership[
+                "assignment"
+            ].any(dim=1).to(next_loss.dtype).sum(dim=1).div(
+                next_loss.shape[-1]
+            ).mean(),
+            "functional/redundant_credit_fraction": initial_ownership[
+                "redundant_credit_fraction"
+            ].mean(),
+            "functional/pair_synergy_fraction": (
+                pair_steps.sum().to(next_loss.dtype)
+                / accepted.sum().clamp_min(1).to(next_loss.dtype)
+            ),
+            "functional/heldout_validation_available": functional_loss.new_zeros(()),
+            "functional/inferred_k_eff": plan["inferred_k_eff"].to(
+                next_loss.dtype
+            ).mean(),
+            "functional/owned_mode_count": initial_training_modes.to(
+                next_loss.dtype
+            ).sum(dim=1).mean(),
+            "functional/unowned_positive_mode_count": plan[
+                "unresolved_modes"
+            ].to(next_loss.dtype).sum(dim=1).mean(),
+            "functional/max_modes_per_owner": initial_ownership[
+                "max_modes_per_owner"
+            ].to(next_loss.dtype).mean(),
+            "functional/giant_owner_fraction": initial_ownership[
+                "giant_owner"
+            ].to(next_loss.dtype).mean(),
+            "functional/ownership_row_similarity": initial_ownership[
+                "ownership_row_similarity"
+            ].mean(),
+            "functional/unresolved_multimode_fraction": (
+                (plan["inferred_k_eff"] > 1)
+                & plan["unresolved_modes"].any(dim=1)
+            ).to(next_loss.dtype).mean(),
+            "functional/initial_owned_mode_count": initial_training_modes.to(
+                next_loss.dtype
+            ).sum(dim=1).mean(),
+            "functional/conditional_steps": accepted_count.to(
+                next_loss.dtype
+            ).mean(),
+            "functional/conditional_credited_slots": credited_slots.to(
+                next_loss.dtype
+            ).sum(dim=1).mean(),
+            "functional/conditional_credited_modes": credited_mode_count.to(
+                next_loss.dtype
+            ).mean(),
+            "functional/conditional_residual_gain": conditional_gain.mean(),
+            "functional/conditional_stop_no_gain_fraction": plan[
+                "stop_no_gain"
+            ].to(next_loss.dtype).mean(),
+            "functional/conditional_clone_rejection_fraction": plan[
+                "clone_rejection_fraction"
+            ].mean(),
+            "functional/conditional_pair_fraction": (
+                pair_steps.sum().to(next_loss.dtype)
+                / accepted.sum().clamp_min(1).to(next_loss.dtype)
+            ),
+            "functional/loss": functional_loss.detach(),
+        }
+        if not all(torch.isfinite(value).all() for value in result.values()):
+            raise FloatingPointError("non-finite conditional functional output")
+        return result
 
     def _functional_ownership_loss(
         self,
@@ -1221,6 +1549,13 @@ class TAPER(nn.Module):
         )
         if candidates is None:
             return self._zero_functional_outputs(output["q0"])
+
+        if self.functional_credit_schedule == "conditional_residual":
+            return self._conditional_residual_functional_loss(
+                output,
+                text_states,
+                candidates,
+            )
 
         # Functional interventions audit every non-empty real slot. They do
         # not alter QASA selection used by the main retrieval forward.
@@ -1353,6 +1688,16 @@ class TAPER(nn.Module):
             "functional/unresolved_multimode_fraction": (
                 final_unresolved_multimode.to(singleton_loss.dtype).mean()
             ),
+            "functional/initial_owned_mode_count": training_owned_modes.to(
+                singleton_loss.dtype
+            ).sum(dim=1).mean(),
+            "functional/conditional_steps": functional_loss.new_zeros(()),
+            "functional/conditional_credited_slots": functional_loss.new_zeros(()),
+            "functional/conditional_credited_modes": functional_loss.new_zeros(()),
+            "functional/conditional_residual_gain": functional_loss.new_zeros(()),
+            "functional/conditional_stop_no_gain_fraction": functional_loss.new_zeros(()),
+            "functional/conditional_clone_rejection_fraction": functional_loss.new_zeros(()),
+            "functional/conditional_pair_fraction": functional_loss.new_zeros(()),
             "functional/loss": functional_loss.detach(),
         }
         if not all(torch.isfinite(value).all() for value in result.values()):

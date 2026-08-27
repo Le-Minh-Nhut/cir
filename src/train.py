@@ -105,6 +105,12 @@ def main(cfg: DictConfig) -> None:
         )
         print("Functional mode capacity:", functional_cfg.mode_capacity or "adaptive")
         print("Functional credit isolation:", functional_cfg.credit_isolation)
+        print("Functional credit schedule:", functional_cfg.credit_schedule)
+        if functional_cfg.credit_schedule == "conditional_residual":
+            print(
+                "Functional coalition variants:",
+                1 << int(cfg.experiment.model.num_slots),
+            )
 
     train_loader = build_train_loader(
         annotation_root=annotation_root,
@@ -181,6 +187,7 @@ def main(cfg: DictConfig) -> None:
         functional_assignment_mode=f.assignment_mode,
         functional_credit_isolation=f.credit_isolation,
         functional_pair_residual_mode=f.pair_residual_mode,
+        functional_credit_schedule=f.credit_schedule,
     ).to(device)
 
     optimizer = AdamW(

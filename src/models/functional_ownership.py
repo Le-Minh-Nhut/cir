@@ -17,6 +17,306 @@ def slot_pairs(num_slots: int, device: torch.device) -> Tensor:
     return torch.tensor(pairs, dtype=torch.long, device=device)
 
 
+def coalition_masks(num_slots: int, device: torch.device) -> Tensor:
+    """Return all ``2**L`` real-slot coalitions in integer-mask order."""
+    if num_slots < 1:
+        raise ValueError("num_slots must be >= 1")
+    return torch.tensor(
+        [
+            [bool(mask & (1 << slot_id)) for slot_id in range(num_slots)]
+            for mask in range(1 << num_slots)
+        ],
+        dtype=torch.bool,
+        device=device,
+    )
+
+
+def coalition_index(coalition_mask: Tensor) -> Tensor:
+    """Convert ``[...,L]`` Boolean coalition masks to integer indices."""
+    if coalition_mask.ndim < 1 or coalition_mask.dtype != torch.bool:
+        raise TypeError("coalition_mask must be a bool Tensor with shape [...,L]")
+    powers = 1 << torch.arange(
+        coalition_mask.shape[-1],
+        dtype=torch.long,
+        device=coalition_mask.device,
+    )
+    return (coalition_mask.to(torch.long) * powers).sum(dim=-1)
+
+
+def conditional_phi(
+    coalition_loss: Tensor,
+    base_coalition: Tensor,
+    slot_id: int,
+) -> Tensor:
+    """Exact ``loss(A) - loss(A union {slot})`` for each batch item."""
+    if coalition_loss.ndim != 3:
+        raise ValueError("coalition_loss must be [B,2^L,H]")
+    batch_size, num_coalitions, _ = coalition_loss.shape
+    num_slots = int(math.log2(num_coalitions))
+    if (1 << num_slots) != num_coalitions:
+        raise ValueError("coalition_loss coalition dimension must be a power of two")
+    if base_coalition.shape != (batch_size,):
+        raise ValueError("base_coalition must be [B]")
+    if base_coalition.dtype != torch.long:
+        raise TypeError("base_coalition must be torch.long")
+    if slot_id < 0 or slot_id >= num_slots:
+        raise ValueError("slot_id out of range")
+    if ((base_coalition < 0) | (base_coalition >= num_coalitions)).any():
+        raise ValueError("base_coalition index out of range")
+    bit = 1 << slot_id
+    if ((base_coalition & bit) != 0).any():
+        raise ValueError("candidate slot is already present in base coalition")
+    batch_ids = torch.arange(batch_size, device=coalition_loss.device)
+    return (
+        coalition_loss[batch_ids, base_coalition]
+        - coalition_loss[batch_ids, base_coalition | bit]
+    )
+
+
+@torch.no_grad()
+def build_conditional_residual_plan(
+    coalition_loss: Tensor,
+    candidate_mask: Tensor,
+    task_error_rank: Tensor,
+    *,
+    rank_gate_enabled: bool = True,
+    rank_threshold: float = 0.25,
+    mode_capacity: int | None = None,
+    allow_unassigned_modes: bool = True,
+    pair_lookahead: bool = True,
+    eps: float = 1e-6,
+) -> dict[str, Tensor]:
+    """Build exact finite-coalition residual-credit jobs.
+
+    The planner recomputes mode-wise marginal utility after every accepted
+    block.  Its decisions and weights are a detached oracle; differentiable
+    step queries are constructed separately by :class:`TAPER`.
+    """
+    if coalition_loss.ndim != 3:
+        raise ValueError("coalition_loss must be [B,2^L,H]")
+    batch_size, num_coalitions, num_modes = coalition_loss.shape
+    num_slots = int(math.log2(num_coalitions))
+    if (1 << num_slots) != num_coalitions:
+        raise ValueError("coalition_loss coalition dimension must be a power of two")
+    if candidate_mask.shape != (batch_size, num_slots):
+        raise ValueError("candidate_mask must be [B,L]")
+    if candidate_mask.dtype != torch.bool:
+        raise TypeError("candidate_mask must be bool")
+    if task_error_rank.shape != (batch_size,):
+        raise ValueError("task_error_rank must be [B]")
+    if not torch.isfinite(coalition_loss).all():
+        raise ValueError("coalition_loss contains NaN or Inf")
+    if not torch.isfinite(task_error_rank).all():
+        raise ValueError("task_error_rank contains NaN or Inf")
+    if not isinstance(rank_gate_enabled, bool):
+        raise TypeError("rank_gate_enabled must be bool")
+    if not math.isfinite(rank_threshold) or rank_threshold < 0:
+        raise ValueError("rank_threshold must be finite and >= 0")
+    if mode_capacity is not None and mode_capacity < 1:
+        raise ValueError("mode_capacity must be None or >= 1")
+    if allow_unassigned_modes is not True:
+        raise ValueError("allow_unassigned_modes must be true")
+    if not isinstance(pair_lookahead, bool):
+        raise TypeError("pair_lookahead must be bool")
+    if not math.isfinite(eps) or eps <= 0:
+        raise ValueError("eps must be finite and > 0")
+
+    device = coalition_loss.device
+    dtype = coalition_loss.dtype
+    max_steps = num_slots
+    base_indices = torch.full(
+        (batch_size, max_steps), -1, dtype=torch.long, device=device
+    )
+    next_indices = torch.full_like(base_indices, -1)
+    new_block_mask = torch.zeros(
+        batch_size, max_steps, num_slots, dtype=torch.bool, device=device
+    )
+    mode_credit = torch.zeros(
+        batch_size, max_steps, num_modes, dtype=dtype, device=device
+    )
+    accepted_mask = torch.zeros(
+        batch_size, max_steps, dtype=torch.bool, device=device
+    )
+    inferred_k_eff = torch.ones(batch_size, dtype=torch.long, device=device)
+    stop_no_gain = torch.zeros(batch_size, dtype=torch.bool, device=device)
+    unresolved_modes = torch.zeros(
+        batch_size, num_modes, dtype=torch.bool, device=device
+    )
+    clone_rejected = torch.zeros(batch_size, dtype=dtype, device=device)
+    clone_candidates = torch.zeros_like(clone_rejected)
+
+    for batch_id in range(batch_size):
+        rank = max(float(task_error_rank[batch_id]), 1.0)
+        if not rank_gate_enabled:
+            k_eff = min(num_slots, num_modes)
+        elif rank <= 1.0 + rank_threshold:
+            k_eff = 1
+        else:
+            k_eff = min(num_slots, num_modes, max(1, math.ceil(rank)))
+        inferred_k_eff[batch_id] = k_eff
+        capacity = (
+            num_modes
+            if k_eff == 1
+            else (
+                math.ceil(num_modes / k_eff)
+                if mode_capacity is None
+                else mode_capacity
+            )
+        )
+
+        losses = coalition_loss[batch_id]
+        empty = losses[0]
+        initial_effect = torch.stack(
+            [empty - losses[1 << slot_id] for slot_id in range(num_slots)],
+            dim=0,
+        ).clamp_min(0.0)
+        residual_modes = (
+            initial_effect
+            * candidate_mask[batch_id, :, None].to(initial_effect.dtype)
+        ).amax(dim=0) > eps
+        if pair_lookahead:
+            candidate_ids = candidate_mask[batch_id].nonzero(
+                as_tuple=False
+            ).flatten().tolist()
+            for first, second in combinations(candidate_ids, 2):
+                pair_loss = losses[(1 << first) | (1 << second)]
+                pair_gain = (empty - pair_loss).clamp_min(0.0)
+                interaction = (
+                    losses[1 << first]
+                    + losses[1 << second]
+                    - pair_loss
+                    - empty
+                ).clamp_min(0.0)
+                residual_modes |= (
+                    torch.minimum(pair_gain, interaction) > eps
+                )
+        available = candidate_mask[batch_id].clone()
+        coalition = 0
+        used_slot_count = 0
+        step = 0
+
+        while step < max_steps and used_slot_count < k_eff:
+            if not bool(available.any()) or not bool(residual_modes.any()):
+                break
+            base = losses[coalition]
+            conditional = torch.zeros(
+                num_slots, num_modes, dtype=dtype, device=device
+            )
+            for slot_id in range(num_slots):
+                if bool(available[slot_id]):
+                    conditional[slot_id] = (
+                        base - losses[coalition | (1 << slot_id)]
+                    ).clamp_min(0.0)
+
+            if step > 0:
+                eligible = available[:, None] & residual_modes[None]
+                initially_positive = (initial_effect > eps) & eligible
+                clone_candidates[batch_id] += initially_positive.sum()
+                clone_rejected[batch_id] += (
+                    initially_positive & (conditional <= eps)
+                ).sum()
+
+            remaining_capacity = torch.full(
+                (num_slots,), capacity, dtype=torch.long, device=device
+            )
+            proposal = _greedy_mode_assignment(
+                conditional,
+                residual_modes,
+                available,
+                remaining_capacity,
+                eps=eps,
+            )
+            owner_score = (
+                conditional * proposal.to(conditional.dtype)
+            ).sum(dim=-1).masked_fill(~available, -1.0)
+            owner = int(owner_score.argmax().item())
+            singleton_accepted = float(owner_score[owner]) > eps
+
+            block = torch.zeros(num_slots, dtype=torch.bool, device=device)
+            credited_modes = torch.zeros(
+                num_modes, dtype=torch.bool, device=device
+            )
+            credit = torch.zeros(num_modes, dtype=dtype, device=device)
+
+            if singleton_accepted:
+                block[owner] = True
+                credited_modes = proposal[owner] & residual_modes
+                credit[credited_modes] = conditional[owner, credited_modes]
+            elif pair_lookahead and (k_eff - used_slot_count) >= 2:
+                best_score = eps
+                best_pair: tuple[int, int] | None = None
+                best_modes: Tensor | None = None
+                best_gain: Tensor | None = None
+                available_ids = available.nonzero(as_tuple=False).flatten().tolist()
+                for first, second in combinations(available_ids, 2):
+                    pair_index = coalition | (1 << first) | (1 << second)
+                    pair_gain = (base - losses[pair_index]).clamp_min(0.0)
+                    interaction = (
+                        losses[coalition | (1 << first)]
+                        + losses[coalition | (1 << second)]
+                        - losses[pair_index]
+                        - base
+                    ).clamp_min(0.0)
+                    pair_utility = torch.minimum(pair_gain, interaction)
+                    pair_modes = residual_modes & (pair_utility > eps)
+                    pair_capacity = min(num_modes, 2 * capacity)
+                    if int(pair_modes.sum()) > pair_capacity:
+                        mode_ids = pair_utility.masked_fill(
+                            ~pair_modes, -1.0
+                        ).topk(pair_capacity).indices
+                        limited = torch.zeros_like(pair_modes)
+                        limited[mode_ids] = True
+                        pair_modes = limited
+                    score = float(pair_utility[pair_modes].sum())
+                    if score > best_score:
+                        best_score = score
+                        best_pair = (first, second)
+                        best_modes = pair_modes
+                        best_gain = pair_gain
+                if best_pair is not None and best_modes is not None and best_gain is not None:
+                    block[list(best_pair)] = True
+                    credited_modes = best_modes
+                    credit[credited_modes] = best_gain[credited_modes]
+
+            if not bool(block.any()) or not bool(credited_modes.any()):
+                stop_no_gain[batch_id] = bool(residual_modes.any())
+                break
+
+            next_coalition = coalition
+            for slot_id in block.nonzero(as_tuple=False).flatten().tolist():
+                next_coalition |= 1 << slot_id
+            base_indices[batch_id, step] = coalition
+            next_indices[batch_id, step] = next_coalition
+            new_block_mask[batch_id, step] = block
+            mode_credit[batch_id, step] = credit
+            accepted_mask[batch_id, step] = True
+
+            residual_modes &= ~credited_modes
+            available &= ~block
+            coalition = next_coalition
+            used_slot_count += int(block.sum())
+            step += 1
+
+        unresolved_modes[batch_id] = residual_modes
+
+    clone_rejection_fraction = torch.where(
+        clone_candidates > 0,
+        clone_rejected / clone_candidates.clamp_min(1.0),
+        torch.zeros_like(clone_rejected),
+    )
+    return {
+        "base_coalition_index": base_indices,
+        "next_coalition_index": next_indices,
+        "new_block_mask": new_block_mask,
+        "mode_credit": mode_credit,
+        "accepted_mask": accepted_mask,
+        "inferred_k_eff": inferred_k_eff,
+        "unresolved_modes": unresolved_modes,
+        "stop_no_gain": stop_no_gain,
+        "clone_rejection_fraction": clone_rejection_fraction,
+    }
+
+
 def _validate_effects(effects: Tensor, candidate_mask: Tensor) -> None:
     if effects.ndim != 3:
         raise ValueError("functional_effects must be [B,L,H]")
