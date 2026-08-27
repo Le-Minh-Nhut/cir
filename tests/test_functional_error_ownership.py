@@ -515,6 +515,28 @@ def test_conditional_plan_keeps_independent_specialists() -> None:
     )
 
 
+def test_conditional_mode_can_emerge_after_previous_block() -> None:
+    losses = torch.tensor(
+        [[
+            [5.0, 5.0],  # EMPTY
+            [1.0, 8.0],  # S0: E1 improves, E2 worsens.
+            [5.0, 6.0],  # S1: no positive EMPTY utility.
+            [1.0, 6.0],  # Given S0, S1 improves E2 by 2.
+        ]]
+    )
+    plan = _plan(losses, pair_lookahead=False)
+    assert not plan["initial_positive_modes"][0, 1]
+    assert plan["ever_achievable_modes"][0, 1]
+    assert plan["claimed_modes"][0].all()
+    assert not plan["currently_achievable_unclaimed_modes"][0].any()
+    assert torch.equal(
+        plan["new_block_mask"][0, :2],
+        torch.tensor([[True, False], [False, True]]),
+    )
+    assert plan["mode_credit"][0, 0, 0] == 4.0
+    assert plan["mode_credit"][0, 1, 1] == 2.0
+
+
 def test_conditional_plan_allows_true_rank_one() -> None:
     losses = torch.tensor(
         [[
@@ -573,6 +595,10 @@ def test_coalition_helpers_are_exact_and_deterministic() -> None:
     losses = torch.arange(16, dtype=torch.float32).reshape(1, 8, 2)
     phi = conditional_phi(losses, torch.tensor([1]), slot_id=2)
     torch.testing.assert_close(phi, losses[:, 1] - losses[:, 5])
+
+    fashioniq_masks = coalition_masks(4, torch.device("cpu"))
+    assert fashioniq_masks.shape == (16, 4)
+    assert torch.equal(coalition_index(fashioniq_masks), torch.arange(16))
 
 
 def test_later_conditional_step_gradient_reaches_only_new_slot_query() -> None:
@@ -745,6 +771,12 @@ def test_full_conditional_compute_loss_backward() -> None:
         "functional/conditional_stop_no_gain_fraction",
         "functional/conditional_clone_rejection_fraction",
         "functional/conditional_pair_fraction",
+        "functional/conditional_unresolved_modes",
+        "functional/conditional_ever_achievable_modes",
+        "functional/conditional_claimed_modes",
+        "functional/initial_unowned_positive_mode_count",
+        "functional/initial_redundant_credit_fraction",
+        "functional/initial_unique_mode_coverage",
     ):
         assert key in losses
         assert torch.isfinite(losses[key])

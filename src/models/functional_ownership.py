@@ -142,6 +142,10 @@ def build_conditional_residual_plan(
     unresolved_modes = torch.zeros(
         batch_size, num_modes, dtype=torch.bool, device=device
     )
+    initial_positive_modes = torch.zeros_like(unresolved_modes)
+    claimed_modes_output = torch.zeros_like(unresolved_modes)
+    ever_achievable_modes_output = torch.zeros_like(unresolved_modes)
+    currently_achievable_unclaimed_output = torch.zeros_like(unresolved_modes)
     clone_rejected = torch.zeros(batch_size, dtype=dtype, device=device)
     clone_candidates = torch.zeros_like(clone_rejected)
 
@@ -170,33 +174,20 @@ def build_conditional_residual_plan(
             [empty - losses[1 << slot_id] for slot_id in range(num_slots)],
             dim=0,
         ).clamp_min(0.0)
-        residual_modes = (
-            initial_effect
-            * candidate_mask[batch_id, :, None].to(initial_effect.dtype)
-        ).amax(dim=0) > eps
-        if pair_lookahead:
-            candidate_ids = candidate_mask[batch_id].nonzero(
-                as_tuple=False
-            ).flatten().tolist()
-            for first, second in combinations(candidate_ids, 2):
-                pair_loss = losses[(1 << first) | (1 << second)]
-                pair_gain = (empty - pair_loss).clamp_min(0.0)
-                interaction = (
-                    losses[1 << first]
-                    + losses[1 << second]
-                    - pair_loss
-                    - empty
-                ).clamp_min(0.0)
-                residual_modes |= (
-                    torch.minimum(pair_gain, interaction) > eps
-                )
         available = candidate_mask[batch_id].clone()
+        claimed_modes = torch.zeros(
+            num_modes, dtype=torch.bool, device=device
+        )
+        ever_achievable_modes = torch.zeros_like(claimed_modes)
         coalition = 0
         used_slot_count = 0
         step = 0
 
         while step < max_steps and used_slot_count < k_eff:
-            if not bool(available.any()) or not bool(residual_modes.any()):
+            if not bool(available.any()):
+                stop_no_gain[batch_id] = bool(
+                    (ever_achievable_modes & ~claimed_modes).any()
+                )
                 break
             base = losses[coalition]
             conditional = torch.zeros(
@@ -207,6 +198,43 @@ def build_conditional_residual_plan(
                     conditional[slot_id] = (
                         base - losses[coalition | (1 << slot_id)]
                     ).clamp_min(0.0)
+
+            singleton_achievable = (
+                (conditional > eps) & available[:, None]
+            ).any(dim=0)
+            pair_achievable = torch.zeros_like(singleton_achievable)
+            pair_candidates: list[
+                tuple[int, int, Tensor, Tensor, Tensor]
+            ] = []
+            if pair_lookahead and (k_eff - used_slot_count) >= 2:
+                available_ids = available.nonzero(
+                    as_tuple=False
+                ).flatten().tolist()
+                for first, second in combinations(available_ids, 2):
+                    pair_index = coalition | (1 << first) | (1 << second)
+                    pair_gain = (base - losses[pair_index]).clamp_min(0.0)
+                    interaction = (
+                        losses[coalition | (1 << first)]
+                        + losses[coalition | (1 << second)]
+                        - losses[pair_index]
+                        - base
+                    ).clamp_min(0.0)
+                    pair_utility = torch.minimum(pair_gain, interaction)
+                    pair_achievable |= pair_utility > eps
+                    pair_candidates.append(
+                        (first, second, pair_gain, interaction, pair_utility)
+                    )
+
+            achievable_now = singleton_achievable | pair_achievable
+            ever_achievable_modes |= achievable_now
+            residual_modes = achievable_now & ~claimed_modes
+            if step == 0:
+                initial_positive_modes[batch_id] = achievable_now
+            if not bool(residual_modes.any()):
+                stop_no_gain[batch_id] = bool(
+                    (ever_achievable_modes & ~claimed_modes).any()
+                )
+                break
 
             if step > 0:
                 eligible = available[:, None] & residual_modes[None]
@@ -247,17 +275,13 @@ def build_conditional_residual_plan(
                 best_pair: tuple[int, int] | None = None
                 best_modes: Tensor | None = None
                 best_gain: Tensor | None = None
-                available_ids = available.nonzero(as_tuple=False).flatten().tolist()
-                for first, second in combinations(available_ids, 2):
-                    pair_index = coalition | (1 << first) | (1 << second)
-                    pair_gain = (base - losses[pair_index]).clamp_min(0.0)
-                    interaction = (
-                        losses[coalition | (1 << first)]
-                        + losses[coalition | (1 << second)]
-                        - losses[pair_index]
-                        - base
-                    ).clamp_min(0.0)
-                    pair_utility = torch.minimum(pair_gain, interaction)
+                for (
+                    first,
+                    second,
+                    pair_gain,
+                    _interaction,
+                    pair_utility,
+                ) in pair_candidates:
                     pair_modes = residual_modes & (pair_utility > eps)
                     pair_capacity = min(num_modes, 2 * capacity)
                     if int(pair_modes.sum()) > pair_capacity:
@@ -291,13 +315,43 @@ def build_conditional_residual_plan(
             mode_credit[batch_id, step] = credit
             accepted_mask[batch_id, step] = True
 
-            residual_modes &= ~credited_modes
+            claimed_modes |= credited_modes
             available &= ~block
             coalition = next_coalition
             used_slot_count += int(block.sum())
             step += 1
 
-        unresolved_modes[batch_id] = residual_modes
+        current_unclaimed = torch.zeros_like(claimed_modes)
+        if used_slot_count < k_eff and bool(available.any()):
+            final_base = losses[coalition]
+            final_achievable = torch.zeros_like(claimed_modes)
+            for slot_id in available.nonzero(
+                as_tuple=False
+            ).flatten().tolist():
+                final_achievable |= (
+                    final_base - losses[coalition | (1 << slot_id)] > eps
+                )
+            if pair_lookahead and (k_eff - used_slot_count) >= 2:
+                final_ids = available.nonzero(
+                    as_tuple=False
+                ).flatten().tolist()
+                for first, second in combinations(final_ids, 2):
+                    pair_index = coalition | (1 << first) | (1 << second)
+                    pair_gain = (final_base - losses[pair_index]).clamp_min(0.0)
+                    interaction = (
+                        losses[coalition | (1 << first)]
+                        + losses[coalition | (1 << second)]
+                        - losses[pair_index]
+                        - final_base
+                    ).clamp_min(0.0)
+                    final_achievable |= (
+                        torch.minimum(pair_gain, interaction) > eps
+                    )
+            current_unclaimed = final_achievable & ~claimed_modes
+        currently_achievable_unclaimed_output[batch_id] = current_unclaimed
+        claimed_modes_output[batch_id] = claimed_modes
+        ever_achievable_modes_output[batch_id] = ever_achievable_modes
+        unresolved_modes[batch_id] = ever_achievable_modes & ~claimed_modes
 
     clone_rejection_fraction = torch.where(
         clone_candidates > 0,
@@ -311,6 +365,12 @@ def build_conditional_residual_plan(
         "mode_credit": mode_credit,
         "accepted_mask": accepted_mask,
         "inferred_k_eff": inferred_k_eff,
+        "initial_positive_modes": initial_positive_modes,
+        "claimed_modes": claimed_modes_output,
+        "ever_achievable_modes": ever_achievable_modes_output,
+        "currently_achievable_unclaimed_modes": (
+            currently_achievable_unclaimed_output
+        ),
         "unresolved_modes": unresolved_modes,
         "stop_no_gain": stop_no_gain,
         "clone_rejection_fraction": clone_rejection_fraction,

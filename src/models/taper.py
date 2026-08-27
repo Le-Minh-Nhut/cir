@@ -1334,6 +1334,9 @@ class TAPER(nn.Module):
             "functional/ownership_row_similarity": zero.detach(),
             "functional/unresolved_multimode_fraction": zero.detach(),
             "functional/initial_owned_mode_count": zero.detach(),
+            "functional/initial_unowned_positive_mode_count": zero.detach(),
+            "functional/initial_redundant_credit_fraction": zero.detach(),
+            "functional/initial_unique_mode_coverage": zero.detach(),
             "functional/conditional_steps": zero.detach(),
             "functional/conditional_credited_slots": zero.detach(),
             "functional/conditional_credited_modes": zero.detach(),
@@ -1341,6 +1344,9 @@ class TAPER(nn.Module):
             "functional/conditional_stop_no_gain_fraction": zero.detach(),
             "functional/conditional_clone_rejection_fraction": zero.detach(),
             "functional/conditional_pair_fraction": zero.detach(),
+            "functional/conditional_unresolved_modes": zero.detach(),
+            "functional/conditional_ever_achievable_modes": zero.detach(),
+            "functional/conditional_claimed_modes": zero.detach(),
             "functional/loss": zero.detach(),
         }
 
@@ -1490,9 +1496,9 @@ class TAPER(nn.Module):
             "functional/owned_mode_count": initial_training_modes.to(
                 next_loss.dtype
             ).sum(dim=1).mean(),
-            "functional/unowned_positive_mode_count": plan[
-                "unresolved_modes"
-            ].to(next_loss.dtype).sum(dim=1).mean(),
+            "functional/unowned_positive_mode_count": initial_ownership[
+                "unowned_positive_mode_count"
+            ].to(next_loss.dtype).mean(),
             "functional/max_modes_per_owner": initial_ownership[
                 "max_modes_per_owner"
             ].to(next_loss.dtype).mean(),
@@ -1509,6 +1515,17 @@ class TAPER(nn.Module):
             "functional/initial_owned_mode_count": initial_training_modes.to(
                 next_loss.dtype
             ).sum(dim=1).mean(),
+            "functional/initial_unowned_positive_mode_count": initial_ownership[
+                "unowned_positive_mode_count"
+            ].to(next_loss.dtype).mean(),
+            "functional/initial_redundant_credit_fraction": initial_ownership[
+                "redundant_credit_fraction"
+            ].mean(),
+            "functional/initial_unique_mode_coverage": initial_ownership[
+                "assignment"
+            ].any(dim=1).to(next_loss.dtype).sum(dim=1).div(
+                next_loss.shape[-1]
+            ).mean(),
             "functional/conditional_steps": accepted_count.to(
                 next_loss.dtype
             ).mean(),
@@ -1529,6 +1546,15 @@ class TAPER(nn.Module):
                 pair_steps.sum().to(next_loss.dtype)
                 / accepted.sum().clamp_min(1).to(next_loss.dtype)
             ),
+            "functional/conditional_unresolved_modes": plan[
+                "unresolved_modes"
+            ].to(next_loss.dtype).sum(dim=1).mean(),
+            "functional/conditional_ever_achievable_modes": plan[
+                "ever_achievable_modes"
+            ].to(next_loss.dtype).sum(dim=1).mean(),
+            "functional/conditional_claimed_modes": plan[
+                "claimed_modes"
+            ].to(next_loss.dtype).sum(dim=1).mean(),
             "functional/loss": functional_loss.detach(),
         }
         if not all(torch.isfinite(value).all() for value in result.values()):
@@ -1691,6 +1717,15 @@ class TAPER(nn.Module):
             "functional/initial_owned_mode_count": training_owned_modes.to(
                 singleton_loss.dtype
             ).sum(dim=1).mean(),
+            "functional/initial_unowned_positive_mode_count": (
+                positive_modes & ~training_owned_modes
+            ).to(singleton_loss.dtype).sum(dim=1).mean(),
+            "functional/initial_redundant_credit_fraction": ownership[
+                "redundant_credit_fraction"
+            ].mean(),
+            "functional/initial_unique_mode_coverage": unique_covered_modes.to(
+                singleton_loss.dtype
+            ).sum(dim=1).div(singleton_loss.shape[-1]).mean(),
             "functional/conditional_steps": functional_loss.new_zeros(()),
             "functional/conditional_credited_slots": functional_loss.new_zeros(()),
             "functional/conditional_credited_modes": functional_loss.new_zeros(()),
@@ -1698,6 +1733,9 @@ class TAPER(nn.Module):
             "functional/conditional_stop_no_gain_fraction": functional_loss.new_zeros(()),
             "functional/conditional_clone_rejection_fraction": functional_loss.new_zeros(()),
             "functional/conditional_pair_fraction": functional_loss.new_zeros(()),
+            "functional/conditional_unresolved_modes": functional_loss.new_zeros(()),
+            "functional/conditional_ever_achievable_modes": functional_loss.new_zeros(()),
+            "functional/conditional_claimed_modes": functional_loss.new_zeros(()),
             "functional/loss": functional_loss.detach(),
         }
         if not all(torch.isfinite(value).all() for value in result.values()):

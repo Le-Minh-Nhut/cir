@@ -36,6 +36,14 @@ The process stops without fabricating owners when no positive conditional
 utility remains. Therefore rank-one tasks and giant-only outcomes may use one
 block.
 
+Mode eligibility is recomputed at every coalition. `claimed_modes` contains
+only modes that an accepted block actually received credit for;
+`achievable_now` contains modes with current positive singleton or conditional
+pair utility; and `ever_achievable_modes` records their union along the visited
+trajectory. Thus a mode that is non-positive at EMPTY may become a residual job
+later. Final `unresolved_modes` means `ever_achievable_modes & ~claimed_modes`.
+The planner also returns the currently achievable unclaimed set at its stop.
+
 ## Functional loss and gradients
 
 For accepted step `t`, with new block `b_t` and assigned residual modes `J_t`:
@@ -80,6 +88,10 @@ The `functional/conditional_*` metrics describe the actual training plan:
 - `conditional_clone_rejection_fraction`: initially positive slot-mode edges
   that lose positive utility after the coalition changes;
 - `conditional_pair_fraction`: accepted blocks that are pairs.
+- `conditional_claimed_modes`: modes actually credited along the plan;
+- `conditional_ever_achievable_modes`: modes that had positive utility at any
+  visited coalition;
+- `conditional_unresolved_modes`: ever-achievable modes never claimed.
 
 Historical A3.4 metrics remain available and describe initial-state assignment
 where applicable. They are not evidence that the conditional training plan
