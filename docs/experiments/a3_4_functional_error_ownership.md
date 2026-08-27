@@ -37,16 +37,55 @@ Phi[s,j] = ell_j(q_empty) - ell_j(q_singleton_s).
 Attention, ownership mass, overlap, and slot cosine are not substituted for
 `Phi`.
 
-## Block residual credit
+## Rank-gated functional mode ownership
 
-The detached positive rows of `Phi` are treated as vectors over hard-negative
-error modes. A greedy block Gram–Schmidt oracle repeatedly selects the remaining
-row with the largest positive residual utility, records that residual as its
-mode credit, and removes its span from all other rows. Consequently, an exact or
-span clone of an already credited slot has approximately zero residual credit.
-Independent useful effects survive. A global giant is not artificially split:
-if every other effect is a clone of the giant, only the giant is credited. A
-rank-one task is therefore allowed to produce one effective functional block.
+A3.4 v1 selected the row with the largest total `Phi` before residualization.
+That removed later clone credit but rewarded a global atom that already solved
+every mode, and zero-credit clones received no new job. The fixed experiment
+separates a training assignment from residual acceptance.
+
+The task rank is the participation-ratio rank of the per-negative target-directed
+gradient matrix `G`. With the default rank gate:
+
+```text
+rank <= 1 + rank_threshold  -> K_eff = 1
+otherwise                   -> K_eff = ceil(rank), capped by slots and modes
+```
+
+For `K_eff=1`, one owner is allowed and no capacity is imposed. For verified
+multi-mode samples, the default adaptive upper capacity is
+`ceil(H / K_eff)` modes per owner. An explicit positive `mode_capacity` can
+replace it, but never applies to rank-one samples.
+
+The first ownership round constructs detached `B_train[s,j]` by descending
+positive functional utility, subject to:
+
+```text
+sum_s B_train[s,j] <= 1
+sum_j B_train[s,j] <= capacity       # multi-mode samples only
+B_train[s,j] = 0 when Phi[s,j] <= eps
+```
+
+Unassigned/NULL modes are legal; there is no lower quota. `B_train` is a
+mode-specific training job, not evidence that specialization already exists.
+This distinction matters for identical Phi rows: the rank gate may assign
+different jobs to create symmetry-breaking pressure, while the residual oracle
+still reports the current effects as clones and marks the sample unresolved.
+
+## Block residual acceptance
+
+After assignment, the detached positive full rows of `Phi` are residualized by
+block Gram–Schmidt. After each accepted block, ownership proposals are recomputed
+on unsolved modes and remaining owner capacity. The full row—not a mode-ID-masked
+row—is projected, so exact/span clones lose unique residual credit even if their
+provisional jobs used different mode IDs.
+
+This produces a separate `B_unique`: current finite effects accepted as unique
+functional work. A multi-mode global giant with useful specialists cannot own
+all jobs because of the upper capacity. If only the giant has positive utility,
+its excess modes remain NULL and `giant_owner` plus `unresolved_multimode` are
+reported. No useless slot is assigned merely to make the table balanced. A
+true rank-one task still allows one owner without a penalty.
 
 Pair lookahead uses the exact interaction
 
@@ -55,11 +94,12 @@ H[a,b,j] = ell_j(q_a) + ell_j(q_b)
            - ell_j(q_pair_ab) - ell_j(q_empty).
 ```
 
-The strongest positive candidate pair per sample is retained as a group credit,
-but only on modes where the pair also improves over EMPTY. Positive interaction
-that is still functionally worse than EMPTY is not credited. This protects an
-XOR-like pair whose singleton effects are weak. It is not a full arbitrary-group
-solver; triple-only synergy remains an open limitation.
+The strongest positive candidate pair per sample participates only on modes
+left unowned by `B_train`, and only where the pair improves over EMPTY. Positive
+interaction that is still functionally worse than EMPTY is not credited. Thus a
+pair cannot be rewarded for re-solving an owned singleton mode, while an XOR-like
+pair whose singleton effects are weak survives. This is not a full arbitrary-
+group solver; triple-only synergy remains an open limitation.
 
 ## Loss and gradient flow
 
@@ -69,15 +109,22 @@ The training objective is
 L = L_retrieval + lambda_func * L_functional.
 ```
 
-For each credited singleton or pair block, its detached positive residual credit
-is normalized over negative modes and weights
+For each `B_train` singleton or residual pair block, its detached positive
+mode-specific utility is normalized over its assigned modes and weights
 `ell_j(q_block) - stopgrad(ell_j(q_empty))`. `L_functional` is the mean over
-credited blocks, equivalently a safely baselined negative marginal improvement.
+assigned blocks, equivalently a safely baselined negative marginal improvement.
 This minimizes error only through the exact credited singleton/group query;
 non-credited slot tensors are masked out of that intervention. Shared
 Executor/query-head parameters remain shared by design. The discrete mining,
-residual ordering, and credit weights are detached, but the credited query/loss
-path is differentiable.
+residual ordering, rank gate, and ownership weights are detached, but the
+assigned query/loss path is differentiable.
+
+For the auxiliary view only, the credited slot's ownership-logit row remains
+live while all competitor rows are value-identical detached constants inside
+the slot-axis softmax. This preserves the exact Run-C forward slot but removes
+direct functional-gradient leakage into non-owner `slot_queries` through the
+softmax denominator. The main retrieval forward is never detached or changed.
+Shared projections, Executor, and query head legitimately remain shared.
 
 The real `q_empty` loss is used only to estimate detached finite improvement; it
 is not optimized as a negative baseline, avoiding a trivial incentive to make
@@ -94,12 +141,31 @@ functional/credited_slots
 functional/unique_mode_coverage
 functional/redundant_credit_fraction
 functional/pair_synergy_fraction
+functional/inferred_k_eff
+functional/owned_mode_count
+functional/unowned_positive_mode_count
+functional/max_modes_per_owner
+functional/giant_owner_fraction
+functional/ownership_row_similarity
+functional/unresolved_multimode_fraction
 functional/loss
 ```
 
 `residual_active_modes` counts modes still represented by another positive
-residual immediately after the first credited block. `credited_slots` is not a
+residual immediately after the first accepted block. `owned_mode_count` and
+`max_modes_per_owner` describe `B_train`; `unique_mode_coverage` and unresolved
+status describe residual-accepted functional work. High assignment coverage is
+therefore not itself success. `ownership_row_similarity` is the mean positive
+Phi-row cosine diagnostic only; it is never a loss. `credited_slots` is not a
 target and no minimum K is enforced.
+
+`giant_owner` means an inferred multi-mode sample has only one residual-accepted
+owner and that owner has positive utility on more than one mode.
+`unresolved_multimode` means the residual-accepted owners are fewer than
+`K_eff`, or some positive mode remains outside `B_unique`. These definitions
+distinguish true rank one, available specialists, and giant/clone-only worlds.
+The fixed `rank_threshold=0.25` is a predeclared numerical rank gate, not tuned
+against the downstream P0 result.
 
 The v0 negative bank is `in_batch`. The provenance records this explicitly and
 `functional/heldout_validation_available=0` flags that ownership is not yet

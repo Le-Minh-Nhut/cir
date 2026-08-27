@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 
 from models.functional_ownership import (
-    block_residual_credit,
+    functional_mode_assignment,
     functional_credit_loss,
     gradient_error_mode_rank,
     pair_synergy_credit,
@@ -69,6 +69,13 @@ class TAPER(nn.Module):
         functional_pair_lookahead: bool = True,
         functional_credit_eps: float = 1e-6,
         functional_negative_bank_mode: str = "in_batch",
+        functional_rank_gate_enabled: bool = True,
+        functional_rank_threshold: float = 0.25,
+        functional_mode_capacity: int | None = None,
+        functional_allow_unassigned_modes: bool = True,
+        functional_assignment_mode: str = "rank_gated_greedy_capacity",
+        functional_credit_isolation: str = "detach_competitor_logits",
+        functional_pair_residual_mode: str = "unsolved_only",
     ) -> None:
         super().__init__()
 
@@ -124,6 +131,40 @@ class TAPER(nn.Module):
             raise ValueError("functional_credit_eps must be finite and > 0")
         if functional_negative_bank_mode != "in_batch":
             raise ValueError("functional_negative_bank_mode must be 'in_batch'")
+        if not isinstance(functional_rank_gate_enabled, bool):
+            raise TypeError("functional_rank_gate_enabled must be a bool")
+        if not math.isfinite(functional_rank_threshold) or functional_rank_threshold < 0:
+            raise ValueError("functional_rank_threshold must be finite and >= 0")
+        if isinstance(functional_mode_capacity, bool) or (
+            functional_mode_capacity is not None
+            and functional_mode_capacity < 1
+        ):
+            raise ValueError("functional_mode_capacity must be null or >= 1")
+        if functional_allow_unassigned_modes is not True:
+            raise ValueError("functional_allow_unassigned_modes must be true")
+        if functional_assignment_mode != "rank_gated_greedy_capacity":
+            raise ValueError(
+                "functional_assignment_mode must be "
+                "'rank_gated_greedy_capacity'"
+            )
+        if functional_credit_isolation != "detach_competitor_logits":
+            raise ValueError(
+                "functional_credit_isolation must be 'detach_competitor_logits'"
+            )
+        if functional_pair_residual_mode != "unsolved_only":
+            raise ValueError(
+                "functional_pair_residual_mode must be 'unsolved_only'"
+            )
+        if functional_ownership_enabled and (
+            slot_value_source != "contextual"
+            or slot_effect_in_value
+            or slot_value_assignment != "soft_shared"
+        ):
+            raise ValueError(
+                "A3.4 functional ownership requires the Run C contract: "
+                "contextual VALUE, slot_effect_in_value=false, "
+                "slot_value_assignment=soft_shared"
+            )
 
         self.teacher = teacher
         self.text_dim = text_dim
@@ -158,6 +199,13 @@ class TAPER(nn.Module):
         self.functional_pair_lookahead = functional_pair_lookahead
         self.functional_credit_eps = float(functional_credit_eps)
         self.functional_negative_bank_mode = functional_negative_bank_mode
+        self.functional_rank_gate_enabled = functional_rank_gate_enabled
+        self.functional_rank_threshold = float(functional_rank_threshold)
+        self.functional_mode_capacity = functional_mode_capacity
+        self.functional_allow_unassigned_modes = functional_allow_unassigned_modes
+        self.functional_assignment_mode = functional_assignment_mode
+        self.functional_credit_isolation = functional_credit_isolation
+        self.functional_pair_residual_mode = functional_pair_residual_mode
         value_dim = (
             self.text_dim
             if self.slot_value_source == "contextual"
@@ -227,6 +275,13 @@ class TAPER(nn.Module):
                 "pair_lookahead": self.functional_pair_lookahead,
                 "credit_eps": self.functional_credit_eps,
                 "negative_bank_mode": self.functional_negative_bank_mode,
+                "rank_gate_enabled": self.functional_rank_gate_enabled,
+                "rank_threshold": self.functional_rank_threshold,
+                "mode_capacity": self.functional_mode_capacity,
+                "allow_unassigned_modes": self.functional_allow_unassigned_modes,
+                "assignment_mode": self.functional_assignment_mode,
+                "credit_isolation": self.functional_credit_isolation,
+                "pair_residual_mode": self.functional_pair_residual_mode,
             },
         }
 
@@ -1082,6 +1137,57 @@ class TAPER(nn.Module):
         )
         return queries, pairs
 
+    def _functional_credit_isolated_edit_slots(
+        self,
+        output: Mapping[str, Tensor],
+        text_states: Tensor,
+    ) -> Tensor:
+        """Rebuild numerically identical Run-C slots with isolated logit grads.
+
+        For auxiliary intervention ``s``, only ownership logit row ``s`` stays
+        differentiable. Competitor rows retain their exact forward values but
+        are constants in this auxiliary view. The main retrieval slots and
+        competitive softmax are untouched.
+        """
+        logits = output["ownership_logits"]
+        valid = output["qasa_valid_mask"]
+        if logits.shape[:2] != (text_states.shape[0], self.num_slots):
+            raise ValueError("ownership_logits shape mismatch")
+        isolated_slots = []
+        for slot_id in range(self.num_slots):
+            live_row = torch.zeros_like(logits)
+            live_row[:, slot_id] = 1.0
+            isolated_logits = logits.detach() + live_row * (
+                logits - logits.detach()
+            )
+            isolated_masks = F.softmax(isolated_logits, dim=1)
+            isolated_masks = isolated_masks * valid[:, None].to(
+                isolated_masks.dtype
+            )
+            slot_mask = isolated_masks[:, slot_id : slot_id + 1]
+            semantics, _, activity = self._mass_aware_slot_pool(
+                text_states,
+                slot_mask,
+            )
+            zero_effect = semantics.new_zeros(
+                semantics.shape[0],
+                1,
+                self.teacher_query_dim,
+            )
+            raw_slot = self.slot_mlp(torch.cat([semantics, zero_effect], dim=-1))
+            isolated_slots.append(raw_slot * activity.unsqueeze(-1))
+        result = torch.cat(isolated_slots, dim=1)
+        if not torch.allclose(
+            result.detach(),
+            output["edit_slots"].detach(),
+            rtol=1e-5,
+            atol=1e-6,
+        ):
+            raise RuntimeError(
+                "credit-isolated Edit Slots changed the Run-C forward values"
+            )
+        return result
+
     def _zero_functional_outputs(self, anchor: Tensor) -> dict[str, Tensor]:
         zero = anchor.sum() * 0.0
         return {
@@ -1093,12 +1199,20 @@ class TAPER(nn.Module):
             "functional/redundant_credit_fraction": zero.detach(),
             "functional/pair_synergy_fraction": zero.detach(),
             "functional/heldout_validation_available": zero.detach(),
+            "functional/inferred_k_eff": zero.detach(),
+            "functional/owned_mode_count": zero.detach(),
+            "functional/unowned_positive_mode_count": zero.detach(),
+            "functional/max_modes_per_owner": zero.detach(),
+            "functional/giant_owner_fraction": zero.detach(),
+            "functional/ownership_row_similarity": zero.detach(),
+            "functional/unresolved_multimode_fraction": zero.detach(),
             "functional/loss": zero.detach(),
         }
 
     def _functional_ownership_loss(
         self,
         output: Mapping[str, Tensor],
+        text_states: Tensor,
         targets: Tensor,
         target_ids: object | None,
     ) -> dict[str, Tensor]:
@@ -1113,8 +1227,12 @@ class TAPER(nn.Module):
         # Functional interventions audit every non-empty real slot. They do
         # not alter QASA selection used by the main retrieval forward.
         candidate_slots = output["value_slot_activity"] > self.functional_credit_eps
+        isolated_edit_slots = self._functional_credit_isolated_edit_slots(
+            output,
+            text_states,
+        )
         variant_queries, pairs = self._functional_variant_queries(
-            edit_slots=output["edit_slots"],
+            edit_slots=isolated_edit_slots,
             candidate_slots=candidate_slots,
             z0=output["z0"],
             reference_state=output["reference_state"],
@@ -1130,9 +1248,20 @@ class TAPER(nn.Module):
         pair_loss = mode_loss[:, 1 + self.num_slots :]
 
         singleton_effect = empty_loss[:, None] - singleton_loss
-        residual = block_residual_credit(
+        error_rank_per_sample = gradient_error_mode_rank(
+            output["q0"].detach(),
+            candidates,
+            margin=self.functional_margin,
+            temperature=self.functional_temperature,
+        )
+        ownership = functional_mode_assignment(
             singleton_effect.detach(),
             candidate_slots,
+            error_rank_per_sample,
+            rank_gate_enabled=self.functional_rank_gate_enabled,
+            rank_threshold=self.functional_rank_threshold,
+            mode_capacity=self.functional_mode_capacity,
+            allow_unassigned_modes=self.functional_allow_unassigned_modes,
             eps=self.functional_credit_eps,
         )
 
@@ -1146,6 +1275,7 @@ class TAPER(nn.Module):
                 pair_loss.detach(),
                 pairs,
                 candidate_slots,
+                available_mode_mask=~ownership["training_assignment"].any(dim=1),
                 eps=self.functional_credit_eps,
             )
             pair_credit = pair_result["credit"]
@@ -1159,42 +1289,72 @@ class TAPER(nn.Module):
         pair_objective = pair_loss - empty_loss.detach()[:, None, :]
         functional_loss = functional_credit_loss(
             singleton_objective,
-            residual["credit"],
+            ownership["training_credit"],
             pair_loss=pair_objective if pair_credit is not None else None,
             pair_credit=pair_credit,
             eps=self.functional_credit_eps,
         )
-        error_rank = gradient_error_mode_rank(
-            output["q0"].detach(),
-            candidates,
-            margin=self.functional_margin,
-            temperature=self.functional_temperature,
-        ).mean()
-        credited_slot_mask = residual["credited_mask"].clone()
-        covered_modes = residual["credit"].amax(dim=1) > self.functional_credit_eps
+        error_rank = error_rank_per_sample.mean()
+        credited_slot_mask = ownership["training_assignment"].any(dim=2)
+        training_owned_modes = ownership["training_assignment"].any(dim=1)
+        unique_covered_modes = ownership["assignment"].any(dim=1)
         if pair_credited_mask is not None and pair_credit is not None:
             for pair_id, pair in enumerate(pairs):
                 active_pair = pair_credited_mask[:, pair_id]
                 credited_slot_mask[:, pair[0]] |= active_pair
                 credited_slot_mask[:, pair[1]] |= active_pair
-            covered_modes |= pair_credit.amax(dim=1) > self.functional_credit_eps
+            pair_owned_modes = pair_credit.amax(dim=1) > self.functional_credit_eps
+            training_owned_modes |= pair_owned_modes
+            unique_covered_modes |= pair_owned_modes
+        positive_modes = (
+            singleton_effect.detach().amax(dim=1) > self.functional_credit_eps
+        )
+        if pair_credit is not None:
+            positive_modes |= pair_credit.amax(dim=1) > self.functional_credit_eps
+        final_unresolved_multimode = (
+            ownership["inferred_k_eff"] > 1
+        ) & (
+            (credited_slot_mask.sum(dim=1) < ownership["inferred_k_eff"])
+            | (positive_modes & ~unique_covered_modes).any(dim=1)
+        )
         result = {
             "functional_loss": functional_loss,
             "functional/error_mode_rank": error_rank,
-            "functional/residual_active_modes": residual[
+            "functional/residual_active_modes": ownership[
                 "residual_active_modes"
             ].mean(),
             "functional/credited_slots": credited_slot_mask.to(
                 singleton_loss.dtype
             ).sum(dim=1).mean(),
-            "functional/unique_mode_coverage": covered_modes.to(
+            "functional/unique_mode_coverage": unique_covered_modes.to(
                 singleton_loss.dtype
             ).sum(dim=1).div(singleton_loss.shape[-1]).mean(),
-            "functional/redundant_credit_fraction": residual[
+            "functional/redundant_credit_fraction": ownership[
                 "redundant_credit_fraction"
             ].mean(),
             "functional/pair_synergy_fraction": pair_synergy_fraction,
             "functional/heldout_validation_available": functional_loss.new_zeros(()),
+            "functional/inferred_k_eff": ownership["inferred_k_eff"].to(
+                singleton_loss.dtype
+            ).mean(),
+            "functional/owned_mode_count": training_owned_modes.to(
+                singleton_loss.dtype
+            ).sum(dim=1).mean(),
+            "functional/unowned_positive_mode_count": (
+                positive_modes & ~training_owned_modes
+            ).to(singleton_loss.dtype).sum(dim=1).mean(),
+            "functional/max_modes_per_owner": ownership[
+                "max_modes_per_owner"
+            ].to(singleton_loss.dtype).mean(),
+            "functional/giant_owner_fraction": ownership["giant_owner"].to(
+                singleton_loss.dtype
+            ).mean(),
+            "functional/ownership_row_similarity": ownership[
+                "ownership_row_similarity"
+            ].mean(),
+            "functional/unresolved_multimode_fraction": (
+                final_unresolved_multimode.to(singleton_loss.dtype).mean()
+            ),
             "functional/loss": functional_loss.detach(),
         }
         if not all(torch.isfinite(value).all() for value in result.values()):
@@ -1354,6 +1514,7 @@ class TAPER(nn.Module):
             losses.update(
                 self._functional_ownership_loss(
                     output,
+                    text,
                     targets,
                     batch.get("target_ids"),
                 )

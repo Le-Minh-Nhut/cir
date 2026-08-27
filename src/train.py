@@ -94,6 +94,17 @@ def main(cfg: DictConfig) -> None:
         "Functional ownership:",
         "enabled" if cfg.experiment.functional_ownership.enabled else "disabled",
     )
+    if cfg.experiment.functional_ownership.enabled:
+        functional_cfg = cfg.experiment.functional_ownership
+        print("Functional assignment:", functional_cfg.assignment_mode)
+        print(
+            "Functional rank gate:",
+            functional_cfg.rank_gate_enabled,
+            "threshold=",
+            functional_cfg.rank_threshold,
+        )
+        print("Functional mode capacity:", functional_cfg.mode_capacity or "adaptive")
+        print("Functional credit isolation:", functional_cfg.credit_isolation)
 
     train_loader = build_train_loader(
         annotation_root=annotation_root,
@@ -163,6 +174,13 @@ def main(cfg: DictConfig) -> None:
         functional_pair_lookahead=f.pair_lookahead,
         functional_credit_eps=f.credit_eps,
         functional_negative_bank_mode=f.negative_bank_mode,
+        functional_rank_gate_enabled=f.rank_gate_enabled,
+        functional_rank_threshold=f.rank_threshold,
+        functional_mode_capacity=f.mode_capacity,
+        functional_allow_unassigned_modes=f.allow_unassigned_modes,
+        functional_assignment_mode=f.assignment_mode,
+        functional_credit_isolation=f.credit_isolation,
+        functional_pair_residual_mode=f.pair_residual_mode,
     ).to(device)
 
     optimizer = AdamW(

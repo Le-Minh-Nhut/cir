@@ -258,6 +258,16 @@ def fit(
             f"{train_metrics.get('functional/redundant_credit_fraction', float('nan')):.3f}"
             f" | func_pair="
             f"{train_metrics.get('functional/pair_synergy_fraction', float('nan')):.3f}"
+            f" | func_k="
+            f"{train_metrics.get('functional/inferred_k_eff', float('nan')):.2f}"
+            f" | func_owned="
+            f"{train_metrics.get('functional/owned_mode_count', float('nan')):.2f}"
+            f" | func_unowned="
+            f"{train_metrics.get('functional/unowned_positive_mode_count', float('nan')):.2f}"
+            f" | func_giant="
+            f"{train_metrics.get('functional/giant_owner_fraction', float('nan')):.3f}"
+            f" | func_unresolved="
+            f"{train_metrics.get('functional/unresolved_multimode_fraction', float('nan')):.3f}"
         )
 
 

@@ -11,6 +11,7 @@ from torch import Tensor, nn
 from models.functional_ownership import (
     block_residual_credit,
     functional_credit_loss,
+    functional_mode_assignment,
     pair_synergy_credit,
     pairwise_error_modes,
     slot_pairs,
@@ -44,7 +45,12 @@ class DummyTeacher(nn.Module):
         return query
 
 
-def make_model(*, enabled: bool) -> TAPER:
+def make_model(
+    *,
+    enabled: bool,
+    pair_lookahead: bool = True,
+    rank_threshold: float = 0.25,
+) -> TAPER:
     torch.manual_seed(17)
     return TAPER(
         DummyTeacher(query_dim=4),
@@ -67,7 +73,8 @@ def make_model(*, enabled: bool) -> TAPER:
         functional_lambda=0.1,
         functional_margin=0.0,
         functional_temperature=0.07,
-        functional_pair_lookahead=True,
+        functional_pair_lookahead=pair_lookahead,
+        functional_rank_threshold=rank_threshold,
     )
 
 
@@ -118,7 +125,7 @@ def test_independent_two_mode_slots_receive_unique_credit() -> None:
     )
 
 
-def test_global_giant_is_reported_without_artificial_split() -> None:
+def test_v1_residual_detects_giant_but_is_not_assignment_success() -> None:
     effects = torch.tensor([[[2.0, 2.0], [0.2, 0.2]]])
     result = block_residual_credit(
         effects,
@@ -127,6 +134,106 @@ def test_global_giant_is_reported_without_artificial_split() -> None:
     assert result["credited_mask"].sum().item() == 1
     assert result["credited_mask"][0, 0]
     assert result["unique_mode_coverage"].item() == 1.0
+
+
+def assign_modes(effects: Tensor, rank: float) -> dict[str, Tensor]:
+    return functional_mode_assignment(
+        effects,
+        torch.ones(effects.shape[:2], dtype=torch.bool),
+        torch.tensor([rank], dtype=torch.float32),
+        rank_gate_enabled=True,
+        rank_threshold=0.25,
+        mode_capacity=None,
+        allow_unassigned_modes=True,
+    )
+
+
+def test_mode_assignment_exact_clone_and_independent_specialist() -> None:
+    effects = torch.tensor([[[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]]])
+    result = assign_modes(effects, rank=2.0)
+    assignment = result["assignment"][0]
+    assert assignment[:, 0].sum().item() == 1
+    assert assignment[:, 1].sum().item() == 1
+    assert not (assignment[0, 0] and assignment[1, 0])
+    assert assignment[2, 1]
+    assert result["credited_mask"].sum().item() == 2
+    assert result["unresolved_multimode"].item() is False
+
+
+def test_mode_assignment_independent_two_mode_world() -> None:
+    effects = torch.tensor([[[2.0, 0.0], [0.0, 2.0]]])
+    result = assign_modes(effects, rank=2.0)
+    assert torch.equal(
+        result["assignment"],
+        torch.tensor([[[True, False], [False, True]]]),
+    )
+    assert result["inferred_k_eff"].item() == 2
+    assert result["owned_mode_count"].item() == 2
+    assert result["credited_mask"].sum().item() == 2
+    assert result["unique_mode_coverage"].item() == 1.0
+
+
+def test_mode_assignment_true_rank_one_allows_one_owner() -> None:
+    effects = torch.tensor([[[1.0, 2.0], [2.0, 4.0], [0.5, 1.0]]])
+    result = functional_mode_assignment(
+        effects,
+        torch.ones(1, 3, dtype=torch.bool),
+        torch.tensor([1.1]),
+        rank_gate_enabled=True,
+        rank_threshold=0.25,
+        mode_capacity=1,
+        allow_unassigned_modes=True,
+    )
+    assert result["inferred_k_eff"].item() == 1
+    assert result["credited_mask"].sum().item() == 1
+    assert result["owned_mode_count"].item() == 2
+    assert not result["unresolved_multimode"].item()
+
+
+def test_multimode_giant_cannot_own_all_when_specialists_exist() -> None:
+    effects = torch.tensor(
+        [[[2.0, 2.0], [1.5, 0.0], [0.0, 1.5]]]
+    )
+    result = assign_modes(effects, rank=2.0)
+    assignment = result["assignment"][0]
+    assert assignment[0].sum().item() == 1
+    assert assignment.any(dim=1).sum().item() == 2
+    assert assignment[:, 0].sum().item() == 1
+    assert assignment[:, 1].sum().item() == 1
+    assert not result["giant_owner"].item()
+    assert not result["unresolved_multimode"].item()
+
+
+def test_multimode_giant_only_is_flagged_unresolved_without_fake_owner() -> None:
+    effects = torch.tensor(
+        [[[2.0, 2.0], [-1.0, 0.0], [0.0, -1.0]]]
+    )
+    result = assign_modes(effects, rank=2.0)
+    assert result["credited_mask"].sum().item() == 1
+    assert result["owned_mode_count"].item() == 1
+    assert result["unowned_positive_mode_count"].item() == 1
+    assert result["giant_owner"].item()
+    assert result["unresolved_multimode"].item()
+
+
+def test_identical_phi_rows_are_unresolved_not_fake_split() -> None:
+    effects = torch.tensor([[[1.0, 1.0], [1.0, 1.0], [1.0, 1.0]]])
+    result = assign_modes(effects, rank=2.0)
+    assert result["proposal_assignment"].any(dim=1).sum().item() == 2
+    assert result["assignment"].any(dim=1).sum().item() == 1
+    assert result["owned_mode_count"].item() == 2
+    assert result["unique_mode_coverage"].item() == pytest.approx(0.5)
+    assert result["credited_mask"].sum().item() == 1
+    assert result["unowned_positive_mode_count"].item() == 0
+    assert result["training_credit"][0, 1, 1].item() > 0.0
+    assert result["credit"][0, 1].sum().item() == 0.0
+    assert result["ownership_row_similarity"].item() == pytest.approx(1.0)
+    assert result["unresolved_multimode"].item()
+
+    objectives = torch.zeros_like(effects, requires_grad=True)
+    functional_credit_loss(objectives, result["training_credit"]).backward()
+    assert objectives.grad[0, 0, 0].item() > 0.0
+    assert objectives.grad[0, 1, 1].item() > 0.0
 
 
 def test_pair_lookahead_keeps_xor_synergy() -> None:
@@ -144,6 +251,22 @@ def test_pair_lookahead_keeps_xor_synergy() -> None:
     assert result["credited_mask"].item()
     assert result["credit"].sum().item() == pytest.approx(2.0)
     assert result["synergy_fraction"].item() == 1.0
+
+
+def test_pair_synergy_only_receives_currently_unsolved_modes() -> None:
+    empty = torch.tensor([[1.0, 1.0]])
+    singletons = torch.tensor([[[1.0, 1.0], [1.0, 1.0]]])
+    pair = torch.tensor([[[0.0, 0.0]]])
+    result = pair_synergy_credit(
+        empty,
+        singletons,
+        pair,
+        torch.tensor([[0, 1]]),
+        torch.ones(1, 2, dtype=torch.bool),
+        available_mode_mask=torch.tensor([[False, True]]),
+    )
+    assert result["credit"][0, 0, 0].item() == 0.0
+    assert result["credit"][0, 0, 1].item() > 0.0
 
 
 def test_positive_interaction_without_pair_improvement_gets_no_credit() -> None:
@@ -174,12 +297,10 @@ def test_rank_one_task_allows_one_effective_credit_block() -> None:
 
 def test_orthogonal_junk_without_positive_improvement_gets_no_credit() -> None:
     effects = torch.tensor([[[1.0, 0.0], [-1.0, -3.0]]])
-    result = block_residual_credit(
-        effects,
-        torch.ones(1, 2, dtype=torch.bool),
-    )
+    result = assign_modes(effects, rank=2.0)
     assert result["credited_mask"][0, 0]
     assert not result["credited_mask"][0, 1]
+    assert not result["assignment"][0, 1].any()
 
 
 def test_functional_gradient_isolated_to_credited_blocks() -> None:
@@ -197,6 +318,71 @@ def test_functional_gradient_isolated_to_credited_blocks() -> None:
     assert losses.grad[0, 0, 1] == 0
     assert losses.grad[0, 2, 0] == 0
     assert losses.grad[0, 2, 1] > 0
+
+
+def test_parameter_gradient_isolation_detaches_competitor_slot_queries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = make_model(enabled=True, pair_lookahead=False).train()
+    batch = make_batch()
+
+    def fixed_owner(
+        effects: Tensor,
+        candidate_mask: Tensor,
+        task_rank: Tensor,
+        **_kwargs,
+    ) -> dict[str, Tensor]:
+        del task_rank
+        batch_size, num_slots, num_modes = effects.shape
+        assignment = torch.zeros_like(effects, dtype=torch.bool)
+        assignment[:, 0, 0] = True
+        credit = torch.zeros_like(effects)
+        credit[:, 0, 0] = 1.0
+        credited = torch.zeros_like(candidate_mask)
+        credited[:, 0] = True
+        zeros = effects.new_zeros(batch_size)
+        return {
+            "assignment": assignment,
+            "training_assignment": assignment.clone(),
+            "proposal_assignment": assignment.clone(),
+            "credit": credit,
+            "training_credit": credit.clone(),
+            "credited_mask": credited,
+            "credit_order": torch.zeros(
+                batch_size,
+                num_slots,
+                dtype=torch.long,
+            ),
+            "inferred_k_eff": torch.ones(batch_size, dtype=torch.long),
+            "owned_mode_count": torch.ones(batch_size, dtype=torch.long),
+            "unowned_positive_mode_count": torch.zeros(
+                batch_size,
+                dtype=torch.long,
+            ),
+            "max_modes_per_owner": torch.ones(batch_size, dtype=torch.long),
+            "giant_owner": torch.zeros(batch_size, dtype=torch.bool),
+            "ownership_row_similarity": zeros,
+            "unresolved_multimode": torch.zeros(batch_size, dtype=torch.bool),
+            "residual_active_modes": zeros,
+            "unique_mode_coverage": zeros,
+            "redundant_credit_fraction": zeros,
+        }
+
+    monkeypatch.setattr("models.taper.functional_mode_assignment", fixed_owner)
+    losses = model.compute_loss(batch)
+    model.zero_grad(set_to_none=True)
+    losses["functional_loss"].backward()
+    assert model.slot_queries.grad is not None
+    assert model.slot_queries.grad[0].abs().sum().item() > 0.0
+    torch.testing.assert_close(
+        model.slot_queries.grad[1:],
+        torch.zeros_like(model.slot_queries.grad[1:]),
+        rtol=0.0,
+        atol=1e-10,
+    )
+    assert model.slot_query_projection.weight.grad is not None
+    assert model.text_key_projection.weight.grad is not None
+    assert model.query_head[0].weight.grad is not None
 
 
 def test_pairwise_modes_remain_unaggregated() -> None:
@@ -227,6 +413,13 @@ def test_full_functional_compute_loss_backward_and_fixed_executor_steps() -> Non
         "functional/redundant_credit_fraction",
         "functional/pair_synergy_fraction",
         "functional/heldout_validation_available",
+        "functional/inferred_k_eff",
+        "functional/owned_mode_count",
+        "functional/unowned_positive_mode_count",
+        "functional/max_modes_per_owner",
+        "functional/giant_owner_fraction",
+        "functional/ownership_row_similarity",
+        "functional/unresolved_multimode_fraction",
     ):
         assert key in losses
         assert torch.isfinite(losses[key])
@@ -304,6 +497,49 @@ def test_checkpoint_provenance_rejects_enabled_mismatch(
     )
     with pytest.raises(RuntimeError, match="provenance mismatch"):
         load_checkpoint(destination, path)
+
+
+def test_checkpoint_provenance_rejects_rank_gate_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    omegaconf_stub = types.ModuleType("omegaconf")
+    omegaconf_stub.OmegaConf = object
+    monkeypatch.setitem(sys.modules, "omegaconf", omegaconf_stub)
+    from evaluate_qasa_inference import load_checkpoint
+
+    source = make_model(enabled=True, rank_threshold=0.25)
+    destination = make_model(enabled=True, rank_threshold=0.5)
+    path = tmp_path / "rank-threshold.pt"
+    torch.save(
+        {
+            "model_state_dict": {
+                key: value
+                for key, value in source.state_dict().items()
+                if not key.startswith("teacher.")
+            },
+            "experiment_provenance": source.experiment_provenance(),
+        },
+        path,
+    )
+    with pytest.raises(RuntimeError, match="provenance mismatch"):
+        load_checkpoint(destination, path)
+
+
+def test_functional_mode_rejects_non_run_c_architecture() -> None:
+    with pytest.raises(ValueError, match="Run C contract"):
+        TAPER(
+            DummyTeacher(query_dim=4),
+            text_dim=5,
+            reference_dim=7,
+            teacher_text_dim=5,
+            teacher_query_dim=4,
+            query_dim=4,
+            slot_value_source="teacher_raw",
+            slot_effect_in_value=False,
+            slot_value_assignment="soft_shared",
+            functional_ownership_enabled=True,
+        )
 
 
 def test_slot_pairs_are_deterministic() -> None:

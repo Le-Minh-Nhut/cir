@@ -26,6 +26,13 @@ functional_ownership:
   pair_lookahead: true
   credit_eps: 1.0e-6
   negative_bank_mode: in_batch
+  rank_gate_enabled: true
+  rank_threshold: 0.25
+  mode_capacity: null
+  allow_unassigned_modes: true
+  assignment_mode: rank_gated_greedy_capacity
+  credit_isolation: detach_competitor_logits
+  pair_residual_mode: unsolved_only
 
 model:
   text_dim: 768

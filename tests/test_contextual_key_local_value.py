@@ -25,6 +25,13 @@ DEFAULT_FUNCTIONAL_PROVENANCE = {
     "pair_lookahead": True,
     "credit_eps": 1e-6,
     "negative_bank_mode": "in_batch",
+    "rank_gate_enabled": True,
+    "rank_threshold": 0.25,
+    "mode_capacity": None,
+    "allow_unassigned_modes": True,
+    "assignment_mode": "rank_gated_greedy_capacity",
+    "credit_isolation": "detach_competitor_logits",
+    "pair_residual_mode": "unsolved_only",
 }
 
 
@@ -1238,6 +1245,13 @@ def test_p0_audit_uses_hard_private_shared_model_builder(
             pair_lookahead=True,
             credit_eps=1e-6,
             negative_bank_mode="in_batch",
+            rank_gate_enabled=True,
+            rank_threshold=0.25,
+            mode_capacity=None,
+            allow_unassigned_modes=True,
+            assignment_mode="rank_gated_greedy_capacity",
+            credit_isolation="detach_competitor_logits",
+            pair_residual_mode="unsolved_only",
         ),
         teacher=types.SimpleNamespace(
             csmcir_root="unused",

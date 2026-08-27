@@ -181,6 +181,13 @@ def build_model(cfg, device: torch.device) -> TAPER:
         functional_pair_lookahead=f.pair_lookahead,
         functional_credit_eps=f.credit_eps,
         functional_negative_bank_mode=f.negative_bank_mode,
+        functional_rank_gate_enabled=f.rank_gate_enabled,
+        functional_rank_threshold=f.rank_threshold,
+        functional_mode_capacity=f.mode_capacity,
+        functional_allow_unassigned_modes=f.allow_unassigned_modes,
+        functional_assignment_mode=f.assignment_mode,
+        functional_credit_isolation=f.credit_isolation,
+        functional_pair_residual_mode=f.pair_residual_mode,
     ).to(device)
 
 
