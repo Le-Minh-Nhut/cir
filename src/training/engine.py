@@ -244,6 +244,20 @@ def fit(
             f"{train_metrics.get('diagnostic/value_dominant_token_share', float('nan')):.3f}"
             f" | value_empty="
             f"{train_metrics.get('diagnostic/value_empty_slot_fraction', float('nan')):.3f}"
+            f" | func_loss="
+            f"{train_metrics.get('functional/loss', float('nan')):.3f}"
+            f" | func_rank="
+            f"{train_metrics.get('functional/error_mode_rank', float('nan')):.2f}"
+            f" | func_slots="
+            f"{train_metrics.get('functional/credited_slots', float('nan')):.2f}"
+            f" | func_residual="
+            f"{train_metrics.get('functional/residual_active_modes', float('nan')):.2f}"
+            f" | func_coverage="
+            f"{train_metrics.get('functional/unique_mode_coverage', float('nan')):.3f}"
+            f" | func_redundant="
+            f"{train_metrics.get('functional/redundant_credit_fraction', float('nan')):.3f}"
+            f" | func_pair="
+            f"{train_metrics.get('functional/pair_synergy_fraction', float('nan')):.3f}"
         )
 
 

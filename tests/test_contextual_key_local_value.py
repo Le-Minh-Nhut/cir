@@ -15,6 +15,32 @@ from cache.features import get_text_features_by_sample_ids, load_text_features
 from models.taper import TAPER
 
 
+DEFAULT_FUNCTIONAL_PROVENANCE = {
+    "enabled": False,
+    "num_hard_negatives": 16,
+    "lambda_func": 0.1,
+    "margin": 0.0,
+    "temperature": 0.07,
+    "residual_mode": "block_gram_schmidt",
+    "pair_lookahead": True,
+    "credit_eps": 1e-6,
+    "negative_bank_mode": "in_batch",
+}
+
+
+def expected_provenance(
+    source: str,
+    effect: bool,
+    assignment: str,
+) -> dict[str, object]:
+    return {
+        "slot_value_source": source,
+        "slot_effect_in_value": effect,
+        "slot_value_assignment": assignment,
+        "functional_ownership": DEFAULT_FUNCTIONAL_PROVENANCE,
+    }
+
+
 class DummyComposeTeacher(nn.Module):
     """Small differentiable stand-in for the frozen CSMCIR compose teacher."""
 
@@ -139,11 +165,11 @@ def test_experiment_contract_and_slot_mlp_input_dimension(
         slot_effect_in_value=slot_effect_in_value,
         slot_value_assignment="soft_shared",
     )
-    assert model.experiment_provenance() == {
-        "slot_value_source": slot_value_source,
-        "slot_effect_in_value": slot_effect_in_value,
-        "slot_value_assignment": "soft_shared",
-    }
+    assert model.experiment_provenance() == expected_provenance(
+        slot_value_source,
+        slot_effect_in_value,
+        "soft_shared",
+    )
     assert isinstance(model.slot_mlp[0], nn.Linear)
     assert model.slot_mlp[0].in_features == expected_input_dim
 
@@ -1062,11 +1088,11 @@ def test_checkpoint_records_experiment_provenance(
     path = tmp_path / "checkpoint.pt"
     torch.save(checkpoint, path)
     restored = torch.load(path, map_location="cpu", weights_only=True)
-    assert restored["experiment_provenance"] == {
-        "slot_value_source": "teacher_raw",
-        "slot_effect_in_value": False,
-        "slot_value_assignment": slot_value_assignment,
-    }
+    assert restored["experiment_provenance"] == expected_provenance(
+        "teacher_raw",
+        False,
+        slot_value_assignment,
+    )
 
 
 def test_evaluator_rejects_historical_shape_and_wrong_provenance(
@@ -1107,21 +1133,15 @@ def test_evaluator_rejects_historical_shape_and_wrong_provenance(
         if not name.startswith("teacher.")
     }
     mismatches = {
-        "source": {
-            "slot_value_source": "contextual",
-            "slot_effect_in_value": False,
-            "slot_value_assignment": "hard_st_exclusive",
-        },
-        "effect": {
-            "slot_value_source": "teacher_raw",
-            "slot_effect_in_value": True,
-            "slot_value_assignment": "hard_st_exclusive",
-        },
-        "assignment": {
-            "slot_value_source": "teacher_raw",
-            "slot_effect_in_value": False,
-            "slot_value_assignment": "soft_shared",
-        },
+        "source": expected_provenance(
+            "contextual", False, "hard_st_exclusive"
+        ),
+        "effect": expected_provenance(
+            "teacher_raw", True, "hard_st_exclusive"
+        ),
+        "assignment": expected_provenance(
+            "teacher_raw", False, "soft_shared"
+        ),
     }
     for name, provenance in mismatches.items():
         wrong_path = tmp_path / f"wrong-provenance-{name}.pt"
@@ -1208,6 +1228,17 @@ def test_p0_audit_uses_hard_private_shared_model_builder(
     )
     cfg = types.SimpleNamespace(
         model=model_config,
+        functional_ownership=types.SimpleNamespace(
+            enabled=False,
+            num_hard_negatives=16,
+            lambda_func=0.1,
+            margin=0.0,
+            temperature=0.07,
+            residual_mode="block_gram_schmidt",
+            pair_lookahead=True,
+            credit_eps=1e-6,
+            negative_bank_mode="in_batch",
+        ),
         teacher=types.SimpleNamespace(
             csmcir_root="unused",
             checkpoint_path="unused",
@@ -1225,11 +1256,11 @@ def test_p0_audit_uses_hard_private_shared_model_builder(
         model_config.slot_effect_in_value = effect
         model_config.slot_value_assignment = assignment
         model = audit_build_model(cfg, torch.device("cpu"))
-        assert model.experiment_provenance() == {
-            "slot_value_source": source,
-            "slot_effect_in_value": effect,
-            "slot_value_assignment": assignment,
-        }
+        assert model.experiment_provenance() == expected_provenance(
+            source,
+            effect,
+            assignment,
+        )
 
 
 def test_evaluation_clis_accept_explicit_value_mode(

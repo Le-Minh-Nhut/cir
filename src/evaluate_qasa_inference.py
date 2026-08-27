@@ -68,6 +68,12 @@ def parse_args():
         default=None,
         help="Override model.slot_value_assignment; must match checkpoint provenance.",
     )
+    p.add_argument(
+        "--functional-ownership-enabled",
+        type=parse_bool,
+        default=None,
+        help="Override functional ownership provenance (true/false).",
+    )
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--num-workers", type=int, default=4)
     p.add_argument("--device", type=str, default="cuda")
@@ -135,6 +141,7 @@ def build_val_loaders(
 
 def build_model(cfg, device: torch.device) -> TAPER:
     m = cfg.model
+    f = cfg.functional_ownership
     teacher = CSMCIRComposeTeacher(
         csmcir_root=cfg.teacher.csmcir_root,
         checkpoint_path=cfg.teacher.checkpoint_path,
@@ -165,6 +172,15 @@ def build_model(cfg, device: torch.device) -> TAPER:
         slot_value_source=m.slot_value_source,
         slot_effect_in_value=m.slot_effect_in_value,
         slot_value_assignment=m.slot_value_assignment,
+        functional_ownership_enabled=f.enabled,
+        functional_num_hard_negatives=f.num_hard_negatives,
+        functional_lambda=f.lambda_func,
+        functional_margin=f.margin,
+        functional_temperature=f.temperature,
+        functional_residual_mode=f.residual_mode,
+        functional_pair_lookahead=f.pair_lookahead,
+        functional_credit_eps=f.credit_eps,
+        functional_negative_bank_mode=f.negative_bank_mode,
     ).to(device)
 
 
@@ -185,7 +201,7 @@ def load_checkpoint(model: TAPER, path: Path):
     if checkpoint_provenance is None:
         raise RuntimeError(
             "Checkpoint is missing experiment_provenance; refusing to infer an "
-            "A3.3 ablation cell from tensor shapes."
+            "A3.3/A3.4 experiment from tensor shapes."
         )
     if checkpoint_provenance != expected_provenance:
         raise RuntimeError(
@@ -196,9 +212,9 @@ def load_checkpoint(model: TAPER, path: Path):
         missing, unexpected = model.load_state_dict(state, strict=False)
     except RuntimeError as error:
         raise RuntimeError(
-            "Incompatible TAPER checkpoint for the configured VALUE-source/effect "
-            "ablation cell. Train each cell from scratch and load it only with "
-            "matching experiment provenance."
+            "Incompatible TAPER checkpoint for the configured experiment. "
+            "Train each cell from scratch and load it only with matching "
+            "experiment provenance."
         ) from error
     bad_missing = [k for k in missing if not k.startswith("teacher.")]
     if bad_missing:
@@ -353,6 +369,8 @@ def run(args):
         cfg.model.slot_effect_in_value = args.slot_effect_in_value
     if args.slot_value_assignment is not None:
         cfg.model.slot_value_assignment = args.slot_value_assignment
+    if args.functional_ownership_enabled is not None:
+        cfg.functional_ownership.enabled = args.functional_ownership_enabled
 
     annotation_root = args.dataset_root / "captions"
     correction_dicts = load_correction_dicts(annotation_root)

@@ -90,6 +90,10 @@ def main(cfg: DictConfig) -> None:
     print("Slot value source:", cfg.experiment.model.slot_value_source)
     print("Slot effect in value:", cfg.experiment.model.slot_effect_in_value)
     print("Slot value assignment:", cfg.experiment.model.slot_value_assignment)
+    print(
+        "Functional ownership:",
+        "enabled" if cfg.experiment.functional_ownership.enabled else "disabled",
+    )
 
     train_loader = build_train_loader(
         annotation_root=annotation_root,
@@ -114,6 +118,16 @@ def main(cfg: DictConfig) -> None:
     ).to(device).eval()
 
     m = cfg.experiment.model
+    f = cfg.experiment.functional_ownership
+    configured_functional_weight = float(
+        cfg.experiment.loss_weights.functional_loss
+    )
+    if configured_functional_weight != float(f.lambda_func):
+        raise ValueError(
+            "loss_weights.functional_loss must equal "
+            "functional_ownership.lambda_func so checkpoint provenance "
+            "matches the optimized objective"
+        )
 
     model = TAPER(
         teacher,
@@ -140,6 +154,15 @@ def main(cfg: DictConfig) -> None:
         slot_value_source=m.slot_value_source,
         slot_effect_in_value=m.slot_effect_in_value,
         slot_value_assignment=m.slot_value_assignment,
+        functional_ownership_enabled=f.enabled,
+        functional_num_hard_negatives=f.num_hard_negatives,
+        functional_lambda=f.lambda_func,
+        functional_margin=f.margin,
+        functional_temperature=f.temperature,
+        functional_residual_mode=f.residual_mode,
+        functional_pair_lookahead=f.pair_lookahead,
+        functional_credit_eps=f.credit_eps,
+        functional_negative_bank_mode=f.negative_bank_mode,
     ).to(device)
 
     optimizer = AdamW(

@@ -7,6 +7,15 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
+from models.functional_ownership import (
+    block_residual_credit,
+    functional_credit_loss,
+    gradient_error_mode_rank,
+    pair_synergy_credit,
+    pairwise_error_modes,
+    slot_pairs,
+)
+
 
 class TAPER(nn.Module):
     SLOT_VALUE_SOURCES = frozenset(
@@ -48,9 +57,18 @@ class TAPER(nn.Module):
         qasa_mu: float = 0.3,
         qasa_eps: float = 1e-8,
         qasa_apply_at_eval: bool = True,
-        slot_value_source: str = "teacher_raw",
+        slot_value_source: str = "contextual",
         slot_effect_in_value: bool = False,
-        slot_value_assignment: str = "hard_st_exclusive",
+        slot_value_assignment: str = "soft_shared",
+        functional_ownership_enabled: bool = False,
+        functional_num_hard_negatives: int = 16,
+        functional_lambda: float = 0.1,
+        functional_margin: float = 0.0,
+        functional_temperature: float | None = None,
+        functional_residual_mode: str = "block_gram_schmidt",
+        functional_pair_lookahead: bool = True,
+        functional_credit_eps: float = 1e-6,
+        functional_negative_bank_mode: str = "in_batch",
     ) -> None:
         super().__init__()
 
@@ -84,6 +102,28 @@ class TAPER(nn.Module):
                 "slot_value_assignment must be one of: "
                 f"{sorted(self.SLOT_VALUE_ASSIGNMENTS)}"
             )
+        if not isinstance(functional_ownership_enabled, bool):
+            raise TypeError("functional_ownership_enabled must be a bool")
+        if functional_num_hard_negatives < 1:
+            raise ValueError("functional_num_hard_negatives must be >= 1")
+        if not math.isfinite(functional_lambda) or functional_lambda < 0:
+            raise ValueError("functional_lambda must be finite and >= 0")
+        if not math.isfinite(functional_margin):
+            raise ValueError("functional_margin must be finite")
+        if functional_temperature is None:
+            functional_temperature = retrieval_temperature
+        if not math.isfinite(functional_temperature) or functional_temperature <= 0:
+            raise ValueError("functional_temperature must be finite and > 0")
+        if functional_residual_mode != "block_gram_schmidt":
+            raise ValueError(
+                "functional_residual_mode must be 'block_gram_schmidt'"
+            )
+        if not isinstance(functional_pair_lookahead, bool):
+            raise TypeError("functional_pair_lookahead must be a bool")
+        if not math.isfinite(functional_credit_eps) or functional_credit_eps <= 0:
+            raise ValueError("functional_credit_eps must be finite and > 0")
+        if functional_negative_bank_mode != "in_batch":
+            raise ValueError("functional_negative_bank_mode must be 'in_batch'")
 
         self.teacher = teacher
         self.text_dim = text_dim
@@ -109,6 +149,15 @@ class TAPER(nn.Module):
         self.slot_value_source = slot_value_source
         self.slot_effect_in_value = bool(slot_effect_in_value)
         self.slot_value_assignment = slot_value_assignment
+        self.functional_ownership_enabled = functional_ownership_enabled
+        self.functional_num_hard_negatives = functional_num_hard_negatives
+        self.functional_lambda = float(functional_lambda)
+        self.functional_margin = float(functional_margin)
+        self.functional_temperature = float(functional_temperature)
+        self.functional_residual_mode = functional_residual_mode
+        self.functional_pair_lookahead = functional_pair_lookahead
+        self.functional_credit_eps = float(functional_credit_eps)
+        self.functional_negative_bank_mode = functional_negative_bank_mode
         value_dim = (
             self.text_dim
             if self.slot_value_source == "contextual"
@@ -163,11 +212,22 @@ class TAPER(nn.Module):
         self.teacher.eval()
         return self
 
-    def experiment_provenance(self) -> dict[str, str | bool]:
+    def experiment_provenance(self) -> dict[str, object]:
         return {
             "slot_value_source": self.slot_value_source,
             "slot_effect_in_value": self.slot_effect_in_value,
             "slot_value_assignment": self.slot_value_assignment,
+            "functional_ownership": {
+                "enabled": self.functional_ownership_enabled,
+                "num_hard_negatives": self.functional_num_hard_negatives,
+                "lambda_func": self.functional_lambda,
+                "margin": self.functional_margin,
+                "temperature": self.functional_temperature,
+                "residual_mode": self.functional_residual_mode,
+                "pair_lookahead": self.functional_pair_lookahead,
+                "credit_eps": self.functional_credit_eps,
+                "negative_bank_mode": self.functional_negative_bank_mode,
+            },
         }
 
     def _pool_text(self, text_states: Tensor, mask: Tensor) -> Tensor:
@@ -922,6 +982,225 @@ class TAPER(nn.Module):
         token_scores = torch.einsum("bd,nkd->bnk", query, candidates)
         return token_scores.amax(dim=-1)
 
+    def _mine_functional_candidates(
+        self,
+        query: Tensor,
+        targets: Tensor,
+        target_ids: object | None,
+    ) -> Tensor | None:
+        """Build [positive, hard negatives] without changing the target bank.
+
+        Mining is discrete and uses a detached full-query score. Duplicate
+        target IDs are excluded exactly as in the retrieval objective.
+        """
+        batch_size = query.shape[0]
+        if batch_size != targets.shape[0]:
+            raise ValueError("query and targets must have the same batch size")
+        if batch_size < 2:
+            return None
+
+        if target_ids is None:
+            positive = torch.eye(
+                batch_size,
+                dtype=torch.bool,
+                device=query.device,
+            )
+        else:
+            positive = self._positive_mask(target_ids, batch_size, query.device)
+
+        valid_negative = ~positive
+        available = int(valid_negative.sum(dim=1).min().item())
+        num_negatives = min(self.functional_num_hard_negatives, available)
+        if num_negatives < 1:
+            return None
+
+        scores = self._retrieval_scores(query.detach(), targets.detach())
+        scores = scores.masked_fill(~valid_negative, float("-inf"))
+        negative_ids = scores.topk(num_negatives, dim=1).indices
+        negatives = targets.detach()[negative_ids]
+        positives = targets.detach()[:, None, :, :]
+        return torch.cat([positives, negatives], dim=1)
+
+    def _functional_variant_queries(
+        self,
+        *,
+        edit_slots: Tensor,
+        candidate_slots: Tensor,
+        z0: Tensor,
+        reference_state: Tensor,
+    ) -> tuple[Tensor, Tensor]:
+        """Execute EMPTY, every singleton, and every pair coalition.
+
+        Every flattened coalition still runs the fixed ``num_slots`` executor
+        loop. Functional credit therefore does not buy extra execution steps.
+        """
+        batch_size = edit_slots.shape[0]
+        pairs = slot_pairs(self.num_slots, edit_slots.device)
+        num_variants = 1 + self.num_slots + pairs.shape[0]
+        selected = torch.zeros(
+            batch_size,
+            num_variants,
+            self.num_slots,
+            dtype=torch.bool,
+            device=edit_slots.device,
+        )
+        slot_ids = torch.arange(self.num_slots, device=edit_slots.device)
+        selected[:, 1 + slot_ids, slot_ids] = candidate_slots
+        for pair_id, pair in enumerate(pairs):
+            first = int(pair[0].item())
+            second = int(pair[1].item())
+            variant_id = 1 + self.num_slots + pair_id
+            selected[:, variant_id, first] = candidate_slots[:, first]
+            selected[:, variant_id, second] = candidate_slots[:, second]
+
+        flat_slots = edit_slots[:, None].expand(
+            -1,
+            num_variants,
+            -1,
+            -1,
+        ).reshape(batch_size * num_variants, self.num_slots, self.slot_dim)
+        flat_selected = selected.reshape(batch_size * num_variants, self.num_slots)
+        flat_z0 = z0[:, None].expand(-1, num_variants, -1).reshape(
+            batch_size * num_variants,
+            self.state_dim,
+        )
+        flat_reference = reference_state[:, None].expand(
+            -1,
+            num_variants,
+            -1,
+        ).reshape(batch_size * num_variants, self.state_dim)
+        execution = self.execute(
+            flat_slots,
+            flat_selected,
+            flat_z0,
+            flat_reference,
+        )
+        queries = self.make_query(execution["final_state"]).reshape(
+            batch_size,
+            num_variants,
+            self.query_dim,
+        )
+        return queries, pairs
+
+    def _zero_functional_outputs(self, anchor: Tensor) -> dict[str, Tensor]:
+        zero = anchor.sum() * 0.0
+        return {
+            "functional_loss": zero,
+            "functional/error_mode_rank": zero.detach(),
+            "functional/residual_active_modes": zero.detach(),
+            "functional/credited_slots": zero.detach(),
+            "functional/unique_mode_coverage": zero.detach(),
+            "functional/redundant_credit_fraction": zero.detach(),
+            "functional/pair_synergy_fraction": zero.detach(),
+            "functional/heldout_validation_available": zero.detach(),
+            "functional/loss": zero.detach(),
+        }
+
+    def _functional_ownership_loss(
+        self,
+        output: Mapping[str, Tensor],
+        targets: Tensor,
+        target_ids: object | None,
+    ) -> dict[str, Tensor]:
+        candidates = self._mine_functional_candidates(
+            output["q0"],
+            targets,
+            target_ids,
+        )
+        if candidates is None:
+            return self._zero_functional_outputs(output["q0"])
+
+        # Functional interventions audit every non-empty real slot. They do
+        # not alter QASA selection used by the main retrieval forward.
+        candidate_slots = output["value_slot_activity"] > self.functional_credit_eps
+        variant_queries, pairs = self._functional_variant_queries(
+            edit_slots=output["edit_slots"],
+            candidate_slots=candidate_slots,
+            z0=output["z0"],
+            reference_state=output["reference_state"],
+        )
+        mode_loss = pairwise_error_modes(
+            variant_queries,
+            candidates,
+            margin=self.functional_margin,
+            temperature=self.functional_temperature,
+        )
+        empty_loss = mode_loss[:, 0]
+        singleton_loss = mode_loss[:, 1 : 1 + self.num_slots]
+        pair_loss = mode_loss[:, 1 + self.num_slots :]
+
+        singleton_effect = empty_loss[:, None] - singleton_loss
+        residual = block_residual_credit(
+            singleton_effect.detach(),
+            candidate_slots,
+            eps=self.functional_credit_eps,
+        )
+
+        pair_credit: Tensor | None = None
+        pair_credited_mask: Tensor | None = None
+        pair_synergy_fraction = empty_loss.new_zeros(())
+        if self.functional_pair_lookahead and pairs.numel() > 0:
+            pair_result = pair_synergy_credit(
+                empty_loss.detach(),
+                singleton_loss.detach(),
+                pair_loss.detach(),
+                pairs,
+                candidate_slots,
+                eps=self.functional_credit_eps,
+            )
+            pair_credit = pair_result["credit"]
+            pair_credited_mask = pair_result["credited_mask"]
+            pair_synergy_fraction = pair_result["synergy_fraction"]
+
+        # Optimize negative marginal improvement while stopping the empty
+        # baseline. This preserves slot/group-specific credit without creating
+        # an incentive to worsen q_empty.
+        singleton_objective = singleton_loss - empty_loss.detach()[:, None, :]
+        pair_objective = pair_loss - empty_loss.detach()[:, None, :]
+        functional_loss = functional_credit_loss(
+            singleton_objective,
+            residual["credit"],
+            pair_loss=pair_objective if pair_credit is not None else None,
+            pair_credit=pair_credit,
+            eps=self.functional_credit_eps,
+        )
+        error_rank = gradient_error_mode_rank(
+            output["q0"].detach(),
+            candidates,
+            margin=self.functional_margin,
+            temperature=self.functional_temperature,
+        ).mean()
+        credited_slot_mask = residual["credited_mask"].clone()
+        covered_modes = residual["credit"].amax(dim=1) > self.functional_credit_eps
+        if pair_credited_mask is not None and pair_credit is not None:
+            for pair_id, pair in enumerate(pairs):
+                active_pair = pair_credited_mask[:, pair_id]
+                credited_slot_mask[:, pair[0]] |= active_pair
+                credited_slot_mask[:, pair[1]] |= active_pair
+            covered_modes |= pair_credit.amax(dim=1) > self.functional_credit_eps
+        result = {
+            "functional_loss": functional_loss,
+            "functional/error_mode_rank": error_rank,
+            "functional/residual_active_modes": residual[
+                "residual_active_modes"
+            ].mean(),
+            "functional/credited_slots": credited_slot_mask.to(
+                singleton_loss.dtype
+            ).sum(dim=1).mean(),
+            "functional/unique_mode_coverage": covered_modes.to(
+                singleton_loss.dtype
+            ).sum(dim=1).div(singleton_loss.shape[-1]).mean(),
+            "functional/redundant_credit_fraction": residual[
+                "redundant_credit_fraction"
+            ].mean(),
+            "functional/pair_synergy_fraction": pair_synergy_fraction,
+            "functional/heldout_validation_available": functional_loss.new_zeros(()),
+            "functional/loss": functional_loss.detach(),
+        }
+        if not all(torch.isfinite(value).all() for value in result.values()):
+            raise FloatingPointError("non-finite functional ownership output")
+        return result
+
     def _assignment_diagnostics(
         self,
         *,
@@ -1071,6 +1350,16 @@ class TAPER(nn.Module):
         losses = {
             "retrieval_loss": self._retrieval_loss(output["q0"], targets, batch.get("target_ids"))
         }
+        if self.functional_ownership_enabled:
+            losses.update(
+                self._functional_ownership_loss(
+                    output,
+                    targets,
+                    batch.get("target_ids"),
+                )
+            )
+        else:
+            losses.update(self._zero_functional_outputs(output["q0"]))
         losses["diagnostic/slot_value_source_contextual"] = losses[
             "retrieval_loss"
         ].new_tensor(float(self.slot_value_source == "contextual"))

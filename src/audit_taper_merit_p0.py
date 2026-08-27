@@ -66,6 +66,12 @@ def parse_args():
         help="Override model.slot_value_assignment; must match checkpoint provenance.",
     )
     p.add_argument(
+        "--functional-ownership-enabled",
+        choices=("true", "false"),
+        default=None,
+        help="Override functional ownership provenance; must match checkpoint.",
+    )
+    p.add_argument(
         "--protocol",
         type=str,
         default="fashioniq_original",
@@ -611,6 +617,10 @@ def load_runtime(args):
         cfg.model.slot_effect_in_value = args.slot_effect_in_value == "true"
     if args.slot_value_assignment is not None:
         cfg.model.slot_value_assignment = args.slot_value_assignment
+    if args.functional_ownership_enabled is not None:
+        cfg.functional_ownership.enabled = (
+            args.functional_ownership_enabled == "true"
+        )
     annotation_root = args.dataset_root / "captions"
     split_root = args.dataset_root / "image_splits"
 
