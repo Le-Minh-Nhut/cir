@@ -1,0 +1,188 @@
+{
+  "checkpoint": "/home/heheboiz/data/cir/outputs/2026-08-26/22-51-06/best.pt",
+  "capacity_enabled": false,
+  "routing_mode": "qisca",
+  "num_queries": 6016,
+  "thetas": [
+    0.15
+  ],
+  "lambdas": [
+    1.0,
+    0.55,
+    0.5,
+    0.45,
+    0.4
+  ],
+  "results": [
+    {
+      "theta": 0.15,
+      "lambda": 1.0,
+      "metrics": {
+        "r4_preprojection_token_mass_mean": 0.410879033100675,
+        "r4_preprojection_token_budget_violation_fraction": 0.0,
+        "r4_preprojection_token_budget_excess_mean": 0.0,
+        "r4_token_budget_binding_fraction": 0.0,
+        "routing_token_mass_mean": 0.410879033100675,
+        "routing_unassigned_mass_mean": 0.5891209670318832,
+        "routing_fully_unassigned_token_fraction": 0.0,
+        "routing_active_slot_count": 1.4996675535085353,
+        "qasa_selected_slot_count": 1.5001662237213014,
+        "routing_support_mean": 10.966526304531245,
+        "routing_support_fraction_mean": 0.886917795701028,
+        "routing_zero_fraction": 0.11070764079977001,
+        "routing_support_overlap_mean": 0.6619861888262233,
+        "routing_slot_mass_mean": 1.2245608916743955,
+        "r4_preprojection_token_mass_max": 0.7763254642486572,
+        "routing_token_mass_max": 0.7763254642486572
+      },
+      "slot_active_frequency": {
+        "0": 1.0,
+        "1": 0.37533244680851063,
+        "2": 0.043550531914893616,
+        "3": 0.08078457446808511
+      },
+      "soft_dominant_slot_frequency": {
+        "0": 0.9998337765957447,
+        "1": 0.0,
+        "2": 0.00016622340425531914,
+        "3": 0.0
+      }
+    },
+    {
+      "theta": 0.15,
+      "lambda": 0.55,
+      "metrics": {
+        "r4_preprojection_token_mass_mean": 0.747052757352635,
+        "r4_preprojection_token_budget_violation_fraction": 0.11458609343361696,
+        "r4_preprojection_token_budget_excess_mean": 0.013703821866234773,
+        "r4_token_budget_binding_fraction": 0.1146000367463658,
+        "routing_token_mass_mean": 0.7333489375641083,
+        "routing_unassigned_mass_mean": 0.26665106208081024,
+        "routing_fully_unassigned_token_fraction": 0.0,
+        "routing_active_slot_count": 1.4996675535085353,
+        "qasa_selected_slot_count": 1.5001662237213014,
+        "routing_support_mean": 10.966526304531245,
+        "routing_support_fraction_mean": 0.886917795701028,
+        "routing_zero_fraction": 0.11070764079977001,
+        "routing_support_overlap_mean": 0.6619861888262233,
+        "routing_slot_mass_mean": 2.18563216797849,
+        "r4_preprojection_token_mass_max": 1.4115008115768433,
+        "routing_token_mass_max": 1.0
+      },
+      "slot_active_frequency": {
+        "0": 1.0,
+        "1": 0.37533244680851063,
+        "2": 0.043550531914893616,
+        "3": 0.08078457446808511
+      },
+      "soft_dominant_slot_frequency": {
+        "0": 0.9998337765957447,
+        "1": 0.0,
+        "2": 0.00016622340425531914,
+        "3": 0.0
+      }
+    },
+    {
+      "theta": 0.15,
+      "lambda": 0.5,
+      "metrics": {
+        "r4_preprojection_token_mass_mean": 0.82175806620135,
+        "r4_preprojection_token_budget_violation_fraction": 0.19989124359044214,
+        "r4_preprojection_token_budget_excess_mean": 0.03044001172801211,
+        "r4_token_budget_binding_fraction": 0.19993307349835407,
+        "routing_token_mass_mean": 0.7913180534500115,
+        "routing_unassigned_mass_mean": 0.20868194817974783,
+        "routing_fully_unassigned_token_fraction": 0.0,
+        "routing_active_slot_count": 1.4996675535085353,
+        "qasa_selected_slot_count": 1.5001662237213014,
+        "routing_support_mean": 10.966526304531245,
+        "routing_support_fraction_mean": 0.886917795701028,
+        "routing_zero_fraction": 0.11070764079977001,
+        "routing_support_overlap_mean": 0.6619861888262233,
+        "routing_slot_mass_mean": 2.3584000956504902,
+        "r4_preprojection_token_mass_max": 1.5526509284973145,
+        "routing_token_mass_max": 1.0
+      },
+      "slot_active_frequency": {
+        "0": 1.0,
+        "1": 0.37533244680851063,
+        "2": 0.043550531914893616,
+        "3": 0.08078457446808511
+      },
+      "soft_dominant_slot_frequency": {
+        "0": 0.9998337765957447,
+        "1": 0.0,
+        "2": 0.00016622340425531914,
+        "3": 0.0
+      }
+    },
+    {
+      "theta": 0.15,
+      "lambda": 0.45,
+      "metrics": {
+        "r4_preprojection_token_mass_mean": 0.9130645591076516,
+        "r4_preprojection_token_budget_violation_fraction": 0.3258550730192179,
+        "r4_preprojection_token_budget_excess_mean": 0.06255254534068667,
+        "r4_token_budget_binding_fraction": 0.32589690316606695,
+        "routing_token_mass_mean": 0.8505120134557752,
+        "routing_unassigned_mass_mean": 0.1494879863931749,
+        "routing_fully_unassigned_token_fraction": 0.0,
+        "routing_active_slot_count": 1.4996675535085353,
+        "qasa_selected_slot_count": 1.5001662237213014,
+        "routing_support_mean": 10.96597210368886,
+        "routing_support_fraction_mean": 0.8868816185819418,
+        "routing_zero_fraction": 0.11075258186912534,
+        "routing_support_overlap_mean": 0.6618781846970774,
+        "routing_slot_mass_mean": 2.534818444836964,
+        "r4_preprojection_token_mass_max": 1.7251677513122559,
+        "routing_token_mass_max": 1.0
+      },
+      "slot_active_frequency": {
+        "0": 1.0,
+        "1": 0.37533244680851063,
+        "2": 0.043550531914893616,
+        "3": 0.08078457446808511
+      },
+      "soft_dominant_slot_frequency": {
+        "0": 0.9998337765957447,
+        "1": 0.0,
+        "2": 0.00016622340425531914,
+        "3": 0.0
+      }
+    },
+    {
+      "theta": 0.15,
+      "lambda": 0.4,
+      "metrics": {
+        "r4_preprojection_token_mass_mean": 1.0271975868508105,
+        "r4_preprojection_token_budget_violation_fraction": 0.5019869222555755,
+        "r4_preprojection_token_budget_excess_mean": 0.12171742285383674,
+        "r4_token_budget_binding_fraction": 0.5020008655554425,
+        "routing_token_mass_mean": 0.9054801600038141,
+        "routing_unassigned_mass_mean": 0.09451984275897485,
+        "routing_fully_unassigned_token_fraction": 0.0,
+        "routing_active_slot_count": 1.4996675535085353,
+        "qasa_selected_slot_count": 1.5001662237213014,
+        "routing_support_mean": 10.903901590631849,
+        "routing_support_fraction_mean": 0.8822017500998307,
+        "routing_zero_fraction": 0.11578597314195381,
+        "routing_support_overlap_mean": 0.6480445986863874,
+        "routing_slot_mass_mean": 2.6986424406158163,
+        "r4_preprojection_token_mass_max": 1.940813660621643,
+        "routing_token_mass_max": 1.0
+      },
+      "slot_active_frequency": {
+        "0": 1.0,
+        "1": 0.37533244680851063,
+        "2": 0.043550531914893616,
+        "3": 0.08078457446808511
+      },
+      "soft_dominant_slot_frequency": {
+        "0": 0.9998337765957447,
+        "1": 0.0,
+        "2": 0.00016622340425531914,
+        "3": 0.0
+      }
+    }
+  ]
+}

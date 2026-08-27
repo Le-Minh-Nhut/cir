@@ -1,0 +1,352 @@
+{
+  "checkpoint": "outputs/2026-08-27/15-04-13/best.pt",
+  "protocol": "fashioniq_original",
+  "runtime": {
+    "routing_mode": "qisca",
+    "r4_theta": 0.15,
+    "r4_lambda": 0.45,
+    "r4_capacity_enabled": true,
+    "r4_candidate_mode": "all_real_slots",
+    "r4_slot_capacity": 3.0,
+    "r4_solver_iters": 64
+  },
+  "retrieval": {
+    "full": {
+      "recall_at_10": 20.242191779026104,
+      "recall_at_50": 38.76855462074877,
+      "mean_recall": 29.505373199887437,
+      "categories": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 16.70798215171046,
+          "recall_at_50": 35.64700049578582,
+          "mean_recall": 26.17749132374814
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 23.11089303238469,
+          "recall_at_50": 40.62806673209028,
+          "mean_recall": 31.869479882237485
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 20.90770015298317,
+          "recall_at_50": 40.03059663437022,
+          "mean_recall": 30.469148393676697
+        }
+      }
+    },
+    "reference_only": {
+      "recall_at_10": 5.409782918724519,
+      "recall_at_50": 13.304951064181656,
+      "mean_recall": 9.357366991453087,
+      "categories": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 1.8839861179970252,
+          "recall_at_50": 7.288051561725335,
+          "mean_recall": 4.58601883986118
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 8.684985279685966,
+          "recall_at_50": 19.7252208047105,
+          "mean_recall": 14.205103042198232
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 5.660377358490566,
+          "recall_at_50": 12.901580826109129,
+          "mean_recall": 9.280979092299848
+        }
+      }
+    },
+    "drop_0": {
+      "recall_at_10": 17.995367723346025,
+      "recall_at_50": 35.38190354148006,
+      "mean_recall": 26.68863563241304,
+      "categories": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 13.83242439266237,
+          "recall_at_50": 31.085770946950916,
+          "mean_recall": 22.459097669806642
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 21.54072620215898,
+          "recall_at_50": 39.05789990186457,
+          "mean_recall": 30.299313052011776
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 18.612952575216728,
+          "recall_at_50": 36.00203977562468,
+          "mean_recall": 27.307496175420702
+        }
+      }
+    },
+    "drop_1": {
+      "recall_at_10": 20.192992708465393,
+      "recall_at_50": 38.5841830238028,
+      "mean_recall": 29.388587866134095,
+      "categories": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 16.856717897868123,
+          "recall_at_50": 35.845314823996034,
+          "mean_recall": 26.35101636093208
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 22.865554465161924,
+          "recall_at_50": 40.28459273797841,
+          "mean_recall": 31.575073601570168
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 20.85670576236614,
+          "recall_at_50": 39.62264150943396,
+          "mean_recall": 30.23967363590005
+        }
+      }
+    },
+    "drop_2": {
+      "recall_at_10": 17.679861803752388,
+      "recall_at_50": 35.032007290126586,
+      "mean_recall": 26.355934546939487,
+      "categories": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 13.38621715418939,
+          "recall_at_50": 31.085770946950916,
+          "mean_recall": 22.235994050570152
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 21.295387634936212,
+          "recall_at_50": 38.51815505397448,
+          "mean_recall": 29.906771344455347
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 18.357980622131567,
+          "recall_at_50": 35.49209586945436,
+          "mean_recall": 26.925038245792962
+        }
+      }
+    },
+    "drop_3": {
+      "recall_at_10": 17.12642099369911,
+      "recall_at_50": 34.381598707373,
+      "mean_recall": 25.754009850536058,
+      "categories": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 13.138324243926624,
+          "recall_at_50": 30.24293505205751,
+          "mean_recall": 21.69062964799207
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 20.902845927379783,
+          "recall_at_50": 38.17468105986261,
+          "mean_recall": 29.538763493621197
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 17.338092809790922,
+          "recall_at_50": 34.72718001019888,
+          "mean_recall": 26.0326364099949
+        }
+      }
+    },
+    "only_0": {
+      "recall_at_10": 8.90938152555867,
+      "recall_at_50": 21.449336889044346,
+      "mean_recall": 15.17935920730151,
+      "categories": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 4.412493802677243,
+          "recall_at_50": 13.53495290034705,
+          "mean_recall": 8.973723351512147
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 13.493621197252208,
+          "recall_at_50": 29.29342492639843,
+          "mean_recall": 21.39352306182532
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 8.822029576746559,
+          "recall_at_50": 21.51963284038756,
+          "mean_recall": 15.170831208567058
+        }
+      }
+    },
+    "only_1": {
+      "recall_at_10": 6.885168005779273,
+      "recall_at_50": 17.276707267412856,
+      "mean_recall": 12.080937636596065,
+      "categories": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 3.321764997521071,
+          "recall_at_50": 10.956866633614279,
+          "mean_recall": 7.1393158155676755
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 10.500490677134446,
+          "recall_at_50": 23.994111874386654,
+          "mean_recall": 17.24730127576055
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 6.833248342682305,
+          "recall_at_50": 16.879143294237632,
+          "mean_recall": 11.85619581845997
+        }
+      }
+    },
+    "only_2": {
+      "recall_at_10": 9.206697288194627,
+      "recall_at_50": 21.782312875031817,
+      "mean_recall": 15.494505081613223,
+      "categories": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 4.51165096678235,
+          "recall_at_50": 13.931581556767476,
+          "mean_recall": 9.221616261774912
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 14.08243375858685,
+          "recall_at_50": 29.538763493621197,
+          "mean_recall": 21.810598626104024
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 9.026007139214686,
+          "recall_at_50": 21.87659357470678,
+          "mean_recall": 15.451300356960733
+        }
+      }
+    },
+    "only_3": {
+      "recall_at_10": 9.723874581592074,
+      "recall_at_50": 22.42835723483245,
+      "mean_recall": 16.076115908212262,
+      "categories": {
+        "dress": {
+          "n": 2017,
+          "recall_at_10": 4.66038671294001,
+          "recall_at_50": 14.625681705503222,
+          "mean_recall": 9.643034209221616
+        },
+        "shirt": {
+          "n": 2038,
+          "recall_at_10": 14.720314033366044,
+          "recall_at_50": 30.323846908734055,
+          "mean_recall": 22.52208047105005
+        },
+        "toptee": {
+          "n": 1961,
+          "recall_at_10": 9.790922998470169,
+          "recall_at_50": 22.33554309026007,
+          "mean_recall": 16.06323304436512
+        }
+      }
+    }
+  },
+  "diagnostics": {
+    "samples": 6016,
+    "valid_tokens": 71719,
+    "qasa_selected_slot_count": 2.713098404255319,
+    "routing_active_slot_count": 3.999501329787234,
+    "execution_active_slot_count": 3.999501329787234,
+    "routing_non_qasa_active_slot_count": 1.286402925531915,
+    "execution_non_qasa_active_slot_count": 1.286402925531915,
+    "routing_non_qasa_mass_mean": 1.3487807641083256,
+    "routing_non_qasa_mass_fraction": 0.2118695099649832,
+    "routing_token_mass_mean": 0.533696042326015,
+    "routing_unassigned_mass_mean": 0.4663039603866492,
+    "routing_fully_unassigned_token_fraction": 0.05713967010136784,
+    "routing_support_overlap_mean": 0.46021038037186746,
+    "routing_capacity_utilization_mean": 0.5301992921753133,
+    "routing_capacity_binding_fraction": 0.2495844414893617
+  },
+  "per_slot_functional": {
+    "0": {
+      "drop_mean_recall": 26.68863563241304,
+      "drop_delta_vs_full": -2.816737567474398,
+      "utility_full_minus_drop": 2.816737567474398,
+      "only_slot_mean_recall": 15.17935920730151,
+      "only_slot_gain_over_reference": 5.821992215848422,
+      "routing_mass_mean": 1.0750406868619586,
+      "routing_active_frequency": 0.9998337765957447,
+      "execution_active_frequency": 0.9998337765957447,
+      "qasa_selected_frequency": 0.690658244680851,
+      "soft_dominant_frequency": 0.0,
+      "routing_support_mean_when_active": 5.011471321695761,
+      "routing_support_fraction_when_active": 0.427154391260813,
+      "state_change_norm_mean_when_executed": 4.040172291753298,
+      "transition_strength_mean_when_executed": 0.7753375315235143,
+      "drop_query_cosine_change_mean": 0.03549098718832148
+    },
+    "1": {
+      "drop_mean_recall": 29.388587866134095,
+      "drop_delta_vs_full": -0.11678533375334155,
+      "utility_full_minus_drop": 0.11678533375334155,
+      "only_slot_mean_recall": 12.080937636596065,
+      "only_slot_gain_over_reference": 2.7235706451429778,
+      "routing_mass_mean": 2.999394081354617,
+      "routing_active_frequency": 1.0,
+      "execution_active_frequency": 1.0,
+      "qasa_selected_frequency": 1.0,
+      "soft_dominant_frequency": 0.9998337765957447,
+      "routing_support_mean_when_active": 6.415890957446808,
+      "routing_support_fraction_when_active": 0.5492311704140949,
+      "state_change_norm_mean_when_executed": 0.4460527231870962,
+      "transition_strength_mean_when_executed": 0.08471861214211264,
+      "drop_query_cosine_change_mean": 0.00130460691697737
+    },
+    "2": {
+      "drop_mean_recall": 26.355934546939487,
+      "drop_delta_vs_full": -3.14943865294795,
+      "utility_full_minus_drop": 3.14943865294795,
+      "only_slot_mean_recall": 15.494505081613223,
+      "only_slot_gain_over_reference": 6.137138090160136,
+      "routing_mass_mean": 1.097363250694198,
+      "routing_active_frequency": 0.9998337765957447,
+      "execution_active_frequency": 0.9998337765957447,
+      "qasa_selected_frequency": 0.08460771276595745,
+      "soft_dominant_frequency": 0.0,
+      "routing_support_mean_when_active": 4.67930174563591,
+      "routing_support_fraction_when_active": 0.3989562419894231,
+      "state_change_norm_mean_when_executed": 4.793522523436463,
+      "transition_strength_mean_when_executed": 0.8901089508238179,
+      "drop_query_cosine_change_mean": 0.0371173297233404
+    },
+    "3": {
+      "drop_mean_recall": 25.754009850536058,
+      "drop_delta_vs_full": -3.7513633493513794,
+      "utility_full_minus_drop": 3.7513633493513794,
+      "only_slot_mean_recall": 16.076115908212262,
+      "only_slot_gain_over_reference": 6.718748916759175,
+      "routing_mass_mean": 1.190593341279074,
+      "routing_active_frequency": 0.9998337765957447,
+      "execution_active_frequency": 0.9998337765957447,
+      "qasa_selected_frequency": 0.9378324468085106,
+      "soft_dominant_frequency": 0.00016622340425531914,
+      "routing_support_mean_when_active": 4.266001662510391,
+      "routing_support_fraction_when_active": 0.3637455964375811,
+      "state_change_norm_mean_when_executed": 5.1950824799977635,
+      "transition_strength_mean_when_executed": 0.9291955342192701,
+      "drop_query_cosine_change_mean": 0.040574060346772696
+    }
+  }
+}
