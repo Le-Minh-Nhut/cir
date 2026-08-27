@@ -1,1048 +1,952 @@
-# A3.2 Contextual-Key / Local-Value — Failure Diagnosis README
+# CIR / TAPER A3.4 — Functional Error Ownership
+## Negative-Result Diagnostic README
 
-**Date:** 2026-08-26  
-**Branch:** `exp/e2e-a3.2-contextual-key-local-value`  
-**Parent reference:** `exp/e2e-a3.1-qasa-slot-filter-eval-winner`
-
----
-
-## 1. Mục đích
-
-Tài liệu này là checkpoint chẩn đoán cho nhánh A3.2 sau khi thử hai chế độ:
-
-- `soft_shared`
-- `hard_st_exclusive`
-
-Hypothesis ban đầu của A3.2:
-
-> Edit Slots collapse vì VALUE mang quá nhiều thông tin global/contextual và vì cùng một token có thể bị copy mềm sang nhiều slots.
-
-A3.2 cô lập information path như sau:
-
-- **KEY / ownership / QASA:** vẫn dùng contextual Q-Former text states.
-- **VALUE:** dùng raw CSMCIR word embeddings `teacher_text_states`.
-- **`slot_effects = q_full - q_minus`:** vẫn được tính cho diagnostic nhưng không còn feed vào Edit Slot latent.
-- Assignment có toggle giữa `soft_shared` và `hard_st_exclusive`.
-
-Mục tiêu của tài liệu này là ghi lại chính xác cái gì đã được chứng minh, cái gì bị falsify, và failure mode còn lại là gì.
+**Date:** 2026-08-27  
+**Branch:** `exp/e2e-a3.4-functional-error-ownership`  
+**Frozen implementation commit:** `7756148772634d69acf513e0c3cbc0f85d501faa` (`v2.1`)  
+**Status:** **NEGATIVE RESULT — functional specialization not achieved**  
+**Next experimental branch:** recommended `exp/e2e-a3.4b-conditional-residual-credit`
 
 ---
 
-## 2. Kiến trúc đang test
+# 1. Purpose of this checkpoint
 
-### 2.1 Contextual KEY
+This document freezes the scientific state of A3.4 before moving to the next branch.
 
-Ownership vẫn được tính từ contextual text states:
+A3.4 was created after the A3.3 2×2 ablation showed a sharp separation between:
+
+- **representation / endpoint retrieval strength**, and
+- **functional slot specialization**.
+
+The A3.3 Run C baseline was chosen because it was strong at retrieval while still showing very clear functional collapse:
+
+```yaml
+slot_value_source: contextual
+slot_effect_in_value: false
+slot_value_assignment: soft_shared
+```
+
+Approximate Run C baseline:
+
+```text
+Mean Recall                    ≈ 58.75
+Gradient error-mode rank       ≈ 2.84
+Functional Phi rank            ≈ 1.00
+Median SINGLE/FULL             ≈ 0.777
+Median REPEAT/FULL             ≈ 1.020
+Median MEANxK/FULL             ≈ 1.000
+Mean K95 / K99                 ≈ 2.56 / 3.01
+```
+
+The A3.4 hypothesis was:
+
+> If retrieval error is represented as multiple per-negative functional modes, and slot credit is assigned in functional error space rather than token/latent geometry, then Edit Slots may begin to specialize into different useful retrieval-error functions.
+
+The implementation intentionally kept the Run C representation and executor stack fixed.
+
+---
+
+# 2. Scientific scope of A3.4
+
+A3.4 was intended to probe the theory around:
+
+```text
+§6.4 Multi-error retrieval representation
+§6.5 Functional mode assignment
+§6.6 Block residual pursuit
+```
+
+The experiment did **not** attempt to solve the full TAPER-MERIT theory.
+
+It kept unchanged:
+
+```text
+contextual VALUE
+competitive token ownership
+QASA
+routing
+Primitive Bank
+Executor
+teacher
+retrieval objective
+FashionIQ protocol
+optimizer
+training schedule
+```
+
+The new mechanisms were limited to the functional-credit side.
+
+---
+
+# 3. A3.4 v2.1 mechanism
+
+The final A3.4 v2.1 implementation used:
+
+```text
+hard negatives
+    ↓
+per-negative pairwise retrieval errors
+    ↓
+task error-mode rank
+    ↓
+finite singleton functional effects Phi[s,j]
+    ↓
+rank-gated functional mode assignment B[s,j]
+    ↓
+upper mode capacity + NULL/unassigned modes
+    ↓
+block Gram-Schmidt residual acceptance
+    ↓
+pair synergy lookahead
+    ↓
+functional auxiliary loss
+```
+
+The per-negative error was of the form:
+
+\[
+\ell_j(q)
+=
+\operatorname{softplus}
+\left(
+\frac{
+s(q,y_j^-)-s(q,y^+) + m
+}{\tau}
+\right).
+\]
+
+The finite singleton effect was:
+
+\[
+\Phi_{s,j}
+=
+\ell_j(q_{\emptyset})
+-
+\ell_j(q_s).
+\]
+
+Positive \(\Phi_{s,j}\) means slot \(s\) improves retrieval error mode \(j\).
+
+---
+
+# 4. Functional-credit implementation details
+
+A3.4 v2.1 introduced two distinct ownership objects.
+
+## 4.1 Training assignment
+
+A first-round proposal was stored as:
 
 ```python
-ownership_logits, soft_slot_masks = self._competitive_ownership(
-    text_states,
-    slot_valid,
+proposal_assignment
+```
+
+and then used as:
+
+```python
+training_assignment = proposal_assignment
+training_credit = effects * training_assignment
+```
+
+This assignment was what actually drove the auxiliary functional loss.
+
+## 4.2 Residual / uniqueness assignment
+
+The implementation then performed iterative block residualization over the positive effect rows.
+
+After selecting a block, the row span was projected out using a Gram-Schmidt style update.
+
+This produced:
+
+```python
+assignment
+credit
+credited_mask
+unique_mode_coverage
+redundant_credit_fraction
+unresolved_multimode
+```
+
+These quantities represented the residual-accepted / more unique functional structure.
+
+**Critical fact discovered by this experiment:**
+
+> The residual-accepted structure was mostly diagnostic. The actual training objective continued to use the first-round `training_assignment`.
+
+This distinction becomes the central diagnosis of the negative result.
+
+---
+
+# 5. Auxiliary gradient isolation
+
+A3.4 also added an auxiliary-only credit isolation path.
+
+The main Run C forward was kept numerically exact while auxiliary gradients were routed through a recomputed isolated path:
+
+```python
+recomputed_slots = torch.cat(isolated_slots, dim=1)
+
+result = output["edit_slots"].detach() + (
+    recomputed_slots - recomputed_slots.detach()
 )
 ```
 
-`text_states` là Q-Former text states đã contextualized và reference-conditioned.
-
-Ý nghĩa:
+Therefore:
 
 ```text
-whole caption + reference context
-             |
-             v
-       contextual KEY
-             |
-             v
-      token-slot scores
+FORWARD:
+functional auxiliary slots == Run C edit_slots
+
+BACKWARD:
+gradient flows through isolated recomputation
 ```
 
-KEY được phép global vì nhiệm vụ của nó là quyết định token nên thuộc slot nào.
+This fixed the earlier AMP mismatch runtime error and prevented direct functional-gradient leakage into competitor slot-query rows through the slot-axis softmax denominator.
 
-### 2.2 Raw / local VALUE
+This part of the implementation is considered **working plumbing**, not the source of the final scientific failure.
 
-VALUE không còn lấy từ contextual Q-Former states. Nó lấy từ:
+---
+
+# 6. Training command
+
+The final A3.4 v2.1 experiment was run with:
+
+```bash
+python src/train.py experiment=taper_e2e \
+  experiment.model.slot_value_source=contextual \
+  experiment.model.slot_effect_in_value=false \
+  experiment.model.slot_value_assignment=soft_shared \
+  experiment.functional_ownership.enabled=true
+```
+
+The run completed all 10 epochs.
+
+---
+
+# 7. Training trajectory
+
+Selected epochs:
+
+## Epoch 1
 
 ```text
-teacher_text_states
+Mean Recall       51.6844
+active_slots      2.95
+hard_active       2.76
+qasa_k            2.76
+value_k           2.95
+
+func_loss        -0.305
+func_rank         2.48
+func_slots        3.31
+func_coverage     0.700
+func_redundant    0.820
+func_k            2.92
+func_owned       13.91
+func_unresolved   0.858
 ```
 
-được cache từ raw word embedding lookup trước Q-Former contextualization.
+## Epoch 4
 
-Sau assignment:
+```text
+Mean Recall       58.3466
+active_slots      2.36
+hard_active       2.02
+qasa_k            2.02
+value_k           2.36
+
+func_loss        -0.399
+func_rank         2.19
+func_slots        3.37
+func_coverage     0.781
+func_redundant    0.843
+func_k            2.61
+func_owned       15.43
+func_unresolved   0.838
+```
+
+## Epoch 7 — best checkpoint
+
+```text
+Mean Recall       58.6448
+
+active_slots      1.00
+hard_active       1.01
+dominant          0.806
+qasa_k            1.01
+value_k           1.00
+value_dominant    1.000
+value_empty       0.750
+
+func_loss        -0.375
+func_rank         2.15
+func_slots        3.16
+func_residual    12.64
+func_coverage     0.811
+func_redundant    0.793
+func_pair         0.056
+func_k            2.56
+func_owned       15.56
+func_unowned      0.08
+func_giant        0.001
+func_unresolved   0.836
+```
+
+## Epoch 9
+
+```text
+Mean Recall       58.0483
+active_slots      1.00
+hard_active       1.00
+qasa_k            1.00
+value_k           1.00
+value_dominant    1.000
+
+func_slots        3.06
+func_k            2.56
+func_owned       15.55
+func_unresolved   0.836
+```
+
+---
+
+# 8. Key training-time contradiction
+
+The strongest diagnostic pattern is:
+
+```text
+deployed path:
+qasa_k  ≈ 1
+value_k ≈ 1
+
+functional bookkeeping:
+func_slots ≈ 3
+func_k     ≈ 2.5
+func_owned ≈ 15.5 / 16
+```
+
+At the same time:
+
+```text
+func_redundant  ≈ 0.77–0.84
+func_unresolved ≈ 0.82–0.86
+```
+
+This means:
+
+> The functional assignment system successfully distributed error-mode IDs across slots on paper, but the residual/finite functional evidence still judged the resulting slot effects to be heavily redundant and unresolved.
+
+This is not a simple “loss disabled” bug.
+
+The functional auxiliary term was active.
+
+For example at epoch 7:
+
+```text
+total loss      = 0.4638
+functional loss = -0.375
+lambda_func     = 0.1
+```
+
+Thus the functional term contributed non-trivially to optimization.
+
+The failure is therefore **credit semantics / training target mismatch**, not absence of gradient.
+
+---
+
+# 9. Frozen P0 audit
+
+The full frozen-checkpoint P0 audit used all 6016 validation samples.
+
+Result:
+
+```text
+==============================================================================
+TAPER-MERIT P0 FUNCTIONAL INTERVENTION AUDIT
+==============================================================================
+
+Samples:                          6016
+Hard partition mean K:           1.000
+Dominant hard token share:       1.000
+
+Gradient error-mode rank:        2.842
+Functional Phi effective rank:   1.138
+Functionally useful slots:       3.936
+
+QASA functional precision:       0.974
+QASA functional recall:          0.245
+
+Median best SINGLE/FULL:         0.952
+Median best REPEAT/FULL:         1.089
+Median MEANxK/FULL:              1.001
+
+Mean K95:                        1.745
+Mean K99:                        2.082
+
+qasa_full:
+R@10                             46.79
+R@50                             70.47
+Mean Recall                      58.63
+
+all_slots_full:
+R@10                             46.50
+R@50                             70.45
+Mean Recall                      58.47
+
+reference_only:
+R@10                              4.24
+R@50                             11.91
+Mean Recall                       8.07
+```
+
+Report:
+
+```text
+reports/a3_4_v21_p0_full.json
+```
+
+---
+
+# 10. Comparison against Run C
+
+| Metric | Run C | A3.4 v2.1 | Interpretation |
+|---|---:|---:|---|
+| Mean Recall | ~58.75 | 58.63 | endpoint retrieval essentially unchanged |
+| Gradient error rank | ~2.84 | 2.842 | task remains genuinely multi-directional |
+| Phi effective rank | ~1.00 | 1.138 | only a weak increase; still near rank-1 |
+| SINGLE/FULL | ~0.777 | 0.952 | much worse; one slot nearly explains FULL |
+| REPEAT/FULL | ~1.020 | 1.089 | worse; repeated single slot beats FULL more strongly |
+| MEANxK/FULL | 1.000 | 1.001 | clone/interchangeability signature remains |
+| K95 | ~2.56 | 1.745 | fewer components needed |
+| K99 | ~3.01 | 2.082 | fewer components needed |
+| Hard partition K | ~2.08 | 1.000 | deployed ownership collapses completely |
+
+---
+
+# 11. Main scientific conclusion
+
+The decisive geometry is:
+
+\[
+r_{\text{task}} \approx 2.842
+\]
+
+while
+
+\[
+r_{\Phi} \approx 1.138.
+\]
+
+Therefore:
+
+\[
+\boxed{
+\text{task error geometry is multi-directional}
+\;\not\Rightarrow\;
+\text{learned slot interventions become multi-directional}
+}
+\]
+
+The retrieval task exposes multiple independent error directions.
+
+The learned Edit Slots still produce nearly rank-1 functional effects.
+
+---
+
+# 12. Clone / compute-ticket evidence
+
+The strongest intervention results are:
+
+```text
+SINGLE/FULL ≈ 0.952
+REPEAT/FULL ≈ 1.089
+MEANxK/FULL ≈ 1.001
+```
+
+## SINGLE
+
+A single best slot recovers roughly 95% of FULL gain.
+
+This is much closer to a giant/global functional owner than a compositional decomposition.
+
+## REPEAT
+
+Repeating one slot recovers more than FULL:
+
+```text
+REPEAT/FULL > 1
+```
+
+This is strong evidence that the Executor can exploit repeated similar slot computations as useful compute tickets.
+
+## MEAN
+
+Replacing slot identities by a mean representation and repeating it preserves essentially all FULL gain:
+
+```text
+MEANxK/FULL ≈ 1
+```
+
+This strongly rejects genuine slot identity dependence.
+
+---
+
+# 13. “Functionally useful slots ≈ 3.936” is not specialization
+
+P0 reports:
+
+```text
+Functionally useful slots ≈ 3.936
+```
+
+This must **not** be interpreted as four specialized modules.
+
+Multiple slots can all have positive marginal utility while their functional effect rows remain highly collinear.
+
+The correct distinction is:
+
+\[
+\boxed{
+\text{positive marginal usefulness}
+\neq
+\text{unique functional responsibility}
+}
+\]
+
+A3.4 reinforces this result.
+
+---
+
+# 14. QASA collapse is real but not the primary causal diagnosis
+
+P0:
+
+```text
+Hard partition mean K       = 1.000
+Dominant hard token share   = 1.000
+```
+
+Training also showed:
+
+```text
+qasa_k  → ~1
+value_k → ~1
+```
+
+So the deployed token/slot selector collapsed.
+
+However this should **not** be treated as the only explanation.
+
+Even when all slots are forced into intervention analysis, P0 still gives:
+
+```text
+Phi rank      = 1.138
+SINGLE/FULL   = 0.952
+REPEAT/FULL   = 1.089
+MEANxK/FULL   = 1.001
+```
+
+Therefore the failure is not merely:
+
+> “QASA selected too few slots.”
+
+The slot functions themselves remain highly redundant.
+
+---
+
+# 15. Code-level root cause
+
+The central code-level issue is the split between:
 
 ```python
-slot_semantics = pool(
-    teacher_text_states,
-    value_slot_masks,
-)
-
-raw_edit_slots = self.slot_mlp(slot_semantics)
+training_assignment
 ```
 
-Không concatenate `slot_effects`.
-
-### 2.3 `soft_shared`
-
-```text
-contextual KEY
-      |
-      v
-soft ownership
-      |
-      v
-raw token VALUE
-```
-
-Một token có thể contribute vào nhiều slots.
-
-Ví dụ:
-
-```text
-red:
-S0 = 0.60
-S1 = 0.20
-S2 = 0.10
-S3 = 0.10
-```
-
-### 2.4 `hard_st_exclusive`
-
-Forward:
-
-```text
-contextual KEY
-      |
-      v
-soft scores
-      |
-      v
-argmax/token
-      |
-      v
-one hard owner
-      |
-      v
-raw token VALUE
-```
-
-Mỗi valid token chỉ contribute vào đúng một VALUE slot.
-
-Backward dùng Straight-Through:
+and:
 
 ```python
-value_slot_masks = (
-    hard_slot_masks
-    + soft_slot_masks
-    - soft_slot_masks.detach()
+assignment / credit
+```
+
+The current training path uses:
+
+```python
+training_assignment = proposal_assignment
+training_credit = effects * training_assignment
+```
+
+where `proposal_assignment` is frozen from the first ownership round.
+
+Then:
+
+```python
+functional_loss = functional_credit_loss(
+    singleton_objective,
+    ownership["training_credit"],
+    ...
 )
 ```
 
-Forward hard, backward vẫn có gradient qua soft ownership.
+Therefore the auxiliary loss optimizes the **initial mode assignment**.
+
+The later block-residual process can discover that assigned slots are redundant, but that result does not fully replace the training credit.
+
+Conceptually, A3.4 does:
+
+```text
+initial Phi from EMPTY
+       ↓
+assign job IDs
+       ↓
+train those assignments
+       ↓
+residual audit says:
+"many of these are still redundant"
+       ↓
+mostly diagnostic
+```
+
+What the theory intended for block residual pursuit is closer to:
+
+```text
+A = EMPTY
+    ↓
+measure conditional Phi[s,j | A]
+    ↓
+assign residual jobs
+    ↓
+credit one accepted block
+    ↓
+A ← A ∪ block
+    ↓
+recompute conditional Phi[s,j | A]
+    ↓
+assign only genuinely remaining work
+    ↓
+credit next block
+```
+
+This difference is now empirically important.
 
 ---
 
-## 3. Baseline A3.1 trước A3.2
+# 16. Hypotheses tested by A3.4
 
-P0 audit reference checkpoint A3.1:
+## H-A3.4-1
 
-| Metric | A3.1 |
-|---|---:|
-| Hard partition mean K | 1.175 |
-| Dominant hard token share | 0.976 |
-| Gradient error-mode rank | 2.837 |
-| Functional Phi effective rank | 1.018 |
-| Functionally useful slots | 3.903 |
-| QASA functional precision | 0.974 |
-| QASA functional recall | 0.497 |
-| Median best SINGLE/FULL | 0.790 |
-| Median best REPEAT/FULL | 1.037 |
-| Median MEANxK/FULL | 1.000 |
-| Mean K95 | 2.514 |
-| Mean K99 | 2.959 |
-| qasa_full Mean Recall | 58.58 |
-| all_slots_full Mean Recall | 58.88 |
-| reference_only Mean Recall | 8.10 |
+> Per-negative retrieval error modes plus first-round functional assignment are sufficient to create functional slot specialization.
 
-Interpretation baseline:
-
-```text
-gradient error-mode rank ≈ 2.84
-```
-
-Task có nhiều error directions, nhưng:
-
-```text
-Phi rank ≈ 1.02
-```
-
-learned slot effects gần như chỉ nằm trên một functional direction.
-
-Ngoài ra:
-
-```text
-REPEAT/FULL ≈ 1.04
-MEANxK/FULL ≈ 1.00
-```
-
-cho thấy slot identity/content không thực sự cần thiết; một representation gần-global cộng với nhiều executor tickets có thể tái tạo gần toàn bộ gain.
-
----
-
-## 4. Training results A3.2
-
-### 4.1 HARD — `hard_st_exclusive`
-
-Checkpoint:
-
-```text
-outputs/2026-08-26/20-48-08/best.pt
-```
-
-10-epoch training:
-
-```text
-best Mean Recall ≈ 43.27
-```
-
-Cuối training:
-
-```text
-value_k          ≈ 2.06
-value_dominant   ≈ 0.792
-value_empty      ≈ 0.486
-```
-
-Performance giảm mạnh so với A3.1 reference checkpoint.
-
-### 4.2 SOFT — `soft_shared`
-
-Checkpoint:
-
-```text
-outputs/2026-08-26/21-22-35/best.pt
-```
-
-10-epoch training:
-
-```text
-best Mean Recall ≈ 42.68
-```
-
-Cuối training hard-argmax diagnostic:
-
-```text
-value_k          ≈ 1.03
-value_dominant   ≈ 0.994
-value_empty      ≈ 0.743
-```
-
-Soft mode học tới gần monopoly tuyệt đối theo argmax ownership.
-
----
-
-## 5. Local-value failure diagnosis — HARD
-
-Checkpoint:
-
-```text
-/home/heheboiz/data/cir/outputs/2026-08-26/20-48-08/best.pt
-```
-
-Full validation: 6016 queries.
-
-### 5.1 Retrieval interventions
-
-| Variant | Mean Recall |
-|---|---:|
-| deployed_qasa | **43.25** |
-| raw_hard_qasa | 43.25 |
-| raw_hard_qasa_nonempty | 43.26 |
-| raw_hard_all_nonempty | 43.35 |
-| raw_soft_qasa | 42.76 |
-| raw_soft_all | 36.54 |
-| contextual_hard_qasa_nonempty | 21.88 |
-| contextual_soft_qasa | 23.02 |
-| teacher_full | **64.94** |
-| reference_only | 13.81 |
-| empty_selected_only | 13.78 |
-
-### 5.2 Routing / ownership
-
-```text
-hard_value_effective_k         = 1.9456
-hard_value_dominant_share      = 0.8267
-hard_value_empty_slot_fraction = 0.5136
-```
-
-Hard privacy không còn cho token bị copy sang nhiều VALUE slots, nhưng model thích nghi bằng cách tạo một **giant slot**:
-
-- chỉ khoảng 1.95 / 4 slots có token,
-- slot lớn nhất ăn ~82.7% token,
-- ~51.4% slot positions empty.
-
-### 5.3 QASA mismatch
-
-```text
-qasa_selected_empty_fraction                 = 0.0427
-qasa_selected_nonempty_precision             = 0.9573
-qasa_hard_nonempty_recall                    = 0.9083
-hard_owned_token_fraction_unselected_by_qasa = 0.0214
-```
-
-Mismatch có thật nhưng nhỏ.
-
-```text
-deployed_qasa          = 43.254
-raw_hard_qasa_nonempty = 43.263
-```
-
-Chặn QASA-selected empty slots chỉ tăng khoảng `+0.008 Mean Recall`.
-
-**Kết luận:** QASA/value-support mismatch không phải root cause của performance failure.
-
-### 5.4 Empty-slot executor contract issue
-
-```text
-executor/empty_selected_actual_change_norm_sum = 0.0524
-```
-
-Một slot có hard VALUE = zero nhưng nếu QASA chọn nó, Executor vẫn có thể thay đổi state.
-
-Đây là behavior không sạch về contract:
-
-```text
-empty VALUE
-   nhưng
-selected by QASA
-   ->
-non-zero state transition
-```
-
-Nên sửa về lâu dài thành exact no-op cho empty VALUE slot. Tuy nhiên retrieval intervention cho thấy issue này **không giải thích performance drop**.
-
-### 5.5 Raw vs contextual token geometry
-
-```text
-raw word embedding pairwise cosine   = 0.2374
-contextual embedding pairwise cosine = 0.7247
-```
-
-Đây là evidence mạnh rằng Q-Former contextual tokens đã bị global/contextualized rất nhiều.
-
-Hypothesis:
-
-> final contextual text tokens quá global
-
-được hỗ trợ bởi token geometry.
-
-Nhưng hypothesis:
-
-> chỉ cần bỏ contextual VALUE là slots sẽ tự specialization
-
-bị bác bỏ bởi A3.2.
-
----
-
-## 6. Local-value failure diagnosis — SOFT
-
-Checkpoint:
-
-```text
-/home/heheboiz/data/cir/outputs/2026-08-26/21-22-35/best.pt
-```
-
-Full validation: 6016 queries.
-
-### 6.1 Retrieval interventions
-
-| Variant | Mean Recall |
-|---|---:|
-| deployed_qasa | **42.67** |
-| raw_hard_qasa | 42.59 |
-| raw_hard_qasa_nonempty | 42.59 |
-| raw_hard_all_nonempty | 42.59 |
-| raw_soft_qasa | **42.67** |
-| raw_soft_all | 37.20 |
-| contextual_hard_qasa_nonempty | 30.37 |
-| contextual_soft_qasa | 30.50 |
-| teacher_full | **64.94** |
-| reference_only | 12.86 |
-| empty_selected_only | 12.86 |
-
-### 6.2 Ownership collapse
-
-Hard-argmax diagnostic của soft ownership:
-
-```text
-hard_value_effective_k         = 1.000
-hard_value_dominant_share      = 1.000
-hard_value_empty_slot_fraction = 0.750
-```
-
-Đây là absolute winner monopoly:
-
-```text
-mọi valid token
-    ->
-cùng một winning slot
-```
-
-Soft VALUE vẫn cho các slot khác fractional mass, nhưng ownership ranking đã collapse hoàn toàn.
-
-### 6.3 Hard-vs-soft frozen intervention
-
-```text
-raw_soft_qasa = 42.67
-raw_hard_qasa = 42.59
-```
-
-Difference chỉ ~`0.08 Mean Recall`.
-
-Không có evidence rằng chỉ riêng hard assignment là nguyên nhân gây tụt performance.
-
-Quan trọng hơn, hai model đã được train from scratch riêng:
-
-```text
-HARD best ≈ 43.27
-SOFT best ≈ 42.68
-```
-
-=> `soft_shared` không cứu được performance hoặc collapse.
-
----
-
-## 7. P0 Functional Audit — HARD
-
-Checkpoint:
-
-```text
-outputs/2026-08-26/20-48-08/best.pt
-```
-
-### 7.1 Results
-
-| Metric | HARD A3.2 |
-|---|---:|
-| Hard partition mean K | 1.946 |
-| Dominant hard token share | 0.827 |
-| Gradient error-mode rank | **2.672** |
-| Functional Phi effective rank | **1.059** |
-| Functionally useful slots | 3.673 |
-| QASA functional precision | 0.911 |
-| QASA functional recall | 0.471 |
-| Median best SINGLE/FULL | **1.010** |
-| Median best REPEAT/FULL | **1.668** |
-| Median MEANxK/FULL | **0.276** |
-| Mean K95 | **1.286** |
-| Mean K99 | **1.611** |
-| qasa_full Mean Recall | 43.25 |
-| all_slots_full Mean Recall | 43.18 |
-| reference_only Mean Recall | 13.81 |
-
-### 7.2 Functional interpretation
-
-Task vẫn có nhiều error modes:
-
-```text
-gradient rank = 2.672
-```
-
-nhưng learned functional effects vẫn gần rank-1:
-
-```text
-Phi rank = 1.059
-```
-
-Hard privacy **không tạo functional decomposition**.
-
-#### SINGLE/FULL
-
-```text
-median best SINGLE/FULL = 1.010
-```
-
-Một slot đơn lẻ trung vị đã đạt hoặc vượt forced-all FULL gain.
-
-#### REPEAT/FULL
-
-```text
-median best REPEAT/FULL = 1.668
-```
-
-Copy một slot vào tất cả executor tickets có thể tạo gain ~1.67× forced-all FULL.
-
-Interpretation:
-
-> Executor/recurrent compute vẫn có thể amplify một single functional direction qua nhiều execution tickets.
-
-Hard information isolation không giải quyết compute-ticket degeneracy.
-
-#### MEANxK/FULL
-
-```text
-baseline A3.1 = 1.000
-A3.2 HARD     = 0.276
-```
-
-Đây là thay đổi quan trọng.
-
-Hard private VALUE đã phá được **mean-slot clone symmetry** ở representation level.
-
-Nhưng vì:
-
-```text
-Phi rank       ≈ 1.06
-SINGLE/FULL    ≈ 1.01
-REPEAT/FULL    ≈ 1.67
-```
-
-nên representation khác nhau **không đồng nghĩa** với function khác nhau.
-
-Failure mode chuyển từ:
-
-```text
-global/mean clone collapse
-```
-
-sang:
-
-```text
-giant functional slot + weak/empty auxiliary slots
-```
-
-#### K95 / K99
-
-```text
-K95 = 1.286
-K99 = 1.611
-```
-
-Phần lớn full functional gain chỉ cần rất ít slots.
-
----
-
-## 8. P0 Functional Audit — SOFT
-
-Checkpoint:
-
-```text
-outputs/2026-08-26/21-22-35/best.pt
-```
-
-### 8.1 Results
-
-| Metric | SOFT A3.2 |
-|---|---:|
-| Hard partition mean K | **1.000** |
-| Dominant hard token share | **1.000** |
-| Gradient error-mode rank | **2.654** |
-| Functional Phi effective rank | **1.166** |
-| Functionally useful slots | 3.888 |
-| QASA functional precision | 0.921 |
-| QASA functional recall | 0.236 |
-| Median best SINGLE/FULL | **1.041** |
-| Median best REPEAT/FULL | **1.659** |
-| Median MEANxK/FULL | **0.910** |
-| Mean K95 | 1.761 |
-| Mean K99 | 1.982 |
-| qasa_full Mean Recall | 42.67 |
-| all_slots_full Mean Recall | 37.20 |
-| reference_only Mean Recall | 12.86 |
-
-### 8.2 Interpretation
-
-Ownership collapse hoàn toàn:
-
-```text
-K = 1
-dominant share = 1
-```
-
-Task error structure vẫn:
-
-```text
-gradient rank = 2.654
-```
-
-nhưng functional Phi:
-
-```text
-Phi rank = 1.166
-```
-
-vẫn thấp.
-
-```text
-SINGLE/FULL = 1.041
-REPEAT/FULL = 1.659
-MEANxK/FULL = 0.910
-```
-
-Một single slot vẫn đủ hoặc tốt hơn full coalition, và repeating một slot qua các execution tickets vẫn cực mạnh.
-
----
-
-## 9. So sánh A3.1 vs A3.2 HARD vs A3.2 SOFT
-
-| Metric | A3.1 | A3.2 HARD | A3.2 SOFT |
-|---|---:|---:|---:|
-| Mean Recall qasa | **58.58** | 43.25 | 42.67 |
-| Hard K | 1.175 | 1.946 | **1.000** |
-| Dominant token share | 0.976 | 0.827 | **1.000** |
-| Gradient rank | 2.837 | 2.672 | 2.654 |
-| Phi rank | 1.018 | 1.059 | 1.166 |
-| SINGLE/FULL | 0.790 | **1.010** | **1.041** |
-| REPEAT/FULL | 1.037 | **1.668** | **1.659** |
-| MEANxK/FULL | 1.000 | **0.276** | 0.910 |
-| K95 | 2.514 | **1.286** | 1.761 |
-| K99 | 2.959 | **1.611** | 1.982 |
-
----
-
-## 10. Hypothesis audit
-
-### H1 — Contextual Q-Former tokens quá global
-
-**Status: SUPPORTED**
+**Status:** REJECTED.
 
 Evidence:
 
 ```text
-raw token pairwise cosine        = 0.237
-contextual token pairwise cosine = 0.725
+Phi rank = 1.138
+REPEAT/FULL = 1.089
+MEANxK/FULL = 1.001
 ```
 
-Contextual representations đồng dạng hóa token rất mạnh.
+## H-A3.4-2
 
-### H2 — Soft token sharing là nguyên nhân chính của collapse
+> Giving different slot IDs different hard-negative mode assignments is enough to produce different functional modules.
 
-**Status: REJECTED AS PRIMARY CAUSE**
+**Status:** STRONGLY REJECTED.
 
-Soft A3.2 collapse:
+Training:
 
 ```text
-K = 1.0
-dominant = 1.0
+func_owned ≈ 15.5 / 16
+func_slots ≈ 3
 ```
 
-Hard A3.2:
+yet frozen P0:
 
 ```text
-K ≈ 1.95
-dominant ≈ 0.83
+Phi rank ≈ 1.14
 ```
 
-Hard làm token partition bớt monopoly hơn nhưng functional decomposition vẫn gần rank-1 và performance không hồi phục.
+Therefore:
 
-### H3 — Hard exclusivity tự nó đủ để tạo specialization
+\[
+\boxed{
+\text{different assigned error IDs}
+\neq
+\text{different learned functions}
+}
+\]
 
-**Status: REJECTED**
+## H-A3.4-3
 
-Evidence HARD:
+> Residual uniqueness analysis used primarily as an acceptance diagnostic is enough to steer learning.
+
+**Status:** REJECTED / NOT SUPPORTED.
+
+Residual diagnostics stayed strongly unresolved:
 
 ```text
-Phi rank    = 1.059
-SINGLE/FULL = 1.010
-REPEAT/FULL = 1.668
-K95         = 1.286
+func_redundant  ≈ 0.77–0.84
+func_unresolved ≈ 0.82–0.86
 ```
 
-Slots có thể khác raw content nhưng vẫn không phân chia functional responsibility.
+while specialization did not emerge.
 
-### H4 — Raw/local VALUE tự nó đủ để giải quyết collapse
+## H-A3.4-4
 
-**Status: REJECTED**
+> Retrieval performance must fall substantially if functional specialization pressure is added.
 
-Cả soft và hard raw VALUE đều:
+**Status:** REJECTED.
 
-- Recall thấp ~42–43.
-- Functional Phi gần rank-1.
-- Một slot đơn đủ hoặc tốt hơn full.
-- Repeat một slot qua nhiều executor steps cực mạnh.
-
-### H5 — Retrieval task thực sự chỉ cần một edit direction
-
-**Status: NOT SUPPORTED**
-
-Gradient error-mode rank vẫn khoảng:
+Mean Recall stayed essentially unchanged:
 
 ```text
-2.65 – 2.67
+Run C     ≈ 58.75
+A3.4 v2.1 = 58.63
 ```
 
-Task local retrieval error geometry có nhiều independent directions.
+This is useful because it shows the failure is not primarily catastrophic optimization instability.
 
-Vấn đề là learned slots không ownership các directions đó.
+---
 
-### H6 — Retrieval-only objective không tạo đủ pressure functional specialization
+# 17. What A3.4 did successfully establish
 
-**Status: STRONGLY SUPPORTED BY CURRENT EVIDENCE**
+Although A3.4 failed its main specialization goal, it produced useful scientific information.
 
-Current objective chỉ yêu cầu:
+It established that:
+
+1. the task has multiple error directions;
+2. per-negative functional modes can be computed stably enough for training;
+3. finite intervention Phi is usable as a functional diagnostic;
+4. gradient-isolated auxiliary slot interventions can be implemented without changing Run C forward values;
+5. functional assignment can be separated from token routing;
+6. fake assignment diversity can coexist with rank-1 functional behavior;
+7. residual redundancy metrics correctly warn about unresolved collapse;
+8. endpoint Recall can remain strong while functional decomposition is absent.
+
+These components should not all be discarded.
+
+---
+
+# 18. What must NOT be concluded
+
+Do **not** conclude:
 
 ```text
-final query -> target
+multi-error functional modeling is useless
+block residual pursuit is useless
+contextual VALUE can never specialize
+QASA alone caused the entire failure
+more functional loss weight would solve the problem
+four slots are unnecessary for every sample
+the task itself is rank-1
 ```
 
-Nó không yêu cầu:
+The experiment does not support those claims.
+
+The task error rank remains around 2.84.
+
+The experiment specifically falsifies the current **credit realization**.
+
+---
+
+# 19. What must NOT be changed next
+
+The next branch should not immediately add unrelated mechanisms.
+
+Do not change:
 
 ```text
-slot 0 owns error mode A
-slot 1 owns error mode B
-slot 2 owns residual C
+contextual VALUE
+teacher
+QASA
+routing
+Executor
+Primitive Bank
+retrieval loss
+FashionIQ protocol
+optimizer
+training schedule
+```
+
+Do not add:
+
+```text
+local microencoder
+teacher_raw VALUE
+Entmax
+Sinkhorn
+OT
+balance loss
+cosine diversity
+orthogonality
+new semantic supervision
+new data
+LLM-generated labels
+new solver architecture
+```
+
+The next experiment should preserve attribution.
+
+---
+
+# 20. Recommended next branch
+
+Freeze A3.4 v2.1 as a negative-result branch.
+
+Recommended next branch:
+
+```bash
+git checkout exp/e2e-a3.4-functional-error-ownership
+git checkout -b exp/e2e-a3.4b-conditional-residual-credit
+```
+
+The next hypothesis should change **only the functional training-credit semantics**.
+
+---
+
+# 21. A3.4b hypothesis
+
+A3.4b should test:
+
+> Does conditional residual functional credit, recomputed after accepted coalition steps, produce real slot specialization where first-round mode assignment failed?
+
+Target logic:
+
+```text
+A0 = EMPTY
+    ↓
+compute Phi[s,j | A0]
+    ↓
+select / assign useful residual block
+    ↓
+credit that block
+    ↓
+A1 = A0 ∪ block
+    ↓
+compute Phi[s,j | A1]
+    ↓
+select next residual block
+    ↓
+credit only remaining work
+    ↓
 ...
 ```
 
-Vì vậy model có nghiệm rẻ hơn:
+The key change is:
 
-```text
-one giant useful slot
-+
-unused / weak / redundant slots
-+
-repeated executor compute
-```
+\[
+\boxed{
+\text{residual analysis must determine training credit}
+}
+\]
 
----
+rather than:
 
-## 11. Kết luận khoa học chính
-
-### 11.1 Information isolation có tác dụng nhưng không đủ
-
-A3.2 HARD đã phá được một phần clone symmetry:
-
-```text
-MEANxK/FULL
-1.000 -> 0.276
-```
-
-và hard token K tăng:
-
-```text
-1.175 -> 1.946
-```
-
-Do đó hard/private VALUE **có thay đổi representation structure thật**.
-
-Nhưng functional Phi:
-
-```text
-1.018 -> 1.059
-```
-
-gần như không cải thiện.
-
-Kết luận:
-
-> **Representation diversity != functional specialization.**
-
-### 11.2 Collapse đã đổi hình thức
-
-A3.1:
-
-```text
-near-global slot representations
-+
-mean/repeat clone behavior
-```
-
-A3.2 HARD:
-
-```text
-private token supports
-+
-giant functional slot
-+
-many empty/weak slots
-+
-single slot amplified by executor tickets
-```
-
-A3.2 SOFT:
-
-```text
-absolute winner monopoly
-+
-soft leakage to other slots
-+
-global/mean-like functional behavior
-```
-
-### 11.3 Core failure hiện tại
-
-```text
-TOKEN OWNERSHIP
-    !=
-FUNCTIONAL ERROR OWNERSHIP
-```
-
-A3.2 chỉ cưỡng chế hoặc thay đổi token-information ownership.
-
-Nó chưa cưỡng chế mỗi slot phải giải quyết một residual/error direction khác mà slot trước chưa giải quyết.
+\[
+\text{residual analysis mostly diagnoses a fixed first-round training assignment}.
+\]
 
 ---
 
-## 12. Warning về contextual-V intervention
+# 22. Acceptance criteria for the next branch
 
-Các frozen probes:
+The next experiment should still use the same frozen P0 acceptance metrics.
+
+Primary specialization indicators:
 
 ```text
-contextual_hard_qasa_nonempty
-contextual_soft_qasa
+Functional Phi rank      ↑ materially from ~1
+REPEAT/FULL              ↓ clearly below current level
+MEANxK/FULL              ↓ below ~1 when identity matters
+SINGLE/FULL              ↓ on verified multi-mode samples
+K95 / K99                ↑ when multiple functional components are necessary
 ```
 
-rất thấp.
+Secondary endpoint constraint:
 
-Không được kết luận đơn giản rằng contextual VALUE intrinsically tệ hơn raw VALUE.
+```text
+Mean Recall should remain usable and not catastrophically collapse.
+```
 
-`slot_mlp` của checkpoint A3.2 được train trên distribution của raw word embeddings. Thay trực tiếp contextual Q-Former states vào frozen `slot_mlp` tạo distribution shift lớn.
+Do not optimize these diagnostics directly.
 
-Probe này chỉ nói:
-
-> frozen raw-trained slot pipeline không chịu được representation swap.
-
-Muốn so raw-vs-contextual VALUE công bằng phải train riêng từ scratch.
+They remain acceptance metrics.
 
 ---
 
-## 13. Những kết luận KHÔNG được phép rút ra
+# 23. Frozen benchmark reference for future comparison
 
-Không được kết luận:
+Use this A3.4 v2.1 checkpoint as a negative control:
 
-1. `hard assignment` là nguyên nhân duy nhất làm Recall giảm.
-2. `raw embedding` intrinsically tốt hơn contextual embedding.
-3. `QASA` là nguyên nhân chính của collapse.
-4. `K=1` nghĩa task chỉ có một edit factor.
-5. `functionally useful slots ≈ 4` nghĩa bốn slots đã specialization.
-6. representation cosine thấp nghĩa functional decomposition đã thành công.
+```text
+A3.4 v2.1
+
+Mean Recall                  58.63
+Gradient rank                 2.842
+Phi rank                      1.138
+Useful slots                  3.936
+
+SINGLE/FULL                   0.952
+REPEAT/FULL                   1.089
+MEANxK/FULL                   1.001
+
+K95                           1.745
+K99                           2.082
+
+Hard partition K              1.000
+Dominant hard token share     1.000
+
+QASA precision                0.974
+QASA recall                   0.245
+```
+
+Future branches must not claim specialization unless they beat this profile on the functional metrics, not merely Recall.
 
 ---
 
-## 14. Contract issue cần ghi nhớ
+# 24. Final verdict
 
-Trong HARD run, empty VALUE slot có thể execute:
+A3.4 v2.1 should be recorded as:
 
-```text
-empty selected state-change norm ≈ 0.0524
-```
+\[
+\boxed{
+\textbf{NEGATIVE RESULT}
+}
+\]
 
-Nên sửa contract sau:
+Specifically:
 
-```text
-effective_selected
-=
-qasa_selected
-&
-value_nonempty
-```
+\[
+\boxed{
+\text{first-round functional mode assignment}
++
+\text{residual diagnostic}
+\not\Rightarrow
+\text{functional slot specialization}
+}
+\]
 
-ít nhất cho hard-exclusive mode.
+The task remains multi-error:
 
-Tuy nhiên đây là cleanup/correctness issue, **không phải root cause** theo retrieval intervention.
+\[
+r_{\text{task}}\approx2.842,
+\]
 
----
+but learned slot interventions remain near rank-1:
 
-## 15. Decision after A3.2
+\[
+r_{\Phi}\approx1.138.
+\]
 
-Điều đã học được:
+The next experiment should therefore not broaden the architecture.
 
-```text
-Global contextual VALUE leakage
-    -> có thật
+It should make the smallest causal change consistent with the diagnosis:
 
-Soft sharing leakage
-    -> có thật
+\[
+\boxed{
+\text{conditional residual functional effects}
+\rightarrow
+\text{conditional residual training credit}
+}
+\]
 
-Nhưng cắt cả hai
-    -> vẫn không tạo functional specialization
-```
-
-Do đó không nên tiếp tục chỉ chỉnh:
-
-- temperature,
-- hard/soft,
-- QASA threshold,
-- token balance,
-- slot count,
-- Entmax/Sinkhorn/OT,
-
-với kỳ vọng chúng tự sinh functional decomposition.
-
-Các cơ chế này chủ yếu thay assignment geometry, trong khi failure còn lại là functional ownership.
-
----
-
-## 16. Hướng experiment tiếp theo
-
-Next experiment phải đánh trực tiếp vào:
-
-```text
-FUNCTIONAL ERROR OWNERSHIP
-```
-
-thay vì chỉ:
-
-```text
-TOKEN OWNERSHIP
-```
-
-Candidate direction:
-
-1. Xây per-negative retrieval error directions.
-2. Slot đầu claim một subset/error direction.
-3. Project/remove phần error direction đã được slot đó giải quyết.
-4. Slot tiếp theo chỉ được reward cho residual error chưa được giải quyết.
-5. Clone direction phải có marginal gain gần zero.
-6. Không ép semantic labels.
-7. Không ép balanced token count.
-8. Cho phép `K_eff = 1` khi query thật sự chỉ cần một factor.
-9. Audit bằng exact coalitions, SINGLE, DROP, REPEAT, MEAN, K95/K99.
-
-Core principle:
-
-```text
-token ownership
-      ↓
-không đủ
-
-functional residual ownership
-      ↓
-pressure cần test tiếp
-```
-
----
-
-## 17. Commands / reports đã dùng
-
-### HARD local-value diagnosis
-
-```bash
-python src/diagnose_taper_local_value_failure.py \
-  --checkpoint /home/heheboiz/data/cir/outputs/2026-08-26/20-48-08/best.pt \
-  --slot-value-assignment hard_st_exclusive \
-  --max-queries-per-category 0 \
-  --json-output reports/taper_local_value_failure_full.json
-```
-
-### SOFT local-value diagnosis
-
-```bash
-python src/diagnose_taper_local_value_failure.py \
-  --checkpoint /home/heheboiz/data/cir/outputs/2026-08-26/21-22-35/best.pt \
-  --slot-value-assignment soft_shared \
-  --max-queries-per-category 0 \
-  --json-output reports/a3_2_soft_local_value_failure_full.json
-```
-
-### HARD P0
-
-```bash
-python src/audit_taper_merit_p0.py \
-  --checkpoint /home/heheboiz/data/cir/outputs/2026-08-26/20-48-08/best.pt \
-  --slot-value-assignment hard_st_exclusive \
-  --max-queries-per-category 0 \
-  --hard-negatives 16 \
-  --json-output reports/a3_2_hard_merit_p0_full.json
-```
-
-### SOFT P0
-
-```bash
-python src/audit_taper_merit_p0.py \
-  --checkpoint /home/heheboiz/data/cir/outputs/2026-08-26/21-22-35/best.pt \
-  --slot-value-assignment soft_shared \
-  --max-queries-per-category 0 \
-  --hard-negatives 16 \
-  --json-output reports/a3_2_soft_merit_p0_full.json
-```
-
----
-
-## 18. Final diagnosis
-
-A3.2 không thất bại vô ích.
-
-Nó đã tách được hai vấn đề trước đây bị trộn lẫn:
-
-```text
-INFORMATION COLLAPSE
-vs
-FUNCTIONAL COLLAPSE
-```
-
-Kết quả hiện tại cho thấy:
-
-```text
-Contextual/global information leakage
-    là một vấn đề thật.
-
-Nhưng:
-cắt leakage không tự tạo slot specialization.
-
-Model chuyển sang:
-giant-slot / single-direction / executor-ticket solution.
-```
-
-Kết luận hiện tại:
-
-> **Edit-slot collapse không còn có thể giải thích chỉ bằng token globalization hay soft ownership leakage. Failure còn lại là thiếu pressure để các slots ownership các functional retrieval errors khác nhau.**
-
-Đây là checkpoint để tránh quay lại lặp lại các experiment routing-only mà A3.2 đã falsify.
-
-## A3.2 Executor Shortcut Forensic — Result
-
-To test whether the downstream Executor was the main cause of functional slot collapse, we ran a frozen-checkpoint forensic analysis on all 6,016 FashionIQ validation queries.
-
-The test explicitly isolated two hypotheses:
-
-1. **Slot-content ignoring:** whether the Executor produces nearly the same transition when the real slot is replaced by a zero or shuffled slot.
-2. **Compute-ticket shortcut:** whether repeatedly executing the same dominant slot can substitute for using multiple distinct slots.
-
-### Results
-
-Slot-content dependence was clearly present:
-
-- median real-vs-zero relative transition difference: **0.985**
-- median real-vs-zero transition cosine: **0.427**
-- median real-vs-shuffled relative transition difference: **1.190**
-- median real-vs-shuffled transition cosine: **0.286**
-
-Therefore, the Executor is **not simply ignoring Edit Slot content**. Replacing the actual slot with zero or with another sample's slot substantially changes both the magnitude and direction of the state update.
-
-Repeated execution of the same dominant slot does amplify the amount of state/query movement:
-
-- repeated ×K_eff / single query movement: **1.338×**
-- repeated ×4 / single query movement: **1.598×**
-
-However, this extra recurrent computation does **not** improve retrieval:
-
-| Intervention | Mean Recall |
-|---|---:|
-| Original hard-nonempty slots | **43.346** |
-| Dominant slot ×1 | **42.296** |
-| Dominant slot ×K_eff | **41.455** |
-| Dominant slot ×4 | **35.826** |
-
-Performance decreases as the same slot is repeated. Therefore, recurrent execution depth cannot simply replace genuine multi-slot information.
-
-### Updated Diagnosis
-
-These results substantially weaken the hypothesis that the Executor is the primary source of A3.2 functional collapse.
-
-The current evidence instead indicates:
-
-> **The Edit Slots are representationally different, and the Executor is sensitive to those differences, but training does not provide sufficient pressure for the slots to acquire distinct functional responsibilities.**
-
-The failure is therefore more likely located in the **slot-learning / routing dynamics** rather than in the Executor itself.
-
-A plausible training shortcut is:
-
-```text
-one slot becomes slightly more useful
-        ↓
-selected / reinforced more often
-        ↓
-receives more useful retrieval signal
-        ↓
-becomes the giant slot
-        ↓
-remaining slots stay weak, auxiliary, or empty
+A3.4 is now frozen as the empirical justification for that next step.
