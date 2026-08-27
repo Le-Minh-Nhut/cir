@@ -1,8 +1,8 @@
 name: encoder_binding_e2e
 
-batch_size: 32
-eval_batch_size: 32
-gallery_batch_size: 32
+batch_size: 128
+eval_batch_size: 128
+gallery_batch_size: 128
 num_workers: 8
 num_epochs: 10
 
@@ -12,7 +12,7 @@ weight_decay: 1.0e-4
 train_caption_policy: normalized_ordered_and
 val_caption_policy: normalized_ordered_and
 correction_policy: fashioniq
-text_cache_subdir: text
+text_cache_subdir: text_a8_global
 global_image_cache_subdir: images
 dense_image_cache_subdir: dense_images
 

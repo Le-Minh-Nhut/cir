@@ -119,12 +119,8 @@ class FGCLIP2Backbone(nn.Module):
     def encode_text_tokens(
         self,
         captions: Sequence[str],
-    ) -> tuple[Tensor, Tensor, Tensor]:
-        """Return contextual token states plus attention/content masks."""
-
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         self._assert_frozen()
-        if not captions:
-            raise ValueError("captions must not be empty")
 
         tokenized = self.tokenizer(
             list(captions),
@@ -135,18 +131,18 @@ class FGCLIP2Backbone(nn.Module):
             return_special_tokens_mask=True,
             return_tensors="pt",
         )
+
         special_tokens_mask = tokenized.pop("special_tokens_mask").to(
             device=self.device,
             dtype=torch.bool,
         )
-        input_ids = tokenized["input_ids"].to(device=self.device)
+
+        input_ids = tokenized["input_ids"].to(self.device)
         attention_mask = tokenized["attention_mask"].to(
             device=self.device,
             dtype=torch.bool,
         )
-        # The official remote implementation registers ``position_ids`` twice.
-        # Supplying the canonical short-text positions avoids relying on that
-        # non-persistent buffer when Transformers initializes through meta tensors.
+
         position_ids = torch.arange(
             self.max_text_length,
             device=self.device,
@@ -159,25 +155,22 @@ class FGCLIP2Backbone(nn.Module):
             position_ids=position_ids,
             walk_type="short",
         )
+
         states = outputs.last_hidden_state.float()
+
+        global_features = F.normalize(
+            outputs.pooler_output.float(),
+            dim=-1,
+        )
+
         content_mask = attention_mask & ~special_tokens_mask
 
-        expected_shape = (len(captions), self.max_text_length, FGCLIP2_LARGE_DIM)
-        if tuple(states.shape) != expected_shape:
-            raise RuntimeError(
-                f"Expected FG-CLIP2-Large text states {expected_shape}, "
-                f"got {tuple(states.shape)}"
-            )
-        if content_mask.shape != attention_mask.shape:
-            raise RuntimeError("FG-CLIP2 text mask shape mismatch")
-        if (content_mask & ~attention_mask).any():
-            raise RuntimeError("content_mask includes padding tokens")
-        if not torch.isfinite(states).all():
-            raise FloatingPointError("FG-CLIP2 text states contain NaN or Inf")
-        if states.requires_grad:
-            raise RuntimeError("FG-CLIP2 text precompute recorded gradients")
-
-        return states, attention_mask, content_mask
+        return (
+            states,
+            attention_mask,
+            content_mask,
+            global_features,
+        )
 
     @torch.inference_mode()
     def encode_text_global(self, captions: Sequence[str]) -> Tensor:

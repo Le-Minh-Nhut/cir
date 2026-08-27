@@ -39,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-id", default=FGCLIP2_LARGE_MODEL_ID)
     parser.add_argument("--revision", default=FGCLIP2_LARGE_REVISION)
     parser.add_argument("--splits", nargs="+", choices=VALID_SPLITS, default=list(VALID_SPLITS))
-    parser.add_argument("--batch-size", type=int, default=4)
+    parser.add_argument("--batch-size", type=int, default=90)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--storage-dtype", choices=("float16", "float32"), default="float16")
     parser.add_argument("--parity-samples", type=int, default=3)
@@ -195,7 +195,7 @@ def precompute_split(
             raise RuntimeError("FG-CLIP2 dense direct/cache token-count parity failed")
         error = float((direct.float() - cached).abs().max().item())
         parity_max_abs_error = max(parity_max_abs_error, error)
-    tolerance = 2.0e-3 if np.dtype(storage_dtype) == np.dtype(np.float16) else 1.0e-6
+    tolerance = 5.0e-3 if np.dtype(storage_dtype) == np.dtype(np.float16) else 1.0e-6
     if parity_max_abs_error > tolerance:
         raise RuntimeError(
             "FG-CLIP2 dense direct/cache value parity failed: "

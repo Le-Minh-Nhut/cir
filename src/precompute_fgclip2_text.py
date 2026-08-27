@@ -249,14 +249,16 @@ def precompute_split(
     row = 0
 
     for batch in tqdm(loader, desc=f"FG-CLIP2 text [{split}]", dynamic_ncols=True):
-        batch_states, batch_attention, batch_content = backbone.encode_text_tokens(
+        (
+            batch_states,
+            batch_attention,
+            batch_content,
+            batch_global_all,
+        ) = backbone.encode_text_tokens(
             batch.modification_texts
         )
-        batch_global = (
-            backbone.encode_text_global(batch.modification_texts)
-            if save_global
-            else None
-        )
+
+        batch_global = batch_global_all if save_global else None
         if batch_states.requires_grad:
             raise RuntimeError("Text precompute unexpectedly recorded gradients")
         current_batch_size = len(batch.sample_ids)
