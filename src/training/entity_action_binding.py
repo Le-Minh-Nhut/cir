@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from collections.abc import Callable
 from pathlib import Path
@@ -120,6 +121,8 @@ def fit_entity_action_binding(
     amp_enabled = use_amp and device.type == "cuda"
     scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
     best = float("-inf")
+    metrics_path = output_dir / "training_metrics.jsonl"
+    metrics_path.write_text("", encoding="utf-8")
     for epoch in range(num_epochs):
         if hasattr(train_loader.dataset, "set_epoch"):
             train_loader.dataset.set_epoch(epoch)
@@ -153,6 +156,15 @@ def fit_entity_action_binding(
             best = mean_recall
             torch.save(_checkpoint(model, epoch=epoch + 1, metric=mean_recall), output_dir / "best.pt")
         averaged = {name: value / steps for name, value in totals.items()}
+        persisted_metrics: dict[str, float | int] = {"epoch": epoch + 1}
+        persisted_metrics.update(
+            {f"train/{name}": value for name, value in averaged.items()}
+        )
+        persisted_metrics.update(
+            {f"val/{name}": float(value) for name, value in validation.items()}
+        )
+        with metrics_path.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(persisted_metrics, allow_nan=False) + "\n")
         print(
             f"Epoch {epoch + 1}/{num_epochs} | loss={averaged['total_loss']:.4f} | "
             f"R@10={validation['recall_at_10']:.2f} | R@50={validation['recall_at_50']:.2f} | "

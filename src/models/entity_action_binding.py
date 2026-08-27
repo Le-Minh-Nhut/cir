@@ -145,6 +145,8 @@ class EntityActionBindingCIR(nn.Module):
     ) -> dict[str, Tensor]:
         self._validate_global(image_global, "image_global")
         entity, attention = self.binder(image_dense, image_dense_mask)
+        image_global = F.normalize(image_global, dim=-1)
+        entity = F.normalize(entity, dim=-1)
         tokens = torch.cat((image_global[:, None, :], entity), dim=1)
         embedding = F.normalize(tokens.mean(dim=1), dim=-1)
         return {"entity": entity, "attention": attention, "tokens": tokens, "embedding": embedding}
@@ -154,6 +156,8 @@ class EntityActionBindingCIR(nn.Module):
     ) -> dict[str, Tensor]:
         self._validate_global(text_global, "text_global")
         action, attention = self.binder(text_states, text_content_mask)
+        text_global = F.normalize(text_global, dim=-1)
+        action = F.normalize(action, dim=-1)
         tokens = torch.cat((text_global[:, None, :], action), dim=1)
         return {"action": action, "attention": attention, "tokens": tokens}
 
@@ -286,6 +290,20 @@ class EntityActionBindingCIR(nn.Module):
             "diagnostic/entity_slot_pairwise_cosine": self._slot_pair_cosine(output["entity"]),
             "diagnostic/action_slot_pairwise_cosine": self._slot_pair_cosine(output["action"]),
         }
+        reference_token_norms = output["reference_image_tokens"].norm(dim=-1)
+        text_token_norms = output["text_tokens"].norm(dim=-1)
+        entity_token_norms = reference_token_norms[:, 1:]
+        action_token_norms = text_token_norms[:, 1:]
+        result.update(
+            {
+                "diagnostic/reference_global_token_norm": reference_token_norms[:, 0].mean(),
+                "diagnostic/entity_token_norm_mean": entity_token_norms.mean(),
+                "diagnostic/entity_token_norm_std": entity_token_norms.std(unbiased=False),
+                "diagnostic/text_global_token_norm": text_token_norms[:, 0].mean(),
+                "diagnostic/action_token_norm_mean": action_token_norms.mean(),
+                "diagnostic/action_token_norm_std": action_token_norms.std(unbiased=False),
+            }
+        )
         entity = F.normalize(output["entity"], dim=-1)
         action = F.normalize(output["action"], dim=-1)
         pairing = torch.einsum("bkd,bld->bkl", entity, action)

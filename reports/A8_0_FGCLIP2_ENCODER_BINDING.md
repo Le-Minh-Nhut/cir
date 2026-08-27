@@ -80,6 +80,12 @@ The affine module predicts `[gamma,beta]` from each paired token and computes
 gamma bias 1, and beta bias 0, making initialization approximately reference
 preserving without detaching either learned path.
 
+All global, entity, and action tokens are L2-normalized before paired affine
+fusion. This representation-interface contract prevents relation tokens from
+dominating frozen normalized FG-CLIP2 global tokens purely through norm
+magnitude. It removes a magnitude shortcut; it does not prevent relation
+collapse or guarantee functional specialization.
+
 ## Objectives
 
 The total objective is:
