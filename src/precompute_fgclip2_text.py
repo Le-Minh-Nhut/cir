@@ -11,11 +11,11 @@ from tqdm import tqdm
 from transformers import AutoTokenizer
 
 from backbones.fgclip2 import (
-    FGCLIP2Backbone,
     FGCLIP2_LARGE_DIM,
     FGCLIP2_LARGE_MODEL_ID,
     FGCLIP2_LARGE_REVISION,
     FGCLIP2_SHORT_TEXT_LENGTH,
+    FGCLIP2Backbone,
     validate_fgclip2_revision,
 )
 from cache.features import validate_text_cache_subdir
@@ -26,7 +26,6 @@ from datasets.fashioniq import (
     load_correction_dict,
     validate_correction_policy,
 )
-
 
 CATEGORIES = ("dress", "shirt", "toptee")
 CAPTION_POLICY = "normalized_ordered_and"
@@ -63,6 +62,11 @@ def parse_args() -> argparse.Namespace:
         default="cuda" if torch.cuda.is_available() else "cpu",
     )
     parser.add_argument("--parity-samples", type=int, default=3)
+    parser.add_argument(
+        "--save-global",
+        action="store_true",
+        help="Also save official normalized short-walk global.npy for A8.0.",
+    )
     parser.add_argument(
         "--audit-only",
         action="store_true",
@@ -141,6 +145,9 @@ def build_text_manifest(
     parity_samples: int,
     parity_max_abs_error: float,
     correction_policy: str = "fashioniq",
+    global_shape: tuple[int, ...] | None = None,
+    global_dtype: str | None = None,
+    global_parity_max_abs_error: float | None = None,
 ) -> dict:
     correction_policy = validate_correction_policy(correction_policy)
     manifest = {
@@ -162,11 +169,22 @@ def build_text_manifest(
         "token_length_preflight": token_audit,
         "parity_samples": parity_samples,
         "parity_max_abs_error": parity_max_abs_error,
+        "has_global_features": global_shape is not None,
     }
     if correction_policy == "fashioniq":
         manifest["correction_dictionary_files"] = [
             f"correction_dict_{category}.json" for category in CATEGORIES
         ]
+    if global_shape is not None:
+        manifest.update(
+            {
+                "global_feature_kind": "fgclip2_global_text_short",
+                "global_shape": list(global_shape),
+                "global_dtype": global_dtype,
+                "global_normalized": True,
+                "global_parity_max_abs_error": global_parity_max_abs_error,
+            }
+        )
     return manifest
 
 
@@ -182,6 +200,7 @@ def precompute_split(
     parity_samples: int,
     token_audit: dict[str, float | int],
     correction_policy: str,
+    save_global: bool,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     loader = DataLoader(
@@ -211,16 +230,32 @@ def precompute_split(
         dtype=np.bool_,
         shape=(len(dataset), FGCLIP2_SHORT_TEXT_LENGTH),
     )
+    global_features = (
+        np.lib.format.open_memmap(
+            output_dir / "global.npy",
+            mode="w+",
+            dtype=np.float32,
+            shape=(len(dataset), FGCLIP2_LARGE_DIM),
+        )
+        if save_global
+        else None
+    )
 
     sample_to_idx: dict[str, int] = {}
     captions: dict[str, str] = {}
     parity_direct: tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None = None
+    parity_global_direct: torch.Tensor | None = None
     parity_rows: list[int] = []
     row = 0
 
     for batch in tqdm(loader, desc=f"FG-CLIP2 text [{split}]", dynamic_ncols=True):
         batch_states, batch_attention, batch_content = backbone.encode_text_tokens(
             batch.modification_texts
+        )
+        batch_global = (
+            backbone.encode_text_global(batch.modification_texts)
+            if save_global
+            else None
         )
         if batch_states.requires_grad:
             raise RuntimeError("Text precompute unexpectedly recorded gradients")
@@ -229,6 +264,8 @@ def precompute_split(
         states[row:end] = batch_states.cpu().numpy()
         attention[row:end] = batch_attention.cpu().numpy()
         content[row:end] = batch_content.cpu().numpy()
+        if global_features is not None and batch_global is not None:
+            global_features[row:end] = batch_global.cpu().numpy()
 
         if parity_direct is None and parity_samples > 0:
             keep = min(parity_samples, current_batch_size)
@@ -238,6 +275,8 @@ def precompute_split(
                 batch_content[:keep].cpu().clone(),
             )
             parity_rows = list(range(row, row + keep))
+            if batch_global is not None:
+                parity_global_direct = batch_global[:keep].cpu().clone()
 
         for offset, (sample_id, caption) in enumerate(
             zip(batch.sample_ids, batch.modification_texts, strict=True)
@@ -253,6 +292,8 @@ def precompute_split(
     states.flush()
     attention.flush()
     content.flush()
+    if global_features is not None:
+        global_features.flush()
 
     with (output_dir / "sample_to_idx.json").open("w", encoding="utf-8") as file:
         json.dump(sample_to_idx, file, indent=2)
@@ -262,10 +303,14 @@ def precompute_split(
     cached_states = np.load(output_dir / "states.npy", mmap_mode="r")
     cached_attention = np.load(output_dir / "attention_mask.npy", mmap_mode="r")
     cached_content = np.load(output_dir / "content_mask.npy", mmap_mode="r")
+    cached_global = (
+        np.load(output_dir / "global.npy", mmap_mode="r") if save_global else None
+    )
     if not np.isfinite(cached_states).all():
         raise FloatingPointError("Reloaded text cache contains NaN or Inf")
 
     parity_max_abs_error = 0.0
+    global_parity_max_abs_error: float | None = None
     if parity_direct is not None:
         direct_states, direct_attention, direct_content = parity_direct
         saved_states = torch.from_numpy(cached_states[parity_rows].copy())
@@ -281,6 +326,23 @@ def precompute_split(
             raise RuntimeError("FG-CLIP2 attention-mask cache parity failed")
         if not torch.equal(direct_content, saved_content):
             raise RuntimeError("FG-CLIP2 content-mask cache parity failed")
+        if parity_global_direct is not None and cached_global is not None:
+            saved_global = torch.from_numpy(cached_global[parity_rows].copy())
+            global_parity_max_abs_error = float(
+                (parity_global_direct - saved_global).abs().max().item()
+            )
+            if not torch.allclose(
+                parity_global_direct, saved_global, rtol=0.0, atol=1e-6
+            ):
+                raise RuntimeError(
+                    "FG-CLIP2 text-global direct/cache parity failed: "
+                    f"max_abs_error={global_parity_max_abs_error}"
+                )
+    if cached_global is not None:
+        if cached_global.shape != (len(dataset), FGCLIP2_LARGE_DIM):
+            raise RuntimeError("Reloaded text global cache has wrong shape")
+        if not np.isfinite(cached_global).all():
+            raise FloatingPointError("Reloaded text global cache contains NaN or Inf")
 
     manifest = build_text_manifest(
         split=split,
@@ -295,6 +357,9 @@ def precompute_split(
         correction_policy=correction_policy,
         parity_samples=len(parity_rows),
         parity_max_abs_error=parity_max_abs_error,
+        global_shape=tuple(cached_global.shape) if cached_global is not None else None,
+        global_dtype=str(cached_global.dtype) if cached_global is not None else None,
+        global_parity_max_abs_error=global_parity_max_abs_error,
     )
     with (output_dir / "manifest.json").open("w", encoding="utf-8") as file:
         json.dump(manifest, file, indent=2)
@@ -377,6 +442,7 @@ def main() -> None:
             parity_samples=args.parity_samples,
             token_audit=token_audit,
             correction_policy=correction_policy,
+            save_global=args.save_global,
         )
 
 

@@ -1,10 +1,11 @@
-from pathlib import Path
+import json
+import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
-import warnings
-import torch
-import json
+from pathlib import Path
+
 import numpy as np
+import torch
 
 
 def load_feature_manifest(feature_dir) -> dict:
@@ -104,6 +105,7 @@ class TextFeatureCache:
     sample_to_idx: dict[str, int]
     captions: dict[str, str]
     manifest: dict
+    global_features: torch.Tensor | None = None
 
 
 def load_text_features(feature_dir) -> TextFeatureCache:
@@ -157,6 +159,15 @@ def load_text_features(feature_dir) -> TextFeatureCache:
         captions = json.load(file)
 
     manifest = load_feature_manifest(feature_dir)
+    global_path = feature_dir / "global.npy"
+    manifest_has_global = bool(manifest.get("has_global_features", global_path.is_file()))
+    global_features = (
+        torch.from_numpy(np.load(global_path, mmap_mode="c"))
+        if manifest_has_global and global_path.is_file()
+        else None
+    )
+    if manifest_has_global and not global_path.is_file():
+        raise FileNotFoundError(f"Text manifest requires missing cache file: {global_path}")
 
     num_samples = len(sample_to_idx)
 
@@ -177,6 +188,17 @@ def load_text_features(feature_dir) -> TextFeatureCache:
                 f"{name} rows ({tensor.shape[0]}) "
                 f"!= sample index size ({num_samples})"
             )
+
+    if global_features is not None:
+        if global_features.ndim != 2 or global_features.shape[0] != num_samples:
+            raise ValueError(
+                "global.npy must be [Q,D] and align with the text sample index; "
+                f"got {tuple(global_features.shape)}"
+            )
+        if not torch.isfinite(global_features).all():
+            raise FloatingPointError("Text global cache contains NaN or Inf")
+        if manifest.get("global_shape") not in (None, list(global_features.shape)):
+            raise ValueError("Text manifest global_shape does not match global.npy")
 
     if set(sample_to_idx) != set(captions):
         raise ValueError(
@@ -203,6 +225,7 @@ def load_text_features(feature_dir) -> TextFeatureCache:
         sample_to_idx=sample_to_idx,
         captions=captions,
         manifest=manifest,
+        global_features=global_features,
     )
 
 
@@ -235,3 +258,125 @@ def get_text_features_by_sample_ids(sample_ids: Sequence[str], modification_text
         cache.attention_mask[indices],
         cache.content_mask[indices],
     )
+
+
+def get_text_features_with_global_by_sample_ids(
+    sample_ids: Sequence[str],
+    modification_texts: Sequence[str],
+    cache: TextFeatureCache,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """A8.0 text lookup that fails rather than falling back without globals."""
+
+    states, attention_mask, content_mask = get_text_features_by_sample_ids(
+        sample_ids, modification_texts, cache
+    )
+    if cache.global_features is None:
+        raise FileNotFoundError(
+            "A8.0 requires global.npy in the FG-CLIP2 text cache; rerun "
+            "src/precompute_fgclip2_text.py with --save-global"
+        )
+    indices = [cache.sample_to_idx[sample_id] for sample_id in sample_ids]
+    return states, attention_mask, content_mask, cache.global_features[indices]
+
+
+@dataclass(frozen=True)
+class DenseImageFeatureCache:
+    """Memory-mapped ragged FG-CLIP2 dense image features."""
+
+    values: np.ndarray
+    offsets: np.ndarray
+    spatial_shapes: np.ndarray
+    name_to_idx: dict[str, int]
+    manifest: dict
+
+
+def load_dense_image_features(feature_dir: str | Path) -> DenseImageFeatureCache:
+    feature_dir = Path(feature_dir)
+    for name in (
+        "values.npy",
+        "offsets.npy",
+        "spatial_shapes.npy",
+        "name_to_idx.json",
+        "manifest.json",
+    ):
+        if not (feature_dir / name).is_file():
+            raise FileNotFoundError(f"Missing dense image cache file: {feature_dir / name}")
+
+    values = np.load(feature_dir / "values.npy", mmap_mode="r")
+    offsets = np.load(feature_dir / "offsets.npy", mmap_mode="r")
+    spatial_shapes = np.load(feature_dir / "spatial_shapes.npy", mmap_mode="r")
+    with (feature_dir / "name_to_idx.json").open("r", encoding="utf-8") as file:
+        name_to_idx = json.load(file)
+    manifest = load_feature_manifest(feature_dir)
+
+    num_images = len(name_to_idx)
+    if values.ndim != 2:
+        raise ValueError(f"Dense values must be [total_tokens,D], got {values.shape}")
+    if offsets.shape != (num_images + 1,):
+        raise ValueError(f"Dense offsets must be [{num_images + 1}], got {offsets.shape}")
+    if spatial_shapes.shape != (num_images, 2):
+        raise ValueError(
+            f"Dense spatial_shapes must be [{num_images},2], got {spatial_shapes.shape}"
+        )
+    expected_indices = set(range(num_images))
+    if set(name_to_idx.values()) != expected_indices:
+        raise ValueError("Dense image name_to_idx must be a contiguous bijection")
+    offsets_i64 = np.asarray(offsets, dtype=np.int64)
+    if offsets_i64[0] != 0 or offsets_i64[-1] != len(values):
+        raise ValueError("Dense offsets endpoints do not match values.npy")
+    if np.any(offsets_i64[1:] < offsets_i64[:-1]):
+        raise ValueError("Dense offsets are not monotonic")
+    token_counts = offsets_i64[1:] - offsets_i64[:-1]
+    grid_counts = np.asarray(spatial_shapes, dtype=np.int64).prod(axis=1)
+    if np.any(spatial_shapes <= 0) or not np.array_equal(token_counts, grid_counts):
+        raise ValueError("Dense offsets do not match spatial_shapes token counts")
+    if not np.isfinite(values).all():
+        raise FloatingPointError("Dense image cache contains NaN or Inf")
+    if manifest.get("total_token_count") != len(values):
+        raise ValueError("Dense manifest total_token_count does not match values.npy")
+    if manifest.get("num_images") not in (None, num_images):
+        raise ValueError("Dense manifest num_images does not match name_to_idx")
+    if manifest.get("feature_dim") != values.shape[1]:
+        raise ValueError("Dense manifest feature_dim does not match values.npy")
+    if manifest.get("storage_dtype") not in (None, values.dtype.name):
+        raise ValueError("Dense manifest storage_dtype does not match values.npy")
+
+    return DenseImageFeatureCache(
+        values=values,
+        offsets=offsets,
+        spatial_shapes=spatial_shapes,
+        name_to_idx=name_to_idx,
+        manifest=manifest,
+    )
+
+
+def get_dense_features_by_ids(
+    image_ids: Sequence[str],
+    cache: DenseImageFeatureCache,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Gather ragged rows into CPU float32 tokens and a True=real mask."""
+
+    if not image_ids:
+        raise ValueError("image_ids must not be empty")
+    rows: list[np.ndarray] = []
+    lengths: list[int] = []
+    for image_id in image_ids:
+        if image_id not in cache.name_to_idx:
+            raise KeyError(f"Missing image_id from dense cache: {image_id}")
+        index = cache.name_to_idx[image_id]
+        start = int(cache.offsets[index])
+        end = int(cache.offsets[index + 1])
+        row = np.asarray(cache.values[start:end])
+        rows.append(row)
+        lengths.append(end - start)
+
+    dim = int(cache.values.shape[1])
+    maximum = max(lengths)
+    dense_tokens = torch.zeros(len(rows), maximum, dim, dtype=torch.float32)
+    dense_mask = torch.zeros(len(rows), maximum, dtype=torch.bool)
+    for batch_index, (row, length) in enumerate(zip(rows, lengths, strict=True)):
+        dense_tokens[batch_index, :length].copy_(
+            torch.from_numpy(np.asarray(row, dtype=np.float32).copy())
+        )
+        dense_mask[batch_index, :length] = True
+    return dense_tokens, dense_mask

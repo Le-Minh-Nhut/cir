@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 import re
+from collections.abc import Sequence
 from typing import Any
 
 import torch
@@ -9,7 +9,6 @@ import torch.nn.functional as F
 from PIL import Image
 from torch import Tensor, nn
 from transformers import AutoImageProcessor, AutoModelForCausalLM, AutoTokenizer
-
 
 FGCLIP2_LARGE_MODEL_ID = "qihoo360/fg-clip2-large"
 FGCLIP2_LARGE_REVISION = "4d1d5dc35c716902f07c172dbfc23b82a7bc6bf3"
@@ -104,7 +103,7 @@ class FGCLIP2Backbone(nn.Module):
     def device(self) -> torch.device:
         return next(self.model.parameters()).device
 
-    def train(self, mode: bool = True) -> "FGCLIP2Backbone":
+    def train(self, mode: bool = True) -> FGCLIP2Backbone:
         # This adapter is intentionally frozen even when a parent module is trained.
         super().train(False)
         self.model.eval()
@@ -181,6 +180,35 @@ class FGCLIP2Backbone(nn.Module):
         return states, attention_mask, content_mask
 
     @torch.inference_mode()
+    def encode_text_global(self, captions: Sequence[str]) -> Tensor:
+        """Return normalized official short-walk text embeddings [B,1024]."""
+
+        self._assert_frozen()
+        if not captions:
+            raise ValueError("captions must not be empty")
+        tokenized = self.tokenizer(
+            list(captions),
+            padding="max_length",
+            truncation=True,
+            max_length=self.max_text_length,
+            return_attention_mask=True,
+            return_tensors="pt",
+        ).to(self.device)
+        features = self.model.get_text_features(
+            **tokenized,
+            walk_type="short",
+        )
+        features = F.normalize(features.float(), dim=-1)
+        expected_shape = (len(captions), FGCLIP2_LARGE_DIM)
+        if tuple(features.shape) != expected_shape:
+            raise RuntimeError(
+                f"Expected FG-CLIP2 text globals {expected_shape}, got {tuple(features.shape)}"
+            )
+        if not torch.isfinite(features).all() or features.requires_grad:
+            raise FloatingPointError("Invalid frozen FG-CLIP2 text global features")
+        return features
+
+    @torch.inference_mode()
     def encode_image_global(self, images: Sequence[Image.Image]) -> Tensor:
         """Return normalized global image embeddings with shape [B,1024]."""
 
@@ -227,3 +255,85 @@ class FGCLIP2Backbone(nn.Module):
             raise RuntimeError("FG-CLIP2 image precompute recorded gradients")
 
         return features
+
+    @torch.inference_mode()
+    def encode_image_dense(
+        self,
+        images: Sequence[Image.Image],
+    ) -> tuple[list[Tensor], Tensor]:
+        """Return real (unpadded) dense tokens and their [height,width] grids.
+
+        The pinned model card defines the real token prefix as
+        ``spatial_shapes[b, 0] * spatial_shapes[b, 1]``.  We deliberately
+        preserve ragged outputs instead of padding them inside the backbone.
+        """
+
+        self._assert_frozen()
+        if not images:
+            raise ValueError("images must not be empty")
+
+        grouped_indices: dict[int, list[int]] = {}
+        for index, image in enumerate(images):
+            grouped_indices.setdefault(determine_max_num_patches(image), []).append(index)
+
+        ordered_tokens: list[Tensor | None] = [None] * len(images)
+        ordered_shapes = torch.empty(
+            len(images), 2, dtype=torch.long, device=self.device
+        )
+        for budget, indices in grouped_indices.items():
+            inputs = self.image_processor(
+                images=[images[index] for index in indices],
+                max_num_patches=budget,
+                return_tensors="pt",
+            ).to(self.device)
+            if "spatial_shapes" not in inputs:
+                raise RuntimeError("Pinned FG-CLIP2 processor omitted spatial_shapes")
+            spatial_shapes = inputs["spatial_shapes"].to(dtype=torch.long)
+            if tuple(spatial_shapes.shape) != (len(indices), 2):
+                raise RuntimeError(
+                    "Expected spatial_shapes [B,2], got "
+                    f"{tuple(spatial_shapes.shape)}"
+                )
+            dense = self.model.get_image_dense_feature(**inputs)
+            if dense.ndim != 3 or dense.shape[0] != len(indices):
+                raise RuntimeError(
+                    "FG-CLIP2 dense output must be [B,N,D], got "
+                    f"{tuple(dense.shape)}"
+                )
+            if dense.shape[-1] != FGCLIP2_LARGE_DIM:
+                raise RuntimeError(
+                    f"FG-CLIP2 dense feature dim must be {FGCLIP2_LARGE_DIM}"
+                )
+            pixel_attention_mask = inputs.get("pixel_attention_mask")
+            for local_index, original_index in enumerate(indices):
+                height, width = spatial_shapes[local_index].tolist()
+                real_count = int(height * width)
+                if height <= 0 or width <= 0 or real_count > dense.shape[1]:
+                    raise RuntimeError(
+                        "Invalid FG-CLIP2 dense spatial shape: "
+                        f"shape=({height},{width}), available={dense.shape[1]}"
+                    )
+                if pixel_attention_mask is not None:
+                    flattened_mask = pixel_attention_mask[local_index].reshape(-1).bool()
+                    # Some processor versions expose a patch-level mask while
+                    # others expose a pixel-level mask. Only the former is
+                    # directly comparable with dense-token positions.
+                    if flattened_mask.numel() == dense.shape[1] and (
+                            int(flattened_mask.sum().item()) != real_count
+                            or not flattened_mask[:real_count].all()
+                            or flattened_mask[real_count:].any()
+                    ):
+                        raise RuntimeError(
+                            "pixel_attention_mask disagrees with spatial_shapes"
+                        )
+                tokens = dense[local_index, :real_count].float()
+                if tuple(tokens.shape) != (real_count, FGCLIP2_LARGE_DIM):
+                    raise RuntimeError("Unexpected sliced FG-CLIP2 dense-token shape")
+                if not torch.isfinite(tokens).all() or tokens.requires_grad:
+                    raise FloatingPointError("Invalid frozen FG-CLIP2 dense features")
+                ordered_tokens[original_index] = tokens
+                ordered_shapes[original_index] = spatial_shapes[local_index]
+
+        if any(tokens is None for tokens in ordered_tokens):
+            raise RuntimeError("FG-CLIP2 dense batching failed to restore input order")
+        return [tokens for tokens in ordered_tokens if tokens is not None], ordered_shapes
