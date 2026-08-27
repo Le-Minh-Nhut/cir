@@ -1176,15 +1176,13 @@ class TAPER(nn.Module):
             )
             raw_slot = self.slot_mlp(torch.cat([semantics, zero_effect], dim=-1))
             isolated_slots.append(raw_slot * activity.unsqueeze(-1))
-        result = torch.cat(isolated_slots, dim=1)
-        if not torch.allclose(
-            result.detach(),
-            output["edit_slots"].detach(),
-            rtol=1e-5,
-            atol=1e-6,
-        ):
+        recomputed_slots = torch.cat(isolated_slots, dim=1)
+        result = output["edit_slots"].detach() + (
+            recomputed_slots - recomputed_slots.detach()
+        )
+        if not torch.equal(result.detach(), output["edit_slots"].detach()):
             raise RuntimeError(
-                "credit-isolated Edit Slots changed the Run-C forward values"
+                "credit-isolated Edit Slots must preserve exact Run-C forward values"
             )
         return result
 

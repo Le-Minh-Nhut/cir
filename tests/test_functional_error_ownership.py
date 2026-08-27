@@ -369,6 +369,23 @@ def test_parameter_gradient_isolation_detaches_competitor_slot_queries(
         }
 
     monkeypatch.setattr("models.taper.functional_mode_assignment", fixed_owner)
+    output = model.forward(
+        batch["reference_features"],
+        batch["text_states"],
+        batch["text_attention_mask"],
+        text_content_mask=batch["text_content_mask"],
+        teacher_reference_features=batch["teacher_reference_features"],
+        teacher_text_states=batch["teacher_text_states"],
+    )
+    isolated_slots = model._functional_credit_isolated_edit_slots(
+        output,
+        batch["text_states"],
+    )
+    assert torch.equal(
+        isolated_slots.detach(),
+        output["edit_slots"].detach(),
+    )
+
     losses = model.compute_loss(batch)
     model.zero_grad(set_to_none=True)
     losses["functional_loss"].backward()
@@ -380,9 +397,17 @@ def test_parameter_gradient_isolation_detaches_competitor_slot_queries(
         rtol=0.0,
         atol=1e-10,
     )
-    assert model.slot_query_projection.weight.grad is not None
-    assert model.text_key_projection.weight.grad is not None
-    assert model.query_head[0].weight.grad is not None
+    for shared_parameter in (
+        model.slot_query_projection.weight,
+        model.text_key_projection.weight,
+        model.slot_mlp[0].weight,
+        model.router[0].weight,
+        model.transition_delta[0].weight,
+        model.query_head[0].weight,
+    ):
+        assert shared_parameter.grad is not None
+        assert torch.isfinite(shared_parameter.grad).all()
+        assert shared_parameter.grad.abs().sum().item() > 0.0
 
 
 def test_pairwise_modes_remain_unaggregated() -> None:
@@ -465,7 +490,8 @@ def test_disabled_baseline_preserves_run_c_forward_and_zero_auxiliary() -> None:
             teacher_text_states=batch["teacher_text_states"],
         )
     assert off["functional_loss"].item() == 0.0
-    torch.testing.assert_close(off_output["q0"], on_output["q0"])
+    assert torch.equal(off_output["edit_slots"], on_output["edit_slots"])
+    assert torch.equal(off_output["q0"], on_output["q0"])
     assert model_off.slot_value_source == "contextual"
     assert not model_off.slot_effect_in_value
     assert model_off.slot_value_assignment == "soft_shared"
