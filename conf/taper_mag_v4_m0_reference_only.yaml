@@ -3,7 +3,7 @@ control: {id: M0, name: reference_only}
 seed: 42
 data:
   dataset: fashioniq
-  dataset_root: data/fashionIQ_dataset
+  dataset_root: data/FashionIQ
   cache_root: features
   train_caption_policy: normalized_ordered_and
   validation_caption_policy: normalized_ordered_and

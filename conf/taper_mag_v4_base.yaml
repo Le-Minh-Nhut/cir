@@ -3,7 +3,7 @@ seed: 42
 
 data:
   dataset: fashioniq
-  dataset_root: data/fashionIQ_dataset
+  dataset_root: data/FashionIQ
   cache_root: features
   train_caption_policy: normalized_ordered_and
   validation_caption_policy: normalized_ordered_and
@@ -56,10 +56,10 @@ training:
   bypass_health_gates_for_smoke: false
   epochs: 60
   max_optimizer_updates: 4260
-  batch_size: 32
+  batch_size: 128
   eval_batch_size: 64
   gradient_accumulation: 8
-  num_workers: 4
+  num_workers: 8
 
 optimizer:
   actor_lr: 0.0002
