@@ -31,7 +31,7 @@ class CheckpointSelectionState:
     def select(
         self,
         *,
-        retrieval: dict[str, float],
+        retrieval: dict[str, Any],
         policy: dict[str, Any],
         functional: dict[str, Any],
     ) -> dict[str, str]:

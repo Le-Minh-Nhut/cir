@@ -2,27 +2,166 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 import torch
-import torch.nn.functional as F
 from torch import Tensor, nn
 
 from models.taper_mag.contracts import EncodedPolicyBatch, SupervisionBatch
+from models.taper_mag.operator_generator import OperatorSet
 from models.taper_mag.rollout import RolloutConfig, TaperOutput
-from models.taper_mag.utility import HistoryState
+from models.taper_mag.state import LocalState
+from models.taper_mag.utility import HistoryState, append_stop
 from training.marginal_gain_teacher import MarginalGainTeacher
 from training.negative_bank import NegativeBank
 from training.taper_mag_health import (
-    clone_control_metrics,
     dynamic_frozen_metrics,
     recursively_finite,
     repeat_staleness_metrics,
     response_effective_rank,
     utility_health_metrics,
 )
+
+
+def clone_operator_sets(
+    operators: OperatorSet,
+    best_indices: Tensor,
+) -> dict[str, OperatorSet]:
+    """Construct audit-only causal operator interventions before execution."""
+    values = operators.operators
+    if best_indices.shape != values.shape[:1]:
+        raise ValueError("best_indices must be [B]")
+    batch, count, width = values.shape
+    selected = values.gather(
+        1, best_indices[:, None, None].expand(batch, 1, width)
+    )
+    mean = values.mean(dim=1, keepdim=True)
+    return {
+        "clone_all_best": replace(
+            operators, operators=selected.expand(-1, count, -1).clone()
+        ),
+        "clone_all_mean": replace(
+            operators, operators=mean.expand(-1, count, -1).clone()
+        ),
+    }
+
+
+def execute_operator_once(
+    model: nn.Module,
+    state: LocalState,
+    operator: Tensor,
+) -> LocalState:
+    """Execute one [B,D] operator through the real state-dependent executor."""
+    if operator.ndim != 2 or operator.shape[0] != state.local.shape[0]:
+        raise ValueError("operator must be [B,D]")
+    current = model.readout(state)
+    features = model.executor.encode_state(state, current.context)
+    candidate = model.executor.enumerate(state, features, operator[:, None])
+    return state.with_local(candidate.local[:, 0])
+
+
+def rollout_with_operator_set(
+    model: nn.Module,
+    state: LocalState,
+    operators: OperatorSet,
+    *,
+    max_steps: int,
+    step_cost: float,
+) -> Tensor:
+    """Target-free learned rollout under a causal replacement of operator anchors."""
+    if not 1 <= max_steps <= 4:
+        raise ValueError("audit rollout horizon must be in [1,4]")
+    batch, tokens = state.local.shape[:2]
+    history = HistoryState.initialize(
+        batch, operators.operators.shape[1], tokens, state.local.device
+    )
+    stop_index = operators.operators.shape[1]
+    for step in range(max_steps):
+        active = state.alive
+        current, candidates, _, predicted = model.preview(
+            state,
+            operators,
+            history,
+            step=step,
+            max_steps=max_steps,
+            detach_utility_inputs=True,
+        )
+        values = append_stop(predicted, step_cost, stop_allowed=step >= 1)
+        actions = values.argmax(dim=-1)
+        actions = torch.where(active, actions, torch.full_like(actions, stop_index))
+        execute_mask = active & actions.ne(stop_index)
+        features = model.executor.encode_state(state, current.context)
+        selected, _ = model.executor.recompute_selected(
+            state,
+            features,
+            operators.operators,
+            actions,
+            execute_mask,
+        )
+        state = selected.with_local(
+            selected.local,
+            alive=active & actions.ne(stop_index),
+        )
+        history = history.update(
+            actions=actions,
+            execute_mask=execute_mask,
+            predicted_gain=predicted,
+            candidates=candidates,
+            step=step,
+        )
+    return model.readout(state).query
+
+
+@torch.inference_mode()
+def causal_operator_interventions(
+    model: nn.Module,
+    encoded: EncodedPolicyBatch,
+    best_indices: Tensor,
+    *,
+    max_steps: int,
+    step_cost: float = 0.0,
+) -> dict[str, Tensor]:
+    """Execute V4 repeat/clone/zero/mean controls in local-state space."""
+    if model.training:
+        raise RuntimeError("Causal operator interventions are audit-only and require eval()")
+    _, initial, operators = model.prepare(encoded)
+    values = operators.operators
+    batch, _, width = values.shape
+    selected = values.gather(
+        1, best_indices[:, None, None].expand(batch, 1, width)
+    ).squeeze(1)
+    mean = values.mean(dim=1)
+    zero = torch.zeros_like(mean)
+
+    repeat_best_state = execute_operator_once(model, initial, selected)
+    repeat_best_state = execute_operator_once(model, repeat_best_state, selected)
+    mean_repeat_state = execute_operator_once(model, initial, mean)
+    mean_repeat_state = execute_operator_once(model, mean_repeat_state, mean)
+    operator_zero_state = execute_operator_once(model, initial, zero)
+    operator_mean_state = execute_operator_once(model, initial, mean)
+    cloned = clone_operator_sets(operators, best_indices)
+    return {
+        "repeat_best": model.readout(repeat_best_state).query,
+        "mean_repeat": model.readout(mean_repeat_state).query,
+        "clone_all_best": rollout_with_operator_set(
+            model,
+            initial,
+            cloned["clone_all_best"],
+            max_steps=max_steps,
+            step_cost=step_cost,
+        ),
+        "clone_all_mean": rollout_with_operator_set(
+            model,
+            initial,
+            cloned["clone_all_mean"],
+            max_steps=max_steps,
+            step_cost=step_cost,
+        ),
+        "operator_zero": model.readout(operator_zero_state).query,
+        "operator_mean": model.readout(operator_mean_state).query,
+    }
 
 
 def file_sha256(path: str | Path) -> str:
@@ -181,43 +320,23 @@ class TeacherShadowAuditor:
         ).squeeze(1)
         rank = response_effective_rank(current.query, candidate_readout.query)
         best = labels.raw_gain.argmax(dim=-1)
-        candidate_deltas = candidate_readout.query - current.query[:, None]
-        clones = clone_control_metrics(candidate_deltas, best)
-        best_delta = candidate_deltas.gather(
-            1,
-            best[:, None, None].expand(-1, 1, candidate_deltas.shape[-1]),
-        ).squeeze(1)
-        mean_delta = candidate_deltas.mean(dim=1)
-        intervention_queries = torch.stack(
-            [
-                F.normalize(current.query + best_delta, dim=-1),
-                F.normalize(current.query + mean_delta, dim=-1),
-                F.normalize(current.query + 2.0 * best_delta, dim=-1),
-                F.normalize(current.query + 2.0 * mean_delta, dim=-1),
-                current.query,
-                F.normalize(current.query + mean_delta, dim=-1),
-            ],
-            dim=1,
+        causal_queries = causal_operator_interventions(
+            self.model,
+            encoded,
+            best,
+            max_steps=1,
         )
+        control_names = tuple(causal_queries)
         intervention_gain = self.teacher.score(
             current.query,
-            intervention_queries,
+            torch.stack([causal_queries[name] for name in control_names], dim=1),
             supervision,
             negatives,
         ).raw_gain.mean(dim=0)
-        for name, value in zip(
-            (
-                "clone_all_best_realized_gain",
-                "clone_all_mean_realized_gain",
-                "repeat_best_realized_gain",
-                "mean_repeat_realized_gain",
-                "operator_zero_realized_gain",
-                "operator_mean_realized_gain",
-            ),
-            intervention_gain,
-            strict=True,
-        ):
-            clones[name] = float(value)
+        clones = {
+            f"{name}_causal_teacher_gain": float(value)
+            for name, value in zip(control_names, intervention_gain, strict=True)
+        }
         self.sample_count += batch
         self.audited_sample_ids.extend(sample_ids)
         self._candidate_variance.append(
@@ -308,8 +427,13 @@ class TeacherShadowAuditor:
                 "mean_effective_rank": sum(self._response_rank) / len(self._response_rank)
             },
             "clone_controls": {
-                key: sum(float(item[key]) for item in self._clone_controls) / len(self._clone_controls)
-                for key in clone_keys
+                "execution_contract": "operator_to_executor_to_state_to_readout",
+                "query_delta_arithmetic_used": False,
+                **{
+                    key: sum(float(item[key]) for item in self._clone_controls)
+                    / len(self._clone_controls)
+                    for key in clone_keys
+                },
             },
             "parameter_updates": {
                 "before_sha256": self._before,

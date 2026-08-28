@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 import torch
 
 from training.taper_mag_audit import TeacherShadowAuditor, validate_teacher_shadow_report, write_json
@@ -46,8 +45,9 @@ def test_teacher_shadow_is_deterministic_and_updates_no_parameters(tmp_path) -> 
     assert first["numerical_health"]["finite"]
     assert first["sample_count"] == 2
     assert first["candidate_space"]["oracle_action_realized_gain"] >= first["candidate_space"]["random_action_realized_gain"]
-    assert first["clone_controls"]["operator_zero_realized_gain"] == pytest.approx(0.0)
-    assert "repeat_best_realized_gain" in first["clone_controls"]
+    assert first["clone_controls"]["query_delta_arithmetic_used"] is False
+    assert first["clone_controls"]["execution_contract"] == "operator_to_executor_to_state_to_readout"
+    assert "repeat_best_causal_teacher_gain" in first["clone_controls"]
     assert "target_id" not in first_traces[0]["policy"]
     assert "target_id" in first_traces[0]["supervision_audit"]
     for name, value in taper.state_dict().items():

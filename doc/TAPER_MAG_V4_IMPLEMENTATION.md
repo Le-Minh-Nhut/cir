@@ -23,6 +23,20 @@ NumPy mmap (`global.npy`; `dense_values.npy` plus offsets/spatial shapes); batch
 requested rows. Cache manifests explicitly type `complete_split` versus `reference_only`, and
 partial debug caches are marked `complete_split=false`; full training rejects them.
 
+## Primary FashionIQ validation protocol
+
+The primary TAPER-MAG validation protocol on this branch is `fashioniq_val`. For each category its
+gallery is the ordered, duplicate-free union of every reference ID and target ID appearing in that
+category's validation annotations. Category R@10/R@50 are macro-averaged, and Mean Recall is the
+mean of macro R@10 and macro R@50. The resolved protocol is written to the run manifest, validation
+metrics, functional reports and checkpoint metadata; resume rejects a protocol mismatch so scores
+cannot be mixed in one checkpoint-selection history.
+
+`fashioniq_original` remains an explicit, separate protocol whose gallery comes from
+`split.<category>.val.json`. Scores from `fashioniq_val` and `fashioniq_original` are not directly
+comparable without their protocol label. This scoped pass does not alter the separate M0–M3 control
+configs.
+
 ## Scientific boundaries
 
 There is no slot ownership, QASA, hard routing, entmax, primitive bank, semantic slot label,
@@ -47,8 +61,9 @@ M0–M3 are parallel experiments, never curriculum stages and never imported int
 | M3 | gated MLP combiner | reference global + online text | 4,729,344 | 4,260 |
 
 M1–M3 use the same last-four-block text tuning, frozen vision, official global cache, caption and
-correction policy, bidirectional multi-positive InfoNCE, effective batch, AdamW family, validation
-evaluator and best-retrieval checkpoint rule as TAPER. M0 has no text input and no trainable
+correction policy, bidirectional multi-positive InfoNCE, effective batch, AdamW family, evaluator
+implementation and best-retrieval checkpoint rule as TAPER. Their explicitly configured gallery
+protocol must be checked before numerical comparison. M0 has no text input and no trainable
 parameters. M3 is one-shot and has no local state, candidate action, teacher, critic or STOP.
 
 The full pinned text-tuning stratum has 28,353,024 trainable parameters. Thus M3 has 33,082,368
@@ -94,6 +109,14 @@ sections. Checkpoint selection is fixed: retrieval maximizes valid mean Recall; 
 mean regret with median-regret then Recall tie-breaks; functional selection first rejects
 firewall/numerical/exact-collapse failures and then uses Recall and response rank. `last.ckpt` is
 always updated. Resume is deterministic at epoch boundaries only; mid-epoch resume is rejected.
+
+`functional_retrieval.json` evaluates dynamic and frozen-t0 policy on the same `fashioniq_val`
+gallery and reports R@10, R@50, Mean Recall, target-rank mean/median, MRR and paired rank changes.
+Repeat-best, mean-repeat, clone-all-best, clone-all-mean, operator-zero and operator-mean are causal
+audit interventions: operator anchors are replaced before execution and every result passes through
+the shared executor, recurrent local state and real readout. Query-space constructions such as
+`q + n*delta_q` are not used as intervention results. Horizon-one dynamic/frozen state dependence
+is explicitly marked not applicable.
 
 ## Entry points
 

@@ -8,7 +8,7 @@ data:
   train_caption_policy: normalized_ordered_and
   validation_caption_policy: normalized_ordered_and
   correction_policy: fashioniq
-  validation_protocol: fashioniq_original
+  validation_protocol: fashioniq_val
   no_generated_data: true
 
 backbone:

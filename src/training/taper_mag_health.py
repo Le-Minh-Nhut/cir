@@ -234,7 +234,8 @@ def repeat_staleness_metrics(
 
 
 @torch.no_grad()
-def clone_control_metrics(candidate_deltas: Tensor, best_indices: Tensor) -> dict[str, Any]:
+def query_delta_clone_geometry(candidate_deltas: Tensor, best_indices: Tensor) -> dict[str, Any]:
+    """Secondary response geometry only; never a causal operator intervention."""
     if candidate_deltas.ndim != 3 or best_indices.shape != candidate_deltas.shape[:1]:
         raise ValueError("clone controls expect deltas [B,K,D] and best indices [B]")
     batch, actions, width = candidate_deltas.shape

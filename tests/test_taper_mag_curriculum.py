@@ -346,6 +346,7 @@ def test_main_config_enables_full_canonical_schedule_and_matched_budget() -> Non
     assert config["training"]["approved_health_gates"] == []
     assert config["training"]["bypass_health_gates_for_smoke"] is False
     assert config["optimizer"]["ema_decay"] == pytest.approx(0.999)
+    assert config["data"]["validation_protocol"] == "fashioniq_val"
 
 
 def test_resume_rejects_changed_curriculum_or_update_budget() -> None:
@@ -369,3 +370,7 @@ def test_resume_rejects_changed_curriculum_or_update_budget() -> None:
     changed = {"training": {**current["training"], "max_optimizer_updates": 4000}}
     with pytest.raises(RuntimeError, match="schedule config mismatch"):
         verify_resume_schedule_config(saved, changed)
+    saved["config"]["data"] = {"validation_protocol": "fashioniq_original"}
+    current["data"] = {"validation_protocol": "fashioniq_val"}
+    with pytest.raises(RuntimeError, match="validation protocol mismatch"):
+        verify_resume_schedule_config(saved, current)

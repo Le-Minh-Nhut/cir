@@ -5,7 +5,7 @@ import torch
 
 from training.taper_mag_health import (
     QueryGradientTracker,
-    clone_control_metrics,
+    query_delta_clone_geometry,
     dynamic_frozen_metrics,
     repeat_staleness_metrics,
     response_effective_rank,
@@ -50,7 +50,7 @@ def test_response_rank_candidate_variance_and_clone_controls() -> None:
     rank = response_effective_rank(current, candidates)
     assert rank["mean_effective_rank"] > 1
     deltas = candidates - current[:, None]
-    controls = clone_control_metrics(deltas, torch.tensor([0]))
+    controls = query_delta_clone_geometry(deltas, torch.tensor([0]))
     assert controls["clone_all_best_effective_rank"] == pytest.approx(1.0)
     assert controls["clone_all_mean_effective_rank"] == pytest.approx(1.0)
     assert controls["operator_zero_delta_norm"] == 0

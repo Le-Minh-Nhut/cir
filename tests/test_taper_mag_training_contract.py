@@ -141,9 +141,16 @@ def test_checkpoint_resume_restores_model_text_optimizer_scheduler_and_rng(tmp_p
         global_step=17,
         stage="actor_warmup",
         curriculum_state={"horizon": 1},
-        resolved_config={"seed": 42},
+        resolved_config={
+            "seed": 42,
+            "data": {"validation_protocol": "fashioniq_val"},
+        },
         manifest_hashes={"train": "abc"},
         best_metrics={"mean_recall": 1.0},
+        validation_metrics={
+            "validation_protocol": "fashioniq_val",
+            "mean_recall": 1.0,
+        },
     )
     with torch.no_grad():
         next(taper.parameters()).add_(10)
@@ -164,6 +171,8 @@ def test_checkpoint_resume_restores_model_text_optimizer_scheduler_and_rng(tmp_p
     assert payload["epoch"] == 2 and payload["global_step"] == 17
     assert payload["resume_contract"] == "deterministic_epoch_boundary_only"
     assert payload["micro_step"] is None
+    assert payload["config"]["data"]["validation_protocol"] == "fashioniq_val"
+    assert payload["validation_metrics"]["validation_protocol"] == "fashioniq_val"
 
 
 def test_checkpoint_rejects_mid_epoch_resume(tmp_path) -> None:

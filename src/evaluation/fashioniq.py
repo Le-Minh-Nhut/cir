@@ -88,6 +88,92 @@ def evaluate_fashioniq_recall(scores: torch.Tensor, target_ids: Sequence[str], g
         ),
     }
 
+
+def fashioniq_target_ranks(
+    scores: torch.Tensor,
+    target_ids: Sequence[str],
+    gallery_ids: Sequence[str],
+) -> torch.Tensor:
+    """Return deterministic one-indexed target ranks for a fixed gallery."""
+    if scores.ndim != 2 or scores.shape != (len(target_ids), len(gallery_ids)):
+        raise ValueError("scores must align with target_ids and gallery_ids")
+    if len(set(gallery_ids)) != len(gallery_ids):
+        raise ValueError("FashionIQ gallery IDs must be unique")
+    gallery_index = {image_id: index for index, image_id in enumerate(gallery_ids)}
+    missing = sorted({target_id for target_id in target_ids if target_id not in gallery_index})
+    if missing:
+        raise ValueError(f"FashionIQ targets absent from gallery: {missing[:5]}")
+    target_index = torch.tensor(
+        [gallery_index[target_id] for target_id in target_ids],
+        device=scores.device,
+    )
+    ordering = scores.argsort(dim=-1, descending=True)
+    positions = ordering.eq(target_index[:, None]).to(torch.int64).argmax(dim=-1)
+    return positions + 1
+
+
+def evaluate_fashioniq_ranking(
+    scores: torch.Tensor,
+    target_ids: Sequence[str],
+    gallery_ids: Sequence[str],
+) -> dict[str, float]:
+    """FashionIQ recalls plus target-rank diagnostics on the same gallery."""
+    recalls = evaluate_fashioniq_recall(scores, target_ids, gallery_ids)
+    ranks = fashioniq_target_ranks(scores, target_ids, gallery_ids).float()
+    return {
+        **recalls,
+        "mean_target_rank": float(ranks.mean()),
+        "median_target_rank": float(ranks.median()),
+        "mrr": float(ranks.reciprocal().mean()),
+    }
+
+
+def compare_fashioniq_rankings(
+    dynamic_scores: torch.Tensor,
+    frozen_scores: torch.Tensor,
+    target_ids: Sequence[str],
+    gallery_ids: Sequence[str],
+) -> dict[str, object]:
+    """Paired retrieval/rank comparison on one identical FashionIQ gallery."""
+    dynamic = evaluate_fashioniq_ranking(dynamic_scores, target_ids, gallery_ids)
+    frozen = evaluate_fashioniq_ranking(frozen_scores, target_ids, gallery_ids)
+    dynamic_ranks = fashioniq_target_ranks(
+        dynamic_scores, target_ids, gallery_ids
+    ).float()
+    frozen_ranks = fashioniq_target_ranks(
+        frozen_scores, target_ids, gallery_ids
+    ).float()
+    return {
+        "dynamic": dynamic,
+        "frozen": frozen,
+        "delta": {
+            key: dynamic[key] - frozen[key]
+            for key in ("recall_at_10", "recall_at_50")
+        }
+        | {
+            "mean_recall": (
+                dynamic["recall_at_10"]
+                + dynamic["recall_at_50"]
+                - frozen["recall_at_10"]
+                - frozen["recall_at_50"]
+            )
+            / 2.0,
+            "mean_target_rank": dynamic["mean_target_rank"]
+            - frozen["mean_target_rank"],
+            "median_target_rank": dynamic["median_target_rank"]
+            - frozen["median_target_rank"],
+            "mrr": dynamic["mrr"] - frozen["mrr"],
+        },
+        "target_rank_improved_fraction": float(
+            (dynamic_ranks < frozen_ranks).float().mean()
+        ),
+        "target_rank_worsened_fraction": float(
+            (dynamic_ranks > frozen_ranks).float().mean()
+        ),
+        "same_gallery": True,
+        "gallery_size": len(gallery_ids),
+    }
+
 def build_original_gallery(split_root: str | Path, category: str, split: str) -> list[str]:
     gallery_ids = load_fashioniq_split_ids(
         split_root=split_root,

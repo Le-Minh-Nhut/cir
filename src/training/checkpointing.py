@@ -62,7 +62,7 @@ def save_checkpoint(
     curriculum_state: dict[str, Any],
     resolved_config: dict[str, Any],
     manifest_hashes: dict[str, str],
-    best_metrics: dict[str, float],
+    best_metrics: dict[str, Any],
     ema_state: dict[str, Any] | None = None,
     checkpoint_reason: str = "unspecified",
     validation_metrics: dict[str, Any] | None = None,

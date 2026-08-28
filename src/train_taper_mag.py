@@ -22,11 +22,14 @@ from datasets.fashioniq import resolve_fashioniq_correction_dicts
 from evaluation.fashioniq import (
     build_fashioniq_gallery,
     evaluate_fashioniq_category,
+    evaluate_fashioniq_ranking,
+    fashioniq_target_ranks,
     macro_average_fashioniq,
 )
 from models.taper_mag.contracts import PolicyBatch, SupervisionBatch
 from models.taper_mag.model import TaperMAG, TaperMAGConfig
 from models.taper_mag.rollout import RolloutConfig
+from models.taper_mag.utility import HistoryState
 from training.checkpointing import load_checkpoint, save_checkpoint
 from training.checkpoint_selection import CheckpointSelectionState
 from training.ema import ModelEMA, ema_required_for_phase
@@ -43,6 +46,7 @@ from training.taper_mag_curriculum import CurriculumScheduler, CurriculumState
 from training.taper_mag_diagnostics import summarize_training_diagnostics
 from training.taper_mag_audit import (
     TeacherShadowAuditor,
+    causal_operator_interventions,
     dynamic_frozen_audit,
     mean_audit_reports,
     teacher_shadow_firewall_passes,
@@ -161,7 +165,7 @@ def validate_fashioniq(
     device: torch.device,
     curriculum: CurriculumState,
     correction_dicts: dict[str, dict[str, str]] | None,
-) -> dict[str, float]:
+) -> dict[str, Any]:
     model.eval()
     backbone.eval()
     category_results: dict[str, dict[str, float]] = {}
@@ -216,9 +220,274 @@ def validate_fashioniq(
         )
     average = macro_average_fashioniq(category_results)
     metrics = dict(average)
+    metrics["validation_protocol"] = str(config["data"]["validation_protocol"])
     for category, values in category_results.items():
         metrics.update({f"{category}_{key}": value for key, value in values.items()})
     return metrics
+
+
+@torch.no_grad()
+def validate_functional_controls(
+    model: TaperMAG,
+    backbone: FGCLIP2BaseBackbone,
+    cache: FrozenVisionCache,
+    config: dict[str, Any],
+    device: torch.device,
+    curriculum: CurriculumState,
+    correction_dicts: dict[str, dict[str, str]] | None,
+    negative_bank: NegativeBank,
+    teacher: MarginalGainTeacher,
+) -> dict[str, Any]:
+    """Audit-only causal controls and dynamic/frozen retrieval on one VAL gallery."""
+    protocol = str(config["data"]["validation_protocol"])
+    if protocol != "fashioniq_val":
+        raise ValueError(
+            "Primary TAPER functional audit requires validation_protocol=fashioniq_val"
+        )
+    model.eval()
+    backbone.eval()
+    requested = int(
+        config.get("diagnostics", {}).get("functional_audit_samples", 32)
+    )
+    if requested < len(CATEGORIES):
+        raise ValueError(
+            "diagnostics.functional_audit_samples must include at least one sample "
+            "per FashionIQ category"
+        )
+    base_count, remainder = divmod(requested, len(CATEGORIES))
+    category_limits = {
+        category: base_count + int(index < remainder)
+        for index, category in enumerate(CATEGORIES)
+    }
+    variants = (
+        "full_dynamic",
+        "frozen_t0",
+        "reference_only",
+        "repeat_best",
+        "mean_repeat",
+        "clone_all_best",
+        "clone_all_mean",
+        "operator_zero",
+        "operator_mean",
+    )
+    category_metrics: dict[str, dict[str, dict[str, float]]] = {}
+    gallery_sizes: dict[str, int] = {}
+    ranks_by_variant: dict[str, list[torch.Tensor]] = {
+        name: [] for name in variants
+    }
+    complementary_reports: list[dict[str, Any]] = []
+    sample_count = 0
+    dataset_root = Path(config["data"]["dataset_root"])
+
+    for category in CATEGORIES:
+        full_dataset = make_dataset(config, "val", (category,), correction_dicts)
+        audit_dataset = Subset(
+            full_dataset,
+            range(min(category_limits[category], len(full_dataset))),
+        )
+        loader = DataLoader(
+            audit_dataset,
+            batch_size=int(config["training"]["eval_batch_size"]),
+            shuffle=False,
+            num_workers=int(config["training"]["num_workers"]),
+            collate_fn=collate_cir_samples,
+        )
+        gallery_ids = build_fashioniq_gallery(
+            protocol=protocol,
+            split_root=dataset_root / "image_splits",
+            category=category,
+            annotations=full_dataset.annotations,
+            split="val",
+        )
+        gallery = cache.global_by_ids(gallery_ids).to(device).float()
+        gallery_sizes[category] = len(gallery_ids)
+        query_batches: dict[str, list[torch.Tensor]] = {
+            name: [] for name in variants
+        }
+        target_ids: list[str] = []
+        for raw_batch in loader:
+            policy = build_policy_batch(raw_batch, cache, backbone, device)
+            supervision = build_supervision_batch(raw_batch, cache, device)
+            encoded = encode_policy_batch(backbone, policy)
+            dynamic = model(
+                encoded,
+                RolloutConfig(
+                    max_steps=curriculum.horizon,
+                    selection_mode="learned",
+                    straight_through=False,
+                    exploration_probability=0.0,
+                    step_cost=curriculum.step_cost,
+                ),
+                detach_utility_inputs=True,
+            )
+            frozen = model(
+                encoded,
+                RolloutConfig(
+                    max_steps=curriculum.horizon,
+                    selection_mode="frozen_order",
+                    straight_through=False,
+                    exploration_probability=0.0,
+                    step_cost=curriculum.step_cost,
+                ),
+                detach_utility_inputs=True,
+            )
+            _, initial, operators = model.prepare(encoded)
+            history = HistoryState.initialize(
+                initial.local.shape[0],
+                operators.operators.shape[1],
+                initial.local.shape[1],
+                initial.local.device,
+            )
+            current, _, candidate_readout, _ = model.preview(
+                initial,
+                operators,
+                history,
+                step=0,
+                max_steps=curriculum.horizon,
+                detach_utility_inputs=True,
+            )
+            negatives = negative_bank.mine_once(current.query, supervision)
+            labels = teacher.score(
+                current.query,
+                candidate_readout.query,
+                supervision,
+                negatives,
+                step_cost=curriculum.step_cost,
+            )
+            controls = causal_operator_interventions(
+                model,
+                encoded,
+                labels.raw_gain.argmax(dim=-1),
+                max_steps=curriculum.horizon,
+                step_cost=curriculum.step_cost,
+            )
+            batch_queries = {
+                "full_dynamic": dynamic.final_query,
+                "frozen_t0": frozen.final_query,
+                "reference_only": current.query,
+                **controls,
+            }
+            for name in variants:
+                query_batches[name].append(batch_queries[name].float().cpu())
+            target_ids.extend(str(target_id) for target_id in raw_batch.target_ids)
+            complementary_reports.append(
+                dynamic_frozen_audit(
+                    model,
+                    encoded,
+                    supervision,
+                    negative_bank,
+                    teacher,
+                    max_steps=curriculum.horizon,
+                    step_cost=curriculum.step_cost,
+                )
+            )
+        sample_count += len(target_ids)
+        category_metrics[category] = {}
+        for name in variants:
+            scores = torch.cat(query_batches[name]).to(device) @ gallery.T
+            category_metrics[category][name] = evaluate_fashioniq_ranking(
+                scores.cpu(), target_ids, gallery_ids
+            )
+            ranks_by_variant[name].append(
+                fashioniq_target_ranks(scores.cpu(), target_ids, gallery_ids)
+            )
+
+    aggregate: dict[str, dict[str, float]] = {}
+    for name in variants:
+        category_recall = {
+            category: category_metrics[category][name] for category in CATEGORIES
+        }
+        macro = macro_average_fashioniq(category_recall)
+        ranks = torch.cat(ranks_by_variant[name]).float()
+        aggregate[name] = {
+            **macro,
+            "mean_target_rank": float(ranks.mean()),
+            "median_target_rank": float(ranks.median()),
+            "mrr": float(ranks.reciprocal().mean()),
+        }
+
+    dynamic_ranks = torch.cat(ranks_by_variant["full_dynamic"]).float()
+    frozen_ranks = torch.cat(ranks_by_variant["frozen_t0"]).float()
+    if curriculum.horizon == 1:
+        dynamic_vs_frozen: dict[str, Any] = {
+            "valid": True,
+            "status": "not_applicable_horizon_1",
+            "validation_protocol": protocol,
+        }
+    else:
+        dynamic_vs_frozen = {
+            "valid": True,
+            "status": "audited",
+            "validation_protocol": protocol,
+            "dynamic": aggregate["full_dynamic"],
+            "frozen": aggregate["frozen_t0"],
+            "delta": {
+                key: aggregate["full_dynamic"][key]
+                - aggregate["frozen_t0"][key]
+                for key in (
+                    "recall_at_10",
+                    "recall_at_50",
+                    "mean_recall",
+                    "mean_target_rank",
+                    "median_target_rank",
+                    "mrr",
+                )
+            },
+            "target_rank_improved_fraction": float(
+                (dynamic_ranks < frozen_ranks).float().mean()
+            ),
+            "target_rank_worsened_fraction": float(
+                (dynamic_ranks > frozen_ranks).float().mean()
+            ),
+            "same_gallery": True,
+        }
+
+    full_mean = aggregate["full_dynamic"]["mean_recall"]
+    reference_mean = aggregate["reference_only"]["mean_recall"]
+    intervention_report: dict[str, Any] = {
+        "execution_contract": "operator_to_executor_to_state_to_readout",
+        "query_delta_arithmetic_used": False,
+        "best_selection_rule": "detached_t0_common_negative_teacher_argmax_audit_only",
+    }
+    for name in variants[3:]:
+        metrics = aggregate[name]
+        intervention_report[name] = {
+            **metrics,
+            "paired_delta_vs_full": {
+                key: metrics[key] - aggregate["full_dynamic"][key]
+                for key in ("recall_at_10", "recall_at_50", "mean_recall")
+            },
+            "paired_delta_vs_reference": {
+                key: metrics[key] - aggregate["reference_only"][key]
+                for key in ("recall_at_10", "recall_at_50", "mean_recall")
+            },
+        }
+        if name in {"repeat_best", "mean_repeat"}:
+            denominator = full_mean - reference_mean
+            intervention_report[name]["rho_repeat"] = (
+                (metrics["mean_recall"] - reference_mean) / denominator
+                if abs(denominator) > 1e-12
+                else None
+            )
+            intervention_report[name]["rho_repeat_denominator_guarded"] = (
+                abs(denominator) <= 1e-12
+            )
+
+    complementary = mean_audit_reports(complementary_reports)
+    return {
+        "schema_version": 1,
+        "validation_protocol": protocol,
+        "gallery_semantics": "ordered_unique_union_of_val_reference_and_target_ids_per_category",
+        "audit_subset": "first_N_official_validation_triplets_per_category",
+        "requested_sample_count": requested,
+        "sample_count": sample_count,
+        "gallery_sizes": gallery_sizes,
+        "categories": category_metrics,
+        "variants": aggregate,
+        "dynamic_vs_frozen": dynamic_vs_frozen,
+        "interventions": intervention_report,
+        "complementary_local_diagnostics": complementary,
+    }
 
 
 def engine_config_for(
@@ -263,6 +532,14 @@ def verify_resume_schedule_config(
     }
     if differences:
         raise RuntimeError(f"Resume schedule config mismatch: {differences}")
+    saved_protocol = payload["config"].get("data", {}).get("validation_protocol")
+    current_protocol = current_config.get("data", {}).get("validation_protocol")
+    if saved_protocol != current_protocol:
+        raise RuntimeError(
+            "Resume validation protocol mismatch: "
+            f"saved={saved_protocol!r}, current={current_protocol!r}. "
+            "Refusing to mix FashionIQ checkpoint-selection metrics across protocols."
+        )
 
 
 def main() -> None:
@@ -412,26 +689,6 @@ def main() -> None:
         collate_fn=collate_cir_samples,
         pin_memory=device.type == "cuda",
     )
-    health_audit_count = int(
-        config.get("diagnostics", {}).get("functional_audit_samples", 32)
-    )
-    if health_audit_count <= 0:
-        raise ValueError("diagnostics.functional_audit_samples must be positive")
-    health_audit_dataset: Dataset = make_dataset(
-        config, "train", CATEGORIES, correction_dicts
-    )
-    set_dataset_epoch(health_audit_dataset, 0)
-    health_audit_dataset = Subset(
-        health_audit_dataset,
-        range(min(health_audit_count, len(health_audit_dataset))),
-    )
-    health_audit_loader = DataLoader(
-        health_audit_dataset,
-        batch_size=int(config["training"]["eval_batch_size"]),
-        shuffle=False,
-        num_workers=int(config["training"]["num_workers"]),
-        collate_fn=collate_cir_samples,
-    )
     optimizer = build_optimizer(taper, backbone, OptimizerConfig(**config["optimizer"]))
     accumulation = int(config["training"]["gradient_accumulation"])
     epochs = int(config["training"]["epochs"])
@@ -568,6 +825,17 @@ def main() -> None:
                 checkpoint_path=args.resume,
                 cache_manifest_hashes=manifest_hashes,
             )
+            functional_retrieval = validate_functional_controls(
+                taper,
+                backbone,
+                val_cache,
+                config,
+                device,
+                saved_curriculum,
+                correction_dicts,
+                bank,
+                engine.teacher,
+            )
         write_json(output_dir / "teacher_shadow_report.json", shadow)
         write_policy_traces(output_dir / "policy_trace_sampled.jsonl", auditor.traces)
         shadow_firewall = {
@@ -575,10 +843,15 @@ def main() -> None:
             **shadow["firewall"],
         }
         dynamic_report = mean_audit_reports(dynamic_reports)
+        retrieval_dynamic = functional_retrieval["dynamic_vs_frozen"]
         write_json(output_dir / "firewall_report.json", shadow_firewall)
+        write_json(output_dir / "functional_retrieval.json", functional_retrieval)
         functional = {
             "schema_version": 1,
-            "retrieval": {"status": "not_run_in_teacher_shadow"},
+            "retrieval": {
+                "validation_protocol": functional_retrieval["validation_protocol"],
+                "audit_subset_variants": functional_retrieval["variants"],
+            },
             "actor": shadow["candidate_space"],
             "candidate_space": shadow["candidate_space"],
             "critic": shadow["critic_shadow"],
@@ -586,10 +859,21 @@ def main() -> None:
                 "false_stop_rate": shadow["critic_shadow"]["false_stop_rate"],
                 "false_continue_rate": shadow["critic_shadow"]["false_continue_rate"],
             },
-            "dynamic_policy": dynamic_report or {"status": "not_run"},
-            "repeat": (dynamic_report or {}).get("repeat", {"status": "not_run"}),
+            "dynamic_policy": {
+                **retrieval_dynamic,
+                "local_action_diagnostics": dynamic_report or {"status": "not_run"},
+            },
+            "repeat": {
+                "local_staleness": (dynamic_report or {}).get(
+                    "repeat", {"status": "not_run"}
+                ),
+                "causal_retrieval": {
+                    name: functional_retrieval["interventions"][name]
+                    for name in ("repeat_best", "mean_repeat")
+                },
+            },
             "response_rank": shadow["response_rank"],
-            "clone_controls": shadow["clone_controls"],
+            "clone_controls": functional_retrieval["interventions"],
             "firewall": shadow_firewall,
             "numerical_health": {"pass": shadow["numerical_health"]["finite"], **shadow["numerical_health"]},
         }
@@ -728,46 +1012,35 @@ def main() -> None:
             metrics = validate_fashioniq(
                 taper, backbone, val_cache, config, device, curriculum, correction_dicts
             )
-            taper.eval()
-            backbone.eval()
-            dynamic_reports: list[dict[str, Any]] = []
-            for raw_audit_batch in health_audit_loader:
-                audit_policy = build_policy_batch(
-                    raw_audit_batch, train_cache, backbone, device
-                )
-                audit_supervision = build_supervision_batch(
-                    raw_audit_batch, train_cache, device
-                )
-                audit_encoded = encode_policy_batch(backbone, audit_policy)
-                dynamic_reports.append(
-                    dynamic_frozen_audit(
-                        taper,
-                        audit_encoded,
-                        audit_supervision,
-                        bank,
-                        engine.teacher,
-                        max_steps=curriculum.horizon,
-                        step_cost=curriculum.step_cost,
-                    )
-                )
-            combined_dynamic = mean_audit_reports(dynamic_reports)
+            functional_retrieval = validate_functional_controls(
+                taper,
+                backbone,
+                val_cache,
+                config,
+                device,
+                curriculum,
+                correction_dicts,
+                bank,
+                engine.teacher,
+            )
+            combined_dynamic = dict(
+                functional_retrieval["complementary_local_diagnostics"]
+            )
             repeat_report = {
                 **combined_dynamic.pop("repeat"),
+                "causal_retrieval": {
+                    name: functional_retrieval["interventions"][name]
+                    for name in ("repeat_best", "mean_repeat")
+                },
                 "valid": True,
-                "audit_subset": "first_N_official_training_triplets",
-                "sample_count": len(health_audit_dataset),
+                "validation_protocol": functional_retrieval["validation_protocol"],
+                "sample_count": functional_retrieval["sample_count"],
             }
             audit_policy_health = combined_dynamic.pop("critic")
             dynamic_policy_report = {
-                **combined_dynamic,
-                "valid": True,
-                "status": (
-                    "not_applicable_horizon_1"
-                    if curriculum.horizon == 1
-                    else "audited"
-                ),
-                "audit_subset": "first_N_official_training_triplets",
-                "sample_count": len(health_audit_dataset),
+                **functional_retrieval["dynamic_vs_frozen"],
+                "local_action_diagnostics": combined_dynamic,
+                "sample_count": functional_retrieval["sample_count"],
             }
         drift = TextDriftMonitor.measure(backbone, drift_snapshot)
         functional_health = build_functional_health_report(
@@ -780,7 +1053,9 @@ def main() -> None:
             firewall=firewall,
             dynamic_policy=dynamic_policy_report,
             repeat=repeat_report,
+            clone_controls=functional_retrieval["interventions"],
         )
+        write_json(output_dir / "functional_retrieval.json", functional_retrieval)
         write_json(output_dir / "functional_health.json", functional_health)
         record = {
             "epoch": epoch + 1,
