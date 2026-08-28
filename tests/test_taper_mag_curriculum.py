@@ -243,22 +243,31 @@ def test_stage_rollout_contracts_match_schedule_semantics() -> None:
     ).rollout().selection_mode == "soft"
 
 
-def test_soft_candidate_mixture_differs_from_uniform_and_is_end_to_end() -> None:
+def test_soft_candidate_mixture_uses_utility_forward_but_detaches_score_gradient() -> None:
     candidates = torch.tensor([[[[0.0]], [[1.0]], [[0.0]], [[0.0]]]], requires_grad=True)
     values = torch.tensor([[0.0, 6.0, -1.0, -2.0]], requires_grad=True)
     uniform, uniform_weights = candidate_mixture(
-        candidates, values, mode="uniform", temperature=1.0
+        candidates,
+        values,
+        mode="uniform",
+        temperature=1.0,
+        detach_action_values=False,
     )
     soft, soft_weights = candidate_mixture(
-        candidates, values, mode="soft", temperature=1.0
+        candidates,
+        values,
+        mode="soft",
+        temperature=1.0,
+        detach_action_values=True,
     )
     torch.testing.assert_close(uniform_weights, torch.full_like(values, 0.25))
     torch.testing.assert_close(soft_weights.sum(dim=-1), torch.ones(1))
     assert torch.isfinite(soft_weights).all()
+    assert soft_weights.argmax(dim=-1).item() == 1
     assert not torch.allclose(soft, uniform)
     assert abs(float(soft.item()) - 1.0) < abs(float(uniform.item()) - 1.0)
     soft.sum().backward()
-    assert values.grad is not None and values.grad.abs().sum() > 0
+    assert values.grad is None or values.grad.abs().sum() == 0
     assert candidates.grad is not None and candidates.grad.abs().sum() > 0
 
 

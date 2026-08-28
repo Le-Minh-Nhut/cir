@@ -21,8 +21,9 @@ def candidate_mixture(
     *,
     mode: str,
     temperature: float,
+    detach_action_values: bool,
 ) -> tuple[Tensor, Tensor]:
-    """Mix K real actions; STOP is intentionally absent from one-step mixtures."""
+    """Mix K real actions; optionally close retrieval gradients into the scorer."""
     if candidate_local.ndim != 4 or action_values.shape != candidate_local.shape[:2]:
         raise ValueError("candidate mixture expects [B,K,N,D] states and [B,K] values")
     if mode == "uniform":
@@ -30,7 +31,8 @@ def candidate_mixture(
     elif mode == "soft":
         if temperature <= 0:
             raise ValueError("soft candidate-mixture temperature must be positive")
-        weights = torch.softmax(action_values / temperature, dim=-1)
+        mixture_values = action_values.detach() if detach_action_values else action_values
+        weights = torch.softmax(mixture_values / temperature, dim=-1)
     else:
         raise ValueError(f"candidate mixture does not support mode={mode}")
     return torch.einsum("bk,bknd->bnd", weights, candidate_local), weights
@@ -270,6 +272,7 @@ class TaperMAG(nn.Module):
                     real_action_values,
                     mode=rollout.selection_mode,
                     temperature=rollout.selection_temperature,
+                    detach_action_values=rollout.selection_mode == "soft",
                 )
                 actions = mixture_weights.argmax(dim=-1)
                 state = state.with_local(
