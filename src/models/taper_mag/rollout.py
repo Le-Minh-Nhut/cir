@@ -50,7 +50,9 @@ class RolloutTrace:
     current_queries: Tensor
     candidate_queries: Tensor
     support_mass: Tensor
+    support_saturation: Tensor
     delta_norm: Tensor
+    state_norm: Tensor
 
 
 @dataclass(frozen=True, slots=True)

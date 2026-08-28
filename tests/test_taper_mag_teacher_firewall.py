@@ -8,6 +8,7 @@ from models.taper_mag.rollout import RolloutConfig
 from training.marginal_gain_teacher import MarginalGainTeacher
 from training.negative_bank import NegativeBank
 from training.taper_mag_losses import stop_anchored_listwise_utility_loss
+from training.taper_mag_reports import static_firewall_report
 from test_taper_mag_actor import encoded_batch
 
 
@@ -74,3 +75,14 @@ def test_utility_loss_has_closed_teacher_gradient() -> None:
     loss.backward()
     assert predicted.grad is not None and predicted.grad.abs().sum() > 0
     assert teacher.grad is None
+
+
+def test_machine_readable_static_firewall_report() -> None:
+    model = TaperMAG(
+        TaperMAGConfig(text_dim=20, vision_dim=24, retrieval_dim=32, dropout=0)
+    )
+    report = static_firewall_report(model)
+    assert report["pass"]
+    assert report["target_argument_absent"]
+    assert report["teacher_or_target_state_absent"]
+    assert report["supervision_in_policy_history"] is False

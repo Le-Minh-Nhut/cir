@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 from pathlib import Path
 from types import MethodType
 
@@ -18,6 +19,30 @@ from training.taper_mag_curriculum import (
     CurriculumScheduler,
 )
 from training.taper_mag_engine import CurriculumStage, EngineConfig
+
+
+def _teacher_shadow_report(tmp_path: Path) -> Path:
+    path = tmp_path / "teacher_shadow_report.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "audit_kind": "teacher_shadow",
+                "sample_count": 8,
+                "parameter_updates": {"changed": False},
+                "numerical_health": {"finite": True},
+                "firewall": {
+                    "policy_forward_target_argument_absent": True,
+                    "inference_without_supervision_succeeded": True,
+                    "target_shuffle_changed_teacher": True,
+                    "target_entered_policy_or_history": False,
+                },
+                "cache_manifest_hashes": {"train": "abc"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
 
 
 def test_exact_canonical_v4_epoch_boundaries() -> None:
@@ -93,11 +118,13 @@ def test_health_gate_smoke_bypass_is_explicit_and_default_is_enforced() -> None:
     assert smoke.state_for_epoch(60).phase == CurriculumStage.HARDEN
 
 
-def test_curriculum_checkpoint_consistency_and_manual_mode() -> None:
+def test_curriculum_checkpoint_consistency_and_manual_mode(tmp_path) -> None:
+    report = _teacher_shadow_report(tmp_path)
     scheduler = CurriculumScheduler.from_config(
         {
             "curriculum_mode": "canonical_v4",
             "approved_health_gates": sorted(CanonicalV4Curriculum.valid_gate_names),
+            "teacher_shadow_report": str(report),
         },
         step_cost=0.1,
     )
@@ -121,7 +148,7 @@ def test_curriculum_checkpoint_consistency_and_manual_mode() -> None:
     assert manual.phase == CurriculumStage.HARDEN and manual.horizon == 4
 
 
-def test_gate_checkpoint_preserves_approvals_and_allows_explicit_new_approval() -> None:
+def test_gate_checkpoint_preserves_approvals_and_allows_explicit_new_approval(tmp_path) -> None:
     actor = CurriculumScheduler.from_config(
         {"curriculum_mode": "canonical_v4"}, step_cost=0.0
     )
@@ -132,6 +159,7 @@ def test_gate_checkpoint_preserves_approvals_and_allows_explicit_new_approval() 
         {
             "curriculum_mode": "canonical_v4",
             "approved_health_gates": ["actor_warmup_passed"],
+            "teacher_shadow_report": str(_teacher_shadow_report(tmp_path)),
         },
         step_cost=0.0,
     )
@@ -140,6 +168,43 @@ def test_gate_checkpoint_preserves_approvals_and_allows_explicit_new_approval() 
     approved_saved = resumed.checkpoint_state(9)
     with pytest.raises(RuntimeError, match="removed a health-gate approval"):
         actor.verify_checkpoint(9, approved_saved)
+
+
+def test_actor_gate_requires_valid_teacher_shadow_evidence(tmp_path) -> None:
+    with pytest.raises(ValueError, match="teacher_shadow_report"):
+        CurriculumScheduler.from_config(
+            {
+                "curriculum_mode": "canonical_v4",
+                "approved_health_gates": ["actor_warmup_passed"],
+            },
+            step_cost=0.0,
+        )
+    failed = _teacher_shadow_report(tmp_path)
+    payload = json.loads(failed.read_text(encoding="utf-8"))
+    payload["parameter_updates"]["changed"] = True
+    failed.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="parameter/numerical"):
+        CurriculumScheduler.from_config(
+            {
+                "curriculum_mode": "canonical_v4",
+                "approved_health_gates": ["actor_warmup_passed"],
+                "teacher_shadow_report": str(failed),
+            },
+            step_cost=0.0,
+        )
+    firewall_failed = _teacher_shadow_report(tmp_path)
+    payload = json.loads(firewall_failed.read_text(encoding="utf-8"))
+    payload["firewall"]["target_entered_policy_or_history"] = True
+    firewall_failed.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="target-firewall"):
+        CurriculumScheduler.from_config(
+            {
+                "curriculum_mode": "canonical_v4",
+                "approved_health_gates": ["actor_warmup_passed"],
+                "teacher_shadow_report": str(firewall_failed),
+            },
+            step_cost=0.0,
+        )
 
 
 def _model() -> TaperMAG:

@@ -64,6 +64,13 @@ def save_checkpoint(
     manifest_hashes: dict[str, str],
     best_metrics: dict[str, float],
     ema_state: dict[str, Any] | None = None,
+    checkpoint_reason: str = "unspecified",
+    validation_metrics: dict[str, Any] | None = None,
+    policy_metrics: dict[str, Any] | None = None,
+    functional_health_metrics: dict[str, Any] | None = None,
+    selection_state: dict[str, Any] | None = None,
+    dataset_epoch: int | None = None,
+    micro_step: int | None = None,
 ) -> None:
     trainable_backbone = {
         name: parameter.detach().cpu()
@@ -85,6 +92,14 @@ def save_checkpoint(
         "config": resolved_config,
         "manifest_hashes": manifest_hashes,
         "best_metrics": best_metrics,
+        "checkpoint_selection_reason": checkpoint_reason,
+        "validation_metrics": validation_metrics or {},
+        "policy_metrics": policy_metrics or {},
+        "functional_health_metrics": functional_health_metrics or {},
+        "checkpoint_selection_state": selection_state,
+        "resume_contract": "deterministic_epoch_boundary_only",
+        "dataset_epoch": dataset_epoch,
+        "micro_step": micro_step,
         "git": git_metadata(),
         "torch_version": torch.__version__,
     }
@@ -101,6 +116,10 @@ def load_checkpoint(
     expected_manifest_hashes: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     payload = torch.load(Path(path), map_location="cpu", weights_only=False)
+    if payload.get("micro_step") is not None:
+        raise RuntimeError(
+            "Mid-epoch resume is unsupported; canonical checkpoints resume at epoch boundaries"
+        )
     if expected_manifest_hashes is not None and payload["manifest_hashes"] != expected_manifest_hashes:
         raise RuntimeError("Checkpoint feature manifest hashes do not match current caches")
     model.load_state_dict(payload["model"], strict=True)

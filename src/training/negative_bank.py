@@ -10,6 +10,10 @@ from torch import Tensor
 from models.taper_mag.contracts import SupervisionBatch
 
 
+MINING_IMPLEMENTATION_VERSION = "common_negative_topk_v1"
+MMAP_MINING_CHUNK_SIZE = 8_192
+
+
 @dataclass(frozen=True, slots=True)
 class CommonNegativeSet:
     embeddings: Tensor
@@ -89,7 +93,7 @@ class NegativeBank:
                     list(unique),
                 )
 
-        chunk_size = 8_192
+        chunk_size = MMAP_MINING_CHUNK_SIZE
         for start in range(0, len(self.ids), chunk_size):
             chunk_ids = self.ids[start : start + chunk_size]
             allowed_positions = [

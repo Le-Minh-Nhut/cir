@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
 from training.taper_mag_engine import CurriculumStage
+from training.taper_mag_audit import validate_teacher_shadow_report
 
 
 CurriculumMode = Literal["canonical_v4", "manual"]
@@ -42,12 +43,14 @@ class CurriculumGateState:
     approved_transitions: frozenset[str] = frozenset()
     bypass_for_smoke: bool = False
     mode: HealthGateMode = "manual_approval"
+    teacher_shadow_report_sha256: str | None = None
 
     def checkpoint_dict(self) -> dict[str, Any]:
         return {
             "mode": self.mode,
             "approved_transitions": sorted(self.approved_transitions),
             "bypass_for_smoke": self.bypass_for_smoke,
+            "teacher_shadow_report_sha256": self.teacher_shadow_report_sha256,
         }
 
 
@@ -170,13 +173,22 @@ class CurriculumScheduler:
             gate_mode = str(training.get("health_gate_mode", "manual_approval"))
             if gate_mode != "manual_approval":
                 raise ValueError(f"Unsupported health_gate_mode: {gate_mode}")
+            approvals = frozenset(
+                str(item) for item in training.get("approved_health_gates", [])
+            )
+            bypass = bool(training.get("bypass_health_gates_for_smoke", False))
+            shadow_hash = None
+            if "actor_warmup_passed" in approvals and not bypass:
+                report_path = training.get("teacher_shadow_report")
+                if not report_path:
+                    raise ValueError(
+                        "actor_warmup_passed requires training.teacher_shadow_report"
+                    )
+                shadow_hash = validate_teacher_shadow_report(report_path)
             gate_state = CurriculumGateState(
-                approved_transitions=frozenset(
-                    str(item) for item in training.get("approved_health_gates", [])
-                ),
-                bypass_for_smoke=bool(
-                    training.get("bypass_health_gates_for_smoke", False)
-                ),
+                approved_transitions=approvals,
+                bypass_for_smoke=bypass,
+                teacher_shadow_report_sha256=shadow_hash,
             )
             return cls("canonical_v4", step_cost=step_cost, gate_state=gate_state)
         if mode != "manual":
@@ -241,6 +253,9 @@ class CurriculumScheduler:
         approved_at_save = frozenset(saved_gates.get("approved_transitions", []))
         if not approved_at_save.issubset(self.gate_state.approved_transitions):
             raise RuntimeError("Current config removed a health-gate approval saved in checkpoint")
+        saved_shadow = saved_gates.get("teacher_shadow_report_sha256")
+        if saved_shadow is not None and saved_shadow != self.gate_state.teacher_shadow_report_sha256:
+            raise RuntimeError("Teacher-shadow report hash changed after health-gate approval")
         expected = self.state_for_epoch(epoch).checkpoint_dict()
         if saved.get("schedule") != expected or saved.get("current_phase") != expected["phase"]:
             raise RuntimeError(

@@ -221,12 +221,15 @@ class TaperMAG(nn.Module):
         current_query_trace: list[Tensor] = []
         candidate_query_trace: list[Tensor] = []
         support_trace: list[Tensor] = []
+        support_saturation_trace: list[Tensor] = []
         delta_trace: list[Tensor] = []
+        state_norm_trace: list[Tensor] = []
         frozen_values: Tensor | None = None
         stop_index = self.config.num_queries
 
         for step in range(rollout.max_steps):
             active_before = state.alive
+            state_norm_trace.append(state.local.float().norm(dim=-1).mean(dim=-1))
             hard_two_pass = (
                 rollout.selection_mode not in {"uniform", "soft"}
                 and not rollout.straight_through
@@ -345,6 +348,11 @@ class TaperMAG(nn.Module):
             current_query_trace.append(current.query)
             candidate_query_trace.append(candidate_readout.query)
             support_trace.append(candidates.support.mean(dim=-1))
+            support_saturation_trace.append(
+                ((candidates.support < 0.01) | (candidates.support > 0.99))
+                .float()
+                .mean(dim=-1)
+            )
             delta_trace.append(candidates.delta_norm)
 
         final = self.readout(state)
@@ -356,7 +364,9 @@ class TaperMAG(nn.Module):
             current_queries=torch.stack(current_query_trace, dim=1),
             candidate_queries=torch.stack(candidate_query_trace, dim=1),
             support_mass=torch.stack(support_trace, dim=1),
+            support_saturation=torch.stack(support_saturation_trace, dim=1),
             delta_norm=torch.stack(delta_trace, dim=1),
+            state_norm=torch.stack(state_norm_trace, dim=1),
         )
         diagnostics = {
             "text_attention": operators.text_attention,

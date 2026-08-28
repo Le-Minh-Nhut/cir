@@ -81,6 +81,20 @@ non-scientific test override. Gate approvals are checkpointed and cannot be remo
 EMA is initialized from live TAPER plus trainable text weights at utility/critic warm-up, updated
 after each optimizer step with decay 0.999, and temporarily installed only for validation.
 
+`actor_warmup_passed` additionally requires a parameter-free teacher-shadow report generated from
+the exact resumed epoch-8 checkpoint and current cache manifests. The audit writes
+`teacher_shadow_report.json`, `functional_health.json`, `firewall_report.json`, and a bounded
+`policy_trace_sampled.jsonl`; target IDs and teacher values are confined to the explicitly named
+supervision-audit section. It does not call an optimizer. Configure the reviewed report path in
+`training.teacher_shadow_report` before adding the approval.
+
+Every training epoch refreshes `functional_health.json` with actor/candidate, regret distribution,
+STOP, pairwise/calibration, response-rank, gradient-coverage, clipping, firewall and numerical
+sections. Checkpoint selection is fixed: retrieval maximizes valid mean Recall; policy minimizes
+mean regret with median-regret then Recall tie-breaks; functional selection first rejects
+firewall/numerical/exact-collapse failures and then uses Recall and response rank. `last.ckpt` is
+always updated. Resume is deterministic at epoch boundaries only; mid-epoch resume is rejected.
+
 ## Entry points
 
 ```bash
@@ -95,8 +109,17 @@ PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml
 PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml --max-train-samples 32
 PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml --resume runs/taper-mag-v4-fgclip2-base-last4/last.ckpt
 PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml --resume runs/taper-mag-v4-fgclip2-base-last4/best_retrieval_valid.ckpt --validate-only
+PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml --resume runs/taper-mag-v4-fgclip2-base-last4/last.ckpt --teacher-shadow-audit --audit-samples 256
+PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml --resume runs/taper-mag-v4-fgclip2-base-last4/last.ckpt --profile-runtime --audit-samples 32
+PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_smoke.yaml --max-train-samples 32
 PYTHONPATH=src python src/train_one_shot_control.py --config conf/taper_mag_v4_one_shot_control.yaml
 ```
+
+The profiler writes `compute_report.json` with parameter counts, peak CUDA allocation/reservation
+when available, text/operator/preview/teacher/backward timings, throughput, query latency, rollout
+steps and STOP histogram. Optimizer-step timing uses a disposable AdamW instance and restores live
+weights exactly, leaving the training optimizer untouched. FLOPs remain explicitly `null` when no
+reliable tooling is available; values are never extrapolated.
 
 The supplied FashionIQ tree does not currently contain the three configured
 `correction_dict_{dress,shirt,toptee}.json` files. The main configs deliberately use the validated

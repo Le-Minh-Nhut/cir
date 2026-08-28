@@ -162,6 +162,34 @@ def test_checkpoint_resume_restores_model_text_optimizer_scheduler_and_rng(tmp_p
         reference_text,
     )
     assert payload["epoch"] == 2 and payload["global_step"] == 17
+    assert payload["resume_contract"] == "deterministic_epoch_boundary_only"
+    assert payload["micro_step"] is None
+
+
+def test_checkpoint_rejects_mid_epoch_resume(tmp_path) -> None:
+    fg = backbone()
+    taper = TaperMAG(
+        TaperMAGConfig(text_dim=16, vision_dim=16, retrieval_dim=16, dropout=0)
+    )
+    optimizer = build_optimizer(taper, fg, OptimizerConfig())
+    checkpoint = tmp_path / "mid_epoch.ckpt"
+    save_checkpoint(
+        checkpoint,
+        model=taper,
+        backbone=fg,
+        optimizer=optimizer,
+        scheduler=None,
+        epoch=1,
+        global_step=3,
+        stage="actor_warmup",
+        curriculum_state={"epoch": 2},
+        resolved_config={},
+        manifest_hashes={},
+        best_metrics={},
+        micro_step=4,
+    )
+    with pytest.raises(RuntimeError, match="Mid-epoch resume is unsupported"):
+        load_checkpoint(checkpoint, model=taper, backbone=fg)
 
 
 @pytest.mark.parametrize(

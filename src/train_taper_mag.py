@@ -28,6 +28,7 @@ from models.taper_mag.contracts import PolicyBatch, SupervisionBatch
 from models.taper_mag.model import TaperMAG, TaperMAGConfig
 from models.taper_mag.rollout import RolloutConfig
 from training.checkpointing import load_checkpoint, save_checkpoint
+from training.checkpoint_selection import CheckpointSelectionState
 from training.ema import ModelEMA, ema_required_for_phase
 from training.fashioniq_runtime import CATEGORIES, load_config, make_dataset, seed_everything
 from training.marginal_gain_teacher import MarginalGainTeacher
@@ -40,11 +41,29 @@ from training.taper_mag_engine import (
 )
 from training.taper_mag_curriculum import CurriculumScheduler, CurriculumState
 from training.taper_mag_diagnostics import summarize_training_diagnostics
+from training.taper_mag_audit import (
+    TeacherShadowAuditor,
+    dynamic_frozen_audit,
+    mean_audit_reports,
+    teacher_shadow_firewall_passes,
+    validate_teacher_shadow_provenance,
+    write_json,
+    write_policy_traces,
+)
 from training.taper_mag_optimizer import (
     OptimizerConfig,
     build_optimizer,
     format_parameter_report,
 )
+from training.taper_mag_profiler import profile_taper_runtime
+from training.taper_mag_reports import (
+    EpochHealthAccumulator,
+    GradientRuntimeTracker,
+    build_functional_health_report,
+    sampled_policy_trace_records,
+    static_firewall_report,
+)
+from training.run_manifest import build_run_manifest, write_run_manifest
 from training.text_drift import TextDriftMonitor, text_block_gradient_norms
 
 
@@ -54,7 +73,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume", type=Path)
     parser.add_argument("--max-train-samples", type=int)
     parser.add_argument("--validate-only", action="store_true")
+    parser.add_argument("--teacher-shadow-audit", action="store_true")
+    parser.add_argument("--profile-runtime", action="store_true")
+    parser.add_argument("--audit-samples", type=int)
     return parser.parse_args()
+
+
+def set_dataset_epoch(dataset: Dataset, epoch: int) -> None:
+    base = dataset.dataset if isinstance(dataset, Subset) else dataset
+    if hasattr(base, "set_epoch"):
+        base.set_epoch(epoch)
 
 
 def build_policy_batch(
@@ -239,7 +267,26 @@ def verify_resume_schedule_config(
 
 def main() -> None:
     args = parse_args()
+    exclusive_modes = sum(
+        (args.validate_only, args.teacher_shadow_audit, args.profile_runtime)
+    )
+    if exclusive_modes > 1:
+        raise ValueError(
+            "--validate-only, --teacher-shadow-audit, and --profile-runtime are mutually exclusive"
+        )
+    if (args.teacher_shadow_audit or args.profile_runtime) and args.resume is None:
+        raise ValueError("Audit/profile modes require --resume")
+    if args.audit_samples is not None and args.audit_samples <= 0:
+        raise ValueError("--audit-samples must be positive")
     config = load_config(args.config)
+    if (
+        "actor_warmup_passed" in config["training"].get("approved_health_gates", [])
+        and not config["training"].get("bypass_health_gates_for_smoke", False)
+        and args.resume is None
+    ):
+        raise ValueError(
+            "A scientific actor_warmup_passed approval must resume the audited epoch-8 checkpoint"
+        )
     seed_everything(int(config["seed"]))
     correction_dicts = resolve_fashioniq_correction_dicts(
         Path(config["data"]["dataset_root"]) / "captions",
@@ -307,6 +354,23 @@ def main() -> None:
         "val_dense": val_cache.dense_manifest.sha256,
     }
 
+    def verify_new_actor_gate_evidence(payload: dict[str, Any]) -> None:
+        saved_gates = payload["curriculum_state"].get("health_gates", {}).get(
+            "approved_transitions", []
+        )
+        current_gates = config["training"].get("approved_health_gates", [])
+        if "actor_warmup_passed" in current_gates and "actor_warmup_passed" not in saved_gates:
+            if int(payload["epoch"]) + 1 != 8:
+                raise RuntimeError(
+                    "actor_warmup_passed requires teacher-shadow evidence from the "
+                    "completed canonical epoch-8 checkpoint"
+                )
+            validate_teacher_shadow_provenance(
+                config["training"]["teacher_shadow_report"],
+                args.resume,
+                manifest_hashes,
+            )
+
     if args.validate_only:
         if args.resume is None:
             raise ValueError("--validate-only requires --resume with a trained checkpoint")
@@ -317,7 +381,10 @@ def main() -> None:
             expected_manifest_hashes=manifest_hashes,
         )
         saved_epoch = int(payload["epoch"]) + 1
+        if payload.get("dataset_epoch") not in {None, saved_epoch}:
+            raise RuntimeError("Checkpoint dataset epoch is incompatible with epoch-boundary resume")
         verify_resume_schedule_config(payload, config)
+        verify_new_actor_gate_evidence(payload)
         curriculum_scheduler.verify_checkpoint(saved_epoch, payload["curriculum_state"])
         saved_curriculum = curriculum_scheduler.state_for_epoch(saved_epoch)
         ema.load_state_dict(
@@ -344,6 +411,26 @@ def main() -> None:
         num_workers=int(config["training"]["num_workers"]),
         collate_fn=collate_cir_samples,
         pin_memory=device.type == "cuda",
+    )
+    health_audit_count = int(
+        config.get("diagnostics", {}).get("functional_audit_samples", 32)
+    )
+    if health_audit_count <= 0:
+        raise ValueError("diagnostics.functional_audit_samples must be positive")
+    health_audit_dataset: Dataset = make_dataset(
+        config, "train", CATEGORIES, correction_dicts
+    )
+    set_dataset_epoch(health_audit_dataset, 0)
+    health_audit_dataset = Subset(
+        health_audit_dataset,
+        range(min(health_audit_count, len(health_audit_dataset))),
+    )
+    health_audit_loader = DataLoader(
+        health_audit_dataset,
+        batch_size=int(config["training"]["eval_batch_size"]),
+        shuffle=False,
+        num_workers=int(config["training"]["num_workers"]),
+        collate_fn=collate_cir_samples,
     )
     optimizer = build_optimizer(taper, backbone, OptimizerConfig(**config["optimizer"]))
     accumulation = int(config["training"]["gradient_accumulation"])
@@ -385,6 +472,130 @@ def main() -> None:
         json.dumps(asdict(backbone.manifest()), indent=2, sort_keys=True, default=str) + "\n",
         encoding="utf-8",
     )
+    write_run_manifest(
+        output_dir / "run_manifest.json",
+        build_run_manifest(config, backbone.manifest(), manifest_hashes),
+    )
+    firewall = static_firewall_report(taper)
+    write_json(output_dir / "firewall_report.json", firewall)
+
+    if args.teacher_shadow_audit or args.profile_runtime:
+        payload = load_checkpoint(
+            args.resume,
+            model=taper,
+            backbone=backbone,
+            expected_manifest_hashes=manifest_hashes,
+        )
+        saved_epoch = int(payload["epoch"]) + 1
+        if payload.get("dataset_epoch") not in {None, saved_epoch}:
+            raise RuntimeError("Checkpoint dataset epoch is incompatible with epoch-boundary resume")
+        verify_resume_schedule_config(payload, config)
+        verify_new_actor_gate_evidence(payload)
+        curriculum_scheduler.verify_checkpoint(saved_epoch, payload["curriculum_state"])
+        saved_curriculum = curriculum_scheduler.state_for_epoch(saved_epoch)
+        ema.load_state_dict(
+            payload.get("ema"),
+            taper,
+            backbone.model,
+            expected_active=ema_required_for_phase(saved_curriculum.phase.value),
+        )
+        audit_count = args.audit_samples or int(
+            config.get("diagnostics", {}).get("teacher_shadow_samples", 256)
+        )
+        audit_dataset = Subset(dataset, range(min(audit_count, len(dataset))))
+        set_dataset_epoch(audit_dataset, saved_epoch)
+        audit_loader = DataLoader(
+            audit_dataset,
+            batch_size=int(config["training"]["eval_batch_size"]),
+            shuffle=False,
+            num_workers=int(config["training"]["num_workers"]),
+            collate_fn=collate_cir_samples,
+        )
+        if args.profile_runtime:
+            raw_batch = next(iter(audit_loader))
+            policy = build_policy_batch(raw_batch, train_cache, backbone, device)
+            supervision = build_supervision_batch(raw_batch, train_cache, device)
+            with ema.average_parameters(taper, backbone.model):
+                report = profile_taper_runtime(
+                    engine,
+                    policy,
+                    supervision,
+                    engine_config_for(saved_curriculum, config),
+                    optimizer=optimizer,
+                    repeats=int(config.get("diagnostics", {}).get("profiler_repeats", 3)),
+                )
+            write_json(output_dir / "compute_report.json", report)
+            print(json.dumps(report, indent=2, sort_keys=True))
+            return
+
+        with ema.average_parameters(taper, backbone.model):
+            taper.eval()
+            backbone.eval()
+            auditor = TeacherShadowAuditor(
+                taper,
+                backbone.model,
+                bank,
+                engine.teacher,
+                seed=int(config["seed"]),
+                near_tie_band=float(
+                    config.get("diagnostics", {}).get("near_tie_band", 0.0)
+                ),
+            )
+            dynamic_reports: list[dict[str, Any]] = []
+            for raw_batch in audit_loader:
+                policy = build_policy_batch(raw_batch, train_cache, backbone, device)
+                supervision = build_supervision_batch(raw_batch, train_cache, device)
+                encoded = encode_policy_batch(backbone, policy)
+                auditor.update(
+                    encoded,
+                    supervision,
+                    sample_ids=tuple(raw_batch.sample_ids),
+                    reference_ids=tuple(raw_batch.reference_ids),
+                    modification_texts=tuple(raw_batch.modification_texts),
+                )
+                dynamic_reports.append(
+                    dynamic_frozen_audit(
+                        taper,
+                        encoded,
+                        supervision,
+                        bank,
+                        engine.teacher,
+                        max_steps=int(config["policy"]["max_steps"]),
+                        step_cost=float(config["policy"]["step_cost"]),
+                    )
+                )
+            shadow = auditor.finalize(
+                checkpoint_path=args.resume,
+                cache_manifest_hashes=manifest_hashes,
+            )
+        write_json(output_dir / "teacher_shadow_report.json", shadow)
+        write_policy_traces(output_dir / "policy_trace_sampled.jsonl", auditor.traces)
+        shadow_firewall = {
+            "pass": teacher_shadow_firewall_passes(shadow["firewall"]),
+            **shadow["firewall"],
+        }
+        dynamic_report = mean_audit_reports(dynamic_reports)
+        write_json(output_dir / "firewall_report.json", shadow_firewall)
+        functional = {
+            "schema_version": 1,
+            "retrieval": {"status": "not_run_in_teacher_shadow"},
+            "actor": shadow["candidate_space"],
+            "candidate_space": shadow["candidate_space"],
+            "critic": shadow["critic_shadow"],
+            "stop": {
+                "false_stop_rate": shadow["critic_shadow"]["false_stop_rate"],
+                "false_continue_rate": shadow["critic_shadow"]["false_continue_rate"],
+            },
+            "dynamic_policy": dynamic_report or {"status": "not_run"},
+            "repeat": (dynamic_report or {}).get("repeat", {"status": "not_run"}),
+            "response_rank": shadow["response_rank"],
+            "clone_controls": shadow["clone_controls"],
+            "firewall": shadow_firewall,
+            "numerical_health": {"pass": shadow["numerical_health"]["finite"], **shadow["numerical_health"]},
+        }
+        write_json(output_dir / "functional_health.json", functional)
+        print(json.dumps(shadow, indent=2, sort_keys=True))
+        return
     drift_batch = backbone.tokenize_texts(
         ["make it red", "add long sleeves", "remove the pattern", "make it more formal"]
     )
@@ -392,6 +603,7 @@ def main() -> None:
     start_epoch = 0
     global_step = 0
     best_metrics = {"mean_recall": -float("inf")}
+    checkpoint_selection = CheckpointSelectionState()
     if args.resume:
         payload = load_checkpoint(
             args.resume,
@@ -402,7 +614,10 @@ def main() -> None:
             expected_manifest_hashes=manifest_hashes,
         )
         saved_epoch = int(payload["epoch"]) + 1
+        if payload.get("dataset_epoch") not in {None, saved_epoch}:
+            raise RuntimeError("Checkpoint dataset epoch is incompatible with epoch-boundary resume")
         verify_resume_schedule_config(payload, config)
+        verify_new_actor_gate_evidence(payload)
         curriculum_scheduler.verify_checkpoint(saved_epoch, payload["curriculum_state"])
         saved_curriculum = curriculum_scheduler.state_for_epoch(saved_epoch)
         if payload["stage"] != saved_curriculum.phase.value:
@@ -410,6 +625,9 @@ def main() -> None:
         start_epoch = int(payload["epoch"]) + 1
         global_step = int(payload["global_step"])
         best_metrics = dict(payload["best_metrics"])
+        checkpoint_selection = CheckpointSelectionState.from_state_dict(
+            payload.get("checkpoint_selection_state")
+        )
         ema.load_state_dict(
             payload.get("ema"),
             taper,
@@ -421,6 +639,7 @@ def main() -> None:
     last_gradient_norms: dict[str, float] = {}
     last_diagnostics: dict[str, float] = {}
     for epoch in range(start_epoch, epochs):
+        set_dataset_epoch(dataset, epoch + 1)
         curriculum = curriculum_scheduler.state_for_epoch(epoch + 1)
         engine_config = engine_config_for(curriculum, config)
         if ema_required_for_phase(curriculum.phase.value) and not ema.active:
@@ -428,6 +647,17 @@ def main() -> None:
         taper.train()
         backbone.train()
         epoch_loss = 0.0
+        diagnostics_config = config.get("diagnostics", {})
+        epoch_health = EpochHealthAccumulator(
+            near_tie_band=float(diagnostics_config.get("near_tie_band", 0.0)),
+            step_cost=curriculum.step_cost,
+            calibration_bins=int(diagnostics_config.get("calibration_bins", 5)),
+        )
+        gradient_health = GradientRuntimeTracker(taper.config.num_queries)
+        trace_remaining = int(
+            diagnostics_config.get("sampled_policy_traces_per_epoch", 8)
+        )
+        epoch_trace_records: list[dict[str, Any]] = []
         for micro_step, raw_batch in enumerate(loader):
             if global_step >= updates:
                 break
@@ -439,12 +669,42 @@ def main() -> None:
                 scaled_loss = result.loss / accumulation
             scaled_loss.backward()
             epoch_loss += float(result.loss.detach())
-            last_diagnostics = summarize_training_diagnostics(
-                result.model_output, result.teacher_gain
-            )
+            epoch_health.update(result.model_output, result.teacher_gain)
+            if trace_remaining > 0:
+                records = sampled_policy_trace_records(
+                    sample_ids=tuple(raw_batch.sample_ids),
+                    reference_ids=tuple(raw_batch.reference_ids),
+                    target_ids=tuple(str(value) for value in raw_batch.target_ids),
+                    modification_texts=tuple(raw_batch.modification_texts),
+                    output=result.model_output,
+                    teacher_gain=result.teacher_gain,
+                    negative_ids=result.negative_ids,
+                    limit=trace_remaining,
+                )
+                epoch_trace_records.extend(records)
+                trace_remaining -= len(records)
             if (micro_step + 1) % accumulation == 0 or micro_step + 1 == len(loader):
+                optimized_parameters = [
+                    parameter
+                    for group in optimizer.param_groups
+                    for parameter in group["params"]
+                ]
+                gradient_norms = [
+                    parameter.grad.detach().float().norm()
+                    for parameter in optimized_parameters
+                    if parameter.grad is not None
+                ]
+                pre_clip_norm = float(
+                    torch.stack(gradient_norms).norm() if gradient_norms else 0.0
+                )
+                gradient_health.update(
+                    taper,
+                    backbone.model,
+                    pre_clip_global_norm=pre_clip_norm,
+                    clip_threshold=float(config["optimizer"]["gradient_clip"]),
+                )
                 torch.nn.utils.clip_grad_norm_(
-                    [parameter for group in optimizer.param_groups for parameter in group["params"]],
+                    optimized_parameters,
                     max_norm=float(config["optimizer"]["gradient_clip"]),
                 )
                 last_gradient_norms = text_block_gradient_norms(backbone)
@@ -454,11 +714,74 @@ def main() -> None:
                     ema.update(taper, backbone.model)
                 optimizer.zero_grad(set_to_none=True)
                 global_step += 1
+        last_diagnostics, policy_health = epoch_health.report()
+        gradient_report = gradient_health.report()
+        if epoch_trace_records:
+            trace_path = output_dir / "policy_trace_sampled.jsonl"
+            with trace_path.open("a", encoding="utf-8") as file:
+                for trace in epoch_trace_records:
+                    file.write(json.dumps({"epoch": epoch + 1, **trace}, sort_keys=True) + "\n")
+        dynamic_policy_report: dict[str, Any]
+        repeat_report: dict[str, Any]
+        audit_policy_health: dict[str, Any]
         with ema.average_parameters(taper, backbone.model):
             metrics = validate_fashioniq(
                 taper, backbone, val_cache, config, device, curriculum, correction_dicts
             )
+            taper.eval()
+            backbone.eval()
+            dynamic_reports: list[dict[str, Any]] = []
+            for raw_audit_batch in health_audit_loader:
+                audit_policy = build_policy_batch(
+                    raw_audit_batch, train_cache, backbone, device
+                )
+                audit_supervision = build_supervision_batch(
+                    raw_audit_batch, train_cache, device
+                )
+                audit_encoded = encode_policy_batch(backbone, audit_policy)
+                dynamic_reports.append(
+                    dynamic_frozen_audit(
+                        taper,
+                        audit_encoded,
+                        audit_supervision,
+                        bank,
+                        engine.teacher,
+                        max_steps=curriculum.horizon,
+                        step_cost=curriculum.step_cost,
+                    )
+                )
+            combined_dynamic = mean_audit_reports(dynamic_reports)
+            repeat_report = {
+                **combined_dynamic.pop("repeat"),
+                "valid": True,
+                "audit_subset": "first_N_official_training_triplets",
+                "sample_count": len(health_audit_dataset),
+            }
+            audit_policy_health = combined_dynamic.pop("critic")
+            dynamic_policy_report = {
+                **combined_dynamic,
+                "valid": True,
+                "status": (
+                    "not_applicable_horizon_1"
+                    if curriculum.horizon == 1
+                    else "audited"
+                ),
+                "audit_subset": "first_N_official_training_triplets",
+                "sample_count": len(health_audit_dataset),
+            }
         drift = TextDriftMonitor.measure(backbone, drift_snapshot)
+        functional_health = build_functional_health_report(
+            epoch=epoch + 1,
+            phase=curriculum.phase.value,
+            retrieval=metrics,
+            actor=last_diagnostics,
+            critic=audit_policy_health,
+            gradients=gradient_report,
+            firewall=firewall,
+            dynamic_policy=dynamic_policy_report,
+            repeat=repeat_report,
+        )
+        write_json(output_dir / "functional_health.json", functional_health)
         record = {
             "epoch": epoch + 1,
             "global_step": global_step,
@@ -477,15 +800,34 @@ def main() -> None:
             **last_gradient_norms,
             **last_diagnostics,
         }
+        validation_prefix = (
+            "phase_diagnostic"
+            if curriculum.phase
+            in {
+                CurriculumStage.ACTOR_WARMUP,
+                CurriculumStage.UTILITY_SHADOW,
+                CurriculumStage.CRITIC_WARMUP,
+            }
+            else "deployable_hard"
+        )
+        record.update(
+            {f"{validation_prefix}/{name}": value for name, value in metrics.items()}
+        )
         with (output_dir / "metrics_val.jsonl").open("a", encoding="utf-8") as file:
             file.write(json.dumps(record, sort_keys=True) + "\n")
         print(json.dumps(record, sort_keys=True))
-        if metrics["mean_recall"] > best_metrics["mean_recall"]:
+        if (
+            functional_health["firewall"]["pass"]
+            and functional_health["numerical_health"]["pass"]
+            and metrics["mean_recall"] > best_metrics["mean_recall"]
+        ):
             best_metrics = dict(metrics)
-            checkpoint_name = "best_retrieval_valid.ckpt"
-        else:
-            checkpoint_name = "last.ckpt"
-        for name in {checkpoint_name, "last.ckpt"}:
+        checkpoint_names = checkpoint_selection.select(
+            retrieval=metrics,
+            policy=audit_policy_health,
+            functional=functional_health,
+        )
+        for name, reason in checkpoint_names.items():
             save_checkpoint(
                 output_dir / name,
                 model=taper,
@@ -500,6 +842,13 @@ def main() -> None:
                 manifest_hashes=manifest_hashes,
                 best_metrics=best_metrics,
                 ema_state=ema.state_dict(),
+                checkpoint_reason=reason,
+                validation_metrics=metrics,
+                policy_metrics=audit_policy_health,
+                functional_health_metrics=functional_health,
+                selection_state=checkpoint_selection.state_dict(),
+                dataset_epoch=epoch + 1,
+                micro_step=None,
             )
         if global_step >= updates:
             break

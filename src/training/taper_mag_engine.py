@@ -120,6 +120,7 @@ class TrainingStepOutput:
     utility_loss: Tensor
     model_output: TaperOutput
     teacher_gain: Tensor
+    negative_ids: tuple[tuple[tuple[str, ...], ...], ...]
 
 
 def encode_policy_batch(
@@ -210,6 +211,7 @@ class TaperMAGTrainingEngine:
             temperature=config.retrieval_temperature,
         )
         teacher_steps: list[Tensor] = []
+        negative_steps: list[tuple[tuple[str, ...], ...]] = []
         utility_terms: list[Tensor] = []
         for step in range(output.trace.current_queries.shape[1]):
             negatives = self.negative_bank.mine_once(
@@ -223,6 +225,7 @@ class TaperMAGTrainingEngine:
                 step_cost=config.step_cost,
             )
             teacher_steps.append(labels.raw_gain)
+            negative_steps.append(labels.negative_ids)
             utility_terms.append(
                 stop_anchored_listwise_utility_loss(
                     output.trace.predicted_gain[:, step],
@@ -237,5 +240,10 @@ class TaperMAGTrainingEngine:
             utility_coefficient = config.utility_weight
         loss = retrieval_loss + utility_coefficient * utility_loss
         return TrainingStepOutput(
-            loss, retrieval_loss, utility_loss, output, torch.stack(teacher_steps, dim=1)
+            loss,
+            retrieval_loss,
+            utility_loss,
+            output,
+            torch.stack(teacher_steps, dim=1),
+            tuple(negative_steps),
         )

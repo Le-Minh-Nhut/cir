@@ -52,6 +52,7 @@ training:
   curriculum_mode: canonical_v4
   health_gate_mode: manual_approval
   approved_health_gates: []
+  teacher_shadow_report: null
   bypass_health_gates_for_smoke: false
   epochs: 60
   max_optimizer_updates: 4260
@@ -69,6 +70,14 @@ optimizer:
   eps: 0.00000001
   gradient_clip: 1.0
   ema_decay: 0.999
+
+diagnostics:
+  near_tie_band: 0.0
+  calibration_bins: 5
+  teacher_shadow_samples: 256
+  functional_audit_samples: 32
+  sampled_policy_traces_per_epoch: 8
+  profiler_repeats: 3
 
 runtime:
   device: cuda
