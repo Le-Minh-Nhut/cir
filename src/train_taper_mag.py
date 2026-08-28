@@ -189,6 +189,7 @@ def validate_fashioniq(
         gallery = cache.global_by_ids(gallery_ids).to(device).float()
         scores: list[torch.Tensor] = []
         target_ids: list[str] = []
+        reference_ids: list[str] = []
         for raw_batch in loader:
             policy = build_policy_batch(raw_batch, cache, backbone, device)
             use_bf16 = device.type == "cuda" and config["runtime"]["precision"] == "bf16"
@@ -214,13 +215,21 @@ def validate_fashioniq(
                     )
                 query = model(encoded, rollout).final_query.float()
             scores.append((query @ gallery.T).cpu())
+            reference_ids.extend(str(reference_id) for reference_id in raw_batch.reference_ids)
             target_ids.extend(str(target_id) for target_id in raw_batch.target_ids)
         category_results[category] = evaluate_fashioniq_category(
-            torch.cat(scores), target_ids, gallery_ids
+            torch.cat(scores),
+            target_ids,
+            gallery_ids,
+            protocol=str(config["data"]["validation_protocol"]),
+            reference_ids=reference_ids,
         )
     average = macro_average_fashioniq(category_results)
     metrics = dict(average)
     metrics["validation_protocol"] = str(config["data"]["validation_protocol"])
+    metrics["reference_exclusion"] = (
+        config["data"]["validation_protocol"] == "fashioniq_val"
+    )
     for category, values in category_results.items():
         metrics.update({f"{category}_{key}": value for key, value in values.items()})
     return metrics
@@ -305,6 +314,7 @@ def validate_functional_controls(
             name: [] for name in variants
         }
         target_ids: list[str] = []
+        reference_ids: list[str] = []
         for raw_batch in loader:
             policy = build_policy_batch(raw_batch, cache, backbone, device)
             supervision = build_supervision_batch(raw_batch, cache, device)
@@ -369,6 +379,7 @@ def validate_functional_controls(
             }
             for name in variants:
                 query_batches[name].append(batch_queries[name].float().cpu())
+            reference_ids.extend(str(reference_id) for reference_id in raw_batch.reference_ids)
             target_ids.extend(str(target_id) for target_id in raw_batch.target_ids)
             complementary_reports.append(
                 dynamic_frozen_audit(
@@ -386,10 +397,20 @@ def validate_functional_controls(
         for name in variants:
             scores = torch.cat(query_batches[name]).to(device) @ gallery.T
             category_metrics[category][name] = evaluate_fashioniq_ranking(
-                scores.cpu(), target_ids, gallery_ids
+                scores.cpu(),
+                target_ids,
+                gallery_ids,
+                protocol=protocol,
+                reference_ids=reference_ids,
             )
             ranks_by_variant[name].append(
-                fashioniq_target_ranks(scores.cpu(), target_ids, gallery_ids)
+                fashioniq_target_ranks(
+                    scores.cpu(),
+                    target_ids,
+                    gallery_ids,
+                    protocol=protocol,
+                    reference_ids=reference_ids,
+                )
             )
 
     aggregate: dict[str, dict[str, float]] = {}
@@ -413,12 +434,14 @@ def validate_functional_controls(
             "valid": True,
             "status": "not_applicable_horizon_1",
             "validation_protocol": protocol,
+            "reference_exclusion": True,
         }
     else:
         dynamic_vs_frozen = {
             "valid": True,
             "status": "audited",
             "validation_protocol": protocol,
+            "reference_exclusion": True,
             "dynamic": aggregate["full_dynamic"],
             "frozen": aggregate["frozen_t0"],
             "delta": {
@@ -477,6 +500,7 @@ def validate_functional_controls(
     return {
         "schema_version": 1,
         "validation_protocol": protocol,
+        "reference_exclusion": True,
         "gallery_semantics": "ordered_unique_union_of_val_reference_and_target_ids_per_category",
         "audit_subset": "first_N_official_validation_triplets_per_category",
         "requested_sample_count": requested,

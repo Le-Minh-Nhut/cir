@@ -25,10 +25,16 @@ partial debug caches are marked `complete_split=false`; full training rejects th
 
 ## Primary FashionIQ validation protocol
 
-The primary TAPER-MAG validation protocol on this branch is `fashioniq_val`. For each category its
-gallery is the ordered, duplicate-free union of every reference ID and target ID appearing in that
-category's validation annotations. Category R@10/R@50 are macro-averaged, and Mean Recall is the
-mean of macro R@10 and macro R@50. The resolved protocol is written to the run manifest, validation
+The primary TAPER-MAG validation protocol on this branch is `fashioniq_val`, using the
+ENCODER/OFFSET/MELT-style VAL-split convention:
+
+1. the per-category gallery is the ordered, duplicate-free union of every reference ID and target
+   ID appearing in that category's validation annotations;
+2. each query's own reference image is excluded from that query's retrieval ranking;
+3. R@1, R@10, R@50, target rank, and MRR are computed on the remaining gallery.
+
+Category R@10/R@50 are macro-averaged, and Mean Recall is the mean of macro R@10 and macro R@50.
+The resolved protocol and `reference_exclusion=true` are written to the run manifest, validation
 metrics, functional reports and checkpoint metadata; resume rejects a protocol mismatch so scores
 cannot be mixed in one checkpoint-selection history.
 
@@ -111,7 +117,8 @@ firewall/numerical/exact-collapse failures and then uses Recall and response ran
 always updated. Resume is deterministic at epoch boundaries only; mid-epoch resume is rejected.
 
 `functional_retrieval.json` evaluates dynamic and frozen-t0 policy on the same `fashioniq_val`
-gallery and reports R@10, R@50, Mean Recall, target-rank mean/median, MRR and paired rank changes.
+gallery, applies the same per-query reference exclusion to every functional variant, and reports
+R@10, R@50, Mean Recall, target-rank mean/median, MRR and paired rank changes.
 Repeat-best, mean-repeat, clone-all-best, clone-all-mean, operator-zero and operator-mean are causal
 audit interventions: operator anchors are replaced before execution and every result passes through
 the shared executor, recurrent local state and real readout. Query-space constructions such as

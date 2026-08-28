@@ -70,6 +70,9 @@ def build_run_manifest(
             "correction_policy": config["data"]["correction_policy"],
             "correction_hashes": _matching_hashes(annotation_root, ("correction_dict_*.json",)),
             "validation_protocol": config["data"]["validation_protocol"],
+            "reference_exclusion": (
+                config["data"]["validation_protocol"] == "fashioniq_val"
+            ),
             "external_generated_data": False,
         },
         "cache_manifest_hashes": dict(sorted(cache_manifest_hashes.items())),

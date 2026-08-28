@@ -149,6 +149,7 @@ def test_checkpoint_resume_restores_model_text_optimizer_scheduler_and_rng(tmp_p
         best_metrics={"mean_recall": 1.0},
         validation_metrics={
             "validation_protocol": "fashioniq_val",
+            "reference_exclusion": True,
             "mean_recall": 1.0,
         },
     )
@@ -173,6 +174,7 @@ def test_checkpoint_resume_restores_model_text_optimizer_scheduler_and_rng(tmp_p
     assert payload["micro_step"] is None
     assert payload["config"]["data"]["validation_protocol"] == "fashioniq_val"
     assert payload["validation_metrics"]["validation_protocol"] == "fashioniq_val"
+    assert payload["validation_metrics"]["reference_exclusion"] is True
 
 
 def test_checkpoint_rejects_mid_epoch_resume(tmp_path) -> None:

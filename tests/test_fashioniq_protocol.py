@@ -16,10 +16,14 @@ from datasets.fashioniq import (
     validate_correction_policy,
 )
 from evaluation.fashioniq import (
+    apply_fashioniq_protocol_mask,
     build_fashioniq_gallery,
     compare_fashioniq_rankings,
+    evaluate_fashioniq_ranking,
     evaluate_fashioniq_recall,
+    fashioniq_target_ranks,
     macro_average_fashioniq,
+    mask_fashioniq_reference_scores,
 )
 
 
@@ -45,9 +49,103 @@ def test_fashioniq_hand_ranking_and_macro_metrics() -> None:
     scores[1, 55] = 10
     scores[1, :49] = torch.arange(49, dtype=torch.float32) + 20
     metrics = evaluate_fashioniq_recall(scores, ("image-7", "image-55"), gallery_ids)
-    assert metrics == {"recall_at_10": 50.0, "recall_at_50": 100.0}
-    macro = macro_average_fashioniq({"a": metrics, "b": {"recall_at_10": 100.0, "recall_at_50": 100.0}})
-    assert macro == {"recall_at_10": 75.0, "recall_at_50": 100.0, "mean_recall": 87.5}
+    assert metrics == {
+        "recall_at_1": 50.0,
+        "recall_at_10": 50.0,
+        "recall_at_50": 100.0,
+    }
+    macro = macro_average_fashioniq(
+        {
+            "a": metrics,
+            "b": {
+                "recall_at_1": 100.0,
+                "recall_at_10": 100.0,
+                "recall_at_50": 100.0,
+            },
+        }
+    )
+    assert macro == {
+        "recall_at_1": 75.0,
+        "recall_at_10": 75.0,
+        "recall_at_50": 100.0,
+        "mean_recall": 87.5,
+    }
+
+
+def test_val_reference_exclusion_promotes_target_without_masking_it() -> None:
+    gallery = ("A", "B", "C", "D")
+    scores = torch.tensor([[10.0, 9.0, 2.0, 1.0]])
+    masked = mask_fashioniq_reference_scores(
+        scores, ("A",), gallery, target_ids=("B",)
+    )
+    assert scores[0, 0] == 10.0
+    assert torch.isneginf(masked[0, 0])
+    assert masked[0, 1] == scores[0, 1]
+    assert fashioniq_target_ranks(scores, ("B",), gallery).item() == 2
+    assert fashioniq_target_ranks(
+        scores,
+        ("B",),
+        gallery,
+        protocol="fashioniq_val",
+        reference_ids=("A",),
+    ).item() == 1
+
+
+def test_val_reference_exclusion_is_per_query_and_fails_loudly() -> None:
+    gallery = ("A", "B", "C", "D", "E")
+    scores = torch.tensor(
+        [
+            [10.0, 9.0, 8.0, 7.0, 6.0],
+            [6.0, 7.0, 10.0, 9.0, 8.0],
+        ]
+    )
+    masked = mask_fashioniq_reference_scores(
+        scores,
+        ("A", "C"),
+        gallery,
+        target_ids=("B", "D"),
+    )
+    assert torch.isneginf(masked[0, 0]) and masked[0, 2] == scores[0, 2]
+    assert torch.isneginf(masked[1, 2]) and masked[1, 0] == scores[1, 0]
+    assert masked[0, 1] == scores[0, 1]
+    assert masked[1, 3] == scores[1, 3]
+    with pytest.raises(ValueError, match="references absent from gallery"):
+        mask_fashioniq_reference_scores(scores[:1], ("missing",), gallery)
+    with pytest.raises(ValueError, match="reference_id == target_id"):
+        mask_fashioniq_reference_scores(
+            scores[:1], ("A",), gallery, target_ids=("A",)
+        )
+
+
+def test_protocol_mask_is_val_only_and_applies_to_all_variant_scores() -> None:
+    gallery = tuple(f"image-{index}" for index in range(60))
+    references = ("image-0", "image-2")
+    targets = ("image-1", "image-3")
+    base = torch.full((2, 60), -10.0)
+    base[0, 0], base[0, 1] = 10.0, 9.0
+    base[1, 2], base[1, 3] = 10.0, 9.0
+    for offset in (0.0, 0.5, 1.0, 1.5):  # dynamic/frozen/repeat/clone
+        metrics = evaluate_fashioniq_ranking(
+            base + offset,
+            targets,
+            gallery,
+            protocol="fashioniq_val",
+            reference_ids=references,
+        )
+        assert metrics["recall_at_1"] == 100.0
+        assert metrics["mrr"] == 1.0
+    original = apply_fashioniq_protocol_mask(
+        "fashioniq_original", base, targets, gallery, references
+    )
+    val = apply_fashioniq_protocol_mask(
+        "fashioniq_val", base, targets, gallery, references
+    )
+    torch.testing.assert_close(original, base)
+    assert torch.isneginf(val[0, 0]) and torch.isneginf(val[1, 2])
+    with pytest.raises(ValueError, match="requires reference_ids"):
+        apply_fashioniq_protocol_mask(
+            "fashioniq_val", base, targets, gallery, reference_ids=None
+        )
 
 
 def test_val_gallery_is_ordered_pair_union_and_distinct_from_original(tmp_path) -> None:
@@ -110,7 +208,12 @@ def test_dynamic_frozen_comparison_uses_gallery_rank_not_target_score_alone() ->
     dynamic_scores = dynamic_query @ gallery_embeddings.T
     frozen_scores = frozen_query @ gallery_embeddings.T
     comparison = compare_fashioniq_rankings(
-        dynamic_scores, frozen_scores, target, gallery
+        dynamic_scores,
+        frozen_scores,
+        target,
+        gallery,
+        protocol="fashioniq_val",
+        reference_ids=("image-59",),
     )
     assert dynamic_scores[0, 0] < frozen_scores[0, 0]  # target cosine points the wrong way
     assert comparison["dynamic"]["recall_at_10"] == 100.0

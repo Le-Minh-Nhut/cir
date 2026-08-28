@@ -26,5 +26,6 @@ def test_run_manifest_is_stable_and_records_explicit_contract(tmp_path) -> None:
     assert first["dataset"]["annotation_hashes"]["status"] == "unavailable"
     assert first["teacher"]["hard_negatives"] == 64
     assert first["dataset"]["validation_protocol"] == "fashioniq_val"
+    assert first["dataset"]["reference_exclusion"] is True
     assert first["resume_contract"]["checkpoint"] == "epoch-boundary only"
     assert first["resume_contract"]["mid_epoch"] == "unsupported and rejected"
