@@ -25,17 +25,10 @@ class TextDriftMonitor:
     def capture(
         backbone: FGCLIP2BaseBackbone, batch: TokenizedTextBatch
     ) -> TextReferenceSnapshot:
-        states = backbone.encode_text_tokens(batch).detach().float().cpu()
-        device_batch = TokenizedTextBatch(
-            batch.input_ids.to(backbone.device),
-            batch.attention_mask.to(backbone.device),
-            batch.content_mask.to(backbone.device),
-        )
-        pooled = backbone.model.get_text_features(
-            input_ids=device_batch.input_ids,
-            attention_mask=device_batch.attention_mask,
-            walk_type="short",
-        ).detach().float().cpu()
+        device_states = backbone.encode_text_tokens(batch)
+        device_pooled = backbone.pool_short_text_states(device_states)
+        states = device_states.detach().float().cpu()
+        pooled = device_pooled.detach().float().cpu()
         parameters = {
             name: parameter.detach().float().cpu().clone()
             for name, parameter in backbone.model.named_parameters()
@@ -60,12 +53,10 @@ class TextDriftMonitor:
             snapshot.attention_mask.to(backbone.device),
             snapshot.content_mask.to(backbone.device),
         )
-        states = backbone.encode_text_tokens(batch).detach().float().cpu()
-        pooled = backbone.model.get_text_features(
-            input_ids=batch.input_ids,
-            attention_mask=batch.attention_mask,
-            walk_type="short",
-        ).detach().float().cpu()
+        device_states = backbone.encode_text_tokens(batch)
+        device_pooled = backbone.pool_short_text_states(device_states)
+        states = device_states.detach().float().cpu()
+        pooled = device_pooled.detach().float().cpu()
         mask = snapshot.content_mask.unsqueeze(-1)
         token_cosine = F.cosine_similarity(states, snapshot.token_states, dim=-1)
         token_cosine = token_cosine[snapshot.content_mask].mean().item()

@@ -371,6 +371,37 @@ class FGCLIP2BaseBackbone(nn.Module):
             raise RuntimeError(f"Invalid online text states: expected {expected}, got {states.shape}")
         return states
 
+    def pool_short_text_states(self, states: Tensor) -> Tensor:
+        """Project already-computed short-walk states into text retrieval space.
+
+        Pinned FG-CLIP2 short walk applies ``text_model.head`` to the final
+        position of its final-layer-normalized ``last_hidden_state``. Keeping
+        this contract here avoids a redundant text-transformer forward in
+        representation-drift instrumentation.
+        """
+        if states.ndim != 3 or states.shape[-1] != self.contract.text_dim:
+            raise ValueError(
+                "Short-walk text states must be [B,L,text_dim]; "
+                f"got {tuple(states.shape)}"
+            )
+        if states.shape[0] == 0 or states.shape[1] != self.max_text_length:
+            raise ValueError(
+                "Short-walk text states must have a non-empty batch and the pinned "
+                f"sequence length {self.max_text_length}; got {tuple(states.shape)}"
+            )
+        expected = (states.shape[0], self.contract.retrieval_dim)
+        head = getattr(self.model.text_model, "head", None)
+        if not isinstance(head, nn.Module):
+            raise RuntimeError(
+                "Pinned FG-CLIP2 runtime lacks text_model.head required for short pooling"
+            )
+        pooled = head(states[:, -1, :])
+        if tuple(pooled.shape) != expected or not torch.isfinite(pooled).all():
+            raise RuntimeError(
+                f"Invalid short-walk pooled text: expected {expected}, got {pooled.shape}"
+            )
+        return pooled
+
     @torch.inference_mode()
     def encode_image_global(self, images: Sequence[Image.Image]) -> Tensor:
         return self._encode_images(images, dense=False)
