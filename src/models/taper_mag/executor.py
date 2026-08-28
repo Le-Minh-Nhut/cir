@@ -112,3 +112,26 @@ class SharedLocalExecutor(nn.Module):
         selected = candidates.local.gather(1, gather_index).squeeze(1)
         local = torch.where(execute_mask[:, None, None], selected, state.local)
         return state.with_local(local)
+
+    def recompute_selected(
+        self,
+        state: LocalState,
+        features: StateFeatures,
+        operators: Tensor,
+        actions: Tensor,
+        execute_mask: Tensor,
+    ) -> tuple[LocalState, CandidateBatch]:
+        """Re-execute one selected operator per sample from the immutable parent."""
+        if actions.shape != (state.local.shape[0],):
+            raise ValueError("actions must be [B]")
+        batch, candidate_count, width = operators.shape
+        if candidate_count <= 0 or width != self.d_model:
+            raise ValueError("operators must be non-empty [B,K,d_model]")
+        selected_index = actions.clamp(max=candidate_count - 1).view(batch, 1, 1)
+        selected_operator = operators.gather(
+            1, selected_index.expand(-1, 1, width)
+        )
+        recomputed = self.enumerate(state, features, selected_operator)
+        selected = recomputed.local[:, 0]
+        local = torch.where(execute_mask[:, None, None], selected, state.local)
+        return state.with_local(local), recomputed

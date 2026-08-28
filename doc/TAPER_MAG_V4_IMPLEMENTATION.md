@@ -17,9 +17,11 @@ FG-CLIP2-Base/text-finetuning experiment overrides.
 - patch policy: official dynamic budgets; dense tokens are ragged patch tokens with no CLS
 - TAPER width/query count: 256/4; retrieval output: normalized 768-D
 
-The runtime smoke observed different real token counts (for example 567 and 560), so caches store a
-flat ragged tensor plus offsets/spatial shapes. Cache manifests are immutable and partial debug
-caches are marked `complete_split=false`; training rejects them.
+The runtime smoke observed hundreds of real tokens per image, so image caches are split into an
+all-image normalized global store and an annotation-derived reference-only dense store. Both use
+NumPy mmap (`global.npy`; `dense_values.npy` plus offsets/spatial shapes); batch lookup copies only
+requested rows. Cache manifests explicitly type `complete_split` versus `reference_only`, and
+partial debug caches are marked `complete_split=false`; full training rejects them.
 
 ## Scientific boundaries
 
@@ -29,7 +31,13 @@ gradient. ASROA is not implemented or enabled.
 
 Curriculum advancement is explicit in config (`actor_warmup`, `utility_shadow`, `critic_warmup`,
 `dagger_t2`, `st_bridge`, `harden`) rather than automatic. Change stage/horizon/oracle mix only after
-the preceding health gate has been reviewed.
+the preceding health gate has been reviewed. Hard non-ST rollout previews all candidates with the
+actor graph detached, then recomputes only the selected transition from the same parent with
+gradients. The ST bridge retains its live all-candidate surrogate.
+
+The same-backbone one-shot control is a separate model and entry point. It shares the pinned
+backbone, online text path, caches, caption/correction protocol, gallery space, terminal loss and
+evaluator; it is not imported into the TAPER graph.
 
 ## Entry points
 
@@ -41,6 +49,7 @@ PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml
 PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml --max-train-samples 32
 PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml --resume runs/taper-mag-v4-fgclip2-base-last4/last.ckpt
 PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml --resume runs/taper-mag-v4-fgclip2-base-last4/best_retrieval_valid.ckpt --validate-only
+PYTHONPATH=src python src/train_one_shot_control.py --config conf/taper_mag_v4_one_shot_control.yaml
 ```
 
 The supplied FashionIQ tree does not currently contain the three configured

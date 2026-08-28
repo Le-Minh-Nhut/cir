@@ -105,6 +105,36 @@ class TaperMAG(nn.Module):
         )
         return current, candidates, candidate_readout, predicted_gain
 
+    def preview_detached_actor(
+        self,
+        state: LocalState,
+        operators: OperatorSet,
+        history: HistoryState,
+        *,
+        step: int,
+        max_steps: int,
+        detach_utility_inputs: bool = False,
+    ) -> tuple[ReadoutOutput, CandidateBatch, CandidateReadoutOutput, Tensor]:
+        """Preview all K transitions without retaining actor activation graphs."""
+        with torch.no_grad():
+            current = self.readout(state)
+            state_features = self.executor.encode_state(state, current.context)
+            candidates = self.executor.enumerate(state, state_features, operators.operators)
+            candidate_readout = self.readout.forward_candidates(state, candidates)
+        utility_features = self.utility.build_features(
+            current,
+            candidates,
+            candidate_readout,
+            operators,
+            history,
+            step=step,
+            max_steps=max_steps,
+        )
+        predicted_gain = self.utility(
+            utility_features, detach_inputs=detach_utility_inputs
+        )
+        return current, candidates, candidate_readout, predicted_gain
+
     def forward(
         self,
         batch: EncodedPolicyBatch,
@@ -176,7 +206,11 @@ class TaperMAG(nn.Module):
 
         for step in range(rollout.max_steps):
             active_before = state.alive
-            current, candidates, candidate_readout, predicted_gain = self.preview(
+            hard_two_pass = (
+                rollout.selection_mode != "uniform" and not rollout.straight_through
+            )
+            preview_fn = self.preview_detached_actor if hard_two_pass else self.preview
+            current, candidates, candidate_readout, predicted_gain = preview_fn(
                 state,
                 operators,
                 history,
@@ -239,8 +273,17 @@ class TaperMAG(nn.Module):
                         alive=active_before & actions.ne(stop_index),
                     )
                 else:
-                    selected_state = self.executor.gather_selected(
-                        state, candidates, actions, execute_mask
+                    # Recompute only k* with gradients from the same, still-immutable parent.
+                    recompute_current = self.readout(state)
+                    recompute_features = self.executor.encode_state(
+                        state, recompute_current.context
+                    )
+                    selected_state, _ = self.executor.recompute_selected(
+                        state,
+                        recompute_features,
+                        operators.operators,
+                        actions,
+                        execute_mask,
                     )
                     state = selected_state.with_local(
                         selected_state.local,

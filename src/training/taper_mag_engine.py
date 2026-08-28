@@ -35,18 +35,53 @@ class EngineConfig:
     retrieval_temperature: float = 0.07
     utility_weight: float = 1.0
     oracle_mix: float = 0.0
+    straight_through: bool | None = None
+
+    def validate(self) -> None:
+        if not 1 <= self.horizon <= 4:
+            raise ValueError("Curriculum horizon must be in [1,4]")
+        if self.retrieval_temperature <= 0:
+            raise ValueError("retrieval_temperature must be positive")
+        if self.utility_weight < 0:
+            raise ValueError("utility_weight must be non-negative")
+        if not 0 <= self.oracle_mix <= 1:
+            raise ValueError("oracle_mix must be in [0,1]")
+        one_step = {
+            CurriculumStage.ACTOR_WARMUP,
+            CurriculumStage.UTILITY_SHADOW,
+            CurriculumStage.CRITIC_WARMUP,
+        }
+        if self.stage in one_step and self.horizon != 1:
+            raise ValueError(f"{self.stage.value} requires horizon=1")
+        if self.stage == CurriculumStage.DAGGER_T2 and self.horizon != 2:
+            raise ValueError("dagger_t2 requires horizon=2")
+        if self.stage == CurriculumStage.ST_BRIDGE and self.horizon < 2:
+            raise ValueError("st_bridge requires horizon>=2")
+        if self.stage != CurriculumStage.DAGGER_T2 and self.oracle_mix != 0:
+            raise ValueError(f"{self.stage.value} requires oracle_mix=0")
+        expected_st = self.stage == CurriculumStage.ST_BRIDGE
+        if self.straight_through is not None and self.straight_through != expected_st:
+            raise ValueError(
+                f"{self.stage.value} requires straight_through={str(expected_st).lower()}"
+            )
 
     def rollout(self) -> RolloutConfig:
+        self.validate()
         if self.stage in {CurriculumStage.ACTOR_WARMUP, CurriculumStage.UTILITY_SHADOW}:
-            return RolloutConfig(max_steps=1, selection_mode="uniform", step_cost=self.step_cost)
-        if self.stage == CurriculumStage.CRITIC_WARMUP:
-            return RolloutConfig(max_steps=1, selection_mode="uniform", step_cost=self.step_cost)
-        return RolloutConfig(
-            max_steps=self.horizon,
-            selection_mode="learned",
-            straight_through=self.stage == CurriculumStage.ST_BRIDGE,
-            step_cost=self.step_cost,
-        )
+            result = RolloutConfig(max_steps=1, selection_mode="uniform", step_cost=self.step_cost)
+        elif self.stage == CurriculumStage.CRITIC_WARMUP:
+            result = RolloutConfig(max_steps=1, selection_mode="uniform", step_cost=self.step_cost)
+        else:
+            result = RolloutConfig(
+                max_steps=self.horizon,
+                selection_mode="learned",
+                straight_through=self.stage == CurriculumStage.ST_BRIDGE,
+                step_cost=self.step_cost,
+            )
+        if self.stage == CurriculumStage.HARDEN:
+            if result.selection_mode != "learned" or result.straight_through or self.oracle_mix != 0:
+                raise AssertionError("HARDEN must be learned hard rollout without ST/oracle routing")
+        return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +91,27 @@ class TrainingStepOutput:
     utility_loss: Tensor
     model_output: TaperOutput
     teacher_gain: Tensor
+
+
+def encode_policy_batch(
+    backbone: FGCLIP2BaseBackbone, batch: PolicyBatch
+) -> EncodedPolicyBatch:
+    """Online target-free text encoding usable without a training engine/supervision."""
+    tokenized = TokenizedTextBatch(
+        batch.text_input_ids,
+        batch.text_attention_mask,
+        batch.text_content_mask,
+    )
+    text_tokens = backbone.encode_text_tokens(tokenized)
+    return EncodedPolicyBatch(
+        reference_local=batch.reference_local,
+        reference_local_mask=batch.reference_local_mask,
+        reference_global=batch.reference_global,
+        text_tokens=text_tokens,
+        text_attention_mask=batch.text_attention_mask,
+        text_content_mask=batch.text_content_mask,
+        spatial_shapes=batch.spatial_shapes,
+    )
 
 
 class TaperMAGTrainingEngine:
@@ -74,21 +130,7 @@ class TaperMAGTrainingEngine:
         self.teacher = teacher or MarginalGainTeacher()
 
     def encode_policy(self, batch: PolicyBatch) -> EncodedPolicyBatch:
-        tokenized = TokenizedTextBatch(
-            batch.text_input_ids,
-            batch.text_attention_mask,
-            batch.text_content_mask,
-        )
-        text_tokens = self.backbone.encode_text_tokens(tokenized)
-        return EncodedPolicyBatch(
-            reference_local=batch.reference_local,
-            reference_local_mask=batch.reference_local_mask,
-            reference_global=batch.reference_global,
-            text_tokens=text_tokens,
-            text_attention_mask=batch.text_attention_mask,
-            text_content_mask=batch.text_content_mask,
-            spatial_shapes=batch.spatial_shapes,
-        )
+        return encode_policy_batch(self.backbone, batch)
 
     def step(
         self,
@@ -96,12 +138,10 @@ class TaperMAGTrainingEngine:
         supervision: SupervisionBatch,
         config: EngineConfig,
     ) -> TrainingStepOutput:
+        config.validate()
         encoded = self.encode_policy(policy)
         action_selector = None
         if config.stage == CurriculumStage.DAGGER_T2 and config.oracle_mix > 0:
-            if not 0 <= config.oracle_mix <= 1:
-                raise ValueError("oracle_mix must be in [0,1]")
-
             def dagger_selector(
                 step: int,
                 current_query: Tensor,

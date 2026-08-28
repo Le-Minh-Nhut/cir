@@ -12,7 +12,12 @@ from models.taper_mag.contracts import PolicyBatch, SupervisionBatch
 from models.taper_mag.model import TaperMAG, TaperMAGConfig
 from training.negative_bank import NegativeBank
 from training.checkpointing import load_checkpoint, save_checkpoint
-from training.taper_mag_engine import CurriculumStage, EngineConfig, TaperMAGTrainingEngine
+from training.taper_mag_engine import (
+    CurriculumStage,
+    EngineConfig,
+    TaperMAGTrainingEngine,
+    encode_policy_batch,
+)
 from training.taper_mag_optimizer import OptimizerConfig, build_optimizer
 
 
@@ -42,7 +47,9 @@ def test_invalid_cache_tuning_combinations_fail_loudly() -> None:
 
 def test_manifest_exact_validation() -> None:
     manifest = ImageCacheManifest(
-        schema_version=1,
+        schema_version=2,
+        cache_kind="global",
+        image_scope="complete_split",
         model_id="qihoo360/fg-clip2-base",
         revision="a" * 40,
         processor_config_hash="p",
@@ -155,3 +162,54 @@ def test_checkpoint_resume_restores_model_text_optimizer_scheduler_and_rng(tmp_p
         reference_text,
     )
     assert payload["epoch"] == 2 and payload["global_step"] == 17
+
+
+@pytest.mark.parametrize(
+    ("stage", "horizon", "oracle_mix", "message"),
+    [
+        (CurriculumStage.ACTOR_WARMUP, 2, 0.0, "horizon=1"),
+        (CurriculumStage.UTILITY_SHADOW, 2, 0.0, "horizon=1"),
+        (CurriculumStage.CRITIC_WARMUP, 2, 0.0, "horizon=1"),
+        (CurriculumStage.DAGGER_T2, 3, 0.0, "horizon=2"),
+        (CurriculumStage.ST_BRIDGE, 1, 0.0, "horizon>=2"),
+        (CurriculumStage.HARDEN, 2, 0.2, "oracle_mix=0"),
+    ],
+)
+def test_invalid_curriculum_combinations_fail(stage, horizon, oracle_mix, message) -> None:
+    with pytest.raises(ValueError, match=message):
+        EngineConfig(stage=stage, horizon=horizon, oracle_mix=oracle_mix).validate()
+
+
+def test_harden_is_exact_learned_hard_inference_contract() -> None:
+    config = EngineConfig(stage=CurriculumStage.HARDEN, horizon=4, oracle_mix=0)
+    rollout = config.rollout()
+    assert rollout.selection_mode == "learned"
+    assert rollout.straight_through is False
+    assert rollout.max_steps == 4
+    with pytest.raises(ValueError, match="straight_through=false"):
+        EngineConfig(
+            stage=CurriculumStage.HARDEN,
+            horizon=4,
+            straight_through=True,
+        ).validate()
+
+
+def test_policy_only_online_forward_needs_no_supervision_object() -> None:
+    fg = backbone()
+    taper = TaperMAG(
+        TaperMAGConfig(text_dim=16, vision_dim=16, retrieval_dim=16, dropout=0, max_steps=1)
+    ).eval()
+    tokenized = fg.tokenize_texts(["make red", "add sleeves"])
+    policy = PolicyBatch(
+        reference_ids=("r0", "r1"),
+        modification_texts=("make red", "add sleeves"),
+        reference_local=torch.randn(2, 5, 16),
+        reference_local_mask=torch.ones(2, 5, dtype=torch.bool),
+        reference_global=torch.nn.functional.normalize(torch.randn(2, 16), dim=-1),
+        text_input_ids=tokenized.input_ids,
+        text_attention_mask=tokenized.attention_mask,
+        text_content_mask=tokenized.content_mask,
+    )
+    encoded = encode_policy_batch(fg, policy)
+    output = taper(encoded, EngineConfig().rollout())
+    assert output.final_query.shape == (2, 16)

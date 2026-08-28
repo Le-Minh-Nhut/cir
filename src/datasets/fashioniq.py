@@ -17,6 +17,9 @@ VALID_CATEGORIES = {"dress", "shirt", "toptee"}
 VALID_SPLITS = {"train", "val", "test"}
 VALID_CAPTION_POLICIES = {"ordered_and", "normalized_ordered_and", "randomized_four_way"}
 CORRECTION_POLICIES = {"fashioniq", "none"}
+REQUIRED_CORRECTION_DICTIONARIES = tuple(
+    f"correction_dict_{category}.json" for category in ("dress", "shirt", "toptee")
+)
 
 
 def validate_correction_policy(policy: str) -> str:
@@ -26,6 +29,31 @@ def validate_correction_policy(policy: str) -> str:
             f"expected one of {sorted(CORRECTION_POLICIES)}"
         )
     return policy
+
+
+def resolve_fashioniq_correction_dicts(
+    annotation_root: str | Path,
+    policy: str,
+) -> dict[str, dict[str, str]] | None:
+    """Resolve the audited dictionaries, never silently changing text protocol."""
+    validated = validate_correction_policy(policy)
+    if validated == "none":
+        return None
+    root = Path(annotation_root).resolve()
+    missing = [name for name in REQUIRED_CORRECTION_DICTIONARIES if not (root / name).is_file()]
+    if missing:
+        required = "\n".join(f"  {name}" for name in REQUIRED_CORRECTION_DICTIONARIES)
+        raise FileNotFoundError(
+            "FashionIQ correction_policy=fashioniq requires:\n"
+            f"{required}\n\n"
+            f"Expected under: {root}\n\n"
+            "Either supply the audited dictionaries or explicitly run a control\n"
+            "with correction_policy=none."
+        )
+    return {
+        category: load_correction_dict(root / f"correction_dict_{category}.json")
+        for category in ("dress", "shirt", "toptee")
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,8 +237,6 @@ def build_pair_union_gallery(annotations: Sequence[FashionIQAnnotation]) -> list
 
     for annotation in annotations:
         assert annotation.target_id is not None
-
-        image_ids = (annotation.reference_id, annotation.target_id)
 
         if annotation.reference_id not in seen:
             seen.add(annotation.reference_id)

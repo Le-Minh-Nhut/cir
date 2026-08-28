@@ -103,3 +103,67 @@ def test_required_diagnostics_are_finite() -> None:
     }
     assert required.issubset(diagnostics)
     assert all(torch.isfinite(torch.tensor(value)) for value in diagnostics.values())
+
+
+def test_hard_rollout_detaches_k_preview_and_recomputes_only_selected() -> None:
+    taper = model().train()
+    original = taper.executor.enumerate
+    calls: list[tuple[int, bool]] = []
+
+    def observed(self, state, features, operators, **kwargs):
+        calls.append((operators.shape[1], torch.is_grad_enabled()))
+        return original(state, features, operators, **kwargs)
+
+    taper.executor.enumerate = MethodType(observed, taper.executor)
+    output = taper(encoded_batch(), RolloutConfig(max_steps=1, selection_mode="learned"))
+    assert calls == [(4, False), (1, True)]
+    assert not output.trace.candidate_queries.requires_grad
+    output.final_query[:, 0].sum().backward()
+    assert taper.executor.film.weight.grad is not None
+    assert taper.executor.film.weight.grad.abs().sum() > 0
+
+
+def test_selected_recomputation_matches_preview_from_immutable_parent() -> None:
+    taper = model()
+    batch = encoded_batch()
+    _, parent, operators = taper.prepare(batch)
+    from models.taper_mag.utility import HistoryState
+
+    history = HistoryState.initialize(2, 4, 6, parent.local.device)
+    _, candidates, _, predicted = taper.preview_detached_actor(
+        parent, operators, history, step=0, max_steps=1
+    )
+    actions = predicted.argmax(dim=-1)
+    parent_before = parent.local.clone()
+    current = taper.readout(parent)
+    features = taper.executor.encode_state(parent, current.context)
+    selected, _ = taper.executor.recompute_selected(
+        parent, features, operators.operators, actions, torch.ones(2, dtype=torch.bool)
+    )
+    expected = candidates.local[
+        torch.arange(parent.local.shape[0]), actions
+    ]
+    torch.testing.assert_close(selected.local, expected)
+    torch.testing.assert_close(parent.local, parent_before)
+    assert selected.local.data_ptr() != parent.local.data_ptr()
+
+
+def test_st_path_keeps_live_k_graph_and_soft_surrogate_gradient() -> None:
+    taper = model().train()
+    original = taper.executor.enumerate
+    calls: list[tuple[int, bool]] = []
+
+    def observed(self, state, features, operators, **kwargs):
+        calls.append((operators.shape[1], torch.is_grad_enabled()))
+        return original(state, features, operators, **kwargs)
+
+    taper.executor.enumerate = MethodType(observed, taper.executor)
+    output = taper(
+        encoded_batch(),
+        RolloutConfig(max_steps=2, selection_mode="learned", straight_through=True),
+    )
+    assert calls == [(4, True), (4, True)]
+    assert output.trace.candidate_queries.requires_grad
+    output.final_query[:, 0].sum().backward()
+    assert taper.executor.film.weight.grad is not None
+    assert taper.utility.mlp[-1].weight.grad is not None

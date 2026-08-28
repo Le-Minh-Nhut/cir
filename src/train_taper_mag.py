@@ -22,8 +22,7 @@ from cache.taper_mag import FeatureSourcePolicy, FrozenVisionCache, stable_json_
 from datasets.common import CIRBatch, collate_cir_samples
 from datasets.fashioniq import (
     FashionIQDataset,
-    load_correction_dict,
-    validate_correction_policy,
+    resolve_fashioniq_correction_dicts,
 )
 from evaluation.fashioniq import (
     build_fashioniq_gallery,
@@ -40,6 +39,7 @@ from training.taper_mag_engine import (
     CurriculumStage,
     EngineConfig,
     TaperMAGTrainingEngine,
+    encode_policy_batch,
 )
 from training.taper_mag_diagnostics import summarize_training_diagnostics
 from training.taper_mag_optimizer import (
@@ -77,62 +77,62 @@ def load_config(path: Path) -> dict[str, Any]:
     return config
 
 
-def correction_dicts(annotation_root: Path) -> dict[str, dict[str, str]]:
-    return {
-        category: load_correction_dict(annotation_root / f"correction_dict_{category}.json")
-        for category in CATEGORIES
-    }
-
-
 def make_dataset(
-    config: dict[str, Any], split: str, categories: tuple[str, ...]
+    config: dict[str, Any],
+    split: str,
+    categories: tuple[str, ...],
+    correction_dicts: dict[str, dict[str, str]] | None,
 ) -> FashionIQDataset:
     annotation_root = Path(config["data"]["dataset_root"]) / "captions"
-    correction_policy = validate_correction_policy(config["data"]["correction_policy"])
-    corrections = correction_dicts(annotation_root) if correction_policy == "fashioniq" else None
     policy_key = "train_caption_policy" if split == "train" else "validation_caption_policy"
     return FashionIQDataset(
         annotation_root,
         split,
         categories,
         caption_policy=config["data"][policy_key],
-        correction_dicts=corrections,
+        correction_dicts=correction_dicts,
         seed=int(config["seed"]),
     )
 
 
-def policy_and_supervision(
+def build_policy_batch(
     batch: CIRBatch,
     cache: FrozenVisionCache,
     backbone: FGCLIP2BaseBackbone,
     device: torch.device,
-) -> tuple[PolicyBatch, SupervisionBatch]:
-    if any(target_id is None for target_id in batch.target_ids):
-        raise ValueError("Training/validation FashionIQ sample is missing target ID")
-    target_ids = tuple(str(target_id) for target_id in batch.target_ids)
+) -> PolicyBatch:
     reference_ids = tuple(batch.reference_ids)
     texts = tuple(batch.modification_texts)
     local, local_mask, shapes = cache.dense_by_ids(reference_ids)
     reference_global = cache.global_by_ids(reference_ids)
-    target_global = cache.global_by_ids(target_ids)
     tokenized = backbone.tokenize_texts(texts)
-    policy = PolicyBatch(
+    return PolicyBatch(
         reference_ids=reference_ids,
         modification_texts=texts,
-        reference_local=local.to(device),
+        reference_local=local.to(device).float(),
         reference_local_mask=local_mask.to(device),
-        reference_global=reference_global.to(device),
+        reference_global=reference_global.to(device).float(),
         text_input_ids=tokenized.input_ids.to(device),
         text_attention_mask=tokenized.attention_mask.to(device),
         text_content_mask=tokenized.content_mask.to(device),
         spatial_shapes=shapes.to(device),
     )
-    supervision = SupervisionBatch(
-        target_embedding=target_global.to(device),
+
+
+def build_supervision_batch(
+    batch: CIRBatch,
+    cache: FrozenVisionCache,
+    device: torch.device,
+) -> SupervisionBatch:
+    if any(target_id is None for target_id in batch.target_ids):
+        raise ValueError("Training/validation FashionIQ sample is missing target ID")
+    target_ids = tuple(str(target_id) for target_id in batch.target_ids)
+    target_global = cache.global_by_ids(target_ids)
+    return SupervisionBatch(
+        target_embedding=target_global.to(device).float(),
         target_ids=target_ids,
         positive_ids=tuple((target_id,) for target_id in target_ids),
     )
-    return policy, supervision
 
 
 def validate_cache(cache: FrozenVisionCache, backbone: FGCLIP2BaseBackbone, split: str) -> None:
@@ -151,7 +151,8 @@ def validate_cache(cache: FrozenVisionCache, backbone: FGCLIP2BaseBackbone, spli
             "split": split,
             "normalization": expected_normalization,
             "complete_split": True,
-            "image_count": len(cache.name_to_idx),
+            "cache_kind": "global" if expected_normalization == "L2" else "dense_reference",
+            "image_scope": "complete_split" if expected_normalization == "L2" else "reference_only",
         }
         actual = cache_manifest.__dict__ if hasattr(cache_manifest, "__dict__") else {
             field: getattr(cache_manifest, field) for field in expected
@@ -169,13 +170,14 @@ def validate_fashioniq(
     config: dict[str, Any],
     device: torch.device,
     stage: CurriculumStage,
+    correction_dicts: dict[str, dict[str, str]] | None,
 ) -> dict[str, float]:
     model.eval()
     backbone.eval()
     category_results: dict[str, dict[str, float]] = {}
     dataset_root = Path(config["data"]["dataset_root"])
     for category in CATEGORIES:
-        dataset = make_dataset(config, "val", (category,))
+        dataset = make_dataset(config, "val", (category,), correction_dicts)
         loader = DataLoader(
             dataset,
             batch_size=int(config["training"]["eval_batch_size"]),
@@ -194,17 +196,17 @@ def validate_fashioniq(
         scores: list[torch.Tensor] = []
         target_ids: list[str] = []
         for raw_batch in loader:
-            policy, _ = policy_and_supervision(raw_batch, cache, backbone, device)
-            encoded = TaperMAGTrainingEngine(
-                backbone, model, NegativeBank(hard_negatives=1)
-            ).encode_policy(policy)
-            if stage in {CurriculumStage.ACTOR_WARMUP, CurriculumStage.UTILITY_SHADOW}:
-                rollout = RolloutConfig(max_steps=1, selection_mode="uniform")
-            else:
-                rollout = RolloutConfig(
-                    max_steps=int(config["training"]["horizon"]), selection_mode="learned"
-                )
-            query = model(encoded, rollout).final_query.float()
+            policy = build_policy_batch(raw_batch, cache, backbone, device)
+            use_bf16 = device.type == "cuda" and config["runtime"]["precision"] == "bf16"
+            with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_bf16):
+                encoded = encode_policy_batch(backbone, policy)
+                if stage in {CurriculumStage.ACTOR_WARMUP, CurriculumStage.UTILITY_SHADOW}:
+                    rollout = RolloutConfig(max_steps=1, selection_mode="uniform")
+                else:
+                    rollout = RolloutConfig(
+                        max_steps=int(config["training"]["horizon"]), selection_mode="learned"
+                    )
+                query = model(encoded, rollout).final_query.float()
             scores.append((query @ gallery.T).cpu())
             target_ids.extend(str(target_id) for target_id in raw_batch.target_ids)
         category_results[category] = evaluate_fashioniq_category(
@@ -221,6 +223,21 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     seed_everything(int(config["seed"]))
+    correction_dicts = resolve_fashioniq_correction_dicts(
+        Path(config["data"]["dataset_root"]) / "captions",
+        str(config["data"]["correction_policy"]),
+    )
+    stage = CurriculumStage(config["training"]["stage"])
+    engine_config = EngineConfig(
+        stage=stage,
+        horizon=int(config["training"]["horizon"]),
+        step_cost=float(config["policy"]["step_cost"]),
+        retrieval_temperature=float(config["loss"]["retrieval_temperature"]),
+        utility_weight=float(config["loss"]["utility_weight"]),
+        oracle_mix=float(config["training"].get("oracle_mix", 0.0)),
+        straight_through=config["training"].get("straight_through"),
+    )
+    engine_config.validate()
     device = torch.device(
         config["runtime"]["device"]
         if config["runtime"]["device"] != "cuda" or torch.cuda.is_available()
@@ -228,6 +245,8 @@ def main() -> None:
     )
     text_cfg = TextTuningConfig(**config["backbone"]["text_tuning"])
     vision_cfg = VisionTuningConfig(**config["backbone"]["vision_tuning"])
+    if vision_cfg.mode != "frozen" or vision_cfg.num_unfrozen_blocks != 0:
+        raise ValueError("This branch requires vision_tuning.mode=frozen and num_unfrozen_blocks=0")
     FeatureSourcePolicy(
         text_encoder_trainable=text_cfg.mode != "frozen",
         vision_encoder_trainable=False,
@@ -273,7 +292,6 @@ def main() -> None:
         "val_dense": val_cache.dense_manifest.sha256,
     }
 
-    stage = CurriculumStage(config["training"]["stage"])
     if args.validate_only:
         if args.resume is None:
             raise ValueError("--validate-only requires --resume with a trained checkpoint")
@@ -283,10 +301,12 @@ def main() -> None:
             backbone=backbone,
             expected_manifest_hashes=manifest_hashes,
         )
-        metrics = validate_fashioniq(taper, backbone, val_cache, config, device, stage)
+        metrics = validate_fashioniq(
+            taper, backbone, val_cache, config, device, stage, correction_dicts
+        )
         print(json.dumps(metrics, indent=2, sort_keys=True))
         return
-    dataset: Dataset = make_dataset(config, "train", CATEGORIES)
+    dataset: Dataset = make_dataset(config, "train", CATEGORIES, correction_dicts)
     if args.max_train_samples is not None:
         if args.max_train_samples <= 0:
             raise ValueError("--max-train-samples must be positive")
@@ -322,14 +342,6 @@ def main() -> None:
         taper,
         bank,
         MarginalGainTeacher(float(config["teacher"]["retrieval_temperature"])),
-    )
-    engine_config = EngineConfig(
-        stage=stage,
-        horizon=int(config["training"]["horizon"]),
-        step_cost=float(config["policy"]["step_cost"]),
-        retrieval_temperature=float(config["loss"]["retrieval_temperature"]),
-        utility_weight=float(config["loss"]["utility_weight"]),
-        oracle_mix=float(config["training"].get("oracle_mix", 0.0)),
     )
     output_dir = Path(config["runtime"]["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -370,7 +382,8 @@ def main() -> None:
         backbone.train()
         epoch_loss = 0.0
         for micro_step, raw_batch in enumerate(loader):
-            policy, supervision = policy_and_supervision(raw_batch, train_cache, backbone, device)
+            policy = build_policy_batch(raw_batch, train_cache, backbone, device)
+            supervision = build_supervision_batch(raw_batch, train_cache, device)
             use_bf16 = device.type == "cuda" and config["runtime"]["precision"] == "bf16"
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_bf16):
                 result = engine.step(policy, supervision, engine_config)
@@ -390,7 +403,9 @@ def main() -> None:
                 scheduler.step()
                 optimizer.zero_grad(set_to_none=True)
                 global_step += 1
-        metrics = validate_fashioniq(taper, backbone, val_cache, config, device, stage)
+        metrics = validate_fashioniq(
+            taper, backbone, val_cache, config, device, stage, correction_dicts
+        )
         drift = TextDriftMonitor.measure(backbone, drift_snapshot)
         record = {
             "epoch": epoch,
