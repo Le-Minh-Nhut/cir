@@ -213,3 +213,112 @@ def test_policy_only_online_forward_needs_no_supervision_object() -> None:
     encoded = encode_policy_batch(fg, policy)
     output = taper(encoded, EngineConfig().rollout())
     assert output.final_query.shape == (2, 16)
+
+
+def _end_to_end_fixture():
+    fg = backbone()
+    taper = TaperMAG(
+        TaperMAGConfig(text_dim=16, vision_dim=16, retrieval_dim=16, dropout=0, max_steps=4)
+    )
+    tokenized = fg.tokenize_texts(["make it red", "add sleeves"])
+    policy = PolicyBatch(
+        reference_ids=("r0", "r1"),
+        modification_texts=("make it red", "add sleeves"),
+        reference_local=torch.randn(2, 5, 16),
+        reference_local_mask=torch.ones(2, 5, dtype=torch.bool),
+        reference_global=torch.nn.functional.normalize(torch.randn(2, 16), dim=-1),
+        text_input_ids=tokenized.input_ids,
+        text_attention_mask=tokenized.attention_mask,
+        text_content_mask=tokenized.content_mask,
+    )
+    supervision = SupervisionBatch(
+        target_embedding=torch.nn.functional.normalize(torch.randn(2, 16), dim=-1),
+        target_ids=("t0", "t1"),
+        positive_ids=(("t0",), ("t1",)),
+    )
+    bank = NegativeBank(torch.randn(4, 16), ("n0", "n1", "n2", "n3"), hard_negatives=3)
+    return fg, taper, policy, supervision, TaperMAGTrainingEngine(fg, taper, bank)
+
+
+def _gradient_sum(parameter: torch.nn.Parameter) -> float:
+    return 0.0 if parameter.grad is None else float(parameter.grad.abs().sum())
+
+
+def test_actor_warmup_terminal_retrieval_jointly_trains_entire_actor() -> None:
+    fg, taper, policy, supervision, engine = _end_to_end_fixture()
+    result = engine.step(
+        policy,
+        supervision,
+        EngineConfig(stage=CurriculumStage.ACTOR_WARMUP, horizon=1),
+    )
+    result.retrieval_loss.backward()
+    actor_parameters = {
+        "shared_queries": taper.operator_generator.text_reader.queries,
+        "text_reader": taper.operator_generator.text_reader.block.attention.in_proj_weight,
+        "edit_conditioning": taper.operator_generator.edit_conditioning.gate.weight,
+        "visual_grounding": taper.operator_generator.grounding.block.attention.in_proj_weight,
+        "operator_fusion": taper.operator_generator.fusion[0].weight,
+        "executor": taper.executor.film.weight,
+        "readout": taper.readout.retrieval_projection.weight,
+    }
+    assert all(_gradient_sum(parameter) > 0 for parameter in actor_parameters.values())
+    assert any(
+        _gradient_sum(parameter) > 0
+        for parameter in fg.model.text_model.encoder.layers[8].parameters()
+    )
+
+
+def test_critic_warmup_utility_loss_trains_full_critic_but_not_actor() -> None:
+    _, taper, policy, supervision, engine = _end_to_end_fixture()
+    result = engine.step(
+        policy,
+        supervision,
+        EngineConfig(stage=CurriculumStage.CRITIC_WARMUP, horizon=1),
+    )
+    result.utility_loss.backward()
+    assert any(
+        _gradient_sum(parameter) > 0
+        for parameter in taper.utility.history_projection.parameters()
+    )
+    assert _gradient_sum(taper.utility.mlp[-1].weight) > 0
+    actor_gradient = sum(
+        _gradient_sum(parameter)
+        for name, parameter in taper.named_parameters()
+        if not name.startswith("utility.")
+    )
+    assert actor_gradient == 0
+
+
+def test_st_terminal_retrieval_opens_controlled_policy_and_actor_gradients() -> None:
+    _, taper, policy, supervision, engine = _end_to_end_fixture()
+    result = engine.step(
+        policy,
+        supervision,
+        EngineConfig(
+            stage=CurriculumStage.ST_BRIDGE,
+            horizon=2,
+            straight_through=True,
+            rho_gate=0.25,
+            selection_temperature=0.7,
+        ),
+    )
+    result.retrieval_loss.backward()
+    assert _gradient_sum(taper.utility.mlp[-1].weight) > 0
+    assert _gradient_sum(taper.operator_generator.fusion[0].weight) > 0
+    assert _gradient_sum(taper.executor.film.weight) > 0
+    assert _gradient_sum(taper.readout.retrieval_projection.weight) > 0
+
+
+def test_hardening_has_no_selection_gradient_but_selected_actor_stays_trainable() -> None:
+    _, taper, policy, supervision, engine = _end_to_end_fixture()
+    result = engine.step(
+        policy,
+        supervision,
+        EngineConfig(stage=CurriculumStage.HARDEN, horizon=4),
+    )
+    result.retrieval_loss.backward()
+    utility_gradient = sum(_gradient_sum(parameter) for parameter in taper.utility.parameters())
+    assert utility_gradient == 0
+    assert _gradient_sum(taper.operator_generator.fusion[0].weight) > 0
+    assert _gradient_sum(taper.executor.film.weight) > 0
+    assert _gradient_sum(taper.readout.retrieval_projection.weight) > 0

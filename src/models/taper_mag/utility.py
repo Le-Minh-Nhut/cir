@@ -130,25 +130,38 @@ class TargetFreeUtilityCritic(nn.Module):
         *,
         step: int,
         max_steps: int,
+        detach_inputs: bool = False,
     ) -> Tensor:
-        num_queries = operators.operators.shape[1]
-        current_internal = current.internal[:, None, :].expand(-1, num_queries, -1)
-        mean_text = operators.text_reads.mean(dim=1, keepdim=True).expand(-1, num_queries, -1)
-        global_delta = candidate_readout.internal - current_internal
+        def actor_input(value: Tensor) -> Tensor:
+            return value.detach() if detach_inputs else value
+
+        operator_values = actor_input(operators.operators)
+        text_reads = actor_input(operators.text_reads)
+        visual_reads = actor_input(operators.visual_reads)
+        support_context = actor_input(candidates.support_context)
+        candidate_internal = actor_input(candidate_readout.internal)
+        current_value = actor_input(current.internal)
+        support = actor_input(candidates.support)
+        num_queries = operator_values.shape[1]
+        current_internal = current_value[:, None, :].expand(-1, num_queries, -1)
+        mean_text = text_reads.mean(dim=1, keepdim=True).expand(-1, num_queries, -1)
+        global_delta = candidate_internal - current_internal
         history_embedding = self.history_projection(
-            history.features(candidates.support, step=step, max_steps=max_steps)
+            history.features(support, step=step, max_steps=max_steps).detach()
+            if detach_inputs
+            else history.features(support, step=step, max_steps=max_steps)
         )
         return torch.cat(
             [
                 current_internal,
-                operators.operators,
-                operators.text_reads,
-                operators.visual_reads,
+                operator_values,
+                text_reads,
+                visual_reads,
                 mean_text,
-                candidates.support_context,
+                support_context,
                 global_delta,
-                operators.operators * candidates.support_context,
-                operators.text_reads * operators.visual_reads,
+                operator_values * support_context,
+                text_reads * visual_reads,
                 history_embedding,
             ],
             dim=-1,

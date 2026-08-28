@@ -49,11 +49,9 @@ loss:
   utility_weight: 1.0
 
 training:
-  # Advance manually only after the preceding stage's health gate passes.
-  stage: actor_warmup
-  horizon: 1
-  oracle_mix: 0.0
-  epochs: 8
+  curriculum_mode: canonical_v4
+  epochs: 60
+  max_optimizer_updates: 4260
   batch_size: 32
   eval_batch_size: 64
   gradient_accumulation: 8

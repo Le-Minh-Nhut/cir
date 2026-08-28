@@ -3,12 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import random
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import torch
 import yaml
 from torch.utils.data import DataLoader, Dataset, Subset
@@ -20,10 +18,7 @@ from backbones.fgclip2_base import (
 )
 from cache.taper_mag import FeatureSourcePolicy, FrozenVisionCache, stable_json_hash
 from datasets.common import CIRBatch, collate_cir_samples
-from datasets.fashioniq import (
-    FashionIQDataset,
-    resolve_fashioniq_correction_dicts,
-)
+from datasets.fashioniq import resolve_fashioniq_correction_dicts
 from evaluation.fashioniq import (
     build_fashioniq_gallery,
     evaluate_fashioniq_category,
@@ -33,6 +28,7 @@ from models.taper_mag.contracts import PolicyBatch, SupervisionBatch
 from models.taper_mag.model import TaperMAG, TaperMAGConfig
 from models.taper_mag.rollout import RolloutConfig
 from training.checkpointing import load_checkpoint, save_checkpoint
+from training.fashioniq_runtime import CATEGORIES, load_config, make_dataset, seed_everything
 from training.marginal_gain_teacher import MarginalGainTeacher
 from training.negative_bank import NegativeBank
 from training.taper_mag_engine import (
@@ -41,6 +37,7 @@ from training.taper_mag_engine import (
     TaperMAGTrainingEngine,
     encode_policy_batch,
 )
+from training.taper_mag_curriculum import CurriculumScheduler, CurriculumState
 from training.taper_mag_diagnostics import summarize_training_diagnostics
 from training.taper_mag_optimizer import (
     OptimizerConfig,
@@ -50,9 +47,6 @@ from training.taper_mag_optimizer import (
 from training.text_drift import TextDriftMonitor, text_block_gradient_norms
 
 
-CATEGORIES = ("dress", "shirt", "toptee")
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train TAPER-MAG V4 on FashionIQ")
     parser.add_argument("--config", type=Path, required=True)
@@ -60,39 +54,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-train-samples", type=int)
     parser.add_argument("--validate-only", action="store_true")
     return parser.parse_args()
-
-
-def seed_everything(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
-
-def load_config(path: Path) -> dict[str, Any]:
-    config = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if config.get("schema_version") != 1:
-        raise ValueError("Unsupported TAPER-MAG config schema")
-    return config
-
-
-def make_dataset(
-    config: dict[str, Any],
-    split: str,
-    categories: tuple[str, ...],
-    correction_dicts: dict[str, dict[str, str]] | None,
-) -> FashionIQDataset:
-    annotation_root = Path(config["data"]["dataset_root"]) / "captions"
-    policy_key = "train_caption_policy" if split == "train" else "validation_caption_policy"
-    return FashionIQDataset(
-        annotation_root,
-        split,
-        categories,
-        caption_policy=config["data"][policy_key],
-        correction_dicts=correction_dicts,
-        seed=int(config["seed"]),
-    )
 
 
 def build_policy_batch(
@@ -169,7 +130,7 @@ def validate_fashioniq(
     cache: FrozenVisionCache,
     config: dict[str, Any],
     device: torch.device,
-    stage: CurriculumStage,
+    curriculum: CurriculumState,
     correction_dicts: dict[str, dict[str, str]] | None,
 ) -> dict[str, float]:
     model.eval()
@@ -200,11 +161,18 @@ def validate_fashioniq(
             use_bf16 = device.type == "cuda" and config["runtime"]["precision"] == "bf16"
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_bf16):
                 encoded = encode_policy_batch(backbone, policy)
-                if stage in {CurriculumStage.ACTOR_WARMUP, CurriculumStage.UTILITY_SHADOW}:
+                if curriculum.phase in {
+                    CurriculumStage.ACTOR_WARMUP,
+                    CurriculumStage.UTILITY_SHADOW,
+                    CurriculumStage.CRITIC_WARMUP,
+                }:
                     rollout = RolloutConfig(max_steps=1, selection_mode="uniform")
                 else:
                     rollout = RolloutConfig(
-                        max_steps=int(config["training"]["horizon"]), selection_mode="learned"
+                        max_steps=curriculum.horizon,
+                        selection_mode="learned",
+                        straight_through=False,
+                        exploration_probability=0.0,
                     )
                 query = model(encoded, rollout).final_query.float()
             scores.append((query @ gallery.T).cpu())
@@ -219,6 +187,44 @@ def validate_fashioniq(
     return metrics
 
 
+def engine_config_for(
+    curriculum: CurriculumState,
+    config: dict[str, Any],
+) -> EngineConfig:
+    result = EngineConfig(
+        stage=curriculum.phase,
+        horizon=curriculum.horizon,
+        step_cost=curriculum.step_cost,
+        retrieval_temperature=float(config["loss"]["retrieval_temperature"]),
+        utility_weight=float(config["loss"]["utility_weight"]),
+        oracle_mix=curriculum.oracle_mix,
+        straight_through=curriculum.straight_through,
+        selection_temperature=curriculum.selection_temperature,
+        rho_gate=curriculum.rho_gate,
+        exploration_probability=curriculum.exploration_probability,
+    )
+    result.validate()
+    return result
+
+
+def verify_resume_schedule_config(
+    payload: dict[str, Any], current_config: dict[str, Any]
+) -> None:
+    saved_training = payload["config"]["training"]
+    current_training = current_config["training"]
+    keys = ("curriculum_mode", "epochs", "max_optimizer_updates")
+    differences = {
+        key: {
+            "saved": saved_training.get(key),
+            "current": current_training.get(key),
+        }
+        for key in keys
+        if saved_training.get(key) != current_training.get(key)
+    }
+    if differences:
+        raise RuntimeError(f"Resume schedule config mismatch: {differences}")
+
+
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
@@ -227,17 +233,15 @@ def main() -> None:
         Path(config["data"]["dataset_root"]) / "captions",
         str(config["data"]["correction_policy"]),
     )
-    stage = CurriculumStage(config["training"]["stage"])
-    engine_config = EngineConfig(
-        stage=stage,
-        horizon=int(config["training"]["horizon"]),
-        step_cost=float(config["policy"]["step_cost"]),
-        retrieval_temperature=float(config["loss"]["retrieval_temperature"]),
-        utility_weight=float(config["loss"]["utility_weight"]),
-        oracle_mix=float(config["training"].get("oracle_mix", 0.0)),
-        straight_through=config["training"].get("straight_through"),
+    curriculum_scheduler = CurriculumScheduler.from_config(
+        config["training"], step_cost=float(config["policy"]["step_cost"])
     )
-    engine_config.validate()
+    configured_epochs = int(config["training"]["epochs"])
+    if curriculum_scheduler.mode == "canonical_v4" and configured_epochs != 60:
+        raise ValueError("canonical_v4 requires training.epochs=60")
+    validation_epochs = range(1, 61) if curriculum_scheduler.mode == "canonical_v4" else (1,)
+    for validation_epoch in validation_epochs:
+        engine_config_for(curriculum_scheduler.state_for_epoch(validation_epoch), config)
     device = torch.device(
         config["runtime"]["device"]
         if config["runtime"]["device"] != "cuda" or torch.cuda.is_available()
@@ -270,7 +274,7 @@ def main() -> None:
             retrieval_dim=backbone.contract.retrieval_dim,
             d_model=int(config["model"]["d_model"]),
             num_queries=int(config["model"]["num_queries"]),
-            max_steps=int(config["training"]["horizon"]),
+            max_steps=int(config["policy"]["max_steps"]),
         )
     ).to(device)
     print(format_parameter_report(backbone, taper))
@@ -295,14 +299,18 @@ def main() -> None:
     if args.validate_only:
         if args.resume is None:
             raise ValueError("--validate-only requires --resume with a trained checkpoint")
-        load_checkpoint(
+        payload = load_checkpoint(
             args.resume,
             model=taper,
             backbone=backbone,
             expected_manifest_hashes=manifest_hashes,
         )
+        saved_epoch = int(payload["epoch"]) + 1
+        verify_resume_schedule_config(payload, config)
+        curriculum_scheduler.verify_checkpoint(saved_epoch, payload["curriculum_state"])
+        saved_curriculum = curriculum_scheduler.state_for_epoch(saved_epoch)
         metrics = validate_fashioniq(
-            taper, backbone, val_cache, config, device, stage, correction_dicts
+            taper, backbone, val_cache, config, device, saved_curriculum, correction_dicts
         )
         print(json.dumps(metrics, indent=2, sort_keys=True))
         return
@@ -322,7 +330,14 @@ def main() -> None:
     optimizer = build_optimizer(taper, backbone, OptimizerConfig(**config["optimizer"]))
     accumulation = int(config["training"]["gradient_accumulation"])
     epochs = int(config["training"]["epochs"])
-    updates = max(1, math.ceil(len(loader) / accumulation) * epochs)
+    configured_max = config["training"].get("max_optimizer_updates")
+    updates = (
+        int(configured_max)
+        if configured_max is not None
+        else max(1, math.ceil(len(loader) / accumulation) * epochs)
+    )
+    if updates <= 0:
+        raise ValueError("max_optimizer_updates must be positive")
     warmup = max(1, round(0.05 * updates))
 
     def schedule(step: int) -> float:
@@ -368,8 +383,12 @@ def main() -> None:
             scheduler=scheduler,
             expected_manifest_hashes=manifest_hashes,
         )
-        if payload["stage"] != stage.value:
-            raise RuntimeError("Resume checkpoint stage differs from resolved config")
+        saved_epoch = int(payload["epoch"]) + 1
+        verify_resume_schedule_config(payload, config)
+        curriculum_scheduler.verify_checkpoint(saved_epoch, payload["curriculum_state"])
+        saved_curriculum = curriculum_scheduler.state_for_epoch(saved_epoch)
+        if payload["stage"] != saved_curriculum.phase.value:
+            raise RuntimeError("Resume checkpoint stage differs from resolved curriculum")
         start_epoch = int(payload["epoch"]) + 1
         global_step = int(payload["global_step"])
         best_metrics = dict(payload["best_metrics"])
@@ -378,10 +397,14 @@ def main() -> None:
     last_gradient_norms: dict[str, float] = {}
     last_diagnostics: dict[str, float] = {}
     for epoch in range(start_epoch, epochs):
+        curriculum = curriculum_scheduler.state_for_epoch(epoch + 1)
+        engine_config = engine_config_for(curriculum, config)
         taper.train()
         backbone.train()
         epoch_loss = 0.0
         for micro_step, raw_batch in enumerate(loader):
+            if global_step >= updates:
+                break
             policy = build_policy_batch(raw_batch, train_cache, backbone, device)
             supervision = build_supervision_batch(raw_batch, train_cache, device)
             use_bf16 = device.type == "cuda" and config["runtime"]["precision"] == "bf16"
@@ -404,13 +427,19 @@ def main() -> None:
                 optimizer.zero_grad(set_to_none=True)
                 global_step += 1
         metrics = validate_fashioniq(
-            taper, backbone, val_cache, config, device, stage, correction_dicts
+            taper, backbone, val_cache, config, device, curriculum, correction_dicts
         )
         drift = TextDriftMonitor.measure(backbone, drift_snapshot)
         record = {
-            "epoch": epoch,
+            "epoch": epoch + 1,
             "global_step": global_step,
-            "stage": stage.value,
+            "stage": curriculum.phase.value,
+            "horizon": curriculum.horizon,
+            "oracle_mix": curriculum.oracle_mix,
+            "straight_through": curriculum.straight_through,
+            "selection_temperature": curriculum.selection_temperature,
+            "rho_gate": curriculum.rho_gate,
+            "exploration_probability": curriculum.exploration_probability,
             "train_loss": epoch_loss / max(len(loader), 1),
             **metrics,
             **drift,
@@ -434,16 +463,14 @@ def main() -> None:
                 scheduler=scheduler,
                 epoch=epoch,
                 global_step=global_step,
-                stage=stage.value,
-                curriculum_state={
-                    "horizon": engine_config.horizon,
-                    "oracle_mix": engine_config.oracle_mix,
-                    "step_cost": engine_config.step_cost,
-                },
+                stage=curriculum.phase.value,
+                curriculum_state=curriculum.checkpoint_dict(),
                 resolved_config=config,
                 manifest_hashes=manifest_hashes,
                 best_metrics=best_metrics,
             )
+        if global_step >= updates:
+            break
 
 
 if __name__ == "__main__":

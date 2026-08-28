@@ -24,6 +24,7 @@ class CurriculumStage(str, Enum):
     CRITIC_WARMUP = "critic_warmup"
     DAGGER_T2 = "dagger_t2"
     ST_BRIDGE = "st_bridge"
+    PREDICTED_T4 = "predicted_t4"
     HARDEN = "harden"
 
 
@@ -36,6 +37,9 @@ class EngineConfig:
     utility_weight: float = 1.0
     oracle_mix: float = 0.0
     straight_through: bool | None = None
+    selection_temperature: float = 1.0
+    rho_gate: float = 0.0
+    exploration_probability: float = 0.0
 
     def validate(self) -> None:
         if not 1 <= self.horizon <= 4:
@@ -46,6 +50,12 @@ class EngineConfig:
             raise ValueError("utility_weight must be non-negative")
         if not 0 <= self.oracle_mix <= 1:
             raise ValueError("oracle_mix must be in [0,1]")
+        if self.selection_temperature <= 0:
+            raise ValueError("selection_temperature must be positive")
+        if not 0 <= self.rho_gate <= 1:
+            raise ValueError("rho_gate must be in [0,1]")
+        if not 0 <= self.exploration_probability <= 1:
+            raise ValueError("exploration_probability must be in [0,1]")
         one_step = {
             CurriculumStage.ACTOR_WARMUP,
             CurriculumStage.UTILITY_SHADOW,
@@ -57,13 +67,17 @@ class EngineConfig:
             raise ValueError("dagger_t2 requires horizon=2")
         if self.stage == CurriculumStage.ST_BRIDGE and self.horizon < 2:
             raise ValueError("st_bridge requires horizon>=2")
-        if self.stage != CurriculumStage.DAGGER_T2 and self.oracle_mix != 0:
+        if self.stage == CurriculumStage.PREDICTED_T4 and self.horizon != 4:
+            raise ValueError("predicted_t4 requires horizon=4")
+        if self.stage not in {CurriculumStage.DAGGER_T2, CurriculumStage.ST_BRIDGE} and self.oracle_mix != 0:
             raise ValueError(f"{self.stage.value} requires oracle_mix=0")
         expected_st = self.stage == CurriculumStage.ST_BRIDGE
         if self.straight_through is not None and self.straight_through != expected_st:
             raise ValueError(
                 f"{self.stage.value} requires straight_through={str(expected_st).lower()}"
             )
+        if self.exploration_probability > 0 and self.stage != CurriculumStage.PREDICTED_T4:
+            raise ValueError("top-2 exploration is allowed only in predicted_t4")
 
     def rollout(self) -> RolloutConfig:
         self.validate()
@@ -77,10 +91,20 @@ class EngineConfig:
                 selection_mode="learned",
                 straight_through=self.stage == CurriculumStage.ST_BRIDGE,
                 step_cost=self.step_cost,
+                selection_temperature=self.selection_temperature,
+                rho_gate=self.rho_gate,
+                exploration_probability=self.exploration_probability,
             )
         if self.stage == CurriculumStage.HARDEN:
-            if result.selection_mode != "learned" or result.straight_through or self.oracle_mix != 0:
-                raise AssertionError("HARDEN must be learned hard rollout without ST/oracle routing")
+            if (
+                result.selection_mode != "learned"
+                or result.straight_through
+                or self.oracle_mix != 0
+                or result.exploration_probability != 0
+            ):
+                raise AssertionError(
+                    "HARDEN must be learned hard rollout without ST/oracle/exploration"
+                )
         return result
 
 
@@ -141,7 +165,7 @@ class TaperMAGTrainingEngine:
         config.validate()
         encoded = self.encode_policy(policy)
         action_selector = None
-        if config.stage == CurriculumStage.DAGGER_T2 and config.oracle_mix > 0:
+        if config.stage in {CurriculumStage.DAGGER_T2, CurriculumStage.ST_BRIDGE} and config.oracle_mix > 0:
             def dagger_selector(
                 step: int,
                 current_query: Tensor,

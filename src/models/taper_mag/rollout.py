@@ -17,6 +17,8 @@ class RolloutConfig:
     selection_mode: SelectionMode = "learned"
     straight_through: bool = False
     selection_temperature: float = 1.0
+    rho_gate: float = 0.0
+    exploration_probability: float = 0.0
 
     def validate(self) -> None:
         if self.min_steps != 1:
@@ -29,6 +31,14 @@ class RolloutConfig:
             raise ValueError("Straight-through selection is defined only for learned rollout")
         if self.selection_temperature <= 0:
             raise ValueError("selection_temperature must be positive")
+        if not 0 <= self.rho_gate <= 1:
+            raise ValueError("rho_gate must be in [0,1]")
+        if not 0 <= self.exploration_probability <= 1:
+            raise ValueError("exploration_probability must be in [0,1]")
+        if self.exploration_probability > 0 and (
+            self.selection_mode != "learned" or self.straight_through
+        ):
+            raise ValueError("Exploration requires learned hard non-ST rollout")
 
 
 @dataclass(frozen=True, slots=True)

@@ -99,10 +99,9 @@ class TaperMAG(nn.Module):
             history,
             step=step,
             max_steps=max_steps,
+            detach_inputs=detach_utility_inputs,
         )
-        predicted_gain = self.utility(
-            utility_features, detach_inputs=detach_utility_inputs
-        )
+        predicted_gain = self.utility(utility_features, detach_inputs=False)
         return current, candidates, candidate_readout, predicted_gain
 
     def preview_detached_actor(
@@ -129,10 +128,9 @@ class TaperMAG(nn.Module):
             history,
             step=step,
             max_steps=max_steps,
+            detach_inputs=detach_utility_inputs,
         )
-        predicted_gain = self.utility(
-            utility_features, detach_inputs=detach_utility_inputs
-        )
+        predicted_gain = self.utility(utility_features, detach_inputs=False)
         return current, candidates, candidate_readout, predicted_gain
 
     def forward(
@@ -250,6 +248,12 @@ class TaperMAG(nn.Module):
                 execute_mask = active_before
             else:
                 actions = selection_values.argmax(dim=-1)
+                if self.training and rollout.exploration_probability > 0:
+                    top_two = selection_values.topk(k=2, dim=-1).indices
+                    explore = torch.rand(
+                        batch_size, device=state.local.device
+                    ) < rollout.exploration_probability
+                    actions = torch.where(explore & active_before, top_two[:, 1], actions)
                 actions = torch.where(
                     active_before,
                     actions,
@@ -257,8 +261,11 @@ class TaperMAG(nn.Module):
                 )
                 execute_mask = active_before & actions.ne(stop_index)
                 if rollout.straight_through:
+                    scaled_values = selection_values.detach() + rollout.rho_gate * (
+                        selection_values - selection_values.detach()
+                    )
                     probabilities = torch.softmax(
-                        selection_values / rollout.selection_temperature, dim=-1
+                        scaled_values / rollout.selection_temperature, dim=-1
                     )
                     hard = torch.nn.functional.one_hot(
                         actions, num_classes=stop_index + 1

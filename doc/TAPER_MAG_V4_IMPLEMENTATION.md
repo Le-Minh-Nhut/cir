@@ -35,9 +35,44 @@ the preceding health gate has been reviewed. Hard non-ST rollout previews all ca
 actor graph detached, then recomputes only the selected transition from the same parent with
 gradients. The ST bridge retains its live all-candidate surrogate.
 
-The same-backbone one-shot control is a separate model and entry point. It shares the pinned
-backbone, online text path, caches, caption/correction protocol, gallery space, terminal loss and
-evaluator; it is not imported into the TAPER graph.
+## Exact-same-backbone controls
+
+M0–M3 are parallel experiments, never curriculum stages and never imported into TAPER:
+
+| ID | Control | Inputs | Composer parameters | Optimizer updates |
+|---|---|---|---:|---:|
+| M0 | reference-only | normalized reference global | 0 | 0 |
+| M1 | text-only | online contextual content tokens | 592,128 | 4,260 |
+| M2 | normalized scalar-gated sum | reference global + online text | 592,129 | 4,260 |
+| M3 | gated MLP combiner | reference global + online text | 4,729,344 | 4,260 |
+
+M1–M3 use the same last-four-block text tuning, frozen vision, official global cache, caption and
+correction policy, bidirectional multi-positive InfoNCE, effective batch, AdamW family, validation
+evaluator and best-retrieval checkpoint rule as TAPER. M0 has no text input and no trainable
+parameters. M3 is one-shot and has no local state, candidate action, teacher, critic or STOP.
+
+The full pinned text-tuning stratum has 28,353,024 trainable parameters. Thus M3 has 33,082,368
+total trainable parameters; TAPER has 34,217,494 (4,348,163 actor, 1,516,307 utility, plus text).
+
+## Canonical V4 curriculum
+
+`training.curriculum_mode=canonical_v4` resolves centrally to:
+
+| Epoch | Phase | T | Oracle mix | ST | Temperature | rho_gate | Exploration |
+|---|---|---:|---:|---|---:|---:|---:|
+| 1–8 | actor warm-up | 1 | 0 | no | 1.0 | 0 | 0 |
+| 9–14 | critic warm-up | 1 | 0 | no | 1.0 | 0 | 0 |
+| 15–26 | DAgger | 2 | 0.8→0.3 | no | 1.0 | 0 | 0 |
+| 27–40 | ST bridge | 3 | 0.3→0 | yes | 1.0→0.5 | 0→0.25 | 0 |
+| 41–46 | predicted T4 | 4 | 0 | no | 0.5 | 0.25 | 0.05 |
+| 47–52 | predicted T4 decay | 4 | 0 | no | 0.5→0.25 | 0.25 | 0.05→0 |
+| 53–60 | harden | 4 | 0 | no | 0.25 | 0.25 (inactive without ST) | 0 |
+
+`rho_gate` implements V4 `grad_scale` only on ST utility weights. Upstream utility inputs remain
+detached (`rho_up=0`). Hard non-ST phases retain detached K-preview plus selected-only
+recomputation. The model and optimizer stream remain continuous; no actor module is frozen or
+trained as a sequential submodel. `curriculum_mode=manual` remains available for controlled debug
+runs.
 
 ## Entry points
 
@@ -45,6 +80,10 @@ evaluator; it is not imported into the TAPER graph.
 PYTHONPATH=src python src/precompute_taper_mag_vision.py --dataset-root data/fashionIQ_dataset --cache-root features --split train
 PYTHONPATH=src python src/precompute_taper_mag_vision.py --dataset-root data/fashionIQ_dataset --cache-root features --split val
 pytest -q
+PYTHONPATH=src python src/run_taper_control.py --config conf/taper_mag_v4_m0_reference_only.yaml
+PYTHONPATH=src python src/run_taper_control.py --config conf/taper_mag_v4_m1_text_only.yaml
+PYTHONPATH=src python src/run_taper_control.py --config conf/taper_mag_v4_m2_simple_sum.yaml
+PYTHONPATH=src python src/run_taper_control.py --config conf/taper_mag_v4_one_shot_control.yaml
 PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml
 PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml --max-train-samples 32
 PYTHONPATH=src python src/train.py --config conf/taper_mag_v4_base.yaml --resume runs/taper-mag-v4-fgclip2-base-last4/last.ckpt

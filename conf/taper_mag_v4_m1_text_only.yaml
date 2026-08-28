@@ -1,9 +1,6 @@
 schema_version: 1
-control:
-  id: M3
-  name: principal_one_shot_gated_mlp_combiner
+control: {id: M1, name: text_only}
 seed: 42
-
 data:
   dataset: fashioniq
   dataset_root: data/fashionIQ_dataset
@@ -13,7 +10,6 @@ data:
   correction_policy: fashioniq
   validation_protocol: fashioniq_original
   no_generated_data: true
-
 backbone:
   model_id: qihoo360/fg-clip2-base
   revision: 430fbc8a912c86fd4de601381b6245a0edab22f0
@@ -24,27 +20,16 @@ backbone:
     num_unfrozen_blocks: 4
     train_final_norm: true
     train_projection: false
-  vision_tuning:
-    mode: frozen
-    num_unfrozen_blocks: 0
-
-model:
-  variant: gated_mlp_combiner
-  hidden_dim: 768
-
-loss:
-  terminal: bidirectional_multipos_infonce
-  retrieval_temperature: 0.07
-
+  vision_tuning: {mode: frozen, num_unfrozen_blocks: 0}
+model: {variant: content_pool_projection}
+loss: {terminal: bidirectional_multipos_infonce, retrieval_temperature: 0.07}
 training:
   epochs: 60
-  # Exact matched cap shared with TAPER for 18,000 official triplets.
   max_optimizer_updates: 4260
   batch_size: 32
   eval_batch_size: 64
   gradient_accumulation: 8
   num_workers: 4
-
 optimizer:
   actor_lr: 0.0002
   text_lr: 0.000005
@@ -52,8 +37,7 @@ optimizer:
   betas: [0.9, 0.98]
   eps: 0.00000001
   gradient_clip: 1.0
-
 runtime:
   device: cuda
   precision: bf16
-  output_dir: runs/fgclip2-base-one-shot-last4
+  output_dir: runs/fgclip2-base-m1-text-only
