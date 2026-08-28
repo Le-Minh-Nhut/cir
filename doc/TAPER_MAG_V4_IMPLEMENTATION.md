@@ -60,8 +60,8 @@ total trainable parameters; TAPER has 34,217,494 (4,348,163 actor, 1,516,307 uti
 
 | Epoch | Phase | T | Oracle mix | ST | Temperature | rho_gate | Exploration |
 |---|---|---:|---:|---|---:|---:|---:|
-| 1–8 | actor warm-up | 1 | 0 | no | 1.0 | 0 | 0 |
-| 9–14 | critic warm-up | 1 | 0 | no | 1.0 | 0 | 0 |
+| 1–8 | actor warm-up (uniform candidate mixture) | 1 | 0 | no | 1.0 | 0 | 0 |
+| 9–14 | critic warm-up (utility-weighted soft mixture) | 1 | 0 | no | 1.0 | 0 | 0 |
 | 15–26 | DAgger | 2 | 0.8→0.3 | no | 1.0 | 0 | 0 |
 | 27–40 | ST bridge | 3 | 0.3→0 | yes | 1.0→0.5 | 0→0.25 | 0 |
 | 41–46 | predicted T4 | 4 | 0 | no | 0.5 | 0.25 | 0.05 |
@@ -73,6 +73,13 @@ detached (`rho_up=0`). Hard non-ST phases retain detached K-preview plus selecte
 recomputation. The model and optimizer stream remain continuous; no actor module is frozen or
 trained as a sequential submodel. `curriculum_mode=manual` remains available for controlled debug
 runs.
+
+The epoch ranges are reference boundaries, not automatic promotions. Canonical runs use
+`health_gate_mode=manual_approval`; each boundary fails loudly until its named gate is listed in
+`training.approved_health_gates`. `bypass_health_gates_for_smoke` is false by default and is only a
+non-scientific test override. Gate approvals are checkpointed and cannot be removed on resume.
+EMA is initialized from live TAPER plus trainable text weights at utility/critic warm-up, updated
+after each optimizer step with decay 0.999, and temporarily installed only for validation.
 
 ## Entry points
 

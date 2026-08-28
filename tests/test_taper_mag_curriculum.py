@@ -8,16 +8,24 @@ import pytest
 import torch
 import yaml
 
-from models.taper_mag.model import TaperMAG, TaperMAGConfig
+from models.taper_mag.model import TaperMAG, TaperMAGConfig, candidate_mixture
 from models.taper_mag.rollout import RolloutConfig
 from test_taper_mag_actor import encoded_batch
 from train_taper_mag import verify_resume_schedule_config
-from training.taper_mag_curriculum import CanonicalV4Curriculum, CurriculumScheduler
+from training.taper_mag_curriculum import (
+    CanonicalV4Curriculum,
+    CurriculumGateState,
+    CurriculumScheduler,
+)
 from training.taper_mag_engine import CurriculumStage, EngineConfig
 
 
 def test_exact_canonical_v4_epoch_boundaries() -> None:
-    schedule = CanonicalV4Curriculum()
+    schedule = CanonicalV4Curriculum(
+        gate_state=CurriculumGateState(
+            approved_transitions=CanonicalV4Curriculum.valid_gate_names
+        )
+    )
     expected = {
         1: (CurriculumStage.ACTOR_WARMUP, 1),
         8: (CurriculumStage.ACTOR_WARMUP, 1),
@@ -50,18 +58,56 @@ def test_exact_canonical_v4_epoch_boundaries() -> None:
     assert not harden.straight_through
     assert harden.oracle_mix == 0
     assert harden.exploration_probability == 0
+    assert schedule.state_for_epoch(1).selection_mode == "uniform"
+    assert schedule.state_for_epoch(9).selection_mode == "soft"
+
+
+def test_health_gate_boundary_requires_explicit_approval() -> None:
+    default = CanonicalV4Curriculum()
+    assert default.state_for_epoch(8).phase == CurriculumStage.ACTOR_WARMUP
+    with pytest.raises(RuntimeError, match="actor_warmup_passed"):
+        default.state_for_epoch(9)
+
+    approved = CanonicalV4Curriculum(
+        gate_state=CurriculumGateState(
+            approved_transitions=frozenset({"actor_warmup_passed"})
+        )
+    )
+    assert approved.state_for_epoch(9).phase == CurriculumStage.CRITIC_WARMUP
+
+
+def test_health_gate_smoke_bypass_is_explicit_and_default_is_enforced() -> None:
+    default = CurriculumScheduler.from_config(
+        {"curriculum_mode": "canonical_v4"}, step_cost=0.0
+    )
+    assert not default.gate_state.bypass_for_smoke
+    with pytest.raises(RuntimeError, match="non-scientific smoke run"):
+        default.state_for_epoch(60)
+    smoke = CurriculumScheduler.from_config(
+        {
+            "curriculum_mode": "canonical_v4",
+            "bypass_health_gates_for_smoke": True,
+        },
+        step_cost=0.0,
+    )
+    assert smoke.state_for_epoch(60).phase == CurriculumStage.HARDEN
 
 
 def test_curriculum_checkpoint_consistency_and_manual_mode() -> None:
     scheduler = CurriculumScheduler.from_config(
-        {"curriculum_mode": "canonical_v4"}, step_cost=0.1
+        {
+            "curriculum_mode": "canonical_v4",
+            "approved_health_gates": sorted(CanonicalV4Curriculum.valid_gate_names),
+        },
+        step_cost=0.1,
     )
     state = scheduler.state_for_epoch(27)
-    scheduler.verify_checkpoint(27, state.checkpoint_dict())
+    saved = scheduler.checkpoint_state(27)
+    scheduler.verify_checkpoint(27, saved)
     with pytest.raises(RuntimeError, match="curriculum state mismatch"):
-        scheduler.verify_checkpoint(
-            27, replace(state, selection_temperature=0.7).checkpoint_dict()
-        )
+        changed = dict(saved)
+        changed["schedule"] = replace(state, selection_temperature=0.7).checkpoint_dict()
+        scheduler.verify_checkpoint(27, changed)
     manual = CurriculumScheduler.from_config(
         {
             "curriculum_mode": "manual",
@@ -73,6 +119,27 @@ def test_curriculum_checkpoint_consistency_and_manual_mode() -> None:
         step_cost=0.0,
     ).state_for_epoch(999)
     assert manual.phase == CurriculumStage.HARDEN and manual.horizon == 4
+
+
+def test_gate_checkpoint_preserves_approvals_and_allows_explicit_new_approval() -> None:
+    actor = CurriculumScheduler.from_config(
+        {"curriculum_mode": "canonical_v4"}, step_cost=0.0
+    )
+    saved = actor.checkpoint_state(8)
+    assert saved["current_phase"] == "actor_warmup"
+    assert saved["next_allowed_phase"] == "actor_warmup"
+    resumed = CurriculumScheduler.from_config(
+        {
+            "curriculum_mode": "canonical_v4",
+            "approved_health_gates": ["actor_warmup_passed"],
+        },
+        step_cost=0.0,
+    )
+    resumed.verify_checkpoint(8, saved)
+    assert resumed.state_for_epoch(9).phase == CurriculumStage.CRITIC_WARMUP
+    approved_saved = resumed.checkpoint_state(9)
+    with pytest.raises(RuntimeError, match="removed a health-gate approval"):
+        actor.verify_checkpoint(9, approved_saved)
 
 
 def _model() -> TaperMAG:
@@ -148,7 +215,11 @@ def test_rho_gate_controls_only_st_selection_gradient() -> None:
 
 
 def test_stage_rollout_contracts_match_schedule_semantics() -> None:
-    schedule = CanonicalV4Curriculum()
+    schedule = CanonicalV4Curriculum(
+        gate_state=CurriculumGateState(
+            approved_transitions=CanonicalV4Curriculum.valid_gate_names
+        )
+    )
     for epoch in (1, 9, 15, 27, 41, 47, 53):
         state = schedule.state_for_epoch(epoch)
         config = EngineConfig(
@@ -164,6 +235,31 @@ def test_stage_rollout_contracts_match_schedule_semantics() -> None:
         assert rollout.max_steps == state.horizon
         assert rollout.straight_through == state.straight_through
         assert rollout.exploration_probability == state.exploration_probability
+    assert EngineConfig(
+        stage=CurriculumStage.ACTOR_WARMUP, horizon=1
+    ).rollout().selection_mode == "uniform"
+    assert EngineConfig(
+        stage=CurriculumStage.CRITIC_WARMUP, horizon=1
+    ).rollout().selection_mode == "soft"
+
+
+def test_soft_candidate_mixture_differs_from_uniform_and_is_end_to_end() -> None:
+    candidates = torch.tensor([[[[0.0]], [[1.0]], [[0.0]], [[0.0]]]], requires_grad=True)
+    values = torch.tensor([[0.0, 6.0, -1.0, -2.0]], requires_grad=True)
+    uniform, uniform_weights = candidate_mixture(
+        candidates, values, mode="uniform", temperature=1.0
+    )
+    soft, soft_weights = candidate_mixture(
+        candidates, values, mode="soft", temperature=1.0
+    )
+    torch.testing.assert_close(uniform_weights, torch.full_like(values, 0.25))
+    torch.testing.assert_close(soft_weights.sum(dim=-1), torch.ones(1))
+    assert torch.isfinite(soft_weights).all()
+    assert not torch.allclose(soft, uniform)
+    assert abs(float(soft.item()) - 1.0) < abs(float(uniform.item()) - 1.0)
+    soft.sum().backward()
+    assert values.grad is not None and values.grad.abs().sum() > 0
+    assert candidates.grad is not None and candidates.grad.abs().sum() > 0
 
 
 def test_main_config_enables_full_canonical_schedule_and_matched_budget() -> None:
@@ -172,6 +268,10 @@ def test_main_config_enables_full_canonical_schedule_and_matched_budget() -> Non
     assert config["training"]["curriculum_mode"] == "canonical_v4"
     assert config["training"]["epochs"] == 60
     assert config["training"]["max_optimizer_updates"] == 4260
+    assert config["training"]["health_gate_mode"] == "manual_approval"
+    assert config["training"]["approved_health_gates"] == []
+    assert config["training"]["bypass_health_gates_for_smoke"] is False
+    assert config["optimizer"]["ema_decay"] == pytest.approx(0.999)
 
 
 def test_resume_rejects_changed_curriculum_or_update_budget() -> None:

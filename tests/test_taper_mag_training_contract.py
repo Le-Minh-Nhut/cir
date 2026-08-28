@@ -289,6 +289,25 @@ def test_critic_warmup_utility_loss_trains_full_critic_but_not_actor() -> None:
     assert actor_gradient == 0
 
 
+def test_critic_warmup_soft_retrieval_jointly_trains_actor_and_selection() -> None:
+    fg, taper, policy, supervision, engine = _end_to_end_fixture()
+    result = engine.step(
+        policy,
+        supervision,
+        EngineConfig(stage=CurriculumStage.CRITIC_WARMUP, horizon=1),
+    )
+    result.retrieval_loss.backward()
+    assert _gradient_sum(taper.utility.mlp[-1].weight) > 0
+    assert _gradient_sum(taper.operator_generator.text_reader.queries) > 0
+    assert _gradient_sum(taper.operator_generator.fusion[0].weight) > 0
+    assert _gradient_sum(taper.executor.film.weight) > 0
+    assert _gradient_sum(taper.readout.retrieval_projection.weight) > 0
+    assert any(
+        _gradient_sum(parameter) > 0
+        for parameter in fg.model.text_model.encoder.layers[8].parameters()
+    )
+
+
 def test_st_terminal_retrieval_opens_controlled_policy_and_actor_gradients() -> None:
     _, taper, policy, supervision, engine = _end_to_end_fixture()
     result = engine.step(

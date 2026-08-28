@@ -15,6 +15,27 @@ from models.taper_mag.state import InputAdapters, LocalState, ProjectedInputs
 from models.taper_mag.utility import HistoryState, TargetFreeUtilityCritic, append_stop
 
 
+def candidate_mixture(
+    candidate_local: Tensor,
+    action_values: Tensor,
+    *,
+    mode: str,
+    temperature: float,
+) -> tuple[Tensor, Tensor]:
+    """Mix K real actions; STOP is intentionally absent from one-step mixtures."""
+    if candidate_local.ndim != 4 or action_values.shape != candidate_local.shape[:2]:
+        raise ValueError("candidate mixture expects [B,K,N,D] states and [B,K] values")
+    if mode == "uniform":
+        weights = torch.full_like(action_values, 1.0 / action_values.shape[-1])
+    elif mode == "soft":
+        if temperature <= 0:
+            raise ValueError("soft candidate-mixture temperature must be positive")
+        weights = torch.softmax(action_values / temperature, dim=-1)
+    else:
+        raise ValueError(f"candidate mixture does not support mode={mode}")
+    return torch.einsum("bk,bknd->bnd", weights, candidate_local), weights
+
+
 @dataclass(frozen=True, slots=True)
 class TaperMAGConfig:
     text_dim: int = 768
@@ -205,7 +226,8 @@ class TaperMAG(nn.Module):
         for step in range(rollout.max_steps):
             active_before = state.alive
             hard_two_pass = (
-                rollout.selection_mode != "uniform" and not rollout.straight_through
+                rollout.selection_mode not in {"uniform", "soft"}
+                and not rollout.straight_through
             )
             preview_fn = self.preview_detached_actor if hard_two_pass else self.preview
             current, candidates, candidate_readout, predicted_gain = preview_fn(
@@ -227,7 +249,10 @@ class TaperMAG(nn.Module):
             else:
                 selection_values = dynamic_values
 
-            if training_action_selector is not None and rollout.selection_mode != "uniform":
+            if training_action_selector is not None and rollout.selection_mode not in {
+                "uniform",
+                "soft",
+            }:
                 selection_values = training_action_selector(
                     step,
                     current.query,
@@ -238,9 +263,15 @@ class TaperMAG(nn.Module):
                 if selection_values.shape != dynamic_values.shape:
                     raise ValueError("Training action selector must return [B,K+1] values")
 
-            if rollout.selection_mode == "uniform":
-                actions = torch.zeros(batch_size, dtype=torch.long, device=state.local.device)
-                mixed_local = candidates.local.mean(dim=1)
+            if rollout.selection_mode in {"uniform", "soft"}:
+                real_action_values = predicted_gain - rollout.step_cost
+                mixed_local, mixture_weights = candidate_mixture(
+                    candidates.local,
+                    real_action_values,
+                    mode=rollout.selection_mode,
+                    temperature=rollout.selection_temperature,
+                )
+                actions = mixture_weights.argmax(dim=-1)
                 state = state.with_local(
                     torch.where(active_before[:, None, None], mixed_local, state.local),
                     alive=active_before,

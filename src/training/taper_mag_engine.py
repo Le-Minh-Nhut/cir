@@ -84,7 +84,12 @@ class EngineConfig:
         if self.stage in {CurriculumStage.ACTOR_WARMUP, CurriculumStage.UTILITY_SHADOW}:
             result = RolloutConfig(max_steps=1, selection_mode="uniform", step_cost=self.step_cost)
         elif self.stage == CurriculumStage.CRITIC_WARMUP:
-            result = RolloutConfig(max_steps=1, selection_mode="uniform", step_cost=self.step_cost)
+            result = RolloutConfig(
+                max_steps=1,
+                selection_mode="soft",
+                step_cost=self.step_cost,
+                selection_temperature=self.selection_temperature,
+            )
         else:
             result = RolloutConfig(
                 max_steps=self.horizon,

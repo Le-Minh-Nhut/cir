@@ -18,6 +18,7 @@ class OptimizerConfig:
     betas: tuple[float, float] = (0.9, 0.98)
     eps: float = 1e-8
     gradient_clip: float = 1.0
+    ema_decay: float = 0.999
 
 
 def _uses_weight_decay(name: str, parameter: nn.Parameter) -> bool:

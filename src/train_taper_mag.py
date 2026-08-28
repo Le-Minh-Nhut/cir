@@ -28,6 +28,7 @@ from models.taper_mag.contracts import PolicyBatch, SupervisionBatch
 from models.taper_mag.model import TaperMAG, TaperMAGConfig
 from models.taper_mag.rollout import RolloutConfig
 from training.checkpointing import load_checkpoint, save_checkpoint
+from training.ema import ModelEMA, ema_required_for_phase
 from training.fashioniq_runtime import CATEGORIES, load_config, make_dataset, seed_everything
 from training.marginal_gain_teacher import MarginalGainTeacher
 from training.negative_bank import NegativeBank
@@ -164,9 +165,14 @@ def validate_fashioniq(
                 if curriculum.phase in {
                     CurriculumStage.ACTOR_WARMUP,
                     CurriculumStage.UTILITY_SHADOW,
-                    CurriculumStage.CRITIC_WARMUP,
                 }:
                     rollout = RolloutConfig(max_steps=1, selection_mode="uniform")
+                elif curriculum.phase == CurriculumStage.CRITIC_WARMUP:
+                    rollout = RolloutConfig(
+                        max_steps=1,
+                        selection_mode="soft",
+                        selection_temperature=curriculum.selection_temperature,
+                    )
                 else:
                     rollout = RolloutConfig(
                         max_steps=curriculum.horizon,
@@ -212,7 +218,13 @@ def verify_resume_schedule_config(
 ) -> None:
     saved_training = payload["config"]["training"]
     current_training = current_config["training"]
-    keys = ("curriculum_mode", "epochs", "max_optimizer_updates")
+    keys = (
+        "curriculum_mode",
+        "epochs",
+        "max_optimizer_updates",
+        "health_gate_mode",
+        "bypass_health_gates_for_smoke",
+    )
     differences = {
         key: {
             "saved": saved_training.get(key),
@@ -239,9 +251,7 @@ def main() -> None:
     configured_epochs = int(config["training"]["epochs"])
     if curriculum_scheduler.mode == "canonical_v4" and configured_epochs != 60:
         raise ValueError("canonical_v4 requires training.epochs=60")
-    validation_epochs = range(1, 61) if curriculum_scheduler.mode == "canonical_v4" else (1,)
-    for validation_epoch in validation_epochs:
-        engine_config_for(curriculum_scheduler.state_for_epoch(validation_epoch), config)
+    engine_config_for(curriculum_scheduler.state_for_epoch(1), config)
     device = torch.device(
         config["runtime"]["device"]
         if config["runtime"]["device"] != "cuda" or torch.cuda.is_available()
@@ -277,6 +287,7 @@ def main() -> None:
             max_steps=int(config["policy"]["max_steps"]),
         )
     ).to(device)
+    ema = ModelEMA(decay=float(config["optimizer"]["ema_decay"]))
     print(format_parameter_report(backbone, taper))
 
     cache_base = (
@@ -309,9 +320,16 @@ def main() -> None:
         verify_resume_schedule_config(payload, config)
         curriculum_scheduler.verify_checkpoint(saved_epoch, payload["curriculum_state"])
         saved_curriculum = curriculum_scheduler.state_for_epoch(saved_epoch)
-        metrics = validate_fashioniq(
-            taper, backbone, val_cache, config, device, saved_curriculum, correction_dicts
+        ema.load_state_dict(
+            payload.get("ema"),
+            taper,
+            backbone.model,
+            expected_active=ema_required_for_phase(saved_curriculum.phase.value),
         )
+        with ema.average_parameters(taper, backbone.model):
+            metrics = validate_fashioniq(
+                taper, backbone, val_cache, config, device, saved_curriculum, correction_dicts
+            )
         print(json.dumps(metrics, indent=2, sort_keys=True))
         return
     dataset: Dataset = make_dataset(config, "train", CATEGORIES, correction_dicts)
@@ -392,6 +410,12 @@ def main() -> None:
         start_epoch = int(payload["epoch"]) + 1
         global_step = int(payload["global_step"])
         best_metrics = dict(payload["best_metrics"])
+        ema.load_state_dict(
+            payload.get("ema"),
+            taper,
+            backbone.model,
+            expected_active=ema_required_for_phase(saved_curriculum.phase.value),
+        )
 
     optimizer.zero_grad(set_to_none=True)
     last_gradient_norms: dict[str, float] = {}
@@ -399,6 +423,8 @@ def main() -> None:
     for epoch in range(start_epoch, epochs):
         curriculum = curriculum_scheduler.state_for_epoch(epoch + 1)
         engine_config = engine_config_for(curriculum, config)
+        if ema_required_for_phase(curriculum.phase.value) and not ema.active:
+            ema.activate(taper, backbone.model)
         taper.train()
         backbone.train()
         epoch_loss = 0.0
@@ -424,11 +450,14 @@ def main() -> None:
                 last_gradient_norms = text_block_gradient_norms(backbone)
                 optimizer.step()
                 scheduler.step()
+                if ema.active:
+                    ema.update(taper, backbone.model)
                 optimizer.zero_grad(set_to_none=True)
                 global_step += 1
-        metrics = validate_fashioniq(
-            taper, backbone, val_cache, config, device, curriculum, correction_dicts
-        )
+        with ema.average_parameters(taper, backbone.model):
+            metrics = validate_fashioniq(
+                taper, backbone, val_cache, config, device, curriculum, correction_dicts
+            )
         drift = TextDriftMonitor.measure(backbone, drift_snapshot)
         record = {
             "epoch": epoch + 1,
@@ -440,6 +469,8 @@ def main() -> None:
             "selection_temperature": curriculum.selection_temperature,
             "rho_gate": curriculum.rho_gate,
             "exploration_probability": curriculum.exploration_probability,
+            "ema_active": ema.active,
+            "ema_updates": ema.num_updates,
             "train_loss": epoch_loss / max(len(loader), 1),
             **metrics,
             **drift,
@@ -464,10 +495,11 @@ def main() -> None:
                 epoch=epoch,
                 global_step=global_step,
                 stage=curriculum.phase.value,
-                curriculum_state=curriculum.checkpoint_dict(),
+                curriculum_state=curriculum_scheduler.checkpoint_state(epoch + 1),
                 resolved_config=config,
                 manifest_hashes=manifest_hashes,
                 best_metrics=best_metrics,
+                ema_state=ema.state_dict(),
             )
         if global_step >= updates:
             break
