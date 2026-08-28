@@ -10,6 +10,7 @@ from typing import Any
 import torch
 import yaml
 from torch.utils.data import DataLoader, Dataset, Subset
+from tqdm.auto import tqdm
 
 from backbones.fgclip2_base import (
     FGCLIP2BaseBackbone,
@@ -68,6 +69,7 @@ from training.taper_mag_reports import (
     sampled_policy_trace_records,
     static_firewall_report,
 )
+from training.progress import training_progress_description, training_progress_postfix
 from training.run_manifest import build_run_manifest, write_run_manifest
 from training.text_drift import TextDriftMonitor, text_block_gradient_norms
 
@@ -81,6 +83,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--teacher-shadow-audit", action="store_true")
     parser.add_argument("--profile-runtime", action="store_true")
     parser.add_argument("--audit-samples", type=int)
+    parser.add_argument("--no-progress", action="store_true")
     return parser.parse_args()
 
 
@@ -290,6 +293,7 @@ def validate_functional_controls(
     dataset_root = Path(config["data"]["dataset_root"])
 
     for category in CATEGORIES:
+        tqdm.write(f"Functional audit: {category}")
         full_dataset = make_dataset(config, "val", (category,), correction_dicts)
         audit_dataset = Subset(
             full_dataset,
@@ -797,6 +801,7 @@ def main() -> None:
             collate_fn=collate_cir_samples,
         )
         if args.profile_runtime:
+            tqdm.write("Running runtime profiler...")
             raw_batch = next(iter(audit_loader))
             policy = build_policy_batch(raw_batch, train_cache, backbone, device)
             supervision = build_supervision_batch(raw_batch, train_cache, device)
@@ -814,6 +819,7 @@ def main() -> None:
             print(json.dumps(report, indent=2, sort_keys=True))
             return
 
+        tqdm.write(f"Running teacher-shadow audit: {len(audit_dataset)} samples")
         with ema.average_parameters(taper, backbone.model):
             taper.eval()
             backbone.eval()
@@ -974,7 +980,19 @@ def main() -> None:
             diagnostics_config.get("sampled_policy_traces_per_epoch", 8)
         )
         epoch_trace_records: list[dict[str, Any]] = []
-        for micro_step, raw_batch in enumerate(loader):
+        progress = tqdm(
+            loader,
+            desc=training_progress_description(
+                epoch + 1,
+                epochs,
+                curriculum.phase.value,
+                curriculum.horizon,
+            ),
+            dynamic_ncols=True,
+            disable=args.no_progress,
+            unit="batch",
+        )
+        for micro_step, raw_batch in enumerate(progress):
             if global_step >= updates:
                 break
             policy = build_policy_batch(raw_batch, train_cache, backbone, device)
@@ -1029,6 +1047,19 @@ def main() -> None:
                     ema.update(taper, backbone.model)
                 optimizer.zero_grad(set_to_none=True)
                 global_step += 1
+            progress.set_postfix(
+                training_progress_postfix(
+                    running_loss=epoch_loss,
+                    processed_batches=micro_step + 1,
+                    global_step=global_step,
+                    max_updates=updates,
+                    learning_rate=float(optimizer.param_groups[0]["lr"]),
+                    micro_step=micro_step,
+                    accumulation=accumulation,
+                ),
+                refresh=True,
+            )
+        progress.close()
         last_diagnostics, policy_health = epoch_health.report()
         gradient_report = gradient_health.report()
         if epoch_trace_records:
@@ -1039,6 +1070,10 @@ def main() -> None:
         dynamic_policy_report: dict[str, Any]
         repeat_report: dict[str, Any]
         audit_policy_health: dict[str, Any]
+        tqdm.write(
+            f"[Epoch {epoch + 1}] training finished — "
+            "running FashionIQ validation + functional audit..."
+        )
         with ema.average_parameters(taper, backbone.model):
             metrics = validate_fashioniq(
                 taper, backbone, val_cache, config, device, curriculum, correction_dicts
@@ -1073,6 +1108,11 @@ def main() -> None:
                 "local_action_diagnostics": combined_dynamic,
                 "sample_count": functional_retrieval["sample_count"],
             }
+        tqdm.write(
+            f"[Epoch {epoch + 1}] val MeanR={metrics['mean_recall']:.2f} "
+            f"R@10={metrics['recall_at_10']:.2f} "
+            f"R@50={metrics['recall_at_50']:.2f}"
+        )
         drift = TextDriftMonitor.measure(backbone, drift_snapshot)
         functional_health = build_functional_health_report(
             epoch=epoch + 1,
