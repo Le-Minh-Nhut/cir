@@ -11,6 +11,7 @@ from torch.optim import AdamW, Optimizer
 from models.taper_mag.contracts import PolicyBatch, SupervisionBatch
 from models.taper_mag.rollout import RolloutConfig
 from models.taper_mag.utility import HistoryState
+from training.mixed_precision import runtime_autocast
 from training.taper_mag_engine import EngineConfig, TaperMAGTrainingEngine
 
 
@@ -38,6 +39,7 @@ def profile_taper_runtime(
     *,
     optimizer: Optimizer | None = None,
     repeats: int = 3,
+    precision: str = "fp32",
 ) -> dict[str, Any]:
     """Read-only profile: no optimizer step, no persistent weight/state mutation."""
     if repeats <= 0:
@@ -50,9 +52,18 @@ def profile_taper_runtime(
         torch.cuda.reset_peak_memory_stats(device)
     model.eval()
     backbone.eval()
+
+    def model_runtime(function: Callable[[], Any]) -> Any:
+        with runtime_autocast(device, precision):
+            return function()
+
     try:
-        encoded, text_ms = _timed(device, lambda: engine.encode_policy(policy))
-        prepared, actor_ms = _timed(device, lambda: model.prepare(encoded))
+        encoded, text_ms = _timed(
+            device, lambda: model_runtime(lambda: engine.encode_policy(policy))
+        )
+        prepared, actor_ms = _timed(
+            device, lambda: model_runtime(lambda: model.prepare(encoded))
+        )
         _, state, operators = prepared
         history = HistoryState.initialize(
             state.local.shape[0],
@@ -62,13 +73,15 @@ def profile_taper_runtime(
         )
         preview, preview_ms = _timed(
             device,
-            lambda: model.preview_detached_actor(
-                state,
-                operators,
-                history,
-                step=0,
-                max_steps=config.horizon,
-                detach_utility_inputs=True,
+            lambda: model_runtime(
+                lambda: model.preview_detached_actor(
+                    state,
+                    operators,
+                    history,
+                    step=0,
+                    max_steps=config.horizon,
+                    detach_utility_inputs=True,
+                )
             ),
         )
         current, _, candidate_readout, _ = preview
@@ -88,7 +101,7 @@ def profile_taper_runtime(
         backbone.zero_grad(set_to_none=True)
 
         def forward_backward() -> Tensor:
-            result = engine.step(policy, supervision, config)
+            result = model_runtime(lambda: engine.step(policy, supervision, config))
             result.loss.backward()
             return result.loss.detach()
 
@@ -115,7 +128,7 @@ def profile_taper_runtime(
 
             def optimizer_train_step() -> Tensor:
                 profile_optimizer.zero_grad(set_to_none=True)
-                result = engine.step(policy, supervision, config)
+                result = model_runtime(lambda: engine.step(policy, supervision, config))
                 result.loss.backward()
                 profile_optimizer.step()
                 return result.loss.detach()
@@ -136,15 +149,17 @@ def profile_taper_runtime(
             for _ in range(repeats):
                 last_output, latency = _timed(
                     device,
-                    lambda: model(
-                        encoded,
-                        RolloutConfig(
-                            max_steps=config.horizon,
-                            selection_mode="learned",
-                            straight_through=False,
-                            exploration_probability=0.0,
+                    lambda: model_runtime(
+                        lambda: model(
+                            encoded,
+                            RolloutConfig(
+                                max_steps=config.horizon,
+                                selection_mode="learned",
+                                straight_through=False,
+                                exploration_probability=0.0,
+                            ),
+                            detach_utility_inputs=True,
                         ),
-                        detach_utility_inputs=True,
                     ),
                 )
                 latencies.append(latency)

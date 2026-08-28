@@ -35,6 +35,7 @@ from training.checkpoint_selection import CheckpointSelectionState
 from training.ema import ModelEMA, ema_required_for_phase
 from training.fashioniq_runtime import CATEGORIES, load_config, make_dataset, seed_everything
 from training.marginal_gain_teacher import MarginalGainTeacher
+from training.mixed_precision import runtime_autocast
 from training.negative_bank import NegativeBank
 from training.taper_mag_engine import (
     CurriculumStage,
@@ -192,8 +193,7 @@ def validate_fashioniq(
         reference_ids: list[str] = []
         for raw_batch in loader:
             policy = build_policy_batch(raw_batch, cache, backbone, device)
-            use_bf16 = device.type == "cuda" and config["runtime"]["precision"] == "bf16"
-            with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_bf16):
+            with runtime_autocast(device, str(config["runtime"]["precision"])):
                 encoded = encode_policy_batch(backbone, policy)
                 if curriculum.phase in {
                     CurriculumStage.ACTOR_WARMUP,
@@ -249,6 +249,7 @@ def validate_functional_controls(
 ) -> dict[str, Any]:
     """Audit-only causal controls and dynamic/frozen retrieval on one VAL gallery."""
     protocol = str(config["data"]["validation_protocol"])
+    precision = str(config["runtime"]["precision"])
     if protocol != "fashioniq_val":
         raise ValueError(
             "Primary TAPER functional audit requires validation_protocol=fashioniq_val"
@@ -318,44 +319,45 @@ def validate_functional_controls(
         for raw_batch in loader:
             policy = build_policy_batch(raw_batch, cache, backbone, device)
             supervision = build_supervision_batch(raw_batch, cache, device)
-            encoded = encode_policy_batch(backbone, policy)
-            dynamic = model(
-                encoded,
-                RolloutConfig(
+            with runtime_autocast(device, precision):
+                encoded = encode_policy_batch(backbone, policy)
+                dynamic = model(
+                    encoded,
+                    RolloutConfig(
+                        max_steps=curriculum.horizon,
+                        selection_mode="learned",
+                        straight_through=False,
+                        exploration_probability=0.0,
+                        step_cost=curriculum.step_cost,
+                    ),
+                    detach_utility_inputs=True,
+                )
+                frozen = model(
+                    encoded,
+                    RolloutConfig(
+                        max_steps=curriculum.horizon,
+                        selection_mode="frozen_order",
+                        straight_through=False,
+                        exploration_probability=0.0,
+                        step_cost=curriculum.step_cost,
+                    ),
+                    detach_utility_inputs=True,
+                )
+                _, initial, operators = model.prepare(encoded)
+                history = HistoryState.initialize(
+                    initial.local.shape[0],
+                    operators.operators.shape[1],
+                    initial.local.shape[1],
+                    initial.local.device,
+                )
+                current, _, candidate_readout, _ = model.preview(
+                    initial,
+                    operators,
+                    history,
+                    step=0,
                     max_steps=curriculum.horizon,
-                    selection_mode="learned",
-                    straight_through=False,
-                    exploration_probability=0.0,
-                    step_cost=curriculum.step_cost,
-                ),
-                detach_utility_inputs=True,
-            )
-            frozen = model(
-                encoded,
-                RolloutConfig(
-                    max_steps=curriculum.horizon,
-                    selection_mode="frozen_order",
-                    straight_through=False,
-                    exploration_probability=0.0,
-                    step_cost=curriculum.step_cost,
-                ),
-                detach_utility_inputs=True,
-            )
-            _, initial, operators = model.prepare(encoded)
-            history = HistoryState.initialize(
-                initial.local.shape[0],
-                operators.operators.shape[1],
-                initial.local.shape[1],
-                initial.local.device,
-            )
-            current, _, candidate_readout, _ = model.preview(
-                initial,
-                operators,
-                history,
-                step=0,
-                max_steps=curriculum.horizon,
-                detach_utility_inputs=True,
-            )
+                    detach_utility_inputs=True,
+                )
             negatives = negative_bank.mine_once(current.query, supervision)
             labels = teacher.score(
                 current.query,
@@ -370,6 +372,7 @@ def validate_functional_controls(
                 labels.raw_gain.argmax(dim=-1),
                 max_steps=curriculum.horizon,
                 step_cost=curriculum.step_cost,
+                precision=precision,
             )
             batch_queries = {
                 "full_dynamic": dynamic.final_query,
@@ -390,6 +393,7 @@ def validate_functional_controls(
                     teacher,
                     max_steps=curriculum.horizon,
                     step_cost=curriculum.step_cost,
+                    precision=precision,
                 )
             )
         sample_count += len(target_ids)
@@ -804,6 +808,7 @@ def main() -> None:
                     engine_config_for(saved_curriculum, config),
                     optimizer=optimizer,
                     repeats=int(config.get("diagnostics", {}).get("profiler_repeats", 3)),
+                    precision=str(config["runtime"]["precision"]),
                 )
             write_json(output_dir / "compute_report.json", report)
             print(json.dumps(report, indent=2, sort_keys=True))
@@ -818,6 +823,7 @@ def main() -> None:
                 bank,
                 engine.teacher,
                 seed=int(config["seed"]),
+                precision=str(config["runtime"]["precision"]),
                 near_tie_band=float(
                     config.get("diagnostics", {}).get("near_tie_band", 0.0)
                 ),
@@ -826,7 +832,8 @@ def main() -> None:
             for raw_batch in audit_loader:
                 policy = build_policy_batch(raw_batch, train_cache, backbone, device)
                 supervision = build_supervision_batch(raw_batch, train_cache, device)
-                encoded = encode_policy_batch(backbone, policy)
+                with runtime_autocast(device, str(config["runtime"]["precision"])):
+                    encoded = encode_policy_batch(backbone, policy)
                 auditor.update(
                     encoded,
                     supervision,
@@ -843,6 +850,7 @@ def main() -> None:
                         engine.teacher,
                         max_steps=int(config["policy"]["max_steps"]),
                         step_cost=float(config["policy"]["step_cost"]),
+                        precision=str(config["runtime"]["precision"]),
                     )
                 )
             shadow = auditor.finalize(
@@ -971,8 +979,7 @@ def main() -> None:
                 break
             policy = build_policy_batch(raw_batch, train_cache, backbone, device)
             supervision = build_supervision_batch(raw_batch, train_cache, device)
-            use_bf16 = device.type == "cuda" and config["runtime"]["precision"] == "bf16"
-            with torch.autocast(device_type=device.type, dtype=torch.bfloat16, enabled=use_bf16):
+            with runtime_autocast(device, str(config["runtime"]["precision"])):
                 result = engine.step(policy, supervision, engine_config)
                 scaled_loss = result.loss / accumulation
             scaled_loss.backward()

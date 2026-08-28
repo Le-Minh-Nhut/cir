@@ -15,6 +15,7 @@ from models.taper_mag.rollout import RolloutConfig, TaperOutput
 from models.taper_mag.state import LocalState
 from models.taper_mag.utility import HistoryState, append_stop
 from training.marginal_gain_teacher import MarginalGainTeacher
+from training.mixed_precision import runtime_autocast
 from training.negative_bank import NegativeBank
 from training.taper_mag_health import (
     dynamic_frozen_metrics,
@@ -122,46 +123,49 @@ def causal_operator_interventions(
     *,
     max_steps: int,
     step_cost: float = 0.0,
+    precision: str = "fp32",
 ) -> dict[str, Tensor]:
     """Execute V4 repeat/clone/zero/mean controls in local-state space."""
     if model.training:
         raise RuntimeError("Causal operator interventions are audit-only and require eval()")
-    _, initial, operators = model.prepare(encoded)
-    values = operators.operators
-    batch, _, width = values.shape
-    selected = values.gather(
-        1, best_indices[:, None, None].expand(batch, 1, width)
-    ).squeeze(1)
-    mean = values.mean(dim=1)
-    zero = torch.zeros_like(mean)
+    device = next(model.parameters()).device
+    with runtime_autocast(device, precision):
+        _, initial, operators = model.prepare(encoded)
+        values = operators.operators
+        batch, _, width = values.shape
+        selected = values.gather(
+            1, best_indices[:, None, None].expand(batch, 1, width)
+        ).squeeze(1)
+        mean = values.mean(dim=1)
+        zero = torch.zeros_like(mean)
 
-    repeat_best_state = execute_operator_once(model, initial, selected)
-    repeat_best_state = execute_operator_once(model, repeat_best_state, selected)
-    mean_repeat_state = execute_operator_once(model, initial, mean)
-    mean_repeat_state = execute_operator_once(model, mean_repeat_state, mean)
-    operator_zero_state = execute_operator_once(model, initial, zero)
-    operator_mean_state = execute_operator_once(model, initial, mean)
-    cloned = clone_operator_sets(operators, best_indices)
-    return {
-        "repeat_best": model.readout(repeat_best_state).query,
-        "mean_repeat": model.readout(mean_repeat_state).query,
-        "clone_all_best": rollout_with_operator_set(
-            model,
-            initial,
-            cloned["clone_all_best"],
-            max_steps=max_steps,
-            step_cost=step_cost,
-        ),
-        "clone_all_mean": rollout_with_operator_set(
-            model,
-            initial,
-            cloned["clone_all_mean"],
-            max_steps=max_steps,
-            step_cost=step_cost,
-        ),
-        "operator_zero": model.readout(operator_zero_state).query,
-        "operator_mean": model.readout(operator_mean_state).query,
-    }
+        repeat_best_state = execute_operator_once(model, initial, selected)
+        repeat_best_state = execute_operator_once(model, repeat_best_state, selected)
+        mean_repeat_state = execute_operator_once(model, initial, mean)
+        mean_repeat_state = execute_operator_once(model, mean_repeat_state, mean)
+        operator_zero_state = execute_operator_once(model, initial, zero)
+        operator_mean_state = execute_operator_once(model, initial, mean)
+        cloned = clone_operator_sets(operators, best_indices)
+        return {
+            "repeat_best": model.readout(repeat_best_state).query,
+            "mean_repeat": model.readout(mean_repeat_state).query,
+            "clone_all_best": rollout_with_operator_set(
+                model,
+                initial,
+                cloned["clone_all_best"],
+                max_steps=max_steps,
+                step_cost=step_cost,
+            ),
+            "clone_all_mean": rollout_with_operator_set(
+                model,
+                initial,
+                cloned["clone_all_mean"],
+                max_steps=max_steps,
+                step_cost=step_cost,
+            ),
+            "operator_zero": model.readout(operator_zero_state).query,
+            "operator_mean": model.readout(operator_mean_state).query,
+        }
 
 
 def file_sha256(path: str | Path) -> str:
@@ -240,6 +244,7 @@ class TeacherShadowAuditor:
     negative_bank: NegativeBank
     teacher: MarginalGainTeacher
     seed: int
+    precision: str = "fp32"
     near_tie_band: float = 0.0
     sample_count: int = 0
     _candidate_variance: list[Tensor] = field(default_factory=list)
@@ -277,19 +282,23 @@ class TeacherShadowAuditor:
         modification_texts: tuple[str, ...],
         max_trace_samples: int = 8,
     ) -> None:
-        _, state, operators = self.model.prepare(encoded)
-        batch, tokens = state.local.shape[:2]
-        history = HistoryState.initialize(
-            batch, operators.operators.shape[1], tokens, state.local.device
-        )
-        current, candidates, candidate_readout, predicted = self.model.preview(
-            state,
-            operators,
-            history,
-            step=0,
-            max_steps=1,
-            detach_utility_inputs=True,
-        )
+        device = next(self.model.parameters()).device
+        with runtime_autocast(device, self.precision):
+            _, state, operators = self.model.prepare(encoded)
+            batch, tokens = state.local.shape[:2]
+            history = HistoryState.initialize(
+                batch, operators.operators.shape[1], tokens, state.local.device
+            )
+            current, candidates, candidate_readout, predicted = self.model.preview(
+                state,
+                operators,
+                history,
+                step=0,
+                max_steps=1,
+                detach_utility_inputs=True,
+            )
+            uniform_state = state.with_local(candidates.local.mean(dim=1))
+            uniform_query = self.model.readout(uniform_state).query[:, None]
         negatives = self.negative_bank.mine_once(current.query, supervision)
         labels = self.teacher.score(
             current.query, candidate_readout.query, supervision, negatives
@@ -306,8 +315,6 @@ class TeacherShadowAuditor:
             self._target_shuffle_changed_teacher |= not torch.allclose(
                 labels.raw_gain, shuffled_labels.raw_gain
             )
-        uniform_state = state.with_local(candidates.local.mean(dim=1))
-        uniform_query = self.model.readout(uniform_state).query[:, None]
         uniform_gain = self.teacher.score(
             current.query, uniform_query, supervision, negatives
         ).raw_gain[:, 0]
@@ -325,6 +332,7 @@ class TeacherShadowAuditor:
             encoded,
             best,
             max_steps=1,
+            precision=self.precision,
         )
         control_names = tuple(causal_queries)
         intervention_gain = self.teacher.score(
@@ -464,17 +472,20 @@ def dynamic_frozen_audit(
     *,
     max_steps: int = 4,
     step_cost: float = 0.0,
+    precision: str = "fp32",
 ) -> dict[str, Any]:
-    dynamic: TaperOutput = model(
-        encoded,
-        RolloutConfig(max_steps=max_steps, selection_mode="learned", step_cost=step_cost),
-        detach_utility_inputs=True,
-    )
-    frozen: TaperOutput = model(
-        encoded,
-        RolloutConfig(max_steps=max_steps, selection_mode="frozen_order", step_cost=step_cost),
-        detach_utility_inputs=True,
-    )
+    device = next(model.parameters()).device
+    with runtime_autocast(device, precision):
+        dynamic: TaperOutput = model(
+            encoded,
+            RolloutConfig(max_steps=max_steps, selection_mode="learned", step_cost=step_cost),
+            detach_utility_inputs=True,
+        )
+        frozen: TaperOutput = model(
+            encoded,
+            RolloutConfig(max_steps=max_steps, selection_mode="frozen_order", step_cost=step_cost),
+            detach_utility_inputs=True,
+        )
 
     def labels(output: TaperOutput) -> Tensor:
         values = []
