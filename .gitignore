@@ -41,6 +41,7 @@ teacher/outputs/
 teacher/checkpoints
 features/
 outputs/
+runs/
 # Unit test / coverage reports
 htmlcov/
 .tox/

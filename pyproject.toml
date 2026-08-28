@@ -5,6 +5,9 @@ requires-python = ">=3.11"
 dependencies = [
     "torch",
     "torchvision",
+    "transformers>=5.0,<6",
+    "huggingface-hub>=1.0,<2",
+    "safetensors",
     "hydra-core",
     "omegaconf",
     "numpy",
@@ -23,6 +26,9 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = [
+    "integration: requires external checkpoint, dataset, GPU, or network resources",
+]
 
 [tool.ruff]
 line-length = 100

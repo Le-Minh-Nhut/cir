@@ -16,6 +16,16 @@ from datasets.common import CIRSample
 VALID_CATEGORIES = {"dress", "shirt", "toptee"}
 VALID_SPLITS = {"train", "val", "test"}
 VALID_CAPTION_POLICIES = {"ordered_and", "normalized_ordered_and", "randomized_four_way"}
+CORRECTION_POLICIES = {"fashioniq", "none"}
+
+
+def validate_correction_policy(policy: str) -> str:
+    if policy not in CORRECTION_POLICIES:
+        raise ValueError(
+            f"Unsupported FashionIQ correction policy {policy!r}; "
+            f"expected one of {sorted(CORRECTION_POLICIES)}"
+        )
+    return policy
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,7 +272,7 @@ class FashionIQDataset(Dataset):
             for category, correction_dict in correction_dicts.items():
                 self.correction_dicts[category] = dict(correction_dict)
 
-        if (self.caption_policy == "normalized_ordered_and"):
+        if self.caption_policy == "normalized_ordered_and" and correction_dicts is not None:
             for category in self.categories:
                 assert category in self.correction_dicts
 
