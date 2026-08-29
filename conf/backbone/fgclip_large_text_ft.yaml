@@ -3,6 +3,7 @@ checkpoint: qihoo360/fg-clip-large
 revision: 5a8f0f23b5a06dc92310e907599b2a0c2d58fe6f
 train_vision: false
 train_text: true
+train_text_projection: false
 trust_remote_code: true
 max_text_length: 77
 image_cache_path: null

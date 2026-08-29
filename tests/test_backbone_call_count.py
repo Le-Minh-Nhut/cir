@@ -44,7 +44,9 @@ class CountingFGCLIP(nn.Module):
         outputs = self.vision_model(
             pixel_values=pixel_values, output_hidden_states=True, return_dict=True
         )
-        return self.visual_projection(outputs.hidden_states[-2][:, 1:])
+        dense = self.forward_without_attn(outputs.hidden_states[-2])[:, 1:]
+        dense = self.vision_model.post_layernorm(dense)
+        return self.visual_projection(dense)
 
     def get_image_features(self, pixel_values):
         self.global_helper_calls += 1
@@ -85,6 +87,10 @@ def test_frozen_vision_stays_frozen_and_in_eval_mode() -> None:
     )
     assert checkpoint.text_model.training
     assert all(parameter.requires_grad for parameter in checkpoint.text_model.parameters())
+    assert not checkpoint.text_projection.training
+    assert all(
+        not parameter.requires_grad for parameter in checkpoint.text_projection.parameters()
+    )
 
 
 def test_full_regime_trains_vision_and_projection() -> None:

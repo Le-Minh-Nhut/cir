@@ -5,8 +5,9 @@ from dataclasses import dataclass
 from typing import Any
 
 import torch
-import torch.nn.functional as F
 from torch import Tensor, nn
+
+from numerics import normalize_fp32
 
 from .intent import masked_text_mean
 from .outputs import BackboneOutput
@@ -18,6 +19,7 @@ class FGCLIPRegime:
     revision: str
     train_vision: bool
     train_text: bool = True
+    train_text_projection: bool = False
     trust_remote_code: bool = True
 
 
@@ -34,6 +36,8 @@ class FGCLIPBackbone(nn.Module):
         model: nn.Module,
         internal_width: int = 256,
         train_vision: bool = True,
+        train_text: bool = True,
+        train_text_projection: bool = False,
         checkpoint: str | None = None,
         revision: str | None = None,
     ) -> None:
@@ -41,6 +45,8 @@ class FGCLIPBackbone(nn.Module):
         self.model = model
         self.internal_width = internal_width
         self.train_vision = train_vision
+        self.train_text = train_text
+        self.train_text_projection = train_text_projection
         self.checkpoint = checkpoint
         self.revision = revision
         config = getattr(model, "config", None)
@@ -70,16 +76,11 @@ class FGCLIPBackbone(nn.Module):
             model,
             internal_width=internal_width,
             train_vision=regime.train_vision,
+            train_text=regime.train_text,
+            train_text_projection=regime.train_text_projection,
             checkpoint=regime.checkpoint,
             revision=regime.revision,
         )
-        for parameter in backbone.model.text_model.parameters():
-            parameter.requires_grad_(regime.train_text)
-        for parameter in backbone.model.text_projection.parameters():
-            parameter.requires_grad_(regime.train_text)
-        if hasattr(backbone.model, "text_filip_projection"):
-            for parameter in backbone.model.text_filip_projection.parameters():
-                parameter.requires_grad_(regime.train_text)
         return backbone
 
     @staticmethod
@@ -107,16 +108,46 @@ class FGCLIPBackbone(nn.Module):
             parameter.requires_grad_(self.train_vision)
         for parameter in self.model.visual_projection.parameters():
             parameter.requires_grad_(self.train_vision)
+        for parameter in self.model.text_model.parameters():
+            parameter.requires_grad_(self.train_text)
+        for parameter in self.model.text_projection.parameters():
+            parameter.requires_grad_(self.train_text_projection)
+        if hasattr(self.model, "text_filip_projection"):
+            for parameter in self.model.text_filip_projection.parameters():
+                parameter.requires_grad_(False)
         if not self.train_vision:
             self.model.vision_model.eval()
             self.model.visual_projection.eval()
+        if not self.train_text:
+            self.model.text_model.eval()
+        if not self.train_text_projection:
+            self.model.text_projection.eval()
+        if hasattr(self.model, "text_filip_projection"):
+            self.model.text_filip_projection.eval()
 
     def train(self, mode: bool = True) -> "FGCLIPBackbone":
         super().train(mode)
         if not self.train_vision:
             self.model.vision_model.eval()
             self.model.visual_projection.eval()
+        if not self.train_text:
+            self.model.text_model.eval()
+        if not self.train_text_projection:
+            self.model.text_projection.eval()
+        if hasattr(self.model, "text_filip_projection"):
+            self.model.text_filip_projection.eval()
         return self
+
+    def reference_features_from_vision_outputs(self, vision_outputs: Any) -> tuple[Tensor, Tensor]:
+        """Reconstruct official dense/global FG-CLIP features from one vision output."""
+
+        if vision_outputs.hidden_states is None:
+            raise RuntimeError("FG-CLIP vision_model did not return hidden states")
+        dense = self.model.forward_without_attn(vision_outputs.hidden_states[-2])[:, 1:]
+        dense = self.model.vision_model.post_layernorm(dense)
+        dense = self.model.visual_projection(dense)
+        global_features = self.model.visual_projection(vision_outputs.pooler_output)
+        return dense, global_features
 
     def encode_reference_images(self, pixel_values: Tensor) -> tuple[Tensor, Tensor]:
         """Return projected patch anchor and global embedding from one vision pass.
@@ -134,14 +165,9 @@ class FGCLIPBackbone(nn.Module):
             vision_outputs = self.model.vision_model(
                 pixel_values=pixel_values, output_hidden_states=True, return_dict=True
             )
-            if vision_outputs.hidden_states is None:
-                raise RuntimeError("FG-CLIP vision_model did not return hidden states")
-            dense = self.model.forward_without_attn(vision_outputs.hidden_states[-2])[:, 1:]
-            dense = self.model.vision_model.post_layernorm(dense)
-            dense = self.model.visual_projection(dense)
-            global_features = self.model.visual_projection(vision_outputs.pooler_output)
+            dense, global_features = self.reference_features_from_vision_outputs(vision_outputs)
         anchor = self.anchor_projection(dense)
-        reference_global = F.normalize(global_features, dim=-1)
+        reference_global = normalize_fp32(global_features, dim=-1)
         return anchor, reference_global
 
     def encode_global_images(self, pixel_values: Tensor) -> Tensor:
@@ -152,7 +178,7 @@ class FGCLIPBackbone(nn.Module):
         context = nullcontext() if self.train_vision else torch.no_grad()
         with context:
             global_features = self.model.get_image_features(pixel_values=pixel_values)
-        return F.normalize(global_features, dim=-1)
+        return normalize_fp32(global_features, dim=-1)
 
     def encode_text(
         self, input_ids: Tensor, attention_mask: Tensor, content_mask: Tensor
@@ -167,7 +193,7 @@ class FGCLIPBackbone(nn.Module):
         text_global = masked_text_mean(text_tokens, content_mask)
         # This is the checkpoint's trained retrieval-space text representation, not
         # a detached random auxiliary head. It remains auxiliary-only in IAG-SRME.
-        text_semantic_global = F.normalize(
+        text_semantic_global = normalize_fp32(
             self.model.text_projection(outputs.pooler_output), dim=-1
         )
         return text_tokens, text_global, text_semantic_global

@@ -3,6 +3,9 @@ checkpoint: qihoo360/fg-clip-base
 revision: 454d76372c2cf5eb48fa0d871fd0534481484d97
 train_vision: true
 train_text: true
+# The canonical core trains contextual text states through the IAG token projection.
+# FG-CLIP's retrieval text projection is an auxiliary detached-anchor provider only.
+train_text_projection: false
 trust_remote_code: true
 max_text_length: 77
 image_cache_path: null

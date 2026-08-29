@@ -28,6 +28,7 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         revision=str(cfg.backbone.revision),
         train_vision=bool(cfg.backbone.train_vision),
         train_text=bool(cfg.backbone.train_text),
+        train_text_projection=bool(cfg.backbone.train_text_projection),
         trust_remote_code=bool(cfg.backbone.trust_remote_code),
     )
     assert_cache_legal(regime.train_vision, cfg.backbone.get("image_cache_path"))
