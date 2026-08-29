@@ -69,13 +69,14 @@ collator resolves raw images and applies the processor belonging to the configur
 
 ## Training
 
-FG-CLIP Base, full image and text fine-tuning from update 1:
+FG-CLIP Base, full image and contextual text fine-tuning from update 1:
 
 ```bash
 python src/train.py backbone=fgclip_base_full experiment=iag_srme_base_full objective=core
 ```
 
-FG-CLIP Large, vision and pretrained visual projection frozen throughout, full text fine-tuning:
+FG-CLIP Large, vision and pretrained visual projection frozen throughout, contextual text
+encoder plus IAG token-projection fine-tuning:
 
 ```bash
 python src/train.py backbone=fgclip_large_text_ft experiment=iag_srme_large_text_ft objective=core
@@ -97,6 +98,22 @@ Device placement is owned by `src/train.py`: model and objective move to the fin
 AdamW is created. `fit()` validates device and exact parameter-object identity but never migrates
 modules. Precision is explicit: `runtime.precision=fp32` disables autocast, `fp16` uses float16
 autocast plus CUDA GradScaler, and `bf16` uses bfloat16 autocast without fp16 scaling.
+
+### Text trainability contract
+
+Canonical core training follows the contextual-token path required by the master specification:
+
+```text
+FG-CLIP text_model.last_hidden_state
+→ trainable IAG hidden-size-to-d projection
+→ X
+→ intents / grounding / recurrent execution
+```
+
+Accordingly, `FG-CLIP text_model` and the IAG token projection are trainable and receive core
+gradients. FG-CLIP's pretrained retrieval-space `model.text_projection` is frozen: its only
+current use is to provide `text_semantic_global` for the detached auxiliary factor anchor. No
+gradient is fabricated for it, and it is not inserted into the final query as a shortcut.
 
 ## Validation
 
@@ -181,10 +198,50 @@ Reference encoding performs one official vision-model pass and derives both penu
 dense tokens and the pooled global embedding with FG-CLIP's own post-layernorm/projection logic.
 Target and gallery encoding call only the global-image API and never construct dense tokens.
 
+`smoke_fgclip_integration.py` numerically compares the one-pass reconstruction against the
+official dense/global helpers and compares vision, visual-projection, and anchor-projection
+gradients. It also instruments the real checkpoint: one training update must invoke two batched
+vision forwards total (reference + target), while one gallery batch invokes one global-only
+vision forward and never invokes the anchor projection.
+
 Training uses a hard-forward straight-through Gumbel estimator from update 1. When enabled, one
 temperature-scaled Gumbel-perturbed distribution supplies both the hard argmax and the soft
 backward surrogate; evaluation is deterministic argmax. For samples already stopped, the action
 is detached hard STOP, so later unrolled steps contribute no selector/candidate gradient.
+
+### Mixed-precision islands
+
+AMP remains active for the backbone and ordinary IAG-SRME modules. Only sensitive arithmetic is
+promoted locally to FP32:
+
+- entmax-1.5 threshold/root arithmetic for grounding and marginal targets;
+- Fenchel-Young value and its analytic `prediction - target` score gradient;
+- retrieval normalization, similarity, and `logsumexp`;
+- bounded-vector norm and L2 normalization;
+- complementary-claim log/JS operations;
+- binding similarity/cross-entropy;
+- factor/unique normalization, relational logits, log-PoE, and KL.
+
+LayerNorm remains under PyTorch autocast's numerically safe operator policy. These islands do not
+change the objective or disable mixed precision globally.
+
+## GPU FashionIQ canary
+
+Before a full run, execute the canonical Base/full, `K=4`, `Tmax=3`, `d=256`, core-only fp16
+canary:
+
+```bash
+python src/canary_train_iag_srme.py \
+  --dataset-root /absolute/path/to/FashionIQ \
+  --steps 100 \
+  --precision fp16
+```
+
+It requires CUDA and real FashionIQ images. Every logged interval reports losses, gradient norms,
+parameter deltas, STOP/candidate distributions, sparse-grounding statistics, effect norm/rank,
+dynamic-state changes, peak VRAM, and real module call counts. It aborts on non-finite or zero
+expected gradients, exploding gradients, OOM, wrong reference/target call counts, broken STOP
+identity, or sustained all-STOP/never-STOP/candidate-monopoly/identical-effect collapse.
 
 ## Unresolved research contract
 

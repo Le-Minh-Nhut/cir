@@ -20,4 +20,6 @@ precomputed representation requirement.
 pytest -q
 python src/smoke_iag_srme.py --diagnostics
 python src/smoke_fgclip_integration.py --max-steps 3
+python src/canary_train_iag_srme.py --dataset-root /path/to/FashionIQ \
+  --steps 100 --precision fp16
 ```
