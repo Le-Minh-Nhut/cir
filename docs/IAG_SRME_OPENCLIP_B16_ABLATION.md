@@ -1,0 +1,116 @@
+# IAG-SRME OpenCLIP ViT-B/16 controlled backbone ablation
+
+This branch changes exactly two scientific variables relative to the current FG-CLIP Base
+IAG-SRME experiment:
+
+1. the paired vision/text backbone is OpenCLIP ViT-B/16;
+2. validation uses the repository's `fashioniq_val` protocol.
+
+The IAG-SRME architecture, recurrent horizon, selector, STOP behavior, grounding equation,
+editor, readout, scorer, objectives, optimizer, learning rate, precision, caption policy, and
+all other training hyperparameters are unchanged.
+
+## Pinned pretrained model
+
+- OpenCLIP architecture: `ViT-B-16`
+- pretrained tag: `laion2b_s34b_b88k`
+- package: `open-clip-torch==3.3.0`
+- weight repository: `laion/CLIP-ViT-B-16-laion2B-s34B-b88K`
+- immutable repository revision: `7288da5a0d6f0b51c4a2b27c624837a9236d0112`
+- weight file: `open_clip_model.safetensors`
+- native input: 224 × 224
+- patch grid: 14 × 14 = 196
+- retrieval dimension: 512
+
+The reference path calls OpenCLIP `forward_intermediates` once. The anchor uses the final
+contextual spatial tokens after the visual transformer and final visual normalization, drops
+the CLS token through the public spatial-token API, applies the pretrained OpenCLIP visual
+projection token-wise, then applies only `Linear(512,256) + LayerNorm(256)` for the existing
+IAG width contract. The reference global and gallery embeddings use OpenCLIP's pretrained
+pooled/projected retrieval representation.
+
+The text path uses the matching OpenCLIP text tower. Final contextual token states are mapped
+to width 256 with `Linear + LayerNorm`; the official projected global text feature remains the
+auxiliary semantic global. No FG-CLIP text representation is mixed into this experiment.
+
+## Trainability
+
+The policy matches FG-CLIP Base full fine-tuning:
+
+- OpenCLIP visual transformer and pretrained visual projection: trainable;
+- OpenCLIP token embedding, positional embedding, text transformer, and final text norm:
+  trainable;
+- IAG image/text compatibility projections: trainable;
+- OpenCLIP text retrieval projection: frozen, matching the baseline's frozen auxiliary-only
+  retrieval text projection;
+- OpenCLIP logit scale: frozen and unused by IAG-SRME.
+
+No LoRA, partial unfreezing, layer-wise decay, new optimizer, scheduler, or warmup is added.
+
+## FashionIQ VAL protocol
+
+Queries are the deterministic `ordered_and` FashionIQ validation queries. For each category,
+the `fashioniq_val` gallery is the ordered duplicate-free union of reference and target image
+IDs in that category's validation annotations, as implemented by
+`build_pair_union_gallery`. Retrieval keeps the existing rule that removes the query's
+reference image from that query's ranking unless reference and target are the same image.
+Targets never enter model forward and are used only for retrieval metrics or offline oracle
+diagnostics.
+
+## Commands
+
+Install the pinned dependency:
+
+```bash
+python -m pip install -e '.[dev]'
+```
+
+Run the real pretrained integration smoke:
+
+```bash
+PYTHONPATH=src python src/smoke_openclip_integration.py --device cpu
+```
+
+Run the CUDA FP16 canary before full training:
+
+```bash
+python src/canary_train_iag_srme.py \
+  --backbone openclip_b16 \
+  --dataset-root data/FashionIQ \
+  --steps 100 \
+  --precision fp16
+```
+
+Launch the matched experiment:
+
+```bash
+python src/train.py \
+  backbone=openclip_b16_full \
+  experiment=iag_srme_openclip_b16_valsplit \
+  protocol=fashioniq_val \
+  objective=core \
+  dataset.root=data/FashionIQ
+```
+
+Evaluate a checkpoint:
+
+```bash
+python src/evaluate.py \
+  backbone=openclip_b16_full \
+  experiment=iag_srme_openclip_b16_valsplit \
+  protocol=fashioniq_val \
+  dataset.root=data/FashionIQ \
+  checkpoint=/absolute/path/to/best.pt
+```
+
+Run checkpoint diagnostics. The runner reconstructs OpenCLIP and the VAL protocol from the
+checkpoint metadata:
+
+```bash
+python src/diagnose_iag_srme_checkpoint.py \
+  --checkpoint outputs/openclip-b16/best.pt \
+  --dataset-root data/FashionIQ \
+  --batch-size 32 \
+  --gallery-batch-size 128 \
+  --output reports/iag_srme_openclip_b16_best.json
+```
