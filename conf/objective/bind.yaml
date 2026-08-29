@@ -1,0 +1,16 @@
+name: bind
+terminal_weight: 1.0
+marginal_weight: 0.5
+complementary_claim_weight: 0.0
+binding_weight: 0.01
+factor_weight: 0.0
+unique_weight: 0.0
+retrieval_temperature: 0.07
+utility_temperature: 1.0
+score_temperature: 1.0
+binding_temperature: 0.1
+factor_anchor_temperature: 0.1
+factor_temperature: 0.1
+unique_margin: 0.05
+relational_self_masked: false
+require_activity_weights_for_unique: true

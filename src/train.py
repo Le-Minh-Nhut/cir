@@ -1,172 +1,143 @@
+from __future__ import annotations
+
+from functools import partial
 from pathlib import Path
 
 import hydra
-import torch
 from omegaconf import DictConfig
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
-from cache.features import load_features, load_text_features
-from datasets.common import collate_cir_samples
-from datasets.fashioniq import FashionIQDataset, load_correction_dict
+from data.images import FashionIQImageCollator
+from datasets.common import DirectoryImageStore
+from datasets.fashioniq import FashionIQDataset
 from evaluation.fashioniq import evaluate_fashioniq
-from models.taper import TAPER
+from losses.objective import IAGSRMEObjective, ObjectiveConfig
+from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig, IAGSRMECore
+from models.iag_srme.backbone import assert_cache_legal
 from runtime import configure_torch_runtime, resolve_device, seed_everything
-from teachers.csmcir_compose import CSMCIRComposeTeacher
-from training.engine import fit, prepare_batch
+from training.engine import fit
 
 
 CATEGORIES = ("dress", "shirt", "toptee")
 
-def load_fashioniq_correction_dicts(annotation_root: str | Path) -> dict[str, dict[str, str]]:
-    annotation_root = Path(annotation_root)
-    correction_dicts = {}
-    for category in CATEGORIES:
-        path = annotation_root / f"correction_dict_{category}.json"
 
-        if not path.is_file():
-            raise FileNotFoundError(f"Missing FashionIQ correction dictionary: {path}")
+def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
+    regime = FGCLIPRegime(
+        checkpoint=str(cfg.backbone.checkpoint),
+        train_vision=bool(cfg.backbone.train_vision),
+        train_text=bool(cfg.backbone.train_text),
+        trust_remote_code=bool(cfg.backbone.trust_remote_code),
+    )
+    assert_cache_legal(regime.train_vision, cfg.backbone.get("image_cache_path"))
+    backbone = FGCLIPBackbone.from_pretrained(regime, int(cfg.model.width))
+    tokenizer, processor = FGCLIPBackbone.load_processor(
+        regime.checkpoint, regime.trust_remote_code
+    )
+    model_config = IAGSRMEConfig(
+        width=int(cfg.model.width),
+        num_candidates=int(cfg.model.num_candidates),
+        max_steps=int(cfg.model.max_steps),
+        num_heads=int(cfg.model.num_heads),
+        retrieval_dim=backbone.retrieval_dim,
+        lambda_z=float(cfg.model.lambda_z),
+        query_cap=float(cfg.model.query_cap),
+        selector_temperature=float(cfg.model.selector_temperature),
+        selector_gumbel_noise=bool(cfg.model.selector_gumbel_noise),
+        enable_claim_head=bool(cfg.model.enable_claim_head),
+        enable_factor_head=bool(cfg.model.enable_factor_head),
+        factor_dim=int(cfg.model.factor_dim),
+    )
+    return IAGSRME(backbone, IAGSRMECore(model_config)), tokenizer, processor
 
-        correction_dicts[category] = load_correction_dict(path)
 
-    return correction_dicts
-
-
-def build_train_loader(annotation_root: str | Path, *, batch_size: int, num_workers: int, seed: int, caption_policy: str, correction_dicts: dict[str, dict[str, str]],) -> DataLoader:
-    dataset = FashionIQDataset(annotation_root=annotation_root, split="train", categories=CATEGORIES, caption_policy=caption_policy, seed=seed, correction_dicts=correction_dicts)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, collate_fn=collate_cir_samples, pin_memory=True)
-
-
-def build_val_loaders(annotation_root: str | Path, *, batch_size: int, num_workers: int, caption_policy: str, correction_dicts: dict[str, dict[str, str]]):
-    val_loaders = {}
-    val_annotations = {}
-
-    for category in CATEGORIES:
-        dataset = FashionIQDataset(annotation_root=annotation_root, split="val", categories=[category], caption_policy=caption_policy, correction_dicts=correction_dicts,)
-        val_loaders[category] = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_cir_samples, pin_memory=True)
-        val_annotations[category] = dataset.annotations
-
-    return val_loaders, val_annotations
+def build_objective(cfg: DictConfig) -> IAGSRMEObjective:
+    objective_config = ObjectiveConfig(**{key: value for key, value in cfg.objective.items() if key != "name"})
+    return IAGSRMEObjective(objective_config, width=int(cfg.model.width))
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-    if str(cfg.experiment.get("name", "")) != "taper_e2e":
-        raise ValueError(
-            "src/train.py requires experiment=taper_e2e. "
-            "Run: python src/train.py experiment=taper_e2e"
-        )
-
-    seed_everything(seed=cfg.seed, deterministic=cfg.runtime.deterministic)
-    configure_torch_runtime(deterministic=cfg.runtime.deterministic, benchmark=cfg.runtime.benchmark)
-    device = resolve_device(device_name=cfg.runtime.device, accelerator_index=cfg.runtime.accelerator_index)
-
-    print("Device:", device)
+    seed_everything(int(cfg.seed), bool(cfg.runtime.deterministic))
+    configure_torch_runtime(
+        deterministic=bool(cfg.runtime.deterministic), benchmark=bool(cfg.runtime.benchmark)
+    )
+    device = resolve_device(str(cfg.runtime.device), int(cfg.runtime.accelerator_index))
+    model, tokenizer, processor = build_model(cfg)
+    objective = build_objective(cfg)
 
     dataset_root = Path(cfg.dataset.root)
-    annotation_root = dataset_root / "captions"
-    correction_dicts = load_fashioniq_correction_dicts(annotation_root)
-    split_root = dataset_root / "image_splits"
-    cache_root = Path(cfg.paths.cache_root)
-
-    train_retrieval, train_retrieval_idx = load_features(cache_root / "fashioniq" / "csmcir" / "train" / "retrieval")
-    train_native, train_native_idx = load_features(cache_root / "fashioniq" / "csmcir" / "train" / "native")
-    val_retrieval, val_retrieval_idx = load_features(cache_root / "fashioniq" / "csmcir" / "val" / "retrieval")
-    val_native, val_native_idx = load_features(cache_root / "fashioniq" / "csmcir" / "val" / "native")
-
-    train_text = load_text_features(cache_root / "fashioniq" / "csmcir" / "train" / "text")
-    val_text = load_text_features(cache_root / "fashioniq" / "csmcir" / "val" / "text")
-
-    print("Train retrieval:", tuple(train_retrieval.shape))
-    print("Train native:", tuple(train_native.shape))
-    print("Val retrieval:", tuple(val_retrieval.shape))
-    print("Val native:", tuple(val_native.shape))
-    print("Train text:", tuple(train_text.states.shape))
-    print("Val text:", tuple(val_text.states.shape))
-
-    train_loader = build_train_loader(
-        annotation_root=annotation_root,
-        batch_size=cfg.experiment.batch_size,
-        num_workers=cfg.experiment.num_workers,
-        seed=cfg.seed,
-        caption_policy=cfg.experiment.train_caption_policy,
-        correction_dicts=correction_dicts,
+    annotation_root = dataset_root / str(cfg.dataset.annotation_dir)
+    split_root = dataset_root / str(cfg.dataset.split_dir)
+    image_store = DirectoryImageStore(dataset_root / str(cfg.dataset.image_dir))
+    train_dataset = FashionIQDataset(
+        annotation_root,
+        "train",
+        CATEGORIES,
+        caption_policy=str(cfg.experiment.train_caption_policy),
+        seed=int(cfg.seed),
     )
-
-    val_loaders, val_annotations = build_val_loaders(
-        annotation_root=annotation_root,
-        batch_size=cfg.experiment.eval_batch_size,
-        num_workers=cfg.experiment.num_workers,
-        caption_policy=cfg.experiment.val_caption_policy,
-        correction_dicts=correction_dicts,
+    train_collator = FashionIQImageCollator(
+        image_store, tokenizer, processor, int(cfg.backbone.max_text_length), include_targets=True
     )
-
-    teacher = CSMCIRComposeTeacher(
-        csmcir_root=cfg.experiment.teacher.csmcir_root,
-        checkpoint_path=cfg.experiment.teacher.checkpoint_path,
-    ).to(device).eval()
-
-    m = cfg.experiment.model
-
-    model = TAPER(
-        teacher,
-        text_dim=m.text_dim,
-        reference_dim=m.reference_dim,
-        teacher_text_dim=m.teacher_text_dim,
-        teacher_query_dim=m.teacher_query_dim,
-        query_dim=m.query_dim,
-        slot_dim=m.slot_dim,
-        state_dim=m.state_dim,
-        num_slots=m.num_slots,
-        num_primitives=m.num_primitives,
-        mask_temperature=m.mask_temperature,
-        router_temperature=m.router_temperature,
-        retrieval_temperature=m.retrieval_temperature,
-        neutral_mode=m.neutral_mode,
-        slot_gate_threshold=m.slot_gate_threshold,
-        hard_slot_gating_during_training=m.hard_slot_gating_during_training,
-        gate_mode=m.gate_mode,
-        st_gate_recovery=m.st_gate_recovery,
-        alpha_max=m.alpha_max,
-        counterfactual_chunk_size=m.counterfactual_chunk_size,
-    ).to(device)
-
-    optimizer = AdamW(
-        (p for p in model.parameters() if p.requires_grad),
-        lr=cfg.experiment.lr,
-        weight_decay=cfg.experiment.weight_decay,
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=int(cfg.experiment.batch_size),
+        shuffle=True,
+        num_workers=int(cfg.experiment.num_workers),
+        pin_memory=True,
+        collate_fn=train_collator,
     )
-
-    prepare_batch_fn = lambda batch, device: prepare_batch(batch, device, train_retrieval, train_native, train_retrieval_idx, train_native_idx, train_text)
-
-    def evaluate_fn(model):
-        return evaluate_fashioniq(
-            model,
-            val_loaders,
-            val_annotations,
-            protocol=cfg.protocol.name,
-            split_root=split_root,
-            split="val",
-            retrieval_features=val_retrieval,
-            native_features=val_native,
-            retrieval_name_to_idx=val_retrieval_idx,
-            native_name_to_idx=val_native_idx,
-            text_cache=val_text,
-            device=device,
+    val_loaders = {}
+    val_annotations = {}
+    val_collator = FashionIQImageCollator(
+        image_store, tokenizer, processor, int(cfg.backbone.max_text_length), include_targets=False
+    )
+    for category in CATEGORIES:
+        dataset = FashionIQDataset(
+            annotation_root,
+            "val",
+            [category],
+            caption_policy=str(cfg.experiment.val_caption_policy),
+            seed=int(cfg.seed),
         )
-
+        val_annotations[category] = dataset.annotations
+        val_loaders[category] = DataLoader(
+            dataset,
+            batch_size=int(cfg.experiment.eval_batch_size),
+            shuffle=False,
+            num_workers=int(cfg.experiment.num_workers),
+            pin_memory=True,
+            collate_fn=val_collator,
+        )
+    optimizer = AdamW(
+        [parameter for parameter in list(model.parameters()) + list(objective.parameters()) if parameter.requires_grad],
+        lr=float(cfg.experiment.learning_rate),
+        weight_decay=float(cfg.experiment.weight_decay),
+    )
+    evaluate = partial(
+        evaluate_fashioniq,
+        val_loaders=val_loaders,
+        val_annotations=val_annotations,
+        protocol=str(cfg.protocol.name),
+        split_root=split_root,
+        split=str(cfg.protocol.split),
+        image_store=image_store,
+        image_processor=processor,
+        device=device,
+        gallery_batch_size=int(cfg.experiment.gallery_batch_size),
+        num_workers=int(cfg.experiment.num_workers),
+    )
     fit(
         model,
+        objective,
         train_loader,
         optimizer,
-        evaluate_fn,
-        num_epochs=cfg.experiment.num_epochs,
+        evaluate,
+        epochs=int(cfg.experiment.epochs),
         device=device,
-        loss_weights=dict(cfg.experiment.loss_weights),
-        primary_metric="mean_recall",
-        output_dir=cfg.paths.output_root,
-        use_amp=cfg.runtime.precision == "fp16",
-        prepare_batch_fn=prepare_batch_fn,
+        output_dir=str(cfg.paths.output_root),
+        use_amp=str(cfg.runtime.precision) in {"fp16", "bf16"},
     )
 
 

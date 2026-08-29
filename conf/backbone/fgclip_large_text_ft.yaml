@@ -1,0 +1,8 @@
+name: fgclip_large_text_ft
+checkpoint: qihoo360/fg-clip-large
+train_vision: false
+train_text: true
+trust_remote_code: true
+max_text_length: 77
+image_cache_path: null
+

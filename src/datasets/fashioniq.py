@@ -200,8 +200,6 @@ def build_pair_union_gallery(annotations: Sequence[FashionIQAnnotation]) -> list
     for annotation in annotations:
         assert annotation.target_id is not None
 
-        image_ids = (annotation.reference_id, annotation.target_id)
-
         if annotation.reference_id not in seen:
             seen.add(annotation.reference_id)
             gallery_ids.append(annotation.reference_id)

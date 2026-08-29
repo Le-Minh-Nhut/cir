@@ -1,0 +1,13 @@
+name: iag_srme
+width: 256
+num_candidates: 4
+max_steps: 3
+num_heads: 8
+lambda_z: 0.10
+query_cap: 0.50
+selector_temperature: 1.0
+selector_gumbel_noise: true
+enable_claim_head: false
+enable_factor_head: false
+factor_dim: 256
+

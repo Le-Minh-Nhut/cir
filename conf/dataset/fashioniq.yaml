@@ -1,3 +1,5 @@
 name: fashioniq
 root: ${paths.data_root}/FashionIQ
-split: train
+annotation_dir: captions
+split_dir: image_splits
+image_dir: images

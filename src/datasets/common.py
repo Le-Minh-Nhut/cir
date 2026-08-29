@@ -1,11 +1,9 @@
-from dataclasses import dataclass, field
-#Protocol ở đây chỉ định rằng bất kỳ class nào có đủ hai hàm -> thì đều có thể được xem như một ImageStore
-from typing import Any, Protocol 
-from pathlib import Path
 from abc import ABC, abstractmethod
-import random
-import string
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
 from PIL import Image
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +66,7 @@ class ImageStore(ABC):
         raise NotImplementedError
 
 @dataclass(frozen=True, slots=True)
-class DirectoryImageStore (ImageStore):
+class DirectoryImageStore(ImageStore):
     image_root: Path
     extensions: tuple[str, ...] = (".png", ".jpg", ".jpeg")
 
