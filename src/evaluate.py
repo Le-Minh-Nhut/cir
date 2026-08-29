@@ -9,8 +9,7 @@ from torch.utils.data import DataLoader
 
 from data.images import FashionIQImageCollator
 from datasets.common import DirectoryImageStore
-from datasets.fashioniq import FashionIQDataset
-from evaluation.fashioniq import evaluate_fashioniq
+from evaluation.fashioniq import build_validation_datasets, evaluate_fashioniq
 from runtime import resolve_device
 from train import CATEGORIES, build_model
 
@@ -33,8 +32,13 @@ def main(cfg: DictConfig) -> None:
     )
     loaders = {}
     annotations = {}
-    for category in CATEGORIES:
-        dataset = FashionIQDataset(annotation_root, "val", [category], caption_policy="ordered_and")
+    validation_datasets = build_validation_datasets(
+        annotation_root,
+        CATEGORIES,
+        str(cfg.experiment.val_caption_policy),
+        seed=int(cfg.seed),
+    )
+    for category, dataset in validation_datasets.items():
         annotations[category] = dataset.annotations
         loaders[category] = DataLoader(
             dataset,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 import torch
@@ -14,6 +15,26 @@ from data.images import ImageBatch
 from losses.objective import IAGSRMEObjective
 from losses.retrieval import positive_mask_from_ids
 from models.iag_srme.model import IAGSRME
+
+
+@dataclass(frozen=True, slots=True)
+class PrecisionPolicy:
+    name: str
+    autocast_enabled: bool
+    autocast_dtype: torch.dtype | None
+    scaler_enabled: bool
+
+
+def resolve_precision(name: str, device: torch.device) -> PrecisionPolicy:
+    """Resolve the configured precision without conflating fp16 and bf16."""
+
+    if name == "fp32":
+        return PrecisionPolicy(name, False, None, False)
+    if name == "fp16":
+        return PrecisionPolicy(name, True, torch.float16, device.type == "cuda")
+    if name == "bf16":
+        return PrecisionPolicy(name, True, torch.bfloat16, False)
+    raise ValueError(f"unsupported precision: {name}; expected fp32, fp16, or bf16")
 
 
 def trainable_parameters(*modules: nn.Module) -> list[nn.Parameter]:
@@ -73,12 +94,11 @@ def train_one_epoch(
     scaler: torch.amp.GradScaler,
     device: torch.device,
     *,
-    use_amp: bool,
+    precision: PrecisionPolicy,
     epoch: int,
 ) -> dict[str, float]:
     model.train()
     objective.train()
-    amp_enabled = use_amp and device.type == "cuda"
     totals: defaultdict[str, float] = defaultdict(float)
     steps = 0
     progress = tqdm(loader, desc=f"train {epoch + 1}", dynamic_ncols=True)
@@ -87,7 +107,11 @@ def train_one_epoch(
         if batch.target_pixels is None or any(value is None for value in batch.target_ids):
             raise ValueError("training batch requires raw target images and IDs")
         optimizer.zero_grad(set_to_none=True)
-        with torch.autocast(device_type=device.type, enabled=amp_enabled):
+        with torch.autocast(
+            device_type=device.type,
+            enabled=precision.autocast_enabled,
+            dtype=precision.autocast_dtype,
+        ):
             output = model(
                 batch.reference_pixels,
                 batch.input_ids,
@@ -96,7 +120,7 @@ def train_one_epoch(
             )
             # Current target encoder participates normally in terminal retrieval. The marginal
             # evaluator detaches this bank inside MarginalActionLoss only.
-            target_embeddings = model.encode_gallery(batch.target_pixels)
+            target_embeddings = model.encode_global_images(batch.target_pixels)
             target_ids = [str(value) for value in batch.target_ids]
             positives = positive_mask_from_ids(target_ids, device)
             components = objective(output, target_embeddings, positives)
@@ -120,6 +144,7 @@ def save_checkpoint(
     optimizer: Optimizer,
     epoch: int,
     metric: float,
+    precision: PrecisionPolicy,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -129,6 +154,11 @@ def save_checkpoint(
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
             "metric": metric,
+            "metadata": {
+                "backbone_checkpoint": model.backbone.checkpoint,
+                "backbone_revision": model.backbone.revision,
+                "precision": precision.name,
+            },
         },
         path,
     )
@@ -144,12 +174,12 @@ def fit(
     epochs: int,
     device: torch.device,
     output_dir: str | Path,
-    use_amp: bool,
+    precision: PrecisionPolicy,
     primary_metric: str = "mean_recall",
 ) -> None:
     assert_training_setup(model, objective, optimizer, device)
     destination = Path(output_dir)
-    scaler = torch.amp.GradScaler("cuda", enabled=use_amp and device.type == "cuda")
+    scaler = torch.amp.GradScaler("cuda", enabled=precision.scaler_enabled)
     best = float("-inf")
     for epoch in range(epochs):
         set_epoch(train_loader, epoch)
@@ -160,15 +190,31 @@ def fit(
             optimizer,
             scaler,
             device,
-            use_amp=use_amp,
+            precision=precision,
             epoch=epoch,
         )
         validation = dict(evaluate(model))
         metric = float(validation[primary_metric])
-        save_checkpoint(destination / "last.pt", model, objective, optimizer, epoch + 1, metric)
+        save_checkpoint(
+            destination / "last.pt",
+            model,
+            objective,
+            optimizer,
+            epoch + 1,
+            metric,
+            precision,
+        )
         if metric > best:
             best = metric
-            save_checkpoint(destination / "best.pt", model, objective, optimizer, epoch + 1, metric)
+            save_checkpoint(
+                destination / "best.pt",
+                model,
+                objective,
+                optimizer,
+                epoch + 1,
+                metric,
+                precision,
+            )
         print(
             f"epoch={epoch + 1}/{epochs} total={training['total']:.4f} "
             f"{primary_metric}={metric:.3f} best={best:.3f}"

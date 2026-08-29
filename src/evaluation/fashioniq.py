@@ -14,10 +14,34 @@ from data.images import ImageBatch, ImageIdDataset, collate_image_ids
 from datasets.common import DirectoryImageStore
 from datasets.fashioniq import (
     FashionIQAnnotation,
+    FashionIQDataset,
     build_pair_union_gallery,
     load_fashioniq_split_ids,
 )
 from models.iag_srme.model import IAGSRME
+
+
+def build_validation_datasets(
+    annotation_root: str | Path,
+    categories: Sequence[str],
+    caption_policy: str,
+    *,
+    seed: int = 42,
+    correction_dicts: Mapping[str, Mapping[str, str]] | None = None,
+) -> dict[str, FashionIQDataset]:
+    """Build validation data with an explicit checkpoint-compatible caption policy."""
+
+    return {
+        category: FashionIQDataset(
+            annotation_root,
+            "val",
+            [category],
+            caption_policy=caption_policy,
+            correction_dicts=correction_dicts,
+            seed=seed,
+        )
+        for category in categories
+    }
 
 
 def recall_at_k(
@@ -116,7 +140,7 @@ def encode_gallery(
     ordered_ids: list[str] = []
     for batch_ids, pixels in loader:
         ordered_ids.extend(batch_ids)
-        features.append(model.encode_gallery(pixels.to(device)).cpu())
+        features.append(model.encode_global_images(pixels.to(device)).cpu())
     if ordered_ids != image_ids:
         raise AssertionError("gallery encoding order changed")
     return torch.cat(features, dim=0)

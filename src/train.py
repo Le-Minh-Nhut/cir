@@ -16,7 +16,7 @@ from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig, IAGSRMECore
 from models.iag_srme.backbone import assert_cache_legal
 from runtime import configure_torch_runtime, resolve_device, seed_everything
-from training.engine import fit, trainable_parameters
+from training.engine import fit, resolve_precision, trainable_parameters
 
 
 CATEGORIES = ("dress", "shirt", "toptee")
@@ -25,6 +25,7 @@ CATEGORIES = ("dress", "shirt", "toptee")
 def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
     regime = FGCLIPRegime(
         checkpoint=str(cfg.backbone.checkpoint),
+        revision=str(cfg.backbone.revision),
         train_vision=bool(cfg.backbone.train_vision),
         train_text=bool(cfg.backbone.train_text),
         trust_remote_code=bool(cfg.backbone.trust_remote_code),
@@ -32,7 +33,7 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
     assert_cache_legal(regime.train_vision, cfg.backbone.get("image_cache_path"))
     backbone = FGCLIPBackbone.from_pretrained(regime, int(cfg.model.width))
     tokenizer, processor = FGCLIPBackbone.load_processor(
-        regime.checkpoint, regime.trust_remote_code
+        regime.checkpoint, regime.revision, regime.trust_remote_code
     )
     model_config = IAGSRMEConfig(
         width=int(cfg.model.width),
@@ -46,7 +47,7 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         selector_gumbel_noise=bool(cfg.model.selector_gumbel_noise),
         enable_claim_head=bool(cfg.model.enable_claim_head),
         enable_factor_head=bool(cfg.model.enable_factor_head),
-        factor_dim=int(cfg.model.factor_dim),
+        factor_dim=(None if cfg.model.factor_dim is None else int(cfg.model.factor_dim)),
     )
     return IAGSRME(backbone, IAGSRMECore(model_config)), tokenizer, processor
 
@@ -65,6 +66,7 @@ def main(cfg: DictConfig) -> None:
         deterministic=bool(cfg.runtime.deterministic), benchmark=bool(cfg.runtime.benchmark)
     )
     device = resolve_device(str(cfg.runtime.device), int(cfg.runtime.accelerator_index))
+    precision = resolve_precision(str(cfg.runtime.precision), device)
     model, tokenizer, processor = build_model(cfg)
     objective = build_objective(cfg)
     model.to(device)
@@ -141,7 +143,7 @@ def main(cfg: DictConfig) -> None:
         epochs=int(cfg.experiment.epochs),
         device=device,
         output_dir=str(cfg.paths.output_root),
-        use_amp=str(cfg.runtime.precision) in {"fp16", "bf16"},
+        precision=precision,
     )
 
 
