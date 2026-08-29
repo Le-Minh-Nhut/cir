@@ -37,8 +37,52 @@ def _gradient_norm(parameters: Iterable[nn.Parameter]) -> float:
     return math.sqrt(float(torch.stack(squares).sum()))
 
 
+def _gradients_are_finite(parameters: Iterable[nn.Parameter]) -> bool:
+    return all(
+        bool(torch.isfinite(parameter.grad).all())
+        for parameter in parameters
+        if parameter.grad is not None
+    )
+
+
 def _parameter_delta(parameter: nn.Parameter, initial: Tensor) -> float:
     return float((parameter.detach().float() - initial).abs().max())
+
+
+def _complete_amp_step(
+    scaler: torch.amp.GradScaler,
+    optimizer: torch.optim.Optimizer,
+    tracked: dict[str, nn.Parameter],
+    *,
+    scale_before: float,
+    overflow: bool,
+) -> tuple[float, dict[str, float]]:
+    """Finish one scaled step and enforce the overflow skip contract."""
+
+    before_step = {
+        name: parameter.detach().clone() for name, parameter in tracked.items()
+    }
+    scaler.step(optimizer)
+    scaler.update()
+    scale_after = float(scaler.get_scale())
+    step_deltas = {
+        name: _parameter_delta(parameter, before_step[name])
+        for name, parameter in tracked.items()
+    }
+    if overflow:
+        if not scaler.is_enabled():
+            raise FloatingPointError("non-finite gradients without an enabled GradScaler")
+        if scale_after >= scale_before:
+            raise RuntimeError(
+                "GradScaler did not reduce its scale after non-finite gradients: "
+                f"{scale_before} -> {scale_after}"
+            )
+        changed = {name: delta for name, delta in step_deltas.items() if delta != 0.0}
+        if changed:
+            raise AssertionError(
+                f"tracked parameters changed during a skipped AMP overflow step: {changed}"
+            )
+    return scale_after, step_deltas
 
 
 def _mean(values: list[float]) -> float:
@@ -202,6 +246,13 @@ def main() -> None:
     )
     assert_training_setup(model, objective, optimizer, device)
     scaler = torch.amp.GradScaler("cuda", enabled=precision.scaler_enabled)
+    initial_scale = float(scaler.get_scale())
+    minimum_scale = initial_scale
+    total_amp_overflows = 0
+    consecutive_amp_overflows = 0
+    successful_optimizer_steps = 0
+    skipped_optimizer_steps = 0
+    first_successful_step: int | None = None
 
     parameter_families = {
         "vision": list(model.backbone.model.vision_model.parameters())
@@ -268,16 +319,60 @@ def main() -> None:
                 losses = objective(output, target_embeddings, positives)
             if not all(torch.isfinite(value).all() for value in losses.values()):
                 raise FloatingPointError(f"non-finite canary loss at step {step_index}")
+            scale_before = float(scaler.get_scale())
             scaler.scale(losses["total"]).backward()
             scaler.unscale_(optimizer)
             gradient_norms = {
                 name: _gradient_norm(parameters)
                 for name, parameters in parameter_families.items()
             }
-            if any(not math.isfinite(value) for value in gradient_norms.values()):
-                raise FloatingPointError(
-                    f"non-finite canary gradient at step {step_index}: {gradient_norms}"
+            optimizer_parameters = [
+                parameter
+                for group in optimizer.param_groups
+                for parameter in group["params"]
+            ]
+            amp_overflow_this_step = not _gradients_are_finite(optimizer_parameters)
+            if amp_overflow_this_step:
+                scale_after, step_parameter_deltas = _complete_amp_step(
+                    scaler,
+                    optimizer,
+                    tracked,
+                    scale_before=scale_before,
+                    overflow=True,
                 )
+                minimum_scale = min(minimum_scale, scale_after)
+                total_amp_overflows += 1
+                consecutive_amp_overflows += 1
+                skipped_optimizer_steps += 1
+                overflow_record = {
+                    "step": step_index,
+                    "losses": {
+                        name: float(losses[name].detach())
+                        for name in ("terminal", "marginal", "total")
+                    },
+                    "gradient_norms": gradient_norms,
+                    "amp_scale_before": scale_before,
+                    "amp_scale_after": scale_after,
+                    "amp_overflow_this_step": True,
+                    "total_amp_overflows": total_amp_overflows,
+                    "consecutive_amp_overflows": consecutive_amp_overflows,
+                    "successful_optimizer_steps": successful_optimizer_steps,
+                    "skipped_optimizer_steps": skipped_optimizer_steps,
+                    "first_successful_step": first_successful_step,
+                    "parameter_step_max_abs_delta": step_parameter_deltas,
+                    "peak_vram_bytes": torch.cuda.max_memory_allocated(device),
+                }
+                print(json.dumps(overflow_record, sort_keys=True), flush=True)
+                if consecutive_amp_overflows > 20:
+                    raise RuntimeError(
+                        "more than 20 consecutive AMP-overflowed canary iterations"
+                    )
+                if step_index >= 25 and successful_optimizer_steps == 0:
+                    raise RuntimeError(
+                        "no successful optimizer step after 25 attempted iterations"
+                    )
+                continue
+
             zero_families = [name for name, value in gradient_norms.items() if value == 0]
             if zero_families:
                 raise RuntimeError(
@@ -295,8 +390,18 @@ def main() -> None:
             }:
                 raise AssertionError(f"unexpected canary forward call counts: {calls}")
             _verify_absorbing_stop(output)
-            scaler.step(optimizer)
-            scaler.update()
+            scale_after, step_parameter_deltas = _complete_amp_step(
+                scaler,
+                optimizer,
+                tracked,
+                scale_before=scale_before,
+                overflow=False,
+            )
+            minimum_scale = min(minimum_scale, scale_after)
+            consecutive_amp_overflows = 0
+            successful_optimizer_steps += 1
+            if first_successful_step is None:
+                first_successful_step = step_index
 
             diagnostics = _batch_diagnostics(output)
             actions = torch.stack([trace.selected_index.detach().cpu() for trace in output.trace], 1)
@@ -307,11 +412,25 @@ def main() -> None:
                 history[name].append(float(losses[name].detach()))
             history["effect_rank"].append(float(diagnostics["functional_effect_rank"]))
             history["effect_cosine"].append(float(diagnostics["functional_delta_q_cosine"]))
-            if step_index == 1 or step_index % args.log_every == 0 or step_index == args.steps:
+            if (
+                step_index == 1
+                or step_index == first_successful_step
+                or step_index % args.log_every == 0
+                or step_index == args.steps
+            ):
                 record = {
                     "step": step_index,
                     "losses": {name: history[name][-1] for name in ("terminal", "marginal", "total")},
                     "gradient_norms": gradient_norms,
+                    "amp_scale_before": scale_before,
+                    "amp_scale_after": scale_after,
+                    "amp_overflow_this_step": False,
+                    "total_amp_overflows": total_amp_overflows,
+                    "consecutive_amp_overflows": consecutive_amp_overflows,
+                    "successful_optimizer_steps": successful_optimizer_steps,
+                    "skipped_optimizer_steps": skipped_optimizer_steps,
+                    "first_successful_step": first_successful_step,
+                    "parameter_step_max_abs_delta": step_parameter_deltas,
                     "parameter_max_abs_delta": {
                         name: _parameter_delta(parameter, initial[name])
                         for name, parameter in tracked.items()
@@ -339,7 +458,9 @@ def main() -> None:
             handle.remove()
 
     distribution = action_counts.float() / action_counts.sum().clamp_min(1)
-    stop_by_timestep = stop_step_counts.float() / (args.steps * args.batch_size)
+    stop_by_timestep = stop_step_counts.float() / (
+        max(successful_optimizer_steps, 1) * args.batch_size
+    )
     non_stop = action_counts[:4]
     candidate_distribution = non_stop.float() / non_stop.sum().clamp_min(1)
     collapse_flags = {
@@ -356,10 +477,24 @@ def main() -> None:
         "device": str(device),
         "gpu_name": torch.cuda.get_device_name(device),
         "steps": args.steps,
+        "attempted_steps": args.steps,
+        "successful_optimizer_steps": successful_optimizer_steps,
+        "skipped_optimizer_steps": skipped_optimizer_steps,
+        "amp_overflow_count": total_amp_overflows,
+        "initial_scale": initial_scale,
+        "final_scale": float(scaler.get_scale()),
+        "minimum_scale": minimum_scale,
+        "first_successful_step": first_successful_step,
         "precision": args.precision,
         "peak_vram_bytes": torch.cuda.max_memory_allocated(device),
-        "loss_start": {name: history[name][0] for name in ("terminal", "marginal", "total")},
-        "loss_end": {name: history[name][-1] for name in ("terminal", "marginal", "total")},
+        "loss_start": {
+            name: history[name][0] if history[name] else None
+            for name in ("terminal", "marginal", "total")
+        },
+        "loss_end": {
+            name: history[name][-1] if history[name] else None
+            for name in ("terminal", "marginal", "total")
+        },
         "stop_by_timestep": stop_by_timestep.tolist(),
         "selected_distribution_with_stop": distribution.tolist(),
         "candidate_distribution_conditional_non_stop": candidate_distribution.tolist(),
@@ -371,7 +506,7 @@ def main() -> None:
         },
     }
     print(json.dumps(summary, indent=2, sort_keys=True), flush=True)
-    if args.steps >= 10 and any(collapse_flags.values()):
+    if successful_optimizer_steps >= 10 and any(collapse_flags.values()):
         raise RuntimeError(f"canary collapse detector fired: {collapse_flags}")
 
 
