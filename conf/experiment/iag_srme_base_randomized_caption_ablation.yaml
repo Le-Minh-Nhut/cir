@@ -1,0 +1,11 @@
+name: iag_srme_base_randomized_caption_ablation
+epochs: 20
+batch_size: 32
+eval_batch_size: 32
+gallery_batch_size: 128
+num_workers: 4
+learning_rate: 1.0e-5
+weight_decay: 0.01
+# Explicit incomplete-caption ablation; this is not the canonical IAG-SRME run.
+train_caption_policy: randomized_four_way
+val_caption_policy: ordered_and
