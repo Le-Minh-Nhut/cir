@@ -19,4 +19,5 @@ precomputed representation requirement.
 ```bash
 pytest -q
 python src/smoke_iag_srme.py --diagnostics
+python src/smoke_fgclip_integration.py --max-steps 3
 ```

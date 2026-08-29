@@ -44,12 +44,14 @@ model code. Entmax is pinned because sparse exact-zero support is an architectur
 python -m pip install -e '.[dev]'
 ```
 
-The configs select FG-CLIP v1 explicitly:
+The configs select FG-CLIP v1 at immutable Hugging Face revisions:
 
-- `qihoo360/fg-clip-base`
-- `qihoo360/fg-clip-large`
+- `qihoo360/fg-clip-base@454d76372c2cf5eb48fa0d871fd0534481484d97`
+- `qihoo360/fg-clip-large@5a8f0f23b5a06dc92310e907599b2a0c2d58fe6f`
 
-They do not substitute FG-CLIP2.
+The same revision is passed to model, tokenizer, and image-processor loading and is stored in
+checkpoint metadata. Evaluation rejects a checkpoint/config revision mismatch. They do not
+substitute FG-CLIP2.
 
 ## FashionIQ layout
 
@@ -83,6 +85,19 @@ Both commands construct the full three-step graph, four previews, hard-forward s
 terminal objective, and marginal objective before the first optimizer update. There is no
 component, horizon, selection, freezing, or objective curriculum.
 
+Both canonical experiments use `train_caption_policy=ordered_and`, so the model receives both
+FashionIQ captions. Incomplete four-way caption augmentation remains an explicit ablation:
+
+```bash
+python src/train.py backbone=fgclip_base_full \
+  experiment=iag_srme_base_randomized_caption_ablation objective=core
+```
+
+Device placement is owned by `src/train.py`: model and objective move to the final device before
+AdamW is created. `fit()` validates device and exact parameter-object identity but never migrates
+modules. Precision is explicit: `runtime.precision=fp32` disables autocast, `fp16` uses float16
+autocast plus CUDA GradScaler, and `bf16` uses bfloat16 autocast without fp16 scaling.
+
 ## Validation
 
 Use the same backbone/experiment pair as the checkpoint:
@@ -115,10 +130,16 @@ python src/train.py objective=factor model.enable_factor_head=true
 justified activity weights because four proposal identities are not four guaranteed true edits.
 There is intentionally no semantic NULL implementation, and STOP is never reused as one. An
 all-active experiment requires explicitly disabling that guard and must be reported as such.
+The provided training pipeline does not manufacture `active_weights`; therefore `objective=unique`
+and `objective=six_loss_experimental` are research-interface configs, not production-ready runs.
 
-The first factor/unique implementation detaches the target-free full-query auxiliary anchor
-inside relational geometry. That anchor is never consumed by the executor, mutable state, or
-retrieval readout.
+For sample `i`, the factor relational target is
+`u_i = normalize(reference_global_i + text_semantic_global_i)`. Both operands use the pinned
+FG-CLIP checkpoint's trained retrieval projections. The composition is parameter-free—there is
+no random detached MLP. `relational_geometry` detaches `u_i`, so `L_factor` trains the factor
+fuser but cannot co-adapt or move its semantic target. The auxiliary anchor is returned only for
+factor/unique losses and is never consumed by mutable state, context, editor, scorer, selector,
+or retrieval readout.
 
 ## Cache legality
 
@@ -130,7 +151,7 @@ retrieval readout.
 
 ## Target firewall
 
-Target pixels enter only `model.encode_gallery` after the target-free forward has constructed all
+Target pixels enter only `model.encode_global_images` after the target-free forward has constructed all
 intents, supports, contexts, deltas, candidate states/queries, scores, actions, and final state.
 `L_terminal` may update the target encoder normally. `L_marginal` detaches the target bank and the
 computed retrieval gains before score matching. Target IDs are used only to construct the
@@ -142,6 +163,7 @@ multi-positive loss mask and evaluation labels.
 pytest -q
 python src/smoke_iag_srme.py
 python src/smoke_iag_srme.py --diagnostics
+python src/smoke_fgclip_integration.py --max-steps 3
 ```
 
 The smoke path uses FG-CLIP-compatible tensors when a checkpoint is unavailable and executes
@@ -154,6 +176,15 @@ and `frozen_t0_order`. `summarize_trajectory` reports intent cosine, grounding s
 overlap, functional effect cosine/effective rank, selected identities, STOP rate, score evolution,
 and claim mass when enabled. Realized target-evaluated marginal utility is available from
 `losses.marginal.detached_marginal_utilities` and remains outside the forward graph.
+
+Reference encoding performs one official vision-model pass and derives both penultimate-layer
+dense tokens and the pooled global embedding with FG-CLIP's own post-layernorm/projection logic.
+Target and gallery encoding call only the global-image API and never construct dense tokens.
+
+Training uses a hard-forward straight-through Gumbel estimator from update 1. When enabled, one
+temperature-scaled Gumbel-perturbed distribution supplies both the hard argmax and the soft
+backward surrogate; evaluation is deterministic argmax. For samples already stopped, the action
+is detached hard STOP, so later unrolled steps contribute no selector/candidate gradient.
 
 ## Unresolved research contract
 
