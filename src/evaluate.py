@@ -14,6 +14,17 @@ from runtime import resolve_device
 from train import CATEGORIES, build_model
 
 
+def validate_checkpoint_backbone_metadata(
+    metadata: object, expected_checkpoint: str, expected_revision: str
+) -> None:
+    if not isinstance(metadata, dict):
+        raise ValueError("checkpoint has no reproducible backbone metadata")
+    actual = (metadata.get("backbone_checkpoint"), metadata.get("backbone_revision"))
+    expected = (expected_checkpoint, expected_revision)
+    if actual != expected:
+        raise ValueError(f"checkpoint backbone mismatch: stored={actual}, configured={expected}")
+
+
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     checkpoint_path = cfg.get("checkpoint")
@@ -22,6 +33,11 @@ def main(cfg: DictConfig) -> None:
     device = resolve_device(str(cfg.runtime.device), int(cfg.runtime.accelerator_index))
     model, tokenizer, processor = build_model(cfg)
     checkpoint = torch.load(str(checkpoint_path), map_location="cpu", weights_only=True)
+    validate_checkpoint_backbone_metadata(
+        checkpoint.get("metadata"),
+        str(cfg.backbone.checkpoint),
+        str(cfg.backbone.revision),
+    )
     model.load_state_dict(checkpoint["model"])
     model.to(device).eval()
     dataset_root = Path(cfg.dataset.root)

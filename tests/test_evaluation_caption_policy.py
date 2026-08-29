@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
+import pytest
+import yaml
+
+from evaluate import validate_checkpoint_backbone_metadata
 from evaluation.fashioniq import build_validation_datasets
 
 
@@ -25,3 +30,19 @@ def test_evaluation_dataset_uses_explicit_caption_policy(tmp_path) -> None:
 
     assert datasets["dress"].caption_policy == "normalized_ordered_and"
     assert datasets["dress"][0].modification_text == "make it red and add long sleeves"
+
+
+def test_canonical_experiments_use_complete_ordered_caption_text() -> None:
+    root = Path(__file__).parents[1]
+    for name in ("iag_srme_base_full.yaml", "iag_srme_large_text_ft.yaml"):
+        config = yaml.safe_load((root / "conf" / "experiment" / name).read_text())
+        assert config["train_caption_policy"] == "ordered_and"
+        assert config["val_caption_policy"] == "ordered_and"
+
+
+def test_evaluation_rejects_checkpoint_from_another_backbone_revision() -> None:
+    metadata = {"backbone_checkpoint": "qihoo360/fg-clip-base", "backbone_revision": "abc"}
+    with pytest.raises(ValueError, match="backbone mismatch"):
+        validate_checkpoint_backbone_metadata(
+            metadata, "qihoo360/fg-clip-base", "verified-revision"
+        )

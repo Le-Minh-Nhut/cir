@@ -89,7 +89,13 @@ class FGCLIPBackbone(nn.Module):
         from transformers import AutoImageProcessor, AutoTokenizer
 
         tokenizer = AutoTokenizer.from_pretrained(
-            checkpoint, revision=revision, trust_remote_code=trust_remote_code
+            checkpoint,
+            revision=revision,
+            trust_remote_code=trust_remote_code,
+            # The pinned repository declares a custom FGCLIPConfig but ships the
+            # standard CLIP tokenizer files. This explicit hint avoids asking the
+            # Auto registry for a nonexistent custom tokenizer class.
+            tokenizer_type="clip",
         )
         image_processor = AutoImageProcessor.from_pretrained(
             checkpoint, revision=revision, trust_remote_code=trust_remote_code

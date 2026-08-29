@@ -12,6 +12,7 @@ dependencies = [
     "tqdm",
     "transformers>=4.36,<5",
     "entmax==1.3",
+    "einops>=0.7,<1",
 ]
 
 [project.optional-dependencies]
