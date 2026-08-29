@@ -17,6 +17,8 @@ class RelationalGeometry:
 
 
 def kl_divergence(probability: Tensor, approximation: Tensor, epsilon: float = 1e-8) -> Tensor:
+    probability = probability.float()
+    approximation = approximation.float()
     return (
         probability
         * (probability.clamp_min(epsilon).log() - approximation.clamp_min(epsilon).log())
@@ -43,32 +45,36 @@ def relational_geometry(
     if anchor_temperature <= 0 or factor_temperature <= 0:
         raise ValueError("temperatures must be positive")
     # First implementation deliberately stops the powerful auxiliary anchor.
-    anchors = F.normalize(auxiliary_anchor.detach(), dim=-1)
-    normalized_factors = F.normalize(factors, dim=-1)
-    full_logits = anchors @ anchors.T / anchor_temperature
-    factor_logits = torch.einsum("bkd,jd->bkj", normalized_factors, anchors) / factor_temperature
-    if self_masked:
-        if factors.shape[0] < 2:
-            raise ValueError("self-masked relational geometry requires batch size >= 2")
-        diagonal = torch.eye(factors.shape[0], dtype=torch.bool, device=factors.device)
-        full_logits = full_logits.masked_fill(diagonal, -torch.inf)
-        factor_logits = factor_logits.masked_fill(diagonal[:, None, :], -torch.inf)
-    full_distribution = full_logits.softmax(dim=-1)
-    log_factor = factor_logits.log_softmax(dim=-1)
-    factor_distribution = log_factor.exp()
-    if active_weights is None:
-        all_logits = log_factor.mean(dim=1)
-    else:
-        if active_weights.shape != factors.shape[:2]:
-            raise ValueError("active_weights must be [B,K]")
-        weights = active_weights.clamp_min(0).to(factors.dtype)
-        if not weights.sum(dim=1).gt(0).all():
-            raise ValueError("each sample needs at least one active factor")
-        all_logits = (weights[..., None] * log_factor).sum(dim=1) / weights.sum(
-            dim=1, keepdim=True
-        ).clamp_min(epsilon)
-    all_distribution = all_logits.softmax(dim=-1)
-    all_error = kl_divergence(full_distribution, all_distribution, epsilon)
+    # Relational softmax/log-PoE/KL geometry is an explicit AMP FP32 island.
+    with torch.autocast(device_type=factors.device.type, enabled=False):
+        anchors = F.normalize(auxiliary_anchor.detach().float(), dim=-1)
+        normalized_factors = F.normalize(factors.float(), dim=-1)
+        full_logits = anchors @ anchors.T / anchor_temperature
+        factor_logits = (
+            torch.einsum("bkd,jd->bkj", normalized_factors, anchors) / factor_temperature
+        )
+        if self_masked:
+            if factors.shape[0] < 2:
+                raise ValueError("self-masked relational geometry requires batch size >= 2")
+            diagonal = torch.eye(factors.shape[0], dtype=torch.bool, device=factors.device)
+            full_logits = full_logits.masked_fill(diagonal, -torch.inf)
+            factor_logits = factor_logits.masked_fill(diagonal[:, None, :], -torch.inf)
+        full_distribution = full_logits.softmax(dim=-1)
+        log_factor = factor_logits.log_softmax(dim=-1)
+        factor_distribution = log_factor.exp()
+        if active_weights is None:
+            all_logits = log_factor.mean(dim=1)
+        else:
+            if active_weights.shape != factors.shape[:2]:
+                raise ValueError("active_weights must be [B,K]")
+            weights = active_weights.clamp_min(0).float()
+            if not weights.sum(dim=1).gt(0).all():
+                raise ValueError("each sample needs at least one active factor")
+            all_logits = (weights[..., None] * log_factor).sum(dim=1) / weights.sum(
+                dim=1, keepdim=True
+            ).clamp_min(epsilon)
+        all_distribution = all_logits.softmax(dim=-1)
+        all_error = kl_divergence(full_distribution, all_distribution, epsilon)
     return RelationalGeometry(
         full_distribution,
         factor_distribution,

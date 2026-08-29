@@ -43,7 +43,15 @@ def entmax15_fenchel_young(scores: Tensor, target_distribution: Tensor) -> Tenso
 
     if scores.shape != target_distribution.shape:
         raise ValueError("scores and target_distribution must have identical shape")
+    # Entmax/Fenchel-Young arithmetic is intentionally FP32 under mixed precision.
+    scores = scores.float()
+    target_distribution = target_distribution.float()
     prediction = entmax15(scores, dim=-1)
+    # Fenchel-Young has the exact analytic score gradient p* - y. Detaching p*
+    # in the value expression avoids differentiating through sqrt(0) on sparse
+    # entmax coordinates while preserving both the value and intended gradient.
+    prediction_value = prediction.detach()
+    target_value = target_distribution.detach()
 
     def omega_entropy(probabilities: Tensor) -> Tensor:
         return (1.0 - (probabilities * probabilities.clamp_min(0).sqrt()).sum(dim=-1)) / 0.75
@@ -51,9 +59,9 @@ def entmax15_fenchel_young(scores: Tensor, target_distribution: Tensor) -> Tenso
     # Ω*(s)+Ω(y)-<s,y>, written using p*=entmax(s). It is zero when y=p* and
     # has gradient p*-y with respect to s.
     return (
-        omega_entropy(prediction)
-        - omega_entropy(target_distribution)
-        + ((prediction - target_distribution) * scores).sum(dim=-1)
+        omega_entropy(prediction_value)
+        - omega_entropy(target_value)
+        + ((prediction_value - target_value) * scores).sum(dim=-1)
     )
 
 
@@ -87,7 +95,9 @@ class MarginalActionLoss(nn.Module):
                 positive_mask,
                 self.retrieval_temperature,
             )
-            target_distribution = entmax15(utilities / self.utility_temperature, dim=-1)
+            target_distribution = entmax15(
+                utilities.float() / self.utility_temperature, dim=-1
+            )
             losses.append(
                 entmax15_fenchel_young(
                     step.logits_with_stop / self.score_temperature,

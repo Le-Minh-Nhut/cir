@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import torch
-import torch.nn.functional as F
 from torch import Tensor, nn
+
+from numerics import normalize_fp32
 
 
 class StableFactorFuser(nn.Module):
@@ -26,7 +27,7 @@ class StableFactorFuser(nn.Module):
             ],
             dim=-1,
         )
-        return F.normalize(self.network(features), dim=-1)
+        return normalize_fp32(self.network(features), dim=-1)
 
 
 class SemanticFullQueryAnchor(nn.Module):
@@ -40,4 +41,4 @@ class SemanticFullQueryAnchor(nn.Module):
     def forward(self, reference_global: Tensor, text_semantic_global: Tensor) -> Tensor:
         if reference_global.ndim != 2 or reference_global.shape != text_semantic_global.shape:
             raise ValueError("semantic globals must share [B,D]")
-        return F.normalize(reference_global + text_semantic_global, dim=-1)
+        return normalize_fp32(reference_global + text_semantic_global, dim=-1)

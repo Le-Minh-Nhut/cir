@@ -30,7 +30,8 @@ class AnchorGrounder(nn.Module):
             )
             / self.scale
         )
-        supports = entmax15(logits, dim=-1)
+        # Entmax's threshold/root arithmetic is an explicit AMP FP32 island.
+        supports = entmax15(logits.float(), dim=-1).to(logits.dtype)
         if supports.shape != (intents.shape[0], intents.shape[1], anchor.shape[1]):
             raise AssertionError("support shape invariant failed")
         if not torch.allclose(

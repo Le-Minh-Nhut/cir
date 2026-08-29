@@ -4,10 +4,15 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
+from numerics import fp32_if_low_precision, normalize_fp32
+
 
 def cap_vector(vector: Tensor, cap: float, epsilon: float = 1e-8) -> Tensor:
-    norm = vector.norm(dim=-1, keepdim=True)
-    return cap * torch.tanh(norm / cap) * vector / norm.clamp_min(epsilon)
+    with torch.autocast(device_type=vector.device.type, enabled=False):
+        working = fp32_if_low_precision(vector)
+        norm = working.norm(dim=-1, keepdim=True)
+        bounded = cap * torch.tanh(norm / cap) * working / norm.clamp_min(epsilon)
+    return bounded.to(vector.dtype)
 
 
 class TokenStateReadout(nn.Module):
@@ -45,7 +50,7 @@ class TokenStateReadout(nn.Module):
         weights = self.attention_score(hidden).squeeze(-1).softmax(dim=-1)
         pooled_change = self.output_projection(torch.einsum("bn,bnd->bd", weights, displacement))
         bounded_change = cap_vector(pooled_change, self.query_cap)
-        return F.normalize(reference_global + bounded_change, dim=-1)
+        return normalize_fp32(reference_global + bounded_change, dim=-1)
 
     def forward(
         self, state: Tensor, anchor: Tensor, text_global: Tensor, reference_global: Tensor

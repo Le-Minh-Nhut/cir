@@ -6,6 +6,8 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
+from numerics import fp32_if_low_precision
+
 
 def positive_mask_from_ids(target_ids: Sequence[str], device: torch.device) -> Tensor:
     if not target_ids:
@@ -33,9 +35,19 @@ def retrieval_energy(
         raise ValueError("positive_mask must be [Q,G]")
     if not positive_mask.any(dim=-1).all():
         raise ValueError("every query needs at least one positive")
-    logits = F.normalize(queries, dim=-1) @ F.normalize(target_bank, dim=-1).T / temperature
-    positive_logits = logits.masked_fill(~positive_mask, -torch.inf)
-    return torch.logsumexp(logits, dim=-1) - torch.logsumexp(positive_logits, dim=-1)
+    # Similarity and logsumexp remain FP32 under AMP; gradients still reach both branches.
+    with torch.autocast(device_type=queries.device.type, enabled=False):
+        query_values = fp32_if_low_precision(queries)
+        target_values = fp32_if_low_precision(target_bank)
+        logits = (
+            F.normalize(query_values, dim=-1)
+            @ F.normalize(target_values, dim=-1).T
+            / temperature
+        )
+        positive_logits = logits.masked_fill(~positive_mask, -torch.inf)
+        return torch.logsumexp(logits, dim=-1) - torch.logsumexp(
+            positive_logits, dim=-1
+        )
 
 
 class TerminalRetrievalLoss(nn.Module):

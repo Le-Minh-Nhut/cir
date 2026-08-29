@@ -24,6 +24,8 @@ class ComplementaryClaimLoss(nn.Module):
             raise ValueError("claims=[B,K,L], content_mask=[B,L] required")
         if claims.shape[1] < 2:
             raise ValueError("complementary claims require at least two candidates")
+        # Log-complement, normalization, and JS/KL are explicit FP32 islands.
+        claims = claims.float()
         mask = content_mask[:, None, :]
         valid_claims = claims.clamp(0.0, 1.0) * mask.to(claims.dtype)
         raw_mass = valid_claims.sum(dim=-1)
