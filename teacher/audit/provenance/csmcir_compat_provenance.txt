@@ -1,4 +1,0 @@
-]633;E;echo "upstream_commit=774f94e2076ff17ea91703a6239d2a08f0e1a44e";7e909a8d-1eee-4650-b521-aeedba657348]633;Cupstream_commit=774f94e2076ff17ea91703a6239d2a08f0e1a44e
-patched_file=src/lavis/models/__init__.py
-reason=disable imports of modules absent from upstream repository snapshot
-87fb74265ee2e2fb712be2a4e75cc064d63e5a500ae2a02fcfd9863b77a633a8  teacher/audit/provenance/csmcir_models_init_compat.patch

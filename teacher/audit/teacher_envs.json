@@ -1,7 +1,0 @@
-{
-  "encoder": {"conda_env": "teacher-encoder"},
-  "tme": {"conda_env": "teacher-tme"},
-  "sprc": {"conda_env": "teacher-sprc"},
-  "tgcir": {"conda_env": "teacher-tgcir"},
-  "csmcir": {"conda_env": "teacher-csmcir"}
-}
