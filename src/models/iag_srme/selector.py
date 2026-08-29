@@ -27,7 +27,10 @@ class HardStopSelector(nn.Module):
         indices = torch.where(live, indices, torch.full_like(indices, stop_index))
         hard = torch.nn.functional.one_hot(indices, logits.shape[-1]).to(logits.dtype)
         if self.training:
-            action = hard + continuous - continuous.detach()
+            straight_through = hard + continuous - continuous.detach()
+            # Once a sample has stopped, later decisions are absent from both the forward
+            # trajectory and its surrogate backward graph.
+            action = torch.where(live[:, None], straight_through, hard.detach())
         else:
             action = hard
         return action, hard
