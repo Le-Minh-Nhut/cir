@@ -145,15 +145,23 @@ class IAGSRMECore(nn.Module):
                 candidate_states, anchor, encoded.text_global, encoded.reference_global
             )
             delta_q = candidate_queries - query_before[:, None, :]
-            scores = self.scorer(contexts, delta_z, delta_q, change, supports)
+            scorer_change = change
+            scorer_supports = supports
             if control == "clone_candidate_1":
+                original = original[:, :1].expand_as(original)
+                current = current[:, :1].expand_as(current)
+                change = change[:, :1].expand_as(change)
                 contexts = contexts[:, :1].expand_as(contexts)
                 delta_z = delta_z[:, :1].expand_as(delta_z)
                 candidate_states = candidate_states[:, :1].expand_as(candidate_states)
                 candidate_queries = candidate_queries[:, :1].expand_as(candidate_queries)
                 delta_q = delta_q[:, :1].expand_as(delta_q)
-                scores = scores[:, :1].expand_as(scores)
+                scorer_change = change
+                scorer_supports = supports[:, :1].expand_as(supports)
             elif control == "mean_candidate":
+                original = original.mean(dim=1, keepdim=True).expand_as(original)
+                current = current.mean(dim=1, keepdim=True).expand_as(current)
+                change = change.mean(dim=1, keepdim=True).expand_as(change)
                 contexts = contexts.mean(dim=1, keepdim=True).expand_as(contexts)
                 delta_z = delta_z.mean(dim=1, keepdim=True).expand_as(delta_z)
                 candidate_states = current_state[:, None] + delta_z
@@ -161,7 +169,11 @@ class IAGSRMECore(nn.Module):
                     candidate_states, anchor, encoded.text_global, encoded.reference_global
                 )
                 delta_q = candidate_queries - query_before[:, None, :]
-                scores = self.scorer(contexts, delta_z, delta_q, change, supports)
+                scorer_change = change
+                scorer_supports = supports.mean(dim=1, keepdim=True).expand_as(supports)
+            scores = self.scorer(
+                contexts, delta_z, delta_q, scorer_change, scorer_supports
+            )
             stop_score = torch.zeros(batch_size, 1, dtype=scores.dtype, device=scores.device)
             logits = torch.cat([scores, stop_score], dim=-1)
             if control == "full":

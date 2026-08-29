@@ -5,7 +5,12 @@ from torch import Tensor, nn
 
 
 class HardStopSelector(nn.Module):
-    """Hard forward, differentiable backward, deterministic evaluation selector."""
+    """Hard-forward straight-through Gumbel selector with absorbing STOP.
+
+    During noisy training, one Gumbel-perturbed, temperature-scaled distribution
+    supplies both the hard argmax and soft backward surrogate. Evaluation uses a
+    deterministic argmax. There is never a soft-forward phase.
+    """
 
     def __init__(self, temperature: float = 1.0, gumbel_noise: bool = True) -> None:
         super().__init__()
@@ -17,11 +22,12 @@ class HardStopSelector(nn.Module):
     def forward(self, logits: Tensor, live: Tensor) -> tuple[Tensor, Tensor]:
         if logits.ndim != 2 or live.shape != logits.shape[:1] or live.dtype != torch.bool:
             raise ValueError("logits=[B,K+1] and live=bool[B] are required")
-        continuous = (logits / self.temperature).softmax(dim=-1)
         decision_logits = logits
         if self.training and self.gumbel_noise:
             uniform = torch.rand_like(logits).clamp_(1e-6, 1.0 - 1e-6)
-            decision_logits = logits - torch.log(-torch.log(uniform))
+            gumbel = -torch.log(-torch.log(uniform))
+            decision_logits = logits + gumbel
+        continuous = (decision_logits / self.temperature).softmax(dim=-1)
         indices = decision_logits.argmax(dim=-1)
         stop_index = logits.shape[-1] - 1
         indices = torch.where(live, indices, torch.full_like(indices, stop_index))
