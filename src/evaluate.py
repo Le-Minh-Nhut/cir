@@ -15,12 +15,19 @@ from train import CATEGORIES, build_model
 
 
 def validate_checkpoint_backbone_metadata(
-    metadata: object, expected_checkpoint: str, expected_revision: str
+    metadata: object,
+    expected_checkpoint: str,
+    expected_revision: str,
+    expected_type: str = "fgclip",
 ) -> None:
     if not isinstance(metadata, dict):
         raise ValueError("checkpoint has no reproducible backbone metadata")
-    actual = (metadata.get("backbone_checkpoint"), metadata.get("backbone_revision"))
-    expected = (expected_checkpoint, expected_revision)
+    actual = (
+        metadata.get("backbone_type", "fgclip"),
+        metadata.get("backbone_checkpoint"),
+        metadata.get("backbone_revision"),
+    )
+    expected = (expected_type, expected_checkpoint, expected_revision)
     if actual != expected:
         raise ValueError(f"checkpoint backbone mismatch: stored={actual}, configured={expected}")
 
@@ -37,6 +44,7 @@ def main(cfg: DictConfig) -> None:
         checkpoint.get("metadata"),
         str(cfg.backbone.checkpoint),
         str(cfg.backbone.revision),
+        str(cfg.backbone.get("type", "fgclip")),
     )
     model.load_state_dict(checkpoint["model"])
     model.to(device).eval()

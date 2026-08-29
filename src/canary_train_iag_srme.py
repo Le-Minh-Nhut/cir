@@ -20,13 +20,24 @@ from datasets.fashioniq import FashionIQDataset
 from diagnostics.iag_srme import functional_effective_rank, pairwise_cosine
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from losses.retrieval import positive_mask_from_ids
-from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig, IAGSRMECore
+from models.iag_srme import (
+    BackboneBuildSpec,
+    IAGSRME,
+    IAGSRMEConfig,
+    IAGSRMECore,
+    build_backbone,
+)
 from runtime import configure_torch_runtime, seed_everything
 from training.engine import assert_training_setup, resolve_precision, trainable_parameters
 
 
 BASE_CHECKPOINT = "qihoo360/fg-clip-base"
 BASE_REVISION = "454d76372c2cf5eb48fa0d871fd0534481484d97"
+OPENCLIP_MODEL = "ViT-B-16"
+OPENCLIP_PRETRAINED = "laion2b_s34b_b88k"
+OPENCLIP_VERSION = "3.3.0"
+OPENCLIP_WEIGHTS_REPOSITORY = "laion/CLIP-ViT-B-16-laion2B-s34B-b88K"
+OPENCLIP_WEIGHTS_REVISION = "7288da5a0d6f0b51c4a2b27c624837a9236d0112"
 CATEGORIES = ("dress", "shirt", "toptee")
 
 
@@ -140,18 +151,36 @@ def _batch_diagnostics(output) -> dict[str, object]:
     }
 
 
-def _build_canary_model(device: torch.device) -> tuple[IAGSRME, object, object]:
-    regime = FGCLIPRegime(
-        checkpoint=BASE_CHECKPOINT,
-        revision=BASE_REVISION,
-        train_vision=True,
-        train_text=True,
-        train_text_projection=False,
-    )
-    backbone = FGCLIPBackbone.from_pretrained(regime, internal_width=256)
-    tokenizer, processor = FGCLIPBackbone.load_processor(
-        regime.checkpoint, regime.revision, regime.trust_remote_code
-    )
+def _build_canary_model(
+    device: torch.device, backbone_name: str
+) -> tuple[IAGSRME, object, object]:
+    if backbone_name == "fgclip_base":
+        spec = BackboneBuildSpec(
+            backbone_type="fgclip",
+            checkpoint=BASE_CHECKPOINT,
+            revision=BASE_REVISION,
+            library_version=None,
+            trust_remote_code=True,
+            train_vision=True,
+            train_text=True,
+            train_text_projection=False,
+        )
+    elif backbone_name == "openclip_b16":
+        spec = BackboneBuildSpec(
+            backbone_type="openclip",
+            checkpoint=OPENCLIP_MODEL,
+            revision=OPENCLIP_PRETRAINED,
+            library_version=OPENCLIP_VERSION,
+            weights_repository=OPENCLIP_WEIGHTS_REPOSITORY,
+            weights_revision=OPENCLIP_WEIGHTS_REVISION,
+            trust_remote_code=False,
+            train_vision=True,
+            train_text=True,
+            train_text_projection=False,
+        )
+    else:
+        raise ValueError(f"unsupported canary backbone: {backbone_name}")
+    backbone, tokenizer, processor = build_backbone(spec, internal_width=256)
     core = IAGSRMECore(
         IAGSRMEConfig(
             width=256,
@@ -212,6 +241,11 @@ def _next_batch(iterator, loader):
 def main() -> None:
     parser = argparse.ArgumentParser(description="Canonical GPU FashionIQ IAG-SRME canary")
     parser.add_argument("--steps", type=int, default=100)
+    parser.add_argument(
+        "--backbone",
+        choices=("fgclip_base", "openclip_b16"),
+        default="fgclip_base",
+    )
     parser.add_argument("--precision", choices=("fp16", "bf16", "fp32"), default="fp16")
     parser.add_argument(
         "--dataset-root",
@@ -236,7 +270,7 @@ def main() -> None:
     seed_everything(args.seed, deterministic=True)
     configure_torch_runtime(deterministic=True, benchmark=False)
     precision = resolve_precision(args.precision, device)
-    model, tokenizer, processor = _build_canary_model(device)
+    model, tokenizer, processor = _build_canary_model(device, args.backbone)
     objective = IAGSRMEObjective(ObjectiveConfig(), width=256).to(device)
     loader = _build_loader(args, tokenizer, processor)
     optimizer = AdamW(
@@ -255,9 +289,8 @@ def main() -> None:
     first_successful_step: int | None = None
 
     parameter_families = {
-        "vision": list(model.backbone.model.vision_model.parameters())
-        + list(model.backbone.model.visual_projection.parameters()),
-        "text_encoder": list(model.backbone.model.text_model.parameters()),
+        "vision": list(model.backbone.vision_encoder_parameters()),
+        "text_encoder": list(model.backbone.text_encoder_parameters()),
         "intent_queries": [model.core.intent_encoder.query_bank],
         "grounding": list(model.core.grounder.parameters()),
         "editor": list(model.core.editor.parameters()),
@@ -265,8 +298,8 @@ def main() -> None:
         "scorer": list(model.core.scorer.parameters()),
     }
     tracked = {
-        "vision": next(model.backbone.model.vision_model.parameters()),
-        "text": next(model.backbone.model.text_model.parameters()),
+        "vision": next(model.backbone.vision_encoder_parameters()),
+        "text": next(model.backbone.text_encoder_parameters()),
         "intent": model.core.intent_encoder.query_bank,
         "editor": model.core.editor.direction.weight,
     }
@@ -280,7 +313,7 @@ def main() -> None:
         return hook
 
     handles = [
-        model.backbone.model.vision_model.register_forward_pre_hook(count("vision_model")),
+        model.backbone.vision_call_module.register_forward_pre_hook(count("vision_model")),
         model.backbone.anchor_projection.register_forward_pre_hook(count("anchor_projection")),
         model.core.intent_encoder.register_forward_pre_hook(count("intent")),
         model.core.grounder.register_forward_pre_hook(count("grounder")),
@@ -476,6 +509,7 @@ def main() -> None:
         "status": "complete",
         "device": str(device),
         "gpu_name": torch.cuda.get_device_name(device),
+        "backbone": args.backbone,
         "steps": args.steps,
         "attempted_steps": args.steps,
         "successful_optimizer_steps": successful_optimizer_steps,

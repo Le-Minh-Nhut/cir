@@ -24,18 +24,18 @@ from evaluation.fashioniq import (
 )
 from models.iag_srme import (
     BackboneOutput,
-    FGCLIPBackbone,
-    FGCLIPRegime,
     IAGSRME,
     IAGSRMEConfig,
     IAGSRMECore,
     IAGSRMEOutput,
+    backbone_spec_from_metadata,
+    build_backbone,
 )
 from runtime import configure_torch_runtime, resolve_device, seed_everything
 
 
 CATEGORIES = ("dress", "shirt", "toptee")
-PROTOCOL = "fashioniq_original"
+LEGACY_DEFAULT_PROTOCOL = "fashioniq_original"
 SPLIT = "val"
 CAPTION_POLICY = "ordered_and"
 REQUIRED_REPORT_KEYS = {
@@ -544,10 +544,6 @@ def _load_checkpoint_model(
     metadata = checkpoint.get("metadata")
     if not isinstance(metadata, dict):
         raise ValueError("checkpoint has no reproducible backbone metadata")
-    backbone_checkpoint = metadata.get("backbone_checkpoint")
-    backbone_revision = metadata.get("backbone_revision")
-    if not isinstance(backbone_checkpoint, str) or not isinstance(backbone_revision, str):
-        raise ValueError("checkpoint backbone checkpoint/revision metadata is incomplete")
     state = checkpoint.get("model")
     if not isinstance(state, dict):
         raise ValueError("checkpoint has no model state")
@@ -558,17 +554,13 @@ def _load_checkpoint_model(
     if candidates != 4 or width != 256:
         raise ValueError("diagnostic runner supports canonical K=4, d=256 checkpoints")
 
-    regime = FGCLIPRegime(
-        checkpoint=backbone_checkpoint,
-        revision=backbone_revision,
+    spec = backbone_spec_from_metadata(
+        metadata,
         train_vision=False,
         train_text=False,
         train_text_projection=False,
     )
-    backbone = FGCLIPBackbone.from_pretrained(regime, internal_width=width)
-    tokenizer, processor = FGCLIPBackbone.load_processor(
-        regime.checkpoint, regime.revision, regime.trust_remote_code
-    )
+    backbone, tokenizer, processor = build_backbone(spec, internal_width=width)
     enable_claim = any(key.startswith("core.claim_head.") for key in state)
     enable_factor = any(key.startswith("core.factor_fuser.") for key in state)
     core = IAGSRMECore(
@@ -780,6 +772,10 @@ def main() -> None:
     device = resolve_device(args.device, args.accelerator_index)
     model, tokenizer, processor, checkpoint = _load_checkpoint_model(args.checkpoint, device)
     model.eval()
+    metadata = checkpoint["metadata"]
+    protocol = metadata.get("evaluation_protocol", LEGACY_DEFAULT_PROTOCOL)
+    if protocol not in {"fashioniq_original", "fashioniq_val"}:
+        raise ValueError(f"unsupported checkpoint evaluation protocol: {protocol}")
 
     annotation_root = args.dataset_root / "captions"
     split_root = args.dataset_root / "image_splits"
@@ -811,7 +807,7 @@ def main() -> None:
             collate_fn=collator,
         )
         gallery_ids = build_fashioniq_gallery(
-            PROTOCOL, split_root, category, dataset.annotations, SPLIT
+            protocol, split_root, category, dataset.annotations, SPLIT
         )
         gallery = encode_gallery(
             model,
@@ -862,21 +858,25 @@ def main() -> None:
     functional = global_accumulator.functional_summary()
     dynamic = global_accumulator.dynamic_summary()
     specialization = global_accumulator.specialization_summary()
-    metadata = checkpoint["metadata"]
     report = {
         "checkpoint": str(args.checkpoint.resolve()),
         "checkpoint_epoch": checkpoint.get("epoch"),
         "checkpoint_metric": checkpoint.get("metric"),
         "backbone_metadata": {
+            "type": metadata.get("backbone_type", "fgclip"),
             "checkpoint": metadata["backbone_checkpoint"],
             "revision": metadata["backbone_revision"],
+            "library": metadata.get("backbone_library"),
+            "library_version": metadata.get("backbone_library_version"),
+            "weights_repository": metadata.get("backbone_weights_repository"),
+            "weights_revision": metadata.get("backbone_weights_revision"),
             "training_precision": metadata.get("precision"),
         },
         "protocol": {
             "dataset": "FashionIQ",
             "split": SPLIT,
             "caption_policy": CAPTION_POLICY,
-            "gallery_protocol": PROTOCOL,
+            "gallery_protocol": protocol,
             "reference_filtering": (
                 "remove the query reference image from its gallery row unless it is the target"
             ),

@@ -17,7 +17,13 @@ from datasets.common import DirectoryImageStore
 from datasets.fashioniq import FashionIQDataset
 from evaluation.fashioniq import evaluate_fashioniq
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
-from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig, IAGSRMECore
+from models.iag_srme import (
+    BackboneBuildSpec,
+    IAGSRME,
+    IAGSRMEConfig,
+    IAGSRMECore,
+    build_backbone,
+)
 from models.iag_srme.backbone import assert_cache_legal
 from runtime import configure_torch_runtime, resolve_device, seed_everything
 from training.engine import fit, resolve_precision, trainable_parameters
@@ -27,19 +33,32 @@ CATEGORIES = ("dress", "shirt", "toptee")
 
 
 def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
-    regime = FGCLIPRegime(
+    spec = BackboneBuildSpec(
+        backbone_type=str(cfg.backbone.get("type", "fgclip")),
         checkpoint=str(cfg.backbone.checkpoint),
         revision=str(cfg.backbone.revision),
         train_vision=bool(cfg.backbone.train_vision),
         train_text=bool(cfg.backbone.train_text),
         train_text_projection=bool(cfg.backbone.train_text_projection),
-        trust_remote_code=bool(cfg.backbone.trust_remote_code),
+        trust_remote_code=bool(cfg.backbone.get("trust_remote_code", False)),
+        library_version=(
+            None
+            if cfg.backbone.get("library_version") is None
+            else str(cfg.backbone.library_version)
+        ),
+        weights_repository=(
+            None
+            if cfg.backbone.get("weights_repository") is None
+            else str(cfg.backbone.weights_repository)
+        ),
+        weights_revision=(
+            None
+            if cfg.backbone.get("weights_revision") is None
+            else str(cfg.backbone.weights_revision)
+        ),
     )
-    assert_cache_legal(regime.train_vision, cfg.backbone.get("image_cache_path"))
-    backbone = FGCLIPBackbone.from_pretrained(regime, int(cfg.model.width))
-    tokenizer, processor = FGCLIPBackbone.load_processor(
-        regime.checkpoint, regime.revision, regime.trust_remote_code
-    )
+    assert_cache_legal(spec.train_vision, cfg.backbone.get("image_cache_path"))
+    backbone, tokenizer, processor = build_backbone(spec, int(cfg.model.width))
     model_config = IAGSRMEConfig(
         width=int(cfg.model.width),
         num_candidates=int(cfg.model.num_candidates),
@@ -149,6 +168,7 @@ def main(cfg: DictConfig) -> None:
         device=device,
         output_dir=str(cfg.paths.output_root),
         precision=precision,
+        evaluation_protocol=str(cfg.protocol.name),
     )
 
 

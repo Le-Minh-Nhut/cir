@@ -145,6 +145,7 @@ def save_checkpoint(
     epoch: int,
     metric: float,
     precision: PrecisionPolicy,
+    evaluation_protocol: str,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -155,8 +156,18 @@ def save_checkpoint(
             "epoch": epoch,
             "metric": metric,
             "metadata": {
+                "backbone_type": model.backbone.backbone_type,
                 "backbone_checkpoint": model.backbone.checkpoint,
                 "backbone_revision": model.backbone.revision,
+                "backbone_library": model.backbone.library,
+                "backbone_library_version": model.backbone.library_version,
+                "backbone_weights_repository": getattr(
+                    model.backbone, "weights_repository", None
+                ),
+                "backbone_weights_revision": getattr(
+                    model.backbone, "weights_revision", None
+                ),
+                "evaluation_protocol": evaluation_protocol,
                 "precision": precision.name,
             },
         },
@@ -175,6 +186,7 @@ def fit(
     device: torch.device,
     output_dir: str | Path,
     precision: PrecisionPolicy,
+    evaluation_protocol: str,
     primary_metric: str = "mean_recall",
 ) -> None:
     assert_training_setup(model, objective, optimizer, device)
@@ -203,6 +215,7 @@ def fit(
             epoch + 1,
             metric,
             precision,
+            evaluation_protocol,
         )
         if metric > best:
             best = metric
@@ -214,6 +227,7 @@ def fit(
                 epoch + 1,
                 metric,
                 precision,
+                evaluation_protocol,
             )
         print(
             f"epoch={epoch + 1}/{epochs} total={training['total']:.4f} "
