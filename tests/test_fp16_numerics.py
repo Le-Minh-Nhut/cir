@@ -2,24 +2,36 @@ from __future__ import annotations
 
 import torch
 from entmax import entmax15
-from torch import nn
+from pytest import MonkeyPatch
+from torch import Tensor, nn
 
 from losses.complementary_claim import ComplementaryClaimLoss
 from losses.factor import FactorCompletenessLoss
 from losses.marginal import entmax15_fenchel_young
 from losses.retrieval import TerminalRetrievalLoss
+import models.iag_srme.grounding as grounding_module
 from models.iag_srme.grounding import AnchorGrounder
 from models.iag_srme.readout import cap_vector
 from numerics import normalize_fp32
 
 
-def test_fp16_grounding_entmax_is_finite_normalized_and_sparse() -> None:
+def test_fp16_grounding_entmax_is_finite_normalized_and_sparse(
+    monkeypatch: MonkeyPatch,
+) -> None:
     torch.manual_seed(181)
+    entmax_input_dtypes: list[torch.dtype] = []
+
+    def recording_entmax(logits: Tensor, dim: int) -> Tensor:
+        entmax_input_dtypes.append(logits.dtype)
+        return entmax15(logits, dim=dim)
+
+    monkeypatch.setattr(grounding_module, "entmax15", recording_entmax)
     grounder = AnchorGrounder(width=4).half()
     intents = (20 * torch.randn(2, 4, 4)).half().requires_grad_()
     anchor = (20 * torch.randn(2, 9, 4)).half().requires_grad_()
     supports = grounder(intents, anchor)
 
+    assert entmax_input_dtypes == [torch.float32]
     assert supports.dtype is torch.float16
     assert torch.isfinite(supports).all()
     assert torch.allclose(supports.sum(dim=-1).float(), torch.ones(2, 4), atol=1e-3)
