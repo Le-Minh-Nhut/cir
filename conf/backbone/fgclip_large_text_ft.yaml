@@ -1,5 +1,6 @@
 name: fgclip_large_text_ft
 checkpoint: qihoo360/fg-clip-large
+revision: 5a8f0f23b5a06dc92310e907599b2a0c2d58fe6f
 train_vision: false
 train_text: true
 trust_remote_code: true

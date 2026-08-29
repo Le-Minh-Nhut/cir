@@ -15,6 +15,7 @@ from .outputs import BackboneOutput
 @dataclass(frozen=True, slots=True)
 class FGCLIPRegime:
     checkpoint: str
+    revision: str
     train_vision: bool
     train_text: bool = True
     trust_remote_code: bool = True
@@ -23,17 +24,25 @@ class FGCLIPRegime:
 class FGCLIPBackbone(nn.Module):
     """Thin adapter around the official FG-CLIP v1 checkpoint API.
 
-    The adapter intentionally calls ``get_image_dense_features`` for patch tokens and
-    ``text_model`` for contextual states. It never substitutes FG-CLIP2.
+    Reference encoding derives dense and global features from one official vision-model
+    output. Target/gallery encoding uses only the checkpoint's global-image API. The
+    adapter never substitutes FG-CLIP2.
     """
 
     def __init__(
-        self, model: nn.Module, internal_width: int = 256, train_vision: bool = True
+        self,
+        model: nn.Module,
+        internal_width: int = 256,
+        train_vision: bool = True,
+        checkpoint: str | None = None,
+        revision: str | None = None,
     ) -> None:
         super().__init__()
         self.model = model
         self.internal_width = internal_width
         self.train_vision = train_vision
+        self.checkpoint = checkpoint
+        self.revision = revision
         config = getattr(model, "config", None)
         if config is None:
             raise ValueError("FG-CLIP model must expose config")
@@ -53,9 +62,17 @@ class FGCLIPBackbone(nn.Module):
         from transformers import AutoModelForCausalLM
 
         model = AutoModelForCausalLM.from_pretrained(
-            regime.checkpoint, trust_remote_code=regime.trust_remote_code
+            regime.checkpoint,
+            revision=regime.revision,
+            trust_remote_code=regime.trust_remote_code,
         )
-        backbone = cls(model, internal_width=internal_width, train_vision=regime.train_vision)
+        backbone = cls(
+            model,
+            internal_width=internal_width,
+            train_vision=regime.train_vision,
+            checkpoint=regime.checkpoint,
+            revision=regime.revision,
+        )
         for parameter in backbone.model.text_model.parameters():
             parameter.requires_grad_(regime.train_text)
         for parameter in backbone.model.text_projection.parameters():
@@ -66,12 +83,16 @@ class FGCLIPBackbone(nn.Module):
         return backbone
 
     @staticmethod
-    def load_processor(checkpoint: str, trust_remote_code: bool = True) -> tuple[Any, Any]:
+    def load_processor(
+        checkpoint: str, revision: str, trust_remote_code: bool = True
+    ) -> tuple[Any, Any]:
         from transformers import AutoImageProcessor, AutoTokenizer
 
-        tokenizer = AutoTokenizer.from_pretrained(checkpoint, trust_remote_code=trust_remote_code)
+        tokenizer = AutoTokenizer.from_pretrained(
+            checkpoint, revision=revision, trust_remote_code=trust_remote_code
+        )
         image_processor = AutoImageProcessor.from_pretrained(
-            checkpoint, trust_remote_code=trust_remote_code
+            checkpoint, revision=revision, trust_remote_code=trust_remote_code
         )
         return tokenizer, image_processor
 
@@ -91,20 +112,45 @@ class FGCLIPBackbone(nn.Module):
             self.model.visual_projection.eval()
         return self
 
-    def encode_images(self, pixel_values: Tensor) -> tuple[Tensor, Tensor]:
+    def encode_reference_images(self, pixel_values: Tensor) -> tuple[Tensor, Tensor]:
+        """Return projected patch anchor and global embedding from one vision pass.
+
+        This mirrors the official FG-CLIP v1 dense/global helpers: the dense branch
+        uses the penultimate hidden state, ``forward_without_attn``, drops CLS, then
+        applies post-layernorm and ``visual_projection``; the global branch projects
+        the vision pooler output.
+        """
+
         if pixel_values.ndim != 4:
             raise ValueError("pixel_values must be [B,C,H,W]")
         context = nullcontext() if self.train_vision else torch.no_grad()
         with context:
-            dense = self.model.get_image_dense_features(pixel_values=pixel_values)
-            global_features = self.model.get_image_features(pixel_values=pixel_values)
+            vision_outputs = self.model.vision_model(
+                pixel_values=pixel_values, output_hidden_states=True, return_dict=True
+            )
+            if vision_outputs.hidden_states is None:
+                raise RuntimeError("FG-CLIP vision_model did not return hidden states")
+            dense = self.model.forward_without_attn(vision_outputs.hidden_states[-2])[:, 1:]
+            dense = self.model.vision_model.post_layernorm(dense)
+            dense = self.model.visual_projection(dense)
+            global_features = self.model.visual_projection(vision_outputs.pooler_output)
         anchor = self.anchor_projection(dense)
         reference_global = F.normalize(global_features, dim=-1)
         return anchor, reference_global
 
+    def encode_global_images(self, pixel_values: Tensor) -> Tensor:
+        """Return retrieval embeddings without constructing dense patch features."""
+
+        if pixel_values.ndim != 4:
+            raise ValueError("pixel_values must be [B,C,H,W]")
+        context = nullcontext() if self.train_vision else torch.no_grad()
+        with context:
+            global_features = self.model.get_image_features(pixel_values=pixel_values)
+        return F.normalize(global_features, dim=-1)
+
     def encode_text(
         self, input_ids: Tensor, attention_mask: Tensor, content_mask: Tensor
-    ) -> tuple[Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor]:
         outputs = self.model.text_model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -113,7 +159,12 @@ class FGCLIPBackbone(nn.Module):
         )
         text_tokens = self.text_projection(outputs.last_hidden_state)
         text_global = masked_text_mean(text_tokens, content_mask)
-        return text_tokens, text_global
+        # This is the checkpoint's trained retrieval-space text representation, not
+        # a detached random auxiliary head. It remains auxiliary-only in IAG-SRME.
+        text_semantic_global = F.normalize(
+            self.model.text_projection(outputs.pooler_output), dim=-1
+        )
+        return text_tokens, text_global, text_semantic_global
 
     def forward(
         self,
@@ -122,13 +173,16 @@ class FGCLIPBackbone(nn.Module):
         attention_mask: Tensor,
         content_mask: Tensor,
     ) -> BackboneOutput:
-        anchor, reference_global = self.encode_images(reference_pixels)
-        text_tokens, text_global = self.encode_text(input_ids, attention_mask, content_mask)
+        anchor, reference_global = self.encode_reference_images(reference_pixels)
+        text_tokens, text_global, text_semantic_global = self.encode_text(
+            input_ids, attention_mask, content_mask
+        )
         return BackboneOutput(
             anchor=anchor,
             reference_global=reference_global,
             text_tokens=text_tokens,
             text_global=text_global,
+            text_semantic_global=text_semantic_global,
             text_content_mask=content_mask,
         )
 

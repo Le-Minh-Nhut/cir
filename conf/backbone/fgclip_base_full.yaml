@@ -1,5 +1,6 @@
 name: fgclip_base_full
 checkpoint: qihoo360/fg-clip-base
+revision: 454d76372c2cf5eb48fa0d871fd0534481484d97
 train_vision: true
 train_text: true
 trust_remote_code: true
