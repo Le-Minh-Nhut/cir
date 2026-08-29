@@ -5,6 +5,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import torch
+from torch import nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -13,6 +14,48 @@ from data.images import ImageBatch
 from losses.objective import IAGSRMEObjective
 from losses.retrieval import positive_mask_from_ids
 from models.iag_srme.model import IAGSRME
+
+
+def trainable_parameters(*modules: nn.Module) -> list[nn.Parameter]:
+    """Return the exact parameter objects that an optimizer must own."""
+
+    return [
+        parameter
+        for module in modules
+        for parameter in module.parameters()
+        if parameter.requires_grad
+    ]
+
+
+def assert_training_setup(
+    model: nn.Module,
+    objective: nn.Module,
+    optimizer: Optimizer,
+    device: torch.device,
+) -> None:
+    """Validate device ownership and optimizer identity before any update."""
+
+    expected = trainable_parameters(model, objective)
+    wrong_device = [parameter.device for parameter in expected if parameter.device != device]
+    if wrong_device:
+        raise RuntimeError(
+            f"model/objective must be moved to {device} before optimizer construction; "
+            f"found parameter on {wrong_device[0]}"
+        )
+    optimizer_parameters = [
+        parameter for group in optimizer.param_groups for parameter in group["params"]
+    ]
+    expected_ids = {id(parameter) for parameter in expected}
+    optimizer_ids = {id(parameter) for parameter in optimizer_parameters}
+    if len(optimizer_parameters) != len(optimizer_ids):
+        raise RuntimeError("optimizer contains duplicate parameter references")
+    if optimizer_ids != expected_ids:
+        missing = len(expected_ids - optimizer_ids)
+        stale_or_extra = len(optimizer_ids - expected_ids)
+        raise RuntimeError(
+            "optimizer parameters do not match the live model/objective objects: "
+            f"missing={missing}, stale_or_extra={stale_or_extra}"
+        )
 
 
 def set_epoch(loader: DataLoader[ImageBatch], epoch: int) -> None:
@@ -104,8 +147,7 @@ def fit(
     use_amp: bool,
     primary_metric: str = "mean_recall",
 ) -> None:
-    model.to(device)
-    objective.to(device)
+    assert_training_setup(model, objective, optimizer, device)
     destination = Path(output_dir)
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp and device.type == "cuda")
     best = float("-inf")

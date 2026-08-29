@@ -16,7 +16,7 @@ from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig, IAGSRMECore
 from models.iag_srme.backbone import assert_cache_legal
 from runtime import configure_torch_runtime, resolve_device, seed_everything
-from training.engine import fit
+from training.engine import fit, trainable_parameters
 
 
 CATEGORIES = ("dress", "shirt", "toptee")
@@ -67,6 +67,8 @@ def main(cfg: DictConfig) -> None:
     device = resolve_device(str(cfg.runtime.device), int(cfg.runtime.accelerator_index))
     model, tokenizer, processor = build_model(cfg)
     objective = build_objective(cfg)
+    model.to(device)
+    objective.to(device)
 
     dataset_root = Path(cfg.dataset.root)
     annotation_root = dataset_root / str(cfg.dataset.annotation_dir)
@@ -113,11 +115,7 @@ def main(cfg: DictConfig) -> None:
             collate_fn=val_collator,
         )
     optimizer = AdamW(
-        [
-            parameter
-            for parameter in list(model.parameters()) + list(objective.parameters())
-            if parameter.requires_grad
-        ],
+        trainable_parameters(model, objective),
         lr=float(cfg.experiment.learning_rate),
         weight_decay=float(cfg.experiment.weight_decay),
     )
