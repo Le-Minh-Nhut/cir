@@ -32,8 +32,8 @@ from training.engine import fit, resolve_precision, trainable_parameters
 CATEGORIES = ("dress", "shirt", "toptee")
 
 
-def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
-    spec = BackboneBuildSpec(
+def backbone_build_spec_from_config(cfg: DictConfig) -> BackboneBuildSpec:
+    return BackboneBuildSpec(
         backbone_type=str(cfg.backbone.get("type", "fgclip")),
         checkpoint=str(cfg.backbone.checkpoint),
         revision=str(cfg.backbone.revision),
@@ -57,6 +57,10 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
             else str(cfg.backbone.weights_revision)
         ),
     )
+
+
+def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
+    spec = backbone_build_spec_from_config(cfg)
     assert_cache_legal(spec.train_vision, cfg.backbone.get("image_cache_path"))
     backbone, tokenizer, processor = build_backbone(spec, int(cfg.model.width))
     model_config = IAGSRMEConfig(

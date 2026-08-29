@@ -4,14 +4,43 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import torch
+import pytest
 import yaml
 from torch import nn
 from torch.optim import SGD
 
 from datasets.fashioniq import FashionIQAnnotation
 from evaluation.fashioniq import build_fashioniq_gallery
-from models.iag_srme import backbone_spec_from_metadata
+from models.iag_srme import (
+    BackboneBuildSpec,
+    backbone_spec_from_metadata,
+    validate_checkpoint_backbone_metadata,
+)
 from training.engine import PrecisionPolicy, save_checkpoint
+
+
+OPENCLIP_METADATA = {
+    "backbone_type": "openclip",
+    "backbone_checkpoint": "ViT-B-16",
+    "backbone_revision": "laion2b_s34b_b88k",
+    "backbone_library_version": "3.3.0",
+    "backbone_weights_repository": "laion/CLIP-ViT-B-16-laion2B-s34B-b88K",
+    "backbone_weights_revision": "7288da5a0d6f0b51c4a2b27c624837a9236d0112",
+}
+
+
+def _expected_openclip_spec() -> BackboneBuildSpec:
+    return BackboneBuildSpec(
+        backbone_type="openclip",
+        checkpoint="ViT-B-16",
+        revision="laion2b_s34b_b88k",
+        library_version="3.3.0",
+        weights_repository="laion/CLIP-ViT-B-16-laion2B-s34B-b88K",
+        weights_revision="7288da5a0d6f0b51c4a2b27c624837a9236d0112",
+        train_vision=True,
+        train_text=True,
+        train_text_projection=False,
+    )
 
 
 def test_fashioniq_val_protocol_uses_pair_union_gallery(tmp_path: Path) -> None:
@@ -57,6 +86,43 @@ def test_diagnostic_backbone_factory_recognizes_openclip_metadata() -> None:
     assert spec.library_version == "3.3.0"
     assert spec.weights_repository == "repository"
     assert spec.weights_revision == "immutable-sha"
+
+
+def test_correct_openclip_checkpoint_identity_passes() -> None:
+    validate_checkpoint_backbone_metadata(OPENCLIP_METADATA, _expected_openclip_spec())
+
+
+@pytest.mark.parametrize(
+    ("field", "wrong_value"),
+    [
+        ("backbone_weights_revision", "wrong-immutable-sha"),
+        ("backbone_library_version", "3.2.0"),
+        ("backbone_weights_repository", "wrong/repository"),
+    ],
+)
+def test_openclip_checkpoint_identity_rejects_reproducibility_mismatch(
+    field: str, wrong_value: str
+) -> None:
+    metadata = {**OPENCLIP_METADATA, field: wrong_value}
+    with pytest.raises(ValueError, match="backbone mismatch"):
+        validate_checkpoint_backbone_metadata(metadata, _expected_openclip_spec())
+
+
+def test_legacy_fgclip_checkpoint_identity_remains_compatible() -> None:
+    metadata = {
+        "backbone_checkpoint": "qihoo360/fg-clip-base",
+        "backbone_revision": "verified-revision",
+    }
+    expected = BackboneBuildSpec(
+        backbone_type="fgclip",
+        checkpoint="qihoo360/fg-clip-base",
+        revision="verified-revision",
+        train_vision=True,
+        train_text=True,
+        train_text_projection=False,
+        trust_remote_code=True,
+    )
+    validate_checkpoint_backbone_metadata(metadata, expected)
 
 
 def test_checkpoint_persists_openclip_and_val_protocol_metadata(tmp_path: Path) -> None:

@@ -29,9 +29,20 @@ projection token-wise, then applies only `Linear(512,256) + LayerNorm(256)` for 
 IAG width contract. The reference global and gallery embeddings use OpenCLIP's pretrained
 pooled/projected retrieval representation.
 
+For the pinned OpenCLIP 3.3.0 API, `image_indices=1` means “take the last one transformer
+block,” `normalize_intermediates=True` applies `visual.ln_post`, and the default
+`image_output_extra_tokens=False` (passed explicitly) removes the CLS prefix from the NLC
+intermediates. The
+adapter asserts the resulting native tensor is `[B,196,768]` before applying the pretrained
+visual projection. A real-checkpoint smoke invariant compares the reference global from this
+single-pass path with `encode_image(..., normalize=True)` for the same pixels.
+
 The text path uses the matching OpenCLIP text tower. Final contextual token states are mapped
 to width 256 with `Linear + LayerNorm`; the official projected global text feature remains the
 auxiliary semantic global. No FG-CLIP text representation is mixed into this experiment.
+The collator-validity mask follows OpenCLIP's own EOT argmax contract: it includes the
+contiguous SOT-through-EOT sequence, then the generic collator excludes SOT and EOT to form
+the IAG content mask. It does not interpret token value zero as padding semantics.
 
 ## Trainability
 

@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from evaluate import validate_checkpoint_backbone_metadata
 from evaluation.fashioniq import build_validation_datasets
+from models.iag_srme import BackboneBuildSpec, validate_checkpoint_backbone_metadata
 
 
 def test_evaluation_dataset_uses_explicit_caption_policy(tmp_path) -> None:
@@ -44,5 +44,13 @@ def test_evaluation_rejects_checkpoint_from_another_backbone_revision() -> None:
     metadata = {"backbone_checkpoint": "qihoo360/fg-clip-base", "backbone_revision": "abc"}
     with pytest.raises(ValueError, match="backbone mismatch"):
         validate_checkpoint_backbone_metadata(
-            metadata, "qihoo360/fg-clip-base", "verified-revision"
+            metadata,
+            BackboneBuildSpec(
+                backbone_type="fgclip",
+                checkpoint="qihoo360/fg-clip-base",
+                revision="verified-revision",
+                train_vision=True,
+                train_text=True,
+                train_text_projection=False,
+            ),
         )

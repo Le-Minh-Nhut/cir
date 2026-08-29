@@ -25,6 +25,21 @@ class OpenCLIPRegime:
     train_text_projection: bool = False
 
 
+def openclip_valid_token_mask(input_ids: Tensor) -> Tensor:
+    """Mark the contiguous OpenCLIP sequence from SOT through EOT as valid.
+
+    Standard CLIP tokenization assigns EOT the greatest token ID, which is the
+    same contract used by OpenCLIP's argmax text pooling. Token value zero is
+    therefore not treated as padding here; validity is determined by position
+    relative to EOT.
+    """
+    if input_ids.ndim != 2 or input_ids.shape[1] == 0:
+        raise ValueError("OpenCLIP input IDs must be a non-empty [B,L] tensor")
+    eot_positions = input_ids.argmax(dim=-1)
+    positions = torch.arange(input_ids.shape[1], device=input_ids.device)
+    return positions.unsqueeze(0) <= eot_positions.unsqueeze(1)
+
+
 class OpenCLIPTokenizerAdapter:
     """Expose OpenCLIP tokenization through the collator's tokenizer contract."""
 
@@ -48,7 +63,7 @@ class OpenCLIPTokenizerAdapter:
         input_ids = self.tokenizer(texts, context_length=max_length)
         return {
             "input_ids": input_ids,
-            "attention_mask": input_ids.ne(0),
+            "attention_mask": openclip_valid_token_mask(input_ids),
         }
 
 
@@ -229,10 +244,22 @@ class OpenCLIPBackbone(nn.Module):
                 normalize=True,
                 normalize_intermediates=True,
                 image_output_fmt="NLC",
+                image_output_extra_tokens=False,
             )
-            contextual_tokens = outputs["image_intermediates"][-1]
-            if contextual_tokens.shape[1] != self.patch_tokens:
-                raise AssertionError("OpenCLIP anchor must contain exactly 196 patch tokens")
+            intermediates = outputs["image_intermediates"]
+            if len(intermediates) != 1:
+                raise AssertionError("image_indices=1 must return exactly the last visual block")
+            contextual_tokens = intermediates[0]
+            expected_shape = (
+                pixel_values.shape[0],
+                self.patch_tokens,
+                int(self.model.visual.proj.shape[0]),
+            )
+            if tuple(contextual_tokens.shape) != expected_shape:
+                raise AssertionError(
+                    "normalized final-block OpenCLIP spatial-token contract failed: "
+                    f"actual={tuple(contextual_tokens.shape)}, expected={expected_shape}"
+                )
             dense_retrieval_tokens = contextual_tokens @ self.model.visual.proj
             reference_global = outputs["image_features"]
         anchor = self.anchor_projection(dense_retrieval_tokens)

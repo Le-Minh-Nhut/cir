@@ -91,6 +91,30 @@ def main() -> None:
     final_positions = attention_mask.sum(dim=1).sub(1)
     content_mask.scatter_(1, final_positions[:, None], False)
 
+    model.eval()
+    with torch.no_grad():
+        _, reference_global_from_intermediates = model.backbone.encode_reference_images(
+            reference_pixels
+        )
+        global_only_from_encode_image = model.encode_global_images(reference_pixels)
+    torch.testing.assert_close(
+        reference_global_from_intermediates,
+        global_only_from_encode_image,
+        atol=1e-6,
+        rtol=1e-5,
+    )
+    global_equivalence_max_error = float(
+        (reference_global_from_intermediates - global_only_from_encode_image).abs().max()
+    )
+    global_equivalence_cosine = float(
+        torch.nn.functional.cosine_similarity(
+            reference_global_from_intermediates.float(),
+            global_only_from_encode_image.float(),
+            dim=-1,
+        ).mean()
+    )
+    model.train()
+
     tracked = {
         "openclip_vision": next(model.backbone.vision_encoder_parameters()),
         "openclip_visual_projection": model.backbone.model.visual.proj,
@@ -99,6 +123,7 @@ def main() -> None:
         "text_adapter": model.backbone.text_projection[0].weight,
         "intent": model.core.intent_encoder.query_bank,
         "grounder": model.core.grounder.intent_projection.weight,
+        "context": model.core.context_fuser.fusion[0].weight,
         "editor": model.core.editor.direction.weight,
         "readout": model.core.readout.output_projection.weight,
         "scorer": model.core.scorer.score_head[-1].weight,
@@ -109,6 +134,10 @@ def main() -> None:
     target_embeddings = model.encode_global_images(target_pixels)
     losses = objective(output, target_embeddings, torch.eye(2, dtype=torch.bool, device=device))
     losses["total"].backward()
+    if model.backbone.model.text_projection.grad is not None:
+        raise AssertionError("frozen OpenCLIP text retrieval projection received a gradient")
+    if model.backbone.model.logit_scale.grad is not None:
+        raise AssertionError("frozen OpenCLIP logit scale received a gradient")
     gradient_norms = {name: _gradient_norm(parameter) for name, parameter in tracked.items()}
     if not all(value > 0.0 for value in gradient_norms.values()):
         raise AssertionError(f"expected nonzero OpenCLIP smoke gradients: {gradient_norms}")
@@ -142,7 +171,16 @@ def main() -> None:
                     "intents": list(output.intents.shape),
                     "supports": list(output.supports.shape),
                     "final_query": list(output.final_query.shape),
+                    "contextual_patches_before_visual_projection": [
+                        reference_pixels.shape[0],
+                        model.backbone.patch_tokens,
+                        int(model.backbone.model.visual.proj.shape[0]),
+                    ],
                 },
+                "reference_global_vs_global_only_max_abs_error": (
+                    global_equivalence_max_error
+                ),
+                "reference_global_vs_global_only_cosine": global_equivalence_cosine,
                 "losses": {name: float(value.detach()) for name, value in losses.items()},
                 "gradient_norms": gradient_norms,
                 "parameter_max_abs_deltas": parameter_deltas,

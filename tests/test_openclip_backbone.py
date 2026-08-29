@@ -10,7 +10,11 @@ from torch import Tensor, nn
 
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from models.iag_srme import IAGSRME, IAGSRMEConfig, IAGSRMECore
-from models.iag_srme.openclip_backbone import OpenCLIPBackbone
+from models.iag_srme.openclip_backbone import (
+    OpenCLIPBackbone,
+    OpenCLIPTokenizerAdapter,
+    openclip_valid_token_mask,
+)
 
 
 class TinyTransformer(nn.Module):
@@ -53,6 +57,7 @@ class TinyOpenCLIP(nn.Module):
         self.logit_scale = nn.Parameter(torch.ones(()))
         self.image_intermediate_calls = 0
         self.global_image_calls = 0
+        self.last_image_intermediate_kwargs: dict[str, object] | None = None
 
     def forward_intermediates(
         self,
@@ -61,10 +66,10 @@ class TinyOpenCLIP(nn.Module):
         text: Tensor | None = None,
         **kwargs,
     ) -> dict[str, Tensor | list[Tensor]]:
-        del kwargs
         result: dict[str, Tensor | list[Tensor]] = {}
         if image is not None:
             self.image_intermediate_calls += 1
+            self.last_image_intermediate_kwargs = dict(kwargs)
             tokens = self.visual.contextual_tokens(image)
             global_features = tokens.mean(dim=1) @ self.visual.proj
             result["image_intermediates"] = [tokens]
@@ -141,8 +146,56 @@ def test_openclip_reference_is_single_pass_and_gallery_is_global_only() -> None:
 
     assert anchor.shape == (2, 196, 8)
     assert reference_global.shape == gallery_global.shape == (2, 6)
+    torch.testing.assert_close(reference_global, gallery_global, atol=1e-7, rtol=1e-6)
     assert model.backbone.model.image_intermediate_calls == 1
     assert model.backbone.model.global_image_calls == 1
+
+
+def test_openclip_reference_requests_normalized_last_block_spatial_tokens() -> None:
+    model = _build_model().eval()
+    pixels, _, _, _ = _inputs()
+
+    anchor, _ = model.backbone.encode_reference_images(pixels)
+
+    assert anchor.shape == (2, 196, 8)
+    assert model.backbone.model.last_image_intermediate_kwargs == {
+        "image_indices": 1,
+        "normalize": True,
+        "normalize_intermediates": True,
+        "image_output_fmt": "NLC",
+        "image_output_extra_tokens": False,
+    }
+
+
+def test_openclip_eot_validity_and_content_masks_do_not_depend_on_zero_token() -> None:
+    # The internal zero is synthetic but deliberately valid: sequence validity
+    # ends at the maximum-token-ID EOT, not at the first zero-valued token.
+    input_ids = torch.tensor([[98, 7, 0, 11, 99, 0, 0]])
+
+    class FixedTokenizer:
+        def __call__(self, texts: list[str], context_length: int) -> Tensor:
+            assert texts == ["controlled text"]
+            assert context_length == 7
+            return input_ids.clone()
+
+    adapter = OpenCLIPTokenizerAdapter(FixedTokenizer(), context_length=7)
+    tokenized = adapter(
+        ["controlled text"],
+        max_length=7,
+        padding="max_length",
+        truncation=True,
+        return_tensors="pt",
+    )
+    attention_mask = tokenized["attention_mask"]
+    torch.testing.assert_close(attention_mask, openclip_valid_token_mask(input_ids))
+    assert attention_mask.tolist() == [[True, True, True, True, True, False, False]]
+
+    # This is the generic collator's unchanged SOT/EOT removal operation.
+    content_mask = attention_mask.clone()
+    content_mask[:, 0] = False
+    final_positions = attention_mask.sum(dim=1).sub(1)
+    content_mask.scatter_(1, final_positions[:, None], False)
+    assert content_mask.tolist() == [[False, True, True, True, False, False, False]]
 
 
 def test_openclip_full_forward_and_core_gradients() -> None:
@@ -158,9 +211,13 @@ def test_openclip_full_forward_and_core_gradients() -> None:
 
     families = {
         "vision": next(model.backbone.vision_encoder_parameters()),
+        "visual_projection": model.backbone.model.visual.proj,
         "text": next(model.backbone.text_encoder_parameters()),
+        "anchor_adapter": model.backbone.anchor_projection[0].weight,
+        "text_adapter": model.backbone.text_projection[0].weight,
         "intent": model.core.intent_encoder.query_bank,
         "grounder": model.core.grounder.intent_projection.weight,
+        "context": model.core.context_fuser.fusion[0].weight,
         "editor": model.core.editor.direction.weight,
         "readout": model.core.readout.output_projection.weight,
         "scorer": model.core.scorer.score_head[-1].weight,
@@ -169,6 +226,8 @@ def test_openclip_full_forward_and_core_gradients() -> None:
     assert torch.isfinite(loss)
     for name, parameter in families.items():
         assert parameter.grad is not None and parameter.grad.abs().sum() > 0, name
+    assert model.backbone.model.text_projection.grad is None
+    assert model.backbone.model.logit_scale.grad is None
 
 
 def test_openclip_trainability_matches_base_full_policy() -> None:

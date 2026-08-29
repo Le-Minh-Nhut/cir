@@ -23,6 +23,100 @@ class BackboneBuildSpec:
     weights_revision: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _BackboneIdentity:
+    backbone_type: str
+    checkpoint: str
+    revision: str
+    library_version: str | None
+    weights_repository: str | None
+    weights_revision: str | None
+
+
+def _backbone_identity_from_metadata(metadata: object) -> _BackboneIdentity:
+    if not isinstance(metadata, dict):
+        raise ValueError("checkpoint has no reproducible backbone metadata")
+    checkpoint = metadata.get("backbone_checkpoint")
+    revision = metadata.get("backbone_revision")
+    if not isinstance(checkpoint, str) or not isinstance(revision, str):
+        raise ValueError("checkpoint backbone checkpoint/revision metadata is incomplete")
+    backbone_type = metadata.get("backbone_type", "fgclip")
+    if not isinstance(backbone_type, str):
+        raise ValueError("checkpoint backbone type metadata is invalid")
+
+    library_version = metadata.get("backbone_library_version")
+    weights_repository = metadata.get("backbone_weights_repository")
+    weights_revision = metadata.get("backbone_weights_revision")
+    if backbone_type == "openclip":
+        pinned = {
+            "backbone_library_version": library_version,
+            "backbone_weights_repository": weights_repository,
+            "backbone_weights_revision": weights_revision,
+        }
+        missing = [name for name, value in pinned.items() if not isinstance(value, str)]
+        if missing:
+            raise ValueError(
+                "OpenCLIP checkpoint has incomplete immutable backbone metadata: "
+                + ", ".join(missing)
+            )
+    else:
+        if library_version is not None and not isinstance(library_version, str):
+            raise ValueError("checkpoint backbone library version metadata is invalid")
+        weights_repository = (
+            weights_repository if isinstance(weights_repository, str) else None
+        )
+        weights_revision = weights_revision if isinstance(weights_revision, str) else None
+
+    return _BackboneIdentity(
+        backbone_type=backbone_type,
+        checkpoint=checkpoint,
+        revision=revision,
+        library_version=library_version,
+        weights_repository=weights_repository,
+        weights_revision=weights_revision,
+    )
+
+
+def validate_checkpoint_backbone_metadata(
+    metadata: object, expected: BackboneBuildSpec
+) -> None:
+    """Validate checkpoint identity against the configured reproducibility pins."""
+    actual = _backbone_identity_from_metadata(metadata)
+    expected_identity = _BackboneIdentity(
+        backbone_type=expected.backbone_type,
+        checkpoint=expected.checkpoint,
+        revision=expected.revision,
+        library_version=(
+            expected.library_version if expected.backbone_type == "openclip" else None
+        ),
+        weights_repository=(
+            expected.weights_repository if expected.backbone_type == "openclip" else None
+        ),
+        weights_revision=(
+            expected.weights_revision if expected.backbone_type == "openclip" else None
+        ),
+    )
+    actual_identity = _BackboneIdentity(
+        backbone_type=actual.backbone_type,
+        checkpoint=actual.checkpoint,
+        revision=actual.revision,
+        library_version=(
+            actual.library_version if actual.backbone_type == "openclip" else None
+        ),
+        weights_repository=(
+            actual.weights_repository if actual.backbone_type == "openclip" else None
+        ),
+        weights_revision=(
+            actual.weights_revision if actual.backbone_type == "openclip" else None
+        ),
+    )
+    if actual_identity != expected_identity:
+        raise ValueError(
+            "checkpoint backbone mismatch: "
+            f"stored={actual_identity}, configured={expected_identity}"
+        )
+
+
 def build_backbone(
     spec: BackboneBuildSpec, internal_width: int
 ) -> tuple[nn.Module, Any, Any]:
@@ -66,29 +160,16 @@ def backbone_spec_from_metadata(
     train_text: bool,
     train_text_projection: bool,
 ) -> BackboneBuildSpec:
-    checkpoint = metadata.get("backbone_checkpoint")
-    revision = metadata.get("backbone_revision")
-    if not isinstance(checkpoint, str) or not isinstance(revision, str):
-        raise ValueError("checkpoint backbone checkpoint/revision metadata is incomplete")
-    backbone_type = metadata.get("backbone_type", "fgclip")
-    if not isinstance(backbone_type, str):
-        raise ValueError("checkpoint backbone type metadata is invalid")
-    library_version = metadata.get("backbone_library_version")
-    if library_version is not None and not isinstance(library_version, str):
-        raise ValueError("checkpoint backbone library version metadata is invalid")
-    weights_repository = metadata.get("backbone_weights_repository")
-    weights_revision = metadata.get("backbone_weights_revision")
+    identity = _backbone_identity_from_metadata(metadata)
     return BackboneBuildSpec(
-        backbone_type=backbone_type,
-        checkpoint=checkpoint,
-        revision=revision,
+        backbone_type=identity.backbone_type,
+        checkpoint=identity.checkpoint,
+        revision=identity.revision,
         train_vision=train_vision,
         train_text=train_text,
         train_text_projection=train_text_projection,
-        trust_remote_code=backbone_type == "fgclip",
-        library_version=library_version,
-        weights_repository=(
-            weights_repository if isinstance(weights_repository, str) else None
-        ),
-        weights_revision=weights_revision if isinstance(weights_revision, str) else None,
+        trust_remote_code=identity.backbone_type == "fgclip",
+        library_version=identity.library_version,
+        weights_repository=identity.weights_repository,
+        weights_revision=identity.weights_revision,
     )
