@@ -28,4 +28,3 @@ class GroundedEditContext(nn.Module):
             [intents, original, current, change, intents * current, intents - current], dim=-1
         )
         return self.output_norm(self.fusion(features) + self.intent_residual(intents))
-

@@ -12,7 +12,11 @@ from torch.utils.data import DataLoader
 
 from data.images import ImageBatch, ImageIdDataset, collate_image_ids
 from datasets.common import DirectoryImageStore
-from datasets.fashioniq import FashionIQAnnotation, build_pair_union_gallery, load_fashioniq_split_ids
+from datasets.fashioniq import (
+    FashionIQAnnotation,
+    build_pair_union_gallery,
+    load_fashioniq_split_ids,
+)
 from models.iag_srme.model import IAGSRME
 
 
@@ -42,7 +46,9 @@ def recall_at_k(
     targets = torch.tensor(
         [gallery_index[target_id] for target_id in target_ids], device=scores.device
     )[:, None]
-    return filtered_scores.topk(k, dim=1).indices.eq(targets).any(dim=1).float().mean().item() * 100.0
+    return (
+        filtered_scores.topk(k, dim=1).indices.eq(targets).any(dim=1).float().mean().item() * 100.0
+    )
 
 
 def evaluate_fashioniq_recall(
@@ -80,7 +86,11 @@ def macro_average_fashioniq(results: Mapping[str, Mapping[str, float]]) -> dict[
         raise ValueError("category results must not be empty")
     recall_10 = sum(item["recall_at_10"] for item in results.values()) / len(results)
     recall_50 = sum(item["recall_at_50"] for item in results.values()) / len(results)
-    return {"recall_at_10": recall_10, "recall_at_50": recall_50, "mean_recall": 0.5 * (recall_10 + recall_50)}
+    return {
+        "recall_at_10": recall_10,
+        "recall_at_50": recall_50,
+        "mean_recall": 0.5 * (recall_10 + recall_50),
+    }
 
 
 @torch.no_grad()

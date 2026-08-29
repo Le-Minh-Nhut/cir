@@ -8,4 +8,3 @@ def test_full_vision_rejects_image_cache() -> None:
         assert_cache_legal(True, "features/fgclip/reference")
     assert_cache_legal(False, "features/fgclip/reference")
     assert_cache_legal(True, None)
-

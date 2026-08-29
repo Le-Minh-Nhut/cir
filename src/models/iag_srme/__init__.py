@@ -13,4 +13,3 @@ __all__ = [
     "RecurrentStepOutput",
     "assert_cache_legal",
 ]
-

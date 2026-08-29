@@ -25,8 +25,10 @@ def detached_marginal_utilities(
         current_query, target_bank, positive_mask, retrieval_temperature
     )
     flat_candidates = candidate_queries.reshape(batch_size * candidates, width)
-    expanded_mask = positive_mask[:, None, :].expand(-1, candidates, -1).reshape(
-        batch_size * candidates, target_bank.shape[0]
+    expanded_mask = (
+        positive_mask[:, None, :]
+        .expand(-1, candidates, -1)
+        .reshape(batch_size * candidates, target_bank.shape[0])
     )
     candidate_energy = retrieval_energy(
         flat_candidates, target_bank, expanded_mask, retrieval_temperature
@@ -98,4 +100,3 @@ class MarginalActionLoss(nn.Module):
         loss_values = torch.stack(losses, dim=1)
         live_mask = torch.stack(masks, dim=1)
         return (loss_values * live_mask).sum() / live_mask.sum().clamp_min(1.0)
-

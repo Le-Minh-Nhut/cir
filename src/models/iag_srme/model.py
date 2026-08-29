@@ -53,9 +53,7 @@ class IAGSRMECore(nn.Module):
         self.editor = SharedTokenEditor(config.width, config.lambda_z)
         self.readout = TokenStateReadout(config.width, config.retrieval_dim, config.query_cap)
         self.scorer = ConsequenceScorer(config.width, config.retrieval_dim)
-        self.selector = HardStopSelector(
-            config.selector_temperature, config.selector_gumbel_noise
-        )
+        self.selector = HardStopSelector(config.selector_temperature, config.selector_gumbel_noise)
         self.claim_head = SemanticClaimHead(config.width) if config.enable_claim_head else None
         self.factor_fuser = (
             StableFactorFuser(config.width, config.factor_dim)
@@ -70,9 +68,17 @@ class IAGSRMECore(nn.Module):
 
     def forward(self, encoded: BackboneOutput, control: str = "full") -> IAGSRMEOutput:
         valid_controls = {
-            "full", "zero_edit", "single_candidate", "repeat_candidate_1",
-            "repeat_candidate_2", "repeat_candidate_3", "repeat_candidate_4",
-            "repeat_best", "clone_candidate_1", "mean_candidate", "random_candidate",
+            "full",
+            "zero_edit",
+            "single_candidate",
+            "repeat_candidate_1",
+            "repeat_candidate_2",
+            "repeat_candidate_3",
+            "repeat_candidate_4",
+            "repeat_best",
+            "clone_candidate_1",
+            "mean_candidate",
+            "random_candidate",
             "frozen_t0_order",
         }
         if control not in valid_controls:
@@ -87,9 +93,7 @@ class IAGSRMECore(nn.Module):
         supports = self.grounder(intents, anchor)
         # A is immutable; assignment never changes after this point. Z starts at A.
         state = anchor
-        current_query = self.readout(
-            state, anchor, encoded.text_global, encoded.reference_global
-        )
+        current_query = self.readout(state, anchor, encoded.text_global, encoded.reference_global)
         live = torch.ones(batch_size, dtype=torch.bool, device=anchor.device)
         trace: list[RecurrentStepOutput] = []
         fixed_best: Tensor | None = None
@@ -99,9 +103,7 @@ class IAGSRMECore(nn.Module):
         claims = None
         claim_logits = None
         if self.claim_head is not None:
-            claim_logits = self.claim_head(
-                intents, encoded.text_tokens, encoded.text_content_mask
-            )
+            claim_logits = self.claim_head(intents, encoded.text_tokens, encoded.text_content_mask)
             claims = torch.sigmoid(claim_logits) * encoded.text_content_mask[:, None].to(
                 claim_logits.dtype
             )
@@ -128,7 +130,9 @@ class IAGSRMECore(nn.Module):
                 raise AssertionError("same-parent candidate shape invariant failed")
             # This explicit expression is the scientific same-parent contract.
             if not torch.equal(candidate_states, current_state.unsqueeze(1) + delta_z):
-                raise AssertionError("all counterfactual candidates must branch from the same parent")
+                raise AssertionError(
+                    "all counterfactual candidates must branch from the same parent"
+                )
             candidate_queries = self.readout(
                 candidate_states, anchor, encoded.text_global, encoded.reference_global
             )

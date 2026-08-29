@@ -54,4 +54,3 @@ def test_claim_padding_has_zero_mass() -> None:
     mask = torch.tensor([[1, 1, 0, 0, 0], [1, 1, 1, 0, 0]], dtype=torch.bool)
     result = ComplementaryClaimLoss()(claims, mask)
     assert torch.equal(result.normalized_claims.masked_select(~mask[:, None]), torch.zeros(20))
-

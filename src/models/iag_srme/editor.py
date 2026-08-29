@@ -45,4 +45,3 @@ class SharedTokenEditor(nn.Module):
         if delta_z.shape != (batch_size, candidates, tokens, width):
             raise AssertionError("delta shape invariant failed")
         return delta_z, candidate_states
-

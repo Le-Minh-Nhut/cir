@@ -8,4 +8,3 @@ learning_rate: 1.0e-5
 weight_decay: 0.01
 train_caption_policy: randomized_four_way
 val_caption_policy: ordered_and
-

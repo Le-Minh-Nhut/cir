@@ -58,4 +58,3 @@ class UniqueContributionLoss(nn.Module):
             return hinge.mean(), contribution
         weights = active_weights.clamp_min(0).to(hinge.dtype)
         return (hinge * weights).sum() / weights.sum().clamp_min(1.0), contribution
-

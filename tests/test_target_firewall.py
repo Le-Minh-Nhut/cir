@@ -16,4 +16,3 @@ def test_target_permutation_cannot_change_forward(core, synthetic_encoded) -> No
         for name in ("contexts", "delta_z", "candidate_states", "candidate_queries", "scores"):
             assert torch.equal(getattr(left, name), getattr(right, name))
     assert "target" not in inspect.signature(core.forward).parameters
-

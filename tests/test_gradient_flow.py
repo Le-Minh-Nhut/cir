@@ -4,7 +4,9 @@ from losses.retrieval import TerminalRetrievalLoss
 from models.iag_srme.outputs import BackboneOutput
 
 
-def test_terminal_gradient_reaches_intent_grounding_editor_and_inputs(core, synthetic_encoded) -> None:
+def test_terminal_gradient_reaches_intent_grounding_editor_and_inputs(
+    core, synthetic_encoded
+) -> None:
     with torch.no_grad():
         final = core.scorer.score_head[-1]
         final.weight.zero_()
@@ -29,4 +31,3 @@ def test_terminal_gradient_reaches_intent_grounding_editor_and_inputs(core, synt
         encoded.text_tokens,
     ]
     assert all(tensor.grad is not None and tensor.grad.abs().sum() > 0 for tensor in expected)
-

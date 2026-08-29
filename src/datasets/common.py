@@ -6,17 +6,18 @@ from typing import Any
 
 from PIL import Image
 
+
 @dataclass(frozen=True, slots=True)
 class CIRSample:
-    sample_id: str # id của sample do codebase quản lý 
+    sample_id: str  # id của sample do codebase quản lý
     benchmark_id: str | None
-    reference_id: str # id của ref image 
-    target_id: str | None # id của target image
-    modification_text: str # câu mô tả
-    category: str | None = None # dành cho FashionIQ
-    group_members: tuple[str, ...] = () # dành cho đánh giá CIRR 
+    reference_id: str  # id của ref image
+    target_id: str | None  # id của target image
+    modification_text: str  # câu mô tả
+    category: str | None = None  # dành cho FashionIQ
+    group_members: tuple[str, ...] = ()  # dành cho đánh giá CIRR
     ground_truth_ids: tuple[str, ...] = ()
-    metadata: Mapping[str, Any] = field(default_factory=dict) # thông tin phụ
+    metadata: Mapping[str, Any] = field(default_factory=dict)  # thông tin phụ
 
 
 # 1 nhóm nhiều CIRSample
@@ -30,7 +31,7 @@ class CIRBatch:
     modification_texts: list[str]
 
     categories: list[str | None]
-    group_members: list[tuple[str, ...]] # chứa nhiều group của nhiều query
+    group_members: list[tuple[str, ...]]  # chứa nhiều group của nhiều query
     ground_truth_ids: list[tuple[str, ...]]
 
 
@@ -43,14 +44,10 @@ def collate_cir_samples(samples: list[CIRSample]) -> CIRBatch:
         benchmark_ids=[sample.benchmark_id for sample in samples],
         reference_ids=[sample.reference_id for sample in samples],
         target_ids=[sample.target_id for sample in samples],
-        modification_texts=[
-            sample.modification_text for sample in samples
-        ],
+        modification_texts=[sample.modification_text for sample in samples],
         categories=[sample.category for sample in samples],
         group_members=[sample.group_members for sample in samples],
-        ground_truth_ids=[
-            sample.ground_truth_ids for sample in samples
-        ],
+        ground_truth_ids=[sample.ground_truth_ids for sample in samples],
     )
 
 
@@ -64,6 +61,7 @@ class ImageStore(ABC):
     def load(self, image_id: str) -> Image.Image:
         """Load an image as an RGB PIL image."""
         raise NotImplementedError
+
 
 @dataclass(frozen=True, slots=True)
 class DirectoryImageStore(ImageStore):

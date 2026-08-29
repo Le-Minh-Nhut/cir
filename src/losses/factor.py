@@ -35,7 +35,10 @@ def relational_geometry(
 ) -> RelationalGeometry:
     if factors.ndim != 3 or auxiliary_anchor.ndim != 2:
         raise ValueError("factors=[B,K,D] and auxiliary_anchor=[B,D] required")
-    if factors.shape[0] != auxiliary_anchor.shape[0] or factors.shape[-1] != auxiliary_anchor.shape[-1]:
+    if (
+        factors.shape[0] != auxiliary_anchor.shape[0]
+        or factors.shape[-1] != auxiliary_anchor.shape[-1]
+    ):
         raise ValueError("factor/anchor batch and dimensions must match")
     if anchor_temperature <= 0 or factor_temperature <= 0:
         raise ValueError("temperatures must be positive")
@@ -102,4 +105,3 @@ class FactorCompletenessLoss(nn.Module):
             active_weights=active_weights,
         )
         return geometry.all_factor_error.mean(), geometry
-

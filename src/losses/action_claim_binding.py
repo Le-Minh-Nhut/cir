@@ -35,4 +35,3 @@ class ActionClaimBindingLoss(nn.Module):
             return forward
         reverse = F.cross_entropy(similarities.transpose(1, 2).flatten(0, 1), labels.flatten())
         return 0.5 * (forward + reverse)
-

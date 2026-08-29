@@ -14,4 +14,3 @@ def test_stop_identity_and_absorbing(core, synthetic_encoded) -> None:
     assert torch.equal(output.final_state, synthetic_encoded.anchor)
     assert not output.trace[1].live_before.any()
     assert not output.trace[2].live_before.any()
-

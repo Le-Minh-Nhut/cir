@@ -27,9 +27,7 @@ def configure_torch_runtime(*, deterministic: bool, benchmark: bool) -> None:
     # deterministic=True: ưu tiên kết quả ổn định.
     # benchmark=True: cuDNN thử nhiều thuật toán rồi chọn cái nhanh nhất.
     if deterministic and benchmark:
-        raise ValueError(
-            "runtime.deterministic and runtime.benchmark cannot both be true."
-        )
+        raise ValueError("runtime.deterministic and runtime.benchmark cannot both be true.")
 
     torch.use_deterministic_algorithms(
         deterministic,
@@ -45,10 +43,7 @@ def resolve_device(device_name: str, accelerator_index: int = 0) -> torch.device
     normalized_name = device_name.strip().lower()
 
     if accelerator_index < 0:
-        raise ValueError(
-            "accelerator_index must be non-negative, "
-            f"received: {accelerator_index}"
-        )
+        raise ValueError(f"accelerator_index must be non-negative, received: {accelerator_index}")
 
     if normalized_name == "auto":
         if torch.cuda.is_available():
@@ -61,9 +56,7 @@ def resolve_device(device_name: str, accelerator_index: int = 0) -> torch.device
 
     if normalized_name == "cuda":
         if not torch.cuda.is_available():
-            raise RuntimeError(
-                "CUDA was requested but no CUDA device is available."
-            )
+            raise RuntimeError("CUDA was requested but no CUDA device is available.")
 
         device_count = torch.cuda.device_count()
         if accelerator_index >= device_count:
@@ -76,32 +69,28 @@ def resolve_device(device_name: str, accelerator_index: int = 0) -> torch.device
 
     if normalized_name == "mps":
         if not torch.backends.mps.is_available():
-            raise RuntimeError(
-                "MPS was requested but is not available."
-            )
+            raise RuntimeError("MPS was requested but is not available.")
 
         return torch.device("mps")
 
     if normalized_name == "cpu":
         return torch.device("cpu")
 
-    raise ValueError(
-        f"Unsupported device '{device_name}'. "
-        "Expected one of: auto, cuda, mps, cpu."
-    )
+    raise ValueError(f"Unsupported device '{device_name}'. Expected one of: auto, cuda, mps, cpu.")
 
-# lấy mã hash của commit để đưa cho checkpoint 
+
+# lấy mã hash của commit để đưa cho checkpoint
 def get_git_commit() -> str | None:
     try:
         result = subprocess.run(
             [
-                "git", # # chương trình cần chạy
-                "rev-parse", # đối số thứ nhất
-                "HEAD" # đối số thứ hai
+                "git",  # # chương trình cần chạy
+                "rev-parse",  # đối số thứ nhất
+                "HEAD",  # đối số thứ hai
             ],
-            check=True, # Nếu lệnh terminal thất bại, Python sẽ ném lỗi
-            capture_output=True, # Giữ lại output của lệnh thay vì in trực tiếp ra terminal
-            text=True, # Yêu cầu kết quả trả về dưới dạng chuỗi Python str
+            check=True,  # Nếu lệnh terminal thất bại, Python sẽ ném lỗi
+            capture_output=True,  # Giữ lại output của lệnh thay vì in trực tiếp ra terminal
+            text=True,  # Yêu cầu kết quả trả về dưới dạng chuỗi Python str
         )
     except (FileNotFoundError, subprocess.CalledProcessError):
         return None
@@ -125,9 +114,8 @@ def collect_environment_metadata() -> dict[str, Any]:
 
     if torch.cuda.is_available():
         metadata["cuda_device_count"] = torch.cuda.device_count()
-        metadata["cuda_devices"] = [ # lấy tên từng gpu
-            torch.cuda.get_device_name(index)
-            for index in range(torch.cuda.device_count())
+        metadata["cuda_devices"] = [  # lấy tên từng gpu
+            torch.cuda.get_device_name(index) for index in range(torch.cuda.device_count())
         ]
     else:
         metadata["cuda_device_count"] = 0

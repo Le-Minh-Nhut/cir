@@ -43,9 +43,7 @@ class TokenStateReadout(nn.Module):
             + self.text_projection(text_global)[:, None, :]
         )
         weights = self.attention_score(hidden).squeeze(-1).softmax(dim=-1)
-        pooled_change = self.output_projection(
-            torch.einsum("bn,bnd->bd", weights, displacement)
-        )
+        pooled_change = self.output_projection(torch.einsum("bn,bnd->bd", weights, displacement))
         bounded_change = cap_vector(pooled_change, self.query_cap)
         return F.normalize(reference_global + bounded_change, dim=-1)
 
@@ -61,12 +59,13 @@ class TokenStateReadout(nn.Module):
             raise ValueError("anchor must be [B,N,d]")
         flat_state = state.reshape(batch_size * candidates, tokens, width)
         flat_anchor = anchor[:, None].expand(-1, candidates, -1, -1).reshape_as(flat_state)
-        flat_text = text_global[:, None].expand(-1, candidates, -1).reshape(
-            batch_size * candidates, -1
+        flat_text = (
+            text_global[:, None].expand(-1, candidates, -1).reshape(batch_size * candidates, -1)
         )
-        flat_reference = reference_global[:, None].expand(-1, candidates, -1).reshape(
-            batch_size * candidates, -1
+        flat_reference = (
+            reference_global[:, None]
+            .expand(-1, candidates, -1)
+            .reshape(batch_size * candidates, -1)
         )
         result = self._readout_flat(flat_state, flat_anchor, flat_text, flat_reference)
         return result.reshape(batch_size, candidates, self.retrieval_dim)
-

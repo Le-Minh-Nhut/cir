@@ -74,7 +74,9 @@ def main() -> None:
         name: 0.0 if gradient is None else float(gradient.norm())
         for name, gradient in gradient_checks.items()
     }
-    if not all(value > 0 and torch.isfinite(torch.tensor(value)) for value in gradient_norms.values()):
+    if not all(
+        value > 0 and torch.isfinite(torch.tensor(value)) for value in gradient_norms.values()
+    ):
         raise AssertionError(f"expected nonzero finite gradients: {gradient_norms}")
     report: dict[str, object] = {
         "shapes": {

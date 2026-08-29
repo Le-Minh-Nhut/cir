@@ -43,4 +43,3 @@ class AuxiliaryFullQueryAnchor(nn.Module):
     def forward(self, anchor: Tensor, text_global: Tensor) -> Tensor:
         anchor_global = anchor.mean(dim=1)
         return F.normalize(self.network(torch.cat([anchor_global, text_global], dim=-1)), dim=-1)
-

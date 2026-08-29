@@ -30,4 +30,3 @@ def test_all_matched_compute_controls_execute(core, synthetic_encoded) -> None:
         output = core(synthetic_encoded, control=control)
         assert output.final_query.shape == (3, 24)
         assert torch.isfinite(output.final_query).all()
-

@@ -26,7 +26,9 @@ class ConsequenceScorer(nn.Module):
         supports: Tensor,
     ) -> Tensor:
         if contexts.shape[:2] != supports.shape[:2] or delta_z.shape[:3] != (
-            supports.shape[0], supports.shape[1], supports.shape[2]
+            supports.shape[0],
+            supports.shape[1],
+            supports.shape[2],
         ):
             raise ValueError("candidate axes must match")
         support_gate = supports / supports.amax(dim=-1, keepdim=True).clamp_min(1e-8)

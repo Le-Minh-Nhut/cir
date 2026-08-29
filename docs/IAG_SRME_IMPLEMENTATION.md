@@ -161,4 +161,3 @@ The code does not claim semantic factorization is solved. Variable true edit cou
 activity, normalized-claim behavior for inactive identities, secret-sharing, arbitrary relational
 coding, and representation-versus-functional specialization require controlled experiments and
 intervention evidence.
-

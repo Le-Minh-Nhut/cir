@@ -31,6 +31,7 @@ def _read_json(path: str | Path) -> Any:
     with Path(path).open("r", encoding="utf-8") as file:
         return json.load(file)
 
+
 # đọc dictionary sửa lỗi từ ENCODER và giữ nguyên nội dung
 def load_correction_dict(path: str | Path) -> dict[str, str]:
     """
@@ -50,7 +51,9 @@ def load_correction_dict(path: str | Path) -> dict[str, str]:
     return correction_dict
 
 
-def load_fashioniq_annotations(annotation_root: str | Path, split: str, category: str) -> list[FashionIQAnnotation]:
+def load_fashioniq_annotations(
+    annotation_root: str | Path, split: str, category: str
+) -> list[FashionIQAnnotation]:
     assert split in VALID_SPLITS
     assert category in VALID_CATEGORIES
 
@@ -66,7 +69,7 @@ def load_fashioniq_annotations(annotation_root: str | Path, split: str, category
         assert len(captions) == 2
 
         # Train/validation retrieval needs a known positive target.
-        if split in {"train", "val"}: 
+        if split in {"train", "val"}:
             assert target_id is not None
 
         annotation = FashionIQAnnotation(
@@ -85,13 +88,15 @@ def load_fashioniq_annotations(annotation_root: str | Path, split: str, category
 def load_fashioniq_split_ids(split_root: str | Path, split: str, category: str) -> list[str]:
     assert split in VALID_SPLITS
     assert category in VALID_CATEGORIES
-    path = Path(split_root)/ f"split.{category}.{split}.json"
+    path = Path(split_root) / f"split.{category}.{split}.json"
     image_ids = _read_json(path)
 
-    return image_ids # -> trả về danh sách ids của các ảnh 
+    return image_ids  # -> trả về danh sách ids của các ảnh
 
 
-def normalize_fashioniq_caption(caption: str, correction_dict: Mapping[str, str] | None = None) -> str:
+def normalize_fashioniq_caption(
+    caption: str, correction_dict: Mapping[str, str] | None = None
+) -> str:
     """
     Reproduce ENCODER's FashionIQ text normalization:
 
@@ -106,19 +111,27 @@ def normalize_fashioniq_caption(caption: str, correction_dict: Mapping[str, str]
     # string.punctuation là 1 chuỗi chứa các dấu: "!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"
     for character in string.punctuation:
         punctuation_map[character] = " "
-    punctuation_to_space = str.maketrans(punctuation_map) # -> biến dict đó thành như 1 bản dịch 
+    punctuation_to_space = str.maketrans(punctuation_map)  # -> biến dict đó thành như 1 bản dịch
 
-    tokens = (str(caption).lower().translate(punctuation_to_space).strip().split()) # -> lower -> xóa dấu -> xóa khoảng trắng 2 đầu -> tách thành list
+    tokens = (
+        str(caption).lower().translate(punctuation_to_space).strip().split()
+    )  # -> lower -> xóa dấu -> xóa khoảng trắng 2 đầu -> tách thành list
     corrected_tokens: list[str] = []
     for token in tokens:
         if correction_dict is not None and token in correction_dict:
-            corrected_token = correction_dict[token] # -> sửa chữ sai chính tả 
+            corrected_token = correction_dict[token]  # -> sửa chữ sai chính tả
         else:
-            corrected_token = token 
+            corrected_token = token
         corrected_tokens.append(corrected_token)
     return " ".join(corrected_tokens)
 
-def compose_fashioniq_caption(captions: tuple[str, str], policy: str, correction_dict: Mapping[str, str] | None = None, rng: random.Random | None = None) -> str:
+
+def compose_fashioniq_caption(
+    captions: tuple[str, str],
+    policy: str,
+    correction_dict: Mapping[str, str] | None = None,
+    rng: random.Random | None = None,
+) -> str:
     """
     Compose the two original FashionIQ captions according to one
     audited research policy.
@@ -219,20 +232,21 @@ class FashionIQDataset(Dataset):
     CIRSample. Raw image loading, model-specific preprocessing, and
     FeatureCache resolution intentionally live outside this Dataset.
     """
+
     def __init__(
         self,
-        annotation_root: str | Path, # -> folder chứa cap.dress.train.json, cap.shirt.val.json,...
-        split: str, # -> train / val / test
-        categories: Sequence[str], # -> category muốn load
-        caption_policy: str = "ordered_and", # -> policy hình thành caption
-        correction_dicts: ( # -> mảng đúng chính tả 
+        annotation_root: str | Path,  # -> folder chứa cap.dress.train.json, cap.shirt.val.json,...
+        split: str,  # -> train / val / test
+        categories: Sequence[str],  # -> category muốn load
+        caption_policy: str = "ordered_and",  # -> policy hình thành caption
+        correction_dicts: (  # -> mảng đúng chính tả
             Mapping[
                 str,
                 Mapping[str, str],
             ]
             | None
         ) = None,
-        seed: int = 42, #-> dùng cho randomized_four_way
+        seed: int = 42,  # -> dùng cho randomized_four_way
     ) -> None:
         super().__init__()
 
@@ -245,7 +259,7 @@ class FashionIQDataset(Dataset):
 
         # TME's four-way caption randomization is a training behavior.
         # Standard FashionIQ evaluation uses deterministic ordered captions.
-        if (caption_policy == "randomized_four_way"):
+        if caption_policy == "randomized_four_way":
             assert split == "train"
 
         self.annotation_root = Path(annotation_root)
@@ -253,34 +267,39 @@ class FashionIQDataset(Dataset):
         self.categories = list(categories)
         self.caption_policy = caption_policy
         self.seed = seed
-        self._epoch = mp.Value("q", 0, lock=True,) # -> tạo một biến epoch dùng chung giữa các process
+        self._epoch = mp.Value(
+            "q",
+            0,
+            lock=True,
+        )  # -> tạo một biến epoch dùng chung giữa các process
         self.correction_dicts: dict[str, dict[str, str]] = {}
 
         if correction_dicts is not None:
             for category, correction_dict in correction_dicts.items():
                 self.correction_dicts[category] = dict(correction_dict)
 
-        if (self.caption_policy == "normalized_ordered_and"):
+        if self.caption_policy == "normalized_ordered_and":
             for category in self.categories:
                 assert category in self.correction_dicts
 
         self.annotations: list[FashionIQAnnotation] = []
 
         for category in self.categories:
-            category_annotations = (
-                load_fashioniq_annotations(
-                    annotation_root=(self.annotation_root),
-                    split=self.split,
-                    category=category,
-                )
+            category_annotations = load_fashioniq_annotations(
+                annotation_root=(self.annotation_root),
+                split=self.split,
+                category=category,
             )
             self.annotations.extend(category_annotations)
 
-    @property # -> cho phép gọi epoch như một biến dù thực chất bên trong nó là một function
+    @property  # -> cho phép gọi epoch như một biến dù thực chất bên trong nó là một function
     def epoch(self) -> int:
         return int(self._epoch.value)
 
-    def set_epoch(self, epoch: int,) -> None:
+    def set_epoch(
+        self,
+        epoch: int,
+    ) -> None:
         self._epoch.value = epoch
 
     def __len__(self) -> int:
@@ -304,7 +323,7 @@ class FashionIQDataset(Dataset):
     def _compose_text(self, annotation: FashionIQAnnotation, sample_id: str) -> str:
         correction_dict = self.correction_dicts.get(annotation.category)
         rng = None
-        if (self.caption_policy == "randomized_four_way"):
+        if self.caption_policy == "randomized_four_way":
             rng = self._make_rng(sample_id)
 
         return compose_fashioniq_caption(

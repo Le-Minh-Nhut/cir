@@ -57,4 +57,3 @@ class TerminalRetrievalLoss(nn.Module):
             return forward
         reverse = retrieval_energy(targets, queries, positive_mask.T, self.temperature).mean()
         return 0.5 * (forward + reverse)
-

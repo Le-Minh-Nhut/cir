@@ -45,9 +45,7 @@ class IAGSRMEObjective(nn.Module):
             config.score_temperature,
         )
         self.complementary_claim = ComplementaryClaimLoss()
-        self.binding = ActionClaimBindingLoss(
-            width=width, temperature=config.binding_temperature
-        )
+        self.binding = ActionClaimBindingLoss(width=width, temperature=config.binding_temperature)
         self.factor = FactorCompletenessLoss(
             config.factor_anchor_temperature,
             config.factor_temperature,

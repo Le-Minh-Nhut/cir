@@ -26,4 +26,3 @@ def test_entmax_produces_exact_sparse_zeros() -> None:
     support = grounder(intents, anchor)
     assert (support == 0).any()
     assert torch.equal(support[..., 1], torch.zeros_like(support[..., 1]))
-

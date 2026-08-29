@@ -55,4 +55,3 @@ class IAGSRMEOutput:
     claims: Tensor | None = None  # [B,K,L]
     factors: Tensor | None = None  # [B,K,D_f]
     auxiliary_anchor: Tensor | None = None  # [B,D_f]
-

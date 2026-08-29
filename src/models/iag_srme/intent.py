@@ -65,15 +65,19 @@ class SemanticClaimHead(nn.Module):
             raise ValueError("intent/text batch and width must match")
         if content_mask.shape != text_tokens.shape[:2]:
             raise ValueError("content_mask must be [B,L]")
-        logits = torch.einsum(
-            "bkd,bld->bkl",
-            self.query_projection(intents),
-            self.token_projection(text_tokens),
-        ) / self.scale
+        logits = (
+            torch.einsum(
+                "bkd,bld->bkl",
+                self.query_projection(intents),
+                self.token_projection(text_tokens),
+            )
+            / self.scale
+        )
         return logits.masked_fill(~content_mask[:, None, :], torch.finfo(logits.dtype).min)
 
 
 def masked_text_mean(text_tokens: Tensor, content_mask: Tensor) -> Tensor:
     weights = content_mask.to(text_tokens.dtype)
-    return torch.einsum("bl,bld->bd", weights, text_tokens) / weights.sum(dim=1, keepdim=True).clamp_min(1.0)
-
+    return torch.einsum("bl,bld->bd", weights, text_tokens) / weights.sum(
+        dim=1, keepdim=True
+    ).clamp_min(1.0)

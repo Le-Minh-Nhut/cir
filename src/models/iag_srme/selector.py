@@ -49,4 +49,3 @@ def select_next_state(
     next_state = torch.einsum("bk,bknd->bnd", action, all_states)
     next_query = torch.einsum("bk,bkd->bd", action, all_queries)
     return next_state, next_query
-

@@ -54,7 +54,9 @@ def summarize_trajectory(output: IAGSRMEOutput) -> dict[str, Tensor]:
         "functional_effective_rank": functional_effective_rank(delta_q),
         "selected_candidate_distribution": torch.nn.functional.one_hot(
             actions, output.intents.shape[1] + 1
-        ).float().mean(dim=(0, 1)),
+        )
+        .float()
+        .mean(dim=(0, 1)),
         "stop_frequency": actions.eq(output.intents.shape[1]).float().mean(),
         "scores_over_time": scores,
         "score_changes_over_time": scores[:, 1:] - scores[:, :-1],
@@ -62,4 +64,3 @@ def summarize_trajectory(output: IAGSRMEOutput) -> dict[str, Tensor]:
     if output.claims is not None:
         result["claim_mass"] = output.claims.sum(dim=-1)
     return result
-

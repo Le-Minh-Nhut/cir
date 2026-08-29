@@ -53,4 +53,3 @@ def claim_weighted_text_pool(
     return torch.einsum("bkl,bld->bkd", valid, text_tokens) / valid.sum(
         dim=-1, keepdim=True
     ).clamp_min(epsilon)
-

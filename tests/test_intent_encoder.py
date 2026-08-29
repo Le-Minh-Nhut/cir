@@ -27,4 +27,3 @@ def test_query_permutation_has_no_hardcoded_semantics() -> None:
         encoder.query_bank.copy_(encoder.query_bank[permutation])
     permuted = encoder(text, mask)
     assert torch.allclose(permuted, baseline[:, permutation], atol=1e-6)
-

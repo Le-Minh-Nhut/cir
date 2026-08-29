@@ -52,7 +52,9 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
 
 
 def build_objective(cfg: DictConfig) -> IAGSRMEObjective:
-    objective_config = ObjectiveConfig(**{key: value for key, value in cfg.objective.items() if key != "name"})
+    objective_config = ObjectiveConfig(
+        **{key: value for key, value in cfg.objective.items() if key != "name"}
+    )
     return IAGSRMEObjective(objective_config, width=int(cfg.model.width))
 
 
@@ -111,7 +113,11 @@ def main(cfg: DictConfig) -> None:
             collate_fn=val_collator,
         )
     optimizer = AdamW(
-        [parameter for parameter in list(model.parameters()) + list(objective.parameters()) if parameter.requires_grad],
+        [
+            parameter
+            for parameter in list(model.parameters()) + list(objective.parameters())
+            if parameter.requires_grad
+        ],
         lr=float(cfg.experiment.learning_rate),
         weight_decay=float(cfg.experiment.weight_decay),
     )

@@ -29,4 +29,3 @@ def test_unique_error_matches_slow_distribution_math() -> None:
             approximation = kept.mean(0).softmax(-1)
             slow[batch, removed] = kl_divergence(full[batch], approximation)
     assert torch.allclose(vectorized, slow, atol=1e-7)
-

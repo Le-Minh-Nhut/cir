@@ -31,7 +31,9 @@ class ImageBatch:
             self.modification_texts,
             self.categories,
             self.reference_pixels.to(device, non_blocking=True),
-            None if self.target_pixels is None else self.target_pixels.to(device, non_blocking=True),
+            None
+            if self.target_pixels is None
+            else self.target_pixels.to(device, non_blocking=True),
             self.input_ids.to(device, non_blocking=True),
             self.attention_mask.to(device, non_blocking=True),
             self.content_mask.to(device, non_blocking=True),
@@ -59,17 +61,17 @@ class FashionIQImageCollator:
         if not samples:
             raise ValueError("cannot collate an empty batch")
         reference_images = [self.image_store.load(sample.reference_id) for sample in samples]
-        reference_pixels = self.image_processor.preprocess(
-            reference_images, return_tensors="pt"
-        )["pixel_values"]
+        reference_pixels = self.image_processor.preprocess(reference_images, return_tensors="pt")[
+            "pixel_values"
+        ]
         target_pixels = None
         if self.include_targets:
             if any(sample.target_id is None for sample in samples):
                 raise ValueError("target image is required for this collator")
             target_images = [self.image_store.load(str(sample.target_id)) for sample in samples]
-            target_pixels = self.image_processor.preprocess(
-                target_images, return_tensors="pt"
-            )["pixel_values"]
+            target_pixels = self.image_processor.preprocess(target_images, return_tensors="pt")[
+                "pixel_values"
+            ]
         tokenized = self.tokenizer(
             [sample.modification_text for sample in samples],
             max_length=self.max_text_length,
@@ -116,4 +118,3 @@ def collate_image_ids(
     images = [image_store.load(image_id) for image_id in image_ids]
     pixels = image_processor.preprocess(images, return_tensors="pt")["pixel_values"]
     return image_ids, pixels
-

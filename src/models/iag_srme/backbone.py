@@ -27,7 +27,9 @@ class FGCLIPBackbone(nn.Module):
     ``text_model`` for contextual states. It never substitutes FG-CLIP2.
     """
 
-    def __init__(self, model: nn.Module, internal_width: int = 256, train_vision: bool = True) -> None:
+    def __init__(
+        self, model: nn.Module, internal_width: int = 256, train_vision: bool = True
+    ) -> None:
         super().__init__()
         self.model = model
         self.internal_width = internal_width
@@ -133,5 +135,6 @@ class FGCLIPBackbone(nn.Module):
 
 def assert_cache_legal(train_vision: bool, image_cache_path: str | None) -> None:
     if train_vision and image_cache_path is not None:
-        raise ValueError("persistent image-feature caches are illegal when FG-CLIP vision is trainable")
-
+        raise ValueError(
+            "persistent image-feature caches are illegal when FG-CLIP vision is trainable"
+        )
