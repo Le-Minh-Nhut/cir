@@ -46,6 +46,7 @@ nvidia-nvtx-cu12==12.8.55
 omegaconf==2.3.0
 opencv-python==4.11.0.86
 opentelemetry-api==1.44.0
+open-clip-torch==3.3.0
 packaging==26.2
 pandas==2.2.0
 pillow==12.3.0

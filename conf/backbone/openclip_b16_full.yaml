@@ -1,0 +1,15 @@
+name: openclip_b16_full
+type: openclip
+checkpoint: ViT-B-16
+revision: laion2b_s34b_b88k
+library_version: 3.3.0
+weights_repository: laion/CLIP-ViT-B-16-laion2B-s34B-b88K
+weights_revision: 7288da5a0d6f0b51c4a2b27c624837a9236d0112
+train_vision: true
+train_text: true
+# Matches the FG-CLIP Base policy: contextual text encoder is trainable while the
+# pretrained retrieval text projection remains auxiliary-only and frozen.
+train_text_projection: false
+trust_remote_code: false
+max_text_length: 77
+image_cache_path: null

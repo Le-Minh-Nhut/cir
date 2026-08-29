@@ -31,6 +31,9 @@ class FGCLIPBackbone(nn.Module):
     adapter never substitutes FG-CLIP2.
     """
 
+    backbone_type = "fgclip"
+    library = "transformers"
+
     def __init__(
         self,
         model: nn.Module,
@@ -49,6 +52,7 @@ class FGCLIPBackbone(nn.Module):
         self.train_text_projection = train_text_projection
         self.checkpoint = checkpoint
         self.revision = revision
+        self.library_version = None
         config = getattr(model, "config", None)
         if config is None:
             raise ValueError("FG-CLIP model must expose config")
@@ -62,6 +66,25 @@ class FGCLIPBackbone(nn.Module):
             nn.Linear(text_input_dim, internal_width), nn.LayerNorm(internal_width)
         )
         self._apply_freeze_policy()
+
+    def vision_encoder_parameters(self):
+        yield from self.model.vision_model.parameters()
+        yield from self.model.visual_projection.parameters()
+
+    def text_encoder_parameters(self):
+        yield from self.model.text_model.parameters()
+
+    @property
+    def vision_encoder_module(self) -> nn.Module:
+        return self.model.vision_model
+
+    @property
+    def vision_call_module(self) -> nn.Module:
+        return self.model.vision_model
+
+    @property
+    def text_encoder_module(self) -> nn.Module:
+        return self.model.text_model
 
     @classmethod
     def from_pretrained(cls, regime: FGCLIPRegime, internal_width: int = 256) -> "FGCLIPBackbone":
@@ -222,5 +245,5 @@ class FGCLIPBackbone(nn.Module):
 def assert_cache_legal(train_vision: bool, image_cache_path: str | None) -> None:
     if train_vision and image_cache_path is not None:
         raise ValueError(
-            "persistent image-feature caches are illegal when FG-CLIP vision is trainable"
+            "persistent image-feature caches are illegal when the vision backbone is trainable"
         )

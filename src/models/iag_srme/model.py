@@ -12,6 +12,7 @@ from .factorization import SemanticFullQueryAnchor, StableFactorFuser
 from .grounded_reader import GroundedStateReader
 from .grounding import AnchorGrounder
 from .intent import SemanticClaimHead, TextIntentEncoder
+from .openclip_backbone import OpenCLIPBackbone
 from .outputs import BackboneOutput, IAGSRMEOutput, RecurrentStepOutput
 from .readout import TokenStateReadout
 from .scorer import ConsequenceScorer
@@ -262,7 +263,9 @@ class IAGSRMECore(nn.Module):
 class IAGSRME(nn.Module):
     """Raw reference+text public model. Target tensors are intentionally absent."""
 
-    def __init__(self, backbone: FGCLIPBackbone, core: IAGSRMECore) -> None:
+    def __init__(
+        self, backbone: FGCLIPBackbone | OpenCLIPBackbone, core: IAGSRMECore
+    ) -> None:
         super().__init__()
         if backbone.internal_width != core.config.width:
             raise ValueError("backbone and core internal widths differ")
