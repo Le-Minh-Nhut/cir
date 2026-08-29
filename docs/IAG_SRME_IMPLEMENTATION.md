@@ -1,0 +1,164 @@
+# IAG-SRME Implementation Guide
+
+## Architecture-to-code map
+
+| Research block | Implementation |
+|---|---|
+| FG-CLIP patch/global/text extraction and regime contract | `src/models/iag_srme/backbone.py` |
+| stable text-only WHAT intents | `TextIntentEncoder` in `intent.py` |
+| stable anchor-grounded sparse WHERE | `AnchorGrounder` in `grounding.py` |
+| original/current/change reads | `GroundedStateReader` in `grounded_reader.py` |
+| state-conditioned HOW | `GroundedEditContext` in `context.py` |
+| shared, bounded, exactly support-gated edit | `SharedTokenEditor` in `editor.py` |
+| accumulated-token-change retrieval bottleneck | `TokenStateReadout` in `readout.py` |
+| target-free VALUE field | `ConsequenceScorer` in `scorer.py` |
+| hard candidate/fixed-zero absorbing STOP | `HardStopSelector` plus recurrence in `model.py` |
+| typed trajectory/firewall surface | `outputs.py` |
+
+`IAGSRMECore.forward` computes `E`, `P`, and `A` once. It then recomputes grounded current
+evidence, context, edit, candidate state/query, effect, and score at every step. Candidate states
+are constructed by the literal expression `current_state[:, None] + delta_z`; only selection
+commits a consequence. The public model forward signature contains reference pixels and text
+tensors only.
+
+## Directory structure
+
+```text
+src/models/iag_srme/    architecture modules
+src/losses/             six independent objectives and objective composer
+src/data/               raw-image FG-CLIP collation
+src/datasets/           generic CIR/FashionIQ annotations
+src/evaluation/         current-checkpoint FashionIQ retrieval protocol
+src/diagnostics/        structural/functional metrics and control registry
+src/training/           generic end-to-end optimizer/checkpoint loop
+tests/                  deterministic scientific invariants
+conf/                   explicit backbone/model/objective/experiment/protocol configs
+```
+
+## Environment
+
+Python 3.11+ and PyTorch are required. The official FG-CLIP checkpoints use Hugging Face remote
+model code. Entmax is pinned because sparse exact-zero support is an architectural contract.
+
+```bash
+python -m pip install -e '.[dev]'
+```
+
+The configs select FG-CLIP v1 explicitly:
+
+- `qihoo360/fg-clip-base`
+- `qihoo360/fg-clip-large`
+
+They do not substitute FG-CLIP2.
+
+## FashionIQ layout
+
+Set `CIR_DATA_ROOT` to the parent of `FashionIQ`:
+
+```text
+$CIR_DATA_ROOT/FashionIQ/
+  captions/cap.{dress,shirt,toptee}.{train,val}.json
+  image_splits/split.{dress,shirt,toptee}.val.json
+  images/<image-id>.{png,jpg,jpeg}
+```
+
+The dataset returns stable sample/reference/target IDs, modification text, and category. The
+collator resolves raw images and applies the processor belonging to the configured checkpoint.
+
+## Training
+
+FG-CLIP Base, full image and text fine-tuning from update 1:
+
+```bash
+python src/train.py backbone=fgclip_base_full experiment=iag_srme_base_full objective=core
+```
+
+FG-CLIP Large, vision and pretrained visual projection frozen throughout, full text fine-tuning:
+
+```bash
+python src/train.py backbone=fgclip_large_text_ft experiment=iag_srme_large_text_ft objective=core
+```
+
+Both commands construct the full three-step graph, four previews, hard-forward selector, STOP,
+terminal objective, and marginal objective before the first optimizer update. There is no
+component, horizon, selection, freezing, or objective curriculum.
+
+## Validation
+
+Use the same backbone/experiment pair as the checkpoint:
+
+```bash
+python src/evaluate.py backbone=fgclip_base_full experiment=iag_srme_base_full \
+  checkpoint=/path/to/best.pt
+
+python src/evaluate.py backbone=fgclip_large_text_ft experiment=iag_srme_large_text_ft \
+  checkpoint=/path/to/best.pt
+```
+
+Validation regenerates gallery embeddings with the loaded current checkpoint. This is mandatory
+for trainable vision and deliberately remains the default for frozen vision.
+
+## Loss configurations
+
+`objective=core` enables only `L_terminal + 0.5 L_marginal`.
+
+Optional groups are `comp`, `bind`, `factor`, `unique`, and `six_loss_experimental`. Enable the
+matching model branches explicitly, for example:
+
+```bash
+python src/train.py objective=comp model.enable_claim_head=true
+python src/train.py objective=bind model.enable_claim_head=true
+python src/train.py objective=factor model.enable_factor_head=true
+```
+
+`L_unique` accepts `active_weights[B,K]`. The objective guard rejects it without externally
+justified activity weights because four proposal identities are not four guaranteed true edits.
+There is intentionally no semantic NULL implementation, and STOP is never reused as one. An
+all-active experiment requires explicitly disabling that guard and must be reported as such.
+
+The first factor/unique implementation detaches the target-free full-query auxiliary anchor
+inside relational geometry. That anchor is never consumed by the executor, mutable state, or
+retrieval readout.
+
+## Cache legality
+
+- Base full fine-tuning: persistent reference, target, and gallery feature caches are illegal.
+- Large frozen vision: a future cache may be legal only with an exact checkpoint, preprocessing,
+  image-ID, and projection manifest.
+- This rewrite intentionally implements no image-feature cache. It always takes the safe live
+  path and has no compatibility path for historical feature arrays.
+
+## Target firewall
+
+Target pixels enter only `model.encode_gallery` after the target-free forward has constructed all
+intents, supports, contexts, deltas, candidate states/queries, scores, actions, and final state.
+`L_terminal` may update the target encoder normally. `L_marginal` detaches the target bank and the
+computed retrieval gains before score matching. Target IDs are used only to construct the
+multi-positive loss mask and evaluation labels.
+
+## Tests, smoke, and diagnostics
+
+```bash
+pytest -q
+python src/smoke_iag_srme.py
+python src/smoke_iag_srme.py --diagnostics
+```
+
+The smoke path uses FG-CLIP-compatible tensors when a checkpoint is unavailable and executes
+intent, entmax grounding, recurrence, four previews, candidate readout, score/STOP, terminal and
+marginal losses, and backward.
+
+The model exposes the controls `full`, `zero_edit`, `single_candidate`, `repeat_candidate_1` ...
+`repeat_candidate_4`, `repeat_best`, `clone_candidate_1`, `mean_candidate`, `random_candidate`,
+and `frozen_t0_order`. `summarize_trajectory` reports intent cosine, grounding support/entropy/
+overlap, functional effect cosine/effective rank, selected identities, STOP rate, score evolution,
+and claim mass when enabled. Realized target-evaluated marginal utility is available from
+`losses.marginal.detached_marginal_utilities` and remains outside the forward graph.
+
+## Unresolved research contract
+
+The code does not claim semantic factorization is solved. Variable true edit count, factor
+activity, normalized-claim behavior for inactive identities, secret-sharing, arbitrary relational
+coding, and representation-versus-functional specialization require controlled experiments and
+intervention evidence.
+
