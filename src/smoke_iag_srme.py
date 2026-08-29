@@ -34,6 +34,9 @@ def main() -> None:
         reference_global=F.normalize(torch.randn(batch, retrieval_dim), dim=-1).requires_grad_(),
         text_tokens=torch.randn(batch, length, width, requires_grad=True),
         text_global=torch.randn(batch, width, requires_grad=True),
+        text_semantic_global=F.normalize(
+            torch.randn(batch, retrieval_dim), dim=-1
+        ).requires_grad_(),
         text_content_mask=torch.ones(batch, length, dtype=torch.bool),
     )
     target_embeddings = F.normalize(torch.randn(batch, retrieval_dim), dim=-1).requires_grad_()

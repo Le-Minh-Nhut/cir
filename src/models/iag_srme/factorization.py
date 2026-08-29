@@ -29,17 +29,15 @@ class StableFactorFuser(nn.Module):
         return F.normalize(self.network(features), dim=-1)
 
 
-class AuxiliaryFullQueryAnchor(nn.Module):
-    """Target-free, auxiliary-only reference+text relational anchor."""
+class SemanticFullQueryAnchor(nn.Module):
+    """Parameter-free, auxiliary-only composition in FG-CLIP retrieval space.
 
-    def __init__(self, width: int = 256, factor_dim: int = 256) -> None:
-        super().__init__()
-        self.network = nn.Sequential(
-            nn.Linear(2 * width, 2 * width),
-            nn.GELU(),
-            nn.Linear(2 * width, factor_dim),
-        )
+    Both operands are outputs of the checkpoint's trained semantic projection heads.
+    Keeping this composition parameter-free avoids turning a detached random head into
+    the relational target for the factor losses.
+    """
 
-    def forward(self, anchor: Tensor, text_global: Tensor) -> Tensor:
-        anchor_global = anchor.mean(dim=1)
-        return F.normalize(self.network(torch.cat([anchor_global, text_global], dim=-1)), dim=-1)
+    def forward(self, reference_global: Tensor, text_semantic_global: Tensor) -> Tensor:
+        if reference_global.ndim != 2 or reference_global.shape != text_semantic_global.shape:
+            raise ValueError("semantic globals must share [B,D]")
+        return F.normalize(reference_global + text_semantic_global, dim=-1)

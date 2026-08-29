@@ -25,6 +25,7 @@ def _encoded() -> BackboneOutput:
         reference_global=torch.nn.functional.normalize(torch.randn(3, 12), dim=-1),
         text_tokens=torch.randn(3, 7, 16),
         text_global=torch.randn(3, 16),
+        text_semantic_global=torch.nn.functional.normalize(torch.randn(3, 12), dim=-1),
         text_content_mask=torch.ones(3, 7, dtype=torch.bool),
     )
 

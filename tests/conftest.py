@@ -16,6 +16,7 @@ def synthetic_encoded() -> BackboneOutput:
         reference_global=F.normalize(torch.randn(batch, retrieval_dim), dim=-1),
         text_tokens=torch.randn(batch, length, width),
         text_global=torch.randn(batch, width),
+        text_semantic_global=F.normalize(torch.randn(batch, retrieval_dim), dim=-1),
         text_content_mask=torch.ones(batch, length, dtype=torch.bool),
     )
 

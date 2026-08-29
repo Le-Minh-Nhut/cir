@@ -16,6 +16,7 @@ def test_terminal_gradient_reaches_intent_grounding_editor_and_inputs(
         reference_global=synthetic_encoded.reference_global.detach().requires_grad_(),
         text_tokens=synthetic_encoded.text_tokens.detach().requires_grad_(),
         text_global=synthetic_encoded.text_global.detach().requires_grad_(),
+        text_semantic_global=synthetic_encoded.text_semantic_global.detach().requires_grad_(),
         text_content_mask=synthetic_encoded.text_content_mask,
     )
     output = core.train()(encoded)

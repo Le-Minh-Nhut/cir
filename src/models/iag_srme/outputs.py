@@ -13,6 +13,7 @@ class BackboneOutput:
     reference_global: Tensor  # [B,D]
     text_tokens: Tensor  # [B,L,d]
     text_global: Tensor  # [B,d]
+    text_semantic_global: Tensor  # [B,D], official FG-CLIP retrieval projection
     text_content_mask: Tensor  # [B,L]
 
 

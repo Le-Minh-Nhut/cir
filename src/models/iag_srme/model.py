@@ -8,7 +8,7 @@ from torch import Tensor, nn
 from .backbone import FGCLIPBackbone
 from .context import GroundedEditContext
 from .editor import SharedTokenEditor
-from .factorization import AuxiliaryFullQueryAnchor, StableFactorFuser
+from .factorization import SemanticFullQueryAnchor, StableFactorFuser
 from .grounded_reader import GroundedStateReader
 from .grounding import AnchorGrounder
 from .intent import SemanticClaimHead, TextIntentEncoder
@@ -31,7 +31,7 @@ class IAGSRMEConfig:
     selector_gumbel_noise: bool = True
     enable_claim_head: bool = False
     enable_factor_head: bool = False
-    factor_dim: int = 256
+    factor_dim: int | None = None
 
 
 class IAGSRMECore(nn.Module):
@@ -55,13 +55,19 @@ class IAGSRMECore(nn.Module):
         self.scorer = ConsequenceScorer(config.width, config.retrieval_dim)
         self.selector = HardStopSelector(config.selector_temperature, config.selector_gumbel_noise)
         self.claim_head = SemanticClaimHead(config.width) if config.enable_claim_head else None
+        factor_dim = config.retrieval_dim if config.factor_dim is None else config.factor_dim
+        if config.enable_factor_head and factor_dim != config.retrieval_dim:
+            raise ValueError(
+                "factor_dim must equal FG-CLIP retrieval_dim: no untrained projection is "
+                "permitted in the detached semantic-anchor path"
+            )
         self.factor_fuser = (
-            StableFactorFuser(config.width, config.factor_dim)
+            StableFactorFuser(config.width, factor_dim)
             if config.enable_factor_head
             else None
         )
         self.auxiliary_anchor = (
-            AuxiliaryFullQueryAnchor(config.width, config.factor_dim)
+            SemanticFullQueryAnchor()
             if config.enable_factor_head
             else None
         )
@@ -111,7 +117,9 @@ class IAGSRMECore(nn.Module):
         auxiliary_anchor = None
         if self.factor_fuser is not None and self.auxiliary_anchor is not None:
             factors = self.factor_fuser(intents, original_static)
-            auxiliary_anchor = self.auxiliary_anchor(anchor, encoded.text_global)
+            auxiliary_anchor = self.auxiliary_anchor(
+                encoded.reference_global, encoded.text_semantic_global
+            )
 
         for timestep in range(self.config.max_steps):
             current_state = state
@@ -262,6 +270,10 @@ class IAGSRME(nn.Module):
         encoded = self.backbone(reference_pixels, input_ids, attention_mask, content_mask)
         return self.core(encoded, control=control)
 
+    def encode_global_images(self, pixel_values: Tensor) -> Tensor:
+        return self.backbone.encode_global_images(pixel_values)
+
     def encode_gallery(self, pixel_values: Tensor) -> Tensor:
-        _, global_features = self.backbone.encode_images(pixel_values)
-        return global_features
+        """Backward-compatible generic gallery name; always global-only."""
+
+        return self.encode_global_images(pixel_values)
