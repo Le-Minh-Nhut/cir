@@ -13,6 +13,7 @@ from diagnose_iag_srme_checkpoint import (
     _selection_batch_counts,
     _validate_report_schema,
     repeat_candidate_control,
+    resolve_diagnostic_protocol,
     same_parent_candidate_queries,
     single_candidate_control,
 )
@@ -114,3 +115,28 @@ def test_report_schema_has_required_keys_and_is_json_serializable() -> None:
 
     with pytest.raises(AssertionError, match="missing top-level keys"):
         _validate_report_schema({"checkpoint": "best.pt"})
+
+
+def test_diagnostic_protocol_can_override_checkpoint_selection() -> None:
+    metadata = {
+        "selection_protocol": "fashioniq_val",
+        "evaluation_protocol": "fashioniq_val",
+    }
+    assert resolve_diagnostic_protocol(None, metadata) == "fashioniq_val"
+    assert (
+        resolve_diagnostic_protocol("fashioniq_original", metadata)
+        == "fashioniq_original"
+    )
+
+
+def test_diagnostic_protocol_legacy_and_unselected_fallbacks() -> None:
+    assert (
+        resolve_diagnostic_protocol(None, {"evaluation_protocol": "fashioniq_val"})
+        == "fashioniq_val"
+    )
+    assert (
+        resolve_diagnostic_protocol(
+            None, {"selection_protocol": None, "evaluation_protocol": None}
+        )
+        == "fashioniq_original"
+    )

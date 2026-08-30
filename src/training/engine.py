@@ -17,6 +17,9 @@ from losses.retrieval import positive_mask_from_ids
 from models.iag_srme.model import IAGSRME
 
 
+FASHIONIQ_EVALUATION_PROTOCOLS = ("fashioniq_original", "fashioniq_val")
+
+
 @dataclass(frozen=True, slots=True)
 class PrecisionPolicy:
     name: str
@@ -143,10 +146,26 @@ def save_checkpoint(
     objective: IAGSRMEObjective,
     optimizer: Optimizer,
     epoch: int,
-    metric: float,
     precision: PrecisionPolicy,
-    evaluation_protocol: str,
+    validation_metrics: Mapping[str, Mapping[str, float]],
+    selection_protocol: str | None,
+    selection_metric: str = "mean_recall",
 ) -> None:
+    serialized_metrics = {
+        protocol: {name: float(value) for name, value in metrics.items()}
+        for protocol, metrics in validation_metrics.items()
+    }
+    if set(serialized_metrics) != set(FASHIONIQ_EVALUATION_PROTOCOLS):
+        raise ValueError("checkpoint requires both FashionIQ validation metric groups")
+    if selection_protocol is not None and selection_protocol not in FASHIONIQ_EVALUATION_PROTOCOLS:
+        raise ValueError("unsupported checkpoint selection protocol")
+    selection_value = None
+    if selection_protocol is not None:
+        if selection_protocol not in serialized_metrics:
+            raise ValueError("selection protocol is missing from validation metrics")
+        if selection_metric not in serialized_metrics[selection_protocol]:
+            raise ValueError("selection metric is missing from selected protocol metrics")
+        selection_value = serialized_metrics[selection_protocol][selection_metric]
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
         {
@@ -154,7 +173,7 @@ def save_checkpoint(
             "objective": objective.state_dict(),
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
-            "metric": metric,
+            "metric": selection_value,
             "metadata": {
                 "backbone_type": model.backbone.backbone_type,
                 "backbone_checkpoint": model.backbone.checkpoint,
@@ -167,7 +186,13 @@ def save_checkpoint(
                 "backbone_weights_revision": getattr(
                     model.backbone, "weights_revision", None
                 ),
-                "evaluation_protocol": evaluation_protocol,
+                # Retained for legacy readers. New dual-evaluation checkpoints use
+                # selection_protocol as the authoritative provenance field.
+                "evaluation_protocol": selection_protocol,
+                "validation_metrics": serialized_metrics,
+                "selection_protocol": selection_protocol,
+                "selection_metric": selection_metric,
+                "selection_metric_value": selection_value,
                 "precision": precision.name,
             },
         },
@@ -180,19 +205,19 @@ def fit(
     objective: IAGSRMEObjective,
     train_loader: DataLoader[ImageBatch],
     optimizer: Optimizer,
-    evaluate: Callable[[IAGSRME], Mapping[str, float]],
+    evaluate: Callable[[IAGSRME], Mapping[str, Mapping[str, float]]],
     *,
     epochs: int,
     device: torch.device,
     output_dir: str | Path,
     precision: PrecisionPolicy,
-    evaluation_protocol: str,
     primary_metric: str = "mean_recall",
 ) -> None:
     assert_training_setup(model, objective, optimizer, device)
     destination = Path(output_dir)
     scaler = torch.amp.GradScaler("cuda", enabled=precision.scaler_enabled)
-    best = float("-inf")
+    protocols = FASHIONIQ_EVALUATION_PROTOCOLS
+    best = {protocol: float("-inf") for protocol in protocols}
     for epoch in range(epochs):
         set_epoch(train_loader, epoch)
         training = train_one_epoch(
@@ -205,31 +230,46 @@ def fit(
             precision=precision,
             epoch=epoch,
         )
-        validation = dict(evaluate(model))
-        metric = float(validation[primary_metric])
+        validation = {
+            protocol: dict(metrics) for protocol, metrics in evaluate(model).items()
+        }
+        if set(validation) != set(protocols):
+            raise ValueError("dual evaluation must return original and val protocol metrics")
+        current = {
+            protocol: float(validation[protocol][primary_metric]) for protocol in protocols
+        }
         save_checkpoint(
             destination / "last.pt",
             model,
             objective,
             optimizer,
             epoch + 1,
-            metric,
             precision,
-            evaluation_protocol,
+            validation,
+            selection_protocol=None,
+            selection_metric=primary_metric,
         )
-        if metric > best:
-            best = metric
-            save_checkpoint(
-                destination / "best.pt",
-                model,
-                objective,
-                optimizer,
-                epoch + 1,
-                metric,
-                precision,
-                evaluation_protocol,
-            )
+        for protocol, filename in (
+            ("fashioniq_original", "best_original.pt"),
+            ("fashioniq_val", "best_val.pt"),
+        ):
+            if current[protocol] > best[protocol]:
+                best[protocol] = current[protocol]
+                save_checkpoint(
+                    destination / filename,
+                    model,
+                    objective,
+                    optimizer,
+                    epoch + 1,
+                    precision,
+                    validation,
+                    selection_protocol=protocol,
+                    selection_metric=primary_metric,
+                )
         print(
             f"epoch={epoch + 1}/{epochs} total={training['total']:.4f} "
-            f"{primary_metric}={metric:.3f} best={best:.3f}"
+            f"original_mean={current['fashioniq_original']:.3f} "
+            f"original_best={best['fashioniq_original']:.3f} "
+            f"val_mean={current['fashioniq_val']:.3f} "
+            f"val_best={best['fashioniq_val']:.3f}"
         )

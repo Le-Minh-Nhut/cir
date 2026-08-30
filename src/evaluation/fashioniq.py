@@ -117,6 +117,33 @@ def macro_average_fashioniq(results: Mapping[str, Mapping[str, float]]) -> dict[
     }
 
 
+def select_gallery_features(
+    full_features: Tensor,
+    full_ids: Sequence[str],
+    requested_ids: Sequence[str],
+) -> Tensor:
+    """Select an ordered gallery subset without re-encoding any images."""
+    if full_features.ndim != 2 or full_features.shape[0] != len(full_ids):
+        raise ValueError("full gallery features/IDs are inconsistent")
+    if len(set(full_ids)) != len(full_ids):
+        raise ValueError("full gallery IDs must be unique")
+    if len(set(requested_ids)) != len(requested_ids):
+        raise ValueError("requested gallery IDs must be unique")
+    full_index = {image_id: index for index, image_id in enumerate(full_ids)}
+    missing = [image_id for image_id in requested_ids if image_id not in full_index]
+    if missing:
+        raise ValueError(
+            "requested FashionIQ gallery is not a subset of the original gallery: "
+            f"first missing ID={missing[0]}"
+        )
+    indices = torch.tensor(
+        [full_index[image_id] for image_id in requested_ids],
+        dtype=torch.long,
+        device=full_features.device,
+    )
+    return full_features.index_select(0, indices)
+
+
 @torch.no_grad()
 def encode_gallery(
     model: IAGSRME,
@@ -147,6 +174,134 @@ def encode_gallery(
 
 
 @torch.no_grad()
+def encode_validation_queries(
+    model: IAGSRME,
+    loader: DataLoader[ImageBatch],
+    device: torch.device,
+) -> tuple[Tensor, list[str], list[str]]:
+    queries: list[Tensor] = []
+    target_ids: list[str] = []
+    reference_ids: list[str] = []
+    for cpu_batch in loader:
+        batch = cpu_batch.to(device)
+        output = model(
+            batch.reference_pixels,
+            batch.input_ids,
+            batch.attention_mask,
+            batch.content_mask,
+        )
+        queries.append(output.final_query)
+        reference_ids.extend(batch.reference_ids)
+        if any(target_id is None for target_id in batch.target_ids):
+            raise ValueError("validation target missing")
+        target_ids.extend(str(target_id) for target_id in batch.target_ids)
+    if not queries:
+        raise RuntimeError("empty validation loader")
+    return F.normalize(torch.cat(queries), dim=-1), target_ids, reference_ids
+
+
+def _flatten_category_metrics(
+    category_results: Mapping[str, Mapping[str, float]],
+) -> dict[str, float]:
+    metrics = dict(macro_average_fashioniq(category_results))
+    for category, result in category_results.items():
+        metrics[f"{category}_recall_at_10"] = result["recall_at_10"]
+        metrics[f"{category}_recall_at_50"] = result["recall_at_50"]
+    return metrics
+
+
+@torch.no_grad()
+def evaluate_fashioniq_protocols(
+    model: IAGSRME,
+    val_loaders: Mapping[str, DataLoader[ImageBatch]],
+    val_annotations: Mapping[str, Sequence[FashionIQAnnotation]],
+    *,
+    protocols: Sequence[str],
+    split_root: str | Path,
+    split: str,
+    image_store: DirectoryImageStore,
+    image_processor: Any,
+    device: torch.device,
+    gallery_batch_size: int,
+    num_workers: int,
+) -> dict[str, dict[str, float]]:
+    """Evaluate one model state on one or more independent FashionIQ protocols.
+
+    Query encodings are shared across every requested protocol. When both canonical
+    protocols are requested, the original gallery is encoded once and the ordered
+    pair-union gallery is selected from those exact features.
+    """
+    requested_protocols = tuple(protocols)
+    if not requested_protocols or len(set(requested_protocols)) != len(requested_protocols):
+        raise ValueError("protocols must be a non-empty unique sequence")
+    supported = {"fashioniq_original", "fashioniq_val"}
+    if any(protocol not in supported for protocol in requested_protocols):
+        raise ValueError(f"unsupported FashionIQ protocols: {requested_protocols}")
+
+    model.eval()
+    results: dict[str, dict[str, dict[str, float]]] = {
+        protocol: {} for protocol in requested_protocols
+    }
+    share_original_gallery = set(requested_protocols) == supported
+    for category, loader in val_loaders.items():
+        queries, target_ids, reference_ids = encode_validation_queries(model, loader, device)
+        gallery_ids_by_protocol = {
+            protocol: build_fashioniq_gallery(
+                protocol, split_root, category, val_annotations[category], split
+            )
+            for protocol in requested_protocols
+        }
+
+        if share_original_gallery:
+            original_ids = gallery_ids_by_protocol["fashioniq_original"]
+            original_gallery = encode_gallery(
+                model,
+                original_ids,
+                image_store,
+                image_processor,
+                device,
+                gallery_batch_size,
+                num_workers,
+            ).to(device)
+            galleries = {
+                "fashioniq_original": original_gallery,
+                "fashioniq_val": select_gallery_features(
+                    original_gallery,
+                    original_ids,
+                    gallery_ids_by_protocol["fashioniq_val"],
+                ),
+            }
+        else:
+            protocol = requested_protocols[0]
+            galleries = {
+                protocol: encode_gallery(
+                    model,
+                    gallery_ids_by_protocol[protocol],
+                    image_store,
+                    image_processor,
+                    device,
+                    gallery_batch_size,
+                    num_workers,
+                ).to(device)
+            }
+
+        for protocol in requested_protocols:
+            gallery = F.normalize(galleries[protocol], dim=-1)
+            scores = queries @ gallery.T
+            results[protocol][category] = evaluate_fashioniq_recall(
+                scores,
+                target_ids,
+                gallery_ids_by_protocol[protocol],
+                reference_ids,
+            )
+
+    return {
+        protocol: _flatten_category_metrics(results[protocol])
+        for protocol in requested_protocols
+    }
+
+
+@torch.no_grad()
 def evaluate_fashioniq(
     model: IAGSRME,
     val_loaders: Mapping[str, DataLoader[ImageBatch]],
@@ -161,44 +316,16 @@ def evaluate_fashioniq(
     gallery_batch_size: int,
     num_workers: int,
 ) -> dict[str, float]:
-    model.eval()
-    category_results: dict[str, dict[str, float]] = {}
-    for category, loader in val_loaders.items():
-        gallery_ids = build_fashioniq_gallery(
-            protocol, split_root, category, val_annotations[category], split
-        )
-        gallery = encode_gallery(
-            model,
-            gallery_ids,
-            image_store,
-            image_processor,
-            device,
-            gallery_batch_size,
-            num_workers,
-        ).to(device)
-        queries: list[Tensor] = []
-        target_ids: list[str] = []
-        reference_ids: list[str] = []
-        for cpu_batch in loader:
-            batch = cpu_batch.to(device)
-            output = model(
-                batch.reference_pixels,
-                batch.input_ids,
-                batch.attention_mask,
-                batch.content_mask,
-            )
-            queries.append(output.final_query)
-            reference_ids.extend(batch.reference_ids)
-            if any(target_id is None for target_id in batch.target_ids):
-                raise ValueError("validation target missing")
-            target_ids.extend(str(target_id) for target_id in batch.target_ids)
-        scores = F.normalize(torch.cat(queries), dim=-1) @ F.normalize(gallery, dim=-1).T
-        category_results[category] = evaluate_fashioniq_recall(
-            scores, target_ids, gallery_ids, reference_ids
-        )
-    average = macro_average_fashioniq(category_results)
-    metrics = dict(average)
-    for category, result in category_results.items():
-        metrics[f"{category}_recall_at_10"] = result["recall_at_10"]
-        metrics[f"{category}_recall_at_50"] = result["recall_at_50"]
-    return metrics
+    return evaluate_fashioniq_protocols(
+        model,
+        val_loaders,
+        val_annotations,
+        protocols=(protocol,),
+        split_root=split_root,
+        split=split,
+        image_store=image_store,
+        image_processor=image_processor,
+        device=device,
+        gallery_batch_size=gallery_batch_size,
+        num_workers=num_workers,
+    )[protocol]

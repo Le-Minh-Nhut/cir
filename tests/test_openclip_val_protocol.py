@@ -92,6 +92,18 @@ def test_correct_openclip_checkpoint_identity_passes() -> None:
     validate_checkpoint_backbone_metadata(OPENCLIP_METADATA, _expected_openclip_spec())
 
 
+def test_backbone_identity_validation_is_independent_of_evaluation_protocol() -> None:
+    metadata = {
+        **OPENCLIP_METADATA,
+        "evaluation_protocol": "fashioniq_val",
+        "selection_protocol": "fashioniq_val",
+    }
+    validate_checkpoint_backbone_metadata(metadata, _expected_openclip_spec())
+    metadata["evaluation_protocol"] = "fashioniq_original"
+    metadata["selection_protocol"] = "fashioniq_original"
+    validate_checkpoint_backbone_metadata(metadata, _expected_openclip_spec())
+
+
 @pytest.mark.parametrize(
     ("field", "wrong_value"),
     [
@@ -145,9 +157,12 @@ def test_checkpoint_persists_openclip_and_val_protocol_metadata(tmp_path: Path) 
         objective,
         optimizer,
         epoch=3,
-        metric=42.0,
         precision=PrecisionPolicy("fp16", True, torch.float16, True),
-        evaluation_protocol="fashioniq_val",
+        validation_metrics={
+            "fashioniq_original": {"mean_recall": 40.0},
+            "fashioniq_val": {"mean_recall": 42.0},
+        },
+        selection_protocol="fashioniq_val",
     )
     metadata = torch.load(path, weights_only=True)["metadata"]
 
@@ -157,3 +172,5 @@ def test_checkpoint_persists_openclip_and_val_protocol_metadata(tmp_path: Path) 
     assert metadata["backbone_library_version"] == "3.3.0"
     assert metadata["backbone_weights_revision"] == "immutable-sha"
     assert metadata["evaluation_protocol"] == "fashioniq_val"
+    assert metadata["selection_protocol"] == "fashioniq_val"
+    assert metadata["validation_metrics"]["fashioniq_original"]["mean_recall"] == 40.0

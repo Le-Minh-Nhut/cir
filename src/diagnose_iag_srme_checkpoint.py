@@ -54,6 +54,22 @@ REQUIRED_REPORT_KEYS = {
     "specialization_matrices",
     "failure_flags",
 }
+FASHIONIQ_PROTOCOLS = ("fashioniq_original", "fashioniq_val")
+
+
+def resolve_diagnostic_protocol(
+    requested_protocol: str | None, metadata: Mapping[str, Any]
+) -> str:
+    """Resolve an explicit protocol, then selection provenance, then legacy fallback."""
+    if requested_protocol is not None:
+        return requested_protocol
+    selection_protocol = metadata.get("selection_protocol")
+    if selection_protocol in FASHIONIQ_PROTOCOLS:
+        return str(selection_protocol)
+    legacy_protocol = metadata.get("evaluation_protocol")
+    if legacy_protocol in FASHIONIQ_PROTOCOLS:
+        return str(legacy_protocol)
+    return LEGACY_DEFAULT_PROTOCOL
 
 
 def _cosine_matrix(values: Tensor) -> Tensor:
@@ -758,6 +774,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--accelerator-index", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--protocol",
+        choices=FASHIONIQ_PROTOCOLS,
+        default=None,
+        help=(
+            "gallery protocol; defaults to checkpoint selection provenance when available, "
+            "otherwise fashioniq_original for legacy/last checkpoints"
+        ),
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.batch_size < 1 or args.gallery_batch_size < 1 or args.num_workers < 0:
@@ -773,9 +798,7 @@ def main() -> None:
     model, tokenizer, processor, checkpoint = _load_checkpoint_model(args.checkpoint, device)
     model.eval()
     metadata = checkpoint["metadata"]
-    protocol = metadata.get("evaluation_protocol", LEGACY_DEFAULT_PROTOCOL)
-    if protocol not in {"fashioniq_original", "fashioniq_val"}:
-        raise ValueError(f"unsupported checkpoint evaluation protocol: {protocol}")
+    protocol = resolve_diagnostic_protocol(args.protocol, metadata)
 
     annotation_root = args.dataset_root / "captions"
     split_root = args.dataset_root / "image_splits"

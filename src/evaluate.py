@@ -19,7 +19,9 @@ from train import CATEGORIES, backbone_build_spec_from_config, build_model
 def main(cfg: DictConfig) -> None:
     checkpoint_path = cfg.get("checkpoint")
     if checkpoint_path is None:
-        raise ValueError("pass checkpoint=/absolute/or/repository/relative/best.pt")
+        raise ValueError(
+            "pass checkpoint=/path/to/best_original.pt, best_val.pt, or last.pt"
+        )
     device = resolve_device(str(cfg.runtime.device), int(cfg.runtime.accelerator_index))
     checkpoint = torch.load(str(checkpoint_path), map_location="cpu", weights_only=True)
     validate_checkpoint_backbone_metadata(

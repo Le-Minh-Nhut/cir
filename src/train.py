@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from data.images import FashionIQImageCollator
 from datasets.common import DirectoryImageStore
 from datasets.fashioniq import FashionIQDataset
-from evaluation.fashioniq import evaluate_fashioniq
+from evaluation.fashioniq import evaluate_fashioniq_protocols
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from models.iag_srme import (
     BackboneBuildSpec,
@@ -150,10 +150,10 @@ def main(cfg: DictConfig) -> None:
         weight_decay=float(cfg.experiment.weight_decay),
     )
     evaluate = partial(
-        evaluate_fashioniq,
+        evaluate_fashioniq_protocols,
         val_loaders=val_loaders,
         val_annotations=val_annotations,
-        protocol=str(cfg.protocol.name),
+        protocols=("fashioniq_original", "fashioniq_val"),
         split_root=split_root,
         split=str(cfg.protocol.split),
         image_store=image_store,
@@ -172,7 +172,6 @@ def main(cfg: DictConfig) -> None:
         device=device,
         output_dir=str(cfg.paths.output_root),
         precision=precision,
-        evaluation_protocol=str(cfg.protocol.name),
     )
 
 

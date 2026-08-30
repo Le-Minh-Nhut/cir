@@ -111,17 +111,28 @@ python src/evaluate.py \
   experiment=iag_srme_openclip_b16_valsplit \
   protocol=fashioniq_val \
   dataset.root=data/FashionIQ \
-  checkpoint=/absolute/path/to/best.pt
+  checkpoint=/absolute/path/to/best_val.pt
 ```
 
-Run checkpoint diagnostics. The runner reconstructs OpenCLIP and the VAL protocol from the
-checkpoint metadata:
+Training evaluates the same model state after every epoch on both `fashioniq_original` and
+`fashioniq_val`. It encodes each category's validation queries once, encodes the full original
+gallery once, and selects pair-union embeddings in the exact `fashioniq_val` ID order. The
+independent outputs are `best_original.pt`, `best_val.pt`, and `last.pt`; no ambiguous
+`best.pt` is written. Every checkpoint stores both current protocol metric groups.
+
+Run checkpoint diagnostics. The runner reconstructs OpenCLIP from checkpoint metadata and
+accepts the gallery protocol explicitly:
 
 ```bash
 python src/diagnose_iag_srme_checkpoint.py \
-  --checkpoint outputs/openclip-b16/best.pt \
+  --checkpoint outputs/openclip-b16/best_val.pt \
   --dataset-root data/FashionIQ \
+  --protocol fashioniq_val \
   --batch-size 32 \
   --gallery-batch-size 128 \
   --output reports/iag_srme_openclip_b16_best.json
 ```
+
+Pass `--protocol fashioniq_original` to diagnose the exact same checkpoint against the full
+original gallery. If omitted, diagnostics use an unambiguous checkpoint selection protocol;
+`last.pt` and legacy checkpoints without such provenance fall back to `fashioniq_original`.

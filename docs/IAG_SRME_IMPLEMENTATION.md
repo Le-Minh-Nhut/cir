@@ -121,14 +121,17 @@ Use the same backbone/experiment pair as the checkpoint:
 
 ```bash
 python src/evaluate.py backbone=fgclip_base_full experiment=iag_srme_base_full \
-  checkpoint=/path/to/best.pt
+  protocol=fashioniq_original checkpoint=/path/to/best_original.pt
 
 python src/evaluate.py backbone=fgclip_large_text_ft experiment=iag_srme_large_text_ft \
-  checkpoint=/path/to/best.pt
+  protocol=fashioniq_val checkpoint=/path/to/best_val.pt
 ```
 
 Validation regenerates gallery embeddings with the loaded current checkpoint. This is mandatory
 for trainable vision and deliberately remains the default for frozen vision.
+Training evaluates both FashionIQ protocols independently after each epoch and writes
+`best_original.pt`, `best_val.pt`, and `last.pt`. Either selected checkpoint can be evaluated
+under either protocol because protocol choice is not part of backbone identity validation.
 
 ## Loss configurations
 
