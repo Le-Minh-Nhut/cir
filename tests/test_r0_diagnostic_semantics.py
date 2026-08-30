@@ -4,7 +4,11 @@ from dataclasses import replace
 
 import torch
 
-from diagnose_iag_srme_checkpoint import ValidationDiagnosticAccumulator
+from diagnose_iag_srme_checkpoint import (
+    SelectedPathMarginalAccumulator,
+    ValidationDiagnosticAccumulator,
+    _failure_flags,
+)
 from diagnostics.iag_srme import (
     flatten_delta_z,
     functional_effective_rank,
@@ -114,3 +118,140 @@ def test_live_parent_denominator_excludes_absorbed_trajectories(
     summary = accumulator.functional_summary()["per_timestep"]
 
     assert [item["live_parent_count"] for item in summary] == [3, 2, 1]
+    dynamic = accumulator.dynamic_summary()["context"]["per_transition"]
+    assert [item["live_executed_parent_count"] for item in dynamic] == [2, 1]
+    assert all("metric_population" in item for item in dynamic)
+
+
+def test_selected_path_target_diagnostics_are_offline_and_do_not_mutate_forward(
+    core, synthetic_encoded
+) -> None:
+    core.eval()
+    with torch.no_grad():
+        core.scorer.score_head[-1].weight.zero_()
+        core.scorer.score_head[-1].bias.fill_(1.0)
+    output = core(synthetic_encoded)
+    before = {
+        "final_query": output.final_query.detach().clone(),
+        "final_state": output.final_state.detach().clone(),
+        "intents": output.intents.detach().clone(),
+        "supports": output.supports.detach().clone(),
+        "scores": torch.stack([step.scores for step in output.trace]).detach().clone(),
+    }
+    target_a = torch.randn_like(output.final_query)
+    target_b = -target_a
+    audit_a = SelectedPathMarginalAccumulator()
+    audit_b = SelectedPathMarginalAccumulator()
+    audit_a.update(output, target_a)
+    audit_b.update(output, target_b)
+
+    for name, expected in before.items():
+        actual = (
+            torch.stack([step.scores for step in output.trace])
+            if name == "scores"
+            else getattr(output, name)
+        )
+        torch.testing.assert_close(actual, expected, atol=0.0, rtol=0.0)
+    summary_a = audit_a.summary()["target_similarity_improvement_by_timestep"]
+    summary_b = audit_b.summary()["target_similarity_improvement_by_timestep"]
+    assert summary_a[0]["selected_non_stop_transition_count"] == 3
+    assert summary_a[0]["delta_target_cosine_similarity"]["mean"] != summary_b[0][
+        "delta_target_cosine_similarity"
+    ]["mean"]
+
+
+def test_r0_instrumentation_freezes_numerical_forward_behavior(
+    core, synthetic_encoded
+) -> None:
+    core.eval()
+    before = core(synthetic_encoded)
+    accumulator = ValidationDiagnosticAccumulator()
+    accumulator.update(before)
+    _ = accumulator.intent_summary()
+    _ = accumulator.grounding_summary()
+    _ = accumulator.functional_summary()
+    _ = accumulator.dynamic_summary()
+    after = core(synthetic_encoded)
+
+    for name in ("final_query", "final_state", "anchor", "intents", "supports"):
+        torch.testing.assert_close(
+            getattr(after, name), getattr(before, name), atol=0.0, rtol=0.0
+        )
+    for before_step, after_step in zip(before.trace, after.trace, strict=True):
+        for name in (
+            "current_state",
+            "current_query",
+            "contexts",
+            "delta_z",
+            "candidate_states",
+            "candidate_queries",
+            "delta_q",
+            "scores",
+            "selected_index",
+            "next_state",
+            "next_query",
+        ):
+            torch.testing.assert_close(
+                getattr(after_step, name),
+                getattr(before_step, name),
+                atol=0.0,
+                rtol=0.0,
+            )
+
+
+def test_functional_report_keeps_timestep_matrices_and_retention(
+    core, synthetic_encoded
+) -> None:
+    core.eval()
+    output = core(synthetic_encoded)
+    accumulator = ValidationDiagnosticAccumulator()
+    accumulator.update(output)
+    summary = accumulator.functional_summary()
+
+    assert len(summary["per_timestep"]) == 3
+    for timestep in summary["per_timestep"]:
+        assert torch.tensor(timestep["context_pairwise_cosine_matrix"]).shape == (4, 4)
+        assert torch.tensor(timestep["delta_z_pairwise_cosine_matrix"]).shape == (4, 4)
+        assert torch.tensor(timestep["delta_q_pairwise_cosine_matrix"]).shape == (4, 4)
+        assert timestep["median_delta_q_norm"] is not None
+    assert set(summary["late_step_effect_retention"]) >= {
+        "mean_delta_q_norm_t1_over_t0",
+        "mean_delta_q_norm_t2_over_t0",
+        "mean_delta_q_norm_t2_over_t1",
+    }
+
+
+def test_every_failure_flag_has_an_auditable_noncausal_contract(
+    core, synthetic_encoded
+) -> None:
+    core.eval()
+    output = core(synthetic_encoded)
+    accumulator = ValidationDiagnosticAccumulator()
+    accumulator.update(output)
+    selection = accumulator.selection_summary()
+    grounding = accumulator.grounding_summary()
+    functional = accumulator.functional_summary()
+    specialization = accumulator.specialization_summary()
+    retrieval = {
+        "full": {"mean_recall": 10.0},
+        "reference_only": {"mean_recall": 9.0},
+        "counterfactual_same_parent_by_timestep": {
+            "t0": {"best_single_candidate_oracle": {"mean_recall": 11.0}}
+        },
+    }
+    retrieval.update(
+        {f"single_{index}": {"mean_recall": 10.0 + index} for index in range(4)}
+    )
+    retrieval.update(
+        {f"repeat_{index}": {"mean_recall": 9.0 + index} for index in range(4)}
+    )
+    audit = _failure_flags(
+        selection, grounding, functional, retrieval, specialization
+    )
+
+    assert set(audit["flags"]) == set(audit["per_flag_audit_contract"])
+    for contract in audit["per_flag_audit_contract"].values():
+        assert contract["condition"]
+        assert isinstance(contract["supporting_numbers"], dict)
+        assert isinstance(contract["thresholds"], dict)
+        assert contract["interpretation_limitation"]

@@ -15,7 +15,13 @@ from torch.utils.data import DataLoader
 
 from data.images import FashionIQImageCollator, ImageBatch
 from datasets.common import DirectoryImageStore
-from diagnostics.iag_srme import functional_effective_rank
+from diagnostics.iag_srme import (
+    flatten_delta_z,
+    functional_effective_rank,
+    off_diagonal_values,
+    pairwise_cosine_matrix,
+    verify_same_parent_counterfactuals,
+)
 from evaluation.fashioniq import (
     build_fashioniq_gallery,
     build_validation_datasets,
@@ -36,6 +42,7 @@ from runtime import configure_torch_runtime, resolve_device, seed_everything
 
 CATEGORIES = ("dress", "shirt", "toptee")
 PROTOCOL = "fashioniq_original"
+PROTOCOLS = ("fashioniq_original", "fashioniq_val")
 SPLIT = "val"
 CAPTION_POLICY = "ordered_and"
 REQUIRED_REPORT_KEYS = {
@@ -46,25 +53,31 @@ REQUIRED_REPORT_KEYS = {
     "protocol",
     "global_metrics",
     "per_category_metrics",
+    "intent_diagnostics",
     "selection_diagnostics",
     "grounding_diagnostics",
     "functional_diagnostics",
     "dynamic_diagnostics",
     "control_retrieval_metrics",
+    "same_parent_counterfactual_diagnostics",
+    "selected_path_marginal_diagnostics",
     "specialization_matrices",
     "failure_flags",
+    "diagnostic_definitions",
 }
 
 
-def _cosine_matrix(values: Tensor) -> Tensor:
-    normalized = F.normalize(values.float(), dim=-1)
-    return normalized @ normalized.transpose(-1, -2)
-
-
 def _off_diagonal_mean(matrix: Tensor) -> float:
-    size = matrix.shape[-1]
-    mask = ~torch.eye(size, dtype=torch.bool)
-    return float(matrix[mask].mean())
+    return float(off_diagonal_values(matrix).mean())
+
+
+def _off_diagonal_summary(matrix: Tensor) -> dict[str, float]:
+    values = off_diagonal_values(matrix)
+    return {
+        "mean": float(values.mean()),
+        "minimum": float(values.min()),
+        "maximum": float(values.max()),
+    }
 
 
 @dataclass
@@ -100,11 +113,46 @@ class _ScalarStats:
         self.count += values.numel()
         self.maximum = max(self.maximum, float(values.max()))
 
-    def summary(self) -> dict[str, float | int]:
+    def summary(
+        self, *, parent_count: int, population: str
+    ) -> dict[str, float | int | str]:
         return {
             "mean_absolute_change": self.total / max(self.count, 1),
             "max_absolute_change": self.maximum,
             "element_count": self.count,
+            "live_executed_parent_count": parent_count,
+            "metric_population": population,
+        }
+
+
+@dataclass
+class _DistributionStats:
+    chunks: list[Tensor]
+
+    def __init__(self) -> None:
+        self.chunks = []
+
+    def update(self, values: Tensor) -> None:
+        values = values.detach().float().flatten().cpu()
+        if values.numel() > 0:
+            self.chunks.append(values)
+
+    def summary(self) -> dict[str, float | int | None]:
+        if not self.chunks:
+            return {
+                "count": 0,
+                "mean": None,
+                "median": None,
+                "minimum": None,
+                "maximum": None,
+            }
+        values = torch.cat(self.chunks)
+        return {
+            "count": values.numel(),
+            "mean": float(values.mean()),
+            "median": float(values.median()),
+            "minimum": float(values.min()),
+            "maximum": float(values.max()),
         }
 
 
@@ -143,9 +191,7 @@ def same_parent_candidate_queries(
     """Return qhat candidates only for valid/live parent states at timestep t."""
 
     step = output.trace[timestep]
-    expected = step.current_state[:, None] + step.delta_z
-    if not torch.equal(step.candidate_states, expected):
-        raise AssertionError("counterfactual queries are not from the same parent state")
+    verify_same_parent_counterfactuals(step)
     return step.candidate_queries[step.live_before], step.live_before
 
 
@@ -191,10 +237,15 @@ class ValidationDiagnosticAccumulator:
         self.support_overlap = _MeanTensor()
         self.dominant_grounding_share = _MeanTensor()
         self.intent_cosine = _MeanTensor()
+        self.intent_norm = _MeanTensor()
 
         self.delta_z_norm = [_MeanTensor() for _ in range(timesteps)]
         self.delta_q_norm = [_MeanTensor() for _ in range(timesteps)]
-        self.effect_rank = [_MeanTensor() for _ in range(timesteps)]
+        self.delta_q_norm_distribution = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.delta_z_rank = [_MeanTensor() for _ in range(timesteps)]
+        self.delta_q_rank = [_MeanTensor() for _ in range(timesteps)]
         self.context_cosine = [_MeanTensor() for _ in range(timesteps)]
         self.delta_z_cosine = [_MeanTensor() for _ in range(timesteps)]
         self.delta_q_cosine = [_MeanTensor() for _ in range(timesteps)]
@@ -206,6 +257,7 @@ class ValidationDiagnosticAccumulator:
         self.dynamic = {
             name: [_ScalarStats() for _ in range(timesteps - 1)] for name in names
         }
+        self.dynamic_parent_counts = torch.zeros(timesteps - 1, dtype=torch.long)
 
     def update(self, output: IAGSRMEOutput) -> None:
         batch_size, candidates, tokens = output.supports.shape
@@ -234,30 +286,38 @@ class ValidationDiagnosticAccumulator:
         self.support_fraction.update((supports > 0).float().mean(dim=-1))
         self.support_entropy.update(entropy)
         self.support_effective_size.update(entropy.exp())
-        self.support_cosine.update(_cosine_matrix(supports))
+        self.support_cosine.update(pairwise_cosine_matrix(supports))
         overlap = torch.minimum(supports[:, :, None], supports[:, None, :]).sum(dim=-1)
         self.support_overlap.update(overlap)
         dominant_share = supports.max(dim=1).values.sum(dim=-1) / supports.sum(
             dim=(1, 2)
         ).clamp_min(1e-8)
         self.dominant_grounding_share.update(dominant_share[:, None])
-        self.intent_cosine.update(_cosine_matrix(output.intents))
+        self.intent_cosine.update(pairwise_cosine_matrix(output.intents))
+        self.intent_norm.update(output.intents.float().norm(dim=-1))
 
         for timestep, step in enumerate(output.trace):
+            verify_same_parent_counterfactuals(step)
             valid = step.live_before
             if not valid.any():
                 continue
             delta_z = step.delta_z[valid].float()
             delta_q = step.delta_q[valid].float()
             contexts = step.contexts[valid].float()
-            self.delta_z_norm[timestep].update(delta_z.flatten(2).norm(dim=-1))
-            self.delta_q_norm[timestep].update(delta_q.norm(dim=-1))
-            self.effect_rank[timestep].update(
+            flat_delta_z = flatten_delta_z(delta_z)
+            delta_q_norm = delta_q.norm(dim=-1)
+            self.delta_z_norm[timestep].update(flat_delta_z.norm(dim=-1))
+            self.delta_q_norm[timestep].update(delta_q_norm)
+            self.delta_q_norm_distribution[timestep].update(delta_q_norm)
+            self.delta_z_rank[timestep].update(
+                functional_effective_rank(flat_delta_z)[:, None]
+            )
+            self.delta_q_rank[timestep].update(
                 functional_effective_rank(delta_q)[:, None]
             )
-            context_matrix = _cosine_matrix(contexts)
-            delta_z_matrix = _cosine_matrix(delta_z.flatten(2))
-            delta_q_matrix = _cosine_matrix(delta_q)
+            context_matrix = pairwise_cosine_matrix(contexts)
+            delta_z_matrix = pairwise_cosine_matrix(flat_delta_z)
+            delta_q_matrix = pairwise_cosine_matrix(delta_q)
             self.context_cosine[timestep].update(context_matrix)
             self.delta_z_cosine[timestep].update(delta_z_matrix)
             self.delta_q_cosine[timestep].update(delta_q_matrix)
@@ -268,9 +328,13 @@ class ValidationDiagnosticAccumulator:
         for transition, (previous, current) in enumerate(
             zip(output.trace[:-1], output.trace[1:], strict=True)
         ):
+            expected_live = previous.live_before & ~previous.stopped_now
+            if not torch.equal(current.live_before, expected_live):
+                raise AssertionError("recurrent live lineage is inconsistent after STOP")
             valid = previous.live_before & previous.selected_index.lt(candidates)
             if not valid.any():
                 continue
+            self.dynamic_parent_counts[transition] += int(valid.sum())
             pairs = {
                 "g_t": (previous.current_evidence, current.current_evidence),
                 "d_t": (
@@ -311,12 +375,41 @@ class ValidationDiagnosticAccumulator:
             "fraction_queries_with_repeated_candidate_selections": (
                 self.repeated_queries / max(self.queries, 1)
             ),
+            "metric_populations": {
+                "candidate_distribution_conditional_on_edit": (
+                    "selected non-STOP decisions across all live timesteps"
+                ),
+                "live_action_distribution_candidates_plus_stop": (
+                    "all decisions among live parents before each timestep"
+                ),
+                "absorbed_stop_occupancy_by_timestep": (
+                    "all validation trajectories, including already absorbed STOP"
+                ),
+                "new_stop_hazard_by_timestep": (
+                    "live parents before the decision at each timestep"
+                ),
+            },
             "counts": {
                 "queries": self.queries,
                 "candidate_selections": self.candidate_counts.tolist(),
+                "live_actions_candidates_plus_stop": self.live_action_counts.tolist(),
+                "absorbed_stop_occupancy": self.stop_occupancy.tolist(),
                 "new_stops": self.new_stop_counts.tolist(),
                 "live_parents": self.live_counts.tolist(),
+                "executed_edits": self.executed_edits,
+                "queries_with_repeated_candidate_selections": self.repeated_queries,
             },
+        }
+
+    def intent_summary(self) -> dict[str, Any]:
+        cosine = self.intent_cosine.mean()
+        norms = self.intent_norm.mean()
+        return {
+            "pairwise_intent_cosine_matrix": cosine.tolist(),
+            "pairwise_intent_cosine_off_diagonal": _off_diagonal_summary(cosine),
+            "per_candidate_intent_norm": norms.tolist(),
+            "metric_population": "all validation queries; intents are computed once per query",
+            "tensor_shape_before_reduction": "[B,K,d]",
         }
 
     def grounding_summary(self) -> dict[str, Any]:
@@ -326,7 +419,9 @@ class ValidationDiagnosticAccumulator:
         cosine = self.support_cosine.mean()
         overlap = self.support_overlap.mean()
         return {
-            "stable_over_recurrence": True,
+            "support_recomputed_each_timestep": False,
+            "support_static_by_current_architecture": True,
+            "empirical_recurrence_stability_measured": False,
             "visual_token_count": self.visual_tokens,
             "support_fraction": float(fraction.mean()),
             "support_entropy": float(entropy.mean()),
@@ -336,6 +431,12 @@ class ValidationDiagnosticAccumulator:
             "per_candidate_support_effective_size": effective_size.tolist(),
             "pairwise_support_cosine_mean_off_diagonal": _off_diagonal_mean(cosine),
             "pairwise_support_overlap_mean_off_diagonal": _off_diagonal_mean(overlap),
+            "pairwise_support_cosine_off_diagonal": _off_diagonal_summary(cosine),
+            "pairwise_support_probability_overlap_off_diagonal": (
+                _off_diagonal_summary(overlap)
+            ),
+            "pairwise_support_cosine_matrix": cosine.tolist(),
+            "pairwise_support_probability_overlap_matrix": overlap.tolist(),
             "dominant_tokenwise_grounding_mass_share": float(
                 self.dominant_grounding_share.mean().mean()
             ),
@@ -343,39 +444,103 @@ class ValidationDiagnosticAccumulator:
                 "sum_n max_k P[k,n] divided by total candidate support mass; "
                 "diagnostic only, not semantic ownership"
             ),
+            "metric_population": (
+                "all validation queries; one static support map per query/candidate"
+            ),
         }
 
     def functional_summary(self) -> dict[str, Any]:
         per_timestep = []
+        mean_delta_q_by_timestep: list[float | None] = []
         for timestep in range(self.timesteps):
             if self.delta_z_norm[timestep].count == 0:
-                per_timestep.append({"timestep": timestep, "live_parent_count": 0})
+                mean_delta_q_by_timestep.append(None)
+                per_timestep.append(
+                    {
+                        "timestep": timestep,
+                        "live_parent_count": 0,
+                        "metric_population": (
+                            f"live parents before decision at t={timestep}"
+                        ),
+                    }
+                )
                 continue
             delta_z_norm = self.delta_z_norm[timestep].mean()
             delta_q_norm = self.delta_q_norm[timestep].mean()
+            mean_delta_q = float(delta_q_norm.mean())
+            mean_delta_q_by_timestep.append(mean_delta_q)
+            context_cosine = self.context_cosine[timestep].mean()
+            delta_z_cosine = self.delta_z_cosine[timestep].mean()
             delta_q_cosine = self.delta_q_cosine[timestep].mean()
+            distribution = self.delta_q_norm_distribution[timestep].summary()
             per_timestep.append(
                 {
                     "timestep": timestep,
                     "live_parent_count": self.delta_z_norm[timestep].count,
+                    "metric_population": f"live parents before decision at t={timestep}",
                     "mean_delta_z_norm": float(delta_z_norm.mean()),
-                    "mean_delta_q_norm": float(delta_q_norm.mean()),
+                    "mean_delta_q_norm": mean_delta_q,
+                    "median_delta_q_norm": distribution["median"],
                     "candidate_wise_delta_z_norm": delta_z_norm.tolist(),
-                    "candidate_wise_effect_norm": delta_q_norm.tolist(),
+                    "candidate_wise_delta_q_norm": delta_q_norm.tolist(),
+                    "context_pairwise_cosine_matrix": context_cosine.tolist(),
+                    "context_pairwise_cosine_off_diagonal": _off_diagonal_summary(
+                        context_cosine
+                    ),
+                    "delta_z_pairwise_cosine_matrix": delta_z_cosine.tolist(),
+                    "delta_z_pairwise_cosine_off_diagonal": _off_diagonal_summary(
+                        delta_z_cosine
+                    ),
+                    "delta_q_pairwise_cosine_matrix": delta_q_cosine.tolist(),
+                    "delta_q_pairwise_cosine_off_diagonal": _off_diagonal_summary(
+                        delta_q_cosine
+                    ),
                     "pairwise_delta_q_cosine_mean_off_diagonal": _off_diagonal_mean(
                         delta_q_cosine
                     ),
+                    "delta_z_effective_rank": float(
+                        self.delta_z_rank[timestep].mean().mean()
+                    ),
                     "functional_effective_rank": float(
-                        self.effect_rank[timestep].mean().mean()
+                        self.delta_q_rank[timestep].mean().mean()
                     ),
                 }
             )
-        return {"per_timestep": per_timestep}
+        epsilon = 1e-8
+
+        def ratio(numerator: int, denominator: int) -> float | None:
+            top = mean_delta_q_by_timestep[numerator]
+            bottom = mean_delta_q_by_timestep[denominator]
+            if top is None or bottom is None:
+                return None
+            return top / (bottom + epsilon)
+
+        return {
+            "per_timestep": per_timestep,
+            "late_step_effect_retention": {
+                "mean_delta_q_norm_t1_over_t0": ratio(1, 0),
+                "mean_delta_q_norm_t2_over_t0": ratio(2, 0),
+                "mean_delta_q_norm_t2_over_t1": ratio(2, 1),
+                "epsilon": epsilon,
+                "interpretation_limitation": (
+                    "descriptive effect retention only; no universal collapse threshold"
+                ),
+            },
+        }
 
     def dynamic_summary(self) -> dict[str, Any]:
         result: dict[str, Any] = {}
         for name, transitions in self.dynamic.items():
-            summaries = [stats.summary() for stats in transitions]
+            summaries = [
+                stats.summary(
+                    parent_count=int(self.dynamic_parent_counts[transition]),
+                    population=(
+                        f"live parents at t={transition} that executed a non-STOP edit; "
+                        f"change measured from t={transition} to t={transition + 1}"
+                    ),
+                )
+                for transition, stats in enumerate(transitions)
+            ]
             total_count = sum(stats.count for stats in transitions)
             total = sum(stats.total for stats in transitions)
             result[name] = {
@@ -384,6 +549,7 @@ class ValidationDiagnosticAccumulator:
                 "overall_max_absolute_change": max(
                     (stats.maximum for stats in transitions), default=0.0
                 ),
+                "overall_is_secondary_aggregate": True,
             }
         return result
 
@@ -394,7 +560,182 @@ class ValidationDiagnosticAccumulator:
             "pairwise_context_cosine": self.context_cosine_all.mean().tolist(),
             "pairwise_delta_z_cosine": self.delta_z_cosine_all.mean().tolist(),
             "pairwise_delta_q_cosine": self.delta_q_cosine_all.mean().tolist(),
+            "aggregation_note": (
+                "context/delta-Z/delta-q matrices are secondary aggregates weighted by "
+                "live-parent observations across timesteps; use functional per_timestep "
+                "matrices for lineage-safe conclusions"
+            ),
         }
+
+
+class SelectedPathMarginalAccumulator:
+    """Offline target-relative measurements of transitions already selected by the model."""
+
+    def __init__(self, timesteps: int = 3) -> None:
+        self.timesteps = timesteps
+        self.similarity_improvements = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+
+    def update(self, output: IAGSRMEOutput, target_features: Tensor) -> None:
+        if target_features.ndim != 2 or target_features.shape[0] != output.intents.shape[0]:
+            raise ValueError("target features must be [B,D] for offline diagnostics")
+        normalized_targets = F.normalize(target_features.float(), dim=-1)
+        candidates = output.intents.shape[1]
+        for timestep, step in enumerate(output.trace):
+            verify_same_parent_counterfactuals(step)
+            valid = step.live_before & step.selected_index.lt(candidates)
+            if not valid.any():
+                continue
+            selected_queries = step.candidate_queries[
+                valid, step.selected_index[valid]
+            ]
+            torch.testing.assert_close(
+                step.next_query[valid], selected_queries, atol=1e-6, rtol=1e-6
+            )
+            target = normalized_targets[valid]
+            similarity_before = (
+                F.normalize(step.current_query[valid].float(), dim=-1) * target
+            ).sum(dim=-1)
+            similarity_after = (
+                F.normalize(step.next_query[valid].float(), dim=-1) * target
+            ).sum(dim=-1)
+            self.similarity_improvements[timestep].update(
+                similarity_after - similarity_before
+            )
+
+    def summary(self) -> dict[str, Any]:
+        return {
+            "target_similarity_improvement_by_timestep": [
+                {
+                    "timestep": timestep,
+                    "selected_non_stop_transition_count": stats.summary()["count"],
+                    "metric_population": (
+                        f"live parents at t={timestep} whose selected action was non-STOP"
+                    ),
+                    "delta_target_cosine_similarity": {
+                        key: value
+                        for key, value in stats.summary().items()
+                        if key != "count"
+                    },
+                }
+                for timestep, stats in enumerate(self.similarity_improvements)
+            ],
+            "target_firewall": (
+                "target gallery features are consumed only after the complete target-free "
+                "rollout has been constructed"
+            ),
+            "interpretation_limitation": (
+                "target-similarity change describes the executed transition; it does not "
+                "identify why the policy selected it"
+            ),
+        }
+
+
+def diagnostic_definitions() -> dict[str, dict[str, Any]]:
+    return {
+        "pairwise_intent_cosine": {
+            "definition": "cos(I_i, I_j) for every ordered candidate pair i,j",
+            "population": "all validation queries",
+            "tensor_shape_before_reduction": "[B,K,d]",
+            "reduction_axes": "mean over B only; KxK matrix preserved",
+            "interpretation_limitation": "representational similarity is not semantic correctness",
+        },
+        "support_probability_overlap": {
+            "definition": "sum_n min(P_i[n], P_j[n])",
+            "population": "all validation queries; static supports computed once",
+            "tensor_shape_before_reduction": "[B,K,K,N]",
+            "reduction_axes": "sum over N, then mean over B; KxK preserved",
+            "interpretation_limitation": "overlap does not establish semantic ownership",
+        },
+        "dominant_tokenwise_grounding_mass_share": {
+            "definition": "sum_n max_k P[k,n] / sum_{k,n} P[k,n]",
+            "population": "all validation queries",
+            "tensor_shape_before_reduction": "[B,K,N]",
+            "reduction_axes": "max over K per token, sum over N, then mean over B",
+            "interpretation_limitation": "heuristic concentration statistic, not ownership",
+        },
+        "context_pairwise_cosine": {
+            "definition": "cos(C_t,i, C_t,j)",
+            "population": "live parents before the decision at each reported timestep",
+            "tensor_shape_before_reduction": "[B_live,K,d]",
+            "reduction_axes": "mean over B_live only; reported separately by timestep",
+            "interpretation_limitation": "context similarity alone does not imply equal edits",
+        },
+        "delta_z_pairwise_cosine": {
+            "definition": "cos(vec(DeltaZ_t,i), vec(DeltaZ_t,j))",
+            "population": "live parents before the decision at each reported timestep",
+            "tensor_shape_before_reduction": "[B_live,K,N,d] -> [B_live,K,N*d]",
+            "reduction_axes": "flatten N,d; mean over B_live; KxK preserved",
+            "interpretation_limitation": "token-effect similarity is not retrieval utility",
+        },
+        "delta_q_pairwise_cosine": {
+            "definition": "Deltaq_t,k=qhat_t+1,k-q_t; then pairwise cosine across K",
+            "population": "live same-parent counterfactuals at each timestep",
+            "tensor_shape_before_reduction": "[B_live,K,D]",
+            "reduction_axes": "mean over B_live only; KxK preserved",
+            "interpretation_limitation": "functional similarity does not identify its cause",
+        },
+        "functional_effective_rank": {
+            "definition": "exp(entropy(normalized singular values of the KxD effect matrix))",
+            "population": "live parents before the decision at each timestep",
+            "tensor_shape_before_reduction": "[B_live,K,D]",
+            "reduction_axes": "SVD over K,D; mean scalar rank over B_live",
+            "interpretation_limitation": "uncentered numerical rank is not semantic factor count",
+        },
+        "late_step_effect_retention": {
+            "definition": "E||Deltaq_t|| / (E||Deltaq_reference|| + 1e-8)",
+            "population": "each timestep's own live-parent population",
+            "tensor_shape_before_reduction": "[B_live,K,D]",
+            "reduction_axes": "norm over D, mean over B_live,K",
+            "interpretation_limitation": "different live populations make this descriptive, not causal",
+        },
+        "absorbed_stop_occupancy": {
+            "definition": "count(action_t=STOP) / count(all validation trajectories)",
+            "population": "all trajectories, including trajectories stopped earlier",
+            "tensor_shape_before_reduction": "[B,T]",
+            "reduction_axes": "mean over B separately by timestep",
+            "interpretation_limitation": "must not be interpreted as new STOP hazard",
+        },
+        "new_stop_hazard": {
+            "definition": "new STOP selections at t / live parents before decision t",
+            "population": "live parents before the decision at each timestep",
+            "tensor_shape_before_reduction": "live_before[B,T], stopped_now[B,T]",
+            "reduction_axes": "sum over B separately by timestep",
+            "interpretation_limitation": "policy behavior, not semantic factor inactivity",
+        },
+        "selected_path_target_similarity_improvement": {
+            "definition": "cos(q_t+1,y)-cos(q_t,y) for selected non-STOP transitions",
+            "population": "live parents whose actual selected action was non-STOP",
+            "tensor_shape_before_reduction": "q_t,q_t+1,y: [B_selected,D]",
+            "reduction_axes": "cosine over D; distribution summarized per timestep",
+            "interpretation_limitation": "offline target-relative observation; no target enters forward",
+        },
+        "same_parent_counterfactual_retrieval": {
+            "definition": "retrieval of every qhat_t+1,k constructed from the same q_t/Z_t",
+            "population": "live parents before the decision at each timestep",
+            "tensor_shape_before_reduction": "candidate queries [B_live,K,D]",
+            "reduction_axes": "retrieval per K plus offline best-candidate oracle and mean query",
+            "interpretation_limitation": "oracle uses targets offline and is never a model action",
+        },
+        "single_and_repeat_controls": {
+            "definition": (
+                "SINGLE_k executes k once from Z0 then stops; REPEAT_k executes k through "
+                "the real updated recurrent state for Tmax steps"
+            ),
+            "population": "all validation queries",
+            "tensor_shape_before_reduction": "final controlled query [B,D]",
+            "reduction_axes": "FashionIQ R@10/R@50 then category macro-average",
+            "interpretation_limitation": "control superiority is an observation, not a causal mechanism",
+        },
+        "retrieval_control_ratios": {
+            "definition": "control Mean Recall / FULL Mean Recall",
+            "population": "the same FashionIQ validation queries and protocol gallery",
+            "tensor_shape_before_reduction": "scalar macro Mean Recall values",
+            "reduction_axes": "per-category recalls macro-averaged before ratio",
+            "interpretation_limitation": "relative performance alone does not establish causality",
+        },
+    }
 
 
 def _retrieval_metrics(
@@ -509,15 +850,26 @@ def _macro_control_results(category_controls: Mapping[str, Mapping[str, Any]]) -
         valid = [item for item in category_items if "candidate_0" in item]
         if not valid:
             result["counterfactual_same_parent_by_timestep"][key] = {
-                "live_parent_count": 0
+                "live_parent_count": 0,
+                "metric_population": (
+                    f"live parents before decision at t={timestep}; no observations"
+                ),
             }
             continue
         without_counts = [
-            {name: value for name, value in item.items() if name != "live_parent_count"}
+            {
+                name: value
+                for name, value in item.items()
+                if name not in {"live_parent_count", "metric_population"}
+            }
             for item in valid
         ]
         averaged = _macro_numeric_tree(without_counts)
         averaged["live_parent_count"] = sum(int(item["live_parent_count"]) for item in valid)
+        averaged["metric_population"] = (
+            f"live parents before decision at t={timestep}; retrieval metrics are "
+            "category-macro averages and live_parent_count is the raw pooled count"
+        )
         result["counterfactual_same_parent_by_timestep"][key] = averaged
     return result
 
@@ -601,6 +953,8 @@ def _diagnose_category(
     device: torch.device,
     category_accumulator: ValidationDiagnosticAccumulator,
     global_accumulator: ValidationDiagnosticAccumulator,
+    category_selected_path: SelectedPathMarginalAccumulator,
+    global_selected_path: SelectedPathMarginalAccumulator,
 ) -> dict[str, Any]:
     query_lists: defaultdict[str, list[Tensor]] = defaultdict(list)
     target_ids: list[str] = []
@@ -608,6 +962,7 @@ def _diagnose_category(
     counterfactual_queries: list[list[Tensor]] = [[] for _ in range(3)]
     counterfactual_targets: list[list[str]] = [[] for _ in range(3)]
     counterfactual_references: list[list[str]] = [[] for _ in range(3)]
+    gallery_index = {image_id: index for index, image_id in enumerate(gallery_ids)}
 
     for cpu_batch in loader:
         batch = cpu_batch.to(device)
@@ -622,6 +977,18 @@ def _diagnose_category(
         full = model.core(encoded, control="full")
         category_accumulator.update(full)
         global_accumulator.update(full)
+        batch_targets = [str(target) for target in batch.target_ids]
+        if any(target not in gallery_index for target in batch_targets):
+            raise ValueError("diagnostic target is missing from the evaluation gallery")
+        target_indices = torch.tensor(
+            [gallery_index[target] for target in batch_targets],
+            dtype=torch.long,
+            device=gallery.device,
+        )
+        target_features = gallery.index_select(0, target_indices)
+        # Target access begins only here, after the complete target-free rollout exists.
+        category_selected_path.update(full, target_features)
+        global_selected_path.update(full, target_features)
         query_lists["full"].append(full.final_query.cpu())
         query_lists["reference_only"].append(encoded.reference_global.cpu())
         for candidate in range(4):
@@ -632,7 +999,6 @@ def _diagnose_category(
         mean_output = model.core(encoded, control="mean_candidate")
         query_lists["mean_candidate"].append(mean_output.final_query.cpu())
 
-        batch_targets = [str(target) for target in batch.target_ids]
         target_ids.extend(batch_targets)
         reference_ids.extend(batch.reference_ids)
         for timestep in range(3):
@@ -662,7 +1028,10 @@ def _diagnose_category(
         queries = torch.cat(counterfactual_queries[timestep])
         if queries.shape[0] == 0:
             controls["counterfactual_same_parent_by_timestep"][f"t{timestep}"] = {
-                "live_parent_count": 0
+                "live_parent_count": 0,
+                "metric_population": (
+                    f"live parents before decision at t={timestep}; no observations"
+                ),
             }
             continue
         result = _counterfactual_retrieval_metrics(
@@ -673,6 +1042,10 @@ def _diagnose_category(
             counterfactual_references[timestep],
         )
         result["live_parent_count"] = queries.shape[0]
+        result["metric_population"] = (
+            f"live parents before decision at t={timestep}; every candidate query branches "
+            "from the same current parent query/state"
+        )
         controls["counterfactual_same_parent_by_timestep"][f"t{timestep}"] = result
     return controls
 
@@ -726,27 +1099,130 @@ def _failure_flags(
         "t0_candidate_oracle_mean_recall": oracle_t0,
     }
     flags = {
-        "all_stop_t0": supporting["stop_t0_occupancy"] >= thresholds["stop_or_monopoly_fraction"],
+        "high_stop_t0_occupancy": (
+            supporting["stop_t0_occupancy"] >= thresholds["stop_or_monopoly_fraction"]
+        ),
         "never_stop": supporting["total_new_stops"] == 0,
         "single_candidate_monopoly": (
             supporting["maximum_candidate_selection_share"]
             >= thresholds["stop_or_monopoly_fraction"]
         ),
-        "candidate_clone_effects": (
+        "high_delta_q_similarity": (
             supporting["mean_delta_q_off_diagonal_cosine"] >= thresholds["clone_cosine"]
         ),
-        "grounding_clone": (
+        "high_support_similarity": (
             supporting["mean_support_off_diagonal_cosine"] >= thresholds["clone_cosine"]
         ),
         "grounding_over_sparse": support_fraction <= thresholds["grounding_sparse_fraction"],
         "grounding_over_diffuse": support_fraction >= thresholds["grounding_diffuse_fraction"],
-        "functional_rank_collapse": mean_rank <= thresholds["functional_rank"],
+        "low_functional_effective_rank": mean_rank <= thresholds["functional_rank"],
         "repeat_beats_full": best_repeat >= full + margin,
         "single_beats_full": best_single >= full + margin,
         "reference_dominates": reference >= full + margin,
         "selected_policy_underperforms_candidate_oracle": oracle_t0 >= full + margin,
     }
-    return {"flags": flags, "supporting_numbers": supporting, "thresholds": thresholds}
+    definitions = {
+        "high_stop_t0_occupancy": (
+            "observes STOP occupancy at t0 >= threshold; does not explain why STOP was chosen"
+        ),
+        "never_stop": "observes zero new STOP decisions; not a claim about required edit count",
+        "single_candidate_monopoly": (
+            "observes maximum conditional edit-selection share >= threshold"
+        ),
+        "high_delta_q_similarity": (
+            "observes high mean off-diagonal same-parent Deltaq cosine; potential functional "
+            "candidate collapse, without causal localization"
+        ),
+        "high_support_similarity": (
+            "observes high support-map cosine; does not establish semantic grounding failure"
+        ),
+        "grounding_over_sparse": "observes support fraction <= configured audit threshold",
+        "grounding_over_diffuse": "observes support fraction >= configured audit threshold",
+        "low_functional_effective_rank": (
+            "observes low uncentered Deltaq effect rank; not semantic factor count"
+        ),
+        "repeat_beats_full": "observes best REPEAT Mean Recall exceeds FULL by margin",
+        "single_beats_full": "observes best SINGLE Mean Recall exceeds FULL by margin",
+        "reference_dominates": "observes REFERENCE_ONLY exceeds FULL by margin",
+        "selected_policy_underperforms_candidate_oracle": (
+            "observes offline t0 oracle exceeds FULL by margin; oracle never enters policy"
+        ),
+    }
+    audit_contracts = {
+        "high_stop_t0_occupancy": (
+            "stop_t0_occupancy >= stop_or_monopoly_fraction",
+            ("stop_t0_occupancy",),
+            ("stop_or_monopoly_fraction",),
+        ),
+        "never_stop": ("total_new_stops == 0", ("total_new_stops",), ()),
+        "single_candidate_monopoly": (
+            "maximum_candidate_selection_share >= stop_or_monopoly_fraction",
+            ("maximum_candidate_selection_share",),
+            ("stop_or_monopoly_fraction",),
+        ),
+        "high_delta_q_similarity": (
+            "mean_delta_q_off_diagonal_cosine >= clone_cosine",
+            ("mean_delta_q_off_diagonal_cosine",),
+            ("clone_cosine",),
+        ),
+        "high_support_similarity": (
+            "mean_support_off_diagonal_cosine >= clone_cosine",
+            ("mean_support_off_diagonal_cosine",),
+            ("clone_cosine",),
+        ),
+        "grounding_over_sparse": (
+            "support_fraction <= grounding_sparse_fraction",
+            ("support_fraction",),
+            ("grounding_sparse_fraction",),
+        ),
+        "grounding_over_diffuse": (
+            "support_fraction >= grounding_diffuse_fraction",
+            ("support_fraction",),
+            ("grounding_diffuse_fraction",),
+        ),
+        "low_functional_effective_rank": (
+            "mean_functional_effective_rank <= functional_rank",
+            ("mean_functional_effective_rank",),
+            ("functional_rank",),
+        ),
+        "repeat_beats_full": (
+            "best_repeat_mean_recall >= full_mean_recall + retrieval_margin_points",
+            ("best_repeat_mean_recall", "full_mean_recall"),
+            ("retrieval_margin_points",),
+        ),
+        "single_beats_full": (
+            "best_single_mean_recall >= full_mean_recall + retrieval_margin_points",
+            ("best_single_mean_recall", "full_mean_recall"),
+            ("retrieval_margin_points",),
+        ),
+        "reference_dominates": (
+            "reference_only_mean_recall >= full_mean_recall + retrieval_margin_points",
+            ("reference_only_mean_recall", "full_mean_recall"),
+            ("retrieval_margin_points",),
+        ),
+        "selected_policy_underperforms_candidate_oracle": (
+            "t0_candidate_oracle_mean_recall >= full_mean_recall + retrieval_margin_points",
+            ("t0_candidate_oracle_mean_recall", "full_mean_recall"),
+            ("retrieval_margin_points",),
+        ),
+    }
+    flag_audit = {
+        name: {
+            "condition": condition,
+            "supporting_numbers": {key: supporting[key] for key in supporting_keys},
+            "thresholds": {key: thresholds[key] for key in threshold_keys},
+            "interpretation_limitation": definitions[name],
+        }
+        for name, (condition, supporting_keys, threshold_keys) in audit_contracts.items()
+    }
+    return {
+        "flags": flags,
+        "supporting_numbers": supporting,
+        "thresholds": thresholds,
+        "definitions_and_limits": definitions,
+        "per_flag_audit_contract": flag_audit,
+        "status": "OBSERVATION flags only; causal INTERPRETATION requires follow-up experiments",
+    }
 
 
 def _validate_report_schema(report: Mapping[str, Any]) -> None:
@@ -766,6 +1242,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--accelerator-index", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--protocol", choices=PROTOCOLS, default=PROTOCOL)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.batch_size < 1 or args.gallery_batch_size < 1 or args.num_workers < 0:
@@ -798,6 +1275,7 @@ def main() -> None:
         include_targets=False,
     )
     global_accumulator = ValidationDiagnosticAccumulator()
+    global_selected_path = SelectedPathMarginalAccumulator()
     category_results: dict[str, Any] = {}
     category_controls: dict[str, Any] = {}
     for category in CATEGORIES:
@@ -811,7 +1289,7 @@ def main() -> None:
             collate_fn=collator,
         )
         gallery_ids = build_fashioniq_gallery(
-            PROTOCOL, split_root, category, dataset.annotations, SPLIT
+            args.protocol, split_root, category, dataset.annotations, SPLIT
         )
         gallery = encode_gallery(
             model,
@@ -823,6 +1301,7 @@ def main() -> None:
             args.num_workers,
         ).to(device)
         category_accumulator = ValidationDiagnosticAccumulator()
+        category_selected_path = SelectedPathMarginalAccumulator()
         controls = _diagnose_category(
             model,
             loader,
@@ -831,9 +1310,12 @@ def main() -> None:
             device,
             category_accumulator,
             global_accumulator,
+            category_selected_path,
+            global_selected_path,
         )
         category_controls[category] = controls
         category_selection = category_accumulator.selection_summary()
+        category_intent = category_accumulator.intent_summary()
         category_grounding = category_accumulator.grounding_summary()
         category_functional = category_accumulator.functional_summary()
         category_dynamic = category_accumulator.dynamic_summary()
@@ -841,10 +1323,15 @@ def main() -> None:
         category_results[category] = {
             "global_metrics": controls["full"],
             "selection_diagnostics": category_selection,
+            "intent_diagnostics": category_intent,
             "grounding_diagnostics": category_grounding,
             "functional_diagnostics": category_functional,
             "dynamic_diagnostics": category_dynamic,
             "control_retrieval_metrics": controls,
+            "same_parent_counterfactual_diagnostics": controls[
+                "counterfactual_same_parent_by_timestep"
+            ],
+            "selected_path_marginal_diagnostics": category_selected_path.summary(),
             "specialization_matrices": category_specialization,
             "failure_flags": _failure_flags(
                 category_selection,
@@ -858,6 +1345,7 @@ def main() -> None:
     global_controls = _macro_control_results(category_controls)
     global_controls["usefulness_ratios"] = _usefulness_ratios(global_controls)
     selection = global_accumulator.selection_summary()
+    intent = global_accumulator.intent_summary()
     grounding = global_accumulator.grounding_summary()
     functional = global_accumulator.functional_summary()
     dynamic = global_accumulator.dynamic_summary()
@@ -876,7 +1364,7 @@ def main() -> None:
             "dataset": "FashionIQ",
             "split": SPLIT,
             "caption_policy": CAPTION_POLICY,
-            "gallery_protocol": PROTOCOL,
+            "gallery_protocol": args.protocol,
             "reference_filtering": (
                 "remove the query reference image from its gallery row unless it is the target"
             ),
@@ -896,15 +1384,21 @@ def main() -> None:
         },
         "global_metrics": global_controls["full"],
         "per_category_metrics": category_results,
+        "intent_diagnostics": intent,
         "selection_diagnostics": selection,
         "grounding_diagnostics": grounding,
         "functional_diagnostics": functional,
         "dynamic_diagnostics": dynamic,
         "control_retrieval_metrics": global_controls,
+        "same_parent_counterfactual_diagnostics": global_controls[
+            "counterfactual_same_parent_by_timestep"
+        ],
+        "selected_path_marginal_diagnostics": global_selected_path.summary(),
         "specialization_matrices": specialization,
         "failure_flags": _failure_flags(
             selection, grounding, functional, global_controls, specialization
         ),
+        "diagnostic_definitions": diagnostic_definitions(),
         "omitted_controls": {
             "all_candidate_sequential_0_1_2_3": (
                 "omitted: canonical Tmax=3 cannot execute four sequential candidates "
