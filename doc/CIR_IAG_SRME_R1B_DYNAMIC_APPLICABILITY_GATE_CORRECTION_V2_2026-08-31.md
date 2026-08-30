@@ -498,3 +498,111 @@ Only after R1b v2 is trained and diagnosed should a separate R1c experiment cons
 
 That would change WHERE dynamically. It is not implemented here. Corrected R1b intentionally
 tests fixed WHERE plus dynamic WHETHER only.
+
+## O. Mixed-Precision Applicability Quantization Correction
+
+### Pre-correction CUDA evidence
+
+A real 100-step CUDA FP16 canary ran on an NVIDIA GeForce RTX 5070 Ti:
+
+```text
+attempted steps                                      100
+successful optimizer steps                           96
+AMP overflows                                          4
+successful steps with nonzero applicability gradient 96 / 96
+finite                                               true
+collapse flags                                       all false
+```
+
+The applicability parameters moved:
+
+```text
+applicability weight max absolute delta  2.3145708837546408e-04
+applicability bias max absolute delta    1.3303756713867188e-04
+```
+
+This confirms that the v2 sigmoid gate removed the earlier Entmax sparse-support gradient-death
+failure. However, its forward actuator remained heavily quantized:
+
+```text
+p_null mean start  0.02001953125
+p_null mean end    0.02001953125
+
+step-100 confidence t0/t1/t2  0.97998046875 / 0.97998046875 / 0.97998046875
+step-100 confidence minimum    0.97998046875
+step-100 confidence maximum    0.97998046875
+```
+
+Earlier steps occasionally moved by exactly one FP16 quantum between `0.9794921875` and
+`0.97998046875`. Around 0.98, FP16 spacing is approximately `4.8828125e-4`.
+
+### Root cause
+
+The earlier forward used:
+
+```python
+logits = projection(norm(contexts))       # autocast FP16
+confidence = sigmoid(logits.float())      # temporary FP32
+confidence = confidence.to(logits.dtype)  # quantized back to FP16
+```
+
+Parameters could therefore learn continuously while their forward confidence values collapsed to
+a small set of FP16 representable values.
+
+### Corrected FP32 pathway
+
+The complete applicability head now runs with autocast disabled:
+
+```python
+with torch.autocast(device_type=contexts.device.type, enabled=False):
+    contexts_fp32 = contexts.float()
+    normalized = layer_norm(contexts_fp32)
+    logits = linear(normalized)
+    confidence = sigmoid(logits)
+    p_null = 1.0 - confidence
+```
+
+Logits, confidence, and NULL probability remain FP32 under FP16 and BF16 autocast. They are not
+cast back to the context dtype.
+
+The editor first constructs the unchanged legacy spatial/directional effect, then performs the
+applicability multiplication in an FP32 island:
+
+```math
+base\_delta=\lambda_zS\tanh(u),
+```
+
+```math
+\Delta Z=base\_delta_{FP32}\,c_{FP32}.
+```
+
+Candidate states and the selected recurrent state remain FP32. State selection uses the same hard
+or straight-through action and unchanged absorbing STOP semantics; only its einsum arithmetic is
+protected from autocast down-conversion. Query/action policy semantics are unchanged.
+
+### Updated canary diagnostics
+
+Applicability statistics now include only samples live before each timestep. The canary reports:
+
+- confidence and p_null mean/std/min/max globally and at t0/t1/t2;
+- mean/max temporal confidence change over surviving trajectories;
+- candidate-wise confidence and NULL standard deviation;
+- ungated and gated DeltaZ norms;
+- elementwise `DeltaZ = confidence * base_delta` error;
+- applicability, DeltaZ, and candidate-state dtypes;
+- nonzero applicability-gradient fraction;
+- cumulative applicability parameter movement;
+- maximum observed FP32 applicability variation.
+
+After at least 20 successful optimizer steps, it fails only if applicability never receives a
+nonzero gradient, its parameters never move, or all confidence variation remains below the
+documented FP32 diagnostic tolerance `1e-7`. A single zero-gradient minibatch is not a failure.
+
+This is a numerical precision correction, not a new scientific mechanism. Initialization remains
+`c0=0.98`; Entmax still decides fixed WHERE and the same dynamic sigmoid gate decides WHETHER.
+
+### Post-correction CUDA status
+
+The post-fix GPU canary has not been run in the implementation environment. Its AMP behavior,
+continuous confidence range, temporal variation, and actuator response remain pending. No
+post-fix CUDA values are claimed here.
