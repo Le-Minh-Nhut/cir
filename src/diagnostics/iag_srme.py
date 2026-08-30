@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
-from models.iag_srme.outputs import IAGSRMEOutput
+from models.iag_srme.outputs import IAGSRMEOutput, RecurrentStepOutput
 
 
 MATCHED_COMPUTE_CONTROLS = (
@@ -23,15 +23,49 @@ MATCHED_COMPUTE_CONTROLS = (
 )
 
 
+def pairwise_cosine_matrix(values: Tensor) -> Tensor:
+    """Return the full candidate-pair matrix while preserving every leading axis."""
+    if values.ndim < 2:
+        raise ValueError("pairwise cosine requires [...,K,F]")
+    normalized = F.normalize(values.float(), dim=-1)
+    return normalized @ normalized.transpose(-1, -2)
+
+
+def off_diagonal_values(matrix: Tensor) -> Tensor:
+    if matrix.ndim < 2 or matrix.shape[-1] != matrix.shape[-2]:
+        raise ValueError("pairwise matrix must be [...,K,K]")
+    candidates = matrix.shape[-1]
+    mask = ~torch.eye(candidates, dtype=torch.bool, device=matrix.device)
+    return matrix[..., mask]
+
+
 def pairwise_cosine(values: Tensor) -> Tensor:
-    normalized = F.normalize(values, dim=-1)
-    similarities = normalized @ normalized.transpose(-1, -2)
-    count = values.shape[-2]
-    mask = ~torch.eye(count, dtype=torch.bool, device=values.device)
-    return similarities[..., mask].reshape(*values.shape[:-2], count, count - 1)
+    matrix = pairwise_cosine_matrix(values)
+    candidates = values.shape[-2]
+    return off_diagonal_values(matrix).reshape(
+        *values.shape[:-2], candidates, candidates - 1
+    )
+
+
+def flatten_delta_z(delta_z: Tensor) -> Tensor:
+    """Flatten spatial+channel axes only: [B,K,N,D] -> [B,K,N*D]."""
+    if delta_z.ndim != 4:
+        raise ValueError("delta_z must be [B,K,N,D]")
+    return delta_z.flatten(start_dim=2)
+
+
+def verify_same_parent_counterfactuals(step: RecurrentStepOutput) -> None:
+    expected_states = step.current_state[:, None] + step.delta_z
+    if not torch.equal(step.candidate_states, expected_states):
+        raise AssertionError("candidate states do not branch from the same parent Z_t")
+    expected_delta_q = step.candidate_queries - step.current_query[:, None]
+    if not torch.equal(step.delta_q, expected_delta_q):
+        raise AssertionError("delta_q is not candidate_query minus the same parent q_t")
 
 
 def functional_effective_rank(delta_q: Tensor, epsilon: float = 1e-8) -> Tensor:
+    if delta_q.ndim < 2:
+        raise ValueError("candidate effects must be [...,K,F]")
     singular_values = torch.linalg.svdvals(delta_q.float())
     probabilities = singular_values / singular_values.sum(dim=-1, keepdim=True).clamp_min(epsilon)
     return torch.exp(-(probabilities * probabilities.clamp_min(epsilon).log()).sum(dim=-1))
