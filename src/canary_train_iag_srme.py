@@ -120,7 +120,11 @@ def _dynamic_change_metrics(output) -> dict[str, float]:
 def _batch_diagnostics(output) -> dict[str, object]:
     actions = torch.stack([step.selected_index for step in output.trace], dim=1)
     delta_q = torch.stack([step.delta_q for step in output.trace], dim=1)
-    supports = output.supports.float()
+    supports = (
+        output.conditional_supports.float()
+        if output.conditional_supports is not None
+        else output.supports.float()
+    )
     return {
         "stop_by_timestep": actions.eq(output.intents.shape[1]).float().mean(dim=0).tolist(),
         "selected_distribution": torch.nn.functional.one_hot(
@@ -137,6 +141,14 @@ def _batch_diagnostics(output) -> dict[str, object]:
         "functional_effect_rank": float(functional_effective_rank(delta_q).mean()),
         "functional_delta_q_cosine": float(pairwise_cosine(delta_q).mean()),
         "dynamic_changes": _dynamic_change_metrics(output),
+        "visual_null_probability": (
+            None
+            if output.visual_null_probabilities is None
+            else {
+                "mean": float(output.visual_null_probabilities.float().mean()),
+                "maximum": float(output.visual_null_probabilities.float().max()),
+            }
+        ),
     }
 
 
@@ -160,8 +172,12 @@ def _build_canary_model(device: torch.device) -> tuple[IAGSRME, object, object]:
             num_heads=8,
             retrieval_dim=backbone.retrieval_dim,
             lambda_z=0.10,
+            query_cap=1000.0,
             selector_temperature=1.0,
             selector_gumbel_noise=True,
+            enable_visual_null=True,
+            visual_null_initial_logit=0.0,
+            grounding_normalization="entmax15",
         )
     )
     return IAGSRME(backbone, core).to(device), tokenizer, processor
@@ -237,6 +253,8 @@ def main() -> None:
     configure_torch_runtime(deterministic=True, benchmark=False)
     precision = resolve_precision(args.precision, device)
     model, tokenizer, processor = _build_canary_model(device)
+    if model.core.config.query_cap != 1000.0 or not model.core.config.enable_visual_null:
+        raise AssertionError("R1b canary requires query_cap=1000 and Visual NULL enabled")
     objective = IAGSRMEObjective(ObjectiveConfig(), width=256).to(device)
     loader = _build_loader(args, tokenizer, processor)
     optimizer = AdamW(
@@ -260,6 +278,10 @@ def main() -> None:
         "text_encoder": list(model.backbone.model.text_model.parameters()),
         "intent_queries": [model.core.intent_encoder.query_bank],
         "grounding": list(model.core.grounder.parameters()),
+        "visual_null": [
+            model.core.grounder.visual_null_key,
+            model.core.grounder.visual_null_bias,
+        ],
         "editor": list(model.core.editor.parameters()),
         "readout": list(model.core.readout.parameters()),
         "scorer": list(model.core.scorer.parameters()),
@@ -269,6 +291,7 @@ def main() -> None:
         "text": next(model.backbone.model.text_model.parameters()),
         "intent": model.core.intent_encoder.query_bank,
         "editor": model.core.editor.direction.weight,
+        "visual_null": model.core.grounder.visual_null_key,
     }
     initial = {name: parameter.detach().float().clone() for name, parameter in tracked.items()}
     calls = {"vision_model": 0, "anchor_projection": 0, "intent": 0, "grounder": 0}
@@ -412,6 +435,10 @@ def main() -> None:
                 history[name].append(float(losses[name].detach()))
             history["effect_rank"].append(float(diagnostics["functional_effect_rank"]))
             history["effect_cosine"].append(float(diagnostics["functional_delta_q_cosine"]))
+            null_diagnostics = diagnostics["visual_null_probability"]
+            if isinstance(null_diagnostics, dict):
+                history["p_null_mean"].append(float(null_diagnostics["mean"]))
+                history["p_null_max"].append(float(null_diagnostics["maximum"]))
             if (
                 step_index == 1
                 or step_index == first_successful_step
@@ -486,6 +513,14 @@ def main() -> None:
         "minimum_scale": minimum_scale,
         "first_successful_step": first_successful_step,
         "precision": args.precision,
+        "query_cap": model.core.config.query_cap,
+        "enable_visual_null": model.core.config.enable_visual_null,
+        "p_null_mean_start": (
+            history["p_null_mean"][0] if history["p_null_mean"] else None
+        ),
+        "p_null_mean_end": (
+            history["p_null_mean"][-1] if history["p_null_mean"] else None
+        ),
         "peak_vram_bytes": torch.cuda.max_memory_allocated(device),
         "loss_start": {
             name: history[name][0] if history[name] else None

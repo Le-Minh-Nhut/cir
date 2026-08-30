@@ -43,6 +43,7 @@ def main() -> None:
         "--revision", default="454d76372c2cf5eb48fa0d871fd0534481484d97"
     )
     parser.add_argument("--max-steps", type=int, default=1)
+    parser.add_argument("--r1b", action="store_true")
     args = parser.parse_args()
     torch.manual_seed(20260829)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -65,6 +66,8 @@ def main() -> None:
             num_heads=8,
             retrieval_dim=backbone.retrieval_dim,
             selector_gumbel_noise=False,
+            query_cap=1000.0 if args.r1b else 0.5,
+            enable_visual_null=args.r1b,
         )
     )
     model = IAGSRME(backbone, core).to(device).eval()
@@ -169,6 +172,9 @@ def main() -> None:
         "visual_projection": model.backbone.model.visual_projection.weight,
         "anchor_projection": model.backbone.anchor_projection[0].weight,
     }
+    if args.r1b:
+        tracked["visual_null_key"] = model.core.grounder.visual_null_key
+        tracked["visual_null_bias"] = model.core.grounder.visual_null_bias
     before = {name: parameter.detach().clone() for name, parameter in tracked.items()}
     real_calls = {
         "vision_model": 0,
@@ -198,6 +204,16 @@ def main() -> None:
     optimizer.zero_grad(set_to_none=True)
     encoded = model.backbone(reference_pixels, input_ids, attention_mask, content_mask)
     output = model.core(encoded)
+    with torch.no_grad():
+        projected_intents = model.core.grounder.intent_projection(output.intents)
+        real_grounding_logits = (
+            torch.einsum(
+                "bkd,bnd->bkn",
+                projected_intents,
+                model.core.grounder.anchor_projection(output.anchor),
+            )
+            / model.core.grounder.scale
+        )
     target_embeddings = model.encode_global_images(target_pixels)
     training_call_counts = dict(real_calls)
     if training_call_counts != {
@@ -328,6 +344,39 @@ def main() -> None:
                         }
                         for step in output.trace
                     ],
+                },
+                "r1b_visual_null": {
+                    "enabled": model.core.config.enable_visual_null,
+                    "query_cap": model.core.config.query_cap,
+                    "mean_p_null": (
+                        None
+                        if output.visual_null_probabilities is None
+                        else float(
+                            output.visual_null_probabilities.detach().float().mean()
+                        )
+                    ),
+                    "real_mass_invariant_max_abs_error": (
+                        None
+                        if output.visual_null_probabilities is None
+                        else float(
+                            (
+                                output.supports.detach().float().sum(dim=-1)
+                                - (
+                                    1.0
+                                    - output.visual_null_probabilities.detach().float()
+                                )
+                            )
+                            .abs()
+                            .max()
+                        )
+                    ),
+                    "initial_real_visual_logit_statistics": {
+                        "mean": float(real_grounding_logits.mean()),
+                        "standard_deviation": float(real_grounding_logits.std()),
+                        "minimum": float(real_grounding_logits.min()),
+                        "maximum": float(real_grounding_logits.max()),
+                        "initial_null_logit": model.core.config.visual_null_initial_logit,
+                    },
                 },
                 "three_step_contract": {
                     "intent_encoder_calls": training_call_counts["intent_encoder"],

@@ -14,6 +14,7 @@ from models.iag_srme import BackboneOutput, IAGSRMEConfig, IAGSRMECore
 def main() -> None:
     parser = argparse.ArgumentParser(description="Synthetic IAG-SRME end-to-end smoke test")
     parser.add_argument("--diagnostics", action="store_true")
+    parser.add_argument("--r1b", action="store_true")
     args = parser.parse_args()
     torch.manual_seed(20260829)
     batch, tokens, length, width, retrieval_dim = 4, 17, 9, 32, 24
@@ -24,6 +25,8 @@ def main() -> None:
             retrieval_dim=retrieval_dim,
             max_steps=3,
             selector_gumbel_noise=False,
+            query_cap=1000.0 if args.r1b else 0.5,
+            enable_visual_null=args.r1b,
         )
     )
     with torch.no_grad():
@@ -73,6 +76,9 @@ def main() -> None:
         "anchor_input": encoded.anchor.grad,
         "text_input": encoded.text_tokens.grad,
     }
+    if args.r1b:
+        gradient_checks["visual_null_key"] = core.grounder.visual_null_key.grad
+        gradient_checks["visual_null_bias"] = core.grounder.visual_null_bias.grad
     gradient_norms = {
         name: 0.0 if gradient is None else float(gradient.norm())
         for name, gradient in gradient_checks.items()
@@ -96,6 +102,27 @@ def main() -> None:
         "target_firewall": firewall,
         "finite": bool(torch.isfinite(losses["total"]).item()),
         "selected_actions": [step.selected_index.tolist() for step in output.trace],
+        "model_config": {
+            "query_cap": core.config.query_cap,
+            "enable_visual_null": core.config.enable_visual_null,
+            "grounding_normalization": core.config.grounding_normalization,
+        },
+        "visual_null": (
+            None
+            if output.visual_null_probabilities is None
+            else {
+                "mean": float(output.visual_null_probabilities.detach().mean()),
+                "maximum": float(output.visual_null_probabilities.detach().max()),
+                "real_mass_error": float(
+                    (
+                        output.supports.detach().sum(dim=-1)
+                        - (1.0 - output.visual_null_probabilities.detach())
+                    )
+                    .abs()
+                    .max()
+                ),
+            }
+        ),
     }
     if args.diagnostics:
         diagnostics = summarize_trajectory(output)

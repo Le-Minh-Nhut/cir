@@ -29,7 +29,7 @@ def test_fp16_grounding_entmax_is_finite_normalized_and_sparse(
     grounder = AnchorGrounder(width=4).half()
     intents = (20 * torch.randn(2, 4, 4)).half().requires_grad_()
     anchor = (20 * torch.randn(2, 9, 4)).half().requires_grad_()
-    supports = grounder(intents, anchor)
+    supports = grounder(intents, anchor).visual_supports
 
     assert entmax_input_dtypes == [torch.float32]
     assert supports.dtype is torch.float16
