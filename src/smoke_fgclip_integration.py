@@ -67,7 +67,8 @@ def main() -> None:
             retrieval_dim=backbone.retrieval_dim,
             selector_gumbel_noise=False,
             query_cap=1000.0 if args.r1b else 0.5,
-            enable_visual_null=args.r1b,
+            enable_dynamic_applicability=args.r1b,
+            initial_applicability=0.98,
         )
     )
     model = IAGSRME(backbone, core).to(device).eval()
@@ -173,14 +174,17 @@ def main() -> None:
         "anchor_projection": model.backbone.anchor_projection[0].weight,
     }
     if args.r1b:
-        tracked["visual_null_key"] = model.core.grounder.visual_null_key
-        tracked["visual_null_bias"] = model.core.grounder.visual_null_bias
+        tracked["applicability_weight"] = (
+            model.core.applicability_head.projection.weight
+        )
+        tracked["applicability_bias"] = model.core.applicability_head.projection.bias
     before = {name: parameter.detach().clone() for name, parameter in tracked.items()}
     real_calls = {
         "vision_model": 0,
         "anchor_projection": 0,
         "intent_encoder": 0,
         "grounder": 0,
+        "applicability": 0,
     }
 
     def count_real_call(name):
@@ -200,6 +204,13 @@ def main() -> None:
     )
     grounder_handle = model.core.grounder.register_forward_pre_hook(
         count_real_call("grounder")
+    )
+    applicability_handle = (
+        model.core.applicability_head.register_forward_pre_hook(
+            count_real_call("applicability")
+        )
+        if model.core.applicability_head is not None
+        else None
     )
     optimizer.zero_grad(set_to_none=True)
     encoded = model.backbone(reference_pixels, input_ids, attention_mask, content_mask)
@@ -221,6 +232,7 @@ def main() -> None:
         "anchor_projection": 1,
         "intent_encoder": 1,
         "grounder": 1,
+        "applicability": args.max_steps if args.r1b else 0,
     }:
         raise AssertionError(f"unexpected real training call counts: {training_call_counts}")
     positives = torch.eye(2, dtype=torch.bool, device=device)
@@ -236,6 +248,7 @@ def main() -> None:
         "anchor_projection": 0,
         "intent_encoder": 0,
         "grounder": 0,
+        "applicability": 0,
     }
     with torch.no_grad():
         model.encode_global_images(target_pixels[:1])
@@ -244,11 +257,14 @@ def main() -> None:
     anchor_handle.remove()
     intent_handle.remove()
     grounder_handle.remove()
+    if applicability_handle is not None:
+        applicability_handle.remove()
     if gallery_call_counts != {
         "vision_model": 1,
         "anchor_projection": 0,
         "intent_encoder": 0,
         "grounder": 0,
+        "applicability": 0,
     }:
         raise AssertionError(f"unexpected real gallery call counts: {gallery_call_counts}")
     parameter_deltas = {
@@ -270,8 +286,18 @@ def main() -> None:
         raise AssertionError("real FG-CLIP smoke produced non-finite values")
     if not all(value > 0 for value in gradient_norms.values()):
         raise AssertionError(f"expected nonzero real gradients: {gradient_norms}")
-    if not all(value > 0 for value in parameter_deltas.values()):
+    required_parameter_deltas = {
+        name: value
+        for name, value in parameter_deltas.items()
+        if name != "applicability_bias"
+    }
+    if not all(value > 0 for value in required_parameter_deltas.values()):
         raise AssertionError(f"expected real parameter changes: {parameter_deltas}")
+    if args.r1b and max(
+        parameter_deltas["applicability_weight"],
+        parameter_deltas["applicability_bias"],
+    ) == 0:
+        raise AssertionError("dynamic applicability head did not update")
     model.eval()
     with torch.no_grad():
         dynamic_output = model.core(encoded, control="repeat_candidate_1")
@@ -345,8 +371,8 @@ def main() -> None:
                         for step in output.trace
                     ],
                 },
-                "r1b_visual_null": {
-                    "enabled": model.core.config.enable_visual_null,
+                "r1b_dynamic_applicability": {
+                    "enabled": model.core.config.enable_dynamic_applicability,
                     "query_cap": model.core.config.query_cap,
                     "mean_p_null": (
                         None
@@ -355,32 +381,33 @@ def main() -> None:
                             output.visual_null_probabilities.detach().float().mean()
                         )
                     ),
-                    "real_mass_invariant_max_abs_error": (
+                    "mean_confidence_by_timestep": (
                         None
-                        if output.visual_null_probabilities is None
-                        else float(
-                            (
-                                output.supports.detach().float().sum(dim=-1)
-                                - (
-                                    1.0
-                                    - output.visual_null_probabilities.detach().float()
-                                )
-                            )
-                            .abs()
-                            .max()
-                        )
+                        if output.visual_confidence is None
+                        else output.visual_confidence.detach()
+                        .float()
+                        .mean(dim=(0, 2))
+                        .tolist()
+                    ),
+                    "spatial_mass_invariant_max_abs_error": float(
+                        (output.supports.detach().float().sum(dim=-1) - 1.0)
+                        .abs()
+                        .max()
                     ),
                     "initial_real_visual_logit_statistics": {
                         "mean": float(real_grounding_logits.mean()),
                         "standard_deviation": float(real_grounding_logits.std()),
                         "minimum": float(real_grounding_logits.min()),
                         "maximum": float(real_grounding_logits.max()),
-                        "initial_null_logit": model.core.config.visual_null_initial_logit,
+                        "initial_applicability": (
+                            model.core.config.initial_applicability
+                        ),
                     },
                 },
                 "three_step_contract": {
                     "intent_encoder_calls": training_call_counts["intent_encoder"],
                     "grounder_calls": training_call_counts["grounder"],
+                    "applicability_calls": training_call_counts["applicability"],
                     "dynamic_max_abs_changes": dynamic_changes,
                 },
                 "losses": {

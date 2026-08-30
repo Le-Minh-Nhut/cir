@@ -147,5 +147,5 @@ def summarize_trajectory(output: IAGSRMEOutput) -> dict[str, Tensor]:
         result["claim_mass"] = output.claims.sum(dim=-1)
     if output.visual_null_probabilities is not None:
         result["visual_null_probability"] = output.visual_null_probabilities
-        result["visual_execution_confidence"] = 1.0 - output.visual_null_probabilities
+        result["visual_execution_confidence"] = output.visual_confidence
     return result

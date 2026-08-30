@@ -26,7 +26,8 @@ def main() -> None:
             max_steps=3,
             selector_gumbel_noise=False,
             query_cap=1000.0 if args.r1b else 0.5,
-            enable_visual_null=args.r1b,
+            enable_dynamic_applicability=args.r1b,
+            initial_applicability=0.98,
         )
     )
     with torch.no_grad():
@@ -77,8 +78,12 @@ def main() -> None:
         "text_input": encoded.text_tokens.grad,
     }
     if args.r1b:
-        gradient_checks["visual_null_key"] = core.grounder.visual_null_key.grad
-        gradient_checks["visual_null_bias"] = core.grounder.visual_null_bias.grad
+        gradient_checks["applicability_weight"] = (
+            core.applicability_head.projection.weight.grad
+        )
+        gradient_checks["applicability_bias"] = (
+            core.applicability_head.projection.bias.grad
+        )
     gradient_norms = {
         name: 0.0 if gradient is None else float(gradient.norm())
         for name, gradient in gradient_checks.items()
@@ -104,7 +109,8 @@ def main() -> None:
         "selected_actions": [step.selected_index.tolist() for step in output.trace],
         "model_config": {
             "query_cap": core.config.query_cap,
-            "enable_visual_null": core.config.enable_visual_null,
+            "enable_dynamic_applicability": core.config.enable_dynamic_applicability,
+            "initial_applicability": core.config.initial_applicability,
             "grounding_normalization": core.config.grounding_normalization,
         },
         "visual_null": (
@@ -113,13 +119,12 @@ def main() -> None:
             else {
                 "mean": float(output.visual_null_probabilities.detach().mean()),
                 "maximum": float(output.visual_null_probabilities.detach().max()),
-                "real_mass_error": float(
-                    (
-                        output.supports.detach().sum(dim=-1)
-                        - (1.0 - output.visual_null_probabilities.detach())
-                    )
-                    .abs()
-                    .max()
+                "minimum": float(output.visual_null_probabilities.detach().min()),
+                "per_timestep_mean": output.visual_null_probabilities.detach()
+                .mean(dim=(0, 2))
+                .tolist(),
+                "spatial_mass_error": float(
+                    (output.supports.detach().sum(dim=-1) - 1.0).abs().max()
                 ),
             }
         ),

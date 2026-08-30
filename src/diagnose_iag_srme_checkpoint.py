@@ -430,11 +430,34 @@ class ValidationDiagnosticAccumulator:
         self.null_probability_by_candidate = [
             _DistributionStats() for _ in range(candidates)
         ]
+        self.null_probability_by_timestep = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.confidence_by_timestep = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.null_probability_by_candidate_timestep = [
+            [_DistributionStats() for _ in range(candidates)]
+            for _ in range(timesteps)
+        ]
         self.selected_null_probability = _DistributionStats()
         self.non_selected_null_probability = _DistributionStats()
         self.selected_null_by_timestep = [
             _DistributionStats() for _ in range(timesteps)
         ]
+        self.non_selected_null_by_timestep = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.temporal_confidence_change = [
+            _DistributionStats() for _ in range(timesteps - 1)
+        ]
+        self.temporal_confidence_absolute_change = [
+            _DistributionStats() for _ in range(timesteps - 1)
+        ]
+        self.executed_confidence_before = _DistributionStats()
+        self.executed_confidence_after = _DistributionStats()
+        self.executed_confidence_change = _DistributionStats()
+        self.repeated_confidence_change = _DistributionStats()
         self.null_effect_bins = _NullEffectBinAccumulator()
         self.null_effect_bins_by_timestep = [
             _NullEffectBinAccumulator() for _ in range(timesteps)
@@ -540,61 +563,101 @@ class ValidationDiagnosticAccumulator:
         self.intent_cosine.update(pairwise_cosine_matrix(output.intents))
         self.intent_norm.update(output.intents.float().norm(dim=-1))
 
-        null_probabilities = output.visual_null_probabilities
-        if null_probabilities is not None:
+        for timestep, step in enumerate(output.trace):
+            if step.visual_null_probability is None or step.visual_confidence is None:
+                continue
             self.visual_null_seen = True
-            null_probabilities = null_probabilities.float()
-            confidence = 1.0 - null_probabilities
+            valid = step.live_before
+            if not valid.any():
+                continue
+            live_null = step.visual_null_probability[valid].float()
+            live_confidence = step.visual_confidence[valid].float()
             torch.testing.assert_close(
-                support_mass, confidence, atol=1e-5, rtol=1e-5
+                live_null + live_confidence,
+                torch.ones_like(live_null),
+                atol=1e-6,
+                rtol=1e-6,
             )
-            self.null_probability.update(null_probabilities)
-            self.visual_confidence_distribution.update(confidence)
+            self.null_probability.update(live_null)
+            self.visual_confidence_distribution.update(live_confidence)
+            self.null_probability_by_timestep[timestep].update(live_null)
+            self.confidence_by_timestep[timestep].update(live_confidence)
             for candidate in range(candidates):
                 self.null_probability_by_candidate[candidate].update(
-                    null_probabilities[:, candidate]
+                    live_null[:, candidate]
+                )
+                self.null_probability_by_candidate_timestep[timestep][candidate].update(
+                    live_null[:, candidate]
                 )
 
-            for timestep, step in enumerate(output.trace):
-                valid = step.live_before
-                if not valid.any():
-                    continue
-                live_null = null_probabilities[valid]
-                live_confidence = confidence[valid]
-                selected_indices = step.selected_index[valid]
-                selected_mask = torch.zeros_like(live_null, dtype=torch.bool)
-                edit_selected = selected_indices.lt(candidates)
-                if edit_selected.any():
-                    rows = torch.arange(live_null.shape[0], device=live_null.device)[
-                        edit_selected
-                    ]
-                    columns = selected_indices[edit_selected]
-                    selected_mask[rows, columns] = True
-                    selected_values = live_null[rows, columns]
-                    self.selected_null_probability.update(selected_values)
-                    self.selected_null_by_timestep[timestep].update(selected_values)
-                self.non_selected_null_probability.update(live_null[~selected_mask])
-                delta_z_norm = flatten_delta_z(step.delta_z[valid]).norm(dim=-1)
-                delta_q_norm = step.delta_q[valid].float().norm(dim=-1)
-                self.null_effect_bins.update(
-                    live_null, delta_z_norm, delta_q_norm, selected_mask
-                )
-                self.null_effect_bins_by_timestep[timestep].update(
-                    live_null, delta_z_norm, delta_q_norm, selected_mask
-                )
+            selected_indices = step.selected_index[valid]
+            selected_mask = torch.zeros_like(live_null, dtype=torch.bool)
+            edit_selected = selected_indices.lt(candidates)
+            if edit_selected.any():
+                rows = torch.arange(live_null.shape[0], device=live_null.device)[
+                    edit_selected
+                ]
+                columns = selected_indices[edit_selected]
+                selected_mask[rows, columns] = True
+                selected_values = live_null[rows, columns]
+                self.selected_null_probability.update(selected_values)
+                self.selected_null_by_timestep[timestep].update(selected_values)
+            non_selected_values = live_null[~selected_mask]
+            self.non_selected_null_probability.update(non_selected_values)
+            self.non_selected_null_by_timestep[timestep].update(non_selected_values)
+            delta_z_norm = flatten_delta_z(step.delta_z[valid]).norm(dim=-1)
+            delta_q_norm = step.delta_q[valid].float().norm(dim=-1)
+            self.null_effect_bins.update(
+                live_null, delta_z_norm, delta_q_norm, selected_mask
+            )
+            self.null_effect_bins_by_timestep[timestep].update(
+                live_null, delta_z_norm, delta_q_norm, selected_mask
+            )
 
-                stopped = selected_indices.eq(candidates)
-                mean_confidence = live_confidence.mean(dim=-1)
-                max_confidence = live_confidence.max(dim=-1).values
-                self.stop_mean_confidence.update(mean_confidence[stopped])
-                self.edit_mean_confidence.update(mean_confidence[~stopped])
-                self.stop_max_confidence.update(max_confidence[stopped])
-                self.edit_max_confidence.update(max_confidence[~stopped])
-                all_high_null = live_null.gt(0.8).all(dim=-1)
-                self.all_candidates_high_null_count += int(all_high_null.sum())
-                self.all_candidates_high_null_stop_count += int(
-                    (all_high_null & stopped).sum()
-                )
+            stopped = selected_indices.eq(candidates)
+            mean_confidence = live_confidence.mean(dim=-1)
+            max_confidence = live_confidence.max(dim=-1).values
+            self.stop_mean_confidence.update(mean_confidence[stopped])
+            self.edit_mean_confidence.update(mean_confidence[~stopped])
+            self.stop_max_confidence.update(max_confidence[stopped])
+            self.edit_max_confidence.update(max_confidence[~stopped])
+            all_high_null = live_null.gt(0.8).all(dim=-1)
+            self.all_candidates_high_null_count += int(all_high_null.sum())
+            self.all_candidates_high_null_stop_count += int(
+                (all_high_null & stopped).sum()
+            )
+
+        for transition, (previous, current_step) in enumerate(
+            zip(output.trace[:-1], output.trace[1:], strict=True)
+        ):
+            if (
+                previous.visual_confidence is None
+                or current_step.visual_confidence is None
+            ):
+                continue
+            valid = current_step.live_before
+            if not valid.any():
+                continue
+            confidence_change = (
+                current_step.visual_confidence[valid].float()
+                - previous.visual_confidence[valid].float()
+            )
+            self.temporal_confidence_change[transition].update(confidence_change)
+            self.temporal_confidence_absolute_change[transition].update(
+                confidence_change.abs()
+            )
+            previous_selected = previous.selected_index[valid]
+            executed = previous_selected.lt(candidates)
+            if executed.any():
+                rows = torch.arange(int(valid.sum()), device=valid.device)[executed]
+                columns = previous_selected[executed]
+                before = previous.visual_confidence[valid][rows, columns].float()
+                after = current_step.visual_confidence[valid][rows, columns].float()
+                self.executed_confidence_before.update(before)
+                self.executed_confidence_after.update(after)
+                self.executed_confidence_change.update(after - before)
+                repeated = current_step.selected_index[valid][executed].eq(columns)
+                self.repeated_confidence_change.update((after - before)[repeated])
 
         for timestep, step in enumerate(output.trace):
             verify_same_parent_counterfactuals(step)
@@ -740,6 +803,8 @@ class ValidationDiagnosticAccumulator:
             "support_static_by_current_architecture": True,
             "empirical_recurrence_stability_measured": False,
             "visual_token_count": self.visual_tokens,
+            "spatial_support_mass": float(visual_mass.mean()),
+            "per_candidate_spatial_support_mass": visual_mass.tolist(),
             "real_visual_support_mass": float(visual_mass.mean()),
             "per_candidate_real_visual_support_mass": visual_mass.tolist(),
             "real_visual_support_mass_distribution": (
@@ -780,8 +845,8 @@ class ValidationDiagnosticAccumulator:
             "pairwise_support_cosine_matrix": cosine,
             "pairwise_support_probability_overlap_matrix": overlap,
             "support_shape_normalization": (
-                "shape metrics use P_visual / (sum(P_visual)+epsilon), exclude "
-                "zero-mass candidates as undefined, and never enter model execution"
+                "corrected R1b spatial Entmax support already has unit mass over real "
+                "tokens; this diagnostic normalization is an identity up to epsilon"
             ),
             "dominant_tokenwise_grounding_mass_share": float(
                 self.dominant_grounding_share.mean().mean()
@@ -803,7 +868,7 @@ class ValidationDiagnosticAccumulator:
                 "metric_population": "not applicable: checkpoint has no Visual NULL",
             }
         null_values = self.null_probability.values()
-        thresholds = (0.25, 0.50, 0.80, 0.95)
+        thresholds = (0.10, 0.25, 0.50, 0.80)
         overall_bins = self.null_effect_bins.summary()
         nonempty_bins = [item for item in overall_bins if item["count"]]
         low_bin_delta = (
@@ -818,8 +883,9 @@ class ValidationDiagnosticAccumulator:
         ]
         return {
             "enabled": True,
-            "architecture_generation": "r1b_visual_null_confidence_gate",
-            "static_by_architecture": True,
+            "architecture_generation": "r1b_dynamic_applicability_gate_v2",
+            "static_by_architecture": False,
+            "dynamic_whether_by_current_context": True,
             "support_recomputed_each_timestep": False,
             "null_probability": self.null_probability.summary(),
             "fraction_above_threshold": {
@@ -830,6 +896,23 @@ class ValidationDiagnosticAccumulator:
             },
             "per_candidate_null_probability": [
                 stats.summary() for stats in self.null_probability_by_candidate
+            ],
+            "null_probability_by_timestep": [
+                {"timestep": timestep, **stats.summary()}
+                for timestep, stats in enumerate(self.null_probability_by_timestep)
+            ],
+            "confidence_by_timestep": [
+                {"timestep": timestep, **stats.summary()}
+                for timestep, stats in enumerate(self.confidence_by_timestep)
+            ],
+            "null_probability_by_candidate_and_timestep": [
+                {
+                    "timestep": timestep,
+                    "candidates": [stats.summary() for stats in candidate_stats],
+                }
+                for timestep, candidate_stats in enumerate(
+                    self.null_probability_by_candidate_timestep
+                )
             ],
             "visual_confidence": self.visual_confidence_distribution.summary(),
             "selected_candidate_null_probability": (
@@ -843,12 +926,53 @@ class ValidationDiagnosticAccumulator:
                     "timestep": timestep,
                     **stats.summary(),
                     "population": (
-                        "selected non-STOP candidates among live decisions; the underlying "
-                        "NULL value is static and only the selected subset changes"
+                        "selected non-STOP candidates among live decisions at this dynamic "
+                        "current-state context"
                     ),
                 }
                 for timestep, stats in enumerate(self.selected_null_by_timestep)
             ],
+            "non_selected_candidate_null_probability_by_timestep": [
+                {
+                    "timestep": timestep,
+                    **stats.summary(),
+                    "population": "non-selected candidates of live parents",
+                }
+                for timestep, stats in enumerate(self.non_selected_null_by_timestep)
+            ],
+            "temporal_applicability": {
+                "confidence_change_by_transition": [
+                    {
+                        "transition": f"t{transition}_to_t{transition + 1}",
+                        "signed_change": self.temporal_confidence_change[
+                            transition
+                        ].summary(),
+                        "absolute_change": self.temporal_confidence_absolute_change[
+                            transition
+                        ].summary(),
+                        "population": (
+                            "all candidates of parents still live at the later timestep"
+                        ),
+                    }
+                    for transition in range(self.timesteps - 1)
+                ],
+                "selected_action_confidence_before_execution": (
+                    self.executed_confidence_before.summary()
+                ),
+                "same_action_confidence_after_execution": (
+                    self.executed_confidence_after.summary()
+                ),
+                "same_action_confidence_change_after_execution": (
+                    self.executed_confidence_change.summary()
+                ),
+                "repeated_selected_action_confidence_change": (
+                    self.repeated_confidence_change.summary()
+                ),
+                "interpretation_limitation": (
+                    "confidence changes are observational; reduced confidence after an "
+                    "execution is not assumed unless measured"
+                ),
+            },
             "null_vs_effect_magnitude_bins": overall_bins,
             "null_vs_effect_magnitude_bins_by_timestep": [
                 {
@@ -888,8 +1012,7 @@ class ValidationDiagnosticAccumulator:
                 ),
             },
             "metric_population": (
-                "one static p_null per validation query/candidate; timestep subsets are "
-                "selection-conditioned, not state-dependent NULL"
+                "dynamic p_null for all candidates of live parents at each timestep"
             ),
             "shortcut_observation_flags": {
                 "null_effectively_ignored": mean_null <= 0.01,
@@ -1152,7 +1275,7 @@ class SelectedPathMarginalAccumulator:
 class NullTargetUtilityAccumulator:
     """Offline NULL/utility association after target-free candidates already exist."""
 
-    def __init__(self) -> None:
+    def __init__(self, timesteps: int = 3) -> None:
         self.null_probabilities = _DistributionStats()
         self.utilities = _DistributionStats()
         bins = len(NULL_EFFECT_BIN_EDGES) - 1
@@ -1160,13 +1283,20 @@ class NullTargetUtilityAccumulator:
         self.bin_utility_total = torch.zeros(bins, dtype=torch.float64)
         self.bin_positive = torch.zeros(bins, dtype=torch.long)
         self.bin_negative = torch.zeros(bins, dtype=torch.long)
+        self.timestep_bin_count = torch.zeros(timesteps, bins, dtype=torch.long)
+        self.timestep_bin_utility_total = torch.zeros(
+            timesteps, bins, dtype=torch.float64
+        )
+        self.timestep_bin_positive = torch.zeros(timesteps, bins, dtype=torch.long)
+        self.timestep_bin_negative = torch.zeros(timesteps, bins, dtype=torch.long)
 
     def update(self, output: IAGSRMEOutput, target_features: Tensor) -> None:
         if output.visual_null_probabilities is None:
             return
         normalized_targets = F.normalize(target_features.float(), dim=-1)
-        null_probabilities = output.visual_null_probabilities.float()
-        for step in output.trace:
+        for timestep, step in enumerate(output.trace):
+            if step.visual_null_probability is None:
+                continue
             valid = step.live_before
             if not valid.any():
                 continue
@@ -1180,7 +1310,7 @@ class NullTargetUtilityAccumulator:
                 targets,
             )
             utility = candidate_similarity - current_similarity[:, None]
-            null_values = null_probabilities[valid]
+            null_values = step.visual_null_probability[valid].float()
             self.null_probabilities.update(null_values)
             self.utilities.update(utility)
             flat_null = null_values.detach().cpu().flatten()
@@ -1193,6 +1323,16 @@ class NullTargetUtilityAccumulator:
                 self.bin_utility_total[index] += float(flat_utility[mask].sum())
                 self.bin_positive[index] += int(flat_utility[mask].gt(0).sum())
                 self.bin_negative[index] += int(flat_utility[mask].lt(0).sum())
+                self.timestep_bin_count[timestep, index] += int(mask.sum())
+                self.timestep_bin_utility_total[timestep, index] += float(
+                    flat_utility[mask].sum()
+                )
+                self.timestep_bin_positive[timestep, index] += int(
+                    flat_utility[mask].gt(0).sum()
+                )
+                self.timestep_bin_negative[timestep, index] += int(
+                    flat_utility[mask].lt(0).sum()
+                )
 
     def summary(self) -> dict[str, Any]:
         null_values = self.null_probabilities.values()
@@ -1228,10 +1368,46 @@ class NullTargetUtilityAccumulator:
                     ),
                 }
             )
+        timestep_bins = []
+        for timestep in range(self.timestep_bin_count.shape[0]):
+            items = []
+            for index, (lower, upper) in enumerate(
+                zip(NULL_EFFECT_BIN_EDGES[:-1], NULL_EFFECT_BIN_EDGES[1:], strict=True)
+            ):
+                count = int(self.timestep_bin_count[timestep, index])
+                items.append(
+                    {
+                        "range": [lower, min(upper, 1.0)],
+                        "count": count,
+                        "mean_candidate_target_similarity_gain": (
+                            float(self.timestep_bin_utility_total[timestep, index] / count)
+                            if count
+                            else None
+                        ),
+                        "positive_utility_rate": (
+                            float(self.timestep_bin_positive[timestep, index] / count)
+                            if count
+                            else None
+                        ),
+                        "negative_utility_rate": (
+                            float(self.timestep_bin_negative[timestep, index] / count)
+                            if count
+                            else None
+                        ),
+                    }
+                )
+            timestep_bins.append(
+                {
+                    "timestep": timestep,
+                    "population": f"all candidates of live parents at t={timestep}",
+                    "bins": items,
+                }
+            )
         return {
             "pearson_p_null_vs_candidate_utility": pearson,
             "utility_definition": "cos(qhat_t+1,k, target)-cos(q_t, target)",
             "utility_by_null_bin": bins,
+            "utility_by_null_bin_and_timestep": timestep_bins,
             "candidate_observation_count": null_values.numel(),
             "target_firewall": (
                 "targets are accessed only after target-free rollout/candidates are complete"
@@ -1246,28 +1422,28 @@ def diagnostic_definitions() -> dict[str, dict[str, Any]]:
     return {
         "visual_null_probability": {
             "definition": (
-                "p_null is the final Entmax-1.5 coordinate after augmenting N visual "
-                "logits with one learnable Visual NULL logit"
+                "p_null[t,k]=1-sigmoid(G_app(context[t,k])); it is a dynamic Bernoulli "
+                "applicability complement, not a spatial Entmax coordinate"
             ),
-            "population": "all validation queries and four static candidate identities",
-            "tensor_shape_before_reduction": "[B,K]",
-            "reduction_axes": "distribution globally and separately by candidate identity",
+            "population": "all four candidates of live parents at each timestep",
+            "tensor_shape_before_reduction": "[B_live,T,K]",
+            "reduction_axes": "distribution by timestep and candidate identity",
             "interpretation_limitation": (
-                "static target-free applicability signal; not semantic NULL and not STOP"
+                "target-free numerical applicability; not semantic NULL and not STOP"
             ),
         },
         "real_visual_support_mass": {
-            "definition": "sum_n P_visual[k,n] = 1 - p_null[k]",
+            "definition": "sum_n pi[k,n]=1 for fixed legacy/R1a Entmax WHERE",
             "population": "all validation queries/candidates",
-            "tensor_shape_before_reduction": "P_visual [B,K,N]",
+            "tensor_shape_before_reduction": "pi [B,K,N]",
             "reduction_axes": "sum over N; distribution over B,K",
             "interpretation_limitation": (
-                "execution confidence, distinct from conditional spatial shape"
+                "spatial support mass is separate from dynamic execution confidence"
             ),
         },
         "conditional_support_shape": {
-            "definition": "P_tilde=P_visual/(sum(P_visual)+epsilon)",
-            "population": "candidate supports with nonzero real visual mass",
+            "definition": "pi is already unit-mass Entmax support over real tokens",
+            "population": "all candidate supports",
             "tensor_shape_before_reduction": "[B,K,N]",
             "reduction_axes": "shape entropy/overlap/cosine over N; zero-mass shapes excluded",
             "interpretation_limitation": (
@@ -1276,7 +1452,7 @@ def diagnostic_definitions() -> dict[str, dict[str, Any]]:
         },
         "null_vs_effect_magnitude": {
             "definition": (
-                "bin same-parent candidates by static p_null and summarize ||DeltaZ||, "
+                "bin same-parent candidates by dynamic p_null[t,k] and summarize ||DeltaZ||, "
                 "||Deltaq||, and selection rate"
             ),
             "population": "all K candidates of live parents at each timestep",
@@ -1591,6 +1767,8 @@ _LEGACY_CANONICAL_MODEL_CONFIG = {
     "selector_temperature": 1.0,
     "enable_visual_null": False,
     "visual_null_initial_logit": 0.0,
+    "enable_dynamic_applicability": False,
+    "initial_applicability": 0.98,
     "grounding_normalization": "entmax15",
 }
 _SERIALIZED_MODEL_CONFIG_KEYS = (
@@ -1637,7 +1815,15 @@ def _resolve_checkpoint_model_config(
     candidates, width = query_bank.shape
     enable_claim = any(key.startswith("core.claim_head.") for key in state)
     enable_factor = any(key.startswith("core.factor_fuser.") for key in state)
-    inferred_visual_null = "core.grounder.visual_null_key" in state
+    inferred_entmax_null_v1 = "core.grounder.visual_null_key" in state
+    inferred_dynamic_applicability = any(
+        key.startswith("core.applicability_head.") for key in state
+    )
+    if inferred_entmax_null_v1:
+        raise ValueError(
+            "checkpoint uses superseded r1b_visual_null_entmax_v1; it cannot be "
+            "replayed as r1b_dynamic_applicability_gate_v2"
+        )
     factor_output = state.get("core.factor_fuser.network.2.weight")
     inferred_factor_dim = (
         int(factor_output.shape[0]) if isinstance(factor_output, Tensor) else None
@@ -1645,9 +1831,10 @@ def _resolve_checkpoint_model_config(
     serialized = _serialized_model_config(checkpoint)
 
     if serialized is None:
-        if inferred_visual_null:
+        if inferred_dynamic_applicability:
             raise ValueError(
-                "Visual NULL checkpoint is not self-describing; exact R1b replay is unsafe"
+                "dynamic-applicability checkpoint is not self-describing; exact R1b "
+                "replay is unsafe"
             )
         replay_values = dict(_LEGACY_CANONICAL_MODEL_CONFIG)
         source = "legacy_checkpoint_plus_canonical_assumption"
@@ -1657,11 +1844,11 @@ def _resolve_checkpoint_model_config(
         )
     else:
         required_fields = set(_SELF_DESCRIBING_MODEL_CONFIG_FIELDS)
-        if inferred_visual_null:
+        if inferred_dynamic_applicability:
             required_fields.update(
                 {
-                    "enable_visual_null",
-                    "visual_null_initial_logit",
+                    "enable_dynamic_applicability",
+                    "initial_applicability",
                     "grounding_normalization",
                 }
             )
@@ -1686,7 +1873,8 @@ def _resolve_checkpoint_model_config(
             "retrieval_dim": retrieval_dim,
             "enable_claim_head": enable_claim,
             "enable_factor_head": enable_factor,
-            "enable_visual_null": inferred_visual_null,
+            "enable_visual_null": False,
+            "enable_dynamic_applicability": inferred_dynamic_applicability,
         }
         for key, expected in inferable_expected.items():
             if key in serialized and serialized[key] != expected:
@@ -1720,6 +1908,10 @@ def _resolve_checkpoint_model_config(
         "visual_null_initial_logit": float(
             replay_values["visual_null_initial_logit"]
         ),
+        "enable_dynamic_applicability": bool(
+            replay_values["enable_dynamic_applicability"]
+        ),
+        "initial_applicability": float(replay_values["initial_applicability"]),
         "grounding_normalization": str(replay_values["grounding_normalization"]),
     }
     provenance: dict[str, Any] = {
@@ -1731,14 +1923,15 @@ def _resolve_checkpoint_model_config(
             "enable_claim_head": enable_claim,
             "enable_factor_head": enable_factor,
             "factor_dim": inferred_factor_dim,
-            "enable_visual_null": inferred_visual_null,
+            "enable_visual_null": False,
+            "enable_dynamic_applicability": inferred_dynamic_applicability,
         },
         "resolved_diagnostic_config": resolved,
         "diagnostic_inference_override": {"selector_gumbel_noise": False},
         "warning": warning,
         "architecture_generation": (
-            "r1b_visual_null_confidence_gate"
-            if inferred_visual_null
+            "r1b_dynamic_applicability_gate_v2"
+            if inferred_dynamic_applicability
             else "legacy_r0_or_r1a"
         ),
     }
@@ -2211,7 +2404,7 @@ def _checkpoint_replay_guard(
     tolerance: float = 1e-4,
 ) -> dict[str, Any]:
     generation = provenance.get("architecture_generation")
-    if generation != "r1b_visual_null_confidence_gate":
+    if generation != "r1b_dynamic_applicability_gate_v2":
         return {
             "applicable": False,
             "architecture_generation": generation,
@@ -2222,7 +2415,12 @@ def _checkpoint_replay_guard(
         raise ValueError("R1b replay has no resolved model config")
     checks = {
         "query_cap_is_1000": float(resolved.get("query_cap", -1.0)) == 1000.0,
-        "visual_null_enabled": resolved.get("enable_visual_null") is True,
+        "dynamic_applicability_enabled": (
+            resolved.get("enable_dynamic_applicability") is True
+        ),
+        "initial_applicability_is_0.98": (
+            float(resolved.get("initial_applicability", -1.0)) == 0.98
+        ),
         "checkpoint_fully_self_describing": (
             provenance.get("fully_self_describing") is True
         ),

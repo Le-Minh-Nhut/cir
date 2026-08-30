@@ -141,14 +141,24 @@ def _batch_diagnostics(output) -> dict[str, object]:
         "functional_effect_rank": float(functional_effective_rank(delta_q).mean()),
         "functional_delta_q_cosine": float(pairwise_cosine(delta_q).mean()),
         "dynamic_changes": _dynamic_change_metrics(output),
-        "visual_null_probability": (
-            None
-            if output.visual_null_probabilities is None
-            else {
-                "mean": float(output.visual_null_probabilities.float().mean()),
-                "maximum": float(output.visual_null_probabilities.float().max()),
-            }
-        ),
+        "visual_null_probability": _dynamic_applicability_diagnostics(output),
+    }
+
+
+def _dynamic_applicability_diagnostics(output) -> dict[str, object] | None:
+    if output.visual_null_probabilities is None or output.visual_confidence is None:
+        return None
+    null = output.visual_null_probabilities.detach().float()
+    confidence = output.visual_confidence.detach().float()
+    return {
+        "mean": float(null.mean()),
+        "minimum": float(null.min()),
+        "maximum": float(null.max()),
+        "confidence_mean": float(confidence.mean()),
+        "confidence_minimum": float(confidence.min()),
+        "confidence_maximum": float(confidence.max()),
+        "p_null_mean_by_timestep": null.mean(dim=(0, 2)).tolist(),
+        "confidence_mean_by_timestep": confidence.mean(dim=(0, 2)).tolist(),
     }
 
 
@@ -175,8 +185,8 @@ def _build_canary_model(device: torch.device) -> tuple[IAGSRME, object, object]:
             query_cap=1000.0,
             selector_temperature=1.0,
             selector_gumbel_noise=True,
-            enable_visual_null=True,
-            visual_null_initial_logit=0.0,
+            enable_dynamic_applicability=True,
+            initial_applicability=0.98,
             grounding_normalization="entmax15",
         )
     )
@@ -231,7 +241,7 @@ def main() -> None:
     parser.add_argument("--precision", choices=("fp16", "bf16", "fp32"), default="fp16")
     parser.add_argument(
         "--dataset-root",
-        default=os.environ.get("FASHIONIQ_ROOT", "data/fashionIQ_dataset"),
+        default=os.environ.get("FASHIONIQ_ROOT", "data/FashionIQ"),
     )
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--num-workers", type=int, default=2)
@@ -253,8 +263,13 @@ def main() -> None:
     configure_torch_runtime(deterministic=True, benchmark=False)
     precision = resolve_precision(args.precision, device)
     model, tokenizer, processor = _build_canary_model(device)
-    if model.core.config.query_cap != 1000.0 or not model.core.config.enable_visual_null:
-        raise AssertionError("R1b canary requires query_cap=1000 and Visual NULL enabled")
+    if (
+        model.core.config.query_cap != 1000.0
+        or not model.core.config.enable_dynamic_applicability
+    ):
+        raise AssertionError(
+            "R1b canary requires query_cap=1000 and dynamic applicability enabled"
+        )
     objective = IAGSRMEObjective(ObjectiveConfig(), width=256).to(device)
     loader = _build_loader(args, tokenizer, processor)
     optimizer = AdamW(
@@ -278,10 +293,7 @@ def main() -> None:
         "text_encoder": list(model.backbone.model.text_model.parameters()),
         "intent_queries": [model.core.intent_encoder.query_bank],
         "grounding": list(model.core.grounder.parameters()),
-        "visual_null": [
-            model.core.grounder.visual_null_key,
-            model.core.grounder.visual_null_bias,
-        ],
+        "applicability": list(model.core.applicability_head.parameters()),
         "editor": list(model.core.editor.parameters()),
         "readout": list(model.core.readout.parameters()),
         "scorer": list(model.core.scorer.parameters()),
@@ -291,10 +303,17 @@ def main() -> None:
         "text": next(model.backbone.model.text_model.parameters()),
         "intent": model.core.intent_encoder.query_bank,
         "editor": model.core.editor.direction.weight,
-        "visual_null": model.core.grounder.visual_null_key,
+        "applicability_weight": model.core.applicability_head.projection.weight,
+        "applicability_bias": model.core.applicability_head.projection.bias,
     }
     initial = {name: parameter.detach().float().clone() for name, parameter in tracked.items()}
-    calls = {"vision_model": 0, "anchor_projection": 0, "intent": 0, "grounder": 0}
+    calls = {
+        "vision_model": 0,
+        "anchor_projection": 0,
+        "intent": 0,
+        "grounder": 0,
+        "applicability": 0,
+    }
 
     def count(name):
         def hook(_module, _inputs):
@@ -307,11 +326,16 @@ def main() -> None:
         model.backbone.anchor_projection.register_forward_pre_hook(count("anchor_projection")),
         model.core.intent_encoder.register_forward_pre_hook(count("intent")),
         model.core.grounder.register_forward_pre_hook(count("grounder")),
+        model.core.applicability_head.register_forward_pre_hook(
+            count("applicability")
+        ),
     ]
     history: defaultdict[str, list[float]] = defaultdict(list)
     action_counts = torch.zeros(5, dtype=torch.long)
     stop_step_counts = torch.zeros(3, dtype=torch.long)
     sample_steps = 0
+    successful_steps_with_nonzero_applicability_gradient = 0
+    latest_applicability_diagnostics: dict[str, object] | None = None
     iterator = iter(loader)
     model.train()
     objective.train()
@@ -396,7 +420,14 @@ def main() -> None:
                     )
                 continue
 
-            zero_families = [name for name, value in gradient_norms.items() if value == 0]
+            applicability_gradient = gradient_norms["applicability"]
+            if applicability_gradient > 0:
+                successful_steps_with_nonzero_applicability_gradient += 1
+            zero_families = [
+                name
+                for name, value in gradient_norms.items()
+                if value == 0 and name != "applicability"
+            ]
             if zero_families:
                 raise RuntimeError(
                     f"zero expected gradient at step {step_index}: {zero_families}"
@@ -410,6 +441,7 @@ def main() -> None:
                 "anchor_projection": 1,
                 "intent": 1,
                 "grounder": 1,
+                "applicability": model.core.config.max_steps,
             }:
                 raise AssertionError(f"unexpected canary forward call counts: {calls}")
             _verify_absorbing_stop(output)
@@ -437,8 +469,13 @@ def main() -> None:
             history["effect_cosine"].append(float(diagnostics["functional_delta_q_cosine"]))
             null_diagnostics = diagnostics["visual_null_probability"]
             if isinstance(null_diagnostics, dict):
+                latest_applicability_diagnostics = null_diagnostics
                 history["p_null_mean"].append(float(null_diagnostics["mean"]))
                 history["p_null_max"].append(float(null_diagnostics["maximum"]))
+                history["p_null_min"].append(float(null_diagnostics["minimum"]))
+                history["confidence_mean"].append(
+                    float(null_diagnostics["confidence_mean"])
+                )
             if (
                 step_index == 1
                 or step_index == first_successful_step
@@ -458,6 +495,9 @@ def main() -> None:
                     "skipped_optimizer_steps": skipped_optimizer_steps,
                     "first_successful_step": first_successful_step,
                     "parameter_step_max_abs_delta": step_parameter_deltas,
+                    "successful_steps_with_nonzero_applicability_gradient": (
+                        successful_steps_with_nonzero_applicability_gradient
+                    ),
                     "parameter_max_abs_delta": {
                         name: _parameter_delta(parameter, initial[name])
                         for name, parameter in tracked.items()
@@ -467,6 +507,25 @@ def main() -> None:
                     "peak_vram_bytes": torch.cuda.max_memory_allocated(device),
                 }
                 print(json.dumps(record, sort_keys=True), flush=True)
+            if successful_optimizer_steps >= 20:
+                applicability_delta = max(
+                    _parameter_delta(
+                        tracked["applicability_weight"],
+                        initial["applicability_weight"],
+                    ),
+                    _parameter_delta(
+                        tracked["applicability_bias"],
+                        initial["applicability_bias"],
+                    ),
+                )
+                if successful_steps_with_nonzero_applicability_gradient == 0:
+                    raise RuntimeError(
+                        "dynamic applicability received zero gradient on every successful step"
+                    )
+                if applicability_delta == 0:
+                    raise RuntimeError(
+                        "dynamic applicability parameters did not change after 20 successful steps"
+                    )
     except torch.OutOfMemoryError as error:
         print(
             json.dumps(
@@ -514,13 +573,20 @@ def main() -> None:
         "first_successful_step": first_successful_step,
         "precision": args.precision,
         "query_cap": model.core.config.query_cap,
-        "enable_visual_null": model.core.config.enable_visual_null,
+        "enable_dynamic_applicability": (
+            model.core.config.enable_dynamic_applicability
+        ),
+        "initial_applicability": model.core.config.initial_applicability,
+        "successful_steps_with_nonzero_applicability_gradient": (
+            successful_steps_with_nonzero_applicability_gradient
+        ),
         "p_null_mean_start": (
             history["p_null_mean"][0] if history["p_null_mean"] else None
         ),
         "p_null_mean_end": (
             history["p_null_mean"][-1] if history["p_null_mean"] else None
         ),
+        "dynamic_applicability_end": latest_applicability_diagnostics,
         "peak_vram_bytes": torch.cuda.max_memory_allocated(device),
         "loss_start": {
             name: history[name][0] if history[name] else None
@@ -541,6 +607,10 @@ def main() -> None:
         },
     }
     print(json.dumps(summary, indent=2, sort_keys=True), flush=True)
+    if args.steps >= 20 and successful_optimizer_steps < 20:
+        raise RuntimeError(
+            "GPU canary requires at least 20 successful optimizer steps before full training"
+        )
     if successful_optimizer_steps >= 10 and any(collapse_flags.values()):
         raise RuntimeError(f"canary collapse detector fired: {collapse_flags}")
 
