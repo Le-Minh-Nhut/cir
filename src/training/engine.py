@@ -160,9 +160,13 @@ def save_checkpoint(
                 "precision": precision.name,
                 "model_config": asdict(model.core.config),
                 "architecture_generation": (
-                    "r1b_visual_null_confidence_gate"
-                    if model.core.config.enable_visual_null
-                    else "legacy_iag_srme"
+                    "r1b_dynamic_applicability_gate_v2"
+                    if model.core.config.enable_dynamic_applicability
+                    else (
+                        "r1b_visual_null_entmax_v1"
+                        if model.core.config.enable_visual_null
+                        else "legacy_iag_srme"
+                    )
                 ),
             },
         },

@@ -11,6 +11,9 @@ selector_gumbel_noise: true
 enable_claim_head: false
 enable_factor_head: false
 factor_dim: null
-enable_visual_null: true
+# Superseded N+1 Entmax NULL remains explicitly disabled.
+enable_visual_null: false
 visual_null_initial_logit: 0.0
+enable_dynamic_applicability: true
+initial_applicability: 0.98
 grounding_normalization: entmax15

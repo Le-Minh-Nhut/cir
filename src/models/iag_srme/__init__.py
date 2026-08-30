@@ -4,6 +4,7 @@ from .outputs import BackboneOutput, IAGSRMEOutput, RecurrentStepOutput
 
 __all__ = [
     "BackboneOutput",
+    "DynamicApplicabilityGate",
     "FGCLIPBackbone",
     "FGCLIPRegime",
     "IAGSRME",
@@ -13,3 +14,4 @@ __all__ = [
     "RecurrentStepOutput",
     "assert_cache_legal",
 ]
+from .applicability import DynamicApplicabilityGate

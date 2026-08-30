@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import torch
 from torch import Tensor, nn
 
+from .applicability import DynamicApplicabilityGate
 from .backbone import FGCLIPBackbone
 from .context import GroundedEditContext
 from .editor import SharedTokenEditor
@@ -32,8 +33,11 @@ class IAGSRMEConfig:
     enable_claim_head: bool = False
     enable_factor_head: bool = False
     factor_dim: int | None = None
+    # Deprecated N+1 Entmax R1b-v1 fields are retained only for explicit replay rejection.
     enable_visual_null: bool = False
     visual_null_initial_logit: float = 0.0
+    enable_dynamic_applicability: bool = False
+    initial_applicability: float = 0.98
     grounding_normalization: str = "entmax15"
 
 
@@ -46,18 +50,26 @@ class IAGSRMECore(nn.Module):
             raise ValueError("canonical IAG-SRME requires exactly four candidate identities")
         if config.max_steps < 1:
             raise ValueError("max_steps must be positive")
+        if config.enable_visual_null:
+            raise ValueError(
+                "N+1 Entmax Visual NULL is superseded and cannot be replayed as the "
+                "corrected dynamic-applicability architecture"
+            )
         self.config = config
         self.intent_encoder = TextIntentEncoder(
             config.width, config.num_candidates, config.num_heads
         )
         self.grounder = AnchorGrounder(
             config.width,
-            enable_visual_null=config.enable_visual_null,
-            visual_null_initial_logit=config.visual_null_initial_logit,
             normalization=config.grounding_normalization,
         )
         self.grounded_reader = GroundedStateReader(config.width)
         self.context_fuser = GroundedEditContext(config.width)
+        self.applicability_head = (
+            DynamicApplicabilityGate(config.width, config.initial_applicability)
+            if config.enable_dynamic_applicability
+            else None
+        )
         self.editor = SharedTokenEditor(config.width, config.lambda_z)
         self.readout = TokenStateReadout(config.width, config.retrieval_dim, config.query_cap)
         self.scorer = ConsequenceScorer(config.width, config.retrieval_dim)
@@ -104,12 +116,8 @@ class IAGSRMECore(nn.Module):
         if encoded.reference_global.shape != (batch_size, self.config.retrieval_dim):
             raise ValueError("reference_global must be [B,D]")
         intents = self.intent_encoder(encoded.text_tokens, encoded.text_content_mask)
-        grounding = self.grounder(intents, anchor)
-        visual_supports = grounding.visual_supports
-        spatial_supports = grounding.conditional_supports
-        execution_confidence = (
-            grounding.visual_confidence if self.config.enable_visual_null else None
-        )
+        # Fixed WHERE: canonical R1a Entmax support is computed once per rollout.
+        spatial_supports = self.grounder(intents, anchor)
         # A is immutable; assignment never changes after this point. Z starts at A.
         state = anchor
         current_query = self.readout(state, anchor, encoded.text_global, encoded.reference_global)
@@ -142,6 +150,15 @@ class IAGSRMECore(nn.Module):
                 spatial_supports, anchor, current_state
             )
             contexts = self.context_fuser(intents, original, current, change)
+            applicability_logits = None
+            execution_confidence = None
+            null_probability = None
+            if self.applicability_head is not None:
+                (
+                    applicability_logits,
+                    execution_confidence,
+                    null_probability,
+                ) = self.applicability_head(contexts)
             delta_z, candidate_states = self.editor(
                 contexts,
                 spatial_supports,
@@ -179,6 +196,14 @@ class IAGSRMECore(nn.Module):
                 delta_q = delta_q[:, :1].expand_as(delta_q)
                 scorer_change = change
                 scorer_supports = spatial_supports[:, :1].expand_as(spatial_supports)
+                if applicability_logits is not None:
+                    applicability_logits = applicability_logits[:, :1].expand_as(
+                        applicability_logits
+                    )
+                    execution_confidence = execution_confidence[:, :1].expand_as(
+                        execution_confidence
+                    )
+                    null_probability = null_probability[:, :1].expand_as(null_probability)
             elif control == "mean_candidate":
                 original = original.mean(dim=1, keepdim=True).expand_as(original)
                 current = current.mean(dim=1, keepdim=True).expand_as(current)
@@ -194,6 +219,14 @@ class IAGSRMECore(nn.Module):
                 scorer_supports = spatial_supports.mean(dim=1, keepdim=True).expand_as(
                     spatial_supports
                 )
+                if applicability_logits is not None:
+                    execution_confidence = execution_confidence.mean(
+                        dim=1, keepdim=True
+                    ).expand_as(execution_confidence)
+                    null_probability = 1.0 - execution_confidence
+                    applicability_logits = torch.logit(
+                        execution_confidence.float().clamp(1e-7, 1.0 - 1e-7)
+                    ).to(execution_confidence.dtype)
             scores = self.scorer(
                 contexts, delta_z, delta_q, scorer_change, scorer_supports
             )
@@ -260,6 +293,9 @@ class IAGSRMECore(nn.Module):
                     stopped_now=stopped_now,
                     next_state=next_state,
                     next_query=next_query,
+                    applicability_logits=applicability_logits,
+                    visual_confidence=execution_confidence,
+                    visual_null_probability=null_probability,
                 )
             )
             state = next_state
@@ -270,7 +306,7 @@ class IAGSRMECore(nn.Module):
             final_state=state,
             anchor=anchor,
             intents=intents,
-            supports=visual_supports,
+            supports=spatial_supports,
             text_tokens=encoded.text_tokens,
             text_content_mask=encoded.text_content_mask,
             reference_global=encoded.reference_global,
@@ -281,10 +317,16 @@ class IAGSRMECore(nn.Module):
             auxiliary_anchor=auxiliary_anchor,
             conditional_supports=spatial_supports,
             visual_null_probabilities=(
-                grounding.null_probabilities if self.config.enable_visual_null else None
+                torch.stack(
+                    [step.visual_null_probability for step in trace], dim=1
+                )
+                if self.config.enable_dynamic_applicability
+                else None
             ),
             visual_confidence=(
-                grounding.visual_confidence if self.config.enable_visual_null else None
+                torch.stack([step.visual_confidence for step in trace], dim=1)
+                if self.config.enable_dynamic_applicability
+                else None
             ),
         )
 

@@ -39,6 +39,9 @@ class RecurrentStepOutput:
     stopped_now: Tensor  # [B] bool
     next_state: Tensor  # [B,N,d]
     next_query: Tensor  # [B,D]
+    applicability_logits: Tensor | None = None  # [B,K]
+    visual_confidence: Tensor | None = None  # [B,K]
+    visual_null_probability: Tensor | None = None  # [B,K] = 1-confidence
 
 
 @dataclass(slots=True)
@@ -47,7 +50,7 @@ class IAGSRMEOutput:
     final_state: Tensor  # [B,N,d]
     anchor: Tensor  # [B,N,d]
     intents: Tensor  # [B,K,d]
-    supports: Tensor  # [B,K,N], real visual mass (unit mass for legacy)
+    supports: Tensor  # [B,K,N], unit-mass sparse spatial WHERE
     text_tokens: Tensor  # [B,L,d]
     text_content_mask: Tensor  # [B,L]
     reference_global: Tensor  # [B,D]
@@ -56,6 +59,6 @@ class IAGSRMEOutput:
     claims: Tensor | None = None  # [B,K,L]
     factors: Tensor | None = None  # [B,K,D_f]
     auxiliary_anchor: Tensor | None = None  # [B,D_f]
-    conditional_supports: Tensor | None = None  # [B,K,N], conditional WHERE shape
-    visual_null_probabilities: Tensor | None = None  # [B,K], static p_null
-    visual_confidence: Tensor | None = None  # [B,K] = 1 - p_null
+    conditional_supports: Tensor | None = None  # legacy diagnostic alias of supports
+    visual_null_probabilities: Tensor | None = None  # [B,T,K], dynamic p_null
+    visual_confidence: Tensor | None = None  # [B,T,K], dynamic confidence

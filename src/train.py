@@ -57,6 +57,10 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         visual_null_initial_logit=float(
             cfg.model.get("visual_null_initial_logit", 0.0)
         ),
+        enable_dynamic_applicability=bool(
+            cfg.model.get("enable_dynamic_applicability", False)
+        ),
+        initial_applicability=float(cfg.model.get("initial_applicability", 0.98)),
         grounding_normalization=str(
             cfg.model.get("grounding_normalization", "entmax15")
         ),

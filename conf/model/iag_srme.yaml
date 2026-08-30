@@ -14,4 +14,6 @@ enable_factor_head: false
 factor_dim: null
 enable_visual_null: false
 visual_null_initial_logit: 0.0
+enable_dynamic_applicability: false
+initial_applicability: 0.98
 grounding_normalization: entmax15
