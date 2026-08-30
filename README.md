@@ -1,3196 +1,2215 @@
-# CIR IAG-SRME — Core Baseline Diagnostic
-## Epoch 3 Best vs Epoch 5 Last
+# CIR IAG-SRME — R0 Diagnostic Audit & Results README
 
+**Document ID:** `CIR_IAG_SRME_R0_DIAGNOSTIC_RESULTS_README_2026-08-30`  
 **Date:** 2026-08-30  
-**Method:** IAG-SRME, FG-CLIP Base, K=4, Tmax=3, d=256  
-**Training objective:** `L_terminal + 0.5 L_marginal` (`objective=core`)  
-**Dataset / protocol:** FashionIQ val, `fashioniq_original`, `ordered_and`  
-**Best checkpoint:** epoch 3, Mean Recall = 27.258  
-**Last checkpoint:** epoch 5, Mean Recall = 26.697
+**Project:** Composed Image Retrieval (CIR) / IAG-SRME  
+**Purpose:** canonical record of the R0 diagnostic phase before any R1 architecture repair  
+**R0 branch:** `exp/e2e-iag-srme-r0-diagnostic-audit`  
+**Base clean-rewrite SHA:** `f4bc1e8b91e5c43eec36e824fcd4c1d858f32308`  
+**Initial R0 SHA:** `0ae06a07897664d71eb41771874cb90a57cb9030`  
+**Patched/final R0 SHA:** `e3721e4dd41fa90cf6bd2a8e706822e0ec6e5f16`  
+**Primary checkpoint analyzed here:** `outputs/2026-08-30/00-54-41/last.pt`  
+**Checkpoint epoch:** 5  
+**Backbone:** `qihoo360/fg-clip-base` @ `454d76372c2cf5eb48fa0d871fd0534481484d97`  
+**Evaluation protocol:** `fashioniq_original`  
+**R0 status:** **PASS — measurement layer is ready; no model/training behavior was changed.**
 
 ---
 
-# 1. Executive diagnosis
+# 0. Executive Summary
 
-The run is **not failing because of numerical instability, a single-candidate monopoly, or immediate STOP collapse**.
+R0 was created to answer a narrow question:
 
-The strongest structural failure is:
+> **Where exactly does the current IAG-SRME candidate mechanism collapse, and are the late-step effects genuinely diverse or merely numerically weak?**
 
-> **The four candidates have effectively identical visual grounding.**
+R0 intentionally does **not** repair the architecture. It only measures the existing computation graph more faithfully.
 
-At epoch 3:
+The strongest current R0 result on the FG-CLIP Base CORE-last checkpoint is:
 
-- pairwise support cosine = **0.999795**
-- pairwise support overlap = **0.995188**
+```text
+WHAT intents are already highly correlated
+        ↓
+WHERE support maps are almost identical
+        ↓
+shared editor produces almost parallel token edits
+        ↓
+token-space edit magnitude stays large across steps
+        ↓
+retrieval-space effect magnitude collapses rapidly
+        ↓
+late-step Δq vectors look less similar mostly while becoming very small
+        ↓
+FULL ≈ MEAN ≈ fixed REPEAT
+        ↓
+dynamic multi-candidate specialization is not functionally necessary yet
+```
 
-At epoch 5:
+The two strongest measured bottlenecks are therefore:
 
-- pairwise support cosine = **0.999821**
-- pairwise support overlap = **0.995809**
+\[
+\boxed{B_1:\ \text{WHAT}\rightarrow\text{WHERE contraction}}
+\]
 
-So all four learnable edit queries are essentially looking at the **same visual region distribution**.
+and
 
-This is already present at the best checkpoint and therefore is not merely a consequence of over-training from epoch 3 to epoch 5. It is a structural failure mode of the core objective.
+\[
+\boxed{B_2:\ \text{token-state edit}\rightarrow\text{retrieval-effect attenuation}}
+\]
 
-The second major failure is:
+The current evidence **does not prove** that `query_cap=0.5` is the sole cause of B2. It only makes the readout/cumulative-query path the next causal target to isolate.
 
-> **Candidate edits become increasingly similar at the first recurrent step, while later recurrent edits have rapidly diminishing effect on the final retrieval query.**
+---
 
-At epoch 3:
+# 1. R0 Scope — What Was Allowed and What Was Forbidden
 
-| timestep | mean `||Δq||` | pairwise Δq cosine | functional rank |
+R0 is a **diagnostic-only phase**.
+
+Allowed:
+
+- add lineage-safe metrics;
+- add same-parent counterfactual retrieval diagnostics;
+- measure WHAT / WHERE / context / `ΔZ` / `Δq`;
+- measure selected-path target-relative improvement offline;
+- separate STOP occupancy from new STOP hazard;
+- add explicit checkpoint configuration provenance;
+- fix diagnostic handling of zero/dead effects;
+- add timestep-specific failure flags;
+- document metric definitions and interpretation limits.
+
+Forbidden in R0:
+
+- architecture repair;
+- loss changes;
+- grounding changes;
+- editor changes;
+- readout changes;
+- selector changes;
+- STOP changes;
+- new teacher;
+- TPVG;
+- DPP;
+- semantic residual;
+- dynamic re-grounding;
+- visual NULL;
+- R1a/R1b/R1c mechanisms;
+- retraining old checkpoints to make diagnostics work.
+
+This boundary is important:
+
+```text
+R0 = measurement correctness
+R1 = causal architecture intervention
+```
+
+---
+
+# 2. R0 Code Audit and Numerical Freeze
+
+Final R0 patch changed exactly:
+
+```text
+src/diagnostics/iag_srme.py
+src/diagnose_iag_srme_checkpoint.py
+tests/test_r0_diagnostic_semantics.py
+doc/R0_DIAGNOSTIC_AUDIT_README.md
+```
+
+No files under the following paths were changed by the R0 patch:
+
+```text
+src/models/
+src/losses/
+src/training/
+dataset/evaluation implementation
+```
+
+The diagnostic freeze test checks that R0 instrumentation does not alter:
+
+```text
+final_query
+final_state
+intents
+supports
+contexts
+delta_z
+candidate_states
+candidate_queries
+delta_q
+scores
+selected_index
+next_state
+next_query
+```
+
+Local test report supplied for the final patch:
+
+```text
+Targeted pytest: 24 passed
+Full pytest:     74 passed, 1 skipped
+ruff:            PASS
+compileall:      PASS
+git diff --check PASS
+```
+
+Independent GitHub audit confirmed the diff scope and code semantics. At audit time GitHub had no attached CI status for the commit, so the exact local test execution count is recorded as the local run report rather than independently reproduced CI evidence.
+
+---
+
+# 3. Diagnostic Contract
+
+R0 measures the current computation chain:
+
+```text
+text
+  ↓
+WHAT / intent e_k
+  ↓
+WHERE / support P_k
+  ↓
+grounded current visual evidence
+  ↓
+context C_t,k
+  ↓
+token edit ΔZ_t,k
+  ↓
+candidate query q̂_{t+1,k}
+  ↓
+retrieval effect Δq_t,k = q̂_{t+1,k} - q_t
+  ↓
+score / selected action / STOP
+  ↓
+actual rollout
+```
+
+The main diagnostic families are:
+
+1. **WHAT specialization**
+   - pairwise intent cosine;
+   - candidate intent norms.
+
+2. **WHERE specialization**
+   - pairwise support cosine;
+   - support probability overlap;
+   - support entropy;
+   - support effective size;
+   - support fraction;
+   - dominant tokenwise grounding mass share.
+
+3. **Context specialization**
+   - pairwise context cosine per timestep.
+
+4. **Token-space functional effects**
+   - candidate-wise `||ΔZ||`;
+   - pairwise `ΔZ` cosine;
+   - `ΔZ` effective rank;
+   - active/dead effect fractions.
+
+5. **Retrieval-space functional effects**
+   - candidate-wise `||Δq||`;
+   - pairwise `Δq` cosine;
+   - functional effective rank;
+   - late-step effect retention;
+   - active/dead effect fractions.
+
+6. **Same-parent retrieval controls**
+   - each candidate evaluated from the exact same current parent;
+   - offline best-candidate oracle;
+   - mean candidate query.
+
+7. **Full-rollout controls**
+   - FULL;
+   - REFERENCE_ONLY;
+   - SINGLE-k;
+   - REPEAT-k;
+   - MEAN-CANDIDATE.
+
+8. **Policy diagnostics**
+   - new STOP hazard;
+   - absorbed STOP occupancy;
+   - candidate selection distribution;
+   - repeated-candidate trajectory fraction;
+   - mean number of executed edits.
+
+9. **Selected-path target-relative observation**
+   - for the actually executed non-STOP transition:
+
+\[
+\Delta s_t
+=
+\cos(q_{t+1},y)-\cos(q_t,y).
+\]
+
+This is offline diagnostic evidence only. The target does not enter the model forward path.
+
+---
+
+# 4. Critical R0 Fix — Dead/Zero Functional Effects
+
+The original cosine diagnostic had a dangerous edge case.
+
+For a zero vector, `F.normalize(0)` returns zero. Therefore two dead candidates could numerically appear to have cosine zero and be misread as "orthogonal/diverse".
+
+R0 fixes this by separating:
+
+```text
+EFFECT ACTIVITY
+from
+EFFECT DIVERSITY
+```
+
+Diagnostic activity rule:
+
+\[
+\boxed{
+\text{active}(\Delta)=\mathbf 1[\|\Delta\|_2>10^{-8}]
+}
+\]
+
+Functional pairwise cosine is defined only when **both** effects are active.
+
+If no active-active pair exists:
+
+```text
+cosine cell / summary = null
+```
+
+not numerical zero and not NaN.
+
+R0 also reports:
+
+- active candidate count/fraction;
+- dead candidate count/fraction;
+- dead-parent count/fraction;
+- valid cosine pair count;
+- possible pair count;
+- valid pair fraction.
+
+Effective rank convention:
+
+```text
+all-zero effect matrix        → rank = 0
+non-zero cloned effects       → rank ≈ 1
+four orthogonal active effects→ rank ≈ 4
+```
+
+This correction is essential because late-step `Δq` is very small in the current model.
+
+---
+
+# 5. Checkpoint Replay / Provenance Contract
+
+The analyzed CORE checkpoint is a legacy checkpoint and is **not fully self-describing**.
+
+R0 therefore records:
+
+```text
+source = legacy_checkpoint_plus_canonical_assumption
+fully_self_describing = false
+```
+
+State-dict-inferable fields:
+
+```text
+num_candidates = 4
+width = 256
+enable_claim_head = false
+enable_factor_head = false
+factor_dim = null
+```
+
+Canonical non-state-dict assumptions used for replay:
+
+```yaml
+max_steps: 3
+num_heads: 8
+lambda_z: 0.1
+query_cap: 0.5
+selector_temperature: 1.0
+```
+
+Resolved diagnostic retrieval dimension:
+
+```text
+retrieval_dim = 512
+```
+
+Deterministic diagnostic inference overrides:
+
+```text
+selector_gumbel_noise = false
+```
+
+This override is evaluation-only and explicitly reported. It is not treated as a claim about the training-time selector configuration.
+
+Future self-describing checkpoints can expose serialized model configuration; R0 prefers that path and cross-checks inferable fields against the state dict/backbone.
+
+---
+
+# 6. Primary R0 Checkpoint
+
+Checkpoint:
+
+```text
+outputs/2026-08-30/00-54-41/last.pt
+```
+
+Metadata:
+
+```text
+epoch = 5
+checkpoint metric = 26.6968262692
+backbone = qihoo360/fg-clip-base
+revision = 454d76372c2cf5eb48fa0d871fd0534481484d97
+precision = fp16
+protocol = fashioniq_original
+```
+
+This is **CORE-last e5**, not the earlier CORE-best e3 checkpoint.
+
+The earlier stored CORE trajectory was:
+
+```text
+epoch 1 MR = 25.315
+epoch 2 MR = 26.545
+epoch 3 MR = 27.258  ← earlier best
+epoch 4 MR = 27.006
+epoch 5 MR = 26.697  ← checkpoint analyzed by current R0
+```
+
+Therefore all new R0 numbers below must be labeled `CORE-last e5` unless the best e3 checkpoint is separately re-run through the patched R0 script.
+
+---
+
+# 7. Retrieval Results and Functional Controls
+
+## 7.1 Main retrieval
+
+| Control | Mean Recall | R@10 | R@50 |
 |---|---:|---:|---:|
-| t0 | 0.3581 | 0.9897 | 1.663 |
-| t1 | 0.0890 | 0.9444 | 2.339 |
-| t2 | 0.0216 | 0.6105 | 3.440 |
+| REFERENCE_ONLY | 14.8435 | 8.9576 | 20.7294 |
+| best SINGLE | 24.3948 | 16.0343 | 32.7553 |
+| FULL | **26.6968** | 17.8470 | 35.5466 |
+| MEAN-CANDIDATE | 26.6809 | 17.8984 | 35.4635 |
+| best REPEAT (`repeat_1`) | **26.9151** | 18.0337 | 35.7966 |
 
-At epoch 5:
-
-| timestep | mean `||Δq||` | pairwise Δq cosine | functional rank |
-|---|---:|---:|---:|
-| t0 | 0.3665 | 0.9923 | 1.595 |
-| t1 | 0.0825 | 0.9492 | 2.297 |
-| t2 | 0.0190 | 0.6056 | 3.440 |
-
-The t2 query effect is only about **6.0%** of t0 at epoch 3 and **5.2%** at epoch 5.
-
-Thus the recurrent state is changing, but the later edits are becoming weak in the final retrieval space.
-
-The third important observation is:
-
-> **The scorer progressively learns to STOP much earlier between epoch 3 and epoch 5.**
-
-| metric | epoch 3 | epoch 5 | delta |
-|---|---:|---:|---:|
-| mean executed edits | 2.682 | 2.195 | -0.486 |
-| STOP hazard t0 | 0.08% | 0.08% | 0.00% |
-| STOP hazard t1 | 3.38% | 9.83% | 6.45% |
-| STOP hazard t2 | 25.74% | 67.25% | 41.51% |
-
-This STOP behavior is probably **partly a rational response** to the weak late-step effects. It should not yet be treated as the root cause.
-
----
-
-# 2. Retrieval degradation from epoch 3 to epoch 5
-
-| metric | epoch 3 | epoch 5 | delta |
-|---|---:|---:|---:|
-| R@10 | 18.154 | 17.847 | -0.307 |
-| R@50 | 36.363 | 35.547 | -0.816 |
-| Mean Recall | 27.258 | 26.697 | -0.562 |
-
-The drop is real but modest: **0.562 Mean Recall points**.
-
-More important than the absolute drop is *where* it comes from.
-
-## 2.1 Reference representation does not degrade
-
-Reference-only retrieval actually improves:
-
-- epoch 3: **14.438**
-- epoch 5: **14.843**
-- delta: **+0.406**
-
-Therefore the degradation is not simply “FG-CLIP became worse everywhere”.
-
-A plausible interpretation is:
-
-> Continued fine-tuning improves the global reference/image representation while the composed edit trajectory becomes worse.
-
-This should be treated as an inference, not a proven causal statement.
-
-## 2.2 SINGLE edits remain relatively stable
-
-Best SINGLE:
-
-- epoch 3: **24.527**
-- epoch 5: **24.395**
-
-The degradation is much smaller than FULL.
-
-This indicates that the root-state edit itself has not catastrophically broken.
-
-## 2.3 Deeper/repeated behavior degrades more
-
-Best REPEAT:
-
-- epoch 3: **27.441**
-- epoch 5: **26.915**
-
-FULL:
-
-- epoch 3: **27.258**
-- epoch 5: **26.697**
-
-The candidate effects at t1/t2 also become smaller in query space.
-
-This points toward a **recurrent-composition / edit-trajectory issue**, not a simple first-edit failure.
-
----
-
-# 3. Primary structural failure: WHERE collapse
-
-The strongest diagnostic signal is the visual support similarity.
-
-## Epoch 3
-
-- support cosine: **0.999795**
-- support overlap: **0.995188**
-- support fraction: **7.37%**
-- effective support size: **13.95 / 196 tokens**
-
-## Epoch 5
-
-- support cosine: **0.999821**
-- support overlap: **0.995809**
-- support fraction: **8.32%**
-- effective support size: **15.78 / 196 tokens**
-
-This is not “all candidates attend to nearby but different regions”.
-
-Numerically, the support vectors are almost identical.
-
-The failure flag `grounding_clone=true` is therefore well-supported.
-
-### Important nuance
-
-Grounding is **not over-sparse**.
-
-It actually becomes broader between epoch 3 and epoch 5:
-
-- support fraction: 7.37% → 8.32%
-- entropy: 2.603 → 2.734
-- effective size: 13.95 → 15.78
-
-Therefore the problem is not “entmax became too sharp”.
-
-The problem is:
-
-> **all four candidates use almost the same sparse-ish support.**
-
----
-
-# 4. WHAT / context / edit similarity
-
-The four candidate pathways are already highly correlated before/through editing.
-
-At epoch 3, the global specialization matrices show approximately:
-
-- intent pairwise cosine: about **0.94–0.95**
-- context pairwise cosine: about **0.95–0.96**
-- delta-Z pairwise cosine: about **0.986–0.989**
-- support pairwise cosine: about **0.9997–0.9999**
-
-At epoch 5:
-
-- intent pairwise cosine remains about **0.94–0.95**
-- context cosine rises slightly to around **0.95–0.96**
-- delta-Z cosine rises to around **0.989–0.991**
-- support cosine remains essentially **1.0**
-
-Thus the network has four identities, but most of the visual/edit computation is highly redundant.
-
-The final `delta_q` vectors are less identical than `delta_z`, but that does not rescue the underlying token-level specialization.
-
----
-
-# 5. Recurrent attenuation
-
-One particularly important pattern is the rapid reduction in retrieval-space edit strength.
-
-## Epoch 3
+Useful ratios:
 
 ```text
-t0 ||Δq|| ≈ 0.3581
-t1 ||Δq|| ≈ 0.0890
-t2 ||Δq|| ≈ 0.0216
-```
-
-## Epoch 5
-
-```text
-t0 ||Δq|| ≈ 0.3665
-t1 ||Δq|| ≈ 0.0825
-t2 ||Δq|| ≈ 0.0190
-```
-
-Meanwhile `||ΔZ||` actually increases:
-
-- t0: 2.067 → 2.262
-- t1: 2.070 → 2.264
-- t2: 2.085 → 2.301
-
-So the editor is not becoming inactive in token space.
-
-Instead:
-
-> **large token-state edits produce progressively smaller retrieval-query changes at later timesteps.**
-
-This is a critical distinction.
-
-Possible mechanisms include saturation/cancellation in the readout, repeated edits along similar directions, normalization/capping effects, or the state reaching a region where additional local changes have weak retrieval-space leverage.
-
-The current diagnostics do not isolate which of those mechanisms is causal.
-
----
-
-# 6. STOP drift is secondary, not yet the root cause
-
-Epoch 3:
-
-```text
-STOP hazard: t0=0.08%,
-             t1=3.38%,
-             t2=25.74%
-
-mean executed edits = 2.682
-```
-
-Epoch 5:
-
-```text
-STOP hazard: t0=0.08%,
-             t1=9.83%,
-             t2=67.25%
-
-mean executed edits = 2.195
-```
-
-STOP clearly becomes much more aggressive.
-
-However, forced REPEAT only slightly outperforms FULL:
-
-- epoch 3: best REPEAT / FULL = **1.0067**
-- epoch 5: best REPEAT / FULL = **1.0082**
-
-Therefore there is not a large amount of hidden retrieval performance being destroyed solely by the STOP policy.
-
-The better interpretation is:
-
-> Later candidate consequences are becoming weak / redundant, and the scorer learns that stopping is often nearly as good.
-
----
-
-# 7. Candidate selection is not fully collapsed, but is drifting
-
-Conditional candidate distribution among executed edits:
-
-## Epoch 3
-
-```text
-candidate 0: 13.99%
-candidate 1: 28.07%
-candidate 2: 31.51%
-candidate 3: 26.43%
-```
-
-## Epoch 5
-
-```text
-candidate 0: 23.19%
-candidate 1: 40.82%
-candidate 2: 18.07%
-candidate 3: 17.92%
-```
-
-There is no hard monopoly, but candidate 1 rises from **28.07%** to **40.82%**.
-
-This should be watched in later runs.
-
----
-
-# 8. Why the core objective permits this failure
-
-Current core objective:
-
-```math
-L_core = L_terminal + 0.5 L_marginal
-```
-
-`L_terminal` asks the final composed query to retrieve the target.
-
-`L_marginal` asks the scorer to match target-derived marginal utility of candidate consequences.
-
-Neither objective directly requires:
-
-- different candidates to represent different semantic claims;
-- different candidates to ground to different or complementary visual regions;
-- different candidate token edits to have distinct functional effects;
-- the four candidate identities to form a meaningful decomposition.
-
-If all candidates discover nearly the same useful edit direction, both losses can still be optimized.
-
-This explains why:
-
-```text
-support cosine ≈ 1.0
-delta-Z cosine ≈ 0.99
-MEAN ≈ FULL
-REPEAT ≈ FULL
-```
-
-can coexist with a decreasing training loss.
-
-The core objective provides **utility supervision**, but almost no explicit **symmetry-breaking supervision**.
-
----
-
-# 9. Causal hypothesis to carry into the next experiments
-
-The most plausible current chain is:
-
-```text
-4 text queries
-    ↓
-highly similar intent representations
-    ↓
-almost identical anchor-grounding distributions
-    ↓
-almost identical grounded evidence
-    ↓
-highly similar contexts
-    ↓
-almost parallel token-level edits
-    ↓
-repeated same-direction edits
-    ↓
-later query-space effects attenuate strongly
-    ↓
-marginal utility of later edits becomes small
-    ↓
-scorer increasingly chooses STOP
-```
-
-This chain is a **diagnostic hypothesis**, not yet a proven causal graph.
-
-The next loss ablations should be designed to break specific links and see which metrics move.
-
----
-
-# 10. Recommended loss ablation order
-
-The following runs should initially use only **5 epochs**, because the baseline already exposes its trend by epoch 3–5.
-
-Keep all other variables identical:
-
-- same seed;
-- same backbone;
-- same optimizer;
-- same caption policy;
-- same protocol;
-- same K/Tmax;
-- same learning rate;
-- same precision.
-
-## Run A — `L_bind`
-
-Purpose:
-
-> Test whether forcing candidate intents to bind to candidate-specific claimed text semantics produces meaningful WHAT specialization and whether that propagates into WHERE.
-
-Command:
-
-```bash
-python src/train.py \
-  backbone=fgclip_base_full \
-  experiment=iag_srme_base_full \
-  experiment.epochs=5 \
-  objective=bind \
-  model.enable_claim_head=true \
-  hydra.run.dir=outputs/iag_srme_ablation_bind
-```
-
-Primary questions:
-
-1. Does pairwise intent cosine decrease?
-2. Does support cosine move away from ~1.0?
-3. Does delta-Z cosine decrease?
-4. Does t0 functional rank increase?
-5. Does FULL begin to outperform MEAN / REPEAT?
-
-This is the cleanest first ablation.
-
----
-
-## Run B — `L_comp`
-
-Purpose:
-
-> Test whether complementary claim allocation alone creates useful candidate decomposition.
-
-Command:
-
-```bash
-python src/train.py \
-  backbone=fgclip_base_full \
-  experiment=iag_srme_base_full \
-  experiment.epochs=5 \
-  objective=comp \
-  model.enable_claim_head=true \
-  hydra.run.dir=outputs/iag_srme_ablation_comp
+MEAN / FULL        = 0.999405
+best REPEAT / FULL = 1.008178
+best SINGLE / FULL = 0.913771
+REF / FULL         = 0.556002
 ```
 
 Interpretation:
 
-- If claim complementarity changes intents but grounding remains cloned, the bottleneck is downstream WHERE grounding.
-- If it does not even change intents/effects, complementary claims alone are not enough.
+```text
+FULL ≈ MEAN
+best REPEAT slightly > FULL
+```
+
+The gap is small and below the diagnostic `+2 Mean Recall` failure threshold, so the boolean `repeat_beats_full` flag remains false. Scientifically, however, the parity still matters: the dynamic policy has not demonstrated a clear retrieval advantage over repeatedly using one candidate identity.
 
 ---
 
-## Run C — `L_comp + L_bind`
+# 8. WHAT — Candidate Intent Geometry
 
-Purpose:
+Top-level pairwise intent cosine:
 
-> Test semantic partition + semantic binding together without adding factor losses.
+\[
+\boxed{
+\text{mean cosine}(e_i,e_j)=0.947236
+}
+\]
 
-Command:
-
-```bash
-python src/train.py \
-  backbone=fgclip_base_full \
-  experiment=iag_srme_base_full \
-  experiment.epochs=5 \
-  objective=core \
-  model.enable_claim_head=true \
-  objective.complementary_claim_weight=0.01 \
-  objective.binding_weight=0.01 \
-  hydra.run.dir=outputs/iag_srme_ablation_comp_bind
-```
-
-This is likely more meaningful than `L_comp` alone because complementarity without binding can in principle partition arbitrary claim mass.
-
----
-
-## Run D — `L_factor`
-
-Purpose:
-
-> Test whether candidate factors become jointly semantically complete relative to the auxiliary full-query anchor.
-
-Command:
-
-```bash
-python src/train.py \
-  backbone=fgclip_base_full \
-  experiment=iag_srme_base_full \
-  experiment.epochs=5 \
-  objective=factor \
-  model.enable_factor_head=true \
-  hydra.run.dir=outputs/iag_srme_ablation_factor
-```
-
-Important interpretation caveat:
-
-`L_factor` detaches its auxiliary anchor within the loss branch, but that anchor is recomputed from backbone representations that are jointly updated by the rest of training. Therefore it is not a globally fixed target across optimizer steps.
-
-Use the run as an ablation, but do not describe the semantic anchor as permanently fixed.
-
----
-
-# 11. Do NOT run `L_unique` yet with the current trainer
-
-Current `UniqueContributionLoss` is guarded by:
+Candidate intent norms are all approximately:
 
 ```text
-require_activity_weights_for_unique = true
-```
-
-and `train.py` / `train_one_epoch()` currently calls the objective without external `active_weights`.
-
-Therefore the current `objective=unique` path is expected to raise:
-
-```text
-L_unique requires externally justified activity weights
-```
-
-This is intentional.
-
-STOP is not equivalent to semantic factor inactivity.
-
-Do not disable this guard merely to make the run execute unless the experiment is explicitly defined as an all-active ablation.
-
-For the same reason, the current `six_loss_experimental` config is **not a canonical runnable next step** without resolving the activity-weight semantics.
-
----
-
-# 12. What success should look like
-
-Do not judge the next loss only by Mean Recall.
-
-The baseline tells us that retrieval can improve while candidate structure remains degenerate.
-
-A promising run should move several structural metrics simultaneously.
-
-## Strong positive signs
-
-### Grounding
-
-Baseline:
-
-```text
-support cosine ≈ 0.9998
-support overlap ≈ 0.995
-```
-
-Desired direction:
-
-```text
-support cosine ↓ substantially
-support overlap ↓ substantially
-```
-
-A value below ~0.98 would already be a major qualitative change from the current baseline.
-
-### Token-level edits
-
-Baseline global pairwise `delta_z` cosine is ~0.99.
-
-Desired:
-
-```text
-delta_z cosine ↓
-```
-
-### t0 functional diversity
-
-Baseline:
-
-- epoch 3 rank = **1.663**
-- epoch 5 rank = **1.595**
-
-Desired:
-
-```text
-rank clearly > 2
-t0 pairwise Δq cosine clearly < current ~0.99
-```
-
-### Policy usefulness
-
-Baseline:
-
-```text
-MEAN ≈ FULL
-best REPEAT ≳ FULL
-```
-
-A stronger factorized model should eventually show:
-
-```text
-FULL > MEAN
-FULL > any fixed REPEAT-k
-```
-
-because dynamic candidate choice should matter.
-
-### STOP
-
-STOP itself does not need to be rare.
-
-What matters is:
-
-- it should not collapse at t0;
-- it should correlate with truly low marginal utility;
-- FULL should outperform forced controls.
-
----
-
-# 13. Decision table after the next ablations
-
-## Case A
-
-```text
-intent diversity improves
-BUT support cosine remains ~1.0
-```
-
-Conclusion:
-
-> Text-side semantic specialization is working, but the anchor-grounding mechanism is collapsing distinct intents into the same WHERE.
-
-Next research target: grounding architecture / grounding objective.
-
----
-
-## Case B
-
-```text
-intent + support diversity improve
-BUT delta-Z remains ~parallel
-```
-
-Conclusion:
-
-> WHAT and WHERE differ, but the shared editor maps them to nearly the same edit direction.
-
-Next target: editor conditioning / functional specialization.
-
----
-
-## Case C
-
-```text
-support + delta-Z diversity improve
-BUT FULL ≈ MEAN ≈ REPEAT
-```
-
-Conclusion:
-
-> Candidates are representationally different but their differences are not functionally useful for retrieval, or the selector cannot exploit them.
-
-Next target: functional utility / scorer / trajectory credit.
-
----
-
-## Case D
-
-```text
-FULL beats MEAN/REPEAT
-AND structural diversity improves
-AND recall improves
-```
-
-Conclusion:
-
-> The auxiliary loss is creating genuine candidate specialization that the dynamic policy can exploit.
-
-This is the desired regime.
-
----
-
-## Case E
-
-```text
-all semantic auxiliary losses fail
-support cosine stays ~1.0
-delta-Z stays ~0.99
-```
-
-Conclusion:
-
-> Stop adding more semantic losses.
-
-At that point the failure is likely architectural: independent candidate grounding has no strong mechanism preventing all four queries from selecting the same region.
-
-The next research step should target WHERE competition / candidate-conditioned grounding structure rather than adding another weak regularizer.
-
----
-
-# 14. Baseline checkpoint table for future comparison
-
-| Metric | Core best e3 | Core last e5 |
-|---|---:|---:|
-| Mean Recall | 27.258 | 26.697 |
-| R@10 | 18.154 | 17.847 |
-| R@50 | 36.363 | 35.547 |
-| Reference-only | 14.438 | 14.843 |
-| Best SINGLE | 24.527 | 24.395 |
-| Best REPEAT | 27.441 | 26.915 |
-| MEAN candidate | 27.308 | 26.681 |
-| Support cosine | 0.999795 | 0.999821 |
-| Support overlap | 0.995188 | 0.995809 |
-| Support fraction | 7.37% | 8.32% |
-| t0 Δq cosine | 0.9897 | 0.9923 |
-| t0 effect rank | 1.663 | 1.595 |
-| t1 effect rank | 2.339 | 2.297 |
-| t2 effect rank | 3.440 | 3.440 |
-| Mean executed edits | 2.682 | 2.195 |
-| STOP hazard t2 | 25.74% | 67.25% |
-| Max candidate share | 31.51% | 40.82% |
-
----
-
-# 15. Current conclusion
-
-The core run demonstrates that the implementation can train and retrieve, but the intended four-way edit decomposition does **not emerge from terminal + marginal utility supervision alone**.
-
-The central structural signature is:
-
-```text
-four candidate identities
-        ↓
-almost identical visual supports
-        ↓
-almost parallel token edits
-        ↓
-weakly differentiated candidate consequences
-        ↓
-repeated edits become progressively less effective
-        ↓
-STOP becomes increasingly attractive
-```
-
-The immediate scientific question for the next experiments is therefore:
-
-> **Can semantic auxiliary losses break candidate symmetry strongly enough that different WHAT representations produce different WHERE groundings and functionally distinct edits?**
-
-The first recommended sequence is:
-
-```text
-CORE baseline
-→ BIND
-→ COMP
-→ COMP+BIND
-→ FACTOR
-```
-
-Do not jump directly to the full six-loss objective. Individual ablations are necessary to identify which supervision actually changes the failure signature.
-# CIR IAG-SRME — Core Baseline Diagnostic
-## Epoch 3 Best vs Epoch 5 Last
-
-**Date:** 2026-08-30  
-**Method:** IAG-SRME, FG-CLIP Base, K=4, Tmax=3, d=256  
-**Training objective:** `L_terminal + 0.5 L_marginal` (`objective=core`)  
-**Dataset / protocol:** FashionIQ val, `fashioniq_original`, `ordered_and`  
-**Best checkpoint:** epoch 3, Mean Recall = 27.258  
-**Last checkpoint:** epoch 5, Mean Recall = 26.697
-
----
-
-# 1. Executive diagnosis
-
-The run is **not failing because of numerical instability, a single-candidate monopoly, or immediate STOP collapse**.
-
-The strongest structural failure is:
-
-> **The four candidates have effectively identical visual grounding.**
-
-At epoch 3:
-
-- pairwise support cosine = **0.999795**
-- pairwise support overlap = **0.995188**
-
-At epoch 5:
-
-- pairwise support cosine = **0.999821**
-- pairwise support overlap = **0.995809**
-
-So all four learnable edit queries are essentially looking at the **same visual region distribution**.
-
-This is already present at the best checkpoint and therefore is not merely a consequence of over-training from epoch 3 to epoch 5. It is a structural failure mode of the core objective.
-
-The second major failure is:
-
-> **Candidate edits become increasingly similar at the first recurrent step, while later recurrent edits have rapidly diminishing effect on the final retrieval query.**
-
-At epoch 3:
-
-| timestep | mean `||Δq||` | pairwise Δq cosine | functional rank |
-|---|---:|---:|---:|
-| t0 | 0.3581 | 0.9897 | 1.663 |
-| t1 | 0.0890 | 0.9444 | 2.339 |
-| t2 | 0.0216 | 0.6105 | 3.440 |
-
-At epoch 5:
-
-| timestep | mean `||Δq||` | pairwise Δq cosine | functional rank |
-|---|---:|---:|---:|
-| t0 | 0.3665 | 0.9923 | 1.595 |
-| t1 | 0.0825 | 0.9492 | 2.297 |
-| t2 | 0.0190 | 0.6056 | 3.440 |
-
-The t2 query effect is only about **6.0%** of t0 at epoch 3 and **5.2%** at epoch 5.
-
-Thus the recurrent state is changing, but the later edits are becoming weak in the final retrieval space.
-
-The third important observation is:
-
-> **The scorer progressively learns to STOP much earlier between epoch 3 and epoch 5.**
-
-| metric | epoch 3 | epoch 5 | delta |
-|---|---:|---:|---:|
-| mean executed edits | 2.682 | 2.195 | -0.486 |
-| STOP hazard t0 | 0.08% | 0.08% | 0.00% |
-| STOP hazard t1 | 3.38% | 9.83% | 6.45% |
-| STOP hazard t2 | 25.74% | 67.25% | 41.51% |
-
-This STOP behavior is probably **partly a rational response** to the weak late-step effects. It should not yet be treated as the root cause.
-
----
-
-# 2. Retrieval degradation from epoch 3 to epoch 5
-
-| metric | epoch 3 | epoch 5 | delta |
-|---|---:|---:|---:|
-| R@10 | 18.154 | 17.847 | -0.307 |
-| R@50 | 36.363 | 35.547 | -0.816 |
-| Mean Recall | 27.258 | 26.697 | -0.562 |
-
-The drop is real but modest: **0.562 Mean Recall points**.
-
-More important than the absolute drop is *where* it comes from.
-
-## 2.1 Reference representation does not degrade
-
-Reference-only retrieval actually improves:
-
-- epoch 3: **14.438**
-- epoch 5: **14.843**
-- delta: **+0.406**
-
-Therefore the degradation is not simply “FG-CLIP became worse everywhere”.
-
-A plausible interpretation is:
-
-> Continued fine-tuning improves the global reference/image representation while the composed edit trajectory becomes worse.
-
-This should be treated as an inference, not a proven causal statement.
-
-## 2.2 SINGLE edits remain relatively stable
-
-Best SINGLE:
-
-- epoch 3: **24.527**
-- epoch 5: **24.395**
-
-The degradation is much smaller than FULL.
-
-This indicates that the root-state edit itself has not catastrophically broken.
-
-## 2.3 Deeper/repeated behavior degrades more
-
-Best REPEAT:
-
-- epoch 3: **27.441**
-- epoch 5: **26.915**
-
-FULL:
-
-- epoch 3: **27.258**
-- epoch 5: **26.697**
-
-The candidate effects at t1/t2 also become smaller in query space.
-
-This points toward a **recurrent-composition / edit-trajectory issue**, not a simple first-edit failure.
-
----
-
-# 3. Primary structural failure: WHERE collapse
-
-The strongest diagnostic signal is the visual support similarity.
-
-## Epoch 3
-
-- support cosine: **0.999795**
-- support overlap: **0.995188**
-- support fraction: **7.37%**
-- effective support size: **13.95 / 196 tokens**
-
-## Epoch 5
-
-- support cosine: **0.999821**
-- support overlap: **0.995809**
-- support fraction: **8.32%**
-- effective support size: **15.78 / 196 tokens**
-
-This is not “all candidates attend to nearby but different regions”.
-
-Numerically, the support vectors are almost identical.
-
-The failure flag `grounding_clone=true` is therefore well-supported.
-
-### Important nuance
-
-Grounding is **not over-sparse**.
-
-It actually becomes broader between epoch 3 and epoch 5:
-
-- support fraction: 7.37% → 8.32%
-- entropy: 2.603 → 2.734
-- effective size: 13.95 → 15.78
-
-Therefore the problem is not “entmax became too sharp”.
-
-The problem is:
-
-> **all four candidates use almost the same sparse-ish support.**
-
----
-
-# 4. WHAT / context / edit similarity
-
-The four candidate pathways are already highly correlated before/through editing.
-
-At epoch 3, the global specialization matrices show approximately:
-
-- intent pairwise cosine: about **0.94–0.95**
-- context pairwise cosine: about **0.95–0.96**
-- delta-Z pairwise cosine: about **0.986–0.989**
-- support pairwise cosine: about **0.9997–0.9999**
-
-At epoch 5:
-
-- intent pairwise cosine remains about **0.94–0.95**
-- context cosine rises slightly to around **0.95–0.96**
-- delta-Z cosine rises to around **0.989–0.991**
-- support cosine remains essentially **1.0**
-
-Thus the network has four identities, but most of the visual/edit computation is highly redundant.
-
-The final `delta_q` vectors are less identical than `delta_z`, but that does not rescue the underlying token-level specialization.
-
----
-
-# 5. Recurrent attenuation
-
-One particularly important pattern is the rapid reduction in retrieval-space edit strength.
-
-## Epoch 3
-
-```text
-t0 ||Δq|| ≈ 0.3581
-t1 ||Δq|| ≈ 0.0890
-t2 ||Δq|| ≈ 0.0216
-```
-
-## Epoch 5
-
-```text
-t0 ||Δq|| ≈ 0.3665
-t1 ||Δq|| ≈ 0.0825
-t2 ||Δq|| ≈ 0.0190
-```
-
-Meanwhile `||ΔZ||` actually increases:
-
-- t0: 2.067 → 2.262
-- t1: 2.070 → 2.264
-- t2: 2.085 → 2.301
-
-So the editor is not becoming inactive in token space.
-
-Instead:
-
-> **large token-state edits produce progressively smaller retrieval-query changes at later timesteps.**
-
-This is a critical distinction.
-
-Possible mechanisms include saturation/cancellation in the readout, repeated edits along similar directions, normalization/capping effects, or the state reaching a region where additional local changes have weak retrieval-space leverage.
-
-The current diagnostics do not isolate which of those mechanisms is causal.
-
----
-
-# 6. STOP drift is secondary, not yet the root cause
-
-Epoch 3:
-
-```text
-STOP hazard: t0=0.08%,
-             t1=3.38%,
-             t2=25.74%
-
-mean executed edits = 2.682
-```
-
-Epoch 5:
-
-```text
-STOP hazard: t0=0.08%,
-             t1=9.83%,
-             t2=67.25%
-
-mean executed edits = 2.195
-```
-
-STOP clearly becomes much more aggressive.
-
-However, forced REPEAT only slightly outperforms FULL:
-
-- epoch 3: best REPEAT / FULL = **1.0067**
-- epoch 5: best REPEAT / FULL = **1.0082**
-
-Therefore there is not a large amount of hidden retrieval performance being destroyed solely by the STOP policy.
-
-The better interpretation is:
-
-> Later candidate consequences are becoming weak / redundant, and the scorer learns that stopping is often nearly as good.
-
----
-
-# 7. Candidate selection is not fully collapsed, but is drifting
-
-Conditional candidate distribution among executed edits:
-
-## Epoch 3
-
-```text
-candidate 0: 13.99%
-candidate 1: 28.07%
-candidate 2: 31.51%
-candidate 3: 26.43%
-```
-
-## Epoch 5
-
-```text
-candidate 0: 23.19%
-candidate 1: 40.82%
-candidate 2: 18.07%
-candidate 3: 17.92%
-```
-
-There is no hard monopoly, but candidate 1 rises from **28.07%** to **40.82%**.
-
-This should be watched in later runs.
-
----
-
-# 8. Why the core objective permits this failure
-
-Current core objective:
-
-```math
-L_core = L_terminal + 0.5 L_marginal
-```
-
-`L_terminal` asks the final composed query to retrieve the target.
-
-`L_marginal` asks the scorer to match target-derived marginal utility of candidate consequences.
-
-Neither objective directly requires:
-
-- different candidates to represent different semantic claims;
-- different candidates to ground to different or complementary visual regions;
-- different candidate token edits to have distinct functional effects;
-- the four candidate identities to form a meaningful decomposition.
-
-If all candidates discover nearly the same useful edit direction, both losses can still be optimized.
-
-This explains why:
-
-```text
-support cosine ≈ 1.0
-delta-Z cosine ≈ 0.99
-MEAN ≈ FULL
-REPEAT ≈ FULL
-```
-
-can coexist with a decreasing training loss.
-
-The core objective provides **utility supervision**, but almost no explicit **symmetry-breaking supervision**.
-
----
-
-# 9. Causal hypothesis to carry into the next experiments
-
-The most plausible current chain is:
-
-```text
-4 text queries
-    ↓
-highly similar intent representations
-    ↓
-almost identical anchor-grounding distributions
-    ↓
-almost identical grounded evidence
-    ↓
-highly similar contexts
-    ↓
-almost parallel token-level edits
-    ↓
-repeated same-direction edits
-    ↓
-later query-space effects attenuate strongly
-    ↓
-marginal utility of later edits becomes small
-    ↓
-scorer increasingly chooses STOP
-```
-
-This chain is a **diagnostic hypothesis**, not yet a proven causal graph.
-
-The next loss ablations should be designed to break specific links and see which metrics move.
-
----
-
-# 10. Recommended loss ablation order
-
-The following runs should initially use only **5 epochs**, because the baseline already exposes its trend by epoch 3–5.
-
-Keep all other variables identical:
-
-- same seed;
-- same backbone;
-- same optimizer;
-- same caption policy;
-- same protocol;
-- same K/Tmax;
-- same learning rate;
-- same precision.
-
-## Run A — `L_bind`
-
-Purpose:
-
-> Test whether forcing candidate intents to bind to candidate-specific claimed text semantics produces meaningful WHAT specialization and whether that propagates into WHERE.
-
-Command:
-
-```bash
-python src/train.py \
-  backbone=fgclip_base_full \
-  experiment=iag_srme_base_full \
-  experiment.epochs=5 \
-  objective=bind \
-  model.enable_claim_head=true \
-  hydra.run.dir=outputs/iag_srme_ablation_bind
-```
-
-Primary questions:
-
-1. Does pairwise intent cosine decrease?
-2. Does support cosine move away from ~1.0?
-3. Does delta-Z cosine decrease?
-4. Does t0 functional rank increase?
-5. Does FULL begin to outperform MEAN / REPEAT?
-
-This is the cleanest first ablation.
-
----
-
-## Run B — `L_comp`
-
-Purpose:
-
-> Test whether complementary claim allocation alone creates useful candidate decomposition.
-
-Command:
-
-```bash
-python src/train.py \
-  backbone=fgclip_base_full \
-  experiment=iag_srme_base_full \
-  experiment.epochs=5 \
-  objective=comp \
-  model.enable_claim_head=true \
-  hydra.run.dir=outputs/iag_srme_ablation_comp
+15.9930
+15.9931
+15.9928
+15.9926
 ```
 
 Interpretation:
 
-- If claim complementarity changes intents but grounding remains cloned, the bottleneck is downstream WHERE grounding.
-- If it does not even change intents/effects, complementary claims alone are not enough.
+- the four candidate identities are not numerically identical;
+- but they remain highly correlated in text-intent space;
+- R0 does not interpret intent cosine alone as semantic correctness or failure.
+
+The important question is whether any existing WHAT difference survives the next mapping into WHERE.
 
 ---
 
-## Run C — `L_comp + L_bind`
+# 9. WHERE — Grounding Collapse
 
-Purpose:
+Top-level grounding diagnostics:
 
-> Test semantic partition + semantic binding together without adding factor losses.
+| Metric | CORE-last e5 |
+|---|---:|
+| Pairwise support cosine | **0.999821** |
+| Pairwise support probability overlap | **0.995809** |
+| Support fraction | 0.083240 = 8.32% |
+| Support effective size | 15.782 / 196 tokens |
+| Support entropy | 2.73393 |
+| Dominant tokenwise grounding mass share | 0.25194 |
+| Support recomputed each timestep | **false** |
+| Support static by current architecture | **true** |
 
-Command:
+Therefore:
 
-```bash
-python src/train.py \
-  backbone=fgclip_base_full \
-  experiment=iag_srme_base_full \
-  experiment.epochs=5 \
-  objective=core \
-  model.enable_claim_head=true \
-  objective.complementary_claim_weight=0.01 \
-  objective.binding_weight=0.01 \
-  hydra.run.dir=outputs/iag_srme_ablation_comp_bind
+\[
+\boxed{
+P_1\approx P_2\approx P_3\approx P_4
+}
+\]
+
+This is **not** simply an over-diffuse or over-sparse grounding problem.
+
+The supports are relatively sparse/localized, but all four candidates choose almost the **same** sparse-ish region distribution.
+
+The R0 failure flag:
+
+```text
+high_support_similarity = true
 ```
 
-This is likely more meaningful than `L_comp` alone because complementarity without binding can in principle partition arbitrary claim mass.
+is therefore strongly supported by the measurements.
 
 ---
 
-## Run D — `L_factor`
+# 10. Context and Token-Edit Collapse
 
-Purpose:
+Aggregate context off-diagonal cosine is approximately:
 
-> Test whether candidate factors become jointly semantically complete relative to the auxiliary full-query anchor.
-
-Command:
-
-```bash
-python src/train.py \
-  backbone=fgclip_base_full \
-  experiment=iag_srme_base_full \
-  experiment.epochs=5 \
-  objective=factor \
-  model.enable_factor_head=true \
-  hydra.run.dir=outputs/iag_srme_ablation_factor
+```text
+~0.959–0.961
 ```
 
-Important interpretation caveat:
+Aggregate token-effect `ΔZ` off-diagonal cosine:
 
-`L_factor` detaches its auxiliary anchor within the loss branch, but that anchor is recomputed from backbone representations that are jointly updated by the rest of training. Therefore it is not a globally fixed target across optimizer steps.
+\[
+\boxed{0.990194}
+\]
 
-Use the run as an ablation, but do not describe the semantic anchor as permanently fixed.
+Per timestep:
+
+| Step | mean `||ΔZ||` | `ΔZ` cosine | `ΔZ` effective rank |
+|---:|---:|---:|---:|
+| t0 | 2.26185 | 0.99005 | 1.6670 |
+| t1 | 2.26359 | 0.99007 | 1.6663 |
+| t2 | 2.30105 | 0.99050 | 1.6553 |
+
+All `ΔZ` candidates are active under the R0 `1e-8` activity convention.
+
+The key observation is:
+
+```text
+ΔZ magnitude does NOT decay with timestep.
+```
+
+In fact it stays near 2.26 and slightly increases by t2.
+
+So the editor is still making large token-state modifications; the recurrent failure is not simply "the editor stops editing".
 
 ---
 
-# 11. Do NOT run `L_unique` yet with the current trainer
-
-Current `UniqueContributionLoss` is guarded by:
-
-```text
-require_activity_weights_for_unique = true
-```
-
-and `train.py` / `train_one_epoch()` currently calls the objective without external `active_weights`.
-
-Therefore the current `objective=unique` path is expected to raise:
-
-```text
-L_unique requires externally justified activity weights
-```
-
-This is intentional.
-
-STOP is not equivalent to semantic factor inactivity.
-
-Do not disable this guard merely to make the run execute unless the experiment is explicitly defined as an all-active ablation.
-
-For the same reason, the current `six_loss_experimental` config is **not a canonical runnable next step** without resolving the activity-weight semantics.
-
----
-
-# 12. What success should look like
-
-Do not judge the next loss only by Mean Recall.
-
-The baseline tells us that retrieval can improve while candidate structure remains degenerate.
-
-A promising run should move several structural metrics simultaneously.
-
-## Strong positive signs
-
-### Grounding
-
-Baseline:
-
-```text
-support cosine ≈ 0.9998
-support overlap ≈ 0.995
-```
-
-Desired direction:
-
-```text
-support cosine ↓ substantially
-support overlap ↓ substantially
-```
-
-A value below ~0.98 would already be a major qualitative change from the current baseline.
-
-### Token-level edits
-
-Baseline global pairwise `delta_z` cosine is ~0.99.
-
-Desired:
-
-```text
-delta_z cosine ↓
-```
-
-### t0 functional diversity
-
-Baseline:
-
-- epoch 3 rank = **1.663**
-- epoch 5 rank = **1.595**
-
-Desired:
-
-```text
-rank clearly > 2
-t0 pairwise Δq cosine clearly < current ~0.99
-```
-
-### Policy usefulness
-
-Baseline:
-
-```text
-MEAN ≈ FULL
-best REPEAT ≳ FULL
-```
-
-A stronger factorized model should eventually show:
-
-```text
-FULL > MEAN
-FULL > any fixed REPEAT-k
-```
-
-because dynamic candidate choice should matter.
-
-### STOP
-
-STOP itself does not need to be rare.
-
-What matters is:
-
-- it should not collapse at t0;
-- it should correlate with truly low marginal utility;
-- FULL should outperform forced controls.
-
----
-
-# 13. Decision table after the next ablations
-
-## Case A
-
-```text
-intent diversity improves
-BUT support cosine remains ~1.0
-```
-
-Conclusion:
-
-> Text-side semantic specialization is working, but the anchor-grounding mechanism is collapsing distinct intents into the same WHERE.
-
-Next research target: grounding architecture / grounding objective.
-
----
-
-## Case B
-
-```text
-intent + support diversity improve
-BUT delta-Z remains ~parallel
-```
-
-Conclusion:
-
-> WHAT and WHERE differ, but the shared editor maps them to nearly the same edit direction.
-
-Next target: editor conditioning / functional specialization.
-
----
-
-## Case C
-
-```text
-support + delta-Z diversity improve
-BUT FULL ≈ MEAN ≈ REPEAT
-```
-
-Conclusion:
-
-> Candidates are representationally different but their differences are not functionally useful for retrieval, or the selector cannot exploit them.
-
-Next target: functional utility / scorer / trajectory credit.
-
----
-
-## Case D
-
-```text
-FULL beats MEAN/REPEAT
-AND structural diversity improves
-AND recall improves
-```
-
-Conclusion:
-
-> The auxiliary loss is creating genuine candidate specialization that the dynamic policy can exploit.
-
-This is the desired regime.
-
----
-
-## Case E
-
-```text
-all semantic auxiliary losses fail
-support cosine stays ~1.0
-delta-Z stays ~0.99
-```
-
-Conclusion:
-
-> Stop adding more semantic losses.
-
-At that point the failure is likely architectural: independent candidate grounding has no strong mechanism preventing all four queries from selecting the same region.
-
-The next research step should target WHERE competition / candidate-conditioned grounding structure rather than adding another weak regularizer.
-
----
-
-# 14. Baseline checkpoint table for future comparison
-
-| Metric | Core best e3 | Core last e5 |
-|---|---:|---:|
-| Mean Recall | 27.258 | 26.697 |
-| R@10 | 18.154 | 17.847 |
-| R@50 | 36.363 | 35.547 |
-| Reference-only | 14.438 | 14.843 |
-| Best SINGLE | 24.527 | 24.395 |
-| Best REPEAT | 27.441 | 26.915 |
-| MEAN candidate | 27.308 | 26.681 |
-| Support cosine | 0.999795 | 0.999821 |
-| Support overlap | 0.995188 | 0.995809 |
-| Support fraction | 7.37% | 8.32% |
-| t0 Δq cosine | 0.9897 | 0.9923 |
-| t0 effect rank | 1.663 | 1.595 |
-| t1 effect rank | 2.339 | 2.297 |
-| t2 effect rank | 3.440 | 3.440 |
-| Mean executed edits | 2.682 | 2.195 |
-| STOP hazard t2 | 25.74% | 67.25% |
-| Max candidate share | 31.51% | 40.82% |
-
----
-
-# 15. Current conclusion
-
-The core run demonstrates that the implementation can train and retrieve, but the intended four-way edit decomposition does **not emerge from terminal + marginal utility supervision alone**.
-
-The central structural signature is:
-
-```text
-four candidate identities
-        ↓
-almost identical visual supports
-        ↓
-almost parallel token edits
-        ↓
-weakly differentiated candidate consequences
-        ↓
-repeated edits become progressively less effective
-        ↓
-STOP becomes increasingly attractive
-```
-
-The immediate scientific question for the next experiments is therefore:
-
-> **Can semantic auxiliary losses break candidate symmetry strongly enough that different WHAT representations produce different WHERE groundings and functionally distinct edits?**
-
-The first recommended sequence is:
-
-```text
-CORE baseline
-→ BIND
-→ COMP
-→ COMP+BIND
-→ FACTOR
-```
-
-Do not jump directly to the full six-loss objective. Individual ablations are necessary to identify which supervision actually changes the failure signature.
-
----
-
-# 16. BIND ablation diagnostic — first structural test
-
-**Experiment:** `objective=bind`, `model.enable_claim_head=true`  
-**Objective:**
-
-```math
-L = L_terminal + 0.5 L_marginal + 0.01 L_bind
-```
-
-**Checkpoint analyzed:** epoch 3 best  
-**Mean Recall:** **27.582**
-
-This should be compared against the core baseline best checkpoint at epoch 3, not the degraded epoch-5 checkpoint, because both best checkpoints occur at epoch 3.
-
-## 16.1 Retrieval result
-
-| metric | CORE e3 | BIND e3 | delta |
-|---|---:|---:|---:|
-| R@10 | 18.154 | 18.411 | +0.257 |
-| R@50 | 36.363 | 36.753 | +0.390 |
-| Mean Recall | 27.258 | 27.582 | **+0.324** |
-
-`L_bind` gives a **small positive retrieval gain of +0.324 Mean Recall**.
-
-This is useful evidence that the binding signal is not obviously destructive, but the gain is too small to claim that the decomposition problem is solved.
-
----
-
-# 17. Did BIND solve WHAT specialization?
-
-Only partially.
-
-| diagnostic | CORE e3 | BIND e3 | direction |
-|---|---:|---:|---|
-| pairwise intent cosine | 0.9476 | 0.9423 | ↓ 0.0053 |
-| pairwise context cosine | 0.9549 | 0.9399 | ↓ 0.0150 |
-| pairwise delta-Z cosine | 0.9877 | 0.9838 | ↓ 0.0039 |
-| pairwise delta-q cosine | 0.8510 | 0.8420 | ↓ 0.0090 |
-
-So BIND does move the representation in the intended direction:
-
-```text
-intent slightly less similar
-→ context somewhat less similar
-→ delta-Z slightly less similar
-→ delta-q slightly less similar
-```
-
-However, the changes are modest.
-
-The four intent vectors are still highly correlated:
-
-```text
-CORE: 0.9476
-BIND: 0.9423
-```
-
-Thus `L_bind` creates **weak semantic symmetry breaking**, not a clean four-way decomposition.
-
----
-
-# 18. Did BIND solve WHERE grounding collapse?
-
-**No. This is the most important result of the ablation.**
-
-| grounding diagnostic | CORE e3 | BIND e3 |
-|---|---:|---:|
-| pairwise support cosine | 0.999795 | 0.999372 |
-| pairwise support overlap | 0.995188 | 0.989260 |
-| support fraction | 7.37% | **25.17%** |
-| effective support size | 13.95 | **47.19** |
-
-BIND substantially changes **how broad** grounding is:
-
-```text
-support fraction: 7.37% → 25.17%
-effective size:   13.95 → 47.19 tokens
-```
-
-but does almost nothing to make the four candidates look at different regions:
-
-```text
-support cosine:  0.999795
-              →  0.999372
-
-support overlap: 0.995188
-              →  0.989260
-```
-
-The four support maps remain essentially clones.
-
-This is stronger evidence for the following diagnosis:
-
-> **The current bottleneck is not merely that the text queries lack semantic differentiation. Even after BIND makes intents/contexts somewhat more distinct, the anchor grounder still maps them to almost the same visual support.**
-
-Therefore BIND alone does **not** solve WHERE specialization.
-
----
-
-# 19. BIND changes edit magnitude more than edit direction
-
-At t0:
-
-| diagnostic | CORE e3 | BIND e3 |
-|---|---:|---:|
-| mean `||ΔZ||` | 2.067 | **3.581** |
-| mean `||Δq||` | 0.3581 | 0.3526 |
-| pairwise Δq cosine | 0.9897 | 0.9871 |
-| functional rank | 1.663 | 1.736 |
-
-The token-space edit norm jumps strongly:
-
-```text
-||ΔZ||: 2.067 → 3.581
-```
-
-while the final retrieval-space effect norm barely changes:
-
-```text
-||Δq||: 0.3581 → 0.3526
-```
-
-This means BIND causes the editor to make **larger token-state modifications**, but those larger modifications are not translated proportionally into more useful or more distinct retrieval-space consequences.
-
-This reinforces the earlier recurrent/readout concern.
-
----
-
-# 20. Recurrent attenuation still exists under BIND
-
-BIND checkpoint:
-
-| timestep | mean `||Δq||` | pairwise Δq cosine | effect rank |
-|---|---:|---:|---:|
-| t0 | 0.3526 | 0.9871 | 1.736 |
-| t1 | 0.0930 | 0.9350 | 2.422 |
-| t2 | 0.0246 | 0.5982 | 3.438 |
-
-t2 has only about:
-
-```text
-7.0% of the t0 Δq norm
-```
-
-So the core failure:
-
-```text
-strong first edit
-→ weak later retrieval-space effects
-```
-
-is still present.
-
-BIND does not fix recurrent attenuation.
-
----
-
-# 21. STOP behavior improves, but repeated-action behavior becomes even stronger
-
-| diagnostic | CORE e3 | BIND e3 |
-|---|---:|---:|
-| mean executed edits | 2.682 | 2.849 |
-| STOP hazard t1 | 3.38% | 2.25% |
-| STOP hazard t2 | 25.74% | **10.27%** |
-| repeated-candidate fraction | 90.99% | **95.40%** |
-| max candidate share | 31.51% | 29.78% |
-
-BIND strongly reduces premature STOP:
-
-```text
-t2 STOP hazard:
-25.74%
-→ 10.27%
-```
-
-and increases average edit count.
-
-However, **95.40% of validation queries repeat at least one candidate identity**.
-
-This is even higher than the core baseline.
-
-So the network is not using the extra trajectory depth to compose clearly distinct candidate actions. It is frequently applying the same identity again.
-
-This is consistent with the support maps still being clones.
-
----
-
-# 22. FULL still does not exploit dynamic candidate specialization
-
-| control | CORE e3 | BIND e3 |
-|---|---:|---:|
-| FULL | 27.258 | 27.582 |
-| MEAN | 27.308 | 27.666 |
-| best REPEAT | 27.441 | 27.708 |
-
-For BIND:
-
-```text
-FULL        = 27.582
-MEAN        = 27.666
-best REPEAT = 27.708
-```
+# 11. Retrieval-Space Functional Effects — The Strongest R0 Result
+
+Per-timestep same-parent `Δq` diagnostics:
+
+| Step | mean `||Δq||` | pairwise `Δq` cosine | effective rank | active fraction |
+|---:|---:|---:|---:|---:|
+| t0 | **0.366457** | **0.992265** | 1.5953 | 1.0 |
+| t1 | **0.082489** | 0.949220 | 2.2972 | 1.0 |
+| t2 | **0.018950** | 0.605588 | 3.4397 | 1.0 |
+
+Late-step retention:
+
+\[
+\frac{\mathbb E\|\Delta q_1\|}{\mathbb E\|\Delta q_0\|}
+=0.22510
+\]
+
+\[
+\frac{\mathbb E\|\Delta q_2\|}{\mathbb E\|\Delta q_0\|}
+=0.05171
+\]
+
+\[
+\frac{\mathbb E\|\Delta q_2\|}{\mathbb E\|\Delta q_1\|}
+=0.22973
+\]
 
 So:
 
 ```text
-MEAN > FULL by +0.084
-best REPEAT > FULL by +0.126
+0.3665 → 0.0825 → 0.0190
 ```
 
-The gaps are small, but the qualitative result remains unchanged:
+or approximately:
 
-> **Dynamic candidate selection still provides no measurable advantage over a mean candidate or repeatedly applying one fixed candidate.**
+```text
+t1 keeps 22.5% of t0 magnitude
+t2 keeps  5.17% of t0 magnitude
+```
 
-Therefore BIND improves retrieval slightly without demonstrating that the intended multi-candidate mechanism has become functionally necessary.
+This is the critical R0 distinction:
+
+```text
+Token-space effect:
+||ΔZ|| ≈ 2.26 → 2.26 → 2.30
+
+Retrieval-space effect:
+||Δq|| ≈ 0.366 → 0.082 → 0.019
+```
+
+Therefore:
+
+\[
+\boxed{
+\text{token edits remain large while retrieval consequences attenuate dramatically}
+}
+\]
 
 ---
 
-# 23. Updated causal interpretation after BIND
+# 12. Why Late Effective Rank Must Not Be Read Naively
 
-The CORE-only hypothesis was:
-
-```text
-similar WHAT
-→ cloned WHERE
-→ parallel edits
-→ weak later effects
-→ STOP
-```
-
-BIND gives us a stronger localization of the failure.
-
-Observed under BIND:
+At first glance:
 
 ```text
-WHAT becomes somewhat more distinct       ✅
-context becomes somewhat more distinct    ✅
-WHERE is still almost identical           ❌
-delta-Z remains highly parallel            ❌
-FULL still ≈ MEAN ≈ REPEAT                 ❌
+Δq cosine: 0.992 → 0.949 → 0.606
+rank:      1.595 → 2.297 → 3.440
 ```
 
-Therefore the updated hypothesis is:
+looks like candidate specialization improves over time.
+
+But simultaneously:
 
 ```text
-BIND
-  ↓
-partial text/semantic symmetry breaking
-  ↓
-AnchorGrounder collapses the distinct signals
-into nearly the same spatial distribution
-  ↓
-Grounded evidence remains largely shared
-  ↓
-Shared editor still produces near-parallel token edits
-  ↓
-multi-candidate policy has little functional reason to specialize
+||Δq||: 0.366 → 0.082 → 0.019
 ```
 
-The new evidence shifts suspicion **more strongly toward the WHERE/grounding interface**.
+Thus the model enters a regime where:
+
+```text
+strong effects are highly cloned
+while
+more diverse-looking effects are much weaker
+```
+
+R0 does not call t2 "dead" because `1e-8` is only a numerical activity floor, and all candidates remain above it. But the magnitude retention shows that t2 has very little retrieval leverage compared with t0.
+
+Therefore the correct reading is:
+
+> **The rise in late-step effective rank is not evidence that sequential specialization is healthy. It occurs while functional effect energy collapses.**
 
 ---
 
-# 24. Decision on BIND
+# 13. Selected-Path Target-Similarity Improvement
 
-## What BIND achieved
+For the actually executed non-STOP action:
 
-- Mean Recall: **+0.324**
-- intent cosine decreases slightly;
-- context cosine decreases more clearly;
-- t0 functional rank improves from 1.663 → 1.736;
-- candidate selection becomes slightly more balanced;
-- STOP becomes less aggressive.
+| Step | Mean target cosine improvement | Median | Selected non-STOP count |
+|---:|---:|---:|---:|
+| t0 | **+0.066652** | +0.069516 | 6011 |
+| t1 | **+0.008443** | +0.009022 | 5420 |
+| t2 | **+0.001166** | +0.001225 | 1775 |
 
-## What BIND did not achieve
+This is an especially important R0 result.
 
-- support maps are still clones;
-- support overlap remains ~0.99;
-- delta-Z directions remain highly correlated;
-- t0 candidate effects remain almost parallel;
-- recurrent attenuation remains;
-- repeated candidate selection rises to 95.40%;
-- MEAN and fixed REPEAT still match/beat FULL.
-
-## Verdict
+The actual chosen action's average target-relative improvement falls roughly as:
 
 ```text
-L_bind = mildly useful auxiliary signal
-       ≠ solution to candidate decomposition
++0.0667
+   ↓ ~8×
++0.00844
+   ↓ ~7×
++0.00117
 ```
 
-It should be retained as a promising semantic signal for later combinations, but **BIND alone does not solve the central structural failure**.
+Yet `||ΔZ||` remains large.
+
+This reinforces the same conclusion from `Δq`:
+
+> **Later edits still move the token state, but the useful retrieval-space consequence becomes tiny.**
+
+Target firewall remains intact: target gallery features are consumed only after the complete target-free rollout has been constructed.
 
 ---
 
-# 25. What the next ablation should answer
+# 14. Selector / STOP Behavior
 
-The original plan proposed COMP after BIND.
-
-That is still useful as a controlled experiment, but the BIND result changes what we should look for.
-
-For `L_comp`, the key question is no longer merely:
+Top-level selection diagnostics:
 
 ```text
-Does intent cosine decrease?
+queries                         = 6016
+executed edits                  = 13206
+mean executed edit count        = 2.19515
+queries repeating a candidate   = 4798 / 6016
+repeated-candidate fraction     = 79.754%
 ```
 
-It is:
+Candidate distribution conditional on executing an edit:
 
 ```text
-Can stronger claim complementarity make the intent differences
-large enough to survive the AnchorGrounder and produce distinct supports?
+candidate 0 = 23.19%
+candidate 1 = 40.82%
+candidate 2 = 18.07%
+candidate 3 = 17.92%
 ```
 
-The decisive metrics are:
+This is **not** a single-candidate monopoly under the R0 95% threshold.
 
-1. `pairwise_support_cosine`
-2. `pairwise_support_overlap`
-3. `pairwise_delta_z_cosine`
-4. t0 `functional_effective_rank`
-5. `FULL - MEAN`
-6. `FULL - best_REPEATED`
-7. repeated-candidate fraction
+New STOP hazard:
 
-If COMP or COMP+BIND lowers intent/context cosine but support cosine remains around `0.999`, that would be strong evidence that **the architecture needs a direct WHERE-side specialization mechanism**, rather than more text-side semantic losses.
+```text
+t0 = 0.083%
+t1 = 9.832%
+t2 = 67.251%
+```
+
+Absorbed STOP occupancy:
+
+```text
+t0 = 0.083%
+t1 = 9.907%
+t2 = 70.495%
+```
+
+The distinction matters:
+
+- **new STOP hazard** = newly stopping among live parents;
+- **absorbed STOP occupancy** = all trajectories currently in STOP, including those that stopped earlier.
+
+STOP becomes aggressive late, but R0 does not identify STOP as the root cause. The stronger explanation is that later candidate consequences are already weak/redundant, making stopping increasingly competitive.
 
 ---
 
-# 26. Current experiment scoreboard
+# 15. Same-Parent Candidate Oracle
 
-| Experiment | Mean Recall | support cosine | support overlap | t0 rank | t0 Δq cosine | mean edits | repeat-query fraction | interpretation |
-|---|---:|---:|---:|---:|---:|---:|---:|---|
-| CORE best e3 | 27.258 | 0.999795 | 0.995188 | 1.663 | 0.9897 | 2.682 | 90.99% | WHERE clone |
-| BIND best e3 | **27.582** | 0.999372 | 0.989260 | **1.736** | 0.9871 | 2.849 | 95.40% | mild WHAT improvement, WHERE still clone |
+Same-parent retrieval is computed by branching every candidate from the exact same current state/query.
 
-This table should be extended with COMP, COMP+BIND, FACTOR, and any later architectural interventions.
+### t0
 
-# CIR IAG-SRME — Core Baseline Diagnostic
-## Epoch 3 Best vs Epoch 5 Last
+```text
+best real candidate ≈ 24.395 MR
+best candidate oracle = 24.736 MR
+mean candidate query   = 24.336 MR
+```
 
+### t1
+
+```text
+best real candidate ≈ 26.686 MR
+best candidate oracle = 26.912 MR
+mean candidate query   = 26.621 MR
+```
+
+### t2
+
+```text
+best real candidate ≈ 26.142 MR
+best candidate oracle = 26.259 MR
+mean candidate query   = 26.114 MR
+```
+
+The candidate oracle headroom is modest.
+
+This is consistent with candidate effects being too similar/redundant for the selector to exploit a large latent advantage.
+
+The oracle is evaluation-only and target-aware; it never enters the policy forward pass.
+
+---
+
+# 16. Failure Flags — Correct Interpretation
+
+Top-level R0 flags:
+
+```text
+high_support_similarity          = true
+high_delta_q_similarity_t0       = true
+high_delta_q_similarity_t1       = false  # 0.94922 just below 0.95 threshold
+high_delta_q_similarity_t2       = false
+high_dead_delta_q_fraction_t0    = false
+high_dead_delta_q_fraction_t1    = false
+high_dead_delta_q_fraction_t2    = false
+low_functional_effective_rank_t0 = false  # 1.595 > 1.5 threshold
+low_functional_effective_rank_t1 = false
+low_functional_effective_rank_t2 = false
+single_candidate_monopoly        = false
+repeat_beats_full                = false  # requires +2 MR margin
+single_beats_full                = false
+reference_dominates              = false
+never_stop                       = false
+high_stop_t0_occupancy           = false
+```
+
+These flags are **thresholded observations**, not the scientific conclusion themselves.
+
+Two examples:
+
+1. `repeat_beats_full=false` does **not** mean repeat is harmless. Best REPEAT is still slightly above FULL; it simply does not exceed FULL by the conservative +2 MR flag margin.
+
+2. `low_functional_effective_rank_t2=false` does **not** mean t2 is healthy. Rank is high while `||Δq||` has fallen to only ~5.17% of t0.
+
+For R0, the raw per-timestep measurements have priority over aggregate booleans.
+
+---
+
+# 17. Updated Causal Hypothesis After R0
+
+The strongest current hypothesis is:
+
+```text
+4 learnable text queries
+        ↓
+highly correlated WHAT intents
+        ↓
+AnchorGrounder
+        ↓
+nearly identical WHERE maps
+        ↓
+nearly shared grounded evidence
+        ↓
+highly correlated edit contexts
+        ↓
+SharedTokenEditor
+        ↓
+nearly parallel ΔZ effects
+        ↓
+large cumulative token displacement still occurs
+        ↓
+TokenStateReadout / accumulated displacement geometry
+        ↓
+late Δq magnitude collapses
+        ↓
+late realized target gain approaches zero
+        ↓
+STOP becomes attractive
+        ↓
+FULL ≈ MEAN ≈ REPEAT
+```
+
+This is still a **hypothesis register**, not a proven causal graph.
+
+R0 provides strong localization evidence for two interfaces:
+
+### B1 — WHAT → WHERE
+
+Evidence:
+
+```text
+intent cosine  = 0.9472
+support cosine = 0.999821
+support overlap= 0.995809
+```
+
+The grounding mapping is substantially more contractive than the intent space.
+
+### B2 — ΔZ → Δq / recurrent readout
+
+Evidence:
+
+```text
+||ΔZ|| : 2.262 → 2.264 → 2.301
+||Δq|| : 0.366 → 0.082 → 0.019
+```
+
+Large token edits are not translated into proportional late retrieval-query changes.
+
+---
+
+# 18. What R0 Does NOT Prove
+
+R0 does **not** prove any of the following:
+
+```text
+FG-CLIP is fundamentally unsuitable for CIR.
+query_cap=0.5 is the only source of attenuation.
+Grounding clone is caused solely by Entmax.
+STOP is the root cause.
+A lower support cosine automatically means better grounding.
+A higher effective rank automatically means better actions.
+Candidate semantic labels correspond to human-readable edits.
+Target-relative diagnostics are available at inference.
+```
+
+R0 only establishes measured behavior under the current architecture.
+
+---
+
+# 19. Relationship to Earlier CORE-best e3 Diagnostic
+
+Earlier stored CORE-best e3 measurements:
+
+| Metric | CORE best e3 | CORE last e5 / patched R0 |
+|---|---:|---:|
+| Mean Recall | 27.258 | 26.697 |
+| Support cosine | 0.999795 | 0.999821 |
+| Support overlap | 0.995188 | 0.995809 |
+| t0 `Δq` cosine | ~0.9897 | 0.9923 |
+| t0 effect rank | 1.663 | 1.595 |
+| t1 effect rank | 2.339 | 2.297 |
+| t2 effect rank | 3.440 | 3.440 |
+| mean edits | 2.682 | 2.195 |
+| t2 STOP hazard | 25.74% | 67.25% |
+| repeated-candidate fraction | 90.99% | 79.75% |
+
+Both epochs expose the same structural pattern:
+
+```text
+WHERE clone
++
+parallel root effects
++
+late retrieval-effect attenuation
+```
+
+Longer training does not spontaneously create healthy specialization.
+
+Because the patched R0 diagnostic improved dead-effect semantics and per-step reporting, future comparisons should prefer rerunning all important checkpoints through the same patched R0 script rather than mixing raw legacy and patched metrics indiscriminately.
+
+---
+
+# 20. Relationship to the Five-Run Semantic-Loss Ablations
+
+Earlier same-stratum ablation results:
+
+| Run | Best MR | Intent cosine | Support cosine | Main interpretation |
+|---|---:|---:|---:|---|
+| CORE | 27.258 | 0.9476 | 0.999795 | baseline collapse |
+| BIND | **27.582** | 0.9423 | 0.999372 | mild WHAT improvement, WHERE still clone |
+| COMP | 27.125 | 0.9636 | 0.999467 | negative |
+| COMP+BIND | 27.492 | **0.9347** | **0.999901** | strongest WHAT→WHERE localization |
+| FACTOR | 27.315 | 0.9569 | 0.999750 | no central repair |
+
+The important scientific pattern is:
+
+```text
+semantic losses can move WHAT
+but WHERE remains ~0.9994–0.9999 cosine
+```
+
+Thus adding more representation-only diversity pressure is not justified as the next default move.
+
+Note: those legacy ablation numbers and the newly patched R0 CORE-last result were not all produced by the exact same patched diagnostic implementation. They should be treated as supporting historical evidence, while future causal decisions should use patched-R0 re-evaluations where possible.
+
+---
+
+# 21. Current R0 Verdict
+
+## Measurement layer
+
+\[
+\boxed{\text{R0 implementation: PASS}}
+\]
+
+The diagnostic layer is now sufficiently reliable for the immediate repair ladder because it:
+
+- preserves model behavior;
+- keeps target out of the forward path;
+- measures same-parent counterfactuals;
+- separates numerical inactivity from diversity;
+- reports per-timestep rather than only aggregate functional metrics;
+- records checkpoint replay assumptions;
+- distinguishes STOP occupancy from STOP hazard.
+
+## Model diagnosis
+
+\[
+\boxed{
+\text{Current IAG-SRME still has severe functional candidate redundancy.}
+}
+\]
+
+The strongest signatures are:
+
+```text
+support cosine  ≈ 0.999821
+ΔZ cosine       ≈ 0.990
+root Δq cosine  ≈ 0.992
+FULL            ≈ MEAN
+REPEAT          ≳ FULL
+```
+
+plus the recurrent attenuation:
+
+```text
+||Δq|| = 0.366 → 0.082 → 0.019
+```
+
+while:
+
+```text
+||ΔZ|| ≈ 2.26 → 2.26 → 2.30
+```
+
+and realized selected-action target gain:
+
+```text
++0.0667 → +0.00844 → +0.00117
+```
+
+---
+
+# 22. Decision Gate for R1
+
+R0 should now be considered complete enough to move to a **single-variable causal intervention**.
+
+The first proposed R1 question is:
+
+> Is the global cumulative retrieval-query cap/readout geometry materially responsible for late-step attenuation?
+
+The current readout contains a bounded accumulated change with canonical:
+
+```text
+query_cap = 0.5
+```
+
+R0 has **not** established causality yet.
+
+The correct next experiment is therefore not "redesign everything" but:
+
+```text
+R1a:
+change only the cumulative query-cap behavior
+keep architecture/loss/backbone/K/Tmax/data/protocol fixed
+then rerun the exact same R0 diagnostics
+```
+
+Primary R1a success/falsification metrics:
+
+```text
+mean ||Δq|| t0/t1/t2
+late-step retention t1/t0 and t2/t0
+selected-path target gain t1/t2
+FULL vs MEAN
+FULL vs best REPEAT
+same-parent oracle gap
+stability / retrieval regression
+```
+
+If removing/relaxing the cumulative cap restores late-step `Δq` magnitude and useful marginal gain, B2 is causally supported.
+
+If late-step attenuation remains almost unchanged, the cap hypothesis is falsified as the primary cause and the investigation should move to the next interface rather than protecting the hypothesis.
+
+---
+
+# 23. Reproduction Commands
+
+## 23.1 Diagnose CORE-last e5
+
+```bash
+CUBLAS_WORKSPACE_CONFIG=:4096:8 \
+python src/diagnose_iag_srme_checkpoint.py \
+  --checkpoint outputs/2026-08-30/00-54-41/last.pt \
+  --dataset-root data/FashionIQ \
+  --protocol fashioniq_original \
+  --batch-size 32 \
+  --gallery-batch-size 128 \
+  --output reports/r0_core_last_original.json
+```
+
+Expected main retrieval:
+
+```text
+R@10  ≈ 17.8470
+R@50  ≈ 35.5466
+MR    ≈ 26.6968
+```
+
+## 23.2 Re-run any compatible legacy checkpoint
+
+```bash
+CUBLAS_WORKSPACE_CONFIG=:4096:8 \
+python src/diagnose_iag_srme_checkpoint.py \
+  --checkpoint <CHECKPOINT.pt> \
+  --dataset-root data/FashionIQ \
+  --protocol fashioniq_original \
+  --batch-size 32 \
+  --gallery-batch-size 128 \
+  --output reports/<NAME>.json
+```
+
+Always verify `checkpoint_model_config_provenance` before interpreting a legacy checkpoint with non-canonical historical overrides.
+
+---
+
+# 24. Minimal R0 Checklist for Every Future Checkpoint
+
+Before making a causal claim, record at minimum:
+
+```text
+[ ] exact checkpoint path / epoch / metric
+[ ] git SHA / branch
+[ ] protocol
+[ ] checkpoint config provenance
+[ ] FULL / REF / SINGLE / REPEAT / MEAN
+[ ] same-parent candidate oracle by timestep
+[ ] intent cosine
+[ ] support cosine + overlap + effective size
+[ ] context cosine by timestep
+[ ] ΔZ norm + cosine + rank by timestep
+[ ] Δq norm + cosine + rank by timestep
+[ ] active/dead effect fractions
+[ ] late-step effect retention
+[ ] selected-path target gain by timestep
+[ ] STOP hazard by timestep
+[ ] repeated-candidate fraction
+[ ] candidate selection distribution
+[ ] raw metrics, not only boolean failure flags
+```
+
+---
+
+# 25. One-Screen Handoff
+
+```text
+R0 branch:
+exp/e2e-iag-srme-r0-diagnostic-audit
+
+final R0 SHA:
+e3721e4dd41fa90cf6bd2a8e706822e0ec6e5f16
+
+primary R0 checkpoint:
+outputs/2026-08-30/00-54-41/last.pt
+CORE-last epoch 5
+FashionIQ original
+FG-CLIP Base
+
+retrieval:
+FULL        26.6968
+REF         14.8435
+MEAN        26.6809
+best REPEAT 26.9151
+best SINGLE 24.3948
+
+WHAT:
+intent cosine 0.9472
+
+WHERE:
+support cosine  0.999821
+support overlap 0.995809
+support eff size 15.78 / 196
+static support = true
+
+TOKEN EFFECT:
+||ΔZ||
+2.262 → 2.264 → 2.301
+ΔZ cosine ≈ 0.990 every step
+
+RETRIEVAL EFFECT:
+||Δq||
+0.3665 → 0.0825 → 0.0190
+retention:
+t1/t0 = 22.5%
+t2/t0 = 5.17%
+
+Δq cosine:
+0.9923 → 0.9492 → 0.6056
+rank:
+1.595 → 2.297 → 3.440
+
+selected target gain:
++0.06665 → +0.00844 → +0.00117
+
+policy:
+mean edits = 2.195
+repeat-query fraction = 79.75%
+max candidate share = 40.82%
+STOP hazard = 0.083% → 9.83% → 67.25%
+
+main diagnosis:
+B1 = WHAT→WHERE contraction
+B2 = large token edits but severe late retrieval-effect attenuation
+
+next causal gate:
+R1a = isolate cumulative query-cap/readout contribution only
+```
+
+---
+
+# 26. Final Scientific Statement
+
+The R0 evidence supports the following cautious statement:
+
+> **The current IAG-SRME implementation does not fail because the editor becomes numerically inactive. Instead, four candidate pathways remain highly redundant spatially and functionally: their grounding supports are nearly identical, their token-level edits are almost parallel, and although token-state edit magnitude remains large across recurrent steps, the resulting retrieval-query displacement decays by roughly an order of magnitude per two steps. The dynamic policy therefore has little measurable advantage over mean/repeated candidate controls. R0 localizes the next causal investigations to the WHAT→WHERE interface and the recurrent readout/accumulation path, without yet assigning sole causality to either mechanism.**
+
+This is the boundary at which R0 ends and R1 begins.
+
+# 27. R1a — Remove Global Query Cap: Causal Diagnostic Addendum
+
+**Document role:** append this section directly after Section 26 of `CIR_IAG_SRME_R0_DIAGNOSTIC_RESULTS_README_2026-08-30.md`  
 **Date:** 2026-08-30  
-**Method:** IAG-SRME, FG-CLIP Base, K=4, Tmax=3, d=256  
-**Training objective:** `L_terminal + 0.5 L_marginal` (`objective=core`)  
-**Dataset / protocol:** FashionIQ val, `fashioniq_original`, `ordered_and`  
-**Best checkpoint:** epoch 3, Mean Recall = 27.258  
-**Last checkpoint:** epoch 5, Mean Recall = 26.697
+**Experiment:** R1a — isolate the contribution of the cumulative retrieval-query cap  
+**Only intended intervention:** `model.query_cap: 0.5 -> 1000.0`  
+**Backbone:** `qihoo360/fg-clip-base` @ `454d76372c2cf5eb48fa0d871fd0534481484d97`  
+**K:** 4  
+**Tmax:** 3  
+**lambda_z:** 0.1  
+**Protocol:** `fashioniq_original`  
+**Best checkpoint epoch:** 3  
+**Best checkpoint:** `outputs/2026-08-30/21-34-29/best.pt`  
+**Self-describing diagnostic copy:** `outputs/2026-08-30/21-34-29/best_r1a_self_describing.pt`  
+**Best Mean Recall:** **38.764146**  
+**R1a verdict:** **PASS for the readout-cap hypothesis; candidate/grounding collapse remains.**
 
 ---
 
-# 1. Executive diagnosis
+## 27.1 Hypothesis
 
-The run is **not failing because of numerical instability, a single-candidate monopoly, or immediate STOP collapse**.
-
-The strongest structural failure is:
-
-> **The four candidates have effectively identical visual grounding.**
-
-At epoch 3:
-
-- pairwise support cosine = **0.999795**
-- pairwise support overlap = **0.995188**
-
-At epoch 5:
-
-- pairwise support cosine = **0.999821**
-- pairwise support overlap = **0.995809**
-
-So all four learnable edit queries are essentially looking at the **same visual region distribution**.
-
-This is already present at the best checkpoint and therefore is not merely a consequence of over-training from epoch 3 to epoch 5. It is a structural failure mode of the core objective.
-
-The second major failure is:
-
-> **Candidate edits become increasingly similar at the first recurrent step, while later recurrent edits have rapidly diminishing effect on the final retrieval query.**
-
-At epoch 3:
-
-| timestep | mean `||Δq||` | pairwise Δq cosine | functional rank |
-|---|---:|---:|---:|
-| t0 | 0.3581 | 0.9897 | 1.663 |
-| t1 | 0.0890 | 0.9444 | 2.339 |
-| t2 | 0.0216 | 0.6105 | 3.440 |
-
-At epoch 5:
-
-| timestep | mean `||Δq||` | pairwise Δq cosine | functional rank |
-|---|---:|---:|---:|
-| t0 | 0.3665 | 0.9923 | 1.595 |
-| t1 | 0.0825 | 0.9492 | 2.297 |
-| t2 | 0.0190 | 0.6056 | 3.440 |
-
-The t2 query effect is only about **6.0%** of t0 at epoch 3 and **5.2%** at epoch 5.
-
-Thus the recurrent state is changing, but the later edits are becoming weak in the final retrieval space.
-
-The third important observation is:
-
-> **The scorer progressively learns to STOP much earlier between epoch 3 and epoch 5.**
-
-| metric | epoch 3 | epoch 5 | delta |
-|---|---:|---:|---:|
-| mean executed edits | 2.682 | 2.195 | -0.486 |
-| STOP hazard t0 | 0.08% | 0.08% | 0.00% |
-| STOP hazard t1 | 3.38% | 9.83% | 6.45% |
-| STOP hazard t2 | 25.74% | 67.25% | 41.51% |
-
-This STOP behavior is probably **partly a rational response** to the weak late-step effects. It should not yet be treated as the root cause.
-
----
-
-# 2. Retrieval degradation from epoch 3 to epoch 5
-
-| metric | epoch 3 | epoch 5 | delta |
-|---|---:|---:|---:|
-| R@10 | 18.154 | 17.847 | -0.307 |
-| R@50 | 36.363 | 35.547 | -0.816 |
-| Mean Recall | 27.258 | 26.697 | -0.562 |
-
-The drop is real but modest: **0.562 Mean Recall points**.
-
-More important than the absolute drop is *where* it comes from.
-
-## 2.1 Reference representation does not degrade
-
-Reference-only retrieval actually improves:
-
-- epoch 3: **14.438**
-- epoch 5: **14.843**
-- delta: **+0.406**
-
-Therefore the degradation is not simply “FG-CLIP became worse everywhere”.
-
-A plausible interpretation is:
-
-> Continued fine-tuning improves the global reference/image representation while the composed edit trajectory becomes worse.
-
-This should be treated as an inference, not a proven causal statement.
-
-## 2.2 SINGLE edits remain relatively stable
-
-Best SINGLE:
-
-- epoch 3: **24.527**
-- epoch 5: **24.395**
-
-The degradation is much smaller than FULL.
-
-This indicates that the root-state edit itself has not catastrophically broken.
-
-## 2.3 Deeper/repeated behavior degrades more
-
-Best REPEAT:
-
-- epoch 3: **27.441**
-- epoch 5: **26.915**
-
-FULL:
-
-- epoch 3: **27.258**
-- epoch 5: **26.697**
-
-The candidate effects at t1/t2 also become smaller in query space.
-
-This points toward a **recurrent-composition / edit-trajectory issue**, not a simple first-edit failure.
-
----
-
-# 3. Primary structural failure: WHERE collapse
-
-The strongest diagnostic signal is the visual support similarity.
-
-## Epoch 3
-
-- support cosine: **0.999795**
-- support overlap: **0.995188**
-- support fraction: **7.37%**
-- effective support size: **13.95 / 196 tokens**
-
-## Epoch 5
-
-- support cosine: **0.999821**
-- support overlap: **0.995809**
-- support fraction: **8.32%**
-- effective support size: **15.78 / 196 tokens**
-
-This is not “all candidates attend to nearby but different regions”.
-
-Numerically, the support vectors are almost identical.
-
-The failure flag `grounding_clone=true` is therefore well-supported.
-
-### Important nuance
-
-Grounding is **not over-sparse**.
-
-It actually becomes broader between epoch 3 and epoch 5:
-
-- support fraction: 7.37% → 8.32%
-- entropy: 2.603 → 2.734
-- effective size: 13.95 → 15.78
-
-Therefore the problem is not “entmax became too sharp”.
-
-The problem is:
-
-> **all four candidates use almost the same sparse-ish support.**
-
----
-
-# 4. WHAT / context / edit similarity
-
-The four candidate pathways are already highly correlated before/through editing.
-
-At epoch 3, the global specialization matrices show approximately:
-
-- intent pairwise cosine: about **0.94–0.95**
-- context pairwise cosine: about **0.95–0.96**
-- delta-Z pairwise cosine: about **0.986–0.989**
-- support pairwise cosine: about **0.9997–0.9999**
-
-At epoch 5:
-
-- intent pairwise cosine remains about **0.94–0.95**
-- context cosine rises slightly to around **0.95–0.96**
-- delta-Z cosine rises to around **0.989–0.991**
-- support cosine remains essentially **1.0**
-
-Thus the network has four identities, but most of the visual/edit computation is highly redundant.
-
-The final `delta_q` vectors are less identical than `delta_z`, but that does not rescue the underlying token-level specialization.
-
----
-
-# 5. Recurrent attenuation
-
-One particularly important pattern is the rapid reduction in retrieval-space edit strength.
-
-## Epoch 3
+R0 showed a sharp mismatch:
 
 ```text
-t0 ||Δq|| ≈ 0.3581
-t1 ||Δq|| ≈ 0.0890
-t2 ||Δq|| ≈ 0.0216
+token-space edit magnitude:
+||ΔZ|| remains large through t0,t1,t2
+
+retrieval-space edit magnitude:
+||Δq|| collapses strongly through t0,t1,t2
 ```
 
-## Epoch 5
+The primary R0 CORE-last trajectory was approximately:
 
 ```text
-t0 ||Δq|| ≈ 0.3665
-t1 ||Δq|| ≈ 0.0825
-t2 ||Δq|| ≈ 0.0190
+||Δq||:
+0.3665 -> 0.0825 -> 0.0190
+
+late retention:
+t1/t0 ≈ 22.5%
+t2/t0 ≈ 5.17%
 ```
 
-Meanwhile `||ΔZ||` actually increases:
-
-- t0: 2.067 → 2.262
-- t1: 2.070 → 2.264
-- t2: 2.085 → 2.301
-
-So the editor is not becoming inactive in token space.
-
-Instead:
-
-> **large token-state edits produce progressively smaller retrieval-query changes at later timesteps.**
-
-This is a critical distinction.
-
-Possible mechanisms include saturation/cancellation in the readout, repeated edits along similar directions, normalization/capping effects, or the state reaching a region where additional local changes have weak retrieval-space leverage.
-
-The current diagnostics do not isolate which of those mechanisms is causal.
-
----
-
-# 6. STOP drift is secondary, not yet the root cause
-
-Epoch 3:
+while:
 
 ```text
-STOP hazard: t0=0.08%,
-             t1=3.38%,
-             t2=25.74%
-
-mean executed edits = 2.682
+||ΔZ||:
+2.262 -> 2.264 -> 2.301
 ```
 
-Epoch 5:
+The causal R1a hypothesis was therefore:
 
-```text
-STOP hazard: t0=0.08%,
-             t1=9.83%,
-             t2=67.25%
+\[
+H_{\rm R1a}:
+\quad
+\texttt{query\_cap}=0.5
+\text{ is a major bottleneck that suppresses recurrent retrieval-space updates.}
+\]
 
-mean executed edits = 2.195
+R1a deliberately did **not** modify:
+
+- WHAT/intention generation;
+- grounding;
+- support construction;
+- editor;
+- candidate count;
+- recurrent horizon;
+- STOP formulation;
+- selector;
+- objective/loss set;
+- teacher supervision;
+- DPP/diversity regularization;
+- semantic residual;
+- dynamic re-grounding.
+
+The intervention was only:
+
+```yaml
+model:
+  query_cap: 1000.0
 ```
 
-STOP clearly becomes much more aggressive.
+With the existing `cap_vector` formulation, `1000.0` makes the global cap effectively close to identity at the observed update scales.
 
-However, forced REPEAT only slightly outperforms FULL:
-
-- epoch 3: best REPEAT / FULL = **1.0067**
-- epoch 5: best REPEAT / FULL = **1.0082**
-
-Therefore there is not a large amount of hidden retrieval performance being destroyed solely by the STOP policy.
-
-The better interpretation is:
-
-> Later candidate consequences are becoming weak / redundant, and the scorer learns that stopping is often nearly as good.
-
----
-
-# 7. Candidate selection is not fully collapsed, but is drifting
-
-Conditional candidate distribution among executed edits:
-
-## Epoch 3
-
-```text
-candidate 0: 13.99%
-candidate 1: 28.07%
-candidate 2: 31.51%
-candidate 3: 26.43%
-```
-
-## Epoch 5
-
-```text
-candidate 0: 23.19%
-candidate 1: 40.82%
-candidate 2: 18.07%
-candidate 3: 17.92%
-```
-
-There is no hard monopoly, but candidate 1 rises from **28.07%** to **40.82%**.
-
-This should be watched in later runs.
-
----
-
-# 8. Why the core objective permits this failure
-
-Current core objective:
-
-```math
-L_core = L_terminal + 0.5 L_marginal
-```
-
-`L_terminal` asks the final composed query to retrieve the target.
-
-`L_marginal` asks the scorer to match target-derived marginal utility of candidate consequences.
-
-Neither objective directly requires:
-
-- different candidates to represent different semantic claims;
-- different candidates to ground to different or complementary visual regions;
-- different candidate token edits to have distinct functional effects;
-- the four candidate identities to form a meaningful decomposition.
-
-If all candidates discover nearly the same useful edit direction, both losses can still be optimized.
-
-This explains why:
-
-```text
-support cosine ≈ 1.0
-delta-Z cosine ≈ 0.99
-MEAN ≈ FULL
-REPEAT ≈ FULL
-```
-
-can coexist with a decreasing training loss.
-
-The core objective provides **utility supervision**, but almost no explicit **symmetry-breaking supervision**.
-
----
-
-# 9. Causal hypothesis to carry into the next experiments
-
-The most plausible current chain is:
-
-```text
-4 text queries
-    ↓
-highly similar intent representations
-    ↓
-almost identical anchor-grounding distributions
-    ↓
-almost identical grounded evidence
-    ↓
-highly similar contexts
-    ↓
-almost parallel token-level edits
-    ↓
-repeated same-direction edits
-    ↓
-later query-space effects attenuate strongly
-    ↓
-marginal utility of later edits becomes small
-    ↓
-scorer increasingly chooses STOP
-```
-
-This chain is a **diagnostic hypothesis**, not yet a proven causal graph.
-
-The next loss ablations should be designed to break specific links and see which metrics move.
-
----
-
-# 10. Recommended loss ablation order
-
-The following runs should initially use only **5 epochs**, because the baseline already exposes its trend by epoch 3–5.
-
-Keep all other variables identical:
-
-- same seed;
-- same backbone;
-- same optimizer;
-- same caption policy;
-- same protocol;
-- same K/Tmax;
-- same learning rate;
-- same precision.
-
-## Run A — `L_bind`
-
-Purpose:
-
-> Test whether forcing candidate intents to bind to candidate-specific claimed text semantics produces meaningful WHAT specialization and whether that propagates into WHERE.
-
-Command:
+Training command:
 
 ```bash
+CUBLAS_WORKSPACE_CONFIG=:4096:8 \
 python src/train.py \
-  backbone=fgclip_base_full \
-  experiment=iag_srme_base_full \
-  experiment.epochs=5 \
-  objective=bind \
-  model.enable_claim_head=true \
-  hydra.run.dir=outputs/iag_srme_ablation_bind
+  model.query_cap=1000.0
 ```
-
-Primary questions:
-
-1. Does pairwise intent cosine decrease?
-2. Does support cosine move away from ~1.0?
-3. Does delta-Z cosine decrease?
-4. Does t0 functional rank increase?
-5. Does FULL begin to outperform MEAN / REPEAT?
-
-This is the cleanest first ablation.
 
 ---
 
-## Run B — `L_comp`
+# 28. Training Result — Large Performance Recovery
 
-Purpose:
+Training trajectory:
 
-> Test whether complementary claim allocation alone creates useful candidate decomposition.
+```text
+epoch  1   MR 33.864
+epoch  2   MR 37.375
+epoch  3   MR 38.764   <- BEST
+epoch  4   MR 38.637
+epoch  5   MR 36.563
+epoch  6   MR 36.641
+epoch  7   MR 33.686
+epoch  8   MR 33.388
+epoch  9   MR 31.971
+epoch 10   MR 33.134
+epoch 11   MR 30.176
+epoch 12   MR 30.054
+epoch 13   MR 29.634
+epoch 14   MR 31.207
+epoch 15   MR 29.378
+epoch 16   MR 28.984
+epoch 17   MR 25.646
+epoch 18   MR 28.078
+epoch 19   MR 27.490
+epoch 20   MR 29.626
+```
 
-Command:
+The best checkpoint is therefore **epoch 3**, not `last.pt`.
 
-```bash
-python src/train.py \
-  backbone=fgclip_base_full \
-  experiment=iag_srme_base_full \
-  experiment.epochs=5 \
-  objective=comp \
-  model.enable_claim_head=true \
-  hydra.run.dir=outputs/iag_srme_ablation_comp
+Compared with the primary R0 CORE-last checkpoint:
+
+```text
+R0 CORE-last:
+MR ≈ 26.697
+
+R1a best:
+MR = 38.764
+```
+
+Absolute gain relative to that R0 reference:
+
+\[
+\boxed{
+38.764-26.697\approx +12.07\ {\rm Mean\ Recall}
+}
+\]
+
+This is too large to treat the global cap as a minor implementation detail.
+
+However, this performance delta should not be interpreted as a perfectly epoch-matched estimate because R0's primary recorded checkpoint is CORE-last epoch 5 while R1a uses the best checkpoint epoch 3. The strongest causal evidence comes from the internal effect diagnostics below, not from the headline MR difference alone.
+
+---
+
+# 29. Important Provenance Failure Discovered During R1a
+
+The first R1a diagnostic replay was invalid.
+
+The legacy checkpoint did not serialize `query_cap=1000.0`. The R0 diagnostic loader therefore fell back to its canonical legacy assumption:
+
+```text
+query_cap = 0.5
+```
+
+even though the checkpoint weights had been trained under:
+
+```text
+query_cap = 1000.0
+```
+
+This produced the contradiction:
+
+```text
+checkpoint_metric = 38.764
+diagnostic FULL MR ≈ 27.639
+```
+
+and provenance explicitly showed:
+
+```text
+source = legacy_checkpoint_plus_canonical_assumption
+resolved_diagnostic_config.query_cap = 0.5
+```
+
+That report is **not a valid R1a report**.
+
+A self-describing diagnostic copy was then created with the actual training configuration.
+
+The corrected replay reports:
+
+```text
+source = checkpoint
+fully_self_describing = true
+warning = null
+
+serialized_training_config.query_cap = 1000.0
+resolved_diagnostic_config.query_cap = 1000.0
+```
+
+and:
+
+```text
+checkpoint_metric = 38.764146
+diagnostic FULL MR = 38.764146
+```
+
+Exact agreement establishes replay consistency.
+
+### Reproducibility lesson
+
+Future checkpoints must serialize replay-critical model hyperparameters, especially values not inferable from the state dict:
+
+```text
+query_cap
+lambda_z
+max_steps
+num_heads
+selector_temperature
+selector_gumbel_noise
+and any future non-state architecture scalar
+```
+
+Hydra CLI overrides must not disappear at checkpoint save time.
+
+### Useful but non-canonical observation
+
+The accidental mismatched replay is still mechanistically informative:
+
+```text
+same R1a-trained weights
+cap=1000 replay -> MR 38.764
+cap=0.5 replay  -> MR ~27.639
+```
+
+This should **not** be reported as a benchmark comparison because the weights were optimized for the cap=1000 regime, but it independently shows that reinstating the small cap at inference severely damages the learned recurrent query trajectory.
+
+---
+
+# 30. Correct R1a Retrieval Metrics
+
+Corrected global FashionIQ-original metrics:
+
+| Control | Mean Recall | R@10 | R@50 |
+|---|---:|---:|---:|
+| FULL | **38.7641** | 27.5447 | 49.9836 |
+| MEAN candidate | **38.8160** | 27.5754 | 50.0565 |
+| REPEAT-0 | 39.0013 | 27.8511 | 50.1515 |
+| REPEAT-1 | **39.2232** | 28.0624 | 50.3840 |
+| REPEAT-2 | 38.9622 | 27.8417 | 50.0826 |
+| REPEAT-3 | 38.9954 | 27.6887 | 50.3022 |
+| SINGLE-0 | 24.4947 | 15.7670 | 33.2224 |
+| SINGLE-1 | **24.7096** | 15.9147 | 33.5045 |
+| SINGLE-2 | 24.5529 | 15.8988 | 33.2070 |
+| SINGLE-3 | 24.4862 | 15.8000 | 33.1724 |
+| REFERENCE only | 14.5216 | 8.7899 | 20.2532 |
+
+Useful ratios:
+
+```text
+best REPEAT / FULL = 1.01184
+best SINGLE / FULL = 0.63743
+MEAN / FULL        = 1.00134
+REFERENCE / FULL   = 0.37461
 ```
 
 Interpretation:
 
-- If claim complementarity changes intents but grounding remains cloned, the bottleneck is downstream WHERE grounding.
-- If it does not even change intents/effects, complementary claims alone are not enough.
+1. Multi-step execution is now extremely important:
+   - SINGLE is only ~64% of FULL.
+2. The reference image alone is far below the final composed retrieval result.
+3. However candidate identity is still weak:
+   - averaging candidates is essentially equal to FULL;
+   - a fixed repeated candidate slightly beats the learned dynamic policy.
+
+Therefore R1a restores **depth utility**, but does not restore **candidate specialization**.
 
 ---
 
-## Run C — `L_comp + L_bind`
+# 31. Same-Parent Counterfactuals — Multi-Step Is Now Actually Useful
 
-Purpose:
+The mean same-parent candidate query improves dramatically by recurrent step:
 
-> Test semantic partition + semantic binding together without adding factor losses.
-
-Command:
-
-```bash
-python src/train.py \
-  backbone=fgclip_base_full \
-  experiment=iag_srme_base_full \
-  experiment.epochs=5 \
-  objective=core \
-  model.enable_claim_head=true \
-  objective.complementary_claim_weight=0.01 \
-  objective.binding_weight=0.01 \
-  hydra.run.dir=outputs/iag_srme_ablation_comp_bind
+```text
+t0 mean candidate MR = 24.6032
+t1 mean candidate MR = 34.3021
+t2 mean candidate MR = 39.0305
 ```
 
-This is likely more meaningful than `L_comp` alone because complementarity without binding can in principle partition arbitrary claim mass.
+Offline best-candidate oracle:
+
+```text
+t0 oracle = 25.0834
+t1 oracle = 34.7513
+t2 oracle = 39.5640
+```
+
+Therefore:
+
+\[
+\boxed{
+24.60
+\rightarrow
+34.30
+\rightarrow
+39.03
+}
+\]
+
+is a strong empirical result.
+
+This directly rejects the strongest version of the hypothesis that:
+
+> "the sequential/multi-step concept itself is fundamentally useless."
+
+After removing the cap bottleneck, recurrence produces large retrieval improvements.
+
+The model was previously trying to update token state, but the readout path prevented much of that accumulated change from surviving into retrieval space.
+
+### Candidate headroom remains small
+
+Within each timestep, the four candidates remain close:
+
+```text
+t0 candidates ≈ 24.49 .. 24.71
+t1 candidates ≈ 34.21 .. 34.26
+t2 candidates ≈ 38.98 .. 39.05
+```
+
+The offline oracle gains only a limited amount over each candidate.
+
+Thus recurrence is useful, but choosing among four candidate identities still contributes relatively little.
 
 ---
 
-## Run D — `L_factor`
+# 32. R1a Successfully Repairs Late-Step Retrieval-Effect Attenuation
 
-Purpose:
+This is the central R1a result.
 
-> Test whether candidate factors become jointly semantically complete relative to the auxiliary full-query anchor.
-
-Command:
-
-```bash
-python src/train.py \
-  backbone=fgclip_base_full \
-  experiment=iag_srme_base_full \
-  experiment.epochs=5 \
-  objective=factor \
-  model.enable_factor_head=true \
-  hydra.run.dir=outputs/iag_srme_ablation_factor
-```
-
-Important interpretation caveat:
-
-`L_factor` detaches its auxiliary anchor within the loss branch, but that anchor is recomputed from backbone representations that are jointly updated by the rest of training. Therefore it is not a globally fixed target across optimizer steps.
-
-Use the run as an ablation, but do not describe the semantic anchor as permanently fixed.
-
----
-
-# 11. Do NOT run `L_unique` yet with the current trainer
-
-Current `UniqueContributionLoss` is guarded by:
+Corrected mean `||Δq||`:
 
 ```text
-require_activity_weights_for_unique = true
+t0 = 0.336634
+t1 = 0.272417
+t2 = 0.197111
 ```
 
-and `train.py` / `train_one_epoch()` currently calls the objective without external `active_weights`.
-
-Therefore the current `objective=unique` path is expected to raise:
+Retention:
 
 ```text
-L_unique requires externally justified activity weights
+t1/t0 = 0.809238  = 80.92%
+t2/t0 = 0.585534  = 58.55%
+t2/t1 = 0.723562  = 72.36%
 ```
 
-This is intentional.
-
-STOP is not equivalent to semantic factor inactivity.
-
-Do not disable this guard merely to make the run execute unless the experiment is explicitly defined as an all-active ablation.
-
-For the same reason, the current `six_loss_experimental` config is **not a canonical runnable next step** without resolving the activity-weight semantics.
-
----
-
-# 12. What success should look like
-
-Do not judge the next loss only by Mean Recall.
-
-The baseline tells us that retrieval can improve while candidate structure remains degenerate.
-
-A promising run should move several structural metrics simultaneously.
-
-## Strong positive signs
-
-### Grounding
-
-Baseline:
+Compare with primary R0 CORE-last:
 
 ```text
-support cosine ≈ 0.9998
-support overlap ≈ 0.995
+R0:
+0.3665 -> 0.0825 -> 0.0190
+
+R1a:
+0.3366 -> 0.2724 -> 0.1971
 ```
 
-Desired direction:
+The important change is not t0. It is the preservation of later effects.
 
-```text
-support cosine ↓ substantially
-support overlap ↓ substantially
-```
+Approximate comparison:
 
-A value below ~0.98 would already be a major qualitative change from the current baseline.
-
-### Token-level edits
-
-Baseline global pairwise `delta_z` cosine is ~0.99.
-
-Desired:
-
-```text
-delta_z cosine ↓
-```
-
-### t0 functional diversity
-
-Baseline:
-
-- epoch 3 rank = **1.663**
-- epoch 5 rank = **1.595**
-
-Desired:
-
-```text
-rank clearly > 2
-t0 pairwise Δq cosine clearly < current ~0.99
-```
-
-### Policy usefulness
-
-Baseline:
-
-```text
-MEAN ≈ FULL
-best REPEAT ≳ FULL
-```
-
-A stronger factorized model should eventually show:
-
-```text
-FULL > MEAN
-FULL > any fixed REPEAT-k
-```
-
-because dynamic candidate choice should matter.
-
-### STOP
-
-STOP itself does not need to be rare.
-
-What matters is:
-
-- it should not collapse at t0;
-- it should correlate with truly low marginal utility;
-- FULL should outperform forced controls.
-
----
-
-# 13. Decision table after the next ablations
-
-## Case A
-
-```text
-intent diversity improves
-BUT support cosine remains ~1.0
-```
-
-Conclusion:
-
-> Text-side semantic specialization is working, but the anchor-grounding mechanism is collapsing distinct intents into the same WHERE.
-
-Next research target: grounding architecture / grounding objective.
-
----
-
-## Case B
-
-```text
-intent + support diversity improve
-BUT delta-Z remains ~parallel
-```
-
-Conclusion:
-
-> WHAT and WHERE differ, but the shared editor maps them to nearly the same edit direction.
-
-Next target: editor conditioning / functional specialization.
-
----
-
-## Case C
-
-```text
-support + delta-Z diversity improve
-BUT FULL ≈ MEAN ≈ REPEAT
-```
-
-Conclusion:
-
-> Candidates are representationally different but their differences are not functionally useful for retrieval, or the selector cannot exploit them.
-
-Next target: functional utility / scorer / trajectory credit.
-
----
-
-## Case D
-
-```text
-FULL beats MEAN/REPEAT
-AND structural diversity improves
-AND recall improves
-```
-
-Conclusion:
-
-> The auxiliary loss is creating genuine candidate specialization that the dynamic policy can exploit.
-
-This is the desired regime.
-
----
-
-## Case E
-
-```text
-all semantic auxiliary losses fail
-support cosine stays ~1.0
-delta-Z stays ~0.99
-```
-
-Conclusion:
-
-> Stop adding more semantic losses.
-
-At that point the failure is likely architectural: independent candidate grounding has no strong mechanism preventing all four queries from selecting the same region.
-
-The next research step should target WHERE competition / candidate-conditioned grounding structure rather than adding another weak regularizer.
-
----
-
-# 14. Baseline checkpoint table for future comparison
-
-| Metric | Core best e3 | Core last e5 |
+| Metric | R0 CORE-last | R1a |
 |---|---:|---:|
-| Mean Recall | 27.258 | 26.697 |
-| R@10 | 18.154 | 17.847 |
-| R@50 | 36.363 | 35.547 |
-| Reference-only | 14.438 | 14.843 |
-| Best SINGLE | 24.527 | 24.395 |
-| Best REPEAT | 27.441 | 26.915 |
-| MEAN candidate | 27.308 | 26.681 |
-| Support cosine | 0.999795 | 0.999821 |
-| Support overlap | 0.995188 | 0.995809 |
-| Support fraction | 7.37% | 8.32% |
-| t0 Δq cosine | 0.9897 | 0.9923 |
-| t0 effect rank | 1.663 | 1.595 |
-| t1 effect rank | 2.339 | 2.297 |
-| t2 effect rank | 3.440 | 3.440 |
-| Mean executed edits | 2.682 | 2.195 |
-| STOP hazard t2 | 25.74% | 67.25% |
-| Max candidate share | 31.51% | 40.82% |
+| `||Δq|| t0` | 0.3665 | 0.3366 |
+| `||Δq|| t1` | 0.0825 | **0.2724** |
+| `||Δq|| t2` | 0.0190 | **0.1971** |
+| `t1/t0` | 22.5% | **80.9%** |
+| `t2/t0` | 5.17% | **58.6%** |
+
+Therefore:
+
+\[
+\boxed{
+\texttt{query\_cap}=0.5
+\text{ was a major causal bottleneck in recurrent retrieval-effect propagation.}
+}
+\]
+
+This is stronger than the original R0 correlation.
+
+R1a does **not** prove that every performance problem came from the cap.
+
+It proves that the cap was responsible for a major part of the observed:
+
+\[
+\Delta Z\ {\rm alive}
+\quad\text{but}\quad
+\Delta q\ {\rm dying}
+\]
+
+failure mode.
 
 ---
 
-# 15. Current conclusion
+# 33. Token-Space Effects Remain Highly Redundant
 
-The core run demonstrates that the implementation can train and retrieve, but the intended four-way edit decomposition does **not emerge from terminal + marginal utility supervision alone**.
+R1a does not repair the upstream candidate collapse.
 
-The central structural signature is:
-
-```text
-four candidate identities
-        ↓
-almost identical visual supports
-        ↓
-almost parallel token edits
-        ↓
-weakly differentiated candidate consequences
-        ↓
-repeated edits become progressively less effective
-        ↓
-STOP becomes increasingly attractive
-```
-
-The immediate scientific question for the next experiments is therefore:
-
-> **Can semantic auxiliary losses break candidate symmetry strongly enough that different WHAT representations produce different WHERE groundings and functionally distinct edits?**
-
-The first recommended sequence is:
+Mean token-effect norms:
 
 ```text
-CORE baseline
-→ BIND
-→ COMP
-→ COMP+BIND
-→ FACTOR
+||ΔZ||:
+t0 = 1.38355
+t1 = 1.39111
+t2 = 1.40001
 ```
 
-Do not jump directly to the full six-loss objective. Individual ablations are necessary to identify which supervision actually changes the failure signature.
+Thus the editor remains active at every timestep.
+
+But pairwise `ΔZ` cosine remains:
+
+```text
+t0 = 0.98187
+t1 = 0.98214
+t2 = 0.98245
+```
+
+and `ΔZ` effective rank remains approximately:
+
+```text
+t0 = 1.856
+t1 = 1.851
+t2 = 1.846
+```
+
+Maximum possible candidate-axis rank is 4.
+
+Therefore the token-level transition still behaves much closer to:
+
+```text
+candidate 0 -> nearly same edit direction
+candidate 1 -> nearly same edit direction
+candidate 2 -> nearly same edit direction
+candidate 3 -> nearly same edit direction
+```
+
+than to four genuinely distinct functional edit factors.
+
+R1a solves **effect survival**, not **effect diversity**.
 
 ---
 
-# 16. BIND ablation diagnostic — first structural test
+# 34. Retrieval-Space Candidate Diversity Also Remains Weak
 
-**Experiment:** `objective=bind`, `model.enable_claim_head=true`  
-**Objective:**
+R1a `Δq` pairwise cosine:
 
-```math
-L = L_terminal + 0.5 L_marginal + 0.01 L_bind
+```text
+t0 = 0.98330
+t1 = 0.98167
+t2 = 0.97654
 ```
 
-**Checkpoint analyzed:** epoch 3 best  
-**Mean Recall:** **27.582**
+Functional effective rank:
 
-This should be compared against the core baseline best checkpoint at epoch 3, not the degraded epoch-5 checkpoint, because both best checkpoints occur at epoch 3.
+```text
+t0 = 1.818
+t1 = 1.856
+t2 = 1.954
+```
 
-## 16.1 Retrieval result
+All candidate effects are numerically active:
 
-| metric | CORE e3 | BIND e3 | delta |
-|---|---:|---:|---:|
-| R@10 | 18.154 | 18.411 | +0.257 |
-| R@50 | 36.363 | 36.753 | +0.390 |
-| Mean Recall | 27.258 | 27.582 | **+0.324** |
+```text
+active candidate fraction = 1.0
+dead candidate fraction   = 0.0
+dead parent fraction      = 0.0
+```
 
-`L_bind` gives a **small positive retrieval gain of +0.324 Mean Recall**.
+So this is no longer a "dead effect" problem.
 
-This is useful evidence that the binding signal is not obviously destructive, but the gain is too small to claim that the decomposition problem is solved.
+It is a **live-but-redundant** effect problem.
+
+R0 had an important interpretability trap:
+
+```text
+late Δq cosine fell
+late rank rose
+but Δq energy was almost dead
+```
+
+R1a removes much of that ambiguity because late-step energy remains substantial.
+
+Yet even with healthy magnitude:
+
+```text
+t2 ||Δq|| ≈ 0.197
+```
+
+the four effects still have:
+
+```text
+t2 cosine ≈ 0.977
+rank ≈ 1.95 / 4
+```
+
+Therefore candidate redundancy is now a much cleaner finding.
 
 ---
 
-# 17. Did BIND solve WHAT specialization?
+# 35. WHAT and WHERE Were Not Repaired by R1a
 
-Only partially.
-
-| diagnostic | CORE e3 | BIND e3 | direction |
-|---|---:|---:|---|
-| pairwise intent cosine | 0.9476 | 0.9423 | ↓ 0.0053 |
-| pairwise context cosine | 0.9549 | 0.9399 | ↓ 0.0150 |
-| pairwise delta-Z cosine | 0.9877 | 0.9838 | ↓ 0.0039 |
-| pairwise delta-q cosine | 0.8510 | 0.8420 | ↓ 0.0090 |
-
-So BIND does move the representation in the intended direction:
+Intent similarity:
 
 ```text
-intent slightly less similar
-→ context somewhat less similar
-→ delta-Z slightly less similar
-→ delta-q slightly less similar
+mean off-diagonal intent cosine = 0.949880
 ```
 
-However, the changes are modest.
-
-The four intent vectors are still highly correlated:
+Grounding:
 
 ```text
-CORE: 0.9476
-BIND: 0.9423
+support cosine  = 0.999842
+support overlap = 0.995108
+
+support effective size = 10.573 / 196 tokens
+support fraction       = 0.05603
 ```
 
-Thus `L_bind` creates **weak semantic symmetry breaking**, not a clean four-way decomposition.
-
----
-
-# 18. Did BIND solve WHERE grounding collapse?
-
-**No. This is the most important result of the ablation.**
-
-| grounding diagnostic | CORE e3 | BIND e3 |
-|---|---:|---:|
-| pairwise support cosine | 0.999795 | 0.999372 |
-| pairwise support overlap | 0.995188 | 0.989260 |
-| support fraction | 7.37% | **25.17%** |
-| effective support size | 13.95 | **47.19** |
-
-BIND substantially changes **how broad** grounding is:
+The grounder is also still architecturally static:
 
 ```text
-support fraction: 7.37% → 25.17%
-effective size:   13.95 → 47.19 tokens
+support_recomputed_each_timestep = false
+support_static_by_current_architecture = true
 ```
 
-but does almost nothing to make the four candidates look at different regions:
+Thus R1a changes the chain from:
 
 ```text
-support cosine:  0.999795
-              →  0.999372
-
-support overlap: 0.995188
-              →  0.989260
-```
-
-The four support maps remain essentially clones.
-
-This is stronger evidence for the following diagnosis:
-
-> **The current bottleneck is not merely that the text queries lack semantic differentiation. Even after BIND makes intents/contexts somewhat more distinct, the anchor grounder still maps them to almost the same visual support.**
-
-Therefore BIND alone does **not** solve WHERE specialization.
-
----
-
-# 19. BIND changes edit magnitude more than edit direction
-
-At t0:
-
-| diagnostic | CORE e3 | BIND e3 |
-|---|---:|---:|
-| mean `||ΔZ||` | 2.067 | **3.581** |
-| mean `||Δq||` | 0.3581 | 0.3526 |
-| pairwise Δq cosine | 0.9897 | 0.9871 |
-| functional rank | 1.663 | 1.736 |
-
-The token-space edit norm jumps strongly:
-
-```text
-||ΔZ||: 2.067 → 3.581
-```
-
-while the final retrieval-space effect norm barely changes:
-
-```text
-||Δq||: 0.3581 → 0.3526
-```
-
-This means BIND causes the editor to make **larger token-state modifications**, but those larger modifications are not translated proportionally into more useful or more distinct retrieval-space consequences.
-
-This reinforces the earlier recurrent/readout concern.
-
----
-
-# 20. Recurrent attenuation still exists under BIND
-
-BIND checkpoint:
-
-| timestep | mean `||Δq||` | pairwise Δq cosine | effect rank |
-|---|---:|---:|---:|
-| t0 | 0.3526 | 0.9871 | 1.736 |
-| t1 | 0.0930 | 0.9350 | 2.422 |
-| t2 | 0.0246 | 0.5982 | 3.438 |
-
-t2 has only about:
-
-```text
-7.0% of the t0 Δq norm
-```
-
-So the core failure:
-
-```text
-strong first edit
-→ weak later retrieval-space effects
-```
-
-is still present.
-
-BIND does not fix recurrent attenuation.
-
----
-
-# 21. STOP behavior improves, but repeated-action behavior becomes even stronger
-
-| diagnostic | CORE e3 | BIND e3 |
-|---|---:|---:|
-| mean executed edits | 2.682 | 2.849 |
-| STOP hazard t1 | 3.38% | 2.25% |
-| STOP hazard t2 | 25.74% | **10.27%** |
-| repeated-candidate fraction | 90.99% | **95.40%** |
-| max candidate share | 31.51% | 29.78% |
-
-BIND strongly reduces premature STOP:
-
-```text
-t2 STOP hazard:
-25.74%
-→ 10.27%
-```
-
-and increases average edit count.
-
-However, **95.40% of validation queries repeat at least one candidate identity**.
-
-This is even higher than the core baseline.
-
-So the network is not using the extra trajectory depth to compose clearly distinct candidate actions. It is frequently applying the same identity again.
-
-This is consistent with the support maps still being clones.
-
----
-
-# 22. FULL still does not exploit dynamic candidate specialization
-
-| control | CORE e3 | BIND e3 |
-|---|---:|---:|
-| FULL | 27.258 | 27.582 |
-| MEAN | 27.308 | 27.666 |
-| best REPEAT | 27.441 | 27.708 |
-
-For BIND:
-
-```text
-FULL        = 27.582
-MEAN        = 27.666
-best REPEAT = 27.708
-```
-
-So:
-
-```text
-MEAN > FULL by +0.084
-best REPEAT > FULL by +0.126
-```
-
-The gaps are small, but the qualitative result remains unchanged:
-
-> **Dynamic candidate selection still provides no measurable advantage over a mean candidate or repeatedly applying one fixed candidate.**
-
-Therefore BIND improves retrieval slightly without demonstrating that the intended multi-candidate mechanism has become functionally necessary.
-
----
-
-# 23. Updated causal interpretation after BIND
-
-The CORE-only hypothesis was:
-
-```text
-similar WHAT
-→ cloned WHERE
-→ parallel edits
-→ weak later effects
-→ STOP
-```
-
-BIND gives us a stronger localization of the failure.
-
-Observed under BIND:
-
-```text
-WHAT becomes somewhat more distinct       ✅
-context becomes somewhat more distinct    ✅
-WHERE is still almost identical           ❌
-delta-Z remains highly parallel            ❌
-FULL still ≈ MEAN ≈ REPEAT                 ❌
-```
-
-Therefore the updated hypothesis is:
-
-```text
-BIND
+WHAT correlated
   ↓
-partial text/semantic symmetry breaking
+WHERE almost cloned
   ↓
-AnchorGrounder collapses the distinct signals
-into nearly the same spatial distribution
+ΔZ almost cloned
   ↓
-Grounded evidence remains largely shared
+Δq almost cloned AND rapidly attenuated
+```
+
+to:
+
+```text
+WHAT correlated
   ↓
-Shared editor still produces near-parallel token edits
+WHERE almost cloned
   ↓
-multi-candidate policy has little functional reason to specialize
+ΔZ almost cloned
+  ↓
+Δq almost cloned BUT now remains strong across recurrence
 ```
 
-The new evidence shifts suspicion **more strongly toward the WHERE/grounding interface**.
+This is an important localization result.
+
+The readout bottleneck and grounding/candidate redundancy are **separate failure modes**.
 
 ---
 
-# 24. Decision on BIND
+# 36. Selected-Path Utility Reveals a New Late Over-Edit Problem
 
-## What BIND achieved
-
-- Mean Recall: **+0.324**
-- intent cosine decreases slightly;
-- context cosine decreases more clearly;
-- t0 functional rank improves from 1.663 → 1.736;
-- candidate selection becomes slightly more balanced;
-- STOP becomes less aggressive.
-
-## What BIND did not achieve
-
-- support maps are still clones;
-- support overlap remains ~0.99;
-- delta-Z directions remain highly correlated;
-- t0 candidate effects remain almost parallel;
-- recurrent attenuation remains;
-- repeated candidate selection rises to 95.40%;
-- MEAN and fixed REPEAT still match/beat FULL.
-
-## Verdict
+Target-relative improvement on the actual selected non-STOP transition:
 
 ```text
-L_bind = mildly useful auxiliary signal
-       ≠ solution to candidate decomposition
+t0 mean Δ target cosine = +0.074237
+t1 mean Δ target cosine = +0.024877
+t2 mean Δ target cosine = -0.002613
 ```
 
-It should be retained as a promising semantic signal for later combinations, but **BIND alone does not solve the central structural failure**.
+Counts:
+
+```text
+t0 selected non-STOP = 5917
+t1 selected non-STOP = 5788
+t2 selected non-STOP = 5536
+```
+
+The first two edits are strongly useful on average.
+
+The third selected edit is slightly harmful on average:
+
+\[
+\boxed{
+E[\Delta {\rm sim}_{target}\mid t=2,\ {\rm execute}]
+\approx -0.00261
+}
+\]
+
+This failure was difficult to see under the old cap because the third-step effect itself was almost annihilated.
+
+After R1a, the third-step effect survives, so **over-editing becomes observable**.
+
+This suggests a new distinction:
+
+```text
+R0 problem:
+late actions cannot express enough retrieval movement.
+
+R1a problem:
+late actions can move strongly,
+but the policy often should STOP instead of applying another redundant edit.
+```
+
+The negative t2 target-similarity observation is offline diagnostic evidence only. It does not mean target information entered the forward path.
 
 ---
 
-# 25. What the next ablation should answer
+# 37. STOP and Selection After R1a
 
-The original plan proposed COMP after BIND.
-
-That is still useful as a controlled experiment, but the BIND result changes what we should look for.
-
-For `L_comp`, the key question is no longer merely:
+Global selection:
 
 ```text
-Does intent cosine decrease?
+absorbed STOP occupancy:
+t0 = 1.65%
+t1 = 3.79%
+t2 = 7.98%
 ```
 
-It is:
+New STOP counts:
 
 ```text
-Can stronger claim complementarity make the intent differences
-large enough to survive the AnchorGrounder and produce distinct supports?
+t0 =  99 / 6016
+t1 = 129 / 5917
+t2 = 252 / 5788
 ```
 
-The decisive metrics are:
+Approximate new STOP hazard:
 
-1. `pairwise_support_cosine`
-2. `pairwise_support_overlap`
-3. `pairwise_delta_z_cosine`
-4. t0 `functional_effective_rank`
-5. `FULL - MEAN`
-6. `FULL - best_REPEATED`
-7. repeated-candidate fraction
+```text
+t0 ≈ 1.65%
+t1 ≈ 2.18%
+t2 ≈ 4.35%
+```
 
-If COMP or COMP+BIND lowers intent/context cosine but support cosine remains around `0.999`, that would be strong evidence that **the architecture needs a direct WHERE-side specialization mechanism**, rather than more text-side semantic losses.
+Mean executed edits:
+
+```text
+2.86586 / maximum 3
+```
+
+Thus most examples are still pushed close to the full horizon.
+
+Candidate distribution conditional on edit:
+
+```text
+candidate 0 =  8.86%
+candidate 1 = 40.06%
+candidate 2 = 26.05%
+candidate 3 = 25.04%
+```
+
+There is no strict single-candidate monopoly under the R0 threshold.
+
+However:
+
+```text
+queries with repeated candidate selections
+= 5760 / 6016
+= 95.74%
+```
+
+This is extremely high.
+
+Therefore the current behavior is better summarized as:
+
+\[
+\boxed{
+\text{repeat-heavy consensus/redundancy}
+}
+\]
+
+rather than:
+
+\[
+\boxed{
+\text{single-slot monopoly}
+}
+\]
+
+The combination:
+
+```text
+95.7% repeated-candidate trajectories
++
+best fixed REPEAT > FULL
++
+t2 selected target gain < 0
+```
+
+shows that action identity and STOP policy are not yet exploiting a genuinely diverse candidate set.
 
 ---
 
-# 26. Current experiment scoreboard
+# 38. R1a Red-Team Interpretation
 
-| Experiment | Mean Recall | support cosine | support overlap | t0 rank | t0 Δq cosine | mean edits | repeat-query fraction | interpretation |
-|---|---:|---:|---:|---:|---:|---:|---:|---|
-| CORE best e3 | 27.258 | 0.999795 | 0.995188 | 1.663 | 0.9897 | 2.682 | 90.99% | WHERE clone |
-| BIND best e3 | **27.582** | 0.999372 | 0.989260 | **1.736** | 0.9871 | 2.849 | 95.40% | mild WHAT improvement, WHERE still clone |
+## 38.1 What R1a proves strongly
 
-This table should be extended with COMP, COMP+BIND, FACTOR, and any later architectural interventions.
----
+R1a strongly supports:
 
-# 27. COMP ablation diagnostic
+\[
+\boxed{
+\text{The global query cap was a major causal cause of late retrieval-effect attenuation.}
+}
+\]
 
-**Experiment:** `objective=comp`  
-**Checkpoint analyzed:** epoch 2 best  
-**Mean Recall:** **27.125**
+Evidence:
 
-## Retrieval
+- only intended architectural/config intervention was query cap;
+- corrected replay uses `query_cap=1000`;
+- checkpoint MR and diagnostic MR match exactly;
+- late `Δq` retention recovers from roughly 5% to roughly 59% by t2;
+- same-parent recurrent retrieval rises dramatically through t0 -> t1 -> t2;
+- headline performance increases very strongly.
 
-```text
-CORE = 27.258
-COMP = 27.125
-delta = -0.134
-```
+## 38.2 What R1a does not prove
 
-COMP does **not** improve retrieval over CORE.
+R1a does **not** prove:
 
-## WHAT
+- candidate decomposition is solved;
+- grounding is correct;
+- four actions correspond to four semantic edits;
+- visual supports are meaningfully distinct;
+- selector is optimal;
+- STOP is calibrated;
+- `query_cap=1000` is necessarily the final best production formulation;
+- no norm control/trust region is ever needed;
+- multi-step always needs exactly 3 edits.
 
-```text
-pairwise intent cosine:
-CORE = 0.9476
-COMP = 0.9636
-```
+## 38.3 Remaining collapse after R1a
 
-Intent similarity increases, so COMP alone does not create useful semantic separation.
-
-## WHERE
-
-```text
-support cosine:
-CORE = 0.999795
-COMP = 0.999467
-
-support overlap:
-CORE = 0.995188
-COMP = 0.990262
-
-support fraction:
-CORE = 7.37%
-COMP = 23.30%
-```
-
-The support becomes broader, but the four support maps remain effectively identical.
-
-## Functional behavior
+The remaining collapse is approximately:
 
 ```text
-t0 effect rank:
-CORE = 1.663
-COMP = 1.702
-
-t0 Δq cosine:
-CORE = 0.9897
-COMP = 0.9884
-
-FULL        = 27.125
-MEAN        = 27.125
-best REPEAT = 27.233
+WHAT similarity      ~0.950
+WHERE cosine         ~0.99984
+WHERE overlap        ~0.99511
+ΔZ cosine            ~0.982
+Δq cosine            ~0.977-0.983
+functional rank      ~1.82-1.95 / 4
+repeat trajectories  ~95.7%
 ```
 
-### Verdict
+This is no longer a low-energy artifact.
 
-**COMP alone is not promising as the primary specialization loss.** It neither improves retrieval nor breaks WHERE collapse.
+The candidate set is genuinely highly redundant at useful effect magnitude.
 
 ---
 
-# 28. COMP+BIND ablation diagnostic
+# 39. Updated Failure Decomposition
 
-**Checkpoint analyzed:** epoch 3 best  
-**Mean Recall:** **27.492**
+The current best decomposition is:
 
-## Retrieval
+\[
+\boxed{
+B_1:
+\text{candidate semantic/grounding redundancy}
+}
+\]
 
-```text
-CORE      = 27.258
-BIND      = 27.582
-COMP+BIND = 27.492
-
-COMP+BIND vs CORE = +0.234
-COMP+BIND vs BIND = -0.090
-```
-
-COMP+BIND is slightly better than CORE, but worse than BIND alone.
-
-## WHAT
+Observed as:
 
 ```text
-intent cosine:
-CORE      = 0.9476
-BIND      = 0.9423
-COMP      = 0.9636
-COMP+BIND = 0.9347
+WHAT highly correlated
+WHERE nearly identical
+static WHERE across recurrence
 ```
 
-This is the strongest text-side semantic separation among the semantic-loss runs.
+then:
 
-## WHERE
+\[
+\boxed{
+B_2:
+\text{editor functional redundancy}
+}
+\]
+
+Observed as:
 
 ```text
-support cosine:
-CORE      = 0.999795
-BIND      = 0.999372
-COMP+BIND = 0.999901
-
-support overlap:
-COMP+BIND = 0.996045
+ΔZ cosine ≈ 0.982
+ΔZ effective rank ≈ 1.85 / 4
 ```
 
-Despite stronger WHAT separation, WHERE remains essentially fully cloned.
+R1a has largely repaired the previous:
 
-This is the clearest evidence so far for a **WHAT→WHERE bottleneck**:
+\[
+\boxed{
+B_3:
+\text{late retrieval-effect attenuation from global query capping}
+}
+\]
+
+because:
 
 ```text
-different text-side candidate representations
-                 ↓
-almost identical spatial support distributions
+t2/t0 Δq retention:
+~5.2% -> ~58.6%
 ```
 
-## Functional behavior
+and exposes another issue:
+
+\[
+\boxed{
+B_4:
+\text{late over-edit / insufficient STOP calibration}
+}
+\]
+
+because:
 
 ```text
-t0 effect rank:
-CORE      = 1.663
-BIND      = 1.736
-COMP+BIND = 1.704
-
-FULL        = 27.492
-MEAN        = 27.427
-best REPEAT = 27.535
+t2 selected target-relative gain ≈ -0.00261
+mean edits ≈ 2.866 / 3
+t2 new STOP hazard only ≈ 4.35%
 ```
-
-### Verdict
-
-**COMP+BIND successfully changes WHAT more than BIND alone, but those differences are destroyed by the grounding stage.** It therefore localizes the failure rather than solving it.
 
 ---
 
-# 29. FACTOR ablation diagnostic
+# 40. Updated Causal Chain
 
-**Checkpoint analyzed:** epoch 2 best  
-**Mean Recall:** **27.315**
-
-## Retrieval
+Before R1a:
 
 ```text
-CORE   = 27.258
-FACTOR = 27.315
-delta  = +0.057
+correlated WHAT
+     ↓
+near-identical WHERE
+     ↓
+near-identical ΔZ
+     ↓
+global query cap compresses accumulated displacement
+     ↓
+Δq energy dies rapidly
+     ↓
+late recurrence contributes almost nothing
+     ↓
+FULL ≈ MEAN ≈ REPEAT
 ```
 
-FACTOR gives only a very small gain over CORE and remains below BIND.
-
-## Structure
+After R1a:
 
 ```text
-intent cosine:
-CORE   = 0.9476
-FACTOR = 0.9569
-
-delta-Z cosine:
-CORE   = 0.9877
-FACTOR = 0.9839
-
-t0 effect rank:
-CORE   = 1.663
-FACTOR = 1.752
+correlated WHAT
+     ↓
+near-identical static WHERE
+     ↓
+near-identical ΔZ
+     ↓
+retrieval effect now survives recurrent accumulation
+     ↓
+multi-step retrieval improves strongly
+     ↓
+but candidate directions remain clones
+     ↓
+policy repeats candidates
+     ↓
+third edit is often unnecessary / mildly harmful
 ```
 
-FACTOR slightly improves t0 rank, but the edit pathways remain highly correlated.
+The scientific interpretation therefore changes from:
 
-## WHERE
+> "The whole multi-step mechanism may be invalid."
 
-```text
-support cosine:
-CORE   = 0.999795
-FACTOR = 0.999750
+to:
 
-support overlap:
-CORE   = 0.995188
-FACTOR = 0.995210
-```
-
-WHERE collapse remains intact.
-
-## Selection
-
-```text
-max candidate share       = 49.40%
-mean executed edits       = 2.904
-repeated-candidate fraction = 96.71%
-
-FULL        = 27.315
-MEAN        = 27.332
-best REPEAT = 27.350
-```
-
-FACTOR also creates the strongest candidate-selection skew among the tested objectives without creating corresponding spatial specialization.
-
-### Verdict
-
-**FACTOR does not solve the central structural failure.**
+> **"The multi-step mechanism can be highly useful once recurrent query attenuation is removed, but the current proposer-grounder-editor stack still produces a redundant candidate set and the policy does not yet know reliably when to stop."**
 
 ---
 
-# 30. Five-run scoreboard
+# 41. R1a Decision Gate
 
-| Run | Best ep | Mean Recall | Intent cos | Support cos | Support overlap | Support frac | ΔZ cos | t0 rank | t0 Δq cos | Mean edits | Repeated cand. | Max cand. share | FULL−MEAN | FULL−best REPEAT |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| CORE | 3 | 27.258 | 0.9476 | 0.999795 | 0.995188 | 7.37% | 0.9877 | 1.663 | 0.9897 | 2.682 | 90.99% | 31.51% | -0.050 | -0.182 |
-| BIND | 3 | **27.582** | 0.9423 | 0.999372 | 0.989260 | 25.17% | 0.9838 | 1.736 | 0.9871 | 2.849 | 95.40% | 29.78% | -0.084 | -0.126 |
-| COMP | 2 | 27.125 | 0.9636 | 0.999467 | 0.990262 | 23.30% | 0.9862 | 1.702 | 0.9884 | 2.931 | 97.52% | 33.26% | -0.001 | -0.108 |
-| COMP+BIND | 3 | 27.492 | **0.9347** | 0.999901 | 0.996045 | 8.08% | 0.9859 | 1.704 | 0.9883 | 2.770 | 94.00% | 32.27% | +0.065 | -0.043 |
-| FACTOR | 2 | 27.315 | 0.9569 | 0.999750 | 0.995210 | 9.59% | 0.9839 | **1.752** | 0.9859 | 2.904 | 96.71% | **49.40%** | -0.017 | -0.035 |
+R1a success criteria:
+
+```text
+[PASS] corrected replay uses query_cap=1000
+[PASS] diagnostic MR matches checkpoint MR
+[PASS] late Δq magnitude recovers substantially
+[PASS] t1/t0 retention improves strongly
+[PASS] t2/t0 retention improves strongly
+[PASS] recurrence produces large retrieval gains
+```
+
+R1a remaining failures:
+
+```text
+[FAIL] support maps remain near-identical
+[FAIL] ΔZ candidates remain near-parallel
+[FAIL] Δq candidates remain near-parallel
+[FAIL] functional rank remains far below K=4
+[FAIL] fixed REPEAT remains slightly better than FULL
+[FAIL] MEAN remains essentially equal to FULL
+[FAIL] repeated-candidate trajectory fraction remains extremely high
+[FAIL] selected t2 edit has slightly negative target-relative mean gain
+[FAIL] STOP hazard remains low relative to the observed t2 over-edit signal
+```
+
+Therefore:
+
+\[
+\boxed{
+\textbf{R1a = PASS as a causal repair, but not a complete anti-collapse solution.}
+}
+\]
 
 ---
 
-# 31. Updated scientific conclusion
+# 42. What Should Not Be Done Next
 
-The five objectives now give a consistent picture.
+Do **not** interpret the large MR gain as justification to immediately stack every proposed mechanism.
 
-## 1. BIND is the best current loss for retrieval
-
-```text
-BIND      = 27.582
-COMP+BIND = 27.492
-FACTOR    = 27.315
-CORE      = 27.258
-COMP      = 27.125
-```
-
-BIND is therefore worth keeping as a semantic regularizer.
-
-## 2. Text-side differentiation is possible
-
-COMP+BIND produces the lowest intent cosine among these runs.
-
-So the text side is not completely incapable of specialization.
-
-## 3. WHERE is the persistent bottleneck
-
-Across all five runs:
+Do not yet combine:
 
 ```text
-support cosine ≈ 0.9994–0.9999
-support overlap ≈ 0.989–0.996
+dynamic grounding
++ semantic residual
++ DPP
++ teacher grounding
++ new STOP loss
++ new scorer
 ```
 
-The exact support breadth moves a lot, but support identity does not.
+in one run.
 
-This means the current AnchorGrounder mostly converts candidate differences into changes in **sharpness**, not changes in **spatial target**.
+That would destroy causal attribution.
 
-## 4. Dynamic candidate selection is still not necessary
+R1a has cleanly removed one bottleneck. The next intervention should again isolate one hypothesis.
 
-For every objective:
+Also do not use only headline MR as the decision metric.
+
+Every next experiment must preserve:
 
 ```text
-FULL ≈ MEAN ≈ best fixed REPEAT
+FULL / MEAN / SINGLE / REPEAT
+same-parent candidate retrieval
+intent cosine
+support cosine / overlap
+ΔZ norm / cosine / rank
+Δq norm / cosine / rank
+late retention
+selected target-relative gain
+STOP hazard
+repeated-candidate fraction
 ```
-
-Therefore candidate sequencing is not yet exploiting genuinely complementary actions.
-
-## 5. Repeated candidate use remains extreme
-
-```text
-CORE      = 90.99%
-BIND      = 95.40%
-COMP      = 97.52%
-COMP+BIND = 94.00%
-FACTOR    = 96.71%
-```
-
-The network repeatedly reuses the same action identity instead of composing distinct edits.
 
 ---
 
-# 32. Main diagnosis after five runs
+# 43. Recommended Next Investigation
 
-The evidence now supports this failure chain:
+The next bottleneck is no longer "can recurrent effects survive?"
+
+They can.
+
+The next question is:
+
+> **Can each timestep generate a meaningfully different residual edit conditioned on the current state, instead of repeatedly executing almost the same static support/action program?**
+
+The strongest architectural evidence motivating that question is:
 
 ```text
-Text-side candidates can become somewhat different
-                    ↓
-AnchorGrounder contracts those differences
-                    ↓
-P1 ≈ P2 ≈ P3 ≈ P4
-                    ↓
-grounded evidence remains shared
-                    ↓
-shared editor produces near-parallel token edits
-                    ↓
-candidate consequences remain weakly differentiated
-                    ↓
-sequence identity matters little
-                    ↓
-MEAN / REPEAT ≈ FULL
+support cosine  ≈ 0.99984
+support overlap ≈ 0.99511
+support is static across t
+ΔZ cosine       ≈ 0.982
+repeat fraction ≈ 95.7%
 ```
 
-The next serious research target should therefore be **the WHAT→WHERE grounding interface**, not another weak text-side diversity regularizer.
+Therefore the next clean candidate is a **current-state re-ground / re-propose causal test** rather than immediately adding a diversity loss.
 
-The key research question is:
+Conceptually:
 
-> How can different semantic candidate claims produce distinct but semantically justified visual supports, while still allowing overlap when two edits truly concern the same region?
+```text
+current architecture:
+text -> candidate intents -> support ONCE
+                         ↓
+Z0 -> Z1 -> Z2 -> Z3
+      same supports reused
 
-Any next architectural intervention should be evaluated against the exact five-run scoreboard above.
+next causal question:
+(Z_t, residual text/action state)
+        ↓
+recompute proposal/grounding at timestep t
+        ↓
+edit what is still missing NOW
+```
+
+This should be tested before DPP because DPP can force geometric separation without proving that the separated actions correspond to useful remaining edits.
+
+Likewise, a target-aware grounding teacher should remain conditional until the teacher-free dynamic-grounding hypothesis is tested cleanly.
+
+---
+
+# 44. One-Screen R1a Handoff
+
+```text
+R1a intervention:
+query_cap 0.5 -> 1000.0 only
+
+best checkpoint:
+outputs/2026-08-30/21-34-29/best.pt
+epoch 3
+
+correct diagnostic checkpoint:
+best_r1a_self_describing.pt
+
+provenance:
+source = checkpoint
+fully_self_describing = true
+resolved query_cap = 1000.0
+
+retrieval:
+FULL        38.7641
+MEAN        38.8160
+best REPEAT 39.2232
+best SINGLE 24.7096
+REFERENCE   14.5216
+
+same-parent MR:
+t0 24.603
+t1 34.302
+t2 39.030
+
+Δq norm:
+0.3366 -> 0.2724 -> 0.1971
+
+Δq retention:
+t1/t0 = 80.9%
+t2/t0 = 58.6%
+t2/t1 = 72.4%
+
+Δq cosine:
+0.9833 -> 0.9817 -> 0.9765
+
+functional rank:
+1.818 -> 1.856 -> 1.954
+
+ΔZ norm:
+1.3836 -> 1.3911 -> 1.4000
+
+ΔZ cosine:
+0.9819 -> 0.9821 -> 0.9824
+
+WHAT:
+intent cosine = 0.9499
+
+WHERE:
+support cosine  = 0.999842
+support overlap = 0.995108
+support eff size = 10.57 / 196
+support static = true
+
+selected target-relative gain:
+t0 +0.07424
+t1 +0.02488
+t2 -0.00261
+
+policy:
+mean edits = 2.866 / 3
+repeat-query fraction = 95.74%
+max candidate share = 40.06%
+new STOP hazard ≈ 1.65% -> 2.18% -> 4.35%
+
+R1a conclusion:
+global query cap was a major causal bottleneck.
+It suppressed late retrieval-space effects and hid the usefulness
+of recurrence.
+
+remaining failure:
+candidate/grounding/editor specialization remains collapsed,
+and the newly strengthened rollout now exposes late over-editing.
+
+next clean question:
+current-state re-ground / re-propose before adding diversity losses.
+```
+
+---
+
+# 45. Final R1a Scientific Statement
+
+The corrected R1a experiment supports the following statement:
+
+> **Removing the small global cumulative query cap produces a large recovery in FashionIQ-original retrieval and, more importantly, restores recurrent retrieval-space effect magnitude: t2 retains roughly 58.6% of the t0 `Δq` norm instead of roughly 5% in the R0 CORE-last diagnostic. Same-parent retrieval improves strongly across recurrent steps, demonstrating that the sequential editing mechanism can provide substantial utility when its readout is not aggressively compressed. However, R1a does not solve candidate collapse: support maps remain almost identical, token-space and retrieval-space candidate effects remain highly parallel, fixed REPEAT and MEAN controls remain competitive with FULL, and approximately 95.7% of trajectories reuse a candidate identity. The stronger recurrence also reveals a new late-stage control problem: the selected third edit has slightly negative mean target-relative improvement while STOP remains rare. The next causal investigation should therefore target current-state-conditioned proposal/grounding and residual edit generation, while keeping diversity regularization and target-aware teacher mechanisms conditional on that result.**
