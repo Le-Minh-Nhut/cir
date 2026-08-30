@@ -29,6 +29,34 @@ class SharedTokenEditor(nn.Module):
         state: Tensor,
         execution_confidence: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
+        base_delta, delta_z, candidate_states = self._compute_edit(
+            contexts, supports, anchor, state, execution_confidence
+        )
+        del base_delta
+        return delta_z, candidate_states
+
+    def forward_with_ungated(
+        self,
+        contexts: Tensor,
+        supports: Tensor,
+        anchor: Tensor,
+        state: Tensor,
+        execution_confidence: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        """Return ungated base effect for diagnostics without changing execution."""
+
+        return self._compute_edit(
+            contexts, supports, anchor, state, execution_confidence
+        )
+
+    def _compute_edit(
+        self,
+        contexts: Tensor,
+        supports: Tensor,
+        anchor: Tensor,
+        state: Tensor,
+        execution_confidence: Tensor | None,
+    ) -> tuple[Tensor, Tensor, Tensor]:
         if contexts.ndim != 3 or supports.ndim != 3 or anchor.shape != state.shape:
             raise ValueError("contexts/supports rank 3 and equal anchor/state are required")
         batch_size, candidates, tokens = supports.shape
@@ -37,6 +65,7 @@ class SharedTokenEditor(nn.Module):
             raise ValueError("contexts must be [B,K,d]")
         if anchor.shape[:2] != (batch_size, tokens):
             raise ValueError("support token axis must match anchor/state")
+        has_execution_confidence = execution_confidence is not None
         if execution_confidence is None:
             execution_confidence = torch.ones(
                 batch_size,
@@ -56,13 +85,18 @@ class SharedTokenEditor(nn.Module):
         # This max scaling preserves the legacy spatial gate shape only. Visual NULL
         # confidence is carried separately and MUST NOT be renormalized away.
         support_gate = supports / supports.amax(dim=-1, keepdim=True).clamp_min(self.epsilon)
-        delta_z = (
-            self.lambda_z
-            * execution_confidence[..., None, None]
-            * support_gate[..., None]
-            * direction
-        )
+        base_delta = self.lambda_z * support_gate[..., None] * direction
+        if not has_execution_confidence:
+            delta_z = base_delta
+        else:
+            # The final applicability actuator remains FP32 so confidence changes smaller
+            # than one fp16 quantum survive into the actual recurrent state update.
+            with torch.autocast(device_type=base_delta.device.type, enabled=False):
+                delta_z = (
+                    base_delta.float()
+                    * execution_confidence.float()[..., None, None]
+                )
         candidate_states = state[:, None, :, :] + delta_z
         if delta_z.shape != (batch_size, candidates, tokens, width):
             raise AssertionError("delta shape invariant failed")
-        return delta_z, candidate_states
+        return base_delta, delta_z, candidate_states

@@ -159,7 +159,7 @@ class IAGSRMECore(nn.Module):
                     execution_confidence,
                     null_probability,
                 ) = self.applicability_head(contexts)
-            delta_z, candidate_states = self.editor(
+            ungated_delta_z, delta_z, candidate_states = self.editor.forward_with_ungated(
                 contexts,
                 spatial_supports,
                 anchor,
@@ -204,12 +204,16 @@ class IAGSRMECore(nn.Module):
                         execution_confidence
                     )
                     null_probability = null_probability[:, :1].expand_as(null_probability)
+                ungated_delta_z = ungated_delta_z[:, :1].expand_as(ungated_delta_z)
             elif control == "mean_candidate":
                 original = original.mean(dim=1, keepdim=True).expand_as(original)
                 current = current.mean(dim=1, keepdim=True).expand_as(current)
                 change = change.mean(dim=1, keepdim=True).expand_as(change)
                 contexts = contexts.mean(dim=1, keepdim=True).expand_as(contexts)
                 delta_z = delta_z.mean(dim=1, keepdim=True).expand_as(delta_z)
+                ungated_delta_z = ungated_delta_z.mean(
+                    dim=1, keepdim=True
+                ).expand_as(ungated_delta_z)
                 candidate_states = current_state[:, None] + delta_z
                 candidate_queries = self.readout(
                     candidate_states, anchor, encoded.text_global, encoded.reference_global
@@ -296,6 +300,7 @@ class IAGSRMECore(nn.Module):
                     applicability_logits=applicability_logits,
                     visual_confidence=execution_confidence,
                     visual_null_probability=null_probability,
+                    ungated_delta_z=ungated_delta_z,
                 )
             )
             state = next_state

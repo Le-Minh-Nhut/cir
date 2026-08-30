@@ -55,6 +55,12 @@ def select_next_state(
     all_queries = torch.cat([candidate_queries, current_query[:, None]], dim=1)
     if action.shape != all_states.shape[:2] or action.shape != all_queries.shape[:2]:
         raise ValueError("action axis must include candidates plus STOP")
-    next_state = torch.einsum("bk,bknd->bnd", action, all_states)
+    # Autocast would otherwise downcast this einsum and erase sub-fp16 applicability
+    # differences at the state commit boundary. This changes arithmetic precision only;
+    # the selected hard/ST action and absorbing STOP semantics are unchanged.
+    with torch.autocast(device_type=all_states.device.type, enabled=False):
+        next_state = torch.einsum(
+            "bk,bknd->bnd", action.to(all_states.dtype), all_states
+        )
     next_query = torch.einsum("bk,bkd->bd", action, all_queries)
     return next_state, next_query

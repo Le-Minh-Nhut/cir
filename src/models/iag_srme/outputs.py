@@ -42,6 +42,7 @@ class RecurrentStepOutput:
     applicability_logits: Tensor | None = None  # [B,K]
     visual_confidence: Tensor | None = None  # [B,K]
     visual_null_probability: Tensor | None = None  # [B,K] = 1-confidence
+    ungated_delta_z: Tensor | None = None  # [B,K,N,d], before applicability
 
 
 @dataclass(slots=True)

@@ -23,9 +23,12 @@ class DynamicApplicabilityGate(nn.Module):
     def forward(self, contexts: Tensor) -> tuple[Tensor, Tensor, Tensor]:
         if contexts.ndim != 3:
             raise ValueError("contexts must be [B,K,d]")
-        logits = self.projection(self.norm(contexts)).squeeze(-1)
-        # Sigmoid arithmetic stays in FP32 under AMP so the applicability variable cannot
-        # inherit Entmax's exact sparse-support exclusion behavior.
-        confidence = torch.sigmoid(logits.float()).to(logits.dtype)
-        null_probability = 1.0 - confidence
+        # Keep the entire WHETHER pathway in FP32. Casting only the sigmoid input to FP32
+        # is insufficient because returning confidence to fp16 quantizes small learned
+        # changes near the initial c=0.98 operating point.
+        with torch.autocast(device_type=contexts.device.type, enabled=False):
+            normalized = self.norm(contexts.float())
+            logits = self.projection(normalized).squeeze(-1)
+            confidence = torch.sigmoid(logits)
+            null_probability = 1.0 - confidence
         return logits, confidence, null_probability
