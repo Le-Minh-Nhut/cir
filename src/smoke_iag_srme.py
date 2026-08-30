@@ -33,6 +33,10 @@ def main() -> None:
     with torch.no_grad():
         core.scorer.score_head[-1].weight.zero_()
         core.scorer.score_head[-1].bias.fill_(0.5)
+        if args.r1b:
+            # Exercise continuous FP32 actuator resolution rather than only the exact
+            # zero-weight initialization point.
+            core.applicability_head.projection.weight.normal_(std=1e-3)
     encoded = BackboneOutput(
         anchor=torch.randn(batch, tokens, width, requires_grad=True),
         reference_global=F.normalize(torch.randn(batch, retrieval_dim), dim=-1).requires_grad_(),
@@ -118,6 +122,9 @@ def main() -> None:
             if output.visual_null_probabilities is None
             else {
                 "mean": float(output.visual_null_probabilities.detach().mean()),
+                "standard_deviation": float(
+                    output.visual_null_probabilities.detach().std(unbiased=False)
+                ),
                 "maximum": float(output.visual_null_probabilities.detach().max()),
                 "minimum": float(output.visual_null_probabilities.detach().min()),
                 "per_timestep_mean": output.visual_null_probabilities.detach()
@@ -126,6 +133,16 @@ def main() -> None:
                 "spatial_mass_error": float(
                     (output.supports.detach().sum(dim=-1) - 1.0).abs().max()
                 ),
+                "dtype_contract": {
+                    "context": str(output.trace[0].contexts.dtype),
+                    "applicability_logits": str(
+                        output.trace[0].applicability_logits.dtype
+                    ),
+                    "confidence": str(output.trace[0].visual_confidence.dtype),
+                    "p_null": str(output.trace[0].visual_null_probability.dtype),
+                    "delta_z": str(output.trace[0].delta_z.dtype),
+                    "candidate_state": str(output.trace[0].candidate_states.dtype),
+                },
             }
         ),
     }

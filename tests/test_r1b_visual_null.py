@@ -11,6 +11,7 @@ import torch
 from torch import nn
 from torch.optim import AdamW
 
+from canary_train_iag_srme import _dynamic_applicability_diagnostics
 from diagnose_iag_srme_checkpoint import (
     NullTargetUtilityAccumulator,
     ValidationDiagnosticAccumulator,
@@ -168,6 +169,117 @@ def test_applicability_head_has_finite_nonzero_gradient_even_at_low_null() -> No
         assert parameter.grad.norm() > 0
 
 
+@pytest.mark.parametrize("autocast_dtype", [torch.float16, torch.bfloat16])
+def test_applicability_outputs_remain_fp32_under_low_precision_autocast(
+    autocast_dtype: torch.dtype,
+) -> None:
+    gate = DynamicApplicabilityGate(width=8, initial_applicability=0.98)
+    contexts = torch.randn(2, 4, 8).to(autocast_dtype)
+    with torch.autocast("cpu", dtype=autocast_dtype):
+        logits, confidence, null = gate(contexts)
+    assert logits.dtype == torch.float32
+    assert confidence.dtype == torch.float32
+    assert null.dtype == torch.float32
+    assert gate.norm.weight.dtype == torch.float32
+    assert gate.projection.weight.dtype == torch.float32
+
+
+def test_sub_fp16_quantum_confidence_differences_survive() -> None:
+    gate = DynamicApplicabilityGate(width=8, initial_applicability=0.98)
+    with torch.no_grad():
+        gate.projection.weight.zero_()
+        gate.projection.weight[0, 0] = 5e-5
+    contexts = torch.zeros(1, 2, 8, dtype=torch.float16)
+    contexts[0, 0, 0] = 1.0
+    contexts[0, 1, 0] = -1.0
+    with torch.autocast("cpu", dtype=torch.float16):
+        _, confidence, _ = gate(contexts)
+    difference = (confidence[0, 0] - confidence[0, 1]).abs()
+    assert confidence.dtype == torch.float32
+    assert 0 < difference < 4.8828125e-4
+    assert confidence[0, 0].half() == confidence[0, 1].half()
+
+
+def test_editor_preserves_sub_fp16_confidence_differences() -> None:
+    torch.manual_seed(937)
+    editor = SharedTokenEditor(width=8, lambda_z=0.1).eval()
+    contexts = torch.randn(1, 4, 8, dtype=torch.float16)
+    anchor = torch.randn(1, 7, 8, dtype=torch.float16)
+    support = torch.softmax(torch.randn(1, 4, 7), dim=-1).half()
+    low = torch.full((1, 4), 0.97990, dtype=torch.float32)
+    high = torch.full((1, 4), 0.97995, dtype=torch.float32)
+    assert torch.equal(low.half(), high.half())
+    with torch.autocast("cpu", dtype=torch.float16):
+        low_delta, _ = editor(
+            contexts, support, anchor, anchor, execution_confidence=low
+        )
+        high_delta, _ = editor(
+            contexts, support, anchor, anchor, execution_confidence=high
+        )
+    assert low_delta.dtype == torch.float32
+    assert high_delta.dtype == torch.float32
+    assert not torch.equal(low_delta, high_delta)
+    assert high_delta.norm() > low_delta.norm()
+
+
+def test_mixed_precision_gradient_reaches_all_applicability_parameters() -> None:
+    torch.manual_seed(941)
+    gate = DynamicApplicabilityGate(width=8, initial_applicability=0.98)
+    with torch.no_grad():
+        gate.projection.weight.normal_(std=0.01)
+    contexts = torch.randn(3, 4, 8, dtype=torch.bfloat16, requires_grad=True)
+    weights = torch.linspace(-1.0, 2.0, 12).reshape(3, 4)
+    with torch.autocast("cpu", dtype=torch.bfloat16):
+        _, confidence, _ = gate(contexts)
+        loss = (confidence * weights).sum()
+    loss.backward()
+    for parameter in (
+        gate.norm.weight,
+        gate.norm.bias,
+        gate.projection.weight,
+        gate.projection.bias,
+    ):
+        assert parameter.grad is not None
+        assert torch.isfinite(parameter.grad).all()
+        assert parameter.grad.norm() > 0
+
+
+def test_canary_applicability_diagnostics_are_live_only() -> None:
+    batch, candidates, tokens, width = 2, 4, 3, 2
+    steps = []
+    for timestep in range(3):
+        live = torch.tensor([True, timestep == 0])
+        confidence = torch.full((batch, candidates), 0.98 + timestep * 1e-4)
+        confidence[1] = 0.1  # Must be excluded after t0 when this sample is dead.
+        base = torch.ones(batch, candidates, tokens, width)
+        delta = base * confidence[..., None, None]
+        steps.append(
+            SimpleNamespace(
+                live_before=live,
+                visual_confidence=confidence,
+                visual_null_probability=1.0 - confidence,
+                applicability_logits=torch.logit(confidence),
+                ungated_delta_z=base,
+                delta_z=delta,
+                candidate_states=delta,
+            )
+        )
+    output = SimpleNamespace(
+        trace=tuple(steps),
+        visual_null_probabilities=torch.stack(
+            [step.visual_null_probability for step in steps], dim=1
+        ),
+        visual_confidence=torch.stack(
+            [step.visual_confidence for step in steps], dim=1
+        ),
+    )
+    diagnostics = _dynamic_applicability_diagnostics(output)
+    assert diagnostics is not None
+    assert diagnostics["confidence_mean_by_timestep"][1] == pytest.approx(0.9801)
+    assert diagnostics["confidence_mean_by_timestep"][2] == pytest.approx(0.9802)
+    assert diagnostics["confidence_to_delta_scale_error"] == 0.0
+
+
 def test_dynamic_applicability_changes_with_state_but_where_is_static(
     synthetic_encoded,
 ) -> None:
@@ -210,6 +322,26 @@ def test_grounder_once_applicability_each_timestep_and_same_parent(
         assert step.applicability_logits.shape == (3, 4)
         assert step.visual_confidence.shape == (3, 4)
         assert step.visual_null_probability.shape == (3, 4)
+        torch.testing.assert_close(
+            step.candidate_states,
+            step.current_state[:, None] + step.delta_z,
+            atol=0.0,
+            rtol=0.0,
+        )
+
+
+def test_mixed_precision_same_parent_and_state_commit_remain_fp32(
+    synthetic_encoded,
+) -> None:
+    core = IAGSRMECore(_r1b_config()).eval()
+    with torch.autocast("cpu", dtype=torch.bfloat16):
+        output = core(synthetic_encoded)
+    for step in output.trace:
+        assert step.applicability_logits.dtype == torch.float32
+        assert step.visual_confidence.dtype == torch.float32
+        assert step.delta_z.dtype == torch.float32
+        assert step.candidate_states.dtype == torch.float32
+        assert step.next_state.dtype == torch.float32
         torch.testing.assert_close(
             step.candidate_states,
             step.current_state[:, None] + step.delta_z,

@@ -46,7 +46,7 @@ def main() -> None:
     parser.add_argument("--r1b", action="store_true")
     args = parser.parse_args()
     torch.manual_seed(20260829)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     regime = FGCLIPRegime(
         checkpoint=args.checkpoint,
         revision=args.revision,
@@ -381,6 +381,25 @@ def main() -> None:
                             output.visual_null_probabilities.detach().float().mean()
                         )
                     ),
+                    "p_null_standard_deviation": (
+                        None
+                        if output.visual_null_probabilities is None
+                        else float(
+                            output.visual_null_probabilities.detach()
+                            .float()
+                            .std(unbiased=False)
+                        )
+                    ),
+                    "p_null_minimum": (
+                        None
+                        if output.visual_null_probabilities is None
+                        else float(output.visual_null_probabilities.detach().float().min())
+                    ),
+                    "p_null_maximum": (
+                        None
+                        if output.visual_null_probabilities is None
+                        else float(output.visual_null_probabilities.detach().float().max())
+                    ),
                     "mean_confidence_by_timestep": (
                         None
                         if output.visual_confidence is None
@@ -394,6 +413,28 @@ def main() -> None:
                         .abs()
                         .max()
                     ),
+                    "dtype_contract": {
+                        "context": str(output.trace[0].contexts.dtype),
+                        "applicability_logits": (
+                            None
+                            if output.trace[0].applicability_logits is None
+                            else str(output.trace[0].applicability_logits.dtype)
+                        ),
+                        "confidence": (
+                            None
+                            if output.trace[0].visual_confidence is None
+                            else str(output.trace[0].visual_confidence.dtype)
+                        ),
+                        "p_null": (
+                            None
+                            if output.trace[0].visual_null_probability is None
+                            else str(output.trace[0].visual_null_probability.dtype)
+                        ),
+                        "delta_z": str(output.trace[0].delta_z.dtype),
+                        "candidate_state": str(
+                            output.trace[0].candidate_states.dtype
+                        ),
+                    },
                     "initial_real_visual_logit_statistics": {
                         "mean": float(real_grounding_logits.mean()),
                         "standard_deviation": float(real_grounding_logits.std()),

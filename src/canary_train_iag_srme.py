@@ -148,17 +148,130 @@ def _batch_diagnostics(output) -> dict[str, object]:
 def _dynamic_applicability_diagnostics(output) -> dict[str, object] | None:
     if output.visual_null_probabilities is None or output.visual_confidence is None:
         return None
-    null = output.visual_null_probabilities.detach().float()
-    confidence = output.visual_confidence.detach().float()
+
+    def statistics(values: Tensor) -> dict[str, float]:
+        values = values.detach().float().flatten()
+        return {
+            "mean": float(values.mean()),
+            "std": float(values.std(unbiased=False)),
+            "minimum": float(values.min()),
+            "maximum": float(values.max()),
+        }
+
+    live_confidence: list[Tensor] = []
+    live_null: list[Tensor] = []
+    confidence_by_timestep: list[dict[str, float] | None] = []
+    null_by_timestep: list[dict[str, float] | None] = []
+    candidate_confidence_std: list[Tensor] = []
+    candidate_null_std: list[Tensor] = []
+    ungated_norms: list[Tensor] = []
+    gated_norms: list[Tensor] = []
+    actuator_errors: list[Tensor] = []
+    for step in output.trace:
+        if step.visual_confidence is None or step.visual_null_probability is None:
+            return None
+        valid = step.live_before
+        if not valid.any():
+            confidence_by_timestep.append(None)
+            null_by_timestep.append(None)
+            continue
+        confidence = step.visual_confidence[valid].detach().float()
+        null = step.visual_null_probability[valid].detach().float()
+        live_confidence.append(confidence.flatten())
+        live_null.append(null.flatten())
+        confidence_by_timestep.append(statistics(confidence))
+        null_by_timestep.append(statistics(null))
+        candidate_confidence_std.append(confidence.std(dim=-1, unbiased=False))
+        candidate_null_std.append(null.std(dim=-1, unbiased=False))
+        if step.ungated_delta_z is None:
+            raise AssertionError("R1b canary requires the ungated editor effect trace")
+        ungated = step.ungated_delta_z[valid].detach().float()
+        gated = step.delta_z[valid].detach().float()
+        reconstructed = ungated * confidence[..., None, None]
+        ungated_norms.append(ungated.flatten(2).norm(dim=-1).flatten())
+        gated_norms.append(gated.flatten(2).norm(dim=-1).flatten())
+        actuator_errors.append((gated - reconstructed).abs().flatten())
+
+    if not live_confidence:
+        return None
+    all_confidence = torch.cat(live_confidence)
+    all_null = torch.cat(live_null)
+    temporal_changes: list[Tensor] = []
+    signed_temporal_changes: list[float | None] = []
+    for previous, current in zip(output.trace[:-1], output.trace[1:], strict=True):
+        if previous.visual_confidence is None or current.visual_confidence is None:
+            return None
+        valid = current.live_before
+        if not valid.any():
+            signed_temporal_changes.append(None)
+            continue
+        change = (
+            current.visual_confidence[valid].detach().float()
+            - previous.visual_confidence[valid].detach().float()
+        )
+        temporal_changes.append(change.flatten())
+        signed_temporal_changes.append(float(change.mean()))
+    absolute_temporal = (
+        torch.cat(temporal_changes).abs() if temporal_changes else torch.empty(0)
+    )
+    confidence_stats = statistics(all_confidence)
+    null_stats = statistics(all_null)
     return {
-        "mean": float(null.mean()),
-        "minimum": float(null.min()),
-        "maximum": float(null.max()),
-        "confidence_mean": float(confidence.mean()),
-        "confidence_minimum": float(confidence.min()),
-        "confidence_maximum": float(confidence.max()),
-        "p_null_mean_by_timestep": null.mean(dim=(0, 2)).tolist(),
-        "confidence_mean_by_timestep": confidence.mean(dim=(0, 2)).tolist(),
+        "p_null_mean": null_stats["mean"],
+        "p_null_std": null_stats["std"],
+        "p_null_minimum": null_stats["minimum"],
+        "p_null_maximum": null_stats["maximum"],
+        "confidence_mean": confidence_stats["mean"],
+        "confidence_std": confidence_stats["std"],
+        "confidence_minimum": confidence_stats["minimum"],
+        "confidence_maximum": confidence_stats["maximum"],
+        "confidence_mean_by_timestep": [
+            None if item is None else item["mean"] for item in confidence_by_timestep
+        ],
+        "confidence_std_by_timestep": [
+            None if item is None else item["std"] for item in confidence_by_timestep
+        ],
+        "confidence_min_by_timestep": [
+            None if item is None else item["minimum"] for item in confidence_by_timestep
+        ],
+        "confidence_max_by_timestep": [
+            None if item is None else item["maximum"] for item in confidence_by_timestep
+        ],
+        "p_null_mean_by_timestep": [
+            None if item is None else item["mean"] for item in null_by_timestep
+        ],
+        "p_null_std_by_timestep": [
+            None if item is None else item["std"] for item in null_by_timestep
+        ],
+        "p_null_min_by_timestep": [
+            None if item is None else item["minimum"] for item in null_by_timestep
+        ],
+        "p_null_max_by_timestep": [
+            None if item is None else item["maximum"] for item in null_by_timestep
+        ],
+        "confidence_candidate_std_mean": float(
+            torch.cat(candidate_confidence_std).mean()
+        ),
+        "p_null_candidate_std_mean": float(torch.cat(candidate_null_std).mean()),
+        "mean_abs_confidence_temporal_change": (
+            float(absolute_temporal.mean()) if absolute_temporal.numel() else None
+        ),
+        "max_abs_confidence_temporal_change": (
+            float(absolute_temporal.max()) if absolute_temporal.numel() else None
+        ),
+        "mean_signed_confidence_change_t0_to_t1": signed_temporal_changes[0],
+        "mean_signed_confidence_change_t1_to_t2": signed_temporal_changes[1],
+        "ungated_base_delta_z_norm": float(torch.cat(ungated_norms).mean()),
+        "gated_delta_z_norm": float(torch.cat(gated_norms).mean()),
+        "confidence_to_delta_scale_error": float(
+            torch.cat(actuator_errors).max()
+        ),
+        "applicability_logit_dtype": str(output.trace[0].applicability_logits.dtype),
+        "confidence_dtype": str(output.trace[0].visual_confidence.dtype),
+        "p_null_dtype": str(output.trace[0].visual_null_probability.dtype),
+        "delta_z_dtype": str(output.trace[0].delta_z.dtype),
+        "candidate_state_dtype": str(output.trace[0].candidate_states.dtype),
+        "population": "candidate actions of samples live before each timestep",
     }
 
 
@@ -336,6 +449,7 @@ def main() -> None:
     sample_steps = 0
     successful_steps_with_nonzero_applicability_gradient = 0
     latest_applicability_diagnostics: dict[str, object] | None = None
+    max_observed_applicability_variation = 0.0
     iterator = iter(loader)
     model.train()
     objective.train()
@@ -470,9 +584,21 @@ def main() -> None:
             null_diagnostics = diagnostics["visual_null_probability"]
             if isinstance(null_diagnostics, dict):
                 latest_applicability_diagnostics = null_diagnostics
-                history["p_null_mean"].append(float(null_diagnostics["mean"]))
-                history["p_null_max"].append(float(null_diagnostics["maximum"]))
-                history["p_null_min"].append(float(null_diagnostics["minimum"]))
+                max_observed_applicability_variation = max(
+                    max_observed_applicability_variation,
+                    float(null_diagnostics["confidence_std"]),
+                    float(
+                        null_diagnostics["max_abs_confidence_temporal_change"] or 0.0
+                    ),
+                    float(null_diagnostics["confidence_candidate_std_mean"]),
+                )
+                history["p_null_mean"].append(float(null_diagnostics["p_null_mean"]))
+                history["p_null_max"].append(
+                    float(null_diagnostics["p_null_maximum"])
+                )
+                history["p_null_min"].append(
+                    float(null_diagnostics["p_null_minimum"])
+                )
                 history["confidence_mean"].append(
                     float(null_diagnostics["confidence_mean"])
                 )
@@ -497,6 +623,10 @@ def main() -> None:
                     "parameter_step_max_abs_delta": step_parameter_deltas,
                     "successful_steps_with_nonzero_applicability_gradient": (
                         successful_steps_with_nonzero_applicability_gradient
+                    ),
+                    "applicability_nonzero_gradient_fraction": (
+                        successful_steps_with_nonzero_applicability_gradient
+                        / successful_optimizer_steps
                     ),
                     "parameter_max_abs_delta": {
                         name: _parameter_delta(parameter, initial[name])
@@ -526,6 +656,13 @@ def main() -> None:
                     raise RuntimeError(
                         "dynamic applicability parameters did not change after 20 successful steps"
                     )
+                if isinstance(latest_applicability_diagnostics, dict):
+                    variation_tolerance = 1e-7
+                    if max_observed_applicability_variation <= variation_tolerance:
+                        raise RuntimeError(
+                            "applicability parameters changed but the FP32 actuator remained "
+                            "numerically constant after 20 successful steps"
+                        )
     except torch.OutOfMemoryError as error:
         print(
             json.dumps(
@@ -579,6 +716,14 @@ def main() -> None:
         "initial_applicability": model.core.config.initial_applicability,
         "successful_steps_with_nonzero_applicability_gradient": (
             successful_steps_with_nonzero_applicability_gradient
+        ),
+        "applicability_nonzero_gradient_fraction": (
+            successful_steps_with_nonzero_applicability_gradient
+            / max(successful_optimizer_steps, 1)
+        ),
+        "applicability_variation_tolerance": 1e-7,
+        "max_observed_applicability_variation": (
+            max_observed_applicability_variation
         ),
         "p_null_mean_start": (
             history["p_null_mean"][0] if history["p_null_mean"] else None
