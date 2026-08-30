@@ -32,6 +32,9 @@ class IAGSRMEConfig:
     enable_claim_head: bool = False
     enable_factor_head: bool = False
     factor_dim: int | None = None
+    enable_visual_null: bool = False
+    visual_null_initial_logit: float = 0.0
+    grounding_normalization: str = "entmax15"
 
 
 class IAGSRMECore(nn.Module):
@@ -47,7 +50,12 @@ class IAGSRMECore(nn.Module):
         self.intent_encoder = TextIntentEncoder(
             config.width, config.num_candidates, config.num_heads
         )
-        self.grounder = AnchorGrounder(config.width)
+        self.grounder = AnchorGrounder(
+            config.width,
+            enable_visual_null=config.enable_visual_null,
+            visual_null_initial_logit=config.visual_null_initial_logit,
+            normalization=config.grounding_normalization,
+        )
         self.grounded_reader = GroundedStateReader(config.width)
         self.context_fuser = GroundedEditContext(config.width)
         self.editor = SharedTokenEditor(config.width, config.lambda_z)
@@ -96,7 +104,12 @@ class IAGSRMECore(nn.Module):
         if encoded.reference_global.shape != (batch_size, self.config.retrieval_dim):
             raise ValueError("reference_global must be [B,D]")
         intents = self.intent_encoder(encoded.text_tokens, encoded.text_content_mask)
-        supports = self.grounder(intents, anchor)
+        grounding = self.grounder(intents, anchor)
+        visual_supports = grounding.visual_supports
+        spatial_supports = grounding.conditional_supports
+        execution_confidence = (
+            grounding.visual_confidence if self.config.enable_visual_null else None
+        )
         # A is immutable; assignment never changes after this point. Z starts at A.
         state = anchor
         current_query = self.readout(state, anchor, encoded.text_global, encoded.reference_global)
@@ -105,7 +118,7 @@ class IAGSRMECore(nn.Module):
         fixed_best: Tensor | None = None
         frozen_order: Tensor | None = None
 
-        original_static, _, _ = self.grounded_reader(supports, anchor, anchor)
+        original_static, _, _ = self.grounded_reader(spatial_supports, anchor, anchor)
         claims = None
         claim_logits = None
         if self.claim_head is not None:
@@ -125,9 +138,17 @@ class IAGSRMECore(nn.Module):
             current_state = state
             query_before = current_query
             live_before = live
-            original, current, change = self.grounded_reader(supports, anchor, current_state)
+            original, current, change = self.grounded_reader(
+                spatial_supports, anchor, current_state
+            )
             contexts = self.context_fuser(intents, original, current, change)
-            delta_z, candidate_states = self.editor(contexts, supports, anchor, current_state)
+            delta_z, candidate_states = self.editor(
+                contexts,
+                spatial_supports,
+                anchor,
+                current_state,
+                execution_confidence=execution_confidence,
+            )
             expected_shape = (
                 batch_size,
                 self.config.num_candidates,
@@ -146,7 +167,7 @@ class IAGSRMECore(nn.Module):
             )
             delta_q = candidate_queries - query_before[:, None, :]
             scorer_change = change
-            scorer_supports = supports
+            scorer_supports = spatial_supports
             if control == "clone_candidate_1":
                 original = original[:, :1].expand_as(original)
                 current = current[:, :1].expand_as(current)
@@ -157,7 +178,7 @@ class IAGSRMECore(nn.Module):
                 candidate_queries = candidate_queries[:, :1].expand_as(candidate_queries)
                 delta_q = delta_q[:, :1].expand_as(delta_q)
                 scorer_change = change
-                scorer_supports = supports[:, :1].expand_as(supports)
+                scorer_supports = spatial_supports[:, :1].expand_as(spatial_supports)
             elif control == "mean_candidate":
                 original = original.mean(dim=1, keepdim=True).expand_as(original)
                 current = current.mean(dim=1, keepdim=True).expand_as(current)
@@ -170,7 +191,9 @@ class IAGSRMECore(nn.Module):
                 )
                 delta_q = candidate_queries - query_before[:, None, :]
                 scorer_change = change
-                scorer_supports = supports.mean(dim=1, keepdim=True).expand_as(supports)
+                scorer_supports = spatial_supports.mean(dim=1, keepdim=True).expand_as(
+                    spatial_supports
+                )
             scores = self.scorer(
                 contexts, delta_z, delta_q, scorer_change, scorer_supports
             )
@@ -247,7 +270,7 @@ class IAGSRMECore(nn.Module):
             final_state=state,
             anchor=anchor,
             intents=intents,
-            supports=supports,
+            supports=visual_supports,
             text_tokens=encoded.text_tokens,
             text_content_mask=encoded.text_content_mask,
             reference_global=encoded.reference_global,
@@ -256,6 +279,13 @@ class IAGSRMECore(nn.Module):
             claims=claims,
             factors=factors,
             auxiliary_anchor=auxiliary_anchor,
+            conditional_supports=spatial_supports,
+            visual_null_probabilities=(
+                grounding.null_probabilities if self.config.enable_visual_null else None
+            ),
+            visual_confidence=(
+                grounding.visual_confidence if self.config.enable_visual_null else None
+            ),
         )
 
 

@@ -47,7 +47,7 @@ class IAGSRMEOutput:
     final_state: Tensor  # [B,N,d]
     anchor: Tensor  # [B,N,d]
     intents: Tensor  # [B,K,d]
-    supports: Tensor  # [B,K,N]
+    supports: Tensor  # [B,K,N], real visual mass (unit mass for legacy)
     text_tokens: Tensor  # [B,L,d]
     text_content_mask: Tensor  # [B,L]
     reference_global: Tensor  # [B,D]
@@ -56,3 +56,6 @@ class IAGSRMEOutput:
     claims: Tensor | None = None  # [B,K,L]
     factors: Tensor | None = None  # [B,K,D_f]
     auxiliary_anchor: Tensor | None = None  # [B,D_f]
+    conditional_supports: Tensor | None = None  # [B,K,N], conditional WHERE shape
+    visual_null_probabilities: Tensor | None = None  # [B,K], static p_null
+    visual_confidence: Tensor | None = None  # [B,K] = 1 - p_null

@@ -22,7 +22,12 @@ class SharedTokenEditor(nn.Module):
         self.direction = nn.Linear(width, width)
 
     def forward(
-        self, contexts: Tensor, supports: Tensor, anchor: Tensor, state: Tensor
+        self,
+        contexts: Tensor,
+        supports: Tensor,
+        anchor: Tensor,
+        state: Tensor,
+        execution_confidence: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
         if contexts.ndim != 3 or supports.ndim != 3 or anchor.shape != state.shape:
             raise ValueError("contexts/supports rank 3 and equal anchor/state are required")
@@ -32,6 +37,15 @@ class SharedTokenEditor(nn.Module):
             raise ValueError("contexts must be [B,K,d]")
         if anchor.shape[:2] != (batch_size, tokens):
             raise ValueError("support token axis must match anchor/state")
+        if execution_confidence is None:
+            execution_confidence = torch.ones(
+                batch_size,
+                candidates,
+                dtype=supports.dtype,
+                device=supports.device,
+            )
+        if execution_confidence.shape != (batch_size, candidates):
+            raise ValueError("execution_confidence must be [B,K]")
         hidden = (
             self.state_projection(self.state_norm(state))[:, None, :, :]
             + self.anchor_projection(self.anchor_norm(anchor))[:, None, :, :]
@@ -39,8 +53,15 @@ class SharedTokenEditor(nn.Module):
             + self.change_projection(state - anchor)[:, None, :, :]
         )
         direction = torch.tanh(self.direction(torch.nn.functional.silu(hidden)))
+        # This max scaling preserves the legacy spatial gate shape only. Visual NULL
+        # confidence is carried separately and MUST NOT be renormalized away.
         support_gate = supports / supports.amax(dim=-1, keepdim=True).clamp_min(self.epsilon)
-        delta_z = self.lambda_z * support_gate[..., None] * direction
+        delta_z = (
+            self.lambda_z
+            * execution_confidence[..., None, None]
+            * support_gate[..., None]
+            * direction
+        )
         candidate_states = state[:, None, :, :] + delta_z
         if delta_z.shape != (batch_size, candidates, tokens, width):
             raise AssertionError("delta shape invariant failed")

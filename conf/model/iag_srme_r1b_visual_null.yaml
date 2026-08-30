@@ -1,17 +1,16 @@
-name: iag_srme
+name: iag_srme_r1b_visual_null
 width: 256
 num_candidates: 4
 max_steps: 3
 num_heads: 8
 lambda_z: 0.10
-query_cap: 0.50
+# R1a baseline condition carried forward; not an R1b intervention.
+query_cap: 1000.0
 selector_temperature: 1.0
 selector_gumbel_noise: true
 enable_claim_head: false
 enable_factor_head: false
-# Factor space is the checkpoint's retrieval space. A different dimension would
-# require an independently supervised semantic projection, which is not provided.
 factor_dim: null
-enable_visual_null: false
+enable_visual_null: true
 visual_null_initial_logit: 0.0
 grounding_normalization: entmax15

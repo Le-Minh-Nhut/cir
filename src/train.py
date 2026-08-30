@@ -53,6 +53,13 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         enable_claim_head=bool(cfg.model.enable_claim_head),
         enable_factor_head=bool(cfg.model.enable_factor_head),
         factor_dim=(None if cfg.model.factor_dim is None else int(cfg.model.factor_dim)),
+        enable_visual_null=bool(cfg.model.get("enable_visual_null", False)),
+        visual_null_initial_logit=float(
+            cfg.model.get("visual_null_initial_logit", 0.0)
+        ),
+        grounding_normalization=str(
+            cfg.model.get("grounding_normalization", "entmax15")
+        ),
     )
     return IAGSRME(backbone, IAGSRMECore(model_config)), tokenizer, processor
 
