@@ -54,8 +54,10 @@ def test_evaluation_rejects_checkpoint_from_another_backbone_revision() -> None:
 
 
 def test_evaluation_rejects_non_state_model_config_mismatch() -> None:
-    configured = IAGSRMEConfig(query_cap=1000.0, enable_visual_null=True)
-    stored = IAGSRMEConfig(query_cap=0.5, enable_visual_null=True)
+    configured = IAGSRMEConfig(
+        query_cap=1000.0, enable_dynamic_applicability=True
+    )
+    stored = IAGSRMEConfig(query_cap=0.5, enable_dynamic_applicability=True)
     with pytest.raises(ValueError, match="model-config mismatch"):
         validate_checkpoint_model_config(
             {"model_config": asdict(stored)},
