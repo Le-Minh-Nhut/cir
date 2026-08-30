@@ -111,10 +111,18 @@ def functional_effective_rank(
 
 
 def summarize_trajectory(output: IAGSRMEOutput) -> dict[str, Tensor]:
-    supports = output.supports
-    support_fraction = (supports > 0).float().mean(dim=-1)
-    support_entropy = -(supports * supports.clamp_min(1e-8).log()).sum(dim=-1)
-    support_overlap = pairwise_cosine(supports)
+    visual_supports = output.supports
+    support_mass = visual_supports.float().sum(dim=-1)
+    conditional_supports = (
+        output.conditional_supports
+        if output.conditional_supports is not None
+        else visual_supports / support_mass[..., None].clamp_min(1e-8)
+    )
+    support_fraction = (conditional_supports > 0).float().mean(dim=-1)
+    support_entropy = -(
+        conditional_supports * conditional_supports.clamp_min(1e-8).log()
+    ).sum(dim=-1)
+    support_overlap = pairwise_cosine(conditional_supports)
     actions = torch.stack([step.selected_index for step in output.trace], dim=1)
     scores = torch.stack([step.scores for step in output.trace], dim=1)
     delta_q = torch.stack([step.delta_q for step in output.trace], dim=1)
@@ -123,6 +131,7 @@ def summarize_trajectory(output: IAGSRMEOutput) -> dict[str, Tensor]:
         "grounding_support_fraction": support_fraction,
         "grounding_entropy": support_entropy,
         "grounding_overlap": support_overlap,
+        "grounding_real_visual_mass": support_mass,
         "functional_delta_q_pairwise_cosine": pairwise_cosine(delta_q),
         "functional_effective_rank": functional_effective_rank(delta_q),
         "selected_candidate_distribution": torch.nn.functional.one_hot(
@@ -136,4 +145,7 @@ def summarize_trajectory(output: IAGSRMEOutput) -> dict[str, Tensor]:
     }
     if output.claims is not None:
         result["claim_mass"] = output.claims.sum(dim=-1)
+    if output.visual_null_probabilities is not None:
+        result["visual_null_probability"] = output.visual_null_probabilities
+        result["visual_execution_confidence"] = 1.0 - output.visual_null_probabilities
     return result

@@ -53,6 +53,7 @@ REQUIRED_REPORT_KEYS = {
     "checkpoint_epoch",
     "checkpoint_metric",
     "checkpoint_model_config_provenance",
+    "checkpoint_replay_guard",
     "backbone_metadata",
     "protocol",
     "global_metrics",
@@ -60,6 +61,7 @@ REQUIRED_REPORT_KEYS = {
     "intent_diagnostics",
     "selection_diagnostics",
     "grounding_diagnostics",
+    "visual_null_diagnostics",
     "functional_diagnostics",
     "dynamic_diagnostics",
     "control_retrieval_metrics",
@@ -256,6 +258,9 @@ class _DistributionStats:
                 "count": 0,
                 "mean": None,
                 "median": None,
+                "standard_deviation": None,
+                "p90": None,
+                "p95": None,
                 "minimum": None,
                 "maximum": None,
             }
@@ -264,9 +269,73 @@ class _DistributionStats:
             "count": values.numel(),
             "mean": float(values.mean()),
             "median": float(values.median()),
+            "standard_deviation": float(values.std(unbiased=False)),
+            "p90": float(torch.quantile(values, 0.90)),
+            "p95": float(torch.quantile(values, 0.95)),
             "minimum": float(values.min()),
             "maximum": float(values.max()),
         }
+
+    def values(self) -> Tensor:
+        return torch.cat(self.chunks) if self.chunks else torch.empty(0)
+
+
+NULL_EFFECT_BIN_EDGES = (0.0, 0.2, 0.4, 0.6, 0.8, 1.000001)
+
+
+class _NullEffectBinAccumulator:
+    def __init__(self) -> None:
+        bins = len(NULL_EFFECT_BIN_EDGES) - 1
+        self.count = torch.zeros(bins, dtype=torch.long)
+        self.delta_z_total = torch.zeros(bins, dtype=torch.float64)
+        self.delta_q_total = torch.zeros(bins, dtype=torch.float64)
+        self.selected = torch.zeros(bins, dtype=torch.long)
+
+    def update(
+        self,
+        null_probabilities: Tensor,
+        delta_z_norms: Tensor,
+        delta_q_norms: Tensor,
+        selected: Tensor,
+    ) -> None:
+        values = null_probabilities.detach().float().cpu().flatten()
+        delta_z = delta_z_norms.detach().float().cpu().flatten()
+        delta_q = delta_q_norms.detach().float().cpu().flatten()
+        selected = selected.detach().bool().cpu().flatten()
+        if not (values.shape == delta_z.shape == delta_q.shape == selected.shape):
+            raise ValueError("NULL/effect/selection bin tensors must have equal shape")
+        for index, (lower, upper) in enumerate(
+            zip(NULL_EFFECT_BIN_EDGES[:-1], NULL_EFFECT_BIN_EDGES[1:], strict=True)
+        ):
+            mask = values.ge(lower) & values.lt(upper)
+            self.count[index] += int(mask.sum())
+            self.delta_z_total[index] += float(delta_z[mask].sum())
+            self.delta_q_total[index] += float(delta_q[mask].sum())
+            self.selected[index] += int(selected[mask].sum())
+
+    def summary(self) -> list[dict[str, float | int | None | list[float]]]:
+        result = []
+        for index, (lower, upper) in enumerate(
+            zip(NULL_EFFECT_BIN_EDGES[:-1], NULL_EFFECT_BIN_EDGES[1:], strict=True)
+        ):
+            count = int(self.count[index])
+            result.append(
+                {
+                    "range": [lower, min(upper, 1.0)],
+                    "count": count,
+                    "mean_delta_z_norm": (
+                        float(self.delta_z_total[index] / count) if count else None
+                    ),
+                    "mean_delta_q_norm": (
+                        float(self.delta_q_total[index] / count) if count else None
+                    ),
+                    "candidate_selection_probability": (
+                        float(self.selected[index] / count) if count else None
+                    ),
+                    "selected_count": int(self.selected[index]),
+                }
+            )
+        return result
 
 
 @dataclass
@@ -343,14 +412,39 @@ class ValidationDiagnosticAccumulator:
         self.repeated_queries = 0
         self.visual_tokens: int | None = None
 
-        self.support_fraction = _MeanTensor()
-        self.support_entropy = _MeanTensor()
-        self.support_effective_size = _MeanTensor()
-        self.support_cosine = _MeanTensor()
-        self.support_overlap = _MeanTensor()
+        self.support_fraction = [_DistributionStats() for _ in range(candidates)]
+        self.support_entropy = [_DistributionStats() for _ in range(candidates)]
+        self.support_effective_size = [
+            _DistributionStats() for _ in range(candidates)
+        ]
+        self.support_cosine = _MaskedMatrixStats(candidates)
+        self.support_overlap = _MaskedMatrixStats(candidates)
+        self.real_visual_mass = _MeanTensor()
+        self.real_visual_mass_distribution = _DistributionStats()
         self.dominant_grounding_share = _MeanTensor()
         self.intent_cosine = _MeanTensor()
         self.intent_norm = _MeanTensor()
+        self.visual_null_seen = False
+        self.null_probability = _DistributionStats()
+        self.visual_confidence_distribution = _DistributionStats()
+        self.null_probability_by_candidate = [
+            _DistributionStats() for _ in range(candidates)
+        ]
+        self.selected_null_probability = _DistributionStats()
+        self.non_selected_null_probability = _DistributionStats()
+        self.selected_null_by_timestep = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.null_effect_bins = _NullEffectBinAccumulator()
+        self.null_effect_bins_by_timestep = [
+            _NullEffectBinAccumulator() for _ in range(timesteps)
+        ]
+        self.stop_mean_confidence = _DistributionStats()
+        self.edit_mean_confidence = _DistributionStats()
+        self.stop_max_confidence = _DistributionStats()
+        self.edit_max_confidence = _DistributionStats()
+        self.all_candidates_high_null_count = 0
+        self.all_candidates_high_null_stop_count = 0
 
         self.delta_z_norm = [_MeanTensor() for _ in range(timesteps)]
         self.delta_q_norm = [_MeanTensor() for _ in range(timesteps)]
@@ -405,19 +499,102 @@ class ValidationDiagnosticAccumulator:
         self.repeated_queries += int(selection["repeated"].sum())
 
         supports = output.supports.float()
-        entropy = -(supports * supports.clamp_min(1e-8).log()).sum(dim=-1)
-        self.support_fraction.update((supports > 0).float().mean(dim=-1))
-        self.support_entropy.update(entropy)
-        self.support_effective_size.update(entropy.exp())
-        self.support_cosine.update(pairwise_cosine_matrix(supports))
-        overlap = torch.minimum(supports[:, :, None], supports[:, None, :]).sum(dim=-1)
-        self.support_overlap.update(overlap)
-        dominant_share = supports.max(dim=1).values.sum(dim=-1) / supports.sum(
+        support_mass = supports.sum(dim=-1)
+        self.real_visual_mass.update(support_mass)
+        self.real_visual_mass_distribution.update(support_mass)
+        conditional_supports = (
+            output.conditional_supports.float()
+            if output.conditional_supports is not None
+            else supports / support_mass[..., None].clamp_min(1e-8)
+        )
+        entropy = -(
+            conditional_supports * conditional_supports.clamp_min(1e-8).log()
+        ).sum(dim=-1)
+        valid_shape = support_mass > 1e-8
+        fraction = (conditional_supports > 0).float().mean(dim=-1)
+        for candidate in range(candidates):
+            valid_candidate = valid_shape[:, candidate]
+            self.support_fraction[candidate].update(
+                fraction[valid_candidate, candidate]
+            )
+            self.support_entropy[candidate].update(
+                entropy[valid_candidate, candidate]
+            )
+            self.support_effective_size[candidate].update(
+                entropy[valid_candidate, candidate].exp()
+            )
+        shape_pair_valid = valid_shape[:, :, None] & valid_shape[:, None, :]
+        self.support_cosine.update(
+            pairwise_cosine_matrix(conditional_supports), shape_pair_valid
+        )
+        overlap = torch.minimum(
+            conditional_supports[:, :, None], conditional_supports[:, None, :]
+        ).sum(dim=-1)
+        self.support_overlap.update(overlap, shape_pair_valid)
+        dominant_share = conditional_supports.max(dim=1).values.sum(
+            dim=-1
+        ) / conditional_supports.sum(
             dim=(1, 2)
         ).clamp_min(1e-8)
         self.dominant_grounding_share.update(dominant_share[:, None])
         self.intent_cosine.update(pairwise_cosine_matrix(output.intents))
         self.intent_norm.update(output.intents.float().norm(dim=-1))
+
+        null_probabilities = output.visual_null_probabilities
+        if null_probabilities is not None:
+            self.visual_null_seen = True
+            null_probabilities = null_probabilities.float()
+            confidence = 1.0 - null_probabilities
+            torch.testing.assert_close(
+                support_mass, confidence, atol=1e-5, rtol=1e-5
+            )
+            self.null_probability.update(null_probabilities)
+            self.visual_confidence_distribution.update(confidence)
+            for candidate in range(candidates):
+                self.null_probability_by_candidate[candidate].update(
+                    null_probabilities[:, candidate]
+                )
+
+            for timestep, step in enumerate(output.trace):
+                valid = step.live_before
+                if not valid.any():
+                    continue
+                live_null = null_probabilities[valid]
+                live_confidence = confidence[valid]
+                selected_indices = step.selected_index[valid]
+                selected_mask = torch.zeros_like(live_null, dtype=torch.bool)
+                edit_selected = selected_indices.lt(candidates)
+                if edit_selected.any():
+                    rows = torch.arange(live_null.shape[0], device=live_null.device)[
+                        edit_selected
+                    ]
+                    columns = selected_indices[edit_selected]
+                    selected_mask[rows, columns] = True
+                    selected_values = live_null[rows, columns]
+                    self.selected_null_probability.update(selected_values)
+                    self.selected_null_by_timestep[timestep].update(selected_values)
+                self.non_selected_null_probability.update(live_null[~selected_mask])
+                delta_z_norm = flatten_delta_z(step.delta_z[valid]).norm(dim=-1)
+                delta_q_norm = step.delta_q[valid].float().norm(dim=-1)
+                self.null_effect_bins.update(
+                    live_null, delta_z_norm, delta_q_norm, selected_mask
+                )
+                self.null_effect_bins_by_timestep[timestep].update(
+                    live_null, delta_z_norm, delta_q_norm, selected_mask
+                )
+
+                stopped = selected_indices.eq(candidates)
+                mean_confidence = live_confidence.mean(dim=-1)
+                max_confidence = live_confidence.max(dim=-1).values
+                self.stop_mean_confidence.update(mean_confidence[stopped])
+                self.edit_mean_confidence.update(mean_confidence[~stopped])
+                self.stop_max_confidence.update(max_confidence[stopped])
+                self.edit_max_confidence.update(max_confidence[~stopped])
+                all_high_null = live_null.gt(0.8).all(dim=-1)
+                self.all_candidates_high_null_count += int(all_high_null.sum())
+                self.all_candidates_high_null_stop_count += int(
+                    (all_high_null & stopped).sum()
+                )
 
         for timestep, step in enumerate(output.trace):
             verify_same_parent_counterfactuals(step)
@@ -540,30 +717,72 @@ class ValidationDiagnosticAccumulator:
         }
 
     def grounding_summary(self) -> dict[str, Any]:
-        fraction = self.support_fraction.mean()
-        entropy = self.support_entropy.mean()
-        effective_size = self.support_effective_size.mean()
-        cosine = self.support_cosine.mean()
-        overlap = self.support_overlap.mean()
+        def combined_values(items: list[_DistributionStats]) -> Tensor:
+            chunks = [stats.values() for stats in items]
+            nonempty = [values for values in chunks if values.numel()]
+            return torch.cat(nonempty) if nonempty else torch.empty(0)
+
+        fraction_summaries = [stats.summary() for stats in self.support_fraction]
+        entropy_summaries = [stats.summary() for stats in self.support_entropy]
+        effective_summaries = [
+            stats.summary() for stats in self.support_effective_size
+        ]
+        all_fraction = combined_values(self.support_fraction)
+        all_entropy = combined_values(self.support_entropy)
+        all_effective = combined_values(self.support_effective_size)
+        cosine = self.support_cosine.nullable_matrix()
+        overlap = self.support_overlap.nullable_matrix()
+        cosine_summary = self.support_cosine.off_diagonal_summary()
+        overlap_summary = self.support_overlap.off_diagonal_summary()
+        visual_mass = self.real_visual_mass.mean()
         return {
             "support_recomputed_each_timestep": False,
             "support_static_by_current_architecture": True,
             "empirical_recurrence_stability_measured": False,
             "visual_token_count": self.visual_tokens,
-            "support_fraction": float(fraction.mean()),
-            "support_entropy": float(entropy.mean()),
-            "support_effective_size": float(effective_size.mean()),
-            "per_candidate_support_fraction": fraction.tolist(),
-            "per_candidate_support_entropy": entropy.tolist(),
-            "per_candidate_support_effective_size": effective_size.tolist(),
-            "pairwise_support_cosine_mean_off_diagonal": _off_diagonal_mean(cosine),
-            "pairwise_support_overlap_mean_off_diagonal": _off_diagonal_mean(overlap),
-            "pairwise_support_cosine_off_diagonal": _off_diagonal_summary(cosine),
-            "pairwise_support_probability_overlap_off_diagonal": (
-                _off_diagonal_summary(overlap)
+            "real_visual_support_mass": float(visual_mass.mean()),
+            "per_candidate_real_visual_support_mass": visual_mass.tolist(),
+            "real_visual_support_mass_distribution": (
+                self.real_visual_mass_distribution.summary()
             ),
-            "pairwise_support_cosine_matrix": cosine.tolist(),
-            "pairwise_support_probability_overlap_matrix": overlap.tolist(),
+            "conditional_shape_valid_candidate_fraction": (
+                all_fraction.numel()
+                / max(self.queries * self.candidates, 1)
+            ),
+            "support_fraction": (
+                float(all_fraction.mean()) if all_fraction.numel() else None
+            ),
+            "support_entropy": (
+                float(all_entropy.mean()) if all_entropy.numel() else None
+            ),
+            "conditional_support_entropy": (
+                float(all_entropy.mean()) if all_entropy.numel() else None
+            ),
+            "support_effective_size": (
+                float(all_effective.mean()) if all_effective.numel() else None
+            ),
+            "conditional_support_effective_size": (
+                float(all_effective.mean()) if all_effective.numel() else None
+            ),
+            "per_candidate_support_fraction": [
+                item["mean"] for item in fraction_summaries
+            ],
+            "per_candidate_support_entropy": [
+                item["mean"] for item in entropy_summaries
+            ],
+            "per_candidate_support_effective_size": [
+                item["mean"] for item in effective_summaries
+            ],
+            "pairwise_support_cosine_mean_off_diagonal": cosine_summary["mean"],
+            "pairwise_support_overlap_mean_off_diagonal": overlap_summary["mean"],
+            "pairwise_support_cosine_off_diagonal": cosine_summary,
+            "pairwise_support_probability_overlap_off_diagonal": overlap_summary,
+            "pairwise_support_cosine_matrix": cosine,
+            "pairwise_support_probability_overlap_matrix": overlap,
+            "support_shape_normalization": (
+                "shape metrics use P_visual / (sum(P_visual)+epsilon), exclude "
+                "zero-mass candidates as undefined, and never enter model execution"
+            ),
             "dominant_tokenwise_grounding_mass_share": float(
                 self.dominant_grounding_share.mean().mean()
             ),
@@ -574,6 +793,121 @@ class ValidationDiagnosticAccumulator:
             "metric_population": (
                 "all validation queries; one static support map per query/candidate"
             ),
+        }
+
+    def visual_null_summary(self) -> dict[str, Any]:
+        if not self.visual_null_seen:
+            return {
+                "enabled": False,
+                "architecture_generation": "legacy_r0_or_r1a",
+                "metric_population": "not applicable: checkpoint has no Visual NULL",
+            }
+        null_values = self.null_probability.values()
+        thresholds = (0.25, 0.50, 0.80, 0.95)
+        overall_bins = self.null_effect_bins.summary()
+        nonempty_bins = [item for item in overall_bins if item["count"]]
+        low_bin_delta = (
+            nonempty_bins[0]["mean_delta_z_norm"] if nonempty_bins else None
+        )
+        high_bin_delta = (
+            nonempty_bins[-1]["mean_delta_z_norm"] if nonempty_bins else None
+        )
+        mean_null = float(null_values.mean())
+        candidate_means = [
+            stats.summary()["mean"] for stats in self.null_probability_by_candidate
+        ]
+        return {
+            "enabled": True,
+            "architecture_generation": "r1b_visual_null_confidence_gate",
+            "static_by_architecture": True,
+            "support_recomputed_each_timestep": False,
+            "null_probability": self.null_probability.summary(),
+            "fraction_above_threshold": {
+                f"p_null_gt_{threshold:.2f}": float(
+                    null_values.gt(threshold).float().mean()
+                )
+                for threshold in thresholds
+            },
+            "per_candidate_null_probability": [
+                stats.summary() for stats in self.null_probability_by_candidate
+            ],
+            "visual_confidence": self.visual_confidence_distribution.summary(),
+            "selected_candidate_null_probability": (
+                self.selected_null_probability.summary()
+            ),
+            "non_selected_candidate_null_probability": (
+                self.non_selected_null_probability.summary()
+            ),
+            "selected_candidate_null_probability_by_timestep": [
+                {
+                    "timestep": timestep,
+                    **stats.summary(),
+                    "population": (
+                        "selected non-STOP candidates among live decisions; the underlying "
+                        "NULL value is static and only the selected subset changes"
+                    ),
+                }
+                for timestep, stats in enumerate(self.selected_null_by_timestep)
+            ],
+            "null_vs_effect_magnitude_bins": overall_bins,
+            "null_vs_effect_magnitude_bins_by_timestep": [
+                {
+                    "timestep": timestep,
+                    "population": f"all K candidates of live parents at t={timestep}",
+                    "bins": bins.summary(),
+                }
+                for timestep, bins in enumerate(self.null_effect_bins_by_timestep)
+            ],
+            "stop_interaction": {
+                "mean_candidate_confidence_when_stop": (
+                    self.stop_mean_confidence.summary()
+                ),
+                "mean_candidate_confidence_when_edit": (
+                    self.edit_mean_confidence.summary()
+                ),
+                "max_candidate_confidence_when_stop": (
+                    self.stop_max_confidence.summary()
+                ),
+                "max_candidate_confidence_when_edit": (
+                    self.edit_max_confidence.summary()
+                ),
+                "all_candidates_p_null_gt_0.8_count": (
+                    self.all_candidates_high_null_count
+                ),
+                "all_candidates_p_null_gt_0.8_stop_count": (
+                    self.all_candidates_high_null_stop_count
+                ),
+                "stop_rate_when_all_candidates_p_null_gt_0.8": (
+                    self.all_candidates_high_null_stop_count
+                    / self.all_candidates_high_null_count
+                    if self.all_candidates_high_null_count
+                    else None
+                ),
+                "interpretation_limitation": (
+                    "STOP architecture is unchanged; these are observational associations"
+                ),
+            },
+            "metric_population": (
+                "one static p_null per validation query/candidate; timestep subsets are "
+                "selection-conditioned, not state-dependent NULL"
+            ),
+            "shortcut_observation_flags": {
+                "null_effectively_ignored": mean_null <= 0.01,
+                "null_globally_dominant": mean_null >= 0.99,
+                "higher_null_bin_fails_to_reduce_delta_z": (
+                    None
+                    if low_bin_delta is None or high_bin_delta is None
+                    else high_bin_delta >= low_bin_delta
+                ),
+                "candidate_mean_null_range": (
+                    max(float(value) for value in candidate_means if value is not None)
+                    - min(float(value) for value in candidate_means if value is not None)
+                ),
+                "threshold_note": (
+                    "descriptive conventions only; flags do not establish semantic "
+                    "applicability or causal failure"
+                ),
+            },
         }
 
     def functional_summary(self) -> dict[str, Any]:
@@ -730,7 +1064,10 @@ class ValidationDiagnosticAccumulator:
     def specialization_summary(self) -> dict[str, Any]:
         return {
             "pairwise_intent_cosine": self.intent_cosine.mean().tolist(),
-            "pairwise_support_cosine": self.support_cosine.mean().tolist(),
+            "pairwise_support_cosine": self.support_cosine.nullable_matrix(),
+            "pairwise_support_cosine_off_diagonal_valid_shapes": (
+                self.support_cosine.off_diagonal_summary()
+            ),
             "pairwise_context_cosine": self.context_cosine_all.mean().tolist(),
             "pairwise_delta_z_cosine": self.delta_z_cosine_all.nullable_matrix(),
             "pairwise_delta_q_cosine": self.delta_q_cosine_all.nullable_matrix(),
@@ -812,8 +1149,152 @@ class SelectedPathMarginalAccumulator:
         }
 
 
+class NullTargetUtilityAccumulator:
+    """Offline NULL/utility association after target-free candidates already exist."""
+
+    def __init__(self) -> None:
+        self.null_probabilities = _DistributionStats()
+        self.utilities = _DistributionStats()
+        bins = len(NULL_EFFECT_BIN_EDGES) - 1
+        self.bin_count = torch.zeros(bins, dtype=torch.long)
+        self.bin_utility_total = torch.zeros(bins, dtype=torch.float64)
+        self.bin_positive = torch.zeros(bins, dtype=torch.long)
+        self.bin_negative = torch.zeros(bins, dtype=torch.long)
+
+    def update(self, output: IAGSRMEOutput, target_features: Tensor) -> None:
+        if output.visual_null_probabilities is None:
+            return
+        normalized_targets = F.normalize(target_features.float(), dim=-1)
+        null_probabilities = output.visual_null_probabilities.float()
+        for step in output.trace:
+            valid = step.live_before
+            if not valid.any():
+                continue
+            targets = normalized_targets[valid]
+            current_similarity = (
+                F.normalize(step.current_query[valid].float(), dim=-1) * targets
+            ).sum(dim=-1)
+            candidate_similarity = torch.einsum(
+                "bkd,bd->bk",
+                F.normalize(step.candidate_queries[valid].float(), dim=-1),
+                targets,
+            )
+            utility = candidate_similarity - current_similarity[:, None]
+            null_values = null_probabilities[valid]
+            self.null_probabilities.update(null_values)
+            self.utilities.update(utility)
+            flat_null = null_values.detach().cpu().flatten()
+            flat_utility = utility.detach().cpu().flatten()
+            for index, (lower, upper) in enumerate(
+                zip(NULL_EFFECT_BIN_EDGES[:-1], NULL_EFFECT_BIN_EDGES[1:], strict=True)
+            ):
+                mask = flat_null.ge(lower) & flat_null.lt(upper)
+                self.bin_count[index] += int(mask.sum())
+                self.bin_utility_total[index] += float(flat_utility[mask].sum())
+                self.bin_positive[index] += int(flat_utility[mask].gt(0).sum())
+                self.bin_negative[index] += int(flat_utility[mask].lt(0).sum())
+
+    def summary(self) -> dict[str, Any]:
+        null_values = self.null_probabilities.values()
+        utilities = self.utilities.values()
+        if null_values.numel() > 1:
+            centered_null = null_values - null_values.mean()
+            centered_utility = utilities - utilities.mean()
+            denominator = centered_null.norm() * centered_utility.norm()
+            pearson = (
+                float((centered_null * centered_utility).sum() / denominator)
+                if float(denominator) > 0
+                else None
+            )
+        else:
+            pearson = None
+        bins = []
+        for index, (lower, upper) in enumerate(
+            zip(NULL_EFFECT_BIN_EDGES[:-1], NULL_EFFECT_BIN_EDGES[1:], strict=True)
+        ):
+            count = int(self.bin_count[index])
+            bins.append(
+                {
+                    "range": [lower, min(upper, 1.0)],
+                    "count": count,
+                    "mean_candidate_target_similarity_gain": (
+                        float(self.bin_utility_total[index] / count) if count else None
+                    ),
+                    "positive_utility_rate": (
+                        float(self.bin_positive[index] / count) if count else None
+                    ),
+                    "negative_utility_rate": (
+                        float(self.bin_negative[index] / count) if count else None
+                    ),
+                }
+            )
+        return {
+            "pearson_p_null_vs_candidate_utility": pearson,
+            "utility_definition": "cos(qhat_t+1,k, target)-cos(q_t, target)",
+            "utility_by_null_bin": bins,
+            "candidate_observation_count": null_values.numel(),
+            "target_firewall": (
+                "targets are accessed only after target-free rollout/candidates are complete"
+            ),
+            "interpretation_limitation": (
+                "offline association is diagnostic and never supervises forward execution"
+            ),
+        }
+
+
 def diagnostic_definitions() -> dict[str, dict[str, Any]]:
     return {
+        "visual_null_probability": {
+            "definition": (
+                "p_null is the final Entmax-1.5 coordinate after augmenting N visual "
+                "logits with one learnable Visual NULL logit"
+            ),
+            "population": "all validation queries and four static candidate identities",
+            "tensor_shape_before_reduction": "[B,K]",
+            "reduction_axes": "distribution globally and separately by candidate identity",
+            "interpretation_limitation": (
+                "static target-free applicability signal; not semantic NULL and not STOP"
+            ),
+        },
+        "real_visual_support_mass": {
+            "definition": "sum_n P_visual[k,n] = 1 - p_null[k]",
+            "population": "all validation queries/candidates",
+            "tensor_shape_before_reduction": "P_visual [B,K,N]",
+            "reduction_axes": "sum over N; distribution over B,K",
+            "interpretation_limitation": (
+                "execution confidence, distinct from conditional spatial shape"
+            ),
+        },
+        "conditional_support_shape": {
+            "definition": "P_tilde=P_visual/(sum(P_visual)+epsilon)",
+            "population": "candidate supports with nonzero real visual mass",
+            "tensor_shape_before_reduction": "[B,K,N]",
+            "reduction_axes": "shape entropy/overlap/cosine over N; zero-mass shapes excluded",
+            "interpretation_limitation": (
+                "diagnostic normalization does not enter or alter execution"
+            ),
+        },
+        "null_vs_effect_magnitude": {
+            "definition": (
+                "bin same-parent candidates by static p_null and summarize ||DeltaZ||, "
+                "||Deltaq||, and selection rate"
+            ),
+            "population": "all K candidates of live parents at each timestep",
+            "tensor_shape_before_reduction": "p_null [B_live,K], effects [B_live,K,*]",
+            "reduction_axes": "effect norm then aggregate within fixed p_null bins",
+            "interpretation_limitation": (
+                "descriptive confidence response; selection association is not a new policy loss"
+            ),
+        },
+        "null_vs_offline_candidate_utility": {
+            "definition": "utility=cos(qhat_t+1,k,y)-cos(q_t,y)",
+            "population": "all same-parent candidates of live parents",
+            "tensor_shape_before_reduction": "candidate queries [B_live,K,D]",
+            "reduction_axes": "target cosine over D; association/binning over observations",
+            "interpretation_limitation": (
+                "target is offline-only and never enters candidate construction or selection"
+            ),
+        },
         "pairwise_intent_cosine": {
             "definition": "cos(I_i, I_j) for every ordered candidate pair i,j",
             "population": "all validation queries",
@@ -1108,6 +1589,9 @@ _LEGACY_CANONICAL_MODEL_CONFIG = {
     "lambda_z": 0.10,
     "query_cap": 0.50,
     "selector_temperature": 1.0,
+    "enable_visual_null": False,
+    "visual_null_initial_logit": 0.0,
+    "grounding_normalization": "entmax15",
 }
 _SERIALIZED_MODEL_CONFIG_KEYS = (
     "model_config",
@@ -1153,6 +1637,7 @@ def _resolve_checkpoint_model_config(
     candidates, width = query_bank.shape
     enable_claim = any(key.startswith("core.claim_head.") for key in state)
     enable_factor = any(key.startswith("core.factor_fuser.") for key in state)
+    inferred_visual_null = "core.grounder.visual_null_key" in state
     factor_output = state.get("core.factor_fuser.network.2.weight")
     inferred_factor_dim = (
         int(factor_output.shape[0]) if isinstance(factor_output, Tensor) else None
@@ -1160,6 +1645,10 @@ def _resolve_checkpoint_model_config(
     serialized = _serialized_model_config(checkpoint)
 
     if serialized is None:
+        if inferred_visual_null:
+            raise ValueError(
+                "Visual NULL checkpoint is not self-describing; exact R1b replay is unsafe"
+            )
         replay_values = dict(_LEGACY_CANONICAL_MODEL_CONFIG)
         source = "legacy_checkpoint_plus_canonical_assumption"
         fully_self_describing = False
@@ -1168,6 +1657,14 @@ def _resolve_checkpoint_model_config(
         )
     else:
         required_fields = set(_SELF_DESCRIBING_MODEL_CONFIG_FIELDS)
+        if inferred_visual_null:
+            required_fields.update(
+                {
+                    "enable_visual_null",
+                    "visual_null_initial_logit",
+                    "grounding_normalization",
+                }
+            )
         if bool(serialized.get("enable_factor_head")):
             required_fields.add("factor_dim")
         missing = sorted(required_fields - serialized.keys())
@@ -1177,7 +1674,8 @@ def _resolve_checkpoint_model_config(
                 f"missing {sorted(missing)}"
             )
         replay_values = {
-            key: serialized[key] for key in _LEGACY_CANONICAL_MODEL_CONFIG
+            key: serialized.get(key, default)
+            for key, default in _LEGACY_CANONICAL_MODEL_CONFIG.items()
         }
         source = "checkpoint"
         fully_self_describing = True
@@ -1188,6 +1686,7 @@ def _resolve_checkpoint_model_config(
             "retrieval_dim": retrieval_dim,
             "enable_claim_head": enable_claim,
             "enable_factor_head": enable_factor,
+            "enable_visual_null": inferred_visual_null,
         }
         for key, expected in inferable_expected.items():
             if key in serialized and serialized[key] != expected:
@@ -1217,6 +1716,11 @@ def _resolve_checkpoint_model_config(
         "enable_claim_head": enable_claim,
         "enable_factor_head": enable_factor,
         "factor_dim": inferred_factor_dim,
+        "enable_visual_null": bool(replay_values["enable_visual_null"]),
+        "visual_null_initial_logit": float(
+            replay_values["visual_null_initial_logit"]
+        ),
+        "grounding_normalization": str(replay_values["grounding_normalization"]),
     }
     provenance: dict[str, Any] = {
         "source": source,
@@ -1227,10 +1731,16 @@ def _resolve_checkpoint_model_config(
             "enable_claim_head": enable_claim,
             "enable_factor_head": enable_factor,
             "factor_dim": inferred_factor_dim,
+            "enable_visual_null": inferred_visual_null,
         },
         "resolved_diagnostic_config": resolved,
         "diagnostic_inference_override": {"selector_gumbel_noise": False},
         "warning": warning,
+        "architecture_generation": (
+            "r1b_visual_null_confidence_gate"
+            if inferred_visual_null
+            else "legacy_r0_or_r1a"
+        ),
     }
     if not fully_self_describing:
         provenance["assumed_config"] = {
@@ -1297,6 +1807,8 @@ def _diagnose_category(
     global_accumulator: ValidationDiagnosticAccumulator,
     category_selected_path: SelectedPathMarginalAccumulator,
     global_selected_path: SelectedPathMarginalAccumulator,
+    category_null_utility: NullTargetUtilityAccumulator,
+    global_null_utility: NullTargetUtilityAccumulator,
 ) -> dict[str, Any]:
     query_lists: defaultdict[str, list[Tensor]] = defaultdict(list)
     target_ids: list[str] = []
@@ -1331,6 +1843,8 @@ def _diagnose_category(
         # Target access begins only here, after the complete target-free rollout exists.
         category_selected_path.update(full, target_features)
         global_selected_path.update(full, target_features)
+        category_null_utility.update(full, target_features)
+        global_null_utility.update(full, target_features)
         query_lists["full"].append(full.final_query.cpu())
         query_lists["reference_only"].append(encoded.reference_global.cpu())
         for candidate in range(4):
@@ -1408,14 +1922,16 @@ def _failure_flags(
         ["best_single_candidate_oracle"]["mean_recall"]
     )
     candidate_distribution = selection["candidate_distribution_conditional_on_edit"]
-    support_matrix = torch.tensor(specialization["pairwise_support_cosine"])
     ranks = [
         item.get("functional_effective_rank", 0.0)
         for item in functional["per_timestep"]
         if item.get("live_parent_count", 0) > 0
     ]
     mean_rank = sum(ranks) / max(len(ranks), 1)
-    support_fraction = float(grounding["support_fraction"])
+    support_fraction_value = grounding["support_fraction"]
+    support_fraction = (
+        float(support_fraction_value) if support_fraction_value is not None else None
+    )
     margin = 2.0
     thresholds = {
         "stop_or_monopoly_fraction": 0.95,
@@ -1456,7 +1972,9 @@ def _failure_flags(
         "total_new_stops": sum(selection["counts"]["new_stops"]),
         "maximum_candidate_selection_share": max(candidate_distribution),
         "mean_delta_q_off_diagonal_cosine": aggregate_delta_q_cosine,
-        "mean_support_off_diagonal_cosine": _off_diagonal_mean(support_matrix),
+        "mean_support_off_diagonal_cosine": specialization[
+            "pairwise_support_cosine_off_diagonal_valid_shapes"
+        ]["mean"],
         "support_fraction": support_fraction,
         "mean_functional_effective_rank": mean_rank,
         "full_mean_recall": full,
@@ -1481,10 +1999,21 @@ def _failure_flags(
             >= thresholds["clone_cosine"]
         ),
         "high_support_similarity": (
-            supporting["mean_support_off_diagonal_cosine"] >= thresholds["clone_cosine"]
+            None
+            if supporting["mean_support_off_diagonal_cosine"] is None
+            else supporting["mean_support_off_diagonal_cosine"]
+            >= thresholds["clone_cosine"]
         ),
-        "grounding_over_sparse": support_fraction <= thresholds["grounding_sparse_fraction"],
-        "grounding_over_diffuse": support_fraction >= thresholds["grounding_diffuse_fraction"],
+        "grounding_over_sparse": (
+            None
+            if support_fraction is None
+            else support_fraction <= thresholds["grounding_sparse_fraction"]
+        ),
+        "grounding_over_diffuse": (
+            None
+            if support_fraction is None
+            else support_fraction >= thresholds["grounding_diffuse_fraction"]
+        ),
         "low_functional_effective_rank": mean_rank <= thresholds["functional_rank"],
         "repeat_beats_full": best_repeat >= full + margin,
         "single_beats_full": best_single >= full + margin,
@@ -1674,6 +2203,54 @@ def _validate_report_schema(report: Mapping[str, Any]) -> None:
     json.dumps(report, allow_nan=False)
 
 
+def _checkpoint_replay_guard(
+    checkpoint: Mapping[str, Any],
+    provenance: Mapping[str, Any],
+    replayed_mean_recall: float,
+    *,
+    tolerance: float = 1e-4,
+) -> dict[str, Any]:
+    generation = provenance.get("architecture_generation")
+    if generation != "r1b_visual_null_confidence_gate":
+        return {
+            "applicable": False,
+            "architecture_generation": generation,
+            "trusted_r1b_replay": None,
+        }
+    resolved = provenance.get("resolved_diagnostic_config")
+    if not isinstance(resolved, Mapping):
+        raise ValueError("R1b replay has no resolved model config")
+    checks = {
+        "query_cap_is_1000": float(resolved.get("query_cap", -1.0)) == 1000.0,
+        "visual_null_enabled": resolved.get("enable_visual_null") is True,
+        "checkpoint_fully_self_describing": (
+            provenance.get("fully_self_describing") is True
+        ),
+    }
+    failed = [name for name, passed in checks.items() if not passed]
+    if failed:
+        raise ValueError(f"untrusted R1b checkpoint replay: failed {failed}")
+    saved_metric = checkpoint.get("metric")
+    if not isinstance(saved_metric, (int, float)):
+        raise ValueError("R1b checkpoint has no saved selection metric")
+    metric_error = abs(float(saved_metric) - replayed_mean_recall)
+    if metric_error > tolerance:
+        raise ValueError(
+            "R1b replayed FULL Mean Recall does not match saved checkpoint metric: "
+            f"saved={saved_metric}, replayed={replayed_mean_recall}, error={metric_error}"
+        )
+    return {
+        "applicable": True,
+        "architecture_generation": generation,
+        "trusted_r1b_replay": True,
+        "checks": checks,
+        "saved_checkpoint_metric": float(saved_metric),
+        "replayed_full_mean_recall": replayed_mean_recall,
+        "absolute_error": metric_error,
+        "tolerance": tolerance,
+    }
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Diagnose a trained IAG-SRME checkpoint")
     parser.add_argument("--checkpoint", type=Path, required=True)
@@ -1718,6 +2295,7 @@ def main() -> None:
     )
     global_accumulator = ValidationDiagnosticAccumulator()
     global_selected_path = SelectedPathMarginalAccumulator()
+    global_null_utility = NullTargetUtilityAccumulator()
     category_results: dict[str, Any] = {}
     category_controls: dict[str, Any] = {}
     for category in CATEGORIES:
@@ -1744,6 +2322,7 @@ def main() -> None:
         ).to(device)
         category_accumulator = ValidationDiagnosticAccumulator()
         category_selected_path = SelectedPathMarginalAccumulator()
+        category_null_utility = NullTargetUtilityAccumulator()
         controls = _diagnose_category(
             model,
             loader,
@@ -1754,6 +2333,8 @@ def main() -> None:
             global_accumulator,
             category_selected_path,
             global_selected_path,
+            category_null_utility,
+            global_null_utility,
         )
         category_controls[category] = controls
         category_selection = category_accumulator.selection_summary()
@@ -1767,6 +2348,10 @@ def main() -> None:
             "selection_diagnostics": category_selection,
             "intent_diagnostics": category_intent,
             "grounding_diagnostics": category_grounding,
+            "visual_null_diagnostics": {
+                **category_accumulator.visual_null_summary(),
+                "offline_target_relative_utility": category_null_utility.summary(),
+            },
             "functional_diagnostics": category_functional,
             "dynamic_diagnostics": category_dynamic,
             "control_retrieval_metrics": controls,
@@ -1800,6 +2385,11 @@ def main() -> None:
         "checkpoint_model_config_provenance": checkpoint[
             "checkpoint_model_config_provenance"
         ],
+        "checkpoint_replay_guard": _checkpoint_replay_guard(
+            checkpoint,
+            checkpoint["checkpoint_model_config_provenance"],
+            float(global_controls["full"]["mean_recall"]),
+        ),
         "backbone_metadata": {
             "checkpoint": metadata["backbone_checkpoint"],
             "revision": metadata["backbone_revision"],
@@ -1832,6 +2422,10 @@ def main() -> None:
         "intent_diagnostics": intent,
         "selection_diagnostics": selection,
         "grounding_diagnostics": grounding,
+        "visual_null_diagnostics": {
+            **global_accumulator.visual_null_summary(),
+            "offline_target_relative_utility": global_null_utility.summary(),
+        },
         "functional_diagnostics": functional,
         "dynamic_diagnostics": dynamic,
         "control_retrieval_metrics": global_controls,
