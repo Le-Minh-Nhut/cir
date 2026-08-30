@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
 
 import hydra
@@ -25,6 +26,20 @@ def validate_checkpoint_backbone_metadata(
         raise ValueError(f"checkpoint backbone mismatch: stored={actual}, configured={expected}")
 
 
+def validate_checkpoint_model_config(metadata: object, model_config: object) -> None:
+    if not isinstance(metadata, dict):
+        raise ValueError("checkpoint has no metadata")
+    stored = metadata.get("model_config")
+    if stored is None:
+        return  # Legacy R0/R1a checkpoints predate self-describing model config.
+    configured = asdict(model_config)
+    if stored != configured:
+        raise ValueError(
+            "checkpoint model-config mismatch; replay with the exact stored configuration: "
+            f"stored={stored}, configured={configured}"
+        )
+
+
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     checkpoint_path = cfg.get("checkpoint")
@@ -38,6 +53,7 @@ def main(cfg: DictConfig) -> None:
         str(cfg.backbone.checkpoint),
         str(cfg.backbone.revision),
     )
+    validate_checkpoint_model_config(checkpoint.get("metadata"), model.core.config)
     model.load_state_dict(checkpoint["model"])
     model.to(device).eval()
     dataset_root = Path(cfg.dataset.root)

@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
 import yaml
 
-from evaluate import validate_checkpoint_backbone_metadata
+from evaluate import (
+    validate_checkpoint_backbone_metadata,
+    validate_checkpoint_model_config,
+)
 from evaluation.fashioniq import build_validation_datasets
+from models.iag_srme import IAGSRMEConfig
 
 
 def test_evaluation_dataset_uses_explicit_caption_policy(tmp_path) -> None:
@@ -46,3 +51,17 @@ def test_evaluation_rejects_checkpoint_from_another_backbone_revision() -> None:
         validate_checkpoint_backbone_metadata(
             metadata, "qihoo360/fg-clip-base", "verified-revision"
         )
+
+
+def test_evaluation_rejects_non_state_model_config_mismatch() -> None:
+    configured = IAGSRMEConfig(query_cap=1000.0, enable_visual_null=True)
+    stored = IAGSRMEConfig(query_cap=0.5, enable_visual_null=True)
+    with pytest.raises(ValueError, match="model-config mismatch"):
+        validate_checkpoint_model_config(
+            {"model_config": asdict(stored)},
+            configured,
+        )
+
+
+def test_evaluation_allows_legacy_checkpoint_without_model_config() -> None:
+    validate_checkpoint_model_config({}, IAGSRMEConfig())

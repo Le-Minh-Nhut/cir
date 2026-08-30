@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import torch
@@ -158,6 +158,12 @@ def save_checkpoint(
                 "backbone_checkpoint": model.backbone.checkpoint,
                 "backbone_revision": model.backbone.revision,
                 "precision": precision.name,
+                "model_config": asdict(model.core.config),
+                "architecture_generation": (
+                    "r1b_visual_null_confidence_gate"
+                    if model.core.config.enable_visual_null
+                    else "legacy_iag_srme"
+                ),
             },
         },
         path,
