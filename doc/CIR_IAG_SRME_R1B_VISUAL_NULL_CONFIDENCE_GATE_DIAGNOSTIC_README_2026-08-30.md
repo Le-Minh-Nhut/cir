@@ -1,5 +1,13 @@
 # IAG-SRME R1b: Visual NULL and confidence-preserving grounding
 
+> **STATUS: SUPERSEDED FOR CANONICAL R1b EXECUTION**
+>
+> The N+1 Entmax NULL parameterization documented below exposed an avoidable
+> sparse-support learnability failure during GPU canary testing. It remains here as
+> historical evidence of the first attempted design. The corrected canonical R1b is
+> documented in
+> `CIR_IAG_SRME_R1B_DYNAMIC_APPLICABILITY_GATE_CORRECTION_V2_2026-08-31.md`.
+
 ## 1. Hypothesis
 
 R1b tests one hypothesis only: forced unit-mass grounding over real image tokens can force an
