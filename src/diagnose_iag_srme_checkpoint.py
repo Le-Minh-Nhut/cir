@@ -16,8 +16,11 @@ from torch.utils.data import DataLoader
 from data.images import FashionIQImageCollator, ImageBatch
 from datasets.common import DirectoryImageStore
 from diagnostics.iag_srme import (
+    FUNCTIONAL_ACTIVITY_EPSILON,
     flatten_delta_z,
+    functional_effect_activity,
     functional_effective_rank,
+    masked_pairwise_cosine,
     off_diagonal_values,
     pairwise_cosine_matrix,
     verify_same_parent_counterfactuals,
@@ -49,6 +52,7 @@ REQUIRED_REPORT_KEYS = {
     "checkpoint",
     "checkpoint_epoch",
     "checkpoint_metric",
+    "checkpoint_model_config_provenance",
     "backbone_metadata",
     "protocol",
     "global_metrics",
@@ -97,6 +101,115 @@ class _MeanTensor:
         if self.total is None or self.count == 0:
             raise RuntimeError("diagnostic accumulator has no observations")
         return (self.total / self.count).float()
+
+
+@dataclass
+class _MaskedMatrixStats:
+    candidates: int
+    total: Tensor | None = None
+    valid_counts: Tensor | None = None
+    observations: int = 0
+
+    def update(self, values: Tensor, valid: Tensor) -> None:
+        values = values.detach().float().cpu()
+        valid = valid.detach().bool().cpu()
+        expected = (values.shape[0], self.candidates, self.candidates)
+        if values.shape != expected or valid.shape != expected:
+            raise ValueError("masked pairwise matrices must be [B,K,K]")
+        if values.shape[0] == 0:
+            return
+        batch_total = torch.where(valid, values, 0.0).sum(dim=0, dtype=torch.float64)
+        batch_counts = valid.sum(dim=0, dtype=torch.long)
+        self.total = batch_total if self.total is None else self.total + batch_total
+        self.valid_counts = (
+            batch_counts
+            if self.valid_counts is None
+            else self.valid_counts + batch_counts
+        )
+        self.observations += values.shape[0]
+
+    def nullable_matrix(self) -> list[list[float | None]]:
+        if self.total is None or self.valid_counts is None:
+            return [[None] * self.candidates for _ in range(self.candidates)]
+        means = self.total / self.valid_counts.clamp_min(1)
+        return [
+            [
+                float(means[row, column])
+                if int(self.valid_counts[row, column]) > 0
+                else None
+                for column in range(self.candidates)
+            ]
+            for row in range(self.candidates)
+        ]
+
+    def off_diagonal_summary(self) -> dict[str, float | int | None]:
+        if self.total is None or self.valid_counts is None:
+            valid_values = torch.empty(0, dtype=torch.float64)
+            valid_pair_count = 0
+            valid_pair_total = 0.0
+        else:
+            off_diagonal = ~torch.eye(self.candidates, dtype=torch.bool)
+            valid_cells = self.valid_counts > 0
+            selected = off_diagonal & valid_cells
+            valid_values = (self.total / self.valid_counts.clamp_min(1))[selected]
+            valid_pair_count = int(self.valid_counts[off_diagonal].sum())
+            valid_pair_total = float(self.total[off_diagonal].sum())
+        possible_pair_count = self.observations * self.candidates * (self.candidates - 1)
+        return {
+            "mean": (
+                valid_pair_total / valid_pair_count if valid_pair_count > 0 else None
+            ),
+            "minimum": float(valid_values.min()) if valid_values.numel() else None,
+            "maximum": float(valid_values.max()) if valid_values.numel() else None,
+            "valid_pair_count": valid_pair_count,
+            "possible_pair_count": possible_pair_count,
+            "valid_pair_fraction": (
+                valid_pair_count / possible_pair_count
+                if possible_pair_count > 0
+                else None
+            ),
+        }
+
+
+@dataclass
+class _EffectActivityStats:
+    candidates: int
+    active_candidates: int = 0
+    total_candidates: int = 0
+    dead_parents: int = 0
+    parents: int = 0
+
+    def update(self, active: Tensor) -> None:
+        active = active.detach().bool().cpu()
+        if active.ndim != 2 or active.shape[1] != self.candidates:
+            raise ValueError("functional activity mask must be [B,K]")
+        self.active_candidates += int(active.sum())
+        self.total_candidates += active.numel()
+        self.dead_parents += int((~active.any(dim=-1)).sum())
+        self.parents += active.shape[0]
+
+    def summary(self) -> dict[str, float | int | None]:
+        if self.parents == 0:
+            return {
+                "active_candidate_fraction": None,
+                "dead_candidate_fraction": None,
+                "dead_parent_fraction": None,
+                "active_candidate_count": 0,
+                "total_candidate_count": 0,
+                "dead_parent_count": 0,
+                "parent_count": 0,
+            }
+        return {
+            "active_candidate_fraction": self.active_candidates
+            / self.total_candidates,
+            "dead_candidate_fraction": 1.0
+            - self.active_candidates / self.total_candidates,
+            "dead_parent_fraction": self.dead_parents / self.parents,
+            "active_candidate_count": self.active_candidates,
+            "total_candidate_count": self.total_candidates,
+            "dead_parent_count": self.dead_parents,
+            "parent_count": self.parents,
+        }
 
 
 @dataclass
@@ -246,12 +359,22 @@ class ValidationDiagnosticAccumulator:
         ]
         self.delta_z_rank = [_MeanTensor() for _ in range(timesteps)]
         self.delta_q_rank = [_MeanTensor() for _ in range(timesteps)]
+        self.delta_z_activity = [
+            _EffectActivityStats(candidates) for _ in range(timesteps)
+        ]
+        self.delta_q_activity = [
+            _EffectActivityStats(candidates) for _ in range(timesteps)
+        ]
         self.context_cosine = [_MeanTensor() for _ in range(timesteps)]
-        self.delta_z_cosine = [_MeanTensor() for _ in range(timesteps)]
-        self.delta_q_cosine = [_MeanTensor() for _ in range(timesteps)]
+        self.delta_z_cosine = [
+            _MaskedMatrixStats(candidates) for _ in range(timesteps)
+        ]
+        self.delta_q_cosine = [
+            _MaskedMatrixStats(candidates) for _ in range(timesteps)
+        ]
         self.context_cosine_all = _MeanTensor()
-        self.delta_z_cosine_all = _MeanTensor()
-        self.delta_q_cosine_all = _MeanTensor()
+        self.delta_z_cosine_all = _MaskedMatrixStats(candidates)
+        self.delta_q_cosine_all = _MaskedMatrixStats(candidates)
 
         names = ("g_t", "d_t", "context", "delta_z", "candidate_query", "scores")
         self.dynamic = {
@@ -315,15 +438,19 @@ class ValidationDiagnosticAccumulator:
             self.delta_q_rank[timestep].update(
                 functional_effective_rank(delta_q)[:, None]
             )
+            _, delta_z_active = functional_effect_activity(flat_delta_z)
+            _, delta_q_active = functional_effect_activity(delta_q)
+            self.delta_z_activity[timestep].update(delta_z_active)
+            self.delta_q_activity[timestep].update(delta_q_active)
             context_matrix = pairwise_cosine_matrix(contexts)
-            delta_z_matrix = pairwise_cosine_matrix(flat_delta_z)
-            delta_q_matrix = pairwise_cosine_matrix(delta_q)
+            delta_z_matrix, delta_z_valid = masked_pairwise_cosine(flat_delta_z)
+            delta_q_matrix, delta_q_valid = masked_pairwise_cosine(delta_q)
             self.context_cosine[timestep].update(context_matrix)
-            self.delta_z_cosine[timestep].update(delta_z_matrix)
-            self.delta_q_cosine[timestep].update(delta_q_matrix)
+            self.delta_z_cosine[timestep].update(delta_z_matrix, delta_z_valid)
+            self.delta_q_cosine[timestep].update(delta_q_matrix, delta_q_valid)
             self.context_cosine_all.update(context_matrix)
-            self.delta_z_cosine_all.update(delta_z_matrix)
-            self.delta_q_cosine_all.update(delta_q_matrix)
+            self.delta_z_cosine_all.update(delta_z_matrix, delta_z_valid)
+            self.delta_q_cosine_all.update(delta_q_matrix, delta_q_valid)
 
         for transition, (previous, current) in enumerate(
             zip(output.trace[:-1], output.trace[1:], strict=True)
@@ -470,8 +597,16 @@ class ValidationDiagnosticAccumulator:
             mean_delta_q = float(delta_q_norm.mean())
             mean_delta_q_by_timestep.append(mean_delta_q)
             context_cosine = self.context_cosine[timestep].mean()
-            delta_z_cosine = self.delta_z_cosine[timestep].mean()
-            delta_q_cosine = self.delta_q_cosine[timestep].mean()
+            delta_z_cosine = self.delta_z_cosine[timestep].nullable_matrix()
+            delta_q_cosine = self.delta_q_cosine[timestep].nullable_matrix()
+            delta_z_cosine_summary = self.delta_z_cosine[
+                timestep
+            ].off_diagonal_summary()
+            delta_q_cosine_summary = self.delta_q_cosine[
+                timestep
+            ].off_diagonal_summary()
+            delta_z_activity = self.delta_z_activity[timestep].summary()
+            delta_q_activity = self.delta_q_activity[timestep].summary()
             distribution = self.delta_q_norm_distribution[timestep].summary()
             per_timestep.append(
                 {
@@ -487,17 +622,51 @@ class ValidationDiagnosticAccumulator:
                     "context_pairwise_cosine_off_diagonal": _off_diagonal_summary(
                         context_cosine
                     ),
-                    "delta_z_pairwise_cosine_matrix": delta_z_cosine.tolist(),
-                    "delta_z_pairwise_cosine_off_diagonal": _off_diagonal_summary(
+                    "delta_z_pairwise_cosine_matrix": delta_z_cosine,
+                    "delta_z_pairwise_cosine_matrix_among_valid_effects": (
                         delta_z_cosine
                     ),
-                    "delta_q_pairwise_cosine_matrix": delta_q_cosine.tolist(),
-                    "delta_q_pairwise_cosine_off_diagonal": _off_diagonal_summary(
+                    "delta_z_pairwise_cosine_off_diagonal": delta_z_cosine_summary,
+                    "delta_z_pairwise_cosine_valid_pair_fraction": (
+                        delta_z_cosine_summary["valid_pair_fraction"]
+                    ),
+                    "delta_z_pairwise_cosine_valid_pair_count": (
+                        delta_z_cosine_summary["valid_pair_count"]
+                    ),
+                    "delta_q_pairwise_cosine_matrix": delta_q_cosine,
+                    "pairwise_delta_q_cosine_matrix_among_valid_effects": (
                         delta_q_cosine
                     ),
-                    "pairwise_delta_q_cosine_mean_off_diagonal": _off_diagonal_mean(
-                        delta_q_cosine
+                    "delta_q_pairwise_cosine_off_diagonal": delta_q_cosine_summary,
+                    "pairwise_delta_q_cosine_mean_off_diagonal": (
+                        delta_q_cosine_summary["mean"]
                     ),
+                    "pairwise_delta_q_cosine_valid_pair_fraction": (
+                        delta_q_cosine_summary["valid_pair_fraction"]
+                    ),
+                    "pairwise_delta_q_cosine_valid_pair_count": (
+                        delta_q_cosine_summary["valid_pair_count"]
+                    ),
+                    "delta_z_activity": delta_z_activity,
+                    "active_delta_z_candidate_fraction": delta_z_activity[
+                        "active_candidate_fraction"
+                    ],
+                    "dead_delta_z_candidate_fraction": delta_z_activity[
+                        "dead_candidate_fraction"
+                    ],
+                    "dead_delta_z_parent_fraction": delta_z_activity[
+                        "dead_parent_fraction"
+                    ],
+                    "delta_q_activity": delta_q_activity,
+                    "active_candidate_fraction": delta_q_activity[
+                        "active_candidate_fraction"
+                    ],
+                    "dead_candidate_fraction": delta_q_activity[
+                        "dead_candidate_fraction"
+                    ],
+                    "dead_parent_fraction": delta_q_activity[
+                        "dead_parent_fraction"
+                    ],
                     "delta_z_effective_rank": float(
                         self.delta_z_rank[timestep].mean().mean()
                     ),
@@ -516,6 +685,11 @@ class ValidationDiagnosticAccumulator:
             return top / (bottom + epsilon)
 
         return {
+            "functional_effect_activity_epsilon": FUNCTIONAL_ACTIVITY_EPSILON,
+            "activity_definition": (
+                "active(Delta)=1 when its L2 norm is strictly greater than the "
+                "diagnostic activity epsilon"
+            ),
             "per_timestep": per_timestep,
             "late_step_effect_retention": {
                 "mean_delta_q_norm_t1_over_t0": ratio(1, 0),
@@ -558,8 +732,14 @@ class ValidationDiagnosticAccumulator:
             "pairwise_intent_cosine": self.intent_cosine.mean().tolist(),
             "pairwise_support_cosine": self.support_cosine.mean().tolist(),
             "pairwise_context_cosine": self.context_cosine_all.mean().tolist(),
-            "pairwise_delta_z_cosine": self.delta_z_cosine_all.mean().tolist(),
-            "pairwise_delta_q_cosine": self.delta_q_cosine_all.mean().tolist(),
+            "pairwise_delta_z_cosine": self.delta_z_cosine_all.nullable_matrix(),
+            "pairwise_delta_q_cosine": self.delta_q_cosine_all.nullable_matrix(),
+            "pairwise_delta_z_cosine_off_diagonal_among_valid_effects": (
+                self.delta_z_cosine_all.off_diagonal_summary()
+            ),
+            "pairwise_delta_q_cosine_off_diagonal_among_valid_effects": (
+                self.delta_q_cosine_all.off_diagonal_summary()
+            ),
             "aggregation_note": (
                 "context/delta-Z/delta-q matrices are secondary aggregates weighted by "
                 "live-parent observations across timesteps; use functional per_timestep "
@@ -663,25 +843,58 @@ def diagnostic_definitions() -> dict[str, dict[str, Any]]:
             "interpretation_limitation": "context similarity alone does not imply equal edits",
         },
         "delta_z_pairwise_cosine": {
-            "definition": "cos(vec(DeltaZ_t,i), vec(DeltaZ_t,j))",
+            "definition": (
+                "cos(vec(DeltaZ_t,i), vec(DeltaZ_t,j)) only when both effects have "
+                f"L2 norm > {FUNCTIONAL_ACTIVITY_EPSILON}"
+            ),
             "population": "live parents before the decision at each reported timestep",
             "tensor_shape_before_reduction": "[B_live,K,N,d] -> [B_live,K,N*d]",
             "reduction_axes": "flatten N,d; mean over B_live; KxK preserved",
-            "interpretation_limitation": "token-effect similarity is not retrieval utility",
+            "interpretation_limitation": (
+                "token-effect similarity is not retrieval utility; null means no valid "
+                "active-pair observations"
+            ),
         },
         "delta_q_pairwise_cosine": {
-            "definition": "Deltaq_t,k=qhat_t+1,k-q_t; then pairwise cosine across K",
+            "definition": (
+                "Deltaq_t,k=qhat_t+1,k-q_t; pairwise cosine is defined only when both "
+                f"effect norms are > {FUNCTIONAL_ACTIVITY_EPSILON}"
+            ),
             "population": "live same-parent counterfactuals at each timestep",
             "tensor_shape_before_reduction": "[B_live,K,D]",
             "reduction_axes": "mean over B_live only; KxK preserved",
-            "interpretation_limitation": "functional similarity does not identify its cause",
+            "interpretation_limitation": (
+                "functional similarity does not identify its cause; inactive pairs are "
+                "excluded rather than assigned cosine zero"
+            ),
+        },
+        "functional_effect_activity": {
+            "definition": (
+                f"active(Delta_t,k)=[||Delta_t,k||_2>{FUNCTIONAL_ACTIVITY_EPSILON}]"
+            ),
+            "population": "live same-parent counterfactuals at each timestep",
+            "tensor_shape_before_reduction": (
+                "Deltaq [B_live,K,D] or DeltaZ [B_live,K,N*d]"
+            ),
+            "reduction_axes": (
+                "candidate fraction over B_live,K; dead-parent fraction over B_live"
+            ),
+            "interpretation_limitation": (
+                "numerical inactivity is not semantic edit failure and has no causal meaning"
+            ),
         },
         "functional_effective_rank": {
-            "definition": "exp(entropy(normalized singular values of the KxD effect matrix))",
+            "definition": (
+                "exp(entropy(normalized singular values of the KxD effect matrix)); "
+                "diagnostic convention r_eff=0 when singular-value mass <= 1e-8"
+            ),
             "population": "live parents before the decision at each timestep",
             "tensor_shape_before_reduction": "[B_live,K,D]",
             "reduction_axes": "SVD over K,D; mean scalar rank over B_live",
-            "interpretation_limitation": "uncentered numerical rank is not semantic factor count",
+            "interpretation_limitation": (
+                "uncentered numerical rank is not semantic factor count; zero rank denotes "
+                "only a numerically zero effect matrix"
+            ),
         },
         "late_step_effect_retention": {
             "definition": "E||Deltaq_t|| / (E||Deltaq_reference|| + 1e-8)",
@@ -889,6 +1102,147 @@ def _usefulness_ratios(controls: Mapping[str, Any]) -> dict[str, float]:
     }
 
 
+_LEGACY_CANONICAL_MODEL_CONFIG = {
+    "max_steps": 3,
+    "num_heads": 8,
+    "lambda_z": 0.10,
+    "query_cap": 0.50,
+    "selector_temperature": 1.0,
+}
+_SERIALIZED_MODEL_CONFIG_KEYS = (
+    "model_config",
+    "iag_srme_model_config",
+    "iag_srme_config",
+)
+_SELF_DESCRIBING_MODEL_CONFIG_FIELDS = {
+    "width",
+    "num_candidates",
+    "max_steps",
+    "num_heads",
+    "retrieval_dim",
+    "lambda_z",
+    "query_cap",
+    "selector_temperature",
+    "selector_gumbel_noise",
+    "enable_claim_head",
+    "enable_factor_head",
+}
+
+
+def _serialized_model_config(checkpoint: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    metadata = checkpoint.get("metadata")
+    containers = (checkpoint, metadata if isinstance(metadata, Mapping) else {})
+    for container in containers:
+        for key in _SERIALIZED_MODEL_CONFIG_KEYS:
+            value = container.get(key)
+            if isinstance(value, Mapping):
+                return value
+    return None
+
+
+def _resolve_checkpoint_model_config(
+    checkpoint: Mapping[str, Any],
+    state: Mapping[str, Any],
+    *,
+    retrieval_dim: int,
+) -> tuple[IAGSRMEConfig, dict[str, Any]]:
+    """Resolve replay-critical config, preferring serialized checkpoint provenance."""
+    query_bank = state.get("core.intent_encoder.query_bank")
+    if not isinstance(query_bank, Tensor) or query_bank.ndim != 2:
+        raise ValueError("checkpoint is not an IAG-SRME checkpoint")
+    candidates, width = query_bank.shape
+    enable_claim = any(key.startswith("core.claim_head.") for key in state)
+    enable_factor = any(key.startswith("core.factor_fuser.") for key in state)
+    factor_output = state.get("core.factor_fuser.network.2.weight")
+    inferred_factor_dim = (
+        int(factor_output.shape[0]) if isinstance(factor_output, Tensor) else None
+    )
+    serialized = _serialized_model_config(checkpoint)
+
+    if serialized is None:
+        replay_values = dict(_LEGACY_CANONICAL_MODEL_CONFIG)
+        source = "legacy_checkpoint_plus_canonical_assumption"
+        fully_self_describing = False
+        warning = (
+            "checkpoint does not encode every non-state-dict model hyperparameter"
+        )
+    else:
+        required_fields = set(_SELF_DESCRIBING_MODEL_CONFIG_FIELDS)
+        if bool(serialized.get("enable_factor_head")):
+            required_fields.add("factor_dim")
+        missing = sorted(required_fields - serialized.keys())
+        if missing:
+            raise ValueError(
+                "serialized checkpoint model config is incomplete: "
+                f"missing {sorted(missing)}"
+            )
+        replay_values = {
+            key: serialized[key] for key in _LEGACY_CANONICAL_MODEL_CONFIG
+        }
+        source = "checkpoint"
+        fully_self_describing = True
+        warning = None
+        inferable_expected = {
+            "width": width,
+            "num_candidates": candidates,
+            "retrieval_dim": retrieval_dim,
+            "enable_claim_head": enable_claim,
+            "enable_factor_head": enable_factor,
+        }
+        for key, expected in inferable_expected.items():
+            if key in serialized and serialized[key] != expected:
+                raise ValueError(
+                    f"serialized model config {key}={serialized[key]!r} conflicts "
+                    f"with state-dict/backbone inferred value {expected!r}"
+                )
+        if "factor_dim" in serialized and serialized["factor_dim"] not in {
+            None,
+            inferred_factor_dim,
+        }:
+            raise ValueError("serialized factor_dim conflicts with state dict")
+
+    if int(replay_values["max_steps"]) != 3:
+        raise ValueError("R0 diagnostic runner supports canonical Tmax=3 checkpoints")
+    resolved = {
+        "width": int(width),
+        "num_candidates": int(candidates),
+        "max_steps": int(replay_values["max_steps"]),
+        "num_heads": int(replay_values["num_heads"]),
+        "retrieval_dim": int(retrieval_dim),
+        "lambda_z": float(replay_values["lambda_z"]),
+        "query_cap": float(replay_values["query_cap"]),
+        "selector_temperature": float(replay_values["selector_temperature"]),
+        # Diagnostics always use deterministic hard argmax regardless of training noise.
+        "selector_gumbel_noise": False,
+        "enable_claim_head": enable_claim,
+        "enable_factor_head": enable_factor,
+        "factor_dim": inferred_factor_dim,
+    }
+    provenance: dict[str, Any] = {
+        "source": source,
+        "fully_self_describing": fully_self_describing,
+        "state_dict_inferred": {
+            "width": width,
+            "num_candidates": candidates,
+            "enable_claim_head": enable_claim,
+            "enable_factor_head": enable_factor,
+            "factor_dim": inferred_factor_dim,
+        },
+        "resolved_diagnostic_config": resolved,
+        "diagnostic_inference_override": {"selector_gumbel_noise": False},
+        "warning": warning,
+    }
+    if not fully_self_describing:
+        provenance["assumed_config"] = {
+            "width": width,
+            "num_candidates": candidates,
+            **_LEGACY_CANONICAL_MODEL_CONFIG,
+        }
+    else:
+        provenance["serialized_training_config"] = dict(serialized)
+    return IAGSRMEConfig(**resolved), provenance
+
+
 def _load_checkpoint_model(
     checkpoint_path: Path, device: torch.device
 ) -> tuple[IAGSRME, object, object, dict[str, Any]]:
@@ -921,26 +1275,14 @@ def _load_checkpoint_model(
     tokenizer, processor = FGCLIPBackbone.load_processor(
         regime.checkpoint, regime.revision, regime.trust_remote_code
     )
-    enable_claim = any(key.startswith("core.claim_head.") for key in state)
-    enable_factor = any(key.startswith("core.factor_fuser.") for key in state)
-    core = IAGSRMECore(
-        IAGSRMEConfig(
-            width=width,
-            num_candidates=candidates,
-            max_steps=3,
-            num_heads=8,
-            retrieval_dim=backbone.retrieval_dim,
-            lambda_z=0.10,
-            query_cap=0.50,
-            selector_temperature=1.0,
-            selector_gumbel_noise=False,
-            enable_claim_head=enable_claim,
-            enable_factor_head=enable_factor,
-        )
+    model_config, provenance = _resolve_checkpoint_model_config(
+        checkpoint, state, retrieval_dim=backbone.retrieval_dim
     )
+    core = IAGSRMECore(model_config)
     model = IAGSRME(backbone, core)
     model.load_state_dict(state, strict=True)
     model.to(device).eval()
+    checkpoint["checkpoint_model_config_provenance"] = provenance
     return model, tokenizer, processor, checkpoint
 
 
@@ -1066,7 +1408,6 @@ def _failure_flags(
         ["best_single_candidate_oracle"]["mean_recall"]
     )
     candidate_distribution = selection["candidate_distribution_conditional_on_edit"]
-    delta_q_matrix = torch.tensor(specialization["pairwise_delta_q_cosine"])
     support_matrix = torch.tensor(specialization["pairwise_support_cosine"])
     ranks = [
         item.get("functional_effective_rank", 0.0)
@@ -1082,13 +1423,39 @@ def _failure_flags(
         "grounding_sparse_fraction": 0.02,
         "grounding_diffuse_fraction": 0.80,
         "functional_rank": 1.50,
+        "dead_delta_q_fraction": 0.80,
         "retrieval_margin_points": margin,
     }
+    aggregate_delta_q_cosine = specialization[
+        "pairwise_delta_q_cosine_off_diagonal_among_valid_effects"
+    ]["mean"]
+    timestep_functional: dict[int, dict[str, float | int | None]] = {}
+    for timestep in range(3):
+        item = functional["per_timestep"][timestep]
+        live_parent_count = int(item.get("live_parent_count", 0))
+        timestep_functional[timestep] = {
+            "live_parent_count": live_parent_count,
+            "mean_delta_q_off_diagonal_cosine_among_valid_effects": (
+                item.get("pairwise_delta_q_cosine_mean_off_diagonal")
+                if live_parent_count > 0
+                else None
+            ),
+            "functional_effective_rank": (
+                item.get("functional_effective_rank")
+                if live_parent_count > 0
+                else None
+            ),
+            "dead_delta_q_candidate_fraction": (
+                item.get("dead_candidate_fraction")
+                if live_parent_count > 0
+                else None
+            ),
+        }
     supporting = {
         "stop_t0_occupancy": selection["absorbed_stop_occupancy_by_timestep"][0],
         "total_new_stops": sum(selection["counts"]["new_stops"]),
         "maximum_candidate_selection_share": max(candidate_distribution),
-        "mean_delta_q_off_diagonal_cosine": _off_diagonal_mean(delta_q_matrix),
+        "mean_delta_q_off_diagonal_cosine": aggregate_delta_q_cosine,
         "mean_support_off_diagonal_cosine": _off_diagonal_mean(support_matrix),
         "support_fraction": support_fraction,
         "mean_functional_effective_rank": mean_rank,
@@ -1108,7 +1475,10 @@ def _failure_flags(
             >= thresholds["stop_or_monopoly_fraction"]
         ),
         "high_delta_q_similarity": (
-            supporting["mean_delta_q_off_diagonal_cosine"] >= thresholds["clone_cosine"]
+            None
+            if supporting["mean_delta_q_off_diagonal_cosine"] is None
+            else supporting["mean_delta_q_off_diagonal_cosine"]
+            >= thresholds["clone_cosine"]
         ),
         "high_support_similarity": (
             supporting["mean_support_off_diagonal_cosine"] >= thresholds["clone_cosine"]
@@ -1121,6 +1491,23 @@ def _failure_flags(
         "reference_dominates": reference >= full + margin,
         "selected_policy_underperforms_candidate_oracle": oracle_t0 >= full + margin,
     }
+    for timestep, observations in timestep_functional.items():
+        cosine = observations[
+            "mean_delta_q_off_diagonal_cosine_among_valid_effects"
+        ]
+        rank = observations["functional_effective_rank"]
+        dead_fraction = observations["dead_delta_q_candidate_fraction"]
+        flags[f"high_delta_q_similarity_t{timestep}"] = (
+            None if cosine is None else cosine >= thresholds["clone_cosine"]
+        )
+        flags[f"low_functional_effective_rank_t{timestep}"] = (
+            None if rank is None else rank <= thresholds["functional_rank"]
+        )
+        flags[f"high_dead_delta_q_fraction_t{timestep}"] = (
+            None
+            if dead_fraction is None
+            else dead_fraction >= thresholds["dead_delta_q_fraction"]
+        )
     definitions = {
         "high_stop_t0_occupancy": (
             "observes STOP occupancy at t0 >= threshold; does not explain why STOP was chosen"
@@ -1148,6 +1535,19 @@ def _failure_flags(
             "observes offline t0 oracle exceeds FULL by margin; oracle never enters policy"
         ),
     }
+    for timestep in range(3):
+        definitions[f"high_delta_q_similarity_t{timestep}"] = (
+            f"observes high same-parent Deltaq cosine among active pairs at t{timestep}; "
+            "null means no live parents or no valid active pair"
+        )
+        definitions[f"low_functional_effective_rank_t{timestep}"] = (
+            f"observes low numerical Deltaq effective rank at t{timestep}; rank is not "
+            "semantic factor count and all-zero effects have diagnostic rank zero"
+        )
+        definitions[f"high_dead_delta_q_fraction_t{timestep}"] = (
+            f"observes many numerically inactive candidate effects at t{timestep}; this "
+            "does not establish semantic edit failure or a causal mechanism"
+        )
     audit_contracts = {
         "high_stop_t0_occupancy": (
             "stop_t0_occupancy >= stop_or_monopoly_fraction",
@@ -1206,6 +1606,47 @@ def _failure_flags(
             ("retrieval_margin_points",),
         ),
     }
+    for timestep in range(3):
+        prefix = f"t{timestep}"
+        supporting.update(
+            {
+                f"{prefix}_live_parent_count": timestep_functional[timestep][
+                    "live_parent_count"
+                ],
+                f"{prefix}_mean_delta_q_off_diagonal_cosine_among_valid_effects": (
+                    timestep_functional[timestep][
+                        "mean_delta_q_off_diagonal_cosine_among_valid_effects"
+                    ]
+                ),
+                f"{prefix}_functional_effective_rank": timestep_functional[timestep][
+                    "functional_effective_rank"
+                ],
+                f"{prefix}_dead_delta_q_candidate_fraction": timestep_functional[
+                    timestep
+                ]["dead_delta_q_candidate_fraction"],
+            }
+        )
+        audit_contracts[f"high_delta_q_similarity_t{timestep}"] = (
+            f"{prefix}_mean_delta_q_off_diagonal_cosine_among_valid_effects >= clone_cosine",
+            (
+                f"{prefix}_live_parent_count",
+                f"{prefix}_mean_delta_q_off_diagonal_cosine_among_valid_effects",
+            ),
+            ("clone_cosine",),
+        )
+        audit_contracts[f"low_functional_effective_rank_t{timestep}"] = (
+            f"{prefix}_functional_effective_rank <= functional_rank",
+            (f"{prefix}_live_parent_count", f"{prefix}_functional_effective_rank"),
+            ("functional_rank",),
+        )
+        audit_contracts[f"high_dead_delta_q_fraction_t{timestep}"] = (
+            f"{prefix}_dead_delta_q_candidate_fraction >= dead_delta_q_fraction",
+            (
+                f"{prefix}_live_parent_count",
+                f"{prefix}_dead_delta_q_candidate_fraction",
+            ),
+            ("dead_delta_q_fraction",),
+        )
     flag_audit = {
         name: {
             "condition": condition,
@@ -1222,6 +1663,7 @@ def _failure_flags(
         "definitions_and_limits": definitions,
         "per_flag_audit_contract": flag_audit,
         "status": "OBSERVATION flags only; causal INTERPRETATION requires follow-up experiments",
+        "aggregate_functional_flags_are_secondary": True,
     }
 
 
@@ -1355,6 +1797,9 @@ def main() -> None:
         "checkpoint": str(args.checkpoint.resolve()),
         "checkpoint_epoch": checkpoint.get("epoch"),
         "checkpoint_metric": checkpoint.get("metric"),
+        "checkpoint_model_config_provenance": checkpoint[
+            "checkpoint_model_config_provenance"
+        ],
         "backbone_metadata": {
             "checkpoint": metadata["backbone_checkpoint"],
             "revision": metadata["backbone_revision"],

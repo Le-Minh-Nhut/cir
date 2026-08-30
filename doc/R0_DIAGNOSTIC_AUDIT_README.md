@@ -113,6 +113,36 @@ r_{eff}=\exp\left(-\sum_j \pi_j\log\pi_j\right),
 
 using singular values of the candidate-effect matrix.
 
+### Active versus numerically dead effects
+
+Functional activity and functional diversity are separate diagnostics. For both Δq and ΔZ, R0
+uses the explicit FP32 convention
+
+```math
+active(\Delta_{t,k})=[\|\Delta_{t,k}\|_2>\epsilon_{activity}],
+\qquad \epsilon_{activity}=10^{-8}.
+```
+
+It reports active/dead candidate fractions and the fraction of live parents for which every
+candidate effect is dead. “Dead” means numerically inactive under this convention only; it does
+not mean semantic edit failure and does not identify a cause.
+
+Functional cosine is defined only when both members of a pair are active. Inactive pairs are
+excluded from the numerator and denominator. A K×K cell with no valid observations is serialized
+as JSON `null`, not as zero and not as NaN. Thus an unavailable cosine cannot be confused with
+two active orthogonal effects whose cosine is genuinely zero. The report includes raw valid-pair
+counts, possible-pair counts, and valid-pair fractions.
+
+For effective rank, the active-matrix definition above is unchanged. R0 adds the explicit
+degenerate convention
+
+```math
+r_{eff}(0)=0
+```
+
+when total singular-value mass is at most `1e-8`. A nonzero cloned effect matrix remains rank
+approximately one; four orthogonal active effects remain rank approximately four.
+
 Late-step effect retention is descriptive:
 
 ```math
@@ -226,6 +256,39 @@ diagnostic_definitions                     machine-readable metric contracts
 
 Failure flags contain their exact condition, threshold, supporting raw values, and interpretation
 limit. They are observations, not causal diagnoses.
+
+Functional flags are reported independently at `t0`, `t1`, and `t2`:
+
+```text
+high_delta_q_similarity_t{0,1,2}
+low_functional_effective_rank_t{0,1,2}
+high_dead_delta_q_fraction_t{0,1,2}
+```
+
+When a timestep has no live parents, its flags are JSON `null`, never `false`. The similarity flag
+is also `null` when no active candidate pair exists. The aggregate functional flags remain only
+secondary backward-compatible summaries. Activity epsilon and flag thresholds are diagnostic
+conventions, not universal scientific constants.
+
+## Checkpoint model-config provenance
+
+R0 infers state-dict-identifiable values such as width, K, and optional claim/factor head presence
+from checkpoint tensors. If a checkpoint includes a serialized `model_config`,
+`iag_srme_model_config`, or `iag_srme_config`, R0 prefers it and validates its inferable fields
+against the state dict and backbone retrieval dimension.
+
+Legacy checkpoints remain runnable. For fields not inferable from weights—`max_steps`,
+`num_heads`, `lambda_z`, `query_cap`, and `selector_temperature`—R0 uses the canonical assumptions
+only when serialized configuration is absent. The report then sets:
+
+```text
+checkpoint_model_config_provenance.source = legacy_checkpoint_plus_canonical_assumption
+checkpoint_model_config_provenance.fully_self_describing = false
+```
+
+and includes the exact assumptions plus a reproducibility warning. A self-describing checkpoint
+uses `source=checkpoint` and has no legacy warning. Diagnostic inference always disables Gumbel
+noise for deterministic hard-argmax replay; that inference-only override is recorded separately.
 
 ## What R0 can and cannot establish
 

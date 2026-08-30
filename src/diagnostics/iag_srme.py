@@ -22,6 +22,9 @@ MATCHED_COMPUTE_CONTROLS = (
     "frozen_t0_order",
 )
 
+FUNCTIONAL_ACTIVITY_EPSILON = 1e-8
+FUNCTIONAL_RANK_EPSILON = 1e-8
+
 
 def pairwise_cosine_matrix(values: Tensor) -> Tensor:
     """Return the full candidate-pair matrix while preserving every leading axis."""
@@ -47,6 +50,32 @@ def pairwise_cosine(values: Tensor) -> Tensor:
     )
 
 
+def functional_effect_activity(
+    values: Tensor, epsilon: float = FUNCTIONAL_ACTIVITY_EPSILON
+) -> tuple[Tensor, Tensor]:
+    """Return effect norms and a numerical activity mask for [...,K,F]."""
+    if values.ndim < 2:
+        raise ValueError("candidate effects must be [...,K,F]")
+    if epsilon < 0:
+        raise ValueError("activity epsilon must be non-negative")
+    norms = values.float().norm(dim=-1)
+    return norms, norms > epsilon
+
+
+def masked_pairwise_cosine(
+    values: Tensor, epsilon: float = FUNCTIONAL_ACTIVITY_EPSILON
+) -> tuple[Tensor, Tensor]:
+    """Return cosine values and validity for pairs of active functional effects.
+
+    Values at invalid locations are finite placeholders. Callers must use the returned
+    mask and must not interpret those placeholders as cosine observations.
+    """
+    _, active = functional_effect_activity(values, epsilon)
+    cosine = pairwise_cosine_matrix(values)
+    valid = active.unsqueeze(-1) & active.unsqueeze(-2)
+    return cosine, valid
+
+
 def flatten_delta_z(delta_z: Tensor) -> Tensor:
     """Flatten spatial+channel axes only: [B,K,N,D] -> [B,K,N*D]."""
     if delta_z.ndim != 4:
@@ -63,12 +92,22 @@ def verify_same_parent_counterfactuals(step: RecurrentStepOutput) -> None:
         raise AssertionError("delta_q is not candidate_query minus the same parent q_t")
 
 
-def functional_effective_rank(delta_q: Tensor, epsilon: float = 1e-8) -> Tensor:
+def functional_effective_rank(
+    delta_q: Tensor, epsilon: float = FUNCTIONAL_RANK_EPSILON
+) -> Tensor:
     if delta_q.ndim < 2:
         raise ValueError("candidate effects must be [...,K,F]")
     singular_values = torch.linalg.svdvals(delta_q.float())
-    probabilities = singular_values / singular_values.sum(dim=-1, keepdim=True).clamp_min(epsilon)
-    return torch.exp(-(probabilities * probabilities.clamp_min(epsilon).log()).sum(dim=-1))
+    singular_value_mass = singular_values.sum(dim=-1, keepdim=True)
+    probabilities = singular_values / singular_value_mass.clamp_min(epsilon)
+    active_rank = torch.exp(
+        -(probabilities * probabilities.clamp_min(epsilon).log()).sum(dim=-1)
+    )
+    return torch.where(
+        singular_value_mass.squeeze(-1) > epsilon,
+        active_rank,
+        torch.zeros_like(active_rank),
+    )
 
 
 def summarize_trajectory(output: IAGSRMEOutput) -> dict[str, Tensor]:
