@@ -219,10 +219,15 @@ def test_temporal_grounding_diagnostics_preserve_decision_conditioning(
     stopped = core(synthetic_encoded, control="zero_edit")
     stop_accumulator = TemporalGroundingAccumulator()
     stop_accumulator.update(stopped)
-    stop_summary = stop_accumulator.summary()["per_transition"][0]
-    stop_metrics = stop_summary["conditioned_on_previous_decision"]["stop"]
-    assert stop_metrics["l1_change"]["count"] == 12
-    assert stop_metrics["l1_change"]["maximum"] == 0.0
+    stopped_summary = stop_accumulator.summary()
+    primary = stopped_summary["per_transition"][0]
+    assert primary["support_l1_change"]["count"] == 0
+    assert "stop" not in primary["conditioned_on_previous_decision"]
+    hypothetical = stopped_summary["hypothetical_post_stop_recomputation"]
+    assert hypothetical["excluded_from_primary_temporal_metrics"] is True
+    stop_metrics = hypothetical["per_transition"][0]["support_l1_change"]
+    assert stop_metrics["count"] == 12
+    assert stop_metrics["maximum"] == 0.0
 
 
 def test_support_similarity_failure_observations_are_timestep_specific(

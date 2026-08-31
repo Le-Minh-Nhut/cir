@@ -467,8 +467,14 @@ class TemporalIntentAccumulator:
             for condition in (
                 "same_candidate_executed",
                 "other_candidate_executed",
-                "stop",
             )
+        }
+        self.hypothetical_post_stop_parent_counts = torch.zeros(
+            transitions, dtype=torch.long
+        )
+        self.hypothetical_post_stop = {
+            name: [_DistributionStats() for _ in range(transitions)]
+            for name in ("cosine", "l1_change", "l2_change")
         }
 
     def update(self, output: IAGSRMEOutput) -> None:
@@ -527,7 +533,27 @@ class TemporalIntentAccumulator:
                 )
 
         for transition in range(self.timesteps - 1):
+            previous_step = output.trace[transition]
             valid = output.trace[transition + 1].live_before
+            stopped_now = previous_step.stopped_now
+            if stopped_now.any():
+                hypothetical_before = temporal[stopped_now, transition]
+                hypothetical_after = temporal[stopped_now, transition + 1]
+                hypothetical_difference = hypothetical_after - hypothetical_before
+                self.hypothetical_post_stop_parent_counts[transition] += int(
+                    stopped_now.sum()
+                )
+                self.hypothetical_post_stop["cosine"][transition].update(
+                    F.cosine_similarity(
+                        hypothetical_before, hypothetical_after, dim=-1
+                    )
+                )
+                self.hypothetical_post_stop["l1_change"][transition].update(
+                    hypothetical_difference.abs().sum(dim=-1)
+                )
+                self.hypothetical_post_stop["l2_change"][transition].update(
+                    hypothetical_difference.norm(dim=-1)
+                )
             if not valid.any():
                 continue
             before = temporal[valid, transition]
@@ -542,7 +568,7 @@ class TemporalIntentAccumulator:
             matrix, pair_valid = masked_pairwise_cosine(displacement)
             self.displacement_alignment[transition].update(matrix, pair_valid)
 
-            previous_action = output.trace[transition].selected_index[valid]
+            previous_action = previous_step.selected_index[valid]
             candidate_ids = torch.arange(
                 self.candidates, device=previous_action.device
             )[None]
@@ -553,11 +579,6 @@ class TemporalIntentAccumulator:
                 "other_candidate_executed": (
                     previous_action[:, None].lt(self.candidates)
                     & ~previous_action[:, None].eq(candidate_ids)
-                ),
-                # A sample that STOPped is not live at the next timestep; primary
-                # lineage-safe STOP-conditioned transition metrics are undefined.
-                "stop": previous_action[:, None].eq(self.candidates).expand_as(
-                    cosine
                 ),
             }
             for condition, mask in masks.items():
@@ -628,6 +649,33 @@ class TemporalIntentAccumulator:
             ),
             "per_timestep": per_timestep,
             "per_transition": per_transition,
+            "hypothetical_post_stop_recomputation": {
+                "execution_semantics": (
+                    "non-executed batched recomputation only; state/query remain "
+                    "absorbing and these WHAT tensors never enter execution"
+                ),
+                "excluded_from_primary_temporal_metrics": True,
+                "per_transition": [
+                    {
+                        "transition": f"t{transition}_to_t{transition + 1}",
+                        "newly_stopped_parent_count": int(
+                            self.hypothetical_post_stop_parent_counts[transition]
+                        ),
+                        "same_candidate_temporal_intent_cosine": (
+                            self.hypothetical_post_stop["cosine"][
+                                transition
+                            ].summary()
+                        ),
+                        "intent_l1_change": self.hypothetical_post_stop[
+                            "l1_change"
+                        ][transition].summary(),
+                        "intent_l2_change": self.hypothetical_post_stop[
+                            "l2_change"
+                        ][transition].summary(),
+                    }
+                    for transition in range(self.timesteps - 1)
+                ],
+            },
             "interpretation_limit": (
                 "intent motion or lower cosine is not semantic success without "
                 "downstream WHERE, functional, utility, and retrieval evidence"
@@ -671,7 +719,14 @@ class TemporalGroundingAccumulator:
                 name: [_DistributionStats() for _ in range(transitions)]
                 for name in ("cosine", "overlap", "l1_change")
             }
-            for condition in ("same_candidate_executed", "other_candidate_executed", "stop")
+            for condition in ("same_candidate_executed", "other_candidate_executed")
+        }
+        self.hypothetical_post_stop_parent_counts = torch.zeros(
+            transitions, dtype=torch.long
+        )
+        self.hypothetical_post_stop = {
+            name: [_DistributionStats() for _ in range(transitions)]
+            for name in ("cosine", "overlap", "l1_change", "l2_change")
         }
         self.argmax_changed = torch.zeros(transitions, dtype=torch.long)
         self.argmax_total = torch.zeros(transitions, dtype=torch.long)
@@ -779,6 +834,18 @@ class TemporalGroundingAccumulator:
                 "l1_change": l1,
                 "l2_change": l2,
             }
+            stopped_now = previous_step.stopped_now
+            if stopped_now.any():
+                self.hypothetical_post_stop_parent_counts[transition] += int(
+                    stopped_now.sum()
+                )
+                hypothetical_mask = stopped_now[:, None].expand_as(cosine)
+                for name in ("cosine", "overlap", "l1_change", "l2_change"):
+                    self._masked_update(
+                        self.hypothetical_post_stop[name][transition],
+                        transition_values[name],
+                        hypothetical_mask,
+                    )
             for name, values in transition_values.items():
                 self._masked_update(
                     self.transition[name][transition],
@@ -797,17 +864,15 @@ class TemporalGroundingAccumulator:
 
             action = previous_step.selected_index
             candidate_ids = torch.arange(candidates, device=action.device)[None]
-            same = previous_step.live_before[:, None] & action[:, None].eq(candidate_ids)
+            same = valid_live[:, None] & action[:, None].eq(candidate_ids)
             other = (
-                previous_step.live_before[:, None]
+                valid_live[:, None]
                 & action[:, None].lt(candidates)
                 & ~action[:, None].eq(candidate_ids)
             )
-            stopped = previous_step.live_before[:, None] & action[:, None].eq(candidates)
             for condition, mask in (
                 ("same_candidate_executed", same),
                 ("other_candidate_executed", other),
-                ("stop", stopped.expand(batch, candidates)),
             ):
                 for name, values in (
                     ("cosine", cosine),
@@ -897,6 +962,38 @@ class TemporalGroundingAccumulator:
             "legacy_output_supports_semantics": "initial/t0 raw support only",
             "per_timestep": per_timestep,
             "per_transition": transitions,
+            "hypothetical_post_stop_recomputation": {
+                "execution_semantics": (
+                    "non-executed batched recomputation only; state/query remain "
+                    "absorbing and these WHERE tensors never enter execution"
+                ),
+                "excluded_from_primary_temporal_metrics": True,
+                "per_transition": [
+                    {
+                        "transition": f"t{transition}_to_t{transition + 1}",
+                        "newly_stopped_parent_count": int(
+                            self.hypothetical_post_stop_parent_counts[transition]
+                        ),
+                        "same_candidate_temporal_cosine": (
+                            self.hypothetical_post_stop["cosine"][
+                                transition
+                            ].summary()
+                        ),
+                        "same_candidate_temporal_overlap": (
+                            self.hypothetical_post_stop["overlap"][
+                                transition
+                            ].summary()
+                        ),
+                        "support_l1_change": self.hypothetical_post_stop[
+                            "l1_change"
+                        ][transition].summary(),
+                        "support_l2_change": self.hypothetical_post_stop[
+                            "l2_change"
+                        ][transition].summary(),
+                    }
+                    for transition in range(self.timesteps - 1)
+                ],
+            },
             "interpretation_limit": (
                 "support motion alone does not establish semantic residual behavior; "
                 "inspect displacement alignment and functional/retrieval consequences"
@@ -1955,7 +2052,23 @@ def diagnostic_definitions() -> dict[str, dict[str, Any]]:
             "reduction_axes": "feature axis d; candidate matrices retain KxK",
             "interpretation_limitation": (
                 "WHAT movement can be common-mode or destructive; inspect displacement "
-                "alignment and downstream support/effect/retrieval response"
+                "alignment and downstream support/effect/retrieval response; primary "
+                "transitions exclude samples that STOPped before the later timestep"
+            ),
+        },
+        "hypothetical_post_stop_recomputation": {
+            "definition": (
+                "WHAT/WHERE tensors produced by vectorized later-step computation for "
+                "samples that newly selected STOP at the previous decision"
+            ),
+            "population": "newly stopped parents, reported separately by transition",
+            "tensor_shape_before_reduction": (
+                "intent [B_stopped,K,d], support [B_stopped,K,N]"
+            ),
+            "reduction_axes": "feature/token axes, then stopped-parent/candidate observations",
+            "interpretation_limitation": (
+                "non-executed audit only: state/query are absorbing, these tensors never "
+                "enter execution, and they are excluded from primary temporal metrics"
             ),
         },
         "between_candidate_support_similarity_by_timestep": {
@@ -1977,7 +2090,7 @@ def diagnostic_definitions() -> dict[str, dict[str, Any]]:
             ),
             "population": (
                 "samples live before the later timestep; decision-conditioned summaries "
-                "also retain same-candidate, other-candidate, and STOP populations"
+                "retain only same-candidate and other-candidate executed populations"
             ),
             "tensor_shape_before_reduction": "temporal supports [B,T,K,N]",
             "reduction_axes": "token axis N, then distribution over lineage-valid B,K",

@@ -148,8 +148,14 @@ Temporal WHAT diagnostics are live-lineage conditioned and report:
 - per-timestep intent cosine matrix, off-diagonal cosine, candidate norms, and residual norms;
 - same-candidate temporal intent cosine and L1/L2 movement;
 - candidate displacement matrix for `I[t+1,k]-I[t,k]`, detecting moving WHAT clones;
-- movement conditioned on same candidate executed, other candidate executed, or STOP;
+- primary movement conditioned on same candidate executed or another candidate executed;
 - a concise WHAT -> WHERE -> DeltaZ -> Deltaq chain per timestep.
+
+Primary WHAT/WHERE transitions contain only samples live before the later timestep. The batched
+forward may still construct later WHAT/WHERE tensors after a sample selected STOP, but state and
+query remain absorbing. These tensors are excluded from every primary temporal statistic and are
+reported only under `hypothetical_post_stop_recomputation`, explicitly labeled as non-executed
+vectorized audit values.
 
 All R1c1 temporal WHERE, functional, selection, retrieval-control, same-parent oracle, and offline
 target-relative diagnostics remain. The report includes fixed R1a and R1c1 historical comparisons;
@@ -189,6 +195,13 @@ two-stage gradient activation, config/replay safety, and temporal diagnostics.
 The deterministic CPU smoke verifies one intent call, two reproposal calls, three grounder calls,
 zero applicability calls, exact zero-init/t0 parity, support normalization, same-parent previews,
 finite loss/gradients, and reproposal/grounder parameter movement.
+
+The CUDA canary audits the shared re-proposal branches independently: output projection, state
+attention, change attention, token-level text attention, state-query projection, and residual
+fusion. First-step upstream zero gradient is legal under zero-initialized `W_out`; after at least
+20 successful optimizer steps every branch must have received a nonzero cumulative gradient and
+its representative parameter must have moved. Candidate collapse and weak WHAT/WHERE motion remain
+warning-only scientific outcomes.
 
 CUDA canary and full FashionIQ training remain pending.
 

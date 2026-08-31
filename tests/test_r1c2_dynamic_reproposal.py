@@ -11,10 +11,12 @@ from torch.optim import SGD
 
 from diagnose_iag_srme_checkpoint import (
     SelectedPathMarginalAccumulator,
+    TemporalGroundingAccumulator,
     TemporalIntentAccumulator,
     _checkpoint_replay_guard,
     _resolve_checkpoint_model_config,
 )
+from canary_train_iag_srme import _reproposal_audit_groups
 from models.iag_srme import IAGSRMEConfig, IAGSRMECore
 from models.iag_srme.reproposal import DynamicIntentReproposal
 
@@ -307,8 +309,11 @@ def test_zero_init_then_upstream_gradient_and_parameter_movement(
     _force_non_stop(core)
     assert core.reproposal is not None
     optimizer = SGD(core.parameters(), lr=1e-2)
-    output_before = core.reproposal.output_projection.weight.detach().clone()
-    upstream_before = core.reproposal.state_query_projection.weight.detach().clone()
+    families, representatives = _reproposal_audit_groups(core.reproposal)
+    initial_parameters = {
+        name: parameter.detach().clone()
+        for name, parameter in representatives.items()
+    }
     intent_weights = torch.linspace(-1.0, 1.0, 32)
     support_weights = torch.linspace(-1.0, 1.0, 13)
 
@@ -317,13 +322,23 @@ def test_zero_init_then_upstream_gradient_and_parameter_movement(
         first.temporal_intents[:, 1] * intent_weights
     ).sum() + (first.temporal_supports[:, 1] * support_weights).sum()
     first_loss.backward()
-    assert core.reproposal.output_projection.weight.grad is not None
-    assert core.reproposal.output_projection.weight.grad.abs().sum() > 0
-    upstream_grad = core.reproposal.state_query_projection.weight.grad
-    assert upstream_grad is None or torch.count_nonzero(upstream_grad) == 0
+    output_gradient = sum(
+        float(parameter.grad.abs().sum())
+        for parameter in families["reproposal_output"]
+        if parameter.grad is not None
+    )
+    assert output_gradient > 0
+    for name, parameters in families.items():
+        if name == "reproposal_output":
+            continue
+        assert all(
+            parameter.grad is None or torch.count_nonzero(parameter.grad) == 0
+            for parameter in parameters
+        )
     optimizer.step()
     assert not torch.equal(
-        core.reproposal.output_projection.weight.detach(), output_before
+        representatives["reproposal_output"].detach(),
+        initial_parameters["reproposal_output"],
     )
 
     optimizer.zero_grad(set_to_none=True)
@@ -332,20 +347,23 @@ def test_zero_init_then_upstream_gradient_and_parameter_movement(
         second.temporal_intents[:, 1] * intent_weights
     ).sum() + (second.temporal_supports[:, 1] * support_weights).sum()
     second_loss.backward()
-    required = {
-        "upstream": core.reproposal.state_query_projection.weight.grad,
-        "output": core.reproposal.output_projection.weight.grad,
-        "base_query": core.intent_encoder.query_bank.grad,
-        "grounder": core.grounder.intent_projection.weight.grad,
-    }
-    for gradient in required.values():
+    for parameters in families.values():
+        gradients = [
+            parameter.grad for parameter in parameters if parameter.grad is not None
+        ]
+        assert gradients
+        assert all(torch.isfinite(gradient).all() for gradient in gradients)
+        assert sum(float(gradient.abs().sum()) for gradient in gradients) > 0
+    for gradient in (
+        core.intent_encoder.query_bank.grad,
+        core.grounder.intent_projection.weight.grad,
+    ):
         assert gradient is not None
         assert torch.isfinite(gradient).all()
         assert gradient.abs().sum() > 0
     optimizer.step()
-    assert not torch.equal(
-        core.reproposal.state_query_projection.weight.detach(), upstream_before
-    )
+    for name, parameter in representatives.items():
+        assert not torch.equal(parameter.detach(), initial_parameters[name]), name
 
 
 def test_temporal_intent_diagnostics_and_checkpoint_replay(
@@ -367,7 +385,7 @@ def test_temporal_intent_diagnostics_and_checkpoint_replay(
     conditioned = summary["per_transition"][0]["conditioned_on_previous_decision"]
     assert conditioned["same_candidate_executed"]["l2_change"]["count"] == 3
     assert conditioned["other_candidate_executed"]["l2_change"]["count"] == 9
-    assert conditioned["stop"]["l2_change"]["count"] == 0
+    assert "stop" not in conditioned
 
     checkpoint = {
         "metadata": {
@@ -419,17 +437,52 @@ def test_temporal_intent_diagnostics_exclude_absorbed_stop_lineage(
 
     accumulator = TemporalIntentAccumulator()
     accumulator.update(output)
-    summary = accumulator.summary()
-    assert [item["live_parent_count"] for item in summary["per_timestep"]] == [
+    intent_summary = accumulator.summary()
+    grounding_accumulator = TemporalGroundingAccumulator()
+    grounding_accumulator.update(output)
+    grounding_summary = grounding_accumulator.summary()
+    assert [
+        item["live_parent_count"] for item in intent_summary["per_timestep"]
+    ] == [
         synthetic_encoded.anchor.shape[0],
         0,
         0,
     ]
-    for transition in summary["per_transition"]:
+    for transition in intent_summary["per_transition"]:
         assert transition["intent_l2_change"]["count"] == 0
         assert transition[
             "candidate_intent_displacement_alignment_off_diagonal"
         ]["valid_pair_count"] == 0
+        assert "stop" not in transition["conditioned_on_previous_decision"]
+    for transition in grounding_summary["per_transition"]:
+        assert transition["support_l1_change"]["count"] == 0
+        assert transition[
+            "candidate_displacement_cosine_off_diagonal"
+        ]["valid_pair_count"] == 0
+        assert "stop" not in transition["conditioned_on_previous_decision"]
+
+    expected_parents = synthetic_encoded.anchor.shape[0]
+    intent_hypothetical = intent_summary[
+        "hypothetical_post_stop_recomputation"
+    ]
+    grounding_hypothetical = grounding_summary[
+        "hypothetical_post_stop_recomputation"
+    ]
+    for hypothetical in (intent_hypothetical, grounding_hypothetical):
+        assert hypothetical["excluded_from_primary_temporal_metrics"] is True
+        assert "never enter execution" in hypothetical["execution_semantics"]
+        assert hypothetical["per_transition"][0][
+            "newly_stopped_parent_count"
+        ] == expected_parents
+        assert hypothetical["per_transition"][1][
+            "newly_stopped_parent_count"
+        ] == 0
+    assert intent_hypothetical["per_transition"][0]["intent_l2_change"][
+        "count"
+    ] == expected_parents * 4
+    assert grounding_hypothetical["per_transition"][0]["support_l1_change"][
+        "count"
+    ] == expected_parents * 4
 
 
 def test_canonical_hydra_config_is_matched_to_r1c1() -> None:

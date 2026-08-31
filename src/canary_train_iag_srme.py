@@ -50,6 +50,32 @@ def _parameter_delta(parameter: nn.Parameter, initial: Tensor) -> float:
     return float((parameter.detach().float() - initial).abs().max())
 
 
+def _reproposal_audit_groups(
+    reproposal: nn.Module,
+) -> tuple[dict[str, list[nn.Parameter]], dict[str, nn.Parameter]]:
+    """Return independently auditable R1c2 branches and representatives."""
+
+    families = {
+        "reproposal_output": list(reproposal.output_projection.parameters()),
+        "reproposal_state": list(reproposal.state_attention.parameters()),
+        "reproposal_change": list(reproposal.change_attention.parameters()),
+        "reproposal_text": list(reproposal.text_attention.parameters()),
+        "reproposal_state_query": list(
+            reproposal.state_query_projection.parameters()
+        ),
+        "reproposal_fusion": list(reproposal.residual_hidden.parameters()),
+    }
+    representatives = {
+        "reproposal_output": reproposal.output_projection.weight,
+        "reproposal_state": reproposal.state_attention.in_proj_weight,
+        "reproposal_change": reproposal.change_attention.in_proj_weight,
+        "reproposal_text": reproposal.text_attention.in_proj_weight,
+        "reproposal_state_query": reproposal.state_query_projection.weight,
+        "reproposal_fusion": reproposal.residual_hidden[1].weight,
+    }
+    return families, representatives
+
+
 def _complete_amp_step(
     scaler: torch.amp.GradScaler,
     optimizer: torch.optim.Optimizer,
@@ -610,15 +636,14 @@ def main() -> None:
         parameter_families["applicability"] = list(
             model.core.applicability_head.parameters()
         )
+    reproposal_families: dict[str, list[nn.Parameter]] = {}
+    reproposal_representatives: dict[str, nn.Parameter] = {}
     if model.core.reproposal is not None:
-        parameter_families["reproposal_output"] = list(
-            model.core.reproposal.output_projection.parameters()
-        )
-        parameter_families["reproposal_upstream"] = [
-            parameter
-            for name, parameter in model.core.reproposal.named_parameters()
-            if not name.startswith("output_projection.")
-        ]
+        (
+            reproposal_families,
+            reproposal_representatives,
+        ) = _reproposal_audit_groups(model.core.reproposal)
+        parameter_families.update(reproposal_families)
     tracked = {
         "vision": next(model.backbone.model.vision_model.parameters()),
         "text": next(model.backbone.model.text_model.parameters()),
@@ -629,13 +654,7 @@ def main() -> None:
     if model.core.applicability_head is not None:
         tracked["applicability_weight"] = model.core.applicability_head.projection.weight
         tracked["applicability_bias"] = model.core.applicability_head.projection.bias
-    if model.core.reproposal is not None:
-        tracked["reproposal_output"] = (
-            model.core.reproposal.output_projection.weight
-        )
-        tracked["reproposal_upstream"] = (
-            model.core.reproposal.state_query_projection.weight
-        )
+    tracked.update(reproposal_representatives)
     initial = {name: parameter.detach().float().clone() for name, parameter in tracked.items()}
     calls = {
         "vision_model": 0,
@@ -674,8 +693,9 @@ def main() -> None:
     sample_steps = 0
     successful_steps_with_nonzero_applicability_gradient = 0
     successful_steps_with_nonzero_grounding_gradient = 0
-    successful_steps_with_nonzero_reproposal_output_gradient = 0
-    successful_steps_with_nonzero_reproposal_upstream_gradient = 0
+    reproposal_nonzero_gradient_steps = {
+        name: 0 for name in reproposal_families
+    }
     latest_applicability_diagnostics: dict[str, object] | None = None
     latest_grounding_diagnostics: dict[str, object] | None = None
     latest_intent_diagnostics: dict[str, object] | None = None
@@ -769,10 +789,9 @@ def main() -> None:
                 successful_steps_with_nonzero_applicability_gradient += 1
             if gradient_norms["grounding"] > 0:
                 successful_steps_with_nonzero_grounding_gradient += 1
-            if gradient_norms.get("reproposal_output", 0.0) > 0:
-                successful_steps_with_nonzero_reproposal_output_gradient += 1
-            if gradient_norms.get("reproposal_upstream", 0.0) > 0:
-                successful_steps_with_nonzero_reproposal_upstream_gradient += 1
+            for name in reproposal_nonzero_gradient_steps:
+                if gradient_norms.get(name, 0.0) > 0:
+                    reproposal_nonzero_gradient_steps[name] += 1
             allowed_zero_families = {"applicability"}
             if args.r1c1 or args.r1c2:
                 # Dynamic-WHERE readiness is based on cumulative grounder learnability;
@@ -781,9 +800,7 @@ def main() -> None:
             if args.r1c2:
                 # Zero-init W_out intentionally blocks upstream reproposal gradients
                 # until the output projection has taken an optimizer step.
-                allowed_zero_families.update(
-                    {"reproposal_output", "reproposal_upstream"}
-                )
+                allowed_zero_families.update(reproposal_families)
             zero_families = [
                 name
                 for name, value in gradient_norms.items()
@@ -885,12 +902,10 @@ def main() -> None:
                     "successful_steps_with_nonzero_applicability_gradient": (
                         successful_steps_with_nonzero_applicability_gradient
                     ),
-                    "successful_steps_with_nonzero_reproposal_output_gradient": (
-                        successful_steps_with_nonzero_reproposal_output_gradient
-                    ),
-                    "successful_steps_with_nonzero_reproposal_upstream_gradient": (
-                        successful_steps_with_nonzero_reproposal_upstream_gradient
-                    ),
+                    **{
+                        f"successful_steps_with_nonzero_{name}_gradient": count
+                        for name, count in reproposal_nonzero_gradient_steps.items()
+                    },
                     "applicability_nonzero_gradient_fraction": (
                         successful_steps_with_nonzero_applicability_gradient
                         / successful_optimizer_steps
@@ -940,22 +955,26 @@ def main() -> None:
                 ) == 0:
                     raise RuntimeError("dynamic-WHERE grounder parameters did not change")
             if successful_optimizer_steps >= 20 and args.r1c2:
-                if successful_steps_with_nonzero_reproposal_output_gradient == 0:
+                dead_gradient_branches = [
+                    name
+                    for name, count in reproposal_nonzero_gradient_steps.items()
+                    if count == 0
+                ]
+                if dead_gradient_branches:
                     raise RuntimeError(
-                        "R1c2 reproposal output projection received no cumulative gradient"
+                        "R1c2 reproposal branches received no cumulative gradient: "
+                        f"{dead_gradient_branches}"
                     )
-                if successful_steps_with_nonzero_reproposal_upstream_gradient == 0:
+                unmoved_branches = [
+                    name
+                    for name in reproposal_representatives
+                    if _parameter_delta(tracked[name], initial[name]) == 0
+                ]
+                if unmoved_branches:
                     raise RuntimeError(
-                        "R1c2 upstream reproposal pathway never began receiving gradient"
+                        "R1c2 reproposal branch parameters did not move: "
+                        f"{unmoved_branches}"
                     )
-                if _parameter_delta(
-                    tracked["reproposal_output"], initial["reproposal_output"]
-                ) == 0:
-                    raise RuntimeError("R1c2 reproposal output projection did not move")
-                if _parameter_delta(
-                    tracked["reproposal_upstream"], initial["reproposal_upstream"]
-                ) == 0:
-                    raise RuntimeError("R1c2 upstream reproposal parameters did not move")
     except torch.OutOfMemoryError as error:
         print(
             json.dumps(
@@ -1018,32 +1037,22 @@ def main() -> None:
             "r1c2_dynamic_reproposal_disabled": bool(
                 args.r1c2 and not model.core.config.enable_dynamic_reproposal
             ),
-            "reproposal_output_no_gradient": bool(
-                args.r1c2
-                and successful_optimizer_steps >= 20
-                and successful_steps_with_nonzero_reproposal_output_gradient == 0
-            ),
-            "reproposal_upstream_no_gradient": bool(
-                args.r1c2
-                and successful_optimizer_steps >= 20
-                and successful_steps_with_nonzero_reproposal_upstream_gradient == 0
-            ),
-            "reproposal_no_parameter_movement": bool(
-                args.r1c2
-                and successful_optimizer_steps >= 20
-                and (
-                    _parameter_delta(
-                        tracked["reproposal_output"],
-                        initial["reproposal_output"],
-                    )
-                    == 0.0
-                    or _parameter_delta(
-                        tracked["reproposal_upstream"],
-                        initial["reproposal_upstream"],
-                    )
-                    == 0.0
+            **{
+                f"{name}_no_gradient": bool(
+                    args.r1c2
+                    and successful_optimizer_steps >= 20
+                    and reproposal_nonzero_gradient_steps[name] == 0
                 )
-            ),
+                for name in reproposal_families
+            },
+            **{
+                f"{name}_no_parameter_movement": bool(
+                    args.r1c2
+                    and successful_optimizer_steps >= 20
+                    and _parameter_delta(tracked[name], initial[name]) == 0.0
+                )
+                for name in reproposal_representatives
+            },
         }
     )
     if args.r1c2 and isinstance(latest_intent_diagnostics, dict):
@@ -1110,12 +1119,10 @@ def main() -> None:
         "successful_steps_with_nonzero_grounding_gradient": (
             successful_steps_with_nonzero_grounding_gradient
         ),
-        "successful_steps_with_nonzero_reproposal_output_gradient": (
-            successful_steps_with_nonzero_reproposal_output_gradient
-        ),
-        "successful_steps_with_nonzero_reproposal_upstream_gradient": (
-            successful_steps_with_nonzero_reproposal_upstream_gradient
-        ),
+        **{
+            f"successful_steps_with_nonzero_{name}_gradient": count
+            for name, count in reproposal_nonzero_gradient_steps.items()
+        },
         "grounding_nonzero_gradient_fraction": (
             successful_steps_with_nonzero_grounding_gradient
             / max(successful_optimizer_steps, 1)
