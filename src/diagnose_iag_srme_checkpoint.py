@@ -59,6 +59,8 @@ REQUIRED_REPORT_KEYS = {
     "global_metrics",
     "per_category_metrics",
     "intent_diagnostics",
+    "temporal_intent_diagnostics",
+    "temporal_candidate_chain",
     "selection_diagnostics",
     "grounding_diagnostics",
     "temporal_grounding_diagnostics",
@@ -72,6 +74,7 @@ REQUIRED_REPORT_KEYS = {
     "failure_flags",
     "diagnostic_definitions",
     "trusted_r1a_baseline",
+    "trusted_r1c1_best",
 }
 
 TEMPORAL_SUPPORT_TOP_M = 10
@@ -88,6 +91,16 @@ TRUSTED_R1A_BASELINE = {
     "pairwise_support_overlap": 0.995108,
     "repeated_candidate_trajectory_fraction": 0.957447,
     "mean_executed_edits": 2.86586,
+}
+TRUSTED_R1C1_BEST = {
+    "full_mean_recall": 38.754133,
+    "pairwise_intent_cosine": 0.954,
+    "pairwise_support_cosine_by_timestep": [0.999766, 0.999755, 0.999740],
+    "mean_delta_q_norm_by_timestep": [0.33027, 0.26697, 0.19414],
+    "pairwise_delta_q_cosine_by_timestep": [0.98277, 0.98074, 0.97539],
+    "functional_effective_rank_by_timestep": [1.8296, 1.8720, 1.9708],
+    "mean_candidate_mean_recall": 38.7631,
+    "best_repeat_mean_recall": 38.8971,
 }
 
 
@@ -422,6 +435,206 @@ def _selection_batch_counts(output: IAGSRMEOutput) -> dict[str, Tensor]:
     }
 
 
+class TemporalIntentAccumulator:
+    """Lineage-safe temporal WHAT diagnostics over raw reproposed intents."""
+
+    def __init__(self, candidates: int = 4, timesteps: int = 3) -> None:
+        self.candidates = candidates
+        self.timesteps = timesteps
+        self.dynamic_reproposal: bool | None = None
+        self.live_counts = torch.zeros(timesteps, dtype=torch.long)
+        self.pairwise = [_MaskedMatrixStats(candidates) for _ in range(timesteps)]
+        self.norm = [
+            [_DistributionStats() for _ in range(candidates)]
+            for _ in range(timesteps)
+        ]
+        self.residual_norm = [
+            [_DistributionStats() for _ in range(candidates)]
+            for _ in range(timesteps)
+        ]
+        transitions = timesteps - 1
+        self.temporal_cosine = [_DistributionStats() for _ in range(transitions)]
+        self.l1_change = [_DistributionStats() for _ in range(transitions)]
+        self.l2_change = [_DistributionStats() for _ in range(transitions)]
+        self.displacement_alignment = [
+            _MaskedMatrixStats(candidates) for _ in range(transitions)
+        ]
+        self.conditioned = {
+            condition: {
+                name: [_DistributionStats() for _ in range(transitions)]
+                for name in ("cosine", "l2_change")
+            }
+            for condition in (
+                "same_candidate_executed",
+                "other_candidate_executed",
+                "stop",
+            )
+        }
+
+    def update(self, output: IAGSRMEOutput) -> None:
+        base = (
+            output.initial_intents
+            if output.initial_intents is not None
+            else output.intents
+        ).float()
+        temporal = (
+            output.temporal_intents
+            if output.temporal_intents is not None
+            else output.intents[:, None].expand(-1, self.timesteps, -1, -1)
+        ).float()
+        if temporal.shape[:3] != (
+            base.shape[0],
+            self.timesteps,
+            self.candidates,
+        ):
+            raise ValueError("temporal intents must be [B,T,K,d]")
+        if not torch.equal(temporal[:, 0], base):
+            raise AssertionError("t0 temporal intent must equal immutable base intent")
+        if self.dynamic_reproposal is None:
+            self.dynamic_reproposal = output.dynamic_reproposal
+        elif self.dynamic_reproposal != output.dynamic_reproposal:
+            raise ValueError("mixed static/dynamic WHAT outputs in one accumulator")
+
+        for timestep, step in enumerate(output.trace):
+            raw = (
+                step.current_intents
+                if step.current_intents is not None
+                else output.intents
+            ).float()
+            torch.testing.assert_close(
+                temporal[:, timestep], raw, atol=0.0, rtol=0.0
+            )
+            valid = step.live_before
+            self.live_counts[timestep] += int(valid.sum())
+            if not valid.any():
+                continue
+            current = temporal[valid, timestep]
+            valid_pairs = torch.ones(
+                current.shape[:2] + (self.candidates,),
+                dtype=torch.bool,
+                device=current.device,
+            )
+            self.pairwise[timestep].update(
+                pairwise_cosine_matrix(current), valid_pairs
+            )
+            residual = current - base[valid]
+            for candidate in range(self.candidates):
+                self.norm[timestep][candidate].update(
+                    current[:, candidate].norm(dim=-1)
+                )
+                self.residual_norm[timestep][candidate].update(
+                    residual[:, candidate].norm(dim=-1)
+                )
+
+        for transition in range(self.timesteps - 1):
+            valid = output.trace[transition + 1].live_before
+            if not valid.any():
+                continue
+            before = temporal[valid, transition]
+            after = temporal[valid, transition + 1]
+            cosine = F.cosine_similarity(before, after, dim=-1)
+            l1 = (after - before).abs().sum(dim=-1)
+            l2 = (after - before).norm(dim=-1)
+            self.temporal_cosine[transition].update(cosine)
+            self.l1_change[transition].update(l1)
+            self.l2_change[transition].update(l2)
+            displacement = after - before
+            matrix, pair_valid = masked_pairwise_cosine(displacement)
+            self.displacement_alignment[transition].update(matrix, pair_valid)
+
+            previous_action = output.trace[transition].selected_index[valid]
+            candidate_ids = torch.arange(
+                self.candidates, device=previous_action.device
+            )[None]
+            masks = {
+                "same_candidate_executed": previous_action[:, None].eq(
+                    candidate_ids
+                ),
+                "other_candidate_executed": (
+                    previous_action[:, None].lt(self.candidates)
+                    & ~previous_action[:, None].eq(candidate_ids)
+                ),
+                # A sample that STOPped is not live at the next timestep; primary
+                # lineage-safe STOP-conditioned transition metrics are undefined.
+                "stop": previous_action[:, None].eq(self.candidates).expand_as(
+                    cosine
+                ),
+            }
+            for condition, mask in masks.items():
+                self.conditioned[condition]["cosine"][transition].update(
+                    cosine[mask]
+                )
+                self.conditioned[condition]["l2_change"][transition].update(
+                    l2[mask]
+                )
+
+    def summary(self) -> dict[str, Any]:
+        per_timestep = []
+        for timestep in range(self.timesteps):
+            per_timestep.append(
+                {
+                    "timestep": timestep,
+                    "live_parent_count": int(self.live_counts[timestep]),
+                    "metric_population": (
+                        f"raw WHAT for samples live before decision at t={timestep}"
+                    ),
+                    "pairwise_candidate_intent_cosine_matrix": (
+                        self.pairwise[timestep].nullable_matrix()
+                    ),
+                    "pairwise_candidate_intent_cosine_off_diagonal": (
+                        self.pairwise[timestep].off_diagonal_summary()
+                    ),
+                    "candidate_intent_norm": [
+                        stats.summary() for stats in self.norm[timestep]
+                    ],
+                    "candidate_intent_residual_norm_from_base": [
+                        stats.summary() for stats in self.residual_norm[timestep]
+                    ],
+                }
+            )
+        per_transition = []
+        for transition in range(self.timesteps - 1):
+            per_transition.append(
+                {
+                    "transition": f"t{transition}_to_t{transition + 1}",
+                    "metric_population": (
+                        f"same candidate identity among samples live at t={transition + 1}"
+                    ),
+                    "same_candidate_temporal_intent_cosine": (
+                        self.temporal_cosine[transition].summary()
+                    ),
+                    "intent_l1_change": self.l1_change[transition].summary(),
+                    "intent_l2_change": self.l2_change[transition].summary(),
+                    "candidate_intent_displacement_cosine_matrix": (
+                        self.displacement_alignment[transition].nullable_matrix()
+                    ),
+                    "candidate_intent_displacement_alignment_off_diagonal": (
+                        self.displacement_alignment[transition].off_diagonal_summary()
+                    ),
+                    "conditioned_on_previous_decision": {
+                        condition: {
+                            name: values[transition].summary()
+                            for name, values in metrics.items()
+                        }
+                        for condition, metrics in self.conditioned.items()
+                    },
+                }
+            )
+        return {
+            "enable_dynamic_reproposal": bool(self.dynamic_reproposal),
+            "base_intent_semantics": "immutable TextIntentEncoder output B_k",
+            "temporal_intent_semantics": (
+                "raw I_t,k before any CLONE/MEAN diagnostic-control transform"
+            ),
+            "per_timestep": per_timestep,
+            "per_transition": per_transition,
+            "interpretation_limit": (
+                "intent motion or lower cosine is not semantic success without "
+                "downstream WHERE, functional, utility, and retrieval evidence"
+            ),
+        }
+
+
 class TemporalGroundingAccumulator:
     """Lineage-safe dynamic-WHERE measurements; never feeds model execution."""
 
@@ -704,6 +917,7 @@ class ValidationDiagnosticAccumulator:
         self.executed_edits = 0
         self.repeated_queries = 0
         self.visual_tokens: int | None = None
+        self.temporal_intent = TemporalIntentAccumulator(candidates, timesteps)
         self.temporal_grounding = TemporalGroundingAccumulator(candidates, timesteps)
 
         self.support_fraction = [_DistributionStats() for _ in range(candidates)]
@@ -799,6 +1013,7 @@ class ValidationDiagnosticAccumulator:
             raise ValueError("diagnostic accumulator/model K or Tmax mismatch")
         self.queries += batch_size
         self.visual_tokens = tokens
+        self.temporal_intent.update(output)
         self.temporal_grounding.update(output)
 
         selection = _selection_batch_counts(output)
@@ -1073,6 +1288,9 @@ class ValidationDiagnosticAccumulator:
             "metric_population": "all validation queries; intents are computed once per query",
             "tensor_shape_before_reduction": "[B,K,d]",
         }
+
+    def temporal_intent_summary(self) -> dict[str, Any]:
+        return self.temporal_intent.summary()
 
     def grounding_summary(self) -> dict[str, Any]:
         def combined_values(items: list[_DistributionStats]) -> Tensor:
@@ -1727,6 +1945,19 @@ class NullTargetUtilityAccumulator:
 
 def diagnostic_definitions() -> dict[str, dict[str, Any]]:
     return {
+        "temporal_intent_reproposal": {
+            "definition": (
+                "I_0,k=B_k and I_t,k=B_k+DeltaI_t,k for t>0; compare raw WHAT "
+                "by candidate and timestep"
+            ),
+            "population": "samples live before each recurrent decision",
+            "tensor_shape_before_reduction": "raw temporal intents [B,T,K,d]",
+            "reduction_axes": "feature axis d; candidate matrices retain KxK",
+            "interpretation_limitation": (
+                "WHAT movement can be common-mode or destructive; inspect displacement "
+                "alignment and downstream support/effect/retrieval response"
+            ),
+        },
         "between_candidate_support_similarity_by_timestep": {
             "definition": "cos(pi[t,i], pi[t,j]) for each candidate pair i != j",
             "population": "samples live before decision at each reported timestep",
@@ -2049,6 +2280,7 @@ def _macro_control_results(category_controls: Mapping[str, Mapping[str, Any]]) -
         "repeat_2",
         "repeat_3",
         "mean_candidate",
+        "frozen_t0_what",
     )
     result = {
         name: _macro_numeric_tree([controls[name] for controls in category_controls.values()])
@@ -2100,6 +2332,52 @@ def _usefulness_ratios(controls: Mapping[str, Any]) -> dict[str, float]:
         / denominator,
         "reference_only_over_full": float(controls["reference_only"]["mean_recall"])
         / denominator,
+        "frozen_t0_what_over_full": float(
+            controls["frozen_t0_what"]["mean_recall"]
+        )
+        / denominator,
+    }
+
+
+def _temporal_candidate_chain(
+    temporal_intent: Mapping[str, Any],
+    temporal_grounding: Mapping[str, Any],
+    functional: Mapping[str, Any],
+) -> dict[str, Any]:
+    rows = []
+    for timestep in range(3):
+        intent_item = temporal_intent["per_timestep"][timestep]
+        support_item = temporal_grounding["per_timestep"][timestep]
+        functional_item = functional["per_timestep"][timestep]
+        rows.append(
+            {
+                "timestep": timestep,
+                "live_parent_count": intent_item["live_parent_count"],
+                "intent_pairwise_cosine": intent_item[
+                    "pairwise_candidate_intent_cosine_off_diagonal"
+                ]["mean"],
+                "support_pairwise_cosine": support_item[
+                    "between_candidate_support_cosine_off_diagonal"
+                ]["mean"],
+                "delta_z_pairwise_cosine": functional_item.get(
+                    "delta_z_pairwise_cosine_off_diagonal", {}
+                ).get("mean"),
+                "delta_q_pairwise_cosine": functional_item.get(
+                    "pairwise_delta_q_cosine_mean_off_diagonal"
+                ),
+                "delta_q_effective_rank": functional_item.get(
+                    "functional_effective_rank"
+                ),
+                "mean_delta_q_norm": functional_item.get("mean_delta_q_norm"),
+            }
+        )
+    return {
+        "per_timestep": rows,
+        "causal_read_order": "WHAT -> WHERE -> DeltaZ -> Deltaq -> retrieval",
+        "interpretation_limit": (
+            "movement/diversity is descriptive; functional utility and retrieval must "
+            "remain healthy before a scientific success claim"
+        ),
     }
 
 
@@ -2115,6 +2393,7 @@ _LEGACY_CANONICAL_MODEL_CONFIG = {
     "initial_applicability": 0.98,
     "grounding_normalization": "entmax15",
     "enable_dynamic_regrounding": False,
+    "enable_dynamic_reproposal": False,
 }
 _SERIALIZED_MODEL_CONFIG_KEYS = (
     "model_config",
@@ -2164,6 +2443,9 @@ def _resolve_checkpoint_model_config(
     inferred_dynamic_applicability = any(
         key.startswith("core.applicability_head.") for key in state
     )
+    inferred_dynamic_reproposal = any(
+        key.startswith("core.reproposal.") for key in state
+    )
     if inferred_entmax_null_v1:
         raise ValueError(
             "checkpoint uses superseded r1b_visual_null_entmax_v1; it cannot be "
@@ -2183,10 +2465,10 @@ def _resolve_checkpoint_model_config(
     serialized_dynamic_regrounding = False
 
     if serialized is None:
-        if inferred_dynamic_applicability:
+        if inferred_dynamic_applicability or inferred_dynamic_reproposal:
             raise ValueError(
-                "dynamic-applicability checkpoint is not self-describing; exact R1b "
-                "replay is unsafe"
+                "dynamic-applicability/reproposal checkpoint is not self-describing; "
+                "exact replay is unsafe"
             )
         replay_values = dict(_LEGACY_CANONICAL_MODEL_CONFIG)
         source = "legacy_checkpoint_plus_canonical_assumption"
@@ -2199,8 +2481,15 @@ def _resolve_checkpoint_model_config(
         serialized_dynamic_regrounding = bool(
             serialized.get("enable_dynamic_regrounding", False)
         )
+        serialized_dynamic_reproposal = bool(
+            serialized.get("enable_dynamic_reproposal", False)
+        )
         if stored_generation == "r1c1_dynamic_current_state_reground_v1":
             required_fields.add("enable_dynamic_regrounding")
+        if stored_generation == "r1c2_dynamic_current_state_reproposal_v1":
+            required_fields.update(
+                {"enable_dynamic_regrounding", "enable_dynamic_reproposal"}
+            )
         if serialized_dynamic_regrounding:
             required_fields.update(
                 {"enable_dynamic_regrounding", "grounding_normalization"}
@@ -2236,6 +2525,7 @@ def _resolve_checkpoint_model_config(
             "enable_factor_head": enable_factor,
             "enable_visual_null": False,
             "enable_dynamic_applicability": inferred_dynamic_applicability,
+            "enable_dynamic_reproposal": inferred_dynamic_reproposal,
         }
         for key, expected in inferable_expected.items():
             if key in serialized and serialized[key] != expected:
@@ -2252,8 +2542,26 @@ def _resolve_checkpoint_model_config(
             raise ValueError(
                 "R1c1 checkpoint cannot combine dynamic regrounding with R1b applicability"
             )
-        if serialized_dynamic_regrounding and stored_generation != (
+        if serialized_dynamic_reproposal != inferred_dynamic_reproposal:
+            raise ValueError(
+                "serialized dynamic-reproposal flag conflicts with checkpoint state dict"
+            )
+        if serialized_dynamic_reproposal and not serialized_dynamic_regrounding:
+            raise ValueError("R1c2 replay requires dynamic regrounding")
+        if serialized_dynamic_reproposal and inferred_dynamic_applicability:
+            raise ValueError("R1c2 replay cannot combine R1b applicability")
+        if serialized_dynamic_reproposal and stored_generation != (
+            "r1c2_dynamic_current_state_reproposal_v1"
+        ):
+            raise ValueError(
+                "dynamic-reproposal checkpoint has missing or conflicting architecture generation"
+            )
+        if (
+            serialized_dynamic_regrounding
+            and not serialized_dynamic_reproposal
+            and stored_generation != (
             "r1c1_dynamic_current_state_reground_v1"
+            )
         ):
             raise ValueError(
                 "dynamic-regrounding checkpoint has missing or conflicting architecture generation"
@@ -2263,6 +2571,12 @@ def _resolve_checkpoint_model_config(
         ):
             raise ValueError(
                 "R1c1 architecture metadata requires enable_dynamic_regrounding=true"
+            )
+        if stored_generation == "r1c2_dynamic_current_state_reproposal_v1" and not (
+            serialized_dynamic_reproposal
+        ):
+            raise ValueError(
+                "R1c2 architecture metadata requires enable_dynamic_reproposal=true"
             )
 
     if int(replay_values["max_steps"]) != 3:
@@ -2293,6 +2607,9 @@ def _resolve_checkpoint_model_config(
         "enable_dynamic_regrounding": bool(
             replay_values["enable_dynamic_regrounding"]
         ),
+        "enable_dynamic_reproposal": bool(
+            replay_values["enable_dynamic_reproposal"]
+        ),
     }
     provenance: dict[str, Any] = {
         "source": source,
@@ -2312,6 +2629,7 @@ def _resolve_checkpoint_model_config(
             "factor_dim": inferred_factor_dim,
             "enable_visual_null": False,
             "enable_dynamic_applicability": inferred_dynamic_applicability,
+            "enable_dynamic_reproposal": inferred_dynamic_reproposal,
             "enable_dynamic_regrounding": (
                 "not inferable from state dict; resolved from serialized model config"
             ),
@@ -2320,12 +2638,16 @@ def _resolve_checkpoint_model_config(
         "diagnostic_inference_override": {"selector_gumbel_noise": False},
         "warning": warning,
         "architecture_generation": (
-            "r1c1_dynamic_current_state_reground_v1"
-            if resolved["enable_dynamic_regrounding"]
+            "r1c2_dynamic_current_state_reproposal_v1"
+            if resolved["enable_dynamic_reproposal"]
             else (
-                "r1b_dynamic_applicability_gate_v2"
-                if inferred_dynamic_applicability
-                else "legacy_r0_or_r1a"
+                "r1c1_dynamic_current_state_reground_v1"
+                if resolved["enable_dynamic_regrounding"]
+                else (
+                    "r1b_dynamic_applicability_gate_v2"
+                    if inferred_dynamic_applicability
+                    else "legacy_r0_or_r1a"
+                )
             )
         ),
     }
@@ -2441,6 +2763,8 @@ def _diagnose_category(
             query_lists[f"repeat_{candidate}"].append(repeated.final_query.cpu())
         mean_output = model.core(encoded, control="mean_candidate")
         query_lists["mean_candidate"].append(mean_output.final_query.cpu())
+        frozen_what = model.core(encoded, control="frozen_t0_what")
+        query_lists["frozen_t0_what"].append(frozen_what.final_query.cpu())
 
         target_ids.extend(batch_targets)
         reference_ids.extend(batch.reference_ids)
@@ -2860,6 +3184,7 @@ def _checkpoint_replay_guard(
     supported_generations = {
         "r1b_dynamic_applicability_gate_v2",
         "r1c1_dynamic_current_state_reground_v1",
+        "r1c2_dynamic_current_state_reproposal_v1",
     }
     if generation not in supported_generations:
         return {
@@ -2867,6 +3192,7 @@ def _checkpoint_replay_guard(
             "architecture_generation": generation,
             "trusted_r1b_replay": None,
             "trusted_r1c1_replay": None,
+            "trusted_r1c2_replay": None,
         }
     resolved = provenance.get("resolved_diagnostic_config")
     if not isinstance(resolved, Mapping):
@@ -2895,9 +3221,26 @@ def _checkpoint_replay_guard(
                 ),
             }
         )
+    elif generation == "r1c1_dynamic_current_state_reground_v1":
+        checks.update(
+            {
+                "dynamic_regrounding_enabled": (
+                    resolved.get("enable_dynamic_regrounding") is True
+                ),
+                "dynamic_applicability_disabled": (
+                    resolved.get("enable_dynamic_applicability") is False
+                ),
+                "grounding_is_entmax15": (
+                    resolved.get("grounding_normalization") == "entmax15"
+                ),
+            }
+        )
     else:
         checks.update(
             {
+                "dynamic_reproposal_enabled": (
+                    resolved.get("enable_dynamic_reproposal") is True
+                ),
                 "dynamic_regrounding_enabled": (
                     resolved.get("enable_dynamic_regrounding") is True
                 ),
@@ -2926,6 +3269,8 @@ def _checkpoint_replay_guard(
         "architecture_generation": generation,
         "trusted_r1b_replay": generation == "r1b_dynamic_applicability_gate_v2",
         "trusted_r1c1_replay": generation == "r1c1_dynamic_current_state_reground_v1",
+        "trusted_r1c2_replay": generation
+        == "r1c2_dynamic_current_state_reproposal_v1",
         "checks": checks,
         "saved_checkpoint_metric": float(saved_metric),
         "replayed_full_mean_recall": replayed_mean_recall,
@@ -3022,6 +3367,9 @@ def main() -> None:
         category_controls[category] = controls
         category_selection = category_accumulator.selection_summary()
         category_intent = category_accumulator.intent_summary()
+        category_temporal_intent = (
+            category_accumulator.temporal_intent_summary()
+        )
         category_grounding = category_accumulator.grounding_summary()
         category_temporal_grounding = (
             category_accumulator.temporal_grounding_summary()
@@ -3033,6 +3381,7 @@ def main() -> None:
             "global_metrics": controls["full"],
             "selection_diagnostics": category_selection,
             "intent_diagnostics": category_intent,
+            "temporal_intent_diagnostics": category_temporal_intent,
             "grounding_diagnostics": category_grounding,
             "temporal_grounding_diagnostics": category_temporal_grounding,
             "visual_null_diagnostics": {
@@ -3047,6 +3396,11 @@ def main() -> None:
             ],
             "selected_path_marginal_diagnostics": category_selected_path.summary(),
             "specialization_matrices": category_specialization,
+            "temporal_candidate_chain": _temporal_candidate_chain(
+                category_temporal_intent,
+                category_temporal_grounding,
+                category_functional,
+            ),
             "failure_flags": _failure_flags(
                 category_selection,
                 category_grounding,
@@ -3061,6 +3415,7 @@ def main() -> None:
     global_controls["usefulness_ratios"] = _usefulness_ratios(global_controls)
     selection = global_accumulator.selection_summary()
     intent = global_accumulator.intent_summary()
+    temporal_intent = global_accumulator.temporal_intent_summary()
     grounding = global_accumulator.grounding_summary()
     temporal_grounding = global_accumulator.temporal_grounding_summary()
     functional = global_accumulator.functional_summary()
@@ -3080,13 +3435,13 @@ def main() -> None:
     ]
     r1a_comparison = {
         "full_mean_recall": {
-            "r1c1": float(global_controls["full"]["mean_recall"]),
+            "current_checkpoint": float(global_controls["full"]["mean_recall"]),
             "r1a": TRUSTED_R1A_BASELINE["full_mean_recall"],
             "difference": float(global_controls["full"]["mean_recall"])
             - TRUSTED_R1A_BASELINE["full_mean_recall"],
         },
         "mean_delta_q_norm_by_timestep": {
-            "r1c1": current_delta_q,
+            "current_checkpoint": current_delta_q,
             "r1a": TRUSTED_R1A_BASELINE["mean_delta_q_norm_by_timestep"],
             "difference": [
                 None if current is None else current - baseline
@@ -3098,7 +3453,7 @@ def main() -> None:
             ],
         },
         "selected_target_relative_gain_by_timestep": {
-            "r1c1": current_selected_gain,
+            "current_checkpoint": current_selected_gain,
             "r1a": TRUSTED_R1A_BASELINE[
                 "selected_target_relative_gain_by_timestep"
             ],
@@ -3114,19 +3469,19 @@ def main() -> None:
             ],
         },
         "between_candidate_support_cosine_by_timestep": {
-            "r1c1": current_support_cosine,
+            "current_checkpoint": current_support_cosine,
             "r1a_static_reference": TRUSTED_R1A_BASELINE[
                 "pairwise_support_cosine"
             ],
         },
         "mean_executed_edits": {
-            "r1c1": selection["mean_executed_edit_count"],
+            "current_checkpoint": selection["mean_executed_edit_count"],
             "r1a": TRUSTED_R1A_BASELINE["mean_executed_edits"],
             "difference": selection["mean_executed_edit_count"]
             - TRUSTED_R1A_BASELINE["mean_executed_edits"],
         },
         "repeated_candidate_trajectory_fraction": {
-            "r1c1": selection[
+            "current_checkpoint": selection[
                 "fraction_queries_with_repeated_candidate_selections"
             ],
             "r1a": TRUSTED_R1A_BASELINE[
@@ -3140,6 +3495,70 @@ def main() -> None:
         "interpretation_limit": (
             "historical comparison only; no value is used by training or selection"
         ),
+    }
+    current_intent_cosine = [
+        item["pairwise_candidate_intent_cosine_off_diagonal"]["mean"]
+        for item in temporal_intent["per_timestep"]
+    ]
+    current_delta_q_cosine = [
+        item.get("pairwise_delta_q_cosine_mean_off_diagonal")
+        for item in functional["per_timestep"]
+    ]
+    current_functional_rank = [
+        item.get("functional_effective_rank")
+        for item in functional["per_timestep"]
+    ]
+    r1c1_comparison = {
+        "full_mean_recall": {
+            "current_checkpoint": float(global_controls["full"]["mean_recall"]),
+            "r1c1_best": TRUSTED_R1C1_BEST["full_mean_recall"],
+        },
+        "pairwise_intent_cosine_by_timestep": {
+            "current_checkpoint": current_intent_cosine,
+            "r1c1_base_intent_reference": TRUSTED_R1C1_BEST[
+                "pairwise_intent_cosine"
+            ],
+        },
+        "pairwise_support_cosine_by_timestep": {
+            "current_checkpoint": current_support_cosine,
+            "r1c1_best": TRUSTED_R1C1_BEST[
+                "pairwise_support_cosine_by_timestep"
+            ],
+        },
+        "mean_delta_q_norm_by_timestep": {
+            "current_checkpoint": current_delta_q,
+            "r1c1_best": TRUSTED_R1C1_BEST["mean_delta_q_norm_by_timestep"],
+        },
+        "pairwise_delta_q_cosine_by_timestep": {
+            "current_checkpoint": current_delta_q_cosine,
+            "r1c1_best": TRUSTED_R1C1_BEST[
+                "pairwise_delta_q_cosine_by_timestep"
+            ],
+        },
+        "functional_effective_rank_by_timestep": {
+            "current_checkpoint": current_functional_rank,
+            "r1c1_best": TRUSTED_R1C1_BEST[
+                "functional_effective_rank_by_timestep"
+            ],
+        },
+        "mean_candidate_mean_recall": {
+            "current_checkpoint": float(
+                global_controls["mean_candidate"]["mean_recall"]
+            ),
+            "r1c1_best": TRUSTED_R1C1_BEST["mean_candidate_mean_recall"],
+        },
+        "best_repeat_mean_recall": {
+            "current_checkpoint": max(
+                float(global_controls[f"repeat_{candidate}"]["mean_recall"])
+                for candidate in range(4)
+            ),
+            "r1c1_best": TRUSTED_R1C1_BEST["best_repeat_mean_recall"],
+        },
+        "unavailable_trusted_r1c1_fields": (
+            "selected target-relative gain, mean executed edits, and repeated-candidate "
+            "trajectory fraction were not supplied as trusted R1c1 BEST constants"
+        ),
+        "interpretation_limit": "historical comparison only; never used by training",
     }
     metadata = checkpoint["metadata"]
     report = {
@@ -3178,12 +3597,17 @@ def main() -> None:
                     "mean same-parent candidate token effect before readout using the "
                     "existing matched-compute control"
                 ),
+                "frozen_t0_what": (
+                    "hold I_t,k=B_k while retaining Ground(B_k,Z_t) on the actual "
+                    "dynamic selected-path state"
+                ),
                 "candidate_oracle": "offline target-ranked diagnostic only; never executed",
             },
         },
         "global_metrics": global_controls["full"],
         "per_category_metrics": category_results,
         "intent_diagnostics": intent,
+        "temporal_intent_diagnostics": temporal_intent,
         "selection_diagnostics": selection,
         "grounding_diagnostics": grounding,
         "temporal_grounding_diagnostics": temporal_grounding,
@@ -3199,6 +3623,9 @@ def main() -> None:
         ],
         "selected_path_marginal_diagnostics": selected_path,
         "specialization_matrices": specialization,
+        "temporal_candidate_chain": _temporal_candidate_chain(
+            temporal_intent, temporal_grounding, functional
+        ),
         "failure_flags": _failure_flags(
             selection,
             grounding,
@@ -3212,6 +3639,11 @@ def main() -> None:
             **TRUSTED_R1A_BASELINE,
             "status": "fixed historical comparison values; not a training objective",
             "automatic_comparison": r1a_comparison,
+        },
+        "trusted_r1c1_best": {
+            **TRUSTED_R1C1_BEST,
+            "status": "fixed historical diagnostic values; never used by training",
+            "automatic_comparison": r1c1_comparison,
         },
         "omitted_controls": {
             "all_candidate_sequential_0_1_2_3": (

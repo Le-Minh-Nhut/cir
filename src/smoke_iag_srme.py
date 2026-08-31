@@ -5,6 +5,7 @@ import json
 
 import torch
 import torch.nn.functional as F
+from torch.optim import SGD
 
 from diagnostics.iag_srme import summarize_trajectory
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
@@ -14,11 +15,11 @@ from models.iag_srme import BackboneOutput, IAGSRMEConfig, IAGSRMECore
 def main() -> None:
     parser = argparse.ArgumentParser(description="Synthetic IAG-SRME end-to-end smoke test")
     parser.add_argument("--diagnostics", action="store_true")
-    parser.add_argument("--r1b", action="store_true")
-    parser.add_argument("--r1c1", action="store_true")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--r1b", action="store_true")
+    modes.add_argument("--r1c1", action="store_true")
+    modes.add_argument("--r1c2", action="store_true")
     args = parser.parse_args()
-    if args.r1b and args.r1c1:
-        raise ValueError("R1b applicability and R1c1 dynamic grounding are separate experiments")
     torch.manual_seed(20260829)
     batch, tokens, length, width, retrieval_dim = 4, 17, 9, 32, 24
     core = IAGSRMECore(
@@ -28,10 +29,13 @@ def main() -> None:
             retrieval_dim=retrieval_dim,
             max_steps=3,
             selector_gumbel_noise=False,
-            query_cap=1000.0 if (args.r1b or args.r1c1) else 0.5,
+            query_cap=(
+                1000.0 if (args.r1b or args.r1c1 or args.r1c2) else 0.5
+            ),
             enable_dynamic_applicability=args.r1b,
             initial_applicability=0.98,
-            enable_dynamic_regrounding=args.r1c1,
+            enable_dynamic_regrounding=args.r1c1 or args.r1c2,
+            enable_dynamic_reproposal=args.r1c2,
         )
     )
     with torch.no_grad():
@@ -54,8 +58,29 @@ def main() -> None:
     target_embeddings = F.normalize(torch.randn(batch, retrieval_dim), dim=-1).requires_grad_()
     positive_mask = torch.eye(batch, dtype=torch.bool)
 
+    calls = {"intent": 0, "reproposal": 0, "grounder": 0, "applicability": 0}
+
+    def count(name):
+        def hook(_module, _inputs) -> None:
+            calls[name] += 1
+
+        return hook
+
+    handles = [
+        core.intent_encoder.register_forward_pre_hook(count("intent")),
+        core.grounder.register_forward_pre_hook(count("grounder")),
+    ]
+    if core.reproposal is not None:
+        handles.append(core.reproposal.register_forward_pre_hook(count("reproposal")))
+    if core.applicability_head is not None:
+        handles.append(
+            core.applicability_head.register_forward_pre_hook(count("applicability"))
+        )
     core.eval()
     before = core(encoded)
+    for handle in handles:
+        handle.remove()
+    static_t0_before = core.grounder(before.intents, before.anchor)
     permuted_target = target_embeddings[torch.tensor([2, 0, 3, 1])]
     after = core(encoded)
     firewall = all(
@@ -63,6 +88,8 @@ def main() -> None:
         for left, right in (
             (before.intents, after.intents),
             (before.supports, after.supports),
+            (before.temporal_intents, after.temporal_intents),
+            (before.temporal_supports, after.temporal_supports),
             (before.trace[0].contexts, after.trace[0].contexts),
             (before.trace[0].delta_z, after.trace[0].delta_z),
             (before.trace[0].candidate_queries, after.trace[0].candidate_queries),
@@ -71,6 +98,14 @@ def main() -> None:
     )
     assert permuted_target.shape == target_embeddings.shape and firewall
 
+    reproposal_before: dict[str, torch.Tensor] = {}
+    if args.r1c2:
+        reproposal_before = {
+            "output": core.reproposal.output_projection.weight.detach().clone(),
+            "upstream": core.reproposal.state_query_projection.weight.detach().clone(),
+        }
+        with torch.no_grad():
+            core.reproposal.output_projection.weight.normal_(std=1e-3)
     core.train()
     output = core(encoded)
     objective = IAGSRMEObjective(ObjectiveConfig(), width=width)
@@ -92,6 +127,13 @@ def main() -> None:
         gradient_checks["applicability_bias"] = (
             core.applicability_head.projection.bias.grad
         )
+    if args.r1c2:
+        gradient_checks["reproposal_output"] = (
+            core.reproposal.output_projection.weight.grad
+        )
+        gradient_checks["reproposal_upstream"] = (
+            core.reproposal.state_query_projection.weight.grad
+        )
     gradient_norms = {
         name: 0.0 if gradient is None else float(gradient.norm())
         for name, gradient in gradient_checks.items()
@@ -100,6 +142,30 @@ def main() -> None:
         value > 0 and torch.isfinite(torch.tensor(value)) for value in gradient_norms.values()
     ):
         raise AssertionError(f"expected nonzero finite gradients: {gradient_norms}")
+    reproposal_parameter_movement = None
+    if args.r1c2:
+        optimizer = SGD(core.parameters(), lr=1e-2)
+        activated_output = core.reproposal.output_projection.weight.detach().clone()
+        activated_upstream = core.reproposal.state_query_projection.weight.detach().clone()
+        optimizer.step()
+        reproposal_parameter_movement = {
+            "output_after_optimizer": float(
+                (
+                    core.reproposal.output_projection.weight.detach()
+                    - activated_output
+                )
+                .abs()
+                .max()
+            ),
+            "upstream_after_optimizer": float(
+                (
+                    core.reproposal.state_query_projection.weight.detach()
+                    - activated_upstream
+                )
+                .abs()
+                .max()
+            ),
+        }
     report: dict[str, object] = {
         "shapes": {
             "E": list(output.intents.shape),
@@ -121,7 +187,10 @@ def main() -> None:
             "initial_applicability": core.config.initial_applicability,
             "grounding_normalization": core.config.grounding_normalization,
             "enable_dynamic_regrounding": core.config.enable_dynamic_regrounding,
+            "enable_dynamic_reproposal": core.config.enable_dynamic_reproposal,
         },
+        "forward_call_counts": calls,
+        "reproposal_parameter_movement": reproposal_parameter_movement,
         "visual_null": (
             None
             if output.visual_null_probabilities is None
@@ -163,7 +232,6 @@ def main() -> None:
             float(F.cosine_similarity(previous, current, dim=-1).mean())
         )
         temporal_l1.append(float((current - previous).abs().sum(dim=-1).mean()))
-    static_t0 = core.grounder(output.intents, output.anchor)
     report["dynamic_grounding"] = {
         "enabled": output.dynamic_regrounding,
         "temporal_support_shape": list(temporal_supports.shape),
@@ -174,7 +242,12 @@ def main() -> None:
         "temporal_support_cosine": temporal_cosine,
         "temporal_support_l1_change": temporal_l1,
         "t0_static_anchor_parity_max_abs_error": float(
-            (temporal_supports[:, 0] - static_t0.detach().float()).abs().max()
+            (
+                before.temporal_supports[:, 0].detach().float()
+                - static_t0_before.detach().float()
+            )
+            .abs()
+            .max()
         ),
         "support_dtype": str(output.temporal_supports.dtype),
         "state_dtype": str(output.final_state.dtype),
@@ -186,6 +259,56 @@ def main() -> None:
             for step in output.trace
         ),
         "applicability_disabled": core.applicability_head is None,
+    }
+    report["dynamic_reproposal"] = {
+        "enabled": output.dynamic_reproposal,
+        "initial_intents_shape": list(output.initial_intents.shape),
+        "temporal_intents_shape": list(output.temporal_intents.shape),
+        "t0_intent_parity_max_abs_error": float(
+            (
+                output.temporal_intents[:, 0].detach()
+                - output.initial_intents.detach()
+            )
+            .abs()
+            .max()
+        ),
+        "zero_init_residual_max_abs": float(
+            (
+                before.temporal_intents.detach()
+                - before.initial_intents.detach()[:, None]
+            )
+            .abs()
+            .max()
+        ),
+        "controlled_intent_t1_change": float(
+            (
+                output.temporal_intents[:, 1].detach()
+                - output.temporal_intents[:, 0].detach()
+            )
+            .norm(dim=-1)
+            .mean()
+        ),
+        "controlled_intent_t2_change": float(
+            (
+                output.temporal_intents[:, 2].detach()
+                - output.temporal_intents[:, 1].detach()
+            )
+            .norm(dim=-1)
+            .mean()
+        ),
+        "controlled_support_response": float(
+            (
+                output.temporal_supports[:, 1].detach()
+                - before.temporal_supports[:, 1].detach()
+            )
+            .abs()
+            .sum(dim=-1)
+            .mean()
+        ),
+        "pre_activation_output_was_zero": bool(
+            torch.count_nonzero(reproposal_before.get("output", torch.ones(1)))
+            == 0
+        ),
     }
     if args.diagnostics:
         diagnostics = summarize_trajectory(output)

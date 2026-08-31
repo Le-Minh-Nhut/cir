@@ -104,9 +104,9 @@ def _classify_canary_outcomes(
     """Separate implementation readiness from scientific behavior observations.
 
     Candidate/STOP specialization is a result of the experiment, not a prerequisite
-    for a mechanically valid canary. R1c1 immediate-STOP saturation is the one
-    operational exception: it prevents the run from exercising changed-state
-    regrounding, so the canary cannot validate its defining recurrent path.
+    for a mechanically valid canary. R1c1/R1c2 immediate-STOP saturation is the
+    one operational exception: it prevents the run from exercising changed-state
+    recurrence, so the canary cannot validate its defining dynamic path.
     """
 
     mechanical_failure_flags = {
@@ -182,7 +182,68 @@ def _batch_diagnostics(output) -> dict[str, object]:
         "functional_delta_q_cosine": float(pairwise_cosine(delta_q).mean()),
         "dynamic_changes": _dynamic_change_metrics(output),
         "temporal_grounding": _dynamic_grounding_diagnostics(output),
+        "temporal_intent": _dynamic_intent_diagnostics(output),
         "visual_null_probability": _dynamic_applicability_diagnostics(output),
+    }
+
+
+def _dynamic_intent_diagnostics(output) -> dict[str, object] | None:
+    if output.temporal_intents is None or output.initial_intents is None:
+        return None
+    intents = output.temporal_intents.detach().float()
+    base = output.initial_intents.detach().float()
+    per_timestep = []
+    for timestep, step in enumerate(output.trace):
+        valid = step.live_before
+        current = intents[valid, timestep]
+        if not current.numel():
+            per_timestep.append(None)
+            continue
+        pairwise = torch.nn.functional.cosine_similarity(
+            current[:, :, None], current[:, None, :], dim=-1
+        )
+        off_diagonal = ~torch.eye(
+            current.shape[1], dtype=torch.bool, device=current.device
+        )[None]
+        per_timestep.append(
+            {
+                "live_parent_count": int(valid.sum()),
+                "pairwise_candidate_cosine": float(
+                    pairwise[off_diagonal.expand_as(pairwise)].mean()
+                ),
+                "mean_residual_norm_from_base": float(
+                    (current - base[valid]).norm(dim=-1).mean()
+                ),
+            }
+        )
+    transitions = []
+    for timestep in range(len(output.trace) - 1):
+        valid = output.trace[timestep + 1].live_before
+        displacement = intents[valid, timestep + 1] - intents[valid, timestep]
+        if not displacement.numel():
+            transitions.append(None)
+            continue
+        pairwise_displacement = torch.nn.functional.cosine_similarity(
+            displacement[:, :, None], displacement[:, None, :], dim=-1
+        )
+        off_diagonal = ~torch.eye(
+            displacement.shape[1], dtype=torch.bool, device=displacement.device
+        )[None]
+        transitions.append(
+            {
+                "live_parent_count": int(valid.sum()),
+                "mean_intent_l2_change": float(displacement.norm(dim=-1).mean()),
+                "intent_displacement_cosine": float(
+                    pairwise_displacement[
+                        off_diagonal.expand_as(pairwise_displacement)
+                    ].mean()
+                ),
+            }
+        )
+    return {
+        "enable_dynamic_reproposal": output.dynamic_reproposal,
+        "per_timestep": per_timestep,
+        "per_transition": transitions,
     }
 
 
@@ -377,7 +438,10 @@ def _dynamic_applicability_diagnostics(output) -> dict[str, object] | None:
 
 
 def _build_canary_model(
-    device: torch.device, *, dynamic_regrounding: bool = False
+    device: torch.device,
+    *,
+    dynamic_regrounding: bool = False,
+    dynamic_reproposal: bool = False,
 ) -> tuple[IAGSRME, object, object]:
     regime = FGCLIPRegime(
         checkpoint=BASE_CHECKPOINT,
@@ -405,6 +469,7 @@ def _build_canary_model(
             initial_applicability=0.98,
             grounding_normalization="entmax15",
             enable_dynamic_regrounding=dynamic_regrounding,
+            enable_dynamic_reproposal=dynamic_reproposal,
         )
     )
     return IAGSRME(backbone, core).to(device), tokenizer, processor
@@ -468,10 +533,16 @@ def main() -> None:
     parser.add_argument("--exploding-gradient-threshold", type=float, default=1e4)
     parser.add_argument("--accelerator-index", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument(
+    causal_mode = parser.add_mutually_exclusive_group()
+    causal_mode.add_argument(
         "--r1c1",
         action="store_true",
         help="canary R1c1 fixed-WHAT/current-state-WHERE instead of R1b applicability",
+    )
+    causal_mode.add_argument(
+        "--r1c2",
+        action="store_true",
+        help="canary R1c2 dynamic WHAT plus current-state dynamic WHERE",
     )
     args = parser.parse_args()
     if args.steps < 1 or args.batch_size < 2 or args.log_every < 1:
@@ -485,11 +556,22 @@ def main() -> None:
     configure_torch_runtime(deterministic=True, benchmark=False)
     precision = resolve_precision(args.precision, device)
     model, tokenizer, processor = _build_canary_model(
-        device, dynamic_regrounding=args.r1c1
+        device,
+        dynamic_regrounding=args.r1c1 or args.r1c2,
+        dynamic_reproposal=args.r1c2,
     )
     if model.core.config.query_cap != 1000.0:
-        raise AssertionError("R1a/R1b/R1c1 canary requires query_cap=1000")
-    if args.r1c1:
+        raise AssertionError("R1a/R1b/R1c1/R1c2 canary requires query_cap=1000")
+    if args.r1c2:
+        if (
+            not model.core.config.enable_dynamic_regrounding
+            or not model.core.config.enable_dynamic_reproposal
+            or model.core.config.enable_dynamic_applicability
+        ):
+            raise AssertionError(
+                "R1c2 requires dynamic WHAT/WHERE with R1b applicability off"
+            )
+    elif args.r1c1:
         if (
             not model.core.config.enable_dynamic_regrounding
             or model.core.config.enable_dynamic_applicability
@@ -528,6 +610,15 @@ def main() -> None:
         parameter_families["applicability"] = list(
             model.core.applicability_head.parameters()
         )
+    if model.core.reproposal is not None:
+        parameter_families["reproposal_output"] = list(
+            model.core.reproposal.output_projection.parameters()
+        )
+        parameter_families["reproposal_upstream"] = [
+            parameter
+            for name, parameter in model.core.reproposal.named_parameters()
+            if not name.startswith("output_projection.")
+        ]
     tracked = {
         "vision": next(model.backbone.model.vision_model.parameters()),
         "text": next(model.backbone.model.text_model.parameters()),
@@ -538,6 +629,13 @@ def main() -> None:
     if model.core.applicability_head is not None:
         tracked["applicability_weight"] = model.core.applicability_head.projection.weight
         tracked["applicability_bias"] = model.core.applicability_head.projection.bias
+    if model.core.reproposal is not None:
+        tracked["reproposal_output"] = (
+            model.core.reproposal.output_projection.weight
+        )
+        tracked["reproposal_upstream"] = (
+            model.core.reproposal.state_query_projection.weight
+        )
     initial = {name: parameter.detach().float().clone() for name, parameter in tracked.items()}
     calls = {
         "vision_model": 0,
@@ -545,6 +643,7 @@ def main() -> None:
         "intent": 0,
         "grounder": 0,
         "applicability": 0,
+        "reproposal": 0,
     }
 
     def count(name):
@@ -565,14 +664,21 @@ def main() -> None:
                 count("applicability")
             )
         )
+    if model.core.reproposal is not None:
+        handles.append(
+            model.core.reproposal.register_forward_pre_hook(count("reproposal"))
+        )
     history: defaultdict[str, list[float]] = defaultdict(list)
     action_counts = torch.zeros(5, dtype=torch.long)
     stop_step_counts = torch.zeros(3, dtype=torch.long)
     sample_steps = 0
     successful_steps_with_nonzero_applicability_gradient = 0
     successful_steps_with_nonzero_grounding_gradient = 0
+    successful_steps_with_nonzero_reproposal_output_gradient = 0
+    successful_steps_with_nonzero_reproposal_upstream_gradient = 0
     latest_applicability_diagnostics: dict[str, object] | None = None
     latest_grounding_diagnostics: dict[str, object] | None = None
+    latest_intent_diagnostics: dict[str, object] | None = None
     max_observed_applicability_variation = 0.0
     iterator = iter(loader)
     model.train()
@@ -663,11 +769,21 @@ def main() -> None:
                 successful_steps_with_nonzero_applicability_gradient += 1
             if gradient_norms["grounding"] > 0:
                 successful_steps_with_nonzero_grounding_gradient += 1
+            if gradient_norms.get("reproposal_output", 0.0) > 0:
+                successful_steps_with_nonzero_reproposal_output_gradient += 1
+            if gradient_norms.get("reproposal_upstream", 0.0) > 0:
+                successful_steps_with_nonzero_reproposal_upstream_gradient += 1
             allowed_zero_families = {"applicability"}
-            if args.r1c1:
-                # R1c1 readiness is based on cumulative grounding learnability;
+            if args.r1c1 or args.r1c2:
+                # Dynamic-WHERE readiness is based on cumulative grounder learnability;
                 # one minibatch with zero grounder gradient is not a failure.
                 allowed_zero_families.add("grounding")
+            if args.r1c2:
+                # Zero-init W_out intentionally blocks upstream reproposal gradients
+                # until the output projection has taken an optimizer step.
+                allowed_zero_families.update(
+                    {"reproposal_output", "reproposal_upstream"}
+                )
             zero_families = [
                 name
                 for name, value in gradient_norms.items()
@@ -685,8 +801,15 @@ def main() -> None:
                 "vision_model": 2,
                 "anchor_projection": 1,
                 "intent": 1,
-                "grounder": model.core.config.max_steps if args.r1c1 else 1,
-                "applicability": 0 if args.r1c1 else model.core.config.max_steps,
+                "grounder": (
+                    model.core.config.max_steps
+                    if args.r1c1 or args.r1c2
+                    else 1
+                ),
+                "applicability": (
+                    0 if args.r1c1 or args.r1c2 else model.core.config.max_steps
+                ),
+                "reproposal": model.core.config.max_steps - 1 if args.r1c2 else 0,
             }
             if calls != expected_calls:
                 raise AssertionError(f"unexpected canary forward call counts: {calls}")
@@ -708,6 +831,9 @@ def main() -> None:
             temporal_grounding = diagnostics["temporal_grounding"]
             if isinstance(temporal_grounding, dict):
                 latest_grounding_diagnostics = temporal_grounding
+            temporal_intent = diagnostics["temporal_intent"]
+            if isinstance(temporal_intent, dict):
+                latest_intent_diagnostics = temporal_intent
             actions = torch.stack([trace.selected_index.detach().cpu() for trace in output.trace], 1)
             action_counts += torch.bincount(actions.flatten(), minlength=5)
             stop_step_counts += actions.eq(4).sum(dim=0)
@@ -759,6 +885,12 @@ def main() -> None:
                     "successful_steps_with_nonzero_applicability_gradient": (
                         successful_steps_with_nonzero_applicability_gradient
                     ),
+                    "successful_steps_with_nonzero_reproposal_output_gradient": (
+                        successful_steps_with_nonzero_reproposal_output_gradient
+                    ),
+                    "successful_steps_with_nonzero_reproposal_upstream_gradient": (
+                        successful_steps_with_nonzero_reproposal_upstream_gradient
+                    ),
                     "applicability_nonzero_gradient_fraction": (
                         successful_steps_with_nonzero_applicability_gradient
                         / successful_optimizer_steps
@@ -772,7 +904,7 @@ def main() -> None:
                     "peak_vram_bytes": torch.cuda.max_memory_allocated(device),
                 }
                 print(json.dumps(record, sort_keys=True), flush=True)
-            if successful_optimizer_steps >= 20 and not args.r1c1:
+            if successful_optimizer_steps >= 20 and not (args.r1c1 or args.r1c2):
                 applicability_delta = max(
                     _parameter_delta(
                         tracked["applicability_weight"],
@@ -798,15 +930,32 @@ def main() -> None:
                             "applicability parameters changed but the FP32 actuator remained "
                             "numerically constant after 20 successful steps"
                         )
-            if successful_optimizer_steps >= 20 and args.r1c1:
+            if successful_optimizer_steps >= 20 and (args.r1c1 or args.r1c2):
                 if successful_steps_with_nonzero_grounding_gradient == 0:
                     raise RuntimeError(
-                        "R1c1 grounder received zero gradient on every successful step"
+                        "dynamic-WHERE grounder received zero gradient on every successful step"
                     )
                 if _parameter_delta(
                     tracked["grounding_projection"], initial["grounding_projection"]
                 ) == 0:
-                    raise RuntimeError("R1c1 grounder parameters did not change")
+                    raise RuntimeError("dynamic-WHERE grounder parameters did not change")
+            if successful_optimizer_steps >= 20 and args.r1c2:
+                if successful_steps_with_nonzero_reproposal_output_gradient == 0:
+                    raise RuntimeError(
+                        "R1c2 reproposal output projection received no cumulative gradient"
+                    )
+                if successful_steps_with_nonzero_reproposal_upstream_gradient == 0:
+                    raise RuntimeError(
+                        "R1c2 upstream reproposal pathway never began receiving gradient"
+                    )
+                if _parameter_delta(
+                    tracked["reproposal_output"], initial["reproposal_output"]
+                ) == 0:
+                    raise RuntimeError("R1c2 reproposal output projection did not move")
+                if _parameter_delta(
+                    tracked["reproposal_upstream"], initial["reproposal_upstream"]
+                ) == 0:
+                    raise RuntimeError("R1c2 upstream reproposal parameters did not move")
     except torch.OutOfMemoryError as error:
         print(
             json.dumps(
@@ -831,7 +980,7 @@ def main() -> None:
     non_stop = action_counts[:4]
     candidate_distribution = non_stop.float() / non_stop.sum().clamp_min(1)
     mechanical_failure_flags, scientific_warning_flags = _classify_canary_outcomes(
-        r1c1=args.r1c1,
+        r1c1=args.r1c1 or args.r1c2,
         attempted_steps=args.steps,
         successful_optimizer_steps=successful_optimizer_steps,
         stop_t0_occupancy=float(stop_by_timestep[0]),
@@ -853,20 +1002,77 @@ def main() -> None:
             "same_parent_invariant_failure": False,
             "support_normalization_failure": False,
             "r1b_applicability_active": bool(
-                args.r1c1 and model.core.config.enable_dynamic_applicability
+                (args.r1c1 or args.r1c2)
+                and model.core.config.enable_dynamic_applicability
             ),
             "grounder_no_gradient": bool(
-                args.r1c1
+                (args.r1c1 or args.r1c2)
                 and successful_optimizer_steps > 0
                 and successful_steps_with_nonzero_grounding_gradient == 0
             ),
             "grounder_no_parameter_movement": bool(
-                args.r1c1
+                (args.r1c1 or args.r1c2)
                 and successful_optimizer_steps >= 20
                 and grounder_delta == 0.0
             ),
+            "r1c2_dynamic_reproposal_disabled": bool(
+                args.r1c2 and not model.core.config.enable_dynamic_reproposal
+            ),
+            "reproposal_output_no_gradient": bool(
+                args.r1c2
+                and successful_optimizer_steps >= 20
+                and successful_steps_with_nonzero_reproposal_output_gradient == 0
+            ),
+            "reproposal_upstream_no_gradient": bool(
+                args.r1c2
+                and successful_optimizer_steps >= 20
+                and successful_steps_with_nonzero_reproposal_upstream_gradient == 0
+            ),
+            "reproposal_no_parameter_movement": bool(
+                args.r1c2
+                and successful_optimizer_steps >= 20
+                and (
+                    _parameter_delta(
+                        tracked["reproposal_output"],
+                        initial["reproposal_output"],
+                    )
+                    == 0.0
+                    or _parameter_delta(
+                        tracked["reproposal_upstream"],
+                        initial["reproposal_upstream"],
+                    )
+                    == 0.0
+                )
+            ),
         }
     )
+    if args.r1c2 and isinstance(latest_intent_diagnostics, dict):
+        intent_steps = [
+            item
+            for item in latest_intent_diagnostics["per_timestep"]
+            if isinstance(item, dict)
+        ]
+        intent_transitions = [
+            item
+            for item in latest_intent_diagnostics["per_transition"]
+            if isinstance(item, dict)
+        ]
+        scientific_warning_flags.update(
+            {
+                "dynamic_intents_nearly_static": all(
+                    float(item["mean_residual_norm_from_base"]) <= 1e-7
+                    for item in intent_steps[1:]
+                ),
+                "high_intent_candidate_similarity": any(
+                    float(item["pairwise_candidate_cosine"]) >= 0.999
+                    for item in intent_steps
+                ),
+                "high_intent_displacement_comotion": any(
+                    float(item["intent_displacement_cosine"]) >= 0.999
+                    for item in intent_transitions
+                ),
+            }
+        )
     mechanical_status = (
         "FAIL" if any(mechanical_failure_flags.values()) else "PASS"
     )
@@ -896,12 +1102,19 @@ def main() -> None:
             model.core.config.enable_dynamic_applicability
         ),
         "enable_dynamic_regrounding": model.core.config.enable_dynamic_regrounding,
+        "enable_dynamic_reproposal": model.core.config.enable_dynamic_reproposal,
         "initial_applicability": model.core.config.initial_applicability,
         "successful_steps_with_nonzero_applicability_gradient": (
             successful_steps_with_nonzero_applicability_gradient
         ),
         "successful_steps_with_nonzero_grounding_gradient": (
             successful_steps_with_nonzero_grounding_gradient
+        ),
+        "successful_steps_with_nonzero_reproposal_output_gradient": (
+            successful_steps_with_nonzero_reproposal_output_gradient
+        ),
+        "successful_steps_with_nonzero_reproposal_upstream_gradient": (
+            successful_steps_with_nonzero_reproposal_upstream_gradient
         ),
         "grounding_nonzero_gradient_fraction": (
             successful_steps_with_nonzero_grounding_gradient
@@ -923,6 +1136,7 @@ def main() -> None:
         ),
         "dynamic_applicability_end": latest_applicability_diagnostics,
         "dynamic_grounding_end": latest_grounding_diagnostics,
+        "dynamic_intent_end": latest_intent_diagnostics,
         "peak_vram_bytes": torch.cuda.max_memory_allocated(device),
         "loss_start": {
             name: history[name][0] if history[name] else None

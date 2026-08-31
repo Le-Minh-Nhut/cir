@@ -20,6 +20,7 @@ MATCHED_COMPUTE_CONTROLS = (
     "mean_candidate",
     "random_candidate",
     "frozen_t0_order",
+    "frozen_t0_what",
 )
 
 FUNCTIONAL_ACTIVITY_EPSILON = 1e-8
