@@ -44,7 +44,10 @@ def main() -> None:
     )
     parser.add_argument("--max-steps", type=int, default=1)
     parser.add_argument("--r1b", action="store_true")
+    parser.add_argument("--r1c1", action="store_true")
     args = parser.parse_args()
+    if args.r1b and args.r1c1:
+        raise ValueError("R1b applicability and R1c1 regrounding cannot be combined")
     torch.manual_seed(20260829)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     regime = FGCLIPRegime(
@@ -66,9 +69,10 @@ def main() -> None:
             num_heads=8,
             retrieval_dim=backbone.retrieval_dim,
             selector_gumbel_noise=False,
-            query_cap=1000.0 if args.r1b else 0.5,
+            query_cap=1000.0 if (args.r1b or args.r1c1) else 0.5,
             enable_dynamic_applicability=args.r1b,
             initial_applicability=0.98,
+            enable_dynamic_regrounding=args.r1c1,
         )
     )
     model = IAGSRME(backbone, core).to(device).eval()
@@ -231,10 +235,12 @@ def main() -> None:
         "vision_model": 2,
         "anchor_projection": 1,
         "intent_encoder": 1,
-        "grounder": 1,
+        "grounder": args.max_steps if args.r1c1 else 1,
         "applicability": args.max_steps if args.r1b else 0,
     }:
         raise AssertionError(f"unexpected real training call counts: {training_call_counts}")
+    with torch.no_grad():
+        t0_anchor_supports = model.core.grounder(output.intents, output.anchor)
     positives = torch.eye(2, dtype=torch.bool, device=device)
     losses = objective(output, target_embeddings, positives)
     losses["total"].backward()
@@ -308,6 +314,8 @@ def main() -> None:
         "delta_z": [],
         "scores": [],
     }
+    if args.r1c1:
+        dynamic_changes["supports"] = []
     for previous, current in zip(
         dynamic_output.trace[:-1], dynamic_output.trace[1:], strict=True
     ):
@@ -321,6 +329,11 @@ def main() -> None:
             "delta_z": (previous.delta_z, current.delta_z),
             "scores": (previous.scores, current.scores),
         }
+        if args.r1c1:
+            pairs["supports"] = (
+                previous.spatial_supports,
+                current.spatial_supports,
+            )
         for name, (left, right) in pairs.items():
             dynamic_changes[name].append(float((right - left).abs().max()))
     if args.max_steps > 1 and not all(
@@ -450,6 +463,35 @@ def main() -> None:
                     "grounder_calls": training_call_counts["grounder"],
                     "applicability_calls": training_call_counts["applicability"],
                     "dynamic_max_abs_changes": dynamic_changes,
+                    "enable_dynamic_regrounding": (
+                        model.core.config.enable_dynamic_regrounding
+                    ),
+                    "temporal_support_shape": list(output.temporal_supports.shape),
+                    "t0_anchor_grounding_max_abs_error": float(
+                        (
+                            output.temporal_supports[:, 0].detach().float()
+                            - t0_anchor_supports.detach().float()
+                        )
+                        .abs()
+                        .max()
+                    ),
+                    "support_mass_max_abs_error_by_timestep": [
+                        float(
+                            (
+                                output.temporal_supports[:, timestep]
+                                .detach()
+                                .float()
+                                .sum(dim=-1)
+                                - 1.0
+                            )
+                            .abs()
+                            .max()
+                        )
+                        for timestep in range(output.temporal_supports.shape[1])
+                    ],
+                    "applicability_disabled_for_r1c1": (
+                        model.core.applicability_head is None if args.r1c1 else None
+                    ),
                 },
                 "losses": {
                     "terminal": float(losses["terminal"].detach()),

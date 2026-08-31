@@ -141,7 +141,68 @@ def _batch_diagnostics(output) -> dict[str, object]:
         "functional_effect_rank": float(functional_effective_rank(delta_q).mean()),
         "functional_delta_q_cosine": float(pairwise_cosine(delta_q).mean()),
         "dynamic_changes": _dynamic_change_metrics(output),
+        "temporal_grounding": _dynamic_grounding_diagnostics(output),
         "visual_null_probability": _dynamic_applicability_diagnostics(output),
+    }
+
+
+def _dynamic_grounding_diagnostics(output) -> dict[str, object]:
+    if output.temporal_supports is None:
+        raise AssertionError("canary output is missing temporal support trace")
+    supports = output.temporal_supports.detach().float()
+    per_timestep = []
+    for timestep, step in enumerate(output.trace):
+        valid = step.live_before
+        current = supports[valid, timestep]
+        if not current.numel():
+            per_timestep.append(None)
+            continue
+        pairwise = torch.nn.functional.cosine_similarity(
+            current[:, :, None], current[:, None, :], dim=-1
+        )
+        off_diagonal = ~torch.eye(
+            current.shape[1], dtype=torch.bool, device=current.device
+        )[None]
+        per_timestep.append(
+            {
+                "live_parent_count": int(valid.sum()),
+                "support_mass_max_abs_error": float(
+                    (current.sum(dim=-1) - 1.0).abs().max()
+                ),
+                "support_fraction": float((current > 0).float().mean()),
+                "support_entropy": float(
+                    -(current * current.clamp_min(1e-8).log()).sum(dim=-1).mean()
+                ),
+                "between_candidate_cosine": float(
+                    pairwise[off_diagonal.expand_as(pairwise)].mean()
+                ),
+            }
+        )
+    transitions = []
+    for transition in range(len(output.trace) - 1):
+        valid = output.trace[transition + 1].live_before
+        before = supports[valid, transition]
+        after = supports[valid, transition + 1]
+        transitions.append(
+            {
+                "live_parent_count": int(valid.sum()),
+                "same_candidate_temporal_cosine": (
+                    float(torch.nn.functional.cosine_similarity(before, after, dim=-1).mean())
+                    if before.numel()
+                    else None
+                ),
+                "support_l1_change": (
+                    float((after - before).abs().sum(dim=-1).mean())
+                    if before.numel()
+                    else None
+                ),
+            }
+        )
+    return {
+        "enable_dynamic_regrounding": output.dynamic_regrounding,
+        "per_timestep": per_timestep,
+        "per_transition": transitions,
+        "support_dtype": str(output.temporal_supports.dtype),
     }
 
 
@@ -275,7 +336,9 @@ def _dynamic_applicability_diagnostics(output) -> dict[str, object] | None:
     }
 
 
-def _build_canary_model(device: torch.device) -> tuple[IAGSRME, object, object]:
+def _build_canary_model(
+    device: torch.device, *, dynamic_regrounding: bool = False
+) -> tuple[IAGSRME, object, object]:
     regime = FGCLIPRegime(
         checkpoint=BASE_CHECKPOINT,
         revision=BASE_REVISION,
@@ -298,9 +361,10 @@ def _build_canary_model(device: torch.device) -> tuple[IAGSRME, object, object]:
             query_cap=1000.0,
             selector_temperature=1.0,
             selector_gumbel_noise=True,
-            enable_dynamic_applicability=True,
+            enable_dynamic_applicability=not dynamic_regrounding,
             initial_applicability=0.98,
             grounding_normalization="entmax15",
+            enable_dynamic_regrounding=dynamic_regrounding,
         )
     )
     return IAGSRME(backbone, core).to(device), tokenizer, processor
@@ -364,6 +428,11 @@ def main() -> None:
     parser.add_argument("--exploding-gradient-threshold", type=float, default=1e4)
     parser.add_argument("--accelerator-index", type=int, default=0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--r1c1",
+        action="store_true",
+        help="canary R1c1 fixed-WHAT/current-state-WHERE instead of R1b applicability",
+    )
     args = parser.parse_args()
     if args.steps < 1 or args.batch_size < 2 or args.log_every < 1:
         raise ValueError("steps/log-every must be positive and batch-size must be at least two")
@@ -375,14 +444,19 @@ def main() -> None:
     seed_everything(args.seed, deterministic=True)
     configure_torch_runtime(deterministic=True, benchmark=False)
     precision = resolve_precision(args.precision, device)
-    model, tokenizer, processor = _build_canary_model(device)
-    if (
-        model.core.config.query_cap != 1000.0
-        or not model.core.config.enable_dynamic_applicability
-    ):
-        raise AssertionError(
-            "R1b canary requires query_cap=1000 and dynamic applicability enabled"
-        )
+    model, tokenizer, processor = _build_canary_model(
+        device, dynamic_regrounding=args.r1c1
+    )
+    if model.core.config.query_cap != 1000.0:
+        raise AssertionError("R1a/R1b/R1c1 canary requires query_cap=1000")
+    if args.r1c1:
+        if (
+            not model.core.config.enable_dynamic_regrounding
+            or model.core.config.enable_dynamic_applicability
+        ):
+            raise AssertionError("R1c1 requires dynamic WHERE with R1b applicability off")
+    elif not model.core.config.enable_dynamic_applicability:
+        raise AssertionError("R1b canary requires dynamic applicability enabled")
     objective = IAGSRMEObjective(ObjectiveConfig(), width=256).to(device)
     loader = _build_loader(args, tokenizer, processor)
     optimizer = AdamW(
@@ -406,19 +480,24 @@ def main() -> None:
         "text_encoder": list(model.backbone.model.text_model.parameters()),
         "intent_queries": [model.core.intent_encoder.query_bank],
         "grounding": list(model.core.grounder.parameters()),
-        "applicability": list(model.core.applicability_head.parameters()),
         "editor": list(model.core.editor.parameters()),
         "readout": list(model.core.readout.parameters()),
         "scorer": list(model.core.scorer.parameters()),
     }
+    if model.core.applicability_head is not None:
+        parameter_families["applicability"] = list(
+            model.core.applicability_head.parameters()
+        )
     tracked = {
         "vision": next(model.backbone.model.vision_model.parameters()),
         "text": next(model.backbone.model.text_model.parameters()),
         "intent": model.core.intent_encoder.query_bank,
         "editor": model.core.editor.direction.weight,
-        "applicability_weight": model.core.applicability_head.projection.weight,
-        "applicability_bias": model.core.applicability_head.projection.bias,
+        "grounding_projection": model.core.grounder.anchor_projection.weight,
     }
+    if model.core.applicability_head is not None:
+        tracked["applicability_weight"] = model.core.applicability_head.projection.weight
+        tracked["applicability_bias"] = model.core.applicability_head.projection.bias
     initial = {name: parameter.detach().float().clone() for name, parameter in tracked.items()}
     calls = {
         "vision_model": 0,
@@ -439,16 +518,21 @@ def main() -> None:
         model.backbone.anchor_projection.register_forward_pre_hook(count("anchor_projection")),
         model.core.intent_encoder.register_forward_pre_hook(count("intent")),
         model.core.grounder.register_forward_pre_hook(count("grounder")),
-        model.core.applicability_head.register_forward_pre_hook(
-            count("applicability")
-        ),
     ]
+    if model.core.applicability_head is not None:
+        handles.append(
+            model.core.applicability_head.register_forward_pre_hook(
+                count("applicability")
+            )
+        )
     history: defaultdict[str, list[float]] = defaultdict(list)
     action_counts = torch.zeros(5, dtype=torch.long)
     stop_step_counts = torch.zeros(3, dtype=torch.long)
     sample_steps = 0
     successful_steps_with_nonzero_applicability_gradient = 0
+    successful_steps_with_nonzero_grounding_gradient = 0
     latest_applicability_diagnostics: dict[str, object] | None = None
+    latest_grounding_diagnostics: dict[str, object] | None = None
     max_observed_applicability_variation = 0.0
     iterator = iter(loader)
     model.train()
@@ -534,9 +618,11 @@ def main() -> None:
                     )
                 continue
 
-            applicability_gradient = gradient_norms["applicability"]
+            applicability_gradient = gradient_norms.get("applicability", 0.0)
             if applicability_gradient > 0:
                 successful_steps_with_nonzero_applicability_gradient += 1
+            if gradient_norms["grounding"] > 0:
+                successful_steps_with_nonzero_grounding_gradient += 1
             zero_families = [
                 name
                 for name, value in gradient_norms.items()
@@ -550,13 +636,14 @@ def main() -> None:
                 raise RuntimeError(
                     f"exploding gradient at step {step_index}: {gradient_norms}"
                 )
-            if calls != {
+            expected_calls = {
                 "vision_model": 2,
                 "anchor_projection": 1,
                 "intent": 1,
-                "grounder": 1,
-                "applicability": model.core.config.max_steps,
-            }:
+                "grounder": model.core.config.max_steps if args.r1c1 else 1,
+                "applicability": 0 if args.r1c1 else model.core.config.max_steps,
+            }
+            if calls != expected_calls:
                 raise AssertionError(f"unexpected canary forward call counts: {calls}")
             _verify_absorbing_stop(output)
             scale_after, step_parameter_deltas = _complete_amp_step(
@@ -573,6 +660,9 @@ def main() -> None:
                 first_successful_step = step_index
 
             diagnostics = _batch_diagnostics(output)
+            temporal_grounding = diagnostics["temporal_grounding"]
+            if isinstance(temporal_grounding, dict):
+                latest_grounding_diagnostics = temporal_grounding
             actions = torch.stack([trace.selected_index.detach().cpu() for trace in output.trace], 1)
             action_counts += torch.bincount(actions.flatten(), minlength=5)
             stop_step_counts += actions.eq(4).sum(dim=0)
@@ -637,7 +727,7 @@ def main() -> None:
                     "peak_vram_bytes": torch.cuda.max_memory_allocated(device),
                 }
                 print(json.dumps(record, sort_keys=True), flush=True)
-            if successful_optimizer_steps >= 20:
+            if successful_optimizer_steps >= 20 and not args.r1c1:
                 applicability_delta = max(
                     _parameter_delta(
                         tracked["applicability_weight"],
@@ -663,6 +753,15 @@ def main() -> None:
                             "applicability parameters changed but the FP32 actuator remained "
                             "numerically constant after 20 successful steps"
                         )
+            if successful_optimizer_steps >= 20 and args.r1c1:
+                if successful_steps_with_nonzero_grounding_gradient == 0:
+                    raise RuntimeError(
+                        "R1c1 grounder received zero gradient on every successful step"
+                    )
+                if _parameter_delta(
+                    tracked["grounding_projection"], initial["grounding_projection"]
+                ) == 0:
+                    raise RuntimeError("R1c1 grounder parameters did not change")
     except torch.OutOfMemoryError as error:
         print(
             json.dumps(
@@ -713,9 +812,17 @@ def main() -> None:
         "enable_dynamic_applicability": (
             model.core.config.enable_dynamic_applicability
         ),
+        "enable_dynamic_regrounding": model.core.config.enable_dynamic_regrounding,
         "initial_applicability": model.core.config.initial_applicability,
         "successful_steps_with_nonzero_applicability_gradient": (
             successful_steps_with_nonzero_applicability_gradient
+        ),
+        "successful_steps_with_nonzero_grounding_gradient": (
+            successful_steps_with_nonzero_grounding_gradient
+        ),
+        "grounding_nonzero_gradient_fraction": (
+            successful_steps_with_nonzero_grounding_gradient
+            / max(successful_optimizer_steps, 1)
         ),
         "applicability_nonzero_gradient_fraction": (
             successful_steps_with_nonzero_applicability_gradient
@@ -732,6 +839,7 @@ def main() -> None:
             history["p_null_mean"][-1] if history["p_null_mean"] else None
         ),
         "dynamic_applicability_end": latest_applicability_diagnostics,
+        "dynamic_grounding_end": latest_grounding_diagnostics,
         "peak_vram_bytes": torch.cuda.max_memory_allocated(device),
         "loss_start": {
             name: history[name][0] if history[name] else None

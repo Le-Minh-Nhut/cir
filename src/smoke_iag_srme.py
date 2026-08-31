@@ -15,7 +15,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Synthetic IAG-SRME end-to-end smoke test")
     parser.add_argument("--diagnostics", action="store_true")
     parser.add_argument("--r1b", action="store_true")
+    parser.add_argument("--r1c1", action="store_true")
     args = parser.parse_args()
+    if args.r1b and args.r1c1:
+        raise ValueError("R1b applicability and R1c1 dynamic grounding are separate experiments")
     torch.manual_seed(20260829)
     batch, tokens, length, width, retrieval_dim = 4, 17, 9, 32, 24
     core = IAGSRMECore(
@@ -25,9 +28,10 @@ def main() -> None:
             retrieval_dim=retrieval_dim,
             max_steps=3,
             selector_gumbel_noise=False,
-            query_cap=1000.0 if args.r1b else 0.5,
+            query_cap=1000.0 if (args.r1b or args.r1c1) else 0.5,
             enable_dynamic_applicability=args.r1b,
             initial_applicability=0.98,
+            enable_dynamic_regrounding=args.r1c1,
         )
     )
     with torch.no_grad():
@@ -116,6 +120,7 @@ def main() -> None:
             "enable_dynamic_applicability": core.config.enable_dynamic_applicability,
             "initial_applicability": core.config.initial_applicability,
             "grounding_normalization": core.config.grounding_normalization,
+            "enable_dynamic_regrounding": core.config.enable_dynamic_regrounding,
         },
         "visual_null": (
             None
@@ -145,6 +150,42 @@ def main() -> None:
                 },
             }
         ),
+    }
+    temporal_supports = output.temporal_supports.detach().float()
+    temporal_cosine = []
+    temporal_l1 = []
+    for previous, current in zip(
+        temporal_supports[:, :-1].unbind(dim=1),
+        temporal_supports[:, 1:].unbind(dim=1),
+        strict=True,
+    ):
+        temporal_cosine.append(
+            float(F.cosine_similarity(previous, current, dim=-1).mean())
+        )
+        temporal_l1.append(float((current - previous).abs().sum(dim=-1).mean()))
+    static_t0 = core.grounder(output.intents, output.anchor)
+    report["dynamic_grounding"] = {
+        "enabled": output.dynamic_regrounding,
+        "temporal_support_shape": list(temporal_supports.shape),
+        "support_mass_max_abs_error_by_timestep": [
+            float((temporal_supports[:, timestep].sum(dim=-1) - 1.0).abs().max())
+            for timestep in range(temporal_supports.shape[1])
+        ],
+        "temporal_support_cosine": temporal_cosine,
+        "temporal_support_l1_change": temporal_l1,
+        "t0_static_anchor_parity_max_abs_error": float(
+            (temporal_supports[:, 0] - static_t0.detach().float()).abs().max()
+        ),
+        "support_dtype": str(output.temporal_supports.dtype),
+        "state_dtype": str(output.final_state.dtype),
+        "same_parent_exact": all(
+            torch.equal(
+                step.candidate_states,
+                step.current_state[:, None] + step.delta_z,
+            )
+            for step in output.trace
+        ),
+        "applicability_disabled": core.applicability_head is None,
     }
     if args.diagnostics:
         diagnostics = summarize_trajectory(output)
