@@ -20,9 +20,10 @@ def claimed_text_content(
     text_tokens: Tensor,
     claims: Tensor,
     residual: Tensor,
+    content_mask: Tensor,
     epsilon: float = 1e-8,
-) -> tuple[Tensor, Tensor]:
-    """Return claim-gated token weights and their normalized semantic content."""
+) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+    """Return weights, direction, remaining mass, and magnitude-aware content."""
 
     if text_tokens.ndim != 3 or claims.ndim != 3 or residual.ndim != 2:
         raise ValueError("text/claims/residual must be [B,L,d]/[B,K,L]/[B,L]")
@@ -30,22 +31,33 @@ def claimed_text_content(
         raise ValueError("claim/text axes mismatch")
     if residual.shape != text_tokens.shape[:2]:
         raise ValueError("residual/text axes mismatch")
+    if content_mask.shape != residual.shape or content_mask.dtype != torch.bool:
+        raise ValueError("content_mask must be boolean [B,L]")
     with torch.autocast(device_type=text_tokens.device.type, enabled=False):
         weights = claims.float() * residual.float()[:, None, :]
-        content = torch.einsum("bkl,bld->bkd", weights, text_tokens.float())
-        content = content / weights.sum(dim=-1, keepdim=True).clamp_min(epsilon)
-    return weights, content
+        weighted_sum = torch.einsum("bkl,bld->bkd", weights, text_tokens.float())
+        weight_mass = weights.sum(dim=-1, keepdim=True)
+        direction = weighted_sum / weight_mass.clamp_min(epsilon)
+        valid_count = content_mask.sum(dim=-1, keepdim=True).clamp_min(1)
+        semantic_mass = weight_mass / valid_count[:, None].float()
+        content = semantic_mass * direction
+    return weights, direction, semantic_mass.squeeze(-1), content
 
 
-def candidate_residual_previews(residual: Tensor, claims: Tensor) -> Tensor:
+def candidate_residual_previews(
+    residual: Tensor, claims: Tensor, consumption: Tensor
+) -> Tensor:
     """Same-parent rho previews; no candidate is committed by this function."""
 
-    if residual.ndim != 2 or claims.ndim != 3:
-        raise ValueError("residual/claims must be [B,L]/[B,K,L]")
+    if residual.ndim != 2 or claims.ndim != 3 or consumption.ndim != 3:
+        raise ValueError("residual/claims/consumption must be [B,L]/[B,K,L]/[B,K,L]")
+    if claims.shape != consumption.shape:
+        raise ValueError("claim and consumption shapes must match")
     if claims.shape[0] != residual.shape[0] or claims.shape[2] != residual.shape[1]:
         raise ValueError("residual/claim axes mismatch")
     with torch.autocast(device_type=residual.device.type, enabled=False):
-        previews = residual.float()[:, None, :] * (1.0 - claims.float())
+        effective_consumption = claims.float() * consumption.float()
+        previews = residual.float()[:, None, :] * (1.0 - effective_consumption)
     return previews.clamp_(0.0, 1.0)
 
 
@@ -86,25 +98,39 @@ class SemanticClaimModule(nn.Module):
         self,
         width: int = 256,
         initial_claim_probability: float = 0.99,
+        initial_consumption_probability: float = 0.05,
     ) -> None:
         super().__init__()
         if not 0.0 < initial_claim_probability < 1.0:
             raise ValueError("initial_claim_probability must be strictly between 0 and 1")
+        if not 0.0 < initial_consumption_probability < 1.0:
+            raise ValueError(
+                "initial_consumption_probability must be strictly between 0 and 1"
+            )
         self.width = width
         self.initial_claim_probability = initial_claim_probability
+        self.initial_consumption_probability = initial_consumption_probability
         self.query_projection = nn.Linear(width, width, bias=False)
         self.token_projection = nn.Linear(width, width, bias=False)
         self.state_projection = nn.Linear(width, width, bias=False)
-        self.compatibility = nn.Sequential(
+        self.shared_hidden = nn.Sequential(
             nn.LayerNorm(width),
             nn.GELU(),
-            nn.Linear(width, 1),
         )
-        final = self.compatibility[-1]
-        nn.init.zeros_(final.weight)
+        self.claim_projection = nn.Linear(width, 1)
+        self.consumption_projection = nn.Linear(width, 1)
+        nn.init.zeros_(self.claim_projection.weight)
         nn.init.constant_(
-            final.bias,
+            self.claim_projection.bias,
             math.log(initial_claim_probability / (1.0 - initial_claim_probability)),
+        )
+        nn.init.zeros_(self.consumption_projection.weight)
+        nn.init.constant_(
+            self.consumption_projection.bias,
+            math.log(
+                initial_consumption_probability
+                / (1.0 - initial_consumption_probability)
+            ),
         )
 
     def forward(
@@ -114,7 +140,7 @@ class SemanticClaimModule(nn.Module):
         content_mask: Tensor,
         residual: Tensor,
         current_state: Tensor,
-    ) -> tuple[Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         if candidate_queries.ndim != 2 or candidate_queries.shape[-1] != self.width:
             raise ValueError("candidate_queries must be [K,d]")
         if text_tokens.ndim != 3 or text_tokens.shape[-1] != self.width:
@@ -132,9 +158,14 @@ class SemanticClaimModule(nn.Module):
             state = self.state_projection(current_state.float().mean(dim=1))[
                 :, None, None, :
             ]
-            logits = self.compatibility(query + token + state).squeeze(-1)
-            claims = torch.sigmoid(logits)
+            hidden = self.shared_hidden(query + token + state)
+            claim_logits = self.claim_projection(hidden).squeeze(-1)
+            consumption_logits = self.consumption_projection(hidden).squeeze(-1)
+            claims = torch.sigmoid(claim_logits)
+            consumption = torch.sigmoid(consumption_logits)
             valid = content_mask[:, None, :]
-            logits = logits.masked_fill(~valid, 0.0)
+            claim_logits = claim_logits.masked_fill(~valid, 0.0)
+            consumption_logits = consumption_logits.masked_fill(~valid, 0.0)
             claims = claims.masked_fill(~valid, 0.0)
-        return logits, claims
+            consumption = consumption.masked_fill(~valid, 0.0)
+        return claim_logits, claims, consumption_logits, consumption

@@ -76,9 +76,17 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         initial_claim_probability=float(
             cfg.model.get("initial_claim_probability", 0.99)
         ),
+        initial_consumption_probability=float(
+            cfg.model.get("initial_consumption_probability", 0.05)
+        ),
         claim_activation=str(cfg.model.get("claim_activation", "sigmoid")),
+        consumption_activation=str(
+            cfg.model.get("consumption_activation", "sigmoid")
+        ),
         residual_update_rule=str(
-            cfg.model.get("residual_update_rule", "selected_multiplicative")
+            cfg.model.get(
+                "residual_update_rule", "selected_claim_times_consumption"
+            )
         ),
         residual_initialization=str(
             cfg.model.get("residual_initialization", "valid_token_ones")

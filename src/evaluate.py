@@ -42,9 +42,11 @@ def validate_checkpoint_model_config(metadata: object, model_config: object) -> 
     normalized_stored.setdefault("enable_dynamic_reproposal", False)
     normalized_stored.setdefault("enable_semantic_residual", False)
     normalized_stored.setdefault("initial_claim_probability", 0.99)
+    normalized_stored.setdefault("initial_consumption_probability", 0.05)
     normalized_stored.setdefault("claim_activation", "sigmoid")
+    normalized_stored.setdefault("consumption_activation", "sigmoid")
     normalized_stored.setdefault(
-        "residual_update_rule", "selected_multiplicative"
+        "residual_update_rule", "selected_claim_times_consumption"
     )
     normalized_stored.setdefault("residual_initialization", "valid_token_ones")
     normalized_stored.setdefault("semantic_residual_fp32", True)

@@ -51,15 +51,17 @@ class IAGSRMEConfig:
     enable_dynamic_reproposal: bool = False
     enable_semantic_residual: bool = False
     initial_claim_probability: float = 0.99
+    initial_consumption_probability: float = 0.05
     claim_activation: str = "sigmoid"
-    residual_update_rule: str = "selected_multiplicative"
+    consumption_activation: str = "sigmoid"
+    residual_update_rule: str = "selected_claim_times_consumption"
     residual_initialization: str = "valid_token_ones"
     semantic_residual_fp32: bool = True
 
 
 def architecture_generation(config: IAGSRMEConfig) -> str:
     if config.enable_semantic_residual:
-        return "r2_semantic_residual_claim_firewall_v1"
+        return "r2_semantic_residual_claim_firewall_v2"
     if config.enable_dynamic_reproposal:
         return "r1c2_dynamic_current_state_reproposal_v1"
     if config.enable_dynamic_regrounding:
@@ -102,8 +104,12 @@ class IAGSRMECore(nn.Module):
                 raise ValueError("R2 cannot stack legacy auxiliary claim/factor heads")
             if config.claim_activation != "sigmoid":
                 raise ValueError("R2 claim activation must be sigmoid")
-            if config.residual_update_rule != "selected_multiplicative":
-                raise ValueError("R2 residual update must be selected_multiplicative")
+            if config.consumption_activation != "sigmoid":
+                raise ValueError("R2 consumption activation must be sigmoid")
+            if config.residual_update_rule != "selected_claim_times_consumption":
+                raise ValueError(
+                    "R2 residual update must be selected_claim_times_consumption"
+                )
             if config.residual_initialization != "valid_token_ones":
                 raise ValueError("R2 residual initialization must be valid_token_ones")
             if not config.semantic_residual_fp32:
@@ -126,7 +132,11 @@ class IAGSRMECore(nn.Module):
             else None
         )
         self.semantic_claim = (
-            SemanticClaimModule(config.width, config.initial_claim_probability)
+            SemanticClaimModule(
+                config.width,
+                config.initial_claim_probability,
+                config.initial_consumption_probability,
+            )
             if config.enable_semantic_residual
             else None
         )
@@ -232,6 +242,8 @@ class IAGSRMECore(nn.Module):
         temporal_intents: list[Tensor] = []
         temporal_semantic_residuals: list[Tensor] = []
         temporal_semantic_claims: list[Tensor] = []
+        temporal_semantic_consumption: list[Tensor] = []
+        temporal_effective_semantic_consumption: list[Tensor] = []
         initial_intents: Tensor | None = None
 
         for timestep in range(self.config.max_steps):
@@ -240,7 +252,12 @@ class IAGSRMECore(nn.Module):
             live_before = live
             raw_semantic_claims = None
             effective_semantic_claims = None
+            raw_semantic_consumption = None
+            effective_consumption_probability = None
+            effective_semantic_consumption = None
             candidate_text_content = None
+            candidate_semantic_direction = None
+            candidate_semantic_mass = None
             if self.semantic_claim is not None:
                 if semantic_residual is None:
                     raise AssertionError("R2 semantic residual state is missing")
@@ -248,7 +265,12 @@ class IAGSRMECore(nn.Module):
                 proposal_residual = semantic_residual
                 if control == "residual_shuffle" and timestep > 0:
                     proposal_residual = semantic_residual.roll(1, dims=0)
-                raw_claim_logits, raw_semantic_claims = self.semantic_claim(
+                (
+                    _raw_claim_logits,
+                    raw_semantic_claims,
+                    _raw_consumption_logits,
+                    raw_semantic_consumption,
+                ) = self.semantic_claim(
                     self.intent_encoder.query_bank,
                     encoded.text_tokens,
                     encoded.text_content_mask,
@@ -256,20 +278,39 @@ class IAGSRMECore(nn.Module):
                     current_state,
                 )
                 effective_semantic_claims = raw_semantic_claims
+                effective_consumption_probability = raw_semantic_consumption
                 if control == "claim_swap":
                     effective_semantic_claims = raw_semantic_claims.roll(1, dims=1)
+                    effective_consumption_probability = raw_semantic_consumption.roll(
+                        1, dims=1
+                    )
                 if control == "no_claim_firewall":
                     executable_weights = encoded.text_content_mask[:, None, :].expand(
                         -1, self.config.num_candidates, -1
                     ).float()
-                    candidate_text_content = encoded.text_global[:, None, :].expand(
-                        -1, self.config.num_candidates, -1
+                    candidate_text_content = (
+                        encoded.text_global.float()[:, None, :].expand(
+                            -1, self.config.num_candidates, -1
+                        )
+                    )
+                    candidate_semantic_direction = candidate_text_content
+                    candidate_semantic_mass = torch.ones(
+                        batch_size,
+                        self.config.num_candidates,
+                        device=anchor.device,
+                        dtype=torch.float32,
                     )
                 else:
-                    executable_weights, candidate_text_content = claimed_text_content(
+                    (
+                        executable_weights,
+                        candidate_semantic_direction,
+                        candidate_semantic_mass,
+                        candidate_text_content,
+                    ) = claimed_text_content(
                         encoded.text_tokens,
                         effective_semantic_claims,
                         proposal_residual,
+                        encoded.text_content_mask,
                     )
                 current_intents = self.intent_encoder.forward_weighted(
                     encoded.text_tokens,
@@ -277,6 +318,7 @@ class IAGSRMECore(nn.Module):
                     executable_weights,
                 )
                 temporal_semantic_claims.append(raw_semantic_claims)
+                temporal_semantic_consumption.append(raw_semantic_consumption)
             else:
                 if base_intents is None:
                     raise AssertionError("legacy base intents are missing")
@@ -387,6 +429,17 @@ class IAGSRMECore(nn.Module):
                     candidate_text_content = candidate_text_content[:, :1].expand_as(
                         candidate_text_content
                     )
+                    candidate_semantic_direction = candidate_semantic_direction[
+                        :, :1
+                    ].expand_as(candidate_semantic_direction)
+                    candidate_semantic_mass = candidate_semantic_mass[:, :1].expand_as(
+                        candidate_semantic_mass
+                    )
+                    effective_consumption_probability = (
+                        effective_consumption_probability[:, :1].expand_as(
+                            effective_consumption_probability
+                        )
+                    )
             elif control == "mean_candidate":
                 original = original.mean(dim=1, keepdim=True).expand_as(original)
                 current = current.mean(dim=1, keepdim=True).expand_as(current)
@@ -411,6 +464,14 @@ class IAGSRMECore(nn.Module):
                     encoded.reference_global,
                 )
                 candidate_text_content = effective_candidate_text
+                if candidate_semantic_mass is not None:
+                    candidate_semantic_mass = candidate_semantic_mass.mean(
+                        dim=1, keepdim=True
+                    ).expand_as(candidate_semantic_mass)
+                    candidate_semantic_direction = (
+                        candidate_text_content.float()
+                        / candidate_semantic_mass[..., None].clamp_min(1e-8)
+                    )
                 delta_q = candidate_queries - query_before[:, None, :]
                 scorer_change = change
                 scorer_supports = current_supports.mean(dim=1, keepdim=True).expand_as(
@@ -428,6 +489,11 @@ class IAGSRMECore(nn.Module):
                     effective_semantic_claims = effective_semantic_claims.mean(
                         dim=1, keepdim=True
                     ).expand_as(effective_semantic_claims)
+                    effective_consumption_probability = (
+                        effective_consumption_probability.mean(
+                            dim=1, keepdim=True
+                        ).expand_as(effective_consumption_probability)
+                    )
             scores = self.scorer(
                 contexts, delta_z, delta_q, scorer_change, scorer_supports
             )
@@ -476,7 +542,16 @@ class IAGSRMECore(nn.Module):
                 if semantic_residual is None:
                     raise AssertionError("R2 semantic residual state is missing")
                 candidate_semantic_residuals = candidate_residual_previews(
-                    semantic_residual, effective_semantic_claims
+                    semantic_residual,
+                    effective_semantic_claims,
+                    effective_consumption_probability,
+                )
+                effective_semantic_consumption = (
+                    effective_semantic_claims.float()
+                    * effective_consumption_probability.float()
+                )
+                temporal_effective_semantic_consumption.append(
+                    effective_semantic_consumption
                 )
                 next_semantic_residual = select_next_residual(
                     candidate_semantic_residuals,
@@ -529,6 +604,10 @@ class IAGSRMECore(nn.Module):
                     parent_semantic_residual=semantic_residual,
                     raw_semantic_claims=raw_semantic_claims,
                     effective_semantic_claims=effective_semantic_claims,
+                    semantic_consumption=raw_semantic_consumption,
+                    effective_semantic_consumption=effective_semantic_consumption,
+                    claimed_semantic_mass=candidate_semantic_mass,
+                    claimed_semantic_direction=candidate_semantic_direction,
                     claimed_text_content=candidate_text_content,
                     candidate_semantic_residuals=candidate_semantic_residuals,
                     next_semantic_residual=next_semantic_residual,
@@ -581,6 +660,16 @@ class IAGSRMECore(nn.Module):
             temporal_semantic_claims=(
                 torch.stack(temporal_semantic_claims, dim=1)
                 if temporal_semantic_claims
+                else None
+            ),
+            temporal_semantic_consumption=(
+                torch.stack(temporal_semantic_consumption, dim=1)
+                if temporal_semantic_consumption
+                else None
+            ),
+            temporal_effective_semantic_consumption=(
+                torch.stack(temporal_effective_semantic_consumption, dim=1)
+                if temporal_effective_semantic_consumption
                 else None
             ),
             final_semantic_residual=semantic_residual,

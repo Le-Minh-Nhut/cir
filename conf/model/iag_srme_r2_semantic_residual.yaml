@@ -19,7 +19,9 @@ enable_dynamic_regrounding: true
 enable_dynamic_reproposal: false
 enable_semantic_residual: true
 initial_claim_probability: 0.99
+initial_consumption_probability: 0.05
 claim_activation: sigmoid
-residual_update_rule: selected_multiplicative
+consumption_activation: sigmoid
+residual_update_rule: selected_claim_times_consumption
 residual_initialization: valid_token_ones
 semantic_residual_fp32: true

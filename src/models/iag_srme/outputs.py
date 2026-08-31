@@ -54,6 +54,10 @@ class RecurrentStepOutput:
     parent_semantic_residual: Tensor | None = None  # [B,L], shared rho_t
     raw_semantic_claims: Tensor | None = None  # [B,K,L], before diagnostic controls
     effective_semantic_claims: Tensor | None = None  # [B,K,L], executable claims
+    semantic_consumption: Tensor | None = None  # [B,K,L], raw gamma
+    effective_semantic_consumption: Tensor | None = None  # [B,K,L], alpha*gamma
+    claimed_semantic_mass: Tensor | None = None  # [B,K]
+    claimed_semantic_direction: Tensor | None = None  # [B,K,d]
     claimed_text_content: Tensor | None = None  # [B,K,d]
     candidate_semantic_residuals: Tensor | None = None  # [B,K,L]
     next_semantic_residual: Tensor | None = None  # [B,L]
@@ -88,4 +92,6 @@ class IAGSRMEOutput:
     initial_semantic_residual: Tensor | None = None  # [B,L]
     temporal_semantic_residuals: Tensor | None = None  # [B,T+1,L]
     temporal_semantic_claims: Tensor | None = None  # [B,T,K,L], raw claims
+    temporal_semantic_consumption: Tensor | None = None  # [B,T,K,L], raw gamma
+    temporal_effective_semantic_consumption: Tensor | None = None  # [B,T,K,L]
     final_semantic_residual: Tensor | None = None  # [B,L]
