@@ -106,6 +106,10 @@ def test_legacy_checkpoint_model_config_provenance_is_explicit() -> None:
     assert config.selector_temperature == 1.0
     assert provenance["source"] == "legacy_checkpoint_plus_canonical_assumption"
     assert provenance["fully_self_describing"] is False
+    assert provenance["fully_self_describing_model_config"] is False
+    assert "model architecture/configuration replay only" in provenance[
+        "provenance_scope"
+    ]
     assert provenance["warning"]
     assert provenance["assumed_config"]["width"] == 256
 
@@ -137,6 +141,7 @@ def test_self_describing_checkpoint_model_config_is_preferred() -> None:
     assert config.selector_gumbel_noise is False
     assert provenance["source"] == "checkpoint"
     assert provenance["fully_self_describing"] is True
+    assert provenance["fully_self_describing_model_config"] is True
     assert provenance["warning"] is None
 
 

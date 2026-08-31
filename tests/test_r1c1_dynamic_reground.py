@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import inspect
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,8 +12,11 @@ from torch import nn
 from torch.optim import AdamW
 
 from diagnose_iag_srme_checkpoint import (
+    SelectedPathMarginalAccumulator,
     TemporalGroundingAccumulator,
+    ValidationDiagnosticAccumulator,
     _checkpoint_replay_guard,
+    _failure_flags,
     _resolve_checkpoint_model_config,
 )
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
@@ -130,21 +134,45 @@ def test_anchor_same_parent_trace_and_no_r1b_gate(synthetic_encoded) -> None:
 def test_temporal_support_contract_and_target_firewall(synthetic_encoded) -> None:
     core = IAGSRMECore(_r1c1_config()).eval()
     _force_non_stop(core)
-    first = core(synthetic_encoded)
-    arbitrary_targets = torch.randn(3, 24)[torch.tensor([2, 0, 1])]
-    second = core(synthetic_encoded)
-    assert arbitrary_targets.shape == first.final_query.shape
-    assert first.temporal_supports.shape == (3, 3, 4, 13)
-    assert torch.equal(first.supports, first.initial_supports)
-    assert torch.equal(first.supports, first.temporal_supports[:, 0])
+    assert "target" not in inspect.signature(core.forward).parameters
+    output = core(synthetic_encoded)
+    assert output.temporal_supports.shape == (3, 3, 4, 13)
+    assert torch.equal(output.supports, output.initial_supports)
+    assert torch.equal(output.supports, output.temporal_supports[:, 0])
     torch.testing.assert_close(
-        first.temporal_supports.sum(dim=-1),
+        output.temporal_supports.sum(dim=-1),
         torch.ones(3, 3, 4),
         atol=1e-5,
         rtol=1e-5,
     )
+
+    snapshots = {
+        "intents": output.intents.clone(),
+        "temporal_supports": output.temporal_supports.clone(),
+        "final_state": output.final_state.clone(),
+        "final_query": output.final_query.clone(),
+        "candidate_states": [step.candidate_states.clone() for step in output.trace],
+        "candidate_queries": [step.candidate_queries.clone() for step in output.trace],
+        "selected_index": [step.selected_index.clone() for step in output.trace],
+    }
+    targets_a = torch.nn.functional.normalize(
+        output.trace[0].candidate_queries[:, 0].detach(), dim=-1
+    )
+    targets_b = targets_a.roll(shifts=1, dims=0)
+    diagnostic_a = SelectedPathMarginalAccumulator()
+    diagnostic_b = SelectedPathMarginalAccumulator()
+    diagnostic_a.update(output, targets_a)
+    diagnostic_b.update(output, targets_b)
+    summary_a = diagnostic_a.summary()
+    summary_b = diagnostic_b.summary()
+    assert summary_a != summary_b
+
     for name in ("intents", "temporal_supports", "final_state", "final_query"):
-        assert torch.equal(getattr(first, name), getattr(second, name))
+        assert torch.equal(getattr(output, name), snapshots[name])
+    for timestep, step in enumerate(output.trace):
+        assert torch.equal(step.candidate_states, snapshots["candidate_states"][timestep])
+        assert torch.equal(step.candidate_queries, snapshots["candidate_queries"][timestep])
+        assert torch.equal(step.selected_index, snapshots["selected_index"][timestep])
 
 
 def test_dynamic_where_controls_reground_actual_parent_state(synthetic_encoded) -> None:
@@ -197,15 +225,90 @@ def test_temporal_grounding_diagnostics_preserve_decision_conditioning(
     assert stop_metrics["l1_change"]["maximum"] == 0.0
 
 
-@pytest.mark.parametrize("control", ["clone_candidate_1", "mean_candidate"])
-def test_clone_and_mean_controls_use_current_timestep_supports(
+def test_support_similarity_failure_observations_are_timestep_specific(
+    synthetic_encoded,
+) -> None:
+    core = IAGSRMECore(_r1c1_config()).eval()
+    output = core(synthetic_encoded)
+    accumulator = ValidationDiagnosticAccumulator()
+    accumulator.update(output)
+    selection = accumulator.selection_summary()
+    grounding = accumulator.grounding_summary()
+    functional = accumulator.functional_summary()
+    specialization = accumulator.specialization_summary()
+    temporal = accumulator.temporal_grounding_summary()
+    for timestep, cosine in enumerate((0.999, 0.50, 0.25)):
+        temporal["per_timestep"][timestep]["live_parent_count"] = 3
+        temporal["per_timestep"][timestep][
+            "between_candidate_support_cosine_off_diagonal"
+        ]["mean"] = cosine
+    controls = {
+        "full": {"mean_recall": 10.0},
+        "reference_only": {"mean_recall": 9.0},
+        "counterfactual_same_parent_by_timestep": {
+            "t0": {"best_single_candidate_oracle": {"mean_recall": 11.0}}
+        },
+        **{f"single_{index}": {"mean_recall": 10.0} for index in range(4)},
+        **{f"repeat_{index}": {"mean_recall": 10.0} for index in range(4)},
+    }
+
+    audit = _failure_flags(
+        selection,
+        grounding,
+        functional,
+        controls,
+        specialization,
+        temporal,
+    )
+
+    assert audit["support_similarity_by_timestep"] == {
+        "t0": 0.999,
+        "t1": 0.50,
+        "t2": 0.25,
+    }
+    assert audit["flags"]["high_support_similarity_t0"] is True
+    assert audit["flags"]["high_support_similarity_t1"] is False
+    assert audit["flags"]["high_support_similarity_t2"] is False
+    assert "high_support_similarity" not in audit["flags"]
+    assert "high_support_similarity_t0_legacy" in audit["flags"]
+
+
+@pytest.mark.parametrize("control", ["full", "repeat_candidate_2"])
+def test_full_and_repeat_raw_and_effective_supports_match(
     synthetic_encoded, control: str
 ) -> None:
     core = IAGSRMECore(_r1c1_config()).eval()
     output = core(synthetic_encoded, control=control)
     for step in output.trace:
-        expected = step.spatial_supports[:, :1].expand_as(step.spatial_supports)
-        assert torch.equal(step.spatial_supports, expected)
+        assert step.raw_spatial_supports is not None
+        assert step.effective_spatial_supports is not None
+        assert torch.equal(step.spatial_supports, step.effective_spatial_supports)
+        assert torch.equal(
+            step.raw_spatial_supports, step.effective_spatial_supports
+        )
+
+
+@pytest.mark.parametrize("control", ["clone_candidate_1", "mean_candidate"])
+def test_clone_and_mean_preserve_raw_support_before_control_transform(
+    synthetic_encoded, control: str
+) -> None:
+    core = IAGSRMECore(_r1c1_config()).eval()
+    output = core(synthetic_encoded, control=control)
+    for timestep, step in enumerate(output.trace):
+        assert step.raw_spatial_supports is not None
+        assert step.effective_spatial_supports is not None
+        expected_raw = core.grounder(output.intents, step.current_state)
+        torch.testing.assert_close(
+            step.raw_spatial_supports, expected_raw, atol=0.0, rtol=0.0
+        )
+        assert torch.equal(step.spatial_supports, step.effective_spatial_supports)
+        assert torch.equal(
+            output.temporal_supports[:, timestep], step.raw_spatial_supports
+        )
+        expected_effective = step.effective_spatial_supports[:, :1].expand_as(
+            step.effective_spatial_supports
+        )
+        assert torch.equal(step.effective_spatial_supports, expected_effective)
 
 
 def test_entmax_remains_fp32_island_under_autocast(synthetic_encoded) -> None:

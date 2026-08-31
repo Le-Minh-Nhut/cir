@@ -479,7 +479,15 @@ class TemporalGroundingAccumulator:
     def update(self, output: IAGSRMEOutput) -> None:
         if output.temporal_supports is None:
             supports = torch.stack(
-                [step.spatial_supports for step in output.trace], dim=1
+                [
+                    (
+                        step.raw_spatial_supports
+                        if step.raw_spatial_supports is not None
+                        else step.spatial_supports
+                    )
+                    for step in output.trace
+                ],
+                dim=1,
             )
         else:
             supports = output.temporal_supports
@@ -495,10 +503,15 @@ class TemporalGroundingAccumulator:
 
         supports = supports.float()
         for timestep, step in enumerate(output.trace):
-            if step.spatial_supports is None:
-                raise AssertionError("trace is missing the support used by this step")
+            raw_supports = (
+                step.raw_spatial_supports
+                if step.raw_spatial_supports is not None
+                else step.spatial_supports
+            )
+            if raw_supports is None:
+                raise AssertionError("trace is missing raw Ground(I, Z_t) support")
             torch.testing.assert_close(
-                supports[:, timestep], step.spatial_supports.float(), atol=0.0, rtol=0.0
+                supports[:, timestep], raw_supports.float(), atol=0.0, rtol=0.0
             )
             valid = step.live_before
             self.live_counts[timestep] += int(valid.sum())
@@ -664,6 +677,11 @@ class TemporalGroundingAccumulator:
                 else "Ground(I_k, A) computed once and reused"
             ),
             "top_m_jaccard_m": TEMPORAL_SUPPORT_TOP_M,
+            "support_tensor_semantics": (
+                "raw Ground(I_k,Z_t) before any CLONE/MEAN diagnostic-control "
+                "transformation"
+            ),
+            "legacy_output_supports_semantics": "initial/t0 raw support only",
             "per_timestep": per_timestep,
             "per_transition": transitions,
             "interpretation_limit": (
@@ -1079,6 +1097,10 @@ class ValidationDiagnosticAccumulator:
             "support_recomputed_each_timestep": bool(output_dynamic := self.temporal_grounding.dynamic_regrounding),
             "support_static_by_current_architecture": not bool(output_dynamic),
             "empirical_recurrence_stability_measured": bool(output_dynamic),
+            "legacy_support_summary_scope": (
+                "output.supports == initial/t0 raw Ground(I,Z0) only; use "
+                "temporal_grounding_diagnostics for R1c1 timestep conclusions"
+            ),
             "visual_token_count": self.visual_tokens,
             "spatial_support_mass": float(visual_mass.mean()),
             "per_candidate_spatial_support_mass": visual_mass.tolist(),
@@ -1705,6 +1727,16 @@ class NullTargetUtilityAccumulator:
 
 def diagnostic_definitions() -> dict[str, dict[str, Any]]:
     return {
+        "between_candidate_support_similarity_by_timestep": {
+            "definition": "cos(pi[t,i], pi[t,j]) for each candidate pair i != j",
+            "population": "samples live before decision at each reported timestep",
+            "tensor_shape_before_reduction": "raw temporal supports [B,T,K,N]",
+            "reduction_axes": "cosine over N; B distribution with KxK matrix retained",
+            "interpretation_limitation": (
+                "high t0 similarity is expected under R1c1/R1a parity; only later "
+                "lineage-safe support plus functional evidence can assess dynamic WHERE"
+            ),
+        },
         "temporal_support_change": {
             "definition": (
                 "for fixed candidate k, compare pi[t,k]=Ground(I_k,Z_t) with "
@@ -2264,7 +2296,14 @@ def _resolve_checkpoint_model_config(
     }
     provenance: dict[str, Any] = {
         "source": source,
+        # Precise name for new consumers. The legacy key remains below for JSON
+        # compatibility; neither key claims complete experiment provenance.
+        "fully_self_describing_model_config": fully_self_describing,
         "fully_self_describing": fully_self_describing,
+        "provenance_scope": (
+            "model architecture/configuration replay only; this does not imply that "
+            "seed, git SHA, protocol, optimizer, or all experiment settings are stored"
+        ),
         "state_dict_inferred": {
             "width": width,
             "num_candidates": candidates,
@@ -2460,6 +2499,7 @@ def _failure_flags(
     functional: Mapping[str, Any],
     controls: Mapping[str, Any],
     specialization: Mapping[str, Any],
+    temporal_grounding: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     full = float(controls["full"]["mean_recall"])
     best_single = max(float(controls[f"single_{index}"]["mean_recall"]) for index in range(4))
@@ -2531,6 +2571,31 @@ def _failure_flags(
         "reference_only_mean_recall": reference,
         "t0_candidate_oracle_mean_recall": oracle_t0,
     }
+    temporal_support_observations: dict[int, dict[str, int | float | None]] = {}
+    temporal_items = (
+        temporal_grounding.get("per_timestep", [])
+        if isinstance(temporal_grounding, Mapping)
+        else []
+    )
+    for timestep in range(3):
+        item = temporal_items[timestep] if timestep < len(temporal_items) else None
+        if isinstance(item, Mapping):
+            live_count = int(item.get("live_parent_count", 0))
+            cosine_summary = item.get(
+                "between_candidate_support_cosine_off_diagonal"
+            )
+            cosine = (
+                cosine_summary.get("mean")
+                if live_count > 0 and isinstance(cosine_summary, Mapping)
+                else None
+            )
+        else:
+            live_count = 0
+            cosine = None
+        temporal_support_observations[timestep] = {
+            "live_parent_count": live_count,
+            "mean_between_candidate_support_cosine": cosine,
+        }
     flags = {
         "high_stop_t0_occupancy": (
             supporting["stop_t0_occupancy"] >= thresholds["stop_or_monopoly_fraction"]
@@ -2546,7 +2611,7 @@ def _failure_flags(
             else supporting["mean_delta_q_off_diagonal_cosine"]
             >= thresholds["clone_cosine"]
         ),
-        "high_support_similarity": (
+        "high_support_similarity_t0_legacy": (
             None
             if supporting["mean_support_off_diagonal_cosine"] is None
             else supporting["mean_support_off_diagonal_cosine"]
@@ -2568,6 +2633,11 @@ def _failure_flags(
         "reference_dominates": reference >= full + margin,
         "selected_policy_underperforms_candidate_oracle": oracle_t0 >= full + margin,
     }
+    for timestep, observations in temporal_support_observations.items():
+        cosine = observations["mean_between_candidate_support_cosine"]
+        flags[f"high_support_similarity_t{timestep}"] = (
+            None if cosine is None else cosine >= thresholds["clone_cosine"]
+        )
     for timestep, observations in timestep_functional.items():
         cosine = observations[
             "mean_delta_q_off_diagonal_cosine_among_valid_effects"
@@ -2597,8 +2667,9 @@ def _failure_flags(
             "observes high mean off-diagonal same-parent Deltaq cosine; potential functional "
             "candidate collapse, without causal localization"
         ),
-        "high_support_similarity": (
-            "observes high support-map cosine; does not establish semantic grounding failure"
+        "high_support_similarity_t0_legacy": (
+            "observes high cosine in output.supports, whose backward-compatible R1c1 "
+            "meaning is initial/t0 support only; it cannot establish dynamic-WHERE failure"
         ),
         "grounding_over_sparse": "observes support fraction <= configured audit threshold",
         "grounding_over_diffuse": "observes support fraction >= configured audit threshold",
@@ -2613,6 +2684,11 @@ def _failure_flags(
         ),
     }
     for timestep in range(3):
+        definitions[f"high_support_similarity_t{timestep}"] = (
+            f"observes high between-candidate cosine in raw Ground(I,Z_t) support at "
+            f"t{timestep}; this is descriptive only. High t0 similarity is expected "
+            "under R1c1/R1a parity and is not by itself evidence that R1c1 failed"
+        )
         definitions[f"high_delta_q_similarity_t{timestep}"] = (
             f"observes high same-parent Deltaq cosine among active pairs at t{timestep}; "
             "null means no live parents or no valid active pair"
@@ -2642,7 +2718,7 @@ def _failure_flags(
             ("mean_delta_q_off_diagonal_cosine",),
             ("clone_cosine",),
         ),
-        "high_support_similarity": (
+        "high_support_similarity_t0_legacy": (
             "mean_support_off_diagonal_cosine >= clone_cosine",
             ("mean_support_off_diagonal_cosine",),
             ("clone_cosine",),
@@ -2687,6 +2763,14 @@ def _failure_flags(
         prefix = f"t{timestep}"
         supporting.update(
             {
+                f"{prefix}_support_live_parent_count": (
+                    temporal_support_observations[timestep]["live_parent_count"]
+                ),
+                f"{prefix}_mean_between_candidate_support_cosine": (
+                    temporal_support_observations[timestep][
+                        "mean_between_candidate_support_cosine"
+                    ]
+                ),
                 f"{prefix}_live_parent_count": timestep_functional[timestep][
                     "live_parent_count"
                 ],
@@ -2702,6 +2786,14 @@ def _failure_flags(
                     timestep
                 ]["dead_delta_q_candidate_fraction"],
             }
+        )
+        audit_contracts[f"high_support_similarity_t{timestep}"] = (
+            f"{prefix}_mean_between_candidate_support_cosine >= clone_cosine",
+            (
+                f"{prefix}_support_live_parent_count",
+                f"{prefix}_mean_between_candidate_support_cosine",
+            ),
+            ("clone_cosine",),
         )
         audit_contracts[f"high_delta_q_similarity_t{timestep}"] = (
             f"{prefix}_mean_delta_q_off_diagonal_cosine_among_valid_effects >= clone_cosine",
@@ -2735,6 +2827,12 @@ def _failure_flags(
     }
     return {
         "flags": flags,
+        "support_similarity_by_timestep": {
+            f"t{timestep}": observations[
+                "mean_between_candidate_support_cosine"
+            ]
+            for timestep, observations in temporal_support_observations.items()
+        },
         "supporting_numbers": supporting,
         "thresholds": thresholds,
         "definitions_and_limits": definitions,
@@ -2772,11 +2870,15 @@ def _checkpoint_replay_guard(
         }
     resolved = provenance.get("resolved_diagnostic_config")
     if not isinstance(resolved, Mapping):
-        raise ValueError("R1b replay has no resolved model config")
+        raise ValueError("checkpoint replay has no resolved model configuration")
     checks = {
         "query_cap_is_1000": float(resolved.get("query_cap", -1.0)) == 1000.0,
-        "checkpoint_fully_self_describing": (
-            provenance.get("fully_self_describing") is True
+        "checkpoint_model_config_fully_self_describing": (
+            provenance.get(
+                "fully_self_describing_model_config",
+                provenance.get("fully_self_describing"),
+            )
+            is True
         ),
     }
     if generation == "r1b_dynamic_applicability_gate_v2":
@@ -2951,6 +3053,7 @@ def main() -> None:
                 category_functional,
                 controls,
                 category_specialization,
+                category_temporal_grounding,
             ),
         }
 
@@ -3097,7 +3200,12 @@ def main() -> None:
         "selected_path_marginal_diagnostics": selected_path,
         "specialization_matrices": specialization,
         "failure_flags": _failure_flags(
-            selection, grounding, functional, global_controls, specialization
+            selection,
+            grounding,
+            functional,
+            global_controls,
+            specialization,
+            temporal_grounding,
         ),
         "diagnostic_definitions": diagnostic_definitions(),
         "trusted_r1a_baseline": {

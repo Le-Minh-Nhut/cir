@@ -330,7 +330,11 @@ class IAGSRMECore(nn.Module):
                     visual_confidence=execution_confidence,
                     visual_null_probability=null_probability,
                     ungated_delta_z=ungated_delta_z,
+                    # Keep raw dynamic WHERE distinct from a diagnostic control's
+                    # effective scorer support. Canonical FULL/REPEAT have equality.
                     spatial_supports=scorer_supports,
+                    raw_spatial_supports=current_supports,
+                    effective_spatial_supports=scorer_supports,
                 )
             )
             state = next_state
@@ -339,7 +343,7 @@ class IAGSRMECore(nn.Module):
         if initial_supports is None:
             raise AssertionError("rollout did not construct initial grounding support")
         temporal_supports = torch.stack(
-            [step.spatial_supports for step in trace], dim=1
+            [step.raw_spatial_supports for step in trace], dim=1
         )
         return IAGSRMEOutput(
             final_query=current_query,

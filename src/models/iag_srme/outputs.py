@@ -43,7 +43,11 @@ class RecurrentStepOutput:
     visual_confidence: Tensor | None = None  # [B,K]
     visual_null_probability: Tensor | None = None  # [B,K] = 1-confidence
     ungated_delta_z: Tensor | None = None  # [B,K,N,d], before applicability
-    spatial_supports: Tensor | None = None  # [B,K,N], WHERE used by this step
+    # Backward-compatible alias of effective_spatial_supports. Canonical FULL and
+    # REPEAT equal raw Ground(I,Z_t); CLONE/MEAN may expose a controlled view here.
+    spatial_supports: Tensor | None = None  # [B,K,N]
+    raw_spatial_supports: Tensor | None = None  # [B,K,N], Ground(I, Z_t)
+    effective_spatial_supports: Tensor | None = None  # [B,K,N], scorer/control view
 
 
 @dataclass(slots=True)
