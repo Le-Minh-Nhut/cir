@@ -148,4 +148,22 @@ def summarize_trajectory(output: IAGSRMEOutput) -> dict[str, Tensor]:
     if output.visual_null_probabilities is not None:
         result["visual_null_probability"] = output.visual_null_probabilities
         result["visual_execution_confidence"] = output.visual_confidence
+    if output.temporal_supports is not None:
+        temporal = output.temporal_supports.float()
+        result["temporal_grounding_support_mass"] = temporal.sum(dim=-1)
+        result["temporal_grounding_support_fraction"] = (
+            temporal > 0
+        ).float().mean(dim=-1)
+        result["temporal_grounding_entropy"] = -(
+            temporal * temporal.clamp_min(1e-8).log()
+        ).sum(dim=-1)
+        if temporal.shape[1] > 1:
+            result["temporal_grounding_same_candidate_cosine"] = (
+                torch.nn.functional.cosine_similarity(
+                    temporal[:, :-1], temporal[:, 1:], dim=-1
+                )
+            )
+            result["temporal_grounding_l1_change"] = (
+                temporal[:, 1:] - temporal[:, :-1]
+            ).abs().sum(dim=-1)
     return result

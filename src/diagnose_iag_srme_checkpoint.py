@@ -61,6 +61,7 @@ REQUIRED_REPORT_KEYS = {
     "intent_diagnostics",
     "selection_diagnostics",
     "grounding_diagnostics",
+    "temporal_grounding_diagnostics",
     "visual_null_diagnostics",
     "functional_diagnostics",
     "dynamic_diagnostics",
@@ -70,6 +71,23 @@ REQUIRED_REPORT_KEYS = {
     "specialization_matrices",
     "failure_flags",
     "diagnostic_definitions",
+    "trusted_r1a_baseline",
+}
+
+TEMPORAL_SUPPORT_TOP_M = 10
+TRUSTED_R1A_BASELINE = {
+    "full_mean_recall": 38.764146,
+    "mean_delta_q_norm_by_timestep": [0.336634, 0.272417, 0.197111],
+    "delta_q_retention": {
+        "t1_over_t0": 0.809238,
+        "t2_over_t0": 0.585534,
+        "t2_over_t1": 0.723562,
+    },
+    "selected_target_relative_gain_by_timestep": [0.07424, 0.02488, -0.00261],
+    "pairwise_support_cosine": 0.999842,
+    "pairwise_support_overlap": 0.995108,
+    "repeated_candidate_trajectory_fraction": 0.957447,
+    "mean_executed_edits": 2.86586,
 }
 
 
@@ -259,6 +277,9 @@ class _DistributionStats:
                 "mean": None,
                 "median": None,
                 "standard_deviation": None,
+                "p10": None,
+                "p25": None,
+                "p75": None,
                 "p90": None,
                 "p95": None,
                 "minimum": None,
@@ -270,6 +291,9 @@ class _DistributionStats:
             "mean": float(values.mean()),
             "median": float(values.median()),
             "standard_deviation": float(values.std(unbiased=False)),
+            "p10": float(torch.quantile(values, 0.10)),
+            "p25": float(torch.quantile(values, 0.25)),
+            "p75": float(torch.quantile(values, 0.75)),
             "p90": float(torch.quantile(values, 0.90)),
             "p95": float(torch.quantile(values, 0.95)),
             "minimum": float(values.min()),
@@ -398,6 +422,257 @@ def _selection_batch_counts(output: IAGSRMEOutput) -> dict[str, Tensor]:
     }
 
 
+class TemporalGroundingAccumulator:
+    """Lineage-safe dynamic-WHERE measurements; never feeds model execution."""
+
+    def __init__(self, candidates: int = 4, timesteps: int = 3) -> None:
+        self.candidates = candidates
+        self.timesteps = timesteps
+        self.dynamic_regrounding: bool | None = None
+        self.live_counts = torch.zeros(timesteps, dtype=torch.long)
+        self.mass = [_DistributionStats() for _ in range(timesteps)]
+        self.entropy = [_DistributionStats() for _ in range(timesteps)]
+        self.effective_size = [_DistributionStats() for _ in range(timesteps)]
+        self.support_fraction = [_DistributionStats() for _ in range(timesteps)]
+        self.between_candidate_cosine = [
+            _MaskedMatrixStats(candidates) for _ in range(timesteps)
+        ]
+        self.between_candidate_overlap = [
+            _MaskedMatrixStats(candidates) for _ in range(timesteps)
+        ]
+        transitions = timesteps - 1
+        names = (
+            "cosine",
+            "overlap",
+            "top_m_jaccard",
+            "entropy_change",
+            "effective_size_change",
+            "l1_change",
+            "l2_change",
+        )
+        self.transition = {
+            name: [_DistributionStats() for _ in range(transitions)] for name in names
+        }
+        self.conditioned = {
+            condition: {
+                name: [_DistributionStats() for _ in range(transitions)]
+                for name in ("cosine", "overlap", "l1_change")
+            }
+            for condition in ("same_candidate_executed", "other_candidate_executed", "stop")
+        }
+        self.argmax_changed = torch.zeros(transitions, dtype=torch.long)
+        self.argmax_total = torch.zeros(transitions, dtype=torch.long)
+        self.transition_live_parent_counts = torch.zeros(transitions, dtype=torch.long)
+        self.displacement_alignment = [
+            _MaskedMatrixStats(candidates) for _ in range(transitions)
+        ]
+
+    @staticmethod
+    def _entropy(supports: Tensor) -> Tensor:
+        values = supports.float()
+        return -(values * values.clamp_min(1e-8).log()).sum(dim=-1)
+
+    @staticmethod
+    def _masked_update(stats: _DistributionStats, values: Tensor, mask: Tensor) -> None:
+        stats.update(values[mask])
+
+    def update(self, output: IAGSRMEOutput) -> None:
+        if output.temporal_supports is None:
+            supports = torch.stack(
+                [step.spatial_supports for step in output.trace], dim=1
+            )
+        else:
+            supports = output.temporal_supports
+        if supports.ndim != 4:
+            raise ValueError("temporal supports must be [B,T,K,N]")
+        batch, timesteps, candidates, tokens = supports.shape
+        if (timesteps, candidates) != (self.timesteps, self.candidates):
+            raise ValueError("temporal support K/T mismatch")
+        if self.dynamic_regrounding is None:
+            self.dynamic_regrounding = output.dynamic_regrounding
+        elif self.dynamic_regrounding != output.dynamic_regrounding:
+            raise ValueError("mixed static/dynamic grounding outputs in one accumulator")
+
+        supports = supports.float()
+        for timestep, step in enumerate(output.trace):
+            if step.spatial_supports is None:
+                raise AssertionError("trace is missing the support used by this step")
+            torch.testing.assert_close(
+                supports[:, timestep], step.spatial_supports.float(), atol=0.0, rtol=0.0
+            )
+            valid = step.live_before
+            self.live_counts[timestep] += int(valid.sum())
+            if not valid.any():
+                continue
+            current = supports[valid, timestep]
+            mass = current.sum(dim=-1)
+            entropy = self._entropy(current)
+            self.mass[timestep].update(mass)
+            self.entropy[timestep].update(entropy)
+            self.effective_size[timestep].update(entropy.exp())
+            self.support_fraction[timestep].update((current > 0).float().mean(dim=-1))
+            valid_pairs = torch.ones(
+                current.shape[:2] + (candidates,), dtype=torch.bool, device=current.device
+            )
+            self.between_candidate_cosine[timestep].update(
+                pairwise_cosine_matrix(current), valid_pairs
+            )
+            overlap = torch.minimum(
+                current[:, :, None], current[:, None, :]
+            ).sum(dim=-1)
+            self.between_candidate_overlap[timestep].update(overlap, valid_pairs)
+
+        for transition in range(self.timesteps - 1):
+            previous_step = output.trace[transition]
+            current_step = output.trace[transition + 1]
+            before = supports[:, transition]
+            after = supports[:, transition + 1]
+            valid_live = current_step.live_before
+            self.transition_live_parent_counts[transition] += int(valid_live.sum())
+            cosine = F.cosine_similarity(before, after, dim=-1)
+            overlap = torch.minimum(before, after).sum(dim=-1)
+            l1 = (after - before).abs().sum(dim=-1)
+            l2 = (after - before).norm(dim=-1)
+            entropy_before = self._entropy(before)
+            entropy_after = self._entropy(after)
+            effective_before = entropy_before.exp()
+            effective_after = entropy_after.exp()
+            top_m = min(TEMPORAL_SUPPORT_TOP_M, tokens)
+            top_before = before.topk(top_m, dim=-1).indices
+            top_after = after.topk(top_m, dim=-1).indices
+            intersection = (
+                top_before[..., :, None] == top_after[..., None, :]
+            ).any(dim=-1).sum(dim=-1)
+            jaccard = intersection.float() / (2 * top_m - intersection).clamp_min(1)
+            transition_values = {
+                "cosine": cosine,
+                "overlap": overlap,
+                "top_m_jaccard": jaccard,
+                "entropy_change": entropy_after - entropy_before,
+                "effective_size_change": effective_after - effective_before,
+                "l1_change": l1,
+                "l2_change": l2,
+            }
+            for name, values in transition_values.items():
+                self._masked_update(
+                    self.transition[name][transition],
+                    values,
+                    valid_live[:, None].expand_as(values),
+                )
+            self.argmax_changed[transition] += int(
+                (before.argmax(dim=-1)[valid_live] != after.argmax(dim=-1)[valid_live]).sum()
+            )
+            self.argmax_total[transition] += int(valid_live.sum()) * candidates
+
+            displacement = after[valid_live] - before[valid_live]
+            if displacement.shape[0]:
+                matrix, pair_valid = masked_pairwise_cosine(displacement)
+                self.displacement_alignment[transition].update(matrix, pair_valid)
+
+            action = previous_step.selected_index
+            candidate_ids = torch.arange(candidates, device=action.device)[None]
+            same = previous_step.live_before[:, None] & action[:, None].eq(candidate_ids)
+            other = (
+                previous_step.live_before[:, None]
+                & action[:, None].lt(candidates)
+                & ~action[:, None].eq(candidate_ids)
+            )
+            stopped = previous_step.live_before[:, None] & action[:, None].eq(candidates)
+            for condition, mask in (
+                ("same_candidate_executed", same),
+                ("other_candidate_executed", other),
+                ("stop", stopped.expand(batch, candidates)),
+            ):
+                for name, values in (
+                    ("cosine", cosine),
+                    ("overlap", overlap),
+                    ("l1_change", l1),
+                ):
+                    self._masked_update(self.conditioned[condition][name][transition], values, mask)
+
+    def summary(self) -> dict[str, Any]:
+        per_timestep = []
+        for timestep in range(self.timesteps):
+            per_timestep.append(
+                {
+                    "timestep": timestep,
+                    "live_parent_count": int(self.live_counts[timestep]),
+                    "metric_population": f"samples live before decision at t={timestep}",
+                    "support_mass": self.mass[timestep].summary(),
+                    "support_entropy": self.entropy[timestep].summary(),
+                    "support_effective_size": self.effective_size[timestep].summary(),
+                    "support_fraction": self.support_fraction[timestep].summary(),
+                    "between_candidate_support_cosine_matrix": (
+                        self.between_candidate_cosine[timestep].nullable_matrix()
+                    ),
+                    "between_candidate_support_cosine_off_diagonal": (
+                        self.between_candidate_cosine[timestep].off_diagonal_summary()
+                    ),
+                    "between_candidate_support_overlap_matrix": (
+                        self.between_candidate_overlap[timestep].nullable_matrix()
+                    ),
+                    "between_candidate_support_overlap_off_diagonal": (
+                        self.between_candidate_overlap[timestep].off_diagonal_summary()
+                    ),
+                }
+            )
+        transitions = []
+        for transition in range(self.timesteps - 1):
+            transitions.append(
+                {
+                    "transition": f"t{transition}_to_t{transition + 1}",
+                    "live_parent_count": int(self.transition_live_parent_counts[transition]),
+                    "metric_population": (
+                        f"same-candidate supports for samples live at t={transition + 1}"
+                    ),
+                    "same_candidate_temporal_cosine": self.transition["cosine"][transition].summary(),
+                    "same_candidate_temporal_overlap": self.transition["overlap"][transition].summary(),
+                    "top_m_jaccard": {
+                        "m": TEMPORAL_SUPPORT_TOP_M,
+                        **self.transition["top_m_jaccard"][transition].summary(),
+                    },
+                    "entropy_change": self.transition["entropy_change"][transition].summary(),
+                    "effective_size_change": self.transition["effective_size_change"][transition].summary(),
+                    "support_l1_change": self.transition["l1_change"][transition].summary(),
+                    "support_l2_change": self.transition["l2_change"][transition].summary(),
+                    "argmax_token_changed_fraction": (
+                        int(self.argmax_changed[transition])
+                        / int(self.argmax_total[transition])
+                        if int(self.argmax_total[transition]) > 0
+                        else None
+                    ),
+                    "candidate_displacement_cosine_matrix": (
+                        self.displacement_alignment[transition].nullable_matrix()
+                    ),
+                    "candidate_displacement_cosine_off_diagonal": (
+                        self.displacement_alignment[transition].off_diagonal_summary()
+                    ),
+                    "conditioned_on_previous_decision": {
+                        condition: {
+                            name: stats[transition].summary()
+                            for name, stats in metrics.items()
+                        }
+                        for condition, metrics in self.conditioned.items()
+                    },
+                }
+            )
+        return {
+            "enable_dynamic_regrounding": bool(self.dynamic_regrounding),
+            "support_source": (
+                "Ground(I_k, Z_t) recomputed before every recurrent decision"
+                if self.dynamic_regrounding
+                else "Ground(I_k, A) computed once and reused"
+            ),
+            "top_m_jaccard_m": TEMPORAL_SUPPORT_TOP_M,
+            "per_timestep": per_timestep,
+            "per_transition": transitions,
+            "interpretation_limit": (
+                "support motion alone does not establish semantic residual behavior; "
+                "inspect displacement alignment and functional/retrieval consequences"
+            ),
+        }
+
+
 class ValidationDiagnosticAccumulator:
     def __init__(self, candidates: int = 4, timesteps: int = 3) -> None:
         self.candidates = candidates
@@ -411,6 +686,7 @@ class ValidationDiagnosticAccumulator:
         self.executed_edits = 0
         self.repeated_queries = 0
         self.visual_tokens: int | None = None
+        self.temporal_grounding = TemporalGroundingAccumulator(candidates, timesteps)
 
         self.support_fraction = [_DistributionStats() for _ in range(candidates)]
         self.support_entropy = [_DistributionStats() for _ in range(candidates)]
@@ -505,6 +781,7 @@ class ValidationDiagnosticAccumulator:
             raise ValueError("diagnostic accumulator/model K or Tmax mismatch")
         self.queries += batch_size
         self.visual_tokens = tokens
+        self.temporal_grounding.update(output)
 
         selection = _selection_batch_counts(output)
         actions = selection["actions"]
@@ -799,9 +1076,9 @@ class ValidationDiagnosticAccumulator:
         overlap_summary = self.support_overlap.off_diagonal_summary()
         visual_mass = self.real_visual_mass.mean()
         return {
-            "support_recomputed_each_timestep": False,
-            "support_static_by_current_architecture": True,
-            "empirical_recurrence_stability_measured": False,
+            "support_recomputed_each_timestep": bool(output_dynamic := self.temporal_grounding.dynamic_regrounding),
+            "support_static_by_current_architecture": not bool(output_dynamic),
+            "empirical_recurrence_stability_measured": bool(output_dynamic),
             "visual_token_count": self.visual_tokens,
             "spatial_support_mass": float(visual_mass.mean()),
             "per_candidate_spatial_support_mass": visual_mass.tolist(),
@@ -856,15 +1133,23 @@ class ValidationDiagnosticAccumulator:
                 "diagnostic only, not semantic ownership"
             ),
             "metric_population": (
-                "all validation queries; one static support map per query/candidate"
+                "all validation queries; backward-compatible t0 support map per query/candidate; "
+                "use temporal_grounding_diagnostics for R1c1 timestep populations"
             ),
         }
+
+    def temporal_grounding_summary(self) -> dict[str, Any]:
+        return self.temporal_grounding.summary()
 
     def visual_null_summary(self) -> dict[str, Any]:
         if not self.visual_null_seen:
             return {
                 "enabled": False,
-                "architecture_generation": "legacy_r0_or_r1a",
+                "architecture_generation": (
+                    "r1c1_dynamic_current_state_reground_v1"
+                    if self.temporal_grounding.dynamic_regrounding
+                    else "legacy_r0_or_r1a"
+                ),
                 "metric_population": "not applicable: checkpoint has no Visual NULL",
             }
         null_values = self.null_probability.values()
@@ -1420,6 +1705,33 @@ class NullTargetUtilityAccumulator:
 
 def diagnostic_definitions() -> dict[str, dict[str, Any]]:
     return {
+        "temporal_support_change": {
+            "definition": (
+                "for fixed candidate k, compare pi[t,k]=Ground(I_k,Z_t) with "
+                "pi[t+1,k]=Ground(I_k,Z_t+1) using cosine, probability overlap, "
+                "top-M Jaccard, L1/L2 displacement, entropy/effective-size change, "
+                "and argmax-token movement"
+            ),
+            "population": (
+                "samples live before the later timestep; decision-conditioned summaries "
+                "also retain same-candidate, other-candidate, and STOP populations"
+            ),
+            "tensor_shape_before_reduction": "temporal supports [B,T,K,N]",
+            "reduction_axes": "token axis N, then distribution over lineage-valid B,K",
+            "interpretation_limitation": (
+                "motion can be self-induced key drift or shared jitter; it is not semantic "
+                "success without functional/retrieval evidence"
+            ),
+        },
+        "candidate_support_displacement_alignment": {
+            "definition": "cos(pi[t+1,i]-pi[t,i], pi[t+1,j]-pi[t,j])",
+            "population": "candidate pairs of samples live before the later timestep",
+            "tensor_shape_before_reduction": "support displacement [B_live,K,N]",
+            "reduction_axes": "cosine over N; B mean with KxK matrix retained",
+            "interpretation_limitation": (
+                "high alignment indicates co-motion, not necessarily identical semantics"
+            ),
+        },
         "visual_null_probability": {
             "definition": (
                 "p_null[t,k]=1-sigmoid(G_app(context[t,k])); it is a dynamic Bernoulli "
@@ -1770,6 +2082,7 @@ _LEGACY_CANONICAL_MODEL_CONFIG = {
     "enable_dynamic_applicability": False,
     "initial_applicability": 0.98,
     "grounding_normalization": "entmax15",
+    "enable_dynamic_regrounding": False,
 }
 _SERIALIZED_MODEL_CONFIG_KEYS = (
     "model_config",
@@ -1829,6 +2142,13 @@ def _resolve_checkpoint_model_config(
         int(factor_output.shape[0]) if isinstance(factor_output, Tensor) else None
     )
     serialized = _serialized_model_config(checkpoint)
+    metadata = checkpoint.get("metadata")
+    stored_generation = (
+        metadata.get("architecture_generation")
+        if isinstance(metadata, Mapping)
+        else None
+    )
+    serialized_dynamic_regrounding = False
 
     if serialized is None:
         if inferred_dynamic_applicability:
@@ -1844,6 +2164,15 @@ def _resolve_checkpoint_model_config(
         )
     else:
         required_fields = set(_SELF_DESCRIBING_MODEL_CONFIG_FIELDS)
+        serialized_dynamic_regrounding = bool(
+            serialized.get("enable_dynamic_regrounding", False)
+        )
+        if stored_generation == "r1c1_dynamic_current_state_reground_v1":
+            required_fields.add("enable_dynamic_regrounding")
+        if serialized_dynamic_regrounding:
+            required_fields.update(
+                {"enable_dynamic_regrounding", "grounding_normalization"}
+            )
         if inferred_dynamic_applicability:
             required_fields.update(
                 {
@@ -1887,6 +2216,22 @@ def _resolve_checkpoint_model_config(
             inferred_factor_dim,
         }:
             raise ValueError("serialized factor_dim conflicts with state dict")
+        if serialized_dynamic_regrounding and inferred_dynamic_applicability:
+            raise ValueError(
+                "R1c1 checkpoint cannot combine dynamic regrounding with R1b applicability"
+            )
+        if serialized_dynamic_regrounding and stored_generation != (
+            "r1c1_dynamic_current_state_reground_v1"
+        ):
+            raise ValueError(
+                "dynamic-regrounding checkpoint has missing or conflicting architecture generation"
+            )
+        if stored_generation == "r1c1_dynamic_current_state_reground_v1" and not (
+            serialized_dynamic_regrounding
+        ):
+            raise ValueError(
+                "R1c1 architecture metadata requires enable_dynamic_regrounding=true"
+            )
 
     if int(replay_values["max_steps"]) != 3:
         raise ValueError("R0 diagnostic runner supports canonical Tmax=3 checkpoints")
@@ -1913,6 +2258,9 @@ def _resolve_checkpoint_model_config(
         ),
         "initial_applicability": float(replay_values["initial_applicability"]),
         "grounding_normalization": str(replay_values["grounding_normalization"]),
+        "enable_dynamic_regrounding": bool(
+            replay_values["enable_dynamic_regrounding"]
+        ),
     }
     provenance: dict[str, Any] = {
         "source": source,
@@ -1925,14 +2273,21 @@ def _resolve_checkpoint_model_config(
             "factor_dim": inferred_factor_dim,
             "enable_visual_null": False,
             "enable_dynamic_applicability": inferred_dynamic_applicability,
+            "enable_dynamic_regrounding": (
+                "not inferable from state dict; resolved from serialized model config"
+            ),
         },
         "resolved_diagnostic_config": resolved,
         "diagnostic_inference_override": {"selector_gumbel_noise": False},
         "warning": warning,
         "architecture_generation": (
-            "r1b_dynamic_applicability_gate_v2"
-            if inferred_dynamic_applicability
-            else "legacy_r0_or_r1a"
+            "r1c1_dynamic_current_state_reground_v1"
+            if resolved["enable_dynamic_regrounding"]
+            else (
+                "r1b_dynamic_applicability_gate_v2"
+                if inferred_dynamic_applicability
+                else "legacy_r0_or_r1a"
+            )
         ),
     }
     if not fully_self_describing:
@@ -2404,43 +2759,71 @@ def _checkpoint_replay_guard(
     tolerance: float = 1e-4,
 ) -> dict[str, Any]:
     generation = provenance.get("architecture_generation")
-    if generation != "r1b_dynamic_applicability_gate_v2":
+    supported_generations = {
+        "r1b_dynamic_applicability_gate_v2",
+        "r1c1_dynamic_current_state_reground_v1",
+    }
+    if generation not in supported_generations:
         return {
             "applicable": False,
             "architecture_generation": generation,
             "trusted_r1b_replay": None,
+            "trusted_r1c1_replay": None,
         }
     resolved = provenance.get("resolved_diagnostic_config")
     if not isinstance(resolved, Mapping):
         raise ValueError("R1b replay has no resolved model config")
     checks = {
         "query_cap_is_1000": float(resolved.get("query_cap", -1.0)) == 1000.0,
-        "dynamic_applicability_enabled": (
-            resolved.get("enable_dynamic_applicability") is True
-        ),
-        "initial_applicability_is_0.98": (
-            float(resolved.get("initial_applicability", -1.0)) == 0.98
-        ),
         "checkpoint_fully_self_describing": (
             provenance.get("fully_self_describing") is True
         ),
     }
+    if generation == "r1b_dynamic_applicability_gate_v2":
+        checks.update(
+            {
+                "dynamic_applicability_enabled": (
+                    resolved.get("enable_dynamic_applicability") is True
+                ),
+                "initial_applicability_is_0.98": (
+                    float(resolved.get("initial_applicability", -1.0)) == 0.98
+                ),
+                "dynamic_regrounding_disabled": (
+                    resolved.get("enable_dynamic_regrounding", False) is False
+                ),
+            }
+        )
+    else:
+        checks.update(
+            {
+                "dynamic_regrounding_enabled": (
+                    resolved.get("enable_dynamic_regrounding") is True
+                ),
+                "dynamic_applicability_disabled": (
+                    resolved.get("enable_dynamic_applicability") is False
+                ),
+                "grounding_is_entmax15": (
+                    resolved.get("grounding_normalization") == "entmax15"
+                ),
+            }
+        )
     failed = [name for name, passed in checks.items() if not passed]
     if failed:
-        raise ValueError(f"untrusted R1b checkpoint replay: failed {failed}")
+        raise ValueError(f"untrusted {generation} checkpoint replay: failed {failed}")
     saved_metric = checkpoint.get("metric")
     if not isinstance(saved_metric, (int, float)):
-        raise ValueError("R1b checkpoint has no saved selection metric")
+        raise ValueError(f"{generation} checkpoint has no saved selection metric")
     metric_error = abs(float(saved_metric) - replayed_mean_recall)
     if metric_error > tolerance:
         raise ValueError(
-            "R1b replayed FULL Mean Recall does not match saved checkpoint metric: "
+            f"{generation} replayed FULL Mean Recall does not match saved checkpoint metric: "
             f"saved={saved_metric}, replayed={replayed_mean_recall}, error={metric_error}"
         )
     return {
         "applicable": True,
         "architecture_generation": generation,
-        "trusted_r1b_replay": True,
+        "trusted_r1b_replay": generation == "r1b_dynamic_applicability_gate_v2",
+        "trusted_r1c1_replay": generation == "r1c1_dynamic_current_state_reground_v1",
         "checks": checks,
         "saved_checkpoint_metric": float(saved_metric),
         "replayed_full_mean_recall": replayed_mean_recall,
@@ -2538,6 +2921,9 @@ def main() -> None:
         category_selection = category_accumulator.selection_summary()
         category_intent = category_accumulator.intent_summary()
         category_grounding = category_accumulator.grounding_summary()
+        category_temporal_grounding = (
+            category_accumulator.temporal_grounding_summary()
+        )
         category_functional = category_accumulator.functional_summary()
         category_dynamic = category_accumulator.dynamic_summary()
         category_specialization = category_accumulator.specialization_summary()
@@ -2546,6 +2932,7 @@ def main() -> None:
             "selection_diagnostics": category_selection,
             "intent_diagnostics": category_intent,
             "grounding_diagnostics": category_grounding,
+            "temporal_grounding_diagnostics": category_temporal_grounding,
             "visual_null_diagnostics": {
                 **category_accumulator.visual_null_summary(),
                 "offline_target_relative_utility": category_null_utility.summary(),
@@ -2572,9 +2959,85 @@ def main() -> None:
     selection = global_accumulator.selection_summary()
     intent = global_accumulator.intent_summary()
     grounding = global_accumulator.grounding_summary()
+    temporal_grounding = global_accumulator.temporal_grounding_summary()
     functional = global_accumulator.functional_summary()
     dynamic = global_accumulator.dynamic_summary()
     specialization = global_accumulator.specialization_summary()
+    selected_path = global_selected_path.summary()
+    current_delta_q = [
+        item.get("mean_delta_q_norm") for item in functional["per_timestep"]
+    ]
+    current_selected_gain = [
+        item["delta_target_cosine_similarity"]["mean"]
+        for item in selected_path["target_similarity_improvement_by_timestep"]
+    ]
+    current_support_cosine = [
+        item["between_candidate_support_cosine_off_diagonal"]["mean"]
+        for item in temporal_grounding["per_timestep"]
+    ]
+    r1a_comparison = {
+        "full_mean_recall": {
+            "r1c1": float(global_controls["full"]["mean_recall"]),
+            "r1a": TRUSTED_R1A_BASELINE["full_mean_recall"],
+            "difference": float(global_controls["full"]["mean_recall"])
+            - TRUSTED_R1A_BASELINE["full_mean_recall"],
+        },
+        "mean_delta_q_norm_by_timestep": {
+            "r1c1": current_delta_q,
+            "r1a": TRUSTED_R1A_BASELINE["mean_delta_q_norm_by_timestep"],
+            "difference": [
+                None if current is None else current - baseline
+                for current, baseline in zip(
+                    current_delta_q,
+                    TRUSTED_R1A_BASELINE["mean_delta_q_norm_by_timestep"],
+                    strict=True,
+                )
+            ],
+        },
+        "selected_target_relative_gain_by_timestep": {
+            "r1c1": current_selected_gain,
+            "r1a": TRUSTED_R1A_BASELINE[
+                "selected_target_relative_gain_by_timestep"
+            ],
+            "difference": [
+                None if current is None else current - baseline
+                for current, baseline in zip(
+                    current_selected_gain,
+                    TRUSTED_R1A_BASELINE[
+                        "selected_target_relative_gain_by_timestep"
+                    ],
+                    strict=True,
+                )
+            ],
+        },
+        "between_candidate_support_cosine_by_timestep": {
+            "r1c1": current_support_cosine,
+            "r1a_static_reference": TRUSTED_R1A_BASELINE[
+                "pairwise_support_cosine"
+            ],
+        },
+        "mean_executed_edits": {
+            "r1c1": selection["mean_executed_edit_count"],
+            "r1a": TRUSTED_R1A_BASELINE["mean_executed_edits"],
+            "difference": selection["mean_executed_edit_count"]
+            - TRUSTED_R1A_BASELINE["mean_executed_edits"],
+        },
+        "repeated_candidate_trajectory_fraction": {
+            "r1c1": selection[
+                "fraction_queries_with_repeated_candidate_selections"
+            ],
+            "r1a": TRUSTED_R1A_BASELINE[
+                "repeated_candidate_trajectory_fraction"
+            ],
+            "difference": selection[
+                "fraction_queries_with_repeated_candidate_selections"
+            ]
+            - TRUSTED_R1A_BASELINE["repeated_candidate_trajectory_fraction"],
+        },
+        "interpretation_limit": (
+            "historical comparison only; no value is used by training or selection"
+        ),
+    }
     metadata = checkpoint["metadata"]
     report = {
         "checkpoint": str(args.checkpoint.resolve()),
@@ -2620,6 +3083,7 @@ def main() -> None:
         "intent_diagnostics": intent,
         "selection_diagnostics": selection,
         "grounding_diagnostics": grounding,
+        "temporal_grounding_diagnostics": temporal_grounding,
         "visual_null_diagnostics": {
             **global_accumulator.visual_null_summary(),
             "offline_target_relative_utility": global_null_utility.summary(),
@@ -2630,12 +3094,17 @@ def main() -> None:
         "same_parent_counterfactual_diagnostics": global_controls[
             "counterfactual_same_parent_by_timestep"
         ],
-        "selected_path_marginal_diagnostics": global_selected_path.summary(),
+        "selected_path_marginal_diagnostics": selected_path,
         "specialization_matrices": specialization,
         "failure_flags": _failure_flags(
             selection, grounding, functional, global_controls, specialization
         ),
         "diagnostic_definitions": diagnostic_definitions(),
+        "trusted_r1a_baseline": {
+            **TRUSTED_R1A_BASELINE,
+            "status": "fixed historical comparison values; not a training objective",
+            "automatic_comparison": r1a_comparison,
+        },
         "omitted_controls": {
             "all_candidate_sequential_0_1_2_3": (
                 "omitted: canonical Tmax=3 cannot execute four sequential candidates "
