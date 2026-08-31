@@ -1,1559 +1,1647 @@
-# CIR IAG-SRME R1b — Dynamic Applicability Gate Negative-Result Diagnostic README
+# CIR IAG-SRME R1c1 — Dynamic Current-State Re-Grounding Diagnostic README
 
 **Date:** 2026-08-31  
-**Repository:** `Le-Minh-Nhut/cir`  
-**Branch:** `exp/e2e-iag-srme-r1b-visual-null-confidence-gate`  
-**Audited implementation HEAD before full training:** `d69d0c7eb148aa15a24a309fe1afc724c86a8860`  
-**Architecture generation:** `r1b_dynamic_applicability_gate_v2`  
+**Branch:** `exp/e2e-iag-srme-r1c1-dynamic-reground`  
+**Architecture generation:** `r1c1_dynamic_current_state_reground_v1`  
+**Dataset / protocol:** FashionIQ original  
 **Backbone:** `qihoo360/fg-clip-base`  
 **Backbone revision:** `454d76372c2cf5eb48fa0d871fd0534481484d97`  
-**Protocol:** `fashioniq_original`  
-**Caption policy:** `ordered_and`  
-**Training precision:** AMP FP16 with explicit FP32 applicability/actuator islands  
-**K:** 4  
-**Tmax:** 3  
-**lambda_z:** 0.1  
+**Training precision:** FP16  
+**K:** 4 candidates  
+**Tmax:** 3 recurrent decisions  
 **query_cap:** 1000.0  
-**Best checkpoint:** `outputs/2026-08-31/02-36-13/best.pt`  
-**Best checkpoint epoch:** 3  
-**Best Mean Recall:** **39.011857**  
-**Diagnostic replay Mean Recall:** **39.011857**  
-**Checkpoint replay error:** `7.1e-15`  
-**Mechanical verdict:** **PASS**  
-**Scientific R1b verdict:** **FAIL / NEGATIVE RESULT**  
-**Next clean experiment:** **R1c1 — dynamic current-state re-grounding**
+**Grounding normalization:** Entmax-1.5  
+**Dynamic applicability:** OFF  
+**Visual NULL:** OFF  
 
 ---
 
 # 1. Executive conclusion
 
-R1b was designed to test a narrow causal hypothesis:
+R1c1 was designed as a clean causal test of the hypothesis:
 
-\[
-\boxed{
-\text{forced visual applicability / compulsory execution contributes materially to late over-edit}
-}
-\]
+> The main remaining collapse after R1a is caused by reusing a static visual WHERE across recurrent steps. If each fixed text-derived action is re-grounded on the current edited visual state `Z_t`, candidate specialization and recurrent utility should improve.
 
-The corrected R1b v2 mechanism keeps the R1a spatial WHERE fixed and adds a dynamic state-conditioned scalar applicability gate:
-
-\[
-\pi_k = \operatorname{Entmax}_{1.5}(\ell^{vis}_k),
-\]
-
-\[
-c_{t,k}
-=
-\sigma\!\left(
-G_{\rm app}(h_{t,k})
-\right),
-\]
-
-\[
-\Delta Z_{t,k,n}
-=
-\lambda_z\,
-c_{t,k}\,
-S_{k,n}\,
-\tanh(u_{t,k,n}).
-\]
-
-Conceptually:
+The intervention was deliberately narrow:
 
 ```text
-Entmax support π_k     = WHERE
-dynamic c_t,k          = WHETHER / applicability
+R1a
++
+fixed WHAT
++
+dynamic current-state WHERE
 ```
-
-The implementation and numerical pathway are now mechanically healthy:
-
-- applicability receives gradients;
-- applicability parameters update;
-- confidence remains FP32;
-- the confidence scalar survives into the actual `DeltaZ`;
-- candidate state and committed recurrent state preserve the continuous gate effect;
-- same-parent construction remains exact;
-- target is not used in forward execution;
-- checkpoint replay is self-describing and exact.
-
-However, the trained model does **not** use the gate in the intended semantic way.
-
-The central result is:
-
-\[
-\boxed{
-c_{t,k}\approx 0.982
-\text{ for almost every candidate and timestep}
-}
-\]
 
 with:
 
 \[
-\boxed{
-p^\varnothing_{t,k}=1-c_{t,k}\approx 0.018
-}
+I_k = \operatorname{Intent}(q_k,T)
 \]
 
-and essentially no meaningful suppression after an action has already been executed.
+computed once per rollout, and:
 
-Most importantly, the late selected transition became **more harmful**, not less harmful:
+\[
+\pi_{t,k}
+=
+\operatorname{Ground}(I_k,Z_t)
+\]
 
-```text
-R1a t2 selected target gain:  -0.00261
-R1b t2 selected target gain:  -0.00682
-```
+recomputed at every timestep.
 
-Mean executed depth increased:
+No dynamic re-proposal, diversity regularizer, teacher, RDMReg, VISReg, DPP, semantic residual, RL, or new STOP objective was added.
 
-```text
-R1a mean edits: 2.866 / 3
-R1b mean edits: 2.961 / 3
-```
-
-and repeated candidate trajectories increased:
+The implementation is mechanically valid. The GPU canary passed:
 
 ```text
-R1a repeated-identity trajectories: 95.74%
-R1b repeated-identity trajectories: 99.15%
+attempted steps:                         100
+successful optimizer steps:              96
+AMP-overflow skipped steps:               4
+grounder nonzero-gradient fraction:     1.0
+grounder parameter movement:            yes
+dynamic regrounding:                    true
+dynamic applicability:                  false
+mechanical_status:                      PASS
 ```
 
-Therefore R1b does **not** support the hypothesis that a learned scalar visual applicability gate, under the current information path and objective, is sufficient to solve late over-edit.
+However, the scientific result is negative.
 
-The correct interpretation is:
+The best checkpoint reached:
+
+```text
+epoch:        4
+Mean Recall: 38.754133
+R@10:        27.583865
+R@50:        49.924401
+```
+
+which is effectively identical to R1a:
+
+```text
+R1a best Mean Recall: 38.764146
+R1c1 best Mean Recall: 38.754133
+difference:             -0.010013
+```
+
+Therefore dynamic current-state re-grounding alone produced no meaningful retrieval gain.
+
+More importantly, the intended candidate-specific WHERE specialization did not emerge.
+
+At the best checkpoint:
+
+```text
+between-candidate support cosine:
+t0 = 0.999766
+t1 = 0.999755
+t2 = 0.999740
+```
+
+The four candidate supports remain almost identical at every timestep.
+
+At the late checkpoint, the model does learn more state-dependent support movement, but the movement is common-mode rather than candidate-specific. The supports move together, while candidate effects become even more parallel.
+
+The correct diagnosis is therefore:
 
 \[
 \boxed{
-\text{R1b is mechanically valid but scientifically negative.}
+\text{R1c1 converts static clones into moving clones rather than solving candidate collapse.}
 }
 \]
 
-This branch should be **frozen**, not hyperparameter-fished.
+A second independent failure appears during late training:
+
+\[
+\boxed{
+\text{the scorer / STOP policy becomes prematurely conservative.}
+}
+\]
+
+At epoch 13:
+
+```text
+FULL Mean Recall:        27.651150
+best REPEAT Mean Recall: 32.377768
+gap:                     +4.726618
+```
+
+Forced continuation with one repeated candidate substantially outperforms the learned FULL policy. Thus the late checkpoint is not simply failing because recurrent computation is useless; it is also failing because the learned policy stops too early.
+
+R1c1 should therefore be frozen as a **mechanically valid but scientifically negative causal experiment**.
+
+The next clean experiment should be R1c2: dynamic current-state re-proposal / dynamic WHAT, not a rescue stack on this branch.
 
 ---
 
-# 2. Why R1b existed
+# 2. Why R1c1 existed
 
-R1a established that the previous global cumulative query cap was a major causal bottleneck.
+R0 showed that the token-space recurrent editor remained active while retrieval-space effects collapsed rapidly:
 
-R1a changed only:
+```text
+R0 ΔZ:
+~2.262 -> ~2.264 -> ~2.301
 
-```yaml
-model:
-  query_cap: 0.5 -> 1000.0
+R0 Δq:
+~0.3665 -> ~0.0825 -> ~0.0190
 ```
 
-and recovered recurrent retrieval-space effect magnitude.
+This indicated that recurrent token edits were not necessarily dead, but their retrieval-space consequences were being strongly attenuated.
 
-R1a best checkpoint:
+R1a causally isolated the global query cap:
+
+```yaml
+query_cap:
+  0.5 -> 1000.0
+```
+
+and restored healthy late-step retrieval effects.
+
+R1a best:
 
 ```text
 Mean Recall = 38.764146
+
+Δq norm:
+t0 = 0.3366
+t1 = 0.2724
+t2 = 0.1971
+
+retention:
+t1/t0 = 80.9%
+t2/t0 = 58.6%
+t2/t1 = 72.4%
+```
+
+R1a also demonstrated that recurrent depth itself can be useful:
+
+```text
+same-parent mean-candidate MR:
+t0 ≈ 24.60
+t1 ≈ 34.30
+t2 ≈ 39.03
+```
+
+However, candidate decomposition remained collapsed:
+
+```text
+intent cosine   ≈ 0.950
+support cosine  ≈ 0.99984
+support overlap ≈ 0.9951
+ΔZ cosine       ≈ 0.982
+Δq cosine       ≈ 0.98
+```
+
+The four action candidates were still highly redundant.
+
+R1b tested a different hypothesis:
+
+> Keep WHERE static, but learn a dynamic scalar WHETHER / applicability gate.
+
+R1b was mechanically healthy but scientifically negative:
+
+```text
+best MR ≈ 39.012
+confidence ≈ 0.982 nearly everywhere
+p_null ≈ 0.018 nearly everywhere
+late selected utility became worse than R1a
+```
+
+Thus the next clean structural question was:
+
+> Is the problem that the same static support is reused even after the visual state changes?
+
+R1c1 was created to answer only that question.
+
+---
+
+# 3. R1c1 scientific contract
+
+R1c1 preserves R1a everywhere except the grounding source.
+
+## 3.1 Fixed WHAT
+
+The text-derived candidate intent is computed once:
+
+\[
+I_k
+=
+\operatorname{IntentEncoder}(q_k,T)
+\]
+
+for:
+
+\[
+k\in\{1,2,3,4\}.
+\]
+
+The candidate identity and action proposal are fixed throughout the rollout.
+
+R1c1 does **not** ask:
+
+> What action is still missing now?
+
+It only asks:
+
+> Given the same original action identity, where should this action look in the current state now?
+
+## 3.2 Dynamic WHERE
+
+For each recurrent timestep:
+
+\[
+Z_t \in \mathbb{R}^{N\times d}
+\]
+
+is the current visual token state.
+
+The grounder recomputes:
+
+\[
+\ell_{t,k,n}
+=
+\frac{
+(W_Q I_k)^\top
+(W_K Z_{t,n})
+}{
+\sqrt{d_g}
+}
+\]
+
+and:
+
+\[
+\pi_{t,k}
+=
+\operatorname{Entmax}_{1.5}(\ell_{t,k,:}).
+\]
+
+Hence:
+
+```text
+R1a:
+π_k = Ground(I_k, A)
+and reuse π_k for all t
+
+R1c1:
+π_t,k = Ground(I_k, Z_t)
+and recompute every t
+```
+
+The immutable anchor remains:
+
+\[
+A = Z_0.
+\]
+
+Only the WHERE input changes from `A` to the current recurrent state `Z_t`.
+
+## 3.3 Grounded evidence
+
+Using dynamic support:
+
+\[
+O_{t,k}
+=
+\sum_n
+\pi_{t,k,n}
+W_O A_n
+\]
+
+\[
+C_{t,k}
+=
+\sum_n
+\pi_{t,k,n}
+W_C Z_{t,n}
+\]
+
+\[
+D_{t,k}
+=
+\sum_n
+\pi_{t,k,n}
+W_D(Z_{t,n}-A_n).
+\]
+
+These are fused with the fixed candidate intent and sent through the same context/editor/scorer pathway as R1a.
+
+## 3.4 Same-parent counterfactual contract
+
+All candidate consequences at timestep `t` branch from the same current parent:
+
+\[
+\widehat Z_{t+1}^{(k)}
+=
+Z_t+\Delta Z_{t,k}.
+\]
+
+This invariant was preserved exactly.
+
+Therefore candidate comparisons remain valid same-parent counterfactuals.
+
+---
+
+# 4. What R1c1 explicitly did NOT change
+
+The branch did not add or modify:
+
+```text
+dynamic WHAT
+dynamic action re-proposal
+R1b applicability
+Visual NULL
+semantic residual
+DPP / FuncDPP
+RDMReg
+VISReg
+variance-floor loss
+orthogonality loss
+teacher grounding
+LLM / MLLM supervision
+RL / DQN
+new STOP loss
+new selector
+new scorer
+new editor
+candidate-specific editor
+candidate-specific grounder
+query-cap tuning
+timestep decay
+target-conditioned execution
+```
+
+This is important because the R1c1 result can be interpreted causally:
+
+\[
+\text{R1c1} - \text{R1a}
+\approx
+\text{effect of current-state dynamic WHERE}.
+\]
+
+---
+
+# 5. Implementation and diagnostic audit status
+
+Before training, the R1c1 branch was audited for causal contamination.
+
+The canonical config is:
+
+```yaml
+query_cap: 1000.0
+enable_dynamic_regrounding: true
+enable_dynamic_applicability: false
+enable_visual_null: false
+grounding_normalization: entmax15
+```
+
+The forward path has:
+
+```text
+IntentEncoder calls: 1 per rollout
+Grounder calls:      Tmax = 3 per rollout
+Applicability calls: 0
+```
+
+The output trace separates:
+
+```text
+raw_spatial_supports
+effective_spatial_supports
+spatial_supports
+temporal_supports
 ```
 
 with:
 
 ```text
-Deltaq norm:
-t0 = 0.3366
-t1 = 0.2724
-t2 = 0.1971
+raw_spatial_supports
+=
+actual Ground(I, Z_t)
+
+effective_spatial_supports
+=
+support consumed by diagnostic-control scorer semantics
+
+temporal_supports
+=
+stack of raw Ground(I, Z_t)
 ```
 
-and retention:
+This prevents CLONE/MEAN diagnostic controls from contaminating temporal grounding analysis.
+
+The target firewall was also strengthened:
 
 ```text
-t1/t0 = 80.9%
-t2/t0 = 58.6%
+IAGSRMECore.forward has no target input.
 ```
 
-This showed that multi-step recurrence itself could be useful once retrieval-space updates were no longer compressed.
+Target-relative utilities are computed only after the target-free rollout already exists.
 
-However, R1a also exposed a new problem:
-
-```text
-selected target-relative gain:
-t0 = +0.07424
-t1 = +0.02488
-t2 = -0.00261
-```
-
-The third edit was slightly harmful on average while STOP remained rare.
-
-The R1b causal question was therefore deliberately small:
-
-> If an action is no longer applicable after prior recurrent edits, can the model learn to suppress that action through a state-dependent visual applicability signal without changing WHAT, WHERE, STOP, losses, or the recurrence itself?
-
----
-
-# 3. R1b experiment contract
-
-R1b was not intended to solve every remaining collapse mode.
-
-It preserved:
+Checkpoint replay guard confirms:
 
 ```text
-K = 4
-Tmax = 3
+architecture_generation = r1c1_dynamic_current_state_reground_v1
 query_cap = 1000
-lambda_z = 0.1
-same FG-CLIP Base backbone
-same FashionIQ-original protocol
-same intent generation
-same static spatial grounding
-same grounded reader
-same context fusion
-same editor direction network
-same readout
-same scorer
-same selector
-same STOP formulation
-same terminal loss
-same marginal loss
-same optimizer/training policy
-same same-parent candidate construction
+dynamic_regrounding = true
+dynamic_applicability = false
+grounding = entmax15
+saved metric == replayed metric
 ```
 
-The intended scientific intervention was only:
-
-```text
-fixed WHERE
-+
-dynamic state-conditioned WHETHER
-```
-
-R1b explicitly did **not** introduce:
-
-- dynamic re-grounding;
-- dynamic re-proposal;
-- semantic residuals;
-- claim consumption;
-- DPP/diversity loss;
-- target-aware teacher;
-- new STOP loss;
-- RL;
-- planning;
-- new candidate ownership.
-
-This isolation matters because the result is a causal negative result, not an ambiguous multi-mechanism failure.
+Both BEST and LATE diagnostic replays have zero metric discrepancy.
 
 ---
 
-# 4. R1b mechanism chronology
+# 6. GPU canary
 
-## 4.1 Original R1b v1: N+1 Entmax NULL
-
-The first R1b formulation added a NULL coordinate directly into Entmax:
-
-\[
-P_k^{full}
-=
-\operatorname{Entmax}_{1.5}
-(
-[\ell^{vis}_{k,1:N},\ell^{null}_k]
-).
-\]
-
-Then:
-
-\[
-p^\varnothing_k=P_{k,\varnothing},
-\qquad
-c_k=1-p^\varnothing_k.
-\]
-
-This exposed an avoidable sparse-support failure.
-
-Observed initial statistics included:
-
-```text
-visual logit mean:  0.200777
-visual logit std:   0.191942
-visual logit min:  -0.305997
-visual logit max:   0.849577
-initial NULL logit: 0.0
-mean p_null:        ~8.738e-05
-```
-
-A canary showed:
-
-```text
-step 3 NULL gradient: nonzero
-step 4 NULL gradient: exactly zero
-```
-
-This did not prove permanent global death, but it demonstrated that Entmax could exclude the NULL coordinate from the active support and create exact local zero probability / zero gradient.
-
-That mechanism was therefore superseded.
-
----
-
-## 4.2 Corrected R1b v2: Entmax WHERE + sigmoid WHETHER
-
-The final scientific formulation became:
-
-\[
-\pi_k
-=
-\operatorname{Entmax}_{1.5}
-(\ell^{vis}_{k,1:N}),
-\qquad
-\sum_n\pi_{k,n}=1.
-\]
-
-Spatial support is computed once per rollout.
-
-For timestep \(t\):
-
-\[
-O_k=\sum_n\pi_{k,n}A_n,
-\]
-
-\[
-C_{t,k}=\sum_n\pi_{k,n}Z_{t,n},
-\]
-
-\[
-D_{t,k}=\sum_n\pi_{k,n}(Z_{t,n}-A_n),
-\]
-
-and the existing fused context is:
-
-\[
-h_{t,k}
-=
-\operatorname{Context}
-(I_k,O_k,C_{t,k},D_{t,k}).
-\]
-
-Applicability:
-
-\[
-r_{t,k}
-=
-W_{\rm app}\operatorname{LN}(h_{t,k})
-+b_{\rm app},
-\]
-
-\[
-c_{t,k}=\sigma(r_{t,k}),
-\]
-
-\[
-p^\varnothing_{t,k}=1-c_{t,k}.
-\]
-
-Execution:
-
-\[
-S_{k,n}
-=
-\frac{\pi_{k,n}}
-{\max_j\pi_{k,j}+\epsilon},
-\]
-
-\[
-\boxed{
-\Delta Z_{t,k,n}
-=
-\lambda_z\,
-c_{t,k}\,
-S_{k,n}\,
-\tanh(u_{t,k,n})
-}
-\]
-
-Confidence is applied exactly once.
-
----
-
-# 5. Initialization
-
-The gate starts nearly equivalent to R1a:
-
-\[
-c_0=0.98,
-\qquad
-p^\varnothing_0=0.02.
-\]
-
-The final projection is initialized as:
-
-\[
-W_{\rm app}=0,
-\]
-
-\[
-b_{\rm app}
-=
-\operatorname{logit}(0.98)
-\approx3.8918203.
-\]
-
-Therefore all candidates initially have:
-
-\[
-c_{t,k}=0.98
-\]
-
-before learning.
-
-The purpose was to make R1b initially close to R1a while leaving a usable sigmoid gradient.
-
----
-
-# 6. Mixed-precision correction before full training
-
-The first corrected-v2 GPU canary exposed a second numerical issue.
-
-The gate parameters received gradients and updated, but the forward confidence was repeatedly observed at the same FP16 representable value:
-
-```text
-0.97998046875
-```
-
-because the code effectively performed:
-
-```python
-confidence = torch.sigmoid(logits.float()).to(logits.dtype)
-```
-
-under FP16 autocast.
-
-Around 0.98, adjacent FP16 values are roughly:
-
-```text
-0.9794921875
-0.97998046875
-0.98046875
-```
-
-so sub-`4.88e-4` changes could disappear.
-
-This was corrected before full training.
-
-Final precision path:
-
-```text
-FP16/BF16 contexts allowed
-        ↓
-FP32 LayerNorm
-        ↓
-FP32 applicability projection
-        ↓
-FP32 sigmoid
-        ↓
-FP32 confidence / p_null
-        ↓
-FP32 confidence × edit actuator
-        ↓
-FP32 DeltaZ
-        ↓
-FP32 candidate state
-        ↓
-FP32 committed recurrent state
-```
-
-Post-fix CUDA canary:
-
-```text
-attempted steps: 100
-successful optimizer steps: 94
-nonzero applicability gradient steps: 94 / 94
-applicability gradient fraction: 1.0
-finite: true
-collapse flags: all false
-```
-
-The gate then showed true continuous variation below one FP16 quantum and:
-
-```text
-confidence_to_delta_scale_error = 0.0
-```
-
-Thus the full-training negative result below is **not** explainable by the earlier Entmax-gradient bug or FP16 quantization bug.
-
----
-
-# 7. Full-training result
-
-Training command:
+The R1c1 CUDA canary ran:
 
 ```bash
 CUBLAS_WORKSPACE_CONFIG=:4096:8 \
-python src/train.py \
-  dataset.root=data/FashionIQ \
-  model=iag_srme_r1b_visual_null \
-  experiment=iag_srme_r1b_visual_null \
-  protocol=fashioniq_original
+python src/canary_train_iag_srme.py \
+  --r1c1 \
+  --dataset-root data/FashionIQ \
+  --steps 100 \
+  --precision fp16
 ```
 
-Visible early training trajectory:
+Final mechanical summary:
 
 ```text
-epoch 1: total=1.3729  MR=33.452
-epoch 2: total=0.6495  MR=38.146
-epoch 3: total=0.3812  MR=39.012  <- best checkpoint
-epoch 4: total=0.2436  MR=37.573
-epoch 5: total=0.1798  MR=37.458
+attempted steps:                 100
+successful optimizer steps:       96
+skipped AMP-overflow steps:         4
+first successful step:              3
+final GradScaler scale:          4096
+finite:                          true
+mechanical_status:               PASS
+
+grounding_nonzero_gradient_fraction:
+1.0
+
+grounding_projection parameter Δmax:
+0.0004545
 ```
 
-The main pattern is:
+No R1b applicability pathway was active.
+
+No candidate monopoly, never-STOP condition, or identical-candidate warning triggered at canary level.
+
+The canary therefore established:
+
+\[
+\boxed{
+\text{dynamic current-state grounding is mechanically trainable and receives gradient.}
+}
+\]
+
+However, even the canary already showed very small temporal support motion:
 
 ```text
-training objective continues decreasing
-while
-validation retrieval peaks early and then falls
+same-candidate temporal cosine ≈ 0.9999+
+support L1 change ≈ 0.005 - 0.018
 ```
 
-This is consistent with overfitting/objective misalignment after the best checkpoint.
-
-The diagnostic in this README uses the saved **best epoch-3 checkpoint**, not `last.pt`.
+This was an early warning that dynamic recomputation did not automatically imply meaningful re-grounding.
 
 ---
 
-# 8. Checkpoint provenance and replay
+# 7. Training trajectory
+
+Observed training:
+
+| Epoch | Train total loss | Mean Recall | Best so far |
+|---:|---:|---:|---:|
+| 1 | 1.4152 | 33.007 | 33.007 |
+| 2 | 0.6584 | 37.509 | 37.509 |
+| 3 | 0.3884 | 38.561 | 38.561 |
+| 4 | 0.2392 | **38.754** | **38.754** |
+| 5 | 0.1716 | 36.042 | 38.754 |
+| 6 | 0.1346 | 36.001 | 38.754 |
+| 7 | 0.1094 | 31.921 | 38.754 |
+| 8 | 0.1035 | 31.431 | 38.754 |
+| 9 | 0.0870 | 30.874 | 38.754 |
+| 10 | 0.0738 | 32.922 | 38.754 |
+| 11 | 0.0715 | 31.157 | 38.754 |
+| 12 | 0.0635 | 31.280 | 38.754 |
+| 13 | 0.0606 | **27.651** | 38.754 |
+
+The key pattern is:
+
+\[
+L_{\text{train}}\downarrow
+\qquad
+\text{MR}_{val}\downarrow
+\]
+
+after epoch 4.
+
+This is not a simple optimizer failure.
+
+The model is successfully optimizing the training objective while validation retrieval becomes much worse.
+
+---
+
+# 8. Trusted checkpoints
+
+Run:
+
+```text
+outputs/2026-08-31/13-24-24/
+```
 
 Best checkpoint:
 
 ```text
-outputs/2026-08-31/02-36-13/best.pt
+best.pt
+epoch = 4
+Mean Recall = 38.75413338343302
 ```
 
-Saved metric:
+Late checkpoint:
 
 ```text
-39.01185741027196
+last.pt
+epoch = 13
+Mean Recall = 27.65115002791087
 ```
 
-Diagnostic replay:
-
-```text
-39.011857410271965
-```
-
-Absolute replay error:
-
-```text
-7.105427357601002e-15
-```
-
-Replay guard:
-
-```text
-fully_self_describing_model_config = true
-architecture_generation = r1b_dynamic_applicability_gate_v2
-dynamic_applicability_enabled = true
-initial_applicability = 0.98
-query_cap = 1000
-trusted_r1b_replay = true
-```
-
-Therefore the report is using the intended R1b v2 checkpoint and configuration.
+Both are trusted R1c1 replay checkpoints.
 
 ---
 
-# 9. Headline retrieval comparison: R1a vs R1b
-
-| Metric | R1a | R1b | Delta |
-|---|---:|---:|---:|
-| FULL Mean Recall | 38.7641 | **39.0119** | +0.2477 |
-| MEAN candidate | 38.8160 | **39.0706** | +0.2546 |
-| Best REPEAT | **39.2232** | 39.1267 | -0.0965 |
-| Reference only | 14.5216 | 14.4726 | -0.0490 |
-| Best SINGLE | 24.7096 | **25.2447** | +0.5351 |
-
-R1b slightly improves the headline best-checkpoint FULL MR relative to R1a.
-
-That small improvement is **not** sufficient to declare the mechanism successful because the intended scientific claim concerns learned applicability and late unnecessary execution.
-
-In fact:
-
-```text
-MEAN > FULL
-best REPEAT > FULL
-```
-
-still holds numerically, although only by tiny margins.
-
-R1b therefore does not create strong evidence that dynamic candidate identity or learned applicability contributes unique retrieval value.
-
----
-
-# 10. Same-parent depth remains useful
-
-R1b same-parent candidate retrieval:
-
-```text
-t0 mean candidate MR = 25.1196
-t1 mean candidate MR = 34.7647
-t2 mean candidate MR = 38.9373
-```
-
-Offline same-parent oracle:
-
-```text
-t0 = 25.7276
-t1 = 35.2889
-t2 = 39.4547
-```
-
-This preserves the important R1a conclusion:
-
-\[
-\boxed{
-\text{recurrent depth itself remains useful}
-}
-\]
-
-The problem is not that the later state is useless.
-
-The problem is that the action system does not reliably know when a particular action is no longer useful.
-
----
-
-# 11. Retrieval-space effect magnitude remains healthy
-
-R1b:
-
-```text
-mean ||Deltaq||:
-t0 = 0.349246
-t1 = 0.278385
-t2 = 0.198699
-```
-
-Retention:
-
-```text
-t1/t0 = 0.7971
-t2/t0 = 0.5689
-t2/t1 = 0.7138
-```
+# 9. Retrieval — R1a vs R1c1 BEST
 
 R1a:
 
 ```text
-t1/t0 ≈ 0.809
-t2/t0 ≈ 0.586
+FULL MR = 38.764146
 ```
 
-Therefore R1b preserves the main R1a repair.
-
-There is no return of the R0 late-query attenuation failure.
-
----
-
-# 12. Token-space edit magnitude also remains active
-
-R1b:
+R1c1 BEST:
 
 ```text
-mean ||DeltaZ||:
-t0 = 1.59434
-t1 = 1.59048
-t2 = 1.59051
+FULL MR = 38.754133
 ```
 
-All candidate effects are numerically active:
-
-```text
-active candidate fraction = 1.0
-dead candidate fraction   = 0.0
-```
-
-Again, the failure is not “late actions are numerically dead.”
-
-The actions remain strong.
-
----
-
-# 13. The core scientific failure: late selected utility becomes worse
-
-R1b global selected target-relative improvement:
-
-```text
-t0 = +0.0715569
-t1 = +0.0199435
-t2 = -0.0068204
-```
-
-R1a baseline:
-
-```text
-t0 = +0.07424
-t1 = +0.02488
-t2 = -0.00261
-```
-
-Comparison:
-
-| Timestep | R1a | R1b | Direction |
-|---|---:|---:|---|
-| t0 | +0.07424 | +0.07156 | slightly worse |
-| t1 | +0.02488 | +0.01994 | worse |
-| t2 | -0.00261 | **-0.00682** | clearly worse |
-
-The R1b success criterion required:
-
-```text
-t2 target gain moves toward zero or positive
-```
-
-Instead:
+Difference:
 
 \[
-\boxed{
--0.00261
-\rightarrow
--0.00682
-}
-\]
-
-Therefore the main R1b over-edit hypothesis fails empirically at the best checkpoint.
-
----
-
-# 14. Applicability gate is alive but functionally near-always-ON
-
-Global visual confidence:
-
-```text
-count  = 71,996
-mean   = 0.9822428
-median = 0.9822109
-min    = 0.9791229
-max    = 0.9858897
-std    = 0.0011973
-```
-
-Equivalent dynamic NULL probability:
-
-```text
-mean   = 0.0177572
-median = 0.0177891
-min    = 0.0141103
-max    = 0.0208771
-std    = 0.0011973
-```
-
-The gate is **not constant** and is **not numerically dead**.
-
-However, every observed candidate remains in a very narrow high-confidence regime.
-
-Fractions:
-
-```text
-p_null > 0.10 : 0
-p_null > 0.25 : 0
-p_null > 0.50 : 0
-p_null > 0.80 : 0
-```
-
-Operationally, the trained gate behaves approximately like:
-
-```text
-candidate applicable?  -> YES, ~98%
-candidate applicable?  -> YES, ~98%
-candidate applicable?  -> YES, ~98%
-...
-```
-
-The model therefore learned a state-conditioned scalar but did not learn meaningful abstention/suppression.
-
----
-
-# 15. Applicability barely changes after execution
-
-The most important temporal diagnostic asks:
-
-> After an action has actually been executed, does the confidence for the same action materially decrease?
-
-Across `11,983` same-action before/after execution observations:
-
-```text
-mean confidence change
-= -7.2574e-06
-```
-
-Repeated selected-action subset (`11,257` observations):
-
-```text
-mean confidence change
-= -7.2413e-06
-```
-
-Typical confidence itself is approximately:
-
-```text
-~0.982
-```
-
-Therefore the relative behavioral change is tiny.
-
-The system effectively behaves as:
-
-```text
-before execution:
-c ≈ 0.98224
-
-after execution:
-c ≈ 0.98223
-```
-
-This is dynamic in a strict numerical sense, but nearly static in functional execution strength.
-
-That is the strongest direct evidence that R1b failed its intended semantic role.
-
----
-
-# 16. Applicability does not track offline candidate utility
-
-Offline diagnostic target utility is:
-
-\[
-U_{t,k}
+38.754133 - 38.764146
 =
-\cos(\hat q_{t+1,k},y)
--
-\cos(q_t,y).
+-0.010013.
 \]
 
-This target-aware signal is used **only after target-free candidate construction** for diagnostics and does not enter forward execution.
+This is effectively no gain.
 
-Measured correlation:
+Therefore:
 
 \[
 \boxed{
-\rho(
-p^\varnothing_{t,k},
-U_{t,k}
-)
-=
--0.03173
+\text{dynamic current-state WHERE is not sufficient to improve best retrieval over R1a.}
 }
 \]
 
-which is near zero.
-
-Thus higher predicted NULL probability does not meaningfully identify lower-utility actions.
-
-This is crucial because the candidate utility distribution changes strongly with depth, while the applicability output barely reacts in the intended direction.
-
 ---
 
-# 17. Utility clearly deteriorates with depth
+# 10. BEST checkpoint retrieval controls
 
-All-candidate offline target utility shows the expected late deterioration.
-
-At early depth, candidates are mostly useful.
-
-By t2, negative utility is common and mean utility becomes negative.
-
-Selected-path behavior also shows:
+At epoch 4:
 
 ```text
-t0 strongly positive
-t1 weakly positive
-t2 negative
+FULL             38.7541
+MEAN             38.7631
+best REPEAT      38.8971
+best SINGLE      24.7414
+REFERENCE_ONLY   14.4076
 ```
 
-Yet all applicability values remain near:
+Ratios:
 
 ```text
-c ≈ 0.98
-p_null ≈ 0.02
+MEAN / FULL         = 1.00023
+best REPEAT / FULL  = 1.00369
 ```
 
-This rules out the explanation:
+Therefore the learned candidate-selection policy does not meaningfully outperform:
 
 ```text
-"the model did not need to suppress actions because all late actions were still useful"
-```
-
-The late action population does contain substantial harmful behavior.
-
-The gate simply does not identify/suppress it.
-
----
-
-# 18. STOP becomes even less aggressive than R1a
-
-R1b new STOP hazard:
-
-```text
-t0 = 0.116%
-t1 = 0.582%
-t2 = 2.377%
-```
-
-Counts:
-
-```text
-new STOP:
-t0 = 7
-t1 = 35
-t2 = 142
-```
-
-R1a approximate new STOP hazard:
-
-```text
-t0 ≈ 1.65%
-t1 ≈ 2.18%
-t2 ≈ 4.35%
-```
-
-Mean executed edits:
-
-```text
-R1a = 2.866 / 3
-R1b = 2.961 / 3
-```
-
-So R1b does not cause more adaptive early stopping.
-
-It produces **more maximum-depth execution**.
-
-This is directly opposite the hoped-for late-suppression behavior.
-
----
-
-# 19. Repeated candidate identity becomes more dominant
-
-R1b:
-
-```text
-queries: 6016
-queries with repeated candidate identity: 5965
-fraction: 99.152%
-```
-
-R1a:
-
-```text
-~95.745%
-```
-
-Thus:
-
-\[
-\boxed{
-95.7\%
-\rightarrow
-99.15\%
-}
-\]
-
-The R1b gate does not break the repeated-action program.
-
-It makes the actual policy even more dominated by repeated candidate identity.
-
-This does not mean the scalar gate causes candidate cloning; R1b was not designed to solve specialization.
-
-But it confirms that the mechanism did not indirectly create a healthier recurrent action process.
-
----
-
-# 20. Candidate selection is not a single-index monopoly, but redundancy remains
-
-R1b candidate distribution conditional on non-STOP edit:
-
-```text
-candidate 0 = 17.29%
-candidate 1 = 14.38%
-candidate 2 = 32.04%
-candidate 3 = 36.29%
-```
-
-Maximum candidate share:
-
-```text
-36.29%
-```
-
-So there is no simple 95%-style candidate-index monopoly.
-
-However, candidate identity diversity is misleading because the candidate functions remain highly similar.
-
-A model can distribute selection over several indices while those indices implement nearly the same edit.
-
-Therefore effect-space diagnostics remain the stronger evidence.
-
----
-
-# 21. WHAT remains highly correlated
-
-R1b intent cosine off-diagonal mean:
-
-```text
-0.953855
-```
-
-R1a:
-
-```text
-~0.9499
-```
-
-This is not a meaningful improvement.
-
-The proposal bank still reads the text into highly correlated latent intents.
-
-R1b was not expected to fix this.
-
----
-
-# 22. WHERE remains essentially cloned
-
-R1b spatial support:
-
-```text
-pairwise support cosine = 0.999853
-pairwise overlap        = 0.994781
-effective support size  = 13.29 / 196
-support entropy         = 2.5386
-```
-
-R1a:
-
-```text
-support cosine  = 0.999842
-support overlap = 0.995108
-effective size  ≈ 10.57 / 196
-```
-
-The difference is negligible for specialization.
-
-Thus:
-
-\[
-\boxed{
-\text{WHERE remains nearly identical across candidates.}
-}
-\]
-
-This is expected because corrected R1b deliberately keeps WHERE static and R1a-equivalent.
-
----
-
-# 23. DeltaZ remains highly redundant
-
-R1b pairwise `DeltaZ` cosine:
-
-```text
-t0 = 0.98150
-t1 = 0.98142
-t2 = 0.98144
-```
-
-DeltaZ effective rank:
-
-```text
-t0 = 1.868
-t1 = 1.869
-t2 = 1.869
-```
-
-R1a was also approximately:
-
-```text
-DeltaZ cosine ≈ 0.982
-rank          ≈ 1.85
-```
-
-So the actual token-space interventions remain clone-like.
-
----
-
-# 24. Deltaq remains highly redundant
-
-R1b pairwise retrieval-effect cosine:
-
-```text
-t0 = 0.98331
-t1 = 0.98111
-t2 = 0.97518
-```
-
-Functional effective rank:
-
-```text
-t0 = 1.824
-t1 = 1.871
-t2 = 1.981
-```
-
-This is slightly less redundant at later depth, but still very far from four clearly distinct functional directions.
-
-The conservative diagnostic flags correctly report high Deltaq similarity at all three timesteps.
-
----
-
-# 25. FULL vs MEAN vs REPEAT remains an important warning
-
-R1b:
-
-```text
-FULL        = 39.0119
-MEAN        = 39.0706
-REPEAT-0    = 38.9277
-REPEAT-1    = 39.0398
-REPEAT-2    = 39.0437
-REPEAT-3    = 39.1267
-```
-
-Best REPEAT exceeds FULL by only ~0.115 points, so it does not trigger the conservative `+2 MR` failure threshold.
-
-But the scientific interpretation is still important:
-
-```text
-MEAN ≈ FULL
-REPEAT ≈ FULL
-```
-
-Dynamic candidate identity provides little unique advantage.
-
-This is consistent with the clone-like WHAT/WHERE/effect diagnostics.
-
----
-
-# 26. R1a → R1b comparison table
-
-| Diagnostic | R1a | R1b | Interpretation |
-|---|---:|---:|---|
-| FULL MR | 38.7641 | 39.0119 | tiny retrieval gain |
-| MEAN MR | 38.8160 | 39.0706 | still ≈ FULL |
-| best REPEAT MR | 39.2232 | 39.1267 | still ≈ FULL |
-| t0 Deltaq norm | 0.3366 | 0.3492 | healthy |
-| t1 Deltaq norm | 0.2724 | 0.2784 | healthy |
-| t2 Deltaq norm | 0.1971 | 0.1987 | healthy |
-| t1/t0 retention | 0.809 | 0.797 | preserved |
-| t2/t0 retention | 0.586 | 0.569 | preserved |
-| t0 Deltaq cosine | 0.9833 | 0.9833 | unchanged |
-| t1 Deltaq cosine | 0.9817 | 0.9811 | tiny change |
-| t2 Deltaq cosine | 0.9765 | 0.9752 | tiny change |
-| support cosine | 0.999842 | 0.999853 | unchanged |
-| support overlap | 0.995108 | 0.994781 | unchanged |
-| intent cosine | 0.9499 | 0.9539 | slightly worse |
-| selected gain t0 | +0.07424 | +0.07156 | worse |
-| selected gain t1 | +0.02488 | +0.01994 | worse |
-| selected gain t2 | -0.00261 | **-0.00682** | worse |
-| mean edits | 2.866 | **2.961** | worse |
-| repeated identity | 95.74% | **99.15%** | worse |
-| late STOP hazard | ~4.35% | **2.38%** | less adaptive |
-
-This table is the shortest complete summary of the R1b outcome.
-
----
-
-# 27. R1b kill criteria and outcome
-
-The pre-registered R1b kill criteria included:
-
-## Criterion 1 — NULL collapses near zero everywhere
-
-Observed:
-
-```text
-mean p_null = 0.01776
-max p_null  = 0.02088
-all p_null < 0.10
-```
-
-This is not exact numerical zero, but functionally the mechanism remains close to always-on.
-
-**Status:** effectively triggered in spirit.
-
----
-
-## Criterion 2 — NULL collapses near one everywhere
-
-Not observed.
-
-**Status:** PASS.
-
----
-
-## Criterion 3 — useful early edits are strongly suppressed
-
-Early utility remains positive, although slightly lower than R1a.
-
-**Status:** no catastrophic suppression.
-
----
-
-## Criterion 4 — Deltaq retention collapses again
-
-Not observed.
-
-**Status:** PASS.
-
----
-
-## Criterion 5 — late negative gain remains and NULL is not informative
-
-Observed strongly:
-
-```text
-R1b t2 selected gain = -0.00682
-p_null vs utility Pearson = -0.0317
-```
-
-**Status:** FAIL / kill criterion triggered.
-
----
-
-## Criterion 6 — MR improves but NULL has no meaningful relation to unnecessary edits
-
-Observed:
-
-```text
-MR: +0.248 over R1a
-but
-semantic applicability evidence remains absent
-```
-
-**Status:** FAIL / kill criterion triggered.
-
----
-
-# 28. Strongest causal interpretation
-
-The R1b result does **not** prove that visual applicability can never help CIR.
-
-It supports the narrower conclusion:
-
-> Under the current IAG-SRME information path and terminal+marginal objective, adding a learned dynamic scalar applicability gate on top of fixed R1a Entmax WHERE is not sufficient to learn meaningful late-action suppression.
-
-The data reject the simple hypothesis:
-
-```text
-forced normalized spatial grounding
-        ↓
-main cause of late over-edit
-```
-
-as the dominant explanation.
-
-At minimum:
-
-```text
-forced WHERE alone
-```
-
-is not sufficient to explain the failure.
-
-The model can minimize the current objective while keeping:
-
-\[
-c_{t,k}\approx1
-\]
-
-almost everywhere.
-
----
-
-# 29. Why the gate can remain near 1 under the current objective
-
-The gate is trainable and receives gradient, but the current objective does not explicitly require:
-
-```text
-"after executing action k, reduce c_t+1,k"
+mean all candidate effects
 ```
 
 or:
 
 ```text
-"if candidate utility is negative, increase p_null"
+repeat one fixed candidate
 ```
 
-The terminal loss only needs the final retrieval query to be useful.
-
-The marginal target utility is detached and primarily supervises the consequence scorer rather than directly defining a semantic applicability target for the gate.
-
-Because candidate actions are already highly redundant, the system can continue to improve retrieval through repeated recurrent movement while leaving the scalar gate near one.
-
-Therefore the learned optimum can be:
-
-```text
-keep most actions executable
-let recurrence/readout do the work
-do not learn semantic abstention
-```
-
-This is a scientific/objective-information result, not a numerical bug.
+This is still the same functional redundancy signature seen in R1a.
 
 ---
 
-# 30. Why not tune the R1b bias or add a gate loss now
+# 11. BEST same-parent depth remains useful
 
-Do **not** respond to this negative result by immediately trying:
-
-```text
-initial_applicability = 0.95
-initial_applicability = 0.90
-initial_applicability = 0.80
-stronger sigmoid temperature
-manual timestep decay
-explicit p_null regularization
-gate entropy loss
-gate sparsity loss
-late gate penalty
-```
-
-Doing so would change the question from:
+At epoch 4, mean candidate retrieval from the same current parent improves strongly with recurrent depth:
 
 ```text
-"does the current task objective naturally learn useful applicability?"
+t0 mean-candidate MR = 24.6512
+t1 mean-candidate MR = 33.8352
+t2 mean-candidate MR = 38.8594
 ```
 
-into:
+Offline best-candidate oracle:
 
 ```text
-"can we force a scalar to turn off?"
+t0 = 25.0997
+t1 = 34.3598
+t2 = 39.3777
 ```
 
-A lower scalar is not evidence of correct semantic applicability.
+This is important.
 
-Likewise, adding a target-derived gate loss immediately would make R1b a different experiment.
-
-The current branch has already answered its intended causal question.
-
-Freeze it.
-
----
-
-# 31. Why this is not a failure of multi-step recurrence
-
-The same-parent candidate retrieval continues to increase strongly with depth:
-
-```text
-25.12 -> 34.76 -> 38.94
-```
-
-and Deltaq remains large at t2:
-
-```text
-0.349 -> 0.278 -> 0.199
-```
-
-Therefore the evidence does **not** support:
-
-```text
-"multi-step was a bad idea"
-```
-
-The better statement remains:
+It again shows:
 
 \[
 \boxed{
-\text{multi-step state evolution is useful, but recurrent action semantics remain poorly conditioned on what is still missing.}
+\text{multi-step computation itself can still be useful.}
 }
 \]
+
+The problem is not simply:
+
+```text
+"more than one step is wrong."
+```
+
+Instead, the four candidate identities remain too redundant and the policy does not exploit meaningful specialization.
 
 ---
 
-# 32. Why R1c1 is the correct next experiment
+# 12. BEST dynamic WHERE is still candidate-cloned
 
-R1b kept WHERE fixed:
+The central R1c1 question is whether current-state re-grounding causes candidate supports to separate.
 
-\[
-\pi_k
-=
-\operatorname{Ground}(I_k,A)
-\]
+It does not.
 
-once before recurrence.
-
-Only a scalar execution confidence saw the changing recurrent context.
-
-But the current state really changes:
+At epoch 4:
 
 ```text
-context changes
-D_t changes
-G_t changes
-candidate query changes
-scores change
+between-candidate support cosine:
+t0 = 0.9997662
+t1 = 0.9997550
+t2 = 0.9997398
 ```
 
-while spatial support itself remains static.
+For comparison, R1a static support cosine was approximately:
 
-R1c1 therefore tests the next smallest structural hypothesis:
+```text
+0.999842
+```
+
+Hence:
+
+\[
+\pi_{t,0}
+\approx
+\pi_{t,1}
+\approx
+\pi_{t,2}
+\approx
+\pi_{t,3}
+\]
+
+for all `t`.
+
+R1c1 reduces support similarity only trivially.
+
+This rejects the strong hypothesis:
+
+> Reusing one static support map across time is the primary reason all four candidates look at the same place.
+
+Even when the support is recomputed from the current state, all four candidates still look almost identically.
+
+---
+
+# 13. BEST WHAT is still highly correlated
+
+At epoch 4:
+
+```text
+mean pairwise intent cosine = 0.954016
+```
+
+Thus fixed WHAT remains strongly correlated:
+
+\[
+I_1\approx I_2\approx I_3\approx I_4.
+\]
+
+This matters because R1c1 only changes the state being queried.
+
+If the four queries entering the grounder are already highly similar, then:
+
+\[
+Ground(I_1,Z_t),
+\dots,
+Ground(I_4,Z_t)
+\]
+
+have little structural reason to become meaningfully different.
+
+This is a major clue for the next experiment.
+
+---
+
+# 14. BEST functional candidates remain clones
+
+At epoch 4:
+
+## Δq
+
+```text
+pairwise Δq cosine:
+t0 = 0.982771
+t1 = 0.980743
+t2 = 0.975395
+```
+
+Functional effective rank:
+
+```text
+t0 = 1.8296 / 4
+t1 = 1.8720 / 4
+t2 = 1.9708 / 4
+```
+
+Mean Δq norm:
+
+```text
+t0 = 0.33027
+t1 = 0.26697
+t2 = 0.19414
+```
+
+Retention:
+
+```text
+t1/t0 = 0.80834
+t2/t0 = 0.58783
+t2/t1 = 0.72720
+```
+
+The good R1a retrieval-effect survival is preserved.
+
+Therefore R1c1 does **not** recreate the original R0 `Δq` attenuation failure.
+
+But specialization remains weak.
+
+## ΔZ
+
+At epoch 4:
+
+```text
+pairwise ΔZ cosine:
+t0 ≈ 0.98076
+t1 ≈ 0.98067
+t2 ≈ 0.98068
+```
+
+Mean ΔZ norm remains healthy:
+
+```text
+t0 ≈ 2.1893
+t1 ≈ 2.1733
+t2 ≈ 2.1626
+```
+
+Thus the candidate edits are alive but highly parallel.
+
+The structural chain is:
+
+```text
+correlated fixed WHAT
+        ↓
+near-identical dynamic WHERE
+        ↓
+near-identical contexts
+        ↓
+parallel ΔZ
+        ↓
+parallel Δq
+```
+
+---
+
+# 15. BEST scientific verdict
+
+The best checkpoint gives a clean negative result:
+
+```text
+dynamic WHERE exists
+but candidate-specific WHERE does not emerge
+```
+
+and:
+
+```text
+best MR ≈ R1a
+MEAN ≈ FULL
+REPEAT ≈ FULL
+```
+
+Therefore R1c1 does not solve the candidate-collapse problem.
+
+At this stage the correct verdict is already:
 
 \[
 \boxed{
-\text{static support reuse prevents the action system from reacting spatially to the edited current state}
+\text{R1c1 is not a successful retrieval intervention.}
 }
 \]
+
+The late checkpoint then explains how the failure evolves under continued optimization.
+
+---
+
+# 16. BEST → LATE retrieval collapse
+
+BEST:
+
+```text
+epoch 4
+FULL = 38.7541
+```
+
+LATE:
+
+```text
+epoch 13
+FULL = 27.6512
+```
 
 Change:
 
 \[
-\pi_k
-=
-\operatorname{Ground}(I_k,A)
+-11.1030\ \text{Mean Recall points}.
 \]
 
-to:
+The training loss simultaneously decreases from:
+
+```text
+0.2392 -> 0.0606
+```
+
+Therefore the model is increasingly fitting a training solution that generalizes poorly to validation retrieval.
+
+---
+
+# 17. LATE support becomes sharper, not more candidate-specific
+
+At epoch 4:
+
+```text
+support effective size ≈ 28.03 / 196
+support entropy        ≈ 3.302
+support fraction       ≈ 14.82%
+```
+
+At epoch 13:
+
+```text
+support effective size ≈ 18.68 / 196
+support entropy        ≈ 2.909
+support fraction       ≈ 10.02%
+```
+
+So the support becomes more concentrated.
+
+But between-candidate similarity does not improve.
+
+LATE:
+
+```text
+support cosine:
+t0 = 0.9998269
+t1 = 0.9998270
+t2 = 0.9998261
+```
+
+Thus:
 
 \[
 \boxed{
-\pi_{t,k}
-=
-\operatorname{Ground}(I_k,A,Z_t)
+\text{the model learns sharper supports, but the four candidates still share almost the same support.}
 }
 \]
 
-or the exact repo-consistent current-state grounding equivalent.
+This is not useful specialization.
 
-The key isolation should be:
+---
+
+# 18. LATE dynamic WHERE becomes "moving clones"
+
+Late training increases the amount by which support changes across recurrent state updates.
+
+The important observation is not merely that:
+
+\[
+\pi_{t+1,k}\neq \pi_{t,k}.
+\]
+
+The important question is whether different candidates move differently.
+
+Define:
+
+\[
+\Delta\pi_{t,k}
+=
+\pi_{t+1,k}-\pi_{t,k}.
+\]
+
+If candidate-specific adaptive grounding were emerging, then:
+
+\[
+\Delta\pi_{t,1},
+\Delta\pi_{t,2},
+\Delta\pi_{t,3},
+\Delta\pi_{t,4}
+\]
+
+should not all point in the same direction.
+
+Instead the late checkpoint shows approximately common-mode movement.
+
+This gives the core R1c1 failure mode:
+
+```text
+static clone:
+π_0 ≈ π_1 ≈ π_2 ≈ π_3
+
+R1c1 late:
+π_t changes with state
+BUT
+all candidate π_t move together
+```
+
+Hence:
+
+\[
+\boxed{\text{moving clones}}
+\]
+
+rather than:
+
+\[
+\boxed{\text{candidate-specific re-grounding}}.
+\]
+
+Dynamic support movement by itself is therefore not evidence of successful adaptive grounding.
+
+---
+
+# 19. Functional collapse gets worse at LATE
+
+BEST Δq cosine:
+
+```text
+t0 = 0.98277
+t1 = 0.98074
+t2 = 0.97539
+```
+
+LATE:
+
+```text
+t0 = 0.99230
+t1 = 0.99146
+t2 = 0.98994
+```
+
+The candidate retrieval-space effects become **more parallel**, not less.
+
+BEST functional rank:
+
+```text
+t0 = 1.8296
+t1 = 1.8720
+t2 = 1.9708
+```
+
+LATE:
+
+```text
+t0 = 1.6053
+t1 = 1.6345
+t2 = 1.6838
+```
+
+Thus:
+
+\[
+\boxed{
+\text{continued optimization reduces functional candidate rank.}
+}
+\]
+
+ΔZ shows the same trend.
+
+LATE ΔZ cosine is approximately:
+
+```text
+~0.9905 - 0.9908
+```
+
+versus BEST:
+
+```text
+~0.9807
+```
+
+Thus the four candidate editors are increasingly producing essentially the same edit direction.
+
+---
+
+# 20. LATE mean candidate depth is still useful
+
+Despite the overall validation collapse, same-parent candidate retrieval still improves strongly with depth.
+
+LATE:
+
+```text
+mean candidate MR:
+t0 = 20.9694
+t1 = 27.7120
+t2 = 32.3871
+```
+
+Oracle:
+
+```text
+t0 = 21.2359
+t1 = 27.9046
+t2 = 32.5661
+```
+
+This remains a monotonic recurrent improvement:
+
+\[
+20.97
+\rightarrow
+27.71
+\rightarrow
+32.39.
+\]
+
+Therefore the late checkpoint does **not** falsify the idea that recurrent depth can contain useful computation.
+
+Instead, the learned FULL policy fails to exploit it.
+
+---
+
+# 21. LATE policy / STOP failure
+
+The strongest evidence is the forced REPEAT control.
+
+LATE:
+
+```text
+FULL        = 27.6512
+REPEAT-0    = 32.3637
+REPEAT-1    = 32.3300
+REPEAT-2    = 32.2876
+REPEAT-3    = 32.3778
+```
+
+Best REPEAT:
+
+```text
+32.3778
+```
+
+Gap:
+
+\[
+32.3778 - 27.6512
+=
+4.7266.
+\]
+
+This is a major failure.
+
+The model's own action-selection / STOP policy is discarding substantial useful recurrent computation.
+
+A trivial forced policy:
+
+```text
+pick one candidate identity
+repeat it through recurrence
+```
+
+beats the learned FULL policy by almost five Mean Recall points.
+
+Therefore:
+
+\[
+\boxed{
+\text{the late scorer / STOP policy is miscalibrated relative to actual retrieval utility.}
+}
+\]
+
+---
+
+# 22. Why this is not simply "late edit over-edit"
+
+At the R1a best checkpoint the third selected edit had a slightly negative average target-relative effect:
+
+```text
+t2 selected target-relative gain ≈ -0.00261
+```
+
+R1c1 BEST is essentially the same regime.
+
+However, by the late R1c1 checkpoint, the strongest control evidence shows that additional recurrent computation remains useful while FULL dramatically underperforms forced continuation.
+
+Therefore the epoch-13 collapse should not be summarized as:
+
+```text
+"the model edits too much."
+```
+
+A better description is:
+
+```text
+the model becomes increasingly conservative in its learned selection/STOP policy,
+even though additional recurrent computation still has retrieval value.
+```
+
+This distinction matters for future STOP/planning experiments.
+
+---
+
+# 23. LATE candidate identity is still not meaningful
+
+At epoch 13:
+
+```text
+candidate 0 t2 MR ≈ 32.3710
+candidate 1 t2 MR ≈ 32.4274
+candidate 2 t2 MR ≈ 32.3564
+candidate 3 t2 MR ≈ 32.4187
+```
+
+The candidates are nearly interchangeable.
+
+The oracle only marginally exceeds each individual candidate.
+
+This is consistent with:
+
+```text
+support cosine ≈ 0.9998
+ΔZ cosine ≈ 0.991
+Δq cosine ≈ 0.990
+```
+
+Therefore the four identities still do not represent meaningfully different semantic actions.
+
+---
+
+# 24. R1c1 causal hypothesis verdict
+
+Primary hypothesis:
+
+> Static reuse of visual grounding is a major causal bottleneck behind candidate collapse.
+
+Result:
+
+\[
+\boxed{
+\text{REJECTED / strongly weakened under the current architecture and objective.}
+}
+\]
+
+Evidence:
+
+1. Dynamic current-state grounding is mechanically real.
+2. It receives gradient on every successful canary update.
+3. It is recomputed from live `Z_t`.
+4. BEST retrieval does not improve over R1a.
+5. Candidate support cosine remains approximately 0.9997-0.9998 at all timesteps.
+6. Candidate ΔZ remains highly parallel.
+7. Candidate Δq remains highly parallel.
+8. MEAN remains equivalent to FULL.
+9. REPEAT remains equivalent to FULL at BEST.
+10. Continued training increases temporal support motion but mostly as common-mode co-motion.
+11. Continued training lowers functional candidate rank.
+
+Hence dynamic WHERE does not create meaningful four-way decomposition.
+
+---
+
+# 25. Failure mode classification
+
+R1c1 should be classified as:
+
+```text
+MECHANICAL:
+PASS
+
+CAUSAL ISOLATION:
+PASS
+
+BEST RETRIEVAL:
+NO IMPROVEMENT
+
+DYNAMIC WHERE:
+REAL BUT WEAKLY DIFFERENTIATED
+
+CANDIDATE SPECIALIZATION:
+FAIL
+
+TEMPORAL GROUNDING:
+STATE-SENSITIVE BUT COMMON-MODE
+
+FUNCTIONAL SPECIALIZATION:
+FAIL / WORSE LATE
+
+LATE POLICY:
+PREMATURE STOP / SCORER MISCALIBRATION
+
+SCIENTIFIC VERDICT:
+NEGATIVE
+```
+
+---
+
+# 26. Updated collapse chain
+
+The evidence now supports the following chain:
+
+```text
+highly correlated fixed WHAT
+        ↓
+Ground(I_k, Z_t)
+        ↓
+dynamic WHERE is recomputed
+        ↓
+BUT all four WHEREs remain nearly identical
+        ↓
+state change causes common-mode support movement
+        ↓
+contexts remain highly similar
+        ↓
+ΔZ remains highly parallel
+        ↓
+Δq remains highly parallel
+        ↓
+candidate identities remain interchangeable
+        ↓
+MEAN / REPEAT remain competitive
+        ↓
+continued training sharpens the common solution
+        ↓
+functional rank decreases
+        ↓
+scorer / STOP becomes increasingly conservative
+        ↓
+FULL stops before useful recurrence is exhausted
+```
+
+Short version:
+
+\[
+\boxed{
+\text{correlated WHAT}
+\rightarrow
+\text{moving-clone WHERE}
+\rightarrow
+\text{clone effects}
+\rightarrow
+\text{late STOP miscalibration}.
+}
+\]
+
+---
+
+# 27. What R1c1 falsifies
+
+R1c1 provides evidence against the following claim:
+
+> Simply making visual grounding state-dependent is enough to make the four actions specialize.
+
+It is not.
+
+The model can satisfy:
+
+\[
+\pi_{t,k}=Ground(I_k,Z_t)
+\]
+
+while still learning:
+
+\[
+\pi_{t,1}
+\approx
+\pi_{t,2}
+\approx
+\pi_{t,3}
+\approx
+\pi_{t,4}.
+\]
+
+Furthermore, all four supports can move over time while preserving this equality approximately.
+
+Thus:
+
+\[
+\boxed{
+\text{dynamic does not imply diverse}
+}
+\]
+
+and:
+
+\[
+\boxed{
+\text{state-sensitive does not imply action-specific}.
+}
+\]
+
+---
+
+# 28. What R1c1 does NOT falsify
+
+R1c1 does not establish that:
+
+```text
+multi-step CIR is wrong
+```
+
+because same-parent retrieval improves strongly with depth.
+
+It also does not establish that:
+
+```text
+visual grounding is useless
+```
+
+because the test only concerns the current shared grounding mechanism under highly correlated fixed WHAT.
+
+It does not establish that:
+
+```text
+dynamic action generation cannot work
+```
+
+because WHAT was explicitly frozen across timesteps.
+
+It does not establish that:
+
+```text
+teacher grounding is necessary
+```
+
+because no teacher-free dynamic WHAT test has been completed yet.
+
+It does not establish that:
+
+```text
+DPP / VISReg / diversity loss is required
+```
+
+because those mechanisms were intentionally excluded from this causal step.
+
+---
+
+# 29. Why R1c2 is now justified
+
+R1c1 preserves:
+
+\[
+I_k
+\]
+
+for the entire rollout.
+
+Yet the diagnostic repeatedly shows:
+
+```text
+pairwise intent cosine ≈ 0.95+
+```
+
+If the four WHAT vectors are already highly correlated, then recomputing WHERE on the current state cannot by itself create strong semantic specialization.
+
+The next causal question becomes:
+
+> After applying an edit, should the action proposal itself be recomputed from what remains unsatisfied in the current state?
+
+That is R1c2.
+
+Conceptually:
 
 ```text
 R1c1:
 fixed WHAT
++
 dynamic WHERE
+
+R1c2:
+dynamic current-state WHAT
++
+corresponding dynamic WHERE
 ```
 
-Do not simultaneously introduce dynamic WHAT.
+Instead of:
+
+\[
+I_k = Intent(T)
+\]
+
+once, R1c2 should investigate something of the form:
+
+\[
+I_{t,k}
+=
+Proposal(
+q_k,
+T,
+Z_t,
+\text{state/change context}
+)
+\]
+
+with strict target-free execution.
+
+The intended question is:
+
+> What edit is still missing NOW?
+
+rather than:
+
+> Where should the same original action look NOW?
 
 ---
 
-# 33. R1c1 causal contract
+# 30. R1c2 must remain a clean causal experiment
 
-R1c1 should preserve:
-
-```text
-K = 4
-Tmax = 3
-query_cap = 1000
-same backbone
-same objective
-same optimizer
-same readout
-same scorer
-same selector
-same STOP
-same editor form
-same candidate identity bank
-same protocol
-```
-
-Only change:
+Do not immediately add:
 
 ```text
-static support
-->
-support recomputed from the current recurrent state at every timestep
+dynamic WHAT
++
+semantic residual
++
+DPP
++
+VISReg
++
+teacher
++
+new STOP loss
 ```
 
-The applicability gate can be either frozen/removed according to the exact causal design, but the experiment must not silently combine multiple new mechanisms.
+That would destroy causal attribution.
 
-If retaining R1b gate for continuity, explicitly label R1c1 as:
+Recommended sequence:
 
 ```text
-R1a + R1b gate + dynamic WHERE
+R1c2:
+dynamic current-state re-proposal only
+
+then evaluate:
+- intent cosine by timestep
+- support cosine by timestep
+- support displacement alignment
+- ΔZ cosine / rank
+- Δq cosine / rank
+- same-parent utility
+- FULL vs REPEAT vs MEAN
+- selected target-relative gain
+- STOP behavior
 ```
 
-and acknowledge that the effect is not isolated against R1a alone.
-
-The cleaner scientific comparison is preferably designed so dynamic WHERE is the only newly active mechanism relative to a matched parent.
+Only if R1c2 fails should more explicit specialization constraints be promoted.
 
 ---
 
-# 34. R1c1 mandatory diagnostics
+# 31. STOP / scorer issue should be tracked separately
 
-Add temporal WHERE diagnostics:
+R1c1 reveals an independent late-training pathology:
 
 ```text
-support cosine P_t,k vs P_t+1,k
-support overlap P_t,k vs P_t+1,k
-support effective-size change
-support entropy change
-support center-of-mass / token-rank shift
-support change after executing same candidate
-support change after executing different candidate
+FULL late ≪ forced REPEAT late
 ```
 
-Preserve:
+This suggests:
+
+\[
+\text{learned score ordering}
+\neq
+\text{actual marginal retrieval utility ordering}.
+\]
+
+This should be logged as a separate future causal target.
+
+Possible label:
 
 ```text
-FULL
-REFERENCE
-SINGLE
-REPEAT
-MEAN
-same-parent candidate retrieval
-offline candidate oracle
-
-intent cosine
-
-between-candidate support cosine
-between-candidate support overlap
-
-DeltaZ norm/cosine/rank
-Deltaq norm/cosine/rank
-late retention
-
-selected target-relative utility
-STOP hazard
-mean executed depth
-repeated candidate identity fraction
+B5 — consequence-score / STOP calibration
 ```
 
-Primary R1c1 success evidence:
+However it should **not** be repaired on the frozen R1c1 branch.
+
+A STOP fix added now would confound the primary R1c1 conclusion.
+
+Recommended action:
 
 ```text
-support becomes genuinely state-sensitive
-and
-late selected utility improves
-and/or
-REPEAT equivalence weakens
-without destroying R1a Deltaq retention/retrieval
+record it
+freeze R1c1
+test R1c2
+return to STOP/planning only in its own controlled experiment
+```
+
+unless R1c2 specifically requires a policy-calibration control to remain interpretable.
+
+---
+
+# 32. Important caution about late collapse
+
+R1c1 is not the first branch to show late validation degradation.
+
+Earlier lineage already showed:
+
+```text
+training objective can continue improving
+while validation retrieval degrades.
+```
+
+Therefore the correct statement is not:
+
+> Dynamic WHERE alone caused all late collapse.
+
+The correct statement is:
+
+> Dynamic WHERE failed to prevent the existing late-collapse tendency, did not improve the best checkpoint, did not create candidate specialization, and at late training coexisted with even stronger functional cloning plus severe STOP / scorer under-utilization of recurrent depth.
+
+This distinction should be preserved in future reports.
+
+---
+
+# 33. Matched comparison table
+
+| Metric | R1a best | R1c1 best e4 | R1c1 late e13 |
+|---|---:|---:|---:|
+| FULL Mean Recall | 38.7641 | 38.7541 | 27.6512 |
+| Best REPEAT | 39.2232 | 38.8971 | 32.3778 |
+| MEAN | 38.8160 | 38.7631 | 27.5010 |
+| Reference only | 14.5216 | 14.4076 | 14.0555 |
+| t0 mean Δq norm | 0.3366 | 0.3303 | 0.2694 |
+| t1 mean Δq norm | 0.2724 | 0.2670 | 0.2196 |
+| t2 mean Δq norm | 0.1971 | 0.1941 | 0.1691 |
+| t1/t0 Δq retention | 0.809 | 0.808 | 0.815 |
+| t2/t0 Δq retention | 0.586 | 0.588 | 0.628 |
+| support cosine t0 | 0.999842 | 0.999766 | 0.999827 |
+| support cosine t1 | static same map | 0.999755 | 0.999827 |
+| support cosine t2 | static same map | 0.999740 | 0.999826 |
+| Δq cosine t0 | ~0.983 | 0.98277 | 0.99230 |
+| Δq cosine t1 | ~0.982 | 0.98074 | 0.99146 |
+| Δq cosine t2 | ~0.977 | 0.97539 | 0.98994 |
+| functional rank t0 | ~1.82 | 1.8296 | 1.6053 |
+| functional rank t1 | ~1.86 | 1.8720 | 1.6345 |
+| functional rank t2 | ~1.95 | 1.9708 | 1.6838 |
+| same-parent mean MR t0 | 24.60 | 24.65 | 20.97 |
+| same-parent mean MR t1 | 34.30 | 33.84 | 27.71 |
+| same-parent mean MR t2 | 39.03 | 38.86 | 32.39 |
+
+Key interpretation:
+
+```text
+R1c1 best:
+almost matched R1a, but did not improve specialization.
+
+R1c1 late:
+support remains cloned,
+functional effects become even more parallel,
+policy underuses still-useful recurrent depth.
 ```
 
 ---
 
-# 35. What not to add in R1c1
+# 34. Reproduction commands
 
-Do not add:
-
-- DPP;
-- semantic residual;
-- token ownership;
-- teacher supervision;
-- target-aware grounding in forward;
-- planning;
-- new STOP loss;
-- RL;
-- action re-proposal;
-- local text losses;
-- new candidate balancing.
-
-If dynamic WHERE fails, then move to R1c2 dynamic WHAT/re-proposal.
-
-Do not skip directly to loss soup.
-
----
-
-# 36. Reproduction commands
-
-## Full R1b training
+## Training
 
 ```bash
 CUBLAS_WORKSPACE_CONFIG=:4096:8 \
 python src/train.py \
   dataset.root=data/FashionIQ \
-  model=iag_srme_r1b_visual_null \
-  experiment=iag_srme_r1b_visual_null \
+  model=iag_srme_r1c1_dynamic_reground \
+  experiment=iag_srme_r1c1_dynamic_reground \
   protocol=fashioniq_original
 ```
 
-## Best-checkpoint diagnostic
+## BEST diagnostic
 
 ```bash
-RUN=outputs/2026-08-31/02-36-13
+RUN=outputs/2026-08-31/13-24-24
 
 CUBLAS_WORKSPACE_CONFIG=:4096:8 \
 python src/diagnose_iag_srme_checkpoint.py \
@@ -1562,17 +1650,85 @@ python src/diagnose_iag_srme_checkpoint.py \
   --protocol fashioniq_original \
   --batch-size 32 \
   --gallery-batch-size 128 \
-  --output reports/r1b_dynamic_applicability_best.json
+  --output reports/r1c1_dynamic_reground_best.json
 ```
 
-Expected replay:
+Expected:
 
 ```text
-checkpoint epoch = 3
-Mean Recall      = 39.011857
-query_cap        = 1000.0
-architecture     = r1b_dynamic_applicability_gate_v2
+checkpoint epoch = 4
+FULL MR = 38.75413338343302
+trusted_r1c1_replay = true
 ```
+
+## LATE diagnostic
+
+```bash
+CUBLAS_WORKSPACE_CONFIG=:4096:8 \
+python src/diagnose_iag_srme_checkpoint.py \
+  --checkpoint "$RUN/last.pt" \
+  --dataset-root data/FashionIQ \
+  --protocol fashioniq_original \
+  --batch-size 32 \
+  --gallery-batch-size 128 \
+  --output reports/r1c1_dynamic_reground_late.json
+```
+
+Expected:
+
+```text
+checkpoint epoch = 13
+FULL MR = 27.65115002791087
+trusted_r1c1_replay = true
+```
+
+---
+
+# 35. Experiment ledger update
+
+After this experiment:
+
+```text
+R0   diagnostic audit                         DONE
+R1a  remove global query cap                  PASS
+R1b  dynamic applicability / visual NULL      NEGATIVE
+R1c1 dynamic current-state re-grounding       NEGATIVE
+R1c2 dynamic current-state re-proposal        NEXT
+R2   semantic residual                        PENDING
+R3   quality-gated functional DPP             CONDITIONAL
+R4   target-privileged grounding teacher      CONDITIONAL
+R5   planning / STOP refinement               CONDITIONAL
+```
+
+---
+
+# 36. Final scientific statement
+
+The R1c1 experiment supports the following statement:
+
+> **Recomputing Entmax visual grounding from the current recurrent token state at every timestep is mechanically valid but is not sufficient to resolve IAG-SRME candidate collapse on FashionIQ. The best R1c1 checkpoint reaches 38.754 Mean Recall, effectively identical to the 38.764 R1a baseline, while candidate visual supports remain nearly identical at all timesteps (between-candidate cosine approximately 0.9997–0.9998). Retrieval-space candidate effects also remain highly parallel. With further training, grounding becomes more state-sensitive but does not become meaningfully candidate-specific; the support maps move largely in common mode, while ΔZ/Δq similarity increases and effective candidate rank decreases. The late checkpoint additionally exposes a separate scorer/STOP calibration failure: FULL retrieval falls to 27.651 while forced REPEAT reaches 32.378, indicating that the learned policy stops before useful recurrent computation is exhausted. Therefore static support reuse is not the primary bottleneck. The next clean causal test should regenerate WHAT/action proposals from the current state rather than only re-grounding fixed actions.**
+
+Compactly:
+
+\[
+\boxed{
+\text{fixed correlated WHAT}
+\rightarrow
+\text{dynamic but moving-clone WHERE}
+\rightarrow
+\text{clone effects}
+\rightarrow
+\text{late STOP miscalibration}
+}
+\]
+
+and:
+
+\[
+\boxed{
+\text{R1c1 = mechanically PASS, scientifically NEGATIVE.}
+}
+\]
 
 ---
 
@@ -1580,129 +1736,121 @@ architecture     = r1b_dynamic_applicability_gate_v2
 
 ```text
 BRANCH
-exp/e2e-iag-srme-r1b-visual-null-confidence-gate
+exp/e2e-iag-srme-r1c1-dynamic-reground
 
-IMPLEMENTATION HEAD BEFORE TRAINING
-d69d0c7eb148aa15a24a309fe1afc724c86a8860
-
-ARCHITECTURE
-fixed Entmax WHERE
+MECHANISM
+fixed WHAT
 +
-dynamic sigmoid WHETHER
+Ground(I_k, Z_t) every timestep
 
-NUMERICAL STATUS
-Entmax-NULL sparse gradient issue: fixed
-FP16 confidence quantization issue: fixed
-FP32 gate/actuator/state pathway: verified
-GPU canary: pass
+CANARY
+96 / 100 successful optimizer steps
+grounder gradient fraction = 1.0
+mechanical PASS
 
-BEST CHECKPOINT
-outputs/2026-08-31/02-36-13/best.pt
-epoch 3
+BEST
+epoch 4
+FULL MR = 38.7541
 
-RETRIEVAL
-R1a FULL = 38.7641
-R1b FULL = 39.0119
-R1b MEAN = 39.0706
-R1b best REPEAT = 39.1267
+R1a
+FULL MR = 38.7641
 
-DEPTH
-Deltaq = 0.3492 -> 0.2784 -> 0.1987
-retention t1/t0 = 79.7%
-retention t2/t0 = 56.9%
+=> no retrieval gain
 
-WHERE
-support cosine = 0.999853
-support overlap = 0.994781
-static across recurrence
+BEST WHERE
+support cosine:
+t0 .999766
+t1 .999755
+t2 .999740
 
-FUNCTION
-DeltaZ cosine ≈ 0.9814
-Deltaq cosine = 0.9833 -> 0.9811 -> 0.9752
-functional rank = 1.824 -> 1.871 -> 1.981
+=> dynamic WHERE still candidate-cloned
 
-APPLICABILITY
-mean confidence = 0.982243
-mean p_null = 0.017757
-max p_null = 0.020877
-fraction p_null > .10 = 0
+BEST Δq
+norm:
+.3303 -> .2670 -> .1941
 
-p_null vs target utility Pearson = -0.0317
+cosine:
+.9828 -> .9807 -> .9754
 
-same-action confidence change after execution:
-mean = -7.26e-06
+rank:
+1.83 -> 1.87 -> 1.97
 
-selected repeated-action confidence change:
-mean = -7.24e-06
+=> recurrence survives
+but candidates remain parallel
 
-TARGET-RELATIVE SELECTED GAIN
-R1a: +0.07424 -> +0.02488 -> -0.00261
-R1b: +0.07156 -> +0.01994 -> -0.00682
+LATE
+epoch 13
+FULL MR = 27.6512
 
-POLICY
-mean edits = 2.961 / 3
-repeated candidate identity = 99.15%
-new STOP hazard =
-0.116% -> 0.582% -> 2.377%
+support cosine:
+t0 .999827
+t1 .999827
+t2 .999826
 
-SCIENTIFIC VERDICT
-R1b FAIL / negative result
+Δq cosine:
+.9923 -> .9915 -> .9899
 
-INTERPRETATION
-The gate is trainable and numerically alive,
-but the current objective/information path learns
-an almost-always-ON applicability function.
+rank:
+1.61 -> 1.63 -> 1.68
 
-It does not suppress already-executed or harmful late actions.
+=> functional cloning gets worse
+
+LATE CONTROL
+best REPEAT = 32.3778
+FULL        = 27.6512
+
+=> policy / STOP prematurely discards useful recurrent depth
+
+MAIN FAILURE
+dynamic WHERE did not create candidate-specific re-grounding
+it created moving clones
+
+VERDICT
+R1c1 scientific NEGATIVE
 
 NEXT
-R1c1 dynamic current-state re-grounding:
-fixed WHAT + dynamic WHERE
+R1c2 dynamic current-state re-proposal / dynamic WHAT
+
+DO NOT STACK YET
+DPP
+VISReg
+RDMReg
+teacher
+semantic residual
+new STOP loss
+RL
 ```
 
 ---
 
-# 38. Final scientific statement
+# 38. Freeze decision
 
-The strongest defensible conclusion from R1b is:
+This branch should now be treated as a frozen causal record.
 
-> **A numerically healthy dynamic sigmoid applicability gate placed after the recurrent grounded context does not, under the current IAG-SRME training objective, learn meaningful abstention or late-action suppression. The gate remains near 0.982 confidence for essentially all candidates, its confidence changes by only about \(7\times10^{-6}\) after execution, and its NULL probability is nearly uncorrelated with offline target-relative candidate utility. Despite a small headline retrieval increase from R1a 38.764 to R1b 39.012 Mean Recall, the intended failure mode worsens: the third selected edit becomes more harmful on average, mean executed depth rises to 2.961/3, and repeated candidate identity rises to 99.15%. At the same time, recurrent retrieval-space effects remain healthy, confirming that multi-step depth is still useful. The next clean causal question is therefore not a stronger scalar gate, but whether recomputing spatial WHERE from the current recurrent state can make candidate execution genuinely state-sensitive.**
+Do not hyperparameter-fish R1c1 into success.
 
----
+Do not silently add a diversity loss and continue calling the result R1c1.
 
-# 39. Branch status
+Do not modify STOP and reinterpret the resulting branch as evidence for dynamic WHERE.
+
+Create a new branch for the next causal question.
+
+Recommended next branch concept:
 
 ```text
-R0   diagnostic audit                         DONE
-R1a  remove global query cap                  PASS
-R1b  dynamic applicability / visual NULL      NEGATIVE RESULT
-R1c1 dynamic current-state re-grounding       NEXT
-R1c2 dynamic current-state re-proposal        PENDING
-R2   semantic residual / claim firewall       PENDING
-R3   quality-gated functional DPP             CONDITIONAL
-R4   target-privileged grounding teacher      CONDITIONAL
-R5   planning / STOP refinement               CONDITIONAL
+exp/e2e-iag-srme-r1c2-dynamic-reproposal
 ```
 
-Do not reinterpret R1b as an implementation failure.
+with a separately specified implementation contract.
 
-The value of R1b is that it eliminates a plausible causal hypothesis cleanly:
+The value of R1c1 is not that it improved retrieval.
+
+Its value is that it eliminated one plausible explanation:
 
 \[
 \boxed{
-\text{scalar applicability alone is not enough.}
+\text{static current-state blindness of WHERE alone is not the dominant remaining cause of candidate collapse.}
 }
 \]
 
-The remaining research direction should now move from:
-
-```text
-"how much should this fixed action execute?"
-```
-
-toward:
-
-```text
-"given the current edited state, where is this action still grounded,
-and what residual action is actually still missing?"
-```
+That narrows the research space substantially.
