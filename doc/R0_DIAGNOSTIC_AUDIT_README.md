@@ -283,12 +283,15 @@ only when serialized configuration is absent. The report then sets:
 
 ```text
 checkpoint_model_config_provenance.source = legacy_checkpoint_plus_canonical_assumption
-checkpoint_model_config_provenance.fully_self_describing = false
+checkpoint_model_config_provenance.fully_self_describing_model_config = false
 ```
 
-and includes the exact assumptions plus a reproducibility warning. A self-describing checkpoint
-uses `source=checkpoint` and has no legacy warning. Diagnostic inference always disables Gumbel
-noise for deterministic hard-argmax replay; that inference-only override is recorded separately.
+and includes the exact assumptions plus a reproducibility warning. A self-describing model
+configuration uses `source=checkpoint` and has no legacy warning. This scope covers model replay,
+not necessarily the seed, Git SHA, protocol, optimizer, or every experiment setting. The legacy
+`fully_self_describing` JSON alias remains for compatibility. Diagnostic inference always disables
+Gumbel noise for deterministic hard-argmax replay; that inference-only override is recorded
+separately.
 
 ## What R0 can and cannot establish
 

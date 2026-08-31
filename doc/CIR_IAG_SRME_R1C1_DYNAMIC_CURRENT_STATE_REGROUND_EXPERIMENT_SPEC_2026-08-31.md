@@ -143,8 +143,11 @@ candidate queries           [B,4,512]
 scores                      [B,4]
 ```
 
-`RecurrentStepOutput.spatial_supports` is the support actually used by that step.
-`IAGSRMEOutput.temporal_supports` stacks those supports as `[B,T,K,N]`.
+`RecurrentStepOutput.raw_spatial_supports` is the actual `Ground(I,Z_t)` result before any
+diagnostic control transform. `effective_spatial_supports` records the support presented to the
+controlled scorer path. The backward-compatible `spatial_supports` field aliases that effective
+value, so CLONE/MEAN consumers keep their historical semantics.
+`IAGSRMEOutput.temporal_supports` always stacks raw supports as `[B,T,K,N]`.
 `output.supports` remains a backward-compatible alias with explicit t0/initial semantics, and
 `output.initial_supports` names that meaning directly.
 
@@ -156,7 +159,7 @@ All controls reground before applying their intervention:
 - `REPEAT-k`: force identity k at every live timestep while recomputing `pi[t,k]` from each updated
   parent state. It never freezes `pi[0,k]`.
 - `CLONE`: compute current-timestep consequences, then clone candidate 0's consequence and support
-  consistently across candidate identities.
+  consistently across candidate identities. Raw `Ground(I,Z_t)` remains available separately.
 - `MEAN`: compute current-timestep consequences, then average effects/support-related scorer inputs.
 - `FULL`: unchanged hard candidate-or-STOP execution.
 
@@ -326,3 +329,29 @@ remain functionally equivalent, support jitters while retrieval degrades, R1a De
 destroyed, or late utility/repeat behavior does not improve.
 
 No rescue mechanism will be added on this branch. Dynamic WHAT/R1c2 is explicitly out of scope.
+
+## Post-implementation audit correction
+
+The CUDA canary separates implementation readiness from scientific behavior:
+
+- mechanical failures still abort on non-finite arithmetic, unusable AMP, insufficient successful
+  optimizer steps, incorrect intent/grounder/applicability call counts, broken same-parent/support
+  invariants, or absent cumulative grounder gradient/parameter movement;
+- `never_stop`, candidate monopoly, clone-like effects, high support similarity, weak support
+  motion, and related collapse observations are warning-only scientific outcomes;
+- near-total STOP at t0 is an operational R1c1 failure only because it prevents the canary from
+  exercising `Z0 -> Z1 -> Ground(I,Z1)`, not because STOP is scientifically undesirable.
+
+Failure observations now distinguish `high_support_similarity_t0`, `t1`, and `t2` using raw
+per-timestep supports with live-parent lineage. The retained legacy observation is named
+`high_support_similarity_t0_legacy` because `output.supports` is t0 only. High t0 similarity is
+expected from exact R1a parity and cannot by itself reject dynamic WHERE.
+
+The target-firewall audit checks that `IAGSRMECore.forward` has no target argument, snapshots the
+completed target-free rollout, and then evaluates offline selected-path metrics under an original
+and permuted target bank. Only offline metrics may change; intents, raw temporal supports,
+candidate states/queries, selections, and final state/query must remain unchanged.
+
+Checkpoint provenance uses the precise term **fully self-describing model configuration**. It
+means architecture/config replay is exact; it does not claim that the checkpoint alone records
+every seed, Git SHA, protocol, optimizer setting, caption policy, or experiment hyperparameter.

@@ -541,7 +541,7 @@ Absolute replay error:
 Replay guard:
 
 ```text
-fully_self_describing = true
+fully_self_describing_model_config = true
 architecture_generation = r1b_dynamic_applicability_gate_v2
 dynamic_applicability_enabled = true
 initial_applicability = 0.98
