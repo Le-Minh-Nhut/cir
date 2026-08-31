@@ -71,6 +71,10 @@ def test_residual_initialization_and_padding_never_claimed(synthetic_encoded) ->
     assert torch.equal(output.initial_semantic_residual, expected)
     assert torch.equal(output.final_semantic_residual, expected)
     assert torch.count_nonzero(output.temporal_semantic_claims[..., -2:]) == 0
+    assert torch.count_nonzero(output.temporal_semantic_consumption[..., -2:]) == 0
+    assert torch.count_nonzero(
+        output.temporal_effective_semantic_consumption[..., -2:]
+    ) == 0
     assert output.temporal_semantic_claims.dtype == torch.float32
 
 
@@ -84,7 +88,9 @@ def test_residual_monotonicity_selected_only_and_same_parent(
     assert torch.all(residuals[:, 1:] <= residuals[:, :-1] + 1e-7)
     for step in output.trace:
         expected = candidate_residual_previews(
-            step.parent_semantic_residual, step.effective_semantic_claims
+            step.parent_semantic_residual,
+            step.effective_semantic_claims,
+            step.semantic_consumption,
         )
         torch.testing.assert_close(
             step.candidate_semantic_residuals, expected, atol=0.0, rtol=0.0
@@ -113,16 +119,87 @@ def test_frozen_residual_control_preserves_rho0(synthetic_encoded) -> None:
     assert output.temporal_semantic_claims is not None
 
 
+def test_conservative_initial_consumption_preserves_multistep_evidence(
+    synthetic_encoded,
+) -> None:
+    core = IAGSRMECore(_config()).eval()
+    output = core(synthetic_encoded, control="repeat_candidate_1")
+    rho = output.temporal_semantic_residuals
+    ratios = rho[:, 1:].sum(dim=-1) / rho[:, :-1].sum(dim=-1)
+    torch.testing.assert_close(
+        ratios,
+        torch.full_like(ratios, 1.0 - 0.99 * 0.05),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert float(ratios[:, 0].detach().mean()) > 0.94
+
+
+def test_claim_read_strength_is_independent_from_consumption() -> None:
+    residual = torch.ones(1, 3)
+    claims = torch.full((1, 1, 3), 0.99)
+    low = torch.full_like(claims, 0.05)
+    high = torch.full_like(claims, 0.80)
+    low_preview = candidate_residual_previews(residual, claims, low)
+    high_preview = candidate_residual_previews(residual, claims, high)
+    tokens = torch.arange(6, dtype=torch.float32).reshape(1, 3, 2)
+    mask = torch.ones(1, 3, dtype=torch.bool)
+    _, _, semantic_mass, semantic_content = claimed_text_content(
+        tokens, claims, residual, mask
+    )
+    assert float(semantic_mass) == pytest.approx(0.99, abs=1e-6)
+    assert float(semantic_content.norm()) > 0
+    assert float(low_preview.mean()) == pytest.approx(0.9505, abs=1e-6)
+    assert float(high_preview.mean()) == pytest.approx(0.208, abs=1e-6)
+    assert torch.equal(claims, claims.clone())
+
+
+def test_semantic_direction_and_mass_decompose_uniform_residual_scaling() -> None:
+    tokens = torch.tensor([[[1.0, 0.0], [0.0, 2.0], [1.0, 1.0]]])
+    mask = torch.ones(1, 3, dtype=torch.bool)
+    claims = torch.ones(1, 1, 3)
+    results = []
+    for scale in (1.0, 0.1, 0.001):
+        residual = torch.full((1, 3), scale)
+        _, direction, mass, content = claimed_text_content(
+            tokens, claims, residual, mask
+        )
+        results.append((direction, mass, content))
+    for direction, _, _ in results[1:]:
+        torch.testing.assert_close(direction, results[0][0], atol=1e-6, rtol=1e-6)
+    assert float(results[1][1]) == pytest.approx(0.1, abs=1e-6)
+    assert float(results[2][1]) == pytest.approx(0.001, abs=1e-7)
+    norm0 = float(results[0][2].norm())
+    assert float(results[1][2].norm()) == pytest.approx(norm0 * 0.1, rel=1e-5)
+    assert float(results[2][2].norm()) == pytest.approx(norm0 * 0.001, rel=1e-5)
+    _, _, zero_mass, zero_content = claimed_text_content(
+        tokens, claims, torch.zeros(1, 3), mask
+    )
+    assert torch.count_nonzero(zero_mass) == 0
+    assert torch.count_nonzero(zero_content) == 0
+
+
+def test_stop_preserves_residual_exactly() -> None:
+    residual = torch.rand(2, 5)
+    claims = torch.rand(2, 4, 5)
+    consumption = torch.rand(2, 4, 5)
+    previews = candidate_residual_previews(residual, claims, consumption)
+    stop = torch.nn.functional.one_hot(torch.full((2,), 4), 5).float()
+    assert torch.equal(select_next_residual(previews, residual, stop), residual)
+
+
 def test_claim_firewall_blocks_unclaimed_token_content(synthetic_encoded) -> None:
     tokens = synthetic_encoded.text_tokens.clone()
     residual = synthetic_encoded.text_content_mask.float()
     claims = torch.zeros(3, 4, 8)
     claims[:, 0, 1] = 1.0
-    weights, content = claimed_text_content(tokens, claims, residual)
+    weights, _, _, content = claimed_text_content(
+        tokens, claims, residual, synthetic_encoded.text_content_mask
+    )
     changed = tokens.clone()
     changed[:, 6] += 1000.0
-    changed_weights, changed_content = claimed_text_content(
-        changed, claims, residual
+    changed_weights, _, _, changed_content = claimed_text_content(
+        changed, claims, residual, synthetic_encoded.text_content_mask
     )
     assert torch.equal(weights, changed_weights)
     assert torch.equal(content[:, 0], changed_content[:, 0])
@@ -146,9 +223,10 @@ def test_claim_swap_changes_executable_semantics(synthetic_encoded) -> None:
     for candidate in range(4):
         controlled[:, candidate, candidate + 1] = 0.8
     logits = torch.zeros_like(controlled)
+    consumption = torch.full_like(controlled, 0.05)
 
     def claims(*_args, **_kwargs):
-        return logits, controlled
+        return logits, controlled, logits, consumption
 
     with patch.object(core.semantic_claim, "forward", side_effect=claims):
         full = core(synthetic_encoded)
@@ -196,8 +274,19 @@ def test_target_firewall_and_r2_trace_shapes(synthetic_encoded) -> None:
     output = core(synthetic_encoded)
     assert output.temporal_semantic_residuals.shape == (3, 4, 8)
     assert output.temporal_semantic_claims.shape == (3, 3, 4, 8)
+    assert output.temporal_semantic_consumption.shape == (3, 3, 4, 8)
+    assert output.temporal_effective_semantic_consumption.shape == (3, 3, 4, 8)
     assert output.temporal_intents.shape == (3, 3, 4, 32)
     assert output.temporal_supports.shape == (3, 3, 4, 13)
+    for step in output.trace:
+        assert step.semantic_consumption.shape == (3, 4, 8)
+        assert step.effective_semantic_consumption.shape == (3, 4, 8)
+        assert step.claimed_semantic_mass.shape == (3, 4)
+        assert step.claimed_semantic_direction.shape == (3, 4, 32)
+        assert step.claimed_text_content.shape == (3, 4, 32)
+        assert step.semantic_consumption.dtype == torch.float32
+        assert step.effective_semantic_consumption.dtype == torch.float32
+        assert step.claimed_semantic_mass.dtype == torch.float32
 
 
 def test_amp_claim_and_residual_arithmetic_stays_fp32() -> None:
@@ -208,15 +297,40 @@ def test_amp_claim_and_residual_arithmetic_stays_fp32() -> None:
     residual = initialize_semantic_residual(mask)
     state = torch.randn(2, 7, 8).bfloat16()
     with torch.autocast("cpu", dtype=torch.bfloat16):
-        logits, claims = module(queries, text, mask, residual, state)
-        previews = candidate_residual_previews(residual, claims)
+        claim_logits, claims, consumption_logits, consumption = module(
+            queries, text, mask, residual, state
+        )
+        previews = candidate_residual_previews(residual, claims, consumption)
+        weights, direction, semantic_mass, semantic_content = claimed_text_content(
+            text, claims, residual, mask
+        )
         action = torch.nn.functional.one_hot(
             torch.zeros(2, dtype=torch.long), 5
         ).float()
         updated = select_next_residual(previews, residual, action)
-    assert logits.dtype == claims.dtype == updated.dtype == torch.float32
+    assert (
+        claim_logits.dtype
+        == claims.dtype
+        == consumption_logits.dtype
+        == consumption.dtype
+        == previews.dtype
+        == updated.dtype
+        == weights.dtype
+        == direction.dtype
+        == semantic_mass.dtype
+        == semantic_content.dtype
+        == torch.float32
+    )
     assert torch.all(updated <= residual)
     assert torch.isfinite(claims).all()
+
+    fine_consumption = consumption.clone()
+    fine_consumption[0, 0, 0] += 1e-5
+    fine_previews = candidate_residual_previews(
+        residual, claims, fine_consumption
+    )
+    assert fine_previews.dtype == torch.float32
+    assert fine_previews[0, 0, 0] != previews[0, 0, 0]
 
 
 def test_canonical_r2_hydra_config() -> None:
@@ -236,6 +350,9 @@ def test_canonical_r2_hydra_config() -> None:
     assert config.model.enable_dynamic_applicability is False
     assert config.model.enable_semantic_residual is True
     assert config.model.claim_activation == "sigmoid"
+    assert config.model.initial_consumption_probability == 0.05
+    assert config.model.consumption_activation == "sigmoid"
+    assert config.model.residual_update_rule == "selected_claim_times_consumption"
     assert config.model.semantic_residual_fp32 is True
     assert config.experiment.epochs == 20
     assert config.experiment.learning_rate == 1e-5
@@ -261,7 +378,7 @@ def test_r2_checkpoint_replay_requires_exact_architecture(synthetic_encoded) -> 
     checkpoint = {
         "model_config": asdict(core.config),
         "metadata": {
-            "architecture_generation": "r2_semantic_residual_claim_firewall_v1"
+            "architecture_generation": "r2_semantic_residual_claim_firewall_v2"
         },
         "metric": 12.5,
     }
@@ -279,6 +396,23 @@ def test_r2_checkpoint_replay_requires_exact_architecture(synthetic_encoded) -> 
     with pytest.raises(ValueError, match="exact replay is unsafe"):
         _resolve_checkpoint_model_config(ambiguous, state, retrieval_dim=24)
 
+    v1_state = {
+        key: value
+        for key, value in state.items()
+        if not key.startswith("core.semantic_claim.consumption_projection.")
+    }
+    v1_checkpoint = {
+        "model_config": {
+            **asdict(core.config),
+            "residual_update_rule": "selected_multiplicative",
+        },
+        "metadata": {
+            "architecture_generation": "r2_semantic_residual_claim_firewall_v1"
+        },
+    }
+    with pytest.raises(ValueError, match="R2-v1 checkpoint"):
+        _resolve_checkpoint_model_config(v1_checkpoint, v1_state, retrieval_dim=24)
+
 
 def test_claim_zero_init_then_upstream_learns(synthetic_encoded) -> None:
     core = IAGSRMECore(_config()).train()
@@ -291,10 +425,15 @@ def test_claim_zero_init_then_upstream_learns(synthetic_encoded) -> None:
     first = core(synthetic_encoded, control="repeat_candidate_1")
     first.final_query.square().mean().backward()
     assert any(parameter.grad is not None for parameter in families["semantic_claim_output"])
+    immediately_active = {
+        "semantic_claim_output",
+        "semantic_consumption_output",
+        "residual_conditioned_intent",
+    }
     assert all(
         parameter.grad is None or torch.count_nonzero(parameter.grad) == 0
         for name, parameters in families.items()
-        if name != "semantic_claim_output"
+        if name not in immediately_active
         for parameter in parameters
     )
     optimizer.step()

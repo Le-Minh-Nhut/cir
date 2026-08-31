@@ -100,7 +100,8 @@ def main() -> None:
     optimizer = SGD(r2.parameters(), lr=1.0)
     objective = IAGSRMEObjective(ObjectiveConfig(), width=width)
     tracked = {
-        "claim_output": r2.semantic_claim.compatibility[-1].weight,
+        "claim_output": r2.semantic_claim.claim_projection.weight,
+        "consumption_output": r2.semantic_claim.consumption_projection.weight,
         "claim_query": r2.semantic_claim.query_projection.weight,
         "claim_token": r2.semantic_claim.token_projection.weight,
         "claim_state": r2.semantic_claim.state_projection.weight,
@@ -119,7 +120,10 @@ def main() -> None:
         losses["total"].backward()
         pass_gradients.append(
             {
-                "claim_output": _grad_norm(r2.semantic_claim.compatibility[-1].parameters()),
+                "claim_output": _grad_norm(r2.semantic_claim.claim_projection.parameters()),
+                "consumption_output": _grad_norm(
+                    r2.semantic_claim.consumption_projection.parameters()
+                ),
                 "claim_upstream": _grad_norm(
                     list(r2.semantic_claim.query_projection.parameters())
                     + list(r2.semantic_claim.token_projection.parameters())
@@ -140,7 +144,7 @@ def main() -> None:
         for step in output.trace
     )
     report = {
-        "architecture_generation": "r2_semantic_residual_claim_firewall_v1",
+        "architecture_generation": "r2_semantic_residual_claim_firewall_v2",
         "shapes": {
             "rho": list(output.temporal_semantic_residuals.shape),
             "claims": list(output.temporal_semantic_claims.shape),
@@ -150,8 +154,33 @@ def main() -> None:
             "final_query": list(output.final_query.shape),
         },
         "t0_parent_parity_max_abs_error": t0_errors,
-        "rho_mean_by_state": output.temporal_semantic_residuals.mean(dim=(0, 2)).tolist(),
-        "claim_mean_by_timestep": output.temporal_semantic_claims.mean(dim=(0, 2, 3)).tolist(),
+        "initial_rho_mean_by_state": initial_output.temporal_semantic_residuals.mean(
+            dim=(0, 2)
+        ).tolist(),
+        "rho_mean_by_state_after_updates": output.temporal_semantic_residuals.mean(
+            dim=(0, 2)
+        ).tolist(),
+        "claim_mean_by_timestep": initial_output.temporal_semantic_claims.mean(
+            dim=(0, 2, 3)
+        ).tolist(),
+        "consumption_mean_by_timestep": initial_output.temporal_semantic_consumption.mean(
+            dim=(0, 2, 3)
+        ).tolist(),
+        "effective_consumption_mean_by_timestep": (
+            initial_output.temporal_effective_semantic_consumption.mean(
+                dim=(0, 2, 3)
+            ).tolist()
+        ),
+        "semantic_mass_mean_by_timestep": [
+            float(step.claimed_semantic_mass.detach().mean())
+            for step in initial_output.trace
+        ],
+        "semantic_content_norm_by_timestep": [
+            float(
+                step.claimed_text_content.detach().float().norm(dim=-1).mean()
+            )
+            for step in initial_output.trace
+        ],
         "claim_dtype": str(output.temporal_semantic_claims.dtype),
         "rho_dtype": str(output.temporal_semantic_residuals.dtype),
         "gradient_norms_by_update": pass_gradients,
@@ -164,6 +193,11 @@ def main() -> None:
         "losses": {name: float(value.detach()) for name, value in losses.items()},
         "finite": bool(torch.isfinite(losses["total"])),
     }
+    initial_rho = report["initial_rho_mean_by_state"]
+    if not 0.94 <= initial_rho[1] / initial_rho[0] <= 0.96:
+        raise AssertionError(
+            f"conservative initial consumption contract failed: {initial_rho}"
+        )
     if not report["finite"] or not firewall or same_parent_error != 0.0:
         raise AssertionError(report)
     print(json.dumps(report, indent=2, sort_keys=True))

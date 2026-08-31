@@ -1045,6 +1045,21 @@ class ValidationDiagnosticAccumulator:
         self.consumption_cosine_by_timestep = [
             _MaskedMatrixStats(candidates) for _ in range(timesteps)
         ]
+        self.effective_consumption_cosine_by_timestep = [
+            _MaskedMatrixStats(candidates) for _ in range(timesteps)
+        ]
+        self.consumption_probability_by_timestep = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.effective_consumption_by_timestep = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.semantic_mass_by_timestep = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.semantic_content_norm_by_timestep = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
         self.selected_consumption_mass = [
             _DistributionStats() for _ in range(timesteps)
         ]
@@ -1373,7 +1388,14 @@ class ValidationDiagnosticAccumulator:
     def _update_semantic_residual(self, output: IAGSRMEOutput) -> None:
         residuals = output.temporal_semantic_residuals
         claims = output.temporal_semantic_claims
-        if residuals is None or claims is None:
+        consumption = output.temporal_semantic_consumption
+        effective_consumption = output.temporal_effective_semantic_consumption
+        if (
+            residuals is None
+            or claims is None
+            or consumption is None
+            or effective_consumption is None
+        ):
             return
         self.semantic_residual_seen = True
         if residuals.shape[1] != self.timesteps + 1:
@@ -1394,7 +1416,11 @@ class ValidationDiagnosticAccumulator:
             live = step.live_before
             if not live.any():
                 continue
-            current_claims = claims[live, timestep].float()
+            current_claims = claims[:, timestep][live].float()
+            current_consumption = consumption[:, timestep][live].float()
+            current_effective_consumption = effective_consumption[:, timestep][
+                live
+            ].float()
             token_mask = valid_tokens[live, None, :]
             current_claims = current_claims * token_mask
             mass = current_claims.sum(dim=-1)
@@ -1413,24 +1439,39 @@ class ValidationDiagnosticAccumulator:
                 current_claims[:, :, None], current_claims[:, None, :]
             ).sum(-1).clamp_min(1e-8)
             self.claim_overlap_by_timestep[timestep].update(overlap, pair_valid)
-            previews = step.parent_semantic_residual[:, None] - step.candidate_semantic_residuals
-            live_previews = previews[live].float()
-            preview_mass = live_previews.norm(dim=-1)
-            preview_valid = preview_mass[:, :, None].gt(1e-8) & preview_mass[:, None, :].gt(1e-8)
+            self.consumption_probability_by_timestep[timestep].update(
+                current_consumption[token_mask.expand_as(current_consumption)]
+            )
+            self.effective_consumption_by_timestep[timestep].update(
+                current_effective_consumption[
+                    token_mask.expand_as(current_effective_consumption)
+                ]
+            )
             self.consumption_cosine_by_timestep[timestep].update(
-                pairwise_cosine_matrix(live_previews), preview_valid
+                pairwise_cosine_matrix(current_consumption), pair_valid
+            )
+            self.effective_consumption_cosine_by_timestep[timestep].update(
+                pairwise_cosine_matrix(current_effective_consumption), pair_valid
+            )
+            self.semantic_mass_by_timestep[timestep].update(
+                step.claimed_semantic_mass[live]
+            )
+            self.semantic_content_norm_by_timestep[timestep].update(
+                step.claimed_text_content[live].float().norm(dim=-1)
             )
             executed = live & step.selected_index.lt(self.candidates)
             if not executed.any():
                 continue
-            consumption = step.selected_semantic_consumption[executed].float()
+            selected_consumption = step.selected_semantic_consumption[executed].float()
             parent_mass = step.parent_semantic_residual[executed].float().sum(-1)
-            consumed_mass = consumption.sum(-1)
+            consumed_mass = selected_consumption.sum(-1)
             self.selected_consumption_mass[timestep].update(consumed_mass)
             self.selected_consumed_token_count[timestep].update(
-                consumption.gt(1e-3).float().sum(-1)
+                selected_consumption.gt(1e-3).float().sum(-1)
             )
-            conditional_consumption = consumption / consumed_mass[:, None].clamp_min(1e-8)
+            conditional_consumption = (
+                selected_consumption / consumed_mass[:, None].clamp_min(1e-8)
+            )
             consumption_entropy = -(
                 conditional_consumption
                 * conditional_consumption.clamp_min(1e-8).log()
@@ -1448,7 +1489,7 @@ class ValidationDiagnosticAccumulator:
             self.selected_near_total_consumption[timestep] += int(
                 consumed_mass.ge(0.9 * parent_mass.clamp_min(1e-8)).sum()
             )
-            self.selected_consumption_count[timestep] += consumption.shape[0]
+            self.selected_consumption_count[timestep] += selected_consumption.shape[0]
 
     def semantic_residual_summary(self) -> dict[str, Any]:
         if not self.semantic_residual_seen:
@@ -1482,7 +1523,12 @@ class ValidationDiagnosticAccumulator:
                     "claim_effective_size": self.claim_effective_size_by_timestep[timestep].summary(),
                     "claim_pairwise_cosine": self.claim_cosine_by_timestep[timestep].off_diagonal_summary(),
                     "claim_pairwise_overlap": self.claim_overlap_by_timestep[timestep].off_diagonal_summary(),
-                    "candidate_consumption_displacement_cosine": self.consumption_cosine_by_timestep[timestep].off_diagonal_summary(),
+                    "consumption_probability": self.consumption_probability_by_timestep[timestep].summary(),
+                    "effective_consumption": self.effective_consumption_by_timestep[timestep].summary(),
+                    "consumption_pairwise_cosine": self.consumption_cosine_by_timestep[timestep].off_diagonal_summary(),
+                    "effective_consumption_pairwise_cosine": self.effective_consumption_cosine_by_timestep[timestep].off_diagonal_summary(),
+                    "semantic_remaining_mass": self.semantic_mass_by_timestep[timestep].summary(),
+                    "semantic_content_norm": self.semantic_content_norm_by_timestep[timestep].summary(),
                     "selected_consumed_mass": self.selected_consumption_mass[timestep].summary(),
                     "selected_consumed_token_count": self.selected_consumed_token_count[timestep].summary(),
                     "selected_consumption_effective_size": self.selected_consumption_effective_size[timestep].summary(),
@@ -1498,11 +1544,17 @@ class ValidationDiagnosticAccumulator:
             )
         return {
             "enabled": True,
-            "architecture_generation": "r2_semantic_residual_claim_firewall_v1",
+            "architecture_generation": "r2_semantic_residual_claim_firewall_v2",
             "residual_states": states,
             "per_timestep": per_timestep,
             "claim_activation": "sigmoid; padding claim is exactly zero; no unit-mass constraint",
-            "residual_update": "rho_next=rho*(1-alpha_selected); STOP is absorbing",
+            "consumption_activation": (
+                "independent sigmoid gamma from the shared claim hidden state; "
+                "padding consumption is exactly zero"
+            ),
+            "residual_update": (
+                "rho_next=rho*(1-alpha_selected*gamma_selected); STOP is absorbing"
+            ),
             "lineage": "all K previews share rho_t; only the selected non-STOP candidate commits consumption",
             "interpretation_limit": "claim separation is descriptive; causality requires FULL/frozen/firewall/shuffle/swap retrieval controls and functional effects",
         }
@@ -2261,11 +2313,13 @@ def diagnostic_definitions() -> dict[str, dict[str, Any]]:
     return {
         "semantic_residual": {
             "definition": (
-                "rho_0=content_mask and rho_t+1=rho_t*(1-alpha_t,a_t) for the "
+                "rho_0=content_mask and rho_t+1=rho_t*(1-alpha_t,a_t*gamma_t,a_t) for the "
                 "selected non-STOP action; STOP leaves rho unchanged"
             ),
             "population": "all trajectories for state summaries; selected live edits for consumption",
-            "tensor_shape_before_reduction": "rho [B,T+1,L], alpha [B,T,K,L]",
+            "tensor_shape_before_reduction": (
+                "rho [B,T+1,L], alpha/gamma/effective consumption [B,T,K,L]"
+            ),
             "reduction_axes": "token distributions and per-query L1 mass; timestep retained",
             "interpretation_limitation": (
                 "decreasing rho is not semantic correctness; selectivity and same-checkpoint controls are required"
@@ -2273,8 +2327,10 @@ def diagnostic_definitions() -> dict[str, dict[str, Any]]:
         },
         "semantic_claim": {
             "definition": (
-                "alpha=sigmoid(f(q_k,rho_t*T,Z_t)); executable content is "
-                "sum(alpha*rho*T)/(sum(alpha*rho)+epsilon)"
+                "alpha=sigmoid(f(q_k,rho_t*T,Z_t)); gamma is an independent sigmoid "
+                "projection of the same hidden state; with w=alpha*rho, direction="
+                "sum(w*T)/(sum(w)+epsilon), mass=sum(w)/(N_valid+epsilon), and "
+                "executable content=mass*direction"
             ),
             "population": "all K claims of parents live before each decision",
             "tensor_shape_before_reduction": "[B_live,K,L]",
@@ -2768,8 +2824,10 @@ _LEGACY_CANONICAL_MODEL_CONFIG = {
     "enable_dynamic_reproposal": False,
     "enable_semantic_residual": False,
     "initial_claim_probability": 0.99,
+    "initial_consumption_probability": 0.05,
     "claim_activation": "sigmoid",
-    "residual_update_rule": "selected_multiplicative",
+    "consumption_activation": "sigmoid",
+    "residual_update_rule": "selected_claim_times_consumption",
     "residual_initialization": "valid_token_ones",
     "semantic_residual_fp32": True,
 }
@@ -2827,6 +2885,10 @@ def _resolve_checkpoint_model_config(
     inferred_semantic_residual = any(
         key.startswith("core.semantic_claim.") for key in state
     )
+    inferred_semantic_consumption = any(
+        key.startswith("core.semantic_claim.consumption_projection.")
+        for key in state
+    )
     if inferred_entmax_null_v1:
         raise ValueError(
             "checkpoint uses superseded r1b_visual_null_entmax_v1; it cannot be "
@@ -2875,14 +2937,16 @@ def _resolve_checkpoint_model_config(
             required_fields.update(
                 {"enable_dynamic_regrounding", "enable_dynamic_reproposal"}
             )
-        if stored_generation == "r2_semantic_residual_claim_firewall_v1":
+        if stored_generation == "r2_semantic_residual_claim_firewall_v2":
             required_fields.update(
                 {
                     "enable_dynamic_regrounding",
                     "enable_dynamic_reproposal",
                     "enable_semantic_residual",
                     "initial_claim_probability",
+                    "initial_consumption_probability",
                     "claim_activation",
+                    "consumption_activation",
                     "residual_update_rule",
                     "residual_initialization",
                     "semantic_residual_fp32",
@@ -2954,7 +3018,11 @@ def _resolve_checkpoint_model_config(
                 "serialized semantic-residual flag conflicts with checkpoint state dict"
             )
         if inferred_semantic_residual:
-            if stored_generation != "r2_semantic_residual_claim_firewall_v1":
+            if not inferred_semantic_consumption:
+                raise ValueError(
+                    "R2-v1 checkpoint couples claim and consumption and cannot be replayed as R2-v2"
+                )
+            if stored_generation != "r2_semantic_residual_claim_firewall_v2":
                 raise ValueError(
                     "semantic-residual checkpoint has missing or conflicting architecture generation"
                 )
@@ -3037,7 +3105,11 @@ def _resolve_checkpoint_model_config(
         "initial_claim_probability": float(
             replay_values["initial_claim_probability"]
         ),
+        "initial_consumption_probability": float(
+            replay_values["initial_consumption_probability"]
+        ),
         "claim_activation": str(replay_values["claim_activation"]),
+        "consumption_activation": str(replay_values["consumption_activation"]),
         "residual_update_rule": str(replay_values["residual_update_rule"]),
         "residual_initialization": str(replay_values["residual_initialization"]),
         "semantic_residual_fp32": bool(
@@ -3064,6 +3136,7 @@ def _resolve_checkpoint_model_config(
             "enable_dynamic_applicability": inferred_dynamic_applicability,
             "enable_dynamic_reproposal": inferred_dynamic_reproposal,
             "enable_semantic_residual": inferred_semantic_residual,
+            "semantic_consumption_head": inferred_semantic_consumption,
             "enable_dynamic_regrounding": (
                 "not inferable from state dict; resolved from serialized model config"
             ),
@@ -3072,7 +3145,7 @@ def _resolve_checkpoint_model_config(
         "diagnostic_inference_override": {"selector_gumbel_noise": False},
         "warning": warning,
         "architecture_generation": (
-            "r2_semantic_residual_claim_firewall_v1"
+            "r2_semantic_residual_claim_firewall_v2"
             if resolved["enable_semantic_residual"]
             else (
                 "r1c2_dynamic_current_state_reproposal_v1"
@@ -3631,7 +3704,7 @@ def _checkpoint_replay_guard(
         "r1b_dynamic_applicability_gate_v2",
         "r1c1_dynamic_current_state_reground_v1",
         "r1c2_dynamic_current_state_reproposal_v1",
-        "r2_semantic_residual_claim_firewall_v1",
+        "r2_semantic_residual_claim_firewall_v2",
     }
     if generation not in supported_generations:
         return {
@@ -3721,9 +3794,16 @@ def _checkpoint_replay_guard(
                 "claim_activation_is_sigmoid": (
                     resolved.get("claim_activation") == "sigmoid"
                 ),
-                "residual_update_is_selected_multiplicative": (
+                "residual_update_is_claim_times_consumption": (
                     resolved.get("residual_update_rule")
-                    == "selected_multiplicative"
+                    == "selected_claim_times_consumption"
+                ),
+                "consumption_activation_is_sigmoid": (
+                    resolved.get("consumption_activation") == "sigmoid"
+                ),
+                "initial_consumption_is_0.05": (
+                    float(resolved.get("initial_consumption_probability", -1.0))
+                    == 0.05
                 ),
                 "residual_is_fp32": (
                     resolved.get("semantic_residual_fp32") is True
@@ -3750,7 +3830,7 @@ def _checkpoint_replay_guard(
         "trusted_r1c2_replay": generation
         == "r1c2_dynamic_current_state_reproposal_v1",
         "trusted_r2_replay": generation
-        == "r2_semantic_residual_claim_firewall_v1",
+        == "r2_semantic_residual_claim_firewall_v2",
         "checks": checks,
         "saved_checkpoint_metric": float(saved_metric),
         "replayed_full_mean_recall": replayed_mean_recall,

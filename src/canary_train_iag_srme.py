@@ -20,7 +20,14 @@ from datasets.fashioniq import FashionIQDataset
 from diagnostics.iag_srme import functional_effective_rank, pairwise_cosine
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from losses.retrieval import positive_mask_from_ids
-from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig, IAGSRMECore
+from models.iag_srme import (
+    FGCLIPBackbone,
+    FGCLIPRegime,
+    IAGSRME,
+    IAGSRMEConfig,
+    IAGSRMECore,
+    architecture_generation,
+)
 from runtime import configure_torch_runtime, seed_everything
 from training.engine import assert_training_setup, resolve_precision, trainable_parameters
 
@@ -82,18 +89,22 @@ def _semantic_claim_audit_groups(
     """Return R2 claim/firewall branches for cumulative learnability checks."""
 
     families = {
-        "semantic_claim_output": list(claim.compatibility[-1].parameters()),
+        "semantic_claim_output": list(claim.claim_projection.parameters()),
+        "semantic_consumption_output": list(
+            claim.consumption_projection.parameters()
+        ),
         "semantic_claim_query": list(claim.query_projection.parameters()),
         "semantic_claim_token": list(claim.token_projection.parameters()),
         "semantic_claim_state": list(claim.state_projection.parameters()),
-        "semantic_claim_hidden": list(claim.compatibility[:-1].parameters()),
+        "semantic_claim_hidden": list(claim.shared_hidden.parameters()),
     }
     representatives = {
-        "semantic_claim_output": claim.compatibility[-1].weight,
+        "semantic_claim_output": claim.claim_projection.weight,
+        "semantic_consumption_output": claim.consumption_projection.weight,
         "semantic_claim_query": claim.query_projection.weight,
         "semantic_claim_token": claim.token_projection.weight,
         "semantic_claim_state": claim.state_projection.weight,
-        "semantic_claim_hidden": claim.compatibility[0].weight,
+        "semantic_claim_hidden": claim.shared_hidden[0].weight,
     }
     return families, representatives
 
@@ -239,13 +250,32 @@ def _batch_diagnostics(output) -> dict[str, object]:
 def _semantic_residual_diagnostics(output) -> dict[str, object] | None:
     residuals = output.temporal_semantic_residuals
     claims = output.temporal_semantic_claims
-    if residuals is None or claims is None:
+    consumption_probabilities = output.temporal_semantic_consumption
+    effective_consumption = output.temporal_effective_semantic_consumption
+    if (
+        residuals is None
+        or claims is None
+        or consumption_probabilities is None
+        or effective_consumption is None
+    ):
         return None
+    dtype_contract = {
+        "claim": str(claims.dtype),
+        "consumption": str(consumption_probabilities.dtype),
+        "effective_consumption": str(effective_consumption.dtype),
+        "residual": str(residuals.dtype),
+    }
     residuals = residuals.detach().float()
     claims = claims.detach().float()
+    consumption_probabilities = consumption_probabilities.detach().float()
+    effective_consumption = effective_consumption.detach().float()
     rho_means = [float(residuals[:, timestep].mean()) for timestep in range(residuals.shape[1])]
     consumption = []
     claim_cosines = []
+    consumption_cosines = []
+    effective_consumption_cosines = []
+    semantic_mass_by_timestep = []
+    semantic_content_norm_by_timestep = []
     for timestep, step in enumerate(output.trace):
         live = step.live_before
         current_claims = claims[live, timestep]
@@ -257,7 +287,44 @@ def _semantic_residual_diagnostics(output) -> dict[str, object] | None:
                 current_claims.shape[1], dtype=torch.bool, device=matrix.device
             )
             claim_cosines.append(float(matrix[:, off_diagonal].mean()))
+            for values, destination in (
+                (consumption_probabilities[live, timestep], consumption_cosines),
+                (effective_consumption[live, timestep], effective_consumption_cosines),
+            ):
+                pairwise = torch.nn.functional.cosine_similarity(
+                    values[:, :, None], values[:, None, :], dim=-1
+                )
+                destination.append(float(pairwise[:, off_diagonal].mean()))
+            semantic_mass_by_timestep.append(
+                float(step.claimed_semantic_mass[live].float().mean())
+            )
+            semantic_content_norm_by_timestep.append(
+                float(step.claimed_text_content[live].float().norm(dim=-1).mean())
+            )
         executed = live & step.selected_index.lt(claims.shape[2])
+        expected_previews = step.parent_semantic_residual[:, None] * (
+            1.0 - step.effective_semantic_consumption
+        )
+        torch.testing.assert_close(
+            step.candidate_semantic_residuals,
+            expected_previews,
+            atol=1e-7,
+            rtol=1e-7,
+        )
+        expected_next = torch.einsum(
+            "bk,bkl->bl",
+            step.action_st.float(),
+            torch.cat(
+                [
+                    step.candidate_semantic_residuals,
+                    step.parent_semantic_residual[:, None],
+                ],
+                dim=1,
+            ).float(),
+        )
+        torch.testing.assert_close(
+            step.next_semantic_residual, expected_next, atol=1e-7, rtol=1e-7
+        )
         if executed.any():
             consumption.append(
                 step.selected_semantic_consumption[executed].detach().float().sum(-1)
@@ -269,13 +336,31 @@ def _semantic_residual_diagnostics(output) -> dict[str, object] | None:
             float(consumed.mean()) if consumed.numel() else None
         ),
         "claim_cosine_between_candidates_by_timestep": claim_cosines,
-        "claim_dtype": str(claims.dtype),
-        "residual_dtype": str(residuals.dtype),
+        "consumption_cosine_between_candidates_by_timestep": consumption_cosines,
+        "effective_consumption_cosine_between_candidates_by_timestep": (
+            effective_consumption_cosines
+        ),
+        "claim": _tensor_summary(claims),
+        "consumption": _tensor_summary(consumption_probabilities),
+        "effective_consumption": _tensor_summary(effective_consumption),
+        "semantic_remaining_mass_by_timestep": semantic_mass_by_timestep,
+        "semantic_content_norm_by_timestep": semantic_content_norm_by_timestep,
+        "dtype_contract": dtype_contract,
         "same_parent_residual": all(
             step.parent_semantic_residual is not None
             and step.candidate_semantic_residuals is not None
             for step in output.trace
         ),
+    }
+
+
+def _tensor_summary(values: Tensor) -> dict[str, float]:
+    values = values.detach().float()
+    return {
+        "mean": float(values.mean()),
+        "standard_deviation": float(values.std(unbiased=False)),
+        "minimum": float(values.min()),
+        "maximum": float(values.max()),
     }
 
 
@@ -565,6 +650,7 @@ def _build_canary_model(
             enable_dynamic_reproposal=dynamic_reproposal,
             enable_semantic_residual=semantic_residual,
             initial_claim_probability=0.99,
+            initial_consumption_probability=0.05,
         )
     )
     return IAGSRME(backbone, core).to(device), tokenizer, processor
@@ -673,6 +759,10 @@ def main() -> None:
             raise AssertionError(
                 "R2 requires claim firewall/dynamic WHERE with reproposal/applicability off"
             )
+        if architecture_generation(model.core.config) != (
+            "r2_semantic_residual_claim_firewall_v2"
+        ):
+            raise AssertionError("R2 canary architecture generation mismatch")
     elif args.r1c2:
         if (
             not model.core.config.enable_dynamic_regrounding
@@ -975,6 +1065,21 @@ def main() -> None:
             temporal_intent = diagnostics["temporal_intent"]
             if isinstance(temporal_intent, dict):
                 latest_intent_diagnostics = temporal_intent
+            semantic_diagnostics = diagnostics["semantic_residual"]
+            if args.r2:
+                if not isinstance(semantic_diagnostics, dict):
+                    raise AssertionError("R2 canary output lacks semantic residual trace")
+                wrong_dtypes = {
+                    name: dtype
+                    for name, dtype in semantic_diagnostics[
+                        "dtype_contract"
+                    ].items()
+                    if dtype != "torch.float32"
+                }
+                if wrong_dtypes:
+                    raise AssertionError(
+                        f"R2 semantic probabilities/residual must remain FP32: {wrong_dtypes}"
+                    )
             actions = torch.stack([trace.selected_index.detach().cpu() for trace in output.trace], 1)
             action_counts += torch.bincount(actions.flatten(), minlength=5)
             stop_step_counts += actions.eq(4).sum(dim=0)
@@ -1262,6 +1367,18 @@ def main() -> None:
         claim_cosines = latest_semantic_residual[
             "claim_cosine_between_candidates_by_timestep"
         ]
+        consumption_cosines = latest_semantic_residual[
+            "consumption_cosine_between_candidates_by_timestep"
+        ]
+        effective_cosines = latest_semantic_residual[
+            "effective_consumption_cosine_between_candidates_by_timestep"
+        ]
+        semantic_mass = latest_semantic_residual[
+            "semantic_remaining_mass_by_timestep"
+        ]
+        semantic_norm = latest_semantic_residual[
+            "semantic_content_norm_by_timestep"
+        ]
         scientific_warning_flags.update(
             {
                 "high_claim_clone": bool(
@@ -1272,7 +1389,18 @@ def main() -> None:
                     len(rho) > 1 and rho[1] <= 0.01 * max(rho[0], 1e-8)
                 ),
                 "global_consumption_warning": bool(
-                    claim_cosines and min(claim_cosines) >= 0.999
+                    effective_cosines and min(effective_cosines) >= 0.999
+                ),
+                "high_consumption_clone": bool(
+                    consumption_cosines and max(consumption_cosines) >= 0.999
+                ),
+                "high_effective_consumption_clone": bool(
+                    effective_cosines and max(effective_cosines) >= 0.999
+                ),
+                "semantic_mass_ignored": bool(
+                    len(semantic_mass) > 1
+                    and semantic_mass[-1] < 0.9 * semantic_mass[0]
+                    and semantic_norm[-1] >= 0.99 * semantic_norm[0]
                 ),
             }
         )
