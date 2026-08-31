@@ -39,6 +39,7 @@ def validate_checkpoint_model_config(metadata: object, model_config: object) -> 
     # static grounding and must remain replay-compatible rather than becoming R1c1.
     normalized_stored = dict(stored)
     normalized_stored.setdefault("enable_dynamic_regrounding", False)
+    normalized_stored.setdefault("enable_dynamic_reproposal", False)
     if normalized_stored != configured:
         raise ValueError(
             "checkpoint model-config mismatch; replay with the exact stored configuration: "

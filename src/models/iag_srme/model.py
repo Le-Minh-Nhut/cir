@@ -15,6 +15,7 @@ from .grounding import AnchorGrounder
 from .intent import SemanticClaimHead, TextIntentEncoder
 from .outputs import BackboneOutput, IAGSRMEOutput, RecurrentStepOutput
 from .readout import TokenStateReadout
+from .reproposal import DynamicIntentReproposal
 from .scorer import ConsequenceScorer
 from .selector import HardStopSelector, select_next_state
 
@@ -40,9 +41,12 @@ class IAGSRMEConfig:
     initial_applicability: float = 0.98
     grounding_normalization: str = "entmax15"
     enable_dynamic_regrounding: bool = False
+    enable_dynamic_reproposal: bool = False
 
 
 def architecture_generation(config: IAGSRMEConfig) -> str:
+    if config.enable_dynamic_reproposal:
+        return "r1c2_dynamic_current_state_reproposal_v1"
     if config.enable_dynamic_regrounding:
         return "r1c1_dynamic_current_state_reground_v1"
     if config.enable_dynamic_applicability:
@@ -66,6 +70,12 @@ class IAGSRMECore(nn.Module):
                 "N+1 Entmax Visual NULL is superseded and cannot be replayed as the "
                 "corrected dynamic-applicability architecture"
             )
+        if config.enable_dynamic_reproposal and not config.enable_dynamic_regrounding:
+            raise ValueError("dynamic reproposal requires dynamic regrounding")
+        if config.enable_dynamic_reproposal and config.enable_dynamic_applicability:
+            raise ValueError(
+                "R1c2 isolates dynamic WHAT/WHERE and cannot enable R1b applicability"
+            )
         if config.enable_dynamic_regrounding and config.enable_dynamic_applicability:
             raise ValueError(
                 "R1c1 isolates dynamic WHERE and cannot enable R1b applicability"
@@ -77,6 +87,11 @@ class IAGSRMECore(nn.Module):
         self.grounder = AnchorGrounder(
             config.width,
             normalization=config.grounding_normalization,
+        )
+        self.reproposal = (
+            DynamicIntentReproposal(config.width, config.num_heads)
+            if config.enable_dynamic_reproposal
+            else None
         )
         self.grounded_reader = GroundedStateReader(config.width)
         self.context_fuser = GroundedEditContext(config.width)
@@ -121,6 +136,7 @@ class IAGSRMECore(nn.Module):
             "mean_candidate",
             "random_candidate",
             "frozen_t0_order",
+            "frozen_t0_what",
         }
         if control not in valid_controls:
             raise ValueError(f"unsupported rollout control: {control}")
@@ -130,13 +146,15 @@ class IAGSRMECore(nn.Module):
         batch_size, tokens, width = anchor.shape
         if encoded.reference_global.shape != (batch_size, self.config.retrieval_dim):
             raise ValueError("reference_global must be [B,D]")
-        intents = self.intent_encoder(encoded.text_tokens, encoded.text_content_mask)
+        base_intents = self.intent_encoder(
+            encoded.text_tokens, encoded.text_content_mask
+        )
         # Static R0/R1a/R1b checkpoints retain one immutable-anchor grounding call.
         # R1c1 instead resolves current_supports from Z_t inside each recurrence step.
         static_supports = (
             None
             if self.config.enable_dynamic_regrounding
-            else self.grounder(intents, anchor)
+            else self.grounder(base_intents, anchor)
         )
         # A is immutable; assignment never changes after this point. Z starts at A.
         state = anchor
@@ -149,20 +167,38 @@ class IAGSRMECore(nn.Module):
         claims = None
         claim_logits = None
         if self.claim_head is not None:
-            claim_logits = self.claim_head(intents, encoded.text_tokens, encoded.text_content_mask)
+            claim_logits = self.claim_head(
+                base_intents, encoded.text_tokens, encoded.text_content_mask
+            )
             claims = torch.sigmoid(claim_logits) * encoded.text_content_mask[:, None].to(
                 claim_logits.dtype
             )
         factors = None
         auxiliary_anchor = None
         initial_supports: Tensor | None = None
+        temporal_intents: list[Tensor] = []
 
         for timestep in range(self.config.max_steps):
             current_state = state
             query_before = current_query
             live_before = live
+            current_intents = base_intents
+            intent_residual = torch.zeros_like(base_intents)
+            if (
+                timestep > 0
+                and self.reproposal is not None
+                and control != "frozen_t0_what"
+            ):
+                current_intents, intent_residual = self.reproposal(
+                    base_intents,
+                    current_state,
+                    anchor,
+                    encoded.text_tokens,
+                    encoded.text_content_mask,
+                )
+            temporal_intents.append(current_intents)
             current_supports = (
-                self.grounder(intents, current_state)
+                self.grounder(current_intents, current_state)
                 if self.config.enable_dynamic_regrounding
                 else static_supports
             )
@@ -174,11 +210,13 @@ class IAGSRMECore(nn.Module):
                 current_supports, anchor, current_state
             )
             if timestep == 0 and self.factor_fuser is not None and self.auxiliary_anchor is not None:
-                factors = self.factor_fuser(intents, original)
+                factors = self.factor_fuser(current_intents, original)
                 auxiliary_anchor = self.auxiliary_anchor(
                     encoded.reference_global, encoded.text_semantic_global
                 )
-            contexts = self.context_fuser(intents, original, current, change)
+            contexts = self.context_fuser(
+                current_intents, original, current, change
+            )
             applicability_logits = None
             execution_confidence = None
             null_probability = None
@@ -335,6 +373,9 @@ class IAGSRMECore(nn.Module):
                     spatial_supports=scorer_supports,
                     raw_spatial_supports=current_supports,
                     effective_spatial_supports=scorer_supports,
+                    base_intents=base_intents,
+                    current_intents=current_intents,
+                    intent_residual=intent_residual,
                 )
             )
             state = next_state
@@ -349,7 +390,7 @@ class IAGSRMECore(nn.Module):
             final_query=current_query,
             final_state=state,
             anchor=anchor,
-            intents=intents,
+            intents=base_intents,
             # Backward-compatible alias with explicit t0 semantics.
             supports=initial_supports,
             text_tokens=encoded.text_tokens,
@@ -364,6 +405,9 @@ class IAGSRMECore(nn.Module):
             initial_supports=initial_supports,
             temporal_supports=temporal_supports,
             dynamic_regrounding=self.config.enable_dynamic_regrounding,
+            initial_intents=base_intents,
+            temporal_intents=torch.stack(temporal_intents, dim=1),
+            dynamic_reproposal=self.config.enable_dynamic_reproposal,
             visual_null_probabilities=(
                 torch.stack(
                     [step.visual_null_probability for step in trace], dim=1

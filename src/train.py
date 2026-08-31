@@ -67,6 +67,9 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         enable_dynamic_regrounding=bool(
             cfg.model.get("enable_dynamic_regrounding", False)
         ),
+        enable_dynamic_reproposal=bool(
+            cfg.model.get("enable_dynamic_reproposal", False)
+        ),
     )
     return IAGSRME(backbone, IAGSRMECore(model_config)), tokenizer, processor
 

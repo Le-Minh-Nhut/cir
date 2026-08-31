@@ -48,6 +48,9 @@ class RecurrentStepOutput:
     spatial_supports: Tensor | None = None  # [B,K,N]
     raw_spatial_supports: Tensor | None = None  # [B,K,N], Ground(I, Z_t)
     effective_spatial_supports: Tensor | None = None  # [B,K,N], scorer/control view
+    base_intents: Tensor | None = None  # [B,K,d], immutable text-only WHAT
+    current_intents: Tensor | None = None  # [B,K,d], raw WHAT used at this step
+    intent_residual: Tensor | None = None  # [B,K,d], current_intents-base_intents
 
 
 @dataclass(slots=True)
@@ -71,3 +74,6 @@ class IAGSRMEOutput:
     initial_supports: Tensor | None = None  # [B,K,N], explicit t0 WHERE
     temporal_supports: Tensor | None = None  # [B,T,K,N]
     dynamic_regrounding: bool = False
+    initial_intents: Tensor | None = None  # [B,K,d], explicit immutable base WHAT
+    temporal_intents: Tensor | None = None  # [B,T,K,d], raw per-step WHAT
+    dynamic_reproposal: bool = False
