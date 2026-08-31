@@ -32,11 +32,17 @@ def validate_checkpoint_model_config(metadata: object, model_config: object) -> 
     stored = metadata.get("model_config")
     if stored is None:
         return  # Legacy R0/R1a checkpoints predate self-describing model config.
+    if not isinstance(stored, dict):
+        raise ValueError("checkpoint model_config metadata must be a mapping")
     configured = asdict(model_config)
-    if stored != configured:
+    # R0/R1a/R1b self-describing checkpoints predate the R1c1 flag. Missing means
+    # static grounding and must remain replay-compatible rather than becoming R1c1.
+    normalized_stored = dict(stored)
+    normalized_stored.setdefault("enable_dynamic_regrounding", False)
+    if normalized_stored != configured:
         raise ValueError(
             "checkpoint model-config mismatch; replay with the exact stored configuration: "
-            f"stored={stored}, configured={configured}"
+            f"stored={normalized_stored}, configured={configured}"
         )
 
 

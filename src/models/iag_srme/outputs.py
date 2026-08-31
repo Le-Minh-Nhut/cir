@@ -43,6 +43,7 @@ class RecurrentStepOutput:
     visual_confidence: Tensor | None = None  # [B,K]
     visual_null_probability: Tensor | None = None  # [B,K] = 1-confidence
     ungated_delta_z: Tensor | None = None  # [B,K,N,d], before applicability
+    spatial_supports: Tensor | None = None  # [B,K,N], WHERE used by this step
 
 
 @dataclass(slots=True)
@@ -51,7 +52,7 @@ class IAGSRMEOutput:
     final_state: Tensor  # [B,N,d]
     anchor: Tensor  # [B,N,d]
     intents: Tensor  # [B,K,d]
-    supports: Tensor  # [B,K,N], unit-mass sparse spatial WHERE
+    supports: Tensor  # [B,K,N], backward-compatible t0/initial WHERE
     text_tokens: Tensor  # [B,L,d]
     text_content_mask: Tensor  # [B,L]
     reference_global: Tensor  # [B,D]
@@ -63,3 +64,6 @@ class IAGSRMEOutput:
     conditional_supports: Tensor | None = None  # legacy diagnostic alias of supports
     visual_null_probabilities: Tensor | None = None  # [B,T,K], dynamic p_null
     visual_confidence: Tensor | None = None  # [B,T,K], dynamic confidence
+    initial_supports: Tensor | None = None  # [B,K,N], explicit t0 WHERE
+    temporal_supports: Tensor | None = None  # [B,T,K,N]
+    dynamic_regrounding: bool = False

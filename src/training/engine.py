@@ -14,7 +14,7 @@ from tqdm import tqdm
 from data.images import ImageBatch
 from losses.objective import IAGSRMEObjective
 from losses.retrieval import positive_mask_from_ids
-from models.iag_srme.model import IAGSRME
+from models.iag_srme.model import IAGSRME, architecture_generation
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,15 +159,7 @@ def save_checkpoint(
                 "backbone_revision": model.backbone.revision,
                 "precision": precision.name,
                 "model_config": asdict(model.core.config),
-                "architecture_generation": (
-                    "r1b_dynamic_applicability_gate_v2"
-                    if model.core.config.enable_dynamic_applicability
-                    else (
-                        "r1b_visual_null_entmax_v1"
-                        if model.core.config.enable_visual_null
-                        else "legacy_iag_srme"
-                    )
-                ),
+                "architecture_generation": architecture_generation(model.core.config),
             },
         },
         path,

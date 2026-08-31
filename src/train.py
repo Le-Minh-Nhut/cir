@@ -64,6 +64,9 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         grounding_normalization=str(
             cfg.model.get("grounding_normalization", "entmax15")
         ),
+        enable_dynamic_regrounding=bool(
+            cfg.model.get("enable_dynamic_regrounding", False)
+        ),
     )
     return IAGSRME(backbone, IAGSRMECore(model_config)), tokenizer, processor
 

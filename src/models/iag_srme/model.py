@@ -39,6 +39,17 @@ class IAGSRMEConfig:
     enable_dynamic_applicability: bool = False
     initial_applicability: float = 0.98
     grounding_normalization: str = "entmax15"
+    enable_dynamic_regrounding: bool = False
+
+
+def architecture_generation(config: IAGSRMEConfig) -> str:
+    if config.enable_dynamic_regrounding:
+        return "r1c1_dynamic_current_state_reground_v1"
+    if config.enable_dynamic_applicability:
+        return "r1b_dynamic_applicability_gate_v2"
+    if config.enable_visual_null:
+        return "r1b_visual_null_entmax_v1"
+    return "legacy_iag_srme"
 
 
 class IAGSRMECore(nn.Module):
@@ -54,6 +65,10 @@ class IAGSRMECore(nn.Module):
             raise ValueError(
                 "N+1 Entmax Visual NULL is superseded and cannot be replayed as the "
                 "corrected dynamic-applicability architecture"
+            )
+        if config.enable_dynamic_regrounding and config.enable_dynamic_applicability:
+            raise ValueError(
+                "R1c1 isolates dynamic WHERE and cannot enable R1b applicability"
             )
         self.config = config
         self.intent_encoder = TextIntentEncoder(
@@ -116,8 +131,13 @@ class IAGSRMECore(nn.Module):
         if encoded.reference_global.shape != (batch_size, self.config.retrieval_dim):
             raise ValueError("reference_global must be [B,D]")
         intents = self.intent_encoder(encoded.text_tokens, encoded.text_content_mask)
-        # Fixed WHERE: canonical R1a Entmax support is computed once per rollout.
-        spatial_supports = self.grounder(intents, anchor)
+        # Static R0/R1a/R1b checkpoints retain one immutable-anchor grounding call.
+        # R1c1 instead resolves current_supports from Z_t inside each recurrence step.
+        static_supports = (
+            None
+            if self.config.enable_dynamic_regrounding
+            else self.grounder(intents, anchor)
+        )
         # A is immutable; assignment never changes after this point. Z starts at A.
         state = anchor
         current_query = self.readout(state, anchor, encoded.text_global, encoded.reference_global)
@@ -126,7 +146,6 @@ class IAGSRMECore(nn.Module):
         fixed_best: Tensor | None = None
         frozen_order: Tensor | None = None
 
-        original_static, _, _ = self.grounded_reader(spatial_supports, anchor, anchor)
         claims = None
         claim_logits = None
         if self.claim_head is not None:
@@ -136,19 +155,29 @@ class IAGSRMECore(nn.Module):
             )
         factors = None
         auxiliary_anchor = None
-        if self.factor_fuser is not None and self.auxiliary_anchor is not None:
-            factors = self.factor_fuser(intents, original_static)
-            auxiliary_anchor = self.auxiliary_anchor(
-                encoded.reference_global, encoded.text_semantic_global
-            )
+        initial_supports: Tensor | None = None
 
         for timestep in range(self.config.max_steps):
             current_state = state
             query_before = current_query
             live_before = live
-            original, current, change = self.grounded_reader(
-                spatial_supports, anchor, current_state
+            current_supports = (
+                self.grounder(intents, current_state)
+                if self.config.enable_dynamic_regrounding
+                else static_supports
             )
+            if current_supports is None:
+                raise AssertionError("grounding support was not constructed")
+            if initial_supports is None:
+                initial_supports = current_supports
+            original, current, change = self.grounded_reader(
+                current_supports, anchor, current_state
+            )
+            if timestep == 0 and self.factor_fuser is not None and self.auxiliary_anchor is not None:
+                factors = self.factor_fuser(intents, original)
+                auxiliary_anchor = self.auxiliary_anchor(
+                    encoded.reference_global, encoded.text_semantic_global
+                )
             contexts = self.context_fuser(intents, original, current, change)
             applicability_logits = None
             execution_confidence = None
@@ -161,7 +190,7 @@ class IAGSRMECore(nn.Module):
                 ) = self.applicability_head(contexts)
             ungated_delta_z, delta_z, candidate_states = self.editor.forward_with_ungated(
                 contexts,
-                spatial_supports,
+                current_supports,
                 anchor,
                 current_state,
                 execution_confidence=execution_confidence,
@@ -184,7 +213,7 @@ class IAGSRMECore(nn.Module):
             )
             delta_q = candidate_queries - query_before[:, None, :]
             scorer_change = change
-            scorer_supports = spatial_supports
+            scorer_supports = current_supports
             if control == "clone_candidate_1":
                 original = original[:, :1].expand_as(original)
                 current = current[:, :1].expand_as(current)
@@ -195,7 +224,7 @@ class IAGSRMECore(nn.Module):
                 candidate_queries = candidate_queries[:, :1].expand_as(candidate_queries)
                 delta_q = delta_q[:, :1].expand_as(delta_q)
                 scorer_change = change
-                scorer_supports = spatial_supports[:, :1].expand_as(spatial_supports)
+                scorer_supports = current_supports[:, :1].expand_as(current_supports)
                 if applicability_logits is not None:
                     applicability_logits = applicability_logits[:, :1].expand_as(
                         applicability_logits
@@ -220,8 +249,8 @@ class IAGSRMECore(nn.Module):
                 )
                 delta_q = candidate_queries - query_before[:, None, :]
                 scorer_change = change
-                scorer_supports = spatial_supports.mean(dim=1, keepdim=True).expand_as(
-                    spatial_supports
+                scorer_supports = current_supports.mean(dim=1, keepdim=True).expand_as(
+                    current_supports
                 )
                 if applicability_logits is not None:
                     execution_confidence = execution_confidence.mean(
@@ -301,17 +330,24 @@ class IAGSRMECore(nn.Module):
                     visual_confidence=execution_confidence,
                     visual_null_probability=null_probability,
                     ungated_delta_z=ungated_delta_z,
+                    spatial_supports=scorer_supports,
                 )
             )
             state = next_state
             current_query = next_query
 
+        if initial_supports is None:
+            raise AssertionError("rollout did not construct initial grounding support")
+        temporal_supports = torch.stack(
+            [step.spatial_supports for step in trace], dim=1
+        )
         return IAGSRMEOutput(
             final_query=current_query,
             final_state=state,
             anchor=anchor,
             intents=intents,
-            supports=spatial_supports,
+            # Backward-compatible alias with explicit t0 semantics.
+            supports=initial_supports,
             text_tokens=encoded.text_tokens,
             text_content_mask=encoded.text_content_mask,
             reference_global=encoded.reference_global,
@@ -320,7 +356,10 @@ class IAGSRMECore(nn.Module):
             claims=claims,
             factors=factors,
             auxiliary_anchor=auxiliary_anchor,
-            conditional_supports=spatial_supports,
+            conditional_supports=initial_supports,
+            initial_supports=initial_supports,
+            temporal_supports=temporal_supports,
+            dynamic_regrounding=self.config.enable_dynamic_regrounding,
             visual_null_probabilities=(
                 torch.stack(
                     [step.visual_null_probability for step in trace], dim=1
