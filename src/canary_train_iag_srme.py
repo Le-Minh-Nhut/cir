@@ -76,6 +76,28 @@ def _reproposal_audit_groups(
     return families, representatives
 
 
+def _semantic_claim_audit_groups(
+    claim: nn.Module,
+) -> tuple[dict[str, list[nn.Parameter]], dict[str, nn.Parameter]]:
+    """Return R2 claim/firewall branches for cumulative learnability checks."""
+
+    families = {
+        "semantic_claim_output": list(claim.compatibility[-1].parameters()),
+        "semantic_claim_query": list(claim.query_projection.parameters()),
+        "semantic_claim_token": list(claim.token_projection.parameters()),
+        "semantic_claim_state": list(claim.state_projection.parameters()),
+        "semantic_claim_hidden": list(claim.compatibility[:-1].parameters()),
+    }
+    representatives = {
+        "semantic_claim_output": claim.compatibility[-1].weight,
+        "semantic_claim_query": claim.query_projection.weight,
+        "semantic_claim_token": claim.token_projection.weight,
+        "semantic_claim_state": claim.state_projection.weight,
+        "semantic_claim_hidden": claim.compatibility[0].weight,
+    }
+    return families, representatives
+
+
 def _complete_amp_step(
     scaler: torch.amp.GradScaler,
     optimizer: torch.optim.Optimizer,
@@ -210,6 +232,50 @@ def _batch_diagnostics(output) -> dict[str, object]:
         "temporal_grounding": _dynamic_grounding_diagnostics(output),
         "temporal_intent": _dynamic_intent_diagnostics(output),
         "visual_null_probability": _dynamic_applicability_diagnostics(output),
+        "semantic_residual": _semantic_residual_diagnostics(output),
+    }
+
+
+def _semantic_residual_diagnostics(output) -> dict[str, object] | None:
+    residuals = output.temporal_semantic_residuals
+    claims = output.temporal_semantic_claims
+    if residuals is None or claims is None:
+        return None
+    residuals = residuals.detach().float()
+    claims = claims.detach().float()
+    rho_means = [float(residuals[:, timestep].mean()) for timestep in range(residuals.shape[1])]
+    consumption = []
+    claim_cosines = []
+    for timestep, step in enumerate(output.trace):
+        live = step.live_before
+        current_claims = claims[live, timestep]
+        if current_claims.numel():
+            matrix = torch.nn.functional.cosine_similarity(
+                current_claims[:, :, None], current_claims[:, None, :], dim=-1
+            )
+            off_diagonal = ~torch.eye(
+                current_claims.shape[1], dtype=torch.bool, device=matrix.device
+            )
+            claim_cosines.append(float(matrix[:, off_diagonal].mean()))
+        executed = live & step.selected_index.lt(claims.shape[2])
+        if executed.any():
+            consumption.append(
+                step.selected_semantic_consumption[executed].detach().float().sum(-1)
+            )
+    consumed = torch.cat(consumption) if consumption else torch.empty(0)
+    return {
+        "rho_mean_by_state": rho_means,
+        "selected_consumption_mass_mean": (
+            float(consumed.mean()) if consumed.numel() else None
+        ),
+        "claim_cosine_between_candidates_by_timestep": claim_cosines,
+        "claim_dtype": str(claims.dtype),
+        "residual_dtype": str(residuals.dtype),
+        "same_parent_residual": all(
+            step.parent_semantic_residual is not None
+            and step.candidate_semantic_residuals is not None
+            for step in output.trace
+        ),
     }
 
 
@@ -468,6 +534,7 @@ def _build_canary_model(
     *,
     dynamic_regrounding: bool = False,
     dynamic_reproposal: bool = False,
+    semantic_residual: bool = False,
 ) -> tuple[IAGSRME, object, object]:
     regime = FGCLIPRegime(
         checkpoint=BASE_CHECKPOINT,
@@ -496,6 +563,8 @@ def _build_canary_model(
             grounding_normalization="entmax15",
             enable_dynamic_regrounding=dynamic_regrounding,
             enable_dynamic_reproposal=dynamic_reproposal,
+            enable_semantic_residual=semantic_residual,
+            initial_claim_probability=0.99,
         )
     )
     return IAGSRME(backbone, core).to(device), tokenizer, processor
@@ -570,6 +639,11 @@ def main() -> None:
         action="store_true",
         help="canary R1c2 dynamic WHAT plus current-state dynamic WHERE",
     )
+    causal_mode.add_argument(
+        "--r2",
+        action="store_true",
+        help="canary R2 semantic residual/claim firewall with dynamic WHERE",
+    )
     args = parser.parse_args()
     if args.steps < 1 or args.batch_size < 2 or args.log_every < 1:
         raise ValueError("steps/log-every must be positive and batch-size must be at least two")
@@ -583,12 +657,23 @@ def main() -> None:
     precision = resolve_precision(args.precision, device)
     model, tokenizer, processor = _build_canary_model(
         device,
-        dynamic_regrounding=args.r1c1 or args.r1c2,
+        dynamic_regrounding=args.r1c1 or args.r1c2 or args.r2,
         dynamic_reproposal=args.r1c2,
+        semantic_residual=args.r2,
     )
     if model.core.config.query_cap != 1000.0:
-        raise AssertionError("R1a/R1b/R1c1/R1c2 canary requires query_cap=1000")
-    if args.r1c2:
+        raise AssertionError("R1a/R1b/R1c1/R1c2/R2 canary requires query_cap=1000")
+    if args.r2:
+        if (
+            not model.core.config.enable_semantic_residual
+            or not model.core.config.enable_dynamic_regrounding
+            or model.core.config.enable_dynamic_reproposal
+            or model.core.config.enable_dynamic_applicability
+        ):
+            raise AssertionError(
+                "R2 requires claim firewall/dynamic WHERE with reproposal/applicability off"
+            )
+    elif args.r1c2:
         if (
             not model.core.config.enable_dynamic_regrounding
             or not model.core.config.enable_dynamic_reproposal
@@ -644,6 +729,20 @@ def main() -> None:
             reproposal_representatives,
         ) = _reproposal_audit_groups(model.core.reproposal)
         parameter_families.update(reproposal_families)
+    semantic_claim_families: dict[str, list[nn.Parameter]] = {}
+    semantic_claim_representatives: dict[str, nn.Parameter] = {}
+    if model.core.semantic_claim is not None:
+        (
+            semantic_claim_families,
+            semantic_claim_representatives,
+        ) = _semantic_claim_audit_groups(model.core.semantic_claim)
+        semantic_claim_families["residual_conditioned_intent"] = list(
+            model.core.intent_encoder.parameters()
+        )
+        semantic_claim_representatives["residual_conditioned_intent"] = (
+            model.core.intent_encoder.cross_attention.in_proj_weight
+        )
+        parameter_families.update(semantic_claim_families)
     tracked = {
         "vision": next(model.backbone.model.vision_model.parameters()),
         "text": next(model.backbone.model.text_model.parameters()),
@@ -655,6 +754,7 @@ def main() -> None:
         tracked["applicability_weight"] = model.core.applicability_head.projection.weight
         tracked["applicability_bias"] = model.core.applicability_head.projection.bias
     tracked.update(reproposal_representatives)
+    tracked.update(semantic_claim_representatives)
     initial = {name: parameter.detach().float().clone() for name, parameter in tracked.items()}
     calls = {
         "vision_model": 0,
@@ -663,6 +763,7 @@ def main() -> None:
         "grounder": 0,
         "applicability": 0,
         "reproposal": 0,
+        "semantic_claim": 0,
     }
 
     def count(name):
@@ -674,7 +775,9 @@ def main() -> None:
     handles = [
         model.backbone.model.vision_model.register_forward_pre_hook(count("vision_model")),
         model.backbone.anchor_projection.register_forward_pre_hook(count("anchor_projection")),
-        model.core.intent_encoder.register_forward_pre_hook(count("intent")),
+        model.core.intent_encoder.cross_attention.register_forward_pre_hook(
+            count("intent")
+        ),
         model.core.grounder.register_forward_pre_hook(count("grounder")),
     ]
     if model.core.applicability_head is not None:
@@ -687,6 +790,12 @@ def main() -> None:
         handles.append(
             model.core.reproposal.register_forward_pre_hook(count("reproposal"))
         )
+    if model.core.semantic_claim is not None:
+        handles.append(
+            model.core.semantic_claim.register_forward_pre_hook(
+                count("semantic_claim")
+            )
+        )
     history: defaultdict[str, list[float]] = defaultdict(list)
     action_counts = torch.zeros(5, dtype=torch.long)
     stop_step_counts = torch.zeros(3, dtype=torch.long)
@@ -695,6 +804,9 @@ def main() -> None:
     successful_steps_with_nonzero_grounding_gradient = 0
     reproposal_nonzero_gradient_steps = {
         name: 0 for name in reproposal_families
+    }
+    semantic_claim_nonzero_gradient_steps = {
+        name: 0 for name in semantic_claim_families
     }
     latest_applicability_diagnostics: dict[str, object] | None = None
     latest_grounding_diagnostics: dict[str, object] | None = None
@@ -792,8 +904,11 @@ def main() -> None:
             for name in reproposal_nonzero_gradient_steps:
                 if gradient_norms.get(name, 0.0) > 0:
                     reproposal_nonzero_gradient_steps[name] += 1
+            for name in semantic_claim_nonzero_gradient_steps:
+                if gradient_norms.get(name, 0.0) > 0:
+                    semantic_claim_nonzero_gradient_steps[name] += 1
             allowed_zero_families = {"applicability"}
-            if args.r1c1 or args.r1c2:
+            if args.r1c1 or args.r1c2 or args.r2:
                 # Dynamic-WHERE readiness is based on cumulative grounder learnability;
                 # one minibatch with zero grounder gradient is not a failure.
                 allowed_zero_families.add("grounding")
@@ -801,6 +916,10 @@ def main() -> None:
                 # Zero-init W_out intentionally blocks upstream reproposal gradients
                 # until the output projection has taken an optimizer step.
                 allowed_zero_families.update(reproposal_families)
+            if args.r2:
+                # The zero-initialized claim output may initially block upstream
+                # claim projections; readiness is checked cumulatively after updates.
+                allowed_zero_families.update(semantic_claim_families)
             zero_families = [
                 name
                 for name, value in gradient_norms.items()
@@ -820,14 +939,19 @@ def main() -> None:
                 "intent": 1,
                 "grounder": (
                     model.core.config.max_steps
-                    if args.r1c1 or args.r1c2
+                    if args.r1c1 or args.r1c2 or args.r2
                     else 1
                 ),
                 "applicability": (
-                    0 if args.r1c1 or args.r1c2 else model.core.config.max_steps
+                    0
+                    if args.r1c1 or args.r1c2 or args.r2
+                    else model.core.config.max_steps
                 ),
                 "reproposal": model.core.config.max_steps - 1 if args.r1c2 else 0,
+                "semantic_claim": model.core.config.max_steps if args.r2 else 0,
             }
+            if args.r2:
+                expected_calls["intent"] = model.core.config.max_steps
             if calls != expected_calls:
                 raise AssertionError(f"unexpected canary forward call counts: {calls}")
             _verify_absorbing_stop(output)
@@ -906,6 +1030,10 @@ def main() -> None:
                         f"successful_steps_with_nonzero_{name}_gradient": count
                         for name, count in reproposal_nonzero_gradient_steps.items()
                     },
+                    **{
+                        f"successful_steps_with_nonzero_{name}_gradient": count
+                        for name, count in semantic_claim_nonzero_gradient_steps.items()
+                    },
                     "applicability_nonzero_gradient_fraction": (
                         successful_steps_with_nonzero_applicability_gradient
                         / successful_optimizer_steps
@@ -919,7 +1047,9 @@ def main() -> None:
                     "peak_vram_bytes": torch.cuda.max_memory_allocated(device),
                 }
                 print(json.dumps(record, sort_keys=True), flush=True)
-            if successful_optimizer_steps >= 20 and not (args.r1c1 or args.r1c2):
+            if successful_optimizer_steps >= 20 and not (
+                args.r1c1 or args.r1c2 or args.r2
+            ):
                 applicability_delta = max(
                     _parameter_delta(
                         tracked["applicability_weight"],
@@ -945,7 +1075,9 @@ def main() -> None:
                             "applicability parameters changed but the FP32 actuator remained "
                             "numerically constant after 20 successful steps"
                         )
-            if successful_optimizer_steps >= 20 and (args.r1c1 or args.r1c2):
+            if successful_optimizer_steps >= 20 and (
+                args.r1c1 or args.r1c2 or args.r2
+            ):
                 if successful_steps_with_nonzero_grounding_gradient == 0:
                     raise RuntimeError(
                         "dynamic-WHERE grounder received zero gradient on every successful step"
@@ -975,6 +1107,27 @@ def main() -> None:
                         "R1c2 reproposal branch parameters did not move: "
                         f"{unmoved_branches}"
                     )
+            if successful_optimizer_steps >= 20 and args.r2:
+                dead_claim_branches = [
+                    name
+                    for name, count in semantic_claim_nonzero_gradient_steps.items()
+                    if count == 0
+                ]
+                if dead_claim_branches:
+                    raise RuntimeError(
+                        "R2 semantic-claim branches received no cumulative gradient: "
+                        f"{dead_claim_branches}"
+                    )
+                unmoved_claim_branches = [
+                    name
+                    for name in semantic_claim_representatives
+                    if _parameter_delta(tracked[name], initial[name]) == 0
+                ]
+                if unmoved_claim_branches:
+                    raise RuntimeError(
+                        "R2 semantic-claim branch parameters did not move: "
+                        f"{unmoved_claim_branches}"
+                    )
     except torch.OutOfMemoryError as error:
         print(
             json.dumps(
@@ -999,7 +1152,7 @@ def main() -> None:
     non_stop = action_counts[:4]
     candidate_distribution = non_stop.float() / non_stop.sum().clamp_min(1)
     mechanical_failure_flags, scientific_warning_flags = _classify_canary_outcomes(
-        r1c1=args.r1c1 or args.r1c2,
+        r1c1=args.r1c1 or args.r1c2 or args.r2,
         attempted_steps=args.steps,
         successful_optimizer_steps=successful_optimizer_steps,
         stop_t0_occupancy=float(stop_by_timestep[0]),
@@ -1021,21 +1174,24 @@ def main() -> None:
             "same_parent_invariant_failure": False,
             "support_normalization_failure": False,
             "r1b_applicability_active": bool(
-                (args.r1c1 or args.r1c2)
+                (args.r1c1 or args.r1c2 or args.r2)
                 and model.core.config.enable_dynamic_applicability
             ),
             "grounder_no_gradient": bool(
-                (args.r1c1 or args.r1c2)
+                (args.r1c1 or args.r1c2 or args.r2)
                 and successful_optimizer_steps > 0
                 and successful_steps_with_nonzero_grounding_gradient == 0
             ),
             "grounder_no_parameter_movement": bool(
-                (args.r1c1 or args.r1c2)
+                (args.r1c1 or args.r1c2 or args.r2)
                 and successful_optimizer_steps >= 20
                 and grounder_delta == 0.0
             ),
             "r1c2_dynamic_reproposal_disabled": bool(
                 args.r1c2 and not model.core.config.enable_dynamic_reproposal
+            ),
+            "r2_semantic_residual_disabled": bool(
+                args.r2 and not model.core.config.enable_semantic_residual
             ),
             **{
                 f"{name}_no_gradient": bool(
@@ -1052,6 +1208,22 @@ def main() -> None:
                     and _parameter_delta(tracked[name], initial[name]) == 0.0
                 )
                 for name in reproposal_representatives
+            },
+            **{
+                f"{name}_no_gradient": bool(
+                    args.r2
+                    and successful_optimizer_steps >= 20
+                    and semantic_claim_nonzero_gradient_steps[name] == 0
+                )
+                for name in semantic_claim_families
+            },
+            **{
+                f"{name}_no_parameter_movement": bool(
+                    args.r2
+                    and successful_optimizer_steps >= 20
+                    and _parameter_delta(tracked[name], initial[name]) == 0.0
+                )
+                for name in semantic_claim_representatives
             },
         }
     )
@@ -1079,6 +1251,28 @@ def main() -> None:
                 "high_intent_displacement_comotion": any(
                     float(item["intent_displacement_cosine"]) >= 0.999
                     for item in intent_transitions
+                ),
+            }
+        )
+    latest_semantic_residual = (
+        _semantic_residual_diagnostics(output) if args.r2 else None
+    )
+    if args.r2 and isinstance(latest_semantic_residual, dict):
+        rho = latest_semantic_residual["rho_mean_by_state"]
+        claim_cosines = latest_semantic_residual[
+            "claim_cosine_between_candidates_by_timestep"
+        ]
+        scientific_warning_flags.update(
+            {
+                "high_claim_clone": bool(
+                    claim_cosines and max(claim_cosines) >= 0.999
+                ),
+                "residual_unused": max(rho) - min(rho) <= 1e-7,
+                "consume_all_after_first_action": (
+                    len(rho) > 1 and rho[1] <= 0.01 * max(rho[0], 1e-8)
+                ),
+                "global_consumption_warning": bool(
+                    claim_cosines and min(claim_cosines) >= 0.999
                 ),
             }
         )
@@ -1112,6 +1306,7 @@ def main() -> None:
         ),
         "enable_dynamic_regrounding": model.core.config.enable_dynamic_regrounding,
         "enable_dynamic_reproposal": model.core.config.enable_dynamic_reproposal,
+        "enable_semantic_residual": model.core.config.enable_semantic_residual,
         "initial_applicability": model.core.config.initial_applicability,
         "successful_steps_with_nonzero_applicability_gradient": (
             successful_steps_with_nonzero_applicability_gradient
@@ -1122,6 +1317,14 @@ def main() -> None:
         **{
             f"successful_steps_with_nonzero_{name}_gradient": count
             for name, count in reproposal_nonzero_gradient_steps.items()
+        },
+        **{
+            f"successful_steps_with_nonzero_{name}_gradient": count
+            for name, count in semantic_claim_nonzero_gradient_steps.items()
+        },
+        "semantic_claim_nonzero_gradient_fraction": {
+            name: count / max(successful_optimizer_steps, 1)
+            for name, count in semantic_claim_nonzero_gradient_steps.items()
         },
         "grounding_nonzero_gradient_fraction": (
             successful_steps_with_nonzero_grounding_gradient
@@ -1144,6 +1347,7 @@ def main() -> None:
         "dynamic_applicability_end": latest_applicability_diagnostics,
         "dynamic_grounding_end": latest_grounding_diagnostics,
         "dynamic_intent_end": latest_intent_diagnostics,
+        "semantic_residual_end": latest_semantic_residual,
         "peak_vram_bytes": torch.cuda.max_memory_allocated(device),
         "loss_start": {
             name: history[name][0] if history[name] else None

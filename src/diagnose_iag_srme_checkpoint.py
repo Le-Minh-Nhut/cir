@@ -65,6 +65,7 @@ REQUIRED_REPORT_KEYS = {
     "grounding_diagnostics",
     "temporal_grounding_diagnostics",
     "visual_null_diagnostics",
+    "semantic_residual_diagnostics",
     "functional_diagnostics",
     "dynamic_diagnostics",
     "control_retrieval_metrics",
@@ -1016,6 +1017,48 @@ class ValidationDiagnosticAccumulator:
         self.visual_tokens: int | None = None
         self.temporal_intent = TemporalIntentAccumulator(candidates, timesteps)
         self.temporal_grounding = TemporalGroundingAccumulator(candidates, timesteps)
+        self.semantic_residual_seen = False
+        self.residual_by_state = [
+            _DistributionStats() for _ in range(timesteps + 1)
+        ]
+        self.residual_mass_by_state = [
+            _DistributionStats() for _ in range(timesteps + 1)
+        ]
+        self.residual_entropy_by_state = [
+            _DistributionStats() for _ in range(timesteps + 1)
+        ]
+        self.claim_mass_by_timestep = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.claim_effective_size_by_timestep = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.claim_entropy_by_timestep = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.claim_cosine_by_timestep = [
+            _MaskedMatrixStats(candidates) for _ in range(timesteps)
+        ]
+        self.claim_overlap_by_timestep = [
+            _MaskedMatrixStats(candidates) for _ in range(timesteps)
+        ]
+        self.consumption_cosine_by_timestep = [
+            _MaskedMatrixStats(candidates) for _ in range(timesteps)
+        ]
+        self.selected_consumption_mass = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.selected_consumed_token_count = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.selected_consumption_effective_size = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.selected_no_consumption = torch.zeros(timesteps, dtype=torch.long)
+        self.selected_near_total_consumption = torch.zeros(
+            timesteps, dtype=torch.long
+        )
+        self.selected_consumption_count = torch.zeros(timesteps, dtype=torch.long)
 
         self.support_fraction = [_DistributionStats() for _ in range(candidates)]
         self.support_entropy = [_DistributionStats() for _ in range(candidates)]
@@ -1112,6 +1155,7 @@ class ValidationDiagnosticAccumulator:
         self.visual_tokens = tokens
         self.temporal_intent.update(output)
         self.temporal_grounding.update(output)
+        self._update_semantic_residual(output)
 
         selection = _selection_batch_counts(output)
         actions = selection["actions"]
@@ -1325,6 +1369,143 @@ class ValidationDiagnosticAccumulator:
             }
             for name, (before, after) in pairs.items():
                 self.dynamic[name][transition].update((after[valid] - before[valid]).abs())
+
+    def _update_semantic_residual(self, output: IAGSRMEOutput) -> None:
+        residuals = output.temporal_semantic_residuals
+        claims = output.temporal_semantic_claims
+        if residuals is None or claims is None:
+            return
+        self.semantic_residual_seen = True
+        if residuals.shape[1] != self.timesteps + 1:
+            raise ValueError("semantic residual trace must be [B,T+1,L]")
+        if claims.shape[1] != self.timesteps:
+            raise ValueError("semantic claim trace must be [B,T,K,L]")
+        valid_tokens = output.initial_semantic_residual.bool()
+        for state_index in range(self.timesteps + 1):
+            values = residuals[:, state_index].float()
+            self.residual_by_state[state_index].update(values[valid_tokens])
+            mass = values.sum(dim=-1)
+            self.residual_mass_by_state[state_index].update(mass)
+            conditional = values / mass[:, None].clamp_min(1e-8)
+            self.residual_entropy_by_state[state_index].update(
+                -(conditional * conditional.clamp_min(1e-8).log()).sum(-1)
+            )
+        for timestep, step in enumerate(output.trace):
+            live = step.live_before
+            if not live.any():
+                continue
+            current_claims = claims[live, timestep].float()
+            token_mask = valid_tokens[live, None, :]
+            current_claims = current_claims * token_mask
+            mass = current_claims.sum(dim=-1)
+            conditional = current_claims / mass[..., None].clamp_min(1e-8)
+            entropy = -(conditional * conditional.clamp_min(1e-8).log()).sum(-1)
+            self.claim_mass_by_timestep[timestep].update(mass)
+            self.claim_entropy_by_timestep[timestep].update(entropy)
+            self.claim_effective_size_by_timestep[timestep].update(entropy.exp())
+            pair_valid = mass[:, :, None].gt(1e-8) & mass[:, None, :].gt(1e-8)
+            self.claim_cosine_by_timestep[timestep].update(
+                pairwise_cosine_matrix(current_claims), pair_valid
+            )
+            overlap = torch.minimum(
+                current_claims[:, :, None], current_claims[:, None, :]
+            ).sum(-1) / torch.maximum(
+                current_claims[:, :, None], current_claims[:, None, :]
+            ).sum(-1).clamp_min(1e-8)
+            self.claim_overlap_by_timestep[timestep].update(overlap, pair_valid)
+            previews = step.parent_semantic_residual[:, None] - step.candidate_semantic_residuals
+            live_previews = previews[live].float()
+            preview_mass = live_previews.norm(dim=-1)
+            preview_valid = preview_mass[:, :, None].gt(1e-8) & preview_mass[:, None, :].gt(1e-8)
+            self.consumption_cosine_by_timestep[timestep].update(
+                pairwise_cosine_matrix(live_previews), preview_valid
+            )
+            executed = live & step.selected_index.lt(self.candidates)
+            if not executed.any():
+                continue
+            consumption = step.selected_semantic_consumption[executed].float()
+            parent_mass = step.parent_semantic_residual[executed].float().sum(-1)
+            consumed_mass = consumption.sum(-1)
+            self.selected_consumption_mass[timestep].update(consumed_mass)
+            self.selected_consumed_token_count[timestep].update(
+                consumption.gt(1e-3).float().sum(-1)
+            )
+            conditional_consumption = consumption / consumed_mass[:, None].clamp_min(1e-8)
+            consumption_entropy = -(
+                conditional_consumption
+                * conditional_consumption.clamp_min(1e-8).log()
+            ).sum(-1)
+            self.selected_consumption_effective_size[timestep].update(
+                torch.where(
+                    consumed_mass.gt(1e-8),
+                    consumption_entropy.exp(),
+                    torch.zeros_like(consumed_mass),
+                )
+            )
+            self.selected_no_consumption[timestep] += int(
+                consumed_mass.le(1e-6).sum()
+            )
+            self.selected_near_total_consumption[timestep] += int(
+                consumed_mass.ge(0.9 * parent_mass.clamp_min(1e-8)).sum()
+            )
+            self.selected_consumption_count[timestep] += consumption.shape[0]
+
+    def semantic_residual_summary(self) -> dict[str, Any]:
+        if not self.semantic_residual_seen:
+            return {"enabled": False, "metric_population": "not applicable"}
+        states = []
+        for index in range(self.timesteps + 1):
+            values = self.residual_by_state[index].values()
+            states.append(
+                {
+                    "state": f"rho{index}",
+                    "token_weight": self.residual_by_state[index].summary(),
+                    "residual_l1_mass_per_query": self.residual_mass_by_state[index].summary(),
+                    "residual_distribution_entropy": self.residual_entropy_by_state[index].summary(),
+                    "fraction_residual_lt_0.1": (
+                        float(values.lt(0.1).float().mean()) if values.numel() else None
+                    ),
+                    "fraction_residual_gt_0.9": (
+                        float(values.gt(0.9).float().mean()) if values.numel() else None
+                    ),
+                }
+            )
+        per_timestep = []
+        for timestep in range(self.timesteps):
+            count = int(self.selected_consumption_count[timestep])
+            per_timestep.append(
+                {
+                    "timestep": timestep,
+                    "live_parent_count": int(self.live_counts[timestep]),
+                    "claim_mass": self.claim_mass_by_timestep[timestep].summary(),
+                    "claim_entropy": self.claim_entropy_by_timestep[timestep].summary(),
+                    "claim_effective_size": self.claim_effective_size_by_timestep[timestep].summary(),
+                    "claim_pairwise_cosine": self.claim_cosine_by_timestep[timestep].off_diagonal_summary(),
+                    "claim_pairwise_overlap": self.claim_overlap_by_timestep[timestep].off_diagonal_summary(),
+                    "candidate_consumption_displacement_cosine": self.consumption_cosine_by_timestep[timestep].off_diagonal_summary(),
+                    "selected_consumed_mass": self.selected_consumption_mass[timestep].summary(),
+                    "selected_consumed_token_count": self.selected_consumed_token_count[timestep].summary(),
+                    "selected_consumption_effective_size": self.selected_consumption_effective_size[timestep].summary(),
+                    "selected_transition_count": count,
+                    "fraction_no_consumption": (
+                        int(self.selected_no_consumption[timestep]) / count if count else None
+                    ),
+                    "fraction_near_total_consumption": (
+                        int(self.selected_near_total_consumption[timestep]) / count if count else None
+                    ),
+                    "metric_population": f"live parents before decision at t={timestep}; consumption only for selected non-STOP actions",
+                }
+            )
+        return {
+            "enabled": True,
+            "architecture_generation": "r2_semantic_residual_claim_firewall_v1",
+            "residual_states": states,
+            "per_timestep": per_timestep,
+            "claim_activation": "sigmoid; padding claim is exactly zero; no unit-mass constraint",
+            "residual_update": "rho_next=rho*(1-alpha_selected); STOP is absorbing",
+            "lineage": "all K previews share rho_t; only the selected non-STOP candidate commits consumption",
+            "interpretation_limit": "claim separation is descriptive; causality requires FULL/frozen/firewall/shuffle/swap retrieval controls and functional effects",
+        }
 
     def selection_summary(self) -> dict[str, Any]:
         edit_total = int(self.candidate_counts.sum())
@@ -1838,6 +2019,12 @@ class SelectedPathMarginalAccumulator:
         self.similarity_improvements = [
             _DistributionStats() for _ in range(timesteps)
         ]
+        self.candidate_utilities = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
+        self.selected_vs_best_regret = [
+            _DistributionStats() for _ in range(timesteps)
+        ]
 
     def update(self, output: IAGSRMEOutput, target_features: Tensor) -> None:
         if target_features.ndim != 2 or target_features.shape[0] != output.intents.shape[0]:
@@ -1846,7 +2033,21 @@ class SelectedPathMarginalAccumulator:
         candidates = output.intents.shape[1]
         for timestep, step in enumerate(output.trace):
             verify_same_parent_counterfactuals(step)
-            valid = step.live_before & step.selected_index.lt(candidates)
+            live = step.live_before
+            if live.any():
+                target = normalized_targets[live]
+                before = (
+                    F.normalize(step.current_query[live].float(), dim=-1) * target
+                ).sum(-1)
+                candidate_after = torch.einsum(
+                    "bkd,bd->bk",
+                    F.normalize(step.candidate_queries[live].float(), dim=-1),
+                    target,
+                )
+                self.candidate_utilities[timestep].update(
+                    candidate_after - before[:, None]
+                )
+            valid = live & step.selected_index.lt(candidates)
             if not valid.any():
                 continue
             selected_queries = step.candidate_queries[
@@ -1865,6 +2066,14 @@ class SelectedPathMarginalAccumulator:
             self.similarity_improvements[timestep].update(
                 similarity_after - similarity_before
             )
+            candidate_similarity = torch.einsum(
+                "bkd,bd->bk",
+                F.normalize(step.candidate_queries[valid].float(), dim=-1),
+                target,
+            )
+            self.selected_vs_best_regret[timestep].update(
+                candidate_similarity.max(dim=-1).values - similarity_after
+            )
 
     def summary(self) -> dict[str, Any]:
         return {
@@ -1882,6 +2091,14 @@ class SelectedPathMarginalAccumulator:
                     },
                 }
                 for timestep, stats in enumerate(self.similarity_improvements)
+            ],
+            "candidate_target_relative_utility_by_timestep": [
+                {"timestep": timestep, **stats.summary()}
+                for timestep, stats in enumerate(self.candidate_utilities)
+            ],
+            "selected_vs_best_candidate_regret_by_timestep": [
+                {"timestep": timestep, **stats.summary()}
+                for timestep, stats in enumerate(self.selected_vs_best_regret)
             ],
             "target_firewall": (
                 "target gallery features are consumed only after the complete target-free "
@@ -2042,6 +2259,30 @@ class NullTargetUtilityAccumulator:
 
 def diagnostic_definitions() -> dict[str, dict[str, Any]]:
     return {
+        "semantic_residual": {
+            "definition": (
+                "rho_0=content_mask and rho_t+1=rho_t*(1-alpha_t,a_t) for the "
+                "selected non-STOP action; STOP leaves rho unchanged"
+            ),
+            "population": "all trajectories for state summaries; selected live edits for consumption",
+            "tensor_shape_before_reduction": "rho [B,T+1,L], alpha [B,T,K,L]",
+            "reduction_axes": "token distributions and per-query L1 mass; timestep retained",
+            "interpretation_limitation": (
+                "decreasing rho is not semantic correctness; selectivity and same-checkpoint controls are required"
+            ),
+        },
+        "semantic_claim": {
+            "definition": (
+                "alpha=sigmoid(f(q_k,rho_t*T,Z_t)); executable content is "
+                "sum(alpha*rho*T)/(sum(alpha*rho)+epsilon)"
+            ),
+            "population": "all K claims of parents live before each decision",
+            "tensor_shape_before_reduction": "[B_live,K,L]",
+            "reduction_axes": "token axis for mass/entropy; KxK retained for cosine/overlap",
+            "interpretation_limitation": (
+                "low overlap alone is not success; claim swap/removal and functional retrieval effects test causal use"
+            ),
+        },
         "temporal_intent_reproposal": {
             "definition": (
                 "I_0,k=B_k and I_t,k=B_k+DeltaI_t,k for t>0; compare raw WHAT "
@@ -2394,6 +2635,10 @@ def _macro_control_results(category_controls: Mapping[str, Mapping[str, Any]]) -
         "repeat_3",
         "mean_candidate",
         "frozen_t0_what",
+        "frozen_residual",
+        "no_claim_firewall",
+        "residual_shuffle",
+        "claim_swap",
     )
     result = {
         name: _macro_numeric_tree([controls[name] for controls in category_controls.values()])
@@ -2448,6 +2693,20 @@ def _usefulness_ratios(controls: Mapping[str, Any]) -> dict[str, float]:
         "frozen_t0_what_over_full": float(
             controls["frozen_t0_what"]["mean_recall"]
         )
+        / denominator,
+        "frozen_residual_over_full": float(
+            controls["frozen_residual"]["mean_recall"]
+        )
+        / denominator,
+        "no_claim_firewall_over_full": float(
+            controls["no_claim_firewall"]["mean_recall"]
+        )
+        / denominator,
+        "residual_shuffle_over_full": float(
+            controls["residual_shuffle"]["mean_recall"]
+        )
+        / denominator,
+        "claim_swap_over_full": float(controls["claim_swap"]["mean_recall"])
         / denominator,
     }
 
@@ -2507,6 +2766,12 @@ _LEGACY_CANONICAL_MODEL_CONFIG = {
     "grounding_normalization": "entmax15",
     "enable_dynamic_regrounding": False,
     "enable_dynamic_reproposal": False,
+    "enable_semantic_residual": False,
+    "initial_claim_probability": 0.99,
+    "claim_activation": "sigmoid",
+    "residual_update_rule": "selected_multiplicative",
+    "residual_initialization": "valid_token_ones",
+    "semantic_residual_fp32": True,
 }
 _SERIALIZED_MODEL_CONFIG_KEYS = (
     "model_config",
@@ -2559,6 +2824,9 @@ def _resolve_checkpoint_model_config(
     inferred_dynamic_reproposal = any(
         key.startswith("core.reproposal.") for key in state
     )
+    inferred_semantic_residual = any(
+        key.startswith("core.semantic_claim.") for key in state
+    )
     if inferred_entmax_null_v1:
         raise ValueError(
             "checkpoint uses superseded r1b_visual_null_entmax_v1; it cannot be "
@@ -2578,7 +2846,11 @@ def _resolve_checkpoint_model_config(
     serialized_dynamic_regrounding = False
 
     if serialized is None:
-        if inferred_dynamic_applicability or inferred_dynamic_reproposal:
+        if (
+            inferred_dynamic_applicability
+            or inferred_dynamic_reproposal
+            or inferred_semantic_residual
+        ):
             raise ValueError(
                 "dynamic-applicability/reproposal checkpoint is not self-describing; "
                 "exact replay is unsafe"
@@ -2602,6 +2874,20 @@ def _resolve_checkpoint_model_config(
         if stored_generation == "r1c2_dynamic_current_state_reproposal_v1":
             required_fields.update(
                 {"enable_dynamic_regrounding", "enable_dynamic_reproposal"}
+            )
+        if stored_generation == "r2_semantic_residual_claim_firewall_v1":
+            required_fields.update(
+                {
+                    "enable_dynamic_regrounding",
+                    "enable_dynamic_reproposal",
+                    "enable_semantic_residual",
+                    "initial_claim_probability",
+                    "claim_activation",
+                    "residual_update_rule",
+                    "residual_initialization",
+                    "semantic_residual_fp32",
+                    "grounding_normalization",
+                }
             )
         if serialized_dynamic_regrounding:
             required_fields.update(
@@ -2639,6 +2925,7 @@ def _resolve_checkpoint_model_config(
             "enable_visual_null": False,
             "enable_dynamic_applicability": inferred_dynamic_applicability,
             "enable_dynamic_reproposal": inferred_dynamic_reproposal,
+            "enable_semantic_residual": inferred_semantic_residual,
         }
         for key, expected in inferable_expected.items():
             if key in serialized and serialized[key] != expected:
@@ -2659,6 +2946,26 @@ def _resolve_checkpoint_model_config(
             raise ValueError(
                 "serialized dynamic-reproposal flag conflicts with checkpoint state dict"
             )
+        serialized_semantic_residual = bool(
+            serialized.get("enable_semantic_residual", False)
+        )
+        if serialized_semantic_residual != inferred_semantic_residual:
+            raise ValueError(
+                "serialized semantic-residual flag conflicts with checkpoint state dict"
+            )
+        if inferred_semantic_residual:
+            if stored_generation != "r2_semantic_residual_claim_firewall_v1":
+                raise ValueError(
+                    "semantic-residual checkpoint has missing or conflicting architecture generation"
+                )
+            if (
+                not serialized_dynamic_regrounding
+                or serialized_dynamic_reproposal
+                or inferred_dynamic_applicability
+            ):
+                raise ValueError(
+                    "R2 replay requires dynamic WHERE with reproposal/applicability disabled"
+                )
         if serialized_dynamic_reproposal and not serialized_dynamic_regrounding:
             raise ValueError("R1c2 replay requires dynamic regrounding")
         if serialized_dynamic_reproposal and inferred_dynamic_applicability:
@@ -2672,8 +2979,9 @@ def _resolve_checkpoint_model_config(
         if (
             serialized_dynamic_regrounding
             and not serialized_dynamic_reproposal
+            and not inferred_semantic_residual
             and stored_generation != (
-            "r1c1_dynamic_current_state_reground_v1"
+                "r1c1_dynamic_current_state_reground_v1"
             )
         ):
             raise ValueError(
@@ -2723,6 +3031,18 @@ def _resolve_checkpoint_model_config(
         "enable_dynamic_reproposal": bool(
             replay_values["enable_dynamic_reproposal"]
         ),
+        "enable_semantic_residual": bool(
+            replay_values["enable_semantic_residual"]
+        ),
+        "initial_claim_probability": float(
+            replay_values["initial_claim_probability"]
+        ),
+        "claim_activation": str(replay_values["claim_activation"]),
+        "residual_update_rule": str(replay_values["residual_update_rule"]),
+        "residual_initialization": str(replay_values["residual_initialization"]),
+        "semantic_residual_fp32": bool(
+            replay_values["semantic_residual_fp32"]
+        ),
     }
     provenance: dict[str, Any] = {
         "source": source,
@@ -2743,6 +3063,7 @@ def _resolve_checkpoint_model_config(
             "enable_visual_null": False,
             "enable_dynamic_applicability": inferred_dynamic_applicability,
             "enable_dynamic_reproposal": inferred_dynamic_reproposal,
+            "enable_semantic_residual": inferred_semantic_residual,
             "enable_dynamic_regrounding": (
                 "not inferable from state dict; resolved from serialized model config"
             ),
@@ -2751,15 +3072,19 @@ def _resolve_checkpoint_model_config(
         "diagnostic_inference_override": {"selector_gumbel_noise": False},
         "warning": warning,
         "architecture_generation": (
-            "r1c2_dynamic_current_state_reproposal_v1"
-            if resolved["enable_dynamic_reproposal"]
+            "r2_semantic_residual_claim_firewall_v1"
+            if resolved["enable_semantic_residual"]
             else (
-                "r1c1_dynamic_current_state_reground_v1"
-                if resolved["enable_dynamic_regrounding"]
+                "r1c2_dynamic_current_state_reproposal_v1"
+                if resolved["enable_dynamic_reproposal"]
                 else (
-                    "r1b_dynamic_applicability_gate_v2"
-                    if inferred_dynamic_applicability
-                    else "legacy_r0_or_r1a"
+                    "r1c1_dynamic_current_state_reground_v1"
+                    if resolved["enable_dynamic_regrounding"]
+                    else (
+                        "r1b_dynamic_applicability_gate_v2"
+                        if inferred_dynamic_applicability
+                        else "legacy_r0_or_r1a"
+                    )
                 )
             )
         ),
@@ -2878,6 +3203,14 @@ def _diagnose_category(
         query_lists["mean_candidate"].append(mean_output.final_query.cpu())
         frozen_what = model.core(encoded, control="frozen_t0_what")
         query_lists["frozen_t0_what"].append(frozen_what.final_query.cpu())
+        for control in (
+            "frozen_residual",
+            "no_claim_firewall",
+            "residual_shuffle",
+            "claim_swap",
+        ):
+            controlled = model.core(encoded, control=control)
+            query_lists[control].append(controlled.final_query.cpu())
 
         target_ids.extend(batch_targets)
         reference_ids.extend(batch.reference_ids)
@@ -3298,6 +3631,7 @@ def _checkpoint_replay_guard(
         "r1b_dynamic_applicability_gate_v2",
         "r1c1_dynamic_current_state_reground_v1",
         "r1c2_dynamic_current_state_reproposal_v1",
+        "r2_semantic_residual_claim_firewall_v1",
     }
     if generation not in supported_generations:
         return {
@@ -3306,6 +3640,7 @@ def _checkpoint_replay_guard(
             "trusted_r1b_replay": None,
             "trusted_r1c1_replay": None,
             "trusted_r1c2_replay": None,
+            "trusted_r2_replay": None,
         }
     resolved = provenance.get("resolved_diagnostic_config")
     if not isinstance(resolved, Mapping):
@@ -3348,7 +3683,7 @@ def _checkpoint_replay_guard(
                 ),
             }
         )
-    else:
+    elif generation == "r1c2_dynamic_current_state_reproposal_v1":
         checks.update(
             {
                 "dynamic_reproposal_enabled": (
@@ -3362,6 +3697,36 @@ def _checkpoint_replay_guard(
                 ),
                 "grounding_is_entmax15": (
                     resolved.get("grounding_normalization") == "entmax15"
+                ),
+            }
+        )
+    else:
+        checks.update(
+            {
+                "semantic_residual_enabled": (
+                    resolved.get("enable_semantic_residual") is True
+                ),
+                "dynamic_regrounding_enabled": (
+                    resolved.get("enable_dynamic_regrounding") is True
+                ),
+                "dynamic_reproposal_disabled": (
+                    resolved.get("enable_dynamic_reproposal") is False
+                ),
+                "dynamic_applicability_disabled": (
+                    resolved.get("enable_dynamic_applicability") is False
+                ),
+                "grounding_is_entmax15": (
+                    resolved.get("grounding_normalization") == "entmax15"
+                ),
+                "claim_activation_is_sigmoid": (
+                    resolved.get("claim_activation") == "sigmoid"
+                ),
+                "residual_update_is_selected_multiplicative": (
+                    resolved.get("residual_update_rule")
+                    == "selected_multiplicative"
+                ),
+                "residual_is_fp32": (
+                    resolved.get("semantic_residual_fp32") is True
                 ),
             }
         )
@@ -3384,6 +3749,8 @@ def _checkpoint_replay_guard(
         "trusted_r1c1_replay": generation == "r1c1_dynamic_current_state_reground_v1",
         "trusted_r1c2_replay": generation
         == "r1c2_dynamic_current_state_reproposal_v1",
+        "trusted_r2_replay": generation
+        == "r2_semantic_residual_claim_firewall_v1",
         "checks": checks,
         "saved_checkpoint_metric": float(saved_metric),
         "replayed_full_mean_recall": replayed_mean_recall,
@@ -3501,6 +3868,9 @@ def main() -> None:
                 **category_accumulator.visual_null_summary(),
                 "offline_target_relative_utility": category_null_utility.summary(),
             },
+            "semantic_residual_diagnostics": (
+                category_accumulator.semantic_residual_summary()
+            ),
             "functional_diagnostics": category_functional,
             "dynamic_diagnostics": category_dynamic,
             "control_retrieval_metrics": controls,
@@ -3534,6 +3904,7 @@ def main() -> None:
     functional = global_accumulator.functional_summary()
     dynamic = global_accumulator.dynamic_summary()
     specialization = global_accumulator.specialization_summary()
+    semantic_residual = global_accumulator.semantic_residual_summary()
     selected_path = global_selected_path.summary()
     current_delta_q = [
         item.get("mean_delta_q_norm") for item in functional["per_timestep"]
@@ -3714,6 +4085,21 @@ def main() -> None:
                     "hold I_t,k=B_k while retaining Ground(B_k,Z_t) on the actual "
                     "dynamic selected-path state"
                 ),
+                "frozen_residual": (
+                    "compute claims normally but keep rho_t=rho_0; isolates selected "
+                    "semantic consumption while retaining dynamic current-state WHERE"
+                ),
+                "no_claim_firewall": (
+                    "diagnostic-only parent semantic bypass; restores full valid text "
+                    "to intent/readout while preserving the checkpoint weights"
+                ),
+                "residual_shuffle": (
+                    "diagnostic-only cross-sample rho permutation after t0; target-free"
+                ),
+                "claim_swap": (
+                    "diagnostic-only cyclic candidate claim swap before executable "
+                    "semantic pooling; raw learned claims remain traceable"
+                ),
                 "candidate_oracle": "offline target-ranked diagnostic only; never executed",
             },
         },
@@ -3728,6 +4114,7 @@ def main() -> None:
             **global_accumulator.visual_null_summary(),
             "offline_target_relative_utility": global_null_utility.summary(),
         },
+        "semantic_residual_diagnostics": semantic_residual,
         "functional_diagnostics": functional,
         "dynamic_diagnostics": dynamic,
         "control_retrieval_metrics": global_controls,
