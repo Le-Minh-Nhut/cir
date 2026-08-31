@@ -1680,7 +1680,7 @@ R1a  remove global query cap                  PASS
 R1b  dynamic applicability / visual NULL      NEGATIVE RESULT
 R1c1 dynamic current-state re-grounding       NEGATIVE RESULT
 R1c2 dynamic current-state re-proposal        IMPLEMENTATION READY / RESULT PENDING
-R2   semantic residual / claim firewall       PENDING
+R2   semantic residual / claim firewall       IMPLEMENTATION READY / RESULT PENDING
 R3   quality-gated functional DPP             CONDITIONAL
 R4   target-privileged grounding teacher      CONDITIONAL
 R5   planning / STOP refinement               CONDITIONAL
@@ -1715,3 +1715,11 @@ R1c2 is isolated on `exp/e2e-iag-srme-r1c2-dynamic-reproposal`. It preserves R1c
 adds a shared zero-initialized state-conditioned WHAT residual at t1/t2, and keeps R1b
 applicability disabled. See
 `doc/CIR_IAG_SRME_R1C2_DYNAMIC_CURRENT_STATE_REPROPOSAL_EXPERIMENT_SPEC_2026-08-31.md`.
+
+## R2 semantic residual / claim firewall
+
+R2 is isolated on `exp/e2e-iag-srme-r2-semantic-residual`. It disables the harmful
+R1c2 unrestricted full-text reproposal, preserves R1a query-cap and R1c1 dynamic WHERE,
+and adds an explicit token-level remaining-evidence state with selected-only claim
+consumption. See
+`doc/CIR_IAG_SRME_R2_SEMANTIC_RESIDUAL_CLAIM_FIREWALL_EXPERIMENT_SPEC_2026-08-31.md`.
