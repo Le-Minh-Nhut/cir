@@ -1,4 +1,4 @@
-# R2 Semantic Residual / Claim Firewall
+# R2 Semantic Residual / Claim Firewall — Corrected v2 Contract
 
 Status: **IMPLEMENTATION READY — SCIENTIFIC RESULT PENDING**
 
@@ -35,13 +35,42 @@ h_{t,k,m}=LN(W_q q_k + W_T(\rho_{t,m}T_m)+W_Z\,mean_n Z_{t,n}),
 \alpha_{t,k,m}=M_m\,\sigma(w_\alpha^T GELU(h_{t,k,m})+b_\alpha).
 \]
 
-Claims are bounded independently; they are not softmax-normalized over tokens. Padding
-claims are exactly zero. Candidate executable semantic content is
+The original v1 contract incorrectly reused `alpha` as consumption strength. With
+`alpha=0.99`, this gave `rho: 1 -> 0.01 -> 0.0001 -> 0.000001`: full-text read parity
+and conservative residual consumption were mathematically incompatible. R2-v2
+separates read allocation from predicted satisfaction. A second minimal shared
+projection of the same hidden state produces
 
 \[
-c_{t,k}=\frac{\sum_m\alpha_{t,k,m}\rho_{t,m}T_m}
-{\sum_m\alpha_{t,k,m}\rho_{t,m}+\epsilon}.
+\gamma_{t,k,m}=M_m\,\sigma(w_\gamma^T GELU(h_{t,k,m})+b_\gamma).
 \]
+
+Here `alpha` means how strongly an action reads/claims evidence; `gamma` means how much
+of claimed evidence it predicts has been satisfied after execution. No target or new
+loss supervises either head.
+
+Claims are bounded independently; they are not softmax-normalized over tokens. Padding
+claims and consumption are exactly zero. Let
+
+\[
+w_{t,k,m}=\alpha_{t,k,m}\rho_{t,m},
+\]
+
+\[
+d_{t,k}=\frac{\sum_mw_{t,k,m}T_m}{\sum_mw_{t,k,m}+\epsilon},
+\qquad
+s_{t,k}=\frac{\sum_mw_{t,k,m}}{\sum_mM_m+\epsilon},
+\]
+
+and magnitude-aware executable content is
+
+\[
+c_{t,k}=s_{t,k}d_{t,k}.
+\]
+
+Thus uniform residual scaling preserves semantic direction while scaling semantic mass
+and executable content. In particular, `rho -> 0` implies `c -> 0`; v1's normalized-only
+pooling did not satisfy this invariant.
 
 The existing shared intent encoder receives only tokens weighted by
 `alpha*rho`. The candidate retrieval readout receives `c_t,k`, never the unrestricted
@@ -54,13 +83,13 @@ full-text global embedding. Current-state dynamic grounding is unchanged:
 All K previews share the same `(Z_t,rho_t)`. Candidate residual previews are
 
 \[
-\widehat\rho^{(k)}_{t+1}=\rho_t(1-\alpha_{t,k}).
+\widehat\rho^{(k)}_{t+1}=\rho_t(1-\alpha_{t,k}\gamma_{t,k}).
 \]
 
 Only after selection is the semantic state committed:
 
 \[
-\rho_{t+1}=\rho_t(1-\alpha_{t,a_t})
+\rho_{t+1}=\rho_t(1-\alpha_{t,a_t}\gamma_{t,a_t})
 \]
 
 for a selected edit. STOP keeps `rho` and `Z` unchanged. The selected visual state still
@@ -70,18 +99,23 @@ satisfies
 \widehat Z^{(k)}_{t+1}=Z_t+\Delta Z_{t,k}.
 \]
 
-Claim sigmoid, claimed pooling, residual preview, and selected update run in FP32 under
+Claim/consumption sigmoid, magnitude-aware pooling, residual preview, and selected update run in FP32 under
 AMP. The residual is bounded and monotone by construction.
+
+The replay identity is `r2_semantic_residual_claim_firewall_v2`. Checkpoints from the
+invalid v1 coupling lack the consumption projection and must fail loudly rather than be
+reconstructed as v2.
 
 ## Initialization and t0 parity
 
-The final claim compatibility weight is zero initialized and its bias is
+The claim projection weight is zero initialized and its bias is
 `logit(0.99)`. Thus every valid token begins with claim 0.99, giving a candidate-weighted
 token sequence close to the parent full-text sequence without random candidate-specific
-shock. This is close, not exact, t0 parity; focused tests bound intent, support, and edit
-errors. This conservative initialization also creates an explicit scientific risk:
-the first selected action initially consumes almost all residual evidence. The residual
-trajectory diagnostics must determine whether training learns selective claims.
+shock. The consumption projection is independently zero initialized with bias
+`logit(0.05)`. Initial effective consumption is therefore `0.99*0.05=0.0495`, giving
+`rho1/rho0=0.9505` rather than 0.01. Both output heads receive gradient immediately;
+their zero weights initially block shared hidden/projection gradients, which emerge after
+the output heads move. This is close, not exact, t0 parent parity.
 
 ## Full-text highway audit
 
@@ -110,7 +144,7 @@ trajectory diagnostics must determine whether training learns selective claims.
 
 The JSON report adds `semantic_residual_diagnostics` with `rho0..rho3` distributions,
 residual L1 mass, fractions near zero/one, claim mass/entropy/effective size,
-candidate claim cosine/overlap, candidate consumption displacement alignment, selected
+semantic mass/content norm, and separate claim, gamma, and alpha-gamma cosine, selected
 consumed mass/token count, and no/near-total-consumption fractions. All timestep metrics
 use live-parent lineage; consumption includes selected non-STOP actions only.
 

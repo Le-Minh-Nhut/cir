@@ -1723,3 +1723,7 @@ R1c2 unrestricted full-text reproposal, preserves R1a query-cap and R1c1 dynamic
 and adds an explicit token-level remaining-evidence state with selected-only claim
 consumption. See
 `doc/CIR_IAG_SRME_R2_SEMANTIC_RESIDUAL_CLAIM_FIREWALL_EXPERIMENT_SPEC_2026-08-31.md`.
+
+The canonical checkpoint generation is `r2_semantic_residual_claim_firewall_v2`:
+semantic read allocation (`alpha`) and satisfaction/consumption (`gamma`) are separate,
+and executable claimed content preserves both semantic direction and remaining mass.
