@@ -21,7 +21,8 @@
 **Checkpoint replay error:** `7.1e-15`  
 **Mechanical verdict:** **PASS**  
 **Scientific R1b verdict:** **FAIL / NEGATIVE RESULT**  
-**Next clean experiment:** **R1c1 — dynamic current-state re-grounding**
+**R1c1 result:** **NEGATIVE — moving WHERE clones remained**  
+**Next clean experiment:** **R1c2 — dynamic current-state WHAT re-proposal**
 
 ---
 
@@ -1676,8 +1677,8 @@ The strongest defensible conclusion from R1b is:
 R0   diagnostic audit                         DONE
 R1a  remove global query cap                  PASS
 R1b  dynamic applicability / visual NULL      NEGATIVE RESULT
-R1c1 dynamic current-state re-grounding       NEXT
-R1c2 dynamic current-state re-proposal        PENDING
+R1c1 dynamic current-state re-grounding       NEGATIVE RESULT
+R1c2 dynamic current-state re-proposal        IMPLEMENTATION READY / RESULT PENDING
 R2   semantic residual / claim firewall       PENDING
 R3   quality-gated functional DPP             CONDITIONAL
 R4   target-privileged grounding teacher      CONDITIONAL
@@ -1706,3 +1707,10 @@ toward:
 "given the current edited state, where is this action still grounded,
 and what residual action is actually still missing?"
 ```
+
+## R1c2 dynamic current-state WHAT reproposal
+
+R1c2 is isolated on `exp/e2e-iag-srme-r1c2-dynamic-reproposal`. It preserves R1c1 dynamic WHERE,
+adds a shared zero-initialized state-conditioned WHAT residual at t1/t2, and keeps R1b
+applicability disabled. See
+`doc/CIR_IAG_SRME_R1C2_DYNAMIC_CURRENT_STATE_REPROPOSAL_EXPERIMENT_SPEC_2026-08-31.md`.
