@@ -17,6 +17,13 @@ from .outputs import BackboneOutput, IAGSRMEOutput, RecurrentStepOutput
 from .readout import TokenStateReadout
 from .reproposal import DynamicIntentReproposal
 from .scorer import ConsequenceScorer
+from .semantic_residual import (
+    SemanticClaimModule,
+    candidate_residual_previews,
+    claimed_text_content,
+    initialize_semantic_residual,
+    select_next_residual,
+)
 from .selector import HardStopSelector, select_next_state
 
 
@@ -42,9 +49,17 @@ class IAGSRMEConfig:
     grounding_normalization: str = "entmax15"
     enable_dynamic_regrounding: bool = False
     enable_dynamic_reproposal: bool = False
+    enable_semantic_residual: bool = False
+    initial_claim_probability: float = 0.99
+    claim_activation: str = "sigmoid"
+    residual_update_rule: str = "selected_multiplicative"
+    residual_initialization: str = "valid_token_ones"
+    semantic_residual_fp32: bool = True
 
 
 def architecture_generation(config: IAGSRMEConfig) -> str:
+    if config.enable_semantic_residual:
+        return "r2_semantic_residual_claim_firewall_v1"
     if config.enable_dynamic_reproposal:
         return "r1c2_dynamic_current_state_reproposal_v1"
     if config.enable_dynamic_regrounding:
@@ -76,6 +91,23 @@ class IAGSRMECore(nn.Module):
             raise ValueError(
                 "R1c2 isolates dynamic WHAT/WHERE and cannot enable R1b applicability"
             )
+        if config.enable_semantic_residual:
+            if not config.enable_dynamic_regrounding:
+                raise ValueError("R2 semantic residual requires dynamic regrounding")
+            if config.enable_dynamic_reproposal:
+                raise ValueError("R2 cannot retain unrestricted R1c2 full-text reproposal")
+            if config.enable_dynamic_applicability:
+                raise ValueError("R2 cannot stack R1b applicability")
+            if config.enable_claim_head or config.enable_factor_head:
+                raise ValueError("R2 cannot stack legacy auxiliary claim/factor heads")
+            if config.claim_activation != "sigmoid":
+                raise ValueError("R2 claim activation must be sigmoid")
+            if config.residual_update_rule != "selected_multiplicative":
+                raise ValueError("R2 residual update must be selected_multiplicative")
+            if config.residual_initialization != "valid_token_ones":
+                raise ValueError("R2 residual initialization must be valid_token_ones")
+            if not config.semantic_residual_fp32:
+                raise ValueError("R2 claim/residual arithmetic must remain FP32")
         if config.enable_dynamic_regrounding and config.enable_dynamic_applicability:
             raise ValueError(
                 "R1c1 isolates dynamic WHERE and cannot enable R1b applicability"
@@ -91,6 +123,11 @@ class IAGSRMECore(nn.Module):
         self.reproposal = (
             DynamicIntentReproposal(config.width, config.num_heads)
             if config.enable_dynamic_reproposal
+            else None
+        )
+        self.semantic_claim = (
+            SemanticClaimModule(config.width, config.initial_claim_probability)
+            if config.enable_semantic_residual
             else None
         )
         self.grounded_reader = GroundedStateReader(config.width)
@@ -137,6 +174,10 @@ class IAGSRMECore(nn.Module):
             "random_candidate",
             "frozen_t0_order",
             "frozen_t0_what",
+            "frozen_residual",
+            "no_claim_firewall",
+            "residual_shuffle",
+            "claim_swap",
         }
         if control not in valid_controls:
             raise ValueError(f"unsupported rollout control: {control}")
@@ -146,8 +187,10 @@ class IAGSRMECore(nn.Module):
         batch_size, tokens, width = anchor.shape
         if encoded.reference_global.shape != (batch_size, self.config.retrieval_dim):
             raise ValueError("reference_global must be [B,D]")
-        base_intents = self.intent_encoder(
-            encoded.text_tokens, encoded.text_content_mask
+        base_intents = (
+            None
+            if self.semantic_claim is not None
+            else self.intent_encoder(encoded.text_tokens, encoded.text_content_mask)
         )
         # Static R0/R1a/R1b checkpoints retain one immutable-anchor grounding call.
         # R1c1 instead resolves current_supports from Z_t inside each recurrence step.
@@ -158,7 +201,15 @@ class IAGSRMECore(nn.Module):
         )
         # A is immutable; assignment never changes after this point. Z starts at A.
         state = anchor
-        current_query = self.readout(state, anchor, encoded.text_global, encoded.reference_global)
+        semantic_residual = (
+            initialize_semantic_residual(encoded.text_content_mask)
+            if self.semantic_claim is not None
+            else None
+        )
+        initial_semantic_residual = semantic_residual
+        current_query = self.readout(
+            state, anchor, encoded.text_global, encoded.reference_global
+        )
         live = torch.ones(batch_size, dtype=torch.bool, device=anchor.device)
         trace: list[RecurrentStepOutput] = []
         fixed_best: Tensor | None = None
@@ -167,6 +218,8 @@ class IAGSRMECore(nn.Module):
         claims = None
         claim_logits = None
         if self.claim_head is not None:
+            if base_intents is None:
+                raise AssertionError("legacy claim head requires legacy base intents")
             claim_logits = self.claim_head(
                 base_intents, encoded.text_tokens, encoded.text_content_mask
             )
@@ -177,25 +230,72 @@ class IAGSRMECore(nn.Module):
         auxiliary_anchor = None
         initial_supports: Tensor | None = None
         temporal_intents: list[Tensor] = []
+        temporal_semantic_residuals: list[Tensor] = []
+        temporal_semantic_claims: list[Tensor] = []
+        initial_intents: Tensor | None = None
 
         for timestep in range(self.config.max_steps):
             current_state = state
             query_before = current_query
             live_before = live
-            current_intents = base_intents
-            intent_residual = torch.zeros_like(base_intents)
-            if (
-                timestep > 0
-                and self.reproposal is not None
-                and control != "frozen_t0_what"
-            ):
-                current_intents, intent_residual = self.reproposal(
-                    base_intents,
-                    current_state,
-                    anchor,
+            raw_semantic_claims = None
+            effective_semantic_claims = None
+            candidate_text_content = None
+            if self.semantic_claim is not None:
+                if semantic_residual is None:
+                    raise AssertionError("R2 semantic residual state is missing")
+                temporal_semantic_residuals.append(semantic_residual)
+                proposal_residual = semantic_residual
+                if control == "residual_shuffle" and timestep > 0:
+                    proposal_residual = semantic_residual.roll(1, dims=0)
+                raw_claim_logits, raw_semantic_claims = self.semantic_claim(
+                    self.intent_encoder.query_bank,
                     encoded.text_tokens,
                     encoded.text_content_mask,
+                    proposal_residual,
+                    current_state,
                 )
+                effective_semantic_claims = raw_semantic_claims
+                if control == "claim_swap":
+                    effective_semantic_claims = raw_semantic_claims.roll(1, dims=1)
+                if control == "no_claim_firewall":
+                    executable_weights = encoded.text_content_mask[:, None, :].expand(
+                        -1, self.config.num_candidates, -1
+                    ).float()
+                    candidate_text_content = encoded.text_global[:, None, :].expand(
+                        -1, self.config.num_candidates, -1
+                    )
+                else:
+                    executable_weights, candidate_text_content = claimed_text_content(
+                        encoded.text_tokens,
+                        effective_semantic_claims,
+                        proposal_residual,
+                    )
+                current_intents = self.intent_encoder.forward_weighted(
+                    encoded.text_tokens,
+                    encoded.text_content_mask,
+                    executable_weights,
+                )
+                temporal_semantic_claims.append(raw_semantic_claims)
+            else:
+                if base_intents is None:
+                    raise AssertionError("legacy base intents are missing")
+                current_intents = base_intents
+                if (
+                    timestep > 0
+                    and self.reproposal is not None
+                    and control != "frozen_t0_what"
+                ):
+                    current_intents, _ = self.reproposal(
+                        base_intents,
+                        current_state,
+                        anchor,
+                        encoded.text_tokens,
+                        encoded.text_content_mask,
+                    )
+            if initial_intents is None:
+                initial_intents = current_intents
+            intent_residual = current_intents - initial_intents
             temporal_intents.append(current_intents)
             current_supports = (
                 self.grounder(current_intents, current_state)
@@ -246,8 +346,16 @@ class IAGSRMECore(nn.Module):
                 raise AssertionError(
                     "all counterfactual candidates must branch from the same parent"
                 )
+            candidate_query_text = (
+                candidate_text_content
+                if candidate_text_content is not None
+                else encoded.text_global
+            )
             candidate_queries = self.readout(
-                candidate_states, anchor, encoded.text_global, encoded.reference_global
+                candidate_states,
+                anchor,
+                candidate_query_text,
+                encoded.reference_global,
             )
             delta_q = candidate_queries - query_before[:, None, :]
             scorer_change = change
@@ -272,6 +380,13 @@ class IAGSRMECore(nn.Module):
                     )
                     null_probability = null_probability[:, :1].expand_as(null_probability)
                 ungated_delta_z = ungated_delta_z[:, :1].expand_as(ungated_delta_z)
+                if effective_semantic_claims is not None:
+                    effective_semantic_claims = effective_semantic_claims[
+                        :, :1
+                    ].expand_as(effective_semantic_claims)
+                    candidate_text_content = candidate_text_content[:, :1].expand_as(
+                        candidate_text_content
+                    )
             elif control == "mean_candidate":
                 original = original.mean(dim=1, keepdim=True).expand_as(original)
                 current = current.mean(dim=1, keepdim=True).expand_as(current)
@@ -282,9 +397,20 @@ class IAGSRMECore(nn.Module):
                     dim=1, keepdim=True
                 ).expand_as(ungated_delta_z)
                 candidate_states = current_state[:, None] + delta_z
-                candidate_queries = self.readout(
-                    candidate_states, anchor, encoded.text_global, encoded.reference_global
+                effective_candidate_text = (
+                    candidate_text_content.mean(dim=1, keepdim=True).expand_as(
+                        candidate_text_content
+                    )
+                    if candidate_text_content is not None
+                    else encoded.text_global
                 )
+                candidate_queries = self.readout(
+                    candidate_states,
+                    anchor,
+                    effective_candidate_text,
+                    encoded.reference_global,
+                )
+                candidate_text_content = effective_candidate_text
                 delta_q = candidate_queries - query_before[:, None, :]
                 scorer_change = change
                 scorer_supports = current_supports.mean(dim=1, keepdim=True).expand_as(
@@ -298,6 +424,10 @@ class IAGSRMECore(nn.Module):
                     applicability_logits = torch.logit(
                         execution_confidence.float().clamp(1e-7, 1.0 - 1e-7)
                     ).to(execution_confidence.dtype)
+                if effective_semantic_claims is not None:
+                    effective_semantic_claims = effective_semantic_claims.mean(
+                        dim=1, keepdim=True
+                    ).expand_as(effective_semantic_claims)
             scores = self.scorer(
                 contexts, delta_z, delta_q, scorer_change, scorer_supports
             )
@@ -339,6 +469,26 @@ class IAGSRMECore(nn.Module):
             next_state, next_query = select_next_state(
                 candidate_states, current_state, candidate_queries, query_before, action_st
             )
+            candidate_semantic_residuals = None
+            next_semantic_residual = None
+            selected_semantic_consumption = None
+            if effective_semantic_claims is not None:
+                if semantic_residual is None:
+                    raise AssertionError("R2 semantic residual state is missing")
+                candidate_semantic_residuals = candidate_residual_previews(
+                    semantic_residual, effective_semantic_claims
+                )
+                next_semantic_residual = select_next_residual(
+                    candidate_semantic_residuals,
+                    semantic_residual,
+                    action_st,
+                    freeze=control == "frozen_residual",
+                )
+                if not torch.all(next_semantic_residual <= semantic_residual + 1e-7):
+                    raise AssertionError("semantic residual must be monotonic")
+                selected_semantic_consumption = (
+                    semantic_residual - next_semantic_residual
+                )
             selected_index = action_hard.argmax(dim=-1)
             stopped_now = live_before & selected_index.eq(self.config.num_candidates)
             live = live_before & ~stopped_now
@@ -373,24 +523,37 @@ class IAGSRMECore(nn.Module):
                     spatial_supports=scorer_supports,
                     raw_spatial_supports=current_supports,
                     effective_spatial_supports=scorer_supports,
-                    base_intents=base_intents,
+                    base_intents=initial_intents,
                     current_intents=current_intents,
                     intent_residual=intent_residual,
+                    parent_semantic_residual=semantic_residual,
+                    raw_semantic_claims=raw_semantic_claims,
+                    effective_semantic_claims=effective_semantic_claims,
+                    claimed_text_content=candidate_text_content,
+                    candidate_semantic_residuals=candidate_semantic_residuals,
+                    next_semantic_residual=next_semantic_residual,
+                    selected_semantic_consumption=selected_semantic_consumption,
                 )
             )
             state = next_state
             current_query = next_query
+            if next_semantic_residual is not None:
+                semantic_residual = next_semantic_residual
 
         if initial_supports is None:
             raise AssertionError("rollout did not construct initial grounding support")
         temporal_supports = torch.stack(
             [step.raw_spatial_supports for step in trace], dim=1
         )
+        if initial_intents is None:
+            raise AssertionError("rollout did not construct initial intents")
+        if semantic_residual is not None:
+            temporal_semantic_residuals.append(semantic_residual)
         return IAGSRMEOutput(
             final_query=current_query,
             final_state=state,
             anchor=anchor,
-            intents=base_intents,
+            intents=initial_intents,
             # Backward-compatible alias with explicit t0 semantics.
             supports=initial_supports,
             text_tokens=encoded.text_tokens,
@@ -405,9 +568,22 @@ class IAGSRMECore(nn.Module):
             initial_supports=initial_supports,
             temporal_supports=temporal_supports,
             dynamic_regrounding=self.config.enable_dynamic_regrounding,
-            initial_intents=base_intents,
+            initial_intents=initial_intents,
             temporal_intents=torch.stack(temporal_intents, dim=1),
             dynamic_reproposal=self.config.enable_dynamic_reproposal,
+            semantic_residual_enabled=self.config.enable_semantic_residual,
+            initial_semantic_residual=initial_semantic_residual,
+            temporal_semantic_residuals=(
+                torch.stack(temporal_semantic_residuals, dim=1)
+                if temporal_semantic_residuals
+                else None
+            ),
+            temporal_semantic_claims=(
+                torch.stack(temporal_semantic_claims, dim=1)
+                if temporal_semantic_claims
+                else None
+            ),
+            final_semantic_residual=semantic_residual,
             visual_null_probabilities=(
                 torch.stack(
                     [step.visual_null_probability for step in trace], dim=1

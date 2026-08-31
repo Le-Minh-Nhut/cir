@@ -65,8 +65,13 @@ class TokenStateReadout(nn.Module):
         flat_state = state.reshape(batch_size * candidates, tokens, width)
         flat_anchor = anchor[:, None].expand(-1, candidates, -1, -1).reshape_as(flat_state)
         flat_text = (
-            text_global[:, None].expand(-1, candidates, -1).reshape(batch_size * candidates, -1)
+            text_global[:, None].expand(-1, candidates, -1)
+            if text_global.ndim == 2
+            else text_global
         )
+        if flat_text.shape != (batch_size, candidates, self.width):
+            raise ValueError("candidate text_global must be [B,d] or [B,K,d]")
+        flat_text = flat_text.reshape(batch_size * candidates, -1)
         flat_reference = (
             reference_global[:, None]
             .expand(-1, candidates, -1)

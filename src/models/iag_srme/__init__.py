@@ -2,11 +2,13 @@ from .backbone import FGCLIPBackbone, FGCLIPRegime, assert_cache_legal
 from .model import IAGSRME, IAGSRMEConfig, IAGSRMECore, architecture_generation
 from .outputs import BackboneOutput, IAGSRMEOutput, RecurrentStepOutput
 from .reproposal import DynamicIntentReproposal
+from .semantic_residual import SemanticClaimModule
 
 __all__ = [
     "BackboneOutput",
     "DynamicApplicabilityGate",
     "DynamicIntentReproposal",
+    "SemanticClaimModule",
     "FGCLIPBackbone",
     "FGCLIPRegime",
     "IAGSRME",

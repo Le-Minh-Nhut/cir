@@ -40,6 +40,14 @@ def validate_checkpoint_model_config(metadata: object, model_config: object) -> 
     normalized_stored = dict(stored)
     normalized_stored.setdefault("enable_dynamic_regrounding", False)
     normalized_stored.setdefault("enable_dynamic_reproposal", False)
+    normalized_stored.setdefault("enable_semantic_residual", False)
+    normalized_stored.setdefault("initial_claim_probability", 0.99)
+    normalized_stored.setdefault("claim_activation", "sigmoid")
+    normalized_stored.setdefault(
+        "residual_update_rule", "selected_multiplicative"
+    )
+    normalized_stored.setdefault("residual_initialization", "valid_token_ones")
+    normalized_stored.setdefault("semantic_residual_fp32", True)
     if normalized_stored != configured:
         raise ValueError(
             "checkpoint model-config mismatch; replay with the exact stored configuration: "

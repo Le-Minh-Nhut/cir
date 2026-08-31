@@ -26,21 +26,63 @@ class TextIntentEncoder(nn.Module):
         self.output_norm = nn.LayerNorm(width)
 
     def forward(self, text_tokens: Tensor, content_mask: Tensor) -> Tensor:
+        return self._encode(text_tokens, content_mask, token_weights=None)
+
+    def forward_weighted(
+        self, text_tokens: Tensor, content_mask: Tensor, token_weights: Tensor
+    ) -> Tensor:
+        """R2 claim-firewall entry point; legacy text-only API stays unchanged."""
+
+        return self._encode(text_tokens, content_mask, token_weights=token_weights)
+
+    def _encode(
+        self,
+        text_tokens: Tensor,
+        content_mask: Tensor,
+        token_weights: Tensor | None,
+    ) -> Tensor:
         if text_tokens.ndim != 3 or text_tokens.shape[-1] != self.width:
             raise ValueError("text_tokens must be [B,L,d]")
         if content_mask.shape != text_tokens.shape[:2] or content_mask.dtype != torch.bool:
             raise ValueError("content_mask must be boolean [B,L]")
         if not content_mask.any(dim=1).all():
             raise ValueError("every sample must contain at least one content token")
-        batch_size = text_tokens.shape[0]
+        batch_size, text_length, _ = text_tokens.shape
         queries = self.query_bank.unsqueeze(0).expand(batch_size, -1, -1)
-        attended, _ = self.cross_attention(
-            query=queries,
-            key=text_tokens,
-            value=text_tokens,
-            key_padding_mask=~content_mask,
-            need_weights=False,
-        )
+        if token_weights is None:
+            attended, _ = self.cross_attention(
+                query=queries,
+                key=text_tokens,
+                value=text_tokens,
+                key_padding_mask=~content_mask,
+                need_weights=False,
+            )
+        else:
+            expected = (batch_size, self.num_candidates, text_length)
+            if token_weights.shape != expected:
+                raise ValueError("token_weights must be [B,K,L]")
+            weighted_tokens = (
+                text_tokens[:, None] * token_weights.to(text_tokens.dtype).unsqueeze(-1)
+            )
+            flat_tokens = weighted_tokens.reshape(
+                batch_size * self.num_candidates, text_length, self.width
+            )
+            flat_queries = queries.reshape(
+                batch_size * self.num_candidates, 1, self.width
+            )
+            flat_mask = content_mask[:, None].expand(
+                -1, self.num_candidates, -1
+            ).reshape(batch_size * self.num_candidates, text_length)
+            flat_attended, _ = self.cross_attention(
+                query=flat_queries,
+                key=flat_tokens,
+                value=flat_tokens,
+                key_padding_mask=~flat_mask,
+                need_weights=False,
+            )
+            attended = flat_attended.reshape(
+                batch_size, self.num_candidates, self.width
+            )
         residual = queries + attended
         intents = self.output_norm(residual + self.ffn(residual))
         if intents.shape != (batch_size, self.num_candidates, self.width):

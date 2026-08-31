@@ -70,6 +70,22 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         enable_dynamic_reproposal=bool(
             cfg.model.get("enable_dynamic_reproposal", False)
         ),
+        enable_semantic_residual=bool(
+            cfg.model.get("enable_semantic_residual", False)
+        ),
+        initial_claim_probability=float(
+            cfg.model.get("initial_claim_probability", 0.99)
+        ),
+        claim_activation=str(cfg.model.get("claim_activation", "sigmoid")),
+        residual_update_rule=str(
+            cfg.model.get("residual_update_rule", "selected_multiplicative")
+        ),
+        residual_initialization=str(
+            cfg.model.get("residual_initialization", "valid_token_ones")
+        ),
+        semantic_residual_fp32=bool(
+            cfg.model.get("semantic_residual_fp32", True)
+        ),
     )
     return IAGSRME(backbone, IAGSRMECore(model_config)), tokenizer, processor
 

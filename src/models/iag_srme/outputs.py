@@ -51,6 +51,13 @@ class RecurrentStepOutput:
     base_intents: Tensor | None = None  # [B,K,d], immutable text-only WHAT
     current_intents: Tensor | None = None  # [B,K,d], raw WHAT used at this step
     intent_residual: Tensor | None = None  # [B,K,d], current_intents-base_intents
+    parent_semantic_residual: Tensor | None = None  # [B,L], shared rho_t
+    raw_semantic_claims: Tensor | None = None  # [B,K,L], before diagnostic controls
+    effective_semantic_claims: Tensor | None = None  # [B,K,L], executable claims
+    claimed_text_content: Tensor | None = None  # [B,K,d]
+    candidate_semantic_residuals: Tensor | None = None  # [B,K,L]
+    next_semantic_residual: Tensor | None = None  # [B,L]
+    selected_semantic_consumption: Tensor | None = None  # [B,L]
 
 
 @dataclass(slots=True)
@@ -77,3 +84,8 @@ class IAGSRMEOutput:
     initial_intents: Tensor | None = None  # [B,K,d], explicit immutable base WHAT
     temporal_intents: Tensor | None = None  # [B,T,K,d], raw per-step WHAT
     dynamic_reproposal: bool = False
+    semantic_residual_enabled: bool = False
+    initial_semantic_residual: Tensor | None = None  # [B,L]
+    temporal_semantic_residuals: Tensor | None = None  # [B,T+1,L]
+    temporal_semantic_claims: Tensor | None = None  # [B,T,K,L], raw claims
+    final_semantic_residual: Tensor | None = None  # [B,L]
