@@ -28,6 +28,7 @@ from training.engine import assert_training_setup, resolve_precision, trainable_
 BASE_CHECKPOINT = "qihoo360/fg-clip-base"
 BASE_REVISION = "454d76372c2cf5eb48fa0d871fd0534481484d97"
 CATEGORIES = ("dress", "shirt", "toptee")
+R1C1_ALL_STOP_T0_OPERATIONAL_THRESHOLD = 0.99
 
 
 def _gradient_norm(parameters: Iterable[nn.Parameter]) -> float:
@@ -87,6 +88,45 @@ def _complete_amp_step(
 
 def _mean(values: list[float]) -> float:
     return sum(values) / max(len(values), 1)
+
+
+def _classify_canary_outcomes(
+    *,
+    r1c1: bool,
+    attempted_steps: int,
+    successful_optimizer_steps: int,
+    stop_t0_occupancy: float,
+    total_stop_decisions: int,
+    maximum_candidate_share: float,
+    mean_effect_rank: float,
+    mean_effect_cosine: float,
+) -> tuple[dict[str, bool], dict[str, bool]]:
+    """Separate implementation readiness from scientific behavior observations.
+
+    Candidate/STOP specialization is a result of the experiment, not a prerequisite
+    for a mechanically valid canary. R1c1 immediate-STOP saturation is the one
+    operational exception: it prevents the run from exercising changed-state
+    regrounding, so the canary cannot validate its defining recurrent path.
+    """
+
+    mechanical_failure_flags = {
+        "no_successful_optimizer_steps": successful_optimizer_steps == 0,
+        "insufficient_successful_optimizer_steps": (
+            attempted_steps >= 20 and successful_optimizer_steps < 20
+        ),
+        "all_stop_t0_prevents_recurrence_exercise": (
+            r1c1
+            and stop_t0_occupancy > R1C1_ALL_STOP_T0_OPERATIONAL_THRESHOLD
+        ),
+    }
+    scientific_warning_flags = {
+        "never_stop": total_stop_decisions == 0,
+        "single_candidate_monopoly": maximum_candidate_share > 0.99,
+        "identical_candidate_effects": (
+            mean_effect_rank <= 1.05 or mean_effect_cosine >= 0.999
+        ),
+    }
+    return mechanical_failure_flags, scientific_warning_flags
 
 
 def _verify_absorbing_stop(output) -> None:
@@ -623,10 +663,15 @@ def main() -> None:
                 successful_steps_with_nonzero_applicability_gradient += 1
             if gradient_norms["grounding"] > 0:
                 successful_steps_with_nonzero_grounding_gradient += 1
+            allowed_zero_families = {"applicability"}
+            if args.r1c1:
+                # R1c1 readiness is based on cumulative grounding learnability;
+                # one minibatch with zero grounder gradient is not a failure.
+                allowed_zero_families.add("grounding")
             zero_families = [
                 name
                 for name, value in gradient_norms.items()
-                if value == 0 and name != "applicability"
+                if value == 0 and name not in allowed_zero_families
             ]
             if zero_families:
                 raise RuntimeError(
@@ -785,17 +830,55 @@ def main() -> None:
     )
     non_stop = action_counts[:4]
     candidate_distribution = non_stop.float() / non_stop.sum().clamp_min(1)
-    collapse_flags = {
-        "all_stop_t0": bool(stop_by_timestep[0] > 0.99),
-        "never_stop": bool(action_counts[4] == 0),
-        "single_candidate_monopoly": bool(candidate_distribution.max() > 0.99),
-        "identical_candidate_effects": bool(
-            _mean(history["effect_rank"]) <= 1.05
-            or _mean(history["effect_cosine"]) >= 0.999
-        ),
-    }
+    mechanical_failure_flags, scientific_warning_flags = _classify_canary_outcomes(
+        r1c1=args.r1c1,
+        attempted_steps=args.steps,
+        successful_optimizer_steps=successful_optimizer_steps,
+        stop_t0_occupancy=float(stop_by_timestep[0]),
+        total_stop_decisions=int(action_counts[4]),
+        maximum_candidate_share=float(candidate_distribution.max()),
+        mean_effect_rank=_mean(history["effect_rank"]),
+        mean_effect_cosine=_mean(history["effect_cosine"]),
+    )
+    grounder_delta = _parameter_delta(
+        tracked["grounding_projection"], initial["grounding_projection"]
+    )
+    mechanical_failure_flags.update(
+        {
+            # These checks abort at the point of failure. False in a completed report
+            # records what the successful canary actually established.
+            "non_finite": False,
+            "unrecoverable_amp_overflow": False,
+            "incorrect_forward_call_count": False,
+            "same_parent_invariant_failure": False,
+            "support_normalization_failure": False,
+            "r1b_applicability_active": bool(
+                args.r1c1 and model.core.config.enable_dynamic_applicability
+            ),
+            "grounder_no_gradient": bool(
+                args.r1c1
+                and successful_optimizer_steps > 0
+                and successful_steps_with_nonzero_grounding_gradient == 0
+            ),
+            "grounder_no_parameter_movement": bool(
+                args.r1c1
+                and successful_optimizer_steps >= 20
+                and grounder_delta == 0.0
+            ),
+        }
+    )
+    mechanical_status = (
+        "FAIL" if any(mechanical_failure_flags.values()) else "PASS"
+    )
     summary = {
         "status": "complete",
+        "mechanical_status": mechanical_status,
+        "mechanical_failure_flags": mechanical_failure_flags,
+        "scientific_warning_flags": scientific_warning_flags,
+        "scientific_warning_status": (
+            "observations only; these flags do not invalidate mechanical readiness "
+            "for full training"
+        ),
         "device": str(device),
         "gpu_name": torch.cuda.get_device_name(device),
         "steps": args.steps,
@@ -852,7 +935,6 @@ def main() -> None:
         "stop_by_timestep": stop_by_timestep.tolist(),
         "selected_distribution_with_stop": distribution.tolist(),
         "candidate_distribution_conditional_non_stop": candidate_distribution.tolist(),
-        "collapse_flags": collapse_flags,
         "finite": True,
         "parameter_max_abs_delta": {
             name: _parameter_delta(parameter, initial[name])
@@ -860,12 +942,16 @@ def main() -> None:
         },
     }
     print(json.dumps(summary, indent=2, sort_keys=True), flush=True)
-    if args.steps >= 20 and successful_optimizer_steps < 20:
+    failed_mechanical_checks = [
+        name for name, failed in mechanical_failure_flags.items() if failed
+    ]
+    if failed_mechanical_checks:
         raise RuntimeError(
-            "GPU canary requires at least 20 successful optimizer steps before full training"
+            "canary mechanical readiness failed: "
+            f"{failed_mechanical_checks}. Immediate STOP saturation is operationally "
+            "invalid only because it prevents exercising changed-state recurrent "
+            "regrounding; it is not a scientific judgment against STOP."
         )
-    if successful_optimizer_steps >= 10 and any(collapse_flags.values()):
-        raise RuntimeError(f"canary collapse detector fired: {collapse_flags}")
 
 
 if __name__ == "__main__":
