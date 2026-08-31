@@ -21,7 +21,8 @@
 **Checkpoint replay error:** `7.1e-15`  
 **Mechanical verdict:** **PASS**  
 **Scientific R1b verdict:** **FAIL / NEGATIVE RESULT**  
-**R1c1 result:** **NEGATIVE — moving WHERE clones remained**  
+**R1c1 result:** **NEGATIVE — moving WHERE clones remained**
+
 **Next clean experiment:** **R1c2 — dynamic current-state WHAT re-proposal**
 
 ---
