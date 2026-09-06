@@ -358,6 +358,12 @@ patch-only. At every readout, the ablation reconstructs
 \([CLS_{L-1};V_t]\), calls the checkpoint's exact final vision block, takes the output
 CLS, and applies the native post-layernorm, visual projection, and normalization.
 
+An implementation-equivalent optimization may compute only the final block's CLS
+attention row: Q comes from normalized CLS, K/V come from all normalized tokens, and
+the residual/MLP path is evaluated only for CLS. This is admissible only when it is
+numerically parity-tested against both the exact full-token checkpoint layer and the
+official native feature; the full-token path remains the validation oracle.
+
 This compares a shared learned recurrent query (`R0-QG`) against an image-specific
 immutable native query anchor (`R0-NCLS`). The Executor never receives or modifies the
 anchor, and all other architecture, objective, data, and optimization settings must be

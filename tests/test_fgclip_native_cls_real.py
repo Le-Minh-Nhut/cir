@@ -88,8 +88,12 @@ def test_real_fgclip_native_cls_parity_and_learned_qg_diagnostic() -> None:
         official_global = official_vision.pooler_output
         official_query = F.normalize(checkpoint.get_image_features(pixel_values=pixels).float(), dim=-1)
         patches, cls_anchor = native_cls.initial_state_with_anchor(pixels)
+        full_global = native_cls._native_cls_readout_full(patches, cls_anchor)
+        cls_only_global = native_cls._native_cls_readout_cls_only(patches, cls_anchor)
+        full_query = native_cls.retrieval_from_global(full_global)
+        cls_only_query = native_cls.retrieval_from_global(cls_only_global)
         reconstructed_global = native_cls.global_readout(patches, cls_anchor)
-        reconstructed_query = native_cls.retrieval_readout(patches, cls_anchor)
+        reconstructed_query = native_cls.retrieval_from_global(reconstructed_global)
         learned_global = learned_qg.global_readout(patches)
         learned_query = learned_qg.retrieval_readout(patches)
         legacy_learned_global = _legacy_learned_qg_global(learned_qg, patches)
@@ -99,6 +103,8 @@ def test_real_fgclip_native_cls_parity_and_learned_qg_diagnostic() -> None:
         changed_query = native_cls.retrieval_readout(changed_patches, cls_anchor)
 
     metrics = {
+        "native_cls_full_vs_cls_only_global": _errors(full_global, cls_only_global),
+        "native_cls_full_vs_cls_only_retrieval": _errors(full_query, cls_only_query),
         "native_cls_global": _errors(official_global, reconstructed_global),
         "native_cls_retrieval": _errors(official_query, reconstructed_query),
         "learned_qg_global": _errors(official_global, learned_global),
@@ -111,6 +117,10 @@ def test_real_fgclip_native_cls_parity_and_learned_qg_diagnostic() -> None:
     }
     print("TRACK_B_READOUT_PARITY=" + json.dumps(metrics, sort_keys=True))
 
+    assert metrics["native_cls_full_vs_cls_only_global"]["max_abs_error"] <= 1e-5
+    assert metrics["native_cls_full_vs_cls_only_retrieval"]["max_abs_error"] <= 1e-5
+    assert metrics["native_cls_full_vs_cls_only_global"]["cosine_similarity"] >= 1.0 - 1e-6
+    assert metrics["native_cls_full_vs_cls_only_retrieval"]["cosine_similarity"] >= 1.0 - 1e-6
     assert metrics["native_cls_global"]["max_abs_error"] <= 1e-5
     assert metrics["native_cls_retrieval"]["max_abs_error"] <= 1e-5
     assert metrics["native_cls_global"]["cosine_similarity"] >= 1.0 - 1e-6

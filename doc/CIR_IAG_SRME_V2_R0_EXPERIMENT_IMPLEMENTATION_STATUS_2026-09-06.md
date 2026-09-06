@@ -12,7 +12,7 @@ checked. It is not an architecture specification. The canonical source of truth 
 | Branch | `exp/e2e-iag-srme-v2-r0` |
 | Base branch | `exp/e2e-iag-srme-clean-rewrite` |
 | Base merge-base | `f4bc1e8b91e5c43eec36e824fcd4c1d858f32308` |
-| Current committed HEAD | `f9421827c7a65a965cc2605c20f94f2f649ebc47` (`v2`) |
+| Current remote HEAD / implementation base | `62512315e4bbd349af9d65d8a323a777e124f086` (`v2.1`) |
 | Record date | 2026-09-07 (implementation began 2026-09-06) |
 | Canonical architecture | `doc/CIR_IAG_SRME_UNIFIED_CANONICAL_ARCHITECTURE_AND_TRAINING_SPEC_V2_2026-09-06.md` |
 | Active backbone track | Track B — FG-CLIP v1 Base |
@@ -38,7 +38,7 @@ The main architecture remains readable top-to-bottom in
 | Component | Input | Output | Responsibility/location |
 |---|---|---|---|
 | Backbone initial state | reference pixels | `V0: [B,196,768]` | Penultimate FG-CLIP patches, CLS removed; `utils/backbone.py` |
-| Current global readout | `V_t`, plus mode-specific query/anchor | `g_t: [B,768]` | R0-QG uses learned `q_G`; R0-NCLS uses immutable image-specific `CLS_(L-1)` with the exact native final block |
+| Current global readout | `V_t`, plus mode-specific query/anchor | `g_t: [B,768]` | R0-QG uses learned `q_G`; R0-NCLS computes the exact CLS row of the native final block from immutable image-specific `CLS_(L-1)` and current patches |
 | ProposalNet | text tokens `[B,L,256]`, text global `[B,256]`, `g_t` | `e: [B,K,768]` | Fresh permutation-compatible edit candidates; no patch-state input |
 | Grounder | `e`, native dense `[B,196,512]` | raw cosine, `alpha`, `M_exec: [B,K,196]` | Softmax read and separate sigmoid write maps |
 | Entity read | `alpha`, current `V_t` | `h: [B,K,768]` | Pools values from the actual recurrent state |
@@ -59,7 +59,7 @@ committed sibling continues; there is no beam, tree, or soft mixture.
 | CLS policy | Never part of mutable recurrent state; R0-NCLS carries an immutable readout anchor | VERIFIED |
 | `q_G` initialization | Copy of checkpoint vision class embedding, then trainable in R0-QG | VERIFIED |
 | R0-QG global readout | `q_G` cross-reads current patches with the preserved last-block-style Q/K/V, norms, output projection and MLP | VERIFIED regression-compatible; not native-parity by design |
-| R0-NCLS global readout | `[CLS_anchor; V_t]` through the exact checkpoint final encoder layer, then native post-LN | VERIFIED native parity at `t=0` |
+| R0-NCLS global readout | Exact final-block CLS attention row from `[CLS_anchor; V_t]`, CLS residual/MLP, then native post-LN; full-token checkpoint call retained as oracle | VERIFIED against full block and native output at `t=0` |
 | Dense readout | `forward_without_attn -> post_layernorm -> visual_projection` | VERIFIED; real-checkpoint max/mean error observed as `0.0/0.0` |
 | Retrieval readout | selected global readout, native visual projection, FP32 L2 normalization | R0-NCLS VERIFIED native parity at `t=0` |
 | Projection | Checkpoint `visual_projection`, output width 512 | VERIFIED for dense path |
@@ -77,27 +77,29 @@ only from R0-NCLS. R0-QG remains the canonical learned recurrent query experimen
 |---|---|---|
 | Mutable state | current penultimate patches `V_t` | current penultimate patches `V_t` |
 | Global token source | one shared trainable `q_G`, initialized from checkpoint class embedding | image-specific `hidden_states[-2][:,0]` captured at reference encoding |
-| Readout | preserved final-block-style cross-attention/MLP implementation | exact checkpoint final encoder layer on `[CLS_anchor;V_t]` |
+| Readout | preserved final-block-style cross-attention/MLP implementation | exact CLS row of the checkpoint final encoder layer on `[CLS_anchor;V_t]` |
 | Anchor recurrence | no CLS anchor required | same immutable anchor at every timestep and sibling |
 | Executor input | patches only | patches only; anchor is never passed to Executor |
 | `t=0` native parity expectation | none | yes |
-| Status | implemented and regression-tested | implemented; real-checkpoint parity verified |
+| Status | implemented and regression-tested | optimized CLS-only production path; full-block and real-checkpoint parity verified |
 
 Measured on one real FashionIQ image using the pinned checkpoint, revision, official
 image processor, FP32 evaluation, native post-layernorm, visual projection, and L2
 normalization:
 
-| Comparison to official FG-CLIP | max absolute error | mean absolute error | cosine similarity |
+| Readout comparison | max absolute error | mean absolute error | cosine similarity |
 |---|---:|---:|---:|
-| R0-NCLS global | `0.0` | `0.0` | `0.9999998808` |
-| R0-NCLS retrieval | `0.0` | `0.0` | `1.0000001192` |
+| Full block vs CLS-only global | `1.4603138e-6` | `2.8152968e-7` | `0.9999999404` |
+| Full block vs CLS-only retrieval | `5.9604645e-8` | `1.3475628e-8` | `1.0000001192` |
+| R0-NCLS CLS-only global | `1.4603138e-6` | `2.8152968e-7` | `0.9999999404` |
+| R0-NCLS CLS-only retrieval | `5.9604645e-8` | `1.3475628e-8` | `1.0000001192` |
 | R0-QG global diagnostic | `10.69435024` | `0.62872618` | `0.50536633` |
 | R0-QG retrieval diagnostic | `0.18923751` | `0.03000430` | `0.61011481` |
 
 The R0-QG numbers are descriptive, not a failed parity test: that mode uses a shared
 learned query and is not claimed to reconstruct native image features. With the same
 R0-NCLS anchor and a `+0.1` perturbation to one patch coordinate, the measured global
-L2 change was `0.0017186521` and retrieval L2 change was `0.0000561665`; therefore the
+L2 change was `0.0017184421` and retrieval L2 change was `0.0000561443`; therefore the
 immutable anchor does not make the recurrent readout static.
 
 The refactored R0-QG global output was also compared against an independent copy of the
@@ -107,8 +109,27 @@ were both `0.0` and cosine similarity was `1.0000001192`.
 Candidate anchors are expanded only across the candidate dimension, preserving sample
 association. Unit tests verify vectorized/loop equality and candidate-permutation
 equivariance to `1e-6` in both modes. The deterministic unit fixture measured
-vectorized/loop maximum errors of `1.1921e-7` (R0-QG) and `1.9372e-7` (R0-NCLS), and
-permutation maximum errors of `7.9162e-8` and `1.9372e-7`, respectively.
+vectorized/loop maximum errors of `5.9605e-8` (R0-QG) and `1.1921e-7` (R0-NCLS), and
+permutation maximum errors of `5.9605e-8` and `8.9407e-8`, respectively.
+
+The recurrent path computes exactly two global readouts per live timestep: one for the
+parent and one vectorized call for all `K` siblings. `retrieval_from_global` applies the
+native visual projection followed by FP32 L2 normalization, so neither parent nor
+candidate global computation is repeated. The compatibility `retrieval_readout`
+wrapper remains available and produces numerically identical queries. One additional
+global readout produces the terminal query after rollout.
+
+The native CLS-only implementation uses checkpoint `layer_norm1`, CLS `q_proj`, all-token
+`k_proj/v_proj`, native attention scale/dropout and `out_proj`, then applies the CLS
+residual, checkpoint `layer_norm2`/MLP residual, and native post-layernorm. It does not
+materialize final-block patch outputs. The exact full-token layer call remains private
+test oracle `_native_cls_readout_full` and is not used by production rollout.
+
+Per-step output no longer retains `raw_delta`, `candidate_global`, or the 1280-wide
+`score_features`, because no objective, diagnostic, evaluation path, or test consumes
+them. It retains `parent_state`, masked `delta`, and `candidate_states` for same-parent,
+hard-commit, and selected-trajectory gradient diagnostics, plus the compact semantic,
+score, and retrieval-consequence tensors required by current objectives.
 
 ### 4.2 Matched comparison protocol and logging
 
@@ -141,7 +162,7 @@ L_total =
 | Term | Responsibility | Intended gradient destination |
 |---|---|---|
 | `L_terminal` | Retrieval quality of the hard-committed terminal state | Committed recurrent trajectory and legal target encoder path |
-| `L_pair` | Candidate ordering | ScoreNet only; teacher and score features are detached |
+| `L_pair` | Candidate ordering | ScoreNet only; teacher and upstream feature inputs are detached before ScoreNet projections |
 | `L_gain` | Absolute calibration against STOP utility zero | ScoreNet only |
 | `L_c^SRME` | Instruction-concept coverage by proposal set at `t=0` | Proposal and its `W_c` projection |
 | `L_bind` | Edit/entity relation-distribution compatibility | Proposal, Grounder through `h -> alpha`, and relation bank/projections |
@@ -150,6 +171,12 @@ L_total =
 
 `L_ortho(Q_prop)` is disabled. `L_cycle` and `L_ground_consistency` are disabled.
 No correspondence term appears in `L_total`.
+
+ScoreNet routing detaches `current_global`, text context, actions, local delta, execution
+mask, and candidate global only at the boundary into `ScoreNet.build_features`. The
+trainable context/action/local/global projections, context LayerNorm, and scoring MLP
+therefore all receive pair/gain gradients. Live candidate queries and `delta_q` are not
+detached, preserving terminal and Functional-DPP routes.
 
 ## 6. Current ablation ladder
 
@@ -287,12 +314,12 @@ specification V1 is intentionally retained as research history, not as source of
 
 | Group | Status | Evidence |
 |---|---|---|
-| Backbone | PASS | R0-QG regression, real-checkpoint R0-NCLS exact native parity, immutable anchor, dynamic-state and vectorized/loop tests |
+| Backbone | PASS | R0-QG regression, full-vs-CLS-only and official R0-NCLS parity, immutable anchor, dynamic-state, vectorized/loop, and non-duplicated-call tests |
 | Proposal | PASS | Text/global dependence, no patch argument, recurrent reproposal |
 | Grounding | PASS | Patch softmax, distinct sigmoid write, current-state entity pool |
 | Fusion | PASS | Independent bounded gates and candidate permutation equivariance |
 | Executor | PASS | Identity initialization, zero-mask no-op, same parent, permutation equivariance |
-| ScoreNet/STOP | PASS | Shared scorer, zero STOP anchor, hard single commit, absorbing STOP |
+| ScoreNet/STOP | PASS | Every ScoreNet projection/norm/MLP group receives isolated pair/gain gradient; backbone, Proposal, Grounder, Fusion, and Executor receive none; STOP unchanged |
 | Teacher | PASS | Duplicate positives, no false negatives, shared pool, empty-negative skip |
 | Target firewall | PASS | Live output unchanged; target affects only training objective branches |
 | Semantic auxiliaries | PASS | Instruction-only/parser determinism, set pooling/permutation, t0 routing, bind/ortho gradients |
@@ -301,7 +328,7 @@ specification V1 is intentionally retained as research history, not as source of
 | Prior R0-QG FashionIQ A6 canary | PASS | CPU FP32, batch 2, one optimizer update, three rollout steps |
 | R0-NCLS full-model forward smoke | PASS | Real checkpoint/image; state `[1,196,768]`, anchor `[1,768]`, sibling queries `[1,4,512]` |
 
-The final suite result is `47 passed, 1 skipped`; the skip is the CUDA-only optimizer
+The final suite result is `49 passed, 1 skipped`; the skip is the CUDA-only optimizer
 placement test because CUDA is unavailable. The real-checkpoint parity test passed.
 Ruff reports `All checks passed`. The prior R0-QG post-threshold canary produced finite values:
 `total=0.803284`, `terminal=0.791728`, `gain=0.001349`,
@@ -310,10 +337,16 @@ The DPP skip is expected at the zero-initialized Executor because fewer than two
 candidates cleared the configured useful-quality guard; it confirms the guard rather
 than demonstrating learned functional diversity.
 
+The canary now resets CUDA peak statistics before its update and reports peak allocated
+and reserved GiB. This host reports `torch.cuda.is_available() == false`, so neither the
+requested FP16 CUDA canaries nor before/after VRAM measurements were run; no memory
+number is inferred from CPU execution.
+
 ## 15. Known issues and unresolved questions
 
-- **Resolved:** R0-NCLS reconstructs the official native global and retrieval outputs at
-  `t=0` with measured zero max/mean absolute error in the pinned FP32 check. R0-QG is
+- **Resolved:** the optimized R0-NCLS CLS-only path reconstructs the official native
+  global/retrieval outputs at `t=0` within `1.4603138e-6`/`5.9604645e-8` maximum
+  absolute error in the pinned FP32 check. R0-QG is
   explicitly a non-native learned recurrent readout and is no longer mislabeled as a
   pending native-parity path.
 - **P1 — before full comparison training:** Run a one-update R0-NCLS canary on the
@@ -334,9 +367,9 @@ than demonstrating learned functional diversity.
 
 ```text
 Architecture implementation: A0-A6 code complete for the requested V2 auxiliaries
-Unit-test readiness:       47 passed, 1 CUDA-only test skipped
-Backbone parity:           native_cls global/retrieval exact at t=0; learned_qg diagnostic only
-Training smoke test:       prior R0-QG CPU A6 canary passed; R0-NCLS training not run
+Unit-test readiness:       49 passed, 1 CUDA-only test skipped
+Backbone parity:           native_cls CLS-only within 1.47e-6 global max error at t=0
+Training smoke test:       prior R0-QG CPU A6 canary passed; current CUDA/FP16 canaries not run
 Ready for full training:   NO
 ```
 

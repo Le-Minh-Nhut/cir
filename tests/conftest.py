@@ -36,9 +36,10 @@ class TinyBackbone(nn.Module):
         return self.dense_projection(state)
 
     def retrieval_readout(self, state: Tensor, cls_anchor: Tensor | None = None) -> Tensor:
-        return F.normalize(
-            self.retrieval_projection(self.global_readout(state, cls_anchor)), dim=-1
-        )
+        return self.retrieval_from_global(self.global_readout(state, cls_anchor))
+
+    def retrieval_from_global(self, global_state: Tensor) -> Tensor:
+        return F.normalize(self.retrieval_projection(global_state), dim=-1)
 
     def encode_text(
         self, input_ids: Tensor, attention_mask: Tensor, content_mask: Tensor

@@ -5,6 +5,15 @@ import torch
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
 
 
+def _gradient_sum(module) -> float:
+    gradients = [
+        float(parameter.grad.detach().abs().sum())
+        for parameter in module.parameters()
+        if parameter.grad is not None
+    ]
+    return sum(gradients)
+
+
 def test_score_losses_only_update_shared_scorenet(model, features) -> None:
     initial, tokens, text, mask = features
     output = model.forward_from_features(initial, tokens, text, mask)
@@ -14,20 +23,18 @@ def test_score_losses_only_update_shared_scorenet(model, features) -> None:
     )
     objective(output, targets, ["a", "b", "c"])["total"].backward()
 
-    score_grad = sum(
-        parameter.grad.abs().sum()
-        for parameter in model.score_net.parameters()
-        if parameter.grad is not None
-    )
-    assert score_grad > 0
-    assert all(
-        parameter.grad is None or parameter.grad.count_nonzero() == 0
-        for parameter in model.proposal.parameters()
-    )
-    assert all(
-        parameter.grad is None or parameter.grad.count_nonzero() == 0
-        for parameter in model.executor.parameters()
-    )
+    for name in (
+        "context_global",
+        "context_text",
+        "context_norm",
+        "action_projection",
+        "local_projection",
+        "global_projection",
+        "net",
+    ):
+        assert _gradient_sum(getattr(model.score_net, name)) > 0, name
+    for name in ("backbone", "proposal", "grounder", "action_fusion", "executor"):
+        assert _gradient_sum(getattr(model, name)) == 0, name
     assert targets.grad is None or targets.grad.count_nonzero() == 0
 
 

@@ -25,8 +25,8 @@ class FGCLIPBackbone(nn.Module):
 
     The recurrent state is always the penultimate patch tensor. ``learned_qg``
     reads it with the original shared learned query; ``native_cls`` carries the
-    image-specific penultimate CLS as immutable readout context and calls the
-    checkpoint's exact final block.
+    image-specific penultimate CLS as immutable readout context and computes
+    the exact CLS row of the checkpoint's final block.
     """
 
     def __init__(
@@ -199,6 +199,76 @@ class FGCLIPBackbone(nn.Module):
         query = query + block.mlp(block.layer_norm2(query))
         return self.model.vision_model.post_layernorm(query[:, 0])
 
+    def _native_cls_readout_full(self, patches: Tensor, cls_anchor: Tensor) -> Tensor:
+        """Exact full-token final block, retained as the native parity oracle."""
+
+        full_state = torch.cat([cls_anchor[:, None], patches], dim=1)
+        block = self.model.vision_model.encoder.layers[-1]
+        final_state = block(
+            hidden_states=full_state,
+            attention_mask=None,
+            causal_attention_mask=None,
+            output_attentions=False,
+        )[0]
+        return self.model.vision_model.post_layernorm(final_state[:, 0])
+
+    def _native_cls_readout_cls_only(
+        self, patches: Tensor, cls_anchor: Tensor
+    ) -> Tensor:
+        """Compute only the final block's CLS output, with checkpoint weights.
+
+        In a pre-LN block, the final CLS attention row needs Q from CLS and K/V
+        from all penultimate tokens. Newly updated patch outputs from the same
+        block cannot affect CLS, so materializing them is unnecessary.
+        """
+
+        block = self.model.vision_model.encoder.layers[-1]
+        attention = block.self_attn
+        full_state = torch.cat([cls_anchor[:, None], patches], dim=1)
+        normalized = block.layer_norm1(full_state)
+        batch, tokens, width = normalized.shape
+        heads = attention.num_heads
+        head_dim = attention.head_dim
+
+        query = attention.q_proj(normalized[:, :1]) * attention.scale
+        key = attention.k_proj(normalized)
+        value = attention.v_proj(normalized)
+        query = (
+            query.view(batch, 1, heads, head_dim)
+            .transpose(1, 2)
+            .contiguous()
+            .view(batch * heads, 1, head_dim)
+        )
+        key = (
+            key.view(batch, tokens, heads, head_dim)
+            .transpose(1, 2)
+            .contiguous()
+            .view(batch * heads, tokens, head_dim)
+        )
+        value = (
+            value.view(batch, tokens, heads, head_dim)
+            .transpose(1, 2)
+            .contiguous()
+            .view(batch * heads, tokens, head_dim)
+        )
+        weights = torch.bmm(query, key.transpose(1, 2))
+        weights = F.softmax(weights, dim=-1)
+        weights = F.dropout(
+            weights,
+            p=float(attention.dropout),
+            training=block.training,
+        )
+        attended = torch.bmm(weights, value)
+        attended = (
+            attended.view(batch, heads, 1, head_dim)
+            .transpose(1, 2)
+            .reshape(batch, 1, width)
+        )
+
+        cls = cls_anchor[:, None] + attention.out_proj(attended)
+        cls = cls + block.mlp(block.layer_norm2(cls))
+        return self.model.vision_model.post_layernorm(cls[:, 0])
+
     def global_readout(self, state: Tensor, cls_anchor: Tensor | None = None) -> Tensor:
         """Read current patches using the configured Track-B global token."""
 
@@ -210,16 +280,7 @@ class FGCLIPBackbone(nn.Module):
             if cls_anchor is None:
                 raise ValueError("native_cls readout requires the image-specific CLS anchor")
             anchor = self._expand_cls_anchor(cls_anchor, leading).to(patches.dtype)
-            full_state = torch.cat([anchor[:, None], patches], dim=1)
-            block = self.model.vision_model.encoder.layers[-1]
-            # Exact checkpoint layer call; no manual approximation of native attention.
-            final_state = block(
-                hidden_states=full_state,
-                attention_mask=None,
-                causal_attention_mask=None,
-                output_attentions=False,
-            )[0]
-            global_state = self.model.vision_model.post_layernorm(final_state[:, 0])
+            global_state = self._native_cls_readout_cls_only(patches, anchor)
         return global_state.reshape(*leading, width)
 
     def dense_readout(self, state: Tensor) -> Tensor:
@@ -231,10 +292,16 @@ class FGCLIPBackbone(nn.Module):
         dense = self.model.visual_projection(dense)
         return dense.reshape(*leading, state.shape[-2], self.dense_dim)
 
-    def retrieval_readout(self, state: Tensor, cls_anchor: Tensor | None = None) -> Tensor:
-        global_state = self.global_readout(state, cls_anchor)
+    def retrieval_from_global(self, global_state: Tensor) -> Tensor:
+        """Project a computed global state once and normalize in FP32."""
+
         query = self.model.visual_projection(global_state)
         return F.normalize(query.float(), dim=-1).to(query.dtype)
+
+    def retrieval_readout(self, state: Tensor, cls_anchor: Tensor | None = None) -> Tensor:
+        """Compatibility wrapper for callers without an existing global state."""
+
+        return self.retrieval_from_global(self.global_readout(state, cls_anchor))
 
     def encode_text(
         self, input_ids: Tensor, attention_mask: Tensor, content_mask: Tensor

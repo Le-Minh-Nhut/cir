@@ -8,8 +8,9 @@ The current implementation is Track B (FG-CLIP v1 Base) with two controlled glob
 readout modes:
 
 - `R0-QG` / `learned_qg`: canonical learned recurrent global query;
-- `R0-NCLS` / `native_cls`: immutable image-specific penultimate CLS passed with current
-  patches through the exact native final vision block.
+- `R0-NCLS` / `native_cls`: immutable image-specific penultimate CLS and current
+  patches feed the exact CLS row of the native final vision block; the full-token call
+  remains a parity oracle.
 
 Both modes keep the following architecture fixed:
 
@@ -68,6 +69,7 @@ python src/canary_train_iag_srme.py \
 ```
 
 Add `--global-readout-mode native_cls` for the R0-NCLS canary.
+On CUDA, the canary JSON also reports peak allocated and reserved memory in GiB.
 
 ## Train
 

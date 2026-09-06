@@ -139,6 +139,8 @@ def main() -> None:
     scaler = torch.amp.GradScaler(device.type, enabled=precision.scaler_enabled)
 
     model.train()
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(device)
     iterator = iter(loader)
     records = []
     for step_index in range(args.steps):
@@ -186,11 +188,20 @@ def main() -> None:
                 "stopped": int(output["stopped"].sum()),
             }
         )
+    memory = (
+        {
+            "peak_allocated_gib": torch.cuda.max_memory_allocated(device) / 1024**3,
+            "peak_reserved_gib": torch.cuda.max_memory_reserved(device) / 1024**3,
+        }
+        if device.type == "cuda"
+        else None
+    )
     print(
         json.dumps(
             {
                 "device": str(device),
                 "global_readout_mode": args.global_readout_mode,
+                "peak_cuda_memory": memory,
                 "records": records,
             },
             indent=2,

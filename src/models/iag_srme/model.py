@@ -320,25 +320,25 @@ class IAGSRME(nn.Module):
             grounding, alpha_read, exec_mask = self.grounder(edits, dense)
             entity = torch.einsum("bkn,bnd->bkd", alpha_read, parent)
             actions, fuse_gamma, fuse_beta = self.action_fusion(entity, edits)
-            raw_delta, delta, candidate_states = self.executor(
+            _, delta, candidate_states = self.executor(
                 parent, actions, exec_mask, self.backbone.patch_grid
             )
 
-            # Current, sibling, and terminal queries all use this same method.
-            current_query = self.backbone.retrieval_readout(parent, live_cls)
-            candidate_queries = self.backbone.retrieval_readout(candidate_states, live_cls)
-            delta_q = candidate_queries - current_query[:, None]
+            # Compute each expensive final-block readout once, then project it.
+            current_query = self.backbone.retrieval_from_global(current_global)
             candidate_global = self.backbone.global_readout(candidate_states, live_cls)
+            candidate_queries = self.backbone.retrieval_from_global(candidate_global)
+            delta_q = candidate_queries - current_query[:, None]
             score_features = self.score_net.build_features(
-                current_global,
-                text,
-                actions,
-                delta,
-                exec_mask,
-                candidate_global,
+                current_global.detach(),
+                text.detach(),
+                actions.detach(),
+                delta.detach(),
+                exec_mask.detach(),
+                candidate_global.detach(),
             )
-            # Score losses update ScoreNet only; argmax itself has no gradient.
-            scores = self.score_net(score_features.detach())
+            # Score losses train all ScoreNet projections, but never upstream modules.
+            scores = self.score_net(score_features)
             best_score, best_idx = scores.max(dim=-1)
             stop_now = (
                 best_score <= self.config.epsilon_stop
@@ -376,13 +376,10 @@ class IAGSRME(nn.Module):
                     "actions": actions,
                     "fuse_gamma": fuse_gamma,
                     "fuse_beta": fuse_beta,
-                    "raw_delta": raw_delta,
                     "delta": delta,
                     "candidate_states": candidate_states,
-                    "candidate_global": candidate_global,
                     "candidate_queries": candidate_queries,
                     "delta_q": delta_q,
-                    "score_features": score_features,
                     "scores": scores,
                     "stop_score": scores.new_zeros(scores.shape[0]),
                     "best_score": best_score,
