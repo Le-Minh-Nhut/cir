@@ -18,6 +18,9 @@ class FGCLIPRegime:
     train_text_projection: bool = False
     trust_remote_code: bool = True
     global_readout_mode: str = "learned_qg"
+    readout_experiment: str | None = None
+    finetune_policy: str = "full"
+    experiment_identity: str | None = None
 
 
 class FGCLIPBackbone(nn.Module):
@@ -39,10 +42,15 @@ class FGCLIPBackbone(nn.Module):
         checkpoint: str | None = None,
         revision: str | None = None,
         global_readout_mode: str = "learned_qg",
+        readout_experiment: str | None = None,
+        finetune_policy: str = "full",
+        experiment_identity: str | None = None,
     ) -> None:
         super().__init__()
         if global_readout_mode not in {"learned_qg", "native_cls"}:
             raise ValueError(f"unknown Track-B global readout: {global_readout_mode}")
+        if finetune_policy not in {"full", "text_only"}:
+            raise ValueError(f"unknown FG-CLIP fine-tuning policy: {finetune_policy}")
         self.model = model
         self.internal_width = text_width  # retained for train/eval infrastructure
         self.text_dim = text_width
@@ -52,6 +60,12 @@ class FGCLIPBackbone(nn.Module):
         self.checkpoint = checkpoint
         self.revision = revision
         self.global_readout_mode = global_readout_mode
+        self.readout_experiment = readout_experiment or (
+            "R0-QG" if global_readout_mode == "learned_qg" else "R0-NCLS"
+        )
+        self.finetune_policy = finetune_policy
+        suffix = "FULL" if finetune_policy == "full" else "TEXT"
+        self.experiment_identity = experiment_identity or f"{self.readout_experiment}-{suffix}"
 
         config = model.config
         self.state_dim = int(config.vision_config.hidden_size)
@@ -94,6 +108,9 @@ class FGCLIPBackbone(nn.Module):
             checkpoint=regime.checkpoint,
             revision=regime.revision,
             global_readout_mode=regime.global_readout_mode,
+            readout_experiment=regime.readout_experiment,
+            finetune_policy=regime.finetune_policy,
+            experiment_identity=regime.experiment_identity,
         )
 
     @staticmethod
@@ -114,6 +131,9 @@ class FGCLIPBackbone(nn.Module):
         return tokenizer, processor
 
     def _apply_freeze_policy(self) -> None:
+        # Start frozen so unused checkpoint scalars/heads never enter the optimizer.
+        for parameter in self.model.parameters():
+            parameter.requires_grad_(False)
         for parameter in self.model.vision_model.parameters():
             parameter.requires_grad_(self.train_vision)
         for parameter in self.model.visual_projection.parameters():
@@ -125,6 +145,8 @@ class FGCLIPBackbone(nn.Module):
         if hasattr(self.model, "text_filip_projection"):
             for parameter in self.model.text_filip_projection.parameters():
                 parameter.requires_grad_(False)
+        # q_G is an IAG-SRME readout parameter, not a pretrained vision weight.
+        self.q_G.requires_grad_(self.global_readout_mode == "learned_qg")
 
     def train(self, mode: bool = True) -> "FGCLIPBackbone":
         super().train(mode)

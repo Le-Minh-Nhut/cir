@@ -12,12 +12,12 @@ checked. It is not an architecture specification. The canonical source of truth 
 | Branch | `exp/e2e-iag-srme-v2-r0` |
 | Base branch | `exp/e2e-iag-srme-clean-rewrite` |
 | Base merge-base | `f4bc1e8b91e5c43eec36e824fcd4c1d858f32308` |
-| Current remote HEAD / implementation base | `62512315e4bbd349af9d65d8a323a777e124f086` (`v2.1`) |
+| Current remote HEAD / implementation base | `5a3bdf5a4c440294476e07210275223e23fb712d` (`v2.2`) |
 | Record date | 2026-09-07 (implementation began 2026-09-06) |
 | Canonical architecture | `doc/CIR_IAG_SRME_UNIFIED_CANONICAL_ARCHITECTURE_AND_TRAINING_SPEC_V2_2026-09-06.md` |
 | Active backbone track | Track B — FG-CLIP v1 Base |
 | Dataset/protocol | FashionIQ, original validation-gallery protocol |
-| Current stage | A0-A6 implemented; Track-B R0-QG/R0-NCLS readout ablation implemented; no full comparison run |
+| Current stage | A0-A6 implemented; 2x2 Track-B readout/fine-tuning ablation implemented; no comparison run |
 
 No retrieval metric or readout-ablation winner is claimed.
 
@@ -143,6 +143,50 @@ Evaluation already reports FashionIQ `recall_at_10`, `recall_at_50`, and `mean_r
 Training logs pair/gain loss, mean `||delta_q||`, within-sibling `delta_q` cosine, STOP
 rate, mean committed rollout length, DPP valid rate/count, and useful-candidate count.
 No comparison result has been generated yet.
+
+### 4.3 FG-CLIP fine-tuning ablation
+
+Readout and fine-tuning are orthogonal controlled axes:
+
+| | FULL (`full`) | TEXT-ONLY (`text_only`) |
+|---|---|---|
+| `learned_qg` | `R0-QG-FULL` | `R0-QG-TEXT` |
+| `native_cls` | `R0-NCLS-FULL` | `R0-NCLS-TEXT` |
+
+FULL preserves the existing policy: FG-CLIP `vision_model` and `text_model` are
+trainable, `visual_projection` follows the vision policy, and `text_projection`
+remains frozen. TEXT-ONLY freezes `vision_model` and `visual_projection`, keeps
+`text_model` and the IAG text adapter trainable, and leaves every IAG-SRME task module
+and enabled objective auxiliary trainable. Unused pretrained logit-scale/fine-grained
+heads are frozen under both policies.
+
+`q_G` is a task-specific recurrent parameter rather than a pretrained vision weight.
+It remains trainable in QG-FULL and QG-TEXT. It is disabled from optimization in NCLS
+runs because native CLS readout never consumes it.
+
+Frozen vision affects parameter ownership, module mode, and initial/target image graph
+construction only. `initial_state_with_anchor` and `encode_global_images` use
+`no_grad()` when vision is frozen. Current-state `global_readout`, `dense_readout`, and
+`retrieval_from_global` do not: gradients still pass through their frozen operations
+to mutable candidate states and the Executor. `FGCLIPBackbone.train()` forces the
+frozen vision model and visual projection to eval mode while the text model remains in
+training mode.
+
+Counts below were computed from the pinned real checkpoint with `K=4`, `T=3`, width
+256, and the enabled A6 objective. Concept vocabulary size does not change trainable
+parameter count because prototypes are buffers.
+
+| Variant | Total | Trainable | Vision | Visual proj. | Text | Text adapter | `q_G` | IAG modules | Objective |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| R0-QG-FULL | 168,854,279 | 168,329,988 | 85,799,424 | 393,216 | 63,419,904 | 131,840 | 768 | 17,202,436 | 1,382,400 |
+| R0-NCLS-FULL | 168,854,279 | 168,329,220 | 85,799,424 | 393,216 | 63,419,904 | 131,840 | 0 | 17,202,436 | 1,382,400 |
+| R0-QG-TEXT | 168,854,279 | 82,137,348 | 0 | 0 | 63,419,904 | 131,840 | 768 | 17,202,436 | 1,382,400 |
+| R0-NCLS-TEXT | 168,854,279 | 82,136,580 | 0 | 0 | 63,419,904 | 131,840 | 0 | 17,202,436 | 1,382,400 |
+
+Hydra config equality tests verify that each FULL/TEXT pair differs only in
+`train_vision`, `finetune_policy`, config name, and experiment identity. Checkpoints
+record and evaluation validates `global_readout_mode`, `readout_experiment`,
+`finetune_policy`, `train_vision`, `train_text`, and `train_text_projection`.
 
 ## 5. Training objective and gradient routing
 
@@ -324,11 +368,12 @@ specification V1 is intentionally retained as research history, not as source of
 | Target firewall | PASS | Live output unchanged; target affects only training objective branches |
 | Semantic auxiliaries | PASS | Instruction-only/parser determinism, set pooling/permutation, t0 routing, bind/ortho gradients |
 | Functional DPP | PASS | `delta_q` gradient, detached history/quality, executed-only history, guard, permutation and redundancy tests |
+| Fine-tuning policy | PASS | FULL/TEXT config equality, frozen eval mode, parameter ownership, checkpoint metadata, QG and NCLS recurrent gradient routing |
 | CUDA optimizer placement | NOT RUN | CUDA unavailable; one pytest skipped |
 | Prior R0-QG FashionIQ A6 canary | PASS | CPU FP32, batch 2, one optimizer update, three rollout steps |
 | R0-NCLS full-model forward smoke | PASS | Real checkpoint/image; state `[1,196,768]`, anchor `[1,768]`, sibling queries `[1,4,512]` |
 
-The final suite result is `49 passed, 1 skipped`; the skip is the CUDA-only optimizer
+The final suite result is `58 passed, 1 skipped`; the skip is the CUDA-only optimizer
 placement test because CUDA is unavailable. The real-checkpoint parity test passed.
 Ruff reports `All checks passed`. The prior R0-QG post-threshold canary produced finite values:
 `total=0.803284`, `terminal=0.791728`, `gain=0.001349`,
@@ -349,9 +394,10 @@ number is inferred from CPU execution.
   absolute error in the pinned FP32 check. R0-QG is
   explicitly a non-native learned recurrent readout and is no longer mislabeled as a
   pending native-parity path.
-- **P1 — before full comparison training:** Run a one-update R0-NCLS canary on the
-  intended CUDA/AMP environment and verify checkpoint save/load plus evaluation mode
-  mismatch protection end-to-end. This task did not launch training.
+- **P1 — before full comparison training:** Run matched one-update FULL/TEXT canaries
+  for both readouts on the intended CUDA/AMP environment and record allocated/reserved
+  VRAM. Checkpoint metadata save and mismatch rejection are unit-tested, but a complete
+  CUDA checkpoint/evaluation round trip remains pending.
 - **P1 — monitor during warm-up:** Functional DPP is legitimately inactive while fewer
   than two candidate utilities exceed the useful threshold. Measure valid-DPP rate and
   useful-effect redundancy before tuning `useful_threshold`, `tau_dpp`, or `kappa_dpp`.
@@ -367,23 +413,23 @@ number is inferred from CPU execution.
 
 ```text
 Architecture implementation: A0-A6 code complete for the requested V2 auxiliaries
-Unit-test readiness:       49 passed, 1 CUDA-only test skipped
+Unit-test readiness:       58 passed, 1 CUDA-only test skipped
 Backbone parity:           native_cls CLS-only within 1.47e-6 global max error at t=0
-Training smoke test:       prior R0-QG CPU A6 canary passed; current CUDA/FP16 canaries not run
+Training smoke test:       prior R0-QG-FULL CPU canary passed; 2x2 CUDA/FP16 canaries not run
 Ready for full training:   NO
 ```
 
-The readout implementation/parity audit is complete. The remaining operational blocker
-is the matched R0-NCLS CUDA/AMP canary and checkpoint/evaluation round trip; no
-architecture or loss redesign is indicated.
+The readout and fine-tuning policy implementation audits are complete. The remaining
+operational blocker is the matched 2x2 CUDA/AMP canary, VRAM measurement, and
+checkpoint/evaluation round trip; no architecture or loss redesign is indicated.
 
 ## 17. Next experiments
 
-1. Run the minimal R0-QG and R0-NCLS FashionIQ canaries on the intended CUDA/AMP environment.
-2. Verify checkpoint save/load and reject evaluation with the wrong readout mode.
+1. Run R0-QG-FULL, R0-NCLS-FULL, R0-QG-TEXT, and R0-NCLS-TEXT FashionIQ canaries with matched CUDA/AMP settings.
+2. Record peak allocated/reserved VRAM and verify checkpoint/evaluation round trips for all four identities.
 3. Run A0, then A1, then A2 and establish the clean-core baseline with a declared readout.
 4. Compare A3 (`L_bind`) and A4 (`L_c(t=0)`) independently.
 5. Run A5 only after the individual semantic branches are healthy.
-6. Compare matched R0-QG versus R0-NCLS, changing only the readout config.
+6. Run the matched 2x2 comparison, changing only readout or fine-tuning policy on each controlled axis.
 7. Enable A6 after measuring useful-effect redundancy and report valid-DPP frequency.
 8. Keep correspondence disabled unless measured identity/grounding drift motivates a diagnostic branch.

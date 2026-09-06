@@ -37,6 +37,9 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         train_text_projection=bool(cfg.backbone.train_text_projection),
         trust_remote_code=bool(cfg.backbone.trust_remote_code),
         global_readout_mode=str(cfg.backbone.global_readout_mode),
+        readout_experiment=str(cfg.backbone.readout_experiment),
+        finetune_policy=str(cfg.backbone.finetune_policy),
+        experiment_identity=str(cfg.backbone.experiment_identity),
     )
     assert_cache_legal(regime.train_vision, cfg.backbone.get("image_cache_path"))
     backbone = FGCLIPBackbone.from_pretrained(regime, int(cfg.model.width))

@@ -4,13 +4,18 @@ Clean research implementation of the recurrent IAG-SRME model for composed image
 retrieval. The architecture follows the
 [V2 canonical specification](doc/CIR_IAG_SRME_UNIFIED_CANONICAL_ARCHITECTURE_AND_TRAINING_SPEC_V2_2026-09-06.md).
 
-The current implementation is Track B (FG-CLIP v1 Base) with two controlled global
-readout modes:
+The current implementation is Track B (FG-CLIP v1 Base) with two orthogonal ablation
+axes:
 
 - `R0-QG` / `learned_qg`: canonical learned recurrent global query;
 - `R0-NCLS` / `native_cls`: immutable image-specific penultimate CLS and current
   patches feed the exact CLS row of the native final vision block; the full-token call
   remains a parity oracle.
+
+FG-CLIP fine-tuning is independently either `full` (vision and text trainable) or
+`text_only` (vision and visual projection frozen; text encoder trainable). The text
+adapter and all IAG-SRME modules remain trainable in both policies. In QG runs, `q_G`
+also remains trainable because it is a task-specific parameter.
 
 Both modes keep the following architecture fixed:
 
@@ -69,17 +74,35 @@ python src/canary_train_iag_srme.py \
 ```
 
 Add `--global-readout-mode native_cls` for the R0-NCLS canary.
+Add `--finetune-policy text_only` for a frozen-vision canary.
 On CUDA, the canary JSON also reports peak allocated and reserved memory in GiB.
+
+```bash
+python src/canary_train_iag_srme.py \
+  --global-readout-mode native_cls \
+  --finetune-policy text_only \
+  --dataset-root data/fashionIQ_dataset \
+  --steps 1 --batch-size 16 --precision fp16
+```
 
 ## Train
 
 ```bash
-# R0-QG
+# R0-QG-FULL
 python src/train.py backbone=fgclip_base_full_qg
 
-# R0-NCLS: the only intended difference is global_readout_mode
+# R0-NCLS-FULL
 python src/train.py backbone=fgclip_base_full_native_cls
+
+# R0-QG-TEXT
+python src/train.py backbone=fgclip_base_text_qg
+
+# R0-NCLS-TEXT
+python src/train.py backbone=fgclip_base_text_native_cls
 ```
+
+The FULL/TEXT pair for a fixed readout differs only in `train_vision`, the explicit
+`finetune_policy`, and experiment identity metadata. Optimization settings are shared.
 
 The default objective config enables all requested A6 auxiliaries. Each term can be
 ablated independently with Hydra overrides such as

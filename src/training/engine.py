@@ -47,6 +47,44 @@ def trainable_parameters(*modules: nn.Module) -> list[nn.Parameter]:
     ]
 
 
+def parameter_count_diagnostics(
+    model: IAGSRME, objective: IAGSRMEObjective
+) -> dict[str, int]:
+    """Compact parameter ownership summary for fine-tuning ablations."""
+
+    def count(modules: nn.Module | tuple[nn.Module, ...], trainable: bool = True) -> int:
+        selected = (modules,) if isinstance(modules, nn.Module) else modules
+        return sum(
+            parameter.numel()
+            for module in selected
+            for parameter in module.parameters()
+            if not trainable or parameter.requires_grad
+        )
+
+    task_modules = (
+        model.proposal,
+        model.grounder,
+        model.action_fusion,
+        model.executor,
+        model.score_net,
+    )
+    return {
+        "total_parameters": count((model, objective), trainable=False),
+        "total_trainable_parameters": count((model, objective)),
+        "trainable_vision_parameters": count(model.backbone.model.vision_model),
+        "trainable_visual_projection_parameters": count(
+            model.backbone.model.visual_projection
+        ),
+        "trainable_text_parameters": count(model.backbone.model.text_model),
+        "trainable_text_adapter_parameters": count(model.backbone.text_adapter),
+        "trainable_q_g_parameters": (
+            model.backbone.q_G.numel() if model.backbone.q_G.requires_grad else 0
+        ),
+        "trainable_iag_srme_parameters": count(task_modules),
+        "trainable_objective_parameters": count(objective),
+    }
+
+
 def assert_training_setup(
     model: nn.Module,
     objective: nn.Module,
@@ -160,11 +198,12 @@ def save_checkpoint(
                 "backbone_revision": model.backbone.revision,
                 "recurrent_state": "penultimate_patch_tokens_without_cls",
                 "global_readout_mode": model.backbone.global_readout_mode,
-                "readout_experiment": (
-                    "R0-QG"
-                    if model.backbone.global_readout_mode == "learned_qg"
-                    else "R0-NCLS"
-                ),
+                "readout_experiment": model.backbone.readout_experiment,
+                "finetune_policy": model.backbone.finetune_policy,
+                "experiment_identity": model.backbone.experiment_identity,
+                "train_vision": model.backbone.train_vision,
+                "train_text": model.backbone.train_text,
+                "train_text_projection": model.backbone.train_text_projection,
                 "global_query_initialization": (
                     "checkpoint_class_embedding"
                     if model.backbone.global_readout_mode == "learned_qg"

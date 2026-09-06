@@ -58,8 +58,10 @@ class MockVision(nn.Module):
     def __init__(self, dim: int = 6) -> None:
         super().__init__()
         self.input = nn.Linear(3, dim)
-        self.embeddings = SimpleNamespace(class_embedding=nn.Parameter(torch.randn(dim)))
-        self.encoder = SimpleNamespace(layers=nn.ModuleList([MockBlock(dim)]))
+        self.embeddings = nn.Module()
+        self.embeddings.class_embedding = nn.Parameter(torch.randn(dim))
+        self.encoder = nn.Module()
+        self.encoder.layers = nn.ModuleList([MockBlock(dim)])
         self.post_layernorm = nn.LayerNorm(dim)
         self.calls = 0
 

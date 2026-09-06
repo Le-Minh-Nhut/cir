@@ -1,0 +1,10 @@
+defaults:
+  - fgclip_base_full_native_cls
+  - _self_
+
+name: fgclip_base_text_native_cls
+train_vision: false
+train_text: true
+train_text_projection: false
+finetune_policy: text_only
+experiment_identity: R0-NCLS-TEXT

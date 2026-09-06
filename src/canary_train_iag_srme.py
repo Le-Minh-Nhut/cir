@@ -18,7 +18,12 @@ from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig
 from runtime import configure_torch_runtime, seed_everything
 from train import build_concept_vocabulary, encode_concept_prototypes
-from training.engine import assert_training_setup, resolve_precision, trainable_parameters
+from training.engine import (
+    assert_training_setup,
+    parameter_count_diagnostics,
+    resolve_precision,
+    trainable_parameters,
+)
 
 
 CHECKPOINT = "qihoo360/fg-clip-base"
@@ -59,14 +64,23 @@ def _complete_amp_step(
 
 
 def build_model(
-    device: torch.device, global_readout_mode: str = "learned_qg"
+    device: torch.device,
+    global_readout_mode: str = "learned_qg",
+    finetune_policy: str = "full",
 ) -> tuple[IAGSRME, object, object]:
+    train_vision = finetune_policy == "full"
+    readout_experiment = "R0-QG" if global_readout_mode == "learned_qg" else "R0-NCLS"
+    suffix = "FULL" if finetune_policy == "full" else "TEXT"
     regime = FGCLIPRegime(
         checkpoint=CHECKPOINT,
         revision=REVISION,
-        train_vision=True,
+        train_vision=train_vision,
         train_text=True,
+        train_text_projection=False,
         global_readout_mode=global_readout_mode,
+        readout_experiment=readout_experiment,
+        finetune_policy=finetune_policy,
+        experiment_identity=f"{readout_experiment}-{suffix}",
     )
     backbone = FGCLIPBackbone.from_pretrained(regime, text_width=256)
     tokenizer, processor = FGCLIPBackbone.load_processor(CHECKPOINT, REVISION)
@@ -86,6 +100,11 @@ def main() -> None:
         default="learned_qg",
     )
     parser.add_argument(
+        "--finetune-policy",
+        choices=("full", "text_only"),
+        default="full",
+    )
+    parser.add_argument(
         "--dataset-root",
         default=os.environ.get("FASHIONIQ_ROOT", "data/fashionIQ_dataset"),
     )
@@ -96,7 +115,9 @@ def main() -> None:
     seed_everything(args.seed, deterministic=True)
     configure_torch_runtime(deterministic=True, benchmark=False)
     precision = resolve_precision(args.precision, device)
-    model, tokenizer, processor = build_model(device, args.global_readout_mode)
+    model, tokenizer, processor = build_model(
+        device, args.global_readout_mode, args.finetune_policy
+    )
 
     root = Path(args.dataset_root)
     dataset = FashionIQDataset(
@@ -120,6 +141,7 @@ def main() -> None:
         concept_vocabulary=vocabulary,
         concept_prototypes=prototypes,
     ).to(device)
+    parameter_counts = parameter_count_diagnostics(model, objective)
     collator = FashionIQImageCollator(
         DirectoryImageStore(root / "images"),
         tokenizer,
@@ -201,6 +223,9 @@ def main() -> None:
             {
                 "device": str(device),
                 "global_readout_mode": args.global_readout_mode,
+                "finetune_policy": args.finetune_policy,
+                "experiment_identity": model.backbone.experiment_identity,
+                "parameter_counts": parameter_counts,
                 "peak_cuda_memory": memory,
                 "records": records,
             },

@@ -1,0 +1,10 @@
+defaults:
+  - fgclip_base_full_qg
+  - _self_
+
+name: fgclip_base_text_qg
+train_vision: false
+train_text: true
+train_text_projection: false
+finetune_policy: text_only
+experiment_identity: R0-QG-TEXT

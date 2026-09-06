@@ -19,6 +19,11 @@ def validate_checkpoint_backbone_metadata(
     expected_checkpoint: str,
     expected_revision: str,
     expected_readout_mode: str | None = None,
+    expected_readout_experiment: str | None = None,
+    expected_finetune_policy: str | None = None,
+    expected_train_vision: bool | None = None,
+    expected_train_text: bool | None = None,
+    expected_train_text_projection: bool | None = None,
 ) -> None:
     if not isinstance(metadata, dict):
         raise ValueError("checkpoint has no reproducible backbone metadata")
@@ -32,6 +37,19 @@ def validate_checkpoint_backbone_metadata(
             raise ValueError(
                 "checkpoint readout mismatch: "
                 f"stored={actual_mode}, configured={expected_readout_mode}"
+            )
+    expected_policy = {
+        "readout_experiment": expected_readout_experiment,
+        "finetune_policy": expected_finetune_policy,
+        "train_vision": expected_train_vision,
+        "train_text": expected_train_text,
+        "train_text_projection": expected_train_text_projection,
+    }
+    for field, configured in expected_policy.items():
+        if configured is not None and metadata.get(field) != configured:
+            raise ValueError(
+                f"checkpoint fine-tuning mismatch for {field}: "
+                f"stored={metadata.get(field)}, configured={configured}"
             )
 
 
@@ -48,6 +66,11 @@ def main(cfg: DictConfig) -> None:
         str(cfg.backbone.checkpoint),
         str(cfg.backbone.revision),
         str(cfg.backbone.global_readout_mode),
+        expected_readout_experiment=str(cfg.backbone.readout_experiment),
+        expected_finetune_policy=str(cfg.backbone.finetune_policy),
+        expected_train_vision=bool(cfg.backbone.train_vision),
+        expected_train_text=bool(cfg.backbone.train_text),
+        expected_train_text_projection=bool(cfg.backbone.train_text_projection),
     )
     model.load_state_dict(checkpoint["model"])
     model.to(device).eval()

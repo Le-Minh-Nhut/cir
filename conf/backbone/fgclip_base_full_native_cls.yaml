@@ -5,3 +5,4 @@ defaults:
 name: fgclip_base_full_native_cls
 global_readout_mode: native_cls
 readout_experiment: R0-NCLS
+experiment_identity: R0-NCLS-FULL

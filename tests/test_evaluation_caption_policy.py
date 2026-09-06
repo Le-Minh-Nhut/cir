@@ -61,3 +61,28 @@ def test_evaluation_rejects_checkpoint_from_another_readout_ablation() -> None:
             "verified-revision",
             "native_cls",
         )
+
+
+def test_evaluation_rejects_checkpoint_from_another_finetune_policy() -> None:
+    metadata = {
+        "backbone_checkpoint": "qihoo360/fg-clip-base",
+        "backbone_revision": "verified-revision",
+        "global_readout_mode": "native_cls",
+        "readout_experiment": "R0-NCLS",
+        "finetune_policy": "full",
+        "train_vision": True,
+        "train_text": True,
+        "train_text_projection": False,
+    }
+    with pytest.raises(ValueError, match="fine-tuning mismatch"):
+        validate_checkpoint_backbone_metadata(
+            metadata,
+            "qihoo360/fg-clip-base",
+            "verified-revision",
+            "native_cls",
+            expected_readout_experiment="R0-NCLS",
+            expected_finetune_policy="text_only",
+            expected_train_vision=False,
+            expected_train_text=True,
+            expected_train_text_projection=False,
+        )

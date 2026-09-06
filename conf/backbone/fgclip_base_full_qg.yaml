@@ -5,3 +5,4 @@ defaults:
 name: fgclip_base_full_qg
 global_readout_mode: learned_qg
 readout_experiment: R0-QG
+experiment_identity: R0-QG-FULL
