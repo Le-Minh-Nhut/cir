@@ -349,6 +349,21 @@ q_t.
 
 Text is not absent from retrieval: it changes Proposal, Grounding, Fusion, and Executor, which changes \(V_t\), and the readout observes that changed state. The prohibition is only against an additional direct text shortcut inside `RetrievalReadout_B`. Likewise, \(V_0\) remains legal for separately declared reference mechanisms but is not fused directly into the Track-B R0 retrieval query.
 
+### Track-B Native-CLS Readout Ablation
+
+The learned-\(q_G\) definition above remains the canonical/mainline Track-B readout.
+A controlled readout ablation may instead retain the image-specific penultimate
+\(CLS_{L-1}\) as an immutable anchor while keeping the recurrent mutable state strictly
+patch-only. At every readout, the ablation reconstructs
+\([CLS_{L-1};V_t]\), calls the checkpoint's exact final vision block, takes the output
+CLS, and applies the native post-layernorm, visual projection, and normalization.
+
+This compares a shared learned recurrent query (`R0-QG`) against an image-specific
+immutable native query anchor (`R0-NCLS`). The Executor never receives or modifies the
+anchor, and all other architecture, objective, data, and optimization settings must be
+held fixed. This note authorizes a controlled experiment; it does not replace the
+canonical learned-\(q_G\) choice without comparative evidence.
+
 ## 4.5 Mandatory interface parity
 
 Before recurrent training:

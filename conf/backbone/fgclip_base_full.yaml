@@ -9,3 +9,5 @@ train_text_projection: false
 trust_remote_code: true
 max_text_length: 77
 image_cache_path: null
+global_readout_mode: learned_qg
+readout_experiment: R0-QG

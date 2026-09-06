@@ -9,6 +9,7 @@ from models.iag_srme import IAGSRME, IAGSRMEConfig
 
 
 class TinyBackbone(nn.Module):
+    global_readout_mode = "learned_qg"
     state_dim = 16
     text_dim = 8
     dense_dim = 12
@@ -27,14 +28,17 @@ class TinyBackbone(nn.Module):
         patches = images.permute(0, 2, 3, 1).reshape(images.shape[0], 9, 3)
         return self.image_projection(patches)
 
-    def global_readout(self, state: Tensor) -> Tensor:
+    def global_readout(self, state: Tensor, cls_anchor: Tensor | None = None) -> Tensor:
+        del cls_anchor
         return self.global_projection(state.mean(dim=-2))
 
     def dense_readout(self, state: Tensor) -> Tensor:
         return self.dense_projection(state)
 
-    def retrieval_readout(self, state: Tensor) -> Tensor:
-        return F.normalize(self.retrieval_projection(self.global_readout(state)), dim=-1)
+    def retrieval_readout(self, state: Tensor, cls_anchor: Tensor | None = None) -> Tensor:
+        return F.normalize(
+            self.retrieval_projection(self.global_readout(state, cls_anchor)), dim=-1
+        )
 
     def encode_text(
         self, input_ids: Tensor, attention_mask: Tensor, content_mask: Tensor

@@ -394,6 +394,11 @@ class IAGSRMEObjective(nn.Module):
         useful_total = query.new_zeros(())
         useful_rows = query.new_zeros(())
         functional_effects: list[Tensor] = []
+        delta_norm_sum = query.new_zeros(())
+        delta_count = query.new_zeros(())
+        stop_count = query.new_zeros(())
+        decision_count = query.new_zeros(())
+        executed_count = query.new_zeros(())
         histories: list[list[Tensor]] = [[] for _ in range(query.shape[0])]
 
         for step in steps:
@@ -402,6 +407,13 @@ class IAGSRMEObjective(nn.Module):
             candidate_queries = step["candidate_queries"]
             predicted = step["scores"]
             delta_q = step["delta_q"]
+            functional_effects.append(delta_q)
+            delta_norm_sum = delta_norm_sum + delta_q.detach().float().norm(dim=-1).sum()
+            delta_count = delta_count + delta_q.shape[0] * delta_q.shape[1]
+            stopped_now = step["stopped_now"]
+            stop_count = stop_count + stopped_now.sum()
+            decision_count = decision_count + stopped_now.numel()
+            executed_count = executed_count + (~stopped_now).sum()
             pos_live = positive.index_select(0, live_indices)
             neg_live = negative.index_select(0, live_indices)
             teacher, valid_rows = marginal_teacher_utilities(
@@ -440,7 +452,6 @@ class IAGSRMEObjective(nn.Module):
                 binding_distributions.append(edit_distribution.detach())
 
             if self.config.dpp_enabled:
-                functional_effects.append(delta_q)
                 for local_row, sample_index in enumerate(live_indices.tolist()):
                     if not bool(valid_rows[local_row]):
                         continue
@@ -500,6 +511,10 @@ class IAGSRMEObjective(nn.Module):
             relation_metrics = self.relation.diagnostics(torch.cat(binding_distributions, dim=0))
         functional_cosine, functional_rank = _functional_diagnostics(functional_effects, zero)
         useful_count = useful_total / useful_rows.clamp_min(1)
+        mean_delta_q_norm = delta_norm_sum / delta_count.clamp_min(1)
+        stop_rate = stop_count / decision_count.clamp_min(1)
+        mean_rollout_length = executed_count / query.shape[0]
+        dpp_valid_rate = dpp_count / useful_rows.clamp_min(1)
 
         dpp_weighted = self.config.lambda_dpp * dpp_raw
         total = (
@@ -524,8 +539,12 @@ class IAGSRMEObjective(nn.Module):
             **relation_metrics,
             "functional_pairwise_cosine": functional_cosine,
             "functional_rank": functional_rank,
+            "mean_delta_q_norm": mean_delta_q_norm.detach(),
+            "stop_rate": stop_rate.detach(),
+            "mean_rollout_length": mean_rollout_length.detach(),
             "useful_candidate_count": useful_count.detach(),
             "dpp_valid_timestep_count": dpp_count.detach(),
+            "dpp_valid_rate": dpp_valid_rate.detach(),
             "kappa_dpp": query.new_tensor(self.config.kappa_dpp),
             "lambda_dpp": query.new_tensor(self.config.lambda_dpp),
             "sigma_dpp": query.new_tensor(self.config.sigma_dpp),

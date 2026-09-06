@@ -46,3 +46,18 @@ def test_evaluation_rejects_checkpoint_from_another_backbone_revision() -> None:
         validate_checkpoint_backbone_metadata(
             metadata, "qihoo360/fg-clip-base", "verified-revision"
         )
+
+
+def test_evaluation_rejects_checkpoint_from_another_readout_ablation() -> None:
+    metadata = {
+        "backbone_checkpoint": "qihoo360/fg-clip-base",
+        "backbone_revision": "verified-revision",
+        "global_readout_mode": "learned_qg",
+    }
+    with pytest.raises(ValueError, match="readout mismatch"):
+        validate_checkpoint_backbone_metadata(
+            metadata,
+            "qihoo360/fg-clip-base",
+            "verified-revision",
+            "native_cls",
+        )

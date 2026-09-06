@@ -290,13 +290,15 @@ class IAGSRME(nn.Module):
         text_tokens: Tensor,
         text_global: Tensor,
         content_mask: Tensor,
+        cls_anchor: Tensor | None = None,
     ) -> dict[str, object]:
         # V0 is the immutable reference anchor; V is always updated out of place.
         V0 = initial_state
         V = V0.clone()
+        cls_anchor0 = cls_anchor
         batch = V.shape[0]
         alive = torch.ones(batch, dtype=torch.bool, device=V.device)
-        steps: list[dict[str, Tensor | int]] = []
+        steps: list[dict[str, Tensor | int | None]] = []
 
         for timestep in range(self.config.max_steps):
             if not alive.any():
@@ -306,8 +308,13 @@ class IAGSRME(nn.Module):
             tokens = text_tokens.index_select(0, live_indices)
             text = text_global.index_select(0, live_indices)
             mask = content_mask.index_select(0, live_indices)
+            live_cls = (
+                cls_anchor0.index_select(0, live_indices)
+                if cls_anchor0 is not None
+                else None
+            )
 
-            current_global = self.backbone.global_readout(parent)
+            current_global = self.backbone.global_readout(parent, live_cls)
             dense = self.backbone.dense_readout(parent)
             edits = self.proposal(tokens, text, current_global, mask)
             grounding, alpha_read, exec_mask = self.grounder(edits, dense)
@@ -318,10 +325,10 @@ class IAGSRME(nn.Module):
             )
 
             # Current, sibling, and terminal queries all use this same method.
-            current_query = self.backbone.retrieval_readout(parent)
-            candidate_queries = self.backbone.retrieval_readout(candidate_states)
+            current_query = self.backbone.retrieval_readout(parent, live_cls)
+            candidate_queries = self.backbone.retrieval_readout(candidate_states, live_cls)
             delta_q = candidate_queries - current_query[:, None]
-            candidate_global = self.backbone.global_readout(candidate_states)
+            candidate_global = self.backbone.global_readout(candidate_states, live_cls)
             score_features = self.score_net.build_features(
                 current_global,
                 text,
@@ -357,6 +364,7 @@ class IAGSRME(nn.Module):
                 {
                     "timestep": timestep,
                     "live_indices": live_indices,
+                    "cls_anchor": live_cls,
                     "parent_state": parent,
                     "current_global": current_global,
                     "current_query": current_query,
@@ -383,11 +391,12 @@ class IAGSRME(nn.Module):
                 }
             )
 
-        terminal_query = self.backbone.retrieval_readout(V)
+        terminal_query = self.backbone.retrieval_readout(V, cls_anchor0)
         return {
             "query": terminal_query,
             "state": V,
             "initial_state": V0,
+            "cls_anchor": cls_anchor0,
             "steps": steps,
             "stopped": ~alive,
         }
@@ -399,12 +408,18 @@ class IAGSRME(nn.Module):
         attention_mask: Tensor,
         content_mask: Tensor,
     ) -> dict[str, object]:
-        initial_state = self.backbone.initial_state(reference_images)
+        if getattr(self.backbone, "global_readout_mode", "learned_qg") == "native_cls":
+            initial_state, cls_anchor = self.backbone.initial_state_with_anchor(
+                reference_images
+            )
+        else:
+            initial_state = self.backbone.initial_state(reference_images)
+            cls_anchor = None
         text_tokens, text_global = self.backbone.encode_text(
             input_ids, attention_mask, content_mask
         )
         return self.forward_from_features(
-            initial_state, text_tokens, text_global, content_mask
+            initial_state, text_tokens, text_global, content_mask, cls_anchor
         )
 
     def encode_global_images(self, pixel_values: Tensor) -> Tensor:

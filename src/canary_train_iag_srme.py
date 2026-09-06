@@ -58,12 +58,15 @@ def _complete_amp_step(
     return scale_after, changes
 
 
-def build_model(device: torch.device) -> tuple[IAGSRME, object, object]:
+def build_model(
+    device: torch.device, global_readout_mode: str = "learned_qg"
+) -> tuple[IAGSRME, object, object]:
     regime = FGCLIPRegime(
         checkpoint=CHECKPOINT,
         revision=REVISION,
         train_vision=True,
         train_text=True,
+        global_readout_mode=global_readout_mode,
     )
     backbone = FGCLIPBackbone.from_pretrained(regime, text_width=256)
     tokenizer, processor = FGCLIPBackbone.load_processor(CHECKPOINT, REVISION)
@@ -78,6 +81,11 @@ def main() -> None:
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--precision", choices=("fp32", "fp16", "bf16"), default="fp32")
     parser.add_argument(
+        "--global-readout-mode",
+        choices=("learned_qg", "native_cls"),
+        default="learned_qg",
+    )
+    parser.add_argument(
         "--dataset-root",
         default=os.environ.get("FASHIONIQ_ROOT", "data/fashionIQ_dataset"),
     )
@@ -88,7 +96,7 @@ def main() -> None:
     seed_everything(args.seed, deterministic=True)
     configure_torch_runtime(deterministic=True, benchmark=False)
     precision = resolve_precision(args.precision, device)
-    model, tokenizer, processor = build_model(device)
+    model, tokenizer, processor = build_model(device, args.global_readout_mode)
 
     root = Path(args.dataset_root)
     dataset = FashionIQDataset(
@@ -166,11 +174,28 @@ def main() -> None:
                 "bind": float(losses["bind_loss"].detach()),
                 "rel_ortho": float(losses["rel_ortho_loss"].detach()),
                 "dpp_raw": float(losses["dpp_raw"].detach()),
+                "mean_delta_q_norm": float(losses["mean_delta_q_norm"]),
+                "functional_pairwise_cosine": float(
+                    losses["functional_pairwise_cosine"]
+                ),
+                "stop_rate": float(losses["stop_rate"]),
+                "mean_rollout_length": float(losses["mean_rollout_length"]),
+                "dpp_valid_rate": float(losses["dpp_valid_rate"]),
+                "useful_candidate_count": float(losses["useful_candidate_count"]),
                 "rollout_steps": len(output["steps"]),
                 "stopped": int(output["stopped"].sum()),
             }
         )
-    print(json.dumps({"device": str(device), "records": records}, indent=2))
+    print(
+        json.dumps(
+            {
+                "device": str(device),
+                "global_readout_mode": args.global_readout_mode,
+                "records": records,
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -12,15 +12,14 @@ checked. It is not an architecture specification. The canonical source of truth 
 | Branch | `exp/e2e-iag-srme-v2-r0` |
 | Base branch | `exp/e2e-iag-srme-clean-rewrite` |
 | Base merge-base | `f4bc1e8b91e5c43eec36e824fcd4c1d858f32308` |
-| Current committed HEAD | `0f9510ffd92b61bac647edf8fa405383b57cb5ee` (`v1`) |
+| Current committed HEAD | `f9421827c7a65a965cc2605c20f94f2f649ebc47` (`v2`) |
 | Record date | 2026-09-07 (implementation began 2026-09-06) |
 | Canonical architecture | `doc/CIR_IAG_SRME_UNIFIED_CANONICAL_ARCHITECTURE_AND_TRAINING_SPEC_V2_2026-09-06.md` |
 | Active backbone track | Track B — FG-CLIP v1 Base |
 | Dataset/protocol | FashionIQ, original validation-gallery protocol |
-| Current stage | A0-A6 implemented; one-update A6 CPU canary passed; no full experiment run |
+| Current stage | A0-A6 implemented; Track-B R0-QG/R0-NCLS readout ablation implemented; no full comparison run |
 
-The auxiliary implementation described here is an uncommitted working-tree change on
-the recorded HEAD at document creation time. No retrieval metric is claimed.
+No retrieval metric or readout-ablation winner is claimed.
 
 ## 2. Why this rewrite exists
 
@@ -39,7 +38,7 @@ The main architecture remains readable top-to-bottom in
 | Component | Input | Output | Responsibility/location |
 |---|---|---|---|
 | Backbone initial state | reference pixels | `V0: [B,196,768]` | Penultimate FG-CLIP patches, CLS removed; `utils/backbone.py` |
-| Current global readout | `V_t` | `g_t: [B,768]` | Learned `q_G` reads current patches through final-block-style operations |
+| Current global readout | `V_t`, plus mode-specific query/anchor | `g_t: [B,768]` | R0-QG uses learned `q_G`; R0-NCLS uses immutable image-specific `CLS_(L-1)` with the exact native final block |
 | ProposalNet | text tokens `[B,L,256]`, text global `[B,256]`, `g_t` | `e: [B,K,768]` | Fresh permutation-compatible edit candidates; no patch-state input |
 | Grounder | `e`, native dense `[B,196,512]` | raw cosine, `alpha`, `M_exec: [B,K,196]` | Softmax read and separate sigmoid write maps |
 | Entity read | `alpha`, current `V_t` | `h: [B,K,768]` | Pools values from the actual recurrent state |
@@ -57,21 +56,72 @@ committed sibling continues; there is no beam, tree, or soft mixture.
 | Property | Implemented behavior | Status |
 |---|---|---|
 | Persistent state | `hidden_states[-2][:,1:]`; patch-only `H_(L-1)` | VERIFIED by unit and real-checkpoint shape check |
-| CLS policy | CLS is not stored in mutable recurrent state | VERIFIED |
-| `q_G` initialization | Copy of checkpoint vision class embedding, then trainable | IMPLEMENTED |
-| Global readout | `q_G` cross-reads current patches with last-block Q/K/V, norms, output projection and MLP | IMPLEMENTED; NATIVE PARITY PENDING |
+| CLS policy | Never part of mutable recurrent state; R0-NCLS carries an immutable readout anchor | VERIFIED |
+| `q_G` initialization | Copy of checkpoint vision class embedding, then trainable in R0-QG | VERIFIED |
+| R0-QG global readout | `q_G` cross-reads current patches with the preserved last-block-style Q/K/V, norms, output projection and MLP | VERIFIED regression-compatible; not native-parity by design |
+| R0-NCLS global readout | `[CLS_anchor; V_t]` through the exact checkpoint final encoder layer, then native post-LN | VERIFIED native parity at `t=0` |
 | Dense readout | `forward_without_attn -> post_layernorm -> visual_projection` | VERIFIED; real-checkpoint max/mean error observed as `0.0/0.0` |
-| Retrieval readout | global readout, native visual projection, FP32 L2 normalization | IMPLEMENTED; NATIVE PARITY PENDING |
+| Retrieval readout | selected global readout, native visual projection, FP32 L2 normalization | R0-NCLS VERIFIED native parity at `t=0` |
 | Projection | Checkpoint `visual_projection`, output width 512 | VERIFIED for dense path |
 | Patch grid | `224/16 = 14 x 14`, 196 patches | VERIFIED on pinned Base checkpoint |
 | Checkpoint | `qihoo360/fg-clip-base` | PINNED |
 | Revision | `454d76372c2cf5eb48fa0d871fd0534481484d97` | PINNED |
 
-Current-state perturbation changes global, dense, and retrieval readouts; vectorized
-candidate retrieval equals a per-candidate loop. The unresolved question is not whether
-the implementation responds to `V_t`, but whether the learned-query global/retrieval
-definition has the intended native FG-CLIP parity. This task intentionally did not
-redesign that readout.
+Current-state perturbation changes global, dense, and retrieval readouts in both modes;
+vectorized candidate retrieval equals a per-candidate loop. Native parity is expected
+only from R0-NCLS. R0-QG remains the canonical learned recurrent query experiment.
+
+### 4.1 Track-B global/retrieval readout ablation
+
+| Property | R0-QG (`learned_qg`) | R0-NCLS (`native_cls`) |
+|---|---|---|
+| Mutable state | current penultimate patches `V_t` | current penultimate patches `V_t` |
+| Global token source | one shared trainable `q_G`, initialized from checkpoint class embedding | image-specific `hidden_states[-2][:,0]` captured at reference encoding |
+| Readout | preserved final-block-style cross-attention/MLP implementation | exact checkpoint final encoder layer on `[CLS_anchor;V_t]` |
+| Anchor recurrence | no CLS anchor required | same immutable anchor at every timestep and sibling |
+| Executor input | patches only | patches only; anchor is never passed to Executor |
+| `t=0` native parity expectation | none | yes |
+| Status | implemented and regression-tested | implemented; real-checkpoint parity verified |
+
+Measured on one real FashionIQ image using the pinned checkpoint, revision, official
+image processor, FP32 evaluation, native post-layernorm, visual projection, and L2
+normalization:
+
+| Comparison to official FG-CLIP | max absolute error | mean absolute error | cosine similarity |
+|---|---:|---:|---:|
+| R0-NCLS global | `0.0` | `0.0` | `0.9999998808` |
+| R0-NCLS retrieval | `0.0` | `0.0` | `1.0000001192` |
+| R0-QG global diagnostic | `10.69435024` | `0.62872618` | `0.50536633` |
+| R0-QG retrieval diagnostic | `0.18923751` | `0.03000430` | `0.61011481` |
+
+The R0-QG numbers are descriptive, not a failed parity test: that mode uses a shared
+learned query and is not claimed to reconstruct native image features. With the same
+R0-NCLS anchor and a `+0.1` perturbation to one patch coordinate, the measured global
+L2 change was `0.0017186521` and retrieval L2 change was `0.0000561665`; therefore the
+immutable anchor does not make the recurrent readout static.
+
+The refactored R0-QG global output was also compared against an independent copy of the
+pre-ablation learned-query equations on the real checkpoint: max/mean absolute error
+were both `0.0` and cosine similarity was `1.0000001192`.
+
+Candidate anchors are expanded only across the candidate dimension, preserving sample
+association. Unit tests verify vectorized/loop equality and candidate-permutation
+equivariance to `1e-6` in both modes. The deterministic unit fixture measured
+vectorized/loop maximum errors of `1.1921e-7` (R0-QG) and `1.9372e-7` (R0-NCLS), and
+permutation maximum errors of `7.9162e-8` and `1.9372e-7`, respectively.
+
+### 4.2 Matched comparison protocol and logging
+
+The two Hydra configurations inherit the same FG-CLIP Base settings. A valid comparison
+must keep dataset split, caption policy, seed, checkpoint/revision, `K`, `T_max`, optimizer,
+learning rate, weight decay, batch size, epochs, precision, losses, STOP settings, and
+evaluation protocol fixed. The only intended architecture change is
+`global_readout_mode`.
+
+Evaluation already reports FashionIQ `recall_at_10`, `recall_at_50`, and `mean_recall`.
+Training logs pair/gain loss, mean `||delta_q||`, within-sibling `delta_q` cosine, STOP
+rate, mean committed rollout length, DPP valid rate/count, and useful-candidate count.
+No comparison result has been generated yet.
 
 ## 5. Training objective and gradient routing
 
@@ -237,7 +287,7 @@ specification V1 is intentionally retained as research history, not as source of
 
 | Group | Status | Evidence |
 |---|---|---|
-| Backbone | PASS; native global/retrieval parity still pending | State/dense parity, no replay, current-state sensitivity, vectorized parity tests |
+| Backbone | PASS | R0-QG regression, real-checkpoint R0-NCLS exact native parity, immutable anchor, dynamic-state and vectorized/loop tests |
 | Proposal | PASS | Text/global dependence, no patch argument, recurrent reproposal |
 | Grounding | PASS | Patch softmax, distinct sigmoid write, current-state entity pool |
 | Fusion | PASS | Independent bounded gates and candidate permutation equivariance |
@@ -248,10 +298,12 @@ specification V1 is intentionally retained as research history, not as source of
 | Semantic auxiliaries | PASS | Instruction-only/parser determinism, set pooling/permutation, t0 routing, bind/ortho gradients |
 | Functional DPP | PASS | `delta_q` gradient, detached history/quality, executed-only history, guard, permutation and redundancy tests |
 | CUDA optimizer placement | NOT RUN | CUDA unavailable; one pytest skipped |
-| Real FashionIQ A6 canary | PASS | CPU FP32, batch 2, one optimizer update, three rollout steps |
+| Prior R0-QG FashionIQ A6 canary | PASS | CPU FP32, batch 2, one optimizer update, three rollout steps |
+| R0-NCLS full-model forward smoke | PASS | Real checkpoint/image; state `[1,196,768]`, anchor `[1,768]`, sibling queries `[1,4,512]` |
 
-The final suite result at this snapshot is `39 passed, 1 skipped`. Ruff reports
-`All checks passed`. The post-threshold canary produced finite values:
+The final suite result is `47 passed, 1 skipped`; the skip is the CUDA-only optimizer
+placement test because CUDA is unavailable. The real-checkpoint parity test passed.
+Ruff reports `All checks passed`. The prior R0-QG post-threshold canary produced finite values:
 `total=0.803284`, `terminal=0.791728`, `gain=0.001349`,
 `concept=0.879584`, `bind=0.208447`, `rel_ortho=0.001243`, and `dpp_raw=0.0`.
 The DPP skip is expected at the zero-initialized Executor because fewer than two
@@ -260,9 +312,13 @@ than demonstrating learned functional diversity.
 
 ## 15. Known issues and unresolved questions
 
-- **P1 — verify before serious training:** Track-B learned-`q_G` global and retrieval
-  readouts have not been proven native-parity-equivalent. Dense parity is verified; the
-  remaining readout question is intentionally unchanged by this auxiliary task.
+- **Resolved:** R0-NCLS reconstructs the official native global and retrieval outputs at
+  `t=0` with measured zero max/mean absolute error in the pinned FP32 check. R0-QG is
+  explicitly a non-native learned recurrent readout and is no longer mislabeled as a
+  pending native-parity path.
+- **P1 — before full comparison training:** Run a one-update R0-NCLS canary on the
+  intended CUDA/AMP environment and verify checkpoint save/load plus evaluation mode
+  mismatch protection end-to-end. This task did not launch training.
 - **P1 — monitor during warm-up:** Functional DPP is legitimately inactive while fewer
   than two candidate utilities exceed the useful threshold. Measure valid-DPP rate and
   useful-effect redundancy before tuning `useful_threshold`, `tau_dpp`, or `kappa_dpp`.
@@ -278,22 +334,23 @@ than demonstrating learned functional diversity.
 
 ```text
 Architecture implementation: A0-A6 code complete for the requested V2 auxiliaries
-Unit-test readiness:       39 passed, 1 CUDA-only test skipped
-Backbone parity:           dense verified; global/retrieval parity pending
-Training smoke test:       PASS, real FashionIQ CPU FP32 one-update A6 canary
+Unit-test readiness:       47 passed, 1 CUDA-only test skipped
+Backbone parity:           native_cls global/retrieval exact at t=0; learned_qg diagnostic only
+Training smoke test:       prior R0-QG CPU A6 canary passed; R0-NCLS training not run
 Ready for full training:   NO
 ```
 
-The blocker for full training is the mandatory Track-B global/retrieval readout parity
-audit. The auxiliary code itself has no known missing canonical requirement in the
-requested scope.
+The readout implementation/parity audit is complete. The remaining operational blocker
+is the matched R0-NCLS CUDA/AMP canary and checkpoint/evaluation round trip; no
+architecture or loss redesign is indicated.
 
 ## 17. Next experiments
 
-1. Verify Track-B `t=0` native global/retrieval parity without redesigning it during the audit.
-2. Repeat the minimal FashionIQ smoke on the intended CUDA/AMP environment.
-3. Run A0, then A1, then A2 and establish the clean-core baseline.
+1. Run the minimal R0-QG and R0-NCLS FashionIQ canaries on the intended CUDA/AMP environment.
+2. Verify checkpoint save/load and reject evaluation with the wrong readout mode.
+3. Run A0, then A1, then A2 and establish the clean-core baseline with a declared readout.
 4. Compare A3 (`L_bind`) and A4 (`L_c(t=0)`) independently.
 5. Run A5 only after the individual semantic branches are healthy.
-6. Enable A6 after measuring useful-effect redundancy and report valid-DPP frequency.
-7. Keep correspondence disabled unless measured identity/grounding drift motivates a diagnostic branch.
+6. Compare matched R0-QG versus R0-NCLS, changing only the readout config.
+7. Enable A6 after measuring useful-effect redundancy and report valid-DPP frequency.
+8. Keep correspondence disabled unless measured identity/grounding drift motivates a diagnostic branch.

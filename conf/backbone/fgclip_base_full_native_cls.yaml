@@ -1,0 +1,7 @@
+defaults:
+  - fgclip_base_full
+  - _self_
+
+name: fgclip_base_full_native_cls
+global_readout_mode: native_cls
+readout_experiment: R0-NCLS

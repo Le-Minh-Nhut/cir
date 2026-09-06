@@ -159,7 +159,17 @@ def save_checkpoint(
                 "backbone_checkpoint": model.backbone.checkpoint,
                 "backbone_revision": model.backbone.revision,
                 "recurrent_state": "penultimate_patch_tokens_without_cls",
-                "global_query_initialization": "checkpoint_class_embedding",
+                "global_readout_mode": model.backbone.global_readout_mode,
+                "readout_experiment": (
+                    "R0-QG"
+                    if model.backbone.global_readout_mode == "learned_qg"
+                    else "R0-NCLS"
+                ),
+                "global_query_initialization": (
+                    "checkpoint_class_embedding"
+                    if model.backbone.global_readout_mode == "learned_qg"
+                    else "image_specific_penultimate_cls"
+                ),
                 "patch_grid": model.backbone.patch_grid,
                 "state_dim": model.backbone.state_dim,
                 "dense_dim": model.backbone.dense_dim,

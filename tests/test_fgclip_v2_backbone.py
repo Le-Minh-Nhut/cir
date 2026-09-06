@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import inspect
+from dataclasses import replace
 from types import SimpleNamespace
 
 import torch
 from torch import Tensor, nn
 
+from models.iag_srme import Executor, IAGSRME, IAGSRMEConfig
 from models.iag_srme.utils.backbone import FGCLIPBackbone
 
 
@@ -39,9 +41,17 @@ class MockBlock(nn.Module):
         self.layer_norm2 = nn.LayerNorm(dim)
         self.mlp = nn.Sequential(nn.Linear(dim, 2 * dim), nn.GELU(), nn.Linear(2 * dim, dim))
 
-    def forward(self, state: Tensor) -> Tensor:
-        state = state + self.self_attn(self.layer_norm1(state))
-        return state + self.mlp(self.layer_norm2(state))
+    def forward(
+        self,
+        hidden_states: Tensor,
+        attention_mask=None,
+        causal_attention_mask=None,
+        output_attentions=False,
+    ) -> tuple[Tensor]:
+        del attention_mask, causal_attention_mask, output_attentions
+        hidden_states = hidden_states + self.self_attn(self.layer_norm1(hidden_states))
+        hidden_states = hidden_states + self.mlp(self.layer_norm2(hidden_states))
+        return (hidden_states,)
 
 
 class MockVision(nn.Module):
@@ -58,9 +68,10 @@ class MockVision(nn.Module):
         self.calls += 1
         patches = pixel_values.permute(0, 2, 3, 1).reshape(pixel_values.shape[0], 4, 3)
         patches = self.input(patches)
-        cls = self.embeddings.class_embedding[None, None].expand(patches.shape[0], 1, -1)
+        # Stand in for the image-conditioned CLS produced by preceding vision blocks.
+        cls = self.embeddings.class_embedding[None, None] + patches.mean(dim=1, keepdim=True)
         penultimate = torch.cat([cls, patches], dim=1)
-        final = self.encoder.layers[-1](penultimate)
+        final = self.encoder.layers[-1](penultimate)[0]
         return SimpleNamespace(
             hidden_states=(penultimate, final),
             pooler_output=self.post_layernorm(final[:, 0]),
@@ -134,4 +145,177 @@ def test_current_state_readouts_change_and_candidate_vectorization_matches_loop(
         [backbone.retrieval_readout(candidates[:, index]) for index in range(3)], dim=1
     )
     assert torch.allclose(vectorized, loop, atol=1e-6)
-    assert tuple(inspect.signature(backbone.retrieval_readout).parameters) == ("state",)
+    assert tuple(inspect.signature(backbone.retrieval_readout).parameters) == (
+        "state",
+        "cls_anchor",
+    )
+
+
+def _legacy_learned_qg_readout(backbone: FGCLIPBackbone, state: Tensor) -> Tensor:
+    patches, leading = backbone._flatten_state(state)
+    block = backbone.model.vision_model.encoder.layers[-1]
+    batch, tokens, width = patches.shape
+    query = backbone.q_G.to(patches.dtype).view(1, 1, width).expand(batch, 1, width)
+    q = block.self_attn.q_proj(block.layer_norm1(query)) * block.self_attn.scale
+    key_value = block.layer_norm1(patches)
+    key = block.self_attn.k_proj(key_value)
+    value = block.self_attn.v_proj(key_value)
+    heads = block.self_attn.num_heads
+    head_dim = block.self_attn.head_dim
+    q = q.view(batch, 1, heads, head_dim).transpose(1, 2)
+    key = key.view(batch, tokens, heads, head_dim).transpose(1, 2)
+    value = value.view(batch, tokens, heads, head_dim).transpose(1, 2)
+    weights = torch.softmax(q @ key.transpose(-2, -1), dim=-1)
+    attended = (weights @ value).transpose(1, 2).reshape(batch, 1, width)
+    query = query + block.self_attn.out_proj(attended)
+    query = query + block.mlp(block.layer_norm2(query))
+    result = backbone.model.vision_model.post_layernorm(query[:, 0])
+    return result.reshape(*leading, width)
+
+
+def test_learned_qg_is_trainable_initialized_and_regression_compatible() -> None:
+    torch.manual_seed(10)
+    checkpoint = MockFGCLIP()
+    expected_initialization = checkpoint.vision_model.embeddings.class_embedding.detach().clone()
+    backbone = FGCLIPBackbone(checkpoint, text_width=4, global_readout_mode="learned_qg").eval()
+    state = backbone.initial_state(torch.randn(2, 3, 2, 2))
+
+    assert backbone.q_G.requires_grad
+    assert torch.equal(backbone.q_G.detach(), expected_initialization)
+    assert torch.allclose(
+        backbone.global_readout(state), _legacy_learned_qg_readout(backbone, state)
+    )
+    assert torch.equal(
+        backbone.global_readout(state), backbone.global_readout(state, torch.randn(2, 6))
+    )
+
+
+def test_native_cls_initial_parity_and_dynamic_current_state() -> None:
+    torch.manual_seed(12)
+    checkpoint = MockFGCLIP()
+    backbone = FGCLIPBackbone(checkpoint, text_width=4, global_readout_mode="native_cls").eval()
+    pixels = torch.randn(2, 3, 2, 2)
+    patches, cls_anchor = backbone.initial_state_with_anchor(pixels)
+    official = checkpoint.vision_model(pixels, output_hidden_states=True, return_dict=True)
+    expected_global = official.pooler_output
+    expected_query = torch.nn.functional.normalize(
+        checkpoint.visual_projection(expected_global).float(), dim=-1
+    )
+
+    assert cls_anchor.shape == (2, 6)
+    assert not torch.equal(cls_anchor[0], cls_anchor[1])
+    assert torch.allclose(cls_anchor, official.hidden_states[-2][:, 0])
+    assert torch.allclose(patches, official.hidden_states[-2][:, 1:])
+    assert torch.allclose(backbone.global_readout(patches, cls_anchor), expected_global)
+    assert torch.allclose(backbone.retrieval_readout(patches, cls_anchor), expected_query)
+
+    changed = patches.clone()
+    changed[:, 0, 0] += 1.0
+    assert not torch.allclose(
+        backbone.global_readout(changed, cls_anchor),
+        backbone.global_readout(patches, cls_anchor),
+    )
+    assert not torch.allclose(
+        backbone.retrieval_readout(changed, cls_anchor),
+        backbone.retrieval_readout(patches, cls_anchor),
+    )
+
+
+def test_native_cls_candidate_vectorization_and_sample_anchor_association() -> None:
+    torch.manual_seed(13)
+    backbone = FGCLIPBackbone(
+        MockFGCLIP(), text_width=4, global_readout_mode="native_cls"
+    ).eval()
+    patches, cls_anchor = backbone.initial_state_with_anchor(torch.randn(2, 3, 2, 2))
+    candidates = torch.stack([patches, patches + 0.1, patches - 0.2], dim=1)
+    vectorized = backbone.retrieval_readout(candidates, cls_anchor)
+    loop = torch.stack(
+        [backbone.retrieval_readout(candidates[:, index], cls_anchor) for index in range(3)],
+        dim=1,
+    )
+    permutation = torch.tensor([2, 0, 1])
+
+    assert vectorized.shape == (2, 3, 5)
+    assert torch.allclose(vectorized, loop, atol=1e-6)
+    assert torch.allclose(
+        backbone.retrieval_readout(candidates[:, permutation], cls_anchor),
+        vectorized[:, permutation],
+        atol=1e-6,
+    )
+
+
+def test_native_cls_rollout_keeps_anchor_outside_mutable_executor_state() -> None:
+    torch.manual_seed(14)
+    backbone = FGCLIPBackbone(
+        MockFGCLIP(), text_width=4, global_readout_mode="native_cls"
+    ).eval()
+    model = IAGSRME(
+        backbone,
+        IAGSRMEConfig(
+            width=4,
+            num_candidates=3,
+            max_steps=2,
+            num_heads=2,
+            exec_dim=4,
+            stop_enabled=False,
+            score_dropout=0.0,
+        ),
+    ).eval()
+    patches, cls_anchor = backbone.initial_state_with_anchor(torch.randn(2, 3, 2, 2))
+    before = cls_anchor.clone()
+    output = model.forward_from_features(
+        patches,
+        torch.randn(2, 5, 4),
+        torch.randn(2, 4),
+        torch.ones(2, 5, dtype=torch.bool),
+        cls_anchor,
+    )
+
+    assert torch.equal(output["cls_anchor"], before)
+    assert torch.equal(cls_anchor, before)
+    assert tuple(inspect.signature(Executor.forward).parameters) == (
+        "self",
+        "parent",
+        "actions",
+        "exec_mask",
+        "patch_grid",
+    )
+    for step in output["steps"]:
+        assert torch.equal(step["cls_anchor"], before.index_select(0, step["live_indices"]))
+        assert step["candidate_queries"].shape == (2, 3, 5)
+        assert torch.allclose(
+            step["delta_q"], step["candidate_queries"] - step["current_query"][:, None]
+        )
+
+    model.config = replace(model.config, stop_enabled=True)
+    with torch.no_grad():
+        model.score_net.net[-1].weight.zero_()
+        model.score_net.net[-1].bias.fill_(-1.0)
+    stopped = model.forward_from_features(
+        patches,
+        torch.randn(2, 5, 4),
+        torch.randn(2, 4),
+        torch.ones(2, 5, dtype=torch.bool),
+        cls_anchor,
+    )
+    assert stopped["stopped"].all()
+    assert torch.equal(stopped["state"], patches)
+    assert torch.equal(stopped["cls_anchor"], before)
+
+
+def test_both_readout_modes_have_the_same_public_shapes() -> None:
+    torch.manual_seed(15)
+    checkpoint = MockFGCLIP()
+    pixels = torch.randn(2, 3, 2, 2)
+    native = FGCLIPBackbone(
+        checkpoint, text_width=4, global_readout_mode="native_cls"
+    ).eval()
+    learned = FGCLIPBackbone(
+        checkpoint, text_width=4, global_readout_mode="learned_qg"
+    ).eval()
+    patches, cls_anchor = native.initial_state_with_anchor(pixels)
+
+    assert native.global_readout(patches, cls_anchor).shape == learned.global_readout(patches).shape
+    assert native.retrieval_readout(patches, cls_anchor).shape == learned.retrieval_readout(
+        patches
+    ).shape

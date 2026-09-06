@@ -15,7 +15,10 @@ from train import CATEGORIES, build_model
 
 
 def validate_checkpoint_backbone_metadata(
-    metadata: object, expected_checkpoint: str, expected_revision: str
+    metadata: object,
+    expected_checkpoint: str,
+    expected_revision: str,
+    expected_readout_mode: str | None = None,
 ) -> None:
     if not isinstance(metadata, dict):
         raise ValueError("checkpoint has no reproducible backbone metadata")
@@ -23,6 +26,13 @@ def validate_checkpoint_backbone_metadata(
     expected = (expected_checkpoint, expected_revision)
     if actual != expected:
         raise ValueError(f"checkpoint backbone mismatch: stored={actual}, configured={expected}")
+    if expected_readout_mode is not None:
+        actual_mode = metadata.get("global_readout_mode")
+        if actual_mode != expected_readout_mode:
+            raise ValueError(
+                "checkpoint readout mismatch: "
+                f"stored={actual_mode}, configured={expected_readout_mode}"
+            )
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
@@ -37,6 +47,7 @@ def main(cfg: DictConfig) -> None:
         checkpoint.get("metadata"),
         str(cfg.backbone.checkpoint),
         str(cfg.backbone.revision),
+        str(cfg.backbone.global_readout_mode),
     )
     model.load_state_dict(checkpoint["model"])
     model.to(device).eval()

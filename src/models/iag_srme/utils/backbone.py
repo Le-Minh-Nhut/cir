@@ -17,14 +17,16 @@ class FGCLIPRegime:
     train_text: bool = True
     train_text_projection: bool = False
     trust_remote_code: bool = True
+    global_readout_mode: str = "learned_qg"
 
 
 class FGCLIPBackbone(nn.Module):
     """Small Track-B adapter around the official FG-CLIP v1 checkpoint.
 
-    The recurrent state is exactly the penultimate patch tensor. The learned
-    ``q_G`` replaces the discarded CLS token and reads every later state through
-    the checkpoint's final-block projections, norms, MLP and visual projection.
+    The recurrent state is always the penultimate patch tensor. ``learned_qg``
+    reads it with the original shared learned query; ``native_cls`` carries the
+    image-specific penultimate CLS as immutable readout context and calls the
+    checkpoint's exact final block.
     """
 
     def __init__(
@@ -36,8 +38,11 @@ class FGCLIPBackbone(nn.Module):
         train_text_projection: bool = False,
         checkpoint: str | None = None,
         revision: str | None = None,
+        global_readout_mode: str = "learned_qg",
     ) -> None:
         super().__init__()
+        if global_readout_mode not in {"learned_qg", "native_cls"}:
+            raise ValueError(f"unknown Track-B global readout: {global_readout_mode}")
         self.model = model
         self.internal_width = text_width  # retained for train/eval infrastructure
         self.text_dim = text_width
@@ -46,6 +51,7 @@ class FGCLIPBackbone(nn.Module):
         self.train_text_projection = train_text_projection
         self.checkpoint = checkpoint
         self.revision = revision
+        self.global_readout_mode = global_readout_mode
 
         config = model.config
         self.state_dim = int(config.vision_config.hidden_size)
@@ -87,6 +93,7 @@ class FGCLIPBackbone(nn.Module):
             train_text_projection=regime.train_text_projection,
             checkpoint=regime.checkpoint,
             revision=regime.revision,
+            global_readout_mode=regime.global_readout_mode,
         )
 
     @staticmethod
@@ -133,7 +140,13 @@ class FGCLIPBackbone(nn.Module):
         return self
 
     def initial_state(self, reference_images: Tensor) -> Tensor:
-        """Return H_{L-1}^{patch}; CLS is deliberately discarded."""
+        """Return patch-only H_{L-1}; used by the learned-q_G mode."""
+
+        patches, _ = self.initial_state_with_anchor(reference_images)
+        return patches
+
+    def initial_state_with_anchor(self, reference_images: Tensor) -> tuple[Tensor, Tensor]:
+        """Return mutable patches and the image-specific immutable H_{L-1} CLS."""
 
         context = nullcontext() if self.train_vision else torch.no_grad()
         with context:
@@ -142,16 +155,25 @@ class FGCLIPBackbone(nn.Module):
                 output_hidden_states=True,
                 return_dict=True,
             )
-        return outputs.hidden_states[-2][:, 1:]
+        penultimate = outputs.hidden_states[-2]
+        return penultimate[:, 1:], penultimate[:, 0]
 
     def _flatten_state(self, state: Tensor) -> tuple[Tensor, torch.Size]:
         leading = state.shape[:-2]
         return state.reshape(-1, state.shape[-2], state.shape[-1]), leading
 
-    def global_readout(self, state: Tensor) -> Tensor:
-        """Read current patches with q_G through the native final-block machinery."""
+    @staticmethod
+    def _expand_cls_anchor(cls_anchor: Tensor, leading: torch.Size) -> Tensor:
+        anchor_leading = cls_anchor.shape[:-1]
+        if tuple(leading[: len(anchor_leading)]) != tuple(anchor_leading):
+            raise ValueError("CLS anchor batch dimensions do not match the patch state")
+        extra = len(leading) - len(anchor_leading)
+        view = cls_anchor.reshape(*anchor_leading, *([1] * extra), cls_anchor.shape[-1])
+        return view.expand(*leading, cls_anchor.shape[-1]).reshape(-1, cls_anchor.shape[-1])
 
-        patches, leading = self._flatten_state(state)
+    def _learned_qg_readout(self, patches: Tensor) -> Tensor:
+        """Preserved learned-query readout used by the original Track-B R0 code."""
+
         block = self.model.vision_model.encoder.layers[-1]
         batch, tokens, width = patches.shape
         query = self.q_G.to(patches.dtype).view(1, 1, width).expand(batch, 1, width)
@@ -175,7 +197,29 @@ class FGCLIPBackbone(nn.Module):
         attended = (weights @ v).transpose(1, 2).reshape(batch, 1, width)
         query = query + block.self_attn.out_proj(attended)
         query = query + block.mlp(block.layer_norm2(query))
-        global_state = self.model.vision_model.post_layernorm(query[:, 0])
+        return self.model.vision_model.post_layernorm(query[:, 0])
+
+    def global_readout(self, state: Tensor, cls_anchor: Tensor | None = None) -> Tensor:
+        """Read current patches using the configured Track-B global token."""
+
+        patches, leading = self._flatten_state(state)
+        width = patches.shape[-1]
+        if self.global_readout_mode == "learned_qg":
+            global_state = self._learned_qg_readout(patches)
+        else:
+            if cls_anchor is None:
+                raise ValueError("native_cls readout requires the image-specific CLS anchor")
+            anchor = self._expand_cls_anchor(cls_anchor, leading).to(patches.dtype)
+            full_state = torch.cat([anchor[:, None], patches], dim=1)
+            block = self.model.vision_model.encoder.layers[-1]
+            # Exact checkpoint layer call; no manual approximation of native attention.
+            final_state = block(
+                hidden_states=full_state,
+                attention_mask=None,
+                causal_attention_mask=None,
+                output_attentions=False,
+            )[0]
+            global_state = self.model.vision_model.post_layernorm(final_state[:, 0])
         return global_state.reshape(*leading, width)
 
     def dense_readout(self, state: Tensor) -> Tensor:
@@ -187,8 +231,8 @@ class FGCLIPBackbone(nn.Module):
         dense = self.model.visual_projection(dense)
         return dense.reshape(*leading, state.shape[-2], self.dense_dim)
 
-    def retrieval_readout(self, state: Tensor) -> Tensor:
-        global_state = self.global_readout(state)
+    def retrieval_readout(self, state: Tensor, cls_anchor: Tensor | None = None) -> Tensor:
+        global_state = self.global_readout(state, cls_anchor)
         query = self.model.visual_projection(global_state)
         return F.normalize(query.float(), dim=-1).to(query.dtype)
 
