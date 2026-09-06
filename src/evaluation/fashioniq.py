@@ -187,7 +187,7 @@ def evaluate_fashioniq(
                 batch.attention_mask,
                 batch.content_mask,
             )
-            queries.append(output.final_query)
+            queries.append(output["query"])
             reference_ids.extend(batch.reference_ids)
             if any(target_id is None for target_id in batch.target_ids):
                 raise ValueError("validation target missing")

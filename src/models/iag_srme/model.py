@@ -3,19 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import torch
+import torch.nn.functional as F
 from torch import Tensor, nn
-
-from .backbone import FGCLIPBackbone
-from .context import GroundedEditContext
-from .editor import SharedTokenEditor
-from .factorization import SemanticFullQueryAnchor, StableFactorFuser
-from .grounded_reader import GroundedStateReader
-from .grounding import AnchorGrounder
-from .intent import SemanticClaimHead, TextIntentEncoder
-from .outputs import BackboneOutput, IAGSRMEOutput, RecurrentStepOutput
-from .readout import TokenStateReadout
-from .scorer import ConsequenceScorer
-from .selector import HardStopSelector, select_next_state
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,268 +13,402 @@ class IAGSRMEConfig:
     num_candidates: int = 4
     max_steps: int = 3
     num_heads: int = 8
-    retrieval_dim: int = 512
-    lambda_z: float = 0.1
-    query_cap: float = 0.5
-    selector_temperature: float = 1.0
-    selector_gumbel_noise: bool = True
-    enable_claim_head: bool = False
-    enable_factor_head: bool = False
-    factor_dim: int | None = None
+    exec_dim: int = 256
+    epsilon_stop: float = 0.0
+    stop_enabled: bool = True
+    read_scale_init: float = 10.0
+    exec_scale_init: float = 10.0
+    exec_bias_init: float = 0.0
+    scale_min: float = 1.0
+    scale_max: float = 100.0
+    score_dropout: float = 0.1
 
 
-class IAGSRMECore(nn.Module):
-    """Target-free IAG-SRME recurrence over already encoded reference/text tensors."""
+class ProposalNet(nn.Module):
+    """Fresh, state-conditioned WHAT proposals with token-only semantic values."""
 
-    def __init__(self, config: IAGSRMEConfig) -> None:
+    def __init__(
+        self, state_dim: int, text_dim: int, num_candidates: int, num_heads: int
+    ) -> None:
         super().__init__()
-        if config.num_candidates != 4:
-            raise ValueError("canonical IAG-SRME requires exactly four candidate identities")
-        if config.max_steps < 1:
-            raise ValueError("max_steps must be positive")
-        self.config = config
-        self.intent_encoder = TextIntentEncoder(
-            config.width, config.num_candidates, config.num_heads
+        self.queries = nn.Parameter(torch.empty(num_candidates, state_dim))
+        nn.init.normal_(self.queries, std=0.02)
+        self.text_context = nn.Linear(text_dim, state_dim)
+        self.visual_context = nn.Linear(state_dim, state_dim)
+        self.context = nn.Sequential(
+            nn.Linear(4 * state_dim, 2 * state_dim),
+            nn.GELU(),
+            nn.Linear(2 * state_dim, state_dim),
         )
-        self.grounder = AnchorGrounder(config.width)
-        self.grounded_reader = GroundedStateReader(config.width)
-        self.context_fuser = GroundedEditContext(config.width)
-        self.editor = SharedTokenEditor(config.width, config.lambda_z)
-        self.readout = TokenStateReadout(config.width, config.retrieval_dim, config.query_cap)
-        self.scorer = ConsequenceScorer(config.width, config.retrieval_dim)
-        self.selector = HardStopSelector(config.selector_temperature, config.selector_gumbel_noise)
-        self.claim_head = SemanticClaimHead(config.width) if config.enable_claim_head else None
-        factor_dim = config.retrieval_dim if config.factor_dim is None else config.factor_dim
-        if config.enable_factor_head and factor_dim != config.retrieval_dim:
-            raise ValueError(
-                "factor_dim must equal FG-CLIP retrieval_dim: no untrained projection is "
-                "permitted in the detached semantic-anchor path"
-            )
-        self.factor_fuser = (
-            StableFactorFuser(config.width, factor_dim)
-            if config.enable_factor_head
-            else None
+        self.query_conditioner = nn.Sequential(
+            nn.Linear(3 * state_dim, state_dim),
+            nn.GELU(),
+            nn.Linear(state_dim, state_dim),
         )
-        self.auxiliary_anchor = (
-            SemanticFullQueryAnchor()
-            if config.enable_factor_head
-            else None
+        self.query_norm = nn.LayerNorm(state_dim)
+        self.token_attention = nn.MultiheadAttention(
+            state_dim,
+            num_heads,
+            kdim=text_dim,
+            vdim=text_dim,
+            batch_first=True,
         )
-
-    def forward(self, encoded: BackboneOutput, control: str = "full") -> IAGSRMEOutput:
-        valid_controls = {
-            "full",
-            "zero_edit",
-            "single_candidate",
-            "repeat_candidate_1",
-            "repeat_candidate_2",
-            "repeat_candidate_3",
-            "repeat_candidate_4",
-            "repeat_best",
-            "clone_candidate_1",
-            "mean_candidate",
-            "random_candidate",
-            "frozen_t0_order",
-        }
-        if control not in valid_controls:
-            raise ValueError(f"unsupported rollout control: {control}")
-        anchor = encoded.anchor
-        if anchor.ndim != 3 or anchor.shape[-1] != self.config.width:
-            raise ValueError("anchor must be [B,N,d]")
-        batch_size, tokens, width = anchor.shape
-        if encoded.reference_global.shape != (batch_size, self.config.retrieval_dim):
-            raise ValueError("reference_global must be [B,D]")
-        intents = self.intent_encoder(encoded.text_tokens, encoded.text_content_mask)
-        supports = self.grounder(intents, anchor)
-        # A is immutable; assignment never changes after this point. Z starts at A.
-        state = anchor
-        current_query = self.readout(state, anchor, encoded.text_global, encoded.reference_global)
-        live = torch.ones(batch_size, dtype=torch.bool, device=anchor.device)
-        trace: list[RecurrentStepOutput] = []
-        fixed_best: Tensor | None = None
-        frozen_order: Tensor | None = None
-
-        original_static, _, _ = self.grounded_reader(supports, anchor, anchor)
-        claims = None
-        claim_logits = None
-        if self.claim_head is not None:
-            claim_logits = self.claim_head(intents, encoded.text_tokens, encoded.text_content_mask)
-            claims = torch.sigmoid(claim_logits) * encoded.text_content_mask[:, None].to(
-                claim_logits.dtype
-            )
-        factors = None
-        auxiliary_anchor = None
-        if self.factor_fuser is not None and self.auxiliary_anchor is not None:
-            factors = self.factor_fuser(intents, original_static)
-            auxiliary_anchor = self.auxiliary_anchor(
-                encoded.reference_global, encoded.text_semantic_global
-            )
-
-        for timestep in range(self.config.max_steps):
-            current_state = state
-            query_before = current_query
-            live_before = live
-            original, current, change = self.grounded_reader(supports, anchor, current_state)
-            contexts = self.context_fuser(intents, original, current, change)
-            delta_z, candidate_states = self.editor(contexts, supports, anchor, current_state)
-            expected_shape = (
-                batch_size,
-                self.config.num_candidates,
-                tokens,
-                width,
-            )
-            if candidate_states.shape != expected_shape:
-                raise AssertionError("same-parent candidate shape invariant failed")
-            # This explicit expression is the scientific same-parent contract.
-            if not torch.equal(candidate_states, current_state.unsqueeze(1) + delta_z):
-                raise AssertionError(
-                    "all counterfactual candidates must branch from the same parent"
-                )
-            candidate_queries = self.readout(
-                candidate_states, anchor, encoded.text_global, encoded.reference_global
-            )
-            delta_q = candidate_queries - query_before[:, None, :]
-            scorer_change = change
-            scorer_supports = supports
-            if control == "clone_candidate_1":
-                original = original[:, :1].expand_as(original)
-                current = current[:, :1].expand_as(current)
-                change = change[:, :1].expand_as(change)
-                contexts = contexts[:, :1].expand_as(contexts)
-                delta_z = delta_z[:, :1].expand_as(delta_z)
-                candidate_states = candidate_states[:, :1].expand_as(candidate_states)
-                candidate_queries = candidate_queries[:, :1].expand_as(candidate_queries)
-                delta_q = delta_q[:, :1].expand_as(delta_q)
-                scorer_change = change
-                scorer_supports = supports[:, :1].expand_as(supports)
-            elif control == "mean_candidate":
-                original = original.mean(dim=1, keepdim=True).expand_as(original)
-                current = current.mean(dim=1, keepdim=True).expand_as(current)
-                change = change.mean(dim=1, keepdim=True).expand_as(change)
-                contexts = contexts.mean(dim=1, keepdim=True).expand_as(contexts)
-                delta_z = delta_z.mean(dim=1, keepdim=True).expand_as(delta_z)
-                candidate_states = current_state[:, None] + delta_z
-                candidate_queries = self.readout(
-                    candidate_states, anchor, encoded.text_global, encoded.reference_global
-                )
-                delta_q = candidate_queries - query_before[:, None, :]
-                scorer_change = change
-                scorer_supports = supports.mean(dim=1, keepdim=True).expand_as(supports)
-            scores = self.scorer(
-                contexts, delta_z, delta_q, scorer_change, scorer_supports
-            )
-            stop_score = torch.zeros(batch_size, 1, dtype=scores.dtype, device=scores.device)
-            logits = torch.cat([scores, stop_score], dim=-1)
-            if control == "full":
-                action_st, action_hard = self.selector(logits, live_before)
-            else:
-                if timestep == 0:
-                    fixed_best = scores.argmax(dim=-1)
-                    frozen_order = scores.argsort(dim=-1, descending=True)
-                if control == "zero_edit" or (control == "single_candidate" and timestep > 0):
-                    forced = torch.full_like(fixed_best, self.config.num_candidates)
-                elif control == "single_candidate":
-                    forced = fixed_best
-                elif control.startswith("repeat_candidate_"):
-                    forced = torch.full_like(fixed_best, int(control[-1]) - 1)
-                elif control == "repeat_best":
-                    forced = fixed_best
-                elif control == "frozen_t0_order":
-                    if frozen_order is None:
-                        raise AssertionError("frozen order was not initialized")
-                    forced = frozen_order[:, min(timestep, self.config.num_candidates - 1)]
-                elif control == "random_candidate":
-                    forced = torch.randint(
-                        self.config.num_candidates, (batch_size,), device=anchor.device
-                    )
-                else:  # clone/mean: preserve the normal target-free selection policy.
-                    forced = logits.argmax(dim=-1)
-                forced = torch.where(
-                    live_before,
-                    forced,
-                    torch.full_like(forced, self.config.num_candidates),
-                )
-                action_hard = torch.nn.functional.one_hot(
-                    forced, self.config.num_candidates + 1
-                ).to(logits.dtype)
-                action_st = action_hard
-            next_state, next_query = select_next_state(
-                candidate_states, current_state, candidate_queries, query_before, action_st
-            )
-            selected_index = action_hard.argmax(dim=-1)
-            stopped_now = live_before & selected_index.eq(self.config.num_candidates)
-            live = live_before & ~stopped_now
-            trace.append(
-                RecurrentStepOutput(
-                    timestep=timestep,
-                    live_before=live_before,
-                    current_state=current_state,
-                    current_query=query_before,
-                    original_evidence=original,
-                    current_evidence=current,
-                    accumulated_local_change=change,
-                    contexts=contexts,
-                    delta_z=delta_z,
-                    candidate_states=candidate_states,
-                    candidate_queries=candidate_queries,
-                    delta_q=delta_q,
-                    scores=scores,
-                    logits_with_stop=logits,
-                    action_st=action_st,
-                    action_hard=action_hard,
-                    selected_index=selected_index,
-                    stopped_now=stopped_now,
-                    next_state=next_state,
-                    next_query=next_query,
-                )
-            )
-            state = next_state
-            current_query = next_query
-
-        return IAGSRMEOutput(
-            final_query=current_query,
-            final_state=state,
-            anchor=anchor,
-            intents=intents,
-            supports=supports,
-            text_tokens=encoded.text_tokens,
-            text_content_mask=encoded.text_content_mask,
-            reference_global=encoded.reference_global,
-            trace=tuple(trace),
-            claim_logits=claim_logits,
-            claims=claims,
-            factors=factors,
-            auxiliary_anchor=auxiliary_anchor,
-        )
-
-
-class IAGSRME(nn.Module):
-    """Raw reference+text public model. Target tensors are intentionally absent."""
-
-    def __init__(self, backbone: FGCLIPBackbone, core: IAGSRMECore) -> None:
-        super().__init__()
-        if backbone.internal_width != core.config.width:
-            raise ValueError("backbone and core internal widths differ")
-        if backbone.retrieval_dim != core.config.retrieval_dim:
-            raise ValueError("backbone and core retrieval dimensions differ")
-        self.backbone = backbone
-        self.core = core
 
     def forward(
         self,
-        reference_pixels: Tensor,
+        text_tokens: Tensor,
+        text_global: Tensor,
+        current_global: Tensor,
+        content_mask: Tensor,
+    ) -> Tensor:
+        # text_tokens: [B,L,Dt], current_global: [B,Dv]
+        text = self.text_context(text_global)
+        visual = self.visual_context(current_global)
+        context = self.context(
+            torch.cat([text, visual, text * visual, text - visual], dim=-1)
+        )
+
+        # Learned rows are capacity priors, not fixed semantic identities.
+        q = self.queries.unsqueeze(0).expand(text.shape[0], -1, -1)
+        conditioned = self.query_conditioner(
+            torch.cat([q, context[:, None].expand_as(q), q * context[:, None]], dim=-1)
+        )
+        q = self.query_norm(q + conditioned)
+        # No q residual: candidate content comes only from instruction token values.
+        edits, _ = self.token_attention(
+            q,
+            text_tokens,
+            text_tokens,
+            key_padding_mask=~content_mask,
+            need_weights=False,
+        )
+        return edits
+
+
+class Grounder(nn.Module):
+    """Native-dense cosine WHERE grounding with distinct read and write maps."""
+
+    def __init__(
+        self,
+        state_dim: int,
+        dense_dim: int,
+        read_scale: float = 10.0,
+        exec_scale: float = 10.0,
+        exec_bias: float = 0.0,
+        scale_bounds: tuple[float, float] = (1.0, 100.0),
+    ) -> None:
+        super().__init__()
+        self.where = nn.Sequential(
+            nn.LayerNorm(state_dim),
+            nn.Linear(state_dim, state_dim),
+            nn.GELU(),
+            nn.Linear(state_dim, dense_dim),
+        )
+        self.log_read_scale = nn.Parameter(torch.tensor(read_scale).log())
+        self.log_exec_scale = nn.Parameter(torch.tensor(exec_scale).log())
+        self.exec_bias = nn.Parameter(torch.tensor(exec_bias))
+        self.scale_bounds = scale_bounds
+
+    def forward(self, edits: Tensor, dense: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        # edits: [B,K,Dv], dense: [B,N,Dd]
+        query = F.normalize(self.where(edits).float(), dim=-1)
+        keys = F.normalize(dense.float(), dim=-1)
+        raw = torch.einsum("bkd,bnd->bkn", query, keys)
+        low, high = self.scale_bounds
+        read_scale = self.log_read_scale.exp().clamp(low, high)
+        exec_scale = self.log_exec_scale.exp().clamp(low, high)
+        alpha_read = torch.softmax(read_scale * raw, dim=-1)
+        exec_mask = torch.sigmoid(exec_scale * (raw - self.exec_bias))
+        return raw.to(edits.dtype), alpha_read.to(edits.dtype), exec_mask.to(edits.dtype)
+
+
+class ActionFusion(nn.Module):
+    """Entity-conditioned bounded independent dual-gate fusion."""
+
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.gates = nn.Sequential(
+            nn.Linear(2 * dim, dim),
+            nn.LeakyReLU(),
+            nn.Linear(dim, 2 * dim),
+        )
+
+    def forward(self, entity: Tensor, edit: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        gamma, beta = torch.sigmoid(self.gates(torch.cat([entity, edit], dim=-1))).chunk(
+            2, dim=-1
+        )
+        action = gamma * entity + beta * edit
+        return action, gamma, beta
+
+
+class Executor(nn.Module):
+    """Action-conditioned, masked local signed-residual state transition."""
+
+    def __init__(self, state_dim: int, action_dim: int, exec_dim: int = 256) -> None:
+        super().__init__()
+        self.state_down = nn.Linear(state_dim, exec_dim)
+        self.state_norm = nn.LayerNorm(exec_dim)
+        self.action_norm = nn.LayerNorm(action_dim)
+        self.action_mlp = nn.Sequential(
+            nn.Linear(action_dim, 2 * exec_dim),
+            nn.SiLU(),
+            nn.Linear(2 * exec_dim, 2 * exec_dim),
+        )
+        self.local_mixer = nn.Conv2d(
+            exec_dim, exec_dim, kernel_size=3, padding=1, groups=exec_dim
+        )
+        self.ffn_norm = nn.LayerNorm(exec_dim)
+        self.ffn = nn.Sequential(
+            nn.Linear(exec_dim, 4 * exec_dim),
+            nn.GELU(),
+            nn.Linear(4 * exec_dim, exec_dim),
+        )
+        self.state_up = nn.Linear(exec_dim, state_dim)
+        nn.init.zeros_(self.action_mlp[-1].weight)
+        nn.init.zeros_(self.action_mlp[-1].bias)
+        nn.init.zeros_(self.state_up.weight)
+        nn.init.zeros_(self.state_up.bias)
+
+    def forward(
+        self,
+        parent: Tensor,
+        actions: Tensor,
+        exec_mask: Tensor,
+        patch_grid: tuple[int, int],
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        # parent: [B,N,Dv], actions: [B,K,Da], exec_mask: [B,K,N]
+        batch, tokens, _ = parent.shape
+        candidates = actions.shape[1]
+        height, width = patch_grid
+        if tokens != height * width:
+            raise ValueError(f"state has {tokens} patches but grid is {height}x{width}")
+
+        x = self.state_down(parent)  # [B,N,dx], computed once for the shared parent
+        gamma, beta = self.action_mlp(self.action_norm(actions)).chunk(2, dim=-1)
+        normalized = self.state_norm(x)[:, None]
+        modulated = (1.0 + gamma[:, :, None]) * normalized + beta[:, :, None]
+
+        local = modulated.reshape(batch * candidates, height, width, -1)
+        local = local.permute(0, 3, 1, 2)
+        local = local + self.local_mixer(local)
+        local = local.permute(0, 2, 3, 1).reshape(batch, candidates, tokens, -1)
+        residual_features = local + self.ffn(self.ffn_norm(local))
+        raw_delta = self.state_up(residual_features)  # signed: deliberately no activation
+        delta = exec_mask[..., None] * raw_delta
+        candidate_states = parent[:, None] + delta
+        return raw_delta, delta, candidate_states
+
+
+class ScoreNet(nn.Module):
+    """Shared independent predictor of marginal utility versus KEEP state."""
+
+    def __init__(
+        self, state_dim: int, text_dim: int, action_dim: int, dim: int = 256, dropout: float = 0.1
+    ) -> None:
+        super().__init__()
+        self.context_global = nn.Linear(state_dim, dim)
+        self.context_text = nn.Linear(text_dim, dim)
+        self.context_norm = nn.LayerNorm(dim)
+        self.action_projection = nn.Linear(action_dim, dim)
+        self.local_projection = nn.Linear(state_dim, dim)
+        self.global_projection = nn.Linear(state_dim, dim)
+        self.net = nn.Sequential(
+            nn.LayerNorm(5 * dim),
+            nn.Linear(5 * dim, 512),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(512, 256),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(256, 1),
+        )
+
+    def build_features(
+        self,
+        current_global: Tensor,
+        text_global: Tensor,
+        actions: Tensor,
+        delta: Tensor,
+        exec_mask: Tensor,
+        candidate_global: Tensor,
+    ) -> Tensor:
+        # All candidate groups below are [B,K,d].
+        context = self.context_norm(
+            self.context_global(current_global) + self.context_text(text_global)
+        )
+        action = self.action_projection(actions)
+        support = exec_mask.sum(dim=-1, keepdim=True).clamp_min(1e-6)
+        local_mean = delta.sum(dim=-2) / support  # delta is already support-masked
+        local_effect = self.local_projection(local_mean)
+        global_effect = self.global_projection(candidate_global - current_global[:, None])
+        compatibility = action * global_effect
+        context = context[:, None].expand_as(action)
+        return torch.cat(
+            [context, action, local_effect, global_effect, compatibility], dim=-1
+        )
+
+    def forward(self, features: Tensor) -> Tensor:
+        return self.net(features).squeeze(-1)
+
+
+class IAGSRME(nn.Module):
+    """Canonical target-free V2 R0 recurrent model."""
+
+    def __init__(self, backbone: nn.Module, config: IAGSRMEConfig = IAGSRMEConfig()) -> None:
+        super().__init__()
+        self.backbone = backbone
+        self.config = config
+        state_dim = int(backbone.state_dim)
+        text_dim = int(backbone.text_dim)
+        dense_dim = int(backbone.dense_dim)
+        self.proposal = ProposalNet(
+            state_dim, text_dim, config.num_candidates, config.num_heads
+        )
+        self.grounder = Grounder(
+            state_dim,
+            dense_dim,
+            config.read_scale_init,
+            config.exec_scale_init,
+            config.exec_bias_init,
+            (config.scale_min, config.scale_max),
+        )
+        self.action_fusion = ActionFusion(state_dim)
+        self.executor = Executor(state_dim, state_dim, config.exec_dim)
+        self.score_net = ScoreNet(
+            state_dim, text_dim, state_dim, config.width, config.score_dropout
+        )
+
+    @staticmethod
+    def _gather_candidate(values: Tensor, indices: Tensor) -> Tensor:
+        shape = [values.shape[0], 1] + [1] * (values.ndim - 2)
+        index = indices.view(*shape).expand(-1, 1, *values.shape[2:])
+        return values.gather(1, index).squeeze(1)
+
+    def forward_from_features(
+        self,
+        initial_state: Tensor,
+        text_tokens: Tensor,
+        text_global: Tensor,
+        content_mask: Tensor,
+    ) -> dict[str, object]:
+        # V0 is the immutable reference anchor; V is always updated out of place.
+        V0 = initial_state
+        V = V0.clone()
+        batch = V.shape[0]
+        alive = torch.ones(batch, dtype=torch.bool, device=V.device)
+        steps: list[dict[str, Tensor | int]] = []
+
+        for timestep in range(self.config.max_steps):
+            if not alive.any():
+                break
+            live_indices = alive.nonzero(as_tuple=False).squeeze(-1)
+            parent = V.index_select(0, live_indices)
+            tokens = text_tokens.index_select(0, live_indices)
+            text = text_global.index_select(0, live_indices)
+            mask = content_mask.index_select(0, live_indices)
+
+            current_global = self.backbone.global_readout(parent)
+            dense = self.backbone.dense_readout(parent)
+            edits = self.proposal(tokens, text, current_global, mask)
+            grounding, alpha_read, exec_mask = self.grounder(edits, dense)
+            entity = torch.einsum("bkn,bnd->bkd", alpha_read, parent)
+            actions, fuse_gamma, fuse_beta = self.action_fusion(entity, edits)
+            raw_delta, delta, candidate_states = self.executor(
+                parent, actions, exec_mask, self.backbone.patch_grid
+            )
+
+            # Current, sibling, and terminal queries all use this same method.
+            current_query = self.backbone.retrieval_readout(parent)
+            candidate_queries = self.backbone.retrieval_readout(candidate_states)
+            delta_q = candidate_queries - current_query[:, None]
+            candidate_global = self.backbone.global_readout(candidate_states)
+            score_features = self.score_net.build_features(
+                current_global,
+                text,
+                actions,
+                delta,
+                exec_mask,
+                candidate_global,
+            )
+            # Score losses update ScoreNet only; argmax itself has no gradient.
+            scores = self.score_net(score_features.detach())
+            best_score, best_idx = scores.max(dim=-1)
+            stop_now = (
+                best_score <= self.config.epsilon_stop
+                if self.config.stop_enabled
+                else torch.zeros_like(best_score, dtype=torch.bool)
+            )
+            selected_idx = torch.where(
+                stop_now,
+                torch.full_like(best_idx, self.config.num_candidates),
+                best_idx,
+            )
+
+            execute = ~stop_now
+            if execute.any():
+                execute_rows = live_indices[execute]
+                chosen = self._gather_candidate(candidate_states[execute], best_idx[execute])
+                V = V.index_copy(0, execute_rows, chosen)
+            if stop_now.any():
+                alive = alive.clone()
+                alive[live_indices[stop_now]] = False
+
+            steps.append(
+                {
+                    "timestep": timestep,
+                    "live_indices": live_indices,
+                    "parent_state": parent,
+                    "current_global": current_global,
+                    "current_query": current_query,
+                    "proposals": edits,
+                    "grounding": grounding,
+                    "alpha_read": alpha_read,
+                    "exec_mask": exec_mask,
+                    "entities": entity,
+                    "actions": actions,
+                    "fuse_gamma": fuse_gamma,
+                    "fuse_beta": fuse_beta,
+                    "raw_delta": raw_delta,
+                    "delta": delta,
+                    "candidate_states": candidate_states,
+                    "candidate_global": candidate_global,
+                    "candidate_queries": candidate_queries,
+                    "delta_q": delta_q,
+                    "score_features": score_features,
+                    "scores": scores,
+                    "stop_score": scores.new_zeros(scores.shape[0]),
+                    "best_score": best_score,
+                    "selected_idx": selected_idx,
+                    "stopped_now": stop_now,
+                }
+            )
+
+        terminal_query = self.backbone.retrieval_readout(V)
+        return {
+            "query": terminal_query,
+            "state": V,
+            "initial_state": V0,
+            "steps": steps,
+            "stopped": ~alive,
+        }
+
+    def forward(
+        self,
+        reference_images: Tensor,
         input_ids: Tensor,
         attention_mask: Tensor,
         content_mask: Tensor,
-        control: str = "full",
-    ) -> IAGSRMEOutput:
-        encoded = self.backbone(reference_pixels, input_ids, attention_mask, content_mask)
-        return self.core(encoded, control=control)
+    ) -> dict[str, object]:
+        initial_state = self.backbone.initial_state(reference_images)
+        text_tokens, text_global = self.backbone.encode_text(
+            input_ids, attention_mask, content_mask
+        )
+        return self.forward_from_features(
+            initial_state, text_tokens, text_global, content_mask
+        )
 
     def encode_global_images(self, pixel_values: Tensor) -> Tensor:
         return self.backbone.encode_global_images(pixel_values)
 
     def encode_gallery(self, pixel_values: Tensor) -> Tensor:
-        """Backward-compatible generic gallery name; always global-only."""
-
         return self.encode_global_images(pixel_values)

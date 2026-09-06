@@ -6,17 +6,12 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from numerics import fp32_if_low_precision
+from models.iag_srme.utils.retrieval import build_teacher_masks
 
 
 def positive_mask_from_ids(target_ids: Sequence[str], device: torch.device) -> Tensor:
-    if not target_ids:
-        raise ValueError("target_ids must not be empty")
-    return torch.tensor(
-        [[left == right for right in target_ids] for left in target_ids],
-        dtype=torch.bool,
-        device=device,
-    )
+    positive, _, _ = build_teacher_masks(target_ids, device)
+    return positive
 
 
 def retrieval_energy(
@@ -37,8 +32,8 @@ def retrieval_energy(
         raise ValueError("every query needs at least one positive")
     # Similarity and logsumexp remain FP32 under AMP; gradients still reach both branches.
     with torch.autocast(device_type=queries.device.type, enabled=False):
-        query_values = fp32_if_low_precision(queries)
-        target_values = fp32_if_low_precision(target_bank)
+        query_values = queries.float()
+        target_values = target_bank.float()
         logits = (
             F.normalize(query_values, dim=-1)
             @ F.normalize(target_values, dim=-1).T

@@ -1,19 +1,8 @@
-from .iag_srme import (
-    BackboneOutput,
-    FGCLIPBackbone,
-    FGCLIPRegime,
-    IAGSRME,
-    IAGSRMEConfig,
-    IAGSRMECore,
-    IAGSRMEOutput,
-)
+from .iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig
 
 __all__ = [
-    "BackboneOutput",
     "FGCLIPBackbone",
     "FGCLIPRegime",
     "IAGSRME",
     "IAGSRMEConfig",
-    "IAGSRMECore",
-    "IAGSRMEOutput",
 ]

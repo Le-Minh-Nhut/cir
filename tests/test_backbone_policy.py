@@ -1,6 +1,6 @@
 import pytest
 
-from models.iag_srme.backbone import assert_cache_legal
+from models.iag_srme.utils.backbone import assert_cache_legal
 
 
 def test_full_vision_rejects_image_cache() -> None:

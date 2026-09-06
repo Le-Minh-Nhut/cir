@@ -17,8 +17,8 @@ from datasets.common import DirectoryImageStore
 from datasets.fashioniq import FashionIQDataset
 from evaluation.fashioniq import evaluate_fashioniq
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
-from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig, IAGSRMECore
-from models.iag_srme.backbone import assert_cache_legal
+from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig
+from models.iag_srme.utils.backbone import assert_cache_legal
 from runtime import configure_torch_runtime, resolve_device, seed_everything
 from training.engine import fit, resolve_precision, trainable_parameters
 
@@ -45,16 +45,15 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         num_candidates=int(cfg.model.num_candidates),
         max_steps=int(cfg.model.max_steps),
         num_heads=int(cfg.model.num_heads),
-        retrieval_dim=backbone.retrieval_dim,
-        lambda_z=float(cfg.model.lambda_z),
-        query_cap=float(cfg.model.query_cap),
-        selector_temperature=float(cfg.model.selector_temperature),
-        selector_gumbel_noise=bool(cfg.model.selector_gumbel_noise),
-        enable_claim_head=bool(cfg.model.enable_claim_head),
-        enable_factor_head=bool(cfg.model.enable_factor_head),
-        factor_dim=(None if cfg.model.factor_dim is None else int(cfg.model.factor_dim)),
+        exec_dim=int(cfg.model.exec_dim),
+        epsilon_stop=float(cfg.model.epsilon_stop),
+        stop_enabled=bool(cfg.model.stop_enabled),
+        read_scale_init=float(cfg.model.read_scale_init),
+        exec_scale_init=float(cfg.model.exec_scale_init),
+        exec_bias_init=float(cfg.model.exec_bias_init),
+        score_dropout=float(cfg.model.score_dropout),
     )
-    return IAGSRME(backbone, IAGSRMECore(model_config)), tokenizer, processor
+    return IAGSRME(backbone, model_config), tokenizer, processor
 
 
 def build_objective(cfg: DictConfig) -> IAGSRMEObjective:

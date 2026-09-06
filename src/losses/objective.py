@@ -1,106 +1,137 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Mapping
 
+import torch
+import torch.nn.functional as F
 from torch import Tensor, nn
 
-from models.iag_srme.outputs import IAGSRMEOutput
+from models.iag_srme.utils.retrieval import (
+    build_teacher_masks,
+    marginal_teacher_utilities,
+)
 
-from .action_claim_binding import ActionClaimBindingLoss
-from .complementary_claim import ComplementaryClaimLoss, claim_weighted_text_pool
-from .factor import FactorCompletenessLoss
-from .marginal import MarginalActionLoss
 from .retrieval import TerminalRetrievalLoss
-from .unique import UniqueContributionLoss
 
 
 @dataclass(frozen=True, slots=True)
 class ObjectiveConfig:
     terminal_weight: float = 1.0
-    marginal_weight: float = 0.5
-    complementary_claim_weight: float = 0.0
-    binding_weight: float = 0.0
-    factor_weight: float = 0.0
-    unique_weight: float = 0.0
+    lambda_pair: float = 0.5
+    lambda_gain: float = 0.5
     retrieval_temperature: float = 0.07
-    utility_temperature: float = 1.0
-    score_temperature: float = 1.0
-    binding_temperature: float = 0.1
-    factor_anchor_temperature: float = 0.1
-    factor_temperature: float = 0.1
-    unique_margin: float = 0.05
-    relational_self_masked: bool = False
-    require_activity_weights_for_unique: bool = True
+    pair_temperature: float = 1.0
+    pair_weight_temperature: float = 1.0
+    epsilon_pair: float = 0.01
+    huber_delta: float = 1.0
+
+
+def pairwise_ranking_loss(
+    predicted: Tensor,
+    teacher: Tensor,
+    valid_rows: Tensor,
+    *,
+    epsilon: float,
+    temperature: float,
+    weight_temperature: float,
+) -> tuple[Tensor, Tensor]:
+    """Confidence-weighted ranking over every unordered sibling pair."""
+
+    candidates = predicted.shape[-1]
+    left, right = torch.triu_indices(candidates, candidates, offset=1, device=predicted.device)
+    teacher_delta = teacher[:, left] - teacher[:, right]
+    confident = teacher_delta.abs() >= epsilon
+    pair_mask = valid_rows[:, None] & confident
+    weight = 1.0 - torch.exp(-teacher_delta.abs() / weight_temperature)
+    signed_margin = teacher_delta.sign() * (predicted[:, left] - predicted[:, right])
+    values = -weight * F.logsigmoid(signed_margin / temperature)
+    normalizer = (weight * pair_mask).sum()
+    loss = (values * pair_mask).sum() / normalizer.clamp_min(1e-8)
+    return loss, normalizer
+
+
+def absolute_gain_loss(
+    predicted: Tensor, teacher: Tensor, valid_rows: Tensor, delta: float
+) -> tuple[Tensor, Tensor]:
+    values = F.huber_loss(predicted, teacher, reduction="none", delta=delta)
+    mask = valid_rows[:, None].expand_as(values)
+    count = mask.sum()
+    return (values * mask).sum() / count.clamp_min(1), count
 
 
 class IAGSRMEObjective(nn.Module):
+    """V2 core: terminal retrieval plus calibrated ScoreNet supervision."""
+
     def __init__(self, config: ObjectiveConfig, width: int = 256) -> None:
         super().__init__()
+        del width  # kept so the existing optimizer/training builder stays minimal
         self.config = config
         self.terminal = TerminalRetrievalLoss(config.retrieval_temperature)
-        self.marginal = MarginalActionLoss(
-            config.retrieval_temperature,
-            config.utility_temperature,
-            config.score_temperature,
-        )
-        self.complementary_claim = ComplementaryClaimLoss()
-        self.binding = ActionClaimBindingLoss(width=width, temperature=config.binding_temperature)
-        self.factor = FactorCompletenessLoss(
-            config.factor_anchor_temperature,
-            config.factor_temperature,
-            config.relational_self_masked,
-        )
-        self.unique = UniqueContributionLoss(config.unique_margin)
 
     def forward(
         self,
-        output: IAGSRMEOutput,
+        output: Mapping[str, object],
         target_embeddings: Tensor,
-        positive_mask: Tensor,
-        *,
-        active_weights: Tensor | None = None,
+        target_ids: Sequence[str | None],
     ) -> Mapping[str, Tensor]:
-        components: dict[str, Tensor] = {}
-        terminal = self.terminal(output.final_query, target_embeddings, positive_mask)
-        marginal = self.marginal(output.trace, target_embeddings, positive_mask)
-        components["terminal"] = terminal
-        components["marginal"] = marginal
-        total = self.config.terminal_weight * terminal + self.config.marginal_weight * marginal
+        positive, negative, _ = build_teacher_masks(target_ids, target_embeddings.device)
+        query = output["query"]
+        assert isinstance(query, Tensor)
+        terminal = self.terminal(query, target_embeddings, positive)
 
-        if self.config.complementary_claim_weight > 0 or self.config.binding_weight > 0:
-            if output.claims is None:
-                raise ValueError("claim losses enabled but model claim head is disabled")
-            claim_result = self.complementary_claim(output.claims, output.text_content_mask)
-            components["complementary_claim"] = claim_result.loss
-            components["diagnostic/claim_mass"] = claim_result.raw_claim_mass.mean().detach()
-            total = total + self.config.complementary_claim_weight * claim_result.loss
-            if self.config.binding_weight > 0:
-                claimed_semantics = claim_weighted_text_pool(
-                    output.claims, output.text_tokens, output.text_content_mask
-                )
-                binding = self.binding(output.intents, claimed_semantics)
-                components["binding"] = binding
-                total = total + self.config.binding_weight * binding
+        steps = output["steps"]
+        assert isinstance(steps, list)
+        score_zero = query.sum() * 0.0
+        pair_numerator = score_zero
+        gain_numerator = score_zero
+        pair_count = query.new_zeros(())
+        gain_count = query.new_zeros(())
+        invalid_rows = query.new_zeros(())
 
-        if self.config.factor_weight > 0 or self.config.unique_weight > 0:
-            if output.factors is None or output.auxiliary_anchor is None:
-                raise ValueError("factor losses enabled but model factor head is disabled")
-            factor_loss, geometry = self.factor(
-                output.factors, output.auxiliary_anchor, active_weights=active_weights
+        for step in steps:
+            live_indices = step["live_indices"]
+            current_query = step["current_query"]
+            candidate_queries = step["candidate_queries"]
+            predicted = step["scores"]
+            pos_live = positive.index_select(0, live_indices)
+            neg_live = negative.index_select(0, live_indices)
+            teacher, valid_rows = marginal_teacher_utilities(
+                current_query,
+                candidate_queries,
+                target_embeddings.detach(),
+                pos_live,
+                neg_live,
+                self.config.retrieval_temperature,
             )
-            components["factor"] = factor_loss
-            total = total + self.config.factor_weight * factor_loss
-            if self.config.unique_weight > 0:
-                if self.config.require_activity_weights_for_unique and active_weights is None:
-                    raise ValueError(
-                        "L_unique requires externally justified activity weights; STOP is not "
-                        "factor inactivity. Set the guard false only for an explicit all-active ablation."
-                    )
-                unique_loss, contribution = self.unique(geometry, active_weights=active_weights)
-                components["unique"] = unique_loss
-                components["diagnostic/unique_contribution"] = contribution.mean().detach()
-                total = total + self.config.unique_weight * unique_loss
+            pair, pair_weight = pairwise_ranking_loss(
+                predicted,
+                teacher,
+                valid_rows,
+                epsilon=self.config.epsilon_pair,
+                temperature=self.config.pair_temperature,
+                weight_temperature=self.config.pair_weight_temperature,
+            )
+            gain, gains = absolute_gain_loss(
+                predicted, teacher, valid_rows, self.config.huber_delta
+            )
+            pair_numerator = pair_numerator + pair * pair_weight
+            gain_numerator = gain_numerator + gain * gains.clamp_min(1)
+            pair_count = pair_count + pair_weight
+            gain_count = gain_count + gains
+            invalid_rows = invalid_rows + (~valid_rows).sum()
 
-        components["total"] = total
-        return components
+        pair = pair_numerator / pair_count.clamp_min(1e-8)
+        gain = gain_numerator / gain_count.clamp_min(1)
+        total = (
+            self.config.terminal_weight * terminal
+            + self.config.lambda_pair * pair
+            + self.config.lambda_gain * gain
+        )
+        return {
+            "terminal": terminal,
+            "pair": pair,
+            "gain": gain,
+            "teacher_invalid_rows": invalid_rows.detach(),
+            "total": total,
+        }

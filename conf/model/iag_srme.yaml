@@ -3,12 +3,10 @@ width: 256
 num_candidates: 4
 max_steps: 3
 num_heads: 8
-lambda_z: 0.10
-query_cap: 0.50
-selector_temperature: 1.0
-selector_gumbel_noise: true
-enable_claim_head: false
-enable_factor_head: false
-# Factor space is the checkpoint's retrieval space. A different dimension would
-# require an independently supervised semantic projection, which is not provided.
-factor_dim: null
+exec_dim: 256
+stop_enabled: true
+epsilon_stop: 0.0
+read_scale_init: 10.0
+exec_scale_init: 10.0
+exec_bias_init: 0.0
+score_dropout: 0.1

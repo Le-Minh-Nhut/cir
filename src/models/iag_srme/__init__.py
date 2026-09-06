@@ -1,15 +1,23 @@
-from .backbone import FGCLIPBackbone, FGCLIPRegime, assert_cache_legal
-from .model import IAGSRME, IAGSRMEConfig, IAGSRMECore
-from .outputs import BackboneOutput, IAGSRMEOutput, RecurrentStepOutput
+from .model import (
+    ActionFusion,
+    Executor,
+    Grounder,
+    IAGSRME,
+    IAGSRMEConfig,
+    ProposalNet,
+    ScoreNet,
+)
+from .utils.backbone import FGCLIPBackbone, FGCLIPRegime, assert_cache_legal
 
 __all__ = [
-    "BackboneOutput",
+    "ActionFusion",
+    "Executor",
     "FGCLIPBackbone",
     "FGCLIPRegime",
     "IAGSRME",
     "IAGSRMEConfig",
-    "IAGSRMECore",
-    "IAGSRMEOutput",
-    "RecurrentStepOutput",
+    "Grounder",
+    "ProposalNet",
+    "ScoreNet",
     "assert_cache_legal",
 ]

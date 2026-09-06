@@ -4,23 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
-from models.iag_srme.outputs import IAGSRMEOutput
-
-
-MATCHED_COMPUTE_CONTROLS = (
-    "full",
-    "zero_edit",
-    "single_candidate",
-    "repeat_candidate_1",
-    "repeat_candidate_2",
-    "repeat_candidate_3",
-    "repeat_candidate_4",
-    "repeat_best",
-    "clone_candidate_1",
-    "mean_candidate",
-    "random_candidate",
-    "frozen_t0_order",
-)
+MATCHED_COMPUTE_CONTROLS: tuple[str, ...] = ()
 
 
 def pairwise_cosine(values: Tensor) -> Tensor:
@@ -37,30 +21,22 @@ def functional_effective_rank(delta_q: Tensor, epsilon: float = 1e-8) -> Tensor:
     return torch.exp(-(probabilities * probabilities.clamp_min(epsilon).log()).sum(dim=-1))
 
 
-def summarize_trajectory(output: IAGSRMEOutput) -> dict[str, Tensor]:
-    supports = output.supports
-    support_fraction = (supports > 0).float().mean(dim=-1)
-    support_entropy = -(supports * supports.clamp_min(1e-8).log()).sum(dim=-1)
-    support_overlap = pairwise_cosine(supports)
-    actions = torch.stack([step.selected_index for step in output.trace], dim=1)
-    scores = torch.stack([step.scores for step in output.trace], dim=1)
-    delta_q = torch.stack([step.delta_q for step in output.trace], dim=1)
-    result = {
-        "intent_pairwise_cosine": pairwise_cosine(output.intents),
-        "grounding_support_fraction": support_fraction,
-        "grounding_entropy": support_entropy,
-        "grounding_overlap": support_overlap,
-        "functional_delta_q_pairwise_cosine": pairwise_cosine(delta_q),
-        "functional_effective_rank": functional_effective_rank(delta_q),
-        "selected_candidate_distribution": torch.nn.functional.one_hot(
-            actions, output.intents.shape[1] + 1
-        )
-        .float()
-        .mean(dim=(0, 1)),
-        "stop_frequency": actions.eq(output.intents.shape[1]).float().mean(),
-        "scores_over_time": scores,
-        "score_changes_over_time": scores[:, 1:] - scores[:, :-1],
+def summarize_trajectory(output: dict[str, object]) -> dict[str, Tensor]:
+    steps = output["steps"]
+    if not steps:
+        return {}
+    supports = torch.cat([step["exec_mask"] for step in steps], dim=0)
+    grounding = torch.cat([step["alpha_read"] for step in steps], dim=0)
+    effects = torch.cat([step["delta_q"] for step in steps], dim=0)
+    scores = torch.cat([step["scores"] for step in steps], dim=0)
+    selected = torch.cat([step["selected_idx"] for step in steps], dim=0)
+    candidates = scores.shape[-1]
+    return {
+        "read_entropy": -(grounding * grounding.clamp_min(1e-8).log()).sum(-1),
+        "execution_area": supports.mean(-1),
+        "grounding_overlap": pairwise_cosine(grounding),
+        "functional_delta_q_pairwise_cosine": pairwise_cosine(effects),
+        "functional_effective_rank": functional_effective_rank(effects),
+        "score_mean": scores.mean(),
+        "stop_frequency": selected.eq(candidates).float().mean(),
     }
-    if output.claims is not None:
-        result["claim_mass"] = output.claims.sum(dim=-1)
-    return result

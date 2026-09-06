@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import torch
@@ -13,7 +13,6 @@ from tqdm import tqdm
 
 from data.images import ImageBatch
 from losses.objective import IAGSRMEObjective
-from losses.retrieval import positive_mask_from_ids
 from models.iag_srme.model import IAGSRME
 
 
@@ -118,12 +117,10 @@ def train_one_epoch(
                 batch.attention_mask,
                 batch.content_mask,
             )
-            # Current target encoder participates normally in terminal retrieval. The marginal
-            # evaluator detaches this bank inside MarginalActionLoss only.
+            # Target encoding participates in terminal retrieval; the teacher path detaches it.
             target_embeddings = model.encode_global_images(batch.target_pixels)
             target_ids = [str(value) for value in batch.target_ids]
-            positives = positive_mask_from_ids(target_ids, device)
-            components = objective(output, target_embeddings, positives)
+            components = objective(output, target_embeddings, target_ids)
             loss = components["total"]
         scaler.scale(loss).backward()
         scaler.step(optimizer)
@@ -155,8 +152,21 @@ def save_checkpoint(
             "epoch": epoch,
             "metric": metric,
             "metadata": {
+                "architecture": "iag-srme-v2-r0",
+                "backbone_track": "B/FG-CLIP-v1",
                 "backbone_checkpoint": model.backbone.checkpoint,
                 "backbone_revision": model.backbone.revision,
+                "recurrent_state": "penultimate_patch_tokens_without_cls",
+                "global_query_initialization": "checkpoint_class_embedding",
+                "patch_grid": model.backbone.patch_grid,
+                "state_dim": model.backbone.state_dim,
+                "dense_dim": model.backbone.dense_dim,
+                "retrieval_dim": model.backbone.retrieval_dim,
+                "retrieval_normalization": "l2_fp32",
+                "model_config": asdict(model.config),
+                "objective_config": asdict(objective.config),
+                "teacher_policy": "identity_aware_false_negative_safe_in_batch",
+                "stop_bootstrap_curriculum": "none",
                 "precision": precision.name,
             },
         },
