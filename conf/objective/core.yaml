@@ -7,3 +7,33 @@ pair_temperature: 1.0
 pair_weight_temperature: 1.0
 epsilon_pair: 0.01
 huber_delta: 1.0
+
+# Independently switchable V2 semantic/functional auxiliaries.
+concept_enabled: true
+bind_enabled: true
+rel_ortho_enabled: true
+dpp_enabled: true
+correspondence_enabled: false
+
+lambda_c: 0.01
+lambda_bind: 0.01
+lambda_rel: 0.001
+lambda_dpp: 0.01
+
+tau_concept: 0.1
+tau_mil: 1.0
+beta_pos: 1.0
+beta_neg: 4.0
+concept_threshold: 0.5
+concept_min_frequency: 2
+concept_max_size: 2048
+concept_parser_version: fashioniq_concepts_v2
+
+num_relation_prototypes: 8
+tau_rel: 0.1
+
+kappa_dpp: 1.0
+sigma_dpp: 1.0
+tau_dpp: 0.1
+useful_threshold: 0.55
+dpp_jitter: 0.0001

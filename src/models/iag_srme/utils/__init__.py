@@ -4,6 +4,7 @@ from .retrieval import (
     marginal_teacher_utilities,
     teacher_retrieval_loss,
 )
+from .semantic import ConceptVocabulary, PARSER_VERSION, parse_instruction_concepts
 
 __all__ = [
     "FGCLIPBackbone",
@@ -12,4 +13,7 @@ __all__ = [
     "build_teacher_masks",
     "marginal_teacher_utilities",
     "teacher_retrieval_loss",
+    "ConceptVocabulary",
+    "PARSER_VERSION",
+    "parse_instruction_concepts",
 ]

@@ -10,7 +10,8 @@ src/models/iag_srme/
 └── utils/
     ├── __init__.py
     ├── backbone.py
-    └── retrieval.py
+    ├── retrieval.py
+    └── semantic.py
 ```
 
 `model.py` contains `ProposalNet`, `Grounder`, `ActionFusion`, `Executor`,
@@ -33,13 +34,18 @@ contracts are native final-block parameter reuse, current-state sensitivity, and
 vectorized/loop equality.
 
 `utils/retrieval.py` builds stable-identity multi-positive masks and the detached FP32
-common-pool marginal teacher. `src/losses/objective.py` combines terminal retrieval,
-confidence-weighted pairwise ranking, and absolute Huber gain calibration.
+common-pool marginal teacher. `utils/semantic.py` contains the deterministic,
+versioned instruction-only concept parser and training-split vocabulary.
+`src/losses/objective.py` combines terminal retrieval, confidence-weighted pairwise
+ranking, absolute Huber gain calibration, set-level concept coverage, relation
+binding/prototype regularization, and history-conditioned Functional DPP.
 
 The exported model forward accepts only reference images and instruction tensors. It
 returns a plain dictionary with terminal query/state, immutable initial state, STOP
 status, and per-step research diagnostics.
 
-The current code implements the clean A0/A1/A2 core. Optional A3-A6 semantic binding,
-concept coverage, and Functional DPP branches are intentionally not enabled or
-advertised as implemented.
+All A0-A6 terms are independently switchable. The checked-in `objective=core` config
+enables the A6 objective: `L_bind`, `L_c(t=0)`, relation-bank orthogonality, and
+Functional DPP in `delta_q` consequence space. Correspondence is explicitly disabled.
+The implementation record, measured checks, and open Track-B parity item are in
+`doc/CIR_IAG_SRME_V2_R0_EXPERIMENT_IMPLEMENTATION_STATUS_2026-09-06.md`.

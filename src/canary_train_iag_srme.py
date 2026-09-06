@@ -17,6 +17,7 @@ from datasets.fashioniq import FashionIQDataset
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig
 from runtime import configure_torch_runtime, seed_everything
+from train import build_concept_vocabulary, encode_concept_prototypes
 from training.engine import assert_training_setup, resolve_precision, trainable_parameters
 
 
@@ -88,7 +89,6 @@ def main() -> None:
     configure_torch_runtime(deterministic=True, benchmark=False)
     precision = resolve_precision(args.precision, device)
     model, tokenizer, processor = build_model(device)
-    objective = IAGSRMEObjective(ObjectiveConfig()).to(device)
 
     root = Path(args.dataset_root)
     dataset = FashionIQDataset(
@@ -98,6 +98,20 @@ def main() -> None:
         caption_policy="ordered_and",
         seed=args.seed,
     )
+    objective_config = ObjectiveConfig(
+        concept_enabled=True,
+        bind_enabled=True,
+        rel_ortho_enabled=True,
+        dpp_enabled=True,
+    )
+    vocabulary = build_concept_vocabulary(dataset, objective_config)
+    prototypes = encode_concept_prototypes(model, tokenizer, vocabulary, 77)
+    objective = IAGSRMEObjective(
+        objective_config,
+        state_dim=model.backbone.state_dim,
+        concept_vocabulary=vocabulary,
+        concept_prototypes=prototypes,
+    ).to(device)
     collator = FashionIQImageCollator(
         DirectoryImageStore(root / "images"),
         tokenizer,
@@ -135,7 +149,9 @@ def main() -> None:
                 batch.content_mask,
             )
             targets = model.encode_global_images(batch.target_pixels)
-            losses = objective(output, targets, batch.target_ids)
+            losses = objective(
+                output, targets, batch.target_ids, batch.modification_texts
+            )
         scaler.scale(losses["total"]).backward()
         scaler.step(optimizer)
         scaler.update()
@@ -146,6 +162,10 @@ def main() -> None:
                 "terminal": float(losses["terminal"].detach()),
                 "pair": float(losses["pair"].detach()),
                 "gain": float(losses["gain"].detach()),
+                "concept": float(losses["concept_loss"].detach()),
+                "bind": float(losses["bind_loss"].detach()),
+                "rel_ortho": float(losses["rel_ortho_loss"].detach()),
+                "dpp_raw": float(losses["dpp_raw"].detach()),
                 "rollout_steps": len(output["steps"]),
                 "stopped": int(output["stopped"].sum()),
             }

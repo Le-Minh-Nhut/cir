@@ -120,7 +120,9 @@ def train_one_epoch(
             # Target encoding participates in terminal retrieval; the teacher path detaches it.
             target_embeddings = model.encode_global_images(batch.target_pixels)
             target_ids = [str(value) for value in batch.target_ids]
-            components = objective(output, target_embeddings, target_ids)
+            components = objective(
+                output, target_embeddings, target_ids, batch.modification_texts
+            )
             loss = components["total"]
         scaler.scale(loss).backward()
         scaler.step(optimizer)
@@ -166,6 +168,23 @@ def save_checkpoint(
                 "model_config": asdict(model.config),
                 "objective_config": asdict(objective.config),
                 "teacher_policy": "identity_aware_false_negative_safe_in_batch",
+                "concept_parser_version": objective.config.concept_parser_version,
+                "concept_vocabulary_size": (
+                    len(objective.concept.vocabulary.concepts)
+                    if objective.concept is not None
+                    else 0
+                ),
+                "concept_vocabulary_fingerprint": (
+                    objective.concept.vocabulary.fingerprint
+                    if objective.concept is not None
+                    else None
+                ),
+                "concept_vocabulary": (
+                    objective.concept.vocabulary.concepts
+                    if objective.concept is not None
+                    else ()
+                ),
+                "correspondence": "disabled",
                 "stop_bootstrap_curriculum": "none",
                 "precision": precision.name,
             },

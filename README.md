@@ -14,10 +14,16 @@ The current implementation is canonical Track B (FG-CLIP v1 Base):
 - one shared ScoreNet predicts absolute marginal utility against KEEP/STOP = 0;
 - rollout uses hard argmax/gather, with no Gumbel, straight-through estimator, or state mixture;
 - training targets appear only in the external retrieval teacher and terminal loss.
+- instruction concepts supervise the pooled proposal set at `t=0` only;
+- relation binding uses a prototype bank separate from proposal queries;
+- Functional DPP operates on retrieval consequences `delta_q` and detached executed history;
+- correspondence is disabled.
 
 The complete architecture is in
 [`src/models/iag_srme/model.py`](src/models/iag_srme/model.py). FG-CLIP-specific
 state/readout code and teacher retrieval helpers are the only extracted utilities.
+The current implementation/verification snapshot is recorded separately in the
+[V2 R0 experiment status](doc/CIR_IAG_SRME_V2_R0_EXPERIMENT_IMPLEMENTATION_STATUS_2026-09-06.md).
 
 ## Setup
 
@@ -63,6 +69,10 @@ python src/train.py \
   objective=core \
   experiment=iag_srme_base_full
 ```
+
+The default objective config enables all requested A6 auxiliaries. Each term can be
+ablated independently with Hydra overrides such as
+`objective.concept_enabled=false` or `objective.dpp_enabled=false`.
 
 Dataset loading, FashionIQ evaluation, AMP policy, checkpointing, optimizer ownership
 checks, and stable `CIRSample.target_id` handling are retained from the clean-rewrite
