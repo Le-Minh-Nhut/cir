@@ -1,0 +1,345 @@
+{
+  "checkpoint_path": "outputs/r0_ncls_text_strong_aux/best.pt",
+  "checkpoint": {
+    "epoch": 18,
+    "metric": 28.244677186012268,
+    "experiment_identity": "R0-NCLS-TEXT",
+    "global_readout_mode": "native_cls",
+    "finetune_policy": "text_only",
+    "objective_config": {
+      "terminal_weight": 1.0,
+      "lambda_pair": 0.5,
+      "lambda_gain": 0.5,
+      "retrieval_temperature": 0.07,
+      "pair_temperature": 1.0,
+      "pair_weight_temperature": 1.0,
+      "epsilon_pair": 0.01,
+      "huber_delta": 1.0,
+      "concept_enabled": true,
+      "bind_enabled": true,
+      "rel_ortho_enabled": true,
+      "dpp_enabled": true,
+      "correspondence_enabled": false,
+      "lambda_c": 0.6,
+      "lambda_bind": 1.0,
+      "lambda_rel": 0.6,
+      "lambda_dpp": 0.6,
+      "tau_concept": 0.1,
+      "tau_mil": 1.0,
+      "beta_pos": 1.0,
+      "beta_neg": 4.0,
+      "concept_threshold": 0.5,
+      "concept_min_frequency": 2,
+      "concept_max_size": 2048,
+      "concept_parser_version": "fashioniq_concepts_v2",
+      "num_relation_prototypes": 8,
+      "tau_rel": 0.1,
+      "kappa_dpp": 1.0,
+      "sigma_dpp": 1.0,
+      "tau_dpp": 0.1,
+      "useful_threshold": 0.55,
+      "dpp_jitter": 0.0001
+    }
+  },
+  "num_candidates": 4,
+  "diagnostic_batches": 20,
+  "diagnostic_batch_size": 8,
+  "slot_stats": [
+    {
+      "slot": "C0",
+      "selected_rate": 0.042283298097251586,
+      "oracle_rate": 0.07399577167019028,
+      "mean_score": -0.158124929754729,
+      "mean_teacher_utility": -0.03418250769439762,
+      "positive_utility_rate": 0.3276955602536998,
+      "harmful_selected_rate": 0.45,
+      "dpp_useful_rate": 0.13107822410147993
+    },
+    {
+      "slot": "C1",
+      "selected_rate": 0.10570824524312897,
+      "oracle_rate": 0.10993657505285412,
+      "mean_score": -0.10797314764833349,
+      "mean_teacher_utility": -0.02949935739690607,
+      "positive_utility_rate": 0.4587737843551797,
+      "harmful_selected_rate": 0.4,
+      "dpp_useful_rate": 0.18816067653276955
+    },
+    {
+      "slot": "C2",
+      "selected_rate": 0.11627906976744186,
+      "oracle_rate": 0.08879492600422834,
+      "mean_score": -0.08015166074982658,
+      "mean_teacher_utility": -0.007727242423414428,
+      "positive_utility_rate": 0.35306553911205074,
+      "harmful_selected_rate": 0.5818181818181818,
+      "dpp_useful_rate": 0.09725158562367865
+    },
+    {
+      "slot": "C3",
+      "selected_rate": 0.7272727272727273,
+      "oracle_rate": 0.6321353065539113,
+      "mean_score": 0.3391035374324871,
+      "mean_teacher_utility": 0.03119242418139984,
+      "positive_utility_rate": 0.6723044397463002,
+      "harmful_selected_rate": 0.1686046511627907,
+      "dpp_useful_rate": 0.5708245243128964
+    },
+    {
+      "slot": "STOP",
+      "selected_rate": 0.008456659619450317,
+      "oracle_rate": 0.09513742071881606,
+      "mean_score": 0.0,
+      "mean_teacher_utility": 0.0,
+      "positive_utility_rate": 0.0,
+      "harmful_selected_rate": 0.0,
+      "dpp_useful_rate": 0.0
+    }
+  ],
+  "selector": {
+    "exact_oracle_accuracy": 0.6849894291754757,
+    "stop_execute_accuracy": 0.9006342494714588,
+    "harmful_execution_rate": 0.25158562367864695,
+    "missed_opportunity_stop_rate": 0.006342494714587738,
+    "selected_teacher_utility": 0.23774560712608675,
+    "oracle_teacher_utility": 0.30610456779189643,
+    "oracle_regret": 0.06835896066580968,
+    "score_teacher_pearson": 0.612447202205658,
+    "selected_histogram": {
+      "0": 20,
+      "1": 50,
+      "2": 55,
+      "3": 344,
+      "4": 4
+    },
+    "oracle_histogram": {
+      "0": 35,
+      "1": 52,
+      "2": 42,
+      "3": 299,
+      "4": 45
+    }
+  },
+  "selector_vs_oracle_confusion_rate": [
+    [
+      0.014799154334038054,
+      0.006342494714587738,
+      0.006342494714587738,
+      0.006342494714587738,
+      0.008456659619450317
+    ],
+    [
+      0.008456659619450317,
+      0.04439746300211417,
+      0.006342494714587738,
+      0.021141649048625793,
+      0.02536997885835095
+    ],
+    [
+      0.016913319238900635,
+      0.016913319238900635,
+      0.03382663847780127,
+      0.014799154334038054,
+      0.03382663847780127
+    ],
+    [
+      0.03382663847780127,
+      0.03805496828752643,
+      0.040169133192389,
+      0.5898520084566596,
+      0.02536997885835095
+    ],
+    [
+      0.0,
+      0.004228329809725159,
+      0.0021141649048625794,
+      0.0,
+      0.0021141649048625794
+    ]
+  ],
+  "pairwise": {
+    "proposal_cosine": [
+      [
+        0.9999999980131785,
+        0.7392281154791515,
+        0.7900319814682006,
+        0.08066921268279353
+      ],
+      [
+        0.7392281154791515,
+        1.0000000009934107,
+        0.4304725209871928,
+        0.42395884096622466
+      ],
+      [
+        0.7900319814682006,
+        0.4304725209871928,
+        1.0000000019868216,
+        -0.20788285167266926
+      ],
+      [
+        0.08066921268279353,
+        0.42395884096622466,
+        -0.20788285167266926,
+        0.9999999980131785
+      ]
+    ],
+    "action_cosine": [
+      [
+        0.999999996026357,
+        0.7334257304668427,
+        0.7291685948769252,
+        0.06253709681332112
+      ],
+      [
+        0.7334257304668427,
+        0.9999999990065892,
+        0.36348500065505507,
+        0.2598224333565061
+      ],
+      [
+        0.7291685948769252,
+        0.36348500065505507,
+        0.9999999970197677,
+        -0.06763294593741496
+      ],
+      [
+        0.06253709681332112,
+        0.2598224333565061,
+        -0.06763294593741496,
+        0.9999999940395355
+      ]
+    ],
+    "delta_q_cosine": [
+      [
+        0.9999999980131785,
+        0.10133657391027857,
+        0.1693803982188304,
+        -0.1101434317107002
+      ],
+      [
+        0.10133657391027857,
+        0.9999999970197677,
+        -0.02354072714418483,
+        0.05891803151074176
+      ],
+      [
+        0.1693803982188304,
+        -0.02354072714418483,
+        0.9999999980131785,
+        -0.09584786319173873
+      ],
+      [
+        -0.1101434317107002,
+        0.05891803151074176,
+        -0.09584786319173873,
+        1.0000000009934107
+      ]
+    ],
+    "exec_mask_jaccard": [
+      [
+        0.9979166666666667,
+        0.27396547198295595,
+        0.618677968531847,
+        0.1124556773963074
+      ],
+      [
+        0.27396547198295595,
+        0.9770833333333333,
+        0.088324793210874,
+        0.09484273338069518
+      ],
+      [
+        0.618677968531847,
+        0.088324793210874,
+        1.0,
+        0.1650001766781012
+      ],
+      [
+        0.1124556773963074,
+        0.09484273338069518,
+        0.1650001766781012,
+        0.9958333333333333
+      ]
+    ],
+    "candidate_state_l2": [
+      [
+        0.0,
+        37.56158038775126,
+        22.633659219741823,
+        180.53047472635905
+      ],
+      [
+        37.56158038775126,
+        0.0,
+        43.35927996635437,
+        164.3354242960612
+      ],
+      [
+        22.633659219741823,
+        43.35927996635437,
+        0.0,
+        181.6286184946696
+      ],
+      [
+        180.53047472635905,
+        164.3354242960612,
+        181.6286184946696,
+        0.0
+      ]
+    ]
+  },
+  "proposal_query_prior_cosine": [
+    [
+      1.0,
+      -0.00702810101211071,
+      0.017635637894272804,
+      -0.007167696952819824
+    ],
+    [
+      -0.00702810101211071,
+      1.0,
+      -0.07808886468410492,
+      0.035601623356342316
+    ],
+    [
+      0.017635637894272804,
+      -0.07808886468410492,
+      1.0,
+      -0.09660079330205917
+    ],
+    [
+      -0.007167696952819824,
+      0.035601623356342316,
+      -0.09660079330205917,
+      1.0
+    ]
+  ],
+  "dpp": {
+    "mean_useful_candidate_count": 0.9873150105708245,
+    "valid_row_rate": 0.21141649048625794,
+    "positive_candidate_fraction": 0.45295983086680763
+  },
+  "flags": [
+    {
+      "level": "WARN",
+      "code": "SELECTOR_SLOT_COLLAPSE",
+      "message": "C3 is selected 72.7% of decisions."
+    },
+    {
+      "level": "WARN",
+      "code": "ORACLE_SLOT_BIAS",
+      "message": "Oracle itself prefers C3 63.2% of decisions."
+    },
+    {
+      "level": "WARN",
+      "code": "HARMFUL_EXECUTIONS",
+      "message": "25.2% of selected executions are teacher-negative."
+    },
+    {
+      "level": "WARN",
+      "code": "DPP_STARVED_FOR_GOOD_CANDIDATES",
+      "message": "Only 0.99 useful candidates on average; diversity exists but candidate quality is insufficient."
+    }
+  ]
+}

@@ -35,7 +35,7 @@ MANIFEST
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-
+runs/
 teacher/repos/
 teacher/outputs/
 teacher/checkpoints
