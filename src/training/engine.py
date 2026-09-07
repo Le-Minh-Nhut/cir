@@ -3,7 +3,9 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
+import json
 from pathlib import Path
+from typing import Any
 
 import torch
 from torch import nn
@@ -22,6 +24,83 @@ class PrecisionPolicy:
     autocast_enabled: bool
     autocast_dtype: torch.dtype | None
     scaler_enabled: bool
+
+
+class JSONLLogger:
+    """Tiny append-only run logger; one self-contained JSON object per line."""
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def write(self, record: Mapping[str, Any]) -> None:
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(dict(record), allow_nan=True) + "\n")
+
+
+def _small_trainable_named(module: nn.Module | None) -> tuple[str, nn.Parameter] | None:
+    if module is None:
+        return None
+    candidates = [
+        (name, parameter)
+        for name, parameter in module.named_parameters()
+        if parameter.requires_grad
+    ]
+    return min(candidates, key=lambda item: item[1].numel(), default=None)
+
+
+def build_optimizer_probes(model: IAGSRME) -> dict[str, tuple[str, nn.Parameter]]:
+    """One representative tensor per scientifically relevant trainable group."""
+
+    modules = {
+        "text_encoder": getattr(model.backbone.model, "text_model", None),
+        "proposal": model.proposal,
+        "grounder": model.grounder,
+        "action_fusion": model.action_fusion,
+        "executor": model.executor,
+        "score_net": model.score_net,
+    }
+    probes = {}
+    for group, module in modules.items():
+        selected = _small_trainable_named(module)
+        if selected is not None:
+            probes[group] = selected
+    return probes
+
+
+def _gradient_diagnostics(parameters: list[nn.Parameter]) -> tuple[int, int]:
+    nonfinite = 0
+    elements = 0
+    for parameter in parameters:
+        if parameter.grad is None:
+            continue
+        gradient = parameter.grad.detach()
+        elements += gradient.numel()
+        nonfinite += int((~torch.isfinite(gradient)).sum())
+    return nonfinite, elements
+
+
+def _probe_diagnostics(
+    probes: Mapping[str, tuple[str, nn.Parameter]],
+    before: Mapping[str, torch.Tensor],
+) -> dict[str, dict[str, float | str | None]]:
+    report = {}
+    for group, (name, parameter) in probes.items():
+        value = parameter.detach().float()
+        gradient = parameter.grad
+        update = value - before[group]
+        parameter_norm = float(value.norm())
+        update_norm = float(update.norm())
+        report[group] = {
+            "parameter": name,
+            "parameter_norm": parameter_norm,
+            "gradient_norm": (
+                float(gradient.detach().float().norm()) if gradient is not None else None
+            ),
+            "parameter_delta_norm": update_norm,
+            "update_to_weight_ratio": update_norm / max(parameter_norm, 1e-12),
+        }
+    return report
 
 
 def resolve_precision(name: str, device: torch.device) -> PrecisionPolicy:
@@ -47,9 +126,7 @@ def trainable_parameters(*modules: nn.Module) -> list[nn.Parameter]:
     ]
 
 
-def parameter_count_diagnostics(
-    model: IAGSRME, objective: IAGSRMEObjective
-) -> dict[str, int]:
+def parameter_count_diagnostics(model: IAGSRME, objective: IAGSRMEObjective) -> dict[str, int]:
     """Compact parameter ownership summary for fine-tuning ablations."""
 
     def count(modules: nn.Module | tuple[nn.Module, ...], trainable: bool = True) -> int:
@@ -72,9 +149,7 @@ def parameter_count_diagnostics(
         "total_parameters": count((model, objective), trainable=False),
         "total_trainable_parameters": count((model, objective)),
         "trainable_vision_parameters": count(model.backbone.model.vision_model),
-        "trainable_visual_projection_parameters": count(
-            model.backbone.model.visual_projection
-        ),
+        "trainable_visual_projection_parameters": count(model.backbone.model.visual_projection),
         "trainable_text_parameters": count(model.backbone.model.text_model),
         "trainable_text_adapter_parameters": count(model.backbone.text_adapter),
         "trainable_q_g_parameters": (
@@ -133,13 +208,22 @@ def train_one_epoch(
     *,
     precision: PrecisionPolicy,
     epoch: int,
+    logger: JSONLLogger | None = None,
+    optimizer_step_start: int = 0,
+    batch_step_start: int = 0,
+    log_interval: int = 1,
 ) -> dict[str, float]:
     model.train()
     objective.train()
     totals: defaultdict[str, float] = defaultdict(float)
     steps = 0
+    true_optimizer_steps = optimizer_step_start
+    batch_steps = batch_step_start
+    parameters = trainable_parameters(model, objective)
+    probes = build_optimizer_probes(model)
     progress = tqdm(loader, desc=f"train {epoch + 1}", dynamic_ncols=True)
     for cpu_batch in progress:
+        batch_steps += 1
         batch = cpu_batch.to(device)
         if batch.target_pixels is None or any(value is None for value in batch.target_ids):
             raise ValueError("training batch requires raw target images and IDs")
@@ -158,20 +242,51 @@ def train_one_epoch(
             # Target encoding participates in terminal retrieval; the teacher path detaches it.
             target_embeddings = model.encode_global_images(batch.target_pixels)
             target_ids = [str(value) for value in batch.target_ids]
-            components = objective(
-                output, target_embeddings, target_ids, batch.modification_texts
-            )
+            components = objective(output, target_embeddings, target_ids, batch.modification_texts)
             loss = components["total"]
         scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
+        nonfinite_gradients, gradient_elements = _gradient_diagnostics(parameters)
+        before = {
+            group: parameter.detach().float().clone() for group, (_, parameter) in probes.items()
+        }
+        scale_before = float(scaler.get_scale())
         scaler.step(optimizer)
         scaler.update()
+        scale_after = float(scaler.get_scale())
+        scale_decreased = scale_after < scale_before
+        skipped = bool(precision.scaler_enabled and scale_decreased)
+        if not skipped:
+            true_optimizer_steps += 1
         steps += 1
         for name, value in components.items():
             totals[name] += float(value.detach())
         progress.set_postfix(loss=f"{float(loss.detach()):.4f}")
+        if logger is not None and (steps % max(log_interval, 1) == 0):
+            component_values = {name: float(value.detach()) for name, value in components.items()}
+            logger.write(
+                {
+                    "record_type": "train_update",
+                    "epoch": epoch + 1,
+                    "optimizer_step": true_optimizer_steps,
+                    "batch_step": batch_steps,
+                    "learning_rate": float(optimizer.param_groups[0]["lr"]),
+                    "learning_rates": [float(group["lr"]) for group in optimizer.param_groups],
+                    "amp_scale": scale_after,
+                    "amp_scale_decreased": scale_decreased,
+                    "amp_skipped_update_inferred": skipped,
+                    "nonfinite_gradient_count": nonfinite_gradients,
+                    "gradient_element_count": gradient_elements,
+                    **component_values,
+                    "parameter_updates": _probe_diagnostics(probes, before),
+                }
+            )
     if steps == 0:
         raise RuntimeError("empty training loader")
-    return {name: value / steps for name, value in totals.items()}
+    result = {name: value / steps for name, value in totals.items()}
+    result["optimizer_step_count"] = float(true_optimizer_steps)
+    result["batch_step_count"] = float(batch_steps)
+    return result
 
 
 def save_checkpoint(
@@ -182,6 +297,11 @@ def save_checkpoint(
     epoch: int,
     metric: float,
     precision: PrecisionPolicy,
+    *,
+    scaler: torch.amp.GradScaler | None = None,
+    optimizer_step: int = 0,
+    batch_step: int = 0,
+    run_metadata: Mapping[str, Any] | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -189,6 +309,9 @@ def save_checkpoint(
             "model": model.state_dict(),
             "objective": objective.state_dict(),
             "optimizer": optimizer.state_dict(),
+            "scaler": scaler.state_dict() if scaler is not None else None,
+            "optimizer_step": optimizer_step,
+            "batch_step": batch_step,
             "epoch": epoch,
             "metric": metric,
             "metadata": {
@@ -229,13 +352,13 @@ def save_checkpoint(
                     else None
                 ),
                 "concept_vocabulary": (
-                    objective.concept.vocabulary.concepts
-                    if objective.concept is not None
-                    else ()
+                    objective.concept.vocabulary.concepts if objective.concept is not None else ()
                 ),
                 "correspondence": "disabled",
                 "stop_bootstrap_curriculum": "none",
                 "precision": precision.name,
+                "number_of_optimizer_updates": optimizer_step,
+                "run": dict(run_metadata or {}),
             },
         },
         path,
@@ -254,11 +377,17 @@ def fit(
     output_dir: str | Path,
     precision: PrecisionPolicy,
     primary_metric: str = "mean_recall",
+    logging_interval: int = 1,
+    run_metadata: Mapping[str, Any] | None = None,
 ) -> None:
     assert_training_setup(model, objective, optimizer, device)
     destination = Path(output_dir)
     scaler = torch.amp.GradScaler("cuda", enabled=precision.scaler_enabled)
+    logger = JSONLLogger(destination / "metrics.jsonl")
+    logger.write({"record_type": "run_start", **dict(run_metadata or {})})
     best = float("-inf")
+    optimizer_step = 0
+    batch_step = 0
     for epoch in range(epochs):
         set_epoch(train_loader, epoch)
         training = train_one_epoch(
@@ -270,8 +399,23 @@ def fit(
             device,
             precision=precision,
             epoch=epoch,
+            logger=logger,
+            optimizer_step_start=optimizer_step,
+            batch_step_start=batch_step,
+            log_interval=logging_interval,
         )
+        optimizer_step = int(training.pop("optimizer_step_count"))
+        batch_step = int(training.pop("batch_step_count"))
         validation = dict(evaluate(model))
+        logger.write(
+            {
+                "record_type": "validation",
+                "epoch": epoch + 1,
+                "optimizer_step": optimizer_step,
+                "batch_step": batch_step,
+                **validation,
+            }
+        )
         metric = float(validation[primary_metric])
         save_checkpoint(
             destination / "last.pt",
@@ -281,6 +425,10 @@ def fit(
             epoch + 1,
             metric,
             precision,
+            scaler=scaler,
+            optimizer_step=optimizer_step,
+            batch_step=batch_step,
+            run_metadata=run_metadata,
         )
         if metric > best:
             best = metric
@@ -292,6 +440,10 @@ def fit(
                 epoch + 1,
                 metric,
                 precision,
+                scaler=scaler,
+                optimizer_step=optimizer_step,
+                batch_step=batch_step,
+                run_metadata=run_metadata,
             )
         print(
             f"epoch={epoch + 1}/{epochs} total={training['total']:.4f} "

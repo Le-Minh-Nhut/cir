@@ -78,7 +78,9 @@ def test_text_only_freezes_visual_weights_but_keeps_text_and_tasks_trainable() -
     model = _model(backbone)
     backbone.train()
 
-    assert all(not parameter.requires_grad for parameter in backbone.model.vision_model.parameters())
+    assert all(
+        not parameter.requires_grad for parameter in backbone.model.vision_model.parameters()
+    )
     assert all(
         not parameter.requires_grad for parameter in backbone.model.visual_projection.parameters()
     )
@@ -179,7 +181,9 @@ def test_text_only_optimizer_excludes_frozen_visual_parameters() -> None:
 
     assert optimizer_ids.isdisjoint(frozen_visual_ids)
     assert id(backbone.q_G) in optimizer_ids
-    assert all(id(parameter) in optimizer_ids for parameter in backbone.model.text_model.parameters())
+    assert all(
+        id(parameter) in optimizer_ids for parameter in backbone.model.text_model.parameters()
+    )
     assert all(id(parameter) in optimizer_ids for parameter in backbone.text_adapter.parameters())
     assert all(id(parameter) in optimizer_ids for parameter in model.executor.parameters())
 
@@ -194,8 +198,7 @@ def test_text_only_optimizer_excludes_frozen_visual_parameters() -> None:
     native = _text_only_backbone("native_cls")
     native_model = _model(native)
     native_optimizer_ids = {
-        id(parameter)
-        for parameter in trainable_parameters(native_model, objective)
+        id(parameter) for parameter in trainable_parameters(native_model, objective)
     }
     assert id(native.q_G) not in native_optimizer_ids
 
@@ -214,8 +217,12 @@ def test_checkpoint_records_explicit_finetune_policy(tmp_path) -> None:
         epoch=0,
         metric=0.0,
         precision=PrecisionPolicy("fp32", False, None, False),
+        optimizer_step=17,
+        batch_step=19,
+        run_metadata={"seed": 42, "gradient_accumulation": 1},
     )
-    metadata = torch.load(path, weights_only=True)["metadata"]
+    saved = torch.load(path, weights_only=True)
+    metadata = saved["metadata"]
 
     assert metadata["global_readout_mode"] == "learned_qg"
     assert metadata["readout_experiment"] == "R0-QG"
@@ -224,3 +231,7 @@ def test_checkpoint_records_explicit_finetune_policy(tmp_path) -> None:
     assert metadata["train_vision"] is False
     assert metadata["train_text"] is True
     assert metadata["train_text_projection"] is False
+    assert saved["optimizer_step"] == 17
+    assert saved["batch_step"] == 19
+    assert metadata["number_of_optimizer_updates"] == 17
+    assert metadata["run"]["seed"] == 42

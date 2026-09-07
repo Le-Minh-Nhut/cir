@@ -86,3 +86,42 @@ def test_evaluation_rejects_checkpoint_from_another_finetune_policy() -> None:
             expected_train_text=True,
             expected_train_text_projection=False,
         )
+
+
+def test_evaluation_detects_behavioral_checkpoint_mismatch_and_labels_override() -> None:
+    metadata = {
+        "backbone_checkpoint": "qihoo360/fg-clip-base",
+        "backbone_revision": "verified-revision",
+        "model_config": {
+            "num_candidates": 4,
+            "max_steps": 3,
+            "stop_enabled": True,
+            "epsilon_stop": 0.0,
+        },
+    }
+    expected = {
+        "num_candidates": 4,
+        "max_steps": 1,
+        "stop_enabled": False,
+        "epsilon_stop": 0.1,
+    }
+    with pytest.raises(ValueError, match="behavior mismatch"):
+        validate_checkpoint_backbone_metadata(
+            metadata,
+            "qihoo360/fg-clip-base",
+            "verified-revision",
+            expected_model_config=expected,
+        )
+
+    mismatches = validate_checkpoint_backbone_metadata(
+        metadata,
+        "qihoo360/fg-clip-base",
+        "verified-revision",
+        expected_model_config=expected,
+        allow_counterfactual=True,
+    )
+    assert {item["field"] for item in mismatches} == {
+        "max_steps",
+        "stop_enabled",
+        "epsilon_stop",
+    }

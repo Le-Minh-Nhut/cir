@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Candidate/selector diagnostics for CIR IAG-SRME V2 R0.
 
@@ -18,6 +16,8 @@ Read-only: no optimizer.step(), no checkpoint mutation.
 Target information is used only for diagnostics.
 """
 
+from __future__ import annotations
+
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -34,10 +34,14 @@ from torch.utils.data import DataLoader
 from data.images import FashionIQImageCollator
 from datasets.common import DirectoryImageStore
 from datasets.fashioniq import FashionIQDataset
+from diagnostics.cohort import category_shuffle_indices, load_or_create_manifest
+from diagnostics.selection import selection_metrics, transition_retrieval
+from evaluate import validate_checkpoint_backbone_metadata
+from evaluation.fashioniq import build_validation_datasets, evaluate_fashioniq
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from models.iag_srme.utils.retrieval import (
     build_teacher_masks,
-    marginal_teacher_utilities,
+    teacher_retrieval_loss,
 )
 from runtime import configure_torch_runtime, resolve_device, seed_everything
 from train import (
@@ -122,9 +126,7 @@ def build_objective_from_checkpoint(
     )
 
     if "objective" in checkpoint:
-        missing, unexpected = objective.load_state_dict(
-            checkpoint["objective"], strict=False
-        )
+        missing, unexpected = objective.load_state_dict(checkpoint["objective"], strict=False)
         if missing or unexpected:
             print(
                 "[diagnostic] objective state mismatch:",
@@ -148,9 +150,7 @@ def format_matrix(matrix: list[list[float]], labels: list[str]) -> str:
         "|---|" + "|".join(["---:"] * len(labels)) + "|",
     ]
     for label, row in zip(labels, matrix):
-        lines.append(
-            "| " + label + " | " + " | ".join(f"{v:.4f}" for v in row) + " |"
-        )
+        lines.append("| " + label + " | " + " | ".join(f"{v:.4f}" for v in row) + " |")
     return "\n".join(lines)
 
 
@@ -187,6 +187,8 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         )
 
     sel = report["selector"]
+    detailed = report["selection_metrics"]
+    stop = detailed["stop"]
     lines += [
         "",
         "## Selector summary",
@@ -199,6 +201,15 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         f"- oracle teacher utility: `{sel['oracle_teacher_utility']:.5f}`",
         f"- oracle regret: `{sel['oracle_regret']:.5f}`",
         f"- ScoreNet/teacher Pearson: `{sel['score_teacher_pearson']:.4f}`",
+        f"- selected/oracle agreement: `{detailed['selected_equals_oracle_fraction']:.4f}`",
+        f"- selected utility: `{detailed['mean_selected_utility']:.5f}`",
+        f"- oracle utility: `{detailed['mean_oracle_utility']:.5f}`",
+        f"- regret: `{detailed['mean_regret']:.5f}`",
+        f"- STOP precision / recall / F1: `{stop['precision']:.4f}` / "
+        f"`{stop['recall']:.4f}` / `{stop['f1']:.4f}`",
+        f"- harmful executions: `{stop['harmful_execution_count']}` / "
+        f"`{stop['executed_action_count']}` = "
+        f"`{stop['harmful_execution_fraction_of_executions']:.4f}`",
         "",
         "### Selector vs oracle confusion",
         "",
@@ -246,6 +257,14 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         "",
         "> Target-derived teacher utility is diagnostic only and is never an inference input.",
     ]
+    if report.get("caption_sensitivity"):
+        lines += ["", "## Correct vs shuffled-caption sensitivity", ""]
+        for name, values in report["caption_sensitivity"].items():
+            lines.append(f"- `{name}`: mean `{values['mean']:.6f}` (n={values['count']})")
+    if report.get("official_fashioniq"):
+        lines += ["", "## Official FashionIQ retrieval", ""]
+        for name, value in sorted(report["official_fashioniq"].items()):
+            lines.append(f"- `{name}`: `{value:.6f}`")
     return "\n".join(lines)
 
 
@@ -258,6 +277,14 @@ def main(cfg: DictConfig) -> None:
     checkpoint_path = Path(str(checkpoint_value))
     diagnostic_batches = int(cfg.get("diagnostic_batches", 20))
     diagnostic_batch_size = int(cfg.get("diagnostic_batch_size", 8))
+    manifest_value = cfg.get("diagnostic_manifest")
+    if manifest_value is None:
+        raise ValueError(
+            "pass +diagnostic_manifest=path/to/shared_manifest.json; "
+            "OLD and STRONG must replay the same persistent cohort"
+        )
+    diagnostic_split = str(cfg.get("diagnostic_split", "train"))
+    run_official_evaluation = bool(cfg.get("diagnostic_official_eval", False))
 
     seed_everything(int(cfg.seed), bool(cfg.runtime.deterministic))
     configure_torch_runtime(
@@ -268,6 +295,24 @@ def main(cfg: DictConfig) -> None:
     precision = resolve_precision(str(cfg.runtime.precision), device)
 
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    validate_checkpoint_backbone_metadata(
+        checkpoint.get("metadata"),
+        str(cfg.backbone.checkpoint),
+        str(cfg.backbone.revision),
+        str(cfg.backbone.global_readout_mode),
+        expected_readout_experiment=str(cfg.backbone.readout_experiment),
+        expected_finetune_policy=str(cfg.backbone.finetune_policy),
+        expected_train_vision=bool(cfg.backbone.train_vision),
+        expected_train_text=bool(cfg.backbone.train_text),
+        expected_train_text_projection=bool(cfg.backbone.train_text_projection),
+        expected_model_config={
+            "num_candidates": int(cfg.model.num_candidates),
+            "max_steps": int(cfg.model.max_steps),
+            "stop_enabled": bool(cfg.model.stop_enabled),
+            "epsilon_stop": float(cfg.model.epsilon_stop),
+        },
+        allow_counterfactual=bool(cfg.get("allow_counterfactual_eval", False)),
+    )
     model, tokenizer, processor = build_model(cfg)
     model.load_state_dict(checkpoint["model"])
     model.to(device).eval()
@@ -276,16 +321,30 @@ def main(cfg: DictConfig) -> None:
     annotation_root = dataset_root / str(cfg.dataset.annotation_dir)
     image_store = DirectoryImageStore(dataset_root / str(cfg.dataset.image_dir))
 
-    train_dataset = FashionIQDataset(
+    caption_policy = (
+        str(cfg.experiment.train_caption_policy)
+        if diagnostic_split == "train"
+        else str(cfg.experiment.val_caption_policy)
+    )
+    concept_dataset = FashionIQDataset(
         annotation_root,
         "train",
         CATEGORIES,
         caption_policy=str(cfg.experiment.train_caption_policy),
         seed=int(cfg.seed),
     )
-    objective = build_objective_from_checkpoint(
-        cfg, checkpoint, model, tokenizer, train_dataset
-    ).to(device).eval()
+    diagnostic_dataset = FashionIQDataset(
+        annotation_root,
+        diagnostic_split,
+        CATEGORIES,
+        caption_policy=caption_policy,
+        seed=int(cfg.seed),
+    )
+    objective = (
+        build_objective_from_checkpoint(cfg, checkpoint, model, tokenizer, concept_dataset)
+        .to(device)
+        .eval()
+    )
 
     collator = FashionIQImageCollator(
         image_store,
@@ -294,15 +353,23 @@ def main(cfg: DictConfig) -> None:
         int(cfg.backbone.max_text_length),
         include_targets=True,
     )
-    loader = DataLoader(
-        train_dataset,
+    cohort, manifest = load_or_create_manifest(
+        diagnostic_dataset,
+        str(manifest_value),
+        sample_count=diagnostic_batches * diagnostic_batch_size,
         batch_size=diagnostic_batch_size,
-        shuffle=True,
+        seed=int(cfg.seed),
+        split=diagnostic_split,
+        caption_policy=caption_policy,
+    )
+    loader = DataLoader(
+        cohort,
+        batch_size=diagnostic_batch_size,
+        shuffle=False,
         num_workers=int(cfg.experiment.num_workers),
         pin_memory=True,
         collate_fn=collator,
-        drop_last=True,
-        generator=torch.Generator().manual_seed(int(cfg.seed) + 777),
+        drop_last=False,
     )
 
     k = int(model.config.num_candidates)
@@ -330,9 +397,19 @@ def main(cfg: DictConfig) -> None:
 
     all_scores: list[Tensor] = []
     all_teacher: list[Tensor] = []
+    all_teacher_matrix: list[Tensor] = []
+    all_selected: list[Tensor] = []
+    all_delta_norm: list[Tensor] = []
+    timestep_values: dict[int, dict[str, list[Tensor]]] = defaultdict(lambda: defaultdict(list))
+    transition_values: dict[str, list[Tensor]] = defaultdict(list)
+    decision_records: list[dict[str, Any]] = []
+    terminal_records: list[dict[str, Any]] = []
+    caption_values: dict[str, list[float]] = defaultdict(list)
 
     total_decisions = 0
+    teacher_invalid_rows = 0
     total_harmful = 0
+    total_executed = 0
     total_missed_stop = 0
     total_stop_execute_correct = 0
     total_exact_oracle = 0
@@ -370,7 +447,59 @@ def main(cfg: DictConfig) -> None:
                 )
                 targets = model.encode_global_images(batch.target_pixels)
 
+                shuffle = category_shuffle_indices(
+                    batch.categories, seed=int(cfg.seed) + batch_idx
+                ).to(device)
+                shuffled_output = model(
+                    batch.reference_pixels,
+                    batch.input_ids.index_select(0, shuffle),
+                    batch.attention_mask.index_select(0, shuffle),
+                    batch.content_mask.index_select(0, shuffle),
+                )
+
             positive, negative, _ = build_teacher_masks(batch.target_ids, targets.device)
+            initial_query = (
+                output["steps"][0]["current_query"] if output["steps"] else output["query"]
+            )
+            initial_loss = teacher_retrieval_loss(
+                initial_query,
+                targets.detach(),
+                positive,
+                negative,
+                objective.config.retrieval_temperature,
+            )
+            terminal = transition_retrieval(
+                output["query"],
+                output["query"][:, None],
+                targets.detach(),
+                positive,
+                negative,
+                objective.config.retrieval_temperature,
+            )
+            for row, sample_id in enumerate(batch.sample_ids):
+                if not bool(terminal["valid"][row]):
+                    continue
+                terminal_records.append(
+                    {
+                        "sample_id": sample_id,
+                        "category": batch.categories[row],
+                        "stopped_early": bool(output["stopped"][row]),
+                        "initial_retrieval_loss": float(initial_loss[row].cpu()),
+                        "terminal_retrieval_loss": float(terminal["parent_loss"][row].cpu()),
+                        "initial_to_terminal_retrieval_improvement": float(
+                            (initial_loss[row] - terminal["parent_loss"][row]).cpu()
+                        ),
+                        "terminal_positive_similarity": float(
+                            terminal["parent_positive_similarity"][row].cpu()
+                        ),
+                        "terminal_hardest_negative_similarity": float(
+                            terminal["parent_hardest_negative_similarity"][row].cpu()
+                        ),
+                        "terminal_positive_minus_hardest_negative_margin": float(
+                            terminal["parent_margin"][row].cpu()
+                        ),
+                    }
+                )
 
             for step in output["steps"]:
                 proposal_cos_sum += pairwise_cosine_matrix(step["proposals"]).double().cpu()
@@ -383,7 +512,7 @@ def main(cfg: DictConfig) -> None:
                 live_indices = step["live_indices"]
                 pos_live = positive.index_select(0, live_indices)
                 neg_live = negative.index_select(0, live_indices)
-                teacher, valid_rows = marginal_teacher_utilities(
+                transition = transition_retrieval(
                     step["current_query"],
                     step["candidate_queries"],
                     targets.detach(),
@@ -391,6 +520,9 @@ def main(cfg: DictConfig) -> None:
                     neg_live,
                     objective.config.retrieval_temperature,
                 )
+                teacher = transition["utility"]
+                valid_rows = transition["valid"]
+                teacher_invalid_rows += int((~valid_rows).sum().cpu())
 
                 if not valid_rows.any():
                     continue
@@ -420,9 +552,31 @@ def main(cfg: DictConfig) -> None:
 
                 all_scores.append(scores.detach().cpu().flatten())
                 all_teacher.append(teacher.detach().cpu().flatten())
+                all_teacher_matrix.append(teacher.detach().cpu())
+                all_selected.append(selected.detach().cpu())
+                delta_norm = step["delta_q"][valid_rows].detach().float().norm(dim=-1)
+                all_delta_norm.append(delta_norm.cpu())
+                timestep = int(step["timestep"])
+                timestep_values[timestep]["utility"].append(teacher.detach().cpu())
+                timestep_values[timestep]["selected"].append(selected.detach().cpu())
+                timestep_values[timestep]["delta_norm"].append(delta_norm.cpu())
+
+                for key in (
+                    "parent_loss",
+                    "candidate_loss",
+                    "parent_positive_similarity",
+                    "parent_hardest_negative_similarity",
+                    "parent_margin",
+                    "candidate_positive_similarity",
+                    "candidate_hardest_negative_similarity",
+                    "candidate_margin",
+                ):
+                    transition_values[key].append(
+                        transition[key][valid_rows].detach().float().cpu()
+                    )
 
                 oracle_u, oracle_idx = teacher.max(dim=-1)
-                oracle_stop = oracle_u <= 0
+                oracle_stop = oracle_u <= float(model.config.epsilon_stop)
                 oracle_action = torch.where(
                     oracle_stop,
                     torch.full_like(oracle_idx, stop_idx),
@@ -456,6 +610,7 @@ def main(cfg: DictConfig) -> None:
                 )
 
                 total_harmful += int(harmful.sum().cpu())
+                total_executed += int((~stop).sum().cpu())
                 total_missed_stop += int(missed_stop.sum().cpu())
                 total_stop_execute_correct += int(stop_execute_correct.sum().cpu())
                 total_exact_oracle += int(exact.sum().cpu())
@@ -466,9 +621,145 @@ def main(cfg: DictConfig) -> None:
                 for slot in range(k):
                     chosen_slot = (~stop) & (gather_idx == slot)
                     selected_slot_count[slot] += float(chosen_slot.sum().cpu())
-                    selected_harmful[slot] += float(
-                        (chosen_slot & (selected_u < 0)).sum().cpu()
+                    selected_harmful[slot] += float((chosen_slot & (selected_u < 0)).sum().cpu())
+
+                valid_live = live_indices[valid_rows].detach().cpu().tolist()
+                for row, batch_row in enumerate(valid_live):
+                    decision_records.append(
+                        {
+                            "sample_id": batch.sample_ids[batch_row],
+                            "category": batch.categories[batch_row],
+                            "timestep": timestep,
+                            "live": True,
+                            "executed": bool(selected[row] < k),
+                            "selected_idx": int(selected[row]),
+                            "stopped_now": bool(selected[row] >= k),
+                            "parent_retrieval_loss": float(
+                                transition["parent_loss"][valid_rows][row].detach().cpu()
+                            ),
+                            "candidate_retrieval_loss": [
+                                float(value)
+                                for value in transition["candidate_loss"][valid_rows][row]
+                                .detach()
+                                .cpu()
+                            ],
+                            "candidate_utility": [
+                                float(value) for value in teacher[row].detach().cpu()
+                            ],
+                            "parent_positive_similarity": float(
+                                transition["parent_positive_similarity"][valid_rows][row]
+                                .detach()
+                                .cpu()
+                            ),
+                            "parent_hardest_negative_similarity": float(
+                                transition["parent_hardest_negative_similarity"][valid_rows][row]
+                                .detach()
+                                .cpu()
+                            ),
+                            "parent_positive_minus_hardest_negative_margin": float(
+                                transition["parent_margin"][valid_rows][row].detach().cpu()
+                            ),
+                            "selected_utility": float(selected_u[row].detach().cpu()),
+                            "oracle_utility": float(oracle_value[row].detach().cpu()),
+                            "selected_vs_oracle_regret": float(regret[row].detach().cpu()),
+                            "positive_utility_candidate_count": int(
+                                (teacher[row] > 0).sum().detach().cpu()
+                            ),
+                            "harmful_candidate_count": int((teacher[row] < 0).sum().detach().cpu()),
+                        }
                     )
+
+            # Caption sensitivity is paired at t=0, before divergent STOP cohorts.
+            if output["steps"] and shuffled_output["steps"]:
+                correct = output["steps"][0]
+                shuffled = shuffled_output["steps"][0]
+                changed = shuffle.ne(torch.arange(shuffle.numel(), device=device))
+                if changed.any():
+                    for name in ("proposals", "actions", "delta_q"):
+                        first = correct[name][changed].detach().float()
+                        second = shuffled[name][changed].detach().float()
+                        caption_values[f"{name}_cosine"].extend(
+                            F.cosine_similarity(first, second, dim=-1).flatten().cpu().tolist()
+                        )
+                        caption_values[f"{name}_norm_difference"].extend(
+                            (first - second).norm(dim=-1).flatten().cpu().tolist()
+                        )
+                    correct_transition = transition_retrieval(
+                        correct["current_query"],
+                        correct["candidate_queries"],
+                        targets.detach(),
+                        positive,
+                        negative,
+                        objective.config.retrieval_temperature,
+                    )
+                    shuffled_transition = transition_retrieval(
+                        shuffled["current_query"],
+                        shuffled["candidate_queries"],
+                        targets.detach(),
+                        positive,
+                        negative,
+                        objective.config.retrieval_temperature,
+                    )
+                    paired_valid = (
+                        correct_transition["valid"] & shuffled_transition["valid"] & changed
+                    )
+                    if paired_valid.any():
+                        correct_utility = correct_transition["utility"][paired_valid]
+                        shuffled_utility = shuffled_transition["utility"][paired_valid]
+                        caption_values["candidate_utility_correct_minus_shuffled"].extend(
+                            (correct_utility - shuffled_utility).flatten().cpu().tolist()
+                        )
+                        caption_values["oracle_utility_correct_minus_shuffled"].extend(
+                            (correct_utility.max(-1).values - shuffled_utility.max(-1).values)
+                            .cpu()
+                            .tolist()
+                        )
+                        selected_caption_values = {}
+                        for prefix, step_output, utilities in (
+                            ("correct", correct, correct_utility),
+                            ("shuffled", shuffled, shuffled_utility),
+                        ):
+                            selected_caption = step_output["selected_idx"][paired_valid]
+                            stopped_caption = selected_caption >= k
+                            selected_slot = selected_caption.clamp_max(k - 1)
+                            selected_value = utilities.gather(1, selected_slot[:, None]).squeeze(1)
+                            selected_value = torch.where(
+                                stopped_caption,
+                                torch.zeros_like(selected_value),
+                                selected_value,
+                            )
+                            caption_values[f"selected_utility_{prefix}"].extend(
+                                selected_value.cpu().tolist()
+                            )
+                            selected_caption_values[prefix] = selected_value
+                        caption_values["selected_utility_correct_minus_shuffled"].extend(
+                            (
+                                selected_caption_values["correct"]
+                                - selected_caption_values["shuffled"]
+                            )
+                            .cpu()
+                            .tolist()
+                        )
+                    correct_terminal = teacher_retrieval_loss(
+                        output["query"],
+                        targets.detach(),
+                        positive,
+                        negative,
+                        objective.config.retrieval_temperature,
+                    )
+                    shuffled_terminal = teacher_retrieval_loss(
+                        shuffled_output["query"],
+                        targets.detach(),
+                        positive,
+                        negative,
+                        objective.config.retrieval_temperature,
+                    )
+                    terminal_rows = positive.any(dim=-1) & negative.any(dim=-1) & changed
+                    if terminal_rows.any():
+                        # Positive means the correct caption has lower retrieval loss.
+                        caption_values["terminal_retrieval_correct_advantage"].extend(
+                            (shuffled_terminal - correct_terminal)[terminal_rows].cpu().tolist()
+                        )
 
             print(
                 f"[diagnostic] batch={batch_idx + 1}/{diagnostic_batches} "
@@ -486,18 +777,14 @@ def main(cfg: DictConfig) -> None:
                 "selected_rate": safe_div(float(selected_count[slot]), total_decisions),
                 "oracle_rate": safe_div(float(oracle_count[slot]), total_decisions),
                 "mean_score": safe_div(float(score_sum[slot]), float(slot_rows[slot])),
-                "mean_teacher_utility": safe_div(
-                    float(teacher_sum[slot]), float(slot_rows[slot])
-                ),
+                "mean_teacher_utility": safe_div(float(teacher_sum[slot]), float(slot_rows[slot])),
                 "positive_utility_rate": safe_div(
                     float(teacher_positive[slot]), float(slot_rows[slot])
                 ),
                 "harmful_selected_rate": safe_div(
                     float(selected_harmful[slot]), float(selected_slot_count[slot])
                 ),
-                "dpp_useful_rate": safe_div(
-                    float(dpp_useful[slot]), float(slot_rows[slot])
-                ),
+                "dpp_useful_rate": safe_div(float(dpp_useful[slot]), float(slot_rows[slot])),
             }
         )
 
@@ -568,13 +855,13 @@ def main(cfg: DictConfig) -> None:
             }
         )
 
-    harmful_rate = safe_div(total_harmful, total_decisions)
+    harmful_rate = safe_div(total_harmful, total_executed)
     if harmful_rate > 0.20:
         flags.append(
             {
                 "level": "WARN",
                 "code": "HARMFUL_EXECUTIONS",
-                "message": f"{harmful_rate:.1%} of selected executions are teacher-negative.",
+                "message": f"{harmful_rate:.1%} of executed actions are teacher-negative.",
             }
         )
 
@@ -625,6 +912,138 @@ def main(cfg: DictConfig) -> None:
     metadata = checkpoint.get("metadata")
     metadata = metadata if isinstance(metadata, dict) else {}
 
+    official_metrics = None
+    if run_official_evaluation:
+        validation_datasets = build_validation_datasets(
+            annotation_root,
+            CATEGORIES,
+            str(cfg.experiment.val_caption_policy),
+            seed=int(cfg.seed),
+        )
+        validation_collator = FashionIQImageCollator(
+            image_store,
+            tokenizer,
+            processor,
+            int(cfg.backbone.max_text_length),
+            include_targets=False,
+        )
+        validation_loaders = {
+            category: DataLoader(
+                dataset,
+                batch_size=int(cfg.experiment.eval_batch_size),
+                shuffle=False,
+                num_workers=int(cfg.experiment.num_workers),
+                collate_fn=validation_collator,
+            )
+            for category, dataset in validation_datasets.items()
+        }
+        official_metrics = evaluate_fashioniq(
+            model,
+            validation_loaders,
+            {category: dataset.annotations for category, dataset in validation_datasets.items()},
+            protocol=str(cfg.protocol.name),
+            split_root=dataset_root / str(cfg.dataset.split_dir),
+            split=str(cfg.protocol.split),
+            image_store=image_store,
+            image_processor=processor,
+            device=device,
+            gallery_batch_size=int(cfg.experiment.gallery_batch_size),
+            num_workers=int(cfg.experiment.num_workers),
+        )
+
+    combined_selection = selection_metrics(
+        torch.cat(all_teacher_matrix),
+        torch.cat(all_selected),
+        stop_threshold=float(model.config.epsilon_stop),
+        delta_q_norm=torch.cat(all_delta_norm),
+    )
+    by_timestep = {}
+    for timestep, values in sorted(timestep_values.items()):
+        by_timestep[str(timestep)] = selection_metrics(
+            torch.cat(values["utility"]),
+            torch.cat(values["selected"]),
+            stop_threshold=float(model.config.epsilon_stop),
+            delta_q_norm=torch.cat(values["delta_norm"]),
+        )
+
+    retrieval_behavior = {}
+    for name, values in transition_values.items():
+        merged = torch.cat(values).float()
+        retrieval_behavior[name] = {
+            "mean": float(merged.mean()),
+            "median": float(merged.median()),
+            "count": int(merged.numel()),
+        }
+        if merged.ndim == 2:
+            retrieval_behavior[name]["per_slot"] = [
+                {
+                    "slot": slot,
+                    "mean": float(merged[:, slot].mean()),
+                    "median": float(merged[:, slot].median()),
+                }
+                for slot in range(merged.shape[1])
+            ]
+    retrieval_behavior["number_positive_utility_candidates"] = {
+        "mean": combined_selection["positive_utility_candidate_count_mean"]
+    }
+    retrieval_behavior["number_harmful_candidates"] = {
+        "mean": combined_selection["harmful_candidate_count_mean"]
+    }
+    merged_delta_norm = torch.cat(all_delta_norm)
+    retrieval_behavior["number_nearly_zero_effect_candidates"] = {
+        "mean": float((merged_delta_norm <= 1e-6).sum(-1).float().mean()),
+        "threshold": 1e-6,
+    }
+    caption_summary = {
+        name: {
+            "mean": float(torch.tensor(values).mean()),
+            "median": float(torch.tensor(values).median()),
+            "count": len(values),
+        }
+        for name, values in sorted(caption_values.items())
+        if values
+    }
+    terminal_summary = {
+        key: float(torch.tensor([float(record[key]) for record in terminal_records]).mean())
+        for key in (
+            "initial_retrieval_loss",
+            "terminal_retrieval_loss",
+            "initial_to_terminal_retrieval_improvement",
+            "terminal_positive_similarity",
+            "terminal_hardest_negative_similarity",
+            "terminal_positive_minus_hardest_negative_margin",
+        )
+    }
+    headline = {
+        "mean_utility_per_slot": [
+            slot["mean_teacher_utility"] for slot in combined_selection["slot_metrics"]
+        ],
+        "oracle_slot_occupancy": [
+            slot["oracle_best_fraction"] for slot in combined_selection["slot_metrics"]
+        ],
+        "selected_slot_occupancy": [
+            slot["selected_fraction"] for slot in combined_selection["slot_metrics"]
+        ],
+        "selected_stop_rate": combined_selection["stop"]["stop_rate"],
+        "oracle_stop_rate": combined_selection["stop"]["oracle_stop_rate"],
+        "selected_oracle_agreement": combined_selection["selected_equals_oracle_fraction"],
+        "selected_utility": combined_selection["mean_selected_utility"],
+        "oracle_utility": combined_selection["mean_oracle_utility"],
+        "regret": combined_selection["mean_regret"],
+        "harmful_execution_rate": combined_selection["stop"][
+            "harmful_execution_fraction_of_executions"
+        ],
+        "stop_precision": combined_selection["stop"]["precision"],
+        "stop_recall": combined_selection["stop"]["recall"],
+        "caption_correct_advantage": {
+            key: value["mean"]
+            for key, value in caption_summary.items()
+            if "utility" in key or "retrieval" in key
+        },
+        "official_fashioniq": official_metrics,
+        "terminal_cohort": terminal_summary,
+    }
+
     report = {
         "checkpoint_path": str(checkpoint_path),
         "checkpoint": {
@@ -638,23 +1057,42 @@ def main(cfg: DictConfig) -> None:
         "num_candidates": k,
         "diagnostic_batches": diagnostic_batches,
         "diagnostic_batch_size": diagnostic_batch_size,
+        "teacher_invalid_rows": teacher_invalid_rows,
+        "manifest": {
+            "path": str(manifest_value),
+            "sample_ids": [sample["sample_id"] for sample in manifest["samples"]],
+            "split": diagnostic_split,
+            "caption_policy": caption_policy,
+        },
         "slot_stats": slot_stats,
         "selector": {
             "exact_oracle_accuracy": exact_acc,
             "stop_execute_accuracy": safe_div(total_stop_execute_correct, total_decisions),
             "harmful_execution_rate": harmful_rate,
+            "harmful_execution_fraction_of_decisions": safe_div(total_harmful, total_decisions),
+            "executed_action_count": total_executed,
             "missed_opportunity_stop_rate": safe_div(total_missed_stop, total_decisions),
             "selected_teacher_utility": safe_div(selected_utility_sum, total_decisions),
             "oracle_teacher_utility": safe_div(oracle_utility_sum, total_decisions),
             "oracle_regret": safe_div(regret_sum, total_decisions),
             "score_teacher_pearson": score_teacher_pearson,
-            "selected_histogram": {
-                str(i): int(selected_count[i]) for i in range(n_actions)
-            },
-            "oracle_histogram": {
-                str(i): int(oracle_count[i]) for i in range(n_actions)
-            },
+            "selected_histogram": {str(i): int(selected_count[i]) for i in range(n_actions)},
+            "oracle_histogram": {str(i): int(oracle_count[i]) for i in range(n_actions)},
         },
+        "selection_metrics": combined_selection,
+        "selection_metrics_by_timestep": by_timestep,
+        "headline_metrics": headline,
+        "retrieval_behavior": retrieval_behavior,
+        "retrieval_similarity_definition": {
+            "positive_similarity": "maximum cosine over valid positive target IDs",
+            "hardest_negative_similarity": "maximum cosine over false-negative-safe negatives",
+            "utility": "teacher_loss(parent) - teacher_loss(candidate)",
+        },
+        "decision_records": decision_records,
+        "terminal_cohort_records": terminal_records,
+        "terminal_cohort_summary": terminal_summary,
+        "caption_sensitivity": caption_summary,
+        "official_fashioniq": official_metrics,
         "selector_vs_oracle_confusion_rate": matrix_to_list(confusion_rate),
         "pairwise": {
             "proposal_cosine": matrix_to_list(proposal_cos),

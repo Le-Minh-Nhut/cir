@@ -111,3 +111,60 @@ ablated independently with Hydra overrides such as
 Dataset loading, FashionIQ evaluation, AMP policy, checkpointing, optimizer ownership
 checks, and stable `CIRSample.target_id` handling are retained from the clean-rewrite
 branch.
+
+## Matched OLD/STRONG diagnostics
+
+Diagnostics require a persistent manifest so both checkpoints see the same training
+samples, captions, ordering, target/teacher pool, and seed. The first command creates
+the manifest; every later command validates and reuses it.
+
+```bash
+# OLD: geometry and per-slot/slot-centered spectra
+python src/diagnose_latent_geometry.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +checkpoint=outputs/r0_ncls_text/best.pt \
+  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_train_160.json \
+  +diagnostic_batches=20 +diagnostic_batch_size=8 \
+  hydra.run.dir=outputs/diagnostics/v2-r0/old_geometry
+
+# STRONG: exact replay of the same geometry cohort
+python src/diagnose_latent_geometry.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
+  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_train_160.json \
+  +diagnostic_batches=20 +diagnostic_batch_size=8 \
+  hydra.run.dir=outputs/diagnostics/v2-r0/strong_geometry
+
+# OLD selector/utility/STOP/caption sensitivity + official FashionIQ validation
+python src/diagnose_candidate_selector.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +checkpoint=outputs/r0_ncls_text/best.pt \
+  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_train_160.json \
+  +diagnostic_batches=20 +diagnostic_batch_size=8 \
+  +diagnostic_official_eval=true \
+  hydra.run.dir=outputs/diagnostics/v2-r0/old_selector
+
+# STRONG selector replay
+python src/diagnose_candidate_selector.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
+  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_train_160.json \
+  +diagnostic_batches=20 +diagnostic_batch_size=8 \
+  +diagnostic_official_eval=true \
+  hydra.run.dir=outputs/diagnostics/v2-r0/strong_selector
+```
+
+Geometry runs emit `latent_geometry_report.{json,md}`. Selector runs emit
+`candidate_selector_diagnostic.{json,md}`. Training now appends update and validation
+records to `metrics.jsonl` and persists `resolved_config.yaml` plus
+`run_metadata.json`; checkpoints store the true optimizer/batch step counters and AMP
+scaler state.
+
+Start with `headline_candidate_geometry` in the geometry JSON and `headline_metrics`
+in the selector JSON. They expose per-slot and slot-centered PR, between-slot variance,
+caption utility advantage, per-slot teacher utility/occupancy, selector regret,
+harmful-execution rate, STOP precision/recall, and optional official FashionIQ recall.

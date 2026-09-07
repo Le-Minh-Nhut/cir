@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Latent-geometry diagnostic for CIR IAG-SRME V2 R0.
 
@@ -41,6 +39,8 @@ Main questions:
 6) Does geometry degrade more in the strong-DPP checkpoint than in the old checkpoint?
 """
 
+from __future__ import annotations
+
 import json
 import math
 from collections import defaultdict
@@ -58,6 +58,9 @@ from torch.utils.data import DataLoader
 from data.images import FashionIQImageCollator
 from datasets.common import DirectoryImageStore
 from datasets.fashioniq import FashionIQDataset
+from diagnostics.cohort import load_or_create_manifest
+from diagnostics.geometry import candidate_geometry, feature_geometry
+from evaluate import validate_checkpoint_backbone_metadata
 from runtime import configure_torch_runtime, resolve_device, seed_everything
 from train import CATEGORIES, build_model
 from training.engine import resolve_precision
@@ -66,6 +69,7 @@ from training.engine import resolve_precision
 # ---------------------------------------------------------------------------
 # Basic helpers
 # ---------------------------------------------------------------------------
+
 
 def _to_cpu_float(x: Tensor) -> Tensor:
     return x.detach().float().cpu()
@@ -100,6 +104,7 @@ def _nan() -> float:
 # ---------------------------------------------------------------------------
 # Geometry metrics
 # ---------------------------------------------------------------------------
+
 
 def _offdiag_values(matrix: Tensor) -> Tensor:
     n = matrix.shape[0]
@@ -252,9 +257,7 @@ def _covariance_stats(x: Tensor, max_dim: int = 1024) -> dict[str, float]:
     denom = std[:, None] * std[None, :]
     corr = cov / denom.clamp_min(1e-12)
     offdiag_corr = _offdiag_values(corr)
-    mean_abs_corr = (
-        float(offdiag_corr.abs().mean()) if offdiag_corr.numel() else _nan()
-    )
+    mean_abs_corr = float(offdiag_corr.abs().mean()) if offdiag_corr.numel() else _nan()
 
     return {
         "mean_abs_offdiag_cov": mean_abs_cov,
@@ -274,25 +277,8 @@ def _norm_stats(x: Tensor) -> dict[str, float]:
 
 
 def geometry_stats(x: Tensor) -> dict[str, float]:
-    x = _flatten_features(x).float()
-    result: dict[str, float] = {
-        "count": float(x.shape[0]),
-        "dim": float(x.shape[1]),
-    }
-    result.update(_norm_stats(x))
-    cosine = _pairwise_cosine_stats(x)
-    result.update(
-        {
-            "pairwise_cosine_mean": cosine["mean"],
-            "pairwise_cosine_median": cosine["median"],
-            "pairwise_cosine_p90": cosine["p90"],
-            "pairwise_cosine_p99": cosine["p99"],
-        }
-    )
-    result.update(_spectrum_stats(x))
-    result.update(_dimension_stats(x))
-    result.update(_covariance_stats(x))
-    return result
+    # Kept as the public compatibility name used by existing reports/tests.
+    return feature_geometry(x)
 
 
 def aligned_drift_stats(current: Tensor, anchor: Tensor) -> dict[str, float]:
@@ -352,6 +338,7 @@ def paired_distribution_shift(x: Tensor, ref: Tensor) -> dict[str, float]:
 # Accumulator
 # ---------------------------------------------------------------------------
 
+
 class FeatureAccumulator:
     def __init__(self) -> None:
         self.data: dict[str, list[Tensor]] = defaultdict(list)
@@ -372,6 +359,7 @@ class FeatureAccumulator:
 # ---------------------------------------------------------------------------
 # Diagnostic logic
 # ---------------------------------------------------------------------------
+
 
 def _find_selected_rows(step: dict[str, Any], num_candidates: int) -> tuple[Tensor, Tensor]:
     """
@@ -400,6 +388,13 @@ def main(cfg: DictConfig) -> None:
     checkpoint_path = Path(str(checkpoint_value))
     diagnostic_batches = int(cfg.get("diagnostic_batches", 20))
     diagnostic_batch_size = int(cfg.get("diagnostic_batch_size", 8))
+    manifest_value = cfg.get("diagnostic_manifest")
+    if manifest_value is None:
+        raise ValueError(
+            "pass +diagnostic_manifest=path/to/shared_manifest.json; "
+            "OLD and STRONG must replay the same persistent cohort"
+        )
+    diagnostic_split = str(cfg.get("diagnostic_split", "train"))
 
     seed_everything(int(cfg.seed), bool(cfg.runtime.deterministic))
     configure_torch_runtime(
@@ -420,6 +415,24 @@ def main(cfg: DictConfig) -> None:
         map_location="cpu",
         weights_only=True,
     )
+    validate_checkpoint_backbone_metadata(
+        checkpoint.get("metadata"),
+        str(cfg.backbone.checkpoint),
+        str(cfg.backbone.revision),
+        str(cfg.backbone.global_readout_mode),
+        expected_readout_experiment=str(cfg.backbone.readout_experiment),
+        expected_finetune_policy=str(cfg.backbone.finetune_policy),
+        expected_train_vision=bool(cfg.backbone.train_vision),
+        expected_train_text=bool(cfg.backbone.train_text),
+        expected_train_text_projection=bool(cfg.backbone.train_text_projection),
+        expected_model_config={
+            "num_candidates": int(cfg.model.num_candidates),
+            "max_steps": int(cfg.model.max_steps),
+            "stop_enabled": bool(cfg.model.stop_enabled),
+            "epsilon_stop": float(cfg.model.epsilon_stop),
+        },
+        allow_counterfactual=bool(cfg.get("allow_counterfactual_eval", False)),
+    )
 
     model, tokenizer, processor = build_model(cfg)
     model.load_state_dict(checkpoint["model"])
@@ -429,12 +442,26 @@ def main(cfg: DictConfig) -> None:
     annotation_root = dataset_root / str(cfg.dataset.annotation_dir)
     image_store = DirectoryImageStore(dataset_root / str(cfg.dataset.image_dir))
 
-    train_dataset = FashionIQDataset(
+    caption_policy = (
+        str(cfg.experiment.train_caption_policy)
+        if diagnostic_split == "train"
+        else str(cfg.experiment.val_caption_policy)
+    )
+    dataset = FashionIQDataset(
         annotation_root,
-        "train",
+        diagnostic_split,
         CATEGORIES,
-        caption_policy=str(cfg.experiment.train_caption_policy),
+        caption_policy=caption_policy,
         seed=int(cfg.seed),
+    )
+    cohort, manifest = load_or_create_manifest(
+        dataset,
+        str(manifest_value),
+        sample_count=diagnostic_batches * diagnostic_batch_size,
+        batch_size=diagnostic_batch_size,
+        seed=int(cfg.seed),
+        split=diagnostic_split,
+        caption_policy=caption_policy,
     )
 
     collator = FashionIQImageCollator(
@@ -446,28 +473,30 @@ def main(cfg: DictConfig) -> None:
     )
 
     loader = DataLoader(
-        train_dataset,
+        cohort,
         batch_size=diagnostic_batch_size,
-        shuffle=True,
+        shuffle=False,
         num_workers=int(cfg.experiment.num_workers),
         pin_memory=True,
         collate_fn=collator,
-        drop_last=True,
-        generator=torch.Generator().manual_seed(int(cfg.seed) + 20260907),
+        drop_last=False,
     )
 
     acc = FeatureAccumulator()
+    candidate_acc = FeatureAccumulator()
 
     # Aligned per-sample drift buffers.
     drift_current_by_t: dict[int, list[Tensor]] = defaultdict(list)
     drift_anchor_by_t: dict[int, list[Tensor]] = defaultdict(list)
     committed_global_by_t: dict[int, list[Tensor]] = defaultdict(list)
     committed_anchor_global_by_t: dict[int, list[Tensor]] = defaultdict(list)
+    executed_before_by_t: dict[int, list[Tensor]] = defaultdict(list)
+    executed_after_by_t: dict[int, list[Tensor]] = defaultdict(list)
+    state_records: list[dict[str, Any]] = []
+    terminal_records: list[dict[str, Any]] = []
 
     # Retrieval geometry.
-    retrieval_by_t: dict[int, dict[str, list[float]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
+    retrieval_by_t: dict[int, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
 
     with torch.no_grad():
         iterator = iter(loader)
@@ -527,8 +556,6 @@ def main(cfg: DictConfig) -> None:
                 candidate_states = step["candidate_states"]
                 candidate_queries = step["candidate_queries"]
                 delta_q = step["delta_q"]
-                selected_idx = step["selected_idx"]
-
                 live_indices = step["live_indices"]
                 live_initial_state = initial_state.index_select(0, live_indices)
                 live_initial_pooled = _pool_patch_state(live_initial_state)
@@ -540,24 +567,13 @@ def main(cfg: DictConfig) -> None:
 
                 acc.add(f"{prefix}/current_state_pooled", parent_pooled)
                 acc.add(f"{prefix}/current_global", current_global)
-                acc.add(f"{prefix}/proposals_all", proposals.reshape(-1, proposals.shape[-1]))
-                acc.add(f"{prefix}/actions_all", actions.reshape(-1, actions.shape[-1]))
-                acc.add(
-                    f"{prefix}/candidate_query_all",
-                    candidate_queries.reshape(-1, candidate_queries.shape[-1]),
-                )
-                acc.add(
-                    f"{prefix}/delta_q_all",
-                    delta_q.reshape(-1, delta_q.shape[-1]),
-                )
+                candidate_acc.add(f"{prefix}/proposals", proposals)
+                candidate_acc.add(f"{prefix}/actions", actions)
+                candidate_acc.add(f"{prefix}/candidate_query", candidate_queries)
+                candidate_acc.add(f"{prefix}/delta_q", delta_q)
 
                 candidate_state_pooled = candidate_states.float().mean(dim=-2)
-                acc.add(
-                    f"{prefix}/candidate_state_pooled_all",
-                    candidate_state_pooled.reshape(
-                        -1, candidate_state_pooled.shape[-1]
-                    ),
-                )
+                candidate_acc.add(f"{prefix}/candidate_state_pooled", candidate_state_pooled)
 
                 # Candidate global features can be reconstructed from candidate query path
                 # only if stored; current model steps store candidate_queries but not
@@ -567,10 +583,7 @@ def main(cfg: DictConfig) -> None:
                     candidate_states,
                     live_cls,
                 )
-                acc.add(
-                    f"{prefix}/candidate_global_all",
-                    candidate_global.reshape(-1, candidate_global.shape[-1]),
-                )
+                candidate_acc.add(f"{prefix}/candidate_global", candidate_global)
 
                 # Drift of current state from V0 for the same live sample.
                 drift_current_by_t[t].append(_to_cpu_float(parent_pooled))
@@ -591,6 +604,57 @@ def main(cfg: DictConfig) -> None:
                     step,
                     int(model.config.num_candidates),
                 )
+                gathered_state = _gather_candidate(candidate_states, best_idx)
+                committed_after_decision = torch.where(
+                    execute[:, None, None], gathered_state, parent
+                )
+                acc.add(
+                    f"{prefix}/committed_state_after_decision_pooled",
+                    _pool_patch_state(committed_after_decision),
+                )
+                live_batch_rows = live_indices.detach().cpu().tolist()
+                live_batch_set = set(live_batch_rows)
+                for batch_row, sample_id in enumerate(batch.sample_ids):
+                    if batch_row not in live_batch_set:
+                        state_records.append(
+                            {
+                                "sample_id": sample_id,
+                                "timestep": t,
+                                "live": False,
+                                "executed": False,
+                                "selected_idx": None,
+                                "stopped_now": False,
+                                "state_before_norm": None,
+                                "candidate_preview_norms": None,
+                                "committed_state_after_norm": None,
+                            }
+                        )
+                for local_row, batch_row in enumerate(live_batch_rows):
+                    state_records.append(
+                        {
+                            "sample_id": batch.sample_ids[batch_row],
+                            "timestep": t,
+                            "live": True,
+                            "executed": bool(execute[local_row]),
+                            "selected_idx": int(step["selected_idx"][local_row]),
+                            "stopped_now": bool(step["stopped_now"][local_row]),
+                            "state_before_norm": float(
+                                parent[local_row].detach().float().norm().cpu()
+                            ),
+                            "candidate_preview_norms": [
+                                float(value)
+                                for value in candidate_states[local_row]
+                                .detach()
+                                .float()
+                                .flatten(1)
+                                .norm(dim=-1)
+                                .cpu()
+                            ],
+                            "committed_state_after_norm": float(
+                                committed_after_decision[local_row].detach().float().norm().cpu()
+                            ),
+                        }
+                    )
 
                 if execute.any():
                     chosen_state = _gather_candidate(
@@ -612,13 +676,14 @@ def main(cfg: DictConfig) -> None:
                     acc.add(f"{prefix}/committed_global", chosen_global)
                     acc.add(f"{prefix}/committed_query", chosen_query)
 
-                    chosen_live_initial_pooled = live_initial_pooled[execute]
                     chosen_live_initial_global = live_initial_global[execute]
 
                     committed_global_by_t[t].append(_to_cpu_float(chosen_global))
                     committed_anchor_global_by_t[t].append(
                         _to_cpu_float(chosen_live_initial_global)
                     )
+                    executed_before_by_t[t].append(_to_cpu_float(parent_pooled[execute]))
+                    executed_after_by_t[t].append(_to_cpu_float(chosen_state_pooled))
 
                     chosen_target_query = live_target_query[execute]
                     chosen_pos_sim = F.cosine_similarity(
@@ -633,6 +698,20 @@ def main(cfg: DictConfig) -> None:
             # Terminal query.
             terminal_query = output["query"]
             acc.add("terminal_query", terminal_query)
+            acc.add("terminal_state_pooled", _pool_patch_state(output["state"]))
+            for row, sample_id in enumerate(batch.sample_ids):
+                terminal_records.append(
+                    {
+                        "sample_id": sample_id,
+                        "stopped_early": bool(output["stopped"][row]),
+                        "terminal_state_norm": float(
+                            output["state"][row].detach().float().norm().cpu()
+                        ),
+                        "terminal_query_norm": float(
+                            terminal_query[row].detach().float().norm().cpu()
+                        ),
+                    }
+                )
 
             terminal_pos_sim = F.cosine_similarity(
                 terminal_query.float(),
@@ -658,6 +737,18 @@ def main(cfg: DictConfig) -> None:
         if value is not None and value.numel() > 0:
             geometry[name] = geometry_stats(value)
 
+    candidate_geometry_report: dict[str, dict[str, Any]] = {}
+    for name in candidate_acc.names():
+        value = candidate_acc.cat(name)
+        if value is None or value.numel() == 0:
+            continue
+        report = candidate_geometry(value)
+        candidate_geometry_report[name] = report
+        # Preserve historical *_all keys and add an unambiguous pooled alias.
+        legacy_name = f"{name}_all"
+        geometry[legacy_name] = report["raw"]["pooled"]
+        geometry[f"{name}_pooled"] = report["raw"]["pooled"]
+
     # Drift against V0.
     drift: dict[str, dict[str, float]] = {}
 
@@ -676,6 +767,10 @@ def main(cfg: DictConfig) -> None:
             current,
             anchor,
         )
+    for t in sorted(executed_before_by_t):
+        before = torch.cat(executed_before_by_t[t], dim=0)
+        after = torch.cat(executed_after_by_t[t], dim=0)
+        drift[f"t{t}/paired_executed_state_after_vs_before"] = aligned_drift_stats(after, before)
 
     # Distribution shift against real-image reference/target baselines.
     distribution_shift: dict[str, dict[str, float]] = {}
@@ -688,15 +783,15 @@ def main(cfg: DictConfig) -> None:
             if value is None:
                 continue
             if name.endswith("global") or "candidate_global" in name:
-                distribution_shift[f"{name}_vs_reference_global"] = (
-                    paired_distribution_shift(value, reference_global)
+                distribution_shift[f"{name}_vs_reference_global"] = paired_distribution_shift(
+                    value, reference_global
                 )
 
     if target_query_all is not None:
         terminal_query_all = acc.cat("terminal_query")
         if terminal_query_all is not None:
-            distribution_shift["terminal_query_vs_target_query"] = (
-                paired_distribution_shift(terminal_query_all, target_query_all)
+            distribution_shift["terminal_query_vs_target_query"] = paired_distribution_shift(
+                terminal_query_all, target_query_all
             )
 
     retrieval: dict[str, dict[str, float]] = {}
@@ -708,9 +803,7 @@ def main(cfg: DictConfig) -> None:
                 continue
             tensor = torch.tensor(values, dtype=torch.float32)
             retrieval[label][metric_name + "_mean"] = float(tensor.mean())
-            retrieval[label][metric_name + "_std"] = float(
-                tensor.std(unbiased=False)
-            )
+            retrieval[label][metric_name + "_std"] = float(tensor.std(unbiased=False))
 
     # -----------------------------------------------------------------------
     # Automatic flags
@@ -808,8 +901,7 @@ def main(cfg: DictConfig) -> None:
                 "level": "WARN",
                 "code": "LARGE_RECURRENT_STATE_DRIFT",
                 "message": (
-                    f"{last_state_drift[0]} relative L2 drift is "
-                    f"{last_state_drift[1]:.3f}."
+                    f"{last_state_drift[0]} relative L2 drift is {last_state_drift[1]:.3f}."
                 ),
             }
         )
@@ -829,6 +921,19 @@ def main(cfg: DictConfig) -> None:
     metadata = checkpoint.get("metadata")
     metadata = metadata if isinstance(metadata, dict) else {}
 
+    headline_geometry = {}
+    for name, modes in candidate_geometry_report.items():
+        if not any(name.endswith(suffix) for suffix in ("/proposals", "/actions", "/delta_q")):
+            continue
+        raw = modes["raw"]
+        headline_geometry[name] = {
+            "per_slot_PR": [slot["effective_rank_pr"] for slot in raw["per_slot"]],
+            "slot_centered_pooled_PR": raw["slot_centered_pooled"]["effective_rank_pr"],
+            "between_slot_variance_fraction": raw["variance_decomposition"][
+                "between_slot_variance_fraction"
+            ],
+        }
+
     report = {
         "checkpoint_path": str(checkpoint_path),
         "checkpoint": {
@@ -844,8 +949,17 @@ def main(cfg: DictConfig) -> None:
             "batch_size": diagnostic_batch_size,
             "device": str(device),
             "precision": str(cfg.runtime.precision),
+            "manifest_path": str(manifest_value),
+            "manifest_sample_count": len(manifest["samples"]),
+            "sample_ids": [sample["sample_id"] for sample in manifest["samples"]],
+            "split": diagnostic_split,
+            "caption_policy": caption_policy,
         },
         "geometry": geometry,
+        "candidate_geometry": candidate_geometry_report,
+        "headline_candidate_geometry": headline_geometry,
+        "state_transition_records": state_records,
+        "terminal_cohort_records": terminal_records,
         "drift": drift,
         "distribution_shift": distribution_shift,
         "retrieval": retrieval,
@@ -879,9 +993,7 @@ def main(cfg: DictConfig) -> None:
     ]
 
     for flag in flags:
-        md_lines.append(
-            f"- **{flag['level']} — {flag['code']}**: {flag['message']}"
-        )
+        md_lines.append(f"- **{flag['level']} — {flag['code']}**: {flag['message']}")
 
     md_lines += [
         "",
@@ -932,6 +1044,31 @@ def main(cfg: DictConfig) -> None:
 
     md_lines += [
         "",
+        "## Candidate geometry decomposition",
+        "",
+        "| Representation | pooled PR | slot-centered PR | mean per-slot PR | min per-slot PR | between-slot variance |",
+        "|---|---:|---:|---:|---:|---:|",
+    ]
+    for name, modes in sorted(candidate_geometry_report.items()):
+        raw = modes["raw"]
+        md_lines.append(
+            f"| {name} | {fmt(raw['pooled']['effective_rank_pr'])} | "
+            f"{fmt(raw['slot_centered_pooled']['effective_rank_pr'])} | "
+            f"{fmt(raw['per_slot_summary']['mean_per_slot_PR'])} | "
+            f"{fmt(raw['per_slot_summary']['min_per_slot_PR'])} | "
+            f"{fmt(raw['variance_decomposition']['between_slot_variance_fraction'])} |"
+        )
+        md_lines.append("")
+        for slot in raw["per_slot"]:
+            md_lines.append(
+                f"- `{name}/slot_{slot['slot']}`: PR={fmt(slot['effective_rank_pr'])}, "
+                f"entropy-rank={fmt(slot['effective_rank_entropy'])}, "
+                f"mean-std={fmt(slot['mean_per_dim_std'])}, "
+                f"zero-variance={slot['zero_total_variance']}"
+            )
+
+    md_lines += [
+        "",
         "## Recurrent drift",
         "",
         "| Comparison | relative L2 drift | cosine to anchor |",
@@ -940,8 +1077,7 @@ def main(cfg: DictConfig) -> None:
 
     for name, s in sorted(drift.items()):
         md_lines.append(
-            f"| {name} | {fmt(s.get('relative_l2_drift'))} | "
-            f"{fmt(s.get('cosine_to_anchor'))} |"
+            f"| {name} | {fmt(s.get('relative_l2_drift'))} | {fmt(s.get('cosine_to_anchor'))} |"
         )
 
     md_lines += [

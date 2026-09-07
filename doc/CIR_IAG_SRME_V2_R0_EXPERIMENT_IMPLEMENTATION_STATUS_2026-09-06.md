@@ -12,7 +12,7 @@ checked. It is not an architecture specification. The canonical source of truth 
 | Branch | `exp/e2e-iag-srme-v2-r0` |
 | Base branch | `exp/e2e-iag-srme-clean-rewrite` |
 | Base merge-base | `f4bc1e8b91e5c43eec36e824fcd4c1d858f32308` |
-| Current remote HEAD / implementation base | `5a3bdf5a4c440294476e07210275223e23fb712d` (`v2.2`) |
+| Current remote HEAD / diagnostics implementation base | `c00147863c34c5871f65d62b76a04a1aa985954a` |
 | Record date | 2026-09-07 (implementation began 2026-09-06) |
 | Canonical architecture | `doc/CIR_IAG_SRME_UNIFIED_CANONICAL_ARCHITECTURE_AND_TRAINING_SPEC_V2_2026-09-06.md` |
 | Active backbone track | Track B — FG-CLIP v1 Base |
@@ -373,7 +373,7 @@ specification V1 is intentionally retained as research history, not as source of
 | Prior R0-QG FashionIQ A6 canary | PASS | CPU FP32, batch 2, one optimizer update, three rollout steps |
 | R0-NCLS full-model forward smoke | PASS | Real checkpoint/image; state `[1,196,768]`, anchor `[1,768]`, sibling queries `[1,4,512]` |
 
-The final suite result is `58 passed, 1 skipped`; the skip is the CUDA-only optimizer
+The pre-diagnostics suite result was `58 passed, 1 skipped`; the skip is the CUDA-only optimizer
 placement test because CUDA is unavailable. The real-checkpoint parity test passed.
 Ruff reports `All checks passed`. The prior R0-QG post-threshold canary produced finite values:
 `total=0.803284`, `terminal=0.791728`, `gain=0.001349`,
@@ -433,3 +433,49 @@ checkpoint/evaluation round trip; no architecture or loss redesign is indicated.
 6. Run the matched 2x2 comparison, changing only readout or fine-tuning policy on each controlled axis.
 7. Enable A6 after measuring useful-effect redundancy and report valid-DPP frequency.
 8. Keep correspondence disabled unless measured identity/grounding drift motivates a diagnostic branch.
+
+## 18. Diagnostic observability update — 2026-09-07
+
+The text-only policy is unchanged: the FG-CLIP vision encoder and native visual
+projection stay frozen, while the text encoder, text adapter, and IAG-SRME modules
+remain trainable. This update changes measurement only; it does not alter Proposal,
+Grounder, Fusion, Executor, ScoreNet, STOP, hard selection, teacher, semantic losses,
+or Functional DPP.
+
+Candidate geometry now retains `[B,K,D]` until it reports three separate views:
+historical pooled `[B*K,D]`, per-slot cross-input spectra, and slot-centered pooled
+spectra. It also reports the population covariance-trace decomposition into within-slot
+and between-slot variance for both raw and L2-normalized features. Zero-variance/effect
+representations are explicitly marked degenerate and use rank `0`, rather than being
+misreported as meaningful rank-one structure.
+
+All three diagnostics require and validate one persistent sample manifest containing
+stable sample/reference/target IDs, category, and composed instruction. Geometry and
+selector scripts no longer independently shuffle their cohorts. Transition records use
+`live_indices` and stable sample IDs; before/after edit comparisons are restricted to
+the same executed rows. Selector output now includes parent/sibling teacher losses,
+utilities, positive and hardest-negative similarity/margin, per-slot quality and
+occupancy, selected/oracle regret, explicit STOP confusion and denominators, and a
+same-reference within-category caption-shuffle test at `t=0`. Official FashionIQ recall
+can be requested separately with `+diagnostic_official_eval=true`.
+
+Training writes append-only `metrics.jsonl`, `resolved_config.yaml`, and
+`run_metadata.json`. Update records include all objective components, learning rate,
+AMP scale/overflow inference, non-finite gradient count, true optimizer-step count, and
+representative gradient/update-to-weight probes for text, Proposal, Grounder, Fusion,
+Executor, and ScoreNet. Evaluation now rejects mismatched `K`, `T`, STOP enablement,
+STOP threshold, readout, fine-tuning policy, checkpoint, or revision unless the run is
+explicitly labeled counterfactual.
+
+Source audit notes: current step output does not retain `candidate_global`, so the
+read-only geometry diagnostic reconstructs it from `candidate_states` with the selected
+backbone readout. `selected_idx == K` is the source-level STOP sentinel, and the current
+configured `epsilon_stop` is `0.0`. The canonical Track-B mainline describes full
+vision/text fine-tuning; this branch intentionally remains the separately documented
+TEXT-only controlled ablation.
+
+The post-change CPU/unit suite is `68 passed, 1 skipped`; the skip remains CUDA-only.
+The three diagnostic entrypoints import and resolve their Hydra configuration
+successfully. A checkpoint-backed diagnostic smoke was not run on this host because the
+OLD/STRONG `.pt` files are not present in the workspace, and CUDA is unavailable; no
+diagnostic measurements are fabricated.
