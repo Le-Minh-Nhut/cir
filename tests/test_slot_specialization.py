@@ -7,7 +7,11 @@ import pytest
 import torch
 
 from data.images import ImageBatch
-from diagnose_slot_specialization import _automatic_flags, _gradient_attribution
+from diagnose_slot_specialization import (
+    _automatic_flags,
+    _concept_forward_with_precision,
+    _gradient_attribution,
+)
 from diagnostics.specialization import (
     cluster_bootstrap_mean_interval,
     cluster_bootstrap_row_indices,
@@ -295,6 +299,37 @@ def test_concept_mil_responsibility_is_exact_candidate_softmax() -> None:
     actual = concept_mil_responsibility(logits, tau_mil=0.7)
     assert torch.allclose(actual, expected)
     assert torch.allclose(actual.sum(dim=1), torch.ones_like(actual.sum(dim=1)))
+
+
+def test_concept_mil_forward_uses_configured_autocast_for_mixed_dtype() -> None:
+    class MockConcept(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.projection = torch.nn.Linear(4, 3)
+
+        def forward(
+            self, proposals: torch.Tensor, modification_texts: list[str]
+        ) -> dict[str, torch.Tensor]:
+            del modification_texts
+            return {"candidate_logits": self.projection(proposals)}
+
+    concept = MockConcept()
+    proposals = torch.randn(2, 4, 4, dtype=torch.bfloat16)
+    with pytest.raises(RuntimeError, match="same dtype"):
+        concept(proposals, ["red", "blue"])
+
+    output = _concept_forward_with_precision(
+        concept,
+        proposals,
+        ["red", "blue"],
+        device=torch.device("cpu"),
+        precision=SimpleNamespace(
+            autocast_enabled=True,
+            autocast_dtype=torch.bfloat16,
+        ),
+    )
+    assert output["candidate_logits"].shape == (2, 4, 3)
+    assert output["candidate_logits"].dtype == torch.bfloat16
 
 
 def test_zero_gradient_interference_has_no_nan_or_inf() -> None:

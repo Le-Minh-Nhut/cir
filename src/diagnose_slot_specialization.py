@@ -178,6 +178,24 @@ def _mil_summary(
     }
 
 
+def _concept_forward_with_precision(
+    concept: nn.Module,
+    proposals: Tensor,
+    modification_texts: list[str],
+    *,
+    device: torch.device,
+    precision: Any,
+) -> Mapping[str, Tensor]:
+    """Run diagnostic Concept-MIL through the configured mixed-precision path."""
+
+    with torch.autocast(
+        device_type=device.type,
+        enabled=precision.autocast_enabled,
+        dtype=precision.autocast_dtype,
+    ):
+        return concept(proposals, modification_texts)
+
+
 def _gradient_for(
     loss: Tensor,
     proposals: Tensor,
@@ -758,7 +776,13 @@ def main(cfg: DictConfig) -> None:
                     )
 
             if objective.concept is not None:
-                concept = objective.concept(step["proposals"], batch.modification_texts)
+                concept = _concept_forward_with_precision(
+                    objective.concept,
+                    step["proposals"],
+                    batch.modification_texts,
+                    device=device,
+                    precision=precision,
+                )
                 responsibility = concept_mil_responsibility(
                     concept["candidate_logits"], objective.config.tau_mil
                 )
