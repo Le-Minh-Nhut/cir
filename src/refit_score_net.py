@@ -99,6 +99,40 @@ def _source_objective_config(checkpoint: Mapping[str, Any]) -> Mapping[str, Any]
     return objective
 
 
+def _validate_refit_cache_contract(
+    cfg: DictConfig,
+    manifest: Mapping[str, Any],
+    *,
+    source_checkpoint_sha256: str,
+    source_objective: Mapping[str, Any],
+) -> None:
+    """Lock every cached-rollout behavior used by the scorer refit."""
+
+    retrieval_temperature = float(source_objective["retrieval_temperature"])
+    expected = {
+        "source_checkpoint_sha256": source_checkpoint_sha256,
+        "num_candidates": int(cfg.model.num_candidates),
+        "max_steps": int(cfg.model.max_steps),
+        "stop_enabled": bool(cfg.model.stop_enabled),
+        "epsilon_stop": float(cfg.model.epsilon_stop),
+        "score_dropout": float(cfg.model.score_dropout),
+        "retrieval_temperature": retrieval_temperature,
+    }
+    for field, configured in expected.items():
+        stored = manifest.get(field)
+        if stored != configured:
+            raise ValueError(
+                f"scorer cache contract mismatch for {field}: "
+                f"stored={stored!r}, configured={configured!r}"
+            )
+    configured_temperature = float(cfg.objective.retrieval_temperature)
+    if configured_temperature != retrieval_temperature:
+        raise ValueError(
+            "configured retrieval temperature differs from the source checkpoint: "
+            f"source={retrieval_temperature!r}, configured={configured_temperature!r}"
+        )
+
+
 def _validate_source_checkpoint(cfg: DictConfig, checkpoint: Mapping[str, Any]) -> None:
     validate_checkpoint_backbone_metadata(
         checkpoint.get("metadata"),
@@ -115,6 +149,7 @@ def _validate_source_checkpoint(cfg: DictConfig, checkpoint: Mapping[str, Any]) 
             "max_steps": int(cfg.model.max_steps),
             "stop_enabled": bool(cfg.model.stop_enabled),
             "epsilon_stop": float(cfg.model.epsilon_stop),
+            "score_dropout": float(cfg.model.score_dropout),
         },
     )
 
@@ -278,7 +313,7 @@ def collect_scorer_cache(
     if not shards:
         raise RuntimeError("scorer cache collection produced no valid teacher decisions")
     manifest: dict[str, Any] = {
-        "format_version": 1,
+        "format_version": 2,
         "workflow": "score_net_gain_only_refit",
         "source_checkpoint": str(source_checkpoint),
         "source_checkpoint_sha256": source_checkpoint_sha256,
@@ -301,6 +336,7 @@ def collect_scorer_cache(
         "retrieval_temperature": retrieval_temperature,
         "num_candidates": int(cfg.model.num_candidates),
         "max_steps": int(cfg.model.max_steps),
+        "stop_enabled": bool(cfg.model.stop_enabled),
         "epsilon_stop": float(cfg.model.epsilon_stop),
         "score_dropout": float(cfg.model.score_dropout),
         "raw_input_fields": list(SCORER_TENSOR_FIELDS),
@@ -373,6 +409,33 @@ def _to_device(batch: Mapping[str, Any], device: torch.device) -> dict[str, Any]
     }
 
 
+def _build_refit_checkpoint(
+    checkpoint: Mapping[str, Any],
+    model: Any,
+    optimizer: torch.optim.Optimizer,
+    *,
+    metadata: Mapping[str, Any],
+    epochs: int,
+    optimizer_steps: int,
+) -> dict[str, Any]:
+    """Build an inference-ready checkpoint without claiming full-trainer resumability."""
+
+    result = dict(checkpoint)
+    source_state = dict(checkpoint["model"])
+    for name, value in model.score_net.state_dict().items():
+        source_state[f"score_net.{name}"] = value.detach().cpu()
+    result["model"] = source_state
+    result["optimizer"] = None
+    result["scaler"] = None
+    result["score_refit_optimizer"] = optimizer.state_dict()
+    result["optimizer_step"] = optimizer_steps
+    result["batch_step"] = optimizer_steps
+    result["epoch"] = epochs
+    result["metric"] = None
+    result["metadata"] = dict(metadata)
+    return result
+
+
 @torch.no_grad()
 def _evaluate_cached_scorer(
     model: Any,
@@ -417,16 +480,14 @@ def refit_score_net(
     refit = cfg.scorer_refit
     cache_dir = Path(str(refit.cache_dir))
     manifest = _load_cache_manifest(cache_dir)
-    if manifest["source_checkpoint_sha256"] != source_checkpoint_sha256:
-        raise ValueError("cache and refit source checkpoints differ")
-    if int(manifest["num_candidates"]) != int(cfg.model.num_candidates):
-        raise ValueError("cache candidate count differs from model configuration")
     source_objective = _source_objective_config(checkpoint)
+    _validate_refit_cache_contract(
+        cfg,
+        manifest,
+        source_checkpoint_sha256=source_checkpoint_sha256,
+        source_objective=source_objective,
+    )
     huber_delta = float(source_objective["huber_delta"])
-    if float(manifest["retrieval_temperature"]) != float(
-        source_objective["retrieval_temperature"]
-    ):
-        raise ValueError("cache retrieval temperature differs from source checkpoint")
     manifest["huber_delta"] = huber_delta
 
     model, _, _ = build_model(cfg)
@@ -526,17 +587,6 @@ def refit_score_net(
 
     output_checkpoint = Path(str(refit.output_checkpoint))
     output_checkpoint.parent.mkdir(parents=True, exist_ok=True)
-    result = dict(checkpoint)
-    source_state = dict(checkpoint["model"])
-    for name, value in model.score_net.state_dict().items():
-        source_state[f"score_net.{name}"] = value.detach().cpu()
-    result["model"] = source_state
-    result["optimizer"] = optimizer.state_dict()
-    result["scaler"] = None
-    result["optimizer_step"] = optimizer_steps
-    result["batch_step"] = optimizer_steps
-    result["epoch"] = int(refit.epochs)
-    result["metric"] = None
     metadata = copy.deepcopy(checkpoint.get("metadata"))
     metadata = metadata if isinstance(metadata, dict) else {}
     source_identity = metadata.get("experiment_identity", "unknown")
@@ -544,6 +594,8 @@ def refit_score_net(
     metadata["source_validation_metric"] = checkpoint.get("metric")
     metadata["number_of_optimizer_updates"] = optimizer_steps
     metadata["optimizer_scope"] = "score_net_only"
+    metadata["exact_full_training_resume"] = False
+    metadata["resume_semantics"] = "warm_start_only_for_full_training"
     metadata["score_refit"] = {
         "workflow": "score_net_gain_only_refit",
         "source_checkpoint": str(source_checkpoint),
@@ -559,6 +611,9 @@ def refit_score_net(
         "learning_rate": float(refit.learning_rate),
         "weight_decay": float(refit.weight_decay),
         "optimizer": "AdamW",
+        "optimizer_state_field": "score_refit_optimizer",
+        "exact_full_training_resume": False,
+        "resume_semantics": "warm_start_only_for_full_training",
         "refit_precision": "fp32",
         "epochs": int(refit.epochs),
         "optimizer_steps": optimizer_steps,
@@ -582,7 +637,14 @@ def refit_score_net(
         "final_cached_calibration": final_calibration,
         "resolved_config": OmegaConf.to_container(cfg, resolve=True),
     }
-    result["metadata"] = metadata
+    result = _build_refit_checkpoint(
+        checkpoint,
+        model,
+        optimizer,
+        metadata=metadata,
+        epochs=int(refit.epochs),
+        optimizer_steps=optimizer_steps,
+    )
     torch.save(result, output_checkpoint)
     report = {
         "output_checkpoint": str(output_checkpoint),

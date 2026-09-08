@@ -5,18 +5,22 @@ import json
 
 import pytest
 import torch
+from omegaconf import OmegaConf
 
 from models.iag_srme import ScoreNet
 from refit_score_net import (
+    _build_refit_checkpoint,
     _json_fingerprint,
     _load_cache_manifest,
     _load_shard,
     _sha256_file,
+    _validate_refit_cache_contract,
 )
 from training.scorer_refit import (
     SCORER_TENSOR_FIELDS,
     assert_scorer_optimizer_ownership,
     build_score_refit_optimizer,
+    non_score_parameter_fingerprint,
     scorer_gain_loss,
     validate_scorer_batch,
 )
@@ -47,6 +51,7 @@ def _scorer_batch(
 
 
 def test_score_refit_optimizer_owns_every_and_only_scorenet_parameter(model) -> None:
+    non_score_before = non_score_parameter_fingerprint(model)
     optimizer = build_score_refit_optimizer(
         model, learning_rate=1e-2, weight_decay=0.0
     )
@@ -95,6 +100,97 @@ def test_score_refit_optimizer_owns_every_and_only_scorenet_parameter(model) -> 
         for name, parameter in model.named_parameters()
         if not name.startswith("score_net.")
     )
+    assert non_score_parameter_fingerprint(model) == non_score_before
+
+
+def test_refit_cache_contract_rejects_score_dropout_mismatch() -> None:
+    cfg = OmegaConf.create(
+        {
+            "model": {
+                "num_candidates": 4,
+                "max_steps": 3,
+                "stop_enabled": True,
+                "epsilon_stop": 0.0,
+                "score_dropout": 0.1,
+            },
+            "objective": {"retrieval_temperature": 0.07},
+        }
+    )
+    manifest = {
+        "source_checkpoint_sha256": "source-sha",
+        "num_candidates": 4,
+        "max_steps": 3,
+        "stop_enabled": True,
+        "epsilon_stop": 0.0,
+        "score_dropout": 0.1,
+        "retrieval_temperature": 0.07,
+    }
+    source_objective = {"retrieval_temperature": 0.07}
+    _validate_refit_cache_contract(
+        cfg,
+        manifest,
+        source_checkpoint_sha256="source-sha",
+        source_objective=source_objective,
+    )
+
+    manifest["score_dropout"] = 0.5
+    with pytest.raises(ValueError, match="contract mismatch for score_dropout"):
+        _validate_refit_cache_contract(
+            cfg,
+            manifest,
+            source_checkpoint_sha256="source-sha",
+            source_objective=source_objective,
+        )
+
+
+def test_refit_checkpoint_is_inference_ready_but_not_full_resume(
+    model, features, tmp_path
+) -> None:
+    optimizer = build_score_refit_optimizer(
+        model, learning_rate=1e-3, weight_decay=0.0
+    )
+    source = {
+        "model": copy.deepcopy(model.state_dict()),
+        "objective": {},
+        "optimizer": {"source_full_optimizer": True},
+        "scaler": {"source_scaler": True},
+        "metadata": {"experiment_identity": "R0-NCLS-TEXT"},
+    }
+    metadata = {
+        "optimizer_scope": "score_net_only",
+        "exact_full_training_resume": False,
+        "resume_semantics": "warm_start_only_for_full_training",
+    }
+    checkpoint = _build_refit_checkpoint(
+        source,
+        model,
+        optimizer,
+        metadata=metadata,
+        epochs=2,
+        optimizer_steps=7,
+    )
+
+    assert checkpoint["optimizer"] is None
+    assert checkpoint["scaler"] is None
+    assert checkpoint["score_refit_optimizer"] == optimizer.state_dict()
+    assert checkpoint["metadata"]["optimizer_scope"] == "score_net_only"
+    assert checkpoint["metadata"]["exact_full_training_resume"] is False
+    assert checkpoint["metadata"]["resume_semantics"] == (
+        "warm_start_only_for_full_training"
+    )
+
+    path = tmp_path / "score_refit.pt"
+    torch.save(checkpoint, path)
+    loaded = torch.load(path, map_location="cpu", weights_only=True)
+    restored = copy.deepcopy(model)
+    restored.load_state_dict(loaded["model"])
+    state, tokens, text, mask = features
+    model.eval()
+    restored.eval()
+    with torch.no_grad():
+        expected = model.forward_from_features(state, tokens, text, mask)["query"]
+        actual = restored.forward_from_features(state, tokens, text, mask)["query"]
+    torch.testing.assert_close(actual, expected)
 
 
 def test_gain_only_refit_learns_negative_scores_for_all_negative_utility() -> None:

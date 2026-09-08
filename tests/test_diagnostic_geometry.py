@@ -92,6 +92,36 @@ def test_manifest_replays_same_ids_captions_and_order(tmp_path) -> None:
     ]
 
 
+def test_val_manifest_creation_and_reuse_are_deterministic(tmp_path) -> None:
+    dataset = _Samples(200)
+    path = tmp_path / "shared_val_160.json"
+    first, manifest = load_or_create_manifest(
+        dataset,
+        path,
+        sample_count=160,
+        batch_size=8,
+        seed=42,
+        split="val",
+        caption_policy="ordered_and",
+    )
+    second, replayed = load_or_create_manifest(
+        dataset,
+        path,
+        sample_count=160,
+        batch_size=8,
+        seed=42,
+        split="val",
+        caption_policy="ordered_and",
+    )
+
+    assert manifest == replayed
+    assert [sample.sample_id for sample in first] == [sample.sample_id for sample in second]
+    ids = [sample.sample_id for sample in second]
+    metadata = validate_processed_manifest(replayed, ids, batch_size=8)
+    assert metadata["manifest_sample_count"] == 160
+    assert len(metadata["teacher_batch_grouping_sha256"]) == 64
+
+
 def test_manifest_rejects_truncation_and_fingerprints_processed_order(tmp_path) -> None:
     dataset = _Samples(160)
     path = tmp_path / "manifest.json"

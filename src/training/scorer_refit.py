@@ -180,7 +180,7 @@ def parameter_fingerprint(model: nn.Module, *, score_net: bool) -> str:
         value = parameter.detach().cpu().contiguous()
         digest.update(str(value.dtype).encode("ascii"))
         digest.update(str(tuple(value.shape)).encode("ascii"))
-        digest.update(value.view(torch.uint8).numpy().tobytes())
+        digest.update(value.numpy().tobytes())
     return digest.hexdigest()
 
 

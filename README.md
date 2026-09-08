@@ -115,8 +115,8 @@ branch.
 ## Matched OLD/STRONG diagnostics
 
 Diagnostics require a persistent manifest so both checkpoints see the same training
-samples, captions, ordering, target/teacher pool, and seed. The first command creates
-the manifest; every later command validates and reuses it.
+samples, captions, ordering, target/teacher pool, and seed. The TRAIN-160 manifest
+below is tracked in the repository; every command validates and reuses it.
 
 ```bash
 # OLD: geometry and per-slot/slot-centered spectra
@@ -124,7 +124,7 @@ python src/diagnose_latent_geometry.py \
   backbone=fgclip_base_text_native_cls \
   dataset.root=data/fashionIQ_dataset \
   +checkpoint=outputs/r0_ncls_text/best.pt \
-  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_train_160.json \
+  +diagnostic_manifest=doc/diagnostics/2026-09-08_v2-r0_old-vs-strong/shared_train_160.json \
   +diagnostic_batches=20 +diagnostic_batch_size=8 \
   hydra.run.dir=outputs/diagnostics/v2-r0/old_geometry
 
@@ -133,7 +133,7 @@ python src/diagnose_latent_geometry.py \
   backbone=fgclip_base_text_native_cls \
   dataset.root=data/fashionIQ_dataset \
   +checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
-  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_train_160.json \
+  +diagnostic_manifest=doc/diagnostics/2026-09-08_v2-r0_old-vs-strong/shared_train_160.json \
   +diagnostic_batches=20 +diagnostic_batch_size=8 \
   hydra.run.dir=outputs/diagnostics/v2-r0/strong_geometry
 
@@ -142,7 +142,7 @@ python src/diagnose_candidate_selector.py \
   backbone=fgclip_base_text_native_cls \
   dataset.root=data/fashionIQ_dataset \
   +checkpoint=outputs/r0_ncls_text/best.pt \
-  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_train_160.json \
+  +diagnostic_manifest=doc/diagnostics/2026-09-08_v2-r0_old-vs-strong/shared_train_160.json \
   +diagnostic_batches=20 +diagnostic_batch_size=8 \
   +diagnostic_official_eval=true \
   hydra.run.dir=outputs/diagnostics/v2-r0/old_selector
@@ -152,7 +152,7 @@ python src/diagnose_candidate_selector.py \
   backbone=fgclip_base_text_native_cls \
   dataset.root=data/fashionIQ_dataset \
   +checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
-  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_train_160.json \
+  +diagnostic_manifest=doc/diagnostics/2026-09-08_v2-r0_old-vs-strong/shared_train_160.json \
   +diagnostic_batches=20 +diagnostic_batch_size=8 \
   +diagnostic_official_eval=true \
   hydra.run.dir=outputs/diagnostics/v2-r0/strong_selector
@@ -215,18 +215,98 @@ python src/refit_score_net.py \
   hydra.run.dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/refit
 ```
 
-Cached calibration is only an offline fit check. Run `diagnose_candidate_selector.py`
-again from the refitted checkpoint on the same persistent manifest with
-`+diagnostic_official_eval=true`; that live rollout is the valid selector/STOP and
-FashionIQ comparison because the refitted scorer changes subsequent visited states.
+Refit rejects cache/config mismatches in source checkpoint SHA256, K, T, STOP enable,
+`epsilon_stop`, retrieval temperature, and `score_dropout`. Its checkpoint is directly
+loadable for inference/evaluation, but intentionally has `optimizer: null` and
+`scaler: null`: full-model continuation is a warm start with a newly constructed full
+optimizer, not an exact resume. The scorer-only AdamW state is stored separately as
+`score_refit_optimizer`.
+
+The raw full-TRAIN cache is intentionally large. With 18,000 FashionIQ TRAIN rows,
+K=4, T=3, 196 patches and D=768, `delta` alone has an upper bound of about 60.6 GiB
+in fp16 (121.1 GiB in fp32), before filesystem serialization overhead. STOP and
+invalid teacher rows reduce this in practice. The current cache stays raw and sharded;
+changing it to `local_mean [B,K,D]` would be a separate storage-only optimization.
+
+Cached calibration is only an offline fit diagnostic: its states were visited by the
+original STRONG policy. Better cached Pearson/MAE does not establish a successful live
+policy rescue.
+
+### TRAIN-160 live diagnostic (debugging only)
+
+This cohort overlaps the scorer training distribution. It is useful for fit debugging
+and trajectory comparison, but it is not held-out evidence.
 
 ```bash
+# Original STRONG
+python src/diagnose_candidate_selector.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
+  +diagnostic_manifest=doc/diagnostics/2026-09-08_v2-r0_old-vs-strong/shared_train_160.json \
+  +diagnostic_batches=20 +diagnostic_batch_size=8 \
+  +diagnostic_official_eval=false \
+  hydra.run.dir=outputs/diagnostics/v2-r0/strong_selector_train160
+
+# Gain-only refit
 python src/diagnose_candidate_selector.py \
   backbone=fgclip_base_text_native_cls \
   dataset.root=data/fashionIQ_dataset \
   +checkpoint=outputs/r0_ncls_text_strong_aux_score_gain_refit/score_gain_refit.pt \
-  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_train_160.json \
+  +diagnostic_manifest=doc/diagnostics/2026-09-08_v2-r0_old-vs-strong/shared_train_160.json \
   +diagnostic_batches=20 +diagnostic_batch_size=8 \
-  +diagnostic_official_eval=true \
-  hydra.run.dir=outputs/diagnostics/v2-r0/score_gain_refit_selector
+  +diagnostic_official_eval=false \
+  hydra.run.dir=outputs/diagnostics/v2-r0/score_gain_refit_selector_train160
 ```
+
+### VAL-160 held-out selector diagnostic
+
+Run STRONG first. It deterministically creates `shared_val_160.json`; the refit command
+then strictly replays the same IDs, order, captions and teacher-batch grouping.
+
+```bash
+# Original STRONG creates the persistent VAL manifest
+python src/diagnose_candidate_selector.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
+  +diagnostic_split=val \
+  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_val_160.json \
+  +diagnostic_batches=20 +diagnostic_batch_size=8 \
+  +diagnostic_official_eval=false \
+  hydra.run.dir=outputs/diagnostics/v2-r0/strong_selector_val160
+
+# Gain-only refit reuses the exact VAL cohort
+python src/diagnose_candidate_selector.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +checkpoint=outputs/r0_ncls_text_strong_aux_score_gain_refit/score_gain_refit.pt \
+  +diagnostic_split=val \
+  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_val_160.json \
+  +diagnostic_batches=20 +diagnostic_batch_size=8 \
+  +diagnostic_official_eval=false \
+  hydra.run.dir=outputs/diagnostics/v2-r0/score_gain_refit_selector_val160
+```
+
+### Full official FashionIQ validation
+
+```bash
+python src/evaluate.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +checkpoint=outputs/r0_ncls_text_strong_aux_score_gain_refit/score_gain_refit.pt \
+  hydra.run.dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/eval
+```
+
+Interpret results in this order: official Mean Recall; live selected teacher utility;
+live oracle regret; harmful execution fraction; STOP precision/recall/F1;
+selected/oracle agreement; score/teacher calibration; slot occupancy. VAL-160 is the
+held-out scorer-generalization diagnostic and should include utility/regret, harmful
+execution, STOP metrics, Pearson/bias/MAE/RMSE/sign agreement, agreement, slot usage
+and execute rate by timestep. Official FashionIQ VAL remains the primary benchmark
+through R@10, R@50 and Mean Recall.
+
+If cached calibration improves but VAL live regret and official Recall do not, the
+conclusion is that gain calibration is insufficient: ScoreNet is secondary and
+upstream candidate quality remains the dominant bottleneck. `L_safe` is the next
+separate research step; it is not part of this scorer-refit experiment.
