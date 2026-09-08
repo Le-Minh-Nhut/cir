@@ -1,0 +1,26 @@
+{
+  "checkpoint": "outputs/r0_ncls_text_strong_aux_score_gain_stream/score_gain_stream.pt",
+  "counterfactual": false,
+  "configuration_mismatches": [],
+  "configured_behavior": {
+    "num_candidates": 4,
+    "max_steps": 3,
+    "stop_enabled": true,
+    "epsilon_stop": 0.0,
+    "global_readout_mode": "native_cls",
+    "finetune_policy": "text_only",
+    "backbone_checkpoint": "qihoo360/fg-clip-base",
+    "backbone_revision": "454d76372c2cf5eb48fa0d871fd0534481484d97"
+  },
+  "metrics": {
+    "recall_at_10": 16.32934659719467,
+    "recall_at_50": 34.58387156327566,
+    "mean_recall": 25.456609080235165,
+    "dress_recall_at_10": 13.2870614528656,
+    "dress_recall_at_50": 32.07734525203705,
+    "shirt_recall_at_10": 18.056918680667877,
+    "shirt_recall_at_50": 35.672226548194885,
+    "toptee_recall_at_10": 17.644059658050537,
+    "toptee_recall_at_50": 36.00204288959503
+  }
+}

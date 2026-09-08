@@ -1,0 +1,7 @@
+- backbone=fgclip_base_text_native_cls
+- dataset.root=data/FashionIQ
+- +scorer_refit=gain_only
+- scorer_refit.mode=stream_refit
+- scorer_refit.source_checkpoint=outputs/r0_ncls_text_strong_aux/best.pt
+- scorer_refit.output_checkpoint=outputs/r0_ncls_text_strong_aux_score_gain_stream/score_gain_stream.pt
+- scorer_refit.stream_epochs=1

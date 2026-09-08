@@ -1,0 +1,99 @@
+dataset:
+  name: fashioniq
+  root: data/FashionIQ
+  annotation_dir: captions
+  split_dir: image_splits
+  image_dir: images
+model:
+  name: iag_srme
+  width: 256
+  num_candidates: 4
+  max_steps: 3
+  num_heads: 8
+  exec_dim: 256
+  stop_enabled: true
+  epsilon_stop: 0.0
+  read_scale_init: 10.0
+  exec_scale_init: 10.0
+  exec_bias_init: 0.0
+  score_dropout: 0.1
+backbone:
+  name: fgclip_base_text_native_cls
+  checkpoint: qihoo360/fg-clip-base
+  revision: 454d76372c2cf5eb48fa0d871fd0534481484d97
+  train_vision: false
+  train_text: true
+  finetune_policy: text_only
+  train_text_projection: false
+  trust_remote_code: true
+  max_text_length: 77
+  image_cache_path: null
+  global_readout_mode: native_cls
+  readout_experiment: R0-NCLS
+  experiment_identity: R0-NCLS-TEXT
+objective:
+  name: core
+  terminal_weight: 1.0
+  lambda_pair: 0.5
+  lambda_gain: 0.5
+  retrieval_temperature: 0.07
+  pair_temperature: 1.0
+  pair_weight_temperature: 1.0
+  epsilon_pair: 0.01
+  huber_delta: 1.0
+  concept_enabled: true
+  bind_enabled: true
+  rel_ortho_enabled: true
+  dpp_enabled: true
+  correspondence_enabled: false
+  lambda_c: 0.6
+  lambda_bind: 1.0
+  lambda_rel: 0.6
+  lambda_dpp: 0.6
+  tau_concept: 0.1
+  tau_mil: 1.0
+  beta_pos: 1.0
+  beta_neg: 4.0
+  concept_threshold: 0.5
+  concept_min_frequency: 2
+  concept_max_size: 2048
+  concept_parser_version: fashioniq_concepts_v2
+  num_relation_prototypes: 8
+  tau_rel: 0.1
+  kappa_dpp: 1.0
+  sigma_dpp: 1.0
+  tau_dpp: 0.1
+  useful_threshold: 0.55
+  dpp_jitter: 0.0001
+experiment:
+  name: iag_srme_base_full
+  epochs: 20
+  batch_size: 32
+  eval_batch_size: 32
+  gallery_batch_size: 128
+  num_workers: 8
+  logging_interval: 1
+  learning_rate: 1.0e-05
+  weight_decay: 0.01
+  train_caption_policy: ordered_and
+  val_caption_policy: ordered_and
+protocol:
+  name: fashioniq_original
+  dataset_name: fashioniq
+  split: val
+seed: 42
+runtime:
+  device: auto
+  accelerator_index: 0
+  precision: fp16
+  deterministic: true
+  benchmark: false
+paths:
+  data_root: ${oc.env:CIR_DATA_ROOT,data}
+  output_root: ${hydra:runtime.output_dir}
+checkpoint: outputs/r0_ncls_text_strong_aux_score_gain_stream/score_gain_stream.pt
+diagnostic_split: val
+diagnostic_manifest: outputs/diagnostics/v2-r0/shared_val_160.json
+diagnostic_batches: 20
+diagnostic_batch_size: 8
+diagnostic_official_eval: false

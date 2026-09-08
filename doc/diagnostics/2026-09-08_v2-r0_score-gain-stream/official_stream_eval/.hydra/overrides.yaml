@@ -1,0 +1,3 @@
+- backbone=fgclip_base_text_native_cls
+- dataset.root=data/FashionIQ
+- +checkpoint=outputs/r0_ncls_text_strong_aux_score_gain_stream/score_gain_stream.pt
