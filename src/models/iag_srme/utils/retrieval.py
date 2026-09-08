@@ -53,6 +53,68 @@ def teacher_retrieval_loss(
     return (total_lse - positive_lse).reshape(leading)
 
 
+def candidate_safety_loss(
+    current_query: Tensor,
+    candidate_queries: Tensor,
+    targets: Tensor,
+    positive_mask: Tensor,
+    negative_mask: Tensor,
+    temperature: float,
+) -> dict[str, Tensor]:
+    """Penalize candidate retrieval losses that exceed the detached parent loss.
+
+    Invalid teacher rows are selected out before either retrieval loss is evaluated.
+    The target bank and parent baseline are supervision-only constants, while current
+    candidate queries retain their gradient path to the candidate-producing modules.
+    """
+
+    valid_rows = positive_mask.any(dim=-1) & negative_mask.any(dim=-1)
+    valid_indices = valid_rows.nonzero(as_tuple=False).flatten()
+    if valid_indices.numel() == 0:
+        zero = candidate_queries.sum() * 0.0
+        return {
+            "loss": zero,
+            "numerator": zero,
+            "candidate_count": zero.detach(),
+            "valid_parent_count": zero.detach(),
+            "harmful_candidate_count": zero.detach(),
+            "positive_candidate_count": zero.detach(),
+        }
+
+    current_valid = current_query.index_select(0, valid_indices).detach()
+    candidates_valid = candidate_queries.index_select(0, valid_indices)
+    positive_valid = positive_mask.index_select(0, valid_indices)
+    negative_valid = negative_mask.index_select(0, valid_indices)
+    frozen_targets = targets.detach()
+
+    parent_loss = teacher_retrieval_loss(
+        current_valid,
+        frozen_targets,
+        positive_valid,
+        negative_valid,
+        temperature,
+    ).detach()
+    candidate_loss = teacher_retrieval_loss(
+        candidates_valid,
+        frozen_targets,
+        positive_valid,
+        negative_valid,
+        temperature,
+    )
+    penalty = F.relu(candidate_loss - parent_loss[:, None])
+    numerator = penalty.sum()
+    candidate_count = penalty.new_tensor(penalty.numel())
+    detached_delta = candidate_loss.detach() - parent_loss[:, None]
+    return {
+        "loss": numerator / candidate_count,
+        "numerator": numerator,
+        "candidate_count": candidate_count,
+        "valid_parent_count": penalty.new_tensor(valid_indices.numel()),
+        "harmful_candidate_count": (detached_delta > 0).sum().to(penalty.dtype),
+        "positive_candidate_count": (detached_delta < 0).sum().to(penalty.dtype),
+    }
+
+
 @torch.no_grad()
 def marginal_teacher_utilities(
     current_query: Tensor,

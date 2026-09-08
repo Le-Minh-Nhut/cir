@@ -2,6 +2,8 @@ name: core
 terminal_weight: 1.0
 lambda_pair: 0.5
 lambda_gain: 0.5
+# Q1 candidate-quality supervision. Disabled unless explicitly overridden.
+lambda_safe: 0.0
 retrieval_temperature: 0.07
 pair_temperature: 1.0
 pair_weight_temperature: 1.0

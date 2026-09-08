@@ -9,6 +9,7 @@ from torch import Tensor, nn
 
 from models.iag_srme.utils.retrieval import (
     build_teacher_masks,
+    candidate_safety_loss,
     marginal_teacher_utilities,
 )
 from models.iag_srme.utils.semantic import ConceptVocabulary, PARSER_VERSION
@@ -21,6 +22,7 @@ class ObjectiveConfig:
     terminal_weight: float = 1.0
     lambda_pair: float = 0.5
     lambda_gain: float = 0.5
+    lambda_safe: float = 0.0
     retrieval_temperature: float = 0.07
     pair_temperature: float = 1.0
     pair_weight_temperature: float = 1.0
@@ -386,6 +388,11 @@ class IAGSRMEObjective(nn.Module):
         pair_count = query.new_zeros(())
         gain_count = query.new_zeros(())
         invalid_rows = query.new_zeros(())
+        safe_numerator = zero
+        safe_candidate_count = query.new_zeros(())
+        safe_valid_parent_count = query.new_zeros(())
+        safe_harmful_candidate_count = query.new_zeros(())
+        safe_positive_candidate_count = query.new_zeros(())
         bind_numerator = zero
         bind_count = query.new_zeros(())
         binding_distributions: list[Tensor] = []
@@ -441,6 +448,31 @@ class IAGSRMEObjective(nn.Module):
             gain_count = gain_count + gains
             invalid_rows = invalid_rows + (~valid_rows).sum()
 
+            # L_safe is the only target-judged loss with a live candidate gradient.
+            # Its parent baseline and target bank are detached inside the helper.
+            if self.config.lambda_safe != 0.0:
+                safe = candidate_safety_loss(
+                    current_query,
+                    candidate_queries,
+                    target_embeddings,
+                    pos_live,
+                    neg_live,
+                    self.config.retrieval_temperature,
+                )
+                safe_numerator = safe_numerator + safe["numerator"]
+                safe_candidate_count = (
+                    safe_candidate_count + safe["candidate_count"]
+                )
+                safe_valid_parent_count = (
+                    safe_valid_parent_count + safe["valid_parent_count"]
+                )
+                safe_harmful_candidate_count = (
+                    safe_harmful_candidate_count + safe["harmful_candidate_count"]
+                )
+                safe_positive_candidate_count = (
+                    safe_positive_candidate_count + safe["positive_candidate_count"]
+                )
+
             if self.config.bind_enabled:
                 assert self.relation is not None
                 bind, edit_distribution, _ = self.relation.bind_loss(
@@ -483,6 +515,7 @@ class IAGSRMEObjective(nn.Module):
 
         pair = pair_numerator / pair_count.clamp_min(1e-8)
         gain = gain_numerator / gain_count.clamp_min(1)
+        safe_raw = safe_numerator / safe_candidate_count.clamp_min(1)
         bind = bind_numerator / bind_count.clamp_min(1)
         dpp_raw = dpp_numerator / dpp_count.clamp_min(1)
         rel_ortho = self.relation.orthogonality_loss() if self.config.rel_ortho_enabled else zero
@@ -517,10 +550,24 @@ class IAGSRMEObjective(nn.Module):
         dpp_valid_rate = dpp_count / useful_rows.clamp_min(1)
 
         dpp_weighted = self.config.lambda_dpp * dpp_raw
+        safe_weighted = self.config.lambda_safe * safe_raw
+        safe_harmful_fraction = (
+            safe_harmful_candidate_count / safe_candidate_count.clamp_min(1)
+        )
+        safe_positive_fraction = (
+            safe_positive_candidate_count / safe_candidate_count.clamp_min(1)
+        )
+        safe_harmful_per_parent = (
+            safe_harmful_candidate_count / safe_valid_parent_count.clamp_min(1)
+        )
+        safe_positive_per_parent = (
+            safe_positive_candidate_count / safe_valid_parent_count.clamp_min(1)
+        )
         total = (
             self.config.terminal_weight * terminal
             + self.config.lambda_pair * pair
             + self.config.lambda_gain * gain
+            + safe_weighted
             + self.config.lambda_c * concept_loss
             + self.config.lambda_bind * bind
             + self.config.lambda_rel * rel_ortho
@@ -530,6 +577,14 @@ class IAGSRMEObjective(nn.Module):
             "terminal": terminal,
             "pair": pair,
             "gain": gain,
+            "safe_raw": safe_raw,
+            "safe_weighted": safe_weighted,
+            "safe_candidate_count": safe_candidate_count.detach(),
+            "safe_valid_parent_count": safe_valid_parent_count.detach(),
+            "safe_harmful_candidate_fraction": safe_harmful_fraction.detach(),
+            "safe_positive_candidate_fraction": safe_positive_fraction.detach(),
+            "safe_mean_harmful_candidates_per_parent": safe_harmful_per_parent.detach(),
+            "safe_mean_positive_candidates_per_parent": safe_positive_per_parent.detach(),
             "concept_loss": concept_loss,
             "bind_loss": bind,
             "rel_ortho_loss": rel_ortho,

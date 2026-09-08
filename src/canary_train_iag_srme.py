@@ -109,6 +109,12 @@ def main() -> None:
         default=os.environ.get("FASHIONIQ_ROOT", "data/fashionIQ_dataset"),
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--lambda-safe",
+        type=float,
+        default=0.0,
+        help="Q1 candidate no-harm loss coefficient (disabled by default)",
+    )
     args = parser.parse_args()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -132,6 +138,7 @@ def main() -> None:
         bind_enabled=True,
         rel_ortho_enabled=True,
         dpp_enabled=True,
+        lambda_safe=args.lambda_safe,
     )
     vocabulary = build_concept_vocabulary(dataset, objective_config)
     prototypes = encode_concept_prototypes(model, tokenizer, vocabulary, 77)
@@ -194,6 +201,15 @@ def main() -> None:
                 "terminal": float(losses["terminal"].detach()),
                 "pair": float(losses["pair"].detach()),
                 "gain": float(losses["gain"].detach()),
+                "safe_raw": float(losses["safe_raw"].detach()),
+                "safe_weighted": float(losses["safe_weighted"].detach()),
+                "safe_candidate_count": int(losses["safe_candidate_count"]),
+                "safe_harmful_candidate_fraction": float(
+                    losses["safe_harmful_candidate_fraction"]
+                ),
+                "safe_positive_candidate_fraction": float(
+                    losses["safe_positive_candidate_fraction"]
+                ),
                 "concept": float(losses["concept_loss"].detach()),
                 "bind": float(losses["bind_loss"].detach()),
                 "rel_ortho": float(losses["rel_ortho_loss"].detach()),
