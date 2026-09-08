@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import copy
 import json
+from types import SimpleNamespace
 
 import pytest
 import torch
 from omegaconf import OmegaConf
 
+import refit_score_net as refit_workflow
+from data.images import ImageBatch
+from datasets.common import CIRSample
 from models.iag_srme import ScoreNet
 from refit_score_net import (
     _build_refit_checkpoint,
@@ -18,10 +22,14 @@ from refit_score_net import (
 )
 from training.scorer_refit import (
     SCORER_TENSOR_FIELDS,
+    assert_module_optimizer_ownership,
     assert_scorer_optimizer_ownership,
     build_score_refit_optimizer,
+    build_standalone_score_optimizer,
+    module_parameter_fingerprint,
     non_score_parameter_fingerprint,
     scorer_gain_loss,
+    streaming_scorer_step,
     validate_scorer_batch,
 )
 
@@ -146,11 +154,15 @@ def test_refit_cache_contract_rejects_score_dropout_mismatch() -> None:
 def test_refit_checkpoint_is_inference_ready_but_not_full_resume(
     model, features, tmp_path
 ) -> None:
-    optimizer = build_score_refit_optimizer(
-        model, learning_rate=1e-3, weight_decay=0.0
+    behavior = copy.deepcopy(model).eval()
+    for parameter in behavior.parameters():
+        parameter.requires_grad_(False)
+    standalone = copy.deepcopy(behavior.score_net)
+    optimizer = build_standalone_score_optimizer(
+        standalone, learning_rate=1e-3, weight_decay=0.0
     )
     source = {
-        "model": copy.deepcopy(model.state_dict()),
+        "model": copy.deepcopy(behavior.state_dict()),
         "objective": {},
         "optimizer": {"source_full_optimizer": True},
         "scaler": {"source_scaler": True},
@@ -163,7 +175,7 @@ def test_refit_checkpoint_is_inference_ready_but_not_full_resume(
     }
     checkpoint = _build_refit_checkpoint(
         source,
-        model,
+        standalone,
         optimizer,
         metadata=metadata,
         epochs=2,
@@ -182,15 +194,193 @@ def test_refit_checkpoint_is_inference_ready_but_not_full_resume(
     path = tmp_path / "score_refit.pt"
     torch.save(checkpoint, path)
     loaded = torch.load(path, map_location="cpu", weights_only=True)
-    restored = copy.deepcopy(model)
+    restored = copy.deepcopy(behavior)
     restored.load_state_dict(loaded["model"])
     state, tokens, text, mask = features
-    model.eval()
     restored.eval()
     with torch.no_grad():
-        expected = model.forward_from_features(state, tokens, text, mask)["query"]
+        expected = behavior.forward_from_features(state, tokens, text, mask)["query"]
         actual = restored.forward_from_features(state, tokens, text, mask)["query"]
     torch.testing.assert_close(actual, expected)
+
+
+def test_streaming_update_trains_only_standalone_score_net(model, tmp_path) -> None:
+    behavior = copy.deepcopy(model).eval()
+    for parameter in behavior.parameters():
+        parameter.requires_grad_(False)
+    standalone = copy.deepcopy(behavior.score_net)
+    optimizer = build_standalone_score_optimizer(
+        standalone, learning_rate=1e-2, weight_decay=0.0
+    )
+    assert_module_optimizer_ownership(standalone, optimizer)
+
+    behavior_before = module_parameter_fingerprint(behavior)
+    behavior_score_before = module_parameter_fingerprint(behavior.score_net)
+    refit_before = module_parameter_fingerprint(standalone)
+    loss, predicted = streaming_scorer_step(
+        standalone,
+        optimizer,
+        _scorer_batch(),
+        huber_delta=1.0,
+    )
+
+    assert torch.isfinite(loss)
+    assert torch.isfinite(predicted).all()
+    assert module_parameter_fingerprint(behavior) == behavior_before
+    assert module_parameter_fingerprint(behavior.score_net) == behavior_score_before
+    assert module_parameter_fingerprint(standalone) != refit_before
+    assert not list(tmp_path.glob("shard_*.pt"))
+
+
+def test_stream_refit_checkpoint_changes_only_score_net_model_weights(model) -> None:
+    behavior = copy.deepcopy(model).eval()
+    standalone = copy.deepcopy(behavior.score_net)
+    optimizer = build_standalone_score_optimizer(
+        standalone, learning_rate=1e-2, weight_decay=0.0
+    )
+    streaming_scorer_step(
+        standalone,
+        optimizer,
+        _scorer_batch(),
+        huber_delta=1.0,
+    )
+    source_state = copy.deepcopy(behavior.state_dict())
+    checkpoint = _build_refit_checkpoint(
+        {"model": source_state},
+        standalone,
+        optimizer,
+        metadata={"workflow": "score_net_gain_only_stream_refit"},
+        epochs=1,
+        optimizer_steps=1,
+    )
+
+    changed = [
+        name
+        for name, value in checkpoint["model"].items()
+        if not torch.equal(value, source_state[name])
+    ]
+    assert changed
+    assert all(name.startswith("score_net.") for name in changed)
+
+
+def test_stream_refit_mode_uses_frozen_behavior_and_writes_no_cache(
+    model, tmp_path, monkeypatch
+) -> None:
+    samples = [
+        CIRSample(
+            sample_id=f"sample-{index}",
+            benchmark_id=None,
+            reference_id=f"reference-{index}",
+            target_id=f"target-{index}",
+            modification_text=f"caption-{index}",
+            category="dress",
+        )
+        for index in range(2)
+    ]
+
+    class TinyDataset(torch.utils.data.Dataset):
+        def __len__(self) -> int:
+            return len(samples)
+
+        def __getitem__(self, index: int) -> CIRSample:
+            return samples[index]
+
+    batch = ImageBatch(
+        sample_ids=[sample.sample_id for sample in samples],
+        reference_ids=[sample.reference_id for sample in samples],
+        target_ids=[sample.target_id for sample in samples],
+        modification_texts=[sample.modification_text for sample in samples],
+        categories=[sample.category for sample in samples],
+        reference_pixels=torch.randn(2, 3, 3, 3),
+        target_pixels=torch.randn(2, 3, 3, 3),
+        input_ids=torch.randint(0, 32, (2, 4)),
+        attention_mask=torch.ones(2, 4, dtype=torch.bool),
+        content_mask=torch.tensor([[False, True, True, False]]).expand(2, -1),
+    )
+    behavior = copy.deepcopy(model)
+    behavior_before = module_parameter_fingerprint(behavior)
+    behavior_score_before = module_parameter_fingerprint(behavior.score_net)
+    source_state = copy.deepcopy(behavior.state_dict())
+    output_checkpoint = tmp_path / "score_gain_stream.pt"
+    cache_dir = tmp_path / "must-not-exist"
+    cfg = OmegaConf.create(
+        {
+            "seed": 42,
+            "model": {
+                "num_candidates": 4,
+                "max_steps": 3,
+                "stop_enabled": False,
+                "epsilon_stop": 0.0,
+                "score_dropout": 0.0,
+            },
+            "objective": {"retrieval_temperature": 0.07},
+            "backbone": {"max_text_length": 4},
+            "dataset": {"root": str(tmp_path), "annotation_dir": "captions", "image_dir": "images"},
+            "experiment": {"train_caption_policy": "ordered_and", "num_workers": 0},
+            "runtime": {"precision": "fp32"},
+            "scorer_refit": {
+                "collection_split": "train",
+                "sample_count": 2,
+                "collection_batch_size": 2,
+                "stream_epochs": 1,
+                "learning_rate": 1e-2,
+                "weight_decay": 0.0,
+                "lambda_pair": 0.0,
+                "loss": "absolute_gain_huber_only",
+                "cache_dir": str(cache_dir),
+                "output_checkpoint": str(output_checkpoint),
+            },
+        }
+    )
+    checkpoint = {
+        "model": source_state,
+        "objective": {},
+        "epoch": 4,
+        "optimizer_step": 12,
+        "metric": 1.0,
+        "metadata": {
+            "experiment_identity": "R0-NCLS-TEXT",
+            "objective_config": {"retrieval_temperature": 0.07, "huber_delta": 1.0},
+            "run": {"batch_size": 2, "git_sha": "source-git"},
+        },
+    }
+    monkeypatch.setattr(
+        refit_workflow, "build_model", lambda unused_cfg: (behavior, None, None)
+    )
+    monkeypatch.setattr(refit_workflow, "FashionIQDataset", lambda *args, **kwargs: TinyDataset())
+    monkeypatch.setattr(refit_workflow, "DirectoryImageStore", lambda path: object())
+    monkeypatch.setattr(refit_workflow, "FashionIQImageCollator", lambda *args, **kwargs: object())
+    monkeypatch.setattr(refit_workflow, "DataLoader", lambda *args, **kwargs: [batch])
+    monkeypatch.setattr(
+        refit_workflow.HydraConfig,
+        "get",
+        staticmethod(lambda: SimpleNamespace(runtime=SimpleNamespace(output_dir=str(tmp_path)))),
+    )
+
+    report = refit_workflow.stream_refit_score_net(
+        cfg,
+        checkpoint,
+        tmp_path / "source.pt",
+        source_checkpoint_sha256="source-sha",
+        device=torch.device("cpu"),
+    )
+
+    assert report["workflow"] == "score_net_gain_only_stream_refit"
+    assert report["cache_used"] is False
+    assert output_checkpoint.is_file()
+    assert not cache_dir.exists()
+    assert not list(tmp_path.rglob("shard_*.pt"))
+    assert module_parameter_fingerprint(behavior) == behavior_before
+    assert module_parameter_fingerprint(behavior.score_net) == behavior_score_before
+    loaded = torch.load(output_checkpoint, map_location="cpu", weights_only=True)
+    changed = [
+        name
+        for name, value in loaded["model"].items()
+        if not torch.equal(value, source_state[name])
+    ]
+    assert changed and all(name.startswith("score_net.") for name in changed)
+    restored = copy.deepcopy(behavior)
+    restored.load_state_dict(loaded["model"])
 
 
 def test_gain_only_refit_learns_negative_scores_for_all_negative_utility() -> None:

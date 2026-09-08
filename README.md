@@ -232,6 +232,57 @@ Cached calibration is only an offline fit diagnostic: its states were visited by
 original STRONG policy. Better cached Pearson/MAE does not establish a successful live
 policy rescue.
 
+### No-cache streaming pilot
+
+`stream_refit` is a quick frozen-policy one-pass pilot, not a replacement for the
+controlled cached experiment. One frozen full STRONG model produces every TRAIN
+trajectory; a separate standalone copy of ScoreNet receives gain-only updates. The
+behavior model, including its original ScoreNet, never changes, and no cache directory
+or `shard_*.pt` is created. The default `stream_epochs=1`; overriding it reruns the
+expensive frozen STRONG rollout for every additional epoch.
+
+```bash
+python src/refit_score_net.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +scorer_refit=gain_only \
+  scorer_refit.mode=stream_refit \
+  scorer_refit.source_checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
+  scorer_refit.output_checkpoint=outputs/r0_ncls_text_strong_aux_score_gain_stream/score_gain_stream.pt \
+  scorer_refit.stream_epochs=1 \
+  hydra.run.dir=outputs/r0_ncls_text_strong_aux_score_gain_stream/refit
+```
+
+Held-out VAL-160 live diagnostic, reusing the persistent manifest created by the
+original STRONG VAL command below:
+
+```bash
+python src/diagnose_candidate_selector.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +checkpoint=outputs/r0_ncls_text_strong_aux_score_gain_stream/score_gain_stream.pt \
+  +diagnostic_split=val \
+  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_val_160.json \
+  +diagnostic_batches=20 \
+  +diagnostic_batch_size=8 \
+  +diagnostic_official_eval=false \
+  hydra.run.dir=outputs/diagnostics/v2-r0/score_gain_stream_selector_val160
+```
+
+```bash
+python src/evaluate.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +checkpoint=outputs/r0_ncls_text_strong_aux_score_gain_stream/score_gain_stream.pt \
+  hydra.run.dir=outputs/r0_ncls_text_strong_aux_score_gain_stream/eval
+```
+
+The pilot asks only whether direct absolute-gain fitting on frozen STRONG rollouts
+improves held-out live regret, harmful execution, STOP calibration and official
+retrieval. It is not equivalent to a 20-epoch cached refit. If those metrics do not
+improve materially, do not tune the scorer indefinitely; upstream candidate quality
+likely remains the dominant bottleneck.
+
 ### TRAIN-160 live diagnostic (debugging only)
 
 This cohort overlaps the scorer training distribution. It is useful for fit debugging

@@ -18,6 +18,14 @@ Refit all ScoreNet parameters and save a normal model checkpoint::
       scorer_refit.cache_dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/cache \
       scorer_refit.output_checkpoint=outputs/r0_ncls_text_strong_aux_score_gain_refit/score_gain_refit.pt \
       hydra.run.dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/refit
+
+Run a one-pass frozen-policy pilot without a disk cache::
+
+    python src/refit_score_net.py backbone=fgclip_base_text_native_cls \
+      +scorer_refit=gain_only scorer_refit.mode=stream_refit \
+      scorer_refit.stream_epochs=1 \
+      scorer_refit.source_checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
+      scorer_refit.output_checkpoint=outputs/score_gain_stream.pt
 """
 
 from __future__ import annotations
@@ -48,10 +56,13 @@ from train import CATEGORIES, build_model, git_identity
 from training.scorer_refit import (
     SCORER_TENSOR_FIELDS,
     build_score_refit_optimizer,
+    build_standalone_score_optimizer,
+    module_parameter_fingerprint,
     non_score_parameter_fingerprint,
     parameter_fingerprint,
     scorer_gain_loss,
     scorer_minibatches,
+    streaming_scorer_step,
     validate_scorer_batch,
 )
 from training.engine import resolve_precision
@@ -411,7 +422,7 @@ def _to_device(batch: Mapping[str, Any], device: torch.device) -> dict[str, Any]
 
 def _build_refit_checkpoint(
     checkpoint: Mapping[str, Any],
-    model: Any,
+    score_net: Any,
     optimizer: torch.optim.Optimizer,
     *,
     metadata: Mapping[str, Any],
@@ -422,7 +433,7 @@ def _build_refit_checkpoint(
 
     result = dict(checkpoint)
     source_state = dict(checkpoint["model"])
-    for name, value in model.score_net.state_dict().items():
+    for name, value in score_net.state_dict().items():
         source_state[f"score_net.{name}"] = value.detach().cpu()
     result["model"] = source_state
     result["optimizer"] = None
@@ -467,6 +478,312 @@ def _evaluate_cached_scorer(
             predicted.append(scores.cpu())
             teacher.append(device_batch["teacher_utility"].cpu())
     return score_utility_calibration(torch.cat(predicted), torch.cat(teacher))
+
+
+def _stream_step_batch(
+    step: Mapping[str, Tensor],
+    teacher_utility: Tensor,
+    valid_rows: Tensor,
+    batch_sample_ids: list[str],
+    *,
+    num_candidates: int,
+) -> dict[str, Any]:
+    """Detach valid raw ScoreNet inputs without writing or retaining a cache."""
+
+    row_indices = valid_rows.nonzero(as_tuple=False).squeeze(-1)
+    live_indices = step["live_indices"].detach().cpu().tolist()
+    live_ids = [batch_sample_ids[index] for index in live_indices]
+    valid_ids = [live_ids[index] for index in row_indices.detach().cpu().tolist()]
+    batch = {
+        name: step[name].index_select(0, row_indices).detach().float()
+        for name in (
+            "current_global",
+            "text_global",
+            "actions",
+            "delta",
+            "exec_mask",
+            "candidate_global",
+        )
+    }
+    batch.update(
+        {
+            "teacher_utility": teacher_utility.index_select(0, row_indices).detach().float(),
+            "timestep": torch.full(
+                (row_indices.numel(),),
+                int(step["timestep"]),
+                dtype=torch.long,
+                device=teacher_utility.device,
+            ),
+            "sample_ids": valid_ids,
+        }
+    )
+    validate_scorer_batch(batch, num_candidates)
+    return batch
+
+
+def stream_refit_score_net(
+    cfg: DictConfig,
+    checkpoint: Mapping[str, Any],
+    source_checkpoint: Path,
+    *,
+    source_checkpoint_sha256: str,
+    device: torch.device,
+) -> dict[str, Any]:
+    """One-pass frozen-policy pilot with a standalone trainable ScoreNet copy."""
+
+    refit = cfg.scorer_refit
+    source_objective = _source_objective_config(checkpoint)
+    retrieval_temperature = float(source_objective["retrieval_temperature"])
+    if float(cfg.objective.retrieval_temperature) != retrieval_temperature:
+        raise ValueError("configured retrieval temperature differs from source checkpoint")
+    huber_delta = float(source_objective["huber_delta"])
+
+    behavior_model, tokenizer, processor = build_model(cfg)
+    behavior_model.load_state_dict(checkpoint["model"])
+    for parameter in behavior_model.parameters():
+        parameter.requires_grad_(False)
+    behavior_model.to(device).eval()
+    behavior_before = module_parameter_fingerprint(behavior_model)
+    behavior_score_before = module_parameter_fingerprint(behavior_model.score_net)
+
+    refit_score_net = copy.deepcopy(behavior_model.score_net).to(device).train()
+    refit_score_before = module_parameter_fingerprint(refit_score_net)
+    optimizer = build_standalone_score_optimizer(
+        refit_score_net,
+        learning_rate=float(refit.learning_rate),
+        weight_decay=float(refit.weight_decay),
+    )
+
+    dataset_root = Path(cfg.dataset.root)
+    dataset = FashionIQDataset(
+        dataset_root / str(cfg.dataset.annotation_dir),
+        str(refit.collection_split),
+        CATEGORIES,
+        caption_policy=str(cfg.experiment.train_caption_policy),
+        seed=int(cfg.seed),
+    )
+    cohort, sample_records = _fixed_train_subset(
+        dataset,
+        sample_count=int(refit.sample_count),
+        seed=int(cfg.seed),
+    )
+    batch_size = int(refit.collection_batch_size)
+    source_metadata = checkpoint.get("metadata")
+    source_metadata = source_metadata if isinstance(source_metadata, Mapping) else {}
+    source_run = source_metadata.get("run")
+    source_run = source_run if isinstance(source_run, Mapping) else {}
+    source_batch_size = source_run.get("batch_size")
+    if source_batch_size is not None and int(source_batch_size) != batch_size:
+        raise ValueError(
+            "collection_batch_size must match the source training batch size because "
+            "it changes the in-batch teacher pool"
+        )
+    loader = DataLoader(
+        cohort,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=int(cfg.experiment.num_workers),
+        pin_memory=True,
+        drop_last=False,
+        collate_fn=FashionIQImageCollator(
+            DirectoryImageStore(dataset_root / str(cfg.dataset.image_dir)),
+            tokenizer,
+            processor,
+            int(cfg.backbone.max_text_length),
+            include_targets=True,
+        ),
+    )
+    precision = resolve_precision(str(cfg.runtime.precision), device)
+    stream_epochs = int(refit.stream_epochs)
+    if stream_epochs < 1:
+        raise ValueError("stream_epochs must be at least one")
+
+    output_dir = Path(HydraConfig.get().runtime.output_dir)
+    metrics_path = output_dir / "metrics.jsonl"
+    optimizer_steps = 0
+    valid_decisions = 0
+    invalid_rows = 0
+    streamed_sample_visits = 0
+    predicted_values = []
+    teacher_values = []
+    for epoch in range(stream_epochs):
+        loss_sum = 0.0
+        score_count = 0
+        for batch_index, cpu_batch in enumerate(loader):
+            streamed_sample_visits += len(cpu_batch.sample_ids)
+            batch = cpu_batch.to(device)
+            if batch.target_pixels is None:
+                raise ValueError("stream refit requires target images for the teacher")
+            with torch.no_grad(), torch.autocast(
+                device_type=device.type,
+                enabled=precision.autocast_enabled,
+                dtype=precision.autocast_dtype,
+            ):
+                output = behavior_model(
+                    batch.reference_pixels,
+                    batch.input_ids,
+                    batch.attention_mask,
+                    batch.content_mask,
+                )
+                targets = behavior_model.encode_global_images(batch.target_pixels)
+            positive, negative, _ = build_teacher_masks(batch.target_ids, device)
+            for step in output["steps"]:
+                live_indices = step["live_indices"]
+                teacher, valid_rows = marginal_teacher_utilities(
+                    step["current_query"],
+                    step["candidate_queries"],
+                    targets.detach(),
+                    positive.index_select(0, live_indices),
+                    negative.index_select(0, live_indices),
+                    retrieval_temperature,
+                )
+                invalid_rows += int((~valid_rows).sum().cpu())
+                if not valid_rows.any():
+                    continue
+                scorer_batch = _stream_step_batch(
+                    step,
+                    teacher,
+                    valid_rows,
+                    list(batch.sample_ids),
+                    num_candidates=int(cfg.model.num_candidates),
+                )
+                loss, predicted = streaming_scorer_step(
+                    refit_score_net,
+                    optimizer,
+                    scorer_batch,
+                    huber_delta=huber_delta,
+                )
+                optimizer_steps += 1
+                rows = len(scorer_batch["sample_ids"])
+                valid_decisions += rows
+                elements = predicted.numel()
+                loss_sum += float(loss) * elements
+                score_count += elements
+                predicted_values.append(predicted.cpu())
+                teacher_values.append(scorer_batch["teacher_utility"].cpu())
+            print(
+                f"[score-refit/stream] epoch={epoch + 1}/{stream_epochs} "
+                f"batch={batch_index + 1}/{len(loader)} steps={optimizer_steps}"
+            )
+        record = {
+            "record_type": "score_stream_refit_epoch",
+            "epoch": epoch + 1,
+            "optimizer_steps": optimizer_steps,
+            "valid_decisions": valid_decisions,
+            "teacher_invalid_rows": invalid_rows,
+            "gain_huber": loss_sum / max(score_count, 1),
+            "learning_rate": float(refit.learning_rate),
+        }
+        with metrics_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record) + "\n")
+
+    behavior_after = module_parameter_fingerprint(behavior_model)
+    behavior_score_after = module_parameter_fingerprint(behavior_model.score_net)
+    refit_score_after = module_parameter_fingerprint(refit_score_net)
+    if behavior_after != behavior_before or behavior_score_after != behavior_score_before:
+        raise RuntimeError("frozen behavior model changed during streaming scorer refit")
+    if not predicted_values:
+        raise RuntimeError("stream refit produced no valid teacher decisions")
+    if refit_score_after == refit_score_before:
+        raise RuntimeError("standalone ScoreNet did not change during stream refit")
+    calibration = score_utility_calibration(
+        torch.cat(predicted_values), torch.cat(teacher_values)
+    )
+
+    metadata = copy.deepcopy(checkpoint.get("metadata"))
+    metadata = metadata if isinstance(metadata, dict) else {}
+    source_identity = metadata.get("experiment_identity", "unknown")
+    metadata["experiment_identity"] = f"{source_identity}-SCORE-GAIN-STREAM"
+    metadata["source_validation_metric"] = checkpoint.get("metric")
+    metadata["number_of_optimizer_updates"] = optimizer_steps
+    metadata["optimizer_scope"] = "score_net_only"
+    metadata["exact_full_training_resume"] = False
+    metadata["resume_semantics"] = "warm_start_only_for_full_training"
+    metadata["score_refit"] = {
+        "workflow": "score_net_gain_only_stream_refit",
+        "behavior_policy": "frozen_source_checkpoint",
+        "streaming": True,
+        "cache_used": False,
+        "source_checkpoint": str(source_checkpoint),
+        "source_checkpoint_sha256": source_checkpoint_sha256,
+        "source_epoch": checkpoint.get("epoch"),
+        "source_optimizer_step": checkpoint.get("optimizer_step"),
+        "source_batch_step": checkpoint.get("batch_step"),
+        "source_git_sha": (
+            source_run.get("git_sha")
+            or source_metadata.get("git_sha")
+            or checkpoint.get("git_commit")
+        ),
+        "collection_split": str(refit.collection_split),
+        "sample_count": len(sample_records),
+        "dataset_records_fingerprint": _json_fingerprint(sample_records),
+        "streamed_sample_visits": streamed_sample_visits,
+        "collection_batch_size": batch_size,
+        "source_training_batch_size": source_batch_size,
+        "retrieval_temperature": retrieval_temperature,
+        "num_candidates": int(cfg.model.num_candidates),
+        "max_steps": int(cfg.model.max_steps),
+        "stop_enabled": bool(cfg.model.stop_enabled),
+        "epsilon_stop": float(cfg.model.epsilon_stop),
+        "score_dropout": float(cfg.model.score_dropout),
+        "learning_rate": float(refit.learning_rate),
+        "weight_decay": float(refit.weight_decay),
+        "optimizer": "AdamW",
+        "optimizer_state_field": "score_refit_optimizer",
+        "exact_full_training_resume": False,
+        "resume_semantics": "warm_start_only_for_full_training",
+        "refit_precision": "fp32",
+        "stream_epochs": stream_epochs,
+        "score_update_unit": "one_live_timestep_valid_rows",
+        "optimizer_steps": optimizer_steps,
+        "valid_decision_count": valid_decisions,
+        "teacher_invalid_row_count": invalid_rows,
+        "seed": int(cfg.seed),
+        "huber_delta": huber_delta,
+        "lambda_pair": float(refit.lambda_pair),
+        "loss": str(refit.loss),
+        "trainable_parameter_names": [
+            f"score_net.{name}" for name, _ in refit_score_net.named_parameters()
+        ],
+        "trainable_parameter_count": sum(
+            parameter.numel() for parameter in refit_score_net.parameters()
+        ),
+        "behavior_parameter_fingerprint_before": behavior_before,
+        "behavior_parameter_fingerprint_after": behavior_after,
+        "behavior_parameters_unchanged": True,
+        "behavior_score_net_fingerprint_before": behavior_score_before,
+        "behavior_score_net_fingerprint_after": behavior_score_after,
+        "behavior_score_net_unchanged": True,
+        "refit_score_net_fingerprint_before": refit_score_before,
+        "refit_score_net_fingerprint_after": refit_score_after,
+        "refit_score_net_changed": True,
+        "stream_pre_update_calibration": calibration,
+        "resolved_config": OmegaConf.to_container(cfg, resolve=True),
+    }
+    output_checkpoint = Path(str(refit.output_checkpoint))
+    output_checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    result = _build_refit_checkpoint(
+        checkpoint,
+        refit_score_net,
+        optimizer,
+        metadata=metadata,
+        epochs=stream_epochs,
+        optimizer_steps=optimizer_steps,
+    )
+    torch.save(result, output_checkpoint)
+    report = {
+        "output_checkpoint": str(output_checkpoint),
+        **metadata["score_refit"],
+        "live_rollout_required": True,
+        "note": (
+            "Streaming calibration is pre-update training telemetry. Run held-out live "
+            "diagnostics and official FashionIQ evaluation from this checkpoint."
+        ),
+    }
+    (output_dir / "stream_refit_report.json").write_text(
+        json.dumps(report, indent=2), encoding="utf-8"
+    )
+    return report
 
 
 def refit_score_net(
@@ -639,7 +956,7 @@ def refit_score_net(
     }
     result = _build_refit_checkpoint(
         checkpoint,
-        model,
+        model.score_net,
         optimizer,
         metadata=metadata,
         epochs=int(refit.epochs),
@@ -667,8 +984,8 @@ def main(cfg: DictConfig) -> None:
         raise ValueError("pass +scorer_refit=gain_only")
     refit = cfg.scorer_refit
     mode = str(refit.mode)
-    if mode not in {"collect", "refit"}:
-        raise ValueError("scorer_refit.mode must be collect or refit")
+    if mode not in {"collect", "refit", "stream_refit"}:
+        raise ValueError("scorer_refit.mode must be collect, refit, or stream_refit")
     if float(refit.lambda_pair) != 0.0 or str(refit.loss) != "absolute_gain_huber_only":
         raise ValueError("ScoreNet rescue is fixed to lambda_pair=0 and absolute gain only")
     if str(refit.collection_split) != "train":
@@ -711,7 +1028,7 @@ def main(cfg: DictConfig) -> None:
             json.dumps(report, indent=2), encoding="utf-8"
         )
         print(f"[score-refit] cache: {refit.cache_dir}")
-    else:
+    elif mode == "refit":
         report = refit_score_net(
             cfg,
             checkpoint,
@@ -720,6 +1037,15 @@ def main(cfg: DictConfig) -> None:
             device=device,
         )
         print(f"[score-refit] checkpoint: {report['output_checkpoint']}")
+    else:
+        report = stream_refit_score_net(
+            cfg,
+            checkpoint,
+            source_checkpoint,
+            source_checkpoint_sha256=source_sha256,
+            device=device,
+        )
+        print(f"[score-refit] stream checkpoint: {report['output_checkpoint']}")
 
 
 if __name__ == "__main__":

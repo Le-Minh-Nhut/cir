@@ -94,7 +94,13 @@ def freeze_for_score_refit(model: nn.Module) -> list[str]:
 
 
 def assert_scorer_optimizer_ownership(model: nn.Module, optimizer: Optimizer) -> None:
-    expected = {id(parameter) for parameter in model.score_net.parameters()}
+    assert_module_optimizer_ownership(model.score_net, optimizer)
+
+
+def assert_module_optimizer_ownership(module: nn.Module, optimizer: Optimizer) -> None:
+    """Require an optimizer to own every and only the given module parameters."""
+
+    expected = {id(parameter) for parameter in module.parameters()}
     actual_parameters = [
         parameter for group in optimizer.param_groups for parameter in group["params"]
     ]
@@ -103,7 +109,7 @@ def assert_scorer_optimizer_ownership(model: nn.Module, optimizer: Optimizer) ->
         raise RuntimeError("scorer optimizer contains duplicate parameter references")
     if actual != expected:
         raise RuntimeError(
-            "scorer optimizer must own every and only ScoreNet parameter: "
+            "optimizer must own every and only the requested module parameters: "
             f"missing={len(expected - actual)}, extra={len(actual - expected)}"
         )
 
@@ -118,6 +124,22 @@ def build_score_refit_optimizer(
         weight_decay=weight_decay,
     )
     assert_scorer_optimizer_ownership(model, optimizer)
+    return optimizer
+
+
+def build_standalone_score_optimizer(
+    score_net: nn.Module, *, learning_rate: float, weight_decay: float
+) -> AdamW:
+    """Create the optimizer for a standalone ScoreNet copy used by stream_refit."""
+
+    for parameter in score_net.parameters():
+        parameter.requires_grad_(True)
+    optimizer = AdamW(
+        list(score_net.parameters()),
+        lr=learning_rate,
+        weight_decay=weight_decay,
+    )
+    assert_module_optimizer_ownership(score_net, optimizer)
     return optimizer
 
 
@@ -150,6 +172,27 @@ def scorer_gain_loss(
     return loss, predicted
 
 
+def streaming_scorer_step(
+    score_net: nn.Module,
+    optimizer: Optimizer,
+    batch: Mapping[str, Any],
+    *,
+    huber_delta: float,
+) -> tuple[Tensor, Tensor]:
+    """One gain-only update with no cache or behavior-model mutation."""
+
+    optimizer.zero_grad(set_to_none=True)
+    loss, predicted = scorer_gain_loss(score_net, batch, huber_delta=huber_delta)
+    loss.backward()
+    if any(
+        parameter.grad is not None and not torch.isfinite(parameter.grad).all()
+        for parameter in score_net.parameters()
+    ):
+        raise FloatingPointError("non-finite standalone ScoreNet gradient during stream refit")
+    optimizer.step()
+    return loss.detach(), predicted.detach()
+
+
 def scorer_minibatches(
     batch: Mapping[str, Any],
     *,
@@ -176,6 +219,19 @@ def parameter_fingerprint(model: nn.Module, *, score_net: bool) -> str:
     for name, parameter in model.named_parameters():
         if name.startswith("score_net.") != score_net:
             continue
+        digest.update(name.encode("utf-8"))
+        value = parameter.detach().cpu().contiguous()
+        digest.update(str(value.dtype).encode("ascii"))
+        digest.update(str(tuple(value.shape)).encode("ascii"))
+        digest.update(value.numpy().tobytes())
+    return digest.hexdigest()
+
+
+def module_parameter_fingerprint(module: nn.Module) -> str:
+    """Hash every parameter in a standalone or behavior module."""
+
+    digest = hashlib.sha256()
+    for name, parameter in module.named_parameters():
         digest.update(name.encode("utf-8"))
         value = parameter.detach().cpu().contiguous()
         digest.update(str(value.dtype).encode("ascii"))
