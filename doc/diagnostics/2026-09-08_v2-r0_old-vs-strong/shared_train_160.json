@@ -1,0 +1,1290 @@
+{
+  "version": 1,
+  "split": "train",
+  "caption_policy": "ordered_and",
+  "seed": 42,
+  "requested_sample_count": 160,
+  "teacher_batch_size": 8,
+  "samples": [
+    {
+      "dataset_index": 13542,
+      "sample_id": "fashioniq:train:toptee:1569",
+      "category": "toptee",
+      "reference_id": "B008X0FXCY",
+      "target_id": "B00BTH6Q6U",
+      "modification_text": "The shirt is and picture of a woman's torso and is more revealing"
+    },
+    {
+      "dataset_index": 2141,
+      "sample_id": "fashioniq:train:dress:2141",
+      "category": "dress",
+      "reference_id": "B009365SEK",
+      "target_id": "B0092QK530",
+      "modification_text": "Has a belt and is orange and belted"
+    },
+    {
+      "dataset_index": 8626,
+      "sample_id": "fashioniq:train:shirt:2641",
+      "category": "shirt",
+      "reference_id": "B0015O8OTY",
+      "target_id": "B00ENQROTM",
+      "modification_text": "Is more athletic and has a cartoon graphic and is much blacker"
+    },
+    {
+      "dataset_index": 9745,
+      "sample_id": "fashioniq:train:shirt:3760",
+      "category": "shirt",
+      "reference_id": "B0080SVTEA",
+      "target_id": "B004YDWJP8",
+      "modification_text": "The shirt is black in color short sleeve with bruce lee and is darker"
+    },
+    {
+      "dataset_index": 6826,
+      "sample_id": "fashioniq:train:shirt:841",
+      "category": "shirt",
+      "reference_id": "B00430B6PQ",
+      "target_id": "B005O66JWS",
+      "modification_text": "Is smaller in size adarker and is darker colored"
+    },
+    {
+      "dataset_index": 3805,
+      "sample_id": "fashioniq:train:dress:3805",
+      "category": "dress",
+      "reference_id": "B009LIFCA0",
+      "target_id": "B00B2IYEWE",
+      "modification_text": "Has short knee and black color and is black and white patterned"
+    },
+    {
+      "dataset_index": 1984,
+      "sample_id": "fashioniq:train:dress:1984",
+      "category": "dress",
+      "reference_id": "B007XHPH7O",
+      "target_id": "B0072326XC",
+      "modification_text": "Is white with oval neck and black string on waist and is white and more casual"
+    },
+    {
+      "dataset_index": 7214,
+      "sample_id": "fashioniq:train:shirt:1229",
+      "category": "shirt",
+      "reference_id": "B006C9D2VC",
+      "target_id": "B0050SPM8W",
+      "modification_text": "Has a more colorful and larger graphic and it is more colorful"
+    },
+    {
+      "dataset_index": 910,
+      "sample_id": "fashioniq:train:dress:910",
+      "category": "dress",
+      "reference_id": "B00EIQD91E",
+      "target_id": "B00D4BPP6G",
+      "modification_text": "Is longer and flowery and is yellow with floral patterns"
+    },
+    {
+      "dataset_index": 1019,
+      "sample_id": "fashioniq:train:dress:1019",
+      "category": "dress",
+      "reference_id": "B00CBV4KQQ",
+      "target_id": "B003AM7L0C",
+      "modification_text": "Is more satin and evening and Is more purple and exposes more skin"
+    },
+    {
+      "dataset_index": 7808,
+      "sample_id": "fashioniq:train:shirt:1823",
+      "category": "shirt",
+      "reference_id": "B002LSIEW0",
+      "target_id": "B003JZCR3G",
+      "modification_text": "Black with smaller simpler graphic and Desired item is black with multi-color insignia on chest"
+    },
+    {
+      "dataset_index": 9584,
+      "sample_id": "fashioniq:train:shirt:3599",
+      "category": "shirt",
+      "reference_id": "B001C4DAEQ",
+      "target_id": "B003T5H0FQ",
+      "modification_text": "Is more formal and striped and has stripes and a collar"
+    },
+    {
+      "dataset_index": 9638,
+      "sample_id": "fashioniq:train:shirt:3653",
+      "category": "shirt",
+      "reference_id": "B005253KWI",
+      "target_id": "B009H47WY2",
+      "modification_text": "Is white with no sleeves and is blue with black lettering"
+    },
+    {
+      "dataset_index": 4547,
+      "sample_id": "fashioniq:train:dress:4547",
+      "category": "dress",
+      "reference_id": "B0085966OW",
+      "target_id": "B008DS1YK6",
+      "modification_text": "A short black dress with cutout sleeves and has more black"
+    },
+    {
+      "dataset_index": 9977,
+      "sample_id": "fashioniq:train:shirt:3992",
+      "category": "shirt",
+      "reference_id": "B00EYM61CQ",
+      "target_id": "B009T4B2I2",
+      "modification_text": "Is less wordy and more brown and is lighter in color"
+    },
+    {
+      "dataset_index": 6967,
+      "sample_id": "fashioniq:train:shirt:982",
+      "category": "shirt",
+      "reference_id": "B009A04MEQ",
+      "target_id": "B00AB2Q3DK",
+      "modification_text": "Is black and is darker with a more colorful print"
+    },
+    {
+      "dataset_index": 4275,
+      "sample_id": "fashioniq:train:dress:4275",
+      "category": "dress",
+      "reference_id": "B0083CII6K",
+      "target_id": "B0073ISRX4",
+      "modification_text": "Is  more skimpy and flowing and is darker red"
+    },
+    {
+      "dataset_index": 10369,
+      "sample_id": "fashioniq:train:shirt:4384",
+      "category": "shirt",
+      "reference_id": "B00BQKC8AI",
+      "target_id": "B007JQKKUI",
+      "modification_text": "Is darker and is darker in color"
+    },
+    {
+      "dataset_index": 14763,
+      "sample_id": "fashioniq:train:toptee:2790",
+      "category": "toptee",
+      "reference_id": "B001TEOWXW",
+      "target_id": "B001EVKPJA",
+      "modification_text": "Lighter in color and sleeveless"
+    },
+    {
+      "dataset_index": 2693,
+      "sample_id": "fashioniq:train:dress:2693",
+      "category": "dress",
+      "reference_id": "B005AWVFQG",
+      "target_id": "B00DOTWL4M",
+      "modification_text": "Longer and has pockets and is tan with a black belt"
+    },
+    {
+      "dataset_index": 2109,
+      "sample_id": "fashioniq:train:dress:2109",
+      "category": "dress",
+      "reference_id": "B0069J2YAU",
+      "target_id": "B007EMWDDO",
+      "modification_text": "Is above the knee and more sleeves and is shorter"
+    },
+    {
+      "dataset_index": 893,
+      "sample_id": "fashioniq:train:dress:893",
+      "category": "dress",
+      "reference_id": "B008S9JN08",
+      "target_id": "B008596IFE",
+      "modification_text": "Is blue and less revealing and blue with higher neckline"
+    },
+    {
+      "dataset_index": 12759,
+      "sample_id": "fashioniq:train:toptee:786",
+      "category": "toptee",
+      "reference_id": "B009HC5AKM",
+      "target_id": "B0099VTTKS",
+      "modification_text": "Is lighter and dolmen. longer sleeves"
+    },
+    {
+      "dataset_index": 542,
+      "sample_id": "fashioniq:train:dress:542",
+      "category": "dress",
+      "reference_id": "B00684UKK2",
+      "target_id": "B009K5RLGM",
+      "modification_text": "Has a lower neckline and a solid upper portion and is in blues and only has the floral print on the bottom"
+    },
+    {
+      "dataset_index": 13355,
+      "sample_id": "fashioniq:train:toptee:1382",
+      "category": "toptee",
+      "reference_id": "B004WLENSI",
+      "target_id": "B004R8U10A",
+      "modification_text": "Is less pink shiny and has long sleeves and has longer sleeves"
+    },
+    {
+      "dataset_index": 15688,
+      "sample_id": "fashioniq:train:toptee:3715",
+      "category": "toptee",
+      "reference_id": "B00AE9XF9K",
+      "target_id": "B00A4MU06S",
+      "modification_text": "Is lighter and Has no buttons and is more opaque"
+    },
+    {
+      "dataset_index": 6781,
+      "sample_id": "fashioniq:train:shirt:796",
+      "category": "shirt",
+      "reference_id": "B00CZ6NCY8",
+      "target_id": "B003U6INZA",
+      "modification_text": "Is less wordy and more blue and it has a lighter blue"
+    },
+    {
+      "dataset_index": 1818,
+      "sample_id": "fashioniq:train:dress:1818",
+      "category": "dress",
+      "reference_id": "B00AXUTUYE",
+      "target_id": "B00AVU3H0O",
+      "modification_text": "Slightly shorter and has large dots/flower prints and is longer and redder"
+    },
+    {
+      "dataset_index": 12971,
+      "sample_id": "fashioniq:train:toptee:998",
+      "category": "toptee",
+      "reference_id": "B00AFZWR60",
+      "target_id": "B00A7GSSEC",
+      "modification_text": "Is green with rhinestones and has longer sleeves and  gold trim"
+    },
+    {
+      "dataset_index": 17076,
+      "sample_id": "fashioniq:train:toptee:5103",
+      "category": "toptee",
+      "reference_id": "B008STEA0Q",
+      "target_id": "B008JESLQY",
+      "modification_text": "White and purple colors and is red"
+    },
+    {
+      "dataset_index": 1452,
+      "sample_id": "fashioniq:train:dress:1452",
+      "category": "dress",
+      "reference_id": "B004AMOAVY",
+      "target_id": "B004XYPNA6",
+      "modification_text": "Is black and shorter and has a sexy look and white and longer"
+    },
+    {
+      "dataset_index": 232,
+      "sample_id": "fashioniq:train:dress:232",
+      "category": "dress",
+      "reference_id": "B0085J4K4U",
+      "target_id": "B0094D087E",
+      "modification_text": "Is shorter and shinier and has pockets and is above the knee"
+    },
+    {
+      "dataset_index": 5675,
+      "sample_id": "fashioniq:train:dress:5675",
+      "category": "dress",
+      "reference_id": "B007V0B8IU",
+      "target_id": "B007RUZ6NM",
+      "modification_text": "Is solid black with open sleeved on shoulder and is black with sleeves"
+    },
+    {
+      "dataset_index": 3424,
+      "sample_id": "fashioniq:train:dress:3424",
+      "category": "dress",
+      "reference_id": "B003VCLSFA",
+      "target_id": "B002W0WILK",
+      "modification_text": "Is shiny and blue and has more blue color"
+    },
+    {
+      "dataset_index": 12999,
+      "sample_id": "fashioniq:train:toptee:1026",
+      "category": "toptee",
+      "reference_id": "B0073JSPGC",
+      "target_id": "B004S3CB98",
+      "modification_text": "Has one line of tect and is more like a boston jersey"
+    },
+    {
+      "dataset_index": 6714,
+      "sample_id": "fashioniq:train:shirt:729",
+      "category": "shirt",
+      "reference_id": "B003YLVZI8",
+      "target_id": "B009P6BCCA",
+      "modification_text": "Is a black short sleeved t-shirt with pink cancer phrase and is darker and more graphic"
+    },
+    {
+      "dataset_index": 11567,
+      "sample_id": "fashioniq:train:shirt:5582",
+      "category": "shirt",
+      "reference_id": "B00CBS2SQI",
+      "target_id": "B009PTHUPK",
+      "modification_text": "Grey and short sleeves and is grey with black patterns"
+    },
+    {
+      "dataset_index": 4431,
+      "sample_id": "fashioniq:train:dress:4431",
+      "category": "dress",
+      "reference_id": "B0094N8PX8",
+      "target_id": "B0037Z7LOI",
+      "modification_text": "Is less formal and is shorter and sleeveless"
+    },
+    {
+      "dataset_index": 17838,
+      "sample_id": "fashioniq:train:toptee:5865",
+      "category": "toptee",
+      "reference_id": "B005GVQ64M",
+      "target_id": "B00DXN1EGA",
+      "modification_text": "Is tan with a half sleeve and Desired item is light brown with short sleeves"
+    },
+    {
+      "dataset_index": 81,
+      "sample_id": "fashioniq:train:dress:81",
+      "category": "dress",
+      "reference_id": "B007CDYAAE",
+      "target_id": "B00DJQN0MW",
+      "modification_text": "Has straps and is orange and more modern solid red"
+    },
+    {
+      "dataset_index": 16946,
+      "sample_id": "fashioniq:train:toptee:4973",
+      "category": "toptee",
+      "reference_id": "B0096BLE7M",
+      "target_id": "B00BUJ0OC4",
+      "modification_text": "Is long sleeves with sea blue color and is similar in design without the buttons and is only in blue"
+    },
+    {
+      "dataset_index": 6611,
+      "sample_id": "fashioniq:train:shirt:626",
+      "category": "shirt",
+      "reference_id": "B00CHXO6SA",
+      "target_id": "B00CHXT1U8",
+      "modification_text": "Is brighter colored and is more colorful"
+    },
+    {
+      "dataset_index": 6823,
+      "sample_id": "fashioniq:train:shirt:838",
+      "category": "shirt",
+      "reference_id": "B001ET7DGA",
+      "target_id": "B004SF46EY",
+      "modification_text": "Is slightly transparent and It is more transparent"
+    },
+    {
+      "dataset_index": 9485,
+      "sample_id": "fashioniq:train:shirt:3500",
+      "category": "shirt",
+      "reference_id": "B004433QTQ",
+      "target_id": "B001FXKOTS",
+      "modification_text": "Is white with a sully graphic and is lighter"
+    },
+    {
+      "dataset_index": 4427,
+      "sample_id": "fashioniq:train:dress:4427",
+      "category": "dress",
+      "reference_id": "B00CW67BW0",
+      "target_id": "B00CVTL0CK",
+      "modification_text": "Has spagetti straps and has spaghetti straps"
+    },
+    {
+      "dataset_index": 7973,
+      "sample_id": "fashioniq:train:shirt:1988",
+      "category": "shirt",
+      "reference_id": "B007OV6ID6",
+      "target_id": "B007MB2OAE",
+      "modification_text": "Is similar with a different graphic and has a different picture"
+    },
+    {
+      "dataset_index": 32,
+      "sample_id": "fashioniq:train:dress:32",
+      "category": "dress",
+      "reference_id": "B00FVTN84U",
+      "target_id": "B008BRM2GY",
+      "modification_text": "Is shorter and has longer sleeves and covers shoulders more and has a belt and a pattern"
+    },
+    {
+      "dataset_index": 14583,
+      "sample_id": "fashioniq:train:toptee:2610",
+      "category": "toptee",
+      "reference_id": "B0025V4IX2",
+      "target_id": "B0026PMBDG",
+      "modification_text": "Has shorter sleeves and is blue with short sleeves"
+    },
+    {
+      "dataset_index": 9165,
+      "sample_id": "fashioniq:train:shirt:3180",
+      "category": "shirt",
+      "reference_id": "B0009GCU80",
+      "target_id": "B00147VH8C",
+      "modification_text": "The shirt is pink in color and long sleeve and is darker and has longer sleeves"
+    },
+    {
+      "dataset_index": 9948,
+      "sample_id": "fashioniq:train:shirt:3963",
+      "category": "shirt",
+      "reference_id": "B006JF3UDY",
+      "target_id": "B0063MIFWY",
+      "modification_text": "Has longer sleeves and is pink and has longer sleeves"
+    },
+    {
+      "dataset_index": 2720,
+      "sample_id": "fashioniq:train:dress:2720",
+      "category": "dress",
+      "reference_id": "B007H0SLOS",
+      "target_id": "B0081JIUGS",
+      "modification_text": "Bottom needs to be frilly with gray and black trim and is black and white with high waist line"
+    },
+    {
+      "dataset_index": 16281,
+      "sample_id": "fashioniq:train:toptee:4308",
+      "category": "toptee",
+      "reference_id": "B0007P5JZY",
+      "target_id": "B0052JSQDC",
+      "modification_text": "Is more casual and is light blue"
+    },
+    {
+      "dataset_index": 1086,
+      "sample_id": "fashioniq:train:dress:1086",
+      "category": "dress",
+      "reference_id": "B007K4XTKC",
+      "target_id": "B00D71546Y",
+      "modification_text": "This product has vibrant colors versus the other dress and colorfull and outgoing"
+    },
+    {
+      "dataset_index": 8776,
+      "sample_id": "fashioniq:train:shirt:2791",
+      "category": "shirt",
+      "reference_id": "B003XVYY1O",
+      "target_id": "B00CNDX0H2",
+      "modification_text": "Is black with green words and is black with text and a tshirt"
+    },
+    {
+      "dataset_index": 5920,
+      "sample_id": "fashioniq:train:dress:5920",
+      "category": "dress",
+      "reference_id": "B00CTA0NEW",
+      "target_id": "B00EEGIN3W",
+      "modification_text": "Is darker and less revealing and Is blacker and has longer sleeves"
+    },
+    {
+      "dataset_index": 1539,
+      "sample_id": "fashioniq:train:dress:1539",
+      "category": "dress",
+      "reference_id": "B0067LQGYK",
+      "target_id": "B005LBZ5QW",
+      "modification_text": "Is darker with a shorter skirt and is dark and sparkly"
+    },
+    {
+      "dataset_index": 13847,
+      "sample_id": "fashioniq:train:toptee:1874",
+      "category": "toptee",
+      "reference_id": "B00C5NTPCY",
+      "target_id": "B0025WJH1O",
+      "modification_text": "Is all white tank top style and is totally white and is lacy"
+    },
+    {
+      "dataset_index": 13880,
+      "sample_id": "fashioniq:train:toptee:1907",
+      "category": "toptee",
+      "reference_id": "B0097ZYAA0",
+      "target_id": "B003M6A7LG",
+      "modification_text": "Teal loose tank and green sleeveless and rounded neck"
+    },
+    {
+      "dataset_index": 5938,
+      "sample_id": "fashioniq:train:dress:5938",
+      "category": "dress",
+      "reference_id": "B007HNF8EG",
+      "target_id": "B00DJ803SE",
+      "modification_text": "Is black and white and is darker"
+    },
+    {
+      "dataset_index": 9943,
+      "sample_id": "fashioniq:train:shirt:3958",
+      "category": "shirt",
+      "reference_id": "B00B4N902Q",
+      "target_id": "B008PBHI8S",
+      "modification_text": "Has longer sleeves and a darker color and is darker and has longer sleeves"
+    },
+    {
+      "dataset_index": 12326,
+      "sample_id": "fashioniq:train:toptee:353",
+      "category": "toptee",
+      "reference_id": "B00CRRI650",
+      "target_id": "B00E6E52RC",
+      "modification_text": "Is low cut and brighter stripes and is less bright"
+    },
+    {
+      "dataset_index": 12310,
+      "sample_id": "fashioniq:train:toptee:337",
+      "category": "toptee",
+      "reference_id": "B007OCIDBA",
+      "target_id": "B0072B276A",
+      "modification_text": "The short sleeve shirt is blue in color and is brighter in color"
+    },
+    {
+      "dataset_index": 5000,
+      "sample_id": "fashioniq:train:dress:5000",
+      "category": "dress",
+      "reference_id": "B005541VZY",
+      "target_id": "B0070YILD2",
+      "modification_text": "Has a higher neckline with a polka dot print and is a tye dye pattern"
+    },
+    {
+      "dataset_index": 15433,
+      "sample_id": "fashioniq:train:toptee:3460",
+      "category": "toptee",
+      "reference_id": "B006ZZIAEW",
+      "target_id": "B0016A26XC",
+      "modification_text": "Is black colored with skeleton art and has longer sleeves and is less colourful"
+    },
+    {
+      "dataset_index": 5462,
+      "sample_id": "fashioniq:train:dress:5462",
+      "category": "dress",
+      "reference_id": "B00DY0HFKG",
+      "target_id": "B00DWX5GCE",
+      "modification_text": "Is blue in color and no jacket and sleeves"
+    },
+    {
+      "dataset_index": 11066,
+      "sample_id": "fashioniq:train:shirt:5081",
+      "category": "shirt",
+      "reference_id": "B0054QZ5QE",
+      "target_id": "B009398IIA",
+      "modification_text": "Is darker and is a black shirt"
+    },
+    {
+      "dataset_index": 2625,
+      "sample_id": "fashioniq:train:dress:2625",
+      "category": "dress",
+      "reference_id": "B005N7HDAU",
+      "target_id": "B006PBDPF0",
+      "modification_text": "Lighter and not see through and shinier"
+    },
+    {
+      "dataset_index": 873,
+      "sample_id": "fashioniq:train:dress:873",
+      "category": "dress",
+      "reference_id": "B00E98YVQ8",
+      "target_id": "B004RDQ8W0",
+      "modification_text": "Is less romantic and is two toned and shorter"
+    },
+    {
+      "dataset_index": 9255,
+      "sample_id": "fashioniq:train:shirt:3270",
+      "category": "shirt",
+      "reference_id": "B007BA6QVO",
+      "target_id": "B009ENSOG6",
+      "modification_text": "Is white and sea foam and is lighter"
+    },
+    {
+      "dataset_index": 217,
+      "sample_id": "fashioniq:train:dress:217",
+      "category": "dress",
+      "reference_id": "B008NG1LH4",
+      "target_id": "B00E1UZ63Q",
+      "modification_text": "Longer and no stripes and has long sleeves"
+    },
+    {
+      "dataset_index": 3327,
+      "sample_id": "fashioniq:train:dress:3327",
+      "category": "dress",
+      "reference_id": "B0099PRZ82",
+      "target_id": "B007RCJ01Y",
+      "modification_text": "Is light blue with white polka dots and is blue with white polka-dots and belted"
+    },
+    {
+      "dataset_index": 2648,
+      "sample_id": "fashioniq:train:dress:2648",
+      "category": "dress",
+      "reference_id": "B00DPENKUA",
+      "target_id": "B00E3NXBYW",
+      "modification_text": "With a square neckline and is shorter and has a red and gold pattern"
+    },
+    {
+      "dataset_index": 10456,
+      "sample_id": "fashioniq:train:shirt:4471",
+      "category": "shirt",
+      "reference_id": "B00C1ETPV8",
+      "target_id": "B00DYY3BBO",
+      "modification_text": "Is grey and has large sailboat and gray graphic shirt"
+    },
+    {
+      "dataset_index": 3851,
+      "sample_id": "fashioniq:train:dress:3851",
+      "category": "dress",
+      "reference_id": "B00ARHOQM4",
+      "target_id": "B009DMEWRI",
+      "modification_text": "Is solid blue with no sleeves and is blue and sleevless"
+    },
+    {
+      "dataset_index": 12296,
+      "sample_id": "fashioniq:train:toptee:323",
+      "category": "toptee",
+      "reference_id": "B007YZKAYK",
+      "target_id": "B008PFKSCM",
+      "modification_text": "Is short sleeve and grey with stripes and Has sleeves and a higher neckline"
+    },
+    {
+      "dataset_index": 16709,
+      "sample_id": "fashioniq:train:toptee:4736",
+      "category": "toptee",
+      "reference_id": "B0019705C6",
+      "target_id": "B00106XBDG",
+      "modification_text": "Is strapless and sexy and is sleveless and is dark color"
+    },
+    {
+      "dataset_index": 11215,
+      "sample_id": "fashioniq:train:shirt:5230",
+      "category": "shirt",
+      "reference_id": "B00D38P092",
+      "target_id": "B00BIPJSD6",
+      "modification_text": "Is a jersey and is darker and more masculine"
+    },
+    {
+      "dataset_index": 17873,
+      "sample_id": "fashioniq:train:toptee:5900",
+      "category": "toptee",
+      "reference_id": "B001CF099Y",
+      "target_id": "B001CEVACU",
+      "modification_text": "Is red and is red in color"
+    },
+    {
+      "dataset_index": 10154,
+      "sample_id": "fashioniq:train:shirt:4169",
+      "category": "shirt",
+      "reference_id": "B00640ACXK",
+      "target_id": "B00640AI7A",
+      "modification_text": "Is more fun and is black and is black and white and trendy"
+    },
+    {
+      "dataset_index": 12899,
+      "sample_id": "fashioniq:train:toptee:926",
+      "category": "toptee",
+      "reference_id": "B0066PVM0K",
+      "target_id": "B00AG3XAZ8",
+      "modification_text": "The shirt is black and gold in color and is a white and black mix"
+    },
+    {
+      "dataset_index": 8214,
+      "sample_id": "fashioniq:train:shirt:2229",
+      "category": "shirt",
+      "reference_id": "B009K4ETZ4",
+      "target_id": "B007JCOVSE",
+      "modification_text": "Is a short tropical shirt and is black with flowers and is more patterned"
+    },
+    {
+      "dataset_index": 14620,
+      "sample_id": "fashioniq:train:toptee:2647",
+      "category": "toptee",
+      "reference_id": "B002KG9KLW",
+      "target_id": "B002KG4G1G",
+      "modification_text": "Has no pockets and is more pastel and orange looser fir"
+    },
+    {
+      "dataset_index": 9626,
+      "sample_id": "fashioniq:train:shirt:3641",
+      "category": "shirt",
+      "reference_id": "B00AH4PVY4",
+      "target_id": "B007K1L6CS",
+      "modification_text": "Is more commercial and less humorous and is blue with gi joe logo"
+    },
+    {
+      "dataset_index": 493,
+      "sample_id": "fashioniq:train:dress:493",
+      "category": "dress",
+      "reference_id": "B007EDU8PS",
+      "target_id": "B00AKR46Y4",
+      "modification_text": "Is black with a low neck and no sleeves and Sleeveless and looser with deeper v-neck"
+    },
+    {
+      "dataset_index": 16078,
+      "sample_id": "fashioniq:train:toptee:4105",
+      "category": "toptee",
+      "reference_id": "B007K6ESEG",
+      "target_id": "B004YDW9US",
+      "modification_text": "Has a more faded design and is black with old guys rule on it"
+    },
+    {
+      "dataset_index": 12345,
+      "sample_id": "fashioniq:train:toptee:372",
+      "category": "toptee",
+      "reference_id": "B00590I38M",
+      "target_id": "B003PDND08",
+      "modification_text": "Has long sleeves and color is grey and is lacking the print and now has longer sleeves"
+    },
+    {
+      "dataset_index": 16593,
+      "sample_id": "fashioniq:train:toptee:4620",
+      "category": "toptee",
+      "reference_id": "B00BIJGLKA",
+      "target_id": "B007XD50QQ",
+      "modification_text": "Is much longer and gray and sleeveless"
+    },
+    {
+      "dataset_index": 15996,
+      "sample_id": "fashioniq:train:toptee:4023",
+      "category": "toptee",
+      "reference_id": "B00ATHHW4G",
+      "target_id": "B007N8OKTY",
+      "modification_text": "Has a brighter color with text and has simple neck and is brown color"
+    },
+    {
+      "dataset_index": 12043,
+      "sample_id": "fashioniq:train:toptee:70",
+      "category": "toptee",
+      "reference_id": "B00DQCVPGW",
+      "target_id": "B00DIGRMHC",
+      "modification_text": "Is more whimsical and is sleeveless and black"
+    },
+    {
+      "dataset_index": 5333,
+      "sample_id": "fashioniq:train:dress:5333",
+      "category": "dress",
+      "reference_id": "B004UJIXV0",
+      "target_id": "B005C2CDYC",
+      "modification_text": "Is white with wider shoulder straps and is lighter"
+    },
+    {
+      "dataset_index": 6637,
+      "sample_id": "fashioniq:train:shirt:652",
+      "category": "shirt",
+      "reference_id": "B001V9LN6O",
+      "target_id": "B007XZ7BCA",
+      "modification_text": "Has long sleeves and is a darker color and round graphic"
+    },
+    {
+      "dataset_index": 1470,
+      "sample_id": "fashioniq:train:dress:1470",
+      "category": "dress",
+      "reference_id": "B00ANK75LO",
+      "target_id": "B0065W77AS",
+      "modification_text": "Is black and sleeveless and Is a fashion product"
+    },
+    {
+      "dataset_index": 4785,
+      "sample_id": "fashioniq:train:dress:4785",
+      "category": "dress",
+      "reference_id": "B00C31JB9K",
+      "target_id": "B00DZ1977I",
+      "modification_text": "Is shorter and darker and is above the knee with a floral pattern"
+    },
+    {
+      "dataset_index": 171,
+      "sample_id": "fashioniq:train:dress:171",
+      "category": "dress",
+      "reference_id": "B006W1TYE4",
+      "target_id": "B00AXU14BQ",
+      "modification_text": "Is shorter and is blue and is blue and is shorter"
+    },
+    {
+      "dataset_index": 9171,
+      "sample_id": "fashioniq:train:shirt:3186",
+      "category": "shirt",
+      "reference_id": "B0043LVDHQ",
+      "target_id": "B008G0PVC8",
+      "modification_text": "Is plain white and It is white and not checked"
+    },
+    {
+      "dataset_index": 1340,
+      "sample_id": "fashioniq:train:dress:1340",
+      "category": "dress",
+      "reference_id": "B008CPTBIC",
+      "target_id": "B005SSN9V6",
+      "modification_text": "Is longer and lighter and is a brighter color"
+    },
+    {
+      "dataset_index": 11161,
+      "sample_id": "fashioniq:train:shirt:5176",
+      "category": "shirt",
+      "reference_id": "B00CIPJ4L6",
+      "target_id": "B009OFPY94",
+      "modification_text": "Is darker and is the opposite color of the provided product"
+    },
+    {
+      "dataset_index": 9060,
+      "sample_id": "fashioniq:train:shirt:3075",
+      "category": "shirt",
+      "reference_id": "B00AHYNBBE",
+      "target_id": "B008BTOAD0",
+      "modification_text": "Is a black t shirt with the bands faces on it and is darker"
+    },
+    {
+      "dataset_index": 8161,
+      "sample_id": "fashioniq:train:shirt:2176",
+      "category": "shirt",
+      "reference_id": "B000IO8RTE",
+      "target_id": "B007OODI22",
+      "modification_text": "Is more casual and monochromatic and is solid brown and collarless"
+    },
+    {
+      "dataset_index": 17351,
+      "sample_id": "fashioniq:train:toptee:5378",
+      "category": "toptee",
+      "reference_id": "B005GR3JE6",
+      "target_id": "B00EE0FN5Y",
+      "modification_text": "Is sleeveless with vertical stripes and has shorter sleeves"
+    },
+    {
+      "dataset_index": 6770,
+      "sample_id": "fashioniq:train:shirt:785",
+      "category": "shirt",
+      "reference_id": "B00CE143Z6",
+      "target_id": "B00CE14GSU",
+      "modification_text": "Has a collar and is more formal and button up collared black and white block"
+    },
+    {
+      "dataset_index": 865,
+      "sample_id": "fashioniq:train:dress:865",
+      "category": "dress",
+      "reference_id": "B005SN1FLM",
+      "target_id": "B008M4QKXW",
+      "modification_text": "Is more casual with tank top and Is more plain and sexy"
+    },
+    {
+      "dataset_index": 16953,
+      "sample_id": "fashioniq:train:toptee:4980",
+      "category": "toptee",
+      "reference_id": "B004T1C2XO",
+      "target_id": "B005UAXUKC",
+      "modification_text": "A solid color with no sleeves and is black with shorter sleeves"
+    },
+    {
+      "dataset_index": 2477,
+      "sample_id": "fashioniq:train:dress:2477",
+      "category": "dress",
+      "reference_id": "B008F1HO3W",
+      "target_id": "B008RK6XLA",
+      "modification_text": "Is red in color and has longer sleeves and has more polygons"
+    },
+    {
+      "dataset_index": 16721,
+      "sample_id": "fashioniq:train:toptee:4748",
+      "category": "toptee",
+      "reference_id": "B005K1W4IU",
+      "target_id": "B00A9ZV6LI",
+      "modification_text": "Is a dreamcatcher and is an accessory"
+    },
+    {
+      "dataset_index": 13521,
+      "sample_id": "fashioniq:train:toptee:1548",
+      "category": "toptee",
+      "reference_id": "B0078LIZ4W",
+      "target_id": "B00E8K6BZG",
+      "modification_text": "Is two toned and more conservative and is green and black with buttons"
+    },
+    {
+      "dataset_index": 16779,
+      "sample_id": "fashioniq:train:toptee:4806",
+      "category": "toptee",
+      "reference_id": "B004DB7JYC",
+      "target_id": "B00GQJY8QG",
+      "modification_text": "Lighter and green"
+    },
+    {
+      "dataset_index": 11731,
+      "sample_id": "fashioniq:train:shirt:5746",
+      "category": "shirt",
+      "reference_id": "B004GRB516",
+      "target_id": "B0085J51I4",
+      "modification_text": "Has diamond written on it and has larger graphic and pink oval"
+    },
+    {
+      "dataset_index": 11653,
+      "sample_id": "fashioniq:train:shirt:5668",
+      "category": "shirt",
+      "reference_id": "B007E4VVDA",
+      "target_id": "B009QPNKKC",
+      "modification_text": "Is blue with a weyland corp logo and is a royal blue t-shirt with wetland corp on it"
+    },
+    {
+      "dataset_index": 1966,
+      "sample_id": "fashioniq:train:dress:1966",
+      "category": "dress",
+      "reference_id": "B004LLIRZE",
+      "target_id": "B008G41K6U",
+      "modification_text": "Is white and more revealing and no straps and It is more plain and has not strap"
+    },
+    {
+      "dataset_index": 5005,
+      "sample_id": "fashioniq:train:dress:5005",
+      "category": "dress",
+      "reference_id": "B0058P6TES",
+      "target_id": "B005D9II2K",
+      "modification_text": "Has a leopard print pattern and has more of a cheetah print"
+    },
+    {
+      "dataset_index": 2334,
+      "sample_id": "fashioniq:train:dress:2334",
+      "category": "dress",
+      "reference_id": "B00BNN3BA4",
+      "target_id": "B00DP4VWSM",
+      "modification_text": "Has more fitted skirt with a higher neckline and is solid black"
+    },
+    {
+      "dataset_index": 6167,
+      "sample_id": "fashioniq:train:shirt:182",
+      "category": "shirt",
+      "reference_id": "B00ARCZH9A",
+      "target_id": "B007MKTRPU",
+      "modification_text": "Is all one color with no pattern and Has less stripes and shorter sleeves"
+    },
+    {
+      "dataset_index": 2283,
+      "sample_id": "fashioniq:train:dress:2283",
+      "category": "dress",
+      "reference_id": "B00FI0LV64",
+      "target_id": "B00GROXPFU",
+      "modification_text": "Has long sleeves and is black and white and is black with a white top"
+    },
+    {
+      "dataset_index": 7058,
+      "sample_id": "fashioniq:train:shirt:1073",
+      "category": "shirt",
+      "reference_id": "B001SN7X9O",
+      "target_id": "B0052D1FJU",
+      "modification_text": "Has no sleeves and White short-sleeved with flag colors and face picture"
+    },
+    {
+      "dataset_index": 17764,
+      "sample_id": "fashioniq:train:toptee:5791",
+      "category": "toptee",
+      "reference_id": "B007MXDO42",
+      "target_id": "B0081RVPF8",
+      "modification_text": "Has open wide neck and color is blue and is a purple tshirt"
+    },
+    {
+      "dataset_index": 11712,
+      "sample_id": "fashioniq:train:shirt:5727",
+      "category": "shirt",
+      "reference_id": "B009815LUQ",
+      "target_id": "B005J6T0II",
+      "modification_text": "Is black with a larger graphic and is darker"
+    },
+    {
+      "dataset_index": 1411,
+      "sample_id": "fashioniq:train:dress:1411",
+      "category": "dress",
+      "reference_id": "B005F6NA6U",
+      "target_id": "B005C8WEB8",
+      "modification_text": "Is shorter and floral printed and Shorter and less colorful"
+    },
+    {
+      "dataset_index": 1631,
+      "sample_id": "fashioniq:train:dress:1631",
+      "category": "dress",
+      "reference_id": "B0079VHXIU",
+      "target_id": "B0099B3Z94",
+      "modification_text": "Orange with collars and is much shorter"
+    },
+    {
+      "dataset_index": 13013,
+      "sample_id": "fashioniq:train:toptee:1040",
+      "category": "toptee",
+      "reference_id": "B002U34KGK",
+      "target_id": "B00EHVC5YM",
+      "modification_text": "Has longer sleeves and is maroon and has more maroon"
+    },
+    {
+      "dataset_index": 8039,
+      "sample_id": "fashioniq:train:shirt:2054",
+      "category": "shirt",
+      "reference_id": "B00C7W1TA4",
+      "target_id": "B00B1OE0WI",
+      "modification_text": "Is more plain and minimal and is dark blue with a button"
+    },
+    {
+      "dataset_index": 5961,
+      "sample_id": "fashioniq:train:dress:5961",
+      "category": "dress",
+      "reference_id": "B00BI588U0",
+      "target_id": "B00B7PFHQE",
+      "modification_text": "Is darker with a floral pattern and is less see through"
+    },
+    {
+      "dataset_index": 16,
+      "sample_id": "fashioniq:train:dress:16",
+      "category": "dress",
+      "reference_id": "B00BJSE54Y",
+      "target_id": "B00G5N3J04",
+      "modification_text": "Is dark with straps and has straps and a tighter fit"
+    },
+    {
+      "dataset_index": 10472,
+      "sample_id": "fashioniq:train:shirt:4487",
+      "category": "shirt",
+      "reference_id": "B00ARUJAY0",
+      "target_id": "B007E3LMWG",
+      "modification_text": "A short sleeve dark colored tee shirt with a large colorful latin graphic i and has longer sleeves"
+    },
+    {
+      "dataset_index": 3008,
+      "sample_id": "fashioniq:train:dress:3008",
+      "category": "dress",
+      "reference_id": "B00BBF96XA",
+      "target_id": "B00935NFCS",
+      "modification_text": "Is grey and longer sleeved and is looser and grey"
+    },
+    {
+      "dataset_index": 6079,
+      "sample_id": "fashioniq:train:shirt:94",
+      "category": "shirt",
+      "reference_id": "B008LDGIFO",
+      "target_id": "B00359FKY4",
+      "modification_text": "Is a dark plaid short sleeved shirt with collar and is collared and more western"
+    },
+    {
+      "dataset_index": 13215,
+      "sample_id": "fashioniq:train:toptee:1242",
+      "category": "toptee",
+      "reference_id": "B007Z55T0Y",
+      "target_id": "B004KUYE26",
+      "modification_text": "Has a less bright color and a different print and is a gray shirt"
+    },
+    {
+      "dataset_index": 8404,
+      "sample_id": "fashioniq:train:shirt:2419",
+      "category": "shirt",
+      "reference_id": "B00E40LN9O",
+      "target_id": "B00E40LXUI",
+      "modification_text": "Is darker and is blue"
+    },
+    {
+      "dataset_index": 12331,
+      "sample_id": "fashioniq:train:toptee:358",
+      "category": "toptee",
+      "reference_id": "B007REM53M",
+      "target_id": "B009SSTBH8",
+      "modification_text": "Is black and has longer sleeves and is fitted"
+    },
+    {
+      "dataset_index": 10061,
+      "sample_id": "fashioniq:train:shirt:4076",
+      "category": "shirt",
+      "reference_id": "B009VOB4WY",
+      "target_id": "B00833ZD1C",
+      "modification_text": "Is more green and fun and is green with a different depiction"
+    },
+    {
+      "dataset_index": 6497,
+      "sample_id": "fashioniq:train:shirt:512",
+      "category": "shirt",
+      "reference_id": "B0045K622Q",
+      "target_id": "B00A7OIOWA",
+      "modification_text": "Has bright colors in the image and is faded"
+    },
+    {
+      "dataset_index": 13877,
+      "sample_id": "fashioniq:train:toptee:1904",
+      "category": "toptee",
+      "reference_id": "B00BGVRM44",
+      "target_id": "B00D3K0ER8",
+      "modification_text": "Is white with red stripes and has sleeves and has shorter sleeves and is brighter coloured"
+    },
+    {
+      "dataset_index": 4436,
+      "sample_id": "fashioniq:train:dress:4436",
+      "category": "dress",
+      "reference_id": "B008NFLVRU",
+      "target_id": "B00DQCC3XG",
+      "modification_text": "Is black and shorter and is shorter"
+    },
+    {
+      "dataset_index": 15280,
+      "sample_id": "fashioniq:train:toptee:3307",
+      "category": "toptee",
+      "reference_id": "B009WK62MO",
+      "target_id": "B00FQCC0HS",
+      "modification_text": "The shirt is purple with white writing and is more feminine and has more font"
+    },
+    {
+      "dataset_index": 5438,
+      "sample_id": "fashioniq:train:dress:5438",
+      "category": "dress",
+      "reference_id": "B00A8E8Z0U",
+      "target_id": "B00A890C3S",
+      "modification_text": "Is darker with short sleeves and a v neck and is purple with sleeves"
+    },
+    {
+      "dataset_index": 4063,
+      "sample_id": "fashioniq:train:dress:4063",
+      "category": "dress",
+      "reference_id": "B006361DNI",
+      "target_id": "B00AIIVUP8",
+      "modification_text": "Is sexier and has arm straps and more revealing"
+    },
+    {
+      "dataset_index": 16240,
+      "sample_id": "fashioniq:train:toptee:4267",
+      "category": "toptee",
+      "reference_id": "B00945JK2Q",
+      "target_id": "B009DMECN2",
+      "modification_text": "Is brown and has a belt and is a belted top"
+    },
+    {
+      "dataset_index": 10968,
+      "sample_id": "fashioniq:train:shirt:4983",
+      "category": "shirt",
+      "reference_id": "B00CSE5614",
+      "target_id": "B00DOG33GK",
+      "modification_text": "Is red and says famous and Is red instead of black and has a different logo"
+    },
+    {
+      "dataset_index": 12510,
+      "sample_id": "fashioniq:train:toptee:537",
+      "category": "toptee",
+      "reference_id": "B000FNKU84",
+      "target_id": "B001FRV8FI",
+      "modification_text": "Has a black background and is dark brown with yellow text"
+    },
+    {
+      "dataset_index": 13642,
+      "sample_id": "fashioniq:train:toptee:1669",
+      "category": "toptee",
+      "reference_id": "B003STHQHU",
+      "target_id": "B006C4GF7K",
+      "modification_text": "Has more scoop neck and lighter gray and has large round neck and is grey color"
+    },
+    {
+      "dataset_index": 3439,
+      "sample_id": "fashioniq:train:dress:3439",
+      "category": "dress",
+      "reference_id": "B00CEHNYV4",
+      "target_id": "B004QL7SL8",
+      "modification_text": "Is black in color and is black with two straps"
+    },
+    {
+      "dataset_index": 5547,
+      "sample_id": "fashioniq:train:dress:5547",
+      "category": "dress",
+      "reference_id": "B00FZ4KDPI",
+      "target_id": "B00DUGA3SA",
+      "modification_text": "Is a blue floral design and is a print"
+    },
+    {
+      "dataset_index": 7961,
+      "sample_id": "fashioniq:train:shirt:1976",
+      "category": "shirt",
+      "reference_id": "B00A6AUKPE",
+      "target_id": "B003YU1RX2",
+      "modification_text": "Is blue and different graffic and is blue with homer simpson hilarious"
+    },
+    {
+      "dataset_index": 14489,
+      "sample_id": "fashioniq:train:toptee:2516",
+      "category": "toptee",
+      "reference_id": "B00AUACJBS",
+      "target_id": "B00AUC50MG",
+      "modification_text": "Is dark grey colored with image of heart and is darker and has no animal print"
+    },
+    {
+      "dataset_index": 4711,
+      "sample_id": "fashioniq:train:dress:4711",
+      "category": "dress",
+      "reference_id": "B006TAKSBQ",
+      "target_id": "B003HIWWL2",
+      "modification_text": "White and gold design and is more patterned"
+    },
+    {
+      "dataset_index": 15497,
+      "sample_id": "fashioniq:train:toptee:3524",
+      "category": "toptee",
+      "reference_id": "B008IGABDO",
+      "target_id": "B006UHAAAC",
+      "modification_text": "Is brighter in color and has no buttons and longer and longer sleeves"
+    },
+    {
+      "dataset_index": 14698,
+      "sample_id": "fashioniq:train:toptee:2725",
+      "category": "toptee",
+      "reference_id": "B004UBIEBC",
+      "target_id": "B007A4BE2W",
+      "modification_text": "Has a deeper neck and is less casual and is darker"
+    },
+    {
+      "dataset_index": 5657,
+      "sample_id": "fashioniq:train:dress:5657",
+      "category": "dress",
+      "reference_id": "B007WA2Z0O",
+      "target_id": "B009PFKUU6",
+      "modification_text": "Has a light brown and white color and is more neutral colored"
+    },
+    {
+      "dataset_index": 344,
+      "sample_id": "fashioniq:train:dress:344",
+      "category": "dress",
+      "reference_id": "B00FCEF00O",
+      "target_id": "B00GNLSVVK",
+      "modification_text": "Is black with a bohemian pattern. it has half sleeves and darker and has longer sleeves"
+    },
+    {
+      "dataset_index": 9757,
+      "sample_id": "fashioniq:train:shirt:3772",
+      "category": "shirt",
+      "reference_id": "B00B7AX7Q6",
+      "target_id": "B00ARGIZ68",
+      "modification_text": "Has longer sleeves and a cap at back and It has hood and long sleeves"
+    },
+    {
+      "dataset_index": 11422,
+      "sample_id": "fashioniq:train:shirt:5437",
+      "category": "shirt",
+      "reference_id": "B00AK46E2O",
+      "target_id": "B005JH9BGI",
+      "modification_text": "Is white with a religious graph on the front and is lighter"
+    },
+    {
+      "dataset_index": 5071,
+      "sample_id": "fashioniq:train:dress:5071",
+      "category": "dress",
+      "reference_id": "B00BG0TOEG",
+      "target_id": "B00BJFFWYO",
+      "modification_text": "Its has floral print more loose and has more colors in it"
+    },
+    {
+      "dataset_index": 10096,
+      "sample_id": "fashioniq:train:shirt:4111",
+      "category": "shirt",
+      "reference_id": "B00FH22YLO",
+      "target_id": "B003CD7NRK",
+      "modification_text": "Has blue designs and does not have text present"
+    },
+    {
+      "dataset_index": 3982,
+      "sample_id": "fashioniq:train:dress:3982",
+      "category": "dress",
+      "reference_id": "B00741MD2Q",
+      "target_id": "B00C17ZRLW",
+      "modification_text": "Has a light blue and brown retro pattern and is pink and has a higher neck"
+    },
+    {
+      "dataset_index": 3766,
+      "sample_id": "fashioniq:train:dress:3766",
+      "category": "dress",
+      "reference_id": "B00EH8MQTO",
+      "target_id": "B00BJSFGFG",
+      "modification_text": "Is looser and red and is in only red and black"
+    },
+    {
+      "dataset_index": 14297,
+      "sample_id": "fashioniq:train:toptee:2324",
+      "category": "toptee",
+      "reference_id": "B008O11L46",
+      "target_id": "B00C65T9Y0",
+      "modification_text": "Is lighter and is more blue and is more draped"
+    },
+    {
+      "dataset_index": 558,
+      "sample_id": "fashioniq:train:dress:558",
+      "category": "dress",
+      "reference_id": "B006YLWBN8",
+      "target_id": "B008Q7SIJY",
+      "modification_text": "Longer with no sleeves and is a printed long summer dress"
+    },
+    {
+      "dataset_index": 17593,
+      "sample_id": "fashioniq:train:toptee:5620",
+      "category": "toptee",
+      "reference_id": "B009B1H72I",
+      "target_id": "B00EFJ8UF4",
+      "modification_text": "Gas a darker color and is a shiny one color tank top"
+    },
+    {
+      "dataset_index": 4894,
+      "sample_id": "fashioniq:train:dress:4894",
+      "category": "dress",
+      "reference_id": "B00E89OZ7I",
+      "target_id": "B00APSSVWG",
+      "modification_text": "Is light pink and is pink colored and no sleeves"
+    },
+    {
+      "dataset_index": 9859,
+      "sample_id": "fashioniq:train:shirt:3874",
+      "category": "shirt",
+      "reference_id": "B0082HCOD4",
+      "target_id": "B004HL3BOA",
+      "modification_text": "Is blue with more designs and darker"
+    }
+  ]
+}
