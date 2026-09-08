@@ -93,6 +93,7 @@ def selection_metrics(
     oracle_action = torch.where(oracle_stop, torch.full_like(best_slot, candidates), best_slot)
     oracle_utility = torch.where(oracle_stop, torch.zeros_like(best_utility), best_utility)
     execute = ~stop
+    oracle_execute = ~oracle_stop
     harmful = execute & (selected_utility < 0)
 
     tp = int((stop & oracle_stop).sum())
@@ -100,11 +101,13 @@ def selection_metrics(
     tn = int((~stop & ~oracle_stop).sum())
     fn = int((~stop & oracle_stop).sum())
 
-    def ratio(numerator: int | float, denominator: int | float) -> float:
+    def ratio(numerator: float, denominator: float) -> float:
         return float(numerator / denominator) if denominator else 0.0
 
     slot_metrics = []
     norms = delta_q_norm.detach().float().cpu() if delta_q_norm is not None else None
+    executed_count = int(execute.sum())
+    oracle_executed_count = int(oracle_execute.sum())
     for slot in range(candidates):
         chosen = execute & selected_candidate.eq(slot)
         oracle = (~oracle_stop) & best_slot.eq(slot)
@@ -112,9 +115,13 @@ def selection_metrics(
             {
                 "slot": slot,
                 "selected_count": int(chosen.sum()),
-                "selected_fraction": ratio(int(chosen.sum()), batch),
+                "selected_fraction_of_all_decisions": ratio(int(chosen.sum()), batch),
+                "selected_fraction_given_execute": ratio(int(chosen.sum()), executed_count),
                 "oracle_best_count": int(oracle.sum()),
-                "oracle_best_fraction": ratio(int(oracle.sum()), batch),
+                "oracle_best_fraction_of_all_decisions": ratio(int(oracle.sum()), batch),
+                "oracle_best_fraction_given_oracle_execute": ratio(
+                    int(oracle.sum()), oracle_executed_count
+                ),
                 "mean_teacher_utility": float(values[:, slot].mean()),
                 "median_teacher_utility": float(values[:, slot].median()),
                 "positive_utility_fraction": float((values[:, slot] > 0).float().mean()),
@@ -126,9 +133,12 @@ def selection_metrics(
         )
 
     agreement = selected.eq(oracle_action)
-    executed_count = int(execute.sum())
     return {
         "decision_count": batch,
+        "execute_count": executed_count,
+        "execute_rate": ratio(executed_count, batch),
+        "oracle_execute_count": oracle_executed_count,
+        "oracle_execute_rate": ratio(oracle_executed_count, batch),
         "slot_metrics": slot_metrics,
         "selected_equals_oracle_count": int(agreement.sum()),
         "selected_equals_oracle_fraction": float(agreement.float().mean()),
@@ -157,3 +167,17 @@ def selection_metrics(
             "premature_stop_count": fp,
         },
     }
+
+
+def slot_monopoly(
+    metrics: dict[str, Any], *, oracle: bool = False, threshold: float = 0.60
+) -> dict[str, int | float | bool]:
+    """Detect slot concentration using execution-conditional denominators."""
+
+    key = (
+        "oracle_best_fraction_given_oracle_execute" if oracle else "selected_fraction_given_execute"
+    )
+    values = [float(slot[key]) for slot in metrics["slot_metrics"]]
+    slot = max(range(len(values)), key=values.__getitem__)
+    fraction = values[slot]
+    return {"detected": fraction > threshold, "slot": slot, "fraction": fraction}

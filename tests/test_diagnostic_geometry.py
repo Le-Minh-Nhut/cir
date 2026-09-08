@@ -1,17 +1,27 @@
 from __future__ import annotations
 
+import pytest
 import torch
 
+from compare_matched_diagnostics import compare_feature_artifacts
 from datasets.common import CIRSample
-from diagnostics.cohort import load_or_create_manifest, paired_rows
-from diagnostics.geometry import candidate_geometry, variance_decomposition
-from diagnostics.selection import selection_metrics
-from diagnostics.selection import transition_retrieval
+from diagnostics.cohort import (
+    caption_change_masks,
+    load_or_create_manifest,
+    paired_rows,
+    validate_processed_manifest,
+)
+from diagnostics.geometry import (
+    assert_compatible_feature_interface,
+    candidate_geometry,
+    variance_decomposition,
+)
+from diagnostics.selection import selection_metrics, slot_monopoly, transition_retrieval
 from models.iag_srme.utils.retrieval import marginal_teacher_utilities
 
 
 class _Samples(torch.utils.data.Dataset):
-    def __init__(self) -> None:
+    def __init__(self, count: int = 10) -> None:
         self.samples = [
             CIRSample(
                 sample_id=f"sample-{index}",
@@ -21,7 +31,7 @@ class _Samples(torch.utils.data.Dataset):
                 modification_text=f"caption-{index}",
                 category="dress",
             )
-            for index in range(10)
+            for index in range(count)
         ]
 
     def __len__(self) -> int:
@@ -61,7 +71,7 @@ def test_manifest_replays_same_ids_captions_and_order(tmp_path) -> None:
     second, replayed = load_or_create_manifest(
         dataset,
         path,
-        sample_count=2,
+        sample_count=6,
         batch_size=2,
         seed=17,
         split="train",
@@ -73,6 +83,38 @@ def test_manifest_replays_same_ids_captions_and_order(tmp_path) -> None:
     assert [sample.modification_text for sample in first] == [
         sample.modification_text for sample in second
     ]
+
+
+def test_manifest_rejects_truncation_and_fingerprints_processed_order(tmp_path) -> None:
+    dataset = _Samples(160)
+    path = tmp_path / "manifest.json"
+    cohort, manifest = load_or_create_manifest(
+        dataset,
+        path,
+        sample_count=160,
+        batch_size=8,
+        seed=17,
+        split="train",
+        caption_policy="ordered_and",
+    )
+    with pytest.raises(ValueError, match="cannot be silently truncated"):
+        load_or_create_manifest(
+            dataset,
+            path,
+            sample_count=80,
+            batch_size=8,
+            seed=17,
+            split="train",
+            caption_policy="ordered_and",
+        )
+
+    ids = [sample.sample_id for sample in cohort]
+    metadata = validate_processed_manifest(manifest, ids, batch_size=8)
+    assert metadata["processed_sample_count"] == 160
+    assert len(metadata["processed_sample_ids_sha256"]) == 64
+    assert len(metadata["teacher_batch_grouping_sha256"]) == 64
+    with pytest.raises(ValueError, match="differs from the manifest"):
+        validate_processed_manifest(manifest, ids[:80], batch_size=8)
 
 
 def test_true_per_slot_collapse_and_zero_variance_are_explicit() -> None:
@@ -127,7 +169,7 @@ def test_slot_and_oracle_metrics_recover_genuinely_best_slot() -> None:
 
     slot_three = report["slot_metrics"][3]
     assert slot_three["oracle_best_count"] == 4
-    assert slot_three["oracle_best_fraction"] == 1.0
+    assert slot_three["oracle_best_fraction_given_oracle_execute"] == 1.0
     assert report["selected_equals_oracle_fraction"] == 0.5
     assert report["mean_oracle_utility"] > report["mean_selected_utility"]
     assert report["mean_regret"] > 0
@@ -153,6 +195,102 @@ def test_stop_confusion_and_harmful_execution_denominators() -> None:
     assert stop["executed_action_count"] == 2
     assert stop["harmful_execution_fraction_of_executions"] == 1.0
     assert stop["harmful_execution_fraction_of_decisions"] == 0.5
+
+
+def test_execution_conditional_slot_occupancy_detects_monopoly() -> None:
+    utility = torch.ones(100, 4)
+    selected = torch.full((100,), 4)
+    selected[50:] = 3
+    report = selection_metrics(utility, selected, stop_threshold=0.0)
+    slot_three = report["slot_metrics"][3]
+
+    assert report["execute_count"] == 50
+    assert slot_three["selected_fraction_of_all_decisions"] == 0.5
+    assert slot_three["selected_fraction_given_execute"] == 1.0
+    assert slot_monopoly(report) == {"detected": True, "slot": 3, "fraction": 1.0}
+
+
+def test_harmful_execution_denominator_exact_example() -> None:
+    utility = torch.ones(100, 2)
+    utility[:10, 0] = -1
+    selected = torch.full((100,), 2)
+    selected[:20] = 0
+    stop = selection_metrics(utility, selected, stop_threshold=0.0)["stop"]
+
+    assert stop["executed_action_count"] == 20
+    assert stop["harmful_execution_count"] == 10
+    assert stop["harmful_execution_fraction_of_executions"] == 0.5
+    assert stop["harmful_execution_fraction_of_decisions"] == 0.1
+
+
+def test_stop_epsilon_distinguishes_positive_utility_from_oracle_execute() -> None:
+    utility = torch.tensor([[0.03, -0.2]])
+    report = selection_metrics(utility, torch.tensor([2]), stop_threshold=0.05)
+
+    assert report["positive_utility_candidate_count_mean"] == 1.0
+    assert report["oracle_execute_count"] == 0
+    assert report["stop"]["oracle_stop_count"] == 1
+
+
+def test_representation_space_guard_rejects_patch_query_comparison() -> None:
+    patch = torch.randn(8, 768)
+    query = torch.randn(8, 512)
+    with pytest.raises(ValueError, match="cannot compare"):
+        assert_compatible_feature_interface(
+            patch,
+            query,
+            first_name="V0_pooled",
+            second_name="terminal_query",
+            interface="trajectory",
+        )
+    assert_compatible_feature_interface(
+        query,
+        torch.randn(8, 512),
+        first_name="initial_query",
+        second_name="terminal_query",
+        interface="retrieval-query",
+    )
+
+
+def test_duplicate_caption_strings_are_excluded_from_sensitivity_cohort() -> None:
+    texts = ["make it red", "make it red", "remove sleeves"]
+    masks = caption_change_masks(texts, torch.tensor([1, 0, 2]))
+
+    assert masks["index_changed"].tolist() == [True, True, False]
+    assert masks["text_changed"].tolist() == [False, False, False]
+    assert masks["duplicate_caption_unchanged"].tolist() == [True, True, False]
+
+
+def test_matched_timestep_intersection_uses_only_shared_live_ids() -> None:
+    generator = torch.Generator().manual_seed(31)
+
+    def artifact(ids: list[str]) -> dict:
+        return {
+            "manifest_sample_ids_sha256": "same",
+            "teacher_batch_grouping_sha256": "same-batches",
+            "timesteps": {
+                "1": {
+                    "sample_ids": ids,
+                    "features": {
+                        "proposal": torch.randn(len(ids), 4, 12, generator=generator),
+                        "current_query": torch.randn(len(ids), 8, generator=generator),
+                    },
+                }
+            },
+        }
+
+    report = compare_feature_artifacts(
+        artifact(["A", "B", "C", "D"]),
+        artifact(["B", "C", "D", "E"]),
+    )["timesteps"]["1"]
+
+    assert report["intersection_sample_ids"] == ["B", "C", "D"]
+    assert report["intersection_count"] == 3
+    assert report["features"]["proposal"]["matched_old"]["raw"]["pooled"]["count"] == 12
+
+    empty = compare_feature_artifacts(artifact(["A"]), artifact(["B"]))["timesteps"]["1"]
+    assert empty["intersection_count"] == 0
+    assert empty["features"]["proposal"]["matched_old"]["available"] is False
 
 
 def test_transition_diagnostic_reuses_teacher_utility_semantics() -> None:

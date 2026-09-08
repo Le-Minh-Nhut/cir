@@ -378,6 +378,8 @@ class IAGSRME(nn.Module):
                     "fuse_beta": fuse_beta,
                     "delta": delta,
                     "candidate_states": candidate_states,
+                    # Already computed for ScoreNet/readout; exposed only for diagnostics.
+                    "candidate_global": candidate_global,
                     "candidate_queries": candidate_queries,
                     "delta_q": delta_q,
                     "scores": scores,

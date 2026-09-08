@@ -24,9 +24,10 @@ from __future__ import annotations
 import json
 import math
 from collections import Counter, defaultdict
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import hydra
 import torch
@@ -39,7 +40,12 @@ from torch.utils.data import DataLoader
 from data.images import FashionIQImageCollator
 from datasets.common import DirectoryImageStore
 from datasets.fashioniq import FashionIQDataset
-from diagnostics.cohort import load_or_create_manifest
+from diagnostics.cohort import (
+    load_or_create_manifest,
+    sample_ids_fingerprint,
+    validate_processed_manifest,
+)
+from diagnostics.selection import selection_metrics
 from evaluate import validate_checkpoint_backbone_metadata
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from models.iag_srme.utils.retrieval import build_teacher_masks, marginal_teacher_utilities
@@ -182,7 +188,9 @@ def objective_parameter_group(name: str) -> str:
 
 
 def parameter_movement_from_fresh(model: nn.Module, checkpoint_state: Mapping[str, Tensor]):
-    acc = defaultdict(lambda: dict(diff_sq=0.0, base_sq=0.0, abs_sum=0.0, max_abs=0.0, numel=0.0))
+    acc = defaultdict(
+        lambda: {"diff_sq": 0.0, "base_sq": 0.0, "abs_sum": 0.0, "max_abs": 0.0, "numel": 0.0}
+    )
     for name, parameter in model.named_parameters():
         if name not in checkpoint_state:
             continue
@@ -211,15 +219,15 @@ def parameter_movement_from_fresh(model: nn.Module, checkpoint_state: Mapping[st
 
 def gradient_group_stats(model: nn.Module, objective: nn.Module):
     acc = defaultdict(
-        lambda: dict(
-            grad_sq=0.0,
-            grad_max=0.0,
-            numel=0.0,
-            grad_numel=0.0,
-            nonzero_numel=0.0,
-            trainable_tensors=0.0,
-            no_grad_tensors=0.0,
-        )
+        lambda: {
+            "grad_sq": 0.0,
+            "grad_max": 0.0,
+            "numel": 0.0,
+            "grad_numel": 0.0,
+            "nonzero_numel": 0.0,
+            "trainable_tensors": 0.0,
+            "no_grad_tensors": 0.0,
+        }
     )
 
     def consume(module: nn.Module, is_model: bool):
@@ -314,8 +322,8 @@ def checkpoint_summary(checkpoint: Mapping[str, Any]):
                 if isinstance(value, dict) and "step" in value:
                     try:
                         steps.append(scalar(value["step"]))
-                    except Exception:
-                        pass
+                    except (TypeError, ValueError):
+                        continue
         optimizer_summary = {
             "state_entries": len(states) if isinstance(states, dict) else None,
             "param_groups": len(groups) if isinstance(groups, list) else None,
@@ -407,8 +415,8 @@ def analyze_batch(
         "dpp": cfg.lambda_dpp * raw["dpp"],
     }
     abs_total = sum(abs(v) for v in weighted.values())
-    for name in raw:
-        record[f"loss_raw/{name}"] = raw[name]
+    for name, value in raw.items():
+        record[f"loss_raw/{name}"] = value
         record[f"loss_weighted/{name}"] = weighted[name]
         record[f"loss_abs_fraction/{name}"] = abs(weighted[name]) / max(abs_total, 1e-12)
     record["loss/total"] = scalar(losses["total"])
@@ -436,8 +444,7 @@ def analyze_batch(
     query = output["query"]
     initial_state = output["initial_state"]
     final_state = output["state"]
-    cls_anchor = output.get("cls_anchor")
-    initial_query = model.backbone.retrieval_readout(initial_state, cls_anchor)
+    initial_query = output["steps"][0]["current_query"] if output["steps"] else query
     positive, negative, _ = build_teacher_masks(target_ids, targets.device)
     initial_terminal = objective.terminal(initial_query, targets, positive)
     record["retrieval/initial_terminal_loss"] = scalar(initial_terminal)
@@ -549,7 +556,7 @@ def analyze_batch(
         delta_q = step["delta_q"].detach().float()
         dq_norm = delta_q.norm(dim=-1)
         buckets["effect/delta_q_norm"].append(float(dq_norm.mean().cpu()))
-        buckets["effect/delta_q_effective_rank"].append(effective_rank(delta_q))
+        buckets["effect/delta_q_sibling_singular_effective_rank"].append(effective_rank(delta_q))
         buckets["effect/delta_q_near_zero_fraction"].append(
             float((dq_norm < 1e-5).float().mean().cpu())
         )
@@ -601,30 +608,29 @@ def analyze_batch(
                 )
 
             selected = step["selected_idx"][valid]
-            k = teacher.shape[1]
-            stop = selected >= k
-            gather_idx = selected.clamp_max(k - 1)
-            selected_u = teacher.gather(1, gather_idx[:, None]).squeeze(1)
-            selected_u = torch.where(stop, torch.zeros_like(selected_u), selected_u)
-            oracle_u, oracle_idx = teacher.max(dim=-1)
-            oracle_value = torch.maximum(oracle_u, torch.zeros_like(oracle_u))
-            regret = oracle_value - selected_u
-            buckets["decision/selected_teacher_utility"].append(float(selected_u.mean().cpu()))
-            buckets["decision/oracle_teacher_utility"].append(float(oracle_value.mean().cpu()))
-            buckets["decision/oracle_regret"].append(float(regret.mean().cpu()))
-            buckets["decision/harmful_execution_rate"].append(
-                float(((~stop) & (selected_u < 0)).float().mean().cpu())
+            decision = selection_metrics(
+                teacher,
+                selected,
+                stop_threshold=float(model.config.epsilon_stop),
+            )
+            stop_metrics = decision["stop"]
+            buckets["decision/selected_teacher_utility"].append(decision["mean_selected_utility"])
+            buckets["decision/oracle_teacher_utility"].append(decision["mean_oracle_utility"])
+            buckets["decision/oracle_regret"].append(decision["mean_regret"])
+            buckets["decision/harmful_execution_fraction_of_executions"].append(
+                stop_metrics["harmful_execution_fraction_of_executions"]
+            )
+            buckets["decision/harmful_execution_fraction_of_decisions"].append(
+                stop_metrics["harmful_execution_fraction_of_decisions"]
             )
             buckets["decision/missed_opportunity_stop_rate"].append(
-                float((stop & (oracle_u > 0)).float().mean().cpu())
+                stop_metrics["premature_stop_count"] / decision["decision_count"]
             )
-            should_stop = oracle_u <= 0
             buckets["decision/stop_execute_accuracy"].append(
-                float((stop == should_stop).float().mean().cpu())
+                (stop_metrics["tp"] + stop_metrics["tn"]) / decision["decision_count"]
             )
-            exact = torch.where(should_stop, stop, (~stop) & (gather_idx == oracle_idx))
             buckets["decision/exact_oracle_action_accuracy"].append(
-                float(exact.float().mean().cpu())
+                decision["selected_equals_oracle_fraction"]
             )
 
     for key, values in buckets.items():
@@ -800,7 +806,7 @@ def build_health_flags(
     corr = agg.get("score/global_teacher_pearson")
     if corr is not None and math.isfinite(corr) and corr < 0.20:
         flag(flags, "WARN", "SCORENET_LOW_CORRELATION", f"ScoreNet/teacher Pearson={corr:.3f}.")
-    harmful = agg.get("step/decision/harmful_execution_rate")
+    harmful = agg.get("step/decision/harmful_execution_fraction_of_executions")
     if harmful is not None and harmful > 0.20:
         flag(
             flags,
@@ -930,7 +936,7 @@ def render_markdown(report: Mapping[str, Any]):
             "objective/functional_pairwise_cosine",
             "objective/functional_rank",
             "objective/mean_delta_q_norm",
-            "step/effect/delta_q_effective_rank",
+            "step/effect/delta_q_sibling_singular_effective_rank",
             "step/effect/delta_q_near_zero_fraction",
             "step/executor/candidate_state_pairwise_l2",
         ],
@@ -952,7 +958,8 @@ def render_markdown(report: Mapping[str, Any]):
             "step/decision/selected_teacher_utility",
             "step/decision/oracle_teacher_utility",
             "step/decision/oracle_regret",
-            "step/decision/harmful_execution_rate",
+            "step/decision/harmful_execution_fraction_of_executions",
+            "step/decision/harmful_execution_fraction_of_decisions",
             "step/decision/missed_opportunity_stop_rate",
             "step/decision/stop_execute_accuracy",
             "step/decision/exact_oracle_action_accuracy",
@@ -1189,13 +1196,11 @@ def main(cfg: DictConfig):
 
     records, selections = [], Counter()
     gradient_batch = None
-    iterator = iter(loader)
+    processed_sample_ids: list[str] = []
+    live_sample_ids_by_t: dict[int, list[str]] = defaultdict(list)
     with torch.no_grad():
-        for batch_index in range(diagnostic_batches):
-            try:
-                batch = next(iterator)
-            except StopIteration:
-                break
+        for batch_index, batch in enumerate(loader):
+            processed_sample_ids.extend(batch.sample_ids)
             if gradient_batch is None:
                 gradient_batch = batch
             batch = batch.to(device)
@@ -1213,19 +1218,30 @@ def main(cfg: DictConfig):
                 )
                 targets = model.encode_global_images(batch.target_pixels)
                 losses = objective(output, targets, batch.target_ids, batch.modification_texts)
+            for step in output["steps"]:
+                live_sample_ids_by_t[int(step["timestep"])].extend(
+                    [
+                        batch.sample_ids[index]
+                        for index in step["live_indices"].detach().cpu().tolist()
+                    ]
+                )
             record, selected = analyze_batch(
                 model, objective, output, losses, targets, batch.target_ids
             )
             records.append(record)
             selections.update(selected)
             print(
-                f"[diagnostic] batch={batch_index + 1} total={record['loss/total']:.4f} "
+                f"[diagnostic] batch={batch_index + 1}/{len(loader)} "
+                f"total={record['loss/total']:.4f} "
                 f"dq={record.get('objective/mean_delta_q_norm', float('nan')):.3e} "
                 f"cos={record.get('objective/functional_pairwise_cosine', float('nan')):.4f} "
                 f"rank={record.get('objective/functional_rank', float('nan')):.3f} "
                 f"dpp_valid={record.get('objective/dpp_valid_rate', float('nan')):.3f}"
             )
 
+    cohort_metadata = validate_processed_manifest(
+        manifest, processed_sample_ids, batch_size=diagnostic_batch_size
+    )
     if not records:
         raise RuntimeError("no complete diagnostic batch")
     aggregate = aggregate_records(records)
@@ -1260,7 +1276,36 @@ def main(cfg: DictConfig):
             "manifest_path": str(manifest_value),
             "split": diagnostic_split,
             "caption_policy": caption_policy,
-            "sample_ids": [sample["sample_id"] for sample in manifest["samples"]],
+            **cohort_metadata,
+        },
+        "metric_definitions": {
+            "delta_q_sibling_singular_effective_rank": (
+                "Per-input effective rank of the K-by-D delta_q sibling singular values; "
+                "not cross-input covariance participation ratio."
+            ),
+            "cross_input_covariance_rank_authority": (
+                "diagnose_latent_geometry.py reports per-slot and slot-centered "
+                "cross-input covariance participation ratio."
+            ),
+            "positive_retrieval_utility": "candidate utility > 0",
+            "oracle_execute": (
+                "maximum teacher utility > model epsilon_stop; this may differ from "
+                "positive utility when epsilon_stop > 0"
+            ),
+            "harmful_execution_fraction_of_executions": (
+                "harmful executed actions / all executed actions"
+            ),
+            "harmful_execution_fraction_of_decisions": (
+                "harmful executed actions / all live teacher-valid decisions"
+            ),
+        },
+        "timestep_cohorts": {
+            str(timestep): {
+                "live_sample_ids": sample_ids,
+                "live_sample_count": len(sample_ids),
+                "live_sample_ids_fingerprint": sample_ids_fingerprint(sample_ids),
+            }
+            for timestep, sample_ids in sorted(live_sample_ids_by_t.items())
         },
         "aggregate": aggregate,
         "per_batch": records,

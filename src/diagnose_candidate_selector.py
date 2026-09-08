@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import hydra
 import torch
@@ -34,8 +35,14 @@ from torch.utils.data import DataLoader
 from data.images import FashionIQImageCollator
 from datasets.common import DirectoryImageStore
 from datasets.fashioniq import FashionIQDataset
-from diagnostics.cohort import category_shuffle_indices, load_or_create_manifest
-from diagnostics.selection import selection_metrics, transition_retrieval
+from diagnostics.cohort import (
+    caption_change_masks,
+    category_shuffle_indices,
+    load_or_create_manifest,
+    sample_ids_fingerprint,
+    validate_processed_manifest,
+)
+from diagnostics.selection import selection_metrics, slot_monopoly, transition_retrieval
 from evaluate import validate_checkpoint_backbone_metadata
 from evaluation.fashioniq import build_validation_datasets, evaluate_fashioniq
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
@@ -176,12 +183,13 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         "",
         "## Slot statistics",
         "",
-        "| Slot | selected % | oracle % | mean score | mean teacher utility | positive utility % | harmful when selected % | useful-for-DPP % |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Slot | selected/all | selected/execute | oracle/all | oracle/oracle-execute | mean score | mean teacher utility | positive utility % | harmful when selected % | useful-for-DPP % |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in report["slot_stats"]:
         lines.append(
-            "| {slot} | {selected_rate:.3%} | {oracle_rate:.3%} | {mean_score:.5f} | "
+            "| {slot} | {selected_rate:.3%} | {selected_rate_given_execute:.3%} | "
+            "{oracle_rate:.3%} | {oracle_rate_given_oracle_execute:.3%} | {mean_score:.5f} | "
             "{mean_teacher_utility:.5f} | {positive_utility_rate:.3%} | "
             "{harmful_selected_rate:.3%} | {dpp_useful_rate:.3%} |".format(**row)
         )
@@ -195,7 +203,9 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         "",
         f"- exact oracle accuracy: `{sel['exact_oracle_accuracy']:.4f}`",
         f"- stop/execute accuracy: `{sel['stop_execute_accuracy']:.4f}`",
-        f"- harmful execution rate: `{sel['harmful_execution_rate']:.4f}`",
+        f"- execute rate: `{detailed['execute_rate']:.4f}`",
+        f"- harmful / executions: `{sel['harmful_execution_fraction_of_executions']:.4f}`",
+        f"- harmful / all decisions: `{sel['harmful_execution_fraction_of_decisions']:.4f}`",
         f"- missed-opportunity STOP rate: `{sel['missed_opportunity_stop_rate']:.4f}`",
         f"- selected teacher utility: `{sel['selected_teacher_utility']:.5f}`",
         f"- oracle teacher utility: `{sel['oracle_teacher_utility']:.5f}`",
@@ -205,11 +215,15 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         f"- selected utility: `{detailed['mean_selected_utility']:.5f}`",
         f"- oracle utility: `{detailed['mean_oracle_utility']:.5f}`",
         f"- regret: `{detailed['mean_regret']:.5f}`",
-        f"- STOP precision / recall / F1: `{stop['precision']:.4f}` / "
-        f"`{stop['recall']:.4f}` / `{stop['f1']:.4f}`",
-        f"- harmful executions: `{stop['harmful_execution_count']}` / "
-        f"`{stop['executed_action_count']}` = "
-        f"`{stop['harmful_execution_fraction_of_executions']:.4f}`",
+        (
+            f"- STOP precision / recall / F1: `{stop['precision']:.4f}` / "
+            f"`{stop['recall']:.4f}` / `{stop['f1']:.4f}`"
+        ),
+        (
+            f"- harmful executions: `{stop['harmful_execution_count']}` / "
+            f"`{stop['executed_action_count']}` = "
+            f"`{stop['harmful_execution_fraction_of_executions']:.4f}`"
+        ),
         "",
         "### Selector vs oracle confusion",
         "",
@@ -405,6 +419,14 @@ def main(cfg: DictConfig) -> None:
     decision_records: list[dict[str, Any]] = []
     terminal_records: list[dict[str, Any]] = []
     caption_values: dict[str, list[float]] = defaultdict(list)
+    caption_shuffle_counts = {
+        "requested_shuffle_rows": 0,
+        "index_changed_rows": 0,
+        "text_changed_rows": 0,
+        "text_unchanged_due_to_duplicate_caption_rows": 0,
+    }
+    processed_sample_ids: list[str] = []
+    live_sample_ids_by_t: dict[int, list[str]] = defaultdict(list)
 
     total_decisions = 0
     teacher_invalid_rows = 0
@@ -423,13 +445,9 @@ def main(cfg: DictConfig) -> None:
     positive_candidate_total = 0.0
     positive_candidate_count = 0
 
-    iterator = iter(loader)
     with torch.no_grad():
-        for batch_idx in range(diagnostic_batches):
-            try:
-                batch = next(iterator)
-            except StopIteration:
-                break
+        for batch_idx, batch in enumerate(loader):
+            processed_sample_ids.extend(batch.sample_ids)
 
             batch = batch.to(device)
             assert batch.target_pixels is not None
@@ -510,6 +528,9 @@ def main(cfg: DictConfig) -> None:
                 pairwise_steps += 1
 
                 live_indices = step["live_indices"]
+                live_sample_ids_by_t[int(step["timestep"])].extend(
+                    [batch.sample_ids[index] for index in live_indices.cpu().tolist()]
+                )
                 pos_live = positive.index_select(0, live_indices)
                 neg_live = negative.index_select(0, live_indices)
                 transition = transition_retrieval(
@@ -597,11 +618,11 @@ def main(cfg: DictConfig) -> None:
                 gather_idx = selected.clamp_max(k - 1)
                 selected_u = teacher.gather(1, gather_idx[:, None]).squeeze(1)
                 selected_u = torch.where(stop, torch.zeros_like(selected_u), selected_u)
-                oracle_value = torch.maximum(oracle_u, torch.zeros_like(oracle_u))
+                oracle_value = torch.where(oracle_stop, torch.zeros_like(oracle_u), oracle_u)
                 regret = oracle_value - selected_u
 
                 harmful = (~stop) & (selected_u < 0)
-                missed_stop = stop & (oracle_u > 0)
+                missed_stop = stop & ~oracle_stop
                 stop_execute_correct = stop == oracle_stop
                 exact = torch.where(
                     oracle_stop,
@@ -673,7 +694,16 @@ def main(cfg: DictConfig) -> None:
             if output["steps"] and shuffled_output["steps"]:
                 correct = output["steps"][0]
                 shuffled = shuffled_output["steps"][0]
-                changed = shuffle.ne(torch.arange(shuffle.numel(), device=device))
+                caption_masks = caption_change_masks(batch.modification_texts, shuffle)
+                index_changed = caption_masks["index_changed"].to(device)
+                changed = caption_masks["text_changed"].to(device)
+                duplicate_unchanged = caption_masks["duplicate_caption_unchanged"]
+                caption_shuffle_counts["requested_shuffle_rows"] += len(batch.modification_texts)
+                caption_shuffle_counts["index_changed_rows"] += int(index_changed.sum())
+                caption_shuffle_counts["text_changed_rows"] += int(changed.sum())
+                caption_shuffle_counts["text_unchanged_due_to_duplicate_caption_rows"] += int(
+                    duplicate_unchanged.sum()
+                )
                 if changed.any():
                     for name in ("proposals", "actions", "delta_q"):
                         first = correct[name][changed].detach().float()
@@ -761,21 +791,28 @@ def main(cfg: DictConfig) -> None:
                             (shuffled_terminal - correct_terminal)[terminal_rows].cpu().tolist()
                         )
 
-            print(
-                f"[diagnostic] batch={batch_idx + 1}/{diagnostic_batches} "
-                f"decisions={total_decisions}"
-            )
+            print(f"[diagnostic] batch={batch_idx + 1}/{len(loader)} decisions={total_decisions}")
+
+    cohort_metadata = validate_processed_manifest(
+        manifest, processed_sample_ids, batch_size=diagnostic_batch_size
+    )
 
     if total_decisions == 0:
         raise RuntimeError("no valid decisions found")
 
     slot_stats = []
+    execute_count = int(selected_count[:k].sum())
+    oracle_execute_count = int(oracle_count[:k].sum())
     for slot in range(k):
         slot_stats.append(
             {
                 "slot": f"C{slot}",
                 "selected_rate": safe_div(float(selected_count[slot]), total_decisions),
+                "selected_rate_given_execute": safe_div(float(selected_count[slot]), execute_count),
                 "oracle_rate": safe_div(float(oracle_count[slot]), total_decisions),
+                "oracle_rate_given_oracle_execute": safe_div(
+                    float(oracle_count[slot]), oracle_execute_count
+                ),
                 "mean_score": safe_div(float(score_sum[slot]), float(slot_rows[slot])),
                 "mean_teacher_utility": safe_div(float(teacher_sum[slot]), float(slot_rows[slot])),
                 "positive_utility_rate": safe_div(
@@ -792,7 +829,9 @@ def main(cfg: DictConfig) -> None:
         {
             "slot": "STOP",
             "selected_rate": safe_div(float(selected_count[stop_idx]), total_decisions),
+            "selected_rate_given_execute": 0.0,
             "oracle_rate": safe_div(float(oracle_count[stop_idx]), total_decisions),
+            "oracle_rate_given_oracle_execute": 0.0,
             "mean_score": 0.0,
             "mean_teacher_utility": 0.0,
             "positive_utility_rate": 0.0,
@@ -819,18 +858,38 @@ def main(cfg: DictConfig) -> None:
     state_l2 = state_l2_sum / pairwise_steps
     confusion_rate = confusion / max(float(confusion.sum()), 1.0)
 
-    flags: list[dict[str, str]] = []
-    max_selected_slot = int(selected_count[:k].argmax())
-    max_selected_rate = safe_div(float(selected_count[max_selected_slot]), total_decisions)
-    max_oracle_slot = int(oracle_count[:k].argmax())
-    max_oracle_rate = safe_div(float(oracle_count[max_oracle_slot]), total_decisions)
+    combined_selection = selection_metrics(
+        torch.cat(all_teacher_matrix),
+        torch.cat(all_selected),
+        stop_threshold=float(model.config.epsilon_stop),
+        delta_q_norm=torch.cat(all_delta_norm),
+    )
+    by_timestep = {}
+    for timestep, values in sorted(timestep_values.items()):
+        by_timestep[str(timestep)] = selection_metrics(
+            torch.cat(values["utility"]),
+            torch.cat(values["selected"]),
+            stop_threshold=float(model.config.epsilon_stop),
+            delta_q_norm=torch.cat(values["delta_norm"]),
+        )
 
-    if max_selected_rate > 0.60:
+    flags: list[dict[str, str]] = []
+    selected_dominance = slot_monopoly(combined_selection)
+    oracle_dominance = slot_monopoly(combined_selection, oracle=True)
+    max_selected_slot = int(selected_dominance["slot"])
+    max_selected_rate = float(selected_dominance["fraction"])
+    max_oracle_slot = int(oracle_dominance["slot"])
+    max_oracle_rate = float(oracle_dominance["fraction"])
+
+    if selected_dominance["detected"]:
         flags.append(
             {
                 "level": "WARN",
                 "code": "SELECTOR_SLOT_COLLAPSE",
-                "message": f"C{max_selected_slot} is selected {max_selected_rate:.1%} of decisions.",
+                "message": (
+                    f"C{max_selected_slot} is selected in {max_selected_rate:.1%} "
+                    "of executed edits."
+                ),
             }
         )
 
@@ -846,12 +905,15 @@ def main(cfg: DictConfig) -> None:
             }
         )
 
-    if max_oracle_rate > 0.60:
+    if oracle_dominance["detected"]:
         flags.append(
             {
                 "level": "WARN",
                 "code": "ORACLE_SLOT_BIAS",
-                "message": f"Oracle itself prefers C{max_oracle_slot} {max_oracle_rate:.1%} of decisions.",
+                "message": (
+                    f"Oracle itself prefers C{max_oracle_slot} in {max_oracle_rate:.1%} "
+                    "of oracle-execute decisions."
+                ),
             }
         )
 
@@ -951,21 +1013,6 @@ def main(cfg: DictConfig) -> None:
             num_workers=int(cfg.experiment.num_workers),
         )
 
-    combined_selection = selection_metrics(
-        torch.cat(all_teacher_matrix),
-        torch.cat(all_selected),
-        stop_threshold=float(model.config.epsilon_stop),
-        delta_q_norm=torch.cat(all_delta_norm),
-    )
-    by_timestep = {}
-    for timestep, values in sorted(timestep_values.items()):
-        by_timestep[str(timestep)] = selection_metrics(
-            torch.cat(values["utility"]),
-            torch.cat(values["selected"]),
-            stop_threshold=float(model.config.epsilon_stop),
-            delta_q_norm=torch.cat(values["delta_norm"]),
-        )
-
     retrieval_behavior = {}
     for name, values in transition_values.items():
         merged = torch.cat(values).float()
@@ -1019,19 +1066,25 @@ def main(cfg: DictConfig) -> None:
             slot["mean_teacher_utility"] for slot in combined_selection["slot_metrics"]
         ],
         "oracle_slot_occupancy": [
-            slot["oracle_best_fraction"] for slot in combined_selection["slot_metrics"]
+            slot["oracle_best_fraction_given_oracle_execute"]
+            for slot in combined_selection["slot_metrics"]
         ],
         "selected_slot_occupancy": [
-            slot["selected_fraction"] for slot in combined_selection["slot_metrics"]
+            slot["selected_fraction_given_execute"] for slot in combined_selection["slot_metrics"]
         ],
+        "execute_rate": combined_selection["execute_rate"],
+        "oracle_execute_rate": combined_selection["oracle_execute_rate"],
         "selected_stop_rate": combined_selection["stop"]["stop_rate"],
         "oracle_stop_rate": combined_selection["stop"]["oracle_stop_rate"],
         "selected_oracle_agreement": combined_selection["selected_equals_oracle_fraction"],
         "selected_utility": combined_selection["mean_selected_utility"],
         "oracle_utility": combined_selection["mean_oracle_utility"],
         "regret": combined_selection["mean_regret"],
-        "harmful_execution_rate": combined_selection["stop"][
+        "harmful_execution_fraction_of_executions": combined_selection["stop"][
             "harmful_execution_fraction_of_executions"
+        ],
+        "harmful_execution_fraction_of_decisions": combined_selection["stop"][
+            "harmful_execution_fraction_of_decisions"
         ],
         "stop_precision": combined_selection["stop"]["precision"],
         "stop_recall": combined_selection["stop"]["recall"],
@@ -1060,15 +1113,23 @@ def main(cfg: DictConfig) -> None:
         "teacher_invalid_rows": teacher_invalid_rows,
         "manifest": {
             "path": str(manifest_value),
-            "sample_ids": [sample["sample_id"] for sample in manifest["samples"]],
+            **cohort_metadata,
             "split": diagnostic_split,
             "caption_policy": caption_policy,
+        },
+        "timestep_cohorts": {
+            str(timestep): {
+                "live_sample_ids": sample_ids,
+                "live_sample_count": len(sample_ids),
+                "live_sample_ids_fingerprint": sample_ids_fingerprint(sample_ids),
+            }
+            for timestep, sample_ids in sorted(live_sample_ids_by_t.items())
         },
         "slot_stats": slot_stats,
         "selector": {
             "exact_oracle_accuracy": exact_acc,
             "stop_execute_accuracy": safe_div(total_stop_execute_correct, total_decisions),
-            "harmful_execution_rate": harmful_rate,
+            "harmful_execution_fraction_of_executions": harmful_rate,
             "harmful_execution_fraction_of_decisions": safe_div(total_harmful, total_decisions),
             "executed_action_count": total_executed,
             "missed_opportunity_stop_rate": safe_div(total_missed_stop, total_decisions),
@@ -1087,11 +1148,22 @@ def main(cfg: DictConfig) -> None:
             "positive_similarity": "maximum cosine over valid positive target IDs",
             "hardest_negative_similarity": "maximum cosine over false-negative-safe negatives",
             "utility": "teacher_loss(parent) - teacher_loss(candidate)",
+            "positive_utility": "candidate utility > 0",
+            "oracle_execute": "maximum candidate utility > epsilon_stop",
+        },
+        "metric_definitions": {
+            "selected_fraction_of_all_decisions": "selected slot count / all decisions",
+            "selected_fraction_given_execute": "selected slot count / executed decisions",
+            "oracle_best_fraction_of_all_decisions": "oracle slot count / all decisions",
+            "oracle_best_fraction_given_oracle_execute": (
+                "oracle slot count / decisions where max utility > epsilon_stop"
+            ),
         },
         "decision_records": decision_records,
         "terminal_cohort_records": terminal_records,
         "terminal_cohort_summary": terminal_summary,
         "caption_sensitivity": caption_summary,
+        "caption_shuffle_cohort": caption_shuffle_counts,
         "official_fashioniq": official_metrics,
         "selector_vs_oracle_confusion_rate": matrix_to_list(confusion_rate),
         "pairwise": {

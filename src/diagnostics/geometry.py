@@ -7,6 +7,25 @@ import torch.nn.functional as F
 from torch import Tensor
 
 
+def assert_compatible_feature_interface(
+    first: Tensor,
+    second: Tensor,
+    *,
+    first_name: str,
+    second_name: str,
+    interface: str,
+) -> None:
+    """Reject trajectory comparisons across different feature interfaces."""
+
+    if first.ndim < 2 or second.ndim < 2:
+        raise ValueError("feature-interface comparisons require [...,D] tensors")
+    if first.shape[-1] != second.shape[-1]:
+        raise ValueError(
+            f"cannot compare {first_name} ({first.shape[-1]}D) with "
+            f"{second_name} ({second.shape[-1]}D) as {interface}"
+        )
+
+
 def _flat(values: Tensor) -> Tensor:
     if values.ndim == 1:
         return values[:, None]

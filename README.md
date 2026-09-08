@@ -156,15 +156,30 @@ python src/diagnose_candidate_selector.py \
   +diagnostic_batches=20 +diagnostic_batch_size=8 \
   +diagnostic_official_eval=true \
   hydra.run.dir=outputs/diagnostics/v2-r0/strong_selector
+
+# Compare recurrent geometry only on IDs live in both checkpoints at each timestep
+python src/compare_matched_diagnostics.py \
+  --old-features outputs/diagnostics/v2-r0/old_geometry/candidate_features.pt \
+  --strong-features outputs/diagnostics/v2-r0/strong_geometry/candidate_features.pt \
+  --output-dir outputs/diagnostics/v2-r0/old_vs_strong_matched
 ```
 
-Geometry runs emit `latent_geometry_report.{json,md}`. Selector runs emit
+Persistent manifests are strict: `diagnostic_batches * diagnostic_batch_size` must
+match the request that created the manifest, and every stored row is processed in
+the original teacher-batch grouping. Geometry runs emit
+`latent_geometry_report.{json,md}` plus `candidate_features.pt`. Selector runs emit
 `candidate_selector_diagnostic.{json,md}`. Training now appends update and validation
 records to `metrics.jsonl` and persists `resolved_config.yaml` plus
 `run_metadata.json`; checkpoints store the true optimizer/batch step counters and AMP
 scaler state.
 
+The comparison command emits `matched_geometry_comparison.{json,md}`. Its timestep
+tables separate each checkpoint's native survivor cohort from the OLD/STRONG live-ID
+intersection, so t1/t2 rank changes are not confounded by different STOP survivors.
+
 Start with `headline_candidate_geometry` in the geometry JSON and `headline_metrics`
 in the selector JSON. They expose per-slot and slot-centered PR, between-slot variance,
 caption utility advantage, per-slot teacher utility/occupancy, selector regret,
 harmful-execution rate, STOP precision/recall, and optional official FashionIQ recall.
+Candidate-slot collapse should be read from `selected_fraction_given_execute`; oracle
+slot concentration should be read from `oracle_best_fraction_given_oracle_execute`.

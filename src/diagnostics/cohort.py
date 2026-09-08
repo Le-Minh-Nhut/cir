@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,77 @@ import torch
 from torch.utils.data import Dataset, Subset
 
 from datasets.common import CIRSample
+
+
+def sample_ids_fingerprint(sample_ids: list[str]) -> str:
+    """Stable fingerprint of an ordered cohort."""
+
+    payload = json.dumps(sample_ids, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def teacher_batch_fingerprint(sample_ids: list[str], batch_size: int) -> str:
+    """Stable fingerprint that also locks the in-batch teacher grouping."""
+
+    groups = [
+        sample_ids[start : start + batch_size] for start in range(0, len(sample_ids), batch_size)
+    ]
+    payload = json.dumps(groups, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def validate_processed_manifest(
+    manifest: dict[str, Any], processed_sample_ids: list[str], *, batch_size: int
+) -> dict[str, Any]:
+    """Require a normal replay to process every manifest row in stored order."""
+
+    expected = [str(record["sample_id"]) for record in manifest["samples"]]
+    if processed_sample_ids != expected:
+        raise ValueError(
+            "processed diagnostic cohort differs from the manifest: "
+            f"expected {len(expected)} ordered samples, got {len(processed_sample_ids)}"
+        )
+    return {
+        "manifest_sample_count": len(expected),
+        "processed_sample_count": len(processed_sample_ids),
+        "processed_sample_ids": processed_sample_ids,
+        "processed_sample_ids_sha256": sample_ids_fingerprint(processed_sample_ids),
+        "teacher_batch_grouping_sha256": teacher_batch_fingerprint(
+            processed_sample_ids, batch_size
+        ),
+    }
+
+
+def matched_intersection_ids(old_ids: list[str], strong_ids: list[str]) -> list[str]:
+    """Return the stable OLD-ordered live intersection, rejecting ambiguous IDs."""
+
+    if len(set(old_ids)) != len(old_ids) or len(set(strong_ids)) != len(strong_ids):
+        raise ValueError("matched timestep comparison requires unique sample IDs")
+    strong = set(strong_ids)
+    return [sample_id for sample_id in old_ids if sample_id in strong]
+
+
+def caption_change_masks(
+    original_texts: list[str], shuffled_indices: torch.Tensor
+) -> dict[str, torch.Tensor]:
+    """Separate changed indices from rows whose actual caption string changed."""
+
+    if shuffled_indices.shape != (len(original_texts),):
+        raise ValueError("shuffle indices must have one entry per caption")
+    cpu_indices = shuffled_indices.detach().long().cpu()
+    index_changed = cpu_indices.ne(torch.arange(len(original_texts)))
+    text_changed = torch.tensor(
+        [
+            original_texts[index] != original_texts[int(cpu_indices[index])]
+            for index in range(len(original_texts))
+        ],
+        dtype=torch.bool,
+    )
+    return {
+        "index_changed": index_changed,
+        "text_changed": text_changed,
+        "duplicate_caption_unchanged": index_changed & ~text_changed,
+    }
 
 
 def _record(sample: CIRSample, dataset_index: int) -> dict[str, Any]:
@@ -50,6 +122,13 @@ def load_or_create_manifest(
         records = manifest.get("samples")
         if not isinstance(records, list) or not records:
             raise ValueError("diagnostic manifest has no sample records")
+        stored_request = int(manifest.get("requested_sample_count", len(records)))
+        if sample_count != stored_request:
+            raise ValueError(
+                "diagnostic manifest sample count differs from the requested matched replay: "
+                f"manifest_request={stored_request}, requested={sample_count}. "
+                "Persistent manifests cannot be silently truncated."
+            )
     else:
         count = min(sample_count, len(dataset))
         generator = torch.Generator().manual_seed(seed)
