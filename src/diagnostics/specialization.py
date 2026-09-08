@@ -95,8 +95,12 @@ def functional_specialization_summary(
 
     best, best_slot = values.max(dim=-1)
     oracle_execute = best > 0
-    tie_count = values.eq(best[:, None]).sum(dim=-1)
-    unique_win = oracle_execute[:, None] & values.eq(best[:, None]) & tie_count[:, None].eq(1)
+    exact_best = values.eq(best[:, None])
+    tie_count = exact_best.sum(dim=-1)
+    unique_win = oracle_execute[:, None] & exact_best & tie_count[:, None].eq(1)
+    tie_credit = (
+        exact_best.double() / tie_count[:, None].clamp_min(1)
+    ) * oracle_execute[:, None]
     oracle_execute_count = int(oracle_execute.sum())
     useful = None
     if dpp_temperature is not None and useful_threshold is not None:
@@ -122,9 +126,19 @@ def functional_specialization_summary(
                 "useful_dpp_quality_fraction": (
                     float(useful[:, slot].double().mean()) if useful is not None else None
                 ),
-                "oracle_occupancy_of_all_rows": float(occupied.double().mean()),
-                "oracle_occupancy_given_oracle_execute": (
+                "argmax_tiebroken_oracle_occupancy_of_all_rows": float(
+                    occupied.double().mean()
+                ),
+                "argmax_tiebroken_oracle_occupancy_given_oracle_execute": (
                     float(occupied.sum() / oracle_execute_count)
+                    if oracle_execute_count
+                    else None
+                ),
+                "tie_aware_oracle_occupancy_of_all_rows": float(
+                    tie_credit[:, slot].mean()
+                ),
+                "tie_aware_oracle_occupancy_given_oracle_execute": (
+                    float(tie_credit[:, slot].sum() / oracle_execute_count)
                     if oracle_execute_count
                     else None
                 ),
@@ -170,46 +184,298 @@ def functional_specialization_summary(
         "effective_functional_k": effective_k,
         "oracle_execute_count": oracle_execute_count,
         "oracle_execute_fraction": float(oracle_execute.double().mean()),
+        "oracle_exact_tie_fraction": (
+            float(tie_count[oracle_execute].gt(1).double().mean())
+            if oracle_execute_count
+            else None
+        ),
+        "oracle_exact_tie_fraction_of_all_rows": float(
+            (oracle_execute & tie_count.gt(1)).double().mean()
+        ),
+        "mean_oracle_tie_size_given_execute": (
+            float(tie_count[oracle_execute].double().mean())
+            if oracle_execute_count
+            else None
+        ),
         "per_sample_shapley": shapley,
     }
 
 
-def bootstrap_mean_interval(
-    values: Tensor,
+def valid_teacher_cluster_ids(valid_rows: Tensor, teacher_batch_id: int) -> Tensor:
+    """Carry an original teacher-batch ID through row validity filtering."""
+
+    if valid_rows.ndim != 1 or valid_rows.dtype != torch.bool:
+        raise ValueError("valid_rows must be a one-dimensional bool tensor")
+    return torch.full(
+        (int(valid_rows.sum()),),
+        int(teacher_batch_id),
+        dtype=torch.long,
+    )
+
+
+def cluster_bootstrap_row_indices(
+    cluster_ids: Tensor,
     *,
     samples: int,
-    generator: torch.Generator,
-    confidence: float = 0.95,
-) -> tuple[Tensor, Tensor]:
-    """Deterministic percentile bootstrap interval for a [N,K] mean."""
+    seed: int,
+) -> list[Tensor]:
+    """Draw deterministic bootstrap rows by resampling whole clusters.
 
-    if values.ndim != 2 or values.shape[0] == 0:
-        raise ValueError("bootstrap values must be non-empty [N,K]")
-    if samples <= 0:
-        nan = torch.full((values.shape[1],), float("nan"), dtype=values.dtype)
-        return nan, nan.clone()
-    indices = torch.randint(
-        values.shape[0],
-        (samples, values.shape[0]),
+    Each replicate draws as many clusters as occur in the input. A repeated cluster
+    repeats every one of its rows. The plan depends only on cluster IDs, ``samples``,
+    and ``seed`` so matched checkpoint runs share the same resampling scheme.
+    """
+
+    clusters_for_rows = cluster_ids.detach().long().cpu()
+    if clusters_for_rows.ndim != 1 or clusters_for_rows.numel() == 0:
+        raise ValueError("cluster_ids must be a non-empty one-dimensional tensor")
+    if samples < 0:
+        raise ValueError("bootstrap samples must be non-negative")
+    clusters = torch.unique(clusters_for_rows, sorted=True)
+    members = [
+        clusters_for_rows.eq(cluster).nonzero(as_tuple=False).flatten()
+        for cluster in clusters
+    ]
+    generator = torch.Generator().manual_seed(seed)
+    draws = torch.randint(
+        len(clusters),
+        (samples, len(clusters)),
         generator=generator,
     )
-    estimates = values.index_select(0, indices.flatten()).reshape(
-        samples, values.shape[0], values.shape[1]
-    ).mean(dim=1)
+    return [
+        torch.cat([members[int(cluster_index)] for cluster_index in replicate])
+        for replicate in draws
+    ]
+
+
+def _percentile_interval(
+    estimates: Tensor,
+    *,
+    confidence: float,
+) -> tuple[Tensor, Tensor]:
+    if not 0 < confidence < 1:
+        raise ValueError("bootstrap confidence must be between zero and one")
+    if estimates.shape[0] == 0:
+        shape = estimates.shape[1:]
+        nan = torch.full(shape, float("nan"), dtype=estimates.dtype)
+        return nan, nan.clone()
     tail = (1.0 - confidence) / 2.0
     return torch.quantile(estimates, tail, dim=0), torch.quantile(
         estimates, 1.0 - tail, dim=0
     )
 
 
+def cluster_bootstrap_mean_interval(
+    values: Tensor,
+    cluster_ids: Tensor,
+    *,
+    samples: int,
+    seed: int,
+    confidence: float = 0.95,
+) -> tuple[Tensor, Tensor, int]:
+    """Percentile interval for a mean using teacher-batch cluster resampling."""
+
+    observations = values.detach().double().cpu()
+    if observations.ndim != 2 or observations.shape[0] == 0:
+        raise ValueError("bootstrap values must be non-empty [N,K]")
+    if cluster_ids.shape != (observations.shape[0],):
+        raise ValueError("cluster_ids must align with bootstrap rows")
+    plan = cluster_bootstrap_row_indices(cluster_ids, samples=samples, seed=seed)
+    estimates = (
+        torch.stack([observations[indices].mean(dim=0) for indices in plan])
+        if plan
+        else observations.new_empty((0, observations.shape[1]))
+    )
+    low, high = _percentile_interval(estimates, confidence=confidence)
+    return low, high, len(plan)
+
+
+def _estimate_interval(
+    estimate: float,
+    bootstrap_values: Tensor,
+    *,
+    confidence: float,
+) -> dict[str, Any]:
+    finite = bootstrap_values[torch.isfinite(bootstrap_values)]
+    low, high = _percentile_interval(finite, confidence=confidence)
+    return {
+        "estimate": estimate,
+        "ci_low": float(low) if finite.numel() else None,
+        "ci_high": float(high) if finite.numel() else None,
+        "valid_bootstrap_replicates": int(finite.numel()),
+    }
+
+
+def functional_cluster_bootstrap_summary(
+    utility: Tensor,
+    cluster_ids: Tensor,
+    *,
+    bootstrap_samples: int,
+    seed: int,
+    confidence: float = 0.95,
+    epsilon: float = 1e-12,
+) -> dict[str, Any]:
+    """Cluster-bootstrap CIs for the primary STOP-anchored functional metrics."""
+
+    values = utility.detach().double().cpu()
+    clusters = cluster_ids.detach().long().cpu()
+    if values.ndim != 2 or values.shape[0] == 0:
+        raise ValueError("functional bootstrap requires non-empty [N,K] utility")
+    if clusters.shape != (values.shape[0],):
+        raise ValueError("cluster_ids must align with utility rows")
+
+    shapley, coalition = exact_shapley_values(values)
+    full_rows = coalition[:, -1]
+    single_rows = values.clamp_min(0)
+    plan = cluster_bootstrap_row_indices(
+        clusters, samples=bootstrap_samples, seed=seed
+    )
+    full_bootstrap = []
+    single_bootstrap = []
+    shapley_bootstrap = []
+    share_bootstrap = []
+    effective_k_bootstrap = []
+    for indices in plan:
+        full_mean = full_rows[indices].mean()
+        single_mean = single_rows[indices].mean(dim=0)
+        shapley_mean = shapley[indices].mean(dim=0)
+        full_bootstrap.append(full_mean)
+        single_bootstrap.append(single_mean)
+        shapley_bootstrap.append(shapley_mean)
+        total = shapley_mean.sum()
+        if float(total) > epsilon:
+            shares = shapley_mean / total
+            share_bootstrap.append(shares)
+            positive = shares.clamp_min(torch.finfo(shares.dtype).tiny)
+            effective_k_bootstrap.append((-(shares * positive.log()).sum()).exp())
+
+    candidates = values.shape[1]
+    full_estimate = float(full_rows.mean())
+    single_estimate = single_rows.mean(dim=0)
+    shapley_estimate = shapley.mean(dim=0)
+    full_values = torch.stack(full_bootstrap) if full_bootstrap else values.new_empty(0)
+    single_values = (
+        torch.stack(single_bootstrap)
+        if single_bootstrap
+        else values.new_empty((0, candidates))
+    )
+    shapley_values = (
+        torch.stack(shapley_bootstrap)
+        if shapley_bootstrap
+        else values.new_empty((0, candidates))
+    )
+    full_metric = _estimate_interval(
+        full_estimate, full_values, confidence=confidence
+    )
+    single_metrics = [
+        {
+            "slot": slot,
+            **_estimate_interval(
+                float(single_estimate[slot]),
+                single_values[:, slot],
+                confidence=confidence,
+            ),
+        }
+        for slot in range(candidates)
+    ]
+    shapley_metrics = [
+        {
+            "slot": slot,
+            **_estimate_interval(
+                float(shapley_estimate[slot]),
+                shapley_values[:, slot],
+                confidence=confidence,
+            ),
+        }
+        for slot in range(candidates)
+    ]
+
+    shares_total = float(shapley_estimate.sum())
+    if shares_total > epsilon:
+        share_estimate = shapley_estimate / shares_total
+        normalized_share_metrics = [
+            {
+                "slot": slot,
+                **_estimate_interval(
+                    float(share_estimate[slot]),
+                    (
+                        torch.stack(share_bootstrap)[:, slot]
+                        if share_bootstrap
+                        else values.new_empty(0)
+                    ),
+                    confidence=confidence,
+                ),
+            }
+            for slot in range(candidates)
+        ]
+        positive = share_estimate.clamp_min(torch.finfo(share_estimate.dtype).tiny)
+        effective_k_estimate = float(
+            (-(share_estimate * positive.log()).sum()).exp()
+        )
+    else:
+        normalized_share_metrics = None
+        effective_k_estimate = None
+    effective_k_values = (
+        torch.stack(effective_k_bootstrap)
+        if effective_k_bootstrap
+        else values.new_empty(0)
+    )
+    effective_k = (
+        _estimate_interval(
+            effective_k_estimate, effective_k_values, confidence=confidence
+        )
+        if effective_k_estimate is not None
+        else {
+            "estimate": None,
+            "ci_low": None,
+            "ci_high": None,
+            "valid_bootstrap_replicates": int(effective_k_values.numel()),
+        }
+    )
+
+    c3_slot = 3 if candidates == 4 else None
+    if c3_slot is not None:
+        delta_estimate = full_estimate - float(single_estimate[c3_slot])
+        delta_values = full_values - single_values[:, c3_slot]
+        relative_estimate = delta_estimate / max(abs(full_estimate), epsilon)
+        relative_values = delta_values / full_values.abs().clamp_min(epsilon)
+        complementarity = {
+            "c3_slot": c3_slot,
+            "all_minus_c3": _estimate_interval(
+                delta_estimate, delta_values, confidence=confidence
+            ),
+            "relative_all_minus_c3": _estimate_interval(
+                relative_estimate, relative_values, confidence=confidence
+            ),
+        }
+    else:
+        complementarity = None
+
+    return {
+        "bootstrap_method": "teacher_batch_cluster",
+        "bootstrap_samples": bootstrap_samples,
+        "confidence": confidence,
+        "teacher_cluster_count": int(torch.unique(clusters).numel()),
+        "valid_row_count": values.shape[0],
+        "full_set_oracle_value": full_metric,
+        "single_slot_oracle_values": single_metrics,
+        "complementarity": complementarity,
+        "mean_shapley_per_slot": shapley_metrics,
+        "normalized_shapley_share_per_slot": normalized_share_metrics,
+        "effective_functional_k": effective_k,
+    }
+
+
 def semantic_specialization_summary(
     utility: Tensor,
     shapley: Tensor,
     instruction_concepts: Sequence[Sequence[str]],
+    cluster_ids: Tensor,
     *,
     min_support: int,
     bootstrap_samples: int,
     seed: int,
+    confidence: float = 0.95,
 ) -> dict[str, Any]:
     """Multi-label conditional functional summaries without causal interpretation."""
 
@@ -217,11 +483,16 @@ def semantic_specialization_summary(
     phi = shapley.detach().double().cpu()
     if values.shape != phi.shape or values.shape[0] != len(instruction_concepts):
         raise ValueError("utility, Shapley, and instruction concepts must align")
+    clusters = cluster_ids.detach().long().cpu()
+    if clusters.shape != (values.shape[0],):
+        raise ValueError("cluster_ids must align with semantic rows")
     concepts = sorted({item for row in instruction_concepts for item in row})
     advantages = unique_advantage(values)
-    best, best_slot = values.max(dim=-1)
+    best = values.max(dim=-1).values
     oracle_execute = best > 0
-    generator = torch.Generator().manual_seed(seed)
+    bootstrap_plan = cluster_bootstrap_row_indices(
+        clusters, samples=bootstrap_samples, seed=seed
+    )
     reported = []
     insufficient = []
     for concept in concepts:
@@ -231,34 +502,58 @@ def semantic_specialization_summary(
             insufficient.append({"concept": concept, "support_count": support})
             continue
         conditional_phi = phi[mask]
-        low, high = bootstrap_mean_interval(
-            conditional_phi,
-            samples=bootstrap_samples,
-            generator=generator,
+        bootstrap_estimates = []
+        for indices in bootstrap_plan:
+            conditional_indices = indices[mask[indices]]
+            if conditional_indices.numel():
+                bootstrap_estimates.append(phi[conditional_indices].mean(dim=0))
+        estimates = (
+            torch.stack(bootstrap_estimates)
+            if bootstrap_estimates
+            else phi.new_empty((0, phi.shape[1]))
         )
+        minimum_valid = min(
+            bootstrap_samples, max(20, math.ceil(bootstrap_samples * 0.8))
+        )
+        ci_available = bootstrap_samples > 0 and len(bootstrap_estimates) >= minimum_valid
+        if ci_available:
+            low, high = _percentile_interval(estimates, confidence=confidence)
+            low_values: list[float] | None = low.tolist()
+            high_values: list[float] | None = high.tolist()
+        else:
+            low_values = None
+            high_values = None
         conditional_advantage = advantages[mask]
-        conditional_best = best_slot[mask]
         conditional_execute = oracle_execute[mask]
         execute_count = int(conditional_execute.sum())
+        conditional_exact_best = values[mask].eq(best[mask, None])
+        conditional_tie_size = conditional_exact_best.sum(dim=-1).clamp_min(1)
+        conditional_tie_credit = (
+            conditional_exact_best.double() / conditional_tie_size[:, None]
+        ) * conditional_execute[:, None]
         reported.append(
             {
                 "concept": concept,
                 "support_count": support,
+                "support_teacher_cluster_count": int(torch.unique(clusters[mask]).numel()),
                 "conditional_shapley_mean": conditional_phi.mean(dim=0).tolist(),
-                "conditional_shapley_ci_low": low.tolist(),
-                "conditional_shapley_ci_high": high.tolist(),
+                "conditional_shapley_ci_low": low_values,
+                "conditional_shapley_ci_high": high_values,
+                "bootstrap_method": "teacher_batch_cluster",
+                "valid_bootstrap_replicates": len(bootstrap_estimates),
+                "bootstrap_ci_available": ci_available,
                 "conditional_unique_advantage_mean": conditional_advantage.mean(dim=0).tolist(),
                 "positive_unique_advantage_rate": conditional_advantage.gt(0)
                 .double()
                 .mean(dim=0)
                 .tolist(),
-                "conditional_oracle_occupancy_of_all_rows": [
-                    float((conditional_execute & conditional_best.eq(slot)).double().mean())
+                "conditional_tie_aware_oracle_occupancy_of_all_rows": [
+                    float(conditional_tie_credit[:, slot].mean())
                     for slot in range(values.shape[1])
                 ],
-                "conditional_oracle_occupancy_given_execute": [
+                "conditional_tie_aware_oracle_occupancy_given_execute": [
                     (
-                        float((conditional_execute & conditional_best.eq(slot)).sum() / execute_count)
+                        float(conditional_tie_credit[:, slot].sum() / execute_count)
                         if execute_count
                         else None
                     )
@@ -268,8 +563,11 @@ def semantic_specialization_summary(
         )
     return {
         "minimum_support": min_support,
+        "bootstrap_method": "teacher_batch_cluster",
         "bootstrap_samples": bootstrap_samples,
         "bootstrap_seed": seed,
+        "bootstrap_confidence": confidence,
+        "teacher_cluster_count": int(torch.unique(clusters).numel()),
         "reported_concepts": reported,
         "insufficient_support": insufficient,
     }
@@ -307,14 +605,14 @@ def conditional_geometry_summary(
     features = candidate_features.detach().float().cpu()
     values = utility.detach().double().cpu()
     phi = shapley.detach().double().cpu()
-    best, best_slot = values.max(dim=-1)
+    best = values.max(dim=-1).values
     rows = []
     for slot in range(features.shape[1]):
         masks = {
             "all_valid_t0": torch.ones(features.shape[0], dtype=torch.bool),
             "positive_utility": values[:, slot] > 0,
             "positive_shapley": phi[:, slot] > 1e-12,
-            "oracle_winner": (best > 0) & best_slot.eq(slot),
+            "oracle_winner": (best > 0) & values[:, slot].eq(best),
         }
         rows.append(
             {

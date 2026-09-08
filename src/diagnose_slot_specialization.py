@@ -27,12 +27,14 @@ from diagnostics.cohort import (
     validate_processed_manifest,
 )
 from diagnostics.specialization import (
+    functional_cluster_bootstrap_summary,
     concept_mil_responsibility,
     conditional_geometry_summary,
     functional_specialization_summary,
     gradient_interference_summary,
     semantic_specialization_summary,
     summarize_slot_gradients,
+    valid_teacher_cluster_ids,
 )
 from evaluate import validate_checkpoint_backbone_metadata
 from models.iag_srme.utils.retrieval import (
@@ -257,14 +259,14 @@ def _gradient_attribution(
     query_values = {name: torch.cat(values) for name, values in query_gradients.items()}
     attribution = {
         "available": True,
-        "t0_candidate_tensor_gradient": {
+        "full_objective_gradient_wrt_t0_proposals": {
             name: summarize_slot_gradients(values)
             for name, values in proposal_values.items()
         },
         "parameter_level_aggregate_query_row_gradient": {
             name: summarize_slot_gradients(values) for name, values in query_values.items()
         },
-        "t0_proposal_gradient_interference": gradient_interference_summary(
+        "full_objective_gradient_interference_wrt_t0_proposals": gradient_interference_summary(
             proposal_values
         ),
         "score_loss_upstream_detach_control": {
@@ -275,13 +277,15 @@ def _gradient_attribution(
             for name in ("pair", "gain")
         },
         "scope_notes": {
-            "t0_candidate_tensor_gradient": (
-                "gradient of each exact full objective component with respect to the live "
-                "t=0 proposal tensor"
+            "full_objective_gradient_wrt_t0_proposals": (
+                "gradient of each full configured recurrent objective component with "
+                "respect to the live t=0 proposal tensor; this is not a local t0-only "
+                "loss gradient and may contain downstream recurrent effects"
             ),
             "parameter_level_aggregate_query_row_gradient": (
                 "gradient with respect to shared proposal query rows; terminal/bind/DPP may "
-                "aggregate recurrent uses and must not be called pure t=0 exposure"
+                "aggregate recurrent uses and must not be called pure t=0 exposure; one "
+                "observation is one diagnostic-batch gradient, not one sample"
             ),
             "loss_scaling": (
                 "each gradient uses the checkpoint objective coefficient, so norm ratios "
@@ -302,25 +306,39 @@ def _automatic_flags(
     mil: Mapping[str, Any],
     semantic: Mapping[str, Any],
     *,
-    complementarity_epsilon: float,
+    relative_complementarity_threshold: float,
     gradient_skew_threshold: float,
     mil_skew_threshold: float,
 ) -> list[dict[str, str]]:
     flags: list[dict[str, str]] = []
     coalition = functional["coalition_oracle"]
     if coalition["all_minus_c3"] is not None:
-        if coalition["all_minus_c3"] > complementarity_epsilon:
+        complementarity = functional["cluster_bootstrap"]["complementarity"]
+        absolute = complementarity["all_minus_c3"]
+        relative = complementarity["relative_all_minus_c3"]
+        if (
+            absolute["ci_low"] is not None
+            and absolute["ci_low"] > 0
+            and relative["ci_low"] is not None
+            and relative["ci_low"] > relative_complementarity_threshold
+        ):
             flags.append(
                 {
                     "code": "NON_C3_COMPLEMENTARITY_PRESENT",
-                    "message": "All-K oracle exceeds C3-only beyond the configured tolerance.",
+                    "message": (
+                        "Teacher-batch cluster-bootstrap evidence supports positive "
+                        "all-K over C3-only complementarity."
+                    ),
                 }
             )
         else:
             flags.append(
                 {
                     "code": "NON_C3_COMPLEMENTARITY_WEAK",
-                    "message": "All-K oracle is close to C3-only under the configured tolerance.",
+                    "message": (
+                        "Non-C3 complementarity is uncertain or practically small under "
+                        "the configured descriptive criterion."
+                    ),
                 }
             )
         shares = functional["shapley"]["normalized_share_per_slot"]
@@ -333,7 +351,9 @@ def _automatic_flags(
             )
 
     if gradients.get("available"):
-        terminal = gradients["t0_candidate_tensor_gradient"]["terminal"]["per_slot"]
+        terminal = gradients["full_objective_gradient_wrt_t0_proposals"]["terminal"][
+            "per_slot"
+        ]
         if max(row["gradient_energy_fraction"] for row in terminal) >= gradient_skew_threshold:
             flags.append(
                 {
@@ -341,7 +361,9 @@ def _automatic_flags(
                     "message": "Current t=0 terminal-gradient energy is strongly slot-skewed.",
                 }
             )
-        for comparison in gradients["t0_proposal_gradient_interference"].values():
+        for comparison in gradients[
+            "full_objective_gradient_interference_wrt_t0_proposals"
+        ].values():
             for row in comparison:
                 ratio = row["mean_aux_to_terminal_norm_ratio"]
                 negative = row["negative_cosine_fraction"]
@@ -402,7 +424,7 @@ def _render_markdown(report: Mapping[str, Any]) -> str:
         "|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in functional["per_slot"]:
-        occupancy = row["oracle_occupancy_given_oracle_execute"]
+        occupancy = row["tie_aware_oracle_occupancy_given_oracle_execute"]
         selected = functional["live_policy"]["selected_fraction_given_execute"][row["slot"]]
         selected_text = f"{selected:.3%}" if selected is not None else "n/a"
         lines.append(
@@ -423,8 +445,29 @@ def _render_markdown(report: Mapping[str, Any]) -> str:
         f"- all-K value: `{coalition['full_set_value']:.6f}`",
         f"- C3-only value: `{coalition['c3_only_value']}`",
         f"- all-K minus C3: `{coalition['all_minus_c3']}`",
+        f"- oracle exact-tie fraction (given execute): "
+        f"`{functional['oracle_exact_tie_fraction']}`",
+        f"- mean oracle tie size (given execute): "
+        f"`{functional['mean_oracle_tie_size_given_execute']}`",
         f"- effective functional K: `{functional['effective_functional_k']}`",
         f"- Shapley efficiency error: `{functional['shapley']['efficiency_absolute_error']:.3e}`",
+        "- Oracle occupancy in the table is tie-aware; deterministic argmax-tiebroken "
+        "occupancy remains in JSON for backward comparison only.",
+        "",
+        "### Teacher-batch cluster-bootstrap intervals",
+        "",
+        f"- method: `{functional['cluster_bootstrap']['bootstrap_method']}`",
+        f"- replicates: `{functional['cluster_bootstrap']['bootstrap_samples']}`",
+        f"- confidence: `{functional['cluster_bootstrap']['confidence']}`",
+        f"- teacher clusters: `{functional['cluster_bootstrap']['teacher_cluster_count']}`",
+        f"- all-K value CI: "
+        f"`[{functional['cluster_bootstrap']['full_set_oracle_value']['ci_low']}, "
+        f"{functional['cluster_bootstrap']['full_set_oracle_value']['ci_high']}]`",
+        f"- all-K minus C3 CI: "
+        f"`[{functional['cluster_bootstrap']['complementarity']['all_minus_c3']['ci_low']}, "
+        f"{functional['cluster_bootstrap']['complementarity']['all_minus_c3']['ci_high']}]`",
+        f"- relative all-K minus C3: "
+        f"`{functional['cluster_bootstrap']['complementarity']['relative_all_minus_c3']}`",
         "",
         "## Conditional proposal geometry",
         "",
@@ -455,14 +498,16 @@ def _render_markdown(report: Mapping[str, Any]) -> str:
     lines += ["", "## Current gradient exposure", ""]
     if gradients.get("available"):
         lines += [
-            "t0 proposal-tensor gradient energy fraction:",
+            "Full-objective gradient energy with respect to t0 proposals:",
             "",
             "| loss | "
             + " | ".join(f"C{slot}" for slot in range(functional["num_candidates"]))
             + " |",
             "|---|" + "---:|" * functional["num_candidates"],
         ]
-        for name, statistics in gradients["t0_candidate_tensor_gradient"].items():
+        for name, statistics in gradients[
+            "full_objective_gradient_wrt_t0_proposals"
+        ].items():
             energy = [row["gradient_energy_fraction"] for row in statistics["per_slot"]]
             lines.append(
                 "| " + name + " | " + " | ".join(f"{value:.3%}" for value in energy) + " |"
@@ -473,6 +518,14 @@ def _render_markdown(report: Mapping[str, Any]) -> str:
                 f"- `{name}`: passed=`{control['passed']}`, "
                 f"max |grad|=`{control['maximum_absolute_gradient']:.3e}`"
             )
+        lines += [
+            "",
+            "This is the full configured component gradient with respect to the t0 "
+            "proposal tensor, not a local t0-only loss gradient; downstream recurrent "
+            "effects may contribute.",
+            "Parameter-level proposal-query observations each represent one diagnostic "
+            "batch gradient, not one sample.",
+        ]
     else:
         lines.append(f"Unavailable: {gradients.get('reason')}")
 
@@ -504,6 +557,7 @@ def _render_markdown(report: Mapping[str, Any]) -> str:
         "",
         f"- concepts meeting support threshold: `{len(semantic['reported_concepts'])}`",
         f"- concepts below threshold: `{len(semantic['insufficient_support'])}`",
+        f"- CI method: `{semantic['bootstrap_method']}`",
         "- Multi-label conditionals are explanatory, not causal semantic expertise.",
         "",
         "## Automatic descriptive flags",
@@ -520,8 +574,11 @@ def _render_markdown(report: Mapping[str, Any]) -> str:
         "- High C3 occupancy is not itself collapse.",
         "- Low proposal PR is not itself a dead-slot diagnosis.",
         "- Shapley and all-K-minus-C3 quantify functional complementarity.",
+        "- Functional and semantic CIs resample whole teacher batches because rows share "
+        "an in-batch negative pool.",
         "- Gradient attribution measures current exposure, not what caused training history.",
         "- Concept-MIL responsibility measures current semantic routing pressure, not causality.",
+        "- Automatic flags are descriptive heuristics, not hypothesis tests.",
         "",
         "## Limitations",
         "",
@@ -548,6 +605,7 @@ def main(cfg: DictConfig) -> None:
     min_concept_support = int(cfg.get("min_concept_support", 30))
     min_geometry_support = int(cfg.get("min_geometry_support", 20))
     bootstrap_samples = int(cfg.get("bootstrap_samples", 1000))
+    bootstrap_confidence = float(cfg.get("bootstrap_confidence", 0.95))
     seed = int(cfg.seed)
 
     seed_everything(seed, bool(cfg.runtime.deterministic))
@@ -644,6 +702,7 @@ def main(cfg: DictConfig) -> None:
     valid_categories: list[str | None] = []
     valid_texts: list[str] = []
     valid_concepts: list[tuple[str, ...]] = []
+    valid_teacher_clusters: list[Tensor] = []
     processed_sample_ids: list[str] = []
     positive_responsibilities: list[Tensor] = []
     responsibility_by_concept: dict[str, list[Tensor]] = defaultdict(list)
@@ -682,6 +741,9 @@ def main(cfg: DictConfig) -> None:
             invalid_teacher_rows += int((~valid).sum())
             indices = valid.nonzero(as_tuple=False).flatten()
             if indices.numel():
+                valid_teacher_clusters.append(
+                    valid_teacher_cluster_ids(valid.cpu(), batch_index)
+                )
                 utilities.append(teacher.index_select(0, indices).float().cpu())
                 proposals.append(step["proposals"].index_select(0, indices).float().cpu())
                 actions.append(step["actions"].index_select(0, indices).float().cpu())
@@ -723,6 +785,7 @@ def main(cfg: DictConfig) -> None:
     action = torch.cat(actions)
     effect = torch.cat(effects)
     selected = torch.cat(selections)
+    teacher_cluster_ids = torch.cat(valid_teacher_clusters)
     functional = functional_specialization_summary(
         utility,
         dpp_temperature=(objective.config.tau_dpp if objective.config.dpp_enabled else None),
@@ -731,6 +794,13 @@ def main(cfg: DictConfig) -> None:
         ),
     )
     shapley = functional.pop("per_sample_shapley")
+    functional["cluster_bootstrap"] = functional_cluster_bootstrap_summary(
+        utility,
+        teacher_cluster_ids,
+        bootstrap_samples=bootstrap_samples,
+        seed=seed,
+        confidence=bootstrap_confidence,
+    )
     execute = selected < utility.shape[1]
     execute_count = int(execute.sum())
     functional["live_policy"] = {
@@ -754,9 +824,11 @@ def main(cfg: DictConfig) -> None:
         utility,
         shapley,
         valid_concepts,
+        teacher_cluster_ids,
         min_support=min_concept_support,
         bootstrap_samples=bootstrap_samples,
         seed=seed,
+        confidence=bootstrap_confidence,
     )
     conditional_geometry = {
         "proposal": conditional_geometry_summary(
@@ -811,7 +883,9 @@ def main(cfg: DictConfig) -> None:
         gradient_attribution,
         mil,
         semantic,
-        complementarity_epsilon=float(cfg.get("complementarity_epsilon", 1e-4)),
+        relative_complementarity_threshold=float(
+            cfg.get("relative_complementarity_threshold", 0.01)
+        ),
         gradient_skew_threshold=float(cfg.get("gradient_skew_threshold", 0.75)),
         mil_skew_threshold=float(cfg.get("mil_skew_threshold", 0.60)),
     )
@@ -848,6 +922,19 @@ def main(cfg: DictConfig) -> None:
             ),
             "resolved_config": OmegaConf.to_container(cfg, resolve=True),
             "read_only": True,
+            "automatic_flags_are_heuristic": True,
+            "automatic_flag_thresholds": {
+                "relative_complementarity_threshold": float(
+                    cfg.get("relative_complementarity_threshold", 0.01)
+                ),
+                "gradient_skew_threshold": float(
+                    cfg.get("gradient_skew_threshold", 0.75)
+                ),
+                "mil_skew_threshold": float(cfg.get("mil_skew_threshold", 0.60)),
+                "c3_dominant_shapley_share": 0.70,
+                "aux_to_terminal_norm_ratio": 2.0,
+                "negative_alignment_fraction": 0.50,
+            },
             "model_state_signature_before": model_signature_before,
             "model_state_signature_after": model_signature_after,
             "objective_state_signature_before": objective_signature_before,
@@ -861,12 +948,32 @@ def main(cfg: DictConfig) -> None:
             **cohort_metadata,
             "valid_t0_teacher_row_count": utility.shape[0],
             "valid_t0_sample_ids_sha256": sample_ids_fingerprint(valid_sample_ids),
+            "valid_teacher_cluster_assignment_sha256": sample_ids_fingerprint(
+                [
+                    f"{sample_id}@teacher_batch_{int(cluster)}"
+                    for sample_id, cluster in zip(
+                        valid_sample_ids, teacher_cluster_ids, strict=True
+                    )
+                ]
+            ),
             "invalid_t0_teacher_rows": invalid_teacher_rows,
+            "valid_teacher_cluster_count": int(
+                torch.unique(teacher_cluster_ids).numel()
+            ),
         },
         "teacher": {
             "utility_definition": "retrieval_loss(parent)-retrieval_loss(candidate)",
             "stop_utility": 0.0,
             "target_bank_scope": "matched manifest batch",
+        },
+        "statistics": {
+            "bootstrap_method": "teacher_batch_cluster",
+            "bootstrap_samples": bootstrap_samples,
+            "confidence": bootstrap_confidence,
+            "teacher_cluster_count": int(torch.unique(teacher_cluster_ids).numel()),
+            "valid_row_count": utility.shape[0],
+            "bootstrap_seed": seed,
+            "cluster_definition": "original functional-loader teacher batch before validity filtering",
         },
         "functional_specialization": functional,
         "coalition_oracle": functional["coalition_oracle"],
@@ -886,7 +993,7 @@ def main(cfg: DictConfig) -> None:
             ),
         },
         "gradient_interference": gradient_attribution.get(
-            "t0_proposal_gradient_interference", {}
+            "full_objective_gradient_interference_wrt_t0_proposals", {}
         ),
         "concept_mil_responsibility": mil,
         "automatic_interpretation_flags": flags,
@@ -899,6 +1006,8 @@ def main(cfg: DictConfig) -> None:
             "OLD and STRONG must be run separately with the same manifest and settings.",
             "Mutual information, stratified permutation tests, and FDR tests are not emitted; "
             "deterministic bootstrap confidence intervals are the implemented robustness view.",
+            "The configurable relative-complementarity threshold is a descriptive flagging "
+            "heuristic, not a universal scientific effect-size threshold.",
         ],
     }
 
@@ -924,6 +1033,7 @@ def main(cfg: DictConfig) -> None:
                         "teacher_utility": utility[index].tolist(),
                         "shapley": shapley[index].tolist(),
                         "selected_idx": int(selected[index]),
+                        "teacher_cluster_id": int(teacher_cluster_ids[index]),
                     }
                 )
                 + "\n"
