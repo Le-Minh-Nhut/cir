@@ -100,6 +100,48 @@ def caption_utility_comparison(
     }
 
 
+def score_utility_calibration(
+    predicted: Tensor, teacher: Tensor, *, num_bins: int = 10
+) -> dict[str, Any]:
+    """Simple detached calibration summary, with equal-count teacher-utility bins."""
+
+    if predicted.shape != teacher.shape or predicted.numel() == 0:
+        raise ValueError("predicted and teacher must have the same non-empty shape")
+    score = predicted.detach().float().cpu().flatten()
+    target = teacher.detach().float().cpu().flatten()
+    error = score - target
+    centered_score = score - score.mean()
+    centered_target = target - target.mean()
+    denominator = centered_score.norm() * centered_target.norm()
+    pearson = (
+        float(centered_score.dot(centered_target) / denominator)
+        if float(denominator) > 1e-12
+        else float("nan")
+    )
+    order = target.argsort()
+    bins = []
+    for indices in torch.tensor_split(order, min(num_bins, order.numel())):
+        if indices.numel() == 0:
+            continue
+        bins.append(
+            {
+                "count": int(indices.numel()),
+                "teacher_utility_mean": float(target.index_select(0, indices).mean()),
+                "predicted_score_mean": float(score.index_select(0, indices).mean()),
+                "bias": float(error.index_select(0, indices).mean()),
+            }
+        )
+    return {
+        "count": int(score.numel()),
+        "pearson": pearson,
+        "bias": float(error.mean()),
+        "mae": float(error.abs().mean()),
+        "rmse": float(error.square().mean().sqrt()),
+        "sign_agreement_at_zero": float(score.gt(0).eq(target.gt(0)).float().mean()),
+        "bins_by_teacher_utility": bins,
+    }
+
+
 def selection_metrics(
     utility: Tensor,
     selected_idx: Tensor,

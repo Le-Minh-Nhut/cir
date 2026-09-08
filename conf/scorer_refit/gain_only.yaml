@@ -1,0 +1,16 @@
+mode: collect
+source_checkpoint: outputs/r0_ncls_text_strong_aux/best.pt
+cache_dir: outputs/r0_ncls_text_strong_aux_score_gain_refit/cache
+output_checkpoint: outputs/r0_ncls_text_strong_aux_score_gain_refit/score_gain_refit.pt
+
+collection_split: train
+# <= 0 means the complete training split; positive values create a deterministic subset.
+sample_count: 0
+collection_batch_size: ${experiment.batch_size}
+
+scorer_batch_size: 8
+learning_rate: 1.0e-5
+weight_decay: 0.01
+epochs: 20
+lambda_pair: 0.0
+loss: absolute_gain_huber_only

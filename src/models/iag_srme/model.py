@@ -368,6 +368,8 @@ class IAGSRME(nn.Module):
                     "parent_state": parent,
                     "current_global": current_global,
                     "current_query": current_query,
+                    # Already computed live text; scorer-refit tooling detaches it when caching.
+                    "text_global": text,
                     "proposals": edits,
                     "grounding": grounding,
                     "alpha_read": alpha_read,

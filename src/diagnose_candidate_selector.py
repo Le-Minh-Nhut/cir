@@ -44,6 +44,7 @@ from diagnostics.cohort import (
 )
 from diagnostics.selection import (
     caption_utility_comparison,
+    score_utility_calibration,
     selection_metrics,
     slot_monopoly,
     transition_retrieval,
@@ -288,6 +289,26 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         ]
         for name, values in report["caption_sensitivity"].items():
             lines.append(f"- `{name}`: mean `{values['mean']:.6f}` (n={values['count']})")
+    if report.get("score_utility_calibration"):
+        calibration = report["score_utility_calibration"]
+        lines += [
+            "",
+            "## Score / teacher calibration",
+            "",
+            f"- Pearson: `{calibration['pearson']:.6f}`",
+            f"- bias (score - utility): `{calibration['bias']:.6f}`",
+            f"- MAE: `{calibration['mae']:.6f}`",
+            f"- RMSE: `{calibration['rmse']:.6f}`",
+            f"- sign agreement at zero: `{calibration['sign_agreement_at_zero']:.6f}`",
+            "",
+            "| bin | n | teacher mean | score mean | bias |",
+            "|---:|---:|---:|---:|---:|",
+        ]
+        for index, values in enumerate(calibration["bins_by_teacher_utility"]):
+            lines.append(
+                f"| {index} | {values['count']} | {values['teacher_utility_mean']:.6f} | "
+                f"{values['predicted_score_mean']:.6f} | {values['bias']:.6f} |"
+            )
     if report.get("official_fashioniq"):
         lines += ["", "## Official FashionIQ retrieval", ""]
         for name, value in sorted(report["official_fashioniq"].items()):
@@ -860,15 +881,13 @@ def main(cfg: DictConfig) -> None:
         }
     )
 
+    calibration = None
     score_teacher_pearson = float("nan")
     if all_scores and all_teacher:
         x = torch.cat(all_scores).float()
         y = torch.cat(all_teacher).float()
-        x = x - x.mean()
-        y = y - y.mean()
-        denom = x.norm() * y.norm()
-        if float(denom) > 1e-12:
-            score_teacher_pearson = float((x @ y / denom).cpu())
+        calibration = score_utility_calibration(x, y)
+        score_teacher_pearson = float(calibration["pearson"])
 
     pairwise_steps = max(pairwise_steps, 1)
     proposal_cos = proposal_cos_sum / pairwise_steps
@@ -1126,6 +1145,7 @@ def main(cfg: DictConfig) -> None:
             "global_readout_mode": metadata.get("global_readout_mode"),
             "finetune_policy": metadata.get("finetune_policy"),
             "objective_config": metadata.get("objective_config"),
+            "score_refit": metadata.get("score_refit"),
         },
         "num_candidates": k,
         "diagnostic_batches": diagnostic_batches,
@@ -1162,6 +1182,7 @@ def main(cfg: DictConfig) -> None:
         },
         "selection_metrics": combined_selection,
         "selection_metrics_by_timestep": by_timestep,
+        "score_utility_calibration": calibration,
         "headline_metrics": headline,
         "retrieval_behavior": retrieval_behavior,
         "retrieval_similarity_definition": {

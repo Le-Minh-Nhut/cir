@@ -14,6 +14,9 @@ def test_forward_exposes_exact_candidate_global_used_for_query(model, features) 
 
     for step in output["steps"]:
         torch.testing.assert_close(
+            step["text_global"], text.index_select(0, step["live_indices"])
+        )
+        torch.testing.assert_close(
             model.backbone.retrieval_from_global(step["candidate_global"]),
             step["candidate_queries"],
         )

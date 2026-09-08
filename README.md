@@ -183,3 +183,50 @@ caption utility advantage, per-slot teacher utility/occupancy, selector regret,
 harmful-execution rate, STOP precision/recall, and optional official FashionIQ recall.
 Candidate-slot collapse should be read from `selected_fraction_given_execute`; oracle
 slot concentration should be read from `oracle_best_fraction_given_oracle_execute`.
+
+## ScoreNet gain-only rescue
+
+This is a two-phase scorer-only experiment. Phase 1 freezes the STRONG checkpoint and
+stores detached raw inputs to every trainable part of `ScoreNet`; Phase 2 rebuilds
+features and optimizes every `score_net.*` parameter with only the canonical absolute
+gain Huber loss. The cache is sharded because `delta [B,K,N,D]` is intentionally kept
+raw. No target embedding or target-derived feature is a ScoreNet input.
+
+```bash
+# Phase 1: deterministic fixed TRAIN rollout and raw scorer cache
+python src/refit_score_net.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +scorer_refit=gain_only \
+  scorer_refit.mode=collect \
+  scorer_refit.source_checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
+  scorer_refit.cache_dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/cache \
+  hydra.run.dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/collect
+
+# Phase 2: ScoreNet-only AdamW, absolute gain only
+python src/refit_score_net.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +scorer_refit=gain_only \
+  scorer_refit.mode=refit \
+  scorer_refit.source_checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
+  scorer_refit.cache_dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/cache \
+  scorer_refit.output_checkpoint=outputs/r0_ncls_text_strong_aux_score_gain_refit/score_gain_refit.pt \
+  hydra.run.dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/refit
+```
+
+Cached calibration is only an offline fit check. Run `diagnose_candidate_selector.py`
+again from the refitted checkpoint on the same persistent manifest with
+`+diagnostic_official_eval=true`; that live rollout is the valid selector/STOP and
+FashionIQ comparison because the refitted scorer changes subsequent visited states.
+
+```bash
+python src/diagnose_candidate_selector.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  +checkpoint=outputs/r0_ncls_text_strong_aux_score_gain_refit/score_gain_refit.pt \
+  +diagnostic_manifest=outputs/diagnostics/v2-r0/shared_train_160.json \
+  +diagnostic_batches=20 +diagnostic_batch_size=8 \
+  +diagnostic_official_eval=true \
+  hydra.run.dir=outputs/diagnostics/v2-r0/score_gain_refit_selector
+```
