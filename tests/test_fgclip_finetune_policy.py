@@ -206,7 +206,7 @@ def test_text_only_optimizer_excludes_frozen_visual_parameters() -> None:
 def test_checkpoint_records_explicit_finetune_policy(tmp_path) -> None:
     backbone = _text_only_backbone("learned_qg")
     model = _model(backbone)
-    objective = IAGSRMEObjective(ObjectiveConfig())
+    objective = IAGSRMEObjective(ObjectiveConfig(lambda_safe=0.1))
     optimizer = AdamW(trainable_parameters(model, objective), lr=1e-3)
     path = tmp_path / "checkpoint.pt"
     save_checkpoint(
@@ -235,3 +235,4 @@ def test_checkpoint_records_explicit_finetune_policy(tmp_path) -> None:
     assert saved["batch_step"] == 19
     assert metadata["number_of_optimizer_updates"] == 17
     assert metadata["run"]["seed"] == 42
+    assert metadata["objective_config"]["lambda_safe"] == 0.1

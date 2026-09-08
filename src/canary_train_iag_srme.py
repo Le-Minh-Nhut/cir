@@ -192,8 +192,20 @@ def main() -> None:
                 output, targets, batch.target_ids, batch.modification_texts
             )
         scaler.scale(losses["total"]).backward()
+        nonfinite_gradient_count = sum(
+            int((~torch.isfinite(parameter.grad.detach())).sum())
+            for parameter in (*model.parameters(), *objective.parameters())
+            if parameter.grad is not None
+        )
         scaler.step(optimizer)
         scaler.update()
+        per_slot_metrics = {
+            name: float(value)
+            for name, value in losses.items()
+            if name.startswith("safe_harmful_candidate_fraction_c")
+            or name.startswith("safe_positive_candidate_fraction_c")
+            or name.startswith("mean_delta_q_norm_c")
+        }
         records.append(
             {
                 "step": step_index + 1,
@@ -224,6 +236,8 @@ def main() -> None:
                 "useful_candidate_count": float(losses["useful_candidate_count"]),
                 "rollout_steps": len(output["steps"]),
                 "stopped": int(output["stopped"].sum()),
+                "nonfinite_gradient_count": nonfinite_gradient_count,
+                **per_slot_metrics,
             }
         )
     memory = (

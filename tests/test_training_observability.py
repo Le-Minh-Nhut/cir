@@ -78,6 +78,9 @@ class _ObservedObjective(nn.Module):
             "useful_candidate_count": zero,
             "dpp_valid_rate": zero,
             "mean_delta_q_norm": zero,
+            "safe_harmful_candidate_fraction_c0": zero,
+            "safe_positive_candidate_fraction_c0": zero,
+            "mean_delta_q_norm_c0": zero,
             "teacher_invalid_rows": zero,
         }
 
@@ -119,6 +122,9 @@ def test_training_jsonl_records_real_optimizer_updates(tmp_path) -> None:
     assert record["amp_skipped_update_inferred"] is False
     assert record["nonfinite_gradient_count"] == 0
     assert record["total"] > 0
+    assert record["safe_harmful_candidate_fraction_c0"] == 0
+    assert record["safe_positive_candidate_fraction_c0"] == 0
+    assert record["mean_delta_q_norm_c0"] == 0
     for group in (
         "text_encoder",
         "proposal",

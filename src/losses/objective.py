@@ -382,6 +382,9 @@ class IAGSRMEObjective(nn.Module):
 
         steps = output["steps"]
         assert isinstance(steps, list)
+        num_candidates = (
+            int(steps[0]["candidate_queries"].shape[1]) if steps else 0
+        )
         zero = query.sum() * 0.0
         pair_numerator = zero
         gain_numerator = zero
@@ -393,6 +396,9 @@ class IAGSRMEObjective(nn.Module):
         safe_valid_parent_count = query.new_zeros(())
         safe_harmful_candidate_count = query.new_zeros(())
         safe_positive_candidate_count = query.new_zeros(())
+        safe_candidate_count_per_slot = query.new_zeros(num_candidates)
+        safe_harmful_count_per_slot = query.new_zeros(num_candidates)
+        safe_positive_count_per_slot = query.new_zeros(num_candidates)
         bind_numerator = zero
         bind_count = query.new_zeros(())
         binding_distributions: list[Tensor] = []
@@ -403,6 +409,10 @@ class IAGSRMEObjective(nn.Module):
         functional_effects: list[Tensor] = []
         delta_norm_sum = query.new_zeros(())
         delta_count = query.new_zeros(())
+        delta_norm_sum_per_slot = torch.zeros(
+            num_candidates, device=query.device, dtype=torch.float32
+        )
+        delta_count_per_slot = torch.zeros_like(delta_norm_sum_per_slot)
         stop_count = query.new_zeros(())
         decision_count = query.new_zeros(())
         executed_count = query.new_zeros(())
@@ -415,8 +425,13 @@ class IAGSRMEObjective(nn.Module):
             predicted = step["scores"]
             delta_q = step["delta_q"]
             functional_effects.append(delta_q)
-            delta_norm_sum = delta_norm_sum + delta_q.detach().float().norm(dim=-1).sum()
+            delta_norm = delta_q.detach().float().norm(dim=-1)
+            delta_norm_sum = delta_norm_sum + delta_norm.sum()
             delta_count = delta_count + delta_q.shape[0] * delta_q.shape[1]
+            delta_norm_sum_per_slot = delta_norm_sum_per_slot + delta_norm.sum(dim=0)
+            delta_count_per_slot = (
+                delta_count_per_slot + delta_norm.new_full((num_candidates,), delta_q.shape[0])
+            )
             stopped_now = step["stopped_now"]
             stop_count = stop_count + stopped_now.sum()
             decision_count = decision_count + stopped_now.numel()
@@ -471,6 +486,17 @@ class IAGSRMEObjective(nn.Module):
                 )
                 safe_positive_candidate_count = (
                     safe_positive_candidate_count + safe["positive_candidate_count"]
+                )
+                safe_candidate_count_per_slot = (
+                    safe_candidate_count_per_slot + safe["candidate_count_per_slot"]
+                )
+                safe_harmful_count_per_slot = (
+                    safe_harmful_count_per_slot
+                    + safe["harmful_candidate_count_per_slot"]
+                )
+                safe_positive_count_per_slot = (
+                    safe_positive_count_per_slot
+                    + safe["positive_candidate_count_per_slot"]
                 )
 
             if self.config.bind_enabled:
@@ -563,6 +589,28 @@ class IAGSRMEObjective(nn.Module):
         safe_positive_per_parent = (
             safe_positive_candidate_count / safe_valid_parent_count.clamp_min(1)
         )
+        per_slot_metrics: dict[str, Tensor] = {}
+        for slot in range(num_candidates):
+            safe_slot_count = safe_candidate_count_per_slot[slot]
+            per_slot_metrics[f"safe_candidate_count_c{slot}"] = safe_slot_count.detach()
+            per_slot_metrics[f"safe_harmful_candidate_count_c{slot}"] = (
+                safe_harmful_count_per_slot[slot].detach()
+            )
+            per_slot_metrics[f"safe_positive_candidate_count_c{slot}"] = (
+                safe_positive_count_per_slot[slot].detach()
+            )
+            per_slot_metrics[f"safe_harmful_candidate_fraction_c{slot}"] = (
+                safe_harmful_count_per_slot[slot]
+                / safe_slot_count.clamp_min(1)
+            ).detach()
+            per_slot_metrics[f"safe_positive_candidate_fraction_c{slot}"] = (
+                safe_positive_count_per_slot[slot]
+                / safe_slot_count.clamp_min(1)
+            ).detach()
+            per_slot_metrics[f"mean_delta_q_norm_c{slot}"] = (
+                delta_norm_sum_per_slot[slot]
+                / delta_count_per_slot[slot].clamp_min(1)
+            ).detach()
         total = (
             self.config.terminal_weight * terminal
             + self.config.lambda_pair * pair
@@ -585,6 +633,7 @@ class IAGSRMEObjective(nn.Module):
             "safe_positive_candidate_fraction": safe_positive_fraction.detach(),
             "safe_mean_harmful_candidates_per_parent": safe_harmful_per_parent.detach(),
             "safe_mean_positive_candidates_per_parent": safe_positive_per_parent.detach(),
+            **per_slot_metrics,
             "concept_loss": concept_loss,
             "bind_loss": bind,
             "rel_ortho_loss": rel_ortho,

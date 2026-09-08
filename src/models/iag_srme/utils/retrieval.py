@@ -72,6 +72,7 @@ def candidate_safety_loss(
     valid_indices = valid_rows.nonzero(as_tuple=False).flatten()
     if valid_indices.numel() == 0:
         zero = candidate_queries.sum() * 0.0
+        per_slot_zero = zero.detach().new_zeros(candidate_queries.shape[1])
         return {
             "loss": zero,
             "numerator": zero,
@@ -79,6 +80,9 @@ def candidate_safety_loss(
             "valid_parent_count": zero.detach(),
             "harmful_candidate_count": zero.detach(),
             "positive_candidate_count": zero.detach(),
+            "candidate_count_per_slot": per_slot_zero,
+            "harmful_candidate_count_per_slot": per_slot_zero.clone(),
+            "positive_candidate_count_per_slot": per_slot_zero.clone(),
         }
 
     current_valid = current_query.index_select(0, valid_indices).detach()
@@ -105,6 +109,9 @@ def candidate_safety_loss(
     numerator = penalty.sum()
     candidate_count = penalty.new_tensor(penalty.numel())
     detached_delta = candidate_loss.detach() - parent_loss[:, None]
+    candidate_count_per_slot = penalty.new_full(
+        (penalty.shape[1],), valid_indices.numel()
+    )
     return {
         "loss": numerator / candidate_count,
         "numerator": numerator,
@@ -112,6 +119,13 @@ def candidate_safety_loss(
         "valid_parent_count": penalty.new_tensor(valid_indices.numel()),
         "harmful_candidate_count": (detached_delta > 0).sum().to(penalty.dtype),
         "positive_candidate_count": (detached_delta < 0).sum().to(penalty.dtype),
+        "candidate_count_per_slot": candidate_count_per_slot.detach(),
+        "harmful_candidate_count_per_slot": (detached_delta > 0)
+        .sum(dim=0)
+        .to(penalty.dtype),
+        "positive_candidate_count_per_slot": (detached_delta < 0)
+        .sum(dim=0)
+        .to(penalty.dtype),
     }
 
 

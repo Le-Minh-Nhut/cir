@@ -361,3 +361,46 @@ If cached calibration improves but VAL live regret and official Recall do not, t
 conclusion is that gain calibration is insufficient: ScoreNet is secondary and
 upstream candidate quality remains the dominant bottleneck. `L_safe` is the next
 separate research step; it is not part of this scorer-refit experiment.
+
+### Q1: STRONG + candidate safety
+
+Q1 changes only `objective.lambda_safe` from `0.0` to `0.1`. The repository default
+backbone is not the Q1 regime, so the text-only native-CLS backbone override is
+mandatory. The resulting backbone policy is `train_vision=false`, `train_text=true`,
+`train_text_projection=false`, `finetune_policy=text_only`, and experiment identity
+`R0-NCLS-TEXT`. All other STRONG objective coefficients remain unchanged.
+
+```text
+terminal_weight=1.0
+lambda_pair=0.5, lambda_gain=0.5
+lambda_c=0.6, lambda_bind=1.0, lambda_rel=0.6, lambda_dpp=0.6
+lambda_safe=0.1
+```
+
+One-batch pre-flight canary:
+
+```bash
+python src/canary_train_iag_srme.py \
+  --global-readout-mode native_cls \
+  --finetune-policy text_only \
+  --lambda-safe 0.1 \
+  --precision fp16 \
+  --steps 1 \
+  --batch-size 2 \
+  --dataset-root data/fashionIQ_dataset
+```
+
+Matched Q1 training command (do not omit the backbone override):
+
+```bash
+python src/train.py \
+  backbone=fgclip_base_text_native_cls \
+  dataset.root=data/fashionIQ_dataset \
+  objective.lambda_safe=0.1 \
+  hydra.run.dir=outputs/r0_ncls_text_strong_aux_safe_q1
+```
+
+The per-slot `safe_harmful_candidate_fraction_c*`,
+`safe_positive_candidate_fraction_c*`, and `mean_delta_q_norm_c*` metrics distinguish
+actual harm reduction from the known no-op escape. Do not interpret lower harm as a
+successful Q1 result if `delta_q` norms and best-of-K utility collapse toward zero.
