@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+from collections.abc import Sequence
 from typing import Any
 
 import torch
@@ -156,6 +158,96 @@ def feature_geometry(
         }
     )
     return result
+
+
+def matched_temporal_feature_rows(
+    source_ids: Sequence[str],
+    source_features: Tensor,
+    target_ids: Sequence[str],
+    target_features: Tensor,
+) -> tuple[Tensor, Tensor, list[str]]:
+    """Align two cross-sample feature matrices on stable IDs in target order."""
+
+    if source_features.ndim != 2 or target_features.ndim != 2:
+        raise ValueError("matched temporal features must both be [B,D]")
+    if source_features.shape[0] != len(source_ids):
+        raise ValueError("source sample-ID/feature row mismatch")
+    if target_features.shape[0] != len(target_ids):
+        raise ValueError("target sample-ID/feature row mismatch")
+    if len(set(source_ids)) != len(source_ids) or len(set(target_ids)) != len(target_ids):
+        raise ValueError("matched temporal sample IDs must be unique within each timestep")
+    assert_compatible_feature_interface(
+        source_features,
+        target_features,
+        first_name="source_features",
+        second_name="target_features",
+        interface="matched-temporal",
+    )
+
+    source_positions = {sample_id: index for index, sample_id in enumerate(source_ids)}
+    shared_ids = [sample_id for sample_id in target_ids if sample_id in source_positions]
+    target_positions = {sample_id: index for index, sample_id in enumerate(target_ids)}
+    source_index = torch.tensor(
+        [source_positions[sample_id] for sample_id in shared_ids],
+        dtype=torch.long,
+        device=source_features.device,
+    )
+    target_index = torch.tensor(
+        [target_positions[sample_id] for sample_id in shared_ids],
+        dtype=torch.long,
+        device=target_features.device,
+    )
+    return (
+        source_features.index_select(0, source_index),
+        target_features.index_select(0, target_index),
+        shared_ids,
+    )
+
+
+def matched_temporal_geometry(
+    source_ids: Sequence[str],
+    source_features: Tensor,
+    target_ids: Sequence[str],
+    target_features: Tensor,
+) -> dict[str, Any]:
+    """Geometry change for the same survivors at two recurrent timesteps."""
+
+    baseline, current, matched_ids = matched_temporal_feature_rows(
+        source_ids,
+        source_features,
+        target_ids,
+        target_features,
+    )
+    baseline_stats = feature_geometry(baseline)
+    current_stats = feature_geometry(current)
+    count = len(matched_ids)
+    baseline_rank = baseline_stats["effective_rank_pr"]
+    current_rank = current_stats["effective_rank_pr"]
+    baseline_cosine = baseline_stats["pairwise_cosine_mean"]
+    current_cosine = current_stats["pairwise_cosine_mean"]
+    rank_valid = (
+        count >= 2
+        and math.isfinite(baseline_rank)
+        and math.isfinite(current_rank)
+        and baseline_rank > 0
+    )
+    cosine_valid = (
+        count >= 2 and math.isfinite(baseline_cosine) and math.isfinite(current_cosine)
+    )
+    return {
+        "matched_sample_count": count,
+        "matched_sample_ids": matched_ids,
+        "baseline_matched_PR": baseline_rank,
+        "current_matched_PR": current_rank,
+        "rank_drop_fraction": 1.0 - current_rank / baseline_rank if rank_valid else _nan(),
+        "baseline_matched_pairwise_cosine_mean": baseline_cosine,
+        "current_matched_pairwise_cosine_mean": current_cosine,
+        "pairwise_cosine_increase": (
+            current_cosine - baseline_cosine if cosine_valid else _nan()
+        ),
+        "rank_conclusion_valid": rank_valid,
+        "cosine_conclusion_valid": cosine_valid,
+    }
 
 
 def variance_decomposition(

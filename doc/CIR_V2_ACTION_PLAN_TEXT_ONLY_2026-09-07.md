@@ -484,4 +484,4 @@ Việc tiếp theo:
 - [Training objective](https://github.com/Le-Minh-Nhut/cir/blob/c00147863c34c5871f65d62b76a04a1aa985954a/src/losses/objective.py).
 - Audit chi tiết đã lưu: `CIR_V2_FAILURE_AUDIT_CHECKPOINT_2026-09-07.md`, bản cập nhật gồm phản ví dụ CPU, review source và giới hạn bằng chứng. File hiện tại chuyển các kết luận đó thành thứ tự công việc, không thay đặc tả canonical V2.
 
-Các đường dẫn source trong tài liệu là đường dẫn tương đối từ repo root. Nếu branch có push mới sau snapshot trên, kiểm tra diff trước khi áp dụng; không ghi đè sửa đổi mới của người dùng dựa trên số dòng hoặc config cũ.
+Các đường dẫn source trong tài liệu là đường dẫn tương đối từ repo root. Nếu branch có push mới sau snapshot trên, kiểm tra diff trước khi áp dụng; không ghi đè sửa đổi mới của người dùng dựa trên số dòng hoặc confi cũ.

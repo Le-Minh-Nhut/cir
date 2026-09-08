@@ -14,9 +14,16 @@ from diagnostics.cohort import (
 from diagnostics.geometry import (
     assert_compatible_feature_interface,
     candidate_geometry,
+    feature_geometry,
+    matched_temporal_geometry,
     variance_decomposition,
 )
-from diagnostics.selection import selection_metrics, slot_monopoly, transition_retrieval
+from diagnostics.selection import (
+    caption_utility_comparison,
+    selection_metrics,
+    slot_monopoly,
+    transition_retrieval,
+)
 from models.iag_srme.utils.retrieval import marginal_teacher_utilities
 
 
@@ -307,3 +314,59 @@ def test_transition_diagnostic_reuses_teacher_utility_semantics() -> None:
 
     torch.testing.assert_close(report["utility"], expected)
     torch.testing.assert_close(report["valid"], expected_valid)
+
+
+def test_temporal_geometry_matches_survivors_before_drawing_collapse_conclusions() -> None:
+    ids_t0 = ["A", "B", "C", "D", "E", "F"]
+    ids_t1 = ["A", "B", "C"]
+    features_t0 = torch.eye(6)
+    features_t1 = features_t0[:3].clone()
+
+    native_t0 = feature_geometry(features_t0)
+    native_t1 = feature_geometry(features_t1)
+    matched = matched_temporal_geometry(ids_t0, features_t0, ids_t1, features_t1)
+
+    assert native_t0["effective_rank_pr"] != pytest.approx(
+        native_t1["effective_rank_pr"]
+    )
+    assert matched["matched_sample_count"] == 3
+    assert matched["matched_sample_ids"] == ids_t1
+    assert matched["baseline_matched_PR"] == pytest.approx(matched["current_matched_PR"])
+    assert matched["rank_drop_fraction"] == pytest.approx(0.0)
+    assert matched["pairwise_cosine_increase"] == pytest.approx(0.0)
+    assert not (
+        matched["rank_conclusion_valid"] and matched["rank_drop_fraction"] > 0.30
+    )
+    assert not (
+        matched["cosine_conclusion_valid"]
+        and matched["pairwise_cosine_increase"] > 0.15
+    )
+
+
+@pytest.mark.parametrize(
+    ("epsilon", "correct", "shuffled", "best_advantage", "oracle_advantage"),
+    [
+        (0.0, [-0.02, -0.03, -0.01, -0.04], [-0.20, -0.10, -0.30, -0.15], 0.09, 0.0),
+        (0.05, [0.03, -0.10], [-0.02, -0.20], 0.05, 0.0),
+        (0.05, [0.12, -0.10], [0.03, -0.20], 0.09, 0.12),
+    ],
+)
+def test_caption_best_candidate_and_stop_aware_oracle_are_distinct(
+    epsilon: float,
+    correct: list[float],
+    shuffled: list[float],
+    best_advantage: float,
+    oracle_advantage: float,
+) -> None:
+    report = caption_utility_comparison(
+        torch.tensor([correct]),
+        torch.tensor([shuffled]),
+        stop_threshold=epsilon,
+    )
+
+    assert float(report["best_candidate_utility_correct_minus_shuffled"]) == pytest.approx(
+        best_advantage
+    )
+    assert float(report["oracle_policy_utility_correct_minus_shuffled"]) == pytest.approx(
+        oracle_advantage
+    )

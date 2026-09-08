@@ -67,6 +67,7 @@ from diagnostics.geometry import (
     assert_compatible_feature_interface,
     candidate_geometry,
     feature_geometry,
+    matched_temporal_geometry,
 )
 from evaluate import validate_checkpoint_backbone_metadata
 from runtime import configure_torch_runtime, resolve_device, seed_everything
@@ -714,6 +715,34 @@ def main(cfg: DictConfig) -> None:
             retrieval[label][metric_name + "_mean"] = float(tensor.mean())
             retrieval[label][metric_name + "_std"] = float(tensor.std(unbiased=False))
 
+    # Native per-timestep geometry above remains descriptive. Temporal change
+    # conclusions use the same survivors at baseline and the compared timestep.
+    matched_temporal_geometry_report: dict[str, dict[str, Any]] = {}
+    recurrent_timesteps = sorted(feature_export)
+    if len(recurrent_timesteps) >= 2:
+        baseline_timestep = 0 if 0 in feature_export else recurrent_timesteps[0]
+        baseline = feature_export[baseline_timestep]
+        baseline_current_global = torch.cat(
+            baseline["features"]["current_global"], dim=0
+        )
+        for timestep in recurrent_timesteps:
+            if timestep == baseline_timestep:
+                continue
+            current = feature_export[timestep]
+            comparison = matched_temporal_geometry(
+                baseline["sample_ids"],
+                baseline_current_global,
+                current["sample_ids"],
+                torch.cat(current["features"]["current_global"], dim=0),
+            )
+            comparison.update(
+                {
+                    "baseline_timestep": baseline_timestep,
+                    "timestep": timestep,
+                }
+            )
+            matched_temporal_geometry_report[str(timestep)] = comparison
+
     # -----------------------------------------------------------------------
     # Automatic flags
     # -----------------------------------------------------------------------
@@ -763,57 +792,36 @@ def main(cfg: DictConfig) -> None:
         code="PATCH_STATE_RANK_DROP",
     )
 
-    # Monotonic cross-sample cone concentration in current globals.
-    timestep_cosines: list[tuple[int, float]] = []
-    for name, stats in geometry.items():
-        if name.startswith("t") and name.endswith("/current_global"):
-            try:
-                t = int(name.split("/")[0][1:])
-            except ValueError:
-                continue
-            c = stats.get("pairwise_cosine_mean", _nan())
-            if math.isfinite(c):
-                timestep_cosines.append((t, c))
-
-    timestep_cosines.sort()
-    if len(timestep_cosines) >= 2:
-        increase = timestep_cosines[-1][1] - timestep_cosines[0][1]
-        if increase > 0.15:
+    # Preserve native per-timestep descriptions, but only flag temporal change
+    # after restricting the baseline rows to the later timestep's survivors.
+    if matched_temporal_geometry_report:
+        latest_key = max(matched_temporal_geometry_report, key=int)
+        latest_temporal = matched_temporal_geometry_report[latest_key]
+        increase = latest_temporal["pairwise_cosine_increase"]
+        if latest_temporal["cosine_conclusion_valid"] and increase > 0.15:
             flags.append(
                 {
                     "level": "WARN",
                     "code": "RECURRENT_CONE_CONCENTRATION",
                     "message": (
-                        "Mean cross-sample current-global cosine increases by "
-                        f"{increase:.3f} from t{timestep_cosines[0][0]} "
-                        f"to t{timestep_cosines[-1][0]}."
+                        "Mean cross-sample current-global cosine for the same "
+                        f"{latest_temporal['matched_sample_count']} survivors increases by "
+                        f"{increase:.3f} from t{latest_temporal['baseline_timestep']} "
+                        f"to t{latest_temporal['timestep']}."
                     ),
                 }
             )
-
-    # Rank degradation across current globals.
-    timestep_ranks: list[tuple[int, float]] = []
-    for name, stats in geometry.items():
-        if name.startswith("t") and name.endswith("/current_global"):
-            try:
-                t = int(name.split("/")[0][1:])
-            except ValueError:
-                continue
-            r = stats.get("effective_rank_pr", _nan())
-            if math.isfinite(r):
-                timestep_ranks.append((t, r))
-
-    timestep_ranks.sort()
-    if len(timestep_ranks) >= 2 and timestep_ranks[0][1] > 0:
-        drop = 1.0 - timestep_ranks[-1][1] / timestep_ranks[0][1]
-        if drop > 0.30:
+        drop = latest_temporal["rank_drop_fraction"]
+        if latest_temporal["rank_conclusion_valid"] and drop > 0.30:
             flags.append(
                 {
                     "level": "WARN",
                     "code": "RECURRENT_RANK_COLLAPSE",
                     "message": (
-                        f"Current-global effective rank drops {drop:.1%} "
-                        f"from t{timestep_ranks[0][0]} to t{timestep_ranks[-1][0]}."
+                        "Current-global effective rank for the same "
+                        f"{latest_temporal['matched_sample_count']} survivors drops "
+                        f"{drop:.1%} from t{latest_temporal['baseline_timestep']} "
+                        f"to t{latest_temporal['timestep']}."
                     ),
                 }
             )
@@ -928,6 +936,7 @@ def main(cfg: DictConfig) -> None:
         "candidate_geometry": candidate_geometry_report,
         "headline_candidate_geometry": headline_geometry,
         "headline_trajectory_geometry": headline_trajectory,
+        "matched_temporal_geometry": matched_temporal_geometry_report,
         "metric_definitions": {
             "retrieval_query_rank_trajectory": (
                 "Cross-input covariance PR in the projected, L2-normalized retrieval "
@@ -945,6 +954,11 @@ def main(cfg: DictConfig) -> None:
             "legacy_sibling_rank": (
                 "Not reported here; diagnose_iag_srme.py labels its per-input K-by-D "
                 "singular-value metric explicitly."
+            ),
+            "matched_temporal_geometry": (
+                "Current-global baseline/current PR and pairwise cosine computed on stable "
+                "sample IDs live at both timesteps. Automatic recurrent-collapse flags use "
+                "this matched-survivor geometry, never native cohorts of different sizes."
             ),
         },
         "state_transition_records": state_records,
@@ -1056,6 +1070,28 @@ def main(cfg: DictConfig) -> None:
                 f"mean-std={fmt(slot['mean_per_dim_std'])}, "
                 f"zero-variance={slot['zero_total_variance']}"
             )
+
+    md_lines += [
+        "",
+        "## Matched-survivor temporal geometry",
+        "",
+        "Native timestep geometry remains in the table above; temporal flags use these "
+        "stable-ID-aligned rows.",
+        "",
+        "| baseline | current | matched N | baseline PR | current PR | rank drop | baseline cosine | current cosine | cosine increase |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for comparison in matched_temporal_geometry_report.values():
+        md_lines.append(
+            f"| {comparison['baseline_timestep']} | {comparison['timestep']} | "
+            f"{comparison['matched_sample_count']} | "
+            f"{fmt(comparison['baseline_matched_PR'])} | "
+            f"{fmt(comparison['current_matched_PR'])} | "
+            f"{fmt(comparison['rank_drop_fraction'])} | "
+            f"{fmt(comparison['baseline_matched_pairwise_cosine_mean'])} | "
+            f"{fmt(comparison['current_matched_pairwise_cosine_mean'])} | "
+            f"{fmt(comparison['pairwise_cosine_increase'])} |"
+        )
 
     md_lines += [
         "",

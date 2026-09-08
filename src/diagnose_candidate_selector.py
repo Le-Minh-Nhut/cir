@@ -42,7 +42,12 @@ from diagnostics.cohort import (
     sample_ids_fingerprint,
     validate_processed_manifest,
 )
-from diagnostics.selection import selection_metrics, slot_monopoly, transition_retrieval
+from diagnostics.selection import (
+    caption_utility_comparison,
+    selection_metrics,
+    slot_monopoly,
+    transition_retrieval,
+)
 from evaluate import validate_checkpoint_backbone_metadata
 from evaluation.fashioniq import build_validation_datasets, evaluate_fashioniq
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
@@ -272,7 +277,15 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         "> Target-derived teacher utility is diagnostic only and is never an inference input.",
     ]
     if report.get("caption_sensitivity"):
-        lines += ["", "## Correct vs shuffled-caption sensitivity", ""]
+        lines += [
+            "",
+            "## Correct vs shuffled-caption sensitivity",
+            "",
+            "- `best_candidate_utility_*` compares raw best candidates and ignores STOP.",
+            "- `oracle_policy_utility_*` applies the checkpoint's `epsilon_stop`; its "
+            "value is zero when the oracle chooses STOP.",
+            "",
+        ]
         for name, values in report["caption_sensitivity"].items():
             lines.append(f"- `{name}`: mean `{values['mean']:.6f}` (n={values['count']})")
     if report.get("official_fashioniq"):
@@ -739,11 +752,18 @@ def main(cfg: DictConfig) -> None:
                         caption_values["candidate_utility_correct_minus_shuffled"].extend(
                             (correct_utility - shuffled_utility).flatten().cpu().tolist()
                         )
-                        caption_values["oracle_utility_correct_minus_shuffled"].extend(
-                            (correct_utility.max(-1).values - shuffled_utility.max(-1).values)
-                            .cpu()
-                            .tolist()
+                        utility_comparison = caption_utility_comparison(
+                            correct_utility,
+                            shuffled_utility,
+                            stop_threshold=float(model.config.epsilon_stop),
                         )
+                        for name in (
+                            "best_candidate_utility_correct_minus_shuffled",
+                            "oracle_policy_utility_correct_minus_shuffled",
+                        ):
+                            caption_values[name].extend(
+                                utility_comparison[name].cpu().tolist()
+                            )
                         selected_caption_values = {}
                         for prefix, step_output, utilities in (
                             ("correct", correct, correct_utility),
@@ -1157,6 +1177,15 @@ def main(cfg: DictConfig) -> None:
             "oracle_best_fraction_of_all_decisions": "oracle slot count / all decisions",
             "oracle_best_fraction_given_oracle_execute": (
                 "oracle slot count / decisions where max utility > epsilon_stop"
+            ),
+            "best_candidate_utility_correct_minus_shuffled": (
+                "max candidate utility under correct caption minus max candidate utility "
+                "under shuffled caption; intentionally ignores STOP"
+            ),
+            "oracle_policy_utility_correct_minus_shuffled": (
+                "STOP-aware oracle value under correct caption minus STOP-aware oracle "
+                "value under shuffled caption; oracle executes only when max candidate "
+                "utility > epsilon_stop, otherwise its value is zero"
             ),
         },
         "decision_records": decision_records,

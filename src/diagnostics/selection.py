@@ -68,6 +68,38 @@ def transition_retrieval(
     }
 
 
+def caption_utility_comparison(
+    correct_utility: Tensor,
+    shuffled_utility: Tensor,
+    *,
+    stop_threshold: float,
+) -> dict[str, Tensor]:
+    """Separate raw best-candidate gain from STOP-aware oracle-policy gain."""
+
+    if correct_utility.ndim != 2 or shuffled_utility.shape != correct_utility.shape:
+        raise ValueError("caption utilities must have matching [B,K] shapes")
+    correct_best = correct_utility.max(dim=-1).values
+    shuffled_best = shuffled_utility.max(dim=-1).values
+    correct_oracle = torch.where(
+        correct_best > stop_threshold,
+        correct_best,
+        torch.zeros_like(correct_best),
+    )
+    shuffled_oracle = torch.where(
+        shuffled_best > stop_threshold,
+        shuffled_best,
+        torch.zeros_like(shuffled_best),
+    )
+    return {
+        "best_candidate_utility_correct": correct_best,
+        "best_candidate_utility_shuffled": shuffled_best,
+        "best_candidate_utility_correct_minus_shuffled": correct_best - shuffled_best,
+        "oracle_policy_utility_correct": correct_oracle,
+        "oracle_policy_utility_shuffled": shuffled_oracle,
+        "oracle_policy_utility_correct_minus_shuffled": correct_oracle - shuffled_oracle,
+    }
+
+
 def selection_metrics(
     utility: Tensor,
     selected_idx: Tensor,
