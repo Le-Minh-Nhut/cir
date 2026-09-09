@@ -22,6 +22,27 @@ class IAGSRMEConfig:
     scale_min: float = 1.0
     scale_max: float = 100.0
     score_dropout: float = 0.1
+    selector_shuffle_enabled: bool = False
+
+
+def gather_candidate_axis(values: Tensor, indices: Tensor) -> Tensor:
+    """Gather a per-row permutation along candidate axis one."""
+
+    if values.ndim < 2:
+        raise ValueError("candidate-indexed values must have at least two dimensions")
+    if indices.ndim != 2 or indices.shape != values.shape[:2]:
+        raise ValueError("candidate indices must have shape [batch, candidates]")
+    index = indices.view(*indices.shape, *([1] * (values.ndim - 2)))
+    index = index.expand(*indices.shape, *values.shape[2:])
+    return values.gather(1, index)
+
+
+def random_candidate_permutation(
+    batch_size: int, num_candidates: int, device: torch.device
+) -> Tensor:
+    """Sample an independent candidate permutation for every batch row."""
+
+    return torch.rand(batch_size, num_candidates, device=device).argsort(dim=-1)
 
 
 class ProposalNet(nn.Module):
@@ -338,7 +359,16 @@ class IAGSRME(nn.Module):
                 candidate_global.detach(),
             )
             # Score losses train all ScoreNet projections, but never upstream modules.
-            scores = self.score_net(score_features)
+            if self.training and self.config.selector_shuffle_enabled:
+                permutation = random_candidate_permutation(
+                    score_features.shape[0], score_features.shape[1], score_features.device
+                )
+                shuffled_features = gather_candidate_axis(score_features, permutation)
+                shuffled_scores = self.score_net(shuffled_features)
+                inverse_permutation = permutation.argsort(dim=-1)
+                scores = gather_candidate_axis(shuffled_scores, inverse_permutation)
+            else:
+                scores = self.score_net(score_features)
             best_score, best_idx = scores.max(dim=-1)
             stop_now = (
                 best_score <= self.config.epsilon_stop

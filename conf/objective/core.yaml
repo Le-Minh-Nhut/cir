@@ -8,6 +8,13 @@ pair_weight_temperature: 1.0
 epsilon_pair: 0.01
 huber_delta: 1.0
 
+# Optional proposer/executor candidate task-credit ablation. Baseline is unchanged.
+candidate_credit_mode: none
+lambda_candidate_credit: 0.0
+awta_temperature_init: 1.0
+awta_temperature_decay: 0.85
+awta_temperature_min: 0.05
+
 # Independently switchable V2 semantic/functional auxiliaries.
 concept_enabled: true
 bind_enabled: true

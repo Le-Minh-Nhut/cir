@@ -10,6 +10,7 @@ from torch import Tensor, nn
 from models.iag_srme.utils.retrieval import (
     build_teacher_masks,
     marginal_teacher_utilities,
+    teacher_retrieval_loss,
 )
 from models.iag_srme.utils.semantic import ConceptVocabulary, PARSER_VERSION
 
@@ -26,6 +27,12 @@ class ObjectiveConfig:
     pair_weight_temperature: float = 1.0
     epsilon_pair: float = 0.01
     huber_delta: float = 1.0
+
+    candidate_credit_mode: str = "none"
+    lambda_candidate_credit: float = 0.0
+    awta_temperature_init: float = 1.0
+    awta_temperature_decay: float = 0.85
+    awta_temperature_min: float = 0.05
 
     concept_enabled: bool = False
     bind_enabled: bool = False
@@ -54,6 +61,36 @@ class ObjectiveConfig:
     tau_dpp: float = 0.1
     useful_threshold: float = 0.55
     dpp_jitter: float = 1e-4
+
+
+def awta_temperature(epoch: int, initial: float, decay: float, minimum: float) -> float:
+    """Stateless exponential temperature schedule for annealed WTA."""
+
+    if epoch < 0:
+        raise ValueError("epoch must be non-negative")
+    if initial <= 0.0 or decay <= 0.0 or minimum <= 0.0:
+        raise ValueError("aWTA temperature values must be positive")
+    return max(minimum, initial * decay**epoch)
+
+
+def compute_candidate_credit_weights(
+    candidate_losses: Tensor, mode: str, temperature: float
+) -> Tensor:
+    """Return detached hard-WTA or annealed-WTA assignment weights."""
+
+    if candidate_losses.ndim < 1 or candidate_losses.shape[-1] == 0:
+        raise ValueError("candidate losses must have a non-empty candidate axis")
+    detached_losses = candidate_losses.detach().float()
+    if mode == "awta":
+        if temperature <= 0.0:
+            raise ValueError("aWTA temperature must be positive")
+        weights = torch.softmax(-detached_losses / temperature, dim=-1)
+    elif mode == "hard_wta":
+        winner = detached_losses.argmin(dim=-1)
+        weights = F.one_hot(winner, num_classes=candidate_losses.shape[-1]).float()
+    else:
+        raise ValueError(f"unsupported candidate credit mode: {mode}")
+    return weights.detach()
 
 
 def pairwise_ranking_loss(
@@ -324,7 +361,7 @@ def _functional_diagnostics(effects: list[Tensor], zero: Tensor) -> tuple[Tensor
 
 
 class IAGSRMEObjective(nn.Module):
-    """Canonical V2 objective; all target-derived candidate judgments are detached."""
+    """Canonical V2 objective with optional detached-assignment candidate credit."""
 
     def __init__(
         self,
@@ -338,6 +375,16 @@ class IAGSRMEObjective(nn.Module):
         super().__init__()
         if config.correspondence_enabled:
             raise ValueError("correspondence is intentionally disabled in V2 R0")
+        if config.candidate_credit_mode not in {"none", "hard_wta", "awta"}:
+            raise ValueError(
+                "candidate_credit_mode must be one of: none, hard_wta, awta"
+            )
+        awta_temperature(
+            0,
+            config.awta_temperature_init,
+            config.awta_temperature_decay,
+            config.awta_temperature_min,
+        )
         self.config = config
         self.terminal = TerminalRetrievalLoss(config.retrieval_temperature)
         state_dim = state_dim or width
@@ -372,6 +419,8 @@ class IAGSRMEObjective(nn.Module):
         target_embeddings: Tensor,
         target_ids: Sequence[str | None],
         modification_texts: Sequence[str] | None = None,
+        *,
+        epoch: int = 0,
     ) -> Mapping[str, Tensor]:
         positive, negative, _ = build_teacher_masks(target_ids, target_embeddings.device)
         query = output["query"]
@@ -400,6 +449,17 @@ class IAGSRMEObjective(nn.Module):
         decision_count = query.new_zeros(())
         executed_count = query.new_zeros(())
         histories: list[list[Tensor]] = [[] for _ in range(query.shape[0])]
+        current_awta_temperature = awta_temperature(
+            epoch,
+            self.config.awta_temperature_init,
+            self.config.awta_temperature_decay,
+            self.config.awta_temperature_min,
+        )
+        candidate_credit_numerator = zero
+        candidate_credit_rows = query.new_zeros(())
+        awta_entropy_sum = query.new_zeros(())
+        awta_max_weight_sum = query.new_zeros(())
+        awta_effective_k_sum = query.new_zeros(())
 
         for step in steps:
             live_indices = step["live_indices"]
@@ -440,6 +500,37 @@ class IAGSRMEObjective(nn.Module):
             pair_count = pair_count + pair_weight
             gain_count = gain_count + gains
             invalid_rows = invalid_rows + (~valid_rows).sum()
+
+            if self.config.candidate_credit_mode != "none" and valid_rows.any():
+                valid_candidate_losses = teacher_retrieval_loss(
+                    candidate_queries[valid_rows],
+                    target_embeddings.detach(),
+                    pos_live[valid_rows],
+                    neg_live[valid_rows],
+                    self.config.retrieval_temperature,
+                )
+                weights = compute_candidate_credit_weights(
+                    valid_candidate_losses,
+                    self.config.candidate_credit_mode,
+                    current_awta_temperature,
+                )
+                row_loss = (weights * valid_candidate_losses).sum(dim=-1)
+                candidate_credit_numerator = candidate_credit_numerator + row_loss.sum()
+                candidate_credit_rows = candidate_credit_rows + row_loss.numel()
+
+                diagnostic_weights = weights.detach()
+                eps = torch.finfo(diagnostic_weights.dtype).eps
+                entropy = (
+                    -(
+                        diagnostic_weights
+                        * (diagnostic_weights + eps).log()
+                    ).sum(dim=-1)
+                ).clamp_min(0.0)
+                awta_entropy_sum = awta_entropy_sum + entropy.sum()
+                awta_max_weight_sum = (
+                    awta_max_weight_sum + diagnostic_weights.max(dim=-1).values.sum()
+                )
+                awta_effective_k_sum = awta_effective_k_sum + entropy.exp().sum()
 
             if self.config.bind_enabled:
                 assert self.relation is not None
@@ -515,6 +606,15 @@ class IAGSRMEObjective(nn.Module):
         stop_rate = stop_count / decision_count.clamp_min(1)
         mean_rollout_length = executed_count / query.shape[0]
         dpp_valid_rate = dpp_count / useful_rows.clamp_min(1)
+        candidate_credit_loss = (
+            candidate_credit_numerator / candidate_credit_rows.clamp_min(1)
+        )
+        candidate_credit_weighted = (
+            self.config.lambda_candidate_credit * candidate_credit_loss
+        )
+        awta_weight_entropy = awta_entropy_sum / candidate_credit_rows.clamp_min(1)
+        awta_max_weight = awta_max_weight_sum / candidate_credit_rows.clamp_min(1)
+        awta_effective_k = awta_effective_k_sum / candidate_credit_rows.clamp_min(1)
 
         dpp_weighted = self.config.lambda_dpp * dpp_raw
         total = (
@@ -526,6 +626,8 @@ class IAGSRMEObjective(nn.Module):
             + self.config.lambda_rel * rel_ortho
             + dpp_weighted
         )
+        if self.config.candidate_credit_mode != "none":
+            total = total + candidate_credit_weighted
         return {
             "terminal": terminal,
             "pair": pair,
@@ -535,6 +637,12 @@ class IAGSRMEObjective(nn.Module):
             "rel_ortho_loss": rel_ortho,
             "dpp_raw": dpp_raw,
             "dpp_weighted": dpp_weighted,
+            "candidate_credit_loss": candidate_credit_loss,
+            "candidate_credit_weighted": candidate_credit_weighted,
+            "awta_temperature": query.new_tensor(current_awta_temperature),
+            "awta_weight_entropy": awta_weight_entropy.detach(),
+            "awta_max_weight": awta_max_weight.detach(),
+            "awta_effective_k": awta_effective_k.detach(),
             **concept_metrics,
             **relation_metrics,
             "functional_pairwise_cosine": functional_cosine,

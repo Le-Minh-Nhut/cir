@@ -10,3 +10,4 @@ read_scale_init: 10.0
 exec_scale_init: 10.0
 exec_bias_init: 0.0
 score_dropout: 0.1
+selector_shuffle_enabled: false

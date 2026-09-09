@@ -159,7 +159,11 @@ def train_one_epoch(
             target_embeddings = model.encode_global_images(batch.target_pixels)
             target_ids = [str(value) for value in batch.target_ids]
             components = objective(
-                output, target_embeddings, target_ids, batch.modification_texts
+                output,
+                target_embeddings,
+                target_ids,
+                batch.modification_texts,
+                epoch=epoch,
             )
             loss = components["total"]
         scaler.scale(loss).backward()

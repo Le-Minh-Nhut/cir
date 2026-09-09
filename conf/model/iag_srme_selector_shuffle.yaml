@@ -1,0 +1,6 @@
+defaults:
+  - iag_srme
+  - _self_
+
+name: iag_srme_selector_shuffle
+selector_shuffle_enabled: true

@@ -1,0 +1,7 @@
+defaults:
+  - core
+  - _self_
+
+name: core_awta_candidate_credit
+candidate_credit_mode: awta
+lambda_candidate_credit: 1.0
