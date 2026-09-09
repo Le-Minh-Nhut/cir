@@ -58,7 +58,6 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         exec_scale_init=float(cfg.model.exec_scale_init),
         exec_bias_init=float(cfg.model.exec_bias_init),
         score_dropout=float(cfg.model.score_dropout),
-        selector_shuffle_enabled=bool(cfg.model.selector_shuffle_enabled),
     )
     return IAGSRME(backbone, model_config), tokenizer, processor
 
