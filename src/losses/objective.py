@@ -3,660 +3,77 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-import torch
-import torch.nn.functional as F
 from torch import Tensor, nn
 
-from models.iag_srme.utils.retrieval import (
-    build_teacher_masks,
-    marginal_teacher_utilities,
-    teacher_retrieval_loss,
-)
-from models.iag_srme.utils.semantic import ConceptVocabulary, PARSER_VERSION
-
-from .retrieval import TerminalRetrievalLoss
+from .retrieval import TerminalRetrievalLoss, positive_mask_from_ids
 
 
 @dataclass(frozen=True, slots=True)
 class ObjectiveConfig:
-    terminal_weight: float = 1.0
-    lambda_pair: float = 0.5
-    lambda_gain: float = 0.5
     retrieval_temperature: float = 0.07
-    pair_temperature: float = 1.0
-    pair_weight_temperature: float = 1.0
-    epsilon_pair: float = 0.01
-    huber_delta: float = 1.0
-
-    candidate_credit_mode: str = "none"
-    lambda_candidate_credit: float = 0.0
-    awta_temperature_init: float = 1.0
-    awta_temperature_decay: float = 0.85
-    awta_temperature_min: float = 0.05
-
-    concept_enabled: bool = False
-    bind_enabled: bool = False
-    rel_ortho_enabled: bool = False
-    dpp_enabled: bool = False
-    correspondence_enabled: bool = False
-    lambda_c: float = 0.01
-    lambda_bind: float = 0.01
-    lambda_rel: float = 0.001
-    lambda_dpp: float = 0.01
-
-    tau_concept: float = 0.1
-    tau_mil: float = 1.0
-    beta_pos: float = 1.0
-    beta_neg: float = 4.0
-    concept_threshold: float = 0.5
-    concept_min_frequency: int = 2
-    concept_max_size: int = 2048
-    concept_parser_version: str = PARSER_VERSION
-
-    num_relation_prototypes: int = 8
-    tau_rel: float = 0.1
-
-    kappa_dpp: float = 1.0
-    sigma_dpp: float = 1.0
-    tau_dpp: float = 0.1
-    useful_threshold: float = 0.55
-    dpp_jitter: float = 1e-4
 
 
-def awta_temperature(epoch: int, initial: float, decay: float, minimum: float) -> float:
-    """Stateless exponential temperature schedule for annealed WTA."""
-
-    if epoch < 0:
-        raise ValueError("epoch must be non-negative")
-    if initial <= 0.0 or decay <= 0.0 or minimum <= 0.0:
-        raise ValueError("aWTA temperature values must be positive")
-    return max(minimum, initial * decay**epoch)
-
-
-def compute_candidate_credit_weights(
-    candidate_losses: Tensor, mode: str, temperature: float
-) -> Tensor:
-    """Return detached hard-WTA or annealed-WTA assignment weights."""
-
-    if candidate_losses.ndim < 1 or candidate_losses.shape[-1] == 0:
-        raise ValueError("candidate losses must have a non-empty candidate axis")
-    detached_losses = candidate_losses.detach().float()
-    if mode == "awta":
-        if temperature <= 0.0:
-            raise ValueError("aWTA temperature must be positive")
-        weights = torch.softmax(-detached_losses / temperature, dim=-1)
-    elif mode == "hard_wta":
-        winner = detached_losses.argmin(dim=-1)
-        weights = F.one_hot(winner, num_classes=candidate_losses.shape[-1]).float()
-    else:
-        raise ValueError(f"unsupported candidate credit mode: {mode}")
-    return weights.detach()
-
-
-def pairwise_ranking_loss(
-    predicted: Tensor,
-    teacher: Tensor,
-    valid_rows: Tensor,
-    *,
-    epsilon: float,
-    temperature: float,
-    weight_temperature: float,
-) -> tuple[Tensor, Tensor]:
-    """Confidence-weighted ranking over every unordered sibling pair."""
-
-    candidates = predicted.shape[-1]
-    left, right = torch.triu_indices(candidates, candidates, offset=1, device=predicted.device)
-    teacher_delta = teacher[:, left] - teacher[:, right]
-    confident = teacher_delta.abs() >= epsilon
-    pair_mask = valid_rows[:, None] & confident
-    weight = 1.0 - torch.exp(-teacher_delta.abs() / weight_temperature)
-    signed_margin = teacher_delta.sign() * (predicted[:, left] - predicted[:, right])
-    values = -weight * F.logsigmoid(signed_margin / temperature)
-    normalizer = (weight * pair_mask).sum()
-    loss = (values * pair_mask).sum() / normalizer.clamp_min(1e-8)
-    return loss, normalizer
-
-
-def absolute_gain_loss(
-    predicted: Tensor, teacher: Tensor, valid_rows: Tensor, delta: float
-) -> tuple[Tensor, Tensor]:
-    values = F.huber_loss(predicted, teacher, reduction="none", delta=delta)
-    mask = valid_rows[:, None].expand_as(values)
-    count = mask.sum()
-    return (values * mask).sum() / count.clamp_min(1), count
-
-
-class ConceptSetAuxiliary(nn.Module):
-    """Instruction-level concept coverage after pooling the proposal set."""
-
-    def __init__(
-        self,
-        state_dim: int,
-        vocabulary: ConceptVocabulary,
-        prototypes: Tensor,
-        *,
-        tau_concept: float,
-        tau_mil: float,
-        beta_pos: float,
-        beta_neg: float,
-        threshold: float,
-    ) -> None:
-        super().__init__()
-        if prototypes.shape[0] != len(vocabulary.concepts):
-            raise ValueError("one frozen prototype is required for every concept")
-        self.vocabulary = vocabulary
-        self.tau_concept = tau_concept
-        self.tau_mil = tau_mil
-        self.beta_pos = beta_pos
-        self.beta_neg = beta_neg
-        self.threshold = threshold
-        self.projection = nn.Linear(state_dim, prototypes.shape[-1], bias=False)
-        self.register_buffer(
-            "concept_prototypes", F.normalize(prototypes.detach().float(), dim=-1)
-        )
-
-    def forward(
-        self, proposals_t0: Tensor, instructions: Sequence[str]
-    ) -> Mapping[str, Tensor]:
-        # proposals_t0: [B,K,D]. Pool K before comparing to instruction labels.
-        z = F.normalize(self.projection(proposals_t0).float(), dim=-1)
-        candidate_logits = (
-            torch.einsum("bkd,md->bkm", z, self.concept_prototypes)
-            / self.tau_concept
-        )
-        set_logits = self.tau_mil * torch.logsumexp(
-            candidate_logits / self.tau_mil, dim=1
-        )
-        probability = torch.sigmoid(set_logits)
-        positive = self.vocabulary.labels(instructions, proposals_t0.device)
-        negative = ~positive
-        eps = torch.finfo(probability.dtype).eps
-        positive_term = (
-            (1.0 - probability).pow(self.beta_pos)
-            * torch.log(probability.clamp_min(eps))
-            * positive
-        )
-        negative_term = (
-            probability.pow(self.beta_neg)
-            * torch.log((1.0 - probability).clamp_min(eps))
-            * negative
-        )
-        loss = -(positive_term + negative_term).sum(dim=-1).mean() / probability.shape[-1]
-
-        predicted = probability >= self.threshold
-        positive_count = positive.sum().clamp_min(1)
-        negative_count = negative.sum().clamp_min(1)
-        recall = (predicted & positive).sum().float() / positive_count
-        false_positive_rate = (predicted & negative).sum().float() / negative_count
-        rows_with_concepts = positive.any(dim=-1)
-        covered = ((~positive) | predicted).all(dim=-1)
-        coverage = (covered & rows_with_concepts).sum().float() / rows_with_concepts.sum().clamp_min(1)
-        return {
-            "loss": loss,
-            "candidate_logits": candidate_logits,
-            "set_probability": probability,
-            "labels": positive,
-            "concept_positive_recall": recall.detach(),
-            "concept_negative_false_positive_rate": false_positive_rate.detach(),
-            "instruction_concept_coverage": coverage.detach(),
-        }
-
-
-class RelationAuxiliary(nn.Module):
-    """Edit/entity binding against a stable, separate relation prototype bank."""
-
-    def __init__(
-        self, state_dim: int, num_prototypes: int, relation_dim: int, tau_rel: float
-    ) -> None:
-        super().__init__()
-        self.tau_rel = tau_rel
-        self.edit_projection = nn.Linear(state_dim, relation_dim, bias=False)
-        self.entity_projection = nn.Linear(state_dim, relation_dim, bias=False)
-        self.relation_prototypes = nn.Parameter(torch.empty(num_prototypes, relation_dim))
-        nn.init.normal_(self.relation_prototypes, std=0.02)
-
-    def distributions(self, edits: Tensor, entities: Tensor) -> tuple[Tensor, Tensor]:
-        prototypes = F.normalize(self.relation_prototypes, dim=-1)
-        edit = F.normalize(self.edit_projection(edits), dim=-1)
-        entity = F.normalize(self.entity_projection(entities), dim=-1)
-        b_edit = torch.softmax(torch.einsum("bkd,md->bkm", edit, prototypes) / self.tau_rel, dim=-1)
-        b_entity = torch.softmax(
-            torch.einsum("bkd,md->bkm", entity, prototypes) / self.tau_rel, dim=-1
-        )
-        return b_edit, b_entity
-
-    def bind_loss(self, edits: Tensor, entities: Tensor) -> tuple[Tensor, Tensor, Tensor]:
-        b_edit, b_entity = self.distributions(edits, entities)
-        # Canonical direction: KL(edit relation distribution || entity distribution).
-        loss = (
-            b_edit
-            * (b_edit.clamp_min(1e-8).log() - b_entity.clamp_min(1e-8).log())
-        ).sum(dim=-1).mean()
-        return loss, b_edit, b_entity
-
-    def orthogonality_loss(self) -> Tensor:
-        prototypes = F.normalize(self.relation_prototypes, dim=-1)
-        count = prototypes.shape[0]
-        gram = prototypes @ prototypes.T
-        identity = torch.eye(count, device=gram.device, dtype=gram.dtype)
-        return (gram - identity).square().sum() / max(count * (count - 1), 1)
-
-    def diagnostics(self, distributions: Tensor) -> Mapping[str, Tensor]:
-        occupancy = distributions.mean(dim=(0, 1))
-        entropy = -(occupancy * occupancy.clamp_min(1e-8).log()).sum()
-        prototype = F.normalize(self.relation_prototypes.detach(), dim=-1)
-        cosine = prototype @ prototype.T
-        count = prototype.shape[0]
-        off_diagonal = ~torch.eye(count, device=cosine.device, dtype=torch.bool)
-        pairwise = cosine[off_diagonal].mean() if count > 1 else cosine.new_zeros(())
-        active = (occupancy > 1.0 / (10.0 * count)).float().mean()
-        return {
-            "prototype_occupancy": active,
-            "prototype_entropy": entropy.detach(),
-            "prototype_pairwise_cosine": pairwise.detach(),
-        }
-
-
-def _rbf_similarity(values: Tensor, sigma: float) -> Tensor:
-    squared_distance = (values[:, None] - values[None, :]).square().sum(dim=-1)
-    return torch.exp(-squared_distance / (2.0 * sigma**2))
-
-
-def functional_dpp_loss(
-    effects: Tensor,
-    history: Tensor | None,
-    teacher_utility: Tensor,
-    *,
-    kappa: float,
-    sigma: float,
-    tau: float,
-    useful_threshold: float,
-    jitter: float,
-) -> Mapping[str, Tensor]:
-    """History-conditioned DPP over current retrieval consequences [K,D]."""
-
-    effect_values = effects.float()
-    effects_normalized = effect_values / (
-        effect_values.norm(dim=-1, keepdim=True) + 1e-8
-    )
-    quality = torch.sigmoid(teacher_utility.detach().float() / tau)
-    active = quality > useful_threshold
-    useful_count = active.sum()
-    if useful_count < 2:
-        return {
-            "loss": effects.sum() * 0.0,
-            "normalized_effects": effects_normalized,
-            "quality": quality,
-            "useful_count": useful_count.float(),
-            "valid": torch.zeros((), dtype=torch.bool, device=effects.device),
-        }
-
-    similarity_cc = _rbf_similarity(effects_normalized.float(), sigma)
-    conditional = similarity_cc
-    if history is not None and history.numel() > 0:
-        history_normalized = F.normalize(history.detach().float(), dim=-1)
-        all_values = torch.cat([effects_normalized.float(), history_normalized], dim=0)
-        similarity = _rbf_similarity(all_values, sigma)
-        candidates = effects.shape[0]
-        similarity_ch = similarity[:candidates, candidates:]
-        similarity_hh = similarity[candidates:, candidates:]
-        regularized_history = similarity_hh + jitter * torch.eye(
-            similarity_hh.shape[0], device=effects.device, dtype=similarity_hh.dtype
-        )
-        conditional = similarity_cc - similarity_ch @ torch.linalg.solve(
-            regularized_history, similarity_ch.T
-        )
-    conditional = 0.5 * (conditional + conditional.T)
-    kernel = quality[:, None] * conditional * quality[None, :]
-    matrix = torch.eye(effects.shape[0], device=effects.device, dtype=kernel.dtype)
-    matrix = matrix + kappa * kernel
-    sign, logabsdet = torch.linalg.slogdet(matrix)
-    loss = torch.where(sign > 0, -logabsdet, effects.sum() * 0.0)
-    return {
-        "loss": loss,
-        "normalized_effects": effects_normalized,
-        "quality": quality,
-        "useful_count": useful_count.float(),
-        "valid": torch.ones((), dtype=torch.bool, device=effects.device),
-    }
-
-
-def update_executed_history(
-    histories: list[list[Tensor]],
-    live_indices: Tensor,
-    selected_indices: Tensor,
-    delta_q: Tensor,
-    num_candidates: int,
-) -> None:
-    """Append only detached effects that were actually committed; STOP appends nothing."""
-
-    for local_row, sample_index in enumerate(live_indices.tolist()):
-        selected = int(selected_indices[local_row])
-        if selected < num_candidates:
-            effect = delta_q[local_row, selected]
-            histories[sample_index].append(
-                F.normalize(effect.float(), dim=-1).detach()
-            )
-
-
-def _functional_diagnostics(effects: list[Tensor], zero: Tensor) -> tuple[Tensor, Tensor]:
-    if not effects:
-        return zero.detach(), zero.detach()
-    cosine_values = []
-    rank_values = []
-    for value in effects:
-        # value: [B_live,K,D]. Diagnostics stay within sibling sets.
-        values = value.detach().float()
-        normalized = values / (values.norm(dim=-1, keepdim=True) + 1e-8)
-        cosine = normalized @ normalized.transpose(-1, -2)
-        candidates = value.shape[1]
-        off_diagonal = ~torch.eye(candidates, dtype=torch.bool, device=value.device)
-        cosine_values.append(cosine[:, off_diagonal].mean())
-        singular_values = torch.linalg.svdvals(value.detach().float())
-        effective_rank = singular_values.sum(dim=-1).square() / singular_values.square().sum(
-            dim=-1
-        ).clamp_min(1e-8)
-        rank_values.append(effective_rank.mean())
-    return torch.stack(cosine_values).mean(), torch.stack(rank_values).mean().to(zero.dtype)
+def _mean_batch_l2(values: Tensor) -> Tensor:
+    return values.detach().float().flatten(1).norm(dim=-1).mean()
 
 
 class IAGSRMEObjective(nn.Module):
-    """Canonical V2 objective with optional detached-assignment candidate credit."""
+    """Final-state retrieval supervision with sequential execution diagnostics."""
 
-    def __init__(
-        self,
-        config: ObjectiveConfig,
-        width: int = 256,
-        *,
-        state_dim: int | None = None,
-        concept_vocabulary: ConceptVocabulary | None = None,
-        concept_prototypes: Tensor | None = None,
-    ) -> None:
+    def __init__(self, config: ObjectiveConfig = ObjectiveConfig()) -> None:
         super().__init__()
-        if config.correspondence_enabled:
-            raise ValueError("correspondence is intentionally disabled in V2 R0")
-        if config.candidate_credit_mode not in {"none", "hard_wta", "awta"}:
-            raise ValueError(
-                "candidate_credit_mode must be one of: none, hard_wta, awta"
-            )
-        awta_temperature(
-            0,
-            config.awta_temperature_init,
-            config.awta_temperature_decay,
-            config.awta_temperature_min,
-        )
         self.config = config
         self.terminal = TerminalRetrievalLoss(config.retrieval_temperature)
-        state_dim = state_dim or width
-        self.concept: ConceptSetAuxiliary | None = None
-        if config.concept_enabled:
-            if concept_vocabulary is None or concept_prototypes is None:
-                raise ValueError("enabled concept loss requires training-split vocabulary and prototypes")
-            if concept_vocabulary.parser_version != config.concept_parser_version:
-                raise ValueError("configured concept parser version does not match the vocabulary")
-            self.concept = ConceptSetAuxiliary(
-                state_dim,
-                concept_vocabulary,
-                concept_prototypes,
-                tau_concept=config.tau_concept,
-                tau_mil=config.tau_mil,
-                beta_pos=config.beta_pos,
-                beta_neg=config.beta_neg,
-                threshold=config.concept_threshold,
-            )
-        self.relation: RelationAuxiliary | None = None
-        if config.bind_enabled or config.rel_ortho_enabled:
-            self.relation = RelationAuxiliary(
-                state_dim,
-                config.num_relation_prototypes,
-                state_dim,
-                config.tau_rel,
-            )
 
     def forward(
         self,
         output: Mapping[str, object],
         target_embeddings: Tensor,
-        target_ids: Sequence[str | None],
-        modification_texts: Sequence[str] | None = None,
-        *,
-        epoch: int = 0,
+        target_ids: Sequence[str],
     ) -> Mapping[str, Tensor]:
-        positive, negative, _ = build_teacher_masks(target_ids, target_embeddings.device)
         query = output["query"]
-        assert isinstance(query, Tensor)
-        terminal = self.terminal(query, target_embeddings, positive)
-
+        initial_state = output["initial_state"]
         steps = output["steps"]
+        assert isinstance(query, Tensor)
+        assert isinstance(initial_state, Tensor)
         assert isinstance(steps, list)
-        zero = query.sum() * 0.0
-        pair_numerator = zero
-        gain_numerator = zero
-        pair_count = query.new_zeros(())
-        gain_count = query.new_zeros(())
-        invalid_rows = query.new_zeros(())
-        bind_numerator = zero
-        bind_count = query.new_zeros(())
-        binding_distributions: list[Tensor] = []
-        dpp_numerator = zero
-        dpp_count = query.new_zeros(())
-        useful_total = query.new_zeros(())
-        useful_rows = query.new_zeros(())
-        functional_effects: list[Tensor] = []
-        delta_norm_sum = query.new_zeros(())
-        delta_count = query.new_zeros(())
-        stop_count = query.new_zeros(())
-        decision_count = query.new_zeros(())
-        executed_count = query.new_zeros(())
-        histories: list[list[Tensor]] = [[] for _ in range(query.shape[0])]
-        current_awta_temperature = awta_temperature(
-            epoch,
-            self.config.awta_temperature_init,
-            self.config.awta_temperature_decay,
-            self.config.awta_temperature_min,
-        )
-        candidate_credit_numerator = zero
-        candidate_credit_rows = query.new_zeros(())
-        awta_entropy_sum = query.new_zeros(())
-        awta_max_weight_sum = query.new_zeros(())
-        awta_effective_k_sum = query.new_zeros(())
+
+        positive = positive_mask_from_ids(target_ids, target_embeddings.device)
+        terminal = self.terminal(query, target_embeddings, positive)
+        components: dict[str, Tensor] = {
+            "terminal": terminal,
+            "total": terminal,
+        }
 
         for step in steps:
-            live_indices = step["live_indices"]
-            current_query = step["current_query"]
-            candidate_queries = step["candidate_queries"]
-            predicted = step["scores"]
-            delta_q = step["delta_q"]
-            functional_effects.append(delta_q)
-            delta_norm_sum = delta_norm_sum + delta_q.detach().float().norm(dim=-1).sum()
-            delta_count = delta_count + delta_q.shape[0] * delta_q.shape[1]
-            stopped_now = step["stopped_now"]
-            stop_count = stop_count + stopped_now.sum()
-            decision_count = decision_count + stopped_now.numel()
-            executed_count = executed_count + (~stopped_now).sum()
-            pos_live = positive.index_select(0, live_indices)
-            neg_live = negative.index_select(0, live_indices)
-            teacher, valid_rows = marginal_teacher_utilities(
-                current_query,
-                candidate_queries,
-                target_embeddings.detach(),
-                pos_live,
-                neg_live,
-                self.config.retrieval_temperature,
+            slot = int(step["slot"])
+            prefix = f"slot_{slot}"
+            edit = step["edit"]
+            action = step["action"]
+            exec_mask = step["exec_mask"]
+            delta = step["delta"]
+            parent = step["parent_state"]
+            state = step["state"]
+            assert isinstance(edit, Tensor)
+            assert isinstance(action, Tensor)
+            assert isinstance(exec_mask, Tensor)
+            assert isinstance(delta, Tensor)
+            assert isinstance(parent, Tensor)
+            assert isinstance(state, Tensor)
+
+            components[f"{prefix}_delta_l2"] = _mean_batch_l2(delta)
+            components[f"{prefix}_delta_patch_l2_mean"] = (
+                delta.detach().float().norm(dim=-1).mean()
             )
-            pair, pair_weight = pairwise_ranking_loss(
-                predicted,
-                teacher,
-                valid_rows,
-                epsilon=self.config.epsilon_pair,
-                temperature=self.config.pair_temperature,
-                weight_temperature=self.config.pair_weight_temperature,
+            components[f"{prefix}_exec_mask_mean"] = exec_mask.detach().float().mean()
+            components[f"{prefix}_exec_mask_support"] = (
+                exec_mask.detach().float().sum(dim=-1).mean()
             )
-            gain, gains = absolute_gain_loss(
-                predicted, teacher, valid_rows, self.config.huber_delta
-            )
-            pair_numerator = pair_numerator + pair * pair_weight
-            gain_numerator = gain_numerator + gain * gains.clamp_min(1)
-            pair_count = pair_count + pair_weight
-            gain_count = gain_count + gains
-            invalid_rows = invalid_rows + (~valid_rows).sum()
-
-            if self.config.candidate_credit_mode != "none" and valid_rows.any():
-                valid_candidate_losses = teacher_retrieval_loss(
-                    candidate_queries[valid_rows],
-                    target_embeddings.detach(),
-                    pos_live[valid_rows],
-                    neg_live[valid_rows],
-                    self.config.retrieval_temperature,
-                )
-                weights = compute_candidate_credit_weights(
-                    valid_candidate_losses,
-                    self.config.candidate_credit_mode,
-                    current_awta_temperature,
-                )
-                row_loss = (weights * valid_candidate_losses).sum(dim=-1)
-                candidate_credit_numerator = candidate_credit_numerator + row_loss.sum()
-                candidate_credit_rows = candidate_credit_rows + row_loss.numel()
-
-                diagnostic_weights = weights.detach()
-                eps = torch.finfo(diagnostic_weights.dtype).eps
-                entropy = (
-                    -(
-                        diagnostic_weights
-                        * (diagnostic_weights + eps).log()
-                    ).sum(dim=-1)
-                ).clamp_min(0.0)
-                awta_entropy_sum = awta_entropy_sum + entropy.sum()
-                awta_max_weight_sum = (
-                    awta_max_weight_sum + diagnostic_weights.max(dim=-1).values.sum()
-                )
-                awta_effective_k_sum = awta_effective_k_sum + entropy.exp().sum()
-
-            if self.config.bind_enabled:
-                assert self.relation is not None
-                bind, edit_distribution, _ = self.relation.bind_loss(
-                    step["proposals"], step["entities"]
-                )
-                candidates = step["proposals"].shape[0] * step["proposals"].shape[1]
-                bind_numerator = bind_numerator + bind * candidates
-                bind_count = bind_count + candidates
-                binding_distributions.append(edit_distribution.detach())
-
-            if self.config.dpp_enabled:
-                for local_row, sample_index in enumerate(live_indices.tolist()):
-                    if not bool(valid_rows[local_row]):
-                        continue
-                    history_values = histories[sample_index]
-                    history = torch.stack(history_values) if history_values else None
-                    dpp = functional_dpp_loss(
-                        delta_q[local_row],
-                        history,
-                        teacher[local_row],
-                        kappa=self.config.kappa_dpp,
-                        sigma=self.config.sigma_dpp,
-                        tau=self.config.tau_dpp,
-                        useful_threshold=self.config.useful_threshold,
-                        jitter=self.config.dpp_jitter,
-                    )
-                    useful_total = useful_total + dpp["useful_count"]
-                    useful_rows = useful_rows + 1
-                    if bool(dpp["valid"]):
-                        dpp_numerator = dpp_numerator + dpp["loss"]
-                        dpp_count = dpp_count + 1
-
-            update_executed_history(
-                histories,
-                live_indices,
-                step["selected_idx"],
-                delta_q,
-                delta_q.shape[1],
+            components[f"{prefix}_action_l2"] = _mean_batch_l2(action)
+            components[f"{prefix}_edit_l2"] = _mean_batch_l2(edit)
+            components[f"{prefix}_state_drift_l2"] = _mean_batch_l2(state - parent)
+            components[f"{prefix}_cumulative_drift_l2"] = _mean_batch_l2(
+                state - initial_state
             )
 
-        pair = pair_numerator / pair_count.clamp_min(1e-8)
-        gain = gain_numerator / gain_count.clamp_min(1)
-        bind = bind_numerator / bind_count.clamp_min(1)
-        dpp_raw = dpp_numerator / dpp_count.clamp_min(1)
-        rel_ortho = self.relation.orthogonality_loss() if self.config.rel_ortho_enabled else zero
-
-        concept_loss = zero
-        concept_metrics = {
-            "concept_positive_recall": zero.detach(),
-            "concept_negative_false_positive_rate": zero.detach(),
-            "instruction_concept_coverage": zero.detach(),
-        }
-        if self.config.concept_enabled:
-            if not steps or modification_texts is None:
-                raise ValueError("concept loss needs t=0 proposals and modification_texts")
-            assert self.concept is not None
-            concept = self.concept(steps[0]["proposals"], modification_texts)
-            concept_loss = concept["loss"]
-            concept_metrics = {name: concept[name] for name in concept_metrics}
-
-        relation_metrics = {
-            "prototype_occupancy": zero.detach(),
-            "prototype_entropy": zero.detach(),
-            "prototype_pairwise_cosine": zero.detach(),
-        }
-        if binding_distributions:
-            assert self.relation is not None
-            relation_metrics = self.relation.diagnostics(torch.cat(binding_distributions, dim=0))
-        functional_cosine, functional_rank = _functional_diagnostics(functional_effects, zero)
-        useful_count = useful_total / useful_rows.clamp_min(1)
-        mean_delta_q_norm = delta_norm_sum / delta_count.clamp_min(1)
-        stop_rate = stop_count / decision_count.clamp_min(1)
-        mean_rollout_length = executed_count / query.shape[0]
-        dpp_valid_rate = dpp_count / useful_rows.clamp_min(1)
-        candidate_credit_loss = (
-            candidate_credit_numerator / candidate_credit_rows.clamp_min(1)
-        )
-        candidate_credit_weighted = (
-            self.config.lambda_candidate_credit * candidate_credit_loss
-        )
-        awta_weight_entropy = awta_entropy_sum / candidate_credit_rows.clamp_min(1)
-        awta_max_weight = awta_max_weight_sum / candidate_credit_rows.clamp_min(1)
-        awta_effective_k = awta_effective_k_sum / candidate_credit_rows.clamp_min(1)
-
-        dpp_weighted = self.config.lambda_dpp * dpp_raw
-        total = (
-            self.config.terminal_weight * terminal
-            + self.config.lambda_pair * pair
-            + self.config.lambda_gain * gain
-            + self.config.lambda_c * concept_loss
-            + self.config.lambda_bind * bind
-            + self.config.lambda_rel * rel_ortho
-            + dpp_weighted
-        )
-        if self.config.candidate_credit_mode != "none":
-            total = total + candidate_credit_weighted
-        return {
-            "terminal": terminal,
-            "pair": pair,
-            "gain": gain,
-            "concept_loss": concept_loss,
-            "bind_loss": bind,
-            "rel_ortho_loss": rel_ortho,
-            "dpp_raw": dpp_raw,
-            "dpp_weighted": dpp_weighted,
-            "candidate_credit_loss": candidate_credit_loss,
-            "candidate_credit_weighted": candidate_credit_weighted,
-            "awta_temperature": query.new_tensor(current_awta_temperature),
-            "awta_weight_entropy": awta_weight_entropy.detach(),
-            "awta_max_weight": awta_max_weight.detach(),
-            "awta_effective_k": awta_effective_k.detach(),
-            **concept_metrics,
-            **relation_metrics,
-            "functional_pairwise_cosine": functional_cosine,
-            "functional_rank": functional_rank,
-            "mean_delta_q_norm": mean_delta_q_norm.detach(),
-            "stop_rate": stop_rate.detach(),
-            "mean_rollout_length": mean_rollout_length.detach(),
-            "useful_candidate_count": useful_count.detach(),
-            "dpp_valid_timestep_count": dpp_count.detach(),
-            "dpp_valid_rate": dpp_valid_rate.detach(),
-            "kappa_dpp": query.new_tensor(self.config.kappa_dpp),
-            "lambda_dpp": query.new_tensor(self.config.lambda_dpp),
-            "sigma_dpp": query.new_tensor(self.config.sigma_dpp),
-            "tau_dpp": query.new_tensor(self.config.tau_dpp),
-            "teacher_invalid_rows": invalid_rows.detach(),
-            "total": total,
-        }
+        return components

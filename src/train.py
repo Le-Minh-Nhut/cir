@@ -8,19 +8,17 @@ os.environ.setdefault(
     ":4096:8",
 )
 import hydra
-import torch
 from omegaconf import DictConfig
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
 
 from data.images import FashionIQImageCollator
 from datasets.common import DirectoryImageStore
-from datasets.fashioniq import FashionIQDataset, compose_fashioniq_caption
+from datasets.fashioniq import FashionIQDataset
 from evaluation.fashioniq import evaluate_fashioniq
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig
 from models.iag_srme.utils.backbone import assert_cache_legal
-from models.iag_srme.utils.semantic import ConceptVocabulary
 from runtime import configure_torch_runtime, resolve_device, seed_everything
 from training.engine import fit, resolve_precision, trainable_parameters
 
@@ -48,98 +46,21 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
     )
     model_config = IAGSRMEConfig(
         width=int(cfg.model.width),
-        num_candidates=int(cfg.model.num_candidates),
-        max_steps=int(cfg.model.max_steps),
+        num_context_edits=int(cfg.model.num_context_edits),
         num_heads=int(cfg.model.num_heads),
         exec_dim=int(cfg.model.exec_dim),
-        epsilon_stop=float(cfg.model.epsilon_stop),
-        stop_enabled=bool(cfg.model.stop_enabled),
         read_scale_init=float(cfg.model.read_scale_init),
         exec_scale_init=float(cfg.model.exec_scale_init),
         exec_bias_init=float(cfg.model.exec_bias_init),
-        score_dropout=float(cfg.model.score_dropout),
     )
     return IAGSRME(backbone, model_config), tokenizer, processor
 
 
-def build_concept_vocabulary(
-    dataset: FashionIQDataset, config: ObjectiveConfig
-) -> ConceptVocabulary:
-    # Vocabulary construction is deterministic and sees training instructions only.
-    instructions = [
-        compose_fashioniq_caption(annotation.captions, "ordered_and")
-        for annotation in dataset.annotations
-    ]
-    return ConceptVocabulary.build(
-        instructions,
-        min_frequency=config.concept_min_frequency,
-        max_size=config.concept_max_size,
-    )
-
-
-@torch.no_grad()
-def encode_concept_prototypes(
-    model: IAGSRME,
-    tokenizer: object,
-    vocabulary: ConceptVocabulary,
-    max_text_length: int,
-    batch_size: int = 128,
-) -> torch.Tensor:
-    """Freeze the current FG-CLIP text-global representation of each concept."""
-
-    was_training = model.backbone.training
-    model.backbone.eval()
-    device = next(model.backbone.parameters()).device
-    prototypes = []
-    for start in range(0, len(vocabulary.concepts), batch_size):
-        concepts = list(vocabulary.concepts[start : start + batch_size])
-        tokenized = tokenizer(
-            concepts,
-            max_length=max_text_length,
-            padding="max_length",
-            truncation=True,
-            return_tensors="pt",
-        )
-        input_ids = tokenized["input_ids"].to(device=device, dtype=torch.long)
-        attention_mask = tokenized["attention_mask"].to(device=device, dtype=torch.bool)
-        content_mask = attention_mask.clone()
-        content_mask[:, 0] = False
-        final_positions = attention_mask.sum(dim=1).sub(1).clamp_min(0)
-        content_mask.scatter_(1, final_positions[:, None], False)
-        _, text_global = model.backbone.encode_text(
-            input_ids, attention_mask, content_mask
-        )
-        prototypes.append(text_global.float().cpu())
-    model.backbone.train(was_training)
-    return torch.cat(prototypes, dim=0)
-
-
-def build_objective(
-    cfg: DictConfig,
-    model: IAGSRME,
-    tokenizer: object,
-    train_dataset: FashionIQDataset,
-) -> IAGSRMEObjective:
+def build_objective(cfg: DictConfig) -> IAGSRMEObjective:
     objective_config = ObjectiveConfig(
         **{key: value for key, value in cfg.objective.items() if key != "name"}
     )
-    vocabulary = None
-    prototypes = None
-    if objective_config.concept_enabled:
-        vocabulary = build_concept_vocabulary(train_dataset, objective_config)
-        prototypes = encode_concept_prototypes(
-            model,
-            tokenizer,
-            vocabulary,
-            int(cfg.backbone.max_text_length),
-        )
-    return IAGSRMEObjective(
-        objective_config,
-        width=int(cfg.model.width),
-        state_dim=model.backbone.state_dim,
-        concept_vocabulary=vocabulary,
-        concept_prototypes=prototypes,
-    )
+    return IAGSRMEObjective(objective_config)
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
@@ -163,7 +84,7 @@ def main(cfg: DictConfig) -> None:
         caption_policy=str(cfg.experiment.train_caption_policy),
         seed=int(cfg.seed),
     )
-    objective = build_objective(cfg, model, tokenizer, train_dataset)
+    objective = build_objective(cfg)
     model.to(device)
     objective.to(device)
     train_collator = FashionIQImageCollator(

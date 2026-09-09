@@ -70,11 +70,8 @@ def model() -> IAGSRME:
         TinyBackbone(),
         IAGSRMEConfig(
             width=8,
-            num_candidates=4,
-            max_steps=3,
+            num_context_edits=4,
             num_heads=4,
             exec_dim=8,
-            stop_enabled=False,
-            score_dropout=0.0,
         ),
     )

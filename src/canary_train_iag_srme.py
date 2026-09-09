@@ -17,7 +17,6 @@ from datasets.fashioniq import FashionIQDataset
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig
 from runtime import configure_torch_runtime, seed_everything
-from train import build_concept_vocabulary, encode_concept_prototypes
 from training.engine import (
     assert_training_setup,
     parameter_count_diagnostics,
@@ -84,12 +83,12 @@ def build_model(
     )
     backbone = FGCLIPBackbone.from_pretrained(regime, text_width=256)
     tokenizer, processor = FGCLIPBackbone.load_processor(CHECKPOINT, REVISION)
-    config = IAGSRMEConfig(width=256, num_candidates=4, max_steps=3, num_heads=8)
+    config = IAGSRMEConfig(width=256, num_context_edits=4, num_heads=8)
     return IAGSRME(backbone, config).to(device), tokenizer, processor
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Small FashionIQ V2 R0 training canary")
+    parser = argparse.ArgumentParser(description="Sequential-context FashionIQ canary")
     parser.add_argument("--steps", type=int, default=1)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--num-workers", type=int, default=0)
@@ -127,20 +126,7 @@ def main() -> None:
         caption_policy="ordered_and",
         seed=args.seed,
     )
-    objective_config = ObjectiveConfig(
-        concept_enabled=True,
-        bind_enabled=True,
-        rel_ortho_enabled=True,
-        dpp_enabled=True,
-    )
-    vocabulary = build_concept_vocabulary(dataset, objective_config)
-    prototypes = encode_concept_prototypes(model, tokenizer, vocabulary, 77)
-    objective = IAGSRMEObjective(
-        objective_config,
-        state_dim=model.backbone.state_dim,
-        concept_vocabulary=vocabulary,
-        concept_prototypes=prototypes,
-    ).to(device)
+    objective = IAGSRMEObjective(ObjectiveConfig()).to(device)
     parameter_counts = parameter_count_diagnostics(model, objective)
     collator = FashionIQImageCollator(
         DirectoryImageStore(root / "images"),
@@ -181,10 +167,30 @@ def main() -> None:
                 batch.content_mask,
             )
             targets = model.encode_global_images(batch.target_pixels)
-            losses = objective(
-                output, targets, batch.target_ids, batch.modification_texts
-            )
+            target_ids = [str(value) for value in batch.target_ids]
+            losses = objective(output, targets, target_ids)
         scaler.scale(losses["total"]).backward()
+        gradient_norms = {
+            name: sum(
+                float(parameter.grad.detach().float().norm())
+                for parameter in module.parameters()
+                if parameter.grad is not None
+            )
+            for name, module in {
+                "proposal": model.proposal,
+                "grounder": model.grounder,
+                "action_fusion": model.action_fusion,
+                "executor": model.executor,
+                "text_model": model.backbone.model.text_model,
+                "text_adapter": model.backbone.text_adapter,
+            }.items()
+        }
+        if len(output["steps"]) != model.config.num_context_edits:
+            raise AssertionError("every configured context edit must execute exactly once")
+        if not _gradients_are_finite(trainable_parameters(model, objective)):
+            raise FloatingPointError("non-finite gradient in sequential canary")
+        if any(value <= 0.0 for value in gradient_norms.values()):
+            raise AssertionError(f"missing sequential gradient: {gradient_norms}")
         scaler.step(optimizer)
         scaler.update()
         records.append(
@@ -192,22 +198,13 @@ def main() -> None:
                 "step": step_index + 1,
                 "loss": float(losses["total"].detach()),
                 "terminal": float(losses["terminal"].detach()),
-                "pair": float(losses["pair"].detach()),
-                "gain": float(losses["gain"].detach()),
-                "concept": float(losses["concept_loss"].detach()),
-                "bind": float(losses["bind_loss"].detach()),
-                "rel_ortho": float(losses["rel_ortho_loss"].detach()),
-                "dpp_raw": float(losses["dpp_raw"].detach()),
-                "mean_delta_q_norm": float(losses["mean_delta_q_norm"]),
-                "functional_pairwise_cosine": float(
-                    losses["functional_pairwise_cosine"]
-                ),
-                "stop_rate": float(losses["stop_rate"]),
-                "mean_rollout_length": float(losses["mean_rollout_length"]),
-                "dpp_valid_rate": float(losses["dpp_valid_rate"]),
-                "useful_candidate_count": float(losses["useful_candidate_count"]),
-                "rollout_steps": len(output["steps"]),
-                "stopped": int(output["stopped"].sum()),
+                "slot_diagnostics": {
+                    name: float(value)
+                    for name, value in losses.items()
+                    if name.startswith("slot_")
+                },
+                "gradient_norms": gradient_norms,
+                "sequential_steps": len(output["steps"]),
             }
         )
     memory = (

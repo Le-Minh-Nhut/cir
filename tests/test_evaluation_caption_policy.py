@@ -32,9 +32,9 @@ def test_evaluation_dataset_uses_explicit_caption_policy(tmp_path) -> None:
     assert datasets["dress"][0].modification_text == "make it red and add long sleeves"
 
 
-def test_canonical_experiments_use_complete_ordered_caption_text() -> None:
+def test_sequential_experiment_uses_complete_ordered_caption_text() -> None:
     root = Path(__file__).parents[1]
-    for name in ("iag_srme_base_full.yaml",):
+    for name in ("sequential_r0.yaml",):
         config = yaml.safe_load((root / "conf" / "experiment" / name).read_text())
         assert config["train_caption_policy"] == "ordered_and"
         assert config["val_caption_policy"] == "ordered_and"

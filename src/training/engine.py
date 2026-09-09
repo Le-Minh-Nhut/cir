@@ -66,7 +66,6 @@ def parameter_count_diagnostics(
         model.grounder,
         model.action_fusion,
         model.executor,
-        model.score_net,
     )
     return {
         "total_parameters": count((model, objective), trainable=False),
@@ -155,16 +154,10 @@ def train_one_epoch(
                 batch.attention_mask,
                 batch.content_mask,
             )
-            # Target encoding participates in terminal retrieval; the teacher path detaches it.
+            # Final-state and target encodings jointly participate in terminal retrieval.
             target_embeddings = model.encode_global_images(batch.target_pixels)
             target_ids = [str(value) for value in batch.target_ids]
-            components = objective(
-                output,
-                target_embeddings,
-                target_ids,
-                batch.modification_texts,
-                epoch=epoch,
-            )
+            components = objective(output, target_embeddings, target_ids)
             loss = components["total"]
         scaler.scale(loss).backward()
         scaler.step(optimizer)
@@ -196,7 +189,7 @@ def save_checkpoint(
             "epoch": epoch,
             "metric": metric,
             "metadata": {
-                "architecture": "iag-srme-v2-r0",
+                "architecture": "iag-srme-v2-sequential-r0",
                 "backbone_track": "B/FG-CLIP-v1",
                 "backbone_checkpoint": model.backbone.checkpoint,
                 "backbone_revision": model.backbone.revision,
@@ -220,25 +213,8 @@ def save_checkpoint(
                 "retrieval_normalization": "l2_fp32",
                 "model_config": asdict(model.config),
                 "objective_config": asdict(objective.config),
-                "teacher_policy": "identity_aware_false_negative_safe_in_batch",
-                "concept_parser_version": objective.config.concept_parser_version,
-                "concept_vocabulary_size": (
-                    len(objective.concept.vocabulary.concepts)
-                    if objective.concept is not None
-                    else 0
-                ),
-                "concept_vocabulary_fingerprint": (
-                    objective.concept.vocabulary.fingerprint
-                    if objective.concept is not None
-                    else None
-                ),
-                "concept_vocabulary": (
-                    objective.concept.vocabulary.concepts
-                    if objective.concept is not None
-                    else ()
-                ),
-                "correspondence": "disabled",
-                "stop_bootstrap_curriculum": "none",
+                "context_edit_policy": "proposal_once_fixed_slot_order",
+                "supervision": "final_state_retrieval_only",
                 "precision": precision.name,
             },
         },

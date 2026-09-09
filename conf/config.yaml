@@ -1,9 +1,9 @@
 defaults:
   - dataset: fashioniq
-  - model: iag_srme
+  - model: sequential_r0
   - backbone: fgclip_base_full
-  - objective: core
-  - experiment: iag_srme_base_full
+  - objective: sequential_r0
+  - experiment: sequential_r0
   - protocol: fashioniq_original
   - _self_
 

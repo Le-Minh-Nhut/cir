@@ -1,7 +1,0 @@
-defaults:
-  - core
-  - _self_
-
-name: core_hard_wta_candidate_credit
-candidate_credit_mode: hard_wta
-lambda_candidate_credit: 1.0

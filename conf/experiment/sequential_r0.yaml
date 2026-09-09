@@ -1,4 +1,4 @@
-name: iag_srme_base_full
+name: iag_srme_v2_sequential_r0
 epochs: 20
 batch_size: 32
 eval_batch_size: 32

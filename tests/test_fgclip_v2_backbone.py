@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import inspect
-from dataclasses import replace
 from types import SimpleNamespace
 
 import torch
@@ -280,12 +279,9 @@ def test_native_cls_rollout_keeps_anchor_outside_mutable_executor_state() -> Non
         backbone,
         IAGSRMEConfig(
             width=4,
-            num_candidates=3,
-            max_steps=2,
+            num_context_edits=3,
             num_heads=2,
             exec_dim=4,
-            stop_enabled=False,
-            score_dropout=0.0,
         ),
     ).eval()
     patches, cls_anchor = backbone.initial_state_with_anchor(torch.randn(2, 3, 2, 2))
@@ -300,6 +296,7 @@ def test_native_cls_rollout_keeps_anchor_outside_mutable_executor_state() -> Non
 
     assert torch.equal(output["cls_anchor"], before)
     assert torch.equal(cls_anchor, before)
+    assert len(output["steps"]) == 3
     assert tuple(inspect.signature(Executor.forward).parameters) == (
         "self",
         "parent",
@@ -308,29 +305,13 @@ def test_native_cls_rollout_keeps_anchor_outside_mutable_executor_state() -> Non
         "patch_grid",
     )
     for step in output["steps"]:
-        assert torch.equal(step["cls_anchor"], before.index_select(0, step["live_indices"]))
-        assert step["candidate_queries"].shape == (2, 3, 5)
-        assert torch.allclose(
-            step["delta_q"], step["candidate_queries"] - step["current_query"][:, None]
-        )
-
-    model.config = replace(model.config, stop_enabled=True)
-    with torch.no_grad():
-        model.score_net.net[-1].weight.zero_()
-        model.score_net.net[-1].bias.fill_(-1.0)
-    stopped = model.forward_from_features(
-        patches,
-        torch.randn(2, 5, 4),
-        torch.randn(2, 4),
-        torch.ones(2, 5, dtype=torch.bool),
-        cls_anchor,
-    )
-    assert stopped["stopped"].all()
-    assert torch.equal(stopped["state"], patches)
-    assert torch.equal(stopped["cls_anchor"], before)
+        assert torch.equal(step["cls_anchor"], before)
+        assert step["prefix_query"].shape == (2, 5)
+        assert step["state"].shape == patches.shape
+    assert torch.equal(output["state"], output["steps"][-1]["state"])
 
 
-def test_rollout_computes_parent_and_candidate_global_once_per_timestep(
+def test_sequential_rollout_computes_one_global_readout_per_state(
     monkeypatch,
 ) -> None:
     torch.manual_seed(141)
@@ -339,12 +320,9 @@ def test_rollout_computes_parent_and_candidate_global_once_per_timestep(
         backbone,
         IAGSRMEConfig(
             width=4,
-            num_candidates=3,
-            max_steps=2,
+            num_context_edits=3,
             num_heads=2,
             exec_dim=4,
-            stop_enabled=False,
-            score_dropout=0.0,
         ),
     ).eval()
     patches = backbone.initial_state(torch.randn(2, 3, 2, 2))
@@ -364,8 +342,8 @@ def test_rollout_computes_parent_and_candidate_global_once_per_timestep(
         torch.ones(2, 5, dtype=torch.bool),
     )
 
-    # Parent + vectorized siblings once per step, plus one terminal readout.
-    assert calls == 2 * len(output["steps"]) + 1
+    # One readout for each V0..V3 state; the V0 result is reused for slot zero.
+    assert calls == len(output["steps"]) + 1
 
 
 def test_both_readout_modes_have_the_same_public_shapes() -> None:

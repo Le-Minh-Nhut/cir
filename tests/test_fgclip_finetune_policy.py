@@ -43,12 +43,9 @@ def _model(backbone: FGCLIPBackbone) -> IAGSRME:
         backbone,
         IAGSRMEConfig(
             width=4,
-            num_candidates=3,
-            max_steps=1,
+            num_context_edits=3,
             num_heads=2,
             exec_dim=4,
-            stop_enabled=False,
-            score_dropout=0.0,
         ),
     )
 
@@ -96,12 +93,11 @@ def test_text_only_freezes_visual_weights_but_keeps_text_and_tasks_trainable() -
         model.grounder,
         model.action_fusion,
         model.executor,
-        model.score_net,
     ):
         assert all(parameter.requires_grad for parameter in module.parameters())
 
 
-def test_native_cls_frozen_readout_backpropagates_to_candidate_state_and_executor() -> None:
+def test_native_cls_frozen_readout_backpropagates_to_sequential_state_and_executor() -> None:
     torch.manual_seed(31)
     backbone = _text_only_backbone("native_cls")
     model = _model(backbone).train()
@@ -115,12 +111,12 @@ def test_native_cls_frozen_readout_backpropagates_to_candidate_state_and_executo
         torch.ones(2, 5, dtype=torch.bool),
         cls_anchor,
     )
-    candidate_states = output["steps"][0]["candidate_states"]
-    candidate_states.retain_grad()
-    weights = torch.randn_like(output["steps"][0]["candidate_queries"])
-    (output["steps"][0]["candidate_queries"] * weights).sum().backward()
+    final_state = output["state"]
+    final_state.retain_grad()
+    weights = torch.randn_like(output["query"])
+    (output["query"] * weights).sum().backward()
 
-    assert candidate_states.grad is not None and candidate_states.grad.abs().sum() > 0
+    assert final_state.grad is not None and final_state.grad.abs().sum() > 0
     assert _grad_sum(model.executor) > 0
     assert _grad_sum(backbone.model.vision_model) == 0
     assert _grad_sum(backbone.model.visual_projection) == 0

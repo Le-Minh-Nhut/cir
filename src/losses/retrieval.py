@@ -6,12 +6,16 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from models.iag_srme.utils.retrieval import build_teacher_masks
-
-
 def positive_mask_from_ids(target_ids: Sequence[str], device: torch.device) -> Tensor:
-    positive, _, _ = build_teacher_masks(target_ids, device)
-    return positive
+    """Treat duplicate stable target identities as repeated positives."""
+
+    if any(not value for value in target_ids):
+        raise ValueError("every retrieval row requires a stable target identity")
+    return torch.tensor(
+        [[left == right for right in target_ids] for left in target_ids],
+        dtype=torch.bool,
+        device=device,
+    )
 
 
 def retrieval_energy(

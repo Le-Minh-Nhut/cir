@@ -1,12 +1,8 @@
-name: iag_srme
+name: sequential_r0
 width: 256
-num_candidates: 4
-max_steps: 3
+num_context_edits: 4
 num_heads: 8
 exec_dim: 256
-stop_enabled: true
-epsilon_stop: 0.0
 read_scale_init: 10.0
 exec_scale_init: 10.0
 exec_bias_init: 0.0
-score_dropout: 0.1

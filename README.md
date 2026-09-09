@@ -1,71 +1,50 @@
-# IAG-SRME V2
+# IAG-SRME V2 Sequential R0
 
-Clean research implementation of the recurrent IAG-SRME model for composed image
-retrieval. The architecture follows the
-[V2 canonical specification](doc/CIR_IAG_SRME_UNIFIED_CANONICAL_ARCHITECTURE_AND_TRAINING_SPEC_V2_2026-09-06.md).
+Clean sequential-context-edit experiment for composed image retrieval with the existing
+FG-CLIP backbone and learned ProposalNet context slots.
 
-The current implementation is Track B (FG-CLIP v1 Base) with two orthogonal ablation
-axes:
+```text
+Reference + instruction
+        ↓
+ProposalNet (once at V0)
+        ↓
+C0  C1  C2  C3
+        ↓
+C0 applied to V0 → V1
+C1 applied to V1 → V2
+C2 applied to V2 → V3
+C3 applied to V3 → V4
+        ↓
+terminal retrieval from V4
+```
 
-- `R0-QG` / `learned_qg`: canonical learned recurrent global query;
-- `R0-NCLS` / `native_cls`: immutable image-specific penultimate CLS and current
-  patches feed the exact CLS row of the native final vision block; the full-token call
-  remains a parity oracle.
+The four context edits are learned latent slots; this experiment does not claim semantic
+specialization for any slot. Grounder, ActionFusion, and one shared Executor recompute their
+visual consequences from the evolving state at every slot.
 
-FG-CLIP fine-tuning is independently either `full` (vision and text trainable) or
-`text_only` (vision and visual projection frozen; text encoder trainable). The text
-adapter and all IAG-SRME modules remain trainable in both policies. In QG runs, `q_G`
-also remains trainable because it is a task-specific parameter.
+Architecture constraints:
 
-Both modes keep the following architecture fixed:
+- ProposalNet runs exactly once and produces four fixed ordered context edits.
+- Every context edit executes exactly once in fixed order.
+- Grounding and execution for slot `j` use state `Vj`.
+- One Executor instance and one parameter set are shared across all slots.
+- Only final state `V4` is returned for retrieval and supervised during training.
+- No ScoreNet, hard selector, learned STOP, aWTA, DPP, prefix loss, or state mixture.
 
-- persistent state is the penultimate patch representation, without CLS;
-- proposals are regenerated from current visual state and instruction tokens;
-- grounding uses native dense cosine evidence with separate softmax read and sigmoid write maps;
-- actions use entity-conditioned independent gates;
-- all candidates are masked local residual previews from one parent state;
-- one shared ScoreNet predicts absolute marginal utility against KEEP/STOP = 0;
-- rollout uses hard argmax/gather, with no Gumbel, straight-through estimator, or state mixture;
-- training targets appear only in the external retrieval teacher and terminal loss;
-- instruction concepts supervise the pooled proposal set at `t=0` only;
-- relation binding uses a prototype bank separate from proposal queries;
-- Functional DPP operates on retrieval consequences `delta_q` and detached executed history;
-- correspondence is disabled.
+The FG-CLIP readout and fine-tuning policies remain available as orthogonal backbone choices:
 
-The complete architecture is in
-[`src/models/iag_srme/model.py`](src/models/iag_srme/model.py). FG-CLIP-specific
-state/readout code and teacher retrieval helpers are the only extracted utilities.
-The current implementation/verification snapshot is recorded separately in the
-[V2 R0 experiment status](doc/CIR_IAG_SRME_V2_R0_EXPERIMENT_IMPLEMENTATION_STATUS_2026-09-06.md).
+- `learned_qg` or `native_cls` global readout;
+- `full` or `text_only` fine-tuning.
 
-## Setup
+## Setup and tests
 
 ```bash
 python -m pip install -e '.[dev]'
-```
-
-The default config pins `qihoo360/fg-clip-base` at revision
-`454d76372c2cf5eb48fa0d871fd0534481484d97`.
-
-## Test
-
-```bash
 pytest -q
 ruff check src tests
 ```
 
-## FashionIQ smoke update
-
-Expected data layout:
-
-```text
-data/fashionIQ_dataset/
-├── captions/
-├── image_splits/
-└── images/
-```
-
-Run one small target-firewalled train update:
+## One-batch FashionIQ canary
 
 ```bash
 python src/canary_train_iag_srme.py \
@@ -73,41 +52,24 @@ python src/canary_train_iag_srme.py \
   --steps 1 --batch-size 2 --precision fp32
 ```
 
-Add `--global-readout-mode native_cls` for the R0-NCLS canary.
-Add `--finetune-policy text_only` for a frozen-vision canary.
-On CUDA, the canary JSON also reports peak allocated and reserved memory in GiB.
-
-```bash
-python src/canary_train_iag_srme.py \
-  --global-readout-mode native_cls \
-  --finetune-policy text_only \
-  --dataset-root data/fashionIQ_dataset \
-  --steps 1 --batch-size 16 --precision fp16
-```
+The canary checks four transitions, finite loss/gradients, required gradient paths, and reports
+basic CUDA peak memory when CUDA is available.
 
 ## Train
 
 ```bash
-# R0-QG-FULL
+# Learned global query, full fine-tuning (default)
 python src/train.py backbone=fgclip_base_full_qg
 
-# R0-NCLS-FULL
+# Native CLS readout, full fine-tuning
 python src/train.py backbone=fgclip_base_full_native_cls
 
-# R0-QG-TEXT
+# Frozen vision, trainable text-side model
 python src/train.py backbone=fgclip_base_text_qg
 
-# R0-NCLS-TEXT
+# Native CLS with frozen vision
 python src/train.py backbone=fgclip_base_text_native_cls
 ```
 
-The FULL/TEXT pair for a fixed readout differs only in `train_vision`, the explicit
-`finetune_policy`, and experiment identity metadata. Optimization settings are shared.
-
-The default objective config enables all requested A6 auxiliaries. Each term can be
-ablated independently with Hydra overrides such as
-`objective.concept_enabled=false` or `objective.dpp_enabled=false`.
-
-Dataset loading, FashionIQ evaluation, AMP policy, checkpointing, optimizer ownership
-checks, and stable `CIRSample.target_id` handling are retained from the clean-rewrite
-branch.
+Official FashionIQ evaluation uses only the final `V4` query against the gallery and reports
+R@10, R@50, and mean recall. It does not ensemble or choose among prefix states.
