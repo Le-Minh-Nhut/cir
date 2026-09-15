@@ -1,0 +1,7 @@
+name: cirr
+root: ${paths.data_root}/CIRR
+split: train
+version: rc2
+caption_root: ${dataset.root}/captions
+split_root: ${dataset.root}/image_splits
+image_root: ${dataset.root}/img_raw

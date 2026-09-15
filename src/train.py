@@ -55,6 +55,12 @@ def build_val_loaders(annotation_root: str | Path, *, batch_size: int, num_worke
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
+    if str(cfg.dataset.name) == "cirr":
+        from train_cirr import run_cirr_training
+
+        run_cirr_training(cfg)
+        return
+
     if str(cfg.experiment.get("name", "")) != "taper_e2e":
         raise ValueError(
             "src/train.py requires experiment=taper_e2e. "
