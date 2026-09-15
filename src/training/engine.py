@@ -298,6 +298,15 @@ def fit(
                 precision,
             )
         print(
-            f"epoch={epoch + 1}/{epochs} total={training['total']:.4f} "
-            f"{primary_metric}={metric:.3f} best={best:.3f}"
+            f"epoch={epoch + 1}/{epochs} "
+            f"total={training['total']:.4f} "
+            f"terminal={training['terminal']:.4f} "
+            f"candidate_credit_loss={training['candidate_credit_loss']:.4f} "
+            f"candidate_credit_weighted={training['candidate_credit_weighted']:.4f} "
+            f"awta_temperature={training['awta_temperature']:.4f} "
+            f"awta_weight_entropy={training['awta_weight_entropy']:.4f} "
+            f"awta_max_weight={training['awta_max_weight']:.4f} "
+            f"awta_effective_k={training['awta_effective_k']:.4f} "
+            f"{primary_metric}={metric:.3f} "
+            f"best={best:.3f}"
         )
