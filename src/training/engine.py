@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from datasets.common import CIRBatch
-from evaluation.fashioniq import get_features_by_ids
+from cache.features import TextFeatureCache, get_features_by_ids, get_text_features_by_sample_ids
 
 
 def _compute_total_loss(loss_dict: dict[str, Tensor], loss_weights: dict[str, float]) -> Tensor:
@@ -92,24 +92,64 @@ def train_one_epoch(
 
     return metrics
 
-def prepare_batch(batch: CIRBatch, device: torch.device, image_features: torch.Tensor, name_to_idx: dict[str, int], text_encoder) -> dict[str, object]:
-    reference_features = get_features_by_ids(image_ids=batch.reference_ids, features=image_features, name_to_idx=name_to_idx).to(device)
-    target_ids = []
-    for target_id in batch.target_ids:
-        if target_id is None:
-            raise ValueError("Training sample is missing target_id")
+def prepare_batch(
+    batch: CIRBatch,
+    device: torch.device,
+    retrieval_features: torch.Tensor,
+    native_features: torch.Tensor,
+    retrieval_name_to_idx,
+    native_name_to_idx,
+    text_cache: TextFeatureCache,
+) -> dict[str, object]:
+    target_ids = list(batch.target_ids)
 
-        target_ids.append(target_id)
+    if any(target_id is None for target_id in target_ids):
+        raise ValueError("Training sample is missing target_id")
+    
+    reference_native = get_features_by_ids(batch.reference_ids, native_features, native_name_to_idx).to(device, dtype=torch.float32)
+    target_features = get_features_by_ids(target_ids, retrieval_features, retrieval_name_to_idx).to(device, dtype=torch.float32)
+    reference_features = reference_native[:, 0, :]
+    (text_states, teacher_text_states, attention_mask, content_mask) = get_text_features_by_sample_ids(batch.sample_ids, batch.modification_texts, text_cache)
+    text_states = text_states.to(
+        device=device,
+        dtype=torch.float32,
+        # non_blocking=True,
+    )
 
-    target_features = get_features_by_ids(image_ids=target_ids, features=image_features, name_to_idx=name_to_idx).to(device)
-    text_states, text_attention_mask = text_encoder(batch.modification_texts, device=device)
+    teacher_text_states = teacher_text_states.to(
+        device=device,
+        dtype=torch.float32,
+        # non_blocking=True,
+    )
+
+    attention_mask = attention_mask.to(
+        device=device,
+        dtype=torch.bool,
+        # non_blocking=True,
+    )
+
+    content_mask = content_mask.to(
+        device=device,
+        dtype=torch.bool,
+        # non_blocking=True,
+    )
 
     return {
         "reference_features": reference_features,
+        "teacher_reference_features": reference_native,
         "target_features": target_features,
         "text_states": text_states,
-        "text_attention_mask": text_attention_mask,
+        "teacher_text_states": teacher_text_states,
+        "text_attention_mask": attention_mask,
+        "text_content_mask": content_mask,
         "target_ids": target_ids,
+    }
+
+def taper_state_dict(model):
+    return {
+        name: value
+        for name, value in model.state_dict().items()
+        if not name.startswith("teacher.")
     }
 
 def fit(
@@ -164,17 +204,29 @@ def fit(
         current_metric = float(val_metrics[primary_metric])
 
         # Always keep the latest model.
-        torch.save(model.state_dict(), last_model_path,)
+        torch.save(taper_state_dict(model), last_model_path)
 
         if current_metric > best_metric:
             best_metric = current_metric
             best_epoch = epoch + 1
 
-            torch.save(model.state_dict(), best_model_path,)
+            torch.save(taper_state_dict(model), best_model_path)
 
             print(f"Saved best.pt | {primary_metric}={best_metric:.4f}")
 
-        print(f"Epoch {epoch + 1}/{num_epochs} | train_loss={train_metrics['total_loss']:.4f} | {primary_metric}={current_metric:.4f} | best={best_metric:.4f}")
+        print(
+            f"Epoch {epoch + 1}/{num_epochs} | "
+            f"loss={train_metrics['total_loss']:.4f} | "
+            f"{primary_metric}={current_metric:.4f} | "
+            f"best={best_metric:.4f} | "
+            f"null={train_metrics.get('diagnostic/null_ownership_rate', float('nan')):.3f} | "
+            f"null_argmax={train_metrics.get('diagnostic/null_argmax_fraction', float('nan')):.3f} | "
+            f"all_null={train_metrics.get('diagnostic/all_null_argmax_sample_fraction', float('nan')):.3f} | "
+            f"active_slots={train_metrics.get('diagnostic/ownership_active_slot_count', float('nan')):.2f} | "
+            f"hard_active={train_metrics.get('diagnostic/execution_hard_active_slot_count', float('nan')):.2f} | "
+            f"dominant={train_metrics.get('diagnostic/dominant_slot_share', float('nan')):.3f} | "
+            f"monopoly={train_metrics.get('diagnostic/near_monopoly_fraction', float('nan')):.3f}"
+        )
 
 
         if wandb.run is not None:

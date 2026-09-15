@@ -129,6 +129,53 @@ class CSMCIRStage1Teacher(nn.Module):
             content_mask,
         )
 
+    @torch.no_grad()
+    def encode_contextual_text_tokens(self, reference_features, teacher_text_states, text_attention_mask):
+        batch_size = reference_features.shape[0]
+        query_tokens = self.model.query_tokens.expand(batch_size, -1, -1)
+
+        query_atts = torch.ones(query_tokens.shape[:-1], dtype=torch.long, device=reference_features.device)
+        image_atts = torch.ones(reference_features.shape[:-1], dtype=torch.long, device=reference_features.device)
+        attention_mask = torch.cat([query_atts, text_attention_mask.long()], dim=1)
+
+        output = self.model.Qformer.bert(
+            inputs_embeds=teacher_text_states,
+            query_embeds=query_tokens,
+            attention_mask=attention_mask,
+            encoder_hidden_states=reference_features,
+            encoder_attention_mask=image_atts,
+            return_dict=True,
+        )
+
+        num_query_tokens = query_tokens.shape[1]
+        text_states = output.last_hidden_state[:, num_query_tokens:, :]
+
+        if text_states.shape != teacher_text_states.shape:
+            raise ValueError("Contextual text states must match teacher text states shape")
+
+        return text_states
+
+    @torch.no_grad()
+    def encode_image_tokens(self, images):
+        with self.model.maybe_autocast():
+            native_features = self.model.ln_vision(self.model.visual_encoder(images))
+
+        native_features = native_features.float()
+        image_atts = torch.ones(native_features.shape[:-1], dtype=torch.long, device=native_features.device)
+        query_tokens = self.model.query_tokens.expand(native_features.shape[0], -1, -1)
+
+        output = self.model.Qformer.bert(
+            query_embeds=query_tokens,
+            encoder_hidden_states=native_features,
+            encoder_attention_mask=image_atts,
+            return_dict=True,
+        )
+
+        retrieval_features = self.model.vision_proj(output.last_hidden_state)
+        retrieval_features = torch.nn.functional.normalize(retrieval_features, dim=-1)
+
+        return retrieval_features, native_features
+
     def compose(self, reference_features: torch.Tensor, text_states: torch.Tensor, text_attention_mask: torch.Tensor, normalize: bool = False) -> torch.Tensor:
         if reference_features.ndim != 3:
             raise ValueError(f"CSMCIR reference_features must be [B,K,D], got {tuple(reference_features.shape)}")

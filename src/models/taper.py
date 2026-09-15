@@ -15,6 +15,7 @@ class TAPER(nn.Module):
         *,
         text_dim: int,
         reference_dim: int,
+        teacher_text_dim: int | None = None,
         teacher_query_dim: int,
         query_dim: int,
         slot_dim: int = 512,
@@ -27,12 +28,31 @@ class TAPER(nn.Module):
         neutral_mode: str = "zero",
         slot_gate_threshold: float = 0.5,
         hard_slot_gating_during_training: bool = False,
+        gate_mode: str = "legacy_soft_train_hard_eval",
+        st_gate_recovery: bool = False,
         overlap_margin: float = 0.60,
         effect_diversity_margin: float = 0.50,
         alpha_max: float = 1.0,
+        counterfactual_chunk_size: int = 8,
+        num_refine_iters: int = 3,
+        residual_bias_strength: float = 1.0,
+        residual_depletion_power: float = 1.0,
+        residual_eps: float = 1e-6,
+        randomize_slot_order_during_training: bool = True,
     ) -> None:
         super().__init__()
 
+
+        if residual_bias_strength < 0:
+            raise ValueError("residual_bias_strength must be >= 0")
+
+        if residual_depletion_power <= 0:
+            raise ValueError("residual_depletion_power must be > 0")
+
+        if residual_eps <= 0 or residual_eps >= 1:
+            raise ValueError("residual_eps must be in (0, 1)")
+        if num_refine_iters < 1:
+            raise ValueError("num_refine_iters must be >= 1")
         if num_slots < 1 or num_primitives < 1:
             raise ValueError("num_slots and num_primitives must be >= 1")
         if min(mask_temperature, router_temperature, retrieval_temperature) <= 0:
@@ -43,9 +63,16 @@ class TAPER(nn.Module):
             raise ValueError("slot_gate_threshold must be in [0, 1]")
         if alpha_max <= 0:
             raise ValueError("alpha_max must be > 0")
+        if gate_mode not in {"legacy_soft_train_hard_eval", "straight_through_hard"}:
+            raise ValueError("gate_mode must be 'legacy_soft_train_hard_eval' or " "'straight_through_hard'")
+        if counterfactual_chunk_size < 1:
+            raise ValueError("counterfactual_chunk_size must be >= 1")
 
         self.teacher = teacher
         self.text_dim = text_dim
+        self.teacher_text_dim = text_dim if teacher_text_dim is None else teacher_text_dim
+        if self.teacher_text_dim < 1:
+            raise ValueError("teacher_text_dim must be >= 1")
         self.reference_dim = reference_dim
         self.teacher_query_dim = teacher_query_dim
         self.query_dim = query_dim
@@ -60,75 +87,61 @@ class TAPER(nn.Module):
         self.neutral_mode = neutral_mode
         self.slot_gate_threshold = slot_gate_threshold
         self.hard_slot_gating_during_training = hard_slot_gating_during_training
+        self.gate_mode = gate_mode
+        self.st_gate_recovery = bool(st_gate_recovery)
         self.overlap_margin = overlap_margin
         self.effect_diversity_margin = effect_diversity_margin
         self.alpha_max = alpha_max
+        self.counterfactual_chunk_size = counterfactual_chunk_size
 
         self.teacher.eval()
         for parameter in self.teacher.parameters():
             parameter.requires_grad_(False)
 
+        # Ephemeral Edit Slot queries + one non-executable NULL competitor.
         self.slot_queries = nn.Parameter(torch.randn(num_slots, slot_dim) * 0.02)
+        self.null_query = nn.Parameter(torch.randn(1, slot_dim) * 0.02)
         self.slot_query_projection = nn.Linear(slot_dim, slot_dim, bias=False)
         self.text_key_projection = nn.Linear(text_dim, slot_dim, bias=False)
 
         if neutral_mode == "learned":
-            self.neutral_embedding = nn.Parameter(torch.zeros(text_dim))
+            self.neutral_embedding = nn.Parameter(torch.zeros(self.teacher_text_dim))
         else:
-            self.register_buffer("neutral_embedding", torch.zeros(text_dim))
+            self.register_buffer("neutral_embedding", torch.zeros(self.teacher_text_dim))
 
-        self.slot_mlp = nn.Sequential(
-            nn.Linear(text_dim + teacher_query_dim, slot_dim),
-            nn.GELU(),
-            nn.Linear(slot_dim, slot_dim),
-            nn.LayerNorm(slot_dim),
-        )
+        self.slot_mlp = nn.Sequential(nn.Linear(text_dim + teacher_query_dim, slot_dim), nn.GELU(), nn.Linear(slot_dim, slot_dim), nn.LayerNorm(slot_dim))
 
-        self.slot_gate = nn.Sequential(
-            nn.LayerNorm(slot_dim),
-            nn.Linear(slot_dim, slot_dim),
-            nn.GELU(),
-            nn.Linear(slot_dim, 1),
-        )
+        self.slot_gate = nn.Sequential(nn.LayerNorm(slot_dim), nn.Linear(slot_dim, slot_dim), nn.GELU(), nn.Linear(slot_dim, 1))
         nn.init.constant_(self.slot_gate[-1].bias, 1.0)
 
-        self.reference_to_state = nn.Sequential(
-            nn.Linear(reference_dim, state_dim),
-            nn.GELU(),
-            nn.Linear(state_dim, state_dim),
-            nn.LayerNorm(state_dim),
-        )
+        self.reference_to_state = nn.Sequential(nn.Linear(reference_dim, state_dim), nn.GELU(), nn.Linear(state_dim, state_dim), nn.LayerNorm(state_dim))
 
         self.primitive_bank = nn.Parameter(torch.randn(num_primitives, state_dim) * 0.02)
         router_dim = state_dim + slot_dim + state_dim + state_dim
-        self.router = nn.Sequential(
-            nn.Linear(router_dim, state_dim),
-            nn.GELU(),
-            nn.Linear(state_dim, 1),
-        )
+        self.router = nn.Sequential(nn.Linear(router_dim, state_dim), nn.GELU(), nn.Linear(state_dim, 1))
 
         transition_dim = state_dim + slot_dim + state_dim + state_dim
-        self.transition_delta = nn.Sequential(
-            nn.Linear(transition_dim, state_dim),
-            nn.GELU(),
-            nn.Linear(state_dim, state_dim),
-        )
-        self.transition_strength = nn.Sequential(
-            nn.Linear(transition_dim, state_dim),
-            nn.GELU(),
-            nn.Linear(state_dim, 1),
-            nn.Sigmoid(),
-        )
+        self.transition_delta = nn.Sequential(nn.Linear(transition_dim, state_dim), nn.GELU(), nn.Linear(state_dim, state_dim))
+        self.transition_strength = nn.Sequential(nn.Linear(transition_dim, state_dim), nn.GELU(), nn.Linear(state_dim, 1), nn.Sigmoid())
         self.state_norm = nn.LayerNorm(state_dim)
+        # TAPER V3 contract: valid controlled residual transitions are followed by LN.
+        # Invalid steps bypass this module and preserve the previous state exactly.
+        # self.state_update_norm = nn.LayerNorm(state_dim)
 
-        self.query_head = nn.Sequential(
-            nn.Linear(state_dim, query_dim),
-            nn.GELU(),
-            nn.Linear(query_dim, query_dim),
-        )
+        self.num_refine_iters = num_refine_iters
+        self.text_value_projection = nn.Linear(text_dim, slot_dim, bias=False,)
+        self.slot_update = nn.GRUCell(input_size=slot_dim, hidden_size=slot_dim)
+
+        self.query_head = nn.Sequential(nn.Linear(state_dim, query_dim), nn.GELU(), nn.Linear(query_dim, query_dim))
+
+        self.residual_bias_strength = residual_bias_strength
+        self.residual_depletion_power = residual_depletion_power
+        self.residual_eps = residual_eps
+        self.randomize_slot_order_during_training = bool(randomize_slot_order_during_training)
 
     def train(self, mode: bool = True) -> "TAPER":
         super().train(mode)
+        # The teacher is a frozen functional measuring instrument.
         self.teacher.eval()
         return self
 
@@ -146,84 +159,389 @@ class TAPER(nn.Module):
         batch_ids = torch.arange(slots.shape[0], device=slots.device)
         return slots[batch_ids, slot_ids]
 
-    def build_edit_slots(self, reference_features: Tensor, text_states: Tensor, text_attention_mask: Tensor, text_content_mask: Tensor | None = None,) -> dict[str, Tensor]:
-        """M -> A -> s -> counterfactual delta -> u -> slot gate g."""
+    def _validate_text_inputs(
+        self,
+        text_states: Tensor,
+        text_attention_mask: Tensor,
+        text_content_mask: Tensor | None,
+    ) -> tuple[Tensor, Tensor]:
         if text_states.ndim != 3 or text_attention_mask.ndim != 2:
             raise ValueError("text_states must be [B,N,D] and mask must be [B,N]")
         if text_states.shape[:2] != text_attention_mask.shape:
             raise ValueError("text_states and text_attention_mask do not match")
+        if text_states.shape[1] < 1:
+            raise ValueError("text sequence length must be >= 1")
         if text_states.shape[-1] != self.text_dim:
             raise ValueError(f"text dim must be {self.text_dim}")
+        if not torch.isfinite(text_states).all():
+            raise ValueError("text_states contains NaN or Inf")
 
-        batch_size, num_tokens, _ = text_states.shape
         attention_valid = text_attention_mask.to(torch.bool)
         if text_content_mask is None:
-            slot_valid = attention_valid
-        else:
-            if text_content_mask.shape != text_attention_mask.shape:
-                raise ValueError(
-                    "text_content_mask must match text_attention_mask"
-                )
+            raise ValueError("text_content_mask is required for competitive NULL ownership so " "special/content tokens are excluded explicitly")
+        if text_content_mask.shape != text_attention_mask.shape:
+            raise ValueError("text_content_mask must match text_attention_mask")
+        slot_valid = attention_valid & text_content_mask.to(torch.bool)
 
-            slot_valid = (
-                attention_valid
-                & text_content_mask.to(torch.bool)
+        return attention_valid, slot_valid
+
+    def _competitive_ownership(self, text_states: Tensor, slot_valid: Tensor, slot_states: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        batch_size = text_states.shape[0]
+
+        if slot_states.shape != (batch_size, self.num_slots, self.slot_dim):
+            raise ValueError(f"slot_states must be [B,{self.num_slots},{self.slot_dim}], got {tuple(slot_states.shape)}")
+
+        null_states = self.null_query.unsqueeze(0).expand(batch_size, -1, -1)  # [B, 1, Ds]
+        all_states = torch.cat([null_states, slot_states], dim=1)  # [B, L+1, Ds]
+        queries = self.slot_query_projection(all_states)  # [B, L+1, Ds]
+        keys = self.text_key_projection(text_states)  # [B, N, Ds]
+        logits = torch.einsum("bld,bnd->bln", queries, keys)
+        logits = logits / math.sqrt(self.slot_dim) / self.mask_temperature
+        valid = slot_valid[:, None, :]
+        null_logits = torch.where(slot_valid, logits[:, 0, :], torch.zeros_like(logits[:, 0, :]))
+        invalid_logit = torch.finfo(logits.dtype).min
+        edit_logits = logits[:, 1:, :].masked_fill(~valid, invalid_logit)
+        ownership_logits = torch.cat([null_logits[:, None, :], edit_logits], dim=1)
+        ownership = F.softmax(ownership_logits, dim=1)
+        if not torch.isfinite(ownership).all():
+            raise FloatingPointError("non-finite competitive slot ownership")
+
+        null_probs = ownership[:, 0, :]
+        slot_masks = ownership[:, 1:, :]
+
+        return ownership_logits, null_probs, slot_masks
+
+    def _sequential_residual_round(self, slot_states: Tensor, text_states: Tensor, slot_valid: Tensor, *, update_states: bool,
+    ) -> tuple[
+        Tensor,  # next_slot_states
+        Tensor,  # allocation_logits
+        Tensor,  # null_probs
+        Tensor,  # slot_claims
+        Tensor,  # slot_attentions
+        Tensor,  # slot_score_logits
+        Tensor,  # residual_trajectory
+        Tensor,  # slot_order
+    ]:
+        batch_size, num_tokens, _ = text_states.shape
+        expected = (batch_size, self.num_slots, self.slot_dim)
+        if slot_states.shape != expected:
+            raise ValueError(f"slot_states must be {expected}, got {tuple(slot_states.shape)}")
+
+        residual = slot_valid.to(text_states.dtype)
+        if self.training and self.randomize_slot_order_during_training:
+            slot_order_list = torch.randperm(self.num_slots, device="cpu").tolist()
+        else:
+            slot_order_list = list(range(self.num_slots))
+        slot_order = torch.tensor(slot_order_list, dtype=torch.long, device=text_states.device)
+        old_states = list(slot_states.unbind(dim=1))
+        next_states = list(old_states)
+        slot_attentions: list[Tensor | None] = [None] * self.num_slots
+        slot_claims: list[Tensor | None] = [None] * self.num_slots
+        slot_score_logits: list[Tensor | None] = [None] * self.num_slots
+        residual_steps = [residual]
+
+        for slot_id in slot_order_list:
+            # slot_id = int(slot_index_tensor.item())
+            current_slot = old_states[slot_id]
+            effective_text = text_states * residual.unsqueeze(-1)
+            keys = self.text_key_projection(effective_text)
+            values = self.text_value_projection(effective_text)
+            query = self.slot_query_projection(current_slot)
+
+            logits = torch.einsum("bd,bnd->bn", query, keys)
+            logits = logits / math.sqrt(self.slot_dim) / self.mask_temperature
+            logits = logits + self.residual_bias_strength * torch.log(residual.clamp_min(self.residual_eps))
+            attention = self._masked_token_softmax(logits, slot_valid)
+            evidence = torch.einsum("bn,bnd->bd", attention, values)
+
+            if update_states:
+                candidate = self.slot_update(evidence, current_slot)
+                has_evidence = attention.sum(dim=-1) > 0
+                next_states[slot_id] = torch.where(has_evidence[:, None], candidate, current_slot)
+
+            proposed_residual = residual * (1.0 - attention.pow(self.residual_depletion_power))
+            proposed_residual = torch.where(slot_valid, proposed_residual.clamp_min(self.residual_eps), torch.zeros_like(proposed_residual))
+            consumed = (residual - proposed_residual).clamp_min(0.0)
+            consumed = torch.where(slot_valid, consumed, torch.zeros_like(consumed))
+
+            slot_attentions[slot_id] = attention
+            slot_claims[slot_id] = consumed
+            slot_score_logits[slot_id] = logits
+
+            residual = proposed_residual
+            residual_steps.append(residual)
+
+        next_slot_states = torch.stack(next_states, dim=1)
+        attentions = torch.stack([x for x in slot_attentions], dim=1)
+        claims = torch.stack([x for x in slot_claims], dim=1)
+        score_logits = torch.stack([x for x in slot_score_logits], dim=1)
+        residual_trajectory = torch.stack(residual_steps, dim=1)  # [B,L+1,N]
+        null_probs = torch.where(slot_valid, residual, torch.ones_like(residual))
+        allocation_probs = torch.cat([null_probs[:, None, :], claims], dim=1)
+        conservation_error = (allocation_probs.sum(dim=1) - 1.0).abs().amax()
+
+        if conservation_error.detach().item() > 1e-4:
+            raise RuntimeError(f"sequential residual allocation violates conservation: {conservation_error.item():.6g}")
+
+        allocation_logits = torch.log(allocation_probs.clamp_min(self.residual_eps))
+        if not torch.isfinite(next_slot_states).all():
+            raise FloatingPointError("non-finite sequential slot state")
+
+        if not torch.isfinite(residual).all():
+            raise FloatingPointError("non-finite residual evidence")
+
+        return (
+            next_slot_states,
+            allocation_logits,
+            null_probs,
+            claims,
+            attentions,
+            score_logits,
+            residual_trajectory,
+            slot_order,
+        )
+
+    def _masked_token_softmax(self, logits: Tensor, slot_valid: Tensor) -> Tensor:
+        if logits.shape != slot_valid.shape:
+            raise ValueError(f"logits and slot_valid must match, got {tuple(logits.shape)} and {tuple(slot_valid.shape)}")
+
+        invalid_logit = torch.finfo(logits.dtype).min
+        masked_logits = logits.masked_fill(~slot_valid, invalid_logit,)
+        attention = F.softmax(masked_logits, dim=-1)
+        attention = attention* slot_valid.to(attention.dtype)
+        attention = attention / attention.sum(dim=-1, keepdim=True).clamp_min(self.residual_eps)
+
+        if not torch.isfinite(attention).all():
+            raise FloatingPointError("non-finite sequential token attention")
+
+        return attention
+
+    def _refine_slot_states(self, slot_states: Tensor, text_states: Tensor, slot_masks: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+        batch_size = text_states.shape[0]
+        if slot_states.shape != (batch_size, self.num_slots, self.slot_dim):
+            raise ValueError("slot_states has invalid shape")
+
+        expected_slot_mask_shape = (batch_size, self.num_slots, text_states.shape[1])
+
+        if slot_masks.shape != expected_slot_mask_shape:
+            raise ValueError(f"slot_masks must be {expected_slot_mask_shape}, got {tuple(slot_masks.shape)}")
+
+        text_values = self.text_value_projection(text_states)  # [B, N, Ds]
+        slot_evidence, slot_mass, slot_activity = self._mass_aware_slot_pool(text_values, slot_masks)
+        if not torch.isfinite(slot_evidence).all():
+            raise FloatingPointError("non-finite iterative slot evidence")
+        b, l, d = slot_states.shape
+        candidate_states = self.slot_update(slot_evidence.reshape(b * l, d), slot_states.reshape(b * l, d)).reshape(b, l, d)
+        active = slot_mass > 0
+        next_slot_states = torch.where(active.unsqueeze(-1), candidate_states, slot_states,)
+        if not torch.isfinite(next_slot_states).all():
+            raise FloatingPointError("non-finite refined slot states")
+
+        return (next_slot_states, slot_mass, slot_activity)
+
+    @staticmethod
+    def _mass_aware_slot_pool(
+        text_states: Tensor,
+        slot_masks: Tensor,
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        slot_mass = slot_masks.sum(dim=2)  # [B, L], expected owned-token count
+        weighted_sum = torch.einsum("bln,bnd->bld", slot_masks, text_states)
+        slot_activity = slot_mass.clamp(max=1.0)
+        slot_semantics = weighted_sum / slot_mass.clamp_min(1.0).unsqueeze(-1)
+        return slot_semantics, slot_mass, slot_activity
+
+    def _compose_counterfactual_queries(
+        self,
+        *,
+        teacher_reference_features: Tensor,
+        teacher_text_states: Tensor,
+        text_attention_mask: Tensor,
+        slot_masks: Tensor,
+        neutral: Tensor,
+    ) -> Tensor:
+        batch_size, num_tokens, _ = teacher_text_states.shape
+
+        total = batch_size * self.num_slots
+        outputs = []
+
+        for start in range(0, total, self.counterfactual_chunk_size,):
+            end = min(start + self.counterfactual_chunk_size, total)
+            flat_ids = torch.arange(start, end, device=teacher_text_states.device)
+            batch_ids = torch.div(flat_ids, self.num_slots, rounding_mode="floor")
+            slot_ids = flat_ids % self.num_slots
+            chunk_masks = slot_masks[batch_ids, slot_ids, :].unsqueeze(-1)
+            chunk_teacher_text = teacher_text_states[batch_ids]
+            chunk_neutral = neutral[batch_ids]
+            counterfactual_text = ((1.0 - chunk_masks) * chunk_teacher_text + chunk_masks * chunk_neutral)
+            counterfactual_reference = teacher_reference_features[batch_ids]
+            counterfactual_mask = text_attention_mask[batch_ids]
+            q_chunk = self.teacher.compose(
+                counterfactual_reference,
+                counterfactual_text,
+                counterfactual_mask,
+                normalize=False,
             )
 
-        queries = self.slot_query_projection(self.slot_queries)       # [L,Ds]
-        keys = self.text_key_projection(text_states)                  # [B,N,Ds]
-        logits = torch.einsum("ld,bnd->bln", queries, keys)
-        logits = logits / math.sqrt(self.slot_dim) / self.mask_temperature
+            expected_chunk_shape = (end - start, self.teacher_query_dim)
 
-        # Independent token membership. Padding never belongs to a slot.
-        slot_masks = torch.sigmoid(logits)* slot_valid[:, None, :].to(text_states.dtype)
+            if q_chunk.shape != expected_chunk_shape:
+                raise ValueError(
+                    "counterfactual teacher query chunk "
+                    f"must be {expected_chunk_shape}, "
+                    f"got {tuple(q_chunk.shape)}"
+                )
 
-        mask_mass = slot_masks.sum(2, keepdim=True).clamp_min(1e-6)
-        slot_semantics = (torch.einsum("bln,bnd->bld", slot_masks, text_states) / mask_mass)
+            outputs.append(q_chunk)
 
-        # Full frozen-teacher query. No torch.no_grad() here during training.
-        q_full = self.teacher.compose(reference_features, text_states, text_attention_mask, normalize=False)
+        q_minus_flat = torch.cat(outputs, dim=0)
+        expected_shape = (total, self.teacher_query_dim)
+
+        if q_minus_flat.shape != expected_shape:
+            raise ValueError(
+                "counterfactual teacher query must be "
+                f"{expected_shape}, "
+                f"got {tuple(q_minus_flat.shape)}"
+            )
+
+        return q_minus_flat.reshape(batch_size, self.num_slots, self.teacher_query_dim)
+
+    def build_edit_slots(
+        self,
+        reference_features: Tensor,
+        text_states: Tensor,
+        text_attention_mask: Tensor,
+        text_content_mask: Tensor | None = None,
+        *,
+        teacher_reference_features: Tensor | None = None,
+        teacher_text_states: Tensor | None = None,
+    ) -> dict[str, Tensor]:
+        if reference_features.ndim != 2:
+            raise ValueError("reference_features must be [B,D] for TAPER state initialization")
+        if reference_features.shape[0] != text_states.shape[0]:
+            raise ValueError("reference_features and text_states batch sizes do not match")
+        if teacher_reference_features is None:
+            raise ValueError("teacher_reference_features is required explicitly; do not silently " "reuse TAPER reference_features for the frozen teacher")
+        if teacher_text_states is None:
+            raise ValueError("teacher_text_states is required explicitly; do not silently reuse " "contextual TAPER text_states as teacher-native inputs")
+        if teacher_reference_features.shape[0] != text_states.shape[0]:
+            raise ValueError("teacher_reference_features batch size does not match text_states")
+        if teacher_text_states.ndim != 3 or teacher_text_states.shape[:2] != text_states.shape[:2]:
+            raise ValueError("teacher_text_states must be [B,N,D_teacher] aligned with text_states")
+        if teacher_text_states.shape[-1] != self.teacher_text_dim:
+            raise ValueError(f"teacher text dim must be {self.teacher_text_dim}")
+        if not torch.isfinite(teacher_text_states).all():
+            raise ValueError("teacher_text_states contains NaN or Inf")
+        if not torch.isfinite(teacher_reference_features).all():
+            raise ValueError("teacher_reference_features contains NaN or Inf")
+
+        _, slot_valid = self._validate_text_inputs(text_states, text_attention_mask, text_content_mask)
+
+        batch_size, num_tokens, _ = text_states.shape
+        slot_states = self.slot_queries.unsqueeze(0).expand(batch_size, -1,-1)
+        refine_slot_states = []
+        refine_slot_masses = []
+        refine_update_norms = []
+
+        refine_slot_masks = []
+        refine_null_probs = []
+        refine_ownership_logits = []
+        slot_states = self.slot_queries.unsqueeze(0).expand(batch_size, -1, -1)
+
+        refine_slot_attentions = []
+        refine_sequential_score_logits = []
+        refine_residual_trajectories = []
+        refine_slot_orders = []
+        for refine_idx in range(self.num_refine_iters):
+            refine_slot_states.append(slot_states)
+            old_states = slot_states
+            update_states = refine_idx + 1 < self.num_refine_iters
+
+            (
+                next_slot_states,
+                ownership_logits,
+                null_probs,
+                slot_masks,
+                slot_attentions,
+                sequential_score_logits,
+                residual_trajectory,
+                slot_order,
+            ) = self._sequential_residual_round(
+                slot_states=slot_states,
+                text_states=text_states,
+                slot_valid=slot_valid,
+                update_states=update_states,
+            )
+
+            refine_ownership_logits.append(ownership_logits)
+            refine_null_probs.append(null_probs)
+            refine_slot_masks.append(slot_masks)
+            refine_slot_masses.append(slot_masks.sum(dim=2))
+            refine_slot_attentions.append(slot_attentions)
+            refine_sequential_score_logits.append(sequential_score_logits)
+            refine_residual_trajectories.append(residual_trajectory)
+            refine_slot_orders.append(slot_order)
+            if update_states:
+                refine_update_norms.append((next_slot_states - old_states).norm(dim=-1))
+                slot_states = next_slot_states
+        
+        slot_semantics, slot_mass, slot_activity = self._mass_aware_slot_pool(text_states, slot_masks)
+        q_full = self.teacher.compose(teacher_reference_features, teacher_text_states, text_attention_mask, normalize=False)
         expected_shape = (batch_size, self.teacher_query_dim)
         if q_full.shape != expected_shape:
             raise ValueError(f"teacher query must be {expected_shape}, got {tuple(q_full.shape)}")
 
-        neutral = self._neutral_text(text_states, text_attention_mask)
-        masks = slot_masks.unsqueeze(-1)
-        counterfactual_text = ((1.0 - masks) * text_states.unsqueeze(1) + masks * neutral.unsqueeze(1)).reshape(batch_size * self.num_slots, num_tokens, self.text_dim)
-
-        counterfactual_mask = (
-            text_attention_mask[:, None, :]
-            .expand(batch_size, self.num_slots, num_tokens)
-            .reshape(batch_size * self.num_slots, num_tokens)
+        neutral = self._neutral_text(teacher_text_states, text_attention_mask)
+        q_minus = self._compose_counterfactual_queries(
+            teacher_reference_features=teacher_reference_features,
+            teacher_text_states=teacher_text_states,
+            text_attention_mask=text_attention_mask,
+            slot_masks=slot_masks,
+            neutral=neutral,
         )
-        counterfactual_reference = reference_features.repeat_interleave(self.num_slots, dim=0)
-
-        q_minus_flat = self.teacher.compose(counterfactual_reference, counterfactual_text, counterfactual_mask, normalize=False,)
-        expected_minus_shape = (batch_size * self.num_slots, self.teacher_query_dim)
-        if q_minus_flat.shape != expected_minus_shape:
-            raise ValueError(f"counterfactual teacher query must be {expected_minus_shape}, got {tuple(q_minus_flat.shape)}")
-        q_minus = q_minus_flat.reshape(batch_size, self.num_slots, self.teacher_query_dim)
 
         slot_effects = q_full.unsqueeze(1) - q_minus
-        edit_slots = self.slot_mlp(torch.cat([slot_semantics, slot_effects], dim=-1))
-        slot_gate_logits = self.slot_gate(edit_slots).squeeze(-1)
-        slot_gates = torch.sigmoid(slot_gate_logits)
 
+        raw_edit_slots = self.slot_mlp(torch.cat([slot_semantics, slot_effects], dim=-1))
+        edit_slots = raw_edit_slots * slot_activity.unsqueeze(-1)
+
+        slot_gate_logits = self.slot_gate(edit_slots).squeeze(-1)
+        raw_slot_gates = torch.sigmoid(slot_gate_logits)
+        slot_gates = torch.where(slot_activity > 0, raw_slot_gates, torch.zeros_like(raw_slot_gates))
+        if refine_update_norms:
+            refine_update_norms_tensor = torch.stack(refine_update_norms, dim=1)
+        else:
+            refine_update_norms_tensor = slot_states.new_empty(batch_size, 0, self.num_slots)
         return {
             "edit_slots": edit_slots,
+            "raw_edit_slots": raw_edit_slots,
+            "ownership_logits": ownership_logits,
+            "null_probs": null_probs,
             "slot_masks": slot_masks,
             "slot_semantics": slot_semantics,
+            "slot_mass": slot_mass,
+            "slot_activity": slot_activity,
+            "slot_peak_ownership": slot_masks.amax(dim=2),
             "slot_effects": slot_effects,
             "slot_gate_logits": slot_gate_logits,
+            "raw_slot_gates": raw_slot_gates,
             "slot_gates": slot_gates,
             "q_teacher_full": q_full,
             "q_teacher_minus": q_minus,
+            "refine_slot_states": torch.stack(refine_slot_states, dim=1),  # [B,T,L,D]
+            "refine_slot_masses": torch.stack(refine_slot_masses, dim=1),
+            "refine_update_norms": refine_update_norms_tensor,
+            "refine_slot_masks": torch.stack(refine_slot_masks, dim=1),  # [B,T,L,N]
+            "refine_null_probs": torch.stack(refine_null_probs, dim=1),  # [B,T,N]
+            "refine_ownership_logits": torch.stack(refine_ownership_logits, dim=1),  # [B,T,L+1,N]
+            "refine_slot_attentions": torch.stack(refine_slot_attentions, dim=1),
+            "refine_sequential_score_logits": torch.stack(refine_sequential_score_logits, dim=1),  # [B,T,L,N]
+            "refine_residual_trajectories": torch.stack(refine_residual_trajectories, dim=1),  # [B,T,L+1,N]
+            "refine_slot_orders": torch.stack(refine_slot_orders, dim=0),  # [T,L]
         }
 
     def initialize_state(self, reference_features: Tensor) -> tuple[Tensor, Tensor]:
         if reference_features.ndim != 2:
             raise ValueError("reference_features must be [B,D]")
-
         if reference_features.shape[-1] != self.reference_dim:
             raise ValueError(f"reference dim must be {self.reference_dim}")
 
@@ -231,9 +549,14 @@ class TAPER(nn.Module):
         z0 = reference_state
         return z0, reference_state
 
-
-    def _joint_router_scores(self, state: Tensor, edit_slots: Tensor, reference_state: Tensor) -> Tensor:
+    def _joint_router_scores(
+        self,
+        state: Tensor,
+        edit_slots: Tensor,
+        reference_state: Tensor,
+    ) -> Tensor:
         """Score every candidate active-slot x primitive pair [B,L,K]."""
+
         b, l, _ = edit_slots.shape
         k = self.num_primitives
 
@@ -245,22 +568,97 @@ class TAPER(nn.Module):
         x = torch.cat([state_x, slot_x, primitive_x, reference_x], dim=-1)
         return self.router(x).squeeze(-1)
 
-    def _transition(self, state: Tensor, slot: Tensor, primitive: Tensor, reference_state: Tensor, selected_slot_gate: Tensor, valid_step: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+    def _transition(
+        self,
+        state: Tensor,
+        slot: Tensor,
+        primitive: Tensor,
+        reference_state: Tensor,
+        selected_slot_gate: Tensor,
+        valid_step: Tensor,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         state_context = self.state_norm(state)
         x = torch.cat([state_context, slot, primitive, reference_state], dim=-1)
+
         proposed_delta = self.transition_delta(x)
-        alpha = (self.transition_strength(x).squeeze(-1) * self.alpha_max)
+        alpha = self.transition_strength(x).squeeze(-1) * self.alpha_max
         effective_strength = alpha * selected_slot_gate
-        state_update = (effective_strength[:, None]* proposed_delta)
+        state_update = effective_strength[:, None] * proposed_delta
+
+        # TAPER V3: valid transitions are normalized after the controlled residual;
+        # invalid steps preserve state exactly and do not reapply LayerNorm.
+        # proposed_next = self.state_update_norm(state + state_update)
+        # next_state = torch.where(valid_step[:, None], proposed_next, state)
         proposed_next = state + state_update
         next_state = torch.where(valid_step[:, None], proposed_next, state)
         actual_change = next_state - state
         proposed_delta = torch.where(valid_step[:, None], proposed_delta, torch.zeros_like(proposed_delta))
-        alpha = torch.where(valid_step, alpha, torch.zeros_like(alpha),)
+        alpha = torch.where(valid_step, alpha, torch.zeros_like(alpha))
 
-        return next_state, proposed_delta,alpha, actual_change
+        return next_state, proposed_delta, alpha, actual_change
 
-    def execute(self, edit_slots: Tensor, slot_gates: Tensor, z0: Tensor, reference_state: Tensor, *, disabled_slots: Tensor | None = None) -> dict[str, Tensor]:
+    def _st_gate_recovery_shadow(
+        self,
+        state: Tensor,
+        edit_slots: Tensor,
+        slot_gates: Tensor,
+        reference_state: Tensor,
+        available_slots: Tensor,
+    ) -> Tensor:
+        if available_slots.shape != slot_gates.shape:
+            raise ValueError("available_slots must match slot_gates")
+
+        available_f = available_slots.to(slot_gates.dtype)
+        has_available = available_slots.any(dim=1)
+        if not has_available.any():
+            return state.detach()
+
+        with torch.no_grad():
+            router_scores = self._joint_router_scores(state.detach(), edit_slots.detach(), reference_state.detach())
+
+        gate_eps = 1e-6
+        shadow_logits = router_scores + torch.log(slot_gates.clamp_min(gate_eps))[:, :, None]
+        shadow_logits = shadow_logits.masked_fill(~available_slots[:, :, None], -1e4)
+        conditional_route = F.softmax(shadow_logits.reshape(state.shape[0], -1) / self.router_temperature, dim=-1).reshape(state.shape[0], self.num_slots, self.num_primitives)
+        conditional_route = conditional_route * has_available[:, None, None].to(conditional_route.dtype)
+
+        # Smooth probability that at least one currently available gate participates.
+        soft_any = 1.0 - torch.prod(1.0 - slot_gates.clamp(0.0, 1.0) * available_f, dim=1)
+        shadow_route = conditional_route * soft_any[:, None, None]
+
+        selected_slot = torch.einsum("bl,bld->bd", shadow_route.sum(2), edit_slots.detach())
+        selected_primitive = torch.einsum("bk,kd->bd", shadow_route.sum(1), self.primitive_bank.detach())
+
+        state_context = self.state_norm(state.detach()).detach()
+        x = torch.cat([state_context, selected_slot, selected_primitive, reference_state.detach()], dim=-1)
+
+        def detached_call(module: nn.Module, arg: Tensor) -> Tensor:
+            params_and_buffers = {
+                name: value.detach()
+                for name, value in module.named_parameters()
+            }
+            params_and_buffers.update({name: value.detach() for name, value in module.named_buffers()})
+            return torch.func.functional_call(module, params_and_buffers, (arg,))
+
+        proposed_delta = detached_call(self.transition_delta, x)
+        alpha = (
+            detached_call(self.transition_strength, x).squeeze(-1)
+            * self.alpha_max
+        )
+        update = alpha[:, None] * proposed_delta
+        # shadow_next = detached_call(self.state_update_norm, state.detach() + update)
+        shadow_next = state.detach() + update
+        return torch.where(has_available[:, None], shadow_next, state.detach())
+
+    def execute(
+        self,
+        edit_slots: Tensor,
+        slot_gates: Tensor,
+        z0: Tensor,
+        reference_state: Tensor,
+        *,
+        disabled_slots: Tensor | None = None,
+    ) -> dict[str, Tensor]:
         if edit_slots.ndim != 3 or edit_slots.shape[1] != self.num_slots:
             raise ValueError("edit_slots must be [B,num_slots,slot_dim]")
         if slot_gates.shape != edit_slots.shape[:2]:
@@ -279,7 +677,17 @@ class TAPER(nn.Module):
 
         state = z0
         completed = torch.zeros(b, self.num_slots, dtype=torch.bool, device=device)
-        hard_active_slots = (slot_gates.detach() >= self.slot_gate_threshold) & ~disabled_slots
+        hard_active_slots = (
+            slot_gates.detach() >= self.slot_gate_threshold
+        ) & ~disabled_slots
+        if self.gate_mode == "straight_through_hard":
+            hard_gate_values = hard_active_slots.to(dtype)
+            gate_values = (
+                hard_gate_values + slot_gates - slot_gates.detach()
+            )
+        else:
+            gate_values = slot_gates
+        recovery_used = torch.zeros(b, dtype=torch.bool, device=device)
 
         checkpoints = [state]
         slot_trace: list[Tensor] = []
@@ -295,8 +703,15 @@ class TAPER(nn.Module):
         slot_to_step = torch.full((b, self.num_slots), -1, dtype=torch.long, device=device)
 
         for step in range(self.num_slots):
-            if self.training and not self.hard_slot_gating_during_training:
-                candidate_mask = ~completed & ~disabled_slots
+            if self.gate_mode == "straight_through_hard":
+                # Forward candidate eligibility is identical in train and eval.
+                candidate_mask = ~completed & hard_active_slots
+            elif self.training and not self.hard_slot_gating_during_training:
+                candidate_mask = (
+                    ~completed
+                    & ~disabled_slots
+                    & (slot_gates.detach() > 0.0)
+                )
             else:
                 candidate_mask = ~completed & hard_active_slots
 
@@ -320,14 +735,41 @@ class TAPER(nn.Module):
 
             selected_slot = torch.einsum("bl,bld->bd", route.sum(2), edit_slots)
             selected_primitive = torch.einsum("bk,kd->bd", route.sum(1), self.primitive_bank)
-            selected_gate = torch.einsum("bl,bl->b", route.sum(2), slot_gates)
-            next_state, proposed_delta, alpha, actual_change = self._transition(state,selected_slot, selected_primitive, reference_state, selected_gate, valid_step)
+            selected_gate = torch.einsum("bl,bl->b", route.sum(2), gate_values)
+            next_state, proposed_delta, alpha, actual_change = self._transition(state, selected_slot, selected_primitive, reference_state, selected_gate, valid_step)
+
+            if (
+                self.training
+                and self.gate_mode == "straight_through_hard"
+                and self.st_gate_recovery
+            ):
+                available_for_recovery = (
+                    ~completed
+                    & ~disabled_slots
+                    & (slot_gates.detach() > 0.0)
+                )
+                recovery_mask = (
+                    ~valid_step
+                    & ~recovery_used
+                    & available_for_recovery.any(dim=1)
+                )
+                if recovery_mask.any():
+                    shadow_next = self._st_gate_recovery_shadow(state, edit_slots, slot_gates, reference_state, available_for_recovery)
+                    # Zero-valued forward, nonzero backward surrogate.
+                    next_state = next_state + recovery_mask[:, None].to(dtype) * (
+                        shadow_next - shadow_next.detach()
+                    )
+                    actual_change = next_state - state
+                    recovery_used = recovery_used | recovery_mask
+
             confidence = soft.reshape(b, -1).gather(1, hard_index[:, None]).squeeze(1)
             confidence = torch.where(valid_step, confidence, torch.zeros_like(confidence))
             slot_ids = torch.where(valid_step, raw_slot_ids, torch.full_like(raw_slot_ids, -1))
             primitive_ids = torch.where(valid_step, raw_primitive_ids, torch.full_like(raw_primitive_ids, -1))
             selected_gate = torch.where(valid_step, selected_gate, torch.zeros_like(selected_gate))
-            selected_is_hard_active = valid_step & (selected_gate.detach() >= self.slot_gate_threshold)
+            selected_is_hard_active = valid_step & (
+                selected_gate.detach() >= self.slot_gate_threshold
+            )
 
             slot_trace.append(slot_ids)
             primitive_trace.append(primitive_ids)
@@ -365,24 +807,35 @@ class TAPER(nn.Module):
             "hard_active_slot_mask": hard_active_slots,
         }
 
-
     def make_query(self, final_state: Tensor) -> Tensor:
         return F.normalize(self.query_head(final_state), dim=-1)
 
-    def forward(self, reference_features: Tensor, text_states: Tensor, text_attention_mask: Tensor, *, disable_execution: bool = False, disabled_slots: Tensor | None = None) -> dict[str, Tensor]:
-        slot_output = self.build_edit_slots(reference_features, text_states, text_attention_mask)
+    def forward(
+        self,
+        reference_features: Tensor,
+        text_states: Tensor,
+        text_attention_mask: Tensor,
+        *,
+        text_content_mask: Tensor | None = None,
+        teacher_reference_features: Tensor | None = None,
+        teacher_text_states: Tensor | None = None,
+        disable_execution: bool = False,
+        disabled_slots: Tensor | None = None,
+    ) -> dict[str, Tensor]:
+        slot_output = self.build_edit_slots(
+            reference_features,
+            text_states,
+            text_attention_mask,
+            text_content_mask=text_content_mask,
+            teacher_reference_features=teacher_reference_features,
+            teacher_text_states=teacher_text_states,
+        )
         z0, reference_state = self.initialize_state(reference_features)
 
         if disable_execution:
-            disabled_slots = torch.ones(slot_output["edit_slots"].shape[:2], dtype=torch.bool, device=slot_output["edit_slots"].device,)
+            disabled_slots = torch.ones(slot_output["edit_slots"].shape[:2], dtype=torch.bool, device=slot_output["edit_slots"].device)
 
-        execution = self.execute(
-            slot_output["edit_slots"],
-            slot_output["slot_gates"],
-            z0,
-            reference_state,
-            disabled_slots=disabled_slots,
-        )
+        execution = self.execute(slot_output["edit_slots"], slot_output["slot_gates"], z0, reference_state, disabled_slots=disabled_slots)
 
         q0 = self.make_query(execution["final_state"])
         q_reference_only = self.make_query(z0)
@@ -397,7 +850,11 @@ class TAPER(nn.Module):
         }
 
     @staticmethod
-    def _positive_mask(target_ids: object, batch_size: int, device: torch.device) -> Tensor:
+    def _positive_mask(
+        target_ids: object,
+        batch_size: int,
+        device: torch.device,
+    ) -> Tensor:
         if isinstance(target_ids, Tensor):
             ids = target_ids.reshape(-1)
             if ids.numel() != batch_size:
@@ -418,8 +875,10 @@ class TAPER(nn.Module):
         raise TypeError("target_ids must be a Tensor or a non-string sequence")
 
     def _retrieval_loss(self, query: Tensor, targets: Tensor, target_ids: object | None = None) -> Tensor:
-        targets = F.normalize(targets, dim=-1)
-        logits = (query @ targets.t()) / self.retrieval_temperature
+        if query.shape[0] != targets.shape[0]:
+            raise ValueError("query and target batch sizes must match")
+
+        logits = self._retrieval_scores(query, targets) / self.retrieval_temperature
 
         if target_ids is None:
             labels = torch.arange(query.shape[0], device=query.device)
@@ -431,57 +890,129 @@ class TAPER(nn.Module):
         log_denominator = torch.logsumexp(logits, dim=1)
         return (log_denominator - log_numerator).mean()
 
-    def _slot_regularizers(self, slot_masks: Tensor, slot_effects: Tensor, slot_gates: Tensor, text_attention_mask: Tensor, text_content_mask: Tensor | None = None) -> dict[str, Tensor]:
+    def _retrieval_scores(self, query: Tensor, candidates: Tensor) -> Tensor:
+        if query.ndim != 2 or query.shape[-1] != self.query_dim:
+            raise ValueError(f"query must be [B,{self.query_dim}]")
+
+        if candidates.ndim != 3 or candidates.shape[-1] != self.query_dim:
+            raise ValueError(f"candidates must be [N,K,{self.query_dim}]")
+
+        candidates = F.normalize(candidates, dim=-1)
+        token_scores = torch.einsum("bd,nkd->bnk", query, candidates)
+        return token_scores.amax(dim=-1)
+
+    def _assignment_diagnostics(
+        self,
+        *,
+        null_probs: Tensor,
+        slot_masks: Tensor,
+        slot_mass: Tensor,
+        slot_effects: Tensor,
+        slot_gates: Tensor,
+        hard_active_slot_mask: Tensor,
+        text_attention_mask: Tensor,
+        text_content_mask: Tensor | None = None,
+    ) -> dict[str, Tensor]:
+        """Non-prescriptive diagnostics for the competitive NULL formulation."""
+
         if text_content_mask is not None:
-            sparse_valid = (text_content_mask.to(torch.bool) & text_attention_mask.to(torch.bool))[:, None, :].to(slot_masks.dtype)
+            valid = text_attention_mask.to(torch.bool) & text_content_mask.to(torch.bool)
         else:
-            sparse_valid = text_attention_mask[:, None, :].to(slot_masks.dtype)
+            valid = text_attention_mask.to(torch.bool)
+        valid_f = valid.to(slot_masks.dtype)
+        denom = valid_f.sum().clamp_min(1.0)
 
-        sparse_count = sparse_valid.sum().clamp_min(1.0)
-        gated_masks = slot_masks * slot_gates[:, :, None]
-        sparse = (gated_masks * sparse_valid).sum() / (sparse_count * self.num_slots)
-        if text_content_mask is None:
-            coverage = slot_masks.new_zeros(())
-        else:
-            if text_content_mask.shape != text_attention_mask.shape:
-                raise ValueError("text_content_mask must match text_attention_mask")
-            coverage_valid = (text_content_mask.to(torch.bool) & text_attention_mask.to(torch.bool))[:, None, :].to(slot_masks.dtype)
-            coverage_count = coverage_valid.sum().clamp_min(1.0)
-            max_claim = gated_masks.max(1, keepdim=True).values
-            coverage = (((1.0 - max_claim) ** 2) * coverage_valid).sum() / coverage_count
+        all_probs = torch.cat([null_probs[:, None, :], slot_masks], dim=1)
+        entropy_per_token = -(
+            all_probs.clamp_min(1e-12) * all_probs.clamp_min(1e-12).log()
+        ).sum(dim=1)
+        assignment_entropy = (entropy_per_token * valid_f).sum() / denom
+        null_rate = (null_probs * valid_f).sum() / denom
+        edit_rate = ((1.0 - null_probs) * valid_f).sum() / denom
+        ownership_winner = all_probs.argmax(dim=1)
+        null_winner = ownership_winner.eq(0)
+        null_argmax_fraction = (null_winner.to(slot_masks.dtype) * valid_f).sum() / denom
+        has_valid_content = valid.any(dim=1)
+        all_null_argmax = (null_winner | ~valid).all(dim=1) & has_valid_content
+        valid_sample_count = has_valid_content.to(slot_masks.dtype).sum().clamp_min(1.0)
+        all_null_argmax_sample_fraction = all_null_argmax.to(slot_masks.dtype).sum() / valid_sample_count
+        edit_mass_per_sample = slot_mass.sum(dim=1)
+        edit_mass_fraction = edit_mass_per_sample.sum() / denom
+        ownership_active_slot_count = (slot_mass >= 0.10).to(slot_masks.dtype).sum(dim=1).mean()
+        execution_hard_active_slot_count = hard_active_slot_mask.to(slot_masks.dtype).sum(dim=1).mean()
+        nontrivial_edit = edit_mass_per_sample >= 0.10
+        dominant_slot_share_per_sample = slot_mass.max(dim=1).values/ edit_mass_per_sample.clamp_min(1e-12)
+        nontrivial_count = nontrivial_edit.to(slot_masks.dtype).sum().clamp_min(1.0)
+        dominant_slot_share = (dominant_slot_share_per_sample * nontrivial_edit.to(slot_masks.dtype)).sum() / nontrivial_count
+        near_monopoly_fraction = (
+            (dominant_slot_share_per_sample >= 0.90) & nontrivial_edit
+        ).to(slot_masks.dtype).sum() / nontrivial_count
 
-        gate_sparsity = slot_gates.mean()
+        zero = slot_masks.sum() * 0.0
         if self.num_slots == 1:
-            overlap = slot_masks.new_zeros(())
-            effect_diversity = slot_masks.new_zeros(())
+            overlap = zero
+            effect_similarity_mean = zero
         else:
-            eye = torch.eye(self.num_slots, device=slot_masks.device, dtype=torch.bool)[None]
-            offdiag = ~eye
-            pair_weight = (slot_gates[:, :, None] * slot_gates[:, None, :])
-            mask_vectors = F.normalize(slot_masks * sparse_valid, dim=-1, eps=1e-6)
+            masked = slot_masks * valid_f[:, None, :]
+            mask_vectors = F.normalize(masked, dim=-1, eps=1e-6)
             mask_similarity = mask_vectors @ mask_vectors.transpose(1, 2)
-            overlap_penalty = F.relu(mask_similarity - self.overlap_margin)
-            overlap_weight = pair_weight * offdiag.to(pair_weight.dtype)
-            overlap = (overlap_penalty * overlap_weight).sum() / overlap_weight.sum().clamp_min(1e-6)
+
             effect_vectors = F.normalize(slot_effects, dim=-1, eps=1e-6)
             effect_similarity = effect_vectors @ effect_vectors.transpose(1, 2)
-            effect_penalty = F.relu(effect_similarity - self.effect_diversity_margin)
-            effect_weight = pair_weight * offdiag.to(pair_weight.dtype)
-            effect_diversity = (effect_penalty * effect_weight).sum() / effect_weight.sum().clamp_min(1e-6)
 
-        return {
-            "slot_sparse_loss": sparse,
-            "slot_coverage_loss": coverage,
-            "slot_overlap_loss": overlap,
-            "slot_effect_diversity_loss": effect_diversity,
-            "slot_gate_sparsity_loss": gate_sparsity,
+            upper = torch.triu(torch.ones(self.num_slots, self.num_slots, dtype=torch.bool, device=slot_masks.device), diagonal=1)
+            overlap = mask_similarity[:, upper].mean()
+            effect_similarity_mean = effect_similarity[:, upper].mean()
+
+        diagnostics = {
+            "assignment_entropy": assignment_entropy,
+            "null_ownership_rate": null_rate,
+            "edit_ownership_rate": edit_rate,
+
+            "edit_mass_fraction": edit_mass_fraction,
+            "null_argmax_fraction": null_argmax_fraction,
+            "all_null_argmax_sample_fraction":all_null_argmax_sample_fraction,
+            "ownership_active_slot_count": ownership_active_slot_count,
+            "execution_hard_active_slot_count": execution_hard_active_slot_count,
+            "dominant_slot_share": dominant_slot_share,
+            "near_monopoly_fraction": near_monopoly_fraction,
+            "slot_overlap_mean": overlap,
+            "slot_effect_similarity_mean": effect_similarity_mean,
+            "slot_gate_mean": slot_gates.mean(),
         }
+
+        for slot_id in range(self.num_slots):
+            diagnostics[f"slot_{slot_id}_mass_mean"] = slot_mass[:, slot_id].mean()
+
+        return diagnostics
+
+    def _slot_regularizers(
+        self,
+        slot_masks: Tensor,
+        slot_effects: Tensor,
+        slot_gates: Tensor,
+        text_attention_mask: Tensor,
+        text_content_mask: Tensor | None = None,
+        *,
+        null_probs: Tensor | None = None,
+    ) -> dict[str, Tensor]:
+
+        del slot_masks, slot_effects, slot_gates, text_attention_mask
+        del text_content_mask, null_probs
+        raise RuntimeError(
+            "Standalone Stage-1 structural losses are incompatible with "
+            "competitive NULL ownership. Train this formulation end-to-end with "
+            "retrieval supervision; keep assignment statistics as diagnostics."
+        )
 
     def compute_loss(self, batch: Mapping[str, object]) -> dict[str, Tensor]:
         required = {
             "reference_features",
+            "teacher_reference_features",
             "text_states",
+            "teacher_text_states",
             "text_attention_mask",
+            "text_content_mask",
             "target_features",
         }
         missing = required.difference(batch)
@@ -494,119 +1025,139 @@ class TAPER(nn.Module):
         targets = batch["target_features"]
 
         if not all(isinstance(x, Tensor) for x in (reference, text, mask, targets)):
-            raise TypeError("reference_features, text_states, text_attention_mask, and target_features must be Tensors")
+            raise TypeError("reference_features, text_states, text_attention_mask, and " "target_features must be Tensors")
         assert isinstance(reference, Tensor)
         assert isinstance(text, Tensor)
         assert isinstance(mask, Tensor)
         assert isinstance(targets, Tensor)
 
-        if targets.ndim != 2 or targets.shape[-1] != self.query_dim:
-            raise ValueError(f"target_features must be [B,{self.query_dim}]")
+        if targets.ndim != 3 or targets.shape[-1] != self.query_dim:
+            raise ValueError(f"target_features must be [B,K,{self.query_dim}]")
+        if targets.shape[0] != reference.shape[0]:
+            raise ValueError("target_features batch size must match reference_features batch size")
 
-        content_mask = batch.get("text_content_mask")
-        if content_mask is not None and not isinstance(content_mask, Tensor):
-            raise TypeError("text_content_mask must be a Tensor when provided")
+        content_mask = batch["text_content_mask"]
+        teacher_reference = batch["teacher_reference_features"]
+        teacher_text = batch["teacher_text_states"]
+        if not isinstance(content_mask, Tensor):
+            raise TypeError("text_content_mask must be a Tensor")
+        if not isinstance(teacher_reference, Tensor):
+            raise TypeError("teacher_reference_features must be a Tensor")
+        if not isinstance(teacher_text, Tensor):
+            raise TypeError("teacher_text_states must be a Tensor")
 
-        output = self.forward(reference, text, mask)
+        output = self.forward(reference, text, mask, text_content_mask=content_mask, teacher_reference_features=teacher_reference, teacher_text_states=teacher_text)
         losses = {
-            "retrieval_loss": self._retrieval_loss(
-                output["q0"],
-                targets,
-                batch.get("target_ids"),
-            )
+            "retrieval_loss": self._retrieval_loss(output["q0"], targets, batch.get("target_ids"))
         }
-        losses.update(
-            self._slot_regularizers(
-                output["slot_masks"],
-                output["slot_effects"],
-                output["slot_gates"],
-                mask,
-                content_mask,
+        with torch.no_grad():
+            diagnostics = self._assignment_diagnostics(
+                null_probs=output["null_probs"],
+                slot_masks=output["slot_masks"],
+                slot_mass=output["slot_mass"],
+                slot_effects=output["slot_effects"],
+                slot_gates=output["slot_gates"],
+                hard_active_slot_mask=output["hard_active_slot_mask"],
+                text_attention_mask=mask,
+                text_content_mask=content_mask,
             )
-        )
-
+        losses.update({f"diagnostic/{k}": v for k, v in diagnostics.items()})
         return losses
 
     @torch.no_grad()
-    def slot_drop_queries(self, *, reference_features: Tensor, text_states: Tensor, text_attention_mask: Tensor) -> dict[str, Tensor]:
+    def slot_drop_queries(
+        self,
+        *,
+        reference_features: Tensor,
+        text_states: Tensor,
+        text_attention_mask: Tensor,
+        text_content_mask: Tensor | None = None,
+        teacher_reference_features: Tensor | None = None,
+        teacher_text_states: Tensor | None = None,
+    ) -> dict[str, Tensor]:
         was_training = self.training
         self.eval()
         try:
-            slots = self.build_edit_slots(reference_features, text_states, text_attention_mask,)
+            slots = self.build_edit_slots(
+                reference_features,
+                text_states,
+                text_attention_mask,
+                text_content_mask=text_content_mask,
+                teacher_reference_features=teacher_reference_features,
+                teacher_text_states=teacher_text_states,
+            )
             z0, reference_state = self.initialize_state(reference_features)
-            full_execution = self.execute(slots["edit_slots"], slots["slot_gates"], z0, reference_state,)
+            full_execution = self.execute(slots["edit_slots"], slots["slot_gates"], z0, reference_state)
             full_query = self.make_query(full_execution["final_state"])
 
             dropped_queries = []
             b = reference_features.shape[0]
             for slot_id in range(self.num_slots):
-                disabled = torch.zeros(b, self.num_slots, dtype=torch.bool, device=reference_features.device,)
+                disabled = torch.zeros(b, self.num_slots, dtype=torch.bool, device=reference_features.device)
                 disabled[:, slot_id] = True
-                execution = self.execute(slots["edit_slots"], slots["slot_gates"], z0, reference_state, disabled_slots=disabled,)
+                execution = self.execute(slots["edit_slots"], slots["slot_gates"], z0, reference_state, disabled_slots=disabled)
                 dropped_queries.append(self.make_query(execution["final_state"]))
 
             return {
                 "full_query": full_query,
                 "dropped_queries": torch.stack(dropped_queries, dim=1),
                 "slot_gates": slots["slot_gates"],
-                "hard_active_slot_mask": full_execution["hard_active_slot_mask"],
+                "slot_mass": slots["slot_mass"],
+                "slot_activity": slots["slot_activity"],
+                "null_probs": slots["null_probs"],
+                "hard_active_slot_mask": full_execution[
+                    "hard_active_slot_mask"
+                ],
             }
         finally:
             self.train(was_training)
 
     def compute_stage1_loss(self, batch: Mapping[str, object]) -> dict[str, Tensor]:
-        reference = batch["teacher_reference_features"]
-        text = batch["text_states"]
-        attention_mask = batch["text_attention_mask"]
-        content_mask = batch.get("text_content_mask")
-
-        if content_mask is not None and not isinstance(content_mask, Tensor):
-            raise TypeError("text_content_mask must be a Tensor when provided")
-
-        output = self.build_edit_slots(
-            reference_features=reference,
-            text_states=text,
-            text_attention_mask=attention_mask,
-            text_content_mask=content_mask,
-        )
-
-        return self._slot_regularizers(
-            slot_masks=output["slot_masks"],
-            slot_effects=output["slot_effects"],
-            slot_gates=output["slot_gates"],
-            text_attention_mask=attention_mask,
-            text_content_mask=content_mask,
+        del batch
+        raise RuntimeError(
+            "compute_stage1_loss() is intentionally disabled for competitive "
+            "NULL ownership. This branch requires end-to-end retrieval "
+            "supervision; the previous structural Stage-1 objective is not "
+            "mathematically compatible with a learnable NULL sink."
         )
 
     @torch.no_grad()
-    def retrieve(self, *, reference_features: Tensor, text_states: Tensor, text_attention_mask: Tensor, gallery_features: Tensor, topk: int | None = None) -> dict[str, Tensor]:
-        if gallery_features.ndim != 2 or gallery_features.shape[-1] != self.query_dim:
-            raise ValueError(f"gallery_features must be [G,{self.query_dim}]")
+    def retrieve(
+        self,
+        *,
+        reference_features: Tensor,
+        text_states: Tensor,
+        text_attention_mask: Tensor,
+        gallery_features: Tensor,
+        text_content_mask: Tensor | None = None,
+        teacher_reference_features: Tensor | None = None,
+        teacher_text_states: Tensor | None = None,
+        topk: int | None = None,
+    ) -> dict[str, Tensor]:
+        if gallery_features.ndim != 3 or gallery_features.shape[-1] != self.query_dim:
+            raise ValueError(f"gallery_features must be [G,K,{self.query_dim}]")
 
         was_training = self.training
         self.eval()
         try:
-            output = self.forward(reference_features, text_states, text_attention_mask,)
-            gallery = F.normalize(gallery_features, dim=-1,)
-            scores = output["q0"] @ gallery.t()
+            output = self.forward(
+                reference_features, text_states, text_attention_mask,
+                text_content_mask=text_content_mask,
+                teacher_reference_features=teacher_reference_features,
+                teacher_text_states=teacher_text_states,
+            )
+            scores = self._retrieval_scores(output["q0"], gallery_features)
             result = {
                 **output,
                 "scores": scores,
             }
             if topk is not None:
                 if topk < 1:
-                    raise ValueError(
-                        "topk must be >= 1 when provided"
-                    )
+                    raise ValueError("topk must be >= 1 when provided")
 
-                k = min(topk,gallery.shape[0])
-                top_scores, top_indices = scores.topk(k,dim=1)
-                result.update(
-                    {
-                        "top_scores": top_scores,
-                        "top_indices": top_indices,
-                    }
-                )
+                k = min(topk, gallery_features.shape[0])
+                top_scores, top_indices = scores.topk(k, dim=1)
+                result.update({"top_scores": top_scores, "top_indices": top_indices,})
             return result
         finally:
             self.train(was_training)

@@ -7,6 +7,7 @@ from pathlib import Path
 import torch
 from PIL import Image
 from tqdm import tqdm
+import numpy as np
 
 from datasets.fashioniq import load_fashioniq_annotations, load_fashioniq_split_ids
 from teachers.csmcir import CSMCIRStage1Teacher
@@ -25,6 +26,62 @@ def parse_args():
     parser.add_argument("--device", type=str, default="cuda")
     return parser.parse_args()
 
+@torch.inference_mode()
+def precompute_to_disk(
+    teacher,
+    entries,
+    image_root,
+    batch_size,
+    device,
+    output_dir,
+    kind,
+):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    mmap = None
+
+    for start in tqdm(range(0, len(entries), batch_size), desc=f"CSMCIR {kind}"):
+        batch_entries = entries[start:start + batch_size]
+        images = torch.stack([
+            load_image(image_root=image_root, image_id=image_id, category=category, preprocess=teacher.preprocess)
+            for image_id, category in batch_entries
+        ]).to(device)
+
+        if kind == "retrieval":
+            features, _ = teacher.encode_image_tokens(images)
+        elif kind == "native":
+            features = teacher.encode_reference(images)
+        else:
+            raise ValueError(f"Unsupported feature kind: {kind}")
+
+        features = features.float().cpu()
+        if not torch.isfinite(features).all():
+            raise FloatingPointError(
+                f"Non-finite {kind} features at rows "
+                f"{start}:{start + len(batch_entries)}"
+            )
+        if mmap is None:
+            shape = (len(entries), *features.shape[1:])
+            mmap = np.lib.format.open_memmap(output_dir / "images.npy", mode="w+", dtype=np.float32, shape=shape)
+
+        end = start + len(batch_entries)
+        mmap[start:end] = features.numpy()
+        mmap.flush()
+
+        del images, features
+
+    if mmap is None:
+        raise RuntimeError("No features produced")
+
+    image_ids = [image_id for image_id, _ in entries]
+
+    with (output_dir / "name_to_idx.json").open("w", encoding="utf-8") as file:
+        json.dump(
+            {image_id: i for i, image_id in enumerate(image_ids)},
+            file,
+            indent=2,
+        )
+
+    del mmap
 
 def resolve_image_path(image_root: Path, image_id: str, category: str) -> Path:
     candidates = []
@@ -71,187 +128,21 @@ def unique_reference_entries(annotation_root: Path, split: str) -> list[tuple[st
 
     return entries
 
-
-def validation_gallery_entries_for_category(split_root: Path, category: str) -> list[tuple[str, str]]:
-    image_ids = load_fashioniq_split_ids(
-        split_root=split_root,
-        split="val",
-        category=category,
-    )
-
-    if len(set(image_ids)) != len(image_ids):
-        raise RuntimeError(f"Duplicate image IDs inside FashionIQ category={category}")
-
-    return [
-        (image_id, category)
-        for image_id in image_ids
-    ]
-
-
-def load_csmcir_target_captions(csmcir_root: Path) -> dict:
-    root = csmcir_root.resolve() / "COT_ours2" / "fashioniq"
-    result = {}
+def split_entries(split_root: Path, split: str) -> list[tuple[str, str]]:
+    entries = []
+    seen = set()
 
     for category in CATEGORIES:
-        path = root / f"{category}_cot_val.json"
+        image_ids = load_fashioniq_split_ids(split_root=split_root, split=split, category=category)
 
-        if not path.is_file():
-            raise FileNotFoundError(f"Missing CSMCIR target caption file: {path}")
+        for image_id in image_ids:
+            if image_id in seen:
+                continue
 
-        with path.open("r", encoding="utf-8",) as file:
-            result.update(json.load(file))
+            seen.add(image_id)
+            entries.append((image_id, category))
 
-    return result
-
-def get_target_caption(caption_dict: dict, *, image_id: str) -> str:
-    if image_id not in caption_dict:
-        raise KeyError(f"Missing CSMCIR target caption: {image_id}")
-
-    entry = caption_dict[image_id]
-    if isinstance(entry, str):
-        return entry
-
-    if isinstance(entry, dict) and "Final_Caption" in entry:
-        return entry["Final_Caption"]
-
-    raise ValueError(
-        "Unsupported CSMCIR target-caption "
-        f"entry for {image_id}: {entry!r}"
-    )
-
-
-def save_features(features: torch.Tensor, entries: list[tuple[str, str]], output_dir: Path) -> None:
-    image_ids = [
-        image_id
-        for image_id, _ in entries
-    ]
-
-    if features.ndim < 2:
-        raise ValueError(f"Expected [N,...,D], got {tuple(features.shape)}")
-
-    if features.shape[0] != len(image_ids):
-        raise ValueError("Feature count != image count")
-
-    if len(set(image_ids))!= len(image_ids):
-        raise ValueError("Duplicate image IDs")
-
-    assert_finite_chunked(features)
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    torch.save(features, output_dir / "images.pt")
-    name_to_idx = {
-        image_id: index
-        for index, image_id
-        in enumerate(image_ids)
-    }
-    with (output_dir / "name_to_idx.json").open("w", encoding="utf-8") as file:
-        json.dump(name_to_idx, file, indent=2)
-
-def assert_finite_chunked(
-    features: torch.Tensor,
-    chunk_rows: int = 32,
-) -> None:
-    for start in range(0, features.shape[0], chunk_rows):
-        end = min(start + chunk_rows, features.shape[0],)
-
-        if not torch.isfinite(features[start:end]).all().item():
-            raise FloatingPointError(f"Feature cache contains NaN/Inf in rows {start}:{end}")
-
-@torch.inference_mode()
-def precompute_references(
-    *,
-    teacher: CSMCIRStage1Teacher,
-    entries: list[tuple[str, str]],
-    image_root: Path,
-    batch_size: int,
-    device: torch.device,
-) -> torch.Tensor:
-    output = None
-
-    for start in tqdm(range(0, len(entries), batch_size),desc="CSMCIR references"):
-        batch_entries = entries[start:start + batch_size]
-
-        images = torch.stack(
-            [
-                load_image(
-                    image_root=image_root,
-                    image_id=image_id,
-                    category=category,
-                    preprocess=teacher.preprocess,
-                )
-                for image_id, category in batch_entries
-            ]
-        ).to(device)
-
-        features = teacher.encode_reference(images)
-        features_cpu = features.cpu()
-
-        if output is None:
-            output = torch.empty((len(entries), *features_cpu.shape[1:]), dtype=features_cpu.dtype)
-
-        end = start + len(batch_entries)
-        output[start:end].copy_(features_cpu)
-        del images
-        del features
-        del features_cpu
-
-    if output is None:
-        raise RuntimeError("No reference features produced")
-
-    return output
-
-
-@torch.inference_mode()
-def precompute_gallery(
-    *,
-    teacher: CSMCIRStage1Teacher,
-    entries: list[tuple[str, str]],
-    caption_dicts: dict[str, dict],
-    image_root: Path,
-    batch_size: int,
-    device: torch.device,
-) -> torch.Tensor:
-    output = None
-
-    for start in tqdm(range(0, len(entries), batch_size), desc="CSMCIR gallery"):
-        batch_entries = entries[start:start + batch_size]
-        images = torch.stack(
-            [
-                load_image(
-                    image_root=image_root,
-                    image_id=image_id,
-                    category=category,
-                    preprocess=teacher.preprocess,
-                )
-                for image_id, category in batch_entries
-            ]
-        ).to(device)
-
-        captions = [
-            get_target_caption(
-                caption_dicts,
-                image_id=image_id,
-            )
-            for image_id, category in batch_entries
-        ]
-
-        features = teacher.encode_gallery(images, captions)
-        features_cpu = features.cpu()
-        if output is None:
-            output = torch.empty((len(entries), *features_cpu.shape[1:]), dtype=features_cpu.dtype)
-
-        end = start + len(batch_entries)
-        output[start:end].copy_(features_cpu)
-
-        del images
-        del features
-        del features_cpu
-
-    if output is None:
-        raise RuntimeError("No gallery features produced")
-
-    return output
-
+    return entries
 
 def main():
     args = parse_args()
@@ -260,74 +151,45 @@ def main():
         raise ValueError("--batch-size must be >= 1")
 
     dataset_root = args.dataset_root.resolve()
-    annotation_root = dataset_root / "captions"
     split_root = dataset_root / "image_splits"
     image_root = dataset_root / "images"
     device = torch.device(args.device)
 
-    teacher = (
-        CSMCIRStage1Teacher(
-            csmcir_root=(args.csmcir_root),
-            checkpoint_path=(args.checkpoint),
-            device=args.device,
-        ).to(device).eval()
-    )
+    teacher = CSMCIRStage1Teacher(
+        csmcir_root=args.csmcir_root,
+        checkpoint_path=args.checkpoint,
+        device=args.device,
+    ).to(device).eval()
 
-    train_entries = unique_reference_entries(annotation_root, split="train")
-    print("Train references:", len(train_entries))
+    annotation_root = dataset_root / "captions"
 
-    train_features = (
-        precompute_references(
+    for split in ("train", "val"):
+        retrieval_entries = split_entries(split_root, split)
+        native_entries = unique_reference_entries(annotation_root, split)
+
+        print(f"{split} retrieval images:", len(retrieval_entries))
+        print(f"{split} reference images:", len(native_entries))
+
+        precompute_to_disk(
             teacher=teacher,
-            entries=train_entries,
+            entries=retrieval_entries,
             image_root=image_root,
             batch_size=args.batch_size,
             device=device,
+            output_dir=args.output_root / split / "retrieval",
+            kind="retrieval",
         )
-    )
 
-    print("Train reference shape:", tuple(train_features.shape))
-
-    save_features(train_features, train_entries, args.output_root / "train_reference")
-    del train_features
-
-    import gc
-    gc.collect()
-    val_entries = unique_reference_entries(annotation_root, split="val")
-    print("Val references:", len(val_entries))
-
-    val_features = (
-        precompute_references(
+        precompute_to_disk(
             teacher=teacher,
-            entries=val_entries,
+            entries=native_entries,
             image_root=image_root,
             batch_size=args.batch_size,
             device=device,
+            output_dir=args.output_root / split / "native",
+            kind="native",
         )
-    )
 
-    print("Val reference shape:", tuple(val_features.shape))
-    save_features(val_features, val_entries, args.output_root / "val_reference")
-    del val_features
-    gc.collect()
-    caption_dicts = load_csmcir_target_captions(args.csmcir_root)
-    for category in CATEGORIES:
-        gallery_entries = validation_gallery_entries_for_category(split_root=split_root, category=category)
-
-        print(f"Val gallery {category}:", len(gallery_entries))
-        gallery_features = precompute_gallery(
-            teacher=teacher,
-            entries=gallery_entries,
-            caption_dicts=caption_dicts,
-            image_root=image_root,
-            batch_size=args.batch_size,
-            device=device,
-        )
-        print(f"Val gallery {category} shape:", tuple(gallery_features.shape))
-        save_features(gallery_features, gallery_entries, args.output_root / "val_gallery_teacher" / category,)
-
-        del gallery_features
-        gc.collect()
     print()
     print("DONE")
     print("Saved under:", args.output_root)
