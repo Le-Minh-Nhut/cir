@@ -901,6 +901,18 @@ class TAPER(nn.Module):
         token_scores = torch.einsum("bd,nkd->bnk", query, candidates)
         return token_scores.amax(dim=-1)
 
+    @staticmethod
+    def _orthogonal_regularization(templates: Tensor) -> Tensor:
+        batch_size, length, _ = templates.size()
+        normalized_templates = F.normalize(templates, p=2, dim=-1)
+        cosine_score = torch.matmul(
+            normalized_templates,
+            normalized_templates.transpose(-2, -1),
+        )
+        identity = torch.eye(length, device=templates.device)
+        identity = identity.unsqueeze(0).repeat(batch_size, 1, 1)
+        return F.mse_loss(cosine_score, identity)
+
     def _assignment_diagnostics(
         self,
         *,
@@ -1048,7 +1060,10 @@ class TAPER(nn.Module):
 
         output = self.forward(reference, text, mask, text_content_mask=content_mask, teacher_reference_features=teacher_reference, teacher_text_states=teacher_text)
         losses = {
-            "retrieval_loss": self._retrieval_loss(output["q0"], targets, batch.get("target_ids"))
+            "retrieval_loss": self._retrieval_loss(output["q0"], targets, batch.get("target_ids")),
+            "ortho_loss": self._orthogonal_regularization(
+                self.slot_queries.unsqueeze(0)
+            ),
         }
         with torch.no_grad():
             diagnostics = self._assignment_diagnostics(
