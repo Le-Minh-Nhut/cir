@@ -1,6 +1,8 @@
 [project]
 name = "cir-research"
 version = "0.1.0"
+description = "TAPER for composed image retrieval with a frozen CSMCIR teacher"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "torch",
@@ -10,6 +12,7 @@ dependencies = [
     "numpy",
     "pillow",
     "tqdm",
+    "wandb",
 ]
 
 [project.optional-dependencies]
@@ -26,3 +29,13 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

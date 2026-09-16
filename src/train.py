@@ -5,7 +5,6 @@ os.environ.setdefault(
     ":4096:8",
 )
 import hydra
-import torch
 from omegaconf import DictConfig
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
@@ -152,7 +151,16 @@ def main(cfg: DictConfig) -> None:
         weight_decay=cfg.experiment.weight_decay,
     )
 
-    prepare_batch_fn = lambda batch, device: prepare_batch(batch, device, train_retrieval, train_native, train_retrieval_idx, train_native_idx, train_text)
+    def prepare_batch_fn(batch, batch_device):
+        return prepare_batch(
+            batch,
+            batch_device,
+            train_retrieval,
+            train_native,
+            train_retrieval_idx,
+            train_native_idx,
+            train_text,
+        )
 
     def evaluate_fn(model):
         return evaluate_fashioniq(

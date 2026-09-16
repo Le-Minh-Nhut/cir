@@ -1,27 +1,25 @@
-from dataclasses import dataclass, field
-#Protocol ở đây chỉ định rằng bất kỳ class nào có đủ hai hàm -> thì đều có thể được xem như một ImageStore
-from typing import Any, Protocol 
-from pathlib import Path
 from abc import ABC, abstractmethod
-import random
-import string
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
 from PIL import Image
+
 
 @dataclass(frozen=True, slots=True)
 class CIRSample:
-    sample_id: str # id của sample do codebase quản lý 
+    sample_id: str
     benchmark_id: str | None
-    reference_id: str # id của ref image 
-    target_id: str | None # id của target image
-    modification_text: str # câu mô tả
-    category: str | None = None # dành cho FashionIQ
-    group_members: tuple[str, ...] = () # dành cho đánh giá CIRR 
+    reference_id: str
+    target_id: str | None
+    modification_text: str
+    category: str | None = None
+    group_members: tuple[str, ...] = ()
     ground_truth_ids: tuple[str, ...] = ()
-    metadata: Mapping[str, Any] = field(default_factory=dict) # thông tin phụ
+    metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
-# 1 nhóm nhiều CIRSample
 @dataclass(slots=True)
 class CIRBatch:
     sample_ids: list[str]
@@ -32,7 +30,7 @@ class CIRBatch:
     modification_texts: list[str]
 
     categories: list[str | None]
-    group_members: list[tuple[str, ...]] # chứa nhiều group của nhiều query
+    group_members: list[tuple[str, ...]]
     ground_truth_ids: list[tuple[str, ...]]
 
 
@@ -68,7 +66,7 @@ class ImageStore(ABC):
         raise NotImplementedError
 
 @dataclass(frozen=True, slots=True)
-class DirectoryImageStore (ImageStore):
+class DirectoryImageStore(ImageStore):
     image_root: Path
     extensions: tuple[str, ...] = (".png", ".jpg", ".jpeg")
 
