@@ -15,6 +15,7 @@ from datasets.cirr import (
     CIRRDataset,
     build_cirr_image_store,
     load_cirr_image_mapping,
+    resolve_cirr_image_root,
 )
 from datasets.common import collate_cir_samples
 from teachers.csmcir import CSMCIRStage1Teacher
@@ -69,8 +70,9 @@ def precompute_image_features(
     device: torch.device,
     output_root: Path,
 ) -> None:
+    image_root = resolve_cirr_image_root(dataset_root, split, version=version)
     image_store = build_cirr_image_store(
-        dataset_root / "img_raw",
+        image_root,
         dataset_root / "image_splits",
         split,
         version=version,

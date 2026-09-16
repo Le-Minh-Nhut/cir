@@ -141,6 +141,47 @@ def load_cirr_image_mapping(
     return dict(value)
 
 
+def resolve_cirr_image_root(
+    dataset_root: str | Path,
+    split: str,
+    *,
+    version: str = "rc2",
+) -> Path:
+    """Resolve both common CIRR layouts from paths stored in the split JSON.
+
+    Official split files contain paths such as ``./dev/...`` or ``./test1/...``.
+    Some installations put those directories directly below the CIRR root, while
+    older local setups place them below ``img_raw``.
+    """
+    root = Path(dataset_root)
+    mapping = load_cirr_image_mapping(
+        root / "image_splits", split, version=version
+    )
+    candidates = (root / "img_raw", root)
+    missing_examples: dict[Path, str] = {}
+
+    for candidate in candidates:
+        missing = next(
+            (
+                relative_path
+                for relative_path in mapping.values()
+                if not (candidate / relative_path).is_file()
+            ),
+            None,
+        )
+        if missing is None:
+            return candidate
+        missing_examples[candidate] = missing
+
+    details = "; ".join(
+        f"{candidate} (missing {relative_path!r})"
+        for candidate, relative_path in missing_examples.items()
+    )
+    raise FileNotFoundError(
+        "Could not resolve CIRR image root from split paths. Tried: " + details
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class CIRRImageStore(ImageStore):
     image_root: Path

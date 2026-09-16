@@ -5,7 +5,12 @@ from pathlib import Path
 
 from PIL import Image
 
-from datasets.cirr import CIRRDataset, build_cirr_image_store, load_cirr_image_mapping
+from datasets.cirr import (
+    CIRRDataset,
+    build_cirr_image_store,
+    load_cirr_image_mapping,
+    resolve_cirr_image_root,
+)
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -69,3 +74,27 @@ def test_cirr_image_split_resolves_relative_paths(tmp_path: Path) -> None:
     assert mapping == {"ref": "dev/ref.png"}
     assert store.path_for("ref") == image_path
     assert store.load("ref").mode == "RGB"
+
+
+def test_cirr_image_root_supports_official_root_level_layout(tmp_path: Path) -> None:
+    image_path = tmp_path / "test1" / "ref.png"
+    image_path.parent.mkdir(parents=True)
+    Image.new("RGB", (2, 2), color="red").save(image_path)
+    _write_json(
+        tmp_path / "image_splits" / "split.rc2.test1.json",
+        {"ref": "./test1/ref.png"},
+    )
+
+    assert resolve_cirr_image_root(tmp_path, "test1") == tmp_path
+
+
+def test_cirr_image_root_keeps_img_raw_layout_compatible(tmp_path: Path) -> None:
+    image_path = tmp_path / "img_raw" / "test1" / "ref.png"
+    image_path.parent.mkdir(parents=True)
+    Image.new("RGB", (2, 2), color="red").save(image_path)
+    _write_json(
+        tmp_path / "image_splits" / "split.rc2.test1.json",
+        {"ref": "./test1/ref.png"},
+    )
+
+    assert resolve_cirr_image_root(tmp_path, "test1") == tmp_path / "img_raw"

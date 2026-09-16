@@ -32,7 +32,7 @@ def test_encoder_evaluators_do_not_replace_legacy_evaluators() -> None:
     )
 
     assert "mean_recall" in legacy and "selection_score" not in legacy
-    assert "selection_score" in encoder and "mean_recall" not in encoder
+    assert "selection_score" in encoder and "mean_recall" in encoder
 
 
 def test_importing_encoder_entrypoints_does_not_patch_taper_api() -> None:
@@ -41,6 +41,7 @@ def test_importing_encoder_entrypoints_does_not_patch_taper_api() -> None:
 
     importlib.import_module("train_cirr_encoder")
     importlib.import_module("evaluate_cirr_encoder")
+    importlib.import_module("predict_cirr_encoder_test")
     importlib.import_module("train_fashioniq_encoder")
     importlib.import_module("evaluate_fashioniq_encoder")
 

@@ -17,7 +17,9 @@ from runtime import configure_torch_runtime, resolve_device, seed_everything
 from train_cirr_encoder import build_cirr_encoder_model
 
 
-def _load_checkpoint(model, checkpoint_path: Path, device: torch.device) -> None:
+def load_cirr_encoder_checkpoint(
+    model, checkpoint_path: Path, device: torch.device
+) -> None:
     state_dict = torch.load(checkpoint_path, map_location=device, weights_only=True)
     if not isinstance(state_dict, Mapping):
         raise TypeError("TAPER checkpoint must contain a state-dict mapping")
@@ -85,7 +87,7 @@ def main(cfg: DictConfig) -> None:
     )
 
     model = build_cirr_encoder_model(cfg, device)
-    _load_checkpoint(model, checkpoint_path, device)
+    load_cirr_encoder_checkpoint(model, checkpoint_path, device)
     metrics = evaluate_cirr_encoder(
         model,
         val_loader,

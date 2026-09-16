@@ -39,6 +39,7 @@ def test_cirr_encoder_reference_exclusion_global_subset_and_selection() -> None:
         "recall_subset_at_2": 100.0,
         "recall_subset_at_3": 100.0,
         "selection_score": 500.0,
+        "mean_recall": 50.0,
     }
 
 
@@ -95,6 +96,9 @@ def _encoder_reference_metrics(
         }
     )
     metrics["selection_score"] = sum(metrics.values())
+    metrics["mean_recall"] = 0.5 * (
+        metrics["recall_at_5"] + metrics["recall_subset_at_1"]
+    )
     return metrics
 
 
