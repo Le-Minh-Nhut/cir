@@ -61,6 +61,7 @@ from datasets.fashioniq import FashionIQDataset
 from runtime import configure_torch_runtime, resolve_device, seed_everything
 from train import CATEGORIES, build_model
 from training.engine import resolve_precision
+from training.diagnostics import validate_checkpoint_candidate_count
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +422,7 @@ def main(cfg: DictConfig) -> None:
         weights_only=True,
     )
 
+    validate_checkpoint_candidate_count(checkpoint, int(cfg.model.num_candidates))
     model, tokenizer, processor = build_model(cfg)
     model.load_state_dict(checkpoint["model"])
     model.to(device).eval()

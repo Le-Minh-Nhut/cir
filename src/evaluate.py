@@ -12,6 +12,7 @@ from datasets.common import DirectoryImageStore
 from evaluation.fashioniq import build_validation_datasets, evaluate_fashioniq
 from runtime import resolve_device
 from train import CATEGORIES, build_model
+from training.diagnostics import validate_checkpoint_candidate_count
 
 
 def validate_checkpoint_backbone_metadata(
@@ -59,8 +60,9 @@ def main(cfg: DictConfig) -> None:
     if checkpoint_path is None:
         raise ValueError("pass checkpoint=/absolute/or/repository/relative/best.pt")
     device = resolve_device(str(cfg.runtime.device), int(cfg.runtime.accelerator_index))
-    model, tokenizer, processor = build_model(cfg)
     checkpoint = torch.load(str(checkpoint_path), map_location="cpu", weights_only=True)
+    validate_checkpoint_candidate_count(checkpoint, int(cfg.model.num_candidates))
+    model, tokenizer, processor = build_model(cfg)
     validate_checkpoint_backbone_metadata(
         checkpoint.get("metadata"),
         str(cfg.backbone.checkpoint),

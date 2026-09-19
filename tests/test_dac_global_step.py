@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import torch
@@ -58,6 +59,29 @@ class _RecordingObjective(nn.Module):
         else:
             loss = value.square()
         return {"total": loss}
+
+
+class _StageObjective(nn.Module):
+    def forward(
+        self,
+        output,
+        target_embeddings,
+        target_ids,
+        modification_texts,
+        *,
+        epoch: int,
+        global_step: int,
+    ) -> dict[str, Tensor]:
+        del target_embeddings, target_ids, modification_texts, epoch
+        stage = 0 if global_step < 2000 else 1
+        value = output["value"]
+        return {
+            "total": value.square(),
+            "dac_stage": value.new_tensor(float(stage)),
+            "dac_num_groups": value.new_tensor(float(2**stage)),
+            "dac_group_size": value.new_tensor(float(8 // (2**stage))),
+            "dac_split_interval_steps": value.new_tensor(2000.0),
+        }
 
 
 class _FiniteForwardInfiniteBackward(torch.autograd.Function):
@@ -146,6 +170,84 @@ def test_amp_overflow_skipped_update_does_not_advance_global_step() -> None:
 
     assert objective.global_steps == [5, 5]
     assert global_step == 6
+
+
+def test_step_log_cadence_counts_only_successful_optimizer_updates(
+    tmp_path: Path,
+) -> None:
+    model = _TinyTrainModel()
+    objective = _RecordingObjective(overflow_first=True)
+    optimizer = SGD(model.parameters(), lr=0.1)
+    scaler = torch.amp.GradScaler(
+        "cpu",
+        enabled=True,
+        init_scale=8.0,
+        growth_factor=2.0,
+        backoff_factor=0.5,
+        growth_interval=100,
+    )
+    log_path = tmp_path / "train_steps.jsonl"
+
+    _, global_step = train_one_epoch(
+        model,
+        objective,
+        [_batch(), _batch()],
+        optimizer,
+        scaler,
+        torch.device("cpu"),
+        precision=resolve_precision("fp32", torch.device("cpu")),
+        epoch=4,
+        global_step=99,
+        step_log_path=log_path,
+        step_log_interval=100,
+    )
+
+    records = [json.loads(line) for line in log_path.read_text().splitlines()]
+    assert objective.global_steps == [99, 99]
+    assert global_step == 100
+    assert len(records) == 1
+    assert records[0]["global_step"] == 100
+    assert records[0]["objective_global_step"] == 99
+    assert records[0]["epoch"] == 4
+
+
+def test_epoch_summary_and_step_log_keep_discrete_dac_state(tmp_path: Path) -> None:
+    model = _TinyTrainModel()
+    objective = _StageObjective()
+    optimizer = SGD(model.parameters(), lr=0.1)
+
+    log_path = tmp_path / "train_steps.jsonl"
+    metrics, global_step = train_one_epoch(
+        model,
+        objective,
+        [_batch(), _batch()],
+        optimizer,
+        torch.amp.GradScaler("cpu", enabled=False),
+        torch.device("cpu"),
+        precision=resolve_precision("fp32", torch.device("cpu")),
+        epoch=0,
+        global_step=1999,
+        step_log_path=log_path,
+        step_log_interval=1,
+    )
+
+    assert global_step == 2001
+    assert metrics["dac_stage"] == 1.0
+    assert metrics["dac_num_groups"] == 2.0
+    assert metrics["dac_group_size"] == 4.0
+    assert metrics["dac_split_interval_steps"] == 2000.0
+    records = [json.loads(line) for line in log_path.read_text().splitlines()]
+    assert [
+        (
+            record["global_step"],
+            record["objective_global_step"],
+            record["dac_stage"],
+        )
+        for record in records
+    ] == [
+        (2000, 1999, 0),
+        (2001, 2000, 1),
+    ]
 
 
 def test_checkpoint_records_global_step_and_dac_configuration(

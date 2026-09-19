@@ -44,6 +44,10 @@ from models.iag_srme.utils.retrieval import build_teacher_masks, marginal_teache
 from runtime import configure_torch_runtime, resolve_device, seed_everything
 from train import CATEGORIES, build_concept_vocabulary, build_model, encode_concept_prototypes
 from training.engine import resolve_precision
+from training.diagnostics import (
+    proposal_query_gradient_diagnostics,
+    validate_checkpoint_candidate_count,
+)
 
 
 def scalar(x: Any) -> float:
@@ -550,13 +554,14 @@ def run_gradient_diagnostic(model: nn.Module, objective: IAGSRMEObjective, batch
             batch.modification_texts,
             global_step=global_step,
         )
+    slot_gradients = proposal_query_gradient_diagnostics(model, losses)
     routing = component_gradient_routing(model, objective, losses)
     losses["total"].backward()
     groups = gradient_group_stats(model, objective)
     all_finite = all(torch.isfinite(p.grad).all() for module in (model, objective) for p in module.parameters() if p.grad is not None)
     model.zero_grad(set_to_none=True); objective.zero_grad(set_to_none=True); model.eval(); objective.eval()
     return {"all_gradients_finite": bool(all_finite), "component_routing_probe_grad_l2": routing,
-            "total_gradient_groups": groups}
+            "proposal_query_slot_gradients": slot_gradients, "total_gradient_groups": groups}
 
 
 def flag(flags, level, code, message):
@@ -719,6 +724,35 @@ def render_markdown(report: Mapping[str, Any]):
         probes = sorted({p for r in routing.values() if isinstance(r, Mapping) for p in r if not p.startswith("_")})
         rows = [[loss] + [float(route.get(p, 0.0)) for p in probes] for loss, route in routing.items() if isinstance(route, Mapping)]
         lines += ["## Per-loss gradient routing probes", "", table(rows, ["Loss"] + probes), ""]
+        slot_gradients = gradient.get("proposal_query_slot_gradients", {})
+        if slot_gradients:
+            slot_count = len(
+                [
+                    key
+                    for key in slot_gradients
+                    if key.startswith("proposal_query_grad_l2_")
+                    and key.removeprefix("proposal_query_grad_l2_").isdigit()
+                ]
+            )
+            rows = [
+                [
+                    index,
+                    slot_gradients.get(f"proposal_query_grad_l2_{index}", 0.0),
+                    slot_gradients.get(
+                        f"terminal_proposal_query_grad_l2_{index}", 0.0
+                    ),
+                    slot_gradients.get(
+                        f"candidate_credit_proposal_query_grad_l2_{index}", 0.0
+                    ),
+                ]
+                for index in range(slot_count)
+            ]
+            lines += [
+                "## Proposal query per-slot gradient L2",
+                "",
+                table(rows, ["Slot", "Total", "Terminal", "Candidate credit"]),
+                "",
+            ]
 
     movement = report.get("parameter_movement_from_fresh", {})
     if movement:
@@ -762,6 +796,7 @@ def main(cfg: DictConfig):
     if not isinstance(checkpoint, dict) or "model" not in checkpoint:
         raise ValueError("checkpoint does not contain model state")
 
+    validate_checkpoint_candidate_count(checkpoint, int(cfg.model.num_candidates))
     model, tokenizer, processor = build_model(cfg)
     movement = parameter_movement_from_fresh(model, checkpoint["model"]) if movement_enabled else {}
     model.load_state_dict(checkpoint["model"])

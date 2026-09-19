@@ -230,6 +230,7 @@ def main(cfg: DictConfig) -> None:
         device=device,
         output_dir=str(cfg.paths.output_root),
         precision=precision,
+        step_log_interval=int(cfg.experiment.get("step_log_interval", 100)),
     )
 
 

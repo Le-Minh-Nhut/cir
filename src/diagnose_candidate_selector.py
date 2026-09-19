@@ -49,6 +49,7 @@ from train import (
     encode_concept_prototypes,
 )
 from training.engine import resolve_precision
+from training.diagnostics import validate_checkpoint_candidate_count
 
 
 def safe_div(a: float, b: float) -> float:
@@ -285,6 +286,7 @@ def main(cfg: DictConfig) -> None:
     precision = resolve_precision(str(cfg.runtime.precision), device)
 
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    validate_checkpoint_candidate_count(checkpoint, int(cfg.model.num_candidates))
     model, tokenizer, processor = build_model(cfg)
     model.load_state_dict(checkpoint["model"])
     model.to(device).eval()

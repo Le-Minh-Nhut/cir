@@ -14,6 +14,21 @@ from tqdm import tqdm
 from data.images import ImageBatch
 from losses.objective import IAGSRMEObjective
 from models.iag_srme.model import IAGSRME
+from training.diagnostics import (
+    append_step_jsonl,
+    build_step_log_record,
+    proposal_query_gradient_diagnostics,
+)
+
+
+_DAC_STATE_METRICS = frozenset(
+    {
+        "dac_stage",
+        "dac_num_groups",
+        "dac_group_size",
+        "dac_split_interval_steps",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,13 +149,23 @@ def train_one_epoch(
     precision: PrecisionPolicy,
     epoch: int,
     global_step: int,
+    step_log_path: str | Path | None = None,
+    step_log_interval: int = 100,
 ) -> tuple[dict[str, float], int]:
+    if step_log_path is not None and step_log_interval <= 0:
+        raise ValueError("step_log_interval must be positive")
     model.train()
     objective.train()
     totals: defaultdict[str, float] = defaultdict(float)
+    latest: dict[str, float] = {}
     steps = 0
     progress = tqdm(loader, desc=f"train {epoch + 1}", dynamic_ncols=True)
     for cpu_batch in progress:
+        update_step = global_step
+        should_log = (
+            step_log_path is not None
+            and (update_step + 1) % step_log_interval == 0
+        )
         batch = cpu_batch.to(device)
         if batch.target_pixels is None or any(value is None for value in batch.target_ids):
             raise ValueError("training batch requires raw target images and IDs")
@@ -168,6 +193,11 @@ def train_one_epoch(
                 global_step=global_step,
             )
             loss = components["total"]
+        gradient_metrics = (
+            proposal_query_gradient_diagnostics(model, components)
+            if should_log
+            else {}
+        )
         scaler.scale(loss).backward()
         scale_before = float(scaler.get_scale())
         scaler.step(optimizer)
@@ -177,13 +207,30 @@ def train_one_epoch(
         )
         if optimizer_updated:
             global_step += 1
+            if should_log:
+                append_step_jsonl(
+                    step_log_path,
+                    build_step_log_record(
+                        global_step=global_step,
+                        objective_global_step=update_step,
+                        epoch=epoch,
+                        components=components,
+                        gradient_metrics=gradient_metrics,
+                    ),
+                )
         steps += 1
         for name, value in components.items():
-            totals[name] += float(value.detach())
+            scalar_value = float(value.detach())
+            totals[name] += scalar_value
+            latest[name] = scalar_value
         progress.set_postfix(loss=f"{float(loss.detach()):.4f}")
     if steps == 0:
         raise RuntimeError("empty training loader")
-    return {name: value / steps for name, value in totals.items()}, global_step
+    summary = {name: value / steps for name, value in totals.items()}
+    for name in _DAC_STATE_METRICS:
+        if name in latest:
+            summary[name] = latest[name]
+    return summary, global_step
 
 
 def save_checkpoint(
@@ -269,6 +316,7 @@ def fit(
     output_dir: str | Path,
     precision: PrecisionPolicy,
     primary_metric: str = "mean_recall",
+    step_log_interval: int = 100,
 ) -> None:
     assert_training_setup(model, objective, optimizer, device)
     destination = Path(output_dir)
@@ -287,6 +335,8 @@ def fit(
             precision=precision,
             epoch=epoch,
             global_step=global_step,
+            step_log_path=destination / "train_steps.jsonl",
+            step_log_interval=step_log_interval,
         )
         validation = dict(evaluate(model))
         metric = float(validation[primary_metric])
