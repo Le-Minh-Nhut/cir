@@ -1,0 +1,6 @@
+defaults:
+  - iag_srme
+  - _self_
+
+name: iag_srme_k8
+num_candidates: 8

@@ -34,10 +34,12 @@ from torch.utils.data import DataLoader
 from data.images import FashionIQImageCollator
 from datasets.common import DirectoryImageStore
 from datasets.fashioniq import FashionIQDataset
+from losses.dac import dac_groups, dac_responsibility_weights, dac_stage
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from models.iag_srme.utils.retrieval import (
     build_teacher_masks,
     marginal_teacher_utilities,
+    teacher_retrieval_loss,
 )
 from runtime import configure_torch_runtime, resolve_device, seed_everything
 from train import (
@@ -246,6 +248,21 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         "",
         "> Target-derived teacher utility is diagnostic only and is never an inference input.",
     ]
+    dac = report.get("dac")
+    if isinstance(dac, Mapping) and dac.get("enabled"):
+        lines += [
+            "",
+            "## DAC responsibility",
+            "",
+            f"- stage: `{dac['stage']}`",
+            f"- groups: `{dac['num_groups']}`",
+            f"- group size: `{dac['group_size']}`",
+            f"- split interval: `{dac['split_interval_steps']}` optimizer updates",
+            f"- gradient candidate fraction: `{dac['gradient_candidate_fraction']:.4f}`",
+            f"- responsibility concentration: `{dac['responsibility_concentration']:.4f}`",
+            f"- per-candidate responsibility frequency: `{dac['responsibility_frequency']}`",
+            f"- per-group winning frequency: `{dac['group_winning_frequency']}`",
+        ]
     return "\n".join(lines)
 
 
@@ -308,6 +325,20 @@ def main(cfg: DictConfig) -> None:
     k = int(model.config.num_candidates)
     stop_idx = k
     n_actions = k + 1
+    metadata = checkpoint.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    global_step = int(checkpoint.get("global_step", metadata.get("global_step", 0)))
+    dac_enabled = objective.config.candidate_credit_mode == "dac"
+    dac_stage_index = (
+        dac_stage(global_step, objective.config.dac_split_interval_steps, k)
+        if dac_enabled
+        else 0
+    )
+    current_dac_groups = dac_groups(k, dac_stage_index) if dac_enabled else ()
+    dac_responsibility_count = torch.zeros(k, dtype=torch.float64)
+    dac_weight_sum = torch.zeros(k, dtype=torch.float64)
+    dac_group_win_count = torch.zeros(len(current_dac_groups), dtype=torch.float64)
+    dac_valid_rows = 0
 
     selected_count = torch.zeros(n_actions, dtype=torch.float64)
     oracle_count = torch.zeros(n_actions, dtype=torch.float64)
@@ -394,6 +425,27 @@ def main(cfg: DictConfig) -> None:
 
                 if not valid_rows.any():
                     continue
+
+                if dac_enabled:
+                    candidate_losses = teacher_retrieval_loss(
+                        step["candidate_queries"][valid_rows],
+                        targets.detach(),
+                        pos_live[valid_rows],
+                        neg_live[valid_rows],
+                        objective.config.retrieval_temperature,
+                    )
+                    dac_weights, winning_groups = dac_responsibility_weights(
+                        candidate_losses, dac_stage_index
+                    )
+                    dac_responsibility_count += (
+                        (dac_weights > 0).sum(dim=0).double().cpu()
+                    )
+                    dac_weight_sum += dac_weights.sum(dim=0).double().cpu()
+                    dac_group_win_count += torch.bincount(
+                        winning_groups,
+                        minlength=len(current_dac_groups),
+                    ).double().cpu()
+                    dac_valid_rows += candidate_losses.shape[0]
 
                 teacher = teacher[valid_rows].float()
                 scores = step["scores"][valid_rows].float()
@@ -604,7 +656,7 @@ def main(cfg: DictConfig) -> None:
 
     offdiag = ~torch.eye(k, dtype=torch.bool)
     mean_deltaq_cos = float(deltaq_cos[offdiag].mean())
-    if mean_deltaq_cos > 0.95:
+    if mean_deltaq_cos > 0.95 and not (dac_enabled and dac_stage_index == 0):
         flags.append(
             {
                 "level": "FAIL",
@@ -622,8 +674,27 @@ def main(cfg: DictConfig) -> None:
             }
         )
 
-    metadata = checkpoint.get("metadata")
-    metadata = metadata if isinstance(metadata, dict) else {}
+    dac_denominator = max(dac_valid_rows, 1)
+    dac_mean_weight = dac_weight_sum / dac_denominator
+    dac_report = {
+        "enabled": dac_enabled,
+        "stage": dac_stage_index,
+        "num_groups": len(current_dac_groups),
+        "group_size": len(current_dac_groups[0]) if current_dac_groups else 0,
+        "split_interval_steps": objective.config.dac_split_interval_steps,
+        "gradient_candidate_fraction": (
+            len(current_dac_groups[0]) / k
+            if current_dac_groups and dac_valid_rows
+            else 0.0
+        ),
+        "responsibility_concentration": float(dac_mean_weight.square().sum()),
+        "responsibility_frequency": [
+            float(value / dac_denominator) for value in dac_responsibility_count
+        ],
+        "group_winning_frequency": [
+            float(value / dac_denominator) for value in dac_group_win_count
+        ],
+    }
 
     report = {
         "checkpoint_path": str(checkpoint_path),
@@ -634,6 +705,7 @@ def main(cfg: DictConfig) -> None:
             "global_readout_mode": metadata.get("global_readout_mode"),
             "finetune_policy": metadata.get("finetune_policy"),
             "objective_config": metadata.get("objective_config"),
+            "global_step": global_step,
         },
         "num_candidates": k,
         "diagnostic_batches": diagnostic_batches,
@@ -671,6 +743,7 @@ def main(cfg: DictConfig) -> None:
                 positive_candidate_total, positive_candidate_count
             ),
         },
+        "dac": dac_report,
         "flags": flags,
     }
 

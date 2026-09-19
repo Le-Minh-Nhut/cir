@@ -23,6 +23,7 @@ from models.iag_srme.utils.backbone import assert_cache_legal
 from models.iag_srme.utils.semantic import ConceptVocabulary
 from runtime import configure_torch_runtime, resolve_device, seed_everything
 from training.engine import fit, resolve_precision, trainable_parameters
+from losses.dac import validate_dac_candidate_count
 
 
 CATEGORIES = ("dress", "shirt", "toptee")
@@ -123,6 +124,8 @@ def build_objective(
     objective_config = ObjectiveConfig(
         **{key: value for key, value in cfg.objective.items() if key != "name"}
     )
+    if objective_config.candidate_credit_mode == "dac":
+        validate_dac_candidate_count(int(model.config.num_candidates))
     vocabulary = None
     prototypes = None
     if objective_config.concept_enabled:

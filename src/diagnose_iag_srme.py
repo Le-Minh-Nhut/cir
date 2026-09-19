@@ -351,12 +351,14 @@ def analyze_batch(model: nn.Module, objective: IAGSRMEObjective, output: Mapping
         "gain": scalar(losses["gain"]), "concept": scalar(losses["concept_loss"]),
         "bind": scalar(losses["bind_loss"]), "rel_ortho": scalar(losses["rel_ortho_loss"]),
         "dpp": scalar(losses["dpp_raw"]),
+        "candidate_credit": scalar(losses["candidate_credit_loss"]),
     }
     weighted = {
         "terminal": cfg.terminal_weight * raw["terminal"], "pair": cfg.lambda_pair * raw["pair"],
         "gain": cfg.lambda_gain * raw["gain"], "concept": cfg.lambda_c * raw["concept"],
         "bind": cfg.lambda_bind * raw["bind"], "rel_ortho": cfg.lambda_rel * raw["rel_ortho"],
         "dpp": cfg.lambda_dpp * raw["dpp"],
+        "candidate_credit": cfg.lambda_candidate_credit * raw["candidate_credit"],
     }
     abs_total = sum(abs(v) for v in weighted.values())
     for name in raw:
@@ -374,6 +376,9 @@ def analyze_batch(model: nn.Module, objective: IAGSRMEObjective, output: Mapping
     ]:
         if name in losses:
             record[f"objective/{name}"] = scalar(losses[name])
+    for name, value in losses.items():
+        if name.startswith("dac_"):
+            record[f"objective/{name}"] = scalar(value)
 
     query = output["query"]
     initial_state = output["initial_state"]
@@ -511,6 +516,7 @@ def component_gradient_routing(model: nn.Module, objective: IAGSRMEObjective, lo
     names, params = list(probes), list(probes.values())
     components = {
         "terminal": losses["terminal"], "pair": losses["pair"], "gain": losses["gain"],
+        "candidate_credit": losses["candidate_credit_weighted"],
         "concept": losses["concept_loss"], "bind": losses["bind_loss"],
         "rel_ortho": losses["rel_ortho_loss"], "dpp": losses["dpp_weighted"],
     }
@@ -529,14 +535,21 @@ def component_gradient_routing(model: nn.Module, objective: IAGSRMEObjective, lo
     return routing
 
 
-def run_gradient_diagnostic(model: nn.Module, objective: IAGSRMEObjective, batch: Any, precision: Any, device: torch.device):
+def run_gradient_diagnostic(model: nn.Module, objective: IAGSRMEObjective, batch: Any, precision: Any,
+                            device: torch.device, global_step: int):
     model.train(); objective.train(); model.zero_grad(set_to_none=True); objective.zero_grad(set_to_none=True)
     batch = batch.to(device)
     assert batch.target_pixels is not None
     with torch.autocast(device_type=device.type, enabled=precision.autocast_enabled, dtype=precision.autocast_dtype):
         output = model(batch.reference_pixels, batch.input_ids, batch.attention_mask, batch.content_mask)
         targets = model.encode_global_images(batch.target_pixels)
-        losses = objective(output, targets, batch.target_ids, batch.modification_texts)
+        losses = objective(
+            output,
+            targets,
+            batch.target_ids,
+            batch.modification_texts,
+            global_step=global_step,
+        )
     routing = component_gradient_routing(model, objective, losses)
     losses["total"].backward()
     groups = gradient_group_stats(model, objective)
@@ -567,9 +580,13 @@ def build_health_flags(agg: Mapping[str, float], gradient: Mapping[str, Any], co
         flag(flags, "WARN", "RETRIEVAL_EFFECT_TINY", f"mean delta_q norm={dq:.3e}.")
 
     cos, rank = agg.get("objective/functional_pairwise_cosine"), agg.get("objective/functional_rank")
-    if cos is not None and rank is not None and cos > 0.98 and rank < 1.25:
+    dac_shared_stage = (
+        agg.get("objective/dac_num_groups", 0.0) > 0.0
+        and agg.get("objective/dac_stage", 0.0) == 0.0
+    )
+    if not dac_shared_stage and cos is not None and rank is not None and cos > 0.98 and rank < 1.25:
         flag(flags, "FAIL", "FUNCTIONAL_CANDIDATE_COLLAPSE", f"delta_q cosine={cos:.4f}, effective_rank={rank:.3f}.")
-    elif cos is not None and cos > 0.90:
+    elif not dac_shared_stage and cos is not None and cos > 0.90:
         flag(flags, "WARN", "FUNCTIONAL_CANDIDATES_TOO_SIMILAR", f"delta_q sibling cosine={cos:.4f}.")
 
     useful, dpp_rate = agg.get("objective/useful_candidate_count"), agg.get("objective/dpp_valid_rate")
@@ -581,7 +598,7 @@ def build_health_flags(agg: Mapping[str, float], gradient: Mapping[str, Any], co
     for key, code, label in [("step/proposal/pairwise_cosine_mean", "PROPOSAL_COLLAPSE", "Proposal"),
                              ("step/action/pairwise_cosine_mean", "ACTION_COLLAPSE", "Action")]:
         value = agg.get(key)
-        if value is not None and value > 0.97:
+        if not dac_shared_stage and value is not None and value > 0.97:
             flag(flags, "WARN", code, f"{label} sibling cosine={value:.4f}.")
 
     alpha = agg.get("step/grounding/alpha_entropy")
@@ -664,7 +681,7 @@ def render_markdown(report: Mapping[str, Any]):
     lines += ["", "## Loss decomposition", ""]
     rows = [[name, agg.get(f"loss_raw/{name}", float("nan")), agg.get(f"loss_weighted/{name}", float("nan")),
              agg.get(f"loss_abs_fraction/{name}", float("nan"))]
-            for name in ("terminal", "pair", "gain", "concept", "bind", "rel_ortho", "dpp")]
+            for name in ("terminal", "pair", "gain", "candidate_credit", "concept", "bind", "rel_ortho", "dpp")]
     lines += [table(rows, ["Loss", "Raw", "Weighted", "|Contribution| fraction"]), ""]
 
     sections = {
@@ -684,6 +701,9 @@ def render_markdown(report: Mapping[str, Any]):
         "Semantic auxiliaries / DPP": ["objective/concept_positive_recall", "objective/concept_negative_false_positive_rate",
                                        "objective/instruction_concept_coverage", "objective/prototype_occupancy", "objective/prototype_entropy",
                                        "objective/prototype_pairwise_cosine", "objective/useful_candidate_count", "objective/dpp_valid_rate"],
+        "DAC responsibility": ["objective/dac_stage", "objective/dac_num_groups", "objective/dac_group_size",
+                               "objective/dac_split_interval_steps", "objective/dac_gradient_candidate_fraction",
+                               "objective/dac_responsibility_concentration"],
     }
     for title, keys in sections.items():
         lines += [f"## {title}", "", table([[k, agg.get(k, float('nan'))] for k in keys], ["Metric", "Value"]), ""]
@@ -756,6 +776,7 @@ def main(cfg: DictConfig):
     current_obj = ObjectiveConfig(**{k: v for k, v in cfg.objective.items() if k != "name"})
     metadata = checkpoint.get("metadata") if isinstance(checkpoint.get("metadata"), dict) else {}
     stored_obj = metadata.get("objective_config") if isinstance(metadata, dict) else None
+    global_step = int(checkpoint.get("global_step", metadata.get("global_step", 0)))
     comparison = compare_objective_configs(current_obj, stored_obj)
     active_obj = ObjectiveConfig(**dict(stored_obj)) if use_checkpoint_objective and isinstance(stored_obj, Mapping) else current_obj
     print("[diagnostic] objective source:", "checkpoint" if active_obj is not current_obj else "current config")
@@ -792,7 +813,13 @@ def main(cfg: DictConfig):
             with torch.autocast(device_type=device.type, enabled=precision.autocast_enabled, dtype=precision.autocast_dtype):
                 output = model(batch.reference_pixels, batch.input_ids, batch.attention_mask, batch.content_mask)
                 targets = model.encode_global_images(batch.target_pixels)
-                losses = objective(output, targets, batch.target_ids, batch.modification_texts)
+                losses = objective(
+                    output,
+                    targets,
+                    batch.target_ids,
+                    batch.modification_texts,
+                    global_step=global_step,
+                )
             record, selected = analyze_batch(model, objective, output, losses, targets, batch.target_ids)
             records.append(record); selections.update(selected)
             print(f"[diagnostic] batch={batch_index+1} total={record['loss/total']:.4f} "
@@ -804,7 +831,13 @@ def main(cfg: DictConfig):
     if not records:
         raise RuntimeError("no complete diagnostic batch")
     aggregate = aggregate_records(records)
-    gradient = run_gradient_diagnostic(model, objective, gradient_batch, precision, device) if deep_grad and gradient_batch is not None else {}
+    gradient = (
+        run_gradient_diagnostic(
+            model, objective, gradient_batch, precision, device, global_step
+        )
+        if deep_grad and gradient_batch is not None
+        else {}
+    )
     memory = ({"peak_allocated_gib": torch.cuda.max_memory_allocated(device) / 1024**3,
                "peak_reserved_gib": torch.cuda.max_memory_reserved(device) / 1024**3}
               if device.type == "cuda" else None)

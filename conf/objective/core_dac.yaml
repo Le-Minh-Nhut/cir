@@ -1,0 +1,8 @@
+defaults:
+  - core
+  - _self_
+
+name: core_dac_candidate_credit
+candidate_credit_mode: dac
+lambda_candidate_credit: 1.0
+dac_split_interval_steps: 2000

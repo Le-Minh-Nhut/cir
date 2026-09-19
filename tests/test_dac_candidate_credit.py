@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import inspect
+from pathlib import Path
 
+from hydra import compose, initialize_config_dir
+from omegaconf import OmegaConf
 import pytest
 import torch
 
@@ -345,3 +349,69 @@ def test_dac_credit_detaches_targets_and_reaches_four_candidate_queries(
         nonzero_by_candidate.sum(dim=-1), torch.full((3,), 4, dtype=torch.long)
     )
     assert targets.grad is None or targets.grad.count_nonzero() == 0
+
+
+def test_k8_model_components_and_hard_rollout_shapes(model, features) -> None:
+    model = model.__class__(
+        model.backbone,
+        replace(model.config, num_candidates=8, max_steps=1),
+    )
+    torch.nn.init.normal_(model.executor.state_up.weight, std=0.03)
+
+    output = model.forward_from_features(*features)
+    step = output["steps"][0]
+
+    assert step["proposals"].shape == (3, 8, 16)
+    assert step["grounding"].shape == (3, 8, 9)
+    assert step["alpha_read"].shape == (3, 8, 9)
+    assert step["exec_mask"].shape == (3, 8, 9)
+    assert step["candidate_states"].shape == (3, 8, 9, 16)
+    assert step["candidate_queries"].shape == (3, 8, 12)
+    assert step["scores"].shape == (3, 8)
+    assert step["selected_idx"].shape == (3,)
+    assert torch.all(step["selected_idx"] < 8)
+    assert "target" not in inspect.signature(model.forward).parameters
+
+
+def _compose_k8(objective: str):
+    config_dir = str(Path(__file__).parents[1] / "conf")
+    with initialize_config_dir(version_base=None, config_dir=config_dir):
+        return compose(
+            config_name="config",
+            overrides=["model=iag_srme_k8", f"objective={objective}"],
+        )
+
+
+@pytest.mark.parametrize(
+    ("objective_name", "expected_mode"),
+    (
+        ("core_dac", "dac"),
+        ("core_awta", "awta"),
+        ("core_hard_wta", "hard_wta"),
+    ),
+)
+def test_matched_k8_candidate_credit_configs_compose(
+    objective_name: str, expected_mode: str
+) -> None:
+    cfg = _compose_k8(objective_name)
+
+    assert cfg.model.num_candidates == 8
+    assert cfg.objective.candidate_credit_mode == expected_mode
+    assert cfg.objective.lambda_candidate_credit == 1.0
+    if expected_mode == "dac":
+        assert cfg.objective.dac_split_interval_steps == 2000
+
+
+def test_dac_no_dpp_config_only_disables_dpp_terms() -> None:
+    regular = _compose_k8("core_dac")
+    isolated = _compose_k8("core_dac_no_dpp")
+    regular_objective = OmegaConf.to_container(regular.objective, resolve=True)
+    isolated_objective = OmegaConf.to_container(isolated.objective, resolve=True)
+
+    assert regular_objective.pop("dpp_enabled") is True
+    assert isolated_objective.pop("dpp_enabled") is False
+    assert regular_objective.pop("lambda_dpp") == 0.6
+    assert isolated_objective.pop("lambda_dpp") == 0.0
+    regular_objective.pop("name")
+    isolated_objective.pop("name")
+    assert regular_objective == isolated_objective

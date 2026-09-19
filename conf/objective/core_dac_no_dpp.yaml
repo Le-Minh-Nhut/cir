@@ -1,0 +1,7 @@
+defaults:
+  - core_dac
+  - _self_
+
+name: core_dac_candidate_credit_no_dpp
+dpp_enabled: false
+lambda_dpp: 0.0
