@@ -17,13 +17,13 @@ from data.images import FashionIQImageCollator
 from datasets.common import DirectoryImageStore
 from datasets.fashioniq import FashionIQDataset, compose_fashioniq_caption
 from evaluation.fashioniq import evaluate_fashioniq
+from losses.dac import validate_dac_candidate_count
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
 from models.iag_srme import FGCLIPBackbone, FGCLIPRegime, IAGSRME, IAGSRMEConfig
 from models.iag_srme.utils.backbone import assert_cache_legal
 from models.iag_srme.utils.semantic import ConceptVocabulary
 from runtime import configure_torch_runtime, resolve_device, seed_everything
 from training.engine import fit, resolve_precision, trainable_parameters
-from losses.dac import validate_dac_candidate_count
 
 
 CATEGORIES = ("dress", "shirt", "toptee")

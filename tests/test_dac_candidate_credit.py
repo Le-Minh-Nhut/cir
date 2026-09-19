@@ -17,6 +17,7 @@ from losses.dac import (
     validate_dac_candidate_count,
 )
 from losses.objective import IAGSRMEObjective, ObjectiveConfig
+from diagnose_iag_srme import build_health_flags
 
 
 @pytest.mark.parametrize(
@@ -415,3 +416,35 @@ def test_dac_no_dpp_config_only_disables_dpp_terms() -> None:
     regular_objective.pop("name")
     isolated_objective.pop("name")
     assert regular_objective == isolated_objective
+
+
+def test_stage_zero_shared_responsibility_suppresses_similarity_collapse_flags() -> None:
+    metrics = {
+        "objective/dac_num_groups": 1.0,
+        "objective/dac_stage": 0.0,
+        "objective/functional_pairwise_cosine": 0.999,
+        "objective/functional_rank": 1.0,
+        "step/proposal/pairwise_cosine_mean": 0.999,
+        "step/action/pairwise_cosine_mean": 0.999,
+    }
+
+    flags = build_health_flags(metrics, {}, {"differences": {}})
+
+    codes = {flag["code"] for flag in flags}
+    assert "FUNCTIONAL_CANDIDATE_COLLAPSE" not in codes
+    assert "FUNCTIONAL_CANDIDATES_TOO_SIMILAR" not in codes
+    assert "PROPOSAL_COLLAPSE" not in codes
+    assert "ACTION_COLLAPSE" not in codes
+
+
+def test_post_split_similarity_still_triggers_collapse_diagnostic() -> None:
+    metrics = {
+        "objective/dac_num_groups": 2.0,
+        "objective/dac_stage": 1.0,
+        "objective/functional_pairwise_cosine": 0.999,
+        "objective/functional_rank": 1.0,
+    }
+
+    flags = build_health_flags(metrics, {}, {"differences": {}})
+
+    assert "FUNCTIONAL_CANDIDATE_COLLAPSE" in {flag["code"] for flag in flags}
