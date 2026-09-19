@@ -133,7 +133,8 @@ def train_one_epoch(
     *,
     precision: PrecisionPolicy,
     epoch: int,
-) -> dict[str, float]:
+    global_step: int,
+) -> tuple[dict[str, float], int]:
     model.train()
     objective.train()
     totals: defaultdict[str, float] = defaultdict(float)
@@ -164,18 +165,25 @@ def train_one_epoch(
                 target_ids,
                 batch.modification_texts,
                 epoch=epoch,
+                global_step=global_step,
             )
             loss = components["total"]
         scaler.scale(loss).backward()
+        scale_before = float(scaler.get_scale())
         scaler.step(optimizer)
         scaler.update()
+        optimizer_updated = (
+            not scaler.is_enabled() or float(scaler.get_scale()) >= scale_before
+        )
+        if optimizer_updated:
+            global_step += 1
         steps += 1
         for name, value in components.items():
             totals[name] += float(value.detach())
         progress.set_postfix(loss=f"{float(loss.detach()):.4f}")
     if steps == 0:
         raise RuntimeError("empty training loader")
-    return {name: value / steps for name, value in totals.items()}
+    return {name: value / steps for name, value in totals.items()}, global_step
 
 
 def save_checkpoint(
@@ -186,6 +194,7 @@ def save_checkpoint(
     epoch: int,
     metric: float,
     precision: PrecisionPolicy,
+    global_step: int = 0,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -194,6 +203,7 @@ def save_checkpoint(
             "objective": objective.state_dict(),
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
+            "global_step": global_step,
             "metric": metric,
             "metadata": {
                 "architecture": "iag-srme-v2-r0",
@@ -220,6 +230,7 @@ def save_checkpoint(
                 "retrieval_normalization": "l2_fp32",
                 "model_config": asdict(model.config),
                 "objective_config": asdict(objective.config),
+                "global_step": global_step,
                 "teacher_policy": "identity_aware_false_negative_safe_in_batch",
                 "concept_parser_version": objective.config.concept_parser_version,
                 "concept_vocabulary_size": (
@@ -263,9 +274,10 @@ def fit(
     destination = Path(output_dir)
     scaler = torch.amp.GradScaler("cuda", enabled=precision.scaler_enabled)
     best = float("-inf")
+    global_step = 0
     for epoch in range(epochs):
         set_epoch(train_loader, epoch)
-        training = train_one_epoch(
+        training, global_step = train_one_epoch(
             model,
             objective,
             train_loader,
@@ -274,6 +286,7 @@ def fit(
             device,
             precision=precision,
             epoch=epoch,
+            global_step=global_step,
         )
         validation = dict(evaluate(model))
         metric = float(validation[primary_metric])
@@ -285,6 +298,7 @@ def fit(
             epoch + 1,
             metric,
             precision,
+            global_step=global_step,
         )
         if metric > best:
             best = metric
@@ -296,6 +310,7 @@ def fit(
                 epoch + 1,
                 metric,
                 precision,
+                global_step=global_step,
             )
         print(
             f"epoch={epoch + 1}/{epochs} total={training['total']:.4f} "
