@@ -14,6 +14,7 @@ from models.iag_srme.utils.retrieval import (
 )
 from models.iag_srme.utils.semantic import ConceptVocabulary, PARSER_VERSION
 
+from .dac import dac_groups, dac_responsibility_weights, dac_stage
 from .retrieval import TerminalRetrievalLoss
 
 
@@ -33,6 +34,7 @@ class ObjectiveConfig:
     awta_temperature_init: float = 1.0
     awta_temperature_decay: float = 0.85
     awta_temperature_min: float = 0.05
+    dac_split_interval_steps: int = 2000
 
     concept_enabled: bool = False
     bind_enabled: bool = False
@@ -375,9 +377,9 @@ class IAGSRMEObjective(nn.Module):
         super().__init__()
         if config.correspondence_enabled:
             raise ValueError("correspondence is intentionally disabled in V2 R0")
-        if config.candidate_credit_mode not in {"none", "hard_wta", "awta"}:
+        if config.candidate_credit_mode not in {"none", "hard_wta", "awta", "dac"}:
             raise ValueError(
-                "candidate_credit_mode must be one of: none, hard_wta, awta"
+                "candidate_credit_mode must be one of: none, hard_wta, awta, dac"
             )
         awta_temperature(
             0,
@@ -421,6 +423,7 @@ class IAGSRMEObjective(nn.Module):
         modification_texts: Sequence[str] | None = None,
         *,
         epoch: int = 0,
+        global_step: int = 0,
     ) -> Mapping[str, Tensor]:
         positive, negative, _ = build_teacher_masks(target_ids, target_embeddings.device)
         query = output["query"]
@@ -430,6 +433,18 @@ class IAGSRMEObjective(nn.Module):
         steps = output["steps"]
         assert isinstance(steps, list)
         zero = query.sum() * 0.0
+        num_candidates = int(steps[0]["scores"].shape[-1]) if steps else 0
+        current_dac_stage = 0
+        current_dac_groups: tuple[tuple[int, ...], ...] = ()
+        if self.config.candidate_credit_mode == "dac":
+            if num_candidates == 0:
+                raise ValueError("DAC candidate credit requires at least one rollout step")
+            current_dac_stage = dac_stage(
+                global_step,
+                self.config.dac_split_interval_steps,
+                num_candidates,
+            )
+            current_dac_groups = dac_groups(num_candidates, current_dac_stage)
         pair_numerator = zero
         gain_numerator = zero
         pair_count = query.new_zeros(())
@@ -460,6 +475,9 @@ class IAGSRMEObjective(nn.Module):
         awta_entropy_sum = query.new_zeros(())
         awta_max_weight_sum = query.new_zeros(())
         awta_effective_k_sum = query.new_zeros(())
+        dac_responsibility_counts = query.new_zeros(num_candidates)
+        dac_weight_sum = query.new_zeros(num_candidates)
+        dac_group_win_counts = query.new_zeros(len(current_dac_groups))
 
         for step in steps:
             live_indices = step["live_indices"]
@@ -509,28 +527,47 @@ class IAGSRMEObjective(nn.Module):
                     neg_live[valid_rows],
                     self.config.retrieval_temperature,
                 )
-                weights = compute_candidate_credit_weights(
-                    valid_candidate_losses,
-                    self.config.candidate_credit_mode,
-                    current_awta_temperature,
-                )
+                if self.config.candidate_credit_mode == "dac":
+                    weights, winning_groups = dac_responsibility_weights(
+                        valid_candidate_losses,
+                        current_dac_stage,
+                    )
+                    dac_responsibility_counts = (
+                        dac_responsibility_counts
+                        + (weights > 0).sum(dim=0).to(dac_responsibility_counts)
+                    )
+                    dac_weight_sum = dac_weight_sum + weights.sum(dim=0).to(
+                        dac_weight_sum
+                    )
+                    dac_group_win_counts = dac_group_win_counts + torch.bincount(
+                        winning_groups,
+                        minlength=len(current_dac_groups),
+                    ).to(dac_group_win_counts)
+                else:
+                    weights = compute_candidate_credit_weights(
+                        valid_candidate_losses,
+                        self.config.candidate_credit_mode,
+                        current_awta_temperature,
+                    )
                 row_loss = (weights * valid_candidate_losses).sum(dim=-1)
                 candidate_credit_numerator = candidate_credit_numerator + row_loss.sum()
                 candidate_credit_rows = candidate_credit_rows + row_loss.numel()
 
-                diagnostic_weights = weights.detach()
-                eps = torch.finfo(diagnostic_weights.dtype).eps
-                entropy = (
-                    -(
-                        diagnostic_weights
-                        * (diagnostic_weights + eps).log()
-                    ).sum(dim=-1)
-                ).clamp_min(0.0)
-                awta_entropy_sum = awta_entropy_sum + entropy.sum()
-                awta_max_weight_sum = (
-                    awta_max_weight_sum + diagnostic_weights.max(dim=-1).values.sum()
-                )
-                awta_effective_k_sum = awta_effective_k_sum + entropy.exp().sum()
+                if self.config.candidate_credit_mode == "awta":
+                    diagnostic_weights = weights.detach()
+                    eps = torch.finfo(diagnostic_weights.dtype).eps
+                    entropy = (
+                        -(
+                            diagnostic_weights
+                            * (diagnostic_weights + eps).log()
+                        ).sum(dim=-1)
+                    ).clamp_min(0.0)
+                    awta_entropy_sum = awta_entropy_sum + entropy.sum()
+                    awta_max_weight_sum = (
+                        awta_max_weight_sum
+                        + diagnostic_weights.max(dim=-1).values.sum()
+                    )
+                    awta_effective_k_sum = awta_effective_k_sum + entropy.exp().sum()
 
             if self.config.bind_enabled:
                 assert self.relation is not None
@@ -615,6 +652,42 @@ class IAGSRMEObjective(nn.Module):
         awta_weight_entropy = awta_entropy_sum / candidate_credit_rows.clamp_min(1)
         awta_max_weight = awta_max_weight_sum / candidate_credit_rows.clamp_min(1)
         awta_effective_k = awta_effective_k_sum / candidate_credit_rows.clamp_min(1)
+        dac_responsibility_frequency = (
+            dac_responsibility_counts / candidate_credit_rows.clamp_min(1)
+        )
+        dac_group_winning_frequency = (
+            dac_group_win_counts / candidate_credit_rows.clamp_min(1)
+        )
+        mean_dac_weight = dac_weight_sum / candidate_credit_rows.clamp_min(1)
+        dac_responsibility_concentration = mean_dac_weight.square().sum()
+        dac_has_valid_rows = (candidate_credit_rows > 0).to(query.dtype)
+        dac_group_size = len(current_dac_groups[0]) if current_dac_groups else 0
+        dac_gradient_candidate_fraction = dac_has_valid_rows * (
+            float(dac_group_size) / max(num_candidates, 1)
+        )
+
+        dac_metrics: dict[str, Tensor] = {
+            "dac_stage": query.new_tensor(float(current_dac_stage)),
+            "dac_num_groups": query.new_tensor(float(len(current_dac_groups))),
+            "dac_group_size": query.new_tensor(float(dac_group_size)),
+            "dac_split_interval_steps": query.new_tensor(
+                float(self.config.dac_split_interval_steps)
+            ),
+            "dac_gradient_candidate_fraction": dac_gradient_candidate_fraction.detach(),
+            "dac_responsibility_concentration": dac_responsibility_concentration.detach(),
+        }
+        dac_metrics.update(
+            {
+                f"dac_responsibility_frequency_{index}": value.detach()
+                for index, value in enumerate(dac_responsibility_frequency)
+            }
+        )
+        dac_metrics.update(
+            {
+                f"dac_group_winning_frequency_{index}": value.detach()
+                for index, value in enumerate(dac_group_winning_frequency)
+            }
+        )
 
         dpp_weighted = self.config.lambda_dpp * dpp_raw
         total = (
@@ -643,6 +716,7 @@ class IAGSRMEObjective(nn.Module):
             "awta_weight_entropy": awta_weight_entropy.detach(),
             "awta_max_weight": awta_max_weight.detach(),
             "awta_effective_k": awta_effective_k.detach(),
+            **dac_metrics,
             **concept_metrics,
             **relation_metrics,
             "functional_pairwise_cosine": functional_cosine,

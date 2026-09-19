@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 import torch
 
+import losses.objective as objective_module
 from losses.dac import (
     dac_groups,
     dac_responsibility_weights,
     dac_stage,
     validate_dac_candidate_count,
 )
+from losses.objective import IAGSRMEObjective, ObjectiveConfig
 
 
 @pytest.mark.parametrize(
@@ -173,3 +177,171 @@ def test_dac_leaf_matches_hard_wta_numerically_and_in_gradient() -> None:
     assert torch.equal(dac_value, hard_value)
     assert torch.equal(dac_weights, hard_weights)
     assert torch.equal(dac_losses.grad, hard_losses.grad)
+
+
+def _candidate_credit_output(candidate_queries: torch.Tensor) -> dict[str, object]:
+    batch, candidates, dimension = candidate_queries.shape
+    query = torch.randn(batch, dimension, requires_grad=True)
+    return {
+        "query": query,
+        "steps": [
+            {
+                "live_indices": torch.arange(batch),
+                "current_query": torch.randn(batch, dimension),
+                "candidate_queries": candidate_queries,
+                "scores": torch.randn(batch, candidates, requires_grad=True),
+                "delta_q": torch.randn(batch, candidates, dimension),
+                "stopped_now": torch.zeros(batch, dtype=torch.bool),
+                "selected_idx": torch.zeros(batch, dtype=torch.long),
+            }
+        ],
+    }
+
+
+def _patch_candidate_losses_from_first_coordinate(monkeypatch: pytest.MonkeyPatch) -> None:
+    def valid_teacher(current, candidates, targets, positive, negative, temperature):
+        del current, targets, positive, negative, temperature
+        return (
+            candidates.new_zeros(candidates.shape[:-1]),
+            torch.ones(candidates.shape[0], dtype=torch.bool),
+        )
+
+    def first_coordinate_losses(candidates, targets, positive, negative, temperature):
+        del targets, positive, negative, temperature
+        return candidates[..., 0]
+
+    monkeypatch.setattr(objective_module, "marginal_teacher_utilities", valid_teacher)
+    monkeypatch.setattr(
+        objective_module, "teacher_retrieval_loss", first_coordinate_losses
+    )
+
+
+def test_dac_objective_uses_global_step_and_routes_rows_independently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_candidate_losses_from_first_coordinate(monkeypatch)
+    prescribed = torch.tensor(
+        [
+            [[4.0], [3.0], [2.0], [1.0], [8.0], [7.0], [6.0], [5.0]],
+            [[9.0], [8.0], [7.0], [6.0], [5.0], [4.0], [1.0], [3.0]],
+        ],
+        requires_grad=True,
+    )
+    objective = IAGSRMEObjective(
+        ObjectiveConfig(
+            terminal_weight=0.0,
+            lambda_pair=0.0,
+            lambda_gain=0.0,
+            candidate_credit_mode="dac",
+            lambda_candidate_credit=1.0,
+            dac_split_interval_steps=2000,
+        )
+    )
+
+    components = objective(
+        _candidate_credit_output(prescribed),
+        torch.randn(2, 1),
+        ["left", "right"],
+        global_step=2000,
+    )
+    components["candidate_credit_loss"].backward()
+
+    assert torch.equal(components["dac_stage"], torch.tensor(1.0))
+    assert torch.equal(components["dac_num_groups"], torch.tensor(2.0))
+    assert torch.equal(components["dac_group_size"], torch.tensor(4.0))
+    assert torch.equal(components["dac_split_interval_steps"], torch.tensor(2000.0))
+    assert torch.equal(components["dac_gradient_candidate_fraction"], torch.tensor(0.5))
+    assert torch.equal(components["dac_group_winning_frequency_0"], torch.tensor(0.5))
+    assert torch.equal(components["dac_group_winning_frequency_1"], torch.tensor(0.5))
+    for candidate in range(8):
+        assert torch.equal(
+            components[f"dac_responsibility_frequency_{candidate}"],
+            torch.tensor(0.5),
+        )
+    assert torch.equal(
+        prescribed.grad[..., 0],
+        torch.tensor(
+            [[0.125] * 4 + [0.0] * 4, [0.0] * 4 + [0.125] * 4]
+        ),
+    )
+
+
+def test_dac_objective_skips_invalid_rows_with_finite_zero_metrics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def invalid_teacher(current, candidates, targets, positive, negative, temperature):
+        del current, targets, positive, negative, temperature
+        return (
+            candidates.new_zeros(candidates.shape[:-1]),
+            torch.zeros(candidates.shape[0], dtype=torch.bool),
+        )
+
+    monkeypatch.setattr(objective_module, "marginal_teacher_utilities", invalid_teacher)
+    candidates = torch.randn(2, 8, 3, requires_grad=True)
+    objective = IAGSRMEObjective(
+        ObjectiveConfig(
+            terminal_weight=0.0,
+            lambda_pair=0.0,
+            lambda_gain=0.0,
+            candidate_credit_mode="dac",
+            lambda_candidate_credit=1.0,
+        )
+    )
+
+    components = objective(
+        _candidate_credit_output(candidates),
+        torch.randn(2, 3),
+        ["same", "same"],
+        global_step=4000,
+    )
+
+    for name in (
+        "candidate_credit_loss",
+        "candidate_credit_weighted",
+        "dac_responsibility_concentration",
+        "dac_group_winning_frequency_0",
+        "dac_responsibility_frequency_0",
+        "total",
+    ):
+        assert torch.isfinite(components[name])
+        assert components[name] == 0
+    assert components["teacher_invalid_rows"] == 2
+    assert components["dac_stage"] == 2
+
+
+def test_dac_credit_detaches_targets_and_reaches_four_candidate_queries(
+    model, features
+) -> None:
+    model = model.__class__(
+        model.backbone,
+        replace(model.config, num_candidates=8, max_steps=1),
+    )
+    torch.nn.init.normal_(model.executor.action_mlp[-1].weight, std=0.03)
+    torch.nn.init.normal_(model.executor.state_up.weight, std=0.03)
+    output = model.forward_from_features(*features)
+    candidate_queries = output["steps"][0]["candidate_queries"]
+    candidate_queries.retain_grad()
+    targets = torch.randn(3, 12, requires_grad=True)
+    objective = IAGSRMEObjective(
+        ObjectiveConfig(
+            terminal_weight=0.0,
+            lambda_pair=0.0,
+            lambda_gain=0.0,
+            candidate_credit_mode="dac",
+            lambda_candidate_credit=1.0,
+        )
+    )
+
+    components = objective(
+        output,
+        targets,
+        ["a", "b", "c"],
+        global_step=2000,
+    )
+    components["total"].backward()
+
+    nonzero_by_candidate = candidate_queries.grad.abs().sum(dim=-1) > 0
+    assert torch.equal(
+        nonzero_by_candidate.sum(dim=-1), torch.full((3,), 4, dtype=torch.long)
+    )
+    assert targets.grad is None or targets.grad.count_nonzero() == 0
