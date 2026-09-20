@@ -134,6 +134,10 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
             cfg.model.functional_collapse_audit_enabled
             or cfg.experiment.get("functional_collapse_audit_enabled", False)
         ),
+        proposal_internal_audit_enabled=bool(
+            cfg.model.proposal_internal_audit_enabled
+            or cfg.experiment.get("proposal_internal_audit_enabled", False)
+        ),
     )
     return IAGSRME(backbone, model_config), tokenizer, processor
 

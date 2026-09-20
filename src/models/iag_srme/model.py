@@ -25,6 +25,7 @@ class IAGSRMEConfig:
     loss_free_balance_enabled: bool = False
     loss_free_bias_update_rate: float = 1.0e-3
     functional_collapse_audit_enabled: bool = False
+    proposal_internal_audit_enabled: bool = False
 
 
 class ProposalNet(nn.Module):
@@ -56,6 +57,8 @@ class ProposalNet(nn.Module):
             vdim=text_dim,
             batch_first=True,
         )
+        self.internal_audit_enabled = False
+        self.last_internal_audit: dict[str, Tensor] | None = None
 
     def forward(
         self,
@@ -72,19 +75,40 @@ class ProposalNet(nn.Module):
         )
 
         # Learned rows are capacity priors, not fixed semantic identities.
-        q = self.queries.unsqueeze(0).expand(text.shape[0], -1, -1)
+        base_query = self.queries.unsqueeze(0)
+        expanded_query = base_query.expand(text.shape[0], -1, -1)
         conditioned = self.query_conditioner(
-            torch.cat([q, context[:, None].expand_as(q), q * context[:, None]], dim=-1)
+            torch.cat(
+                [
+                    expanded_query,
+                    context[:, None].expand_as(expanded_query),
+                    expanded_query * context[:, None],
+                ],
+                dim=-1,
+            )
         )
-        q = self.query_norm(q + conditioned)
+        query_pre_norm = expanded_query + conditioned
+        query_post_norm = self.query_norm(query_pre_norm)
         # No q residual: candidate content comes only from instruction token values.
         edits, _ = self.token_attention(
-            q,
+            query_post_norm,
             text_tokens,
             text_tokens,
             key_padding_mask=~content_mask,
             need_weights=False,
         )
+        # Attention weights are intentionally omitted: need_weights=False preserves this call's kernels.
+        if self.internal_audit_enabled:
+            self.last_internal_audit = {
+                "base_query": base_query.detach(),
+                "expanded_query": expanded_query.detach(),
+                "conditioned_residual": conditioned.detach(),
+                "query_pre_norm": query_pre_norm.detach(),
+                "query_post_norm": query_post_norm.detach(),
+                "proposal_output": edits.detach(),
+            }
+        else:
+            self.last_internal_audit = None
         return edits
 
 
@@ -280,6 +304,7 @@ class IAGSRME(nn.Module):
         self.score_net = ScoreNet(
             state_dim, text_dim, state_dim, config.width, config.score_dropout
         )
+        self.proposal.internal_audit_enabled = config.proposal_internal_audit_enabled
         self.register_buffer("routing_bias", torch.zeros(config.num_candidates))
 
     def _load_from_state_dict(
@@ -456,6 +481,7 @@ class IAGSRME(nn.Module):
             current_global = self.backbone.global_readout(parent, live_cls)
             dense = self.backbone.dense_readout(parent)
             edits = self.proposal(tokens, text, current_global, mask)
+            proposal_internal = self.proposal.last_internal_audit
             grounding, alpha_read, exec_mask = self.grounder(edits, dense)
             entity = torch.einsum("bkn,bnd->bkd", alpha_read, parent)
             actions, fuse_gamma, fuse_beta = self.action_fusion(entity, edits)
@@ -518,6 +544,11 @@ class IAGSRME(nn.Module):
                     "candidate_global": candidate_global,
                     "candidate_queries": candidate_queries,
                     "delta_q": delta_q,
+                    **(
+                        {"proposal_internal": proposal_internal}
+                        if self.config.proposal_internal_audit_enabled
+                        else {}
+                    ),
                     "scores": scores,
                     "stop_score": scores.new_zeros(scores.shape[0]),
                     "best_score": best_score,

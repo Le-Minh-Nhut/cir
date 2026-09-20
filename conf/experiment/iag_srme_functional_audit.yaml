@@ -3,3 +3,4 @@ defaults:
 
 name: iag_srme_functional_audit
 functional_collapse_audit_enabled: true
+proposal_internal_audit_enabled: true

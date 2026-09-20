@@ -13,3 +13,4 @@ score_dropout: 0.1
 loss_free_balance_enabled: false
 loss_free_bias_update_rate: 1.0e-3
 functional_collapse_audit_enabled: false
+proposal_internal_audit_enabled: false

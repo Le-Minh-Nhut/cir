@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from data.images import ImageBatch
-from diagnostics.functional_collapse import functional_collapse_audit
+from diagnostics.functional_collapse import functional_collapse_audit, proposal_internal_audit
 from losses.objective import IAGSRMEObjective
 from models.iag_srme.model import IAGSRME
 
@@ -268,7 +268,11 @@ def train_one_epoch(
         audit_enabled = bool(
             getattr(getattr(model, "config", None), "functional_collapse_audit_enabled", False)
         )
+        proposal_audit_enabled = bool(
+            getattr(getattr(model, "config", None), "proposal_internal_audit_enabled", False)
+        )
         collapse_audit = functional_collapse_audit(output) if audit_enabled else {}
+        proposal_audit = proposal_internal_audit(output) if proposal_audit_enabled else {}
         for name, value in components.items():
             totals[name] += float(value.detach())
         progress.set_postfix(loss=f"{float(loss.detach()):.4f}")
@@ -290,6 +294,7 @@ def train_one_epoch(
                     **component_values,
                     "loss_free_routing": routing_diagnostics,
                     **({"functional_collapse_audit": collapse_audit} if audit_enabled else {}),
+                    **({"proposal_internal_audit": proposal_audit} if proposal_audit_enabled else {}),
                     "parameter_updates": _probe_diagnostics(probes, before),
                 }
             )

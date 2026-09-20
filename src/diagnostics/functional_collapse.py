@@ -165,3 +165,87 @@ def functional_collapse_audit(output: Mapping[str, object]) -> dict[str, object]
         raise TypeError("model output must contain a trajectory list")
     by_step = {f"t{step['timestep']}": _step_audit(step) for step in trajectory}
     return {"overall": _aggregate(list(by_step.values())), "by_step": by_step}
+
+
+_PROPOSAL_STAGES = (
+    "base_query",
+    "expanded_query",
+    "conditioned_residual",
+    "query_pre_norm",
+    "query_post_norm",
+    "proposal_output",
+)
+
+
+def _proposal_step_audit(step: Mapping[str, object]) -> dict[str, object]:
+    internal = step.get("proposal_internal")
+    if not isinstance(internal, Mapping):
+        raise TypeError("proposal internal audit requires proposal diagnostic stages")
+    tensors = {name: internal[name] for name in _PROPOSAL_STAGES}
+    if not all(isinstance(value, Tensor) for value in tensors.values()):
+        raise TypeError("proposal internal audit requires tensor stages")
+    base = tensors["expanded_query"]
+    conditioned = tensors["conditioned_residual"]
+    pre = tensors["query_pre_norm"]
+    base_norm = base.float().norm(dim=-1)
+    displacement = (pre.float() - base.float()).norm(dim=-1) / (base_norm + _EPS)
+    base_pre_cosine = (base.float() * pre.float()).sum(dim=-1) / (
+        base_norm * pre.float().norm(dim=-1) + _EPS
+    )
+    post = generic_diversity(tensors["query_post_norm"])
+    output = generic_diversity(tensors["proposal_output"])
+    return {
+        "live_samples": int(base.shape[0]),
+        **{name: generic_diversity(tensors[name]) for name in _PROPOSAL_STAGES},
+        "conditioner_to_base_norm_ratio": float(
+            (conditioned.float().norm(dim=-1) / (base_norm + _EPS)).mean()
+        ),
+        "base_pre_cosine": float(base_pre_cosine.mean()),
+        "mean_relative_displacement": float(displacement.mean()),
+        **{
+            f"mean_relative_displacement_c{slot}": float(displacement[:, slot].mean())
+            for slot in range(base.shape[1])
+        },
+        "attention_diversity_retention": float(
+            output["relative_spread"] / (post["relative_spread"] + _EPS)
+        ),
+        "attention_rank_retention": float(
+            output["effective_rank"] / (post["effective_rank"] + _EPS)
+        ),
+    }
+
+
+def _proposal_aggregate(steps: list[dict[str, object]]) -> dict[str, object]:
+    if not steps:
+        return {}
+    total = sum(int(step["live_samples"]) for step in steps)
+
+    def mean(name: str) -> object:
+        value = steps[0][name]
+        if isinstance(value, Mapping):
+            return {
+                key: mean_nested([step[name][key] for step in steps], total, steps)
+                for key in value
+            }
+        return mean_nested([step[name] for step in steps], total, steps)
+
+    return {"live_samples": total, **{name: mean(name) for name in steps[0] if name != "live_samples"}}
+
+
+def mean_nested(values: list[object], total: int, steps: list[dict[str, object]]) -> object:
+    if isinstance(values[0], list):
+        return [
+            sum(float(value[slot]) * int(step["live_samples"]) for value, step in zip(values, steps, strict=True)) / total
+            for slot in range(len(values[0]))
+        ]
+    return sum(float(value) * int(step["live_samples"]) for value, step in zip(values, steps, strict=True)) / total
+
+
+@torch.no_grad()
+def proposal_internal_audit(output: Mapping[str, object]) -> dict[str, object]:
+    """Detached, sample-weighted ProposalNet stage audit."""
+    trajectory = output.get("steps")
+    if not isinstance(trajectory, list):
+        raise TypeError("model output must contain a trajectory list")
+    by_step = {f"t{step['timestep']}": _proposal_step_audit(step) for step in trajectory}
+    return {"overall": _proposal_aggregate(list(by_step.values())), "by_step": by_step}
