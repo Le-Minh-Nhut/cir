@@ -124,10 +124,6 @@ class TAPER(nn.Module):
         self.transition_delta = nn.Sequential(nn.Linear(transition_dim, state_dim), nn.GELU(), nn.Linear(state_dim, state_dim))
         self.transition_strength = nn.Sequential(nn.Linear(transition_dim, state_dim), nn.GELU(), nn.Linear(state_dim, 1), nn.Sigmoid())
         self.state_norm = nn.LayerNorm(state_dim)
-        # TAPER V3 contract: valid controlled residual transitions are followed by LN.
-        # Invalid steps bypass this module and preserve the previous state exactly.
-        # self.state_update_norm = nn.LayerNorm(state_dim)
-
         self.num_refine_iters = num_refine_iters
         self.text_value_projection = nn.Linear(text_dim, slot_dim, bias=False,)
         self.slot_update = nn.GRUCell(input_size=slot_dim, hidden_size=slot_dim)
@@ -241,7 +237,6 @@ class TAPER(nn.Module):
         residual_steps = [residual]
 
         for slot_id in slot_order_list:
-            # slot_id = int(slot_index_tensor.item())
             current_slot = old_states[slot_id]
             effective_text = text_states * residual.unsqueeze(-1)
             keys = self.text_key_projection(effective_text)
@@ -330,8 +325,11 @@ class TAPER(nn.Module):
         slot_evidence, slot_mass, slot_activity = self._mass_aware_slot_pool(text_values, slot_masks)
         if not torch.isfinite(slot_evidence).all():
             raise FloatingPointError("non-finite iterative slot evidence")
-        b, l, d = slot_states.shape
-        candidate_states = self.slot_update(slot_evidence.reshape(b * l, d), slot_states.reshape(b * l, d)).reshape(b, l, d)
+        batch_size, num_slots, dimension = slot_states.shape
+        candidate_states = self.slot_update(
+            slot_evidence.reshape(batch_size * num_slots, dimension),
+            slot_states.reshape(batch_size * num_slots, dimension),
+        ).reshape(batch_size, num_slots, dimension)
         active = slot_mass > 0
         next_slot_states = torch.where(active.unsqueeze(-1), candidate_states, slot_states,)
         if not torch.isfinite(next_slot_states).all():
@@ -557,13 +555,21 @@ class TAPER(nn.Module):
     ) -> Tensor:
         """Score every candidate active-slot x primitive pair [B,L,K]."""
 
-        b, l, _ = edit_slots.shape
-        k = self.num_primitives
+        batch_size, num_slots, _ = edit_slots.shape
+        num_primitives = self.num_primitives
 
-        state_x = state[:, None, None, :].expand(b, l, k, -1)
-        slot_x = edit_slots[:, :, None, :].expand(b, l, k, -1)
-        primitive_x = self.primitive_bank[None, None, :, :].expand(b, l, k, -1)
-        reference_x = reference_state[:, None, None, :].expand(b, l, k, -1)
+        state_x = state[:, None, None, :].expand(
+            batch_size, num_slots, num_primitives, -1
+        )
+        slot_x = edit_slots[:, :, None, :].expand(
+            batch_size, num_slots, num_primitives, -1
+        )
+        primitive_x = self.primitive_bank[None, None, :, :].expand(
+            batch_size, num_slots, num_primitives, -1
+        )
+        reference_x = reference_state[:, None, None, :].expand(
+            batch_size, num_slots, num_primitives, -1
+        )
 
         x = torch.cat([state_x, slot_x, primitive_x, reference_x], dim=-1)
         return self.router(x).squeeze(-1)
@@ -585,10 +591,6 @@ class TAPER(nn.Module):
         effective_strength = alpha * selected_slot_gate
         state_update = effective_strength[:, None] * proposed_delta
 
-        # TAPER V3: valid transitions are normalized after the controlled residual;
-        # invalid steps preserve state exactly and do not reapply LayerNorm.
-        # proposed_next = self.state_update_norm(state + state_update)
-        # next_state = torch.where(valid_step[:, None], proposed_next, state)
         proposed_next = state + state_update
         next_state = torch.where(valid_step[:, None], proposed_next, state)
         actual_change = next_state - state
@@ -646,7 +648,6 @@ class TAPER(nn.Module):
             * self.alpha_max
         )
         update = alpha[:, None] * proposed_delta
-        # shadow_next = detached_call(self.state_update_norm, state.detach() + update)
         shadow_next = state.detach() + update
         return torch.where(has_available[:, None], shadow_next, state.detach())
 

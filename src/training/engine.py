@@ -32,46 +32,44 @@ def _compute_total_loss(loss_dict: dict[str, Tensor], loss_weights: dict[str, fl
 def _set_epoch(train_loader: DataLoader, epoch: int) -> None:
     """Propagate epoch state to Dataset/Sampler when supported."""
 
-    # một sample khi được lấy ra thì nó trông như thế nào
     if hasattr(train_loader.dataset, "set_epoch"):
         train_loader.dataset.set_epoch(epoch)
 
-    # lấy sample nào trước, sample nào sau
     if hasattr(train_loader.sampler, "set_epoch"):
         train_loader.sampler.set_epoch(epoch)
 
 
 def train_one_epoch(
     prepare_batch_fn,
-    model, # model được train 
-    train_loader: DataLoader, # DataLoader của tập train
+    model,
+    train_loader: DataLoader,
     optimizer: Optimizer,
-    scaler: torch.amp.GradScaler, # dùng cho amp
+    scaler: torch.amp.GradScaler,
     device: torch.device,
-    epoch: int, # epoch hiện tại -> hiển thị
-    loss_weights: dict[str, float], # trọng số từng hàm loss
-    use_amp: bool = True, # bật tắt mixed precision
+    epoch: int,
+    loss_weights: dict[str, float],
+    use_amp: bool = True,
 ) -> dict[str, float]:
     """Train model for one epoch."""
 
     model.train()
-    amp_enabled = use_amp and device.type == "cuda" # kiểm tra xem cho chép dùng amp không 
+    amp_enabled = use_amp and device.type == "cuda"
     running_total_loss = 0.0
-    running_components = defaultdict(float) # nghĩa là dictionary mà key chưa tồn tại thì tự mặc định = 0.0
-    num_steps = 0 # đến số batch
+    running_components = defaultdict(float)
+    num_steps = 0
     progress = tqdm(train_loader, desc=f"Train [{epoch + 1}]", dynamic_ncols=True)
 
     for batch in progress:
         optimizer.zero_grad(set_to_none=True)
         batch = prepare_batch_fn(batch, device)
         with torch.autocast(device_type=device.type, enabled=amp_enabled):
-            loss_dict = model.compute_loss(batch) # model nhận batch, chạy forward và tính các loss riêng
+            loss_dict = model.compute_loss(batch)
 
             total_loss = _compute_total_loss(loss_dict=loss_dict, loss_weights=loss_weights,)
 
-        scaler.scale(total_loss).backward() # phóng to loss rồi cho backward
-        scaler.step(optimizer) # tương đương optimizer.step() cho cập nhật trọng số 
-        scaler.update() # sau mỗi batch scaler tự điều chỉnh hệ số scale cho batch sau.
+        scaler.scale(total_loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
         total_loss_value = total_loss.item()
 
@@ -81,7 +79,7 @@ def train_one_epoch(
         for name, loss in loss_dict.items():
             running_components[name] += loss.item()
 
-        progress.set_postfix(loss=f"{total_loss_value:.4f}") # cập nhật progress bar 
+        progress.set_postfix(loss=f"{total_loss_value:.4f}")
 
     metrics = {
         "total_loss": running_total_loss / num_steps,
@@ -113,25 +111,21 @@ def prepare_batch(
     text_states = text_states.to(
         device=device,
         dtype=torch.float32,
-        # non_blocking=True,
     )
 
     teacher_text_states = teacher_text_states.to(
         device=device,
         dtype=torch.float32,
-        # non_blocking=True,
     )
 
     attention_mask = attention_mask.to(
         device=device,
         dtype=torch.bool,
-        # non_blocking=True,
     )
 
     content_mask = content_mask.to(
         device=device,
         dtype=torch.bool,
-        # non_blocking=True,
     )
 
     return {

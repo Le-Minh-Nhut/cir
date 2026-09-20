@@ -1,8 +1,10 @@
-from pathlib import Path
 from collections.abc import Sequence
-import torch
+from dataclasses import dataclass
+from pathlib import Path
 import json
+
 import numpy as np
+import torch
 
 
 def load_features(feature_dir):
@@ -28,8 +30,6 @@ def load_features(feature_dir):
 def get_features_by_ids(image_ids: Sequence[str], features: torch.Tensor, name_to_idx: dict[str, int]) -> torch.Tensor:
     indices = [name_to_idx[image_id] for image_id in image_ids]
     return features[indices]
-
-from dataclasses import dataclass
 
 
 @dataclass(frozen=True)

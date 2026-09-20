@@ -1,47 +1,9 @@
 from collections.abc import Sequence
 from pathlib import Path
 import torch
-from torch.utils.data import DataLoader
 
 from cache.features import get_features_by_ids, TextFeatureCache, get_text_features_by_sample_ids
 from datasets.fashioniq import FashionIQAnnotation, build_pair_union_gallery, load_fashioniq_split_ids
-
-
-"""
-             A     B     C     D     E
-
-query 0     0.1   0.9   0.3   0.2   0.4
-query 1     0.8   0.2   0.1   0.7   0.3
-query 2     0.1   0.2   0.95  0.3   0.4
-
-annotations của VAL
-      ↓
-build_fashioniq_gallery(...)
-      ↓
-gallery_ids
-      ↓
-load/encode các ảnh gallery
-      ↓
-gallery_features
-
-VAL queries
-      ↓
-encode query
-      ↓
-query_features
-
-query_features × gallery_features
-      ↓
-scores [Q, G]
-      ↓
-evaluate_fashioniq_category(
-    scores,
-    target_ids,
-    gallery_ids,
-)
-      ↓
-R@10, R@50
-"""
 
 def recall_at_k(scores: torch.Tensor, target_ids: Sequence[str], gallery_ids: Sequence[str], k: int) -> float:
     assert scores.ndim == 2
@@ -62,13 +24,10 @@ def recall_at_k(scores: torch.Tensor, target_ids: Sequence[str], gallery_ids: Se
     for target_id in target_ids:
         assert target_id in gallery_index
         target_indices.append(gallery_index[target_id])
-    # dim=1 -> sort theo chiều cột từng hàng 
-    # argsort nó trả ra 1 mảng index được sắp xếp theo score
     rankings = torch.argsort(scores, dim=1, descending=True,)
-    top_k = rankings[:, :k] # lấy hết các hàng và chỉ lấy k cột
-    # unsqueeze thêm 1 chiều tại vị trí 1 
+    top_k = rankings[:, :k]
     target_tensor = torch.tensor(target_indices, device=rankings.device,).unsqueeze(1) 
-    hits_per_query = top_k.eq(target_tensor).any(dim=1) # dim=1 thì cho phép nó coi từng hàng để ra True False duyêt theo cột bất kì nào True 
+    hits_per_query = top_k.eq(target_tensor).any(dim=1)
 
     return hits_per_query.float().mean().item() * 100.0
 

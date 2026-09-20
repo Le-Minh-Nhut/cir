@@ -77,18 +77,16 @@ def test_orthogonal_loss_backpropagates_to_slot_queries() -> None:
 def test_experiment_loss_weights() -> None:
     experiment_dir = Path(__file__).resolve().parents[2] / "conf" / "experiment"
     baseline = OmegaConf.load(experiment_dir / "taper_e2e.yaml")
-    ortho_legacy = OmegaConf.load(experiment_dir / "taper_e2e_ortho07.yaml")
-    ortho_encoder = OmegaConf.load(experiment_dir / "taper_e2e_ortho07_encoder.yaml")
+    ortho = OmegaConf.load(experiment_dir / "taper_e2e_ortho07.yaml")
 
     assert dict(baseline.loss_weights) == {"retrieval_loss": 1.0}
-    for config in (ortho_legacy, ortho_encoder):
-        assert config.name == "taper_e2e"
-        assert dict(config.loss_weights) == {
-            "retrieval_loss": 1.0,
-            "ortho_loss": 0.7,
-        }
+    assert ortho.name == "taper_e2e"
+    assert dict(ortho.loss_weights) == {
+        "retrieval_loss": 1.0,
+        "ortho_loss": 0.7,
+    }
 
-        comparable = OmegaConf.to_container(config, resolve=False)
-        assert isinstance(comparable, dict)
-        comparable["loss_weights"] = {"retrieval_loss": 1.0}
-        assert comparable == OmegaConf.to_container(baseline, resolve=False)
+    comparable = OmegaConf.to_container(ortho, resolve=False)
+    assert isinstance(comparable, dict)
+    comparable["loss_weights"] = {"retrieval_loss": 1.0}
+    assert comparable == OmegaConf.to_container(baseline, resolve=False)

@@ -1,5 +1,1 @@
 name: cirr_encoder
-dataset_name: cirr
-split: val
-global_ks: [1, 5, 10, 50]
-subset_ks: [1, 2, 3]

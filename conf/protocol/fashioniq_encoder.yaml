@@ -1,5 +1,1 @@
 name: fashioniq_encoder
-dataset_name: fashioniq
-split: val
-categories: [dress, shirt, toptee]
-recall_ks: [1, 10, 50]
