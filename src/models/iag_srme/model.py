@@ -336,8 +336,10 @@ class IAGSRME(nn.Module):
         """Apply Algorithm 1 once after a completed training batch and return compact metrics."""
 
         candidates = self.config.num_candidates
+        routing_bias_before = self.routing_bias.detach().clone()
         counts = torch.zeros(candidates, device=self.routing_bias.device, dtype=torch.long)
-        raw_counts = torch.zeros_like(counts)
+        raw_counts_all_decisions = torch.zeros_like(counts)
+        raw_counts_executed = torch.zeros_like(counts)
         raw_scores: list[Tensor] = []
         stop_count = 0
         decisions = 0
@@ -353,9 +355,10 @@ class IAGSRME(nn.Module):
             assert isinstance(raw_best, Tensor)
             assert isinstance(routed, Tensor)
             execute = selected < candidates
-            raw_counts += torch.bincount(raw_best, minlength=candidates)
+            raw_counts_all_decisions += torch.bincount(raw_best, minlength=candidates)
             if execute.any():
                 counts += torch.bincount(routed[execute], minlength=candidates)
+                raw_counts_executed += torch.bincount(raw_best[execute], minlength=candidates)
                 disagreements += int((raw_best[execute] != routed[execute]).sum())
             stop_count += int((~execute).sum())
             decisions += selected.numel()
@@ -374,18 +377,34 @@ class IAGSRME(nn.Module):
         max_vio = (
             float((counts.float().max() - mean_count) / mean_count) if total else 0.0
         )
+        routing_bias_after = self.routing_bias.detach().clone()
         return {
             "loss_free_balance_enabled": self.config.loss_free_balance_enabled,
-            "routing_bias": self.routing_bias.detach().float().cpu().tolist(),
+            "routing_bias": routing_bias_after.float().cpu().tolist(),
+            "routing_bias_before": routing_bias_before.float().cpu().tolist(),
+            "routing_bias_after": routing_bias_after.float().cpu().tolist(),
+            "routing_bias_delta": (routing_bias_after - routing_bias_before).float().cpu().tolist(),
             "committed_selection_count": counts.cpu().tolist(),
             "committed_selection_fraction": (counts.float() / executed_denominator).cpu().tolist(),
-            "raw_argmax_count": raw_counts.cpu().tolist(),
-            "raw_argmax_fraction": (raw_counts.float() / decision_denominator).cpu().tolist(),
+            "raw_argmax_all_decision_count": raw_counts_all_decisions.cpu().tolist(),
+            "raw_argmax_all_decision_fraction": (
+                raw_counts_all_decisions.float() / decision_denominator
+            ).cpu().tolist(),
+            "raw_argmax_executed_count": raw_counts_executed.cpu().tolist(),
+            "raw_argmax_executed_fraction": (
+                raw_counts_executed.float() / executed_denominator
+            ).cpu().tolist(),
             "routed_selection_count": counts.cpu().tolist(),
             "routed_selection_fraction": (counts.float() / executed_denominator).cpu().tolist(),
             "raw_routed_disagreement_fraction": disagreements / executed_denominator,
             "routing_max_vio": max_vio,
-            "raw_monopoly_fraction": float(raw_counts.max() / decision_denominator),
+            "raw_argmax_all_decision_monopoly_fraction": float(
+                raw_counts_all_decisions.max() / decision_denominator
+            ),
+            "raw_argmax_executed_monopoly_fraction": float(
+                raw_counts_executed.max() / executed_denominator
+            ),
+            "raw_monopoly_fraction": float(raw_counts_executed.max() / executed_denominator),
             "routed_monopoly_fraction": float(counts.max() / executed_denominator),
             "raw_score_mean": float(score_values.mean()),
             "raw_score_std": float(score_values.std(unbiased=False)),

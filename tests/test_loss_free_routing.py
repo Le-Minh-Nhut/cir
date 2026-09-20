@@ -80,19 +80,43 @@ def test_bias_update_uses_sign_of_committed_load(model) -> None:
     diagnostics = model.update_routing_bias(output)
 
     torch.testing.assert_close(model.routing_bias, torch.tensor([-0.1, 0.0, 0.1, 0.1]))
+    assert diagnostics["routing_bias_before"] == [0.0, 0.0, 0.0, 0.0]
+    torch.testing.assert_close(
+        torch.tensor(diagnostics["routing_bias_after"]), torch.tensor([-0.1, 0.0, 0.1, 0.1])
+    )
+    torch.testing.assert_close(
+        torch.tensor(diagnostics["routing_bias_delta"]), torch.tensor([-0.1, 0.0, 0.1, 0.1])
+    )
     assert diagnostics["committed_selection_count"] == [3, 1, 0, 0]
 
 
-def test_equal_load_and_stop_rows_do_not_change_bias(model) -> None:
+def test_routing_diagnostics_separate_executed_and_all_decision_raw_argmax(model) -> None:
     _balanced_model(model, loss_free_bias_update_rate=0.1)
     model.train()
-    output = _output(torch.ones(5, 4), torch.tensor([0, 1, 2, 3, 4]))
+    raw = torch.tensor(
+        [
+            [4.0, 0.0, 0.0, 0.0],
+            [0.0, 4.0, 0.0, 0.0],
+            [0.0, 0.0, 4.0, 0.0],
+            [0.0, 0.0, 0.0, 4.0],
+            [4.0, 0.0, 0.0, 0.0],
+        ]
+    )
 
-    diagnostics = model.update_routing_bias(output)
+    diagnostics = model.update_routing_bias(_output(raw, torch.tensor([0, 1, 2, 3, 4])))
 
-    assert model.routing_bias.eq(0).all()
-    assert diagnostics["committed_selection_count"] == [1, 1, 1, 1]
-    assert diagnostics["stop_count"] == 1
+    assert diagnostics["raw_argmax_all_decision_count"] == [2, 1, 1, 1]
+    torch.testing.assert_close(
+        torch.tensor(diagnostics["raw_argmax_all_decision_fraction"]),
+        torch.tensor([0.4, 0.2, 0.2, 0.2]),
+    )
+    assert diagnostics["raw_argmax_executed_count"] == [1, 1, 1, 1]
+    torch.testing.assert_close(
+        torch.tensor(diagnostics["raw_argmax_executed_fraction"]), torch.full((4,), 0.25)
+    )
+    assert diagnostics["raw_monopoly_fraction"] == diagnostics["routed_monopoly_fraction"] == 0.25
+    assert diagnostics["routing_bias_before"] == diagnostics["routing_bias_after"]
+    assert diagnostics["routing_bias_delta"] == [0.0, 0.0, 0.0, 0.0]
 
 
 def test_no_executions_and_evaluation_do_not_update_bias(model) -> None:
