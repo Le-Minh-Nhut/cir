@@ -12,7 +12,7 @@ _GENERIC_STAGES = ("proposals", "entities", "actions", "delta", "delta_q")
 def _flatten_candidates(values: Tensor) -> Tensor:
     if values.ndim < 3:
         raise ValueError("candidate values must have shape [B,K,...]")
-    return values.detach().float().flatten(start_dim=2)
+    return values.detach().flatten(start_dim=2)
 
 
 def _pairwise_mean(values: Tensor, fn) -> Tensor:
@@ -24,29 +24,50 @@ def _pairwise_mean(values: Tensor, fn) -> Tensor:
 
 
 def _pairwise_cosine(values: Tensor) -> Tensor:
-    normalized = values / (values.norm(dim=-1, keepdim=True) + _EPS)
-    return _pairwise_mean(normalized, lambda left, right: (left * right).sum(dim=-1).mean())
+    def cosine(left: Tensor, right: Tensor) -> Tensor:
+        left = left.float()
+        right = right.float()
+        return (left * right).sum(dim=-1).div(
+            left.norm(dim=-1) * right.norm(dim=-1) + _EPS
+        ).mean()
+
+    return _pairwise_mean(values, cosine)
 
 
 def _effective_rank(values: Tensor) -> Tensor:
-    singular_values = torch.linalg.svdvals(values)
-    return (singular_values.sum(dim=-1).square() / singular_values.square().sum(dim=-1).clamp_min(_EPS)).mean()
+    # K is small; construct only the [B,K,K] Gram matrix, never a wide SVD workspace.
+    batch, candidates, _ = values.shape
+    gram = torch.empty(batch, candidates, candidates, device=values.device, dtype=torch.float32)
+    for left in range(candidates):
+        left_value = values[:, left].float()
+        for right in range(left, candidates):
+            inner = (left_value * values[:, right].float()).sum(dim=-1)
+            gram[:, left, right] = inner
+            gram[:, right, left] = inner
+    singular_values = torch.linalg.eigvalsh(gram).clamp_min(0).sqrt()
+    return (
+        singular_values.sum(dim=-1).square()
+        / singular_values.square().sum(dim=-1).clamp_min(_EPS)
+    ).mean()
 
 
 def generic_diversity(values: Tensor) -> dict[str, float | list[float]]:
     """Detached within-sibling metrics for a [B,K,...] stage tensor."""
 
     flat = _flatten_candidates(values)
-    centered = flat - flat.mean(dim=1, keepdim=True)
-    norms = flat.norm(dim=-1)
-    spread = centered.norm(dim=-1).mean(dim=-1)
+    candidates = flat.shape[1]
+    mean = sum((flat[:, slot].float() for slot in range(candidates))) / candidates
+    norms = torch.stack([flat[:, slot].float().norm(dim=-1) for slot in range(candidates)], dim=-1)
+    spread = torch.stack(
+        [(flat[:, slot].float() - mean).norm(dim=-1) for slot in range(candidates)], dim=-1
+    ).mean(dim=-1)
     return {
         "pairwise_cosine": float(_pairwise_cosine(flat)),
         "effective_rank": float(_effective_rank(flat)),
         "spread": float(spread.mean()),
         "relative_spread": float((spread / (norms.mean(dim=-1) + _EPS)).mean()),
         "mean_norm": float(norms.mean()),
-        **{f"mean_norm_c{slot}": float(norms[:, slot].mean()) for slot in range(flat.shape[1])},
+        **{f"mean_norm_c{slot}": float(norms[:, slot].mean()) for slot in range(candidates)},
     }
 
 

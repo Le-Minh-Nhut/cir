@@ -8,9 +8,10 @@ import torch
 from torch import nn
 from torch.optim import SGD
 
-from analyze_functional_collapse import _heuristic, _records, _summarize
+from analyze_functional_collapse import STAGES, _heuristic, _records, _summarize
 from data.images import ImageBatch
 from diagnostics.functional_collapse import (
+    _effective_rank,
     alpha_read_diversity,
     exec_mask_diversity,
     functional_collapse_audit,
@@ -29,10 +30,33 @@ def test_generic_metrics_distinguish_identical_and_orthogonal_candidates() -> No
     assert collapsed["pairwise_cosine"] == 1.0
     assert collapsed["spread"] == 0.0
     assert collapsed["relative_spread"] == 0.0
-    assert collapsed["effective_rank"] == pytest.approx(1.0)
+    assert collapsed["effective_rank"] == pytest.approx(1.0, abs=3e-4)
     assert diverse["pairwise_cosine"] < collapsed["pairwise_cosine"]
     assert diverse["effective_rank"] > collapsed["effective_rank"]
     assert diverse["spread"] > collapsed["spread"]
+
+def test_gram_effective_rank_matches_direct_svd_for_flattened_delta() -> None:
+    values = torch.randn(3, 5, 2, 7)
+    flattened = values.flatten(start_dim=2).float()
+    singular_values = torch.linalg.svdvals(flattened)
+    expected = (
+        singular_values.sum(dim=-1).square()
+        / singular_values.square().sum(dim=-1).clamp_min(1e-8)
+    ).mean()
+
+    torch.testing.assert_close(_effective_rank(flattened), expected, rtol=1e-5, atol=1e-5)
+
+
+def test_analyzer_orders_grounder_outputs_before_entities_and_actions() -> None:
+    assert STAGES == (
+        "proposals",
+        "alpha_read",
+        "exec_mask",
+        "entities",
+        "actions",
+        "delta",
+        "delta_q",
+    )
 
 
 def test_generic_metrics_preserve_dynamic_candidate_and_delta_axes() -> None:

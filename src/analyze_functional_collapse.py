@@ -5,7 +5,7 @@ import json
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-STAGES = ("proposals", "alpha_read", "entities", "actions", "exec_mask", "delta", "delta_q")
+STAGES = ("proposals", "alpha_read", "exec_mask", "entities", "actions", "delta", "delta_q")
 
 
 def _records(path: Path) -> list[Mapping[str, object]]:
@@ -76,6 +76,7 @@ def _format(stage: str, values: Mapping[str, object]) -> str:
 
 def _print_summary(label: str, summary: Mapping[str, object]) -> None:
     print(f"\n{label}")
+    print("Grounder outputs are siblings: alpha_read and exec_mask.")
     print("stage        cosine     rank   rel_spread   JS/softIoU")
     for stage in STAGES:
         if stage in summary:
