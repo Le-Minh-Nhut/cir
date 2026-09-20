@@ -100,8 +100,8 @@ class ProposalNet(nn.Module):
         # Attention weights are intentionally omitted: need_weights=False preserves this call's kernels.
         if self.internal_audit_enabled:
             self.last_internal_audit = {
-                "base_query": base_query.detach(),
-                "expanded_query": expanded_query.detach(),
+                "base_query": base_query.detach().clone(),
+                "expanded_query": expanded_query.detach().clone(),
                 "conditioned_residual": conditioned.detach(),
                 "query_pre_norm": query_pre_norm.detach(),
                 "query_post_norm": query_post_norm.detach(),

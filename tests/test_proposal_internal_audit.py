@@ -105,6 +105,24 @@ def test_disabled_audit_preserves_proposal_forward_and_supports_dynamic_k(featur
     assert enabled.last_internal_audit["proposal_output"].shape[1] == 5
 
 
+def test_audit_query_snapshots_survive_parameter_update(features) -> None:
+    _, tokens, text, mask = features
+    proposal = ProposalNet(16, 8, 3, 1).eval()
+    proposal.internal_audit_enabled = True
+    output = proposal(tokens, text, torch.randn(tokens.shape[0], 16), mask)
+    assert proposal.last_internal_audit is not None
+    base = proposal.last_internal_audit["base_query"].clone()
+    expanded = proposal.last_internal_audit["expanded_query"].clone()
+    output_before = output.clone()
+
+    with torch.no_grad():
+        proposal.queries.add_(1.0)
+
+    torch.testing.assert_close(proposal.last_internal_audit["base_query"], base)
+    torch.testing.assert_close(proposal.last_internal_audit["expanded_query"], expanded)
+    torch.testing.assert_close(output, output_before)
+
+
 def test_analyzer_reads_and_summarizes_audit_records(tmp_path) -> None:
     audit = proposal_internal_audit({"steps": [_step(0, 2, collapsed_pre=True, collapsed_output=True)]})
     path = tmp_path / "metrics.jsonl"
