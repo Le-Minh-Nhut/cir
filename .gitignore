@@ -36,6 +36,7 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 runs/
+/submissions
 teacher/repos/
 teacher/outputs/
 teacher/checkpoints
