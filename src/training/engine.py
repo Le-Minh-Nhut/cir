@@ -259,6 +259,11 @@ def train_one_epoch(
         if not skipped:
             true_optimizer_steps += 1
         steps += 1
+        routing_diagnostics = (
+            model.update_routing_bias(output)
+            if hasattr(model, "update_routing_bias") and not skipped
+            else {}
+        )
         for name, value in components.items():
             totals[name] += float(value.detach())
         progress.set_postfix(loss=f"{float(loss.detach()):.4f}")
@@ -278,6 +283,7 @@ def train_one_epoch(
                     "nonfinite_gradient_count": nonfinite_gradients,
                     "gradient_element_count": gradient_elements,
                     **component_values,
+                    "loss_free_routing": routing_diagnostics,
                     "parameter_updates": _probe_diagnostics(probes, before),
                 }
             )

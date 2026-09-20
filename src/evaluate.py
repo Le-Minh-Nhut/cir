@@ -73,8 +73,12 @@ def validate_checkpoint_backbone_metadata(
                 }
             )
         else:
+            legacy_defaults = {
+                "loss_free_balance_enabled": False,
+                "loss_free_bias_update_rate": 1.0e-3,
+            }
             for field, configured in expected_model_config.items():
-                stored = stored_model.get(field)
+                stored = stored_model.get(field, legacy_defaults.get(field))
                 if stored != configured:
                     mismatches.append({"field": field, "stored": stored, "configured": configured})
     if mismatches and not allow_counterfactual:
@@ -123,6 +127,8 @@ def main(cfg: DictConfig) -> None:
             "max_steps": int(cfg.model.max_steps),
             "stop_enabled": bool(cfg.model.stop_enabled),
             "epsilon_stop": float(cfg.model.epsilon_stop),
+            "loss_free_balance_enabled": bool(cfg.model.loss_free_balance_enabled),
+            "loss_free_bias_update_rate": float(cfg.model.loss_free_bias_update_rate),
         },
         allow_counterfactual=counterfactual,
     )
@@ -175,6 +181,8 @@ def main(cfg: DictConfig) -> None:
             "max_steps": int(cfg.model.max_steps),
             "stop_enabled": bool(cfg.model.stop_enabled),
             "epsilon_stop": float(cfg.model.epsilon_stop),
+            "loss_free_balance_enabled": bool(cfg.model.loss_free_balance_enabled),
+            "loss_free_bias_update_rate": float(cfg.model.loss_free_bias_update_rate),
             "global_readout_mode": str(cfg.backbone.global_readout_mode),
             "finetune_policy": str(cfg.backbone.finetune_policy),
             "backbone_checkpoint": str(cfg.backbone.checkpoint),

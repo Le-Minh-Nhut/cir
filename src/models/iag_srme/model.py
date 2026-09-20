@@ -22,6 +22,8 @@ class IAGSRMEConfig:
     scale_min: float = 1.0
     scale_max: float = 100.0
     score_dropout: float = 0.1
+    loss_free_balance_enabled: bool = False
+    loss_free_bias_update_rate: float = 1.0e-3
 
 
 class ProposalNet(nn.Module):
@@ -277,6 +279,123 @@ class IAGSRME(nn.Module):
         self.score_net = ScoreNet(
             state_dim, text_dim, state_dim, config.width, config.score_dropout
         )
+        self.register_buffer("routing_bias", torch.zeros(config.num_candidates))
+
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        # V2-R0 checkpoints predate this persistent controller state.
+        key = prefix + "routing_bias"
+        if key not in state_dict:
+            state_dict[key] = torch.zeros_like(self.routing_bias)
+        super()._load_from_state_dict(
+            state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs
+        )
+
+    def route_scores(self, raw_scores: Tensor) -> dict[str, Tensor]:
+        """Route with a detached historical slot bias while preserving raw STOP semantics."""
+
+        if raw_scores.shape[-1] != self.config.num_candidates:
+            raise ValueError("raw scores have the wrong candidate dimension")
+        raw_best_score, raw_best_idx = raw_scores.max(dim=-1)
+        selection_scores = raw_scores + (
+            self.routing_bias.detach() if self.config.loss_free_balance_enabled else 0.0
+        )
+        if self.config.stop_enabled:
+            eligible = raw_scores > self.config.epsilon_stop
+            routed_idx = selection_scores.masked_fill(~eligible, -torch.inf).argmax(dim=-1)
+            stop_now = ~eligible.any(dim=-1)
+        else:
+            routed_idx = selection_scores.argmax(dim=-1)
+            stop_now = torch.zeros_like(raw_best_score, dtype=torch.bool)
+        selected_idx = torch.where(
+            stop_now,
+            torch.full_like(routed_idx, self.config.num_candidates),
+            routed_idx,
+        )
+        selected_raw_score = raw_scores.gather(1, routed_idx[:, None]).squeeze(1)
+        return {
+            "selection_scores": selection_scores,
+            "raw_best_score": raw_best_score,
+            "raw_best_idx": raw_best_idx,
+            "routed_idx": routed_idx,
+            "selected_idx": selected_idx,
+            "selected_raw_score": selected_raw_score,
+            "stop_now": stop_now,
+        }
+
+    @torch.no_grad()
+    def update_routing_bias(self, output: dict[str, object]) -> dict[str, object]:
+        """Apply Algorithm 1 once after a completed training batch and return compact metrics."""
+
+        candidates = self.config.num_candidates
+        counts = torch.zeros(candidates, device=self.routing_bias.device, dtype=torch.long)
+        raw_counts = torch.zeros_like(counts)
+        raw_scores: list[Tensor] = []
+        stop_count = 0
+        decisions = 0
+        disagreements = 0
+        for step in output["steps"]:
+            assert isinstance(step, dict)
+            scores = step["scores"]
+            selected = step["selected_idx"]
+            raw_best = step["raw_best_idx"]
+            routed = step["routed_idx"]
+            assert isinstance(scores, Tensor)
+            assert isinstance(selected, Tensor)
+            assert isinstance(raw_best, Tensor)
+            assert isinstance(routed, Tensor)
+            execute = selected < candidates
+            raw_counts += torch.bincount(raw_best, minlength=candidates)
+            if execute.any():
+                counts += torch.bincount(routed[execute], minlength=candidates)
+                disagreements += int((raw_best[execute] != routed[execute]).sum())
+            stop_count += int((~execute).sum())
+            decisions += selected.numel()
+            raw_scores.append(scores.detach().float().reshape(-1))
+
+        total = int(counts.sum())
+        if self.training and self.config.loss_free_balance_enabled and total:
+            mean_count = counts.float().mean()
+            self.routing_bias.add_(
+                self.config.loss_free_bias_update_rate * torch.sign(mean_count - counts)
+            )
+        executed_denominator = max(total, 1)
+        decision_denominator = max(decisions, 1)
+        score_values = torch.cat(raw_scores) if raw_scores else self.routing_bias.new_zeros(1)
+        mean_count = counts.float().mean()
+        max_vio = (
+            float((counts.float().max() - mean_count) / mean_count) if total else 0.0
+        )
+        return {
+            "loss_free_balance_enabled": self.config.loss_free_balance_enabled,
+            "routing_bias": self.routing_bias.detach().float().cpu().tolist(),
+            "committed_selection_count": counts.cpu().tolist(),
+            "committed_selection_fraction": (counts.float() / executed_denominator).cpu().tolist(),
+            "raw_argmax_count": raw_counts.cpu().tolist(),
+            "raw_argmax_fraction": (raw_counts.float() / decision_denominator).cpu().tolist(),
+            "routed_selection_count": counts.cpu().tolist(),
+            "routed_selection_fraction": (counts.float() / executed_denominator).cpu().tolist(),
+            "raw_routed_disagreement_fraction": disagreements / executed_denominator,
+            "routing_max_vio": max_vio,
+            "raw_monopoly_fraction": float(raw_counts.max() / decision_denominator),
+            "routed_monopoly_fraction": float(counts.max() / executed_denominator),
+            "raw_score_mean": float(score_values.mean()),
+            "raw_score_std": float(score_values.std(unbiased=False)),
+            "max_abs_routing_bias": float(self.routing_bias.abs().max()),
+            "routing_bias_to_raw_score_std": float(
+                self.routing_bias.abs().max() / (score_values.std(unbiased=False) + 1e-8)
+            ),
+            "stop_count": stop_count,
+            "stop_rate": stop_count / decision_denominator,
+        }
 
     @staticmethod
     def _gather_candidate(values: Tensor, indices: Tensor) -> Tensor:
@@ -339,17 +458,12 @@ class IAGSRME(nn.Module):
             )
             # Score losses train all ScoreNet projections, but never upstream modules.
             scores = self.score_net(score_features)
-            best_score, best_idx = scores.max(dim=-1)
-            stop_now = (
-                best_score <= self.config.epsilon_stop
-                if self.config.stop_enabled
-                else torch.zeros_like(best_score, dtype=torch.bool)
-            )
-            selected_idx = torch.where(
-                stop_now,
-                torch.full_like(best_idx, self.config.num_candidates),
-                best_idx,
-            )
+            routing = self.route_scores(scores)
+            # `scores` remains the raw ScoreNet prediction for every loss and diagnostic.
+            best_score = routing["raw_best_score"]
+            best_idx = routing["routed_idx"]
+            stop_now = routing["stop_now"]
+            selected_idx = routing["selected_idx"]
 
             execute = ~stop_now
             if execute.any():
@@ -388,6 +502,11 @@ class IAGSRME(nn.Module):
                     "stop_score": scores.new_zeros(scores.shape[0]),
                     "best_score": best_score,
                     "selected_idx": selected_idx,
+                    "selection_scores": routing["selection_scores"],
+                    "routing_bias": self.routing_bias.detach().clone(),
+                    "raw_best_idx": routing["raw_best_idx"],
+                    "routed_idx": routing["routed_idx"],
+                    "selected_raw_score": routing["selected_raw_score"],
                     "stopped_now": stop_now,
                 }
             )

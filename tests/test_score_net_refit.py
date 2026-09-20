@@ -131,6 +131,8 @@ def test_refit_cache_contract_rejects_score_dropout_mismatch() -> None:
         "stop_enabled": True,
         "epsilon_stop": 0.0,
         "score_dropout": 0.1,
+        "loss_free_balance_enabled": False,
+        "loss_free_bias_update_rate": 1.0e-3,
         "retrieval_temperature": 0.07,
     }
     source_objective = {"retrieval_temperature": 0.07}

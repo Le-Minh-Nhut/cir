@@ -10,3 +10,5 @@ read_scale_init: 10.0
 exec_scale_init: 10.0
 exec_bias_init: 0.0
 score_dropout: 0.1
+loss_free_balance_enabled: false
+loss_free_bias_update_rate: 1.0e-3

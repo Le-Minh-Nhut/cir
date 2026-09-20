@@ -82,6 +82,8 @@ def persist_run_configuration(
         "max_steps": int(cfg.model.max_steps),
         "stop_enabled": bool(cfg.model.stop_enabled),
         "epsilon_stop": float(cfg.model.epsilon_stop),
+        "loss_free_balance_enabled": bool(cfg.model.loss_free_balance_enabled),
+        "loss_free_bias_update_rate": float(cfg.model.loss_free_bias_update_rate),
         "batch_size": int(cfg.experiment.batch_size),
         "gradient_accumulation": 1,
         "precision": precision_name,
@@ -126,6 +128,8 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         exec_scale_init=float(cfg.model.exec_scale_init),
         exec_bias_init=float(cfg.model.exec_bias_init),
         score_dropout=float(cfg.model.score_dropout),
+        loss_free_balance_enabled=bool(cfg.model.loss_free_balance_enabled),
+        loss_free_bias_update_rate=float(cfg.model.loss_free_bias_update_rate),
     )
     return IAGSRME(backbone, model_config), tokenizer, processor
 

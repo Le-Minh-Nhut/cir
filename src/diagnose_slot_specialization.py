@@ -118,6 +118,8 @@ def _validate_checkpoint(cfg: DictConfig, checkpoint: Mapping[str, Any]) -> list
             "max_steps": int(cfg.model.max_steps),
             "stop_enabled": bool(cfg.model.stop_enabled),
             "epsilon_stop": float(cfg.model.epsilon_stop),
+            "loss_free_balance_enabled": bool(cfg.model.loss_free_balance_enabled),
+            "loss_free_bias_update_rate": float(cfg.model.loss_free_bias_update_rate),
         },
         allow_counterfactual=bool(cfg.get("allow_counterfactual_eval", False)),
     )

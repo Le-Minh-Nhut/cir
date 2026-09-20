@@ -127,10 +127,16 @@ def _validate_refit_cache_contract(
         "stop_enabled": bool(cfg.model.stop_enabled),
         "epsilon_stop": float(cfg.model.epsilon_stop),
         "score_dropout": float(cfg.model.score_dropout),
+        "loss_free_balance_enabled": bool(cfg.model.get("loss_free_balance_enabled", False)),
+        "loss_free_bias_update_rate": float(cfg.model.get("loss_free_bias_update_rate", 1.0e-3)),
         "retrieval_temperature": retrieval_temperature,
     }
+    legacy_defaults = {
+        "loss_free_balance_enabled": False,
+        "loss_free_bias_update_rate": 1.0e-3,
+    }
     for field, configured in expected.items():
-        stored = manifest.get(field)
+        stored = manifest.get(field, legacy_defaults.get(field))
         if stored != configured:
             raise ValueError(
                 f"scorer cache contract mismatch for {field}: "
@@ -161,6 +167,8 @@ def _validate_source_checkpoint(cfg: DictConfig, checkpoint: Mapping[str, Any]) 
             "stop_enabled": bool(cfg.model.stop_enabled),
             "epsilon_stop": float(cfg.model.epsilon_stop),
             "score_dropout": float(cfg.model.score_dropout),
+            "loss_free_balance_enabled": bool(cfg.model.loss_free_balance_enabled),
+            "loss_free_bias_update_rate": float(cfg.model.loss_free_bias_update_rate),
         },
     )
 
@@ -350,6 +358,8 @@ def collect_scorer_cache(
         "stop_enabled": bool(cfg.model.stop_enabled),
         "epsilon_stop": float(cfg.model.epsilon_stop),
         "score_dropout": float(cfg.model.score_dropout),
+        "loss_free_balance_enabled": bool(cfg.model.loss_free_balance_enabled),
+        "loss_free_bias_update_rate": float(cfg.model.loss_free_bias_update_rate),
         "raw_input_fields": list(SCORER_TENSOR_FIELDS),
         "valid_decision_count": valid_decisions,
         "teacher_invalid_row_count": invalid_rows,

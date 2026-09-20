@@ -1,0 +1,6 @@
+defaults:
+  - iag_srme
+
+name: iag_srme_lossfree
+loss_free_balance_enabled: true
+loss_free_bias_update_rate: 1.0e-3
