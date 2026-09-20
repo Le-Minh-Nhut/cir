@@ -1,0 +1,5 @@
+defaults:
+  - iag_srme_base_full
+
+name: iag_srme_functional_audit
+functional_collapse_audit_enabled: true

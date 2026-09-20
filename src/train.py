@@ -130,6 +130,10 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
         score_dropout=float(cfg.model.score_dropout),
         loss_free_balance_enabled=bool(cfg.model.loss_free_balance_enabled),
         loss_free_bias_update_rate=float(cfg.model.loss_free_bias_update_rate),
+        functional_collapse_audit_enabled=bool(
+            cfg.model.functional_collapse_audit_enabled
+            or cfg.experiment.get("functional_collapse_audit_enabled", False)
+        ),
     )
     return IAGSRME(backbone, model_config), tokenizer, processor
 

@@ -24,6 +24,7 @@ class IAGSRMEConfig:
     score_dropout: float = 0.1
     loss_free_balance_enabled: bool = False
     loss_free_bias_update_rate: float = 1.0e-3
+    functional_collapse_audit_enabled: bool = False
 
 
 class ProposalNet(nn.Module):
