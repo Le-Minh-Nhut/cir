@@ -192,6 +192,43 @@ def test_pool_stability_uses_strict_anchor_subset_and_full_reservoir(monkeypatch
     assert all(torch.equal(first, second) for first, second in zip(observed, observed_again, strict=True))
 
 
+def test_pool_stability_moves_full_target_bank_before_teacher(monkeypatch) -> None:
+    rows = _rows(batch=1)
+    reservoir = {
+        "target_embeddings": torch.arange(18, dtype=torch.float32).reshape(3, 6),
+        "sample_ids": ["anchor", "negative-1", "negative-2"],
+        "target_ids": ["anchor-target", "negative-target-1", "negative-target-2"],
+    }
+    anchors = {
+        "target_embeddings": reservoir["target_embeddings"][:1].clone(),
+        "sample_ids": list(rows["sample_ids"]),
+        "target_ids": ["anchor-target"],
+    }
+    observed = []
+
+    def record_device(current, candidates, bank, *, temperature):
+        del temperature
+        observed.append((current.device, candidates.device, bank.device))
+        return torch.zeros(4)
+
+    monkeypatch.setattr(target_diagnostic, "recompute_utility_with_target_bank", record_device)
+    target_diagnostic._pool_stability(
+        rows,
+        anchors,
+        reservoir,
+        bank_size=2,
+        pool_count=2,
+        epsilon_stop=0.0,
+        temperature=0.2,
+        device=torch.device("meta"),
+        single_positive=torch.ones(1, dtype=torch.bool),
+    )
+    assert observed == [
+        (torch.device("meta"), torch.device("meta"), torch.device("meta")),
+        (torch.device("meta"), torch.device("meta"), torch.device("meta")),
+    ]
+
+
 def test_resampled_teacher_utility_uses_canonical_teacher_and_preserves_queries() -> None:
     generator = torch.Generator().manual_seed(5)
     current = torch.randn(1, 4, generator=generator)

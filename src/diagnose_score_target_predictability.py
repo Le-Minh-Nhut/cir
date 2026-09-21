@@ -288,8 +288,10 @@ def _pool_stability(
             candidates = rows["candidate_queries"][anchor : anchor + 1].to(device=device, dtype=torch.float32)
             utilities = []
             for indices in negatives:
-                negative_bank = reservoir_embeddings.index_select(0, torch.tensor(indices))
-                target_bank = torch.cat((anchor_target[None], negative_bank), dim=0).to(device=device, dtype=torch.float32)
+                negative_bank = reservoir_embeddings.index_select(0, torch.tensor(indices)).to(
+                    device=device, dtype=torch.float32
+                )
+                target_bank = torch.cat((anchor_target[None], negative_bank), dim=0)
                 utilities.append(recompute_utility_with_target_bank(current, candidates, target_bank, temperature=temperature).cpu())
             all_alternatives.append(torch.stack(utilities))
     alternatives = torch.stack(all_alternatives, dim=1)
