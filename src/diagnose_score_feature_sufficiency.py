@@ -390,7 +390,7 @@ def main(cfg: DictConfig) -> None:
         str(cfg.get("probe_train_manifest", output_dir.parent / "score_feature_probe_train.json"))
     )
     val_manifest_path = Path(
-        str(cfg.get("probe_val_manifest", "outputs/diagnostics/2026-09-21/shared_val160.json"))
+        str(cfg.get("probe_val_manifest", "outputs/diagnostics/2026-09-21/shared_val160_true.json"))
     )
     train_batch_size = int(cfg.get("probe_train_teacher_batch_size", 32))
     epochs = int(cfg.get("probe_epochs", 5))
