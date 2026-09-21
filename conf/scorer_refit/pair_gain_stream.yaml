@@ -1,0 +1,16 @@
+mode: stream_refit
+source_checkpoint: outputs/2026-09-21/20-02-45/best.pt
+cache_dir: outputs/2026-09-21/residual_ln_pair_gain_stream/unused-cache
+output_checkpoint: outputs/2026-09-21/residual_ln_pair_gain_stream/score_stream.pt
+
+collection_split: train
+sample_count: 0
+collection_batch_size: ${experiment.batch_size}
+scorer_batch_size: 8
+learning_rate: 1.0e-5
+weight_decay: 0.01
+epochs: 0
+stream_epochs: 3
+lambda_pair: 0.5
+lambda_gain: 0.5
+loss: pair_plus_gain

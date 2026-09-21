@@ -29,6 +29,7 @@ from training.scorer_refit import (
     module_parameter_fingerprint,
     non_score_parameter_fingerprint,
     scorer_gain_loss,
+    scorer_objective_loss,
     streaming_scorer_step,
     validate_scorer_batch,
 )
@@ -265,7 +266,7 @@ def test_stream_refit_checkpoint_changes_only_score_net_model_weights(model) -> 
     assert all(name.startswith("score_net.") for name in changed)
 
 
-def test_stream_refit_mode_uses_frozen_behavior_and_writes_no_cache(
+def test_pair_gain_stream_refit_uses_frozen_behavior_and_writes_no_cache(
     model, tmp_path, monkeypatch
 ) -> None:
     samples = [
@@ -327,8 +328,9 @@ def test_stream_refit_mode_uses_frozen_behavior_and_writes_no_cache(
                 "stream_epochs": 1,
                 "learning_rate": 1e-2,
                 "weight_decay": 0.0,
-                "lambda_pair": 0.0,
-                "loss": "absolute_gain_huber_only",
+                "lambda_pair": 0.5,
+                "lambda_gain": 0.5,
+                "loss": "pair_plus_gain",
                 "cache_dir": str(cache_dir),
                 "output_checkpoint": str(output_checkpoint),
             },
@@ -342,8 +344,15 @@ def test_stream_refit_mode_uses_frozen_behavior_and_writes_no_cache(
         "metric": 1.0,
         "metadata": {
             "experiment_identity": "R0-NCLS-TEXT",
-            "objective_config": {"retrieval_temperature": 0.07, "huber_delta": 1.0},
-            "run": {"batch_size": 2, "git_sha": "source-git"},
+            "objective_config": {
+                "retrieval_temperature": 0.07,
+                "epsilon_pair": 0.01,
+                "pair_temperature": 1.0,
+                "pair_weight_temperature": 1.0,
+                "huber_delta": 1.0,
+                "lambda_pair": 0.5,
+                "lambda_gain": 0.5,
+            },
         },
     }
     monkeypatch.setattr(
@@ -367,7 +376,7 @@ def test_stream_refit_mode_uses_frozen_behavior_and_writes_no_cache(
         device=torch.device("cpu"),
     )
 
-    assert report["workflow"] == "score_net_gain_only_stream_refit"
+    assert report["workflow"] == "score_net_pair_plus_gain_stream_refit"
     assert report["cache_used"] is False
     assert output_checkpoint.is_file()
     assert not cache_dir.exists()
@@ -383,6 +392,15 @@ def test_stream_refit_mode_uses_frozen_behavior_and_writes_no_cache(
     assert changed and all(name.startswith("score_net.") for name in changed)
     restored = copy.deepcopy(behavior)
     restored.load_state_dict(loaded["model"])
+    restored.eval()
+    with torch.no_grad():
+        inference = restored(
+            batch.reference_pixels,
+            batch.input_ids,
+            batch.attention_mask,
+            batch.content_mask,
+        )
+    assert inference["steps"]
 
 
 def test_gain_only_refit_learns_negative_scores_for_all_negative_utility() -> None:
@@ -407,6 +425,47 @@ def test_gain_only_refit_learns_negative_scores_for_all_negative_utility() -> No
     assert final_loss < initial_loss * 0.05
     assert torch.all(predicted < 0)
     assert torch.allclose(predicted.mean(dim=0), teacher[0], atol=0.015)
+
+
+def test_pair_gain_refit_loss_matches_production_objective() -> None:
+    from losses.objective import absolute_gain_loss, pairwise_ranking_loss
+
+    score_net = ScoreNet(16, 8, 16, dim=8, dropout=0.0)
+    batch = _scorer_batch()
+    features = score_net.build_features(
+        batch["current_global"],
+        batch["text_global"],
+        batch["actions"],
+        batch["delta"],
+        batch["exec_mask"],
+        batch["candidate_global"],
+    )
+    predicted = score_net(features)
+    valid_rows = torch.ones(predicted.shape[0], dtype=torch.bool)
+    pair, _ = pairwise_ranking_loss(
+        predicted,
+        batch["teacher_utility"],
+        valid_rows,
+        epsilon=0.01,
+        temperature=1.0,
+        weight_temperature=1.0,
+    )
+    gain, _ = absolute_gain_loss(
+        predicted, batch["teacher_utility"], valid_rows, 1.0
+    )
+    actual, refit_predicted = scorer_objective_loss(
+        score_net,
+        batch,
+        lambda_pair=0.5,
+        lambda_gain=0.5,
+        epsilon_pair=0.01,
+        pair_temperature=1.0,
+        pair_weight_temperature=1.0,
+        huber_delta=1.0,
+    )
+
+    torch.testing.assert_close(actual, 0.5 * pair + 0.5 * gain)
+    torch.testing.assert_close(refit_predicted, predicted)
 
 
 def test_scorer_cache_integrity_requires_raw_finite_target_free_inputs() -> None:

@@ -15,4 +15,5 @@ epochs: 20
 # stream_refit is a quick pilot; each epoch reruns the frozen STRONG rollout.
 stream_epochs: 1
 lambda_pair: 0.0
+lambda_gain: 1.0
 loss: absolute_gain_huber_only

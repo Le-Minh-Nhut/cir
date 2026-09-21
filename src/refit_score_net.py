@@ -1,4 +1,4 @@
-"""Collect fixed rollout inputs and refit only ScoreNet with absolute gain.
+"""Collect fixed rollout inputs and refit only ScoreNet.
 
 Examples
 --------
@@ -7,25 +7,15 @@ Collect a deterministic TRAIN cache::
     python src/refit_score_net.py backbone=fgclip_base_text_native_cls \
       +scorer_refit=gain_only scorer_refit.mode=collect \
       scorer_refit.source_checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
-      scorer_refit.cache_dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/cache \
-      hydra.run.dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/collect
+      scorer_refit.cache_dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/cache
 
-Refit all ScoreNet parameters and save a normal model checkpoint::
+Run a frozen-policy pair-plus-gain stream refit without a disk cache::
 
-    python src/refit_score_net.py backbone=fgclip_base_text_native_cls \
-      +scorer_refit=gain_only scorer_refit.mode=refit \
-      scorer_refit.source_checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
-      scorer_refit.cache_dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/cache \
-      scorer_refit.output_checkpoint=outputs/r0_ncls_text_strong_aux_score_gain_refit/score_gain_refit.pt \
-      hydra.run.dir=outputs/r0_ncls_text_strong_aux_score_gain_refit/refit
-
-Run a one-pass frozen-policy pilot without a disk cache::
-
-    python src/refit_score_net.py backbone=fgclip_base_text_native_cls \
-      +scorer_refit=gain_only scorer_refit.mode=stream_refit \
-      scorer_refit.stream_epochs=1 \
-      scorer_refit.source_checkpoint=outputs/r0_ncls_text_strong_aux/best.pt \
-      scorer_refit.output_checkpoint=outputs/score_gain_stream.pt
+    python src/refit_score_net.py backbone=fgclip_base_full \
+      model=iag_srme model.proposal_mode=residual_ln +scorer_refit=pair_gain_stream \
+      scorer_refit.source_checkpoint=outputs/2026-09-21/residual_ln_epoch1/best.pt \
+      scorer_refit.output_checkpoint=outputs/2026-09-21/residual_ln_pair_gain_stream/score_stream.pt \
+      scorer_refit.stream_epochs=3
 """
 
 from __future__ import annotations
@@ -169,6 +159,7 @@ def _validate_source_checkpoint(cfg: DictConfig, checkpoint: Mapping[str, Any]) 
             "score_dropout": float(cfg.model.score_dropout),
             "loss_free_balance_enabled": bool(cfg.model.loss_free_balance_enabled),
             "loss_free_bias_update_rate": float(cfg.model.loss_free_bias_update_rate),
+            "proposal_mode": str(cfg.model.proposal_mode),
         },
     )
 
@@ -546,7 +537,22 @@ def stream_refit_score_net(
     retrieval_temperature = float(source_objective["retrieval_temperature"])
     if float(cfg.objective.retrieval_temperature) != retrieval_temperature:
         raise ValueError("configured retrieval temperature differs from source checkpoint")
-    huber_delta = float(source_objective["huber_delta"])
+    objective_parameters = {
+        "lambda_pair": float(refit.lambda_pair),
+        "lambda_gain": float(refit.get("lambda_gain", 1.0)),
+        "epsilon_pair": float(source_objective["epsilon_pair"]),
+        "pair_temperature": float(source_objective["pair_temperature"]),
+        "pair_weight_temperature": float(source_objective["pair_weight_temperature"]),
+        "huber_delta": float(source_objective["huber_delta"]),
+    }
+    if str(refit.loss) == "pair_plus_gain":
+        for field in ("lambda_pair", "lambda_gain"):
+            if objective_parameters[field] != float(source_objective[field]):
+                raise ValueError(
+                    f"configured {field} differs from source checkpoint: "
+                    f"source={source_objective[field]!r}, "
+                    f"configured={objective_parameters[field]!r}"
+                )
 
     behavior_model, tokenizer, processor = build_model(cfg)
     behavior_model.load_state_dict(checkpoint["model"])
@@ -616,6 +622,10 @@ def stream_refit_score_net(
     streamed_sample_visits = 0
     predicted_values = []
     teacher_values = []
+    loss_metric = (
+        "gain_huber" if str(refit.loss) == "absolute_gain_huber_only" else "score_objective"
+    )
+    loss_weighted_by_scores = str(refit.loss) == "absolute_gain_huber_only"
     for epoch in range(stream_epochs):
         loss_sum = 0.0
         score_count = 0
@@ -661,14 +671,14 @@ def stream_refit_score_net(
                     refit_score_net,
                     optimizer,
                     scorer_batch,
-                    huber_delta=huber_delta,
+                    **objective_parameters,
                 )
                 optimizer_steps += 1
                 rows = len(scorer_batch["sample_ids"])
                 valid_decisions += rows
-                elements = predicted.numel()
-                loss_sum += float(loss) * elements
-                score_count += elements
+                loss_weight = predicted.numel() if loss_weighted_by_scores else 1
+                loss_sum += float(loss) * loss_weight
+                score_count += loss_weight
                 predicted_values.append(predicted.cpu())
                 teacher_values.append(scorer_batch["teacher_utility"].cpu())
             print(
@@ -681,8 +691,9 @@ def stream_refit_score_net(
             "optimizer_steps": optimizer_steps,
             "valid_decisions": valid_decisions,
             "teacher_invalid_rows": invalid_rows,
-            "gain_huber": loss_sum / max(score_count, 1),
+            loss_metric: loss_sum / max(score_count, 1),
             "learning_rate": float(refit.learning_rate),
+            **objective_parameters,
         }
         with metrics_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record) + "\n")
@@ -703,14 +714,24 @@ def stream_refit_score_net(
     metadata = copy.deepcopy(checkpoint.get("metadata"))
     metadata = metadata if isinstance(metadata, dict) else {}
     source_identity = metadata.get("experiment_identity", "unknown")
-    metadata["experiment_identity"] = f"{source_identity}-SCORE-GAIN-STREAM"
+    workflow = (
+        "score_net_gain_only_stream_refit"
+        if str(refit.loss) == "absolute_gain_huber_only"
+        else "score_net_pair_plus_gain_stream_refit"
+    )
+    experiment_suffix = (
+        "SCORE-GAIN-STREAM"
+        if str(refit.loss) == "absolute_gain_huber_only"
+        else "SCORE-PAIR-GAIN-STREAM"
+    )
+    metadata["experiment_identity"] = f"{source_identity}-{experiment_suffix}"
     metadata["source_validation_metric"] = checkpoint.get("metric")
     metadata["number_of_optimizer_updates"] = optimizer_steps
     metadata["optimizer_scope"] = "score_net_only"
     metadata["exact_full_training_resume"] = False
     metadata["resume_semantics"] = "warm_start_only_for_full_training"
     metadata["score_refit"] = {
-        "workflow": "score_net_gain_only_stream_refit",
+        "workflow": workflow,
         "behavior_policy": "frozen_source_checkpoint",
         "streaming": True,
         "cache_used": False,
@@ -749,8 +770,7 @@ def stream_refit_score_net(
         "valid_decision_count": valid_decisions,
         "teacher_invalid_row_count": invalid_rows,
         "seed": int(cfg.seed),
-        "huber_delta": huber_delta,
-        "lambda_pair": float(refit.lambda_pair),
+        **objective_parameters,
         "loss": str(refit.loss),
         "trainable_parameter_names": [
             f"score_net.{name}" for name, _ in refit_score_net.named_parameters()
@@ -991,15 +1011,21 @@ def refit_score_net(
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     if cfg.get("scorer_refit") is None:
-        raise ValueError("pass +scorer_refit=gain_only")
+        raise ValueError("pass +scorer_refit=gain_only or +scorer_refit=pair_gain_stream")
     refit = cfg.scorer_refit
     mode = str(refit.mode)
     if mode not in {"collect", "refit", "stream_refit"}:
         raise ValueError("scorer_refit.mode must be collect, refit, or stream_refit")
-    if float(refit.lambda_pair) != 0.0 or str(refit.loss) != "absolute_gain_huber_only":
-        raise ValueError("ScoreNet rescue is fixed to lambda_pair=0 and absolute gain only")
+    if str(refit.loss) == "absolute_gain_huber_only":
+        if float(refit.lambda_pair) != 0.0 or float(refit.get("lambda_gain", 1.0)) != 1.0:
+            raise ValueError("gain-only ScoreNet refit requires lambda_pair=0 and lambda_gain=1")
+    elif str(refit.loss) == "pair_plus_gain":
+        if mode != "stream_refit":
+            raise ValueError("pair-plus-gain ScoreNet refit supports stream_refit only")
+    else:
+        raise ValueError("scorer_refit.loss must be absolute_gain_huber_only or pair_plus_gain")
     if str(refit.collection_split) != "train":
-        raise ValueError("gain-only ScoreNet refit collection must use the TRAIN split")
+        raise ValueError("ScoreNet refit collection must use the TRAIN split")
     # Scorer refit is backbone-policy agnostic.
     # Exact compatibility with the source checkpoint is enforced below by
     # _validate_source_checkpoint(...).

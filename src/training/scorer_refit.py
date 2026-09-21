@@ -8,7 +8,7 @@ import torch
 from torch import Tensor, nn
 from torch.optim import AdamW, Optimizer
 
-from losses.objective import absolute_gain_loss
+from losses.objective import absolute_gain_loss, pairwise_ranking_loss
 
 
 SCORER_TENSOR_FIELDS = (
@@ -143,13 +143,18 @@ def build_standalone_score_optimizer(
     return optimizer
 
 
-def scorer_gain_loss(
+def scorer_objective_loss(
     score_net: nn.Module,
     batch: Mapping[str, Any],
     *,
+    lambda_pair: float,
+    lambda_gain: float,
+    epsilon_pair: float,
+    pair_temperature: float,
+    pair_weight_temperature: float,
     huber_delta: float,
 ) -> tuple[Tensor, Tensor]:
-    """Run all trainable ScoreNet projections and the gain-only Huber objective."""
+    """Run ScoreNet against the production pairwise-plus-gain objective."""
 
     features = score_net.build_features(
         batch["current_global"],
@@ -163,13 +168,46 @@ def scorer_gain_loss(
     valid_rows = torch.ones(
         predicted.shape[0], dtype=torch.bool, device=predicted.device
     )
-    loss, _ = absolute_gain_loss(
-        predicted,
-        batch["teacher_utility"],
-        valid_rows,
-        huber_delta,
-    )
+    loss = predicted.new_zeros(())
+    if lambda_pair:
+        pair, _ = pairwise_ranking_loss(
+            predicted,
+            batch["teacher_utility"],
+            valid_rows,
+            epsilon=epsilon_pair,
+            temperature=pair_temperature,
+            weight_temperature=pair_weight_temperature,
+        )
+        loss = loss + lambda_pair * pair
+    if lambda_gain:
+        gain, _ = absolute_gain_loss(
+            predicted,
+            batch["teacher_utility"],
+            valid_rows,
+            huber_delta,
+        )
+        loss = loss + lambda_gain * gain
     return loss, predicted
+
+
+def scorer_gain_loss(
+    score_net: nn.Module,
+    batch: Mapping[str, Any],
+    *,
+    huber_delta: float,
+) -> tuple[Tensor, Tensor]:
+    """Run all trainable ScoreNet projections and the gain-only Huber objective."""
+
+    return scorer_objective_loss(
+        score_net,
+        batch,
+        lambda_pair=0.0,
+        lambda_gain=1.0,
+        epsilon_pair=0.0,
+        pair_temperature=1.0,
+        pair_weight_temperature=1.0,
+        huber_delta=huber_delta,
+    )
 
 
 def streaming_scorer_step(
@@ -177,12 +215,26 @@ def streaming_scorer_step(
     optimizer: Optimizer,
     batch: Mapping[str, Any],
     *,
+    lambda_pair: float = 0.0,
+    lambda_gain: float = 1.0,
+    epsilon_pair: float = 0.0,
+    pair_temperature: float = 1.0,
+    pair_weight_temperature: float = 1.0,
     huber_delta: float,
 ) -> tuple[Tensor, Tensor]:
-    """One gain-only update with no cache or behavior-model mutation."""
+    """One ScoreNet-only update with no cache or behavior-model mutation."""
 
     optimizer.zero_grad(set_to_none=True)
-    loss, predicted = scorer_gain_loss(score_net, batch, huber_delta=huber_delta)
+    loss, predicted = scorer_objective_loss(
+        score_net,
+        batch,
+        lambda_pair=lambda_pair,
+        lambda_gain=lambda_gain,
+        epsilon_pair=epsilon_pair,
+        pair_temperature=pair_temperature,
+        pair_weight_temperature=pair_weight_temperature,
+        huber_delta=huber_delta,
+    )
     loss.backward()
     if any(
         parameter.grad is not None and not torch.isfinite(parameter.grad).all()
