@@ -243,6 +243,185 @@ def selection_metrics(
     }
 
 
+
+def selector_timestep_summary(
+    utility: Tensor,
+    scores: Tensor,
+    selected_idx: Tensor,
+    *,
+    stop_threshold: float,
+    delta_q_norm: Tensor | None = None,
+) -> dict[str, Any]:
+    """Summarize one rollout timestep with aggregate selector definitions."""
+
+    if utility.ndim != 2 or scores.shape != utility.shape:
+        raise ValueError("utility and scores must have matching [B,K] shapes")
+    candidates = utility.shape[1]
+    actions = candidates + 1
+    labels = [f"C{slot}" for slot in range(candidates)] + ["STOP"]
+    if utility.shape[0] == 0:
+        empty_slots = {
+            label: {"count": 0, "fraction_of_all_decisions": None}
+            for label in labels
+        }
+        return {
+            "available": False,
+            "decision_count": 0,
+            "score_utility_calibration": None,
+            "selection_metrics": None,
+            "exact_oracle_accuracy": None,
+            "stop_execute_accuracy": None,
+            "selected_teacher_utility": None,
+            "oracle_teacher_utility": None,
+            "oracle_regret": None,
+            "execute_count": 0,
+            "execute_rate": None,
+            "stop_count": 0,
+            "stop_rate": None,
+            "oracle_execute_count": 0,
+            "oracle_stop_count": 0,
+            "oracle_stop_rate": None,
+            "missed_opportunity_stop_count": 0,
+            "missed_opportunity_stop_rate": None,
+            "harmful_execution_count": 0,
+            "harmful_execution_fraction_of_executions": None,
+            "harmful_execution_fraction_of_decisions": None,
+            "stop": {
+                "precision": None,
+                "recall": None,
+                "f1": None,
+                "harmful_execution_count": 0,
+                "harmful_execution_fraction_of_executions": None,
+                "harmful_execution_fraction_of_decisions": None,
+            },
+            "selected_slot_occupancy": empty_slots,
+            "selected_slot_occupancy_given_execute": {
+                label: {"count": 0, "fraction": None} for label in labels[:-1]
+            },
+            "oracle_slot_occupancy": empty_slots.copy(),
+            "oracle_slot_occupancy_given_oracle_execute": {
+                label: {"count": 0, "fraction": None} for label in labels[:-1]
+            },
+            "confusion": [[0] * actions for _ in range(actions)],
+            "per_slot": [
+                {
+                    "slot": label,
+                    "score_mean": None,
+                    "teacher_utility_mean": None,
+                    "positive_utility_fraction": None,
+                }
+                for label in labels[:-1]
+            ],
+        }
+
+    metrics = selection_metrics(
+        utility,
+        selected_idx,
+        stop_threshold=stop_threshold,
+        delta_q_norm=delta_q_norm,
+    )
+    calibration = score_utility_calibration(scores, utility)
+    values = utility.detach().float().cpu()
+    selected = selected_idx.detach().long().cpu()
+    _, best_slot = values.max(dim=-1)
+    oracle_stop = values.max(dim=-1).values <= stop_threshold
+    oracle_action = torch.where(
+        oracle_stop, torch.full_like(best_slot, candidates), best_slot
+    )
+    confusion = torch.zeros(actions, actions, dtype=torch.long)
+    for selector, oracle in zip(selected.tolist(), oracle_action.tolist()):
+        confusion[selector, oracle] += 1
+
+    stop = metrics["stop"]
+    slot_metrics = metrics["slot_metrics"]
+    selected_all = {
+        f"C{row['slot']}": {
+            "count": row["selected_count"],
+            "fraction_of_all_decisions": row["selected_fraction_of_all_decisions"],
+        }
+        for row in slot_metrics
+    }
+    selected_all["STOP"] = {
+        "count": stop["stop_count"],
+        "fraction_of_all_decisions": stop["stop_rate"],
+    }
+    oracle_all = {
+        f"C{row['slot']}": {
+            "count": row["oracle_best_count"],
+            "fraction_of_all_decisions": row["oracle_best_fraction_of_all_decisions"],
+        }
+        for row in slot_metrics
+    }
+    oracle_all["STOP"] = {
+        "count": stop["oracle_stop_count"],
+        "fraction_of_all_decisions": stop["oracle_stop_rate"],
+    }
+    return {
+        "available": True,
+        "decision_count": metrics["decision_count"],
+        "score_utility_calibration": calibration,
+        "selection_metrics": metrics,
+        "exact_oracle_accuracy": metrics["selected_equals_oracle_fraction"],
+        "stop_execute_accuracy": (stop["tp"] + stop["tn"]) / metrics["decision_count"],
+        "selected_teacher_utility": metrics["mean_selected_utility"],
+        "oracle_teacher_utility": metrics["mean_oracle_utility"],
+        "oracle_regret": metrics["mean_regret"],
+        "execute_count": metrics["execute_count"],
+        "execute_rate": metrics["execute_rate"],
+        "stop_count": stop["stop_count"],
+        "stop_rate": stop["stop_rate"],
+        "oracle_execute_count": metrics["oracle_execute_count"],
+        "oracle_stop_count": stop["oracle_stop_count"],
+        "oracle_stop_rate": stop["oracle_stop_rate"],
+        "missed_opportunity_stop_count": stop["premature_stop_count"],
+        "missed_opportunity_stop_rate": stop["premature_stop_count"] / metrics["decision_count"],
+        "harmful_execution_count": stop["harmful_execution_count"],
+        "harmful_execution_fraction_of_executions": stop[
+            "harmful_execution_fraction_of_executions"
+        ],
+        "harmful_execution_fraction_of_decisions": stop[
+            "harmful_execution_fraction_of_decisions"
+        ],
+        "stop": {
+            "precision": stop["precision"],
+            "recall": stop["recall"],
+            "f1": stop["f1"],
+            "harmful_execution_count": stop["harmful_execution_count"],
+            "harmful_execution_fraction_of_executions": stop[
+                "harmful_execution_fraction_of_executions"
+            ],
+            "harmful_execution_fraction_of_decisions": stop[
+                "harmful_execution_fraction_of_decisions"
+            ],
+        },
+        "selected_slot_occupancy": selected_all,
+        "selected_slot_occupancy_given_execute": {
+            f"C{row['slot']}": {
+                "count": row["selected_count"],
+                "fraction": row["selected_fraction_given_execute"],
+            }
+            for row in slot_metrics
+        },
+        "oracle_slot_occupancy": oracle_all,
+        "oracle_slot_occupancy_given_oracle_execute": {
+            f"C{row['slot']}": {
+                "count": row["oracle_best_count"],
+                "fraction": row["oracle_best_fraction_given_oracle_execute"],
+            }
+            for row in slot_metrics
+        },
+        "confusion": confusion.tolist(),
+        "per_slot": [
+            {
+                "slot": f"C{slot}",
+                "score_mean": float(scores.detach().float().cpu()[:, slot].mean()),
+                "teacher_utility_mean": float(values[:, slot].mean()),
+                "positive_utility_fraction": float((values[:, slot] > 0).float().mean()),
+            }
+            for slot in range(candidates)
+        ],
+    }
+
 def slot_monopoly(
     metrics: dict[str, Any], *, oracle: bool = False, threshold: float = 0.60
 ) -> dict[str, int | float | bool]:

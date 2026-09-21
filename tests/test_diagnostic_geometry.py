@@ -21,6 +21,7 @@ from diagnostics.geometry import (
 from diagnostics.selection import (
     caption_utility_comparison,
     selection_metrics,
+    selector_timestep_summary,
     slot_monopoly,
     transition_retrieval,
 )
@@ -267,6 +268,65 @@ def test_stop_epsilon_distinguishes_positive_utility_from_oracle_execute() -> No
     assert report["positive_utility_candidate_count_mean"] == 1.0
     assert report["oracle_execute_count"] == 0
     assert report["stop"]["oracle_stop_count"] == 1
+
+
+
+def test_timestep_selector_summary_keeps_timesteps_separate_and_closes_counts() -> None:
+    t0_utility = torch.tensor([[0.4, -0.2], [-0.4, -0.1]])
+    t0_scores = torch.tensor([[0.3, -0.3], [-0.5, -0.2]])
+    t0_selected = torch.tensor([0, 2])
+    t1_utility = torch.tensor([[-0.2, 0.3]])
+    t1_scores = torch.tensor([[-0.1, 0.2]])
+    t1_selected = torch.tensor([0])
+    t0 = selector_timestep_summary(t0_utility, t0_scores, t0_selected, stop_threshold=0.0)
+    t1 = selector_timestep_summary(t1_utility, t1_scores, t1_selected, stop_threshold=0.0)
+    combined = selection_metrics(
+        torch.cat((t0_utility, t1_utility)),
+        torch.cat((t0_selected, t1_selected)),
+        stop_threshold=0.0,
+    )
+    assert t0["decision_count"] == 2
+    assert t1["decision_count"] == 1
+    assert t0["decision_count"] + t1["decision_count"] == combined["decision_count"]
+    assert t0["execute_count"] + t1["execute_count"] == combined["execute_count"]
+    assert sum(map(sum, t0["confusion"])) == t0["decision_count"]
+    assert sum(map(sum, t1["confusion"])) == t1["decision_count"]
+    assert sum(row["count"] for row in t0["selected_slot_occupancy"].values()) == 2
+    assert sum(
+        row["count"] for row in t0["selected_slot_occupancy_given_execute"].values()
+    ) == t0["execute_count"]
+    assert t0["selected_slot_occupancy"]["STOP"]["count"] == 1
+    assert t0["selected_slot_occupancy"]["C0"]["count"] == 1
+    assert t1["selected_slot_occupancy"]["C0"]["count"] == 1
+    assert t0["score_utility_calibration"]["count"] == 4
+    assert t1["score_utility_calibration"]["count"] == 2
+    assert t0["stop_count"] + t1["stop_count"] == combined["stop"]["stop_count"]
+    assert (
+        t0["oracle_stop_count"] + t1["oracle_stop_count"]
+        == combined["stop"]["oracle_stop_count"]
+    )
+    assert (
+        t0["harmful_execution_count"] + t1["harmful_execution_count"]
+        == combined["stop"]["harmful_execution_count"]
+    )
+    torch.testing.assert_close(
+        torch.tensor(t0["selected_teacher_utility"] * 2 + t1["selected_teacher_utility"]),
+        torch.tensor(combined["mean_selected_utility"] * 3),
+    )
+
+
+def test_timestep_selector_summary_handles_zero_valid_rows() -> None:
+    report = selector_timestep_summary(
+        torch.empty(0, 2),
+        torch.empty(0, 2),
+        torch.empty(0, dtype=torch.long),
+        stop_threshold=0.0,
+    )
+
+    assert report["available"] is False
+    assert report["decision_count"] == 0
+    assert report["score_utility_calibration"] is None
+    assert sum(map(sum, report["confusion"])) == 0
 
 
 def test_representation_space_guard_rejects_patch_query_comparison() -> None:

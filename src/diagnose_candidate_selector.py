@@ -46,6 +46,7 @@ from diagnostics.selection import (
     caption_utility_comparison,
     score_utility_calibration,
     selection_metrics,
+    selector_timestep_summary,
     slot_monopoly,
     transition_retrieval,
 )
@@ -167,6 +168,12 @@ def format_matrix(matrix: list[list[float]], labels: list[str]) -> str:
     return "\n".join(lines)
 
 
+def format_metric(value: object, precision: int = 4) -> str:
+    if value is None:
+        return "unavailable"
+    return f"{float(value):.{precision}f}"
+
+
 def render_markdown(report: Mapping[str, Any]) -> str:
     k = int(report["num_candidates"])
     cand_labels = [f"C{i}" for i in range(k)]
@@ -236,6 +243,47 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         "Rows = selector, columns = oracle.",
         "",
         format_matrix(report["selector_vs_oracle_confusion_rate"], decision_labels),
+    ]
+    if report.get("by_timestep"):
+        lines += [
+            "",
+            "## By timestep",
+            "",
+            "| timestep | decisions | Pearson | exact oracle | selected utility | oracle utility | regret | harmful / execute | STOP | oracle STOP |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+        for name, values in report["by_timestep"].items():
+            calibration = values["score_utility_calibration"]
+            stop = values["stop"]
+            lines.append(
+                f"| {name} | {values['decision_count']} | "
+                f"{format_metric(None if calibration is None else calibration['pearson'])} | "
+                f"{format_metric(values['exact_oracle_accuracy'])} | "
+                f"{format_metric(values['selected_teacher_utility'], 5)} | "
+                f"{format_metric(values['oracle_teacher_utility'], 5)} | "
+                f"{format_metric(values['oracle_regret'], 5)} | "
+                f"{format_metric(stop['harmful_execution_fraction_of_executions'])} | "
+                f"{format_metric(values['stop_rate'])} | "
+                f"{format_metric(values['oracle_stop_rate'])} |"
+            )
+        for name, values in report["by_timestep"].items():
+            lines += ["", f"### {name}", ""]
+            if not values["available"]:
+                lines.append("No valid decisions at this timestep.")
+                continue
+            calibration = values["score_utility_calibration"]
+            stop = values["stop"]
+            lines += [
+                f"- score bias / MAE / RMSE / sign agreement: `{format_metric(calibration['bias'], 6)}` / `{format_metric(calibration['mae'], 6)}` / `{format_metric(calibration['rmse'], 6)}` / `{format_metric(calibration['sign_agreement_at_zero'], 6)}`",
+                f"- stop/execute accuracy: `{format_metric(values['stop_execute_accuracy'])}`; missed-opportunity STOP: `{format_metric(values['missed_opportunity_stop_rate'])}`",
+                f"- STOP precision / recall / F1: `{format_metric(stop['precision'])}` / `{format_metric(stop['recall'])}` / `{format_metric(stop['f1'])}`",
+                f"- selected occupancy: `{values['selected_slot_occupancy']}`",
+                f"- oracle occupancy: `{values['oracle_slot_occupancy']}`",
+                "- selector-vs-oracle confusion (rows selector, columns oracle):",
+                "",
+                format_matrix(values["confusion"], decision_labels),
+            ]
+    lines += [
         "",
         "## Proposal cosine matrix",
         "",
@@ -615,6 +663,7 @@ def main(cfg: DictConfig) -> None:
                 all_delta_norm.append(delta_norm.cpu())
                 timestep = int(step["timestep"])
                 timestep_values[timestep]["utility"].append(teacher.detach().cpu())
+                timestep_values[timestep]["scores"].append(scores.detach().cpu())
                 timestep_values[timestep]["selected"].append(selected.detach().cpu())
                 timestep_values[timestep]["delta_norm"].append(delta_norm.cpu())
 
@@ -905,13 +954,34 @@ def main(cfg: DictConfig) -> None:
         stop_threshold=float(model.config.epsilon_stop),
         delta_q_norm=torch.cat(all_delta_norm),
     )
-    by_timestep = {}
-    for timestep, values in sorted(timestep_values.items()):
-        by_timestep[str(timestep)] = selection_metrics(
+    by_timestep = {
+        str(timestep): selection_metrics(
             torch.cat(values["utility"]),
             torch.cat(values["selected"]),
             stop_threshold=float(model.config.epsilon_stop),
             delta_q_norm=torch.cat(values["delta_norm"]),
+        )
+        for timestep, values in sorted(timestep_values.items())
+    }
+    by_timestep_report = {}
+    for timestep in range(int(model.config.max_steps)):
+        values = timestep_values.get(timestep)
+        if values:
+            utility = torch.cat(values["utility"])
+            scores = torch.cat(values["scores"])
+            selected = torch.cat(values["selected"])
+            delta_norm = torch.cat(values["delta_norm"])
+        else:
+            utility = torch.empty(0, k)
+            scores = torch.empty(0, k)
+            selected = torch.empty(0, dtype=torch.long)
+            delta_norm = torch.empty(0, k)
+        by_timestep_report[f"t{timestep}"] = selector_timestep_summary(
+            utility,
+            scores,
+            selected,
+            stop_threshold=float(model.config.epsilon_stop),
+            delta_q_norm=delta_norm,
         )
 
     flags: list[dict[str, str]] = []
@@ -1184,6 +1254,7 @@ def main(cfg: DictConfig) -> None:
         },
         "selection_metrics": combined_selection,
         "selection_metrics_by_timestep": by_timestep,
+        "by_timestep": by_timestep_report,
         "score_utility_calibration": calibration,
         "headline_metrics": headline,
         "retrieval_behavior": retrieval_behavior,
