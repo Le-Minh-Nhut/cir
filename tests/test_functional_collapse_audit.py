@@ -88,6 +88,30 @@ def test_selection_audit_uses_keep_zero_for_stop_regret() -> None:
     assert audit["overall"]["oracle_utility"] >= audit["overall"]["selected_utility"]
     assert audit["overall"]["one_step_regret"] >= 0.0
 
+
+def test_selection_audit_subtracts_nonzero_stop_threshold() -> None:
+    output = {
+        "steps": [
+            {
+                "timestep": 0,
+                "scores": torch.tensor([[0.3, 0.1]]),
+                "selected_idx": torch.tensor([0]),
+                "live_indices": torch.tensor([0]),
+                "current_query": torch.tensor([[1.0, 0.0]]),
+                "candidate_queries": torch.tensor([[[0.0, 1.0], [1.0, 0.0]]]),
+            }
+        ]
+    }
+    audit = selection_quality_audit(
+        output,
+        torch.tensor([[0.0, 1.0], [1.0, 0.0]]),
+        ["target", "negative"],
+        0.07,
+        epsilon_stop=0.2,
+    )
+
+    assert audit["overall"]["score_margin_to_stop_mean"] == pytest.approx(0.1)
+
 def test_gram_effective_rank_matches_direct_svd_for_flattened_delta() -> None:
     values = torch.randn(3, 5, 2, 7)
     flattened = values.flatten(start_dim=2).float()

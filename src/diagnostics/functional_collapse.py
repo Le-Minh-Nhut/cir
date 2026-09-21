@@ -261,7 +261,11 @@ def _proposal_step_audit(step: Mapping[str, object]) -> dict[str, object]:
 
 
 def _selection_step_audit(
-    step: Mapping[str, object], targets: Tensor, target_ids: list[str], temperature: float
+    step: Mapping[str, object],
+    targets: Tensor,
+    target_ids: list[str],
+    temperature: float,
+    epsilon_stop: float = 0.0,
 ) -> dict[str, float]:
     from models.iag_srme.utils.retrieval import build_teacher_masks, marginal_teacher_utilities
 
@@ -300,7 +304,7 @@ def _selection_step_audit(
         "raw_best_score": float(raw_best_score.float().mean()),
         "score_margin_mean": float(score_margin.float().mean()),
         "score_margin_near_tie_fraction": float((score_margin.abs() <= 1e-6).float().mean()),
-        "score_margin_to_stop_mean": float(raw_best_score.float().mean()),
+        "score_margin_to_stop_mean": float((raw_best_score - epsilon_stop).float().mean()),
         "executed_fraction": float((~stop).float().mean()),
         "stop_fraction": float(stop.float().mean()),
         "oracle_keep_fraction": float(oracle_idx.eq(candidates).float().mean()),
@@ -330,14 +334,20 @@ def _scalar_aggregate(steps: list[dict[str, float]]) -> dict[str, float]:
 
 @torch.no_grad()
 def selection_quality_audit(
-    output: Mapping[str, object], targets: Tensor, target_ids: list[str], temperature: float
+    output: Mapping[str, object],
+    targets: Tensor,
+    target_ids: list[str],
+    temperature: float,
+    epsilon_stop: float = 0.0,
 ) -> dict[str, object]:
     """Target-derived training diagnostics; never used by model, loss, or routing."""
     trajectory = output.get("steps")
     if not isinstance(trajectory, list):
         raise TypeError("model output must contain a trajectory list")
     by_step = {
-        f"t{step['timestep']}": _selection_step_audit(step, targets, target_ids, temperature)
+        f"t{step['timestep']}": _selection_step_audit(
+            step, targets, target_ids, temperature, epsilon_stop
+        )
         for step in trajectory
     }
     return {"overall": _scalar_aggregate(list(by_step.values())), "by_step": by_step}

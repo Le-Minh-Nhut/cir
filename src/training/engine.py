@@ -19,6 +19,7 @@ from diagnostics.functional_collapse import (
     proposal_internal_audit,
     selection_quality_audit,
 )
+from diagnostics.dpp_gradient import dpp_gradient_audit
 from losses.objective import IAGSRMEObjective
 from models.iag_srme.model import IAGSRME
 
@@ -226,6 +227,7 @@ def train_one_epoch(
     batch_steps = batch_step_start
     parameters = trainable_parameters(model, objective)
     probes = build_optimizer_probes(model)
+    dpp_audit_updates = 0
     progress = tqdm(loader, desc=f"train {epoch + 1}", dynamic_ncols=True)
     for cpu_batch in progress:
         batch_steps += 1
@@ -249,6 +251,28 @@ def train_one_epoch(
             target_ids = [str(value) for value in batch.target_ids]
             components = objective(output, target_embeddings, target_ids, batch.modification_texts)
             loss = components["total"]
+        dpp_audit_enabled = bool(
+            getattr(getattr(model, "config", None), "dpp_gradient_audit_enabled", False)
+            and getattr(getattr(objective, "config", None), "dpp_enabled", False)
+            and dpp_audit_updates < getattr(model.config, "dpp_gradient_audit_max_updates", 0)
+            and (batch_steps - 1) % getattr(model.config, "dpp_gradient_audit_interval", 1) == 0
+        )
+        dpp_audit = (
+            dpp_gradient_audit(
+                model,
+                objective,
+                output,
+                target_embeddings,
+                target_ids,
+                components["dpp_raw"],
+                components["dpp_valid_timestep_count"],
+            )
+            if dpp_audit_enabled
+            else {}
+        )
+        if dpp_audit_enabled:
+            dpp_audit["sample_ids"] = list(batch.sample_ids)
+        dpp_audit_updates += int(dpp_audit_enabled)
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
         nonfinite_gradients, gradient_elements = _gradient_diagnostics(parameters)
@@ -283,6 +307,7 @@ def train_one_epoch(
                 target_embeddings,
                 target_ids,
                 getattr(getattr(objective, "config", None), "retrieval_temperature", 0.07),
+                getattr(getattr(model, "config", None), "epsilon_stop", 0.0),
             )
             if audit_enabled
             and all(
@@ -315,6 +340,7 @@ def train_one_epoch(
                     **({"functional_collapse_audit": collapse_audit} if audit_enabled else {}),
                     **({"proposal_internal_audit": proposal_audit} if proposal_audit_enabled else {}),
                     **({"selection_quality_audit": selection_audit} if selection_audit else {}),
+                    **({"dpp_gradient_audit": dpp_audit} if dpp_audit_enabled else {}),
                     "parameter_updates": _probe_diagnostics(probes, before),
                 }
             )

@@ -4,3 +4,6 @@ defaults:
 name: iag_srme_functional_audit
 functional_collapse_audit_enabled: true
 proposal_internal_audit_enabled: true
+dpp_gradient_audit_enabled: true
+dpp_gradient_audit_interval: 1
+dpp_gradient_audit_max_updates: 16

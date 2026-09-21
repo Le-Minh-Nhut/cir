@@ -139,6 +139,16 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
             or cfg.experiment.get("proposal_internal_audit_enabled", False)
         ),
         proposal_mode=str(cfg.model.proposal_mode),
+        dpp_gradient_audit_enabled=bool(
+            cfg.model.dpp_gradient_audit_enabled
+            or cfg.experiment.get("dpp_gradient_audit_enabled", False)
+        ),
+        dpp_gradient_audit_interval=int(
+            cfg.experiment.get("dpp_gradient_audit_interval", cfg.model.dpp_gradient_audit_interval)
+        ),
+        dpp_gradient_audit_max_updates=int(
+            cfg.experiment.get("dpp_gradient_audit_max_updates", cfg.model.dpp_gradient_audit_max_updates)
+        ),
     )
     return IAGSRME(backbone, model_config), tokenizer, processor
 

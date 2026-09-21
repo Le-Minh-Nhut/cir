@@ -27,10 +27,15 @@ class IAGSRMEConfig:
     functional_collapse_audit_enabled: bool = False
     proposal_internal_audit_enabled: bool = False
     proposal_mode: str = "attention"
+    dpp_gradient_audit_enabled: bool = False
+    dpp_gradient_audit_interval: int = 1
+    dpp_gradient_audit_max_updates: int = 16
 
     def __post_init__(self) -> None:
         if self.proposal_mode not in {"attention", "attention_ln", "residual", "residual_ln"}:
             raise ValueError(f"unsupported proposal_mode: {self.proposal_mode}")
+        if self.dpp_gradient_audit_interval < 1 or self.dpp_gradient_audit_max_updates < 0:
+            raise ValueError("DPP gradient audit interval must be positive and max updates nonnegative")
 
 
 class ProposalNet(nn.Module):

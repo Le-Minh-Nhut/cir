@@ -15,3 +15,6 @@ loss_free_bias_update_rate: 1.0e-3
 functional_collapse_audit_enabled: false
 proposal_internal_audit_enabled: false
 proposal_mode: attention
+dpp_gradient_audit_enabled: false
+dpp_gradient_audit_interval: 1
+dpp_gradient_audit_max_updates: 16
