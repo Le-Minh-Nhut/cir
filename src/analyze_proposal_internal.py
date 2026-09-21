@@ -13,6 +13,7 @@ STAGES = (
     "conditioned_residual",
     "query_pre_norm",
     "query_post_norm",
+    "raw_attention_output",
     "proposal_output",
 )
 SCALARS = (

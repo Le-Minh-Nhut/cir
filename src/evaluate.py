@@ -76,6 +76,7 @@ def validate_checkpoint_backbone_metadata(
             legacy_defaults = {
                 "loss_free_balance_enabled": False,
                 "loss_free_bias_update_rate": 1.0e-3,
+                "proposal_mode": "attention",
             }
             for field, configured in expected_model_config.items():
                 stored = stored_model.get(field, legacy_defaults.get(field))
@@ -129,6 +130,7 @@ def main(cfg: DictConfig) -> None:
             "epsilon_stop": float(cfg.model.epsilon_stop),
             "loss_free_balance_enabled": bool(cfg.model.loss_free_balance_enabled),
             "loss_free_bias_update_rate": float(cfg.model.loss_free_bias_update_rate),
+            "proposal_mode": str(cfg.model.proposal_mode),
         },
         allow_counterfactual=counterfactual,
     )
@@ -183,6 +185,7 @@ def main(cfg: DictConfig) -> None:
             "epsilon_stop": float(cfg.model.epsilon_stop),
             "loss_free_balance_enabled": bool(cfg.model.loss_free_balance_enabled),
             "loss_free_bias_update_rate": float(cfg.model.loss_free_bias_update_rate),
+            "proposal_mode": str(cfg.model.proposal_mode),
             "global_readout_mode": str(cfg.backbone.global_readout_mode),
             "finetune_policy": str(cfg.backbone.finetune_policy),
             "backbone_checkpoint": str(cfg.backbone.checkpoint),

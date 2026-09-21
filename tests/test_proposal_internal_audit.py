@@ -9,7 +9,7 @@ import torch
 
 from analyze_proposal_internal import _heuristic, _records, _summarize
 from diagnostics.functional_collapse import generic_diversity, proposal_internal_audit
-from models.iag_srme import ProposalNet
+from models.iag_srme import IAGSRMEConfig, ProposalNet
 
 
 STAGES = (
@@ -18,6 +18,7 @@ STAGES = (
     "conditioned_residual",
     "query_pre_norm",
     "query_post_norm",
+    "raw_attention_output",
     "proposal_output",
 )
 
@@ -34,6 +35,7 @@ def _step(timestep: int, batch: int, *, collapsed_pre: bool, collapsed_output: b
             "conditioned_residual": pre - base,
             "query_pre_norm": pre,
             "query_post_norm": pre,
+            "raw_attention_output": output,
             "proposal_output": output,
         },
     }
@@ -121,6 +123,59 @@ def test_audit_query_snapshots_survive_parameter_update(features) -> None:
     torch.testing.assert_close(proposal.last_internal_audit["base_query"], base)
     torch.testing.assert_close(proposal.last_internal_audit["expanded_query"], expanded)
     torch.testing.assert_close(output, output_before)
+
+
+@pytest.mark.parametrize("mode", ("attention", "attention_ln", "residual", "residual_ln"))
+def test_proposal_modes_are_finite_and_expose_attention_stages(features, mode) -> None:
+    _, tokens, text, mask = features
+    proposal = ProposalNet(16, 8, 3, 1, proposal_mode=mode).eval()
+    proposal.internal_audit_enabled = True
+    output = proposal(tokens, text, torch.randn(tokens.shape[0], 16), mask)
+
+    assert output.shape == (tokens.shape[0], 3, 16)
+    assert torch.isfinite(output).all()
+    assert proposal.last_internal_audit is not None
+    assert {"query_post_norm", "raw_attention_output", "proposal_output"} <= set(proposal.last_internal_audit)
+    torch.testing.assert_close(proposal.last_internal_audit["proposal_output"], output)
+
+
+def test_attention_mode_matches_the_pre_ablation_attention_path(features) -> None:
+    _, tokens, text, mask = features
+    proposal = ProposalNet(16, 8, 3, 1, proposal_mode="attention").eval()
+    current = torch.randn(tokens.shape[0], 16)
+    text_context = proposal.text_context(text)
+    visual_context = proposal.visual_context(current)
+    context = proposal.context(torch.cat([text_context, visual_context, text_context * visual_context, text_context - visual_context], dim=-1))
+    query = proposal.queries.unsqueeze(0).expand(tokens.shape[0], -1, -1)
+    query = proposal.query_norm(proposal.query_conditioner(torch.cat([query, context[:, None].expand_as(query), query * context[:, None]], dim=-1)) + query)
+    expected, _ = proposal.token_attention(query, tokens, tokens, key_padding_mask=~mask, need_weights=False)
+
+    torch.testing.assert_close(proposal(tokens, text, current, mask), expected)
+
+
+def test_residual_mode_preserves_query_difference_when_attention_is_zero(features) -> None:
+    _, tokens, text, mask = features
+    attention = ProposalNet(16, 8, 3, 1, proposal_mode="attention").eval()
+    residual = ProposalNet(16, 8, 3, 1, proposal_mode="residual").eval()
+    residual.load_state_dict(attention.state_dict())
+    with torch.no_grad():
+        for parameter in attention.token_attention.parameters():
+            parameter.zero_()
+        for parameter in residual.token_attention.parameters():
+            parameter.zero_()
+    residual.internal_audit_enabled = True
+    current = torch.randn(tokens.shape[0], 16)
+
+    assert torch.equal(attention(tokens, text, current, mask), torch.zeros(tokens.shape[0], 3, 16))
+    output = residual(tokens, text, current, mask)
+    assert not torch.allclose(output[:, 0], output[:, 1])
+    assert residual.last_internal_audit is not None
+    torch.testing.assert_close(output, residual.last_internal_audit["query_post_norm"])
+
+
+def test_unknown_proposal_mode_is_rejected() -> None:
+    with pytest.raises(ValueError, match="proposal_mode"):
+        IAGSRMEConfig(proposal_mode="unknown")
 
 
 def test_analyzer_reads_and_summarizes_audit_records(tmp_path) -> None:

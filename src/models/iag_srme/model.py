@@ -26,13 +26,18 @@ class IAGSRMEConfig:
     loss_free_bias_update_rate: float = 1.0e-3
     functional_collapse_audit_enabled: bool = False
     proposal_internal_audit_enabled: bool = False
+    proposal_mode: str = "attention"
+
+    def __post_init__(self) -> None:
+        if self.proposal_mode not in {"attention", "attention_ln", "residual", "residual_ln"}:
+            raise ValueError(f"unsupported proposal_mode: {self.proposal_mode}")
 
 
 class ProposalNet(nn.Module):
     """Fresh, state-conditioned WHAT proposals with token-only semantic values."""
 
     def __init__(
-        self, state_dim: int, text_dim: int, num_candidates: int, num_heads: int
+        self, state_dim: int, text_dim: int, num_candidates: int, num_heads: int, proposal_mode: str = "attention"
     ) -> None:
         super().__init__()
         self.queries = nn.Parameter(torch.empty(num_candidates, state_dim))
@@ -57,6 +62,10 @@ class ProposalNet(nn.Module):
             vdim=text_dim,
             batch_first=True,
         )
+        if proposal_mode not in {"attention", "attention_ln", "residual", "residual_ln"}:
+            raise ValueError(f"unsupported proposal_mode: {proposal_mode}")
+        self.proposal_mode = proposal_mode
+        self.output_norm = nn.LayerNorm(state_dim) if proposal_mode.endswith("_ln") else None
         self.internal_audit_enabled = False
         self.last_internal_audit: dict[str, Tensor] | None = None
 
@@ -89,14 +98,16 @@ class ProposalNet(nn.Module):
         )
         query_pre_norm = expanded_query + conditioned
         query_post_norm = self.query_norm(query_pre_norm)
-        # No q residual: candidate content comes only from instruction token values.
-        edits, _ = self.token_attention(
+        raw_attention, _ = self.token_attention(
             query_post_norm,
             text_tokens,
             text_tokens,
             key_padding_mask=~content_mask,
             need_weights=False,
         )
+        edits = raw_attention + query_post_norm if self.proposal_mode.startswith("residual") else raw_attention
+        if self.output_norm is not None:
+            edits = self.output_norm(edits)
         # Attention weights are intentionally omitted: need_weights=False preserves this call's kernels.
         if self.internal_audit_enabled:
             self.last_internal_audit = {
@@ -105,6 +116,7 @@ class ProposalNet(nn.Module):
                 "conditioned_residual": conditioned.detach(),
                 "query_pre_norm": query_pre_norm.detach(),
                 "query_post_norm": query_post_norm.detach(),
+                "raw_attention_output": raw_attention.detach(),
                 "proposal_output": edits.detach(),
             }
         else:
@@ -289,7 +301,7 @@ class IAGSRME(nn.Module):
         text_dim = int(backbone.text_dim)
         dense_dim = int(backbone.dense_dim)
         self.proposal = ProposalNet(
-            state_dim, text_dim, config.num_candidates, config.num_heads
+            state_dim, text_dim, config.num_candidates, config.num_heads, config.proposal_mode
         )
         self.grounder = Grounder(
             state_dim,

@@ -138,6 +138,7 @@ def build_model(cfg: DictConfig) -> tuple[IAGSRME, object, object]:
             cfg.model.proposal_internal_audit_enabled
             or cfg.experiment.get("proposal_internal_audit_enabled", False)
         ),
+        proposal_mode=str(cfg.model.proposal_mode),
     )
     return IAGSRME(backbone, model_config), tokenizer, processor
 
