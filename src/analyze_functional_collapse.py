@@ -62,22 +62,18 @@ def _format(stage: str, values: Mapping[str, object]) -> str:
     cosine = float(values.get("pairwise_cosine", float("nan")))
     rank = values.get("effective_rank")
     spread = values.get("relative_spread")
-    specific = (
-        values.get("pairwise_js_divergence")
-        if stage == "alpha_read"
-        else values.get("soft_iou")
-        if stage == "exec_mask"
-        else None
-    )
+    valid = values.get("valid_sibling_effect_fraction")
+    low_energy = values.get("low_energy_fraction")
     rank_text = f"{float(rank):8.4f}" if rank is not None else f"{'-':>8}"
     spread_text = f"{float(spread):10.4f}" if spread is not None else f"{'-':>10}"
-    specific_text = f"{float(specific):10.4f}" if specific is not None else f"{'-':>10}"
-    return f"{stage:12} {cosine:8.4f} {rank_text} {spread_text} {specific_text}"
+    valid_text = f"{float(valid):7.3f}" if valid is not None else f"{'-':>7}"
+    low_energy_text = f"{float(low_energy):6.3f}" if low_energy is not None else f"{'-':>6}"
+    return f"{stage:12} {cosine:8.4f} {rank_text} {spread_text} {valid_text} {low_energy_text}"
 
 def _print_summary(label: str, summary: Mapping[str, object]) -> None:
     print(f"\n{label}")
     print("Grounder outputs are siblings: alpha_read and exec_mask.")
-    print("stage        cosine     rank   rel_spread   JS/softIoU")
+    print("stage        cosine     rank   rel_spread   valid low_eng")
     for stage in STAGES:
         if stage in summary:
             print(_format(stage, summary[stage]))

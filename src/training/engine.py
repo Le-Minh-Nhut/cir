@@ -14,7 +14,11 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from data.images import ImageBatch
-from diagnostics.functional_collapse import functional_collapse_audit, proposal_internal_audit
+from diagnostics.functional_collapse import (
+    functional_collapse_audit,
+    proposal_internal_audit,
+    selection_quality_audit,
+)
 from losses.objective import IAGSRMEObjective
 from models.iag_srme.model import IAGSRME
 
@@ -273,6 +277,21 @@ def train_one_epoch(
         )
         collapse_audit = functional_collapse_audit(output) if audit_enabled else {}
         proposal_audit = proposal_internal_audit(output) if proposal_audit_enabled else {}
+        selection_audit = (
+            selection_quality_audit(
+                output,
+                target_embeddings,
+                target_ids,
+                getattr(getattr(objective, "config", None), "retrieval_temperature", 0.07),
+            )
+            if audit_enabled
+            and all(
+                {"scores", "selected_idx", "live_indices", "current_query", "candidate_queries"}
+                <= step.keys()
+                for step in output.get("steps", [])
+            )
+            else {}
+        )
         for name, value in components.items():
             totals[name] += float(value.detach())
         progress.set_postfix(loss=f"{float(loss.detach()):.4f}")
@@ -295,6 +314,7 @@ def train_one_epoch(
                     "loss_free_routing": routing_diagnostics,
                     **({"functional_collapse_audit": collapse_audit} if audit_enabled else {}),
                     **({"proposal_internal_audit": proposal_audit} if proposal_audit_enabled else {}),
+                    **({"selection_quality_audit": selection_audit} if selection_audit else {}),
                     "parameter_updates": _probe_diagnostics(probes, before),
                 }
             )

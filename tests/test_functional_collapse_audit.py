@@ -16,6 +16,7 @@ from diagnostics.functional_collapse import (
     exec_mask_diversity,
     functional_collapse_audit,
     generic_diversity,
+    selection_quality_audit,
 )
 from training.engine import JSONLLogger, PrecisionPolicy, train_one_epoch, trainable_parameters
 
@@ -34,6 +35,58 @@ def test_generic_metrics_distinguish_identical_and_orthogonal_candidates() -> No
     assert diverse["pairwise_cosine"] < collapsed["pairwise_cosine"]
     assert diverse["effective_rank"] > collapsed["effective_rank"]
     assert diverse["spread"] > collapsed["spread"]
+
+
+def test_low_energy_effects_are_not_reported_as_meaningful_directions() -> None:
+    metrics = generic_diversity(torch.full((2, 3, 4), 1e-9))
+
+    assert metrics["low_energy_fraction"] == 1.0
+    assert metrics["valid_sibling_effect_fraction"] == 0.0
+    assert metrics["pairwise_cosine_valid_pair_fraction"] == 0.0
+    assert metrics["effective_rank"] == 0.0
+
+
+def test_effective_rank_is_scale_stable_and_centered_rank_is_bounded() -> None:
+    values = torch.eye(4).unsqueeze(0)
+    tiny = generic_diversity(values * 1e-4)
+    normal = generic_diversity(values)
+
+    assert tiny["effective_rank"] == pytest.approx(normal["effective_rank"])
+    assert normal["centered_effective_rank"] <= 3.0 + 1e-6
+    assert normal["valid_sibling_effect_fraction"] == 1.0
+
+
+def test_zero_effects_are_explicitly_low_energy() -> None:
+    metrics = generic_diversity(torch.zeros(2, 4, 3))
+
+    assert metrics["low_energy_fraction"] == 1.0
+    assert metrics["valid_candidate_fraction"] == 0.0
+    assert metrics["centered_effective_rank"] == 0.0
+
+
+def test_selection_audit_uses_keep_zero_for_stop_regret() -> None:
+    output = {
+        "steps": [
+            {
+                "timestep": 0,
+                "scores": torch.tensor([[0.1, 0.0]]),
+                "selected_idx": torch.tensor([2]),
+                "live_indices": torch.tensor([0]),
+                "current_query": torch.tensor([[1.0, 0.0]]),
+                "candidate_queries": torch.tensor([[[0.0, 1.0], [1.0, 0.0]]]),
+            }
+        ]
+    }
+    audit = selection_quality_audit(
+        output,
+        torch.tensor([[0.0, 1.0], [1.0, 0.0]]),
+        ["target", "negative"],
+        0.07,
+    )
+
+    assert audit["overall"]["stop_fraction"] == 1.0
+    assert audit["overall"]["oracle_utility"] >= audit["overall"]["selected_utility"]
+    assert audit["overall"]["one_step_regret"] >= 0.0
 
 def test_gram_effective_rank_matches_direct_svd_for_flattened_delta() -> None:
     values = torch.randn(3, 5, 2, 7)
