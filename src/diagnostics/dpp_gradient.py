@@ -19,9 +19,12 @@ def _quantiles(values: list[float], device: torch.device) -> dict[str, float]:
     return {name: float(value) for name, value in zip(_QUANTILE_NAMES, result, strict=True)}
 
 
-def _empty() -> dict[str, object]:
+def _empty(objective_valid_count: int = 0) -> dict[str, object]:
     return {
         "dpp_raw_averages_valid_rows": True,
+        "objective_dpp_valid_row_count": objective_valid_count,
+        "audit_dpp_valid_row_count": 0,
+        "dpp_valid_count_matches_objective": objective_valid_count == 0,
         "dpp_valid_row_count": 0,
         "dpp_total_eligible_row_count": 0,
         "dpp_valid_rate": 0.0,
@@ -98,7 +101,11 @@ def _fp32_reference(
     config: object,
     valid_rows: Tensor,
 ) -> tuple[Tensor | None, int]:
-    """Production DPP loss on a detached FP32 clone; this graph never reaches training."""
+    """Recompute DPP arithmetic/backward in FP32 from live ``delta_q`` values only.
+
+    This is not an FP32 model forward; upstream FP16 candidate contrast needs the
+    separate FP32-vs-AMP forward audit.
+    """
     reference = effect.detach().float().clone().requires_grad_()
     result = functional_dpp_loss(
         reference,
@@ -124,15 +131,17 @@ def dpp_gradient_audit(
     target_ids: Sequence[str],
     dpp_raw: Tensor,
     dpp_valid_row_count: Tensor,
+    sample_ids: Sequence[str] | None = None,
 ) -> dict[str, object]:
     """Measure DPP-only gradients before total backward without touching ``.grad``."""
+    objective_valid_count = int(dpp_valid_row_count)
     steps = output.get("steps")
     config = getattr(objective, "config", None)
     if not isinstance(steps, list) or config is None or not bool(config.dpp_enabled):
-        return _empty()
+        return _empty(objective_valid_count)
     effect_steps = [step for step in steps if isinstance(step.get("delta_q"), Tensor)]
-    if not effect_steps or not dpp_raw.requires_grad or not int(dpp_valid_row_count):
-        return _empty()
+    if not effect_steps or not dpp_raw.requires_grad or not objective_valid_count:
+        return _empty(objective_valid_count)
 
     effects = [step["delta_q"] for step in effect_steps]
     candidates = [step["candidate_queries"] for step in effect_steps]
@@ -219,6 +228,12 @@ def dpp_gradient_audit(
             )
             rows.append(
                 {
+                    "batch_sample_index": sample_index,
+                    **(
+                        {"sample_id": str(sample_ids[sample_index])}
+                        if sample_ids is not None and sample_index < len(sample_ids)
+                        else {}
+                    ),
                     "min_effect_norm": float(effect_norm.min()),
                     "mean_effect_norm": float(effect_norm.mean()),
                     "max_effect_norm": float(effect_norm.max()),
@@ -261,6 +276,9 @@ def dpp_gradient_audit(
             }
     return {
         "dpp_raw_averages_valid_rows": True,
+        "objective_dpp_valid_row_count": objective_valid_count,
+        "audit_dpp_valid_row_count": valid_row_count,
+        "dpp_valid_count_matches_objective": valid_row_count == objective_valid_count,
         "dpp_valid_row_count": valid_row_count,
         "dpp_total_eligible_row_count": eligible_rows,
         "dpp_valid_rate": valid_row_count / eligible_rows if eligible_rows else 0.0,

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import torch
 from torch import nn
 
+from analyze_dpp_gradient import main as analyze_dpp_gradient
 from diagnostics.dpp_gradient import dpp_gradient_audit
-from losses.objective import ObjectiveConfig, functional_dpp_loss
+from losses.objective import IAGSRMEObjective, ObjectiveConfig, functional_dpp_loss
 from models.iag_srme.utils.retrieval import build_teacher_masks, marginal_teacher_utilities
 
 
@@ -27,6 +29,7 @@ def _output(model: _Model, *, zero_effect: bool = False) -> tuple[dict[str, obje
     effect = candidate - current[:, None]
     return (
         {
+            "query": current,
             "steps": [
                 {
                     "timestep": 0,
@@ -35,8 +38,10 @@ def _output(model: _Model, *, zero_effect: bool = False) -> tuple[dict[str, obje
                     "candidate_queries": candidate,
                     "delta_q": effect,
                     "selected_idx": torch.tensor([1, 1, 1]),
+                    "scores": torch.zeros(3, 3),
+                    "stopped_now": torch.zeros(3, dtype=torch.bool),
                 }
-            ]
+            ],
         },
         targets,
         ids,
@@ -79,20 +84,52 @@ def test_dpp_gradient_audit_reports_exact_dpp_gradients_without_grad_contaminati
     objective = nn.Module()
     objective.config = config
 
-    report = dpp_gradient_audit(model, objective, output, targets, ids, raw, count)
+    report = dpp_gradient_audit(model, objective, output, targets, ids, raw, count, ids)
 
+    assert report["objective_dpp_valid_row_count"] == 3
+    assert report["audit_dpp_valid_row_count"] == 3
+    assert report["dpp_valid_count_matches_objective"] is True
     assert report["dpp_valid_row_count"] == 3
     assert report["dpp_total_eligible_row_count"] == 3
     assert report["dpp_valid_rate"] == 1.0
     assert report["effect_norm_quantiles"]["p00"] > 0
     assert report["live_grad_norm_quantiles"]["p50"] > 0
     assert report["fp32_reference_grad_norm_quantiles"]["p50"] > 0
-    assert report["by_step"]["t0"]["candidate_query_grad_norm"] > 0
-    assert len(report["by_step"]["t0"]["candidate_query_grad_norm_per_slot"]) == 3
-    assert report["producer_gradients"]["executor"]["global_l2_norm"] > 0
+    assert [row["batch_sample_index"] for row in report["by_step"]["t0"]["rows"]] == [0, 1, 2]
+    assert [row["sample_id"] for row in report["by_step"]["t0"]["rows"]] == ids
     assert all(parameter.grad is None for parameter in model.parameters())
     raw.backward()
     assert model.executor.weight.grad is not None
+
+
+def test_dpp_audit_count_agrees_with_live_objective() -> None:
+    model = _Model()
+    output, targets, ids = _output(model)
+    config = ObjectiveConfig(
+        terminal_weight=0.0,
+        lambda_pair=0.0,
+        lambda_gain=0.0,
+        dpp_enabled=True,
+        lambda_dpp=1.0,
+        useful_threshold=0.55,
+    )
+    objective = IAGSRMEObjective(config, width=3)
+    components = objective(output, targets, ids)
+
+    report = dpp_gradient_audit(
+        model,
+        objective,
+        output,
+        targets,
+        ids,
+        components["dpp_raw"],
+        components["dpp_valid_timestep_count"],
+        ids,
+    )
+
+    assert report["objective_dpp_valid_row_count"] == int(components["dpp_valid_timestep_count"])
+    assert report["audit_dpp_valid_row_count"] == int(components["dpp_valid_timestep_count"])
+    assert report["dpp_valid_count_matches_objective"] is True
 
 
 def test_dpp_gradient_audit_returns_empty_report_without_valid_rows() -> None:
@@ -125,3 +162,39 @@ def test_dpp_gradient_audit_exposes_zero_effect_with_open_quality_gate() -> None
     assert min(row["min_effect_norm"] for row in rows) < 0.01
     assert all(row["fp32_grad_nonfinite_fraction"] == 0.0 for row in rows)
     assert max(value for row in rows for value in row["fp32_reference_grad_norms"]) > 1.0
+
+
+def test_analyzer_reports_row_sample_identifier(tmp_path, capsys, monkeypatch) -> None:
+    path = tmp_path / "metrics.jsonl"
+    path.write_text(
+        json.dumps(
+            {
+                "dpp_gradient_audit": {
+                    "objective_dpp_valid_row_count": 1,
+                    "audit_dpp_valid_row_count": 1,
+                    "dpp_valid_count_matches_objective": True,
+                    "dpp_total_eligible_row_count": 1,
+                    "finite_in_fp32_but_nonfinite_live_count": 0,
+                    "by_step": {
+                        "t0": {
+                            "rows": [
+                                {
+                                    "sample_id": "trace-me",
+                                    "batch_sample_index": 2,
+                                    "min_effect_norm": 0.01,
+                                    "effect_norms": [0.01],
+                                    "live_effect_grad_norms": [1.0],
+                                    "fp32_reference_grad_norms": [1.0],
+                                }
+                            ]
+                        }
+                    },
+                }
+            }
+        )
+    )
+    monkeypatch.setattr("sys.argv", ["analyze_dpp_gradient.py", str(path)])
+
+    analyze_dpp_gradient()
+
+    assert "sample_id=trace-me batch_sample_index=2" in capsys.readouterr().out

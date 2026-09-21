@@ -82,7 +82,128 @@ class _ObservedObjective(nn.Module):
             "safe_positive_candidate_fraction_c0": zero,
             "mean_delta_q_norm_c0": zero,
             "teacher_invalid_rows": zero,
+            "dpp_valid_timestep_count": zero,
         }
+
+
+def _batch() -> ImageBatch:
+    return ImageBatch(
+        sample_ids=["a", "b"],
+        reference_ids=["ra", "rb"],
+        target_ids=["ta", "tb"],
+        modification_texts=["red", "blue"],
+        categories=["dress", "dress"],
+        reference_pixels=torch.tensor([[1.0, 2.0], [2.0, 3.0]]),
+        target_pixels=torch.tensor([[0.0, 1.0], [1.0, 0.0]]),
+        input_ids=torch.tensor([[1, 0], [0, 1]]),
+        attention_mask=torch.ones(2, 2, dtype=torch.bool),
+        content_mask=torch.ones(2, 2, dtype=torch.bool),
+    )
+
+
+def _audit_config(*, interval: int, maximum: int):
+    return type(
+        "Config",
+        (),
+        {
+            "dpp_gradient_audit_enabled": True,
+            "dpp_gradient_audit_interval": interval,
+            "dpp_gradient_audit_max_updates": maximum,
+        },
+    )()
+
+
+def test_dpp_audit_cap_and_interval_are_global_across_epochs(monkeypatch) -> None:
+    model = _ObservedModel()
+    model.config = _audit_config(interval=2, maximum=2)
+    objective = _ObservedObjective()
+    objective.config = type("Config", (), {"dpp_enabled": True})()
+    calls = []
+
+    def audit(*args):
+        calls.append(args)
+        return {}
+
+    monkeypatch.setattr("training.engine.dpp_gradient_audit", audit)
+    optimizer = SGD(trainable_parameters(model, objective), lr=0.1)
+    scaler = torch.amp.GradScaler("cuda", enabled=False)
+    first = train_one_epoch(
+        model,
+        objective,
+        [_batch()],
+        optimizer,
+        scaler,
+        torch.device("cpu"),
+        precision=PrecisionPolicy("fp32", False, None, False),
+        epoch=0,
+    )
+    second = train_one_epoch(
+        model,
+        objective,
+        [_batch(), _batch(), _batch(), _batch()],
+        optimizer,
+        scaler,
+        torch.device("cpu"),
+        precision=PrecisionPolicy("fp32", False, None, False),
+        epoch=1,
+        batch_step_start=int(first["batch_step_count"]),
+    )
+
+    assert len(calls) == 2
+    assert second["batch_step_count"] == 5
+
+
+
+
+def test_dpp_audit_interval_continues_from_prior_epoch(monkeypatch) -> None:
+    model = _ObservedModel()
+    model.config = _audit_config(interval=2, maximum=3)
+    objective = _ObservedObjective()
+    objective.config = type("Config", (), {"dpp_enabled": True})()
+    calls = []
+    monkeypatch.setattr("training.engine.dpp_gradient_audit", lambda *args: calls.append(args) or {})
+    optimizer = SGD(trainable_parameters(model, objective), lr=0.1)
+    scaler = torch.amp.GradScaler("cuda", enabled=False)
+    first = train_one_epoch(
+        model,
+        objective,
+        [_batch()],
+        optimizer,
+        scaler,
+        torch.device("cpu"),
+        precision=PrecisionPolicy("fp32", False, None, False),
+        epoch=0,
+    )
+    train_one_epoch(
+        model,
+        objective,
+        [_batch(), _batch()],
+        optimizer,
+        scaler,
+        torch.device("cpu"),
+        precision=PrecisionPolicy("fp32", False, None, False),
+        epoch=1,
+        batch_step_start=int(first["batch_step_count"]),
+    )
+
+    assert len(calls) == 2  # Global batch indices 0 and 2; not epoch-local 0 and 1.
+def test_dpp_audit_max_updates_zero_skips_calls(monkeypatch) -> None:
+    model = _ObservedModel()
+    model.config = _audit_config(interval=1, maximum=0)
+    objective = _ObservedObjective()
+    objective.config = type("Config", (), {"dpp_enabled": True})()
+    monkeypatch.setattr("training.engine.dpp_gradient_audit", lambda *args: (_ for _ in ()).throw(AssertionError))
+
+    train_one_epoch(
+        model,
+        objective,
+        [_batch(), _batch()],
+        SGD(trainable_parameters(model, objective), lr=0.1),
+        torch.amp.GradScaler("cuda", enabled=False),
+        torch.device("cpu"),
+        precision=PrecisionPolicy("fp32", False, None, False),
+        epoch=0,
+    )
 
 
 def test_training_jsonl_records_real_optimizer_updates(tmp_path) -> None:

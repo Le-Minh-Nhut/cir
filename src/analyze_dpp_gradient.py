@@ -46,10 +46,17 @@ def main() -> None:
     if not records:
         raise SystemExit("no train_update records contain dpp_gradient_audit")
     eligible = _sum(records, "dpp_total_eligible_row_count")
-    valid = _sum(records, "dpp_valid_row_count")
+    valid = _sum(records, "audit_dpp_valid_row_count")
+    objective_valid = _sum(records, "objective_dpp_valid_row_count")
     rows = _rows(records)
+    mismatches = sum(
+        not bool(record["dpp_gradient_audit"].get("dpp_valid_count_matches_objective", False))
+        for record in records
+    )
     print(f"audit_updates: {len(records)}")
-    print(f"dpp_valid_row_count: {int(valid)}")
+    print(f"objective_dpp_valid_row_count: {int(objective_valid)}")
+    print(f"audit_dpp_valid_row_count: {int(valid)}")
+    print(f"dpp_valid_count_mismatch_updates: {mismatches}")
     print(f"dpp_total_eligible_row_count: {int(eligible)}")
     print(f"dpp_valid_rate: {valid / eligible if eligible else 0.0:.6f}")
     print(f"finite_in_fp32_but_nonfinite_live_count: {int(_sum(records, 'finite_in_fp32_but_nonfinite_live_count'))}")
@@ -58,10 +65,13 @@ def main() -> None:
     for name in ("effect_norms", "live_effect_grad_norms", "fp32_reference_grad_norms"):
         print(f"{name}: {_quantiles([float(value) for row in rows for value in row[name]])}")
     for row in sorted(rows, key=lambda value: float(value["min_effect_norm"]))[:5]:
+        identity = " ".join(
+            f"{name}={row[name]}" for name in ("sample_id", "batch_sample_index") if name in row
+        )
         print(
             "min_effect_norm_vs_live_grad: "
             f"{float(row['min_effect_norm']):.6g} "
-            f"{max(float(value) for value in row['live_effect_grad_norms']):.6g}"
+            f"{max(float(value) for value in row['live_effect_grad_norms']):.6g} {identity}"
         )
 
 
