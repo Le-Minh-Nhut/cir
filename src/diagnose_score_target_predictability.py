@@ -40,7 +40,7 @@ from diagnostics.feature_sufficiency import COMPACT_FEATURE_FIELDS, LABEL_FIELD,
 from diagnostics.target_predictability import (
     PRIVILEGED_FIELDS,
     add_privileged_features,
-    deterministic_alternative_banks,
+    deterministic_alternative_negative_indices,
     freeze_module,
     recompute_utility_with_target_bank,
     stability_metrics,
@@ -254,22 +254,42 @@ def _subset_rows(rows: Mapping[str, Any], indices: Tensor) -> dict[str, Any]:
 
 
 def _pool_stability(
-    rows: Mapping[str, Any], targets: Mapping[str, Any], *, bank_size: int, pool_count: int, epsilon_stop: float, temperature: float, device: torch.device, single_positive: Tensor
+    rows: Mapping[str, Any],
+    anchor_targets: Mapping[str, Any],
+    reservoir: Mapping[str, Any],
+    *,
+    bank_size: int,
+    pool_count: int,
+    epsilon_stop: float,
+    temperature: float,
+    device: torch.device,
+    single_positive: Tensor,
 ) -> dict[str, Any]:
-    if list(rows["sample_ids"]) != list(targets["sample_ids"]):
-        raise ValueError("queries and privileged targets are misaligned")
+    if list(rows["sample_ids"]) != list(anchor_targets["sample_ids"]):
+        raise ValueError("anchor queries and target embeddings are misaligned")
+    validate_target_cache_rows(anchor_targets)
+    validate_target_cache_rows(reservoir)
     canonical = rows[LABEL_FIELD].float()
-    target_ids = [str(value) for value in targets["target_ids"]]
+    reservoir_ids = [str(value) for value in reservoir["target_ids"]]
+    reservoir_embeddings = reservoir["target_embeddings"].float()
     all_alternatives = []
-    target_embeddings = targets["target_embeddings"].float()
     with torch.no_grad():
         for anchor in range(canonical.shape[0]):
-            banks = deterministic_alternative_banks(target_ids, anchor=anchor, bank_size=bank_size, seeds=range(pool_count))
+            anchor_target = anchor_targets["target_embeddings"][anchor].to(device=device, dtype=torch.float32)
+            anchor_target_id = str(anchor_targets["target_ids"][anchor])
+            negatives = deterministic_alternative_negative_indices(
+                reservoir_ids,
+                anchor_target_id=anchor_target_id,
+                anchor_seed_index=anchor,
+                bank_size=bank_size,
+                seeds=range(pool_count),
+            )
             current = rows["current_query"][anchor : anchor + 1].to(device=device, dtype=torch.float32)
             candidates = rows["candidate_queries"][anchor : anchor + 1].to(device=device, dtype=torch.float32)
             utilities = []
-            for bank in banks:
-                target_bank = target_embeddings.index_select(0, torch.tensor(bank)).to(device=device, dtype=torch.float32)
+            for indices in negatives:
+                negative_bank = reservoir_embeddings.index_select(0, torch.tensor(indices))
+                target_bank = torch.cat((anchor_target[None], negative_bank), dim=0).to(device=device, dtype=torch.float32)
                 utilities.append(recompute_utility_with_target_bank(current, candidates, target_bank, temperature=temperature).cpu())
             all_alternatives.append(torch.stack(utilities))
     alternatives = torch.stack(all_alternatives, dim=1)
@@ -281,7 +301,9 @@ def _pool_stability(
     report["canonical_single_positive_fraction"] = float(single_positive.float().mean())
     report["canonical_multi_positive_fraction"] = float((~single_positive).float().mean())
     if single_positive.any():
-        report["single_positive_only"] = stability_metrics(canonical[single_positive], alternatives[:, single_positive], epsilon_stop=epsilon_stop)
+        report["single_positive_only"] = stability_metrics(
+            canonical[single_positive], alternatives[:, single_positive], epsilon_stop=epsilon_stop
+        )
     return report
 
 
@@ -448,8 +470,28 @@ def main(cfg: DictConfig) -> None:
         raise RuntimeError("TRAIN stability audit requires the first 16 complete teacher groups (512 rows)")
     first_train = _subset_rows(train_rows, torch.arange(512))
     first_targets = _subset_rows(train_targets, torch.arange(512))
-    train_stability = _pool_stability(first_train, first_targets, bank_size=32, pool_count=16, epsilon_stop=float(cfg.model.epsilon_stop), temperature=temperature, device=device, single_positive=_single_positive_mask(first_targets["target_ids"], 32))
-    val_stability = _pool_stability(val_rows, val_targets, bank_size=8, pool_count=32, epsilon_stop=float(cfg.model.epsilon_stop), temperature=temperature, device=device, single_positive=single_val)
+    train_stability = _pool_stability(
+        first_train,
+        first_targets,
+        train_targets,
+        bank_size=32,
+        pool_count=16,
+        epsilon_stop=float(cfg.model.epsilon_stop),
+        temperature=temperature,
+        device=device,
+        single_positive=_single_positive_mask(first_targets["target_ids"], 32),
+    )
+    val_stability = _pool_stability(
+        val_rows,
+        val_targets,
+        val_targets,
+        bank_size=8,
+        pool_count=32,
+        epsilon_stop=float(cfg.model.epsilon_stop),
+        temperature=temperature,
+        device=device,
+        single_positive=single_val,
+    )
     if _cache_fingerprint(compact_dir) != compact_before:
         raise RuntimeError("immutable compact target-free cache was modified")
     deltas = _true_val_deltas(probes["target_free_retrieval_independent"]["true_val"], probes["target_aware_retrieval_independent"]["true_val"])

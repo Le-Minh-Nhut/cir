@@ -136,15 +136,14 @@ def target_aware_probe_from_rows(rows: Mapping[str, Any], *, width: int = 256) -
     )
 
 
-def deterministic_alternative_banks(
-    target_ids: Sequence[str], *, anchor: int, bank_size: int, seeds: Sequence[int]
+def deterministic_alternative_negative_indices(
+    target_ids: Sequence[str], *, anchor_target_id: str, anchor_seed_index: int, bank_size: int, seeds: Sequence[int]
 ) -> list[list[int]]:
-    """Retain anchor positive and deterministically prefer distinct negative target identities."""
+    """Deterministically sample only negatives from a reservoir for one fixed anchor target."""
 
     if not 1 <= bank_size <= len(target_ids):
         raise ValueError("bank_size must be within the target reservoir")
-    anchor_id = target_ids[anchor]
-    eligible = [index for index, target_id in enumerate(target_ids) if target_id != anchor_id]
+    eligible = [index for index, target_id in enumerate(target_ids) if target_id != anchor_target_id]
     if len(eligible) < bank_size - 1:
         raise ValueError("target reservoir lacks enough negatives distinct from anchor target")
     groups: dict[str, list[int]] = {}
@@ -152,7 +151,7 @@ def deterministic_alternative_banks(
         groups.setdefault(target_ids[index], []).append(index)
     result = []
     for seed in seeds:
-        generator = torch.Generator().manual_seed(int(seed) + anchor * 1_000_003)
+        generator = torch.Generator().manual_seed(int(seed) + anchor_seed_index * 1_000_003)
         identities = list(groups)
         order = torch.randperm(len(identities), generator=generator).tolist()
         selected: list[int] = []
@@ -165,8 +164,25 @@ def deterministic_alternative_banks(
             remaining = [index for index in eligible if index not in selected]
             extra = torch.randperm(len(remaining), generator=generator).tolist()
             selected.extend(remaining[index] for index in extra[: bank_size - 1 - len(selected)])
-        result.append([anchor, *selected])
+        result.append(selected)
     return result
+
+
+def deterministic_alternative_banks(
+    target_ids: Sequence[str], *, anchor: int, bank_size: int, seeds: Sequence[int]
+) -> list[list[int]]:
+    """Retain the reservoir anchor and deterministically sample its negatives."""
+
+    return [
+        [anchor, *negative]
+        for negative in deterministic_alternative_negative_indices(
+            target_ids,
+            anchor_target_id=target_ids[anchor],
+            anchor_seed_index=anchor,
+            bank_size=bank_size,
+            seeds=seeds,
+        )
+    ]
 
 
 def recompute_utility_with_target_bank(

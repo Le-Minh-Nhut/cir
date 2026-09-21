@@ -5,12 +5,14 @@ import hashlib
 import pytest
 import torch
 
+import diagnose_score_target_predictability as target_diagnostic
 from diagnose_score_target_predictability import _cache_fingerprint, _oracle_sanity, _train_target_probe
 from diagnostics.feature_sufficiency import COMPACT_FEATURE_FIELDS, LABEL_FIELD, validate_compact_features
 from diagnostics.target_predictability import (
     PRIVILEGED_FIELDS,
     add_privileged_features,
     deterministic_alternative_banks,
+    deterministic_alternative_negative_indices,
     freeze_module,
     privileged_similarity_features,
     recompute_utility_with_target_bank,
@@ -104,6 +106,90 @@ def test_alternative_banks_keep_anchor_and_exclude_anchor_target_deterministical
         assert len(bank) == 5
         assert all(target_ids[index] != "dup" for index in bank[1:])
         assert len({target_ids[index] for index in bank[1:]}) == 4
+
+
+def test_reservoir_negative_sampler_preserves_true_val_bank_behavior() -> None:
+    target_ids = ["a", "b", "c", "d", "e", "f"]
+    expected = deterministic_alternative_banks(target_ids, anchor=2, bank_size=4, seeds=(3, 4))
+    actual = [
+        [2, *negative]
+        for negative in deterministic_alternative_negative_indices(
+            target_ids,
+            anchor_target_id="c",
+            anchor_seed_index=2,
+            bank_size=4,
+            seeds=(3, 4),
+        )
+    ]
+    assert actual == expected
+
+
+def test_pool_stability_uses_strict_anchor_subset_and_full_reservoir(monkeypatch) -> None:
+    rows = _rows(batch=2)
+    anchors = _targets(rows)
+    reservoir = {
+        "target_embeddings": torch.arange(36, dtype=torch.float32).reshape(6, 6),
+        "sample_ids": [f"reservoir-{index}" for index in range(6)],
+        "target_ids": ["target-0", "target-1", "outside-2", "outside-3", "outside-4", "outside-5"],
+    }
+    anchors["target_embeddings"] = reservoir["target_embeddings"][:2].clone()
+    anchors["target_ids"] = reservoir["target_ids"][:2]
+    before_current, before_candidates = rows["current_query"].clone(), rows["candidate_queries"].clone()
+    observed: list[torch.Tensor] = []
+
+    def record_bank(current, candidates, bank, *, temperature):
+        del current, candidates, temperature
+        observed.append(bank.cpu().clone())
+        return torch.zeros(4)
+
+    monkeypatch.setattr(target_diagnostic, "recompute_utility_with_target_bank", record_bank)
+    report = target_diagnostic._pool_stability(
+        rows,
+        anchors,
+        reservoir,
+        bank_size=3,
+        pool_count=2,
+        epsilon_stop=0.0,
+        temperature=0.2,
+        device=torch.device("cpu"),
+        single_positive=torch.ones(2, dtype=torch.bool),
+    )
+
+    assert report["pool_count"] == 2
+    assert len(observed) == 4
+    for observed_index, bank in enumerate(observed):
+        anchor = observed_index // 2
+        torch.testing.assert_close(bank[0], anchors["target_embeddings"][anchor])
+        negative_indices = [
+            int((reservoir["target_embeddings"] == value).all(dim=1).nonzero().item())
+            for value in bank[1:]
+        ]
+        negative_ids = [reservoir["target_ids"][index] for index in negative_indices]
+        assert all(target_id != anchors["target_ids"][anchor] for target_id in negative_ids)
+    assert any(any(index >= 2 for index in [int((reservoir["target_embeddings"] == value).all(dim=1).nonzero().item()) for value in bank[1:]]) for bank in observed)
+    assert torch.equal(rows["current_query"], before_current)
+    assert torch.equal(rows["candidate_queries"], before_candidates)
+
+    observed_again: list[torch.Tensor] = []
+
+    def record_again(current, candidates, bank, *, temperature):
+        del current, candidates, temperature
+        observed_again.append(bank.cpu().clone())
+        return torch.zeros(4)
+
+    monkeypatch.setattr(target_diagnostic, "recompute_utility_with_target_bank", record_again)
+    target_diagnostic._pool_stability(
+        rows,
+        anchors,
+        reservoir,
+        bank_size=3,
+        pool_count=2,
+        epsilon_stop=0.0,
+        temperature=0.2,
+        device=torch.device("cpu"),
+        single_positive=torch.ones(2, dtype=torch.bool),
+    )
+    assert all(torch.equal(first, second) for first, second in zip(observed, observed_again, strict=True))
 
 
 def test_resampled_teacher_utility_uses_canonical_teacher_and_preserves_queries() -> None:
