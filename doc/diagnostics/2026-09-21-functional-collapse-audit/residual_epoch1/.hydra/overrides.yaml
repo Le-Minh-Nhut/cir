@@ -1,0 +1,7 @@
+- model=iag_srme
+- experiment=iag_srme_functional_audit
+- experiment.epochs=1
+- model.proposal_mode=residual
+- experiment.dpp_gradient_audit_enabled=false
+- runtime.device=cuda
+- runtime.accelerator_index=0

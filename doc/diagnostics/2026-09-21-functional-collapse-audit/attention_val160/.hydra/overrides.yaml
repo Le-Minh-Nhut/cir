@@ -1,0 +1,8 @@
+- model=iag_srme
+- model.proposal_mode=attention
+- backbone=fgclip_base_full
+- +checkpoint=outputs/2026-09-21/18-26-04/best.pt
+- +diagnostic_batches=20
+- +diagnostic_batch_size=8
+- +diagnostic_manifest=outputs/diagnostics/2026-09-21/shared_val160.json
+- +diagnostic_official_eval=false

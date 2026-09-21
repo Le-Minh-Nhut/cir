@@ -1,0 +1,6 @@
+- model=iag_srme
+- experiment=iag_srme_functional_audit
+- experiment.epochs=1
+- model.proposal_mode=attention
+- runtime.device=cuda
+- runtime.accelerator_index=0

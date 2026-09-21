@@ -1,0 +1,8 @@
+- model=iag_srme
+- model.proposal_mode=residual_ln
+- backbone=fgclip_base_full
+- +scorer_refit=gain_only
+- scorer_refit.mode=stream_refit
+- scorer_refit.stream_epochs=3
+- scorer_refit.source_checkpoint=outputs/2026-09-21/20-02-45/best.pt
+- scorer_refit.output_checkpoint=outputs/2026-09-21/residual_ln_score_stream/score_stream.pt

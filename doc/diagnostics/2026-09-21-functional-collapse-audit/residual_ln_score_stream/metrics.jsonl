@@ -1,0 +1,3 @@
+{"record_type": "score_stream_refit_epoch", "epoch": 1, "optimizer_steps": 1689, "valid_decisions": 49865, "teacher_invalid_rows": 0, "gain_huber": 0.0032941650445390464, "learning_rate": 1e-05}
+{"record_type": "score_stream_refit_epoch", "epoch": 2, "optimizer_steps": 3378, "valid_decisions": 99730, "teacher_invalid_rows": 0, "gain_huber": 0.0032077642084028567, "learning_rate": 1e-05}
+{"record_type": "score_stream_refit_epoch", "epoch": 3, "optimizer_steps": 5067, "valid_decisions": 149595, "teacher_invalid_rows": 0, "gain_huber": 0.0031829532394264106, "learning_rate": 1e-05}

@@ -1000,16 +1000,9 @@ def main(cfg: DictConfig) -> None:
         raise ValueError("ScoreNet rescue is fixed to lambda_pair=0 and absolute gain only")
     if str(refit.collection_split) != "train":
         raise ValueError("gain-only ScoreNet refit collection must use the TRAIN split")
-    if not (
-        str(cfg.backbone.finetune_policy) == "text_only"
-        and not bool(cfg.backbone.train_vision)
-        and bool(cfg.backbone.train_text)
-        and not bool(cfg.backbone.train_text_projection)
-    ):
-        raise ValueError(
-            "this controlled rescue requires the existing text-only backbone policy: "
-            "train_vision=false, train_text=true, train_text_projection=false"
-        )
+    # Scorer refit is backbone-policy agnostic.
+    # Exact compatibility with the source checkpoint is enforced below by
+    # _validate_source_checkpoint(...).
 
     seed_everything(int(cfg.seed), bool(cfg.runtime.deterministic))
     configure_torch_runtime(
