@@ -4,6 +4,12 @@ import torch
 import pytest
 
 from diagnose_score_feature_sufficiency import evaluate_probe, train_probe
+from diagnose_score_feature_overfit import (
+    COHORT_BATCH_GROUPS,
+    TEACHER_BATCH_SIZE,
+    load_small_cohort,
+    train_small_cohort_overfit,
+)
 from diagnostics.feature_sufficiency import (
     COMPACT_FEATURE_FIELDS,
     LABEL_FIELD,
@@ -84,6 +90,54 @@ def test_compact_cache_stays_compact_and_round_trips_fp16_features() -> None:
     assert compact_cache_bytes(cache_rows) < 10_000
     restored = to_training_precision(cache_rows, torch.device("cpu"))
     assert all(restored[name].dtype == torch.float32 for name in COMPACT_FEATURE_FIELDS)
+
+
+def test_small_overfit_uses_first_eight_fixed_training_groups(tmp_path) -> None:
+    cache_dir = tmp_path / "compact_cache"
+    shard_dir = cache_dir / "shards"
+    shard_dir.mkdir(parents=True)
+    from diagnose_score_feature_sufficiency import sha256_file
+
+    shards = []
+    for index in range(COHORT_BATCH_GROUPS + 1):
+        rows = _rows(batch=TEACHER_BATCH_SIZE)
+        rows["sample_ids"] = [f"group-{index}-sample-{row}" for row in range(TEACHER_BATCH_SIZE)]
+        path = shard_dir / f"t0_{index:06d}.pt"
+        torch.save(to_cache_precision(rows), path)
+        shards.append({"path": path.name, "rows": TEACHER_BATCH_SIZE, "sha256": sha256_file(path)})
+    (cache_dir / "manifest.json").write_text(
+        __import__("json").dumps(
+            {"metadata": {"split": "train", "teacher_batch_size": TEACHER_BATCH_SIZE}, "shards": shards}
+        ),
+        encoding="utf-8",
+    )
+
+    parts, _ = load_small_cohort(cache_dir)
+
+    assert len(parts) == COHORT_BATCH_GROUPS
+    assert [part["sample_ids"][0] for part in parts] == [
+        f"group-{index}-sample-0" for index in range(COHORT_BATCH_GROUPS)
+    ]
+
+
+def test_small_overfit_trains_same_cohort_without_held_out_rows() -> None:
+    parts = [_rows(batch=TEACHER_BATCH_SIZE) for _ in range(COHORT_BATCH_GROUPS)]
+    _, history = train_small_cohort_overfit(parts, device=torch.device("cpu"), epochs=1)
+
+    assert len(history) == 1
+    assert history[0]["decision_count"] == COHORT_BATCH_GROUPS * TEACHER_BATCH_SIZE
+    assert set(history[0]) >= {
+        "loss",
+        "pearson",
+        "spearman",
+        "sign_agreement_at_zero",
+        "exact_oracle_accuracy",
+        "selected_utility",
+        "oracle_utility",
+        "regret",
+        "stop_rate",
+        "oracle_stop_rate",
+    }
 
 
 def test_probe_evaluation_never_updates_weights() -> None:
