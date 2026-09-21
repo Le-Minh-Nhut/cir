@@ -155,6 +155,20 @@ def _collect_targets(
     return {"metadata": dict(metadata), "shards": records, "processed_sample_ids": processed}
 
 
+def _true_val_forward(model: Any, batch: Any, *, device: torch.device, precision: Any) -> tuple[Any, Tensor]:
+    """Match frozen TRUE VAL model precision to canonical feature sufficiency."""
+
+    batch = batch.to(device)
+    with torch.autocast(
+        device_type=device.type,
+        enabled=precision.autocast_enabled,
+        dtype=precision.autocast_dtype,
+    ):
+        output = model(batch.reference_pixels, batch.input_ids, batch.attention_mask, batch.content_mask)
+        targets = model.encode_global_images(batch.target_pixels)
+    return output, targets
+
+
 def _target_training_rows(rows: Mapping[str, Any], device: torch.device) -> dict[str, Any]:
     compact = {name: rows[name] for name in (*COMPACT_FEATURE_FIELDS, LABEL_FIELD, "sample_ids")}
     result = to_training_precision(compact, device)
@@ -420,12 +434,10 @@ def main(cfg: DictConfig) -> None:
     val_parts = []
     with torch.no_grad():
         for batch in val_loader:
-            batch = batch.to(device)
-            output = model(batch.reference_pixels, batch.input_ids, batch.attention_mask, batch.content_mask)
+            output, targets = _true_val_forward(model, batch, device=device, precision=precision)
             if not output["steps"]:
                 raise RuntimeError("frozen source emitted no t0 step for TRUE VAL")
             step = output["steps"][0]
-            targets = model.encode_global_images(batch.target_pixels)
             positive, negative, _ = build_teacher_masks(batch.target_ids, device)
             from diagnostics.selection import transition_retrieval
             from diagnostics.feature_sufficiency import compact_t0_features

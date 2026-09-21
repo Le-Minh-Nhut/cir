@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from contextlib import contextmanager
 
 import pytest
 import torch
@@ -228,6 +229,51 @@ def test_pool_stability_moves_full_target_bank_before_teacher(monkeypatch) -> No
         (torch.device("meta"), torch.device("meta"), torch.device("meta")),
     ]
 
+
+
+def test_true_val_forward_wraps_model_and_target_encoder_in_resolved_autocast(monkeypatch) -> None:
+    events = []
+
+    @contextmanager
+    def autocast(**kwargs):
+        events.append(("enter", kwargs))
+        yield
+        events.append(("exit", None))
+
+    class Batch:
+        reference_pixels = "reference"
+        input_ids = "ids"
+        attention_mask = "mask"
+        content_mask = "content"
+        target_pixels = "target"
+
+        def to(self, device):
+            events.append(("batch", device))
+            return self
+
+    class Model:
+        def __call__(self, *args):
+            events.append(("model", args))
+            return "output"
+
+        def encode_global_images(self, pixels):
+            events.append(("targets", pixels))
+            return "targets"
+
+    precision = type("Precision", (), {"autocast_enabled": True, "autocast_dtype": torch.bfloat16})()
+    monkeypatch.setattr(target_diagnostic.torch, "autocast", autocast)
+    output, targets = target_diagnostic._true_val_forward(
+        Model(), Batch(), device=torch.device("cpu"), precision=precision
+    )
+
+    assert (output, targets) == ("output", "targets")
+    assert events == [
+        ("batch", torch.device("cpu")),
+        ("enter", {"device_type": "cpu", "enabled": True, "dtype": torch.bfloat16}),
+        ("model", ("reference", "ids", "mask", "content")),
+        ("targets", "target"),
+        ("exit", None),
+    ]
 
 def test_resampled_teacher_utility_uses_canonical_teacher_and_preserves_queries() -> None:
     generator = torch.Generator().manual_seed(5)
