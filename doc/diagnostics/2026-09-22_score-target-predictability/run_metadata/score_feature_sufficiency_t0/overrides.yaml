@@ -1,0 +1,4 @@
+- +checkpoint=outputs/2026-09-21/20-02-45/best.pt
+- model.proposal_mode=residual_ln
+- runtime.device=cuda
+- runtime.accelerator_index=0
