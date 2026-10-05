@@ -1,257 +1,314 @@
 # CIR Failure Analysis Workbench
 
-Local research tool for reproducing public FashionIQ checkpoints, saving per-query retrievals, comparing methods, and finding systematic CIR failures. It does not reimplement models: an adapter invokes each pinned official repository later on a GPU host.
+Local operator tooling for FashionIQ composed-image-retrieval (CIR) failure analysis. It keeps official upstream evaluators authoritative: this repository records pinned-source/checkpoint facts, prepares guarded commands, validates canonical result artifacts, builds a local DuckDB serving index, and presents those artifacts in a browser. It does **not** implement or substitute a CIR model.
 
-> **Laptop development policy:** this checkout ships code and mock data only. No checkpoints, backbone assets, feature caches, datasets, or model inference are required or performed.
+> **Status boundary:** no official model evaluation or reproduction has run in this checkout. Paper metrics are registry sanity references, never local metrics. Mock artifacts are development data, never research evidence.
 
-## Quickstart — laptop development without checkpoints
+## Operating rules
 
-```bash
-cd ~/data/cir
-git switch research/cir-failure-workbench
-python3 -m venv .venv-workbench
-source .venv-workbench/bin/activate
-pip install -r workbench/backend/requirements.txt
-python workbench/scripts/load_mock_results.py
-python workbench/scripts/rebuild_index.py
-uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8000 --reload
-```
+- Use one protocol per run, comparison, cohort, and export. `fashioniq_original_split` and `fashioniq_val_split` are incompatible cohorts.
+- Keep model environments isolated from workbench backend/frontend dependencies. Do not install upstream model requirements into the workbench environment.
+- Sync to registry pins; do not update a source tree to an arbitrary revision.
+- Download only registry-declared, author-linked direct URLs. A locally computed hash records local evidence; it does not become an official hash.
+- Run each official evaluator unmodified and establish metric parity before adding observation-only ranking export. Official evaluation and future per-query export are distinct phases.
+- Treat `run_id`, not `model_id`, as artifact identity. Distinct checkpoints or training conditions need distinct run IDs.
 
-In another terminal:
+## Protocols and guards
 
-```bash
-cd ~/data/cir/workbench/frontend
-npm install
-npm run dev
-```
-
-Open <http://localhost:5173>. Mock runs are visibly marked `mock`; they are not experiments.
-
-## Quickstart — later on GPU host
-
-```bash
-python workbench/scripts/sync_upstreams.py --all
-python workbench/scripts/download_checkpoints.py --list
-python workbench/scripts/download_checkpoints.py --all --dry-run
-python workbench/scripts/download_checkpoints.py --model csmcir
-python workbench/scripts/download_checkpoints.py --verify-only --all
-python workbench/scripts/run_eval.py --model csmcir --checkpoint fashioniq --protocol fashioniq_original_split --dataset-root "$CIR_DATA_ROOT/FashionIQ" --output workbench/artifacts/results/fashioniq_original_split/csmcir/fashioniq.json
-python workbench/scripts/rebuild_index.py
-```
-
-`run_eval.py` only validates and prints an official command in this laptop phase. Execute reviewed command only in model-specific GPU environment after official evaluation behavior is verified.
-
-## Protocols
-
-| Workbench ID | UI label | Gallery and rank semantics |
+| ID | Label | Gallery and target rank |
 | --- | --- | --- |
 | `fashioniq_original_split` | FashionIQ — Original Split | Full ordered `image_splits/split.{category}.val.json`; reference remains eligible. |
-| `fashioniq_val_split` | FashionIQ — Val Split | Ordered unique validation reference/target union; reference removed before Recall@K. |
+| `fashioniq_val_split` | FashionIQ — Val Split | First-seen ordered union of validation reference/target IDs; remove reference before Recall@K. |
 
-These are separate research cohorts. Never aggregate recall, failure Jaccard, consensus failures, common distractors, rank disagreement, heatmaps, or saved cohorts across them. API rejects cross-protocol analytics.
+Both use `dress`, `shirt`, and `toptee`, `captions/cap.{category}.val.json`, and clean evaluation (`evaluation_noise_pct: 0`). Original-split aggregate metrics are macro category R@10/R@50 and their arithmetic mean. Full evidence: [docs/PROTOCOL_AUDIT.md](docs/PROTOCOL_AUDIT.md).
 
-Full audit: [docs/PROTOCOL_AUDIT.md](docs/PROTOCOL_AUDIT.md).
+The API and index fail closed for cross-protocol comparisons; misaligned query universes or canonical identities; insufficient saved Top-K depth; duplicate `run_id`; and unsafe image paths. Analysis requires matching category, annotation index, reference ID, target ID, and raw captions; model-specific composed input text may differ. Do not infer scientific conclusions from a common failure set without inspecting its examples.
 
-## Layout
+## Repository tree and data ownership
 
-- `backend/` — FastAPI API, schemas, adapters, indexing and analysis.
-- `frontend/` — React/Vite local UI.
-- `registry/models.yaml` — checked-in source/checkpoint provenance.
-- `scripts/` — source sync, checkpoint download, mock loader, derived index rebuild, future evaluation command builder.
-- `envs/` — model-specific environment specifications; add only from upstream requirements.
-- `patches/` — reviewable observation-only patches after official metric reproduction.
-- `docs/` — audits, result schema and workflow.
-- `artifacts/checkpoints/` — downloaded checkpoints; ignored except marker file.
-- `artifacts/results/` — canonical run JSON; ignored except marker file.
-- `artifacts/workbench.duckdb` — rebuildable derived index; ignored.
-- `third_party/` — synced official source trees; ignored.
-
-## Installation
-
-Ubuntu laptop requirements: Python 3.11+, Node 20+, npm. Backend dependencies are isolated from all model environments:
-
-```bash
-python3 -m venv .venv-workbench
-source .venv-workbench/bin/activate
-pip install -r workbench/backend/requirements.txt
-cd workbench/frontend
-npm install
+```text
+workbench/
+├── backend/                 tracked API, schemas, registry reader, guards, index logic
+├── config/workbench.env.example
+├── docs/                    tracked audits and result contract
+├── envs/                    tracked upstream environment notes; no environments
+├── frontend/                tracked local React/Vite UI
+├── registry/models.yaml     tracked source, checkpoint, protocol metadata
+├── scripts/                 tracked operator entry points
+├── third_party/             ignored pinned upstream clones
+└── artifacts/
+    ├── checkpoints/         ignored model assets; .gitkeep tracked
+    ├── results/             ignored canonical JSON artifacts; .gitkeep tracked
+    ├── workbench.duckdb     ignored, rebuildable serving index
+    ├── annotations.json     ignored local annotations
+    ├── cohorts.json         ignored local cohort definitions
+    └── logs/                ignored generated logs
 ```
 
-The backend starts with no checkpoint installed. Models then show `CHECKPOINT NOT DOWNLOADED`; run control remains disabled. Browser never downloads weights.
+Repository-level `data/`, `*.pt`, `*.pth`, `*.ckpt`, frontend `node_modules/`, `frontend/dist/`, local `workbench.env`, source clones, downloaded checkpoints, result JSON, and derived artifacts are ignored. Keep generated material out of commits; canonical result JSON is the source of truth even though it is local/ignored.
 
-`registry/models.yaml` records official/author-linked source URL, exact repository commit, required `source_dir`, native protocol, paper sanity scores, and checkpoint variants. `source_dir` is shared by sync and adapters; no method-name-derived path exists.
+## No-install environment policy
 
-```yaml
-checkpoint_id: fiq_n02
-filename: HABIT-FIQ_N0.2.pt
-download_url: https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/main/fiq/HABIT-FIQ_N0.2.pt
-checkpoint_training_noise_pct: 20
-evaluation_noise_pct: 0
-expected_sha256: null
-status: NO_CLEAN_CHECKPOINT
+This workbench provides orchestration only. It does not create virtual environments, install Python packages, run `npm install`, download assets, or combine upstream dependencies. Use already-provisioned environments:
+
+- **Workbench environment:** backend/UI dependencies only, if already installed.
+- **One GPU environment per upstream:** use that pinned upstream's documented requirements. Do not merge model stacks.
+- **Browser:** `serve_workbench.py` starts only dependencies already present and reports missing frontend dependencies.
+
+Known upstream guidance is recorded in [envs/README.md](envs/README.md), not validated runtime compatibility.
+
+## Local configuration
+
+Copy `workbench/config/workbench.env.example` to ignored `workbench/config/workbench.env`, then set only needed `KEY=VALUE` entries. Process environment values override file values. Relative paths resolve against `CIR_REPO_ROOT`.
+
+```dotenv
+CIR_REPO_ROOT=
+CIR_DATA_ROOT=data
+FASHIONIQ_ROOT=data/FashionIQ
+WORKBENCH_HOST=127.0.0.1
+WORKBENCH_BACKEND_PORT=8000
+WORKBENCH_FRONTEND_PORT=5173
+WORKBENCH_CHECKPOINT_ROOT=workbench/artifacts/checkpoints
+WORKBENCH_RESULTS_ROOT=workbench/artifacts/results
+WORKBENCH_THIRD_PARTY_ROOT=workbench/third_party
 ```
 
-`checkpoint_training_noise_pct` and `evaluation_noise_pct` are different. A 20%-noise-trained model evaluated at 0% is **not** a clean-trained or “0% checkpoint.” `expected_sha256: null` means authors did not publish a hash; later local computed hashes go only into ignored `artifacts/checkpoints/download_manifest.json`.
+`doctor.py` resolves and reports this configuration; scripts with explicit root options use their passed paths. Do not put secrets in this file.
 
-Audit details: [docs/UPSTREAM_AUDIT.md](docs/UPSTREAM_AUDIT.md).
+## Mock and manual workflows
 
-## External source repositories
-
-Source sync never downloads checkpoints and never updates a pin silently:
+### Deterministic mock UI data
 
 ```bash
+python workbench/scripts/load_mock_results.py
+python workbench/scripts/validate_results.py --all
+python workbench/scripts/rebuild_index.py --validate-first
+python workbench/scripts/serve_workbench.py
+```
+
+`load_mock_results.py` removes only existing `**/mock` directories beneath its output root, then writes deterministic schema-v2 files. Default result root is `workbench/artifacts/results`; `--output-root PATH` changes it. The UI labels mock runs. Never present mock metrics, cohorts, or screenshots as experimental evidence.
+
+### Manually imported real artifacts
+
+After verified instrumentation creates canonical JSON, place it anywhere below the result root, not only the conventional path. Result discovery is recursive for every `*.json` except `.gitkeep`; each must parse as schema v2 and no two files may carry the same `run_id`.
+
+```bash
+python workbench/scripts/validate_results.py --file PATH [--strict-real]
+python workbench/scripts/validate_results.py --root PATH [--strict-real]
+python workbench/scripts/validate_results.py --all [--strict-real]
+python workbench/scripts/rebuild_index.py --results-root PATH --check-only
+python workbench/scripts/rebuild_index.py --results-root PATH --database PATH [--validate-first]
+```
+
+`--strict-real` makes missing `upstream_commit`, `checkpoint_sha256`, `command_digest`, or `environment_digest` block non-mock artifacts. Rebuild writes a temporary database and atomically replaces the target only after all artifacts load.
+
+## Safe real-evaluation workflow
+
+Use this sequence on a GPU host only. It is a guardrail and recordkeeping procedure, not a claim that any model is ready.
+
+1. Inspect availability without mutation: `python workbench/scripts/doctor.py --all` or `--model MODEL_ID`; add `--json` for machine output.
+2. Inspect pins, then sync exactly one source: `python workbench/scripts/sync_upstreams.py --list`; use `--model MODEL_ID --dry-run` before any clone/fetch. Existing repos change only with `--update-existing`; `--verify-only` checks local state without network/change.
+3. Build that upstream's own documented GPU environment outside workbench. Do not claim compatibility from these notes.
+4. Validate FashionIQ layout: `python workbench/scripts/prepare_dataset.py --dataset-root PATH --check-only`. For CSMCIR, satisfy its dedicated preparation below.
+5. Inspect checkpoint records: `python workbench/scripts/download_checkpoints.py --list`; use `--model MODEL_ID --dry-run` before a download. Verify installed files with `--verify-only`.
+6. Run the unmodified official evaluator and retain exact command, source pin, environment, checkpoint digest, stdout/stderr, and resulting aggregate metrics. Compare paper scores only as a sanity check.
+7. Only after official metric parity is established, make a reviewable **observation-only** instrumentation change that exports the evaluator's existing per-query rankings. Validate its schema-v2 artifact and rebuild the index.
+
+`evaluate_models.py` can print/run only audited official commands after source, pin, checkpoint, protocol, dataset, and model-specific prerequisites pass. It does not generate result JSON or prove reproduction. Use `--dry-run` until the reviewed environment is ready.
+
+## Master pipeline
+
+Commands below are phases, not one automatic run. Stop at any blocker; do not work around it by changing protocol, checkpoint mapping, or upstream evaluator semantics.
+
+```bash
+# 1. Local readiness and source/checkpoint records
+python workbench/scripts/doctor.py --all
 python workbench/scripts/sync_upstreams.py --list
-python workbench/scripts/sync_upstreams.py --model encoder
-python workbench/scripts/sync_upstreams.py --all
-python workbench/scripts/sync_upstreams.py --all --fetch
-```
-
-It clones missing repositories beneath `workbench/third_party/`, then detached-checks out recorded commit and verifies `HEAD`. Source sync and checkpoint download are separate operations.
-
-Each model needs its own official dependency environment. CSMCIR upstream documents Python 3.9, Torch 2.0.1 and torchvision 0.15.2. ENCODER documents its own `requirements.txt`; HINT, Air-Know, ConeSep, HABIT and INTENT document Python/Torch/LAVIS combinations in their READMEs. These are runtime-unverified here; preserve upstream versions rather than combining model dependencies.
-
-## Checkpoints
-
-List records without network download:
-
-```bash
 python workbench/scripts/download_checkpoints.py --list
+
+# 2. One pinned model, after review
+python workbench/scripts/sync_upstreams.py --model csmcir --dry-run
 python workbench/scripts/download_checkpoints.py --model csmcir --dry-run
-python workbench/scripts/download_checkpoints.py --all --dry-run
+python workbench/scripts/prepare_dataset.py --dataset-root "$FASHIONIQ_ROOT" --model csmcir --dry-run
+
+# 3. Guarded official command only; no execution
+python workbench/scripts/evaluate_models.py --model csmcir --checkpoint fashioniq --protocol fashioniq_original_split --dataset-root workbench/third_party/CSMCIR/fashionIQ_dataset --top-k 200 --dry-run
+
+# 4. Later, after verified instrumentation writes JSON recursively below results root
+python workbench/scripts/validate_results.py --all --strict-real
+python workbench/scripts/rebuild_index.py --validate-first
+python workbench/scripts/serve_workbench.py
 ```
 
-`--dry-run` performs no network access or artifact mutation. Actual download uses `filename.part`; resumes only after an HTTP `206` with a matching `Content-Range`. A server ignoring a range request (`200`) restarts safely from byte zero. It atomically renames after completion, computes local SHA-256, refuses different existing content unless `--force-redownload`, and writes local manifest only.
-Later individual downloads:
+`--all-runnable` asks the evaluator guard to assess all registry candidates; it does not make blocked models runnable. `--continue-on-error` continues official command execution after a failure; reserve it for a reviewed batch on a dedicated host.
 
-```bash
-# Original split
-python workbench/scripts/download_checkpoints.py --model csmcir
-python workbench/scripts/download_checkpoints.py --model airknow --checkpoint fiq_n05
-python workbench/scripts/download_checkpoints.py --model conesep --checkpoint fiq_n02
-python workbench/scripts/download_checkpoints.py --model habit --checkpoint fiq_n02
-python workbench/scripts/download_checkpoints.py --model intent --checkpoint fiq_n02
+## Registry-derived checkpoint matrix
 
-# Val split
-python workbench/scripts/download_checkpoints.py --model hint
-# ENCODER needs registry direct Google Drive file URL before this command can download.
-python workbench/scripts/download_checkpoints.py --model encoder
+This matrix describes registry metadata and blockers, not present local files, runtime compatibility, command readiness, or successful reproduction. See [docs/UPSTREAM_AUDIT.md](docs/UPSTREAM_AUDIT.md).
 
-# PAIR mapping remains unresolved; do not choose either variant automatically.
-python workbench/scripts/download_checkpoints.py --model pair --checkpoint pair_b1
-python workbench/scripts/download_checkpoints.py --model pair --checkpoint pair_b2
-```
+| Model | Protocol | Variants | Direct download state | Evaluation state |
+| --- | --- | --- | --- | --- |
+| CSMCIR | original | `fashioniq` clean | author-linked URL recorded | command audited; fixed-root/auxiliary-file limits apply |
+| Air-Know | original | `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
+| ConeSep | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
+| PTHA + MTST | none | none | no verified FashionIQ checkpoint | blocked |
+| HABIT | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
+| INTENT | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
+| HINT | val | `fashioniq` clean | author-linked URL recorded | command not audited |
+| ENCODER | val | `fashioniq` clean | Google Drive folder known; direct file URL unresolved | command audited; checkpoint and OpenCLIP asset both required |
+| PAIR | val | `pair_b1`, `pair_b2` | no verified direct URL or FashionIQ mapping | blocked |
 
-PTHA + MTST intentionally has no FashionIQ download command: no official FashionIQ fine-tuned checkpoint is verified. `--all` skips blocked models and unresolved PAIR mappings; run `--all --dry-run` first. Noise-trained checkpoints retain training-noise metadata.
+A checkpoint trained with 20%, 50%, or 80% noise remains that training condition when evaluated on clean FashionIQ data. It is not a clean checkpoint. `expected_sha256: null` means no official hash is in registry; local hashes belong in ignored download manifests.
 
-Verify local files without network:
+## CSMCIR guide
 
-```bash
-python workbench/scripts/download_checkpoints.py --verify-only --all
-python workbench/scripts/download_checkpoints.py --model hint --verify-only
-```
+CSMCIR is the only original-split model with an audited command constructor. Its upstream evaluator is cwd/root-sensitive and does **not** accept an ordinary dataset-root argument. `evaluate_models.py` runs its command from `workbench/third_party/CSMCIR/src`; it requires `--dataset-root workbench/third_party/CSMCIR/fashionIQ_dataset` because upstream data must appear there.
 
-Expected layout later:
+Before evaluation, source must be pinned and canonical FashionIQ root must contain `captions/`, `image_splits/`, `images/`, and all three category files. Guarded execution also requires upstream `COT_ours2/bert_captions/fashioniq/`. CSMCIR requires both auxiliary caption files for every category:
 
 ```text
-workbench/artifacts/checkpoints/
-├── csmcir/fashioniq_tuned_clip_best.pt
-├── encoder/fashioniq.pt
-├── hint/fashioniq.pt
-└── pair/pair-B1.pt
+qwen_captions/{dress,shirt,toptee}_cot_val.json
+COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json
 ```
 
-## Later evaluation flow
-
-1. Sync one pinned official source.
-2. Build its documented isolated environment on GPU host.
-3. Download and verify exact checkpoint.
-4. Run upstream evaluation unmodified; capture command, environment, stdout, stderr, commit, hash and local metrics.
-5. Compare paper metrics as sanity only.
-6. Add observation-only ranking export patch only after metric parity.
-7. Write canonical per-query JSON and rebuild index.
-
-Future request validation:
+Prepare/check its fixed dataset link without changing evaluator semantics:
 
 ```bash
-python workbench/scripts/run_eval.py \
-  --model encoder --checkpoint fashioniq \
-  --protocol fashioniq_val_split \
-  --dataset-root "$CIR_DATA_ROOT/FashionIQ" \
-  --output workbench/artifacts/results/fashioniq_val_split/encoder/fashioniq.json \
-  --top-k 200
+python workbench/scripts/prepare_dataset.py --dataset-root PATH --model csmcir --check-only
+python workbench/scripts/prepare_dataset.py --dataset-root PATH --model csmcir --dry-run
+python workbench/scripts/prepare_dataset.py --dataset-root PATH --model csmcir
 ```
 
-Adapters reject unsupported protocol/checkpoint pairs and missing checkpoints. A manually installed verified-mapping checkpoint can be runnable even when no automatic direct download URL exists. Availability reports source metadata, local source sync, automatic download availability, local SHA, official SHA status, mapping status, command readiness, runtime verification, and runnable state separately. No adapter imports model code into backend process.
-CSMCIR later requires an audited upstream working-directory/data layout because its official evaluator has no ordinary dataset-root CLI. ENCODER additionally requires the upstream `./open_clip_pytorch_model.bin` ViT-B-32 backbone asset; its FashionIQ checkpoint alone is insufficient. Neither asset is downloaded by this workbench.
+The official phase emits aggregate metrics only. It is **not** a per-query result export and cannot populate canonical JSON alone. Establish official aggregate metric parity first; only then design and review an observation-only export patch.
 
-## Results and index
+## ENCODER guide
 
-Canonical result files live below:
+ENCODER uses `fashioniq_val_split`; its audited command passes `--fashioniq_split val-split`, `--fashioniq_path`, and `--ckpt_path`. It requires both a local FashionIQ checkpoint and the exact upstream-root `open_clip_pytorch_model.bin` asset used by `open_clip.create_model_and_transforms('ViT-B-32', pretrained='./open_clip_pytorch_model.bin')`.
+
+The registry records only an official Google Drive folder for ENCODER's FashionIQ checkpoint. Its direct file URL, official hash, and downloaded file are unresolved/unverified. Do not invent a URL, substitute a backbone, or claim the checkpoint alone is sufficient. `doctor.py` and `evaluate_models.py` report this asset prerequisite; only a reviewed acquisition with provenance can clear it.
+
+## Other model blockers
+
+- Air-Know, ConeSep, HABIT, INTENT, and HINT have registry/checkpoint evidence but no audited official command constructor. Do not execute guessed commands.
+- PTHA + MTST has no verified author-linked FashionIQ fine-tuned checkpoint or eligible source integration.
+- PAIR source is pinned, but its `pair-B1.pt`/`pair-B2.pt` FashionIQ mapping and source URL are unresolved. Do not select a variant automatically.
+- All registry methods remain `NOT_RUN` or explicitly blocked until evidence changes. A downloaded file does not establish runtime verification or reproduction.
+
+## Results, provenance, and index
+
+Schema v2 contract: [docs/RESULT_SCHEMA.md](docs/RESULT_SCHEMA.md). A result needs immutable `run_id`, protocol/model/checkpoint identity, training/evaluation noise, gallery size, saved depth, paper references when available, locally reproduced metrics, and per-query canonical identity, raw captions, model input text, target rank, and contiguous unique ranked results.
+
+Use `data_kind: "mock"` only for development fixtures. For an experiment, retain `upstream_commit`, `checkpoint_sha256`, `command_digest`, and `environment_digest`; `validate_results.py --strict-real` enforces these. Schema v1 is rejected rather than guessed/migrated. DuckDB normalizes runs, queries, and top results for serving only; rebuild it from JSON whenever artifacts change.
+
+## UI pages
+
+- **Dashboard:** registry, experiment-run, and mock-run counts; paper-score and protocol warnings.
+- **Models:** registry status plus checkpoint-local, automatic-download, mapping, command, and runtime states.
+- **Evaluation Runs:** choose compatible runs by immutable `run_id`.
+- **Sample Explorer:** paginate/filter one run's queries; inspect reference, target, rank, captions, and saved retrievals.
+- **Compare Models:** align selected compatible runs on one canonical query and inspect retrieved overlap.
+- **Common Failures:** filter all-fail/threshold/winner/easy sets, inspect consensus failure and common distractors, save a cohort.
+- **Disagreement:** inspect rank range and selected-run disagreement.
+- **Failure Analytics:** inspect failure-set Jaccard and query-by-run target-rank matrix.
+- **Annotations:** save local multi-label notes keyed by `(protocol_id, query_id)` without mutating raw result JSON.
+- **Hypotheses:** list saved same-protocol cohorts. A cohort preserves selected run IDs, query IDs, and filter definition; it is evidence organization, not a conclusion.
+
+Image lookup accepts benchmark image IDs only and known FashionIQ `.png`, `.jpg`, and `.jpeg` layouts. Missing local images show safely as unavailable.
+
+## Research example
+
+1. Select only completed `fashioniq_original_split` experiment runs.
+2. Choose Top-K 10, then filter **all runs fail**.
+3. Sort/inspect queries by median target rank and repeated distractors.
+4. Review reference, target, raw captions, model input text, and actual rankings before labeling a failure.
+5. Store supported labels/notes in **Annotations**.
+6. Save cohort `H01-common-failure-r10` with its run IDs and query IDs.
+7. Compare that cohort with its full benchmark population, while reporting protocol, checkpoint conditions, saved depth, and provenance.
+
+This tests a reproducible hypothesis. It does not prove an architectural cause.
+
+## Troubleshooting
+
+| Symptom | Meaning and action |
+| --- | --- |
+| `BLOCKED` from `doctor.py` | Read reported prerequisite; it performs no repair. Fix only verified local paths/assets. |
+| Source pin missing/mismatch/dirty | Use `sync_upstreams.py --model ID --verify-only`; review source state. `--update-existing` is explicit. |
+| FashionIQ layout missing | Point `--dataset-root` at root containing `captions`, `image_splits`, and `images`; do not point at one subdirectory. |
+| CSMCIR layout/auxiliary blocker | Supply all six verified auxiliary JSON files and use `prepare_dataset.py --model csmcir`; retain fixed source-root link. |
+| ENCODER asset blocker | Both `fashioniq.pt` and `open_clip_pytorch_model.bin` are required. Direct checkpoint URL remains unresolved; do not substitute one. |
+| Checkpoint download blocked | Registry lacks direct URL/mapping or local file conflicts. Inspect with `--list`; use `--force-redownload` only for intentional replacement. |
+| `adapter command not audited` | No verified command exists. Do not derive flags from a guessed README command. |
+| Duplicate run ID or schema failure | Correct/regenerate artifact; do not edit derived database to hide it. |
+| Top-K analysis blocked | Selected artifacts did not save requested depth. Lower K or regenerate after verified instrumentation. |
+| Frontend dependency/port blocker | Use pre-provisioned frontend dependencies or select free distinct ports. Script never installs packages. |
+
+## Adding a model
+
+1. Record source ownership, pinned commit, source directory, supported protocol, checkpoint evidence, training noise, and mapping status in `registry/models.yaml`.
+2. Update [docs/UPSTREAM_AUDIT.md](docs/UPSTREAM_AUDIT.md) with evidence and unresolved facts. Do not add invented URL/hash/command claims.
+3. Add an adapter only after auditing exact official evaluator semantics and its protocol. Keep it unaudited rather than guessing.
+4. Add model-specific guards for required non-checkpoint assets or fixed layouts.
+5. Run official aggregate evaluation unmodified in its isolated environment and record provenance/metric evidence.
+6. After parity, add observation-only per-query export, write schema-v2 artifacts, and use validation/rebuild.
+
+## Safe updates and cleanup
+
+Before source maintenance, inspect with `sync_upstreams.py --list` and preserve recorded pins. `--fetch` contacts remotes; `--update-existing` changes a clean existing checkout. Neither should be used as an implicit update path. Update registry pin and audit evidence together only after review.
+
+Preview/remove only supported generated outputs:
+
+```bash
+python workbench/scripts/clean_generated.py --all-generated --dry-run
+python workbench/scripts/clean_generated.py --mock-results
+python workbench/scripts/clean_generated.py --database
+python workbench/scripts/clean_generated.py --logs
+python workbench/scripts/clean_generated.py --all-generated
+```
+
+Cleanup can remove mock result directories, DuckDB index, and logs only. It never removes experiment result JSON, checkpoints, source clones, or dataset files.
+
+## Exact command reference
+
+All operator scripts use `python workbench/scripts/NAME.py ...`. These are current flags; bracketed values are optional.
 
 ```text
-workbench/artifacts/results/
-├── fashioniq_original_split/csmcir/fashioniq.json
-└── fashioniq_val_split/encoder/fashioniq.json
+# doctor.py
+[--model MODEL_ID | --all] [--json]
+
+# prepare_dataset.py
+--dataset-root PATH [--check-only] [--model MODEL_ID] [--dry-run]
+
+# sync_upstreams.py
+(--list | --model MODEL_ID | --all) [--fetch] [--update-existing] [--dry-run] [--verify-only] [--output-root PATH]
+
+# download_checkpoints.py
+(--list | --model MODEL_ID | --all) [--checkpoint CHECKPOINT_ID] [--dry-run] [--verify-only] [--force-redownload] [--output-root PATH]
+
+# evaluate_models.py
+(--list | --model MODEL_ID | --all-runnable) [--checkpoint CHECKPOINT_ID]
+[--protocol fashioniq_original_split|fashioniq_val_split] [--dataset-root PATH]
+[--top-k POSITIVE_INTEGER] [--dry-run] [--continue-on-error]
+
+# run_eval.py — legacy command preview; pipeline uses guarded evaluate_models.py
+--model MODEL_ID --checkpoint CHECKPOINT_ID
+--protocol fashioniq_original_split|fashioniq_val_split --dataset-root PATH --output PATH
+[--top-k INTEGER]
+
+# validate_results.py
+(--file PATH | --root PATH | --all) [--strict-real]
+
+# rebuild_index.py
+[--results-root PATH] [--database PATH] [--check-only] [--validate-first]
+
+# serve_workbench.py
+[--backend-only | --frontend-only] [--host HOST] [--backend-port PORT]
+[--frontend-port PORT] [--open-browser] [--production-frontend] [--dry-run]
+
+# clean_generated.py — select one or more
+[--mock-results] [--database] [--logs] [--all-generated] [--dry-run]
+
+# load_mock_results.py
+[--output-root PATH]
 ```
 
-Each stores run provenance, training/evaluation noise, paper and local metrics, canonical query identity, raw captions, model input text, exact target rank and top results. Schema v2 adds `run_id` artifact identity, `checkpoint_id`, `top_k_saved`, and `gallery_size`. v1 is rejected rather than silently migrated. See [docs/RESULT_SCHEMA.md](docs/RESULT_SCHEMA.md).
-
-DuckDB is a rebuildable serving index with normalized `runs`, `queries`, and `top_results` tables. Normal API browsing uses SQL metadata queries and paginated query retrieval; canonical JSON remains source of truth. Cross-run analytics load only aligned selected-run fields and requested Top-K rows.
-
-```bash
-python workbench/scripts/rebuild_index.py
-```
-
-## UI guide
-
-- **Sample Explorer** — reference/target local image endpoint with `.png`, `.jpg`, and `.jpeg` known FashionIQ layouts; safe image IDs only; graceful browser placeholders when unavailable. It paginates queries and supports top 1/5/10/20/50/100/200.
-- **Compare Models** — same canonical query across compatible selected runs; run identity remains `run_id`.
-- **Common Failures** — consensus fail fraction at K, median/mean/worst rank, common distractors counted per run, and top-K Jaccard.
-- **Disagreement / Failure Analytics** — rank range/std, universal failure/success and one-run-win inspection; run-level Jaccard matrix.
-- **Annotations** — multi-label dataset-query notes keyed by `(protocol_id, query_id)`; never mutate raw run JSON.
-- **Hypotheses** — save same-protocol cohort definition, selected run IDs and query IDs; JSON/CSV/Markdown exports include cohort metrics.
-
-## Research workflow example
-
-1. Choose **FashionIQ — Original Split**.
-2. Select completed compatible original-split runs.
-3. Filter **all selected models fail @10**.
-4. Sort by median target rank.
-5. Inspect same top-ranked distractors.
-6. Annotate `preservation_failure` where evidence supports it.
-7. Save `H01 — Common failure at R@10` with query IDs and exact run IDs.
-8. Export JSON/CSV/Markdown and compare cohort R@10 against full benchmark.
-
-This converts visual observations into a reproducible hypothesis, not a conclusion.
-
-## Scientific Integrity Guards
-
-1. Cross-run analysis requires one protocol, exact query-ID universe, and identical canonical category, annotation index, reference ID, target ID, and raw captions. `model_input_text` is intentionally allowed to differ.
-2. Analysis uses `run_id`, never `model_id`; checkpoint variants cannot overwrite one another.
-3. Top-K retrieval analyses reject saved depth below requested K. Target-rank cohort metrics do not pretend top-K rows exist.
-4. Rebuild rejects duplicate `run_id` values and writes a temporary DuckDB before atomic replacement. A malformed result file leaves prior index intact.
-5. Structured API guard failures expose `cross_protocol`, `query_alignment_mismatch`, `canonical_query_mismatch`, `insufficient_top_k_depth`, and checkpoint mapping state.
-6. Image lookup accepts only benchmark image IDs and known FashionIQ `.png`/`.jpg`/`.jpeg` locations; HTTP paths never select arbitrary filesystem files.
-
-## Scientific warnings
-
-1. Never mix Original Split and Val Split metrics or analysis cohorts.
-2. Paper scores are not locally reproduced scores.
-3. Noise-trained checkpoint plus clean evaluation is not a clean-trained model.
-4. Missing checkpoint provenance excludes strict comparison.
-5. Common failure is evidence to inspect, not proof of architectural flaw.
-6. Manually examine ambiguous ground truth and dataset defects.
-7. Never guess checkpoint mapping; PAIR remains unresolved until authors establish mapping.
-
-## Script help
-
-All scripts support `--help`:
-
-```bash
-python workbench/scripts/sync_upstreams.py --help
-python workbench/scripts/download_checkpoints.py --help
-python workbench/scripts/load_mock_results.py --help
-python workbench/scripts/rebuild_index.py --help
-python workbench/scripts/run_eval.py --help
-```
+`sync_upstreams.py --verify-only` cannot be combined with `--fetch`; `serve_workbench.py --production-frontend` requires frontend operation; backend and frontend ports must differ when both run. Use script `--help` for argparse wording, not for readiness claims.

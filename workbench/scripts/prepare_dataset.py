@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""Validate a local FashionIQ layout and safely prepare CSMCIR's fixed link."""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from workbench.backend.registry import ROOT
+
+CATEGORIES = ("dress", "shirt", "toptee")
+CSMCIR_ROOT = ROOT / "third_party" / "CSMCIR"
+
+
+def required_layout(root: Path) -> tuple[Path, ...]:
+    return (
+        root / "captions",
+        root / "image_splits",
+        root / "images",
+        *(root / "captions" / f"cap.{category}.val.json" for category in CATEGORIES),
+        *(root / "image_splits" / f"split.{category}.val.json" for category in CATEGORIES),
+    )
+
+
+def validate_fashioniq(root: Path) -> list[str]:
+    if not root.is_dir():
+        return [f"dataset root missing: {root}"]
+    return [f"required path missing: {path}" for path in required_layout(root) if not (path.is_dir() if path.suffix == "" else path.is_file())]
+
+
+def csmcir_auxiliary_files(source: Path) -> tuple[Path, ...]:
+    return tuple(
+        path
+        for category in CATEGORIES
+        for path in (
+            source / "qwen_captions" / f"{category}_cot_val.json",
+            source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json",
+        )
+    )
+
+
+def prepare_csmcir(root: Path, *, check_only: bool, dry_run: bool) -> bool:
+    source = CSMCIR_ROOT
+    destination = source / "fashionIQ_dataset"
+    if not source.is_dir():
+        print(f"[BLOCKED] CSMCIR source missing: {source}")
+        return False
+
+    missing = [path for path in csmcir_auxiliary_files(source) if not path.is_file()]
+    if missing:
+        for path in missing:
+            print(f"[BLOCKED] CSMCIR auxiliary file missing: {path}")
+        return False
+
+    if destination.is_symlink():
+        try:
+            linked_root = destination.resolve()
+        except (OSError, RuntimeError) as error:
+            print(f"[BLOCKED] CSMCIR dataset link cannot resolve: {destination}: {error}")
+            return False
+        if linked_root != root:
+            print(f"[BLOCKED] CSMCIR dataset link resolves to {linked_root}, expected {root}")
+            return False
+        print(f"[OK] CSMCIR dataset link: {destination} -> {root}")
+        return True
+    if os.path.lexists(destination):
+        print(f"[BLOCKED] CSMCIR dataset destination already exists: {destination}")
+        return False
+    if check_only:
+        print(f"[WARN] CSMCIR dataset link absent: {destination} (check-only)")
+        return True
+    if dry_run:
+        print(f"[OK] dry-run: would link {destination} -> {root}")
+        return True
+    destination.symlink_to(root, target_is_directory=True)
+    print(f"[OK] CSMCIR dataset link created: {destination} -> {root}")
+    return True
+
+
+def parser_for() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dataset-root", required=True, type=Path, help="canonical FashionIQ dataset root")
+    parser.add_argument("--check-only", action="store_true", help="validate only; never create a link")
+    parser.add_argument("--model", help="prepare fixed layout only for csmcir")
+    parser.add_argument("--dry-run", action="store_true", help="show link creation without changing files")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parser_for().parse_args(argv)
+    try:
+        root = args.dataset_root.expanduser().resolve()
+    except (OSError, RuntimeError) as error:
+        print(f"[BLOCKED] dataset root cannot resolve: {args.dataset_root}: {error}")
+        return 1
+    missing = validate_fashioniq(root)
+    if missing:
+        for message in missing:
+            print(f"[BLOCKED] {message}")
+        return 1
+    print(f"[OK] FashionIQ layout valid: {root}")
+
+    if args.model == "csmcir":
+        return 0 if prepare_csmcir(root, check_only=args.check_only, dry_run=args.dry_run) else 1
+    if args.model:
+        print(f"[WARN] {args.model}: layout preparation not verified")
+    else:
+        print("[WARN] no model selected: check only; layout preparation not verified")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
