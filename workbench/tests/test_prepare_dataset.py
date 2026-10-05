@@ -30,12 +30,6 @@ def fashioniq_root(tmp_path: Path) -> Path:
     return root
 
 
-def csmcir_qwen(root: Path) -> None:
-    for category in ("dress", "shirt", "toptee"):
-        path = root / "qwen_captions" / f"{category}_cot_val.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("[]")
-
 
 def config(tmp_path: Path, root: Path) -> WorkbenchConfig:
     return WorkbenchConfig(tmp_path, tmp_path / "data", root, "127.0.0.1", 8000, 5173, tmp_path / "checkpoints", tmp_path / "results", tmp_path / "third_party")
@@ -43,10 +37,7 @@ def config(tmp_path: Path, root: Path) -> WorkbenchConfig:
 
 def csmcir_source(tmp_path: Path) -> Path:
     source = tmp_path / "third_party" / "CSMCIR"
-    for category in ("dress", "shirt", "toptee"):
-        path = source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("[]")
+    source.mkdir(parents=True)
     return source
 
 
@@ -77,10 +68,9 @@ def test_dataset_root_cli_overrides_config(monkeypatch, tmp_path: Path, capsys) 
     assert str(root) in capsys.readouterr().out
 
 
-def test_csmcir_dry_run_does_not_create_link(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_csmcir_dry_run_does_not_create_link_without_auxiliary_assets(monkeypatch, tmp_path: Path, capsys) -> None:
     module = load_module()
     root = fashioniq_root(tmp_path)
-    csmcir_qwen(root)
     source = csmcir_source(tmp_path)
     monkeypatch.setattr(module, "resolve_config", lambda: config(tmp_path, root))
 
@@ -89,10 +79,9 @@ def test_csmcir_dry_run_does_not_create_link(monkeypatch, tmp_path: Path, capsys
     assert "[OK] dry-run: would link" in capsys.readouterr().out
 
 
-def test_csmcir_creates_safe_canonical_link(monkeypatch, tmp_path: Path) -> None:
+def test_csmcir_creates_safe_canonical_link_without_auxiliary_assets(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
     root = fashioniq_root(tmp_path)
-    csmcir_qwen(root)
     source = csmcir_source(tmp_path)
     monkeypatch.setattr(module, "resolve_config", lambda: config(tmp_path, root))
 
@@ -102,36 +91,11 @@ def test_csmcir_creates_safe_canonical_link(monkeypatch, tmp_path: Path) -> None
     assert destination.resolve() == root.resolve()
 
 
-def test_csmcir_requires_each_qwen_file(monkeypatch, tmp_path: Path, capsys) -> None:
-    module = load_module()
-    root = fashioniq_root(tmp_path)
-    csmcir_qwen(root)
-    missing = root / "qwen_captions" / "dress_cot_val.json"
-    missing.unlink()
-    csmcir_source(tmp_path)
-    monkeypatch.setattr(module, "resolve_config", lambda: config(tmp_path, root))
-
-    assert module.main(["--dataset-root", str(root), "--model", "csmcir"]) == 1
-    assert str(missing) in capsys.readouterr().out
-
-
-def test_csmcir_requires_each_cot_file(monkeypatch, tmp_path: Path, capsys) -> None:
-    module = load_module()
-    root = fashioniq_root(tmp_path)
-    csmcir_qwen(root)
-    source = csmcir_source(tmp_path)
-    missing = source / "COT_ours2" / "fashioniq" / "dress_cot_val.json"
-    missing.unlink()
-    monkeypatch.setattr(module, "resolve_config", lambda: config(tmp_path, root))
-
-    assert module.main(["--dataset-root", str(root), "--model", "csmcir"]) == 1
-    assert str(missing) in capsys.readouterr().out
 
 
 def test_csmcir_refuses_different_dataset_link(monkeypatch, tmp_path: Path, capsys) -> None:
     module = load_module()
     root = fashioniq_root(tmp_path)
-    csmcir_qwen(root)
     other = fashioniq_root(tmp_path / "other")
     source = csmcir_source(tmp_path)
     (source / "fashionIQ_dataset").symlink_to(other, target_is_directory=True)

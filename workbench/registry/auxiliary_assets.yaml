@@ -1,0 +1,74 @@
+schema_version: 1
+assets:
+  - model_id: csmcir
+    family: Qwen captions
+    required_for: official_evaluation
+    source_type: author_huggingface
+    source_repo: https://huggingface.co/peng12138/CSMCIR
+    source_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
+    source_path: fashioniq_qwen_captions/qwen_captions/dress_cot_val.json
+    destination_scope: fashioniq_root
+    destination_path: qwen_captions/dress_cot_val.json
+    automatic_download_available: true
+    expected_sha256: null
+    provenance_status: VERIFIED
+  - model_id: csmcir
+    family: Qwen captions
+    required_for: official_evaluation
+    source_type: author_huggingface
+    source_repo: https://huggingface.co/peng12138/CSMCIR
+    source_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
+    source_path: fashioniq_qwen_captions/qwen_captions/shirt_cot_val.json
+    destination_scope: fashioniq_root
+    destination_path: qwen_captions/shirt_cot_val.json
+    automatic_download_available: true
+    expected_sha256: null
+    provenance_status: VERIFIED
+  - model_id: csmcir
+    family: Qwen captions
+    required_for: official_evaluation
+    source_type: author_huggingface
+    source_repo: https://huggingface.co/peng12138/CSMCIR
+    source_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
+    source_path: fashioniq_qwen_captions/qwen_captions/toptee_cot_val.json
+    destination_scope: fashioniq_root
+    destination_path: qwen_captions/toptee_cot_val.json
+    automatic_download_available: true
+    expected_sha256: null
+    provenance_status: VERIFIED
+  - model_id: csmcir
+    family: COT_ours2 captions
+    required_for: official_evaluation
+    source_type: none
+    source_repo: null
+    source_revision: null
+    source_path: null
+    destination_scope: model_source
+    destination_path: COT_ours2/fashioniq/dress_cot_val.json
+    automatic_download_available: false
+    expected_sha256: null
+    provenance_status: UNVERIFIED
+  - model_id: csmcir
+    family: COT_ours2 captions
+    required_for: official_evaluation
+    source_type: none
+    source_repo: null
+    source_revision: null
+    source_path: null
+    destination_scope: model_source
+    destination_path: COT_ours2/fashioniq/shirt_cot_val.json
+    automatic_download_available: false
+    expected_sha256: null
+    provenance_status: UNVERIFIED
+  - model_id: csmcir
+    family: COT_ours2 captions
+    required_for: official_evaluation
+    source_type: none
+    source_repo: null
+    source_revision: null
+    source_path: null
+    destination_scope: model_source
+    destination_path: COT_ours2/fashioniq/toptee_cot_val.json
+    automatic_download_available: false
+    expected_sha256: null
+    provenance_status: UNVERIFIED

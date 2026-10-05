@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "registry" / "models.yaml"
+AUXILIARY_ASSET_REGISTRY_PATH = ROOT / "registry" / "auxiliary_assets.yaml"
 CHECKPOINT_ROOT = ROOT / "artifacts" / "checkpoints"
 
 
@@ -25,6 +26,51 @@ def load_registry(path: Path = REGISTRY_PATH) -> dict[str, Any]:
             if checkpoint["evaluation_noise_pct"] != 0:
                 raise ValueError(f"non-clean evaluation policy for {model['model_id']}")
     return registry
+
+
+def load_auxiliary_assets(path: Path = AUXILIARY_ASSET_REGISTRY_PATH) -> list[dict[str, Any]]:
+    with path.open(encoding="utf-8") as handle:
+        registry = yaml.safe_load(handle)
+    if registry.get("schema_version") != 1 or not isinstance(registry.get("assets"), list):
+        raise ValueError("unsupported auxiliary asset registry")
+    required = {
+        "model_id", "family", "required_for", "source_type", "source_repo", "source_revision", "source_path",
+        "destination_scope", "destination_path", "automatic_download_available", "expected_sha256", "provenance_status",
+    }
+    for asset in registry["assets"]:
+        if required - asset.keys():
+            raise ValueError("incomplete auxiliary asset record")
+        available = asset["automatic_download_available"]
+        destination = PurePosixPath(asset["destination_path"])
+        if destination.is_absolute() or ".." in destination.parts:
+            raise ValueError(f"unsafe auxiliary destination for {asset['model_id']}: {asset['destination_path']}")
+        if asset["destination_scope"] not in {"fashioniq_root", "model_source"}:
+            raise ValueError(f"unknown auxiliary destination scope: {asset['destination_scope']}")
+        if available != (asset["source_type"] == "author_huggingface" and bool(asset["source_repo"]) and bool(asset["source_revision"]) and bool(asset["source_path"])):
+            raise ValueError(f"auxiliary source mismatch for {asset['model_id']}: {asset['destination_path']}")
+    return registry["assets"]
+
+
+def auxiliary_assets_for_model(model_id: str) -> list[dict[str, Any]]:
+    return [asset for asset in load_auxiliary_assets() if asset["model_id"] == model_id]
+
+
+def auxiliary_destination(asset: dict[str, Any], third_party_root: Path, fashioniq_root: Path) -> Path:
+    if asset["destination_scope"] == "fashioniq_root":
+        return fashioniq_root / asset["destination_path"]
+    if asset["destination_scope"] == "model_source":
+        return third_party_root / model_by_id(asset["model_id"])["source_dir"] / asset["destination_path"]
+    raise ValueError(f"unknown auxiliary destination scope: {asset['destination_scope']}")
+
+
+def auxiliary_source_url(asset: dict[str, Any]) -> str | None:
+    if not asset["automatic_download_available"]:
+        return None
+    return f"{asset['source_repo']}/resolve/{asset['source_revision']}/{asset['source_path']}"
+
+
+def auxiliary_model_ids() -> set[str]:
+    return {asset["model_id"] for asset in load_auxiliary_assets()}
 
 
 def model_by_id(model_id: str, registry: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
-
+from workbench.backend.registry import auxiliary_model_ids, load_registry
 SCRIPTS = Path(__file__).resolve().parent
 REPOSITORY = SCRIPTS.parents[1]
 
@@ -44,13 +44,11 @@ def dataset_check(args: argparse.Namespace, config: WorkbenchConfig) -> Stage:
     return run_stage("dataset", command("prepare_dataset.py", "--dataset-root", dataset_root(args, config), "--check-only"))
 
 
-def layout_prepare(args: argparse.Namespace, config: WorkbenchConfig, *, check_only: bool) -> Stage:
-    if args.model != "csmcir":
-        return Stage("layout", skipped="only audited CSMCIR layout preparation is available")
-    arguments: list[str | Path] = ["--dataset-root", dataset_root(args, config), "--model", "csmcir"]
-    if check_only:
-        arguments.append("--check-only")
-    return run_stage("layout", command("prepare_dataset.py", *arguments))
+def layout_prepare(args: argparse.Namespace, config: WorkbenchConfig) -> Stage:
+    active = args.model == "csmcir" or (args.model is None and any((args.sync_sources, args.download_checkpoints, args.download_auxiliary_assets, args.evaluate)))
+    if not active:
+        return Stage("dataset-link", skipped="CSMCIR preparation not selected")
+    return run_stage("dataset-link", command("prepare_dataset.py", "--dataset-root", dataset_root(args, config), "--model", "csmcir"))
 
 
 def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
@@ -59,15 +57,28 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
         if args.sync_sources
         else Stage("sync", skipped="pass --sync-sources")
     )
-    download_args = [*selection(args), *( ["--checkpoint", args.checkpoint] if args.checkpoint else []), "--output-root", config.WORKBENCH_CHECKPOINT_ROOT]
+    link = layout_prepare(args, config)
+    download_args = [*selection(args), *(["--checkpoint", args.checkpoint] if args.checkpoint else []), "--output-root", config.WORKBENCH_CHECKPOINT_ROOT]
     checkpoints = run_stage("checkpoint", command("download_checkpoints.py", *download_args)) if args.download_checkpoints else Stage("checkpoint", skipped="pass --download-checkpoints")
-    auxiliary = (
-        run_stage("auxiliary-assets", command("download_auxiliary_assets.py", "--model", "csmcir"))
-        if args.download_auxiliary_assets
-        else Stage("auxiliary-assets", skipped="pass --download-auxiliary-assets")
-    )
+    selected_auxiliary_models = [args.model] if args.model in auxiliary_model_ids() else ([] if args.model else sorted(auxiliary_model_ids()))
+    if args.download_auxiliary_assets and selected_auxiliary_models:
+        auxiliary_args = ["--model", selected_auxiliary_models[0]] if args.model else ["--all"]
+        auxiliary = run_stage("auxiliary-assets", command("download_auxiliary_assets.py", *auxiliary_args))
+    elif args.download_auxiliary_assets:
+        auxiliary = Stage("auxiliary-assets", skipped="selected model has no registered auxiliary assets")
+    else:
+        auxiliary = Stage("auxiliary-assets", skipped="pass --download-auxiliary-assets")
+    final_doctor_args: list[str] = ["--scope", "real", "--dataset-root", str(dataset_root(args, config))]
+    if args.model:
+        final_doctor_args.extend(["--model", args.model])
+        strict_runtime = run_stage("runtime-preflight", command("doctor.py", *final_doctor_args)) if args.evaluate else Stage("runtime-preflight", skipped="pass --evaluate")
+    else:
+        strict_runtime = Stage("runtime-preflight", skipped="per-model strict guards run inside --all-runnable evaluation")
     if args.evaluate:
         evaluation_args = [*selection(args, runnable=True), "--dataset-root", str(dataset_root(args, config))]
+        if args.model == "csmcir":
+            evaluation_args[-1] = str(config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset")
+            evaluation_args.extend(["--canonical-dataset-root", str(dataset_root(args, config))])
         if args.checkpoint:
             evaluation_args.extend(["--checkpoint", args.checkpoint])
         if args.protocol:
@@ -84,19 +95,21 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             command("validate_results.py", "--root", config.WORKBENCH_RESULTS_ROOT, "--strict-real"),
             command("rebuild_index.py", "--results-root", config.WORKBENCH_RESULTS_ROOT),
         )
-        if args.evaluate or args.rebuild_index
-        else Stage("validation-index", skipped="pass --evaluate or --rebuild-index")
+        if args.rebuild_index
+        else Stage("validation-index", skipped="pass --rebuild-index after schema-v2 result JSON exists")
     )
     serve = run_stage("serve", command("serve_workbench.py")) if args.serve else Stage("serve", skipped="pass --serve")
-    doctor_args: list[str] = ["--scope", "workbench"]
+    early_doctor_args: list[str] = ["--scope", "workbench"]
     if args.serve:
-        doctor_args.append("--serve")
+        early_doctor_args.append("--serve")
     return [
-        run_stage("doctor", command("doctor.py", *doctor_args)),
+        run_stage("doctor", command("doctor.py", *early_doctor_args)),
         dataset_check(args, config),
         sync,
+        link,
         checkpoints,
         auxiliary,
+        strict_runtime,
         evaluation,
         validation_index,
         serve,
@@ -114,7 +127,7 @@ def stages_for(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         ]
         return [*stages, run_stage("serve", command("serve_workbench.py")) if args.serve else Stage("serve", skipped="pass --serve")]
     if args.mode == "prepare":
-        return [dataset_check(args, config), layout_prepare(args, config, check_only=False)]
+        return [dataset_check(args, config), layout_prepare(args, config)]
     if args.mode == "real":
         return real_stages(args, config)
     if args.mode == "serve":
@@ -148,7 +161,7 @@ def run_stages(stages: list[Stage], *, dry_run: bool, continue_on_error: bool) -
                 continue
             failed = True
             print(f"  [BLOCKED] {stage.name} exited with status {status}", file=sys.stderr)
-            if not continue_on_error:
+            if stage.name == "runtime-preflight" or not continue_on_error:
                 return 1
     return 1 if failed else 0
 
@@ -176,6 +189,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser_for().parse_args(argv)
     if args.top_k < 1:
         parser_for().error("--top-k must be positive")
+    if args.model and args.model not in {model["model_id"] for model in load_registry()["models"]}:
+        parser_for().error(f"unknown model: {args.model}")
     config = resolve_config()
     if args.mode == "prepare" and args.dataset_root is None and not config.FASHIONIQ_ROOT:
         parser_for().error("prepare requires --dataset-root or FASHIONIQ_ROOT")

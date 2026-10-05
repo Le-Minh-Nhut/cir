@@ -8,7 +8,7 @@ import shlex
 import subprocess
 import sys
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable
@@ -147,6 +147,7 @@ def parser_for(registry: dict) -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint", help="select one checkpoint ID")
     parser.add_argument("--protocol", choices=sorted(registry["protocols"]), help="protocol; defaults to each model native protocol")
     parser.add_argument("--dataset-root", type=Path, help="FashionIQ root; CSMCIR requires its fixed upstream layout")
+    parser.add_argument("--canonical-dataset-root", type=Path, help="canonical FashionIQ root behind a CSMCIR fixed link")
     parser.add_argument("--top-k", type=int, default=200)
     parser.add_argument("--dry-run", action="store_true", help="print guarded command and log plan without writing")
     parser.add_argument("--continue-on-error", action="store_true")
@@ -211,6 +212,8 @@ def main(argv: list[str] | None = None) -> int:
         list_candidates(items)
         return 0
     config = resolve_config()
+    if args.canonical_dataset_root:
+        config = replace(config, FASHIONIQ_ROOT=args.canonical_dataset_root.resolve())
     dataset_root = args.dataset_root or config.FASHIONIQ_ROOT
     failed = False
     for model, checkpoint in items:

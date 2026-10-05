@@ -53,13 +53,14 @@ def test_csmcir_real_checks_require_dataset_qwen_and_cot(tmp_path: Path) -> None
     assert checks["csmcir:qwen-captions"]["status"] == "BLOCKED"
     assert missing_qwen in checks["csmcir:qwen-captions"]["evidence"]["missing"]
 
-    for path in doctor.fashioniq_qwen_paths(settings.FASHIONIQ_ROOT):
+    for path in doctor.csmcir_auxiliary_paths(settings, "Qwen captions"):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("[]")
     checks = {check["name"]: check for check in doctor.model_checks(model, settings)}
     blockers = checks["runtime:csmcir"]["evidence"]["checkpoints"][0]["runtime_blockers"]
-    missing_cot = str(source / "COT_ours2" / "fashioniq" / "dress_cot_val.json")
+    missing_cot = str(settings.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "COT_ours2" / "fashioniq" / "dress_cot_val.json")
     assert f"CSMCIR COT_ours2 captions missing: {missing_cot}" in blockers
+    assert "required COT_ours2 captions have no verified automatic acquisition source" in blockers
     assert checks["csmcir:qwen-captions"]["status"] == "OK"
     assert checks["csmcir:cot-captions"]["status"] == "BLOCKED"
 

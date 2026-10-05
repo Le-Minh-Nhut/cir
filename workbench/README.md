@@ -119,29 +119,23 @@ Use this sequence on a GPU host only. It is a guardrail and recordkeeping proced
 
 ## Master pipeline
 
-Commands below are phases, not one automatic run. Stop at any blocker; do not work around it by changing protocol, checkpoint mapping, or upstream evaluator semantics. Real mode always runs real-scope doctor and dataset checks. Its optional source and checkpoint stages precede the deliberately heavy optional `--download-auxiliary-assets` stage. That stage downloads verified CSMCIR Qwen captions only; it leaves unresolved COT_ours2 captions for manual author-provenance placement. Evaluation, validation/index rebuild, and serving are each opt-in.
+CSMCIR has one canonical guarded setup/evaluation command. It validates canonical FashionIQ, syncs pinned source, creates its fixed dataset link, downloads recorded checkpoint, downloads verified Qwen text, runs strict CSMCIR runtime preflight, then starts unmodified official aggregate evaluation only if every prerequisite passes:
 
 ```bash
-# 1. Local readiness and source/checkpoint records
-python workbench/scripts/doctor.py --all
-python workbench/scripts/sync_upstreams.py --list
-python workbench/scripts/download_checkpoints.py --list
-
-# 2. One pinned model, after review; downloads only verified Qwen assets
-python workbench/scripts/pipeline.py real --model csmcir --sync-sources --download-checkpoints --download-auxiliary-assets --dry-run
-python workbench/scripts/download_auxiliary_assets.py --model csmcir --dry-run
-python workbench/scripts/prepare_dataset.py --dataset-root "$FASHIONIQ_ROOT" --model csmcir --dry-run
-
-# 3. Guarded official command only; no execution
-python workbench/scripts/evaluate_models.py --model csmcir --checkpoint fashioniq --protocol fashioniq_original_split --dataset-root workbench/third_party/CSMCIR/fashionIQ_dataset --top-k 200 --dry-run
-
-# 4. Later, after verified instrumentation writes JSON recursively below results root
-python workbench/scripts/validate_results.py --all --strict-real
-python workbench/scripts/rebuild_index.py --validate-first
-python workbench/scripts/serve_workbench.py
+python workbench/scripts/pipeline.py real \
+  --model csmcir \
+  --dataset-root "$FASHIONIQ_ROOT" \
+  --sync-sources \
+  --download-checkpoints \
+  --download-auxiliary-assets \
+  --evaluate
 ```
 
-`--all-runnable` asks the evaluator guard to assess all registry candidates; it does not make blocked models runnable. `--continue-on-error` continues official command execution after a failure; reserve it for a reviewed batch on a dedicated host.
+Use `--dry-run` first. The pipeline never installs environments, changes evaluator semantics, or treats aggregate official metrics as schema-v2 result JSON. `--rebuild-index` remains explicit and only belongs after an instrumented evaluation has written canonical result JSON.
+
+Automatic CSMCIR work: pinned source checkout, `fashionIQ_dataset -> $FASHIONIQ_ROOT` link, registry checkpoint, and Qwen captions from immutable author Hugging Face revision `cf0c19bb346266c295b4b5772ebf03bd1c4f0467`. COT_ours2 captions remain the sole manual blocker: exact author acquisition source is unverified. Pipeline reports this explicitly at strict preflight; do not substitute or invent files.
+
+Troubleshooting commands remain available: `doctor.py --scope real --model csmcir`, `sync_upstreams.py --model csmcir --dry-run`, `prepare_dataset.py --dataset-root "$FASHIONIQ_ROOT" --model csmcir --dry-run`, and `download_auxiliary_assets.py --model csmcir --dry-run`.
 
 ## Registry-derived checkpoint matrix
 
@@ -172,10 +166,10 @@ Before evaluation, provide four independent prerequisites:
 - **Author-provided COT text** under the source root: `workbench/third_party/CSMCIR/COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json`. Direct validation call graph confirms reads of these source-root files.
 - **CSMCIR `fashioniq` model checkpoint** at its registry-selected local path.
 
-`download_auxiliary_assets.py --model csmcir` downloads only verified author-hosted Qwen files:
+`download_auxiliary_assets.py --model csmcir` downloads verified author-hosted Qwen files from immutable revision `cf0c19bb346266c295b4b5772ebf03bd1c4f0467`:
 
 ```text
-https://huggingface.co/peng12138/CSMCIR/resolve/main/fashioniq_qwen_captions/qwen_captions/{dress,shirt,toptee}_cot_val.json
+https://huggingface.co/peng12138/CSMCIR/resolve/cf0c19bb346266c295b4b5772ebf03bd1c4f0467/fashioniq_qwen_captions/qwen_captions/{dress,shirt,toptee}_cot_val.json
   -> <FASHIONIQ_ROOT>/qwen_captions/{dress,shirt,toptee}_cot_val.json
 ```
 

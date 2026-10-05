@@ -30,13 +30,6 @@ def validate_fashioniq(root: Path) -> list[str]:
     return [f"required path missing: {path}" for path in required_layout(root) if not (path.is_dir() if path.suffix == "" else path.is_file())]
 
 
-def csmcir_qwen_files(root: Path) -> tuple[Path, ...]:
-    return tuple(root / "qwen_captions" / f"{category}_cot_val.json" for category in CATEGORIES)
-
-
-def csmcir_cot_files(source: Path) -> tuple[Path, ...]:
-    return tuple(source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json" for category in CATEGORIES)
-
 
 def prepare_csmcir(root: Path, source: Path, *, check_only: bool, dry_run: bool) -> bool:
     destination = source / "fashionIQ_dataset"
@@ -44,11 +37,8 @@ def prepare_csmcir(root: Path, source: Path, *, check_only: bool, dry_run: bool)
         print(f"[BLOCKED] CSMCIR source missing: {source}")
         return False
 
-    missing = [path for path in csmcir_qwen_files(root) + csmcir_cot_files(source) if not path.is_file()]
-    if missing:
-        for path in missing:
-            print(f"[BLOCKED] CSMCIR evaluation asset missing: {path}")
-        return False
+    # Auxiliary files are runtime prerequisites. Link preparation must stay runnable
+    # before their optional acquisition stage; strict doctor checks them before eval.
 
     if destination.is_symlink():
         try:

@@ -22,7 +22,15 @@ CSMCIR uses the complete ordered FashionIQ validation split gallery and leaves r
 
 Pinned local `CSMCIR@774f94e2076ff17ea91703a6239d2a08f0e1a44e` dispatches `validate_blip_csmcir.py:main` to `blip_validate_fashioniq`. That function builds `FashionIQDataset('val', [category], 'relative'/'classic')` for `dress`, `toptee`, and `shirt`. `data_utils_csmcir.py:FashionIQDataset` reads the canonical `fashionIQ_dataset` base layout and `<FASHIONIQ_ROOT>/qwen_captions/{dress,shirt,toptee}_cot_val.json` through that link. Its `extract_index_blip_caption_features` call (`validate_blip_csmcir.py:612`; `utils_csmcir.py:97-103`) also reads source-root `COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json`.
 
-Official validation is fixed-root/cwd-sensitive and has no ordinary dataset-root CLI. `prepare_dataset.py --model csmcir` validates the base FashionIQ layout, the three dataset-root Qwen files, the three source-root COT files, and safely creates/checks `<third-party-root>/CSMCIR/fashionIQ_dataset -> <FASHIONIQ_ROOT>`. It does not fabricate assets. The evaluator emits aggregate metrics only; it cannot create per-query schema-v2 results. Future observation-only ranking export remains separate and must follow proven official aggregate-metric parity.
+`prepare_dataset.py --model csmcir` validates base FashionIQ and creates/checks `<third-party-root>/CSMCIR/fashionIQ_dataset -> <FASHIONIQ_ROOT>` before auxiliary acquisition. Strict `doctor.py --scope real --model csmcir` remains final runtime gate for link, Qwen, COT, checkpoint, source pin, evaluator, and dataset.
+
+## CSMCIR auxiliary asset audit
+
+**COT source: NOT FOUND.** Pinned author [repository tree](https://api.github.com/repos/qzp2018/CSMCIR/git/trees/774f94e2076ff17ea91703a6239d2a08f0e1a44e?recursive=1), exact-path GitHub history requests, releases/tags, README, and author-linked [Hugging Face revision tree](https://huggingface.co/api/models/peng12138/CSMCIR/tree/cf0c19bb346266c295b4b5772ebf03bd1c4f0467?recursive=true&expand=false) were checked. None contains `COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json`; exact GitHub paths return 404 and path-history requests return `[]`. No automatic COT URL is registered. Final preflight reports `BLOCKED: required COT_ours2 captions have no verified automatic acquisition source` until files are manually placed with known provenance.
+
+**Qwen source: verified immutable revision.** Pinned upstream [README](https://raw.githubusercontent.com/qzp2018/CSMCIR/774f94e2076ff17ea91703a6239d2a08f0e1a44e/README.md) directs Qwen captions to `https://huggingface.co/peng12138/CSMCIR`. Immutable author revision `cf0c19bb346266c295b4b5772ebf03bd1c4f0467` contains `fashioniq_qwen_captions/qwen_captions/{dress,shirt,toptee}_cot_val.json`. Registry URLs use `/resolve/cf0c19bb346266c295b4b5772ebf03bd1c4f0467/`; upstream publishes no file SHA-256, so local manifest hashes remain local evidence only.
+
+Official validation is fixed-root/cwd-sensitive and has no ordinary dataset-root CLI. The evaluator emits aggregate metrics only; it cannot create per-query schema-v2 results. Future observation-only ranking export remains separate and must follow proven official aggregate-metric parity.
 
 ## ENCODER limitations
 

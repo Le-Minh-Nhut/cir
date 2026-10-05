@@ -31,7 +31,7 @@ def config_at(root: Path) -> WorkbenchConfig:
 
 
 def qwen_assets(module, config: WorkbenchConfig):
-    return tuple(asset for asset in module.assets(config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) if asset.automatic_download_available)
+    return tuple(asset for asset in module.assets({"csmcir"}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) if asset.automatic_download_available)
 
 def load_module():
     spec = importlib.util.spec_from_file_location("download_auxiliary_assets", Path("workbench/scripts/download_auxiliary_assets.py"))
@@ -44,16 +44,16 @@ def load_module():
 
 def test_assets_list_qwen_and_unverified_cot(tmp_path: Path) -> None:
     module = load_module()
-    items = module.assets(tmp_path / "third_party", tmp_path / "FashionIQ")
+    items = module.assets({"csmcir"}, tmp_path / "third_party", tmp_path / "FashionIQ")
     qwen = tuple(asset for asset in items if asset.automatic_download_available)
     cot = tuple(asset for asset in items if not asset.automatic_download_available)
 
     assert len(qwen) == len(cot) == 3
-    assert all(asset.required and asset.source_url and not asset.source_unverified for asset in qwen)
-    assert all(asset.required and asset.source_url is None and asset.source_unverified for asset in cot)
+    assert all(asset.required and asset.source_url and asset.source_revision == "cf0c19bb346266c295b4b5772ebf03bd1c4f0467" and asset.provenance_status == "VERIFIED" for asset in qwen)
+    assert all(asset.required and asset.source_url is None and asset.provenance_status == "UNVERIFIED" for asset in cot)
 
 
-def test_dry_run_reports_exact_qwen_urls_and_never_opens_network(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_dry_run_reports_pinned_qwen_urls_and_never_opens_network(monkeypatch, tmp_path: Path, capsys) -> None:
     module = load_module()
     config = config_at(tmp_path)
     monkeypatch.setattr(module, "resolve_config", lambda: config)
@@ -63,8 +63,9 @@ def test_dry_run_reports_exact_qwen_urls_and_never_opens_network(monkeypatch, tm
 
     output = capsys.readouterr().out
     for category in ("dress", "shirt", "toptee"):
-        assert f"https://huggingface.co/peng12138/CSMCIR/resolve/main/fashioniq_qwen_captions/qwen_captions/{category}_cot_val.json" in output
+        assert f"https://huggingface.co/peng12138/CSMCIR/resolve/cf0c19bb346266c295b4b5772ebf03bd1c4f0467/fashioniq_qwen_captions/qwen_captions/{category}_cot_val.json" in output
         assert str(config.FASHIONIQ_ROOT / "qwen_captions" / f"{category}_cot_val.json") in output
+    assert "required asset has no verified automatic acquisition source" in output
     assert "no network request" in output
 
 
@@ -150,3 +151,12 @@ def test_verify_only_blocks_for_missing_cot_without_network(monkeypatch, tmp_pat
     monkeypatch.setattr(module.urllib.request, "urlopen", lambda _: (_ for _ in ()).throw(AssertionError("network used")))
 
     assert module.main(["--model", "csmcir", "--verify-only"]) == 1
+
+
+def test_all_selects_only_registered_auxiliary_models(monkeypatch, tmp_path: Path) -> None:
+    module = load_module()
+    config = config_at(tmp_path)
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
+    monkeypatch.setattr(module.urllib.request, "urlopen", lambda _: (_ for _ in ()).throw(AssertionError("network used")))
+
+    assert module.main(["--all", "--dry-run"]) == 0

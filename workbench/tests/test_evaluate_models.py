@@ -97,6 +97,28 @@ def test_csmcir_dry_run_constructs_official_command(monkeypatch, tmp_path: Path,
     assert "[RUN] command:" in capsys.readouterr().out
 
 
+def test_csmcir_main_accepts_link_and_explicit_canonical_root(monkeypatch, tmp_path: Path) -> None:
+    module = load_module()
+    model = records()["csmcir"]
+    source, checkpoint_file, settings = prepare_source(monkeypatch, module, tmp_path, model)
+    canonical = tmp_path / "custom-FashionIQ"
+    canonical.mkdir()
+    layout = source / "fashionIQ_dataset"
+    layout.symlink_to(canonical, target_is_directory=True)
+    for path in (layout / "captions", layout / "image_splits", layout / "images", source / "COT_ours2" / "fashioniq", layout / "qwen_captions"):
+        path.mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        (source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json").write_text("")
+        (layout / "qwen_captions" / f"{category}_cot_val.json").write_text("")
+    script = source / "src" / "validate_blip_csmcir.py"
+    script.parent.mkdir()
+    script.write_text("")
+    import workbench.backend.adapters.models as adapters
+
+    monkeypatch.setattr(adapters, "checkpoint_path", lambda *_: checkpoint_file)
+    assert module.main(["--model", "csmcir", "--checkpoint", "fashioniq", "--dataset-root", str(layout), "--canonical-dataset-root", str(canonical), "--dry-run"]) == 0
+
+
 def test_encoder_requires_external_openclip_asset(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
     model = records()["encoder"]
