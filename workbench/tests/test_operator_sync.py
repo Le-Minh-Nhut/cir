@@ -4,6 +4,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+from types import SimpleNamespace
+
 import pytest
 
 
@@ -63,6 +65,33 @@ def test_verify_only_never_calls_network(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
     assert all("fetch" not in command and "clone" not in command and "checkout" not in command for command in calls)
     assert "[WARN] demo: local SHA" in capsys.readouterr().out
+
+
+def test_list_uses_configured_source_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    sync = load_sync_module()
+    root = tmp_path / "configured-third-party"
+    inspected: list[Path] = []
+    monkeypatch.setattr(sync, "load_registry", lambda: {"models": [model()]})
+    monkeypatch.setattr(sync, "resolve_config", lambda: SimpleNamespace(WORKBENCH_THIRD_PARTY_ROOT=root))
+    monkeypatch.setattr(sync, "local_state", lambda path: inspected.append(path) or ("missing", None, None))
+    monkeypatch.setattr(sys, "argv", ["sync_upstreams.py", "--list"])
+
+    sync.main()
+
+    output = capsys.readouterr().out
+    assert inspected == [root / "Demo"]
+    assert "local=missing" in output
+    assert "[INFO] demo: pinned SHA unavailable locally" in output
+
+
+def test_verify_only_fails_missing_clone(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    sync = load_sync_module()
+    monkeypatch.setattr(sync, "load_registry", lambda: {"models": [model()]})
+    monkeypatch.setattr(sync, "resolve_config", lambda: SimpleNamespace(WORKBENCH_THIRD_PARTY_ROOT=tmp_path))
+    monkeypatch.setattr(sys, "argv", ["sync_upstreams.py", "--model", "demo", "--verify-only"])
+
+    with pytest.raises(SystemExit, match="1"):
+        sync.main()
 
 
 @pytest.mark.parametrize("arguments", [("--list",), ("--all", "--dry-run"), ("--all", "--verify-only")])

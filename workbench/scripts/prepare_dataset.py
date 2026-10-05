@@ -9,10 +9,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from workbench.backend.registry import ROOT
+from workbench.backend.operator_config import resolve_config
 
 CATEGORIES = ("dress", "shirt", "toptee")
-CSMCIR_ROOT = ROOT / "third_party" / "CSMCIR"
 
 
 def required_layout(root: Path) -> tuple[Path, ...]:
@@ -31,28 +30,24 @@ def validate_fashioniq(root: Path) -> list[str]:
     return [f"required path missing: {path}" for path in required_layout(root) if not (path.is_dir() if path.suffix == "" else path.is_file())]
 
 
-def csmcir_auxiliary_files(source: Path) -> tuple[Path, ...]:
-    return tuple(
-        path
-        for category in CATEGORIES
-        for path in (
-            source / "qwen_captions" / f"{category}_cot_val.json",
-            source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json",
-        )
-    )
+def csmcir_qwen_files(root: Path) -> tuple[Path, ...]:
+    return tuple(root / "qwen_captions" / f"{category}_cot_val.json" for category in CATEGORIES)
 
 
-def prepare_csmcir(root: Path, *, check_only: bool, dry_run: bool) -> bool:
-    source = CSMCIR_ROOT
+def csmcir_cot_files(source: Path) -> tuple[Path, ...]:
+    return tuple(source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json" for category in CATEGORIES)
+
+
+def prepare_csmcir(root: Path, source: Path, *, check_only: bool, dry_run: bool) -> bool:
     destination = source / "fashionIQ_dataset"
     if not source.is_dir():
         print(f"[BLOCKED] CSMCIR source missing: {source}")
         return False
 
-    missing = [path for path in csmcir_auxiliary_files(source) if not path.is_file()]
+    missing = [path for path in csmcir_qwen_files(root) + csmcir_cot_files(source) if not path.is_file()]
     if missing:
         for path in missing:
-            print(f"[BLOCKED] CSMCIR auxiliary file missing: {path}")
+            print(f"[BLOCKED] CSMCIR evaluation asset missing: {path}")
         return False
 
     if destination.is_symlink():
@@ -82,7 +77,7 @@ def prepare_csmcir(root: Path, *, check_only: bool, dry_run: bool) -> bool:
 
 def parser_for() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset-root", required=True, type=Path, help="canonical FashionIQ dataset root")
+    parser.add_argument("--dataset-root", type=Path, help="canonical FashionIQ dataset root; defaults to configured FASHIONIQ_ROOT")
     parser.add_argument("--check-only", action="store_true", help="validate only; never create a link")
     parser.add_argument("--model", help="prepare fixed layout only for csmcir")
     parser.add_argument("--dry-run", action="store_true", help="show link creation without changing files")
@@ -91,20 +86,23 @@ def parser_for() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = parser_for().parse_args(argv)
+    config = resolve_config()
+    dataset_root = args.dataset_root or config.FASHIONIQ_ROOT
     try:
-        root = args.dataset_root.expanduser().resolve()
+        root = dataset_root.expanduser().resolve()
     except (OSError, RuntimeError) as error:
-        print(f"[BLOCKED] dataset root cannot resolve: {args.dataset_root}: {error}")
+        print(f"[BLOCKED] dataset root cannot resolve: {dataset_root}: {error}")
         return 1
     missing = validate_fashioniq(root)
     if missing:
         for message in missing:
             print(f"[BLOCKED] {message}")
         return 1
-    print(f"[OK] FashionIQ layout valid: {root}")
+    print(f"[OK] FashionIQ base layout valid: {root}")
 
     if args.model == "csmcir":
-        return 0 if prepare_csmcir(root, check_only=args.check_only, dry_run=args.dry_run) else 1
+        source = config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR"
+        return 0 if prepare_csmcir(root, source, check_only=args.check_only, dry_run=args.dry_run) else 1
     if args.model:
         print(f"[WARN] {args.model}: layout preparation not verified")
     else:

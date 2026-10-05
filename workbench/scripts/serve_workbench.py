@@ -12,6 +12,10 @@ import sys
 import time
 import webbrowser
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from workbench.backend.operator_config import WorkbenchConfig, resolve_config
+
 from typing import NamedTuple
 
 WORKBENCH_ROOT = Path(__file__).resolve().parents[1]
@@ -91,14 +95,14 @@ def stop_children(children: list[subprocess.Popen[object]]) -> None:
             child.wait()
 
 
-def parser() -> argparse.ArgumentParser:
+def parser(config: WorkbenchConfig) -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     mode = result.add_mutually_exclusive_group()
     mode.add_argument("--backend-only", action="store_true")
     mode.add_argument("--frontend-only", action="store_true")
-    result.add_argument("--host", default="127.0.0.1")
-    result.add_argument("--backend-port", type=port_number, default=8000)
-    result.add_argument("--frontend-port", type=port_number, default=5173)
+    result.add_argument("--host", default=config.WORKBENCH_HOST)
+    result.add_argument("--backend-port", type=port_number, default=config.WORKBENCH_BACKEND_PORT)
+    result.add_argument("--frontend-port", type=port_number, default=config.WORKBENCH_FRONTEND_PORT)
     result.add_argument("--open-browser", action="store_true")
     result.add_argument("--production-frontend", action="store_true")
     result.add_argument("--dry-run", action="store_true")
@@ -106,7 +110,7 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None, root: Path = WORKBENCH_ROOT) -> int:
-    args = parser().parse_args(argv)
+    args = parser(resolve_config()).parse_args(argv)
     backend = not args.frontend_only
     frontend = not args.backend_only
     if args.production_frontend and not frontend:
@@ -137,7 +141,8 @@ def main(argv: list[str] | None = None, root: Path = WORKBENCH_ROOT) -> int:
     children: list[subprocess.Popen[object]] = []
     try:
         for command in commands:
-            children.append(subprocess.Popen(command.argv, cwd=command.cwd, start_new_session=True))
+            environment = os.environ | ({"WORKBENCH_BACKEND_URL": f"http://127.0.0.1:{args.backend_port}"} if command.name == "frontend" else {})
+            children.append(subprocess.Popen(command.argv, cwd=command.cwd, env=environment, start_new_session=True))
             print(f"[OK] started {command.name}")
         if args.open_browser:
             url = f"http://{args.host}:{args.frontend_port if frontend else args.backend_port}"

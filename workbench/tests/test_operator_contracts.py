@@ -31,14 +31,14 @@ def test_doctor_selected_model_json_contract(monkeypatch: pytest.MonkeyPatch, ca
     }
     selected: dict[str, object] = {}
 
-    def collect(*, model_id: str | None = None, all_models: bool = False) -> dict:
-        selected.update(model_id=model_id, all_models=all_models)
+    def collect(*, model_id: str | None = None, all_models: bool = False, scope: str = "workbench", serving: bool = False) -> dict:
+        selected.update(model_id=model_id, all_models=all_models, scope=scope, serving=serving)
         return report
 
     monkeypatch.setattr(doctor, "collect", collect)
 
     assert doctor.main(["--model", "encoder", "--json"]) == 2
-    assert selected == {"model_id": "encoder", "all_models": False}
+    assert selected == {"model_id": "encoder", "all_models": False, "scope": "workbench", "serving": False}
     assert json.loads(capsys.readouterr().out) == report
 
 
@@ -96,8 +96,7 @@ def test_sync_dry_run_and_verify_only_output_contract(monkeypatch: pytest.Monkey
 @pytest.mark.parametrize("arguments, expected", [(["--list", "--dry-run"], 0), (["--all-runnable", "--dry-run"], 1)])
 def test_evaluation_listing_and_dry_run_never_execute_models(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, arguments: list[str], expected: int) -> None:
     evaluate = load_script("evaluate_models")
-    monkeypatch.setattr(evaluate, "ROOT", tmp_path)
-    monkeypatch.setattr(evaluate, "CHECKPOINT_ROOT", tmp_path / "checkpoints")
+    monkeypatch.setattr(evaluate, "pinned_revision", lambda _: None)
     monkeypatch.setattr(evaluate.subprocess, "run", lambda *args, **kwargs: pytest.fail("model command must not run"))
 
     assert evaluate.main(arguments) == expected

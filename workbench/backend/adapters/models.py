@@ -8,8 +8,15 @@ class OfficialScriptAdapter(ModelAdapter):
     script: str
 
     def build_command(self, request: EvalRequest) -> list[str]:
+        from workbench.backend.operator_config import resolve_config
+
         checkpoint = self.validate_request(request)
-        return self.command(ROOT / "third_party" / self.model["source_dir"], checkpoint, request)
+        config = resolve_config()
+        return self.command(
+            config.WORKBENCH_THIRD_PARTY_ROOT / self.model["source_dir"],
+            checkpoint_path(self.model_id, checkpoint, config.WORKBENCH_CHECKPOINT_ROOT),
+            request,
+        )
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         raise NotImplementedError("upstream evaluation command requires audit before execution")
@@ -20,7 +27,7 @@ class CSMCIRAdapter(OfficialScriptAdapter):
     script = "src/validate_blip_csmcir.py"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        return ["python", str(source / self.script), "--dataset", "fashionIQ", "--blip-model-path", str(checkpoint_path(self.model_id, checkpoint))]
+        return ["python", str(source / self.script), "--dataset", "fashionIQ", "--blip-model-path", str(checkpoint)]
 
 
 class EncoderAdapter(OfficialScriptAdapter):
@@ -28,7 +35,7 @@ class EncoderAdapter(OfficialScriptAdapter):
     script = "evaluate_model.py"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        return ["python", str(source / self.script), "--dataset", "fashioniq", "--fashioniq_split", "val-split", "--fashioniq_path", str(request.dataset_root), "--ckpt_path", str(checkpoint_path(self.model_id, checkpoint))]
+        return ["python", str(source / self.script), "--dataset", "fashioniq", "--fashioniq_split", "val-split", "--fashioniq_path", str(request.dataset_root), "--ckpt_path", str(checkpoint)]
 
 
 class HintAdapter(OfficialScriptAdapter):

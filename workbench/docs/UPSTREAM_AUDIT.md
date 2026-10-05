@@ -18,16 +18,11 @@ Audit date: 2026-10-05. This is source/checkpoint evidence, not reproduction evi
 
 CSMCIR uses the complete ordered FashionIQ validation split gallery and leaves reference eligible. ENCODER/PAIR default `val-split` uses first-seen validation reference/target union and removes reference before recall. HINT uses the same union/reference-removal behavior. Local protocol mapping is documented in [PROTOCOL_AUDIT.md](PROTOCOL_AUDIT.md).
 
-## CSMCIR limitations
+## CSMCIR validation requirements
 
-CSMCIR's official evaluator has no ordinary dataset-root CLI. It is fixed-root/cwd-sensitive: guarded execution runs from upstream `src`, requires a source-root `fashionIQ_dataset` link to canonical FashionIQ, plus upstream `COT_ours2/bert_captions/fashioniq/` and all category-specific auxiliary files:
+Pinned local `CSMCIR@774f94e2076ff17ea91703a6239d2a08f0e1a44e` dispatches `validate_blip_csmcir.py:main` to `blip_validate_fashioniq`. That function builds `FashionIQDataset('val', [category], 'relative'/'classic')` for `dress`, `toptee`, and `shirt`. `data_utils_csmcir.py:FashionIQDataset` reads the canonical `fashionIQ_dataset` base layout and `<FASHIONIQ_ROOT>/qwen_captions/{dress,shirt,toptee}_cot_val.json` through that link. Its `extract_index_blip_caption_features` call (`validate_blip_csmcir.py:612`; `utils_csmcir.py:97-103`) also reads source-root `COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json`.
 
-```text
-qwen_captions/{dress,shirt,toptee}_cot_val.json
-COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json
-```
-
-`prepare_dataset.py --model csmcir` validates canonical layout and prepares/checks the dataset link and auxiliary JSON files; it does not fabricate any asset. The official evaluator emits aggregate metrics only. It cannot itself create per-query schema-v2 results. Future observation-only ranking export remains separate from, and must follow, proven official aggregate-metric parity.
+Official validation is fixed-root/cwd-sensitive and has no ordinary dataset-root CLI. `prepare_dataset.py --model csmcir` validates the base FashionIQ layout, the three dataset-root Qwen files, the three source-root COT files, and safely creates/checks `<third-party-root>/CSMCIR/fashionIQ_dataset -> <FASHIONIQ_ROOT>`. It does not fabricate assets. The evaluator emits aggregate metrics only; it cannot create per-query schema-v2 results. Future observation-only ranking export remains separate and must follow proven official aggregate-metric parity.
 
 ## ENCODER limitations
 

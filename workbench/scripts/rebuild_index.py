@@ -7,13 +7,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from workbench.backend.index import DATABASE_PATH, RESULTS_ROOT, rebuild_index
+from workbench.backend.index import DATABASE_PATH, rebuild_index
+from workbench.backend.operator_config import resolve_config
 from workbench.scripts.validate_results import validate_root
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--results-root", type=Path, default=RESULTS_ROOT)
+    parser.add_argument("--results-root", type=Path, default=resolve_config().WORKBENCH_RESULTS_ROOT)
     parser.add_argument("--database", type=Path, default=DATABASE_PATH)
     parser.add_argument("--check-only", action="store_true", help="Check result artifacts without creating an index.")
     parser.add_argument("--validate-first", action="store_true", help="Validate result artifacts before rebuilding.")

@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+from workbench.backend.operator_config import WorkbenchConfig
+
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "prepare_dataset.py"
 
@@ -28,15 +30,23 @@ def fashioniq_root(tmp_path: Path) -> Path:
     return root
 
 
-def csmcir_source(tmp_path: Path) -> Path:
-    source = tmp_path / "CSMCIR"
+def csmcir_qwen(root: Path) -> None:
     for category in ("dress", "shirt", "toptee"):
-        for path in (
-            source / "qwen_captions" / f"{category}_cot_val.json",
-            source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json",
-        ):
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("[]")
+        path = root / "qwen_captions" / f"{category}_cot_val.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("[]")
+
+
+def config(tmp_path: Path, root: Path) -> WorkbenchConfig:
+    return WorkbenchConfig(tmp_path, tmp_path / "data", root, "127.0.0.1", 8000, 5173, tmp_path / "checkpoints", tmp_path / "results", tmp_path / "third_party")
+
+
+def csmcir_source(tmp_path: Path) -> Path:
+    source = tmp_path / "third_party" / "CSMCIR"
+    for category in ("dress", "shirt", "toptee"):
+        path = source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("[]")
     return source
 
 
@@ -45,7 +55,7 @@ def test_valid_layout_without_model_only_checks(tmp_path: Path, capsys) -> None:
     root = fashioniq_root(tmp_path)
 
     assert module.main(["--dataset-root", str(root)]) == 0
-    assert "[OK] FashionIQ layout valid" in capsys.readouterr().out
+    assert "[OK] FashionIQ base layout valid" in capsys.readouterr().out
 
 
 def test_missing_fashioniq_validation_file_blocks(tmp_path: Path, capsys) -> None:
@@ -57,11 +67,22 @@ def test_missing_fashioniq_validation_file_blocks(tmp_path: Path, capsys) -> Non
     assert "[BLOCKED] required path missing" in capsys.readouterr().out
 
 
+def test_dataset_root_cli_overrides_config(monkeypatch, tmp_path: Path, capsys) -> None:
+    module = load_module()
+    root = fashioniq_root(tmp_path)
+    configured_root = tmp_path / "configured-FashionIQ"
+    monkeypatch.setattr(module, "resolve_config", lambda: config(tmp_path, configured_root))
+
+    assert module.main(["--dataset-root", str(root)]) == 0
+    assert str(root) in capsys.readouterr().out
+
+
 def test_csmcir_dry_run_does_not_create_link(monkeypatch, tmp_path: Path, capsys) -> None:
     module = load_module()
     root = fashioniq_root(tmp_path)
+    csmcir_qwen(root)
     source = csmcir_source(tmp_path)
-    monkeypatch.setattr(module, "CSMCIR_ROOT", source)
+    monkeypatch.setattr(module, "resolve_config", lambda: config(tmp_path, root))
 
     assert module.main(["--dataset-root", str(root), "--model", "csmcir", "--dry-run"]) == 0
     assert not (source / "fashionIQ_dataset").exists()
@@ -71,8 +92,9 @@ def test_csmcir_dry_run_does_not_create_link(monkeypatch, tmp_path: Path, capsys
 def test_csmcir_creates_safe_canonical_link(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
     root = fashioniq_root(tmp_path)
+    csmcir_qwen(root)
     source = csmcir_source(tmp_path)
-    monkeypatch.setattr(module, "CSMCIR_ROOT", source)
+    monkeypatch.setattr(module, "resolve_config", lambda: config(tmp_path, root))
 
     assert module.main(["--dataset-root", str(root), "--model", "csmcir"]) == 0
     destination = source / "fashionIQ_dataset"
@@ -80,24 +102,40 @@ def test_csmcir_creates_safe_canonical_link(monkeypatch, tmp_path: Path) -> None
     assert destination.resolve() == root.resolve()
 
 
-def test_csmcir_refuses_conflicting_destination(monkeypatch, tmp_path: Path, capsys) -> None:
+def test_csmcir_requires_each_qwen_file(monkeypatch, tmp_path: Path, capsys) -> None:
     module = load_module()
     root = fashioniq_root(tmp_path)
-    source = csmcir_source(tmp_path)
-    (source / "fashionIQ_dataset").mkdir()
-    monkeypatch.setattr(module, "CSMCIR_ROOT", source)
+    csmcir_qwen(root)
+    missing = root / "qwen_captions" / "dress_cot_val.json"
+    missing.unlink()
+    csmcir_source(tmp_path)
+    monkeypatch.setattr(module, "resolve_config", lambda: config(tmp_path, root))
 
     assert module.main(["--dataset-root", str(root), "--model", "csmcir"]) == 1
-    assert "[BLOCKED] CSMCIR dataset destination already exists" in capsys.readouterr().out
+    assert str(missing) in capsys.readouterr().out
+
+
+def test_csmcir_requires_each_cot_file(monkeypatch, tmp_path: Path, capsys) -> None:
+    module = load_module()
+    root = fashioniq_root(tmp_path)
+    csmcir_qwen(root)
+    source = csmcir_source(tmp_path)
+    missing = source / "COT_ours2" / "fashioniq" / "dress_cot_val.json"
+    missing.unlink()
+    monkeypatch.setattr(module, "resolve_config", lambda: config(tmp_path, root))
+
+    assert module.main(["--dataset-root", str(root), "--model", "csmcir"]) == 1
+    assert str(missing) in capsys.readouterr().out
 
 
 def test_csmcir_refuses_different_dataset_link(monkeypatch, tmp_path: Path, capsys) -> None:
     module = load_module()
     root = fashioniq_root(tmp_path)
+    csmcir_qwen(root)
     other = fashioniq_root(tmp_path / "other")
     source = csmcir_source(tmp_path)
     (source / "fashionIQ_dataset").symlink_to(other, target_is_directory=True)
-    monkeypatch.setattr(module, "CSMCIR_ROOT", source)
+    monkeypatch.setattr(module, "resolve_config", lambda: config(tmp_path, root))
 
     assert module.main(["--dataset-root", str(root), "--model", "csmcir"]) == 1
     assert "[BLOCKED] CSMCIR dataset link resolves to" in capsys.readouterr().out

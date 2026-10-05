@@ -9,7 +9,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from workbench.backend.registry import ROOT, load_registry
+from workbench.backend.operator_config import resolve_config
+
+from workbench.backend.registry import load_registry
 
 
 def git_output(destination: Path, *command: str) -> str | None:
@@ -47,8 +49,10 @@ def main() -> None:
     parser.add_argument("--update-existing", action="store_true", help="allow clean existing repositories to checkout pin")
     parser.add_argument("--dry-run", action="store_true", help="report planned operations without Git calls or changes")
     parser.add_argument("--verify-only", action="store_true", help="report local pin state without network or changes")
-    parser.add_argument("--output-root", type=Path, default=ROOT / "third_party")
+    parser.add_argument("--output-root", type=Path)
     args = parser.parse_args()
+    if args.output_root is None:
+        args.output_root = resolve_config().WORKBENCH_THIRD_PARTY_ROOT
     if args.verify_only and args.fetch:
         parser.error("--verify-only cannot be used with --fetch")
     models = load_registry()["models"]
@@ -70,6 +74,14 @@ def main() -> None:
             state, head, dirty = local_state(destination)
         report(model, state, head)
         pin = model["upstream_commit_sha"]
+        if args.list:
+            if head == pin:
+                print(f"[OK] {model['model_id']}: pinned SHA present")
+            elif head is None:
+                print(f"[INFO] {model['model_id']}: pinned SHA unavailable locally")
+            elif head != pin:
+                print(f"[INFO] {model['model_id']}: local SHA differs from pinned")
+            continue
         if head is not None and head != pin:
             print(f"[WARN] {model['model_id']}: local SHA {head} differs from pinned {pin}")
             failed = args.verify_only or failed
@@ -77,7 +89,7 @@ def main() -> None:
             print(f"[BLOCKED] {model['model_id']}: repository is dirty; refusing to change it")
             failed = True
             continue
-        if args.list or args.verify_only:
+        if args.verify_only:
             if head == pin:
                 print(f"[OK] {model['model_id']}: pinned SHA present")
             elif head is None:

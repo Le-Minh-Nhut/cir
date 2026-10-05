@@ -42,8 +42,10 @@ def checkpoint_by_id(model: dict[str, Any], checkpoint_id: str) -> dict[str, Any
     raise KeyError(checkpoint_id)
 
 
-def checkpoint_path(model_id: str, checkpoint: dict[str, Any], root: Path = CHECKPOINT_ROOT) -> Path:
-    return root / model_id / checkpoint["filename"]
+def checkpoint_path(model_id: str, checkpoint: dict[str, Any], root: Path | None = None) -> Path:
+    from workbench.backend.operator_config import resolve_config
+
+    return (root or resolve_config().WORKBENCH_CHECKPOINT_ROOT) / model_id / checkpoint["filename"]
 
 
 def sha256_file(path: Path) -> str:
@@ -55,13 +57,16 @@ def sha256_file(path: Path) -> str:
 
 
 def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -> dict[str, Any]:
-    path = checkpoint_path(model["model_id"], checkpoint, CHECKPOINT_ROOT)
+    from workbench.backend.operator_config import resolve_config
+
+    config = resolve_config()
+    path = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
     downloaded = path.is_file()
     local_sha = sha256_file(path) if downloaded else None
     official_sha = checkpoint.get("expected_sha256")
     official_sha_match = local_sha == official_sha if downloaded and official_sha else None
     mapping_verified = checkpoint["checkpoint_mapping_status"] not in {"UNVERIFIED"}
-    source_synced = bool(model.get("source_dir")) and (ROOT / "third_party" / model["source_dir"]).is_dir()
+    source_synced = bool(model.get("source_dir")) and (config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]).is_dir()
     adapter_command_ready = mapping_verified and model["model_id"] in {"csmcir", "encoder"}
     runtime_verified = model.get("reproduction_status") == "VERIFIED"
     runnable = downloaded and source_synced and mapping_verified and (official_sha is None or official_sha_match is True) and adapter_command_ready
@@ -74,4 +79,4 @@ def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -
         blocking_reasons.append("official_hash_mismatch")
     if not adapter_command_ready:
         blocking_reasons.append("adapter_command_unverified")
-    return {"checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_metadata": checkpoint["status"] != "BLOCKED", "source_synced_locally": source_synced, "automatic_download_available": checkpoint.get("download_url") is not None, "checkpoint_downloaded": downloaded, "local_sha256": local_sha, "official_sha256_known": official_sha is not None, "official_sha256_match": official_sha_match, "mapping_verified": mapping_verified, "adapter_command_ready": adapter_command_ready, "runtime_verified": runtime_verified, "runnable": runnable, "checkpoint_path": str(path), "blocking_reasons": blocking_reasons}
+    return {"checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_metadata": checkpoint["status"] != "BLOCKED", "source_root": str(config.WORKBENCH_THIRD_PARTY_ROOT), "checkpoint_root": str(config.WORKBENCH_CHECKPOINT_ROOT), "source_synced_locally": source_synced, "automatic_download_available": checkpoint.get("download_url") is not None, "checkpoint_downloaded": downloaded, "local_sha256": local_sha, "official_sha256_known": official_sha is not None, "official_sha256_match": official_sha_match, "mapping_verified": mapping_verified, "adapter_command_ready": adapter_command_ready, "runtime_verified": runtime_verified, "runnable": runnable, "checkpoint_path": str(path), "blocking_reasons": blocking_reasons}

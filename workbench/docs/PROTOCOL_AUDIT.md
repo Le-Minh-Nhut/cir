@@ -12,9 +12,7 @@
 - Recall: target occurs within the first K descending-score results.
 - Aggregate: macro category R@10/R@50; mean is their arithmetic mean.
 
-Evidence: local `src/evaluation/fashioniq.py` loads `split.{category}.val.json`, ranks complete score rows, and directly checks target positions. CSMCIR `src/validate_blip_csmcir.py` extracts validation index features from the split list and computes target labels without reference removal.
-
-CSMCIR's official evaluator is fixed-root/cwd-sensitive, accepts no ordinary dataset-root CLI, requires source-root `fashionIQ_dataset` and qwen/COT auxiliary caption files, and emits aggregate metrics only. This describes official phase behavior; it does not establish a per-query export or local reproduction. Any future observation-only ranking export must follow verified aggregate-metric parity without changing evaluation semantics.
+Evidence: `validate_blip_csmcir.py:blip_validate_fashioniq` creates per-category validation `FashionIQDataset` instances in `relative` and `classic` modes. `FashionIQDataset` reads `fashionIQ_dataset/captions`, `image_splits`, and `images`, plus linked dataset-root `qwen_captions/{dress,shirt,toptee}_cot_val.json`. The direct index call at `validate_blip_csmcir.py:612` reaches `utils_csmcir.py:extract_index_blip_caption_features`, which reads source-root `COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json`. The evaluator accepts no ordinary dataset-root CLI; preparation maintains the fixed source-root link. It emits aggregate metrics only and does not establish a per-query export or local reproduction.
 
 ## `fashioniq_val_split` — FashionIQ Val Split
 

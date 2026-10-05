@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
+
+from workbench.backend.operator_config import WorkbenchConfig
 from workbench.backend.registry import load_registry
 
 
@@ -16,22 +19,24 @@ def load_module():
     return module
 
 
+
+def config(tmp_path: Path) -> WorkbenchConfig:
+    return WorkbenchConfig(tmp_path, tmp_path / "data", tmp_path / "FashionIQ", "127.0.0.1", 8000, 5173, tmp_path / "checkpoints", tmp_path / "results", tmp_path / "third_party")
 def records():
     return {model["model_id"]: model for model in load_registry()["models"]}
 
 
-def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Path, Path, Path]:
-    source = tmp_path / "third_party" / model["source_dir"]
+def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Path, Path, WorkbenchConfig]:
+    settings = config(tmp_path)
+    source = settings.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
     source.mkdir(parents=True)
-    checkpoint_root = tmp_path / "checkpoints"
     checkpoint = model["checkpoint_variants"][0]
-    checkpoint_file = checkpoint_root / model["model_id"] / checkpoint["filename"]
+    checkpoint_file = settings.WORKBENCH_CHECKPOINT_ROOT / model["model_id"] / checkpoint["filename"]
     checkpoint_file.parent.mkdir(parents=True)
     checkpoint_file.write_bytes(b"checkpoint")
-    monkeypatch.setattr(module, "ROOT", tmp_path)
-    monkeypatch.setattr(module, "CHECKPOINT_ROOT", checkpoint_root)
+    monkeypatch.setattr(module, "resolve_config", lambda: settings)
     monkeypatch.setattr(module, "pinned_revision", lambda _: model["upstream_commit_sha"])
-    return source, checkpoint_file, checkpoint_root
+    return source, checkpoint_file, settings
 
 
 def test_unaudited_adapter_is_skipped() -> None:
@@ -45,13 +50,13 @@ def test_unaudited_adapter_is_skipped() -> None:
 def test_missing_checkpoint_is_blocked(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
     model = records()["csmcir"]
-    source = tmp_path / "third_party" / model["source_dir"]
+    settings = config(tmp_path)
+    source = settings.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
     (source / "fashionIQ_dataset").mkdir(parents=True)
-    monkeypatch.setattr(module, "ROOT", tmp_path)
-    monkeypatch.setattr(module, "CHECKPOINT_ROOT", tmp_path / "checkpoints")
+    monkeypatch.setattr(module, "resolve_config", lambda: settings)
     monkeypatch.setattr(module, "pinned_revision", lambda _: model["upstream_commit_sha"])
 
-    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], source / "fashionIQ_dataset", 200)
+    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], source / "fashionIQ_dataset", 200, settings)
 
     assert plan is None
     assert any(reason.startswith("checkpoint missing:") for reason in reasons)
@@ -60,23 +65,25 @@ def test_missing_checkpoint_is_blocked(monkeypatch, tmp_path: Path) -> None:
 def test_csmcir_dry_run_constructs_official_command(monkeypatch, tmp_path: Path, capsys) -> None:
     module = load_module()
     model = records()["csmcir"]
-    source, checkpoint_file, _ = prepare_source(monkeypatch, module, tmp_path, model)
+    source, checkpoint_file, settings = prepare_source(monkeypatch, module, tmp_path, model)
+    settings.FASHIONIQ_ROOT.mkdir()
     dataset_root = source / "fashionIQ_dataset"
+    dataset_root.symlink_to(settings.FASHIONIQ_ROOT, target_is_directory=True)
     for path in (
         dataset_root / "captions", dataset_root / "image_splits", dataset_root / "images",
-        source / "COT_ours2" / "bert_captions" / "fashioniq", source / "COT_ours2" / "fashioniq",
+        source / "COT_ours2" / "fashioniq", dataset_root / "qwen_captions",
     ):
         path.mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        (source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json").write_text("")
+        (dataset_root / "qwen_captions" / f"{category}_cot_val.json").write_text("")
     script = source / "src" / "validate_blip_csmcir.py"
     script.parent.mkdir()
     script.write_text("")
-    import workbench.backend.adapters.base as base
     import workbench.backend.adapters.models as adapters
 
-    monkeypatch.setattr(base, "checkpoint_path", lambda *_: checkpoint_file)
-    monkeypatch.setattr(adapters, "ROOT", tmp_path)
     monkeypatch.setattr(adapters, "checkpoint_path", lambda *_: checkpoint_file)
-    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
+    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200, settings)
     result = module.main([
         "--model", "csmcir", "--checkpoint", "fashioniq", "--protocol", model["native_protocol"],
         "--dataset-root", str(dataset_root), "--dry-run",
@@ -102,3 +109,53 @@ def test_encoder_requires_external_openclip_asset(monkeypatch, tmp_path: Path) -
 
     assert plan is None
     assert reasons == [f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}"]
+
+
+def test_execute_writes_reproducible_logs(monkeypatch, tmp_path: Path) -> None:
+    module = load_module()
+    settings = config(tmp_path)
+    checkpoint = tmp_path / "checkpoint.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    plan = module.EvaluationPlan(
+        "demo",
+        "checkpoint",
+        "fashioniq_original_split",
+        tmp_path / "FashionIQ",
+        tmp_path / "source",
+        checkpoint,
+        tmp_path,
+        ["official", "--eval"],
+        "a" * 40,
+        "a" * 40,
+    )
+
+    class Stream:
+        def __iter__(self):
+            return iter(("line\n",))
+
+    class Process:
+        stdout = Stream()
+        stderr = Stream()
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(module.subprocess, "Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr(module, "log_dir", lambda config, plan, timestamp: tmp_path / "logs" / "attempt")
+
+    assert module.execute(plan, settings) == 0
+    directory = tmp_path / "logs" / "attempt"
+    assert (directory / "stdout.log").read_text() == "line\n"
+    assert (directory / "stderr.log").read_text() == "line\n"
+    metadata = json.loads((directory / "command.json").read_text())
+    assert metadata["model_id"] == "demo"
+    assert metadata["checkpoint_id"] == "checkpoint"
+    assert metadata["protocol_id"] == "fashioniq_original_split"
+    assert metadata["argv"] == ["official", "--eval"]
+    assert metadata["cwd"] == str(tmp_path)
+    assert metadata["upstream_expected_pin"] == "a" * 40
+    assert metadata["actual_source_commit"] == "a" * 40
+    assert metadata["checkpoint_local_sha256"]
+    assert metadata["started_at"] and metadata["finished_at"]
+    assert metadata["return_code"] == 0
+    assert metadata["dataset_root"] == str(tmp_path / "FashionIQ")

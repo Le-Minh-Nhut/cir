@@ -15,7 +15,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from workbench.backend.registry import CHECKPOINT_ROOT, checkpoint_path, load_registry, sha256_file
+from workbench.backend.operator_config import resolve_config
+from workbench.backend.registry import checkpoint_path, load_registry, sha256_file
 
 
 def selected(args: argparse.Namespace, models: list[dict]) -> list[tuple[dict, dict]]:
@@ -111,7 +112,7 @@ def download(url: str, partial: Path) -> None:
         raise RuntimeError(f"unexpected HTTP status {status} for checkpoint download")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--list", action="store_true", help="list registry checkpoint records")
@@ -121,8 +122,9 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="print planned operations; never access network")
     parser.add_argument("--verify-only", action="store_true", help="verify local files only; never access network")
     parser.add_argument("--force-redownload", action="store_true", help="replace existing local file after explicit request")
-    parser.add_argument("--output-root", type=Path, default=CHECKPOINT_ROOT)
-    args = parser.parse_args()
+    parser.add_argument("--output-root", type=Path, help="checkpoint destination; defaults to resolved config")
+    args = parser.parse_args(argv)
+    args.output_root = args.output_root or resolve_config().WORKBENCH_CHECKPOINT_ROOT
     try:
         items = selected(args, load_registry()["models"])
     except ValueError as error:

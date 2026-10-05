@@ -59,7 +59,7 @@ Known upstream guidance is recorded in [envs/README.md](envs/README.md), not val
 
 ## Local configuration
 
-Copy `workbench/config/workbench.env.example` to ignored `workbench/config/workbench.env`, then set only needed `KEY=VALUE` entries. Process environment values override file values. Relative paths resolve against `CIR_REPO_ROOT`.
+Copy `workbench/config/workbench.env.example` to ignored `workbench/config/workbench.env`, then set only needed `KEY=VALUE` entries. Precedence is explicit CLI option, process environment, `workbench/config/workbench.env`, then built-in default. Relative paths resolve against `CIR_REPO_ROOT`.
 
 ```dotenv
 CIR_REPO_ROOT=
@@ -73,20 +73,20 @@ WORKBENCH_RESULTS_ROOT=workbench/artifacts/results
 WORKBENCH_THIRD_PARTY_ROOT=workbench/third_party
 ```
 
-`doctor.py` resolves and reports this configuration; scripts with explicit root options use their passed paths. Do not put secrets in this file.
+All listed roots are operational: `CIR_DATA_ROOT` supplies the default `FASHIONIQ_ROOT`; the checkpoint, result, and third-party roots select their corresponding local stores. `doctor.py` resolves and reports this configuration; scripts with explicit root options use their passed paths. Do not put secrets in this file.
 
 ## Mock and manual workflows
 
 ### Deterministic mock UI data
 
 ```bash
-python workbench/scripts/load_mock_results.py
-python workbench/scripts/validate_results.py --all
-python workbench/scripts/rebuild_index.py --validate-first
-python workbench/scripts/serve_workbench.py
+python workbench/scripts/pipeline.py mock
+python workbench/scripts/pipeline.py mock --serve
 ```
 
-`load_mock_results.py` removes only existing `**/mock` directories beneath its output root, then writes deterministic schema-v2 files. Default result root is `workbench/artifacts/results`; `--output-root PATH` changes it. The UI labels mock runs. Never present mock metrics, cohorts, or screenshots as experimental evidence.
+`pipeline.py mock` runs workbench preflight, generates mock results, validates them, and rebuilds the index. It skips serving unless `--serve` is supplied. With `--serve`, preflight also checks Node, npm, and frontend `node_modules`. `load_mock_results.py` removes only existing `**/mock` directories beneath its output root, then writes deterministic schema-v2 files. Default result root is `workbench/artifacts/results`; `--output-root PATH` changes it. The UI labels mock runs. Never present mock metrics, cohorts, or screenshots as experimental evidence.
+
+`serve_workbench.py` sets `WORKBENCH_BACKEND_URL` to the loopback URL for its selected backend port. Vite reads that value and proxies `/api` for development and preview; use the same selected ports for backend and frontend.
 
 ### Manually imported real artifacts
 
@@ -107,18 +107,19 @@ python workbench/scripts/rebuild_index.py --results-root PATH --database PATH [-
 Use this sequence on a GPU host only. It is a guardrail and recordkeeping procedure, not a claim that any model is ready.
 
 1. Inspect availability without mutation: `python workbench/scripts/doctor.py --all` or `--model MODEL_ID`; add `--json` for machine output.
-2. Inspect pins, then sync exactly one source: `python workbench/scripts/sync_upstreams.py --list`; use `--model MODEL_ID --dry-run` before any clone/fetch. Existing repos change only with `--update-existing`; `--verify-only` checks local state without network/change.
+2. Inspect pins with `python workbench/scripts/sync_upstreams.py --list`. Its missing clones are informational; use `--model MODEL_ID --verify-only` when absence, pin mismatch, or a dirty checkout must fail. Use `--model MODEL_ID --dry-run` before clone/fetch; existing repos change only with `--update-existing`.
 3. Build that upstream's own documented GPU environment outside workbench. Do not claim compatibility from these notes.
 4. Validate FashionIQ layout: `python workbench/scripts/prepare_dataset.py --dataset-root PATH --check-only`. For CSMCIR, satisfy its dedicated preparation below.
 5. Inspect checkpoint records: `python workbench/scripts/download_checkpoints.py --list`; use `--model MODEL_ID --dry-run` before a download. Verify installed files with `--verify-only`.
-6. Run the unmodified official evaluator and retain exact command, source pin, environment, checkpoint digest, stdout/stderr, and resulting aggregate metrics. Compare paper scores only as a sanity check.
-7. Only after official metric parity is established, make a reviewable **observation-only** instrumentation change that exports the evaluator's existing per-query rankings. Validate its schema-v2 artifact and rebuild the index.
+6. For CSMCIR, run the auxiliary-asset report and manually place any missing files. It cannot download them because exact asset URLs are unverified.
+7. Run the unmodified official evaluator and retain exact command, source pin, environment, checkpoint digest, stdout/stderr, and resulting aggregate metrics. Compare paper scores only as a sanity check.
+8. Only after official metric parity is established, make a reviewable **observation-only** instrumentation change that exports the evaluator's existing per-query rankings. Validate its schema-v2 artifact and rebuild the index.
 
-`evaluate_models.py` can print/run only audited official commands after source, pin, checkpoint, protocol, dataset, and model-specific prerequisites pass. It does not generate result JSON or prove reproduction. Use `--dry-run` until the reviewed environment is ready.
+`evaluate_models.py` can print/run only audited official commands after source, pin, checkpoint, protocol, dataset, and model-specific prerequisites pass. It does not generate result JSON or prove reproduction. Use `--dry-run` until the reviewed environment is ready; dry run announces its plan and creates no evaluation log directory.
 
 ## Master pipeline
 
-Commands below are phases, not one automatic run. Stop at any blocker; do not work around it by changing protocol, checkpoint mapping, or upstream evaluator semantics.
+Commands below are phases, not one automatic run. Stop at any blocker; do not work around it by changing protocol, checkpoint mapping, or upstream evaluator semantics. Real mode always runs real-scope doctor and dataset checks. Its optional source and checkpoint stages precede the deliberately heavy optional `--download-auxiliary-assets` stage; that stage reports CSMCIR assets only and cannot auto-download them. Evaluation, validation/index rebuild, and serving are each opt-in.
 
 ```bash
 # 1. Local readiness and source/checkpoint records
@@ -126,9 +127,8 @@ python workbench/scripts/doctor.py --all
 python workbench/scripts/sync_upstreams.py --list
 python workbench/scripts/download_checkpoints.py --list
 
-# 2. One pinned model, after review
-python workbench/scripts/sync_upstreams.py --model csmcir --dry-run
-python workbench/scripts/download_checkpoints.py --model csmcir --dry-run
+# 2. One pinned model, after review; asset stage reports manual placement only
+python workbench/scripts/pipeline.py real --model csmcir --sync-sources --download-checkpoints --download-auxiliary-assets --dry-run
 python workbench/scripts/prepare_dataset.py --dataset-root "$FASHIONIQ_ROOT" --model csmcir --dry-run
 
 # 3. Guarded official command only; no execution
@@ -164,12 +164,14 @@ A checkpoint trained with 20%, 50%, or 80% noise remains that training condition
 
 CSMCIR is the only original-split model with an audited command constructor. Its upstream evaluator is cwd/root-sensitive and does **not** accept an ordinary dataset-root argument. `evaluate_models.py` runs its command from `workbench/third_party/CSMCIR/src`; it requires `--dataset-root workbench/third_party/CSMCIR/fashionIQ_dataset` because upstream data must appear there.
 
-Before evaluation, source must be pinned and canonical FashionIQ root must contain `captions/`, `image_splits/`, `images/`, and all three category files. Guarded execution also requires upstream `COT_ours2/bert_captions/fashioniq/`. CSMCIR requires both auxiliary caption files for every category:
+Before evaluation, provide four independent prerequisites:
 
-```text
-qwen_captions/{dress,shirt,toptee}_cot_val.json
-COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json
-```
+- **Base FashionIQ** under the canonical root: `captions/cap.{dress,shirt,toptee}.val.json`, `image_splits/split.{dress,shirt,toptee}.val.json`, and `images/*.png`.
+- **Author-provided Qwen text** under that same canonical root: `qwen_captions/{dress,shirt,toptee}_cot_val.json`. This is CSMCIR auxiliary text, not standard FashionIQ.
+- **Author-provided COT text** under the source root: `workbench/third_party/CSMCIR/COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json`. Direct validation call graph confirms reads of these source-root files.
+- **CSMCIR `fashioniq` model checkpoint** at its registry-selected local path.
+
+`download_auxiliary_assets.py --model csmcir` only reports those Qwen and COT paths. Exact auxiliary asset URLs remain unverified, so it makes no network request and cannot download them; manually place files with known provenance, then use `--verify-only` to require all paths.
 
 Prepare/check its fixed dataset link without changing evaluator semantics:
 
@@ -177,6 +179,7 @@ Prepare/check its fixed dataset link without changing evaluator semantics:
 python workbench/scripts/prepare_dataset.py --dataset-root PATH --model csmcir --check-only
 python workbench/scripts/prepare_dataset.py --dataset-root PATH --model csmcir --dry-run
 python workbench/scripts/prepare_dataset.py --dataset-root PATH --model csmcir
+python workbench/scripts/download_auxiliary_assets.py --model csmcir --verify-only
 ```
 
 The official phase emits aggregate metrics only. It is **not** a per-query result export and cannot populate canonical JSON alone. Establish official aggregate metric parity first; only then design and review an observation-only export patch.
@@ -232,12 +235,13 @@ This tests a reproducible hypothesis. It does not prove an architectural cause.
 | Symptom | Meaning and action |
 | --- | --- |
 | `BLOCKED` from `doctor.py` | Read reported prerequisite; it performs no repair. Fix only verified local paths/assets. |
-| Source pin missing/mismatch/dirty | Use `sync_upstreams.py --model ID --verify-only`; review source state. `--update-existing` is explicit. |
+| Source pin missing/mismatch/dirty | `sync_upstreams.py --list` reports missing clones without failure. Use `sync_upstreams.py --model ID --verify-only` for strict local verification; `--update-existing` is explicit. |
 | FashionIQ layout missing | Point `--dataset-root` at root containing `captions`, `image_splits`, and `images`; do not point at one subdirectory. |
-| CSMCIR layout/auxiliary blocker | Supply all six verified auxiliary JSON files and use `prepare_dataset.py --model csmcir`; retain fixed source-root link. |
+| CSMCIR layout/auxiliary blocker | Supply base FashionIQ, canonical-root `qwen_captions`, source-root `COT_ours2/fashioniq`, and `fashioniq` checkpoint at their exact paths. Use `download_auxiliary_assets.py --model csmcir --verify-only`; it does not download files. |
 | ENCODER asset blocker | Both `fashioniq.pt` and `open_clip_pytorch_model.bin` are required. Direct checkpoint URL remains unresolved; do not substitute one. |
 | Checkpoint download blocked | Registry lacks direct URL/mapping or local file conflicts. Inspect with `--list`; use `--force-redownload` only for intentional replacement. |
 | `adapter command not audited` | No verified command exists. Do not derive flags from a guessed README command. |
+| Evaluation logs needed | A real evaluator run writes `command.json`, `stdout.log`, and `stderr.log` in ignored `workbench/artifacts/logs/<UTC timestamp>_<model>_<checkpoint>/`. Dry runs create none. |
 | Duplicate run ID or schema failure | Correct/regenerate artifact; do not edit derived database to hide it. |
 | Top-K analysis blocked | Selected artifacts did not save requested depth. Lower K or regenerate after verified instrumentation. |
 | Frontend dependency/port blocker | Use pre-provisioned frontend dependencies or select free distinct ports. Script never installs packages. |
@@ -275,6 +279,13 @@ All operator scripts use `python workbench/scripts/NAME.py ...`. These are curre
 # doctor.py
 [--model MODEL_ID | --all] [--json]
 
+# pipeline.py
+`mock` | `prepare` | `real` | `serve` | `status`
+[--dataset-root PATH] [--sync-sources] [--download-checkpoints]
+[--download-auxiliary-assets] [--evaluate] [--rebuild-index] [--serve]
+[--dry-run] [--continue-on-error] [--model MODEL_ID] [--protocol PROTOCOL_ID]
+[--checkpoint CHECKPOINT_ID] [--top-k POSITIVE_INTEGER]
+
 # prepare_dataset.py
 --dataset-root PATH [--check-only] [--model MODEL_ID] [--dry-run]
 
@@ -283,6 +294,9 @@ All operator scripts use `python workbench/scripts/NAME.py ...`. These are curre
 
 # download_checkpoints.py
 (--list | --model MODEL_ID | --all) [--checkpoint CHECKPOINT_ID] [--dry-run] [--verify-only] [--force-redownload] [--output-root PATH]
+
+# download_auxiliary_assets.py
+(--list | --model csmcir) [--dry-run] [--verify-only] [--force-redownload]
 
 # evaluate_models.py
 (--list | --model MODEL_ID | --all-runnable) [--checkpoint CHECKPOINT_ID]

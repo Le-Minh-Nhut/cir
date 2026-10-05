@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
+
 from workbench.backend.errors import WorkbenchError
 from workbench.backend.registry import checkpoint_by_id, checkpoint_path, model_by_id
 

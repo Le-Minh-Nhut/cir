@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from workbench.backend.index import RESULTS_ROOT, load_runs
+from workbench.backend.index import load_runs
+from workbench.backend.operator_config import resolve_config
 from workbench.backend.schemas.results import ResultRun
 
 PROVENANCE_FIELDS = ("upstream_commit", "checkpoint_sha256", "command_digest", "environment_digest")
@@ -66,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.file is not None:
         valid = validate_file(args.file, args.strict_real)
     else:
-        valid = validate_root(RESULTS_ROOT if args.all else args.root, args.strict_real)
+        valid = validate_root(resolve_config().WORKBENCH_RESULTS_ROOT if args.all else args.root, args.strict_real)
     return 0 if valid else 1
 
 

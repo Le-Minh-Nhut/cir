@@ -9,13 +9,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from workbench.backend.index import RESULTS_ROOT
+from workbench.backend.operator_config import resolve_config
 from workbench.tests.mock_data import build_mock_runs
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-root", type=Path, default=RESULTS_ROOT)
+    parser.add_argument("--output-root", type=Path, default=resolve_config().WORKBENCH_RESULTS_ROOT)
     args = parser.parse_args()
     for stale in args.output_root.glob("**/mock"):
         shutil.rmtree(stale)

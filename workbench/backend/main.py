@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import io
 import json
-import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -180,7 +179,10 @@ def cancel_job(job_id: str):
 def resolve_image(category: str, image_id: str, root: Path | None = None) -> Path | None:
     if category not in {"dress", "shirt", "toptee"} or not image_id or Path(image_id).name != image_id:
         return None
-    root = root or Path(os.environ.get("CIR_DATA_ROOT", ROOT.parent / "data")) / "FashionIQ"
+    if root is None:
+        from workbench.backend.operator_config import resolve_config
+
+        root = resolve_config().FASHIONIQ_ROOT
     candidates = [root / category / f"{image_id}{extension}" for extension in (".png", ".jpg", ".jpeg")] + [root / "images" / f"{image_id}{extension}" for extension in (".png", ".jpg", ".jpeg")] + [root / "resized_image" / category / f"{image_id}{extension}" for extension in (".png", ".jpg", ".jpeg")]
     return next((candidate for candidate in candidates if candidate.is_file()), None)
 
