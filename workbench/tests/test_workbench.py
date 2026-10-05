@@ -13,7 +13,7 @@ from workbench.backend.errors import WorkbenchError
 from workbench.backend import main
 from workbench.backend.main import resolve_image
 from workbench.backend.schemas.results import ResultRun
-from workbench.backend.storage import get_analysis_input, list_runs, query_page
+from workbench.backend.storage import get_analysis_input, get_run, list_runs, query_page
 from workbench.tests.mock_data import build_mock_runs
 
 
@@ -62,6 +62,48 @@ def test_sql_query_page_filters_and_exact_lookup(monkeypatch, tmp_path: Path) ->
     query_id = build_mock_runs()[0].queries[0].query_id
     exact = query_page(run_id, query_id=query_id, limit=1, database_path=database)
     assert exact["total"] == 1 and exact["items"][0]["query_id"] == query_id
+
+
+def test_get_run_returns_metadata_and_rejects_missing_run(monkeypatch, tmp_path: Path) -> None:
+    database = indexed(monkeypatch, tmp_path)
+    assert get_run("mock-habit-fiq_n02", database)["checkpoint_id"] == "fiq_n02"
+    with pytest.raises(WorkbenchError) as error:
+        get_run("missing-run", database)
+    assert error.value.code == "run_not_found"
+
+
+def test_queries_reject_missing_run(monkeypatch, tmp_path: Path) -> None:
+    indexed(monkeypatch, tmp_path)
+    with pytest.raises(WorkbenchError) as error:
+        main.queries("missing-run")
+    assert error.value.code == "run_not_found"
+
+
+def indexed_with_saved_depth(monkeypatch, tmp_path: Path, depth: int) -> Path:
+    root = tmp_path / "results"; root.mkdir()
+    for result in build_mock_runs()[:2]:
+        payload = result.model_dump()
+        payload["run"]["top_k_saved"] = depth
+        for query in payload["queries"]:
+            query["top_results"] = query["top_results"][:depth]
+        (root / f"{payload['run']['run_id']}.json").write_text(ResultRun.model_validate(payload).model_dump_json())
+    database = tmp_path / "workbench.duckdb"; rebuild_index(root, database)
+    monkeypatch.setattr("workbench.backend.storage.DATABASE_PATH", database)
+    return database
+
+
+def test_compare_rejects_unavailable_top_k(monkeypatch, tmp_path: Path) -> None:
+    indexed_with_saved_depth(monkeypatch, tmp_path, 50)
+    query_id = build_mock_runs()[0].queries[0].query_id
+    with pytest.raises(WorkbenchError) as error:
+        main.compare(query_id, "mock-habit-fiq_n02,mock-habit-fiq_n05", 100)
+    assert error.value.code == "insufficient_top_k_depth"
+
+
+def test_failure_jaccard_uses_exact_target_rank_without_top_k(monkeypatch, tmp_path: Path) -> None:
+    indexed_with_saved_depth(monkeypatch, tmp_path, 50)
+    rows = main.overlap("mock-habit-fiq_n02,mock-habit-fiq_n05", 100)
+    assert len(rows) == 4 and rows[0]["jaccard"] >= 0
 
 
 def test_exact_alignment_is_map_based_and_fails_closed() -> None:
@@ -125,6 +167,19 @@ def test_downloader_handles_fresh_and_resumed_responses(tmp_path: Path, monkeypa
     partial = tmp_path / "weight.part"
     monkeypatch.setattr(module.urllib.request,"urlopen",lambda _:Response(200,None,b"fresh")); module.download("https://example.test/weight",partial); assert partial.read_bytes()==b"fresh"
     partial.write_bytes(b"old-"); monkeypatch.setattr(module.urllib.request,"urlopen",lambda _:Response(206,"bytes 4-7/8",b"tail")); module.download("https://example.test/weight",partial); assert partial.read_bytes()==b"old-tail"
+
+
+def test_verifier_distinguishes_local_and_official_hashes(tmp_path: Path, capsys) -> None:
+    spec = importlib.util.spec_from_file_location("downloader_verify", Path("workbench/scripts/download_checkpoints.py")); assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    destination = tmp_path / "checkpoint.pt"; destination.write_bytes(b"checkpoint")
+    assert module.verify({}, {"expected_sha256": None}, destination)
+    assert "LOCAL SHA256 COMPUTED — official SHA256 unavailable" in capsys.readouterr().out
+    assert module.verify({}, {"expected_sha256": module.sha256_file(destination)}, destination)
+    assert "OFFICIAL SHA256 MATCH" in capsys.readouterr().out
+    assert not module.verify({}, {"expected_sha256": "0" * 64}, destination)
+    assert "OFFICIAL SHA256 MISMATCH" in capsys.readouterr().out
+
 
 
 def test_downloader_retries_cleanly_after_416(tmp_path: Path, monkeypatch) -> None:

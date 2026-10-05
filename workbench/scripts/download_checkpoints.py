@@ -63,8 +63,16 @@ def verify(model: dict, checkpoint: dict, destination: Path) -> bool:
         return False
     digest = sha256_file(destination)
     expected = checkpoint.get("expected_sha256")
-    valid = expected is None or digest == expected
-    print(f"{destination}: {destination.stat().st_size} bytes sha256={digest} {'OK' if valid else 'MISMATCH'}")
+    if expected is None:
+        status = "LOCAL SHA256 COMPUTED — official SHA256 unavailable"
+        valid = True
+    elif digest == expected:
+        status = "OFFICIAL SHA256 MATCH"
+        valid = True
+    else:
+        status = "OFFICIAL SHA256 MISMATCH"
+        valid = False
+    print(f"{destination}: {destination.stat().st_size} bytes sha256={digest} {status}")
     return valid
 
 

@@ -47,6 +47,11 @@ def get_run(run_id: str, database_path: Path | None = None) -> dict[str, Any]:
         row = connection.execute("SELECT metadata FROM runs WHERE run_id = ?", [run_id]).fetchone()
     finally:
         connection.close()
+    if row is None:
+        raise WorkbenchError("run_not_found", "Run was not found.", {"run_id": run_id})
+    return json.loads(row[0])
+
+
 def get_runs(run_ids: list[str], database_path: Path | None = None) -> list[dict[str, Any]]:
     if not run_ids or len(set(run_ids)) != len(run_ids):
         raise WorkbenchError("run_not_found", "Run selection must contain distinct run IDs.", {"requested_run_ids": run_ids})
@@ -140,7 +145,7 @@ def get_query_universe(run_ids: list[str], database_path: Path | None = None) ->
     return _query_maps(run_ids, database_path)
 
 
-def validate_analysis_selection(run_ids: list[str], *, k: int | None = None, database_path: Path | None = None) -> tuple[list[dict[str, Any]], dict[str, dict[str, dict[str, Any]]]]:
+def validate_analysis_selection(run_ids: list[str], *, k: int | None = None, require_top_k: bool = True, database_path: Path | None = None) -> tuple[list[dict[str, Any]], dict[str, dict[str, dict[str, Any]]]]:
     runs = get_runs(run_ids, database_path)
     protocols = {run["protocol_id"] for run in runs}
     if len(protocols) != 1:
@@ -149,7 +154,7 @@ def validate_analysis_selection(run_ids: list[str], *, k: int | None = None, dat
         if not 1 <= k <= 200:
             raise WorkbenchError("insufficient_top_k_depth", "K must be between 1 and 200.", {"requested_k": k})
         insufficient = [{"run_id": run["run_id"], "top_k_saved": run["top_k_saved"]} for run in runs if run["top_k_saved"] < k]
-        if insufficient:
+        if require_top_k and insufficient:
             raise WorkbenchError("insufficient_top_k_depth", "Selected runs do not store enough top-K retrievals.", {"requested_k": k, "runs": insufficient})
     maps = _query_maps(run_ids, database_path)
     baseline_id, baseline = run_ids[0], maps[run_ids[0]]

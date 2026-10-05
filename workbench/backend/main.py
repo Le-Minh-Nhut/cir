@@ -61,10 +61,10 @@ def queries(run_id: str, query_id: str | None = None, category: str | None = Non
 
 
 @app.get("/api/compare/{query_id}")
-def compare(query_id: str, run_ids: str):
+def compare(query_id: str, run_ids: str, k: int = 10):
     selected = run_ids.split(",")
-    runs, _ = validate_analysis_selection(selected)
-    return [{"run": run, "query": get_query(run["run_id"], query_id)} for run in runs]
+    runs, _ = validate_analysis_selection(selected, k=k)
+    return [{"run": run, "query": {**(query := get_query(run["run_id"], query_id)), "top_results": query["top_results"][:k]}} for run in runs]
 
 
 @app.get("/api/analysis")
@@ -77,7 +77,7 @@ def analysis(run_ids: str, k: int = 10):
 @app.get("/api/analysis/failure-jaccard")
 def overlap(run_ids: str, k: int = 10):
     selected = run_ids.split(",")
-    _, maps = get_analysis_input(selected, k)
+    _, maps = validate_analysis_selection(selected, k=k, require_top_k=False)
     return failure_jaccard_from_maps(selected, maps, k)
 
 
