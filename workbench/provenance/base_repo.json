@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/Le-Minh-Nhut/cir",
+  "base_ref": "origin/main",
+  "base_commit": "8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333",
+  "branch": "research/cir-failure-workbench"
+}

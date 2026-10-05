@@ -48,6 +48,16 @@ wandb/
 *.pt
 *.pth
 *.ckpt
+workbench/third_party/
+workbench/artifacts/checkpoints/**
+!workbench/artifacts/checkpoints/.gitkeep
+workbench/artifacts/results/**
+!workbench/artifacts/results/.gitkeep
+workbench/artifacts/*.duckdb
+workbench/artifacts/*.jsonl
+workbench/artifacts/runs/
+workbench/frontend/node_modules/
+workbench/frontend/dist/
 # Unit test / coverage reports
 htmlcov/
 .tox/

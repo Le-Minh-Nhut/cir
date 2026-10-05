@@ -1,0 +1,323 @@
+schema_version: 1
+protocols:
+  fashioniq_original_split:
+    label: FashionIQ — Original Split
+    evaluation_noise_pct: 0
+  fashioniq_val_split:
+    label: FashionIQ — Val Split
+    evaluation_noise_pct: 0
+models:
+  - model_id: csmcir
+    method_name: CSMCIR
+    paper_title: "CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval"
+    paper_url: null
+    upstream_repo_url: https://github.com/qzp2018/CSMCIR
+    upstream_default_branch: main
+    upstream_commit_sha: 774f94e2076ff17ea91703a6239d2a08f0e1a44e
+    source_available: true
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: 57.07
+    reported_r50: 77.27
+    reported_mean: 67.17
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: true
+    notes: Official Hugging Face model repository; no official checkpoint SHA published.
+    checkpoint_variants:
+      - checkpoint_id: fashioniq
+        filename: fashioniq_tuned_clip_best.pt
+        download_url: https://huggingface.co/peng12138/CSMCIR/resolve/main/fashioniq_tuned_clip_best.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 0
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: airknow
+    method_name: Air-Know
+    paper_title: "Air-Know: Arbiter-Calibrated Knowledge-Internalizing Robust Network for Composed Image Retrieval"
+    paper_url: https://arxiv.org/abs/2604.19386
+    upstream_repo_url: https://github.com/iLearn-Lab/CVPR26-Air-Know
+    upstream_default_branch: main
+    upstream_commit_sha: 6ab6fa95b746f85b08eea4cb66eb51448bce99b7
+    source_available: true
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: 55.75
+    reported_r50: 75.72
+    reported_mean: 65.74
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: false
+    notes: Official Hub lists only FashionIQ 50% and 80% noise-trained weights; clean evaluation remains 0%.
+    checkpoint_variants:
+      - checkpoint_id: fiq_n05
+        filename: airknow_fiq_0.5.pt
+        download_url: https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.5.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 50
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n08
+        filename: airknow_fiq_0.8.pt
+        download_url: https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.8.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 80
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: conesep
+    method_name: ConeSep
+    paper_title: "ConeSep: Cone-based Robust Noise-Unlearning Compositional Network for Composed Image Retrieval"
+    paper_url: https://arxiv.org/abs/2604.20358
+    upstream_repo_url: https://github.com/iLearn-Lab/CVPR26-ConeSep
+    upstream_default_branch: main
+    upstream_commit_sha: bd4bf629ebe68045c1a54dcc61e4a3ea65f8759b
+    source_available: true
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: 55.58
+    reported_r50: 75.88
+    reported_mean: 65.73
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: false
+    notes: Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.
+    checkpoint_variants:
+      - checkpoint_id: fiq_n02
+        filename: ConeSep-FIQ-N0.2.pt
+        download_url: https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/main/fiq/ConeSep-FIQ-N0.2.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 20
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n05
+        filename: ConeSep-FIQ-N0.5.pt
+        download_url: https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/main/fiq/ConeSep-FIQ-N0.5.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 50
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n08
+        filename: ConeSep-FIQ_N0.8.pt
+        download_url: https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/main/fiq/ConeSep-FIQ_N0.8.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 80
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: ptha_mtst
+    method_name: PTHA + MTST
+    paper_title: Scale Up Composed Image Retrieval Learning via Modification Text Generation
+    paper_url: https://arxiv.org/abs/2504.05316
+    upstream_repo_url: null
+    upstream_default_branch: null
+    upstream_commit_sha: null
+    source_available: false
+    native_protocol: null
+    supported_protocols: []
+    reported_r10: 54.99
+    reported_r50: 76.28
+    reported_mean: 65.64
+    reproduction_status: BLOCKED_NO_VERIFIED_FASHIONIQ_CHECKPOINT
+    strict_clean_checkpoint_available: false
+    notes: No author-linked FashionIQ fine-tuned checkpoint verified. CIRR pretraining evidence is not eligible.
+    checkpoint_variants: []
+  - model_id: habit
+    method_name: HABIT
+    paper_title: "HABIT: Chrono-Synergia Robust Progressive Learning Framework for Composed Image Retrieval"
+    paper_url: https://ojs.aaai.org/index.php/AAAI/article/view/37608
+    upstream_repo_url: https://github.com/iLearn-Lab/AAAI26-HABIT
+    upstream_default_branch: main
+    upstream_commit_sha: 6ddc2cd63eac1f65693f4e821c34fb3b42aee306
+    source_available: true
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: 55.38
+    reported_r50: 75.20
+    reported_mean: 65.29
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: false
+    notes: Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.
+    checkpoint_variants:
+      - checkpoint_id: fiq_n02
+        filename: HABIT-FIQ_N0.2.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/main/fiq/HABIT-FIQ_N0.2.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 20
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n05
+        filename: HABIT-FIQ_N0.5.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/main/fiq/HABIT-FIQ_N0.5.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 50
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n08
+        filename: HABIT-FIQ_N0.8.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/main/fiq/HABIT-FIQ_N0.8.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 80
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: intent
+    method_name: INTENT
+    paper_title: "INTENT: Invariance and Discrimination-aware Noise Mitigation for Robust Composed Image Retrieval"
+    paper_url: https://ojs.aaai.org/index.php/AAAI/article/view/39181
+    upstream_repo_url: https://github.com/iLearn-Lab/AAAI26-INTENT
+    upstream_default_branch: main
+    upstream_commit_sha: 2a75fc6f57d1a036bf3167a7fe1d2cee072f51f3
+    source_available: true
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: 55.31
+    reported_r50: 75.16
+    reported_mean: 65.24
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: false
+    notes: Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.
+    checkpoint_variants:
+      - checkpoint_id: fiq_n02
+        filename: intent_fiq_0.2.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/main/intent_fiq_0.2.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 20
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n05
+        filename: intent_fiq_0.5.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/main/intent_fiq_0.5.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 50
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+      - checkpoint_id: fiq_n08
+        filename: intent_fiq_0.8.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/main/intent_fiq_0.8.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 80
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: NO_CLEAN_CHECKPOINT
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: hint
+    method_name: HINT
+    paper_title: "HINT: Composed Image Retrieval with Dual-Path Compositional Contextualized Network"
+    paper_url: https://arxiv.org/abs/2603.26341
+    upstream_repo_url: https://github.com/iLearn-Lab/ICASSP26-HINT
+    upstream_default_branch: main
+    upstream_commit_sha: bec50b6c8c19111893b617979502b948d1cea5b2
+    source_available: true
+    native_protocol: fashioniq_val_split
+    supported_protocols: [fashioniq_val_split]
+    reported_r10: 58.48
+    reported_r50: 77.93
+    reported_mean: 68.21
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: true
+    notes: Official iLearn-Lab Hugging Face repository exposes FashionIQ checkpoint.
+    checkpoint_variants:
+      - checkpoint_id: fashioniq
+        filename: fashioniq.pt
+        download_url: https://huggingface.co/iLearn-Lab/HINT/resolve/main/fashioniq.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: 0
+        evaluation_noise_pct: 0
+        expected_size_bytes: 2724451182
+        expected_sha256: null
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
+  - model_id: encoder
+    method_name: ENCODER
+    paper_title: "ENCODER: Entity Mining and Modification Relation Binding for Composed Image Retrieval"
+    paper_url: https://ojs.aaai.org/index.php/AAAI/article/view/32541
+    upstream_repo_url: https://github.com/iLearn-Lab/AAAI25-ENCODER
+    upstream_default_branch: main
+    upstream_commit_sha: 29a2a31d6a56f677bf450c3be7cdaef423fb7018
+    source_available: true
+    native_protocol: fashioniq_val_split
+    supported_protocols: [fashioniq_val_split]
+    reported_r10: 56.13
+    reported_r50: 77.59
+    reported_mean: 66.86
+    reproduction_status: NOT_RUN
+    strict_clean_checkpoint_available: true
+    notes: Official README links public Google Drive folder; direct file URL and SHA remain unverified.
+    checkpoint_variants:
+      - checkpoint_id: fashioniq
+        filename: fashioniq.pt
+        download_url: null
+        source_url: https://drive.google.com/drive/folders/1QuBQVIybLwn-qFSORhpBsnXy6ebhtNr3
+        source_type: author_google_drive
+        checkpoint_training_noise_pct: 0
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: VERIFIED_METADATA
+        checkpoint_mapping_status: URL_UNRESOLVED
+  - model_id: pair
+    method_name: PAIR
+    paper_title: "PAIR: Complementarity-guided Disentanglement for Composed Image Retrieval"
+    paper_url: https://ieeexplore.ieee.org/document/10888153
+    upstream_repo_url: https://github.com/iLearn-Lab/ICASSP25-PAIR
+    upstream_default_branch: main
+    upstream_commit_sha: bfb0b98cdb4c44f6b9190baaa84d783a77dd888f
+    source_available: true
+    native_protocol: fashioniq_val_split
+    supported_protocols: [fashioniq_val_split]
+    reported_r10: 52.76
+    reported_r50: 74.51
+    reported_mean: 63.64
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    strict_clean_checkpoint_available: null
+    notes: Existing audit found pair-B1.pt and pair-B2.pt; official FashionIQ mapping and source URL are not verified.
+    checkpoint_variants:
+      - checkpoint_id: pair_b1
+        filename: pair-B1.pt
+        download_url: null
+        source_type: unresolved
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+      - checkpoint_id: pair_b2
+        filename: pair-B2.pt
+        download_url: null
+        source_type: unresolved
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
