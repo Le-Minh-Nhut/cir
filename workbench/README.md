@@ -111,7 +111,7 @@ Use this sequence on a GPU host only. It is a guardrail and recordkeeping proced
 3. Build that upstream's own documented GPU environment outside workbench. Do not claim compatibility from these notes.
 4. Validate FashionIQ layout: `python workbench/scripts/prepare_dataset.py --dataset-root PATH --check-only`. For CSMCIR, satisfy its dedicated preparation below.
 5. Inspect checkpoint records: `python workbench/scripts/download_checkpoints.py --list`; use `--model MODEL_ID --dry-run` before a download. Verify installed files with `--verify-only`.
-6. For CSMCIR, run the auxiliary-asset report and manually place any missing files. It cannot download them because exact asset URLs are unverified.
+6. For CSMCIR, download verified Qwen captions with `python workbench/scripts/download_auxiliary_assets.py --model csmcir`. `COT_ours2/fashioniq` remains manual because its exact author download source is unverified.
 7. Run the unmodified official evaluator and retain exact command, source pin, environment, checkpoint digest, stdout/stderr, and resulting aggregate metrics. Compare paper scores only as a sanity check.
 8. Only after official metric parity is established, make a reviewable **observation-only** instrumentation change that exports the evaluator's existing per-query rankings. Validate its schema-v2 artifact and rebuild the index.
 
@@ -119,7 +119,7 @@ Use this sequence on a GPU host only. It is a guardrail and recordkeeping proced
 
 ## Master pipeline
 
-Commands below are phases, not one automatic run. Stop at any blocker; do not work around it by changing protocol, checkpoint mapping, or upstream evaluator semantics. Real mode always runs real-scope doctor and dataset checks. Its optional source and checkpoint stages precede the deliberately heavy optional `--download-auxiliary-assets` stage; that stage reports CSMCIR assets only and cannot auto-download them. Evaluation, validation/index rebuild, and serving are each opt-in.
+Commands below are phases, not one automatic run. Stop at any blocker; do not work around it by changing protocol, checkpoint mapping, or upstream evaluator semantics. Real mode always runs real-scope doctor and dataset checks. Its optional source and checkpoint stages precede the deliberately heavy optional `--download-auxiliary-assets` stage. That stage downloads verified CSMCIR Qwen captions only; it leaves unresolved COT_ours2 captions for manual author-provenance placement. Evaluation, validation/index rebuild, and serving are each opt-in.
 
 ```bash
 # 1. Local readiness and source/checkpoint records
@@ -127,8 +127,9 @@ python workbench/scripts/doctor.py --all
 python workbench/scripts/sync_upstreams.py --list
 python workbench/scripts/download_checkpoints.py --list
 
-# 2. One pinned model, after review; asset stage reports manual placement only
+# 2. One pinned model, after review; downloads only verified Qwen assets
 python workbench/scripts/pipeline.py real --model csmcir --sync-sources --download-checkpoints --download-auxiliary-assets --dry-run
+python workbench/scripts/download_auxiliary_assets.py --model csmcir --dry-run
 python workbench/scripts/prepare_dataset.py --dataset-root "$FASHIONIQ_ROOT" --model csmcir --dry-run
 
 # 3. Guarded official command only; no execution
@@ -171,7 +172,14 @@ Before evaluation, provide four independent prerequisites:
 - **Author-provided COT text** under the source root: `workbench/third_party/CSMCIR/COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json`. Direct validation call graph confirms reads of these source-root files.
 - **CSMCIR `fashioniq` model checkpoint** at its registry-selected local path.
 
-`download_auxiliary_assets.py --model csmcir` only reports those Qwen and COT paths. Exact auxiliary asset URLs remain unverified, so it makes no network request and cannot download them; manually place files with known provenance, then use `--verify-only` to require all paths.
+`download_auxiliary_assets.py --model csmcir` downloads only verified author-hosted Qwen files:
+
+```text
+https://huggingface.co/peng12138/CSMCIR/resolve/main/fashioniq_qwen_captions/qwen_captions/{dress,shirt,toptee}_cot_val.json
+  -> <FASHIONIQ_ROOT>/qwen_captions/{dress,shirt,toptee}_cot_val.json
+```
+
+It records local SHA-256 values in ignored `workbench/artifacts/auxiliary/download_manifest.json`; those are not official hashes. `COT_ours2/fashioniq` has no verified exact author download URL, remains required, and must be manually placed with known provenance. `--verify-only` requires both asset families.
 
 Prepare/check its fixed dataset link without changing evaluator semantics:
 

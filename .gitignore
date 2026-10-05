@@ -60,6 +60,7 @@ workbench/artifacts/cohorts.json
 workbench/frontend/tsconfig.tsbuildinfo
 workbench/artifacts/runs/
 workbench/artifacts/logs/
+workbench/artifacts/auxiliary/
 workbench/frontend/node_modules/
 workbench/frontend/dist/
 # Unit test / coverage reports

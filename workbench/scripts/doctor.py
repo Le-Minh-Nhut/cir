@@ -109,8 +109,8 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
             runtime_blockers.append(f"CSMCIR dataset link resolves to {layout.resolve()}, expected {config.FASHIONIQ_ROOT.resolve()}")
         asset_groups = (
             ("csmcir:base-dataset", "FashionIQ base dataset", fashioniq_base_paths(config.FASHIONIQ_ROOT)),
-            ("csmcir:qwen-captions", "CSMCIR Qwen auxiliary text", fashioniq_qwen_paths(config.FASHIONIQ_ROOT)),
-            ("csmcir:cot-captions", "CSMCIR COT auxiliary text", tuple(source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json" for category in CATEGORIES)),
+            ("csmcir:qwen-captions", "CSMCIR Qwen captions", fashioniq_qwen_paths(config.FASHIONIQ_ROOT)),
+            ("csmcir:cot-captions", "CSMCIR COT_ours2 captions", tuple(source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json" for category in CATEGORIES)),
         )
         for name, label, paths in asset_groups:
             missing = missing_paths(paths)

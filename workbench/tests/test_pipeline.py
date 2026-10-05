@@ -58,18 +58,34 @@ def test_real_dry_run_orders_full_plan_without_heavy_actions(monkeypatch, capsys
     assert pipeline.main(["real", "--dry-run"]) == 0
 
     assert stage_lines(capsys.readouterr().out) == [
-        "[1/9] doctor",
-        "[2/9] dataset",
-        "[3/9] sync",
-        "[4/9] layout",
-        "[5/9] checkpoint",
-        "[6/9] auxiliary-assets",
-        "[7/9] evaluation",
-        "[8/9] validation-index",
-        "[9/9] serve",
+        "[1/8] doctor",
+        "[2/8] dataset",
+        "[3/8] sync",
+        "[4/8] checkpoint",
+        "[5/8] auxiliary-assets",
+        "[6/8] evaluation",
+        "[7/8] validation-index",
+        "[8/8] serve",
     ]
     assert called == []
 
+
+def test_real_auxiliary_stage_uses_workbench_preflight(monkeypatch) -> None:
+    pipeline = load_pipeline()
+    config = SimpleNamespace(
+        FASHIONIQ_ROOT=Path("/configured/FashionIQ"),
+        WORKBENCH_THIRD_PARTY_ROOT=Path("/configured/third_party"),
+        WORKBENCH_CHECKPOINT_ROOT=Path("/configured/checkpoints"),
+        WORKBENCH_RESULTS_ROOT=Path("/configured/results"),
+    )
+    called: list[list[str]] = []
+    monkeypatch.setattr(pipeline, "resolve_config", lambda: config)
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 0)
+
+    assert pipeline.main(["real", "--model", "csmcir", "--download-auxiliary-assets"]) == 0
+
+    assert called[0][2:] == ["--scope", "workbench"]
+    assert [Path(argv[1]).name for argv in called] == ["doctor.py", "prepare_dataset.py", "download_auxiliary_assets.py"]
 
 def test_bare_real_prepares_configured_dataset(monkeypatch) -> None:
     pipeline = load_pipeline()

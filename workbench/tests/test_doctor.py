@@ -48,7 +48,7 @@ def test_csmcir_real_checks_require_dataset_qwen_and_cot(tmp_path: Path) -> None
     checks = {check["name"]: check for check in doctor.model_checks(model, settings)}
     blockers = checks["runtime:csmcir"]["evidence"]["checkpoints"][0]["runtime_blockers"]
     missing_qwen = str(settings.FASHIONIQ_ROOT / "qwen_captions" / "dress_cot_val.json")
-    assert f"CSMCIR Qwen auxiliary text missing: {missing_qwen}" in blockers
+    assert f"CSMCIR Qwen captions missing: {missing_qwen}" in blockers
     assert checks["csmcir:base-dataset"]["status"] == "OK"
     assert checks["csmcir:qwen-captions"]["status"] == "BLOCKED"
     assert missing_qwen in checks["csmcir:qwen-captions"]["evidence"]["missing"]
@@ -59,7 +59,7 @@ def test_csmcir_real_checks_require_dataset_qwen_and_cot(tmp_path: Path) -> None
     checks = {check["name"]: check for check in doctor.model_checks(model, settings)}
     blockers = checks["runtime:csmcir"]["evidence"]["checkpoints"][0]["runtime_blockers"]
     missing_cot = str(source / "COT_ours2" / "fashioniq" / "dress_cot_val.json")
-    assert f"CSMCIR COT auxiliary text missing: {missing_cot}" in blockers
+    assert f"CSMCIR COT_ours2 captions missing: {missing_cot}" in blockers
     assert checks["csmcir:qwen-captions"]["status"] == "OK"
     assert checks["csmcir:cot-captions"]["status"] == "BLOCKED"
 

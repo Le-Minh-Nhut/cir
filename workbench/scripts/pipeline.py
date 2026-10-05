@@ -88,16 +88,13 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
         else Stage("validation-index", skipped="pass --evaluate or --rebuild-index")
     )
     serve = run_stage("serve", command("serve_workbench.py")) if args.serve else Stage("serve", skipped="pass --serve")
-    doctor_args: list[str] = ["--scope", "real"]
-    if args.model:
-        doctor_args.extend(["--model", args.model])
+    doctor_args: list[str] = ["--scope", "workbench"]
     if args.serve:
         doctor_args.append("--serve")
     return [
         run_stage("doctor", command("doctor.py", *doctor_args)),
         dataset_check(args, config),
         sync,
-        layout_prepare(args, config, check_only=True),
         checkpoints,
         auxiliary,
         evaluation,
