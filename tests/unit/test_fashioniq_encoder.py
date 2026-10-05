@@ -11,7 +11,7 @@ from evaluation.fashioniq_encoder import (
     evaluate_fashioniq_encoder_category,
     fashioniq_encoder_selection_score,
 )
-from train_fashioniq_encoder import CAPTION_POLICY
+CAPTION_POLICY = "normalized_ordered_and"
 
 
 def test_fashioniq_encoder_caption_policy_and_reduced_gallery() -> None:

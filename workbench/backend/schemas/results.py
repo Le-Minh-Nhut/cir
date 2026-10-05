@@ -87,8 +87,9 @@ class ResultRun(BaseModel):
     def validate_queries(self) -> "ResultRun":
         if len({query.query_id for query in self.queries}) != len(self.queries):
             raise ValueError("query_id values must be unique per run")
-        if any(len(query.top_results) > self.run.top_k_saved for query in self.queries):
-            raise ValueError("query top_results exceeds top_k_saved")
+        effective_depth = min(self.run.top_k_saved, self.run.gallery_size)
+        if any(len(query.top_results) > effective_depth for query in self.queries):
+            raise ValueError("query top_results exceeds effective saved retrieval depth")
         if any(query.target_rank > self.run.gallery_size for query in self.queries):
             raise ValueError("target_rank exceeds gallery_size")
         return self

@@ -23,3 +23,7 @@ CSMCIR loads full FashionIQ validation split gallery and does not exclude refere
 Registry stores only official/author-linked endpoints. `expected_sha256` stays `null` unless upstream publishes a hash. A locally computed hash belongs only in ignored `artifacts/checkpoints/download_manifest.json`; it never upgrades registry provenance.
 
 Official paper scores are sanity references, never local reproductions. All listed runs remain `NOT_RUN` under laptop code-only policy.
+## Runtime caveats
+
+- CSMCIR's official evaluation script does not expose a normal dataset-root CLI argument. Later integration must prepare and audit upstream working-directory/data layout without changing upstream semantics.
+- ENCODER's `evaluate_model.py` calls `open_clip.create_model_and_transforms('ViT-B-32', pretrained='./open_clip_pytorch_model.bin')`. FashionIQ checkpoint alone is insufficient; later integration must verify that exact OpenCLIP backbone asset. Do not download it during laptop development.

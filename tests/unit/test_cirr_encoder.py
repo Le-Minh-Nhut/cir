@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
 
 import numpy as np
 import torch
@@ -10,7 +9,6 @@ from evaluation.cirr_encoder import (
     evaluate_cirr_encoder_metrics,
     rank_reference_excluded_gallery,
 )
-from models.taper import TAPER
 
 
 def test_cirr_encoder_reference_exclusion_global_subset_and_selection() -> None:
@@ -52,22 +50,6 @@ def test_cirr_encoder_cosine_similarity_normalizes_both_sides() -> None:
     assert torch.allclose(scores, torch.tensor([[1.0, 0.0], [0.8, 0.6]]), atol=1e-6)
 
 
-def test_existing_taper_scores_are_cosine_equivalent_for_vector_gallery() -> None:
-    raw_queries = torch.tensor([[3.0, 4.0], [0.0, 2.0]])
-    gallery = torch.tensor([[6.0, 8.0], [-4.0, 3.0]])
-    query_harness = SimpleNamespace(query_head=lambda states: states)
-    score_harness = SimpleNamespace(query_dim=2)
-
-    taper_queries = TAPER.make_query(query_harness, raw_queries)
-    taper_scores = TAPER._retrieval_scores(
-        score_harness, taper_queries, gallery.unsqueeze(1)
-    )
-
-    assert torch.allclose(
-        taper_scores,
-        cosine_similarity_scores(raw_queries, gallery),
-        atol=1e-6,
-    )
 
 
 def _encoder_reference_metrics(

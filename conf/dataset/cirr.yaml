@@ -1,3 +1,0 @@
-name: cirr
-root: ${paths.data_root}/CIRR
-version: rc2

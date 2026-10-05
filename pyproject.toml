@@ -1,18 +1,14 @@
 [project]
-name = "cir-research"
+name = "cir-failure-analysis-workbench"
 version = "0.1.0"
-description = "TAPER for composed image retrieval with a frozen CSMCIR teacher"
+description = "FashionIQ protocol utilities and local CIR failure analysis"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "torch",
     "torchvision",
-    "hydra-core",
-    "omegaconf",
     "numpy",
     "pillow",
-    "tqdm",
-    "wandb",
 ]
 
 [project.optional-dependencies]

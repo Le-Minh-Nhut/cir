@@ -12,33 +12,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from workbench.backend.analysis import aligned_queries, analysis_rows, cohort_metrics, failure_jaccard, require_same_protocol
+from workbench.backend.analysis import analysis_rows_from_maps, failure_jaccard_from_maps
 from workbench.backend.errors import WorkbenchError
 from workbench.backend.index import rebuild_index
 from workbench.backend.jobs import SingleGpuQueue
 from workbench.backend.registry import checkpoint_availability, load_registry
 from workbench.backend.schemas.results import Annotation, SavedCohort
-from workbench.backend.storage import indexed_runs
+from workbench.backend.storage import cohort_metrics, get_analysis_input, get_query, list_runs, query_page, validate_analysis_selection
 
 ROOT = Path(__file__).resolve().parents[1]
 ANNOTATIONS_PATH = ROOT / "artifacts" / "annotations.json"
 COHORTS_PATH = ROOT / "artifacts" / "cohorts.json"
 LABELS = ["preservation_failure", "under_edit", "over_edit", "partial_edit", "wrong_attribute", "wrong_entity_binding", "reference_dominance", "text_dominance", "fine_grained_visual_confusion", "ambiguous_ground_truth", "possible_dataset_issue", "duplicate_or_near_duplicate", "other", "unknown"]
 app = FastAPI(title="CIR Failure Analysis Workbench")
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_methods=["*"], allow_headers=["*"])
 JOBS = SingleGpuQueue()
 
 
 @app.exception_handler(WorkbenchError)
 async def workbench_error(_: Request, error: WorkbenchError) -> JSONResponse:
     return JSONResponse(status_code=400, content=error.payload())
-
-
-def runs_for_ids(run_ids: list[str]):
-    runs = [run for run in indexed_runs() if run.run.run_id in run_ids]
-    if len(runs) != len(run_ids):
-        raise HTTPException(404, {"error": "run_not_found", "message": "One or more run IDs were not found.", "details": {"requested_run_ids": run_ids}})
-    return [next(run for run in runs if run.run.run_id == run_id) for run_id in run_ids]
 
 
 def read_json(path: Path) -> list[dict]:
@@ -52,12 +45,6 @@ def write_json(path: Path, payload: list[dict]) -> None:
     temporary.replace(path)
 
 
-def page(items: list[dict], limit: int, offset: int) -> dict:
-    if not 1 <= limit <= 200 or offset < 0:
-        raise HTTPException(400, {"error": "invalid_pagination", "message": "limit must be 1..200 and offset must be non-negative.", "details": {"limit": limit, "offset": offset}})
-    return {"items": items[offset:offset + limit], "total": len(items), "limit": limit, "offset": offset}
-
-
 @app.get("/api/models")
 def models():
     return [{**model, "checkpoints": [checkpoint_availability(model, item) for item in model["checkpoint_variants"]]} for model in load_registry()["models"]]
@@ -65,36 +52,33 @@ def models():
 
 @app.get("/api/runs")
 def runs(protocol_id: str | None = None):
-    return [run.run.model_dump(mode="json") for run in indexed_runs() if protocol_id is None or run.run.protocol_id == protocol_id]
+    return list_runs(protocol_id)
 
 
 @app.get("/api/queries")
-def queries(run_id: str, query_id: str | None = None, category: str | None = None, failed_at: int | None = None, order: str = "worst", limit: int = 50, offset: int = 0):
-    run = runs_for_ids([run_id])[0]
-    rows = [query.model_dump() for query in run.queries if (query_id is None or query.query_id == query_id) and (category is None or query.category == category)]
-    if failed_at is not None:
-        rows = [query for query in rows if query["target_rank"] > failed_at]
-    return page(sorted(rows, key=lambda row: row["target_rank"], reverse=order != "best"), limit, offset)
+def queries(run_id: str, query_id: str | None = None, category: str | None = None, failed_at: int | None = None, min_rank: int | None = None, max_rank: int | None = None, order: str = "worst", limit: int = 50, offset: int = 0):
+    return query_page(run_id, query_id=query_id, category=category, failed_at=failed_at, min_rank=min_rank, max_rank=max_rank, order=order, limit=limit, offset=offset)
 
 
 @app.get("/api/compare/{query_id}")
 def compare(query_id: str, run_ids: str):
-    runs = runs_for_ids(run_ids.split(","))
-    aligned_queries(runs)
-    records = [{"run": run.run.model_dump(mode="json"), "query": next(query.model_dump() for query in run.queries if query.query_id == query_id)} for run in runs if any(query.query_id == query_id for query in run.queries)]
-    if len(records) != len(runs):
-        raise HTTPException(404, {"error": "query_not_found", "message": "Query not found in selected runs.", "details": {"query_id": query_id}})
-    return records
+    selected = run_ids.split(",")
+    runs, _ = validate_analysis_selection(selected)
+    return [{"run": run, "query": get_query(run["run_id"], query_id)} for run in runs]
 
 
 @app.get("/api/analysis")
 def analysis(run_ids: str, k: int = 10):
-    return analysis_rows(runs_for_ids(run_ids.split(",")), k)
+    selected = run_ids.split(",")
+    _, maps = get_analysis_input(selected, k)
+    return analysis_rows_from_maps(selected, maps, k)
 
 
 @app.get("/api/analysis/failure-jaccard")
 def overlap(run_ids: str, k: int = 10):
-    return failure_jaccard(runs_for_ids(run_ids.split(",")), k)
+    selected = run_ids.split(",")
+    _, maps = get_analysis_input(selected, k)
+    return failure_jaccard_from_maps(selected, maps, k)
 
 
 class AnnotationInput(BaseModel):
@@ -136,12 +120,11 @@ def cohorts():
 
 @app.put("/api/cohorts")
 def save_cohort(payload: CohortInput):
-    selected_runs = runs_for_ids(payload.run_ids)
-    protocol = require_same_protocol(selected_runs)
+    runs, maps = validate_analysis_selection(payload.run_ids)
+    protocol = runs[0]["protocol_id"]
     if protocol != payload.protocol_id:
         raise WorkbenchError("cross_protocol", "Cohort protocol does not match selected runs.", {"cohort_protocol": payload.protocol_id, "run_protocol": protocol})
-    aligned = aligned_queries(selected_runs)
-    unknown = sorted(set(payload.query_ids) - set(aligned))
+    unknown = sorted(set(payload.query_ids) - set(maps[payload.run_ids[0]]))
     if unknown:
         raise WorkbenchError("query_alignment_mismatch", "Cohort contains query IDs outside selected run universe.", {"unknown_query_ids": unknown[:20], "unknown_query_count": len(unknown)})
     record = SavedCohort(**payload.model_dump(), created_at=datetime.now(UTC)).model_dump(mode="json")
@@ -155,7 +138,7 @@ def export_cohort(cohort_id: str, format: str):
     cohort = next((item for item in read_json(COHORTS_PATH) if item["cohort_id"] == cohort_id), None)
     if cohort is None:
         raise HTTPException(404, {"error": "cohort_not_found", "message": "Cohort not found.", "details": {"cohort_id": cohort_id}})
-    metrics = cohort_metrics(runs_for_ids(cohort["run_ids"]), cohort["query_ids"])
+    metrics = cohort_metrics(cohort["run_ids"], cohort["query_ids"])
     if format == "json":
         return {**cohort, "metrics": metrics}
     if format == "csv":

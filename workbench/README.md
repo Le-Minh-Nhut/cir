@@ -183,6 +183,7 @@ python workbench/scripts/run_eval.py \
 ```
 
 Adapters reject unsupported protocol/checkpoint pairs and missing checkpoints. A manually installed verified-mapping checkpoint can be runnable even when no automatic direct download URL exists. Availability reports source metadata, local source sync, automatic download availability, local SHA, official SHA status, mapping status, command readiness, runtime verification, and runnable state separately. No adapter imports model code into backend process.
+CSMCIR later requires an audited upstream working-directory/data layout because its official evaluator has no ordinary dataset-root CLI. ENCODER additionally requires the upstream `./open_clip_pytorch_model.bin` ViT-B-32 backbone asset; its FashionIQ checkpoint alone is insufficient. Neither asset is downloaded by this workbench.
 
 ## Results and index
 
@@ -196,7 +197,7 @@ workbench/artifacts/results/
 
 Each stores run provenance, training/evaluation noise, paper and local metrics, canonical query identity, raw captions, model input text, exact target rank and top results. Schema v2 adds `run_id` artifact identity, `checkpoint_id`, `top_k_saved`, and `gallery_size`. v1 is rejected rather than silently migrated. See [docs/RESULT_SCHEMA.md](docs/RESULT_SCHEMA.md).
 
-DuckDB serves normalized `runs`, `queries`, and `top_results` tables after a successful atomic rebuild. APIs paginate query lists (`limit` ≤ 200); result JSON remains canonical.
+DuckDB is a rebuildable serving index with normalized `runs`, `queries`, and `top_results` tables. Normal API browsing uses SQL metadata queries and paginated query retrieval; canonical JSON remains source of truth. Cross-run analytics load only aligned selected-run fields and requested Top-K rows.
 
 ```bash
 python workbench/scripts/rebuild_index.py

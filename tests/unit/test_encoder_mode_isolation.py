@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import importlib
-
 import torch
 
 from evaluation.cirr import evaluate_cirr_metrics as evaluate_cirr_legacy_metrics
 from evaluation.cirr_encoder import evaluate_cirr_encoder_metrics
 from evaluation.fashioniq import evaluate_fashioniq_category
 from evaluation.fashioniq_encoder import evaluate_fashioniq_encoder_category
-from models.taper import TAPER
 
 
 def test_encoder_evaluators_do_not_replace_legacy_evaluators() -> None:
@@ -33,17 +30,3 @@ def test_encoder_evaluators_do_not_replace_legacy_evaluators() -> None:
 
     assert "mean_recall" in legacy and "selection_score" not in legacy
     assert "selection_score" in encoder and "mean_recall" in encoder
-
-
-def test_importing_encoder_entrypoints_does_not_patch_taper_api() -> None:
-    init_method = TAPER.__init__
-    state_dict_method = TAPER.state_dict
-
-    importlib.import_module("train_cirr_encoder")
-    importlib.import_module("evaluate_cirr_encoder")
-    importlib.import_module("predict_cirr_encoder_test")
-    importlib.import_module("train_fashioniq_encoder")
-    importlib.import_module("evaluate_fashioniq_encoder")
-
-    assert TAPER.__init__ is init_method
-    assert TAPER.state_dict is state_dict_method

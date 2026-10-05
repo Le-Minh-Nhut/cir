@@ -37,6 +37,6 @@ Canonical source artifact: `workbench/artifacts/results/{protocol_id}/{model_id}
 
 `run_id`, not `model_id`, is analysis identity. Different checkpoints or training-noise conditions of one model must have distinct `run_id` values. `query_id` derives from canonical category, annotation index, reference ID and target ID; `model_input_text` may differ.
 
-v2 requires `checkpoint_id`, `top_k_saved`, and `gallery_size`. Stored ranks are contiguous, unique, and cannot exceed `top_k_saved`; target rank cannot exceed gallery size. Top-K set operations require every selected run to save requested depth. Target-rank metrics remain valid without top-K retrieval rows.
+v2 requires `checkpoint_id`, `top_k_saved`, and `gallery_size`. Stored ranks are contiguous and unique; `len(top_results) <= min(top_k_saved, gallery_size)`, while `top_k_saved` may intentionally exceed gallery size. Target rank cannot exceed gallery size. Top-K set operations require every selected run to save requested depth. Target-rank metrics remain valid without top-K retrieval rows.
 
 Schema v1 files are intentionally rejected. Regenerate result JSON from verified instrumentation rather than silently guessing missing v2 metadata. Mock fixtures use `data_kind: "mock"`; no UI result from them is research evidence.

@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import sys
+import urllib.error
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,7 +30,7 @@ def selected(args: argparse.Namespace, models: list[dict]) -> list[tuple[dict, d
             variants = [item for item in variants if item["checkpoint_id"] == args.checkpoint]
             if not variants and args.model:
                 raise ValueError(f"unknown checkpoint for {args.model}: {args.checkpoint}")
-        if len(variants) > 1 and model["model_id"] == "pair" and not args.all:
+        if len(variants) > 1 and model["model_id"] == "pair" and not (args.all or args.list) and not args.checkpoint:
             print("PAIR has unresolved variants; select --checkpoint pair_b1 or pair_b2.", file=sys.stderr)
             continue
         records.extend((model, checkpoint) for checkpoint in variants)
@@ -82,7 +83,14 @@ def download(url: str, partial: Path) -> None:
     request = urllib.request.Request(url)
     if offset:
         request.add_header("Range", f"bytes={offset}-")
-    with urllib.request.urlopen(request) as response:
+    try:
+        response = urllib.request.urlopen(request)
+    except urllib.error.HTTPError as error:
+        if error.code == 416 and offset:
+            partial.unlink(missing_ok=True)
+            return download(url, partial)
+        raise
+    with response:
         status = response.getcode()
         if offset and status == 206 and _valid_content_range(response.headers.get("Content-Range"), offset):
             _write_response(response, partial, "ab")
@@ -120,6 +128,12 @@ def main() -> None:
     manifest = load_manifest(manifest_path)
     for model, checkpoint in items:
         destination = checkpoint_path(model["model_id"], checkpoint, args.output_root)
+        if args.all and checkpoint["checkpoint_mapping_status"] == "UNVERIFIED":
+            print(f"SKIPPED: unresolved checkpoint mapping ({model['model_id']} / {checkpoint['checkpoint_id']})")
+            continue
+        if args.all and checkpoint.get("download_url") is None:
+            print(f"SKIPPED: direct official download URL unavailable ({model['model_id']} / {checkpoint['checkpoint_id']})")
+            continue
         describe(model, checkpoint, destination)
         if args.verify_only:
             verify(model, checkpoint, destination)

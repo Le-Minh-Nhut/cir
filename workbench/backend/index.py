@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import csv
 import json
 import os
+import tempfile
 from pathlib import Path
 from uuid import uuid4
 
@@ -48,14 +50,21 @@ def rebuild_index(results_root: Path = RESULTS_ROOT, database_path: Path = DATAB
     connection = duckdb.connect(str(temporary))
     try:
         _create_schema(connection)
+        rows = {"runs": [], "queries": [], "top_results": []}
         for result in runs:
             run = result.run
-            metadata = run.model_dump_json()
-            connection.execute("INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [run.run_id, run.protocol_id, run.model_id, run.checkpoint_id, run.checkpoint_training_noise_pct, run.data_kind, run.top_k_saved, run.gallery_size, run.reproduced_metrics.r10, run.reproduced_metrics.r50, run.reproduced_metrics.mean, metadata])
+            rows["runs"].append([run.run_id, run.protocol_id, run.model_id, run.checkpoint_id, run.checkpoint_training_noise_pct, run.data_kind, run.top_k_saved, run.gallery_size, run.reproduced_metrics.r10, run.reproduced_metrics.r50, run.reproduced_metrics.mean, run.model_dump_json()])
             for query in result.queries:
-                connection.execute("INSERT INTO queries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [run.run_id, query.query_id, query.category, query.annotation_index, query.reference_id, query.target_id, json.dumps(query.raw_captions), query.model_input_text, query.target_rank])
-                for item in query.top_results:
-                    connection.execute("INSERT INTO top_results VALUES (?, ?, ?, ?, ?)", [run.run_id, query.query_id, item.rank, item.image_id, item.score])
+                rows["queries"].append([run.run_id, query.query_id, query.category, query.annotation_index, query.reference_id, query.target_id, json.dumps(query.raw_captions), query.model_input_text, query.target_rank])
+                rows["top_results"].extend([run.run_id, query.query_id, item.rank, item.image_id, item.score] for item in query.top_results)
+        for table, table_rows in rows.items():
+            with tempfile.NamedTemporaryFile(mode="w", newline="", dir=database_path.parent, suffix=".csv", delete=False) as file:
+                csv.writer(file).writerows(table_rows)
+                source = Path(file.name)
+            try:
+                connection.execute(f"COPY {table} FROM ? (FORMAT CSV)", [str(source)])
+            finally:
+                source.unlink(missing_ok=True)
         connection.execute("SELECT COUNT(*) FROM runs").fetchone()
     except Exception:
         connection.close()
