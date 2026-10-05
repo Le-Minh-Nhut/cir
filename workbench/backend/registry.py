@@ -19,6 +19,8 @@ def load_registry(path: Path = REGISTRY_PATH) -> dict[str, Any]:
     for model in registry["models"]:
         if model["native_protocol"] is not None and model["native_protocol"] not in registry["protocols"]:
             raise ValueError(f"unknown protocol for {model['model_id']}")
+        if bool(model["source_available"]) != bool(model.get("source_dir")):
+            raise ValueError(f"source_dir mismatch for {model['model_id']}")
         for checkpoint in model["checkpoint_variants"]:
             if checkpoint["evaluation_noise_pct"] != 0:
                 raise ValueError(f"non-clean evaluation policy for {model['model_id']}")
@@ -53,27 +55,23 @@ def sha256_file(path: Path) -> str:
 
 
 def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -> dict[str, Any]:
-    path = checkpoint_path(model["model_id"], checkpoint)
+    path = checkpoint_path(model["model_id"], checkpoint, CHECKPOINT_ROOT)
     downloaded = path.is_file()
-    actual_sha = sha256_file(path) if downloaded else None
-    expected_sha = checkpoint.get("expected_sha256")
-    valid = downloaded and (expected_sha is None or actual_sha == expected_sha)
-    reasons: list[str] = []
-    if checkpoint["checkpoint_mapping_status"] == "UNVERIFIED":
-        reasons.append("checkpoint_mapping_unverified")
-    if checkpoint.get("download_url") is None:
-        reasons.append("checkpoint_download_url_unavailable")
+    local_sha = sha256_file(path) if downloaded else None
+    official_sha = checkpoint.get("expected_sha256")
+    official_sha_match = local_sha == official_sha if downloaded and official_sha else None
+    mapping_verified = checkpoint["checkpoint_mapping_status"] not in {"UNVERIFIED"}
+    source_synced = bool(model.get("source_dir")) and (ROOT / "third_party" / model["source_dir"]).is_dir()
+    adapter_command_ready = mapping_verified and model["model_id"] in {"csmcir", "encoder"}
+    runtime_verified = model.get("reproduction_status") == "VERIFIED"
+    runnable = downloaded and source_synced and mapping_verified and (official_sha is None or official_sha_match is True) and adapter_command_ready
+    blocking_reasons = []
+    if not mapping_verified:
+        blocking_reasons.append("checkpoint_mapping_unverified")
     if not downloaded:
-        reasons.append("checkpoint_not_downloaded")
-    if downloaded and not valid:
-        reasons.append("checkpoint_hash_mismatch")
-    return {
-        "checkpoint_id": checkpoint["checkpoint_id"],
-        "filename": checkpoint["filename"],
-        "checkpoint_metadata_known": checkpoint["status"] not in {"BLOCKED"},
-        "checkpoint_downloaded": downloaded,
-        "checkpoint_path": str(path),
-        "checkpoint_hash_valid": valid if downloaded else None,
-        "runnable": not reasons,
-        "blocking_reasons": reasons,
-    }
+        blocking_reasons.append("checkpoint_not_installed")
+    if official_sha and official_sha_match is False:
+        blocking_reasons.append("official_hash_mismatch")
+    if not adapter_command_ready:
+        blocking_reasons.append("adapter_command_unverified")
+    return {"checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_metadata": checkpoint["status"] != "BLOCKED", "source_synced_locally": source_synced, "automatic_download_available": checkpoint.get("download_url") is not None, "checkpoint_downloaded": downloaded, "local_sha256": local_sha, "official_sha256_known": official_sha is not None, "official_sha256_match": official_sha_match, "mapping_verified": mapping_verified, "adapter_command_ready": adapter_command_ready, "runtime_verified": runtime_verified, "runnable": runnable, "checkpoint_path": str(path), "blocking_reasons": blocking_reasons}

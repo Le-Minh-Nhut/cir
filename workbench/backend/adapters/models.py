@@ -5,12 +5,11 @@ from workbench.backend.registry import ROOT, checkpoint_path
 
 
 class OfficialScriptAdapter(ModelAdapter):
-    source_dir: str
     script: str
 
     def build_command(self, request: EvalRequest) -> list[str]:
         checkpoint = self.validate_request(request)
-        return self.command(ROOT / "third_party" / self.source_dir, checkpoint, request)
+        return self.command(ROOT / "third_party" / self.model["source_dir"], checkpoint, request)
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         raise NotImplementedError("upstream evaluation command requires audit before execution")
@@ -18,7 +17,6 @@ class OfficialScriptAdapter(ModelAdapter):
 
 class CSMCIRAdapter(OfficialScriptAdapter):
     model_id = "csmcir"
-    source_dir = "CSMCIR"
     script = "src/validate_blip_csmcir.py"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
@@ -27,7 +25,6 @@ class CSMCIRAdapter(OfficialScriptAdapter):
 
 class EncoderAdapter(OfficialScriptAdapter):
     model_id = "encoder"
-    source_dir = "ENCODER"
     script = "evaluate_model.py"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
@@ -36,37 +33,31 @@ class EncoderAdapter(OfficialScriptAdapter):
 
 class HintAdapter(OfficialScriptAdapter):
     model_id = "hint"
-    source_dir = "HINT"
     script = "test.py"
 
 
 class PairAdapter(OfficialScriptAdapter):
     model_id = "pair"
-    source_dir = "PAIR"
     script = "test.py"
 
 
 class AirKnowAdapter(OfficialScriptAdapter):
     model_id = "airknow"
-    source_dir = "AirKnow"
     script = "test_BLIP2.py"
 
 
 class ConeSepAdapter(OfficialScriptAdapter):
     model_id = "conesep"
-    source_dir = "ConeSep"
     script = "test.py"
 
 
 class HabitAdapter(OfficialScriptAdapter):
     model_id = "habit"
-    source_dir = "HABIT"
     script = "test.py"
 
 
 class IntentAdapter(OfficialScriptAdapter):
     model_id = "intent"
-    source_dir = "INTENT"
     script = "test.py"
 
 

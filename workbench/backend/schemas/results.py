@@ -32,14 +32,15 @@ class QueryResult(BaseModel):
     top_results: list[TopResult]
 
     @model_validator(mode="after")
-    def validate_ranks(self) -> "QueryResult":
-        ranks = [result.rank for result in self.top_results]
-        if ranks != list(range(1, len(ranks) + 1)):
+    def validate_query(self) -> "QueryResult":
+        if [item.rank for item in self.top_results] != list(range(1, len(self.top_results) + 1)):
             raise ValueError("top_results ranks must be contiguous from 1")
-        if len({result.image_id for result in self.top_results}) != len(self.top_results):
+        if len({item.image_id for item in self.top_results}) != len(self.top_results):
             raise ValueError("top_results image IDs must be unique")
+        expected_query_id = f"{self.category}:{self.annotation_index}:{self.reference_id}:{self.target_id}"
+        if self.query_id != expected_query_id:
+            raise ValueError("query_id must use canonical category:index:reference:target identity")
         return self
-
 
 class RunMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -51,20 +52,25 @@ class RunMetadata(BaseModel):
     evaluation_noise_pct: Literal[0]
     model_id: str
     method_name: str
+    checkpoint_id: Annotated[str, Field(min_length=1)]
+    checkpoint_training_noise_pct: int | None = Field(default=None, ge=0, le=100)
+    top_k_saved: Annotated[int, Field(ge=1)]
+    gallery_size: Annotated[int, Field(ge=1)]
     upstream_repo: str | None = None
     upstream_commit: str | None = None
     checkpoint_path: str | None = None
     checkpoint_source: str | None = None
     checkpoint_sha256: str | None = None
-    checkpoint_training_noise_pct: int | None = Field(default=None, ge=0, le=100)
     instrumentation_patch_sha256: str | None = None
+    command_digest: str | None = None
+    environment_digest: str | None = None
     timestamp: datetime
     data_kind: Literal["experiment", "mock"] = "experiment"
     reported_paper_metrics: ReportedMetrics = Field(default_factory=ReportedMetrics)
     reproduced_metrics: ReportedMetrics = Field(default_factory=ReportedMetrics)
 
     @model_validator(mode="after")
-    def validate_protocol(self) -> "RunMetadata":
+    def validate_metadata(self) -> "RunMetadata":
         if self.protocol_id not in PROTOCOL_IDS:
             raise ValueError(f"unsupported protocol_id: {self.protocol_id}")
         return self
@@ -73,19 +79,25 @@ class RunMetadata(BaseModel):
 class ResultRun(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     run: RunMetadata
     queries: list[QueryResult]
 
     @model_validator(mode="after")
-    def validate_query_ids(self) -> "ResultRun":
+    def validate_queries(self) -> "ResultRun":
         if len({query.query_id for query in self.queries}) != len(self.queries):
             raise ValueError("query_id values must be unique per run")
+        if any(len(query.top_results) > self.run.top_k_saved for query in self.queries):
+            raise ValueError("query top_results exceeds top_k_saved")
+        if any(query.target_rank > self.run.gallery_size for query in self.queries):
+            raise ValueError("target_rank exceeds gallery_size")
         return self
 
 
 class Annotation(BaseModel):
     query_id: str
+    protocol_id: str
+    annotation_scope: Literal["dataset_query"] = "dataset_query"
     labels: list[str]
     note: str = ""
     updated_at: datetime
@@ -95,7 +107,6 @@ class SavedCohort(BaseModel):
     cohort_id: str
     protocol_id: str
     query_ids: list[str]
-    model_ids: list[str]
     run_ids: list[str]
     definition: dict
     notes: str = ""

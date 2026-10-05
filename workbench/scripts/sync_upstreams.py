@@ -33,7 +33,7 @@ def main() -> None:
         print(f"{model['model_id']}: {model['upstream_repo_url']} @ {model['upstream_commit_sha']}")
         if args.list:
             continue
-        destination = args.output_root / model["method_name"].replace(" ", "")
+        destination = args.output_root / model["source_dir"]
         if not destination.exists():
             subprocess.run(["git", "clone", "--no-checkout", model["upstream_repo_url"], str(destination)], check=True)
         if args.fetch:

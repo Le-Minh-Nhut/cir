@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import urllib.request
@@ -21,7 +22,7 @@ def selected(args: argparse.Namespace, models: list[dict]) -> list[tuple[dict, d
         models = [item for item in models if item["model_id"] == args.model]
         if not models:
             raise ValueError(f"unknown model: {args.model}")
-    selected: list[tuple[dict, dict]] = []
+    records: list[tuple[dict, dict]] = []
     for model in models:
         variants = model["checkpoint_variants"]
         if args.checkpoint:
@@ -31,8 +32,8 @@ def selected(args: argparse.Namespace, models: list[dict]) -> list[tuple[dict, d
         if len(variants) > 1 and model["model_id"] == "pair" and not args.all:
             print("PAIR has unresolved variants; select --checkpoint pair_b1 or pair_b2.", file=sys.stderr)
             continue
-        selected.extend((model, checkpoint) for checkpoint in variants)
-    return selected
+        records.extend((model, checkpoint) for checkpoint in variants)
+    return records
 
 
 def describe(model: dict, checkpoint: dict, destination: Path) -> None:
@@ -66,12 +67,32 @@ def verify(model: dict, checkpoint: dict, destination: Path) -> bool:
     return valid
 
 
-def download(url: str, partial: Path) -> None:
-    request = urllib.request.Request(url)
-    if partial.exists():
-        request.add_header("Range", f"bytes={partial.stat().st_size}-")
-    with urllib.request.urlopen(request) as response, partial.open("ab") as output:
+def _write_response(response, partial: Path, mode: str) -> None:
+    with partial.open(mode) as output:
         shutil.copyfileobj(response, output, length=1024 * 1024)
+
+
+def _valid_content_range(value: str | None, offset: int) -> bool:
+    match = re.fullmatch(r"bytes (\d+)-\d+/\d+|bytes (\d+)-\d+/\*", value or "")
+    return match is not None and int(match.group(1) or match.group(2)) == offset
+
+
+def download(url: str, partial: Path) -> None:
+    offset = partial.stat().st_size if partial.exists() else 0
+    request = urllib.request.Request(url)
+    if offset:
+        request.add_header("Range", f"bytes={offset}-")
+    with urllib.request.urlopen(request) as response:
+        status = response.getcode()
+        if offset and status == 206 and _valid_content_range(response.headers.get("Content-Range"), offset):
+            _write_response(response, partial, "ab")
+            return
+        if status == 200:
+            _write_response(response, partial, "wb")
+            return
+        if offset and status == 206:
+            raise RuntimeError(f"server returned incompatible Content-Range for resume: {response.headers.get('Content-Range')!r}")
+        raise RuntimeError(f"unexpected HTTP status {status} for checkpoint download")
 
 
 def main() -> None:
@@ -125,7 +146,7 @@ def main() -> None:
         if expected and digest != expected:
             raise RuntimeError(f"sha256 mismatch for {destination}")
         manifest = [entry for entry in manifest if not (entry["model_id"] == model["model_id"] and entry["checkpoint_id"] == checkpoint["checkpoint_id"])]
-        manifest.append({"model_id": model["model_id"], "checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_url": checkpoint["download_url"], "downloaded_sha256": digest, "size_bytes": destination.stat().st_size, "downloaded_at": datetime.now(UTC).isoformat(), "verified_against_official_sha": expected is not None})
+        manifest.append({"model_id": model["model_id"], "checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_url": checkpoint["download_url"], "downloaded_sha256": digest, "size_bytes": destination.stat().st_size, "downloaded_at": datetime.now(UTC).isoformat(), "official_hash_available": expected is not None, "official_hash_match": digest == expected if expected else None})
         save_manifest(manifest_path, manifest)
         print(f"DOWNLOADED {destination}: {destination.stat().st_size} bytes sha256={digest}\n")
 

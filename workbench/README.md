@@ -80,9 +80,7 @@ npm install
 
 The backend starts with no checkpoint installed. Models then show `CHECKPOINT NOT DOWNLOADED`; run control remains disabled. Browser never downloads weights.
 
-## Model registry and provenance
-
-`registry/models.yaml` records official/author-linked source URL, exact repository commit, native protocol, paper sanity scores, and checkpoint variants. Example:
+`registry/models.yaml` records official/author-linked source URL, exact repository commit, required `source_dir`, native protocol, paper sanity scores, and checkpoint variants. `source_dir` is shared by sync and adapters; no method-name-derived path exists.
 
 ```yaml
 checkpoint_id: fiq_n02
@@ -123,8 +121,7 @@ python workbench/scripts/download_checkpoints.py --model csmcir --dry-run
 python workbench/scripts/download_checkpoints.py --all --dry-run
 ```
 
-`--dry-run` performs no network access or artifact mutation. Actual download uses `filename.part`, resumes HTTP when server supports ranges, atomically renames after completion, computes SHA-256, refuses different existing content unless `--force-redownload`, and writes local manifest only.
-
+`--dry-run` performs no network access or artifact mutation. Actual download uses `filename.part`; resumes only after an HTTP `206` with a matching `Content-Range`. A server ignoring a range request (`200`) restarts safely from byte zero. It atomically renames after completion, computes local SHA-256, refuses different existing content unless `--force-redownload`, and writes local manifest only.
 Later individual downloads:
 
 ```bash
@@ -185,7 +182,7 @@ python workbench/scripts/run_eval.py \
   --top-k 200
 ```
 
-Adapters reject unsupported protocol/checkpoint pairs and missing checkpoints. No adapter imports model code into backend process.
+Adapters reject unsupported protocol/checkpoint pairs and missing checkpoints. A manually installed verified-mapping checkpoint can be runnable even when no automatic direct download URL exists. Availability reports source metadata, local source sync, automatic download availability, local SHA, official SHA status, mapping status, command readiness, runtime verification, and runnable state separately. No adapter imports model code into backend process.
 
 ## Results and index
 
@@ -197,9 +194,9 @@ workbench/artifacts/results/
 └── fashioniq_val_split/encoder/fashioniq.json
 ```
 
-Each stores run provenance, training/evaluation noise, paper and local metrics, canonical query identity, raw captions, model input text, exact target rank and top results. See [docs/RESULT_SCHEMA.md](docs/RESULT_SCHEMA.md).
+Each stores run provenance, training/evaluation noise, paper and local metrics, canonical query identity, raw captions, model input text, exact target rank and top results. Schema v2 adds `run_id` artifact identity, `checkpoint_id`, `top_k_saved`, and `gallery_size`. v1 is rejected rather than silently migrated. See [docs/RESULT_SCHEMA.md](docs/RESULT_SCHEMA.md).
 
-DuckDB is disposable derivative, never sole truth:
+DuckDB serves normalized `runs`, `queries`, and `top_results` tables after a successful atomic rebuild. APIs paginate query lists (`limit` ≤ 200); result JSON remains canonical.
 
 ```bash
 python workbench/scripts/rebuild_index.py
@@ -207,15 +204,12 @@ python workbench/scripts/rebuild_index.py
 
 ## UI guide
 
-- **Dashboard** — registered models, protocols, latest runs and provenance warnings.
-- **Models** — source pin, checkpoint metadata/download state, noise condition and safe download instruction. Run disabled when assets absent.
-- **Evaluation Runs** — protocol-filtered compatible runs. Never silently selects incompatible model/protocol pair.
-- **Sample Explorer** — reference, target, raw captions, model text, target rank and top 5/10/20/50/100/200 results; previous, next and random query controls.
-- **Compare Models** — same canonical query across compatible selected runs.
-- **Common Failures** — consensus fail fraction at K, median/mean/worst rank, common distractors and top-K Jaccard.
-- **Disagreement / Failure Analytics** — rank range/std, universal failure/success and one-model-win inspection; heatmap-compatible row data.
-- **Annotations** — separate multi-label case notes; never mutates raw run JSON.
-- **Hypotheses** — save same-protocol cohort definition, selected run IDs and query IDs before export.
+- **Sample Explorer** — reference/target local image endpoint with `.png`, `.jpg`, and `.jpeg` known FashionIQ layouts; safe image IDs only; graceful browser placeholders when unavailable. It paginates queries and supports top 1/5/10/20/50/100/200.
+- **Compare Models** — same canonical query across compatible selected runs; run identity remains `run_id`.
+- **Common Failures** — consensus fail fraction at K, median/mean/worst rank, common distractors counted per run, and top-K Jaccard.
+- **Disagreement / Failure Analytics** — rank range/std, universal failure/success and one-run-win inspection; run-level Jaccard matrix.
+- **Annotations** — multi-label dataset-query notes keyed by `(protocol_id, query_id)`; never mutate raw run JSON.
+- **Hypotheses** — save same-protocol cohort definition, selected run IDs and query IDs; JSON/CSV/Markdown exports include cohort metrics.
 
 ## Research workflow example
 
@@ -229,6 +223,15 @@ python workbench/scripts/rebuild_index.py
 8. Export JSON/CSV/Markdown and compare cohort R@10 against full benchmark.
 
 This converts visual observations into a reproducible hypothesis, not a conclusion.
+
+## Scientific Integrity Guards
+
+1. Cross-run analysis requires one protocol, exact query-ID universe, and identical canonical category, annotation index, reference ID, target ID, and raw captions. `model_input_text` is intentionally allowed to differ.
+2. Analysis uses `run_id`, never `model_id`; checkpoint variants cannot overwrite one another.
+3. Top-K retrieval analyses reject saved depth below requested K. Target-rank cohort metrics do not pretend top-K rows exist.
+4. Rebuild rejects duplicate `run_id` values and writes a temporary DuckDB before atomic replacement. A malformed result file leaves prior index intact.
+5. Structured API guard failures expose `cross_protocol`, `query_alignment_mismatch`, `canonical_query_mismatch`, `insufficient_top_k_depth`, and checkpoint mapping state.
+6. Image lookup accepts only benchmark image IDs and known FashionIQ `.png`/`.jpg`/`.jpeg` locations; HTTP paths never select arbitrary filesystem files.
 
 ## Scientific warnings
 

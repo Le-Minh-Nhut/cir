@@ -3,8 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-
+from workbench.backend.errors import WorkbenchError
 from workbench.backend.registry import checkpoint_by_id, checkpoint_path, model_by_id
 
 
@@ -32,7 +31,7 @@ class ModelAdapter(ABC):
         if not path.is_file():
             raise FileNotFoundError(f"checkpoint missing: {path}")
         if checkpoint["checkpoint_mapping_status"] == "UNVERIFIED":
-            raise ValueError(f"checkpoint mapping unresolved: {request.checkpoint_id}")
+            raise WorkbenchError("checkpoint_mapping_unverified", "Checkpoint mapping is unresolved.", {"model_id": self.model_id, "checkpoint_id": request.checkpoint_id})
         return checkpoint
 
     @abstractmethod

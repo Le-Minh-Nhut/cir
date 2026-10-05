@@ -15,6 +15,7 @@ models:
     upstream_default_branch: main
     upstream_commit_sha: 774f94e2076ff17ea91703a6239d2a08f0e1a44e
     source_available: true
+    source_dir: CSMCIR
     native_protocol: fashioniq_original_split
     supported_protocols: [fashioniq_original_split]
     reported_r10: 57.07
@@ -42,6 +43,7 @@ models:
     upstream_default_branch: main
     upstream_commit_sha: 6ab6fa95b746f85b08eea4cb66eb51448bce99b7
     source_available: true
+    source_dir: AirKnow
     native_protocol: fashioniq_original_split
     supported_protocols: [fashioniq_original_split]
     reported_r10: 55.75
@@ -79,6 +81,7 @@ models:
     upstream_default_branch: main
     upstream_commit_sha: bd4bf629ebe68045c1a54dcc61e4a3ea65f8759b
     source_available: true
+    source_dir: ConeSep
     native_protocol: fashioniq_original_split
     supported_protocols: [fashioniq_original_split]
     reported_r10: 55.58
@@ -126,6 +129,7 @@ models:
     upstream_default_branch: null
     upstream_commit_sha: null
     source_available: false
+    source_dir: null
     native_protocol: null
     supported_protocols: []
     reported_r10: 54.99
@@ -143,6 +147,7 @@ models:
     upstream_default_branch: main
     upstream_commit_sha: 6ddc2cd63eac1f65693f4e821c34fb3b42aee306
     source_available: true
+    source_dir: HABIT
     native_protocol: fashioniq_original_split
     supported_protocols: [fashioniq_original_split]
     reported_r10: 55.38
@@ -190,6 +195,7 @@ models:
     upstream_default_branch: main
     upstream_commit_sha: 2a75fc6f57d1a036bf3167a7fe1d2cee072f51f3
     source_available: true
+    source_dir: INTENT
     native_protocol: fashioniq_original_split
     supported_protocols: [fashioniq_original_split]
     reported_r10: 55.31
@@ -237,6 +243,7 @@ models:
     upstream_default_branch: main
     upstream_commit_sha: bec50b6c8c19111893b617979502b948d1cea5b2
     source_available: true
+    source_dir: HINT
     native_protocol: fashioniq_val_split
     supported_protocols: [fashioniq_val_split]
     reported_r10: 58.48
@@ -264,6 +271,7 @@ models:
     upstream_default_branch: main
     upstream_commit_sha: 29a2a31d6a56f677bf450c3be7cdaef423fb7018
     source_available: true
+    source_dir: ENCODER
     native_protocol: fashioniq_val_split
     supported_protocols: [fashioniq_val_split]
     reported_r10: 56.13
@@ -292,6 +300,7 @@ models:
     upstream_default_branch: main
     upstream_commit_sha: bfb0b98cdb4c44f6b9190baaa84d783a77dd888f
     source_available: true
+    source_dir: PAIR
     native_protocol: fashioniq_val_split
     supported_protocols: [fashioniq_val_split]
     reported_r10: 52.76
