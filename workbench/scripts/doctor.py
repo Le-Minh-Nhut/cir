@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
-from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, checkpoint_path, fashioniq_required_paths, load_registry, sha256_file
+from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, checkpoint_path, fashioniq_required_paths, load_registry, preparation_contract_for_model, preparation_paths, sha256_file
 
 from workbench.backend.fashioniq_layout import CATEGORIES, missing_paths, standard_paths
 
@@ -63,6 +63,25 @@ def csmcir_auxiliary_paths(config: WorkbenchConfig, family: str) -> tuple[Path, 
 
 def missing_path_strings(paths: tuple[Path, ...]) -> list[str]:
     return [str(path) for path in missing_paths(paths)]
+
+
+def preparation_checks(model: dict[str, Any], root: Path) -> tuple[list[dict[str, Any]], list[str]]:
+    contract = preparation_contract_for_model(model)
+    if contract is None:
+        missing = missing_path_strings(fashioniq_required_paths(model, root))
+        blockers = [f"FashionIQ {model['fashioniq_layout']} requirement missing: {path}" for path in missing]
+        return [], blockers
+    raw_missing = missing_path_strings(preparation_paths(contract, root, "raw_inputs"))
+    generated_missing = missing_path_strings(preparation_paths(contract, root, "generated_artifacts"))
+    raw_status = "OK" if not raw_missing else "BLOCKED"
+    preparation_status = "BLOCKED" if generated_missing else "MANUAL"
+    checks = [
+        record(f"raw-dataset:{model['model_id']}", raw_status, "raw benchmark inputs available" if not raw_missing else "raw benchmark inputs missing", preparation_id=contract["preparation_id"], missing=raw_missing),
+        record(f"preparation:{model['model_id']}", preparation_status, "manual source-specific preparation required" if not generated_missing else "required generated artifacts missing", preparation_id=contract["preparation_id"], required_generated_artifacts=contract["generated_artifacts"], external_assets=contract["external_assets"], deterministic_status=contract["deterministic_status"], automation_policy=contract["automation_policy"], notes=contract["notes"], missing=generated_missing),
+    ]
+    blockers = [f"raw benchmark input missing: {path}" for path in raw_missing]
+    blockers.extend(f"required generated artifact missing: {path}" for path in generated_missing)
+    return checks, blockers
 
 
 def fashioniq_check(root: Path) -> dict[str, Any]:
@@ -121,8 +140,9 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
             if name == "csmcir:cot-captions" and missing:
                 runtime_blockers.append("required COT_ours2 captions have no verified automatic acquisition source")
     if model_id != "csmcir":
-        missing = missing_path_strings(fashioniq_required_paths(model, config.FASHIONIQ_ROOT))
-        runtime_blockers.extend(f"FashionIQ {model['fashioniq_layout']} requirement missing: {path}" for path in missing)
+        preparation, preparation_blockers = preparation_checks(model, config.FASHIONIQ_ROOT)
+        checks.extend(preparation)
+        runtime_blockers.extend(preparation_blockers)
     checkpoints = []
     for checkpoint in model["checkpoint_variants"]:
         path = checkpoint_path(model_id, checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)

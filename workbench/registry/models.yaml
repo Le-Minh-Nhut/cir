@@ -392,6 +392,7 @@ models:
     source_dir: CLVCNet
     fashioniq_layout: fashioniq_clvc_resized
     preparation_contract: manual_clvc_resized
+    preparation_id: clvc_net_fashioniq
     literature_split_label: val
     native_protocol: fashioniq_val_split
     supported_protocols: [fashioniq_val_split]
@@ -426,10 +427,10 @@ models:
     source_dir: DCNet
     fashioniq_layout: fashioniq_dcnet
     preparation_contract: manual_dcnet
+    preparation_id: dcnet_fashioniq
     literature_split_label: original
-    native_protocol: null
-    native_protocol_condition: Requires independent proof that split.{category}.val.json is the complete validation gallery.
-    supported_protocols: []
+    native_protocol: fashioniq_full_gallery_ref_excluded
+    supported_protocols: [fashioniq_full_gallery_ref_excluded]
     reported_r10: null
     reported_r50: null
     reported_mean: null
@@ -461,6 +462,7 @@ models:
     source_dir: CLIP4Cir
     fashioniq_layout: fashioniq_standard
     preparation_contract: manual_standard
+    preparation_id: clip4cir_fashioniq
     literature_split_label: original
     native_protocol: fashioniq_original_split
     supported_protocols: [fashioniq_original_split]
@@ -495,6 +497,7 @@ models:
     source_dir: CLIP4Cir
     fashioniq_layout: fashioniq_standard
     preparation_contract: manual_standard
+    preparation_id: clip4cir_fashioniq
     literature_split_label: original
     native_protocol: fashioniq_original_split
     supported_protocols: [fashioniq_original_split]
@@ -529,6 +532,7 @@ models:
     source_dir: TGCIR
     fashioniq_layout: fashioniq_ilearn_resized_training
     preparation_contract: manual_ilearn_resized
+    preparation_id: tgcir_fashioniq
     literature_split_label: val
     native_protocol: fashioniq_val_split
     supported_protocols: [fashioniq_val_split]
@@ -564,6 +568,7 @@ models:
     source_dir: SPRC
     fashioniq_layout: fashioniq_standard
     preparation_contract: manual_standard
+    preparation_id: sprc_fashioniq
     literature_split_label: original
     native_protocol: fashioniq_original_split
     supported_protocols: [fashioniq_original_split]
@@ -599,6 +604,7 @@ models:
     source_dir: LIMN
     fashioniq_layout: fashioniq_ilearn_resized_training
     preparation_contract: manual_ilearn_resized
+    preparation_id: limn_fashioniq
     literature_split_label: val
     native_protocol: fashioniq_val_split
     supported_protocols: [fashioniq_val_split]

@@ -41,8 +41,10 @@ def test_legacy_registry_protocols_and_blockers_are_explicit() -> None:
 
     models = {model["model_id"]: model for model in load_registry()["models"]}
 
-    assert models["dcnet"]["native_protocol"] is None
-    assert "complete validation gallery" in models["dcnet"]["native_protocol_condition"]
+    assert models["dcnet"]["native_protocol"] == "fashioniq_full_gallery_ref_excluded"
+    assert models["dcnet"]["supported_protocols"] == ["fashioniq_full_gallery_ref_excluded"]
+    assert models["dcnet"]["literature_split_label"] == "original"
+    assert models["airknow"]["native_protocol"] == models["dcnet"]["native_protocol"]
     for model_id in ("clvc_net", "tgcir", "limn"):
         assert models[model_id]["native_protocol"] == "fashioniq_val_split"
     for model_id in ("combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "sprc"):
@@ -52,6 +54,16 @@ def test_legacy_registry_protocols_and_blockers_are_explicit() -> None:
     assert all(checkpoint["checkpoint_mapping_status"] != "VERIFIED_METADATA" for model_id in ("clvc_net", "dcnet", "combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "tgcir", "sprc", "limn") for checkpoint in models[model_id]["checkpoint_variants"])
     assert models["tgcir"]["reported_mean"] is None
     assert "neucore" not in models
+
+
+def test_dcnet_shares_only_reference_excluded_full_gallery_cohort() -> None:
+    from workbench.backend.registry import load_registry
+
+    models = {model["model_id"]: model for model in load_registry()["models"]}
+
+    assert models["dcnet"]["native_protocol"] == models["airknow"]["native_protocol"]
+    assert models["dcnet"]["native_protocol"] != models["csmcir"]["native_protocol"]
+    assert models["dcnet"]["native_protocol"] != models["hint"]["native_protocol"]
 
 
 def test_legacy_adapters_are_registered_but_commands_remain_unaudited() -> None:
@@ -74,3 +86,20 @@ def test_legacy_layout_contracts_require_native_inputs(tmp_path) -> None:
     assert tmp_path / "resized_images" in fashioniq_required_paths(models["dcnet"], tmp_path)
     assert tmp_path / "captions" / "cap.dress.train.json" in fashioniq_required_paths(models["tgcir"], tmp_path)
     assert tmp_path / "captions" / "cap.dress.train.json" in fashioniq_required_paths(models["limn"], tmp_path)
+
+
+def test_legacy_preparation_contracts_are_source_specific_and_stay_manual() -> None:
+    from workbench.backend.registry import load_preparation_contracts
+
+    contracts = load_preparation_contracts()
+    dcnet = contracts["dcnet_fashioniq"]
+
+    assert {path for artifact in dcnet["generated_artifacts"] for path in artifact["paths"]} >= {
+        "captions/cap.dress.glove.val.pkl",
+        "captions/cap.shirt.glove.val.pkl",
+        "captions/cap.toptee.glove.val.pkl",
+    }
+    assert {asset["name"] for asset in dcnet["external_assets"]} == {"spaCy en_vectors_web_lg", "NLTK punkt"}
+    assert dcnet["deterministic_status"] == "NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT"
+    assert dcnet["automation_policy"] == "AUTHOR_ARTIFACT_PREFERRED"
+    assert all(contract["automation_policy"] == "MANUAL_REQUIRED" for key, contract in contracts.items() if key != "dcnet_fashioniq")

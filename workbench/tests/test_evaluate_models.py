@@ -70,13 +70,15 @@ def test_legacy_adapter_is_skipped_without_guessed_command() -> None:
     assert reasons == ["SKIPPED: adapter command not audited"]
 
 
-def test_dcnet_cannot_plan_without_certified_protocol() -> None:
+def test_dcnet_protocol_is_known_but_unaudited_command_stays_skipped() -> None:
     module = load_module()
     model = records()["dcnet"]
 
-    assert model["native_protocol"] is None
-    assert model["supported_protocols"] == []
+    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], None, 200)
 
+    assert model["native_protocol"] == "fashioniq_full_gallery_ref_excluded"
+    assert plan is None
+    assert reasons == ["SKIPPED: adapter command not audited"]
 
 def test_missing_checkpoint_is_blocked(monkeypatch, tmp_path: Path) -> None:
     module = load_module()

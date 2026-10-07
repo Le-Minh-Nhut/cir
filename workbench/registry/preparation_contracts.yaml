@@ -1,0 +1,137 @@
+schema_version: 1
+contracts:
+  - preparation_id: clvc_net_fashioniq
+    source_family: CLVC-Net
+    raw_inputs:
+      - name: FashionIQ annotations, splits, and original images
+        kind: raw_benchmark
+        scope: fashioniq_root
+        paths: [captions/cap.dress.train.json, captions/cap.shirt.train.json, captions/cap.toptee.train.json, captions/cap.dress.val.json, captions/cap.shirt.val.json, captions/cap.toptee.val.json, image_splits/split.dress.val.json, image_splits/split.shirt.val.json, image_splits/split.toptee.val.json, images]
+    generated_artifacts:
+      - name: category-local resized JPEG images
+        kind: generated_repo_artifact
+        scope: fashioniq_root
+        paths: [resized_image/dress, resized_image/shirt, resized_image/toptee]
+        generator: FashionIQ start_kit/resize_images.py
+        cwd: start_kit
+    external_assets:
+      - name: torchvision ResNet-50 ImageNet weights
+        kind: external_pretrained_asset
+        state: UNRESOLVED_CACHE
+    deterministic_status: UNKNOWN
+    automation_policy: MANUAL_REQUIRED
+    notes: Upstream checkpoint loader/command mapping is unverified; do not infer or run resize commands.
+  - preparation_id: dcnet_fashioniq
+    source_family: DCNet
+    raw_inputs:
+      - name: FashionIQ raw captions, splits, and images
+        kind: raw_benchmark
+        scope: fashioniq_root
+        paths: [captions/cap.dress.train.json, captions/cap.shirt.train.json, captions/cap.toptee.train.json, captions, image_splits/split.dress.val.json, image_splits/split.shirt.val.json, image_splits/split.toptee.val.json, images]
+    generated_artifacts:
+      - name: GloVe validation annotation PKLs
+        kind: generated_repo_artifact
+        scope: fashioniq_root
+        paths: [captions/cap.dress.glove.val.pkl, captions/cap.shirt.glove.val.pkl, captions/cap.toptee.glove.val.pkl]
+        generator: process_cap.py
+        cwd: preprocess
+      - name: resized evaluation images
+        kind: generated_repo_artifact
+        scope: fashioniq_root
+        paths: [resized_images]
+        generator: resize_img.py
+        cwd: preprocess
+    external_assets:
+      - name: spaCy en_vectors_web_lg
+        kind: external_tokenizer_asset
+        state: REQUIRED_FOR_REGENERATION
+      - name: NLTK punkt
+        kind: external_tokenizer_asset
+        state: REQUIRED_FOR_REGENERATION
+    deterministic_status: NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT
+    automation_policy: AUTHOR_ARTIFACT_PREFERRED
+    notes: process_cap.py samples unseeded NumPy OOV vectors; never regenerate automatically. Later approved regeneration must record seed state, NumPy version, spaCy model/version, NLTK tokenizer/version, and generated hashes.
+  - preparation_id: clip4cir_fashioniq
+    source_family: CLIP4Cir / Combiner
+    raw_inputs:
+      - name: FashionIQ validation captions, splits, and JPG images
+        kind: raw_benchmark
+        scope: fashioniq_root
+        paths: [captions/cap.dress.val.json, captions/cap.shirt.val.json, captions/cap.toptee.val.json, image_splits/split.dress.val.json, image_splits/split.shirt.val.json, image_splits/split.toptee.val.json, images]
+    generated_artifacts: []
+    external_assets:
+      - name: OpenAI CLIP RN50x4 weights or verified paired fine-tuned CLIP state
+        kind: external_pretrained_asset
+        state: BLOCKED_PROVENANCE
+    deterministic_status: DETERMINISTIC_AT_EVALUATION
+    automation_policy: MANUAL_REQUIRED
+    notes: TargetPad/CLIP preprocessing occurs in evaluator. noft/fullft artifact pairing remains unresolved; do not substitute one for the other.
+  - preparation_id: tgcir_fashioniq
+    source_family: TG-CIR
+    raw_inputs:
+      - name: FashionIQ train and validation captions and split files
+        kind: raw_benchmark
+        scope: fashioniq_root
+        paths: [captions/cap.dress.train.json, captions/cap.shirt.train.json, captions/cap.toptee.train.json, captions/cap.dress.val.json, captions/cap.shirt.val.json, captions/cap.toptee.val.json, image_splits/split.dress.val.json, image_splits/split.shirt.val.json, image_splits/split.toptee.val.json]
+    generated_artifacts:
+      - name: category-local resized JPEG images
+        kind: generated_repo_artifact
+        scope: fashioniq_root
+        paths: [resized_image/dress, resized_image/shirt, resized_image/toptee]
+        generator: UNKNOWN
+        cwd: UNKNOWN
+      - name: correction dictionaries installed at dataset path
+        kind: generated_repo_artifact
+        scope: fashioniq_root
+        paths: [captions/correction_dict_dress.json, captions/correction_dict_shirt.json, captions/correction_dict_toptee.json]
+        generator: manual placement from pinned source correction_dict/
+        cwd: UNKNOWN
+    external_assets:
+      - name: OpenAI CLIP ViT-B/16 weights/cache
+        kind: external_pretrained_asset
+        state: UNRESOLVED_CACHE
+    deterministic_status: UNKNOWN
+    automation_policy: MANUAL_REQUIRED
+    notes: Source cache files fashion_iq_data.json and test_queries/test_targets PKLs are cache artifacts; source does not validate freshness. Do not copy dictionaries or caches from another repository.
+  - preparation_id: sprc_fashioniq
+    source_family: SPRC
+    raw_inputs:
+      - name: FashionIQ validation captions, splits, and PNG images
+        kind: raw_benchmark
+        scope: fashioniq_root
+        paths: [captions/cap.dress.val.json, captions/cap.shirt.val.json, captions/cap.toptee.val.json, image_splits/split.dress.val.json, image_splits/split.shirt.val.json, image_splits/split.toptee.val.json, images]
+    generated_artifacts: []
+    external_assets:
+      - name: checkpoint-compatible BLIP-2/LAVIS backbone assets
+        kind: external_pretrained_asset
+        state: BLOCKED_PROVENANCE
+    deterministic_status: DETERMINISTIC_AT_EVALUATION
+    automation_policy: MANUAL_REQUIRED
+    notes: Native TargetPad and text processing occur in evaluation. sprc_fiq.pt model/backbone mapping is unresolved and loads non-strictly.
+  - preparation_id: limn_fashioniq
+    source_family: LIMN base iteration 0
+    raw_inputs:
+      - name: FashionIQ train and validation captions and split files
+        kind: raw_benchmark
+        scope: fashioniq_root
+        paths: [captions/cap.dress.train.json, captions/cap.shirt.train.json, captions/cap.toptee.train.json, captions/cap.dress.val.json, captions/cap.shirt.val.json, captions/cap.toptee.val.json, image_splits/split.dress.val.json, image_splits/split.shirt.val.json, image_splits/split.toptee.val.json]
+    generated_artifacts:
+      - name: category-local resized JPEG images
+        kind: generated_repo_artifact
+        scope: fashioniq_root
+        paths: [resized_image/dress, resized_image/shirt, resized_image/toptee]
+        generator: FashionIQ start_kit/resize_images.py
+        cwd: start_kit
+      - name: correction dictionaries installed at dataset path
+        kind: author_artifact
+        scope: fashioniq_root
+        paths: [captions/correction_dict_dress.json, captions/correction_dict_shirt.json, captions/correction_dict_toptee.json]
+        generator: manual placement from pinned source correct_files/
+        cwd: UNKNOWN
+    external_assets:
+      - name: OpenCLIP ViT-L-14 DataComp weights
+        kind: external_pretrained_asset
+        state: BLOCKED_EXTERNAL_ASSET
+    deterministic_status: UNKNOWN
+    automation_policy: MANUAL_REQUIRED
+    notes: Source caches train_data.json and test_queries/test_targets PKLs are not provenance-validated. Base iteration 0 only; no replay command is audited.

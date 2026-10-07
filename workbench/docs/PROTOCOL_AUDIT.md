@@ -22,8 +22,9 @@ Evidence: `validate_blip_csmcir.py:blip_validate_fashioniq` creates per-category
 - Categories, annotation source, and gallery order: identical to `fashioniq_original_split`.
 - Reference is excluded from each query ranking before Recall@K.
 - Air-Know, ConeSep, HABIT, and INTENT select `original-split`, enumerate full validation gallery order, and set reference similarity to `-10e10` before R@1/R@10/R@50.
+- DCNet `CE_dataset.py:CE.__init__` reads `image_splits/split.{category}.val.json` directly as ordered `val_trg`; `TrainerJoint._valid_epoch` masks each reference in both branches before ranking. It fuses `F.log_softmax(score_comp)` and `F.log_softmax(score_corr)` before the final rank. This establishes this cohort's gallery/reference semantics; it does not certify DCNet checkpoint, generated caption artifacts, environment, command, or metric reproduction.
 
-This differs from `fashioniq_original_split`: target rank and Recall@K can change after removing the reference. It also differs from `fashioniq_val_split`, whose gallery is the annotation pair-union. Cross-protocol analysis remains invalid.
+This differs from `fashioniq_original_split`: target rank and Recall@K can change after removing reference. It also differs from `fashioniq_val_split`, whose gallery is annotation pair-union. Cross-protocol analysis remains invalid.
 
 
 ## `fashioniq_val_split` — FashionIQ Val Split
@@ -55,10 +56,10 @@ ENCODER requires an external `open_clip_pytorch_model.bin` ViT-B-32 asset in its
 | Model | Assignment | Evidence boundary |
 | --- | --- | --- |
 | CLVC-Net | `fashioniq_val_split` | Source-order annotation queries; first-seen reference/target union; reference score set to `-10e10` before descending ranking. |
+| DCNet | `fashioniq_full_gallery_ref_excluded` | Ordered `val_trg` directly from `split.{category}.val.json`; reference score masked in composition and correction branches before log-softmax fusion/rank. Generated GloVe PKLs and checkpoint/config pairing remain blocked. |
 | Combiner RN50x4 noft / CLIP4Cir RN50x4 fullft | `fashioniq_original_split` | Full ordered validation split gallery; reference remains eligible. Artifact variants remain unverified. |
-| TG-CIR | `fashioniq_val_split` | Source-order annotation endpoint union and source mask before descending ranking. Correction dictionaries must be manually placed at the loader's expected dataset path. |
+| TG-CIR | `fashioniq_val_split` | Source-order annotation endpoint union and source mask before descending ranking. Correction dictionaries must be manually placed at loader's expected dataset path. |
 | SPRC | `fashioniq_original_split` | Full ordered validation gallery; reference remains eligible. |
 | LIMN base iteration 0 | `fashioniq_val_split` | Source-order annotation endpoint union and source mask before descending ranking. Do not generalize to LIMN+ or later iterations. |
-| DCNet | unavailable | Code reads ordered `val_trg` split and masks reference, but full-gallery completeness against FashionIQ corpus remains unproved. It cannot join any cohort until that condition is independently verified. |
 
 These assignments establish analysis compatibility only. They do not certify a checkpoint, preparation artifact, environment, command, native aggregate, or instrumentation parity. NEUCORE remains outside every registered cohort: its two caption-order queries per annotation are a different query universe.

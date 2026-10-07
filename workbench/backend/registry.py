@@ -10,6 +10,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "registry" / "models.yaml"
 AUXILIARY_ASSET_REGISTRY_PATH = ROOT / "registry" / "auxiliary_assets.yaml"
+PREPARATION_CONTRACT_REGISTRY_PATH = ROOT / "registry" / "preparation_contracts.yaml"
 CHECKPOINT_ROOT = ROOT / "artifacts" / "checkpoints"
 
 
@@ -20,6 +21,7 @@ def load_registry(path: Path = REGISTRY_PATH) -> dict[str, Any]:
         raise ValueError("unsupported model registry")
     layouts = {"fashioniq_standard", "fashioniq_ilearn_resized", "fashioniq_ilearn_resized_training", "fashioniq_clvc_resized", "fashioniq_dcnet"}
     mapping_statuses = {"VERIFIED_METADATA", "UNVERIFIED", "URL_UNRESOLVED", "ARTIFACT_ASSOCIATED_UNVALIDATED"}
+    preparation_contracts = load_preparation_contracts()
     for model in registry["models"]:
         native_protocol = model["native_protocol"]
         supported_protocols = model["supported_protocols"]
@@ -42,6 +44,8 @@ def load_registry(path: Path = REGISTRY_PATH) -> dict[str, Any]:
         if "publication_year" in model and model["publication_year"] is not None and (not isinstance(model["publication_year"], int) or model["publication_year"] < 2020):
             raise ValueError(f"invalid publication year for {model['model_id']}")
         if "preparation_contract" in model and model["preparation_contract"] not in {"manual_standard", "manual_ilearn_resized", "manual_clvc_resized", "manual_dcnet", "unavailable"}:
+            raise ValueError(f"unknown preparation contract for {model['model_id']}")
+        if model.get("preparation_id") not in {None, *preparation_contracts}:
             raise ValueError(f"unknown preparation contract for {model['model_id']}")
         if model.get("native_protocol_condition") and native_protocol is not None:
             raise ValueError(f"conditional native protocol must remain unavailable for {model['model_id']}")
@@ -74,6 +78,42 @@ def load_auxiliary_assets(path: Path = AUXILIARY_ASSET_REGISTRY_PATH) -> list[di
         if available != (asset["source_type"] == "author_huggingface" and bool(asset["source_repo"]) and bool(asset["source_revision"]) and bool(asset["source_path"])):
             raise ValueError(f"auxiliary source mismatch for {asset['model_id']}: {asset['destination_path']}")
     return registry["assets"]
+
+
+def load_preparation_contracts(path: Path = PREPARATION_CONTRACT_REGISTRY_PATH) -> dict[str, dict[str, Any]]:
+    with path.open(encoding="utf-8") as handle:
+        registry = yaml.safe_load(handle)
+    if registry.get("schema_version") != 1 or not isinstance(registry.get("contracts"), list):
+        raise ValueError("unsupported preparation contract registry")
+    contracts: dict[str, dict[str, Any]] = {}
+    required = {"preparation_id", "source_family", "raw_inputs", "generated_artifacts", "external_assets", "deterministic_status", "automation_policy", "notes"}
+    for contract in registry["contracts"]:
+        if required - contract.keys() or contract["preparation_id"] in contracts:
+            raise ValueError("invalid preparation contract")
+        for group in ("raw_inputs", "generated_artifacts"):
+            for artifact in contract[group]:
+                if {"name", "kind", "scope", "paths"} - artifact.keys() or artifact["scope"] != "fashioniq_root":
+                    raise ValueError(f"invalid preparation artifact for {contract['preparation_id']}")
+                for path_value in artifact["paths"]:
+                    path = PurePosixPath(path_value)
+                    if path.is_absolute() or ".." in path.parts:
+                        raise ValueError(f"unsafe preparation path for {contract['preparation_id']}")
+        contracts[contract["preparation_id"]] = contract
+    return contracts
+
+
+def preparation_contract_for_model(model: dict[str, Any]) -> dict[str, Any] | None:
+    preparation_id = model.get("preparation_id")
+    if preparation_id is None:
+        return None
+    try:
+        return load_preparation_contracts()[preparation_id]
+    except KeyError as error:
+        raise ValueError(f"unknown preparation contract for {model['model_id']}") from error
+
+
+def preparation_paths(contract: dict[str, Any], root: Path, group: str) -> tuple[Path, ...]:
+    return tuple(root / path for artifact in contract[group] for path in artifact["paths"])
 
 
 def auxiliary_assets_for_model(model_id: str) -> list[dict[str, Any]]:

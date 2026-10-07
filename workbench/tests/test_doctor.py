@@ -96,15 +96,41 @@ def test_ilearn_present_correction_files_only_clear_presence_blockers(tmp_path: 
 
 
 
-def test_dcnet_reports_generated_caption_pkl_blocker(tmp_path: Path) -> None:
+def test_dcnet_reports_preparation_separately_from_checkpoint(tmp_path: Path) -> None:
     doctor = load_doctor()
     model = next(model for model in load_registry()["models"] if model["model_id"] == "dcnet")
 
     checks = {check["name"]: check for check in doctor.model_checks(model, config(tmp_path))}
     blockers = checks["runtime:dcnet"]["evidence"]["checkpoints"][0]["runtime_blockers"]
 
-    assert f"FashionIQ fashioniq_dcnet requirement missing: {tmp_path / 'FashionIQ' / 'captions'}" in blockers
+    assert checks["raw-dataset:dcnet"]["status"] == "BLOCKED"
+    assert checks["preparation:dcnet"]["status"] == "BLOCKED"
+    assert checks["preparation:dcnet"]["evidence"]["deterministic_status"] == "NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT"
+    assert f"required generated artifact missing: {tmp_path / 'FashionIQ' / 'captions' / 'cap.dress.glove.val.pkl'}" in blockers
     assert "checkpoint mapping unresolved" in blockers
+
+
+def test_dcnet_preparation_readiness_does_not_clear_checkpoint_blocker(tmp_path: Path) -> None:
+    doctor = load_doctor()
+    model = next(model for model in load_registry()["models"] if model["model_id"] == "dcnet")
+    settings = config(tmp_path)
+    contract = doctor.preparation_contract_for_model(model)
+    assert contract is not None
+    for group in ("raw_inputs", "generated_artifacts"):
+        for path in doctor.preparation_paths(contract, settings.FASHIONIQ_ROOT, group):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if path.suffix:
+                path.write_text("[]")
+            else:
+                path.mkdir(parents=True, exist_ok=True)
+
+    checks = {check["name"]: check for check in doctor.model_checks(model, settings)}
+    blockers = checks["runtime:dcnet"]["evidence"]["checkpoints"][0]["runtime_blockers"]
+
+    assert checks["raw-dataset:dcnet"]["status"] == "OK"
+    assert checks["preparation:dcnet"]["status"] == "MANUAL"
+    assert "checkpoint mapping unresolved" in blockers
+    assert not any("generated artifact missing" in blocker for blocker in blockers)
 
 def test_workbench_scope_ignores_missing_fashioniq(monkeypatch, tmp_path: Path) -> None:
     doctor = load_doctor()

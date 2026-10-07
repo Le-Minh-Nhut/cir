@@ -18,7 +18,7 @@ Local operator tooling for FashionIQ composed-image-retrieval (CIR) failure anal
 | ID | Exact label | Literature split label | Gallery and target rank |
 | --- | --- | --- | --- |
 | `fashioniq_original_split` | FashionIQ - Original Split (Full Gallery, Reference Included) | `original` | Full ordered `image_splits/split.{category}.val.json`; reference remains eligible. CSMCIR. |
-| `fashioniq_full_gallery_ref_excluded` | FashionIQ - Original Full Gallery, Reference Excluded | `original` | Same full ordered gallery; exclude reference before Recall@K. Air-Know, ConeSep, HABIT, INTENT. |
+| `fashioniq_full_gallery_ref_excluded` | FashionIQ - Original Full Gallery, Reference Excluded | `original` | Same full ordered gallery; exclude reference before Recall@K. Air-Know, ConeSep, HABIT, INTENT, DCNet. |
 | `fashioniq_val_split` | FashionIQ - Val Split (Pair-Union Gallery, Reference Excluded) | `val` | First-seen ordered union of validation reference/target IDs; remove reference before Recall@K. HINT, ENCODER, PAIR. |
 
 All use `dress`, `shirt`, and `toptee`, `captions/cap.{category}.val.json`, and clean evaluation (`evaluation_noise_pct: 0`). `fashioniq_full_gallery_ref_excluded` is hidden by default in browser protocol selection only; enable it in Protocol visibility. Hidden status never changes registry support or analysis semantics. Full evidence: [docs/PROTOCOL_AUDIT.md](docs/PROTOCOL_AUDIT.md).
@@ -152,13 +152,21 @@ This matrix describes registry metadata and blockers, not present local files, r
 | Air-Know, ConeSep, HABIT, INTENT | `fashioniq_full_gallery_ref_excluded` | official noisy-trained variants only | command not audited; clean evaluation remains distinct from training noise |
 | HINT, ENCODER, PAIR | `fashioniq_val_split` | HINT URL; ENCODER folder; PAIR variants unresolved | HINT command unaudited; ENCODER prerequisites unresolved; PAIR blocked |
 | CLVC-Net | `fashioniq_val_split` | author Drive artifact mapping unresolved | blocked |
-| DCNet | unavailable | author Drive artifact mapping unresolved | blocked pending full-gallery proof and legacy prepared assets |
+| DCNet | `fashioniq_full_gallery_ref_excluded` | author Drive artifact mapping unresolved | blocked: author-generated GloVe PKLs preferred; preprocessing is stochastic |
 | Combiner RN50x4 noft, CLIP4Cir RN50x4 fullft | `fashioniq_original_split` | author Drive folder only; requested variants unresolved | blocked |
 | TG-CIR | `fashioniq_val_split` | official ZIP exists; FashionIQ member unresolved | blocked |
 | SPRC | `fashioniq_original_split` | `sprc_fiq.pt` source known; BLIP-2 mapping unresolved | blocked; printed R@10 conflicts with category arithmetic |
 | LIMN base iteration 0 | `fashioniq_val_split` | author Hub has per-category artifact hashes and metric files | blocked: no audited replay command |
 
-Legacy entries preserve source pins and native evaluator evidence; they do not make assets or commands interchangeable. DCNet stays without a protocol until split completeness is independently proven. NEUCORE is deliberately unregistered because its doubled caption-order queries form a distinct query universe.
+Legacy entries preserve source pins and native evaluator evidence; they do not make assets or commands interchangeable. DCNet requires source-specific author-generated preparation artifacts before it can be considered runtime-ready. NEUCORE is deliberately unregistered because its doubled caption-order queries form a distinct query universe.
+
+## Legacy preparation contracts
+
+`registry/preparation_contracts.yaml` is declarative only. `doctor.py --scope real --model MODEL_ID --json` reports **raw dataset** and **preparation** separately from source, checkpoint, and command readiness. It never executes preparation scripts.
+
+DCNet requires `resized_images/` plus `captions/cap.{category}.glove.val.pkl`; regenerating these PKLs is unsafe because upstream `process_cap.py` samples unseeded NumPy OOV vectors. Preserve author-generated artifacts. `spaCy en_vectors_web_lg` and NLTK `punkt` are regeneration dependencies, not evaluator substitutions.
+
+CLVC-Net, TG-CIR, and LIMN retain independent resized-image contracts. TG-CIR and LIMN dictionaries/caches are source-specific. No legacy contract is automatically prepared.
 
 A checkpoint trained with 20%, 50%, or 80% noise remains that training condition when evaluated on clean FashionIQ data. It is not a clean checkpoint. `expected_sha256: null` means no official hash is in registry; local hashes belong in ignored download manifests.
 
