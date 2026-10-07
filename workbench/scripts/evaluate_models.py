@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.adapters.base import EvalRequest
 from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
+from workbench.backend.fashioniq_layout import missing_paths
 from workbench.backend.registry import checkpoint_path, fashioniq_required_paths, load_registry, sha256_file
 
 
@@ -101,10 +102,10 @@ def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | 
         blocked.append("dataset root not provided")
     elif not dataset_root.is_dir():
         blocked.append(f"dataset root missing: {dataset_root}")
-    if dataset_root is not None:
-        missing = next(iter(fashioniq_required_paths(model, dataset_root)), None)
-        if missing is not None and model["model_id"] != "csmcir":
-            blocked.append(f"FashionIQ {model['fashioniq_layout']} requirement missing: {missing}")
+    if dataset_root is not None and model["model_id"] != "csmcir":
+        missing = missing_paths(fashioniq_required_paths(model, dataset_root))
+        if missing:
+            blocked.append(f"FashionIQ {model['fashioniq_layout']} requirement missing: {missing[0]}")
     if model["model_id"] == "encoder" and not (source / "open_clip_pytorch_model.bin").is_file():
         blocked.append(f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}")
     if model["model_id"] == "encoder" and not (source / "datasets1.py").is_file():
