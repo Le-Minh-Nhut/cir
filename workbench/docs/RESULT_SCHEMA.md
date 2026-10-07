@@ -18,6 +18,7 @@ The JSON below is an illustrative shape only; its IDs, ranks, and metric values 
     "dataset": "FashionIQ",
     "split": "val",
     "protocol_id": "fashioniq_original_split",
+    "literature_split_label": "original",
     "evaluation_noise_pct": 0,
     "model_id": "csmcir",
     "method_name": "CSMCIR",
@@ -45,7 +46,7 @@ The JSON below is an illustrative shape only; its IDs, ranks, and metric values 
 
 ## Identity and protocol contract
 
-`run_id`, not `model_id`, is analysis identity. Different checkpoints, source revisions, environments, or training-noise conditions require distinct IDs. `query_id` derives from canonical category, annotation index, reference ID, and target ID. Annotation index is required: repeated reference/target pairs are distinct benchmark annotations and must not collapse. Same-protocol comparison requires matching canonical identities and raw captions; `model_input_text` may differ.
+`run_id`, not `model_id`, is analysis identity. Different checkpoints, source revisions, environments, or training-noise conditions require distinct IDs. `protocol_id` is exact evaluator identity; `literature_split_label` is preserved separately and cannot relax same-protocol comparison. `fashioniq_original_split` and `fashioniq_full_gallery_ref_excluded` both use literature label `original` but remain incompatible. `query_id` derives from canonical category, annotation index, reference ID, and target ID. Annotation index is required: repeated reference/target pairs are distinct benchmark annotations and must not collapse. Same-protocol comparison requires matching canonical identities and raw captions; `model_input_text` may differ.
 ## Rank and retrieval contract
 
 v2 requires `checkpoint_id`, `top_k_saved`, and `gallery_size`. Stored ranks are contiguous and unique. `len(top_results) <= min(top_k_saved, gallery_size)`; `top_k_saved` may exceed gallery size. `target_rank` cannot exceed gallery size. Top-K operations require each selected run to contain requested depth; target-rank metrics remain valid when retrieval rows were not saved.

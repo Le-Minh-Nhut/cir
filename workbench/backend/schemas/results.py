@@ -5,7 +5,12 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-PROTOCOL_IDS = frozenset({"fashioniq_original_split", "fashioniq_val_split"})
+PROTOCOL_LITERATURE_LABELS = {
+    "fashioniq_original_split": "original",
+    "fashioniq_full_gallery_ref_excluded": "original",
+    "fashioniq_val_split": "val",
+}
+PROTOCOL_IDS = frozenset(PROTOCOL_LITERATURE_LABELS)
 
 
 class ReportedMetrics(BaseModel):
@@ -49,6 +54,7 @@ class RunMetadata(BaseModel):
     dataset: Literal["FashionIQ"]
     split: Literal["val"]
     protocol_id: str
+    literature_split_label: Literal["original", "val"]
     evaluation_noise_pct: Literal[0]
     model_id: str
     method_name: str
@@ -71,10 +77,12 @@ class RunMetadata(BaseModel):
 
     @model_validator(mode="after")
     def validate_metadata(self) -> "RunMetadata":
-        if self.protocol_id not in PROTOCOL_IDS:
+        expected_label = PROTOCOL_LITERATURE_LABELS.get(self.protocol_id)
+        if expected_label is None:
             raise ValueError(f"unsupported protocol_id: {self.protocol_id}")
+        if self.literature_split_label != expected_label:
+            raise ValueError("literature_split_label does not match protocol_id")
         return self
-
 
 class ResultRun(BaseModel):
     model_config = ConfigDict(extra="forbid")

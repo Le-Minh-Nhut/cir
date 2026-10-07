@@ -25,7 +25,7 @@ def test_mock_loader_uses_configured_results_root(tmp_path: Path, monkeypatch) -
 
     load_mock_results.main()
 
-    assert (root / "fashioniq_original_split" / "mock" / "mock-habit-fiq_n02.json").is_file()
+    assert (root / "fashioniq_original_split" / "mock" / "mock_csmcir-fiq_a.json").is_file()
 
 
 def test_validator_all_uses_configured_results_root(tmp_path: Path, monkeypatch) -> None:

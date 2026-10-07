@@ -33,8 +33,9 @@ def indexed(monkeypatch, tmp_path: Path) -> Path:
 def test_mock_generation_is_deterministic_and_schema_v2_valid() -> None:
     left, right = build_mock_runs(), build_mock_runs()
     assert [item.model_dump_json() for item in left] == [item.model_dump_json() for item in right]
-    assert len(left) == 4 and all(item.schema_version == 2 for item in left)
+    assert len(left) == 8 and all(item.schema_version == 2 for item in left)
     assert {query.category for query in left[0].queries} == {"dress", "shirt", "toptee"}
+    assert {item.run.literature_split_label for item in left if item.run.protocol_id != "fashioniq_val_split"} == {"original"}
     assert max(query.target_rank for query in left[0].queries) > 200
 
 
@@ -42,6 +43,14 @@ def test_schema_rejects_top_results_beyond_gallery() -> None:
     payload = build_mock_runs()[0].model_dump()
     payload["run"]["gallery_size"] = 199
     with pytest.raises(ValueError, match="effective saved retrieval depth"):
+        ResultRun.model_validate(payload)
+
+
+def test_schema_rejects_literature_label_mismatch() -> None:
+    payload = build_mock_runs()[0].model_dump()
+    payload["run"]["literature_split_label"] = "val"
+
+    with pytest.raises(ValueError, match="literature_split_label does not match protocol_id"):
         ResultRun.model_validate(payload)
 
 
@@ -60,7 +69,7 @@ def test_schema_preserves_repeated_reference_target_annotations() -> None:
 def test_sql_list_runs_reads_metadata(monkeypatch, tmp_path: Path) -> None:
     database = indexed(monkeypatch, tmp_path)
     runs = list_runs(database_path=database)
-    assert len(runs) == 4
+    assert len(runs) == 8
     assert {run["run_id"] for run in runs} == {item.run.run_id for item in build_mock_runs()}
     assert all("queries" not in run for run in runs)
 
@@ -78,7 +87,7 @@ def test_sql_query_page_filters_and_exact_lookup(monkeypatch, tmp_path: Path) ->
 
 def test_get_run_returns_metadata_and_rejects_missing_run(monkeypatch, tmp_path: Path) -> None:
     database = indexed(monkeypatch, tmp_path)
-    assert get_run("mock-habit-fiq_n02", database)["checkpoint_id"] == "fiq_n02"
+    assert get_run("mock_csmcir-fiq_a", database)["checkpoint_id"] == "fiq_a"
     with pytest.raises(WorkbenchError) as error:
         get_run("missing-run", database)
     assert error.value.code == "run_not_found"
@@ -108,13 +117,13 @@ def test_compare_rejects_unavailable_top_k(monkeypatch, tmp_path: Path) -> None:
     indexed_with_saved_depth(monkeypatch, tmp_path, 50)
     query_id = build_mock_runs()[0].queries[0].query_id
     with pytest.raises(WorkbenchError) as error:
-        main.compare(query_id, "mock-habit-fiq_n02,mock-habit-fiq_n05", 100)
+        main.compare(query_id, "mock_csmcir-fiq_a,mock_csmcir-fiq_b", 100)
     assert error.value.code == "insufficient_top_k_depth"
 
 
 def test_failure_jaccard_uses_exact_target_rank_without_top_k(monkeypatch, tmp_path: Path) -> None:
     indexed_with_saved_depth(monkeypatch, tmp_path, 50)
-    rows = main.overlap("mock-habit-fiq_n02,mock-habit-fiq_n05", 100)
+    rows = main.overlap("mock_csmcir-fiq_a,mock_csmcir-fiq_b", 100)
     assert len(rows) == 4 and rows[0]["jaccard"] >= 0
 
 
@@ -130,25 +139,26 @@ def test_common_distractor_has_distinct_run_provenance() -> None:
     rows = analysis_rows(build_mock_runs()[:2], 10)
     distractor = rows[0]["common_distractors"][0]
     assert distractor["run_count"] == 2
-    assert distractor["run_ids"] == ["mock-habit-fiq_n02", "mock-habit-fiq_n05"]
+    assert distractor["run_ids"] == ["mock_csmcir-fiq_a", "mock_csmcir-fiq_b"]
 
 
 def test_duplicate_run_id_and_atomic_rebuild(monkeypatch, tmp_path: Path) -> None:
     root = tmp_path / "results"; root.mkdir(); write_results(root)
     database = tmp_path / "workbench.duckdb"; rebuild_index(root, database); prior = database.read_bytes()
-    (root / "duplicate.json").write_text((root / "mock-habit-fiq_n02.json").read_text())
+    (root / "duplicate.json").write_text((root / "mock_csmcir-fiq_a.json").read_text())
     with pytest.raises(WorkbenchError, match="Duplicate run_id"): rebuild_index(root, database)
     assert database.read_bytes() == prior
 
 
-def test_api_uses_sql_pagination_and_guards(monkeypatch, tmp_path: Path) -> None:
+def test_csmcir_cannot_share_analysis_with_full_gallery_reference_excluded_models(monkeypatch, tmp_path: Path) -> None:
     indexed(monkeypatch, tmp_path)
-    response = main.queries("mock-habit-fiq_n02", limit=5, offset=5, category="dress", min_rank=1, max_rank=250)
+    response = main.queries("mock_csmcir-fiq_a", limit=5, offset=5, category="dress", min_rank=1, max_rank=250)
     assert len(response["items"]) <= 5
-    with pytest.raises(WorkbenchError, match="Cross-protocol analysis is invalid"):
-        main.analysis("mock-habit-fiq_n02,mock-pair-pair_b1", 10)
-    runs, maps = get_analysis_input(["mock-habit-fiq_n02", "mock-habit-fiq_n05"], 200)
-    assert len(runs) == 2 and len(maps["mock-habit-fiq_n02"]) == 24
+    for model_id in ("mock_airknow", "mock_conesep", "mock_habit", "mock_intent"):
+        with pytest.raises(WorkbenchError, match="Cross-protocol analysis is invalid"):
+            main.analysis(f"mock_csmcir-fiq_a,{model_id}-fiq_n05", 10)
+    runs, maps = get_analysis_input(["mock_csmcir-fiq_a", "mock_csmcir-fiq_b"], 200)
+    assert len(runs) == 2 and len(maps["mock_csmcir-fiq_a"]) == 24
 
 
 def test_image_resolver_supports_extensions_and_rejects_traversal(tmp_path: Path) -> None:

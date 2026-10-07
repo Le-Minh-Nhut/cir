@@ -1,10 +1,16 @@
 schema_version: 1
 protocols:
   fashioniq_original_split:
-    label: FashionIQ — Original Split
+    label: FashionIQ — Full Gallery, Reference Eligible
+    literature_split_label: original
+    evaluation_noise_pct: 0
+  fashioniq_full_gallery_ref_excluded:
+    label: FashionIQ — Full Gallery, Reference Excluded
+    literature_split_label: original
     evaluation_noise_pct: 0
   fashioniq_val_split:
     label: FashionIQ — Val Split
+    literature_split_label: val
     evaluation_noise_pct: 0
 models:
   - model_id: csmcir
@@ -17,6 +23,7 @@ models:
     source_available: true
     source_dir: CSMCIR
     fashioniq_layout: fashioniq_standard
+    literature_split_label: original
     native_protocol: fashioniq_original_split
     supported_protocols: [fashioniq_original_split]
     reported_r10: 57.07
@@ -46,8 +53,9 @@ models:
     source_available: true
     source_dir: AirKnow
     fashioniq_layout: fashioniq_ilearn_resized
-    native_protocol: fashioniq_original_split
-    supported_protocols: [fashioniq_original_split]
+    literature_split_label: original
+    native_protocol: fashioniq_full_gallery_ref_excluded
+    supported_protocols: [fashioniq_full_gallery_ref_excluded]
     reported_r10: 55.75
     reported_r50: 75.72
     reported_mean: 65.74
@@ -85,8 +93,9 @@ models:
     source_available: true
     source_dir: ConeSep
     fashioniq_layout: fashioniq_ilearn_resized
-    native_protocol: fashioniq_original_split
-    supported_protocols: [fashioniq_original_split]
+    literature_split_label: original
+    native_protocol: fashioniq_full_gallery_ref_excluded
+    supported_protocols: [fashioniq_full_gallery_ref_excluded]
     reported_r10: 55.58
     reported_r50: 75.88
     reported_mean: 65.73
@@ -152,8 +161,9 @@ models:
     source_available: true
     source_dir: HABIT
     fashioniq_layout: fashioniq_ilearn_resized
-    native_protocol: fashioniq_original_split
-    supported_protocols: [fashioniq_original_split]
+    literature_split_label: original
+    native_protocol: fashioniq_full_gallery_ref_excluded
+    supported_protocols: [fashioniq_full_gallery_ref_excluded]
     reported_r10: 55.38
     reported_r50: 75.20
     reported_mean: 65.29
@@ -201,8 +211,9 @@ models:
     source_available: true
     source_dir: INTENT
     fashioniq_layout: fashioniq_ilearn_resized
-    native_protocol: fashioniq_original_split
-    supported_protocols: [fashioniq_original_split]
+    literature_split_label: original
+    native_protocol: fashioniq_full_gallery_ref_excluded
+    supported_protocols: [fashioniq_full_gallery_ref_excluded]
     reported_r10: 55.31
     reported_r50: 75.16
     reported_mean: 65.24
@@ -251,6 +262,7 @@ models:
     source_dir: HINT
     fashioniq_layout: fashioniq_ilearn_resized
     native_protocol: fashioniq_val_split
+    literature_split_label: val
     supported_protocols: [fashioniq_val_split]
     reported_r10: 58.48
     reported_r50: 77.93
@@ -280,6 +292,7 @@ models:
     source_dir: ENCODER
     fashioniq_layout: fashioniq_ilearn_resized
     native_protocol: fashioniq_val_split
+    literature_split_label: val
     supported_protocols: [fashioniq_val_split]
     reported_r10: 56.13
     reported_r50: 77.59
@@ -310,6 +323,7 @@ models:
     source_dir: PAIR
     fashioniq_layout: fashioniq_ilearn_resized
     native_protocol: fashioniq_val_split
+    literature_split_label: val
     supported_protocols: [fashioniq_val_split]
     reported_r10: 52.76
     reported_r50: 74.51

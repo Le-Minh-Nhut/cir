@@ -19,3 +19,15 @@ def test_val_split_union_order_and_reference_exclusion() -> None:
     gallery = build_pair_union_gallery(annotations)
     assert gallery == ["ref-a", "target-a", "ref-b"]
     assert fashioniq_encoder_recall_at_k(torch.tensor([[0.99, 0.90, 0.80]]), ["target-a"], ["ref-a"], gallery, 1) == 100.0
+
+
+def test_registry_separates_full_gallery_reference_policies() -> None:
+    from workbench.backend.registry import load_registry
+
+    models = {model["model_id"]: model for model in load_registry()["models"]}
+
+    assert models["csmcir"]["native_protocol"] == "fashioniq_original_split"
+    for model_id in ("airknow", "conesep", "habit", "intent"):
+        assert models[model_id]["literature_split_label"] == "original"
+        assert models[model_id]["native_protocol"] == "fashioniq_full_gallery_ref_excluded"
+        assert models[model_id]["supported_protocols"] == ["fashioniq_full_gallery_ref_excluded"]

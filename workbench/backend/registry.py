@@ -19,8 +19,18 @@ def load_registry(path: Path = REGISTRY_PATH) -> dict[str, Any]:
     if registry.get("schema_version") != 1 or not isinstance(registry.get("models"), list):
         raise ValueError("unsupported model registry")
     for model in registry["models"]:
-        if model["native_protocol"] is not None and model["native_protocol"] not in registry["protocols"]:
+        native_protocol = model["native_protocol"]
+        supported_protocols = model["supported_protocols"]
+        if native_protocol is not None and native_protocol not in registry["protocols"]:
             raise ValueError(f"unknown protocol for {model['model_id']}")
+        if any(protocol not in registry["protocols"] for protocol in supported_protocols):
+            raise ValueError(f"unknown supported protocol for {model['model_id']}")
+        if native_protocol is not None and native_protocol not in supported_protocols:
+            raise ValueError(f"native protocol unsupported for {model['model_id']}")
+        if model.get("literature_split_label") not in {"original", "val", None}:
+            raise ValueError(f"unknown literature split label for {model['model_id']}")
+        if native_protocol is not None and model.get("literature_split_label") != registry["protocols"][native_protocol]["literature_split_label"]:
+            raise ValueError(f"literature split label mismatch for {model['model_id']}")
         if bool(model["source_available"]) != bool(model.get("source_dir")):
             raise ValueError(f"source_dir mismatch for {model['model_id']}")
         if model["source_available"] and model.get("fashioniq_layout") not in {"fashioniq_standard", "fashioniq_ilearn_resized"}:

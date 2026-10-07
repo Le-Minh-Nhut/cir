@@ -6,7 +6,7 @@ Local operator tooling for FashionIQ composed-image-retrieval (CIR) failure anal
 
 ## Operating rules
 
-- Use one protocol per run, comparison, cohort, and export. `fashioniq_original_split` and `fashioniq_val_split` are incompatible cohorts.
+- Use one exact protocol per run, comparison, cohort, and export. `fashioniq_original_split`, `fashioniq_full_gallery_ref_excluded`, and `fashioniq_val_split` are incompatible cohorts; shared literature label `original` does not establish evaluator compatibility.
 - Keep model environments isolated from workbench backend/frontend dependencies. Do not install upstream model requirements into the workbench environment.
 - Sync to registry pins; do not update a source tree to an arbitrary revision.
 - Download only registry-declared, author-linked direct URLs. A locally computed hash records local evidence; it does not become an official hash.
@@ -15,12 +15,13 @@ Local operator tooling for FashionIQ composed-image-retrieval (CIR) failure anal
 
 ## Protocols and guards
 
-| ID | Label | Gallery and target rank |
-| --- | --- | --- |
-| `fashioniq_original_split` | FashionIQ — Original Split | Full ordered `image_splits/split.{category}.val.json`; reference remains eligible. |
-| `fashioniq_val_split` | FashionIQ — Val Split | First-seen ordered union of validation reference/target IDs; remove reference before Recall@K. |
+| ID | Exact label | Literature split label | Gallery and target rank |
+| --- | --- | --- | --- |
+| `fashioniq_original_split` | FashionIQ — Full Gallery, Reference Eligible | `original` | Full ordered `image_splits/split.{category}.val.json`; reference remains eligible. CSMCIR. |
+| `fashioniq_full_gallery_ref_excluded` | FashionIQ — Full Gallery, Reference Excluded | `original` | Full ordered `image_splits/split.{category}.val.json`; reference is excluded before Recall@K. Air-Know, ConeSep, HABIT, INTENT. |
+| `fashioniq_val_split` | FashionIQ — Val Split | `val` | First-seen ordered union of validation reference/target IDs; remove reference before Recall@K. |
 
-Both use `dress`, `shirt`, and `toptee`, `captions/cap.{category}.val.json`, and clean evaluation (`evaluation_noise_pct: 0`). Original-split aggregate metrics are macro category R@10/R@50 and their arithmetic mean. Full evidence: [docs/PROTOCOL_AUDIT.md](docs/PROTOCOL_AUDIT.md).
+All use `dress`, `shirt`, and `toptee`, `captions/cap.{category}.val.json`, and clean evaluation (`evaluation_noise_pct: 0`). The literature `original` label names a gallery family, not identical ranking semantics. Full evidence: [docs/PROTOCOL_AUDIT.md](docs/PROTOCOL_AUDIT.md).
 
 CSMCIR consumes standard FashionIQ `images`; iLearn model sources consume `resized_image/{category}` plus category correction dictionaries. Dictionary files are **local, manual, and UNVERIFIED** for iLearn methods: no automatic download or DQU-CIR substitution occurs. `prepare_dataset.py` validates only standard FashionIQ because CSMCIR link preparation must stay independent; strict model preflight validates each adapter's native layout.
 
@@ -141,23 +142,23 @@ Troubleshooting commands remain available: `doctor.py --scope real --model csmci
 
 This matrix describes registry metadata and blockers, not present local files, runtime compatibility, command readiness, or successful reproduction. See [docs/UPSTREAM_AUDIT.md](docs/UPSTREAM_AUDIT.md).
 
-| Model | Protocol | Variants | Direct download state | Evaluation state |
+| Model | Exact protocol | Literature label | Variants | Direct download state | Evaluation state |
 | --- | --- | --- | --- | --- |
-| CSMCIR | original | `fashioniq` clean | author-linked URL recorded | command audited; fixed-root/auxiliary-file limits apply |
-| Air-Know | original | `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
-| ConeSep | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
-| PTHA + MTST | none | none | no verified FashionIQ checkpoint | blocked |
-| HABIT | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
-| INTENT | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
-| HINT | val | `fashioniq` clean | author-linked URL recorded | command not audited |
-| ENCODER | val | `fashioniq` clean | Google Drive folder known; direct file URL unresolved | command audited; checkpoint and OpenCLIP asset both required |
-| PAIR | val | `pair_b1`, `pair_b2` | no verified direct URL or FashionIQ mapping | blocked |
+| CSMCIR | `fashioniq_original_split` | original | `fashioniq` clean | author-linked URL recorded | command audited; fixed-root/auxiliary-file limits apply |
+| Air-Know | `fashioniq_full_gallery_ref_excluded` | original | `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
+| ConeSep | `fashioniq_full_gallery_ref_excluded` | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
+| PTHA + MTST | unavailable | n/a | none | no verified FashionIQ checkpoint | blocked |
+| HABIT | `fashioniq_full_gallery_ref_excluded` | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
+| INTENT | `fashioniq_full_gallery_ref_excluded` | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
+| HINT | `fashioniq_val_split` | val | `fashioniq` clean | author-linked URL recorded | command not audited |
+| ENCODER | `fashioniq_val_split` | val | `fashioniq` clean | Google Drive folder known; direct file URL unresolved | command audited; checkpoint and OpenCLIP asset both required |
+| PAIR | `fashioniq_val_split` | val | `pair_b1`, `pair_b2` | no verified direct URL or FashionIQ mapping | blocked |
 
 A checkpoint trained with 20%, 50%, or 80% noise remains that training condition when evaluated on clean FashionIQ data. It is not a clean checkpoint. `expected_sha256: null` means no official hash is in registry; local hashes belong in ignored download manifests.
 
 ## CSMCIR guide
 
-CSMCIR is the only original-split model with an audited command constructor. Its upstream evaluator is cwd/root-sensitive and does **not** accept an ordinary dataset-root argument. `evaluate_models.py` runs its command from `workbench/third_party/CSMCIR/src`; it requires `--dataset-root workbench/third_party/CSMCIR/fashionIQ_dataset` because upstream data must appear there.
+CSMCIR is the only full-gallery/reference-eligible model with an audited command constructor. Its upstream evaluator is cwd/root-sensitive and does **not** accept an ordinary dataset-root argument. `evaluate_models.py` runs its command from `workbench/third_party/CSMCIR/src`; it requires `--dataset-root workbench/third_party/CSMCIR/fashionIQ_dataset` because upstream data must appear there.
 
 Before evaluation, provide four independent prerequisites:
 
@@ -200,7 +201,7 @@ The registry records only an official Google Drive folder for ENCODER's FashionI
 
 ## Results, provenance, and index
 
-Schema v2 contract: [docs/RESULT_SCHEMA.md](docs/RESULT_SCHEMA.md). A result needs immutable `run_id`, protocol/model/checkpoint identity, training/evaluation noise, gallery size, saved depth, paper references when available, locally reproduced metrics, and per-query canonical identity, raw captions, model input text, target rank, and contiguous unique ranked results.
+Schema v2 contract: [docs/RESULT_SCHEMA.md](docs/RESULT_SCHEMA.md). A result needs immutable `run_id`, exact protocol identity, separate literature split label, model/checkpoint identity, training/evaluation noise, gallery size, saved depth, paper references when available, locally reproduced metrics, and per-query canonical identity, raw captions, model input text, target rank, and contiguous unique ranked results.
 
 Use `data_kind: "mock"` only for development fixtures. For an experiment, retain `upstream_commit`, `checkpoint_sha256`, `command_digest`, and `environment_digest`; `validate_results.py --strict-real` enforces these. Schema v1 is rejected rather than guessed/migrated. DuckDB normalizes runs, queries, and top results for serving only; rebuild it from JSON whenever artifacts change.
 
@@ -221,7 +222,7 @@ Image lookup accepts benchmark image IDs only and known FashionIQ `.png`, `.jpg`
 
 ## Research example
 
-1. Select only completed `fashioniq_original_split` experiment runs.
+1. Select only completed runs from one exact protocol, for example `fashioniq_original_split`; never combine it with `fashioniq_full_gallery_ref_excluded` only because both retain literature label `original`.
 2. Choose Top-K 10, then filter **all runs fail**.
 3. Sort/inspect queries by median target rank and repeated distractors.
 4. Review reference, target, raw captions, model input text, and actual rankings before labeling a failure.
@@ -301,12 +302,12 @@ All operator scripts use `python workbench/scripts/NAME.py ...`. These are curre
 
 # evaluate_models.py
 (--list | --model MODEL_ID | --all-runnable) [--checkpoint CHECKPOINT_ID]
-[--protocol fashioniq_original_split|fashioniq_val_split] [--dataset-root PATH]
+[--protocol fashioniq_original_split|fashioniq_full_gallery_ref_excluded|fashioniq_val_split] [--dataset-root PATH]
 [--top-k POSITIVE_INTEGER] [--dry-run] [--continue-on-error]
 
 # run_eval.py — legacy command preview; pipeline uses guarded evaluate_models.py
 --model MODEL_ID --checkpoint CHECKPOINT_ID
---protocol fashioniq_original_split|fashioniq_val_split --dataset-root PATH --output PATH
+--protocol fashioniq_original_split|fashioniq_full_gallery_ref_excluded|fashioniq_val_split --dataset-root PATH --output PATH
 [--top-k INTEGER]
 
 # validate_results.py

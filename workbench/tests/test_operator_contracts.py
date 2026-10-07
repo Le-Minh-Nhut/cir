@@ -68,7 +68,7 @@ def test_strict_real_validation_rejects_missing_provenance(tmp_path: Path) -> No
     output: list[str] = []
 
     assert not validate_file(artifact, strict_real=True, output=output.append)
-    assert output[0] == "[BLOCKED] mock-habit-fiq_n02: missing provenance: upstream_commit, checkpoint_sha256, command_digest, environment_digest"
+    assert output[0] == "[BLOCKED] mock_csmcir-fiq_a: missing provenance: upstream_commit, checkpoint_sha256, command_digest, environment_digest"
 
 
 def test_sync_dry_run_and_verify_only_output_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
