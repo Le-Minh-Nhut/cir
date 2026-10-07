@@ -22,7 +22,7 @@ Local operator tooling for FashionIQ composed-image-retrieval (CIR) failure anal
 
 Both use `dress`, `shirt`, and `toptee`, `captions/cap.{category}.val.json`, and clean evaluation (`evaluation_noise_pct: 0`). Original-split aggregate metrics are macro category R@10/R@50 and their arithmetic mean. Full evidence: [docs/PROTOCOL_AUDIT.md](docs/PROTOCOL_AUDIT.md).
 
-The API and index fail closed for cross-protocol comparisons; misaligned query universes or canonical identities; insufficient saved Top-K depth; duplicate `run_id`; and unsafe image paths. Analysis requires matching category, annotation index, reference ID, target ID, and raw captions; model-specific composed input text may differ. Do not infer scientific conclusions from a common failure set without inspecting its examples.
+CSMCIR consumes standard FashionIQ `images`; iLearn model sources consume `resized_image/{category}` plus category correction dictionaries. Dictionary files are **local, manual, and UNVERIFIED** for iLearn methods: no automatic download or DQU-CIR substitution occurs. `prepare_dataset.py` validates only standard FashionIQ because CSMCIR link preparation must stay independent; strict model preflight validates each adapter's native layout.
 
 ## Repository tree and data ownership
 
@@ -195,9 +195,8 @@ The registry records only an official Google Drive folder for ENCODER's FashionI
 ## Other model blockers
 
 - Air-Know, ConeSep, HABIT, INTENT, and HINT have registry/checkpoint evidence but no audited official command constructor. Do not execute guessed commands.
+- Every inspected iLearn model needs `resized_image/{dress,shirt,toptee}` and `captions/correction_dict_{dress,shirt,toptee}.json`; these correction assets are presence-only and unverified. Strict `doctor.py --scope real --model MODEL_ID` reports exact missing paths.
 - PTHA + MTST has no verified author-linked FashionIQ fine-tuned checkpoint or eligible source integration.
-- PAIR source is pinned, but its `pair-B1.pt`/`pair-B2.pt` FashionIQ mapping and source URL are unresolved. Do not select a variant automatically.
-- All registry methods remain `NOT_RUN` or explicitly blocked until evidence changes. A downloaded file does not establish runtime verification or reproduction.
 
 ## Results, provenance, and index
 

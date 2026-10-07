@@ -18,6 +18,20 @@ Audit date: 2026-10-05. This is source/checkpoint evidence, not reproduction evi
 
 CSMCIR uses the complete ordered FashionIQ validation split gallery and leaves reference eligible. ENCODER/PAIR default `val-split` uses first-seen validation reference/target union and removes reference before recall. HINT uses the same union/reference-removal behavior. Local protocol mapping is documented in [PROTOCOL_AUDIT.md](PROTOCOL_AUDIT.md).
 
+## iLearn FashionIQ assets and evaluator semantics
+
+Pinned ENCODER, HINT, PAIR, Air-Know, ConeSep, HABIT, and INTENT sources all open category-local `captions/correction_dict_{dress,shirt,toptee}.json` for FashionIQ train and validation caption construction. Their shared transformation is lowercase, ASCII `string.punctuation` to spaces, whitespace tokenization, exact dictionary lookup, and source-order `caption_1 and caption_2` composition. The dictionaries are not tracked in inspected iLearn trees.
+
+`iLearn-Lab/SIGIR24-DQU-CIR@49f53992447a9a84b897d9b2e2f2c91dd2cc8788` tracks similarly named dictionaries at `data/FashionIQ/captions/`: dress blob `249af320785363d150d9f0f73c7bd3b3f6a2c7ec`, shirt blob `e6e4adfd3fa3dbde2f4f0c760498d821dea192af`, and toptee blob `0fcbc39a9a9a2b24ec99bd9358d100eda2798831`. These are Git blob IDs, not file SHA-256 values. No inspected iLearn source identifies DQU-CIR as their source. Workbench marks dictionary provenance **UNVERIFIED** and only blocks a native iLearn evaluation when local files are absent; it never downloads or substitutes DQU content.
+
+Air-Know, ConeSep, HABIT, and INTENT each select `original-split` in their FashionIQ dataset constructor, enumerate full validation split order, and set reference similarity to `-10e10` before FashionIQ R@1/R@10/R@50. HINT constructs the pair-union validation gallery and removes reference before R@1/R@10/R@50. ENCODER and PAIR use the pair-union/reference-removal variant described in the protocol audit. These static evaluator observations do not make their commands, checkpoints, environments, or reproductions ready.
+
+## Legacy source audit
+
+NEUCORE official source is `VisionLanguageLab/NEUCORE@1839c099f3c2a0299fbf9820c2c2c563890d263d` as observed from GitHub; no author release/tag pin was found. Its FashionIQ loader doubles each annotation into source-order and reverse-order caption queries, while `evaluate.py` scores full category galleries and removes the reference before ranking. It reports category values, query-count-weighted global recall, and a macro validation measure; do not treat these as interchangeable. Its author Google Drive pretrained-model folder lacks a verified FashionIQ filename/hash mapping. NEUCORE is not registered as a runnable workbench model.
+
+No author-controlled DCNet repository, exact FashionIQ evaluator, checkpoint mapping, or runtime contract was verified. DCNet remains BLOCKED/UNVERIFIED and is not registered. CLIP4Cir, SPRC, TG-CIR, CLVC-Net, and LIMN evidence remains insufficient for the exact requested checkpoint variants; no adapter or checkpoint record was added.
+
 ## CSMCIR validation requirements
 
 Pinned local `CSMCIR@774f94e2076ff17ea91703a6239d2a08f0e1a44e` dispatches `validate_blip_csmcir.py:main` to `blip_validate_fashioniq`. That function builds `FashionIQDataset('val', [category], 'relative'/'classic')` for `dress`, `toptee`, and `shirt`. `data_utils_csmcir.py:FashionIQDataset` reads the canonical `fashionIQ_dataset` base layout and `<FASHIONIQ_ROOT>/qwen_captions/{dress,shirt,toptee}_cot_val.json` through that link. Its `extract_index_blip_caption_features` call (`validate_blip_csmcir.py:612`; `utils_csmcir.py:97-103`) also reads source-root `COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json`.

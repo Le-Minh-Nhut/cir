@@ -45,6 +45,18 @@ def test_schema_rejects_top_results_beyond_gallery() -> None:
         ResultRun.model_validate(payload)
 
 
+def test_schema_preserves_repeated_reference_target_annotations() -> None:
+    payload = build_mock_runs()[0].model_dump()
+    template = payload["queries"][0].copy()
+    template["annotation_index"] = 99
+    template["query_id"] = f"{template['category']}:99:{template['reference_id']}:{template['target_id']}"
+    payload["queries"].append(template)
+
+    result = ResultRun.model_validate(payload)
+
+    assert len(result.queries) == 25
+
+
 def test_sql_list_runs_reads_metadata(monkeypatch, tmp_path: Path) -> None:
     database = indexed(monkeypatch, tmp_path)
     runs = list_runs(database_path=database)

@@ -119,7 +119,7 @@ def test_csmcir_main_accepts_link_and_explicit_canonical_root(monkeypatch, tmp_p
     assert module.main(["--model", "csmcir", "--checkpoint", "fashioniq", "--dataset-root", str(layout), "--canonical-dataset-root", str(canonical), "--dry-run"]) == 0
 
 
-def test_encoder_requires_external_openclip_asset(monkeypatch, tmp_path: Path) -> None:
+def test_encoder_requires_native_layout_before_openclip(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
     model = records()["encoder"]
     source, _, _ = prepare_source(monkeypatch, module, tmp_path, model)
@@ -130,7 +130,10 @@ def test_encoder_requires_external_openclip_asset(monkeypatch, tmp_path: Path) -
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
     assert plan is None
-    assert reasons == [f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}"]
+    assert reasons == [
+        f"FashionIQ fashioniq_ilearn_resized requirement missing: {dataset_root / 'captions'}",
+        f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}",
+    ]
 
 
 def test_execute_writes_reproducible_logs(monkeypatch, tmp_path: Path) -> None:

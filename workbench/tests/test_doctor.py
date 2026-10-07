@@ -65,6 +65,36 @@ def test_csmcir_real_checks_require_dataset_qwen_and_cot(tmp_path: Path) -> None
     assert checks["csmcir:cot-captions"]["status"] == "BLOCKED"
 
 
+def test_ilearn_native_layout_requires_local_unverified_correction_files(tmp_path: Path) -> None:
+    doctor = load_doctor()
+    model = next(model for model in load_registry()["models"] if model["model_id"] == "hint")
+    settings = config(tmp_path)
+
+    checks = {check["name"]: check for check in doctor.model_checks(model, settings)}
+    blockers = checks["runtime:hint"]["evidence"]["checkpoints"][0]["runtime_blockers"]
+    missing = str(settings.FASHIONIQ_ROOT / "captions" / "correction_dict_dress.json")
+
+    assert f"FashionIQ fashioniq_ilearn_resized requirement missing: {missing}" in blockers
+
+
+def test_ilearn_present_correction_files_only_clear_presence_blockers(tmp_path: Path) -> None:
+    doctor = load_doctor()
+    model = next(model for model in load_registry()["models"] if model["model_id"] == "hint")
+    settings = config(tmp_path)
+    for path in doctor.fashioniq_required_paths(model, settings.FASHIONIQ_ROOT):
+        if path.suffix:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}" if path.name.startswith("correction_dict_") else "[]")
+        else:
+            path.mkdir(parents=True, exist_ok=True)
+
+    checks = {check["name"]: check for check in doctor.model_checks(model, settings)}
+    blockers = checks["runtime:hint"]["evidence"]["checkpoints"][0]["runtime_blockers"]
+
+    assert not any("fashioniq_ilearn_resized requirement missing" in blocker for blocker in blockers)
+    assert "checkpoint missing:" in blockers[0] or "source missing:" in blockers[0]
+
+
 def test_workbench_scope_ignores_missing_fashioniq(monkeypatch, tmp_path: Path) -> None:
     doctor = load_doctor()
     monkeypatch.setattr(doctor, "git", lambda *_: None)

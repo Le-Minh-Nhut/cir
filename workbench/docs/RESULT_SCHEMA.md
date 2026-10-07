@@ -45,10 +45,7 @@ The JSON below is an illustrative shape only; its IDs, ranks, and metric values 
 
 ## Identity and protocol contract
 
-`run_id`, not `model_id`, is analysis identity. Different checkpoints, source revisions, environments, or training-noise conditions require distinct IDs. `query_id` derives from canonical category, annotation index, reference ID, and target ID. Same-protocol comparison requires matching canonical identities and raw captions; `model_input_text` may differ.
-
-`fashioniq_original_split` and `fashioniq_val_split` cannot be compared, aggregated, or combined into cohorts. Preserve the producing protocol exactly; do not relabel an artifact to fit a comparison.
-
+`run_id`, not `model_id`, is analysis identity. Different checkpoints, source revisions, environments, or training-noise conditions require distinct IDs. `query_id` derives from canonical category, annotation index, reference ID, and target ID. Annotation index is required: repeated reference/target pairs are distinct benchmark annotations and must not collapse. Same-protocol comparison requires matching canonical identities and raw captions; `model_input_text` may differ.
 ## Rank and retrieval contract
 
 v2 requires `checkpoint_id`, `top_k_saved`, and `gallery_size`. Stored ranks are contiguous and unique. `len(top_results) <= min(top_k_saved, gallery_size)`; `top_k_saved` may exceed gallery size. `target_rank` cannot exceed gallery size. Top-K operations require each selected run to contain requested depth; target-rank metrics remain valid when retrieval rows were not saved.

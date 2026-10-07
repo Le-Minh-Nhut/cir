@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from workbench.backend.fashioniq_layout import paths_for_layout
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -22,6 +23,8 @@ def load_registry(path: Path = REGISTRY_PATH) -> dict[str, Any]:
             raise ValueError(f"unknown protocol for {model['model_id']}")
         if bool(model["source_available"]) != bool(model.get("source_dir")):
             raise ValueError(f"source_dir mismatch for {model['model_id']}")
+        if model["source_available"] and model.get("fashioniq_layout") not in {"fashioniq_standard", "fashioniq_ilearn_resized"}:
+            raise ValueError(f"unknown FashionIQ layout for {model['model_id']}")
         for checkpoint in model["checkpoint_variants"]:
             if checkpoint["evaluation_noise_pct"] != 0:
                 raise ValueError(f"non-clean evaluation policy for {model['model_id']}")
@@ -100,6 +103,13 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def fashioniq_required_paths(model: dict[str, Any], root: Path) -> tuple[Path, ...]:
+    layout = model.get("fashioniq_layout")
+    if layout is None:
+        return ()
+    return paths_for_layout(root, layout)
 
 
 def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -> dict[str, Any]:

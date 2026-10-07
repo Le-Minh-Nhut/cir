@@ -10,24 +10,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.operator_config import resolve_config
+from workbench.backend.fashioniq_layout import missing_paths, standard_paths
 
-CATEGORIES = ("dress", "shirt", "toptee")
 
 
 def required_layout(root: Path) -> tuple[Path, ...]:
-    return (
-        root / "captions",
-        root / "image_splits",
-        root / "images",
-        *(root / "captions" / f"cap.{category}.val.json" for category in CATEGORIES),
-        *(root / "image_splits" / f"split.{category}.val.json" for category in CATEGORIES),
-    )
+    return standard_paths(root)
 
 
 def validate_fashioniq(root: Path) -> list[str]:
     if not root.is_dir():
         return [f"dataset root missing: {root}"]
-    return [f"required path missing: {path}" for path in required_layout(root) if not (path.is_dir() if path.suffix == "" else path.is_file())]
+    return [f"required path missing: {path}" for path in missing_paths(required_layout(root))]
 
 
 

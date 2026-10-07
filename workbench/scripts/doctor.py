@@ -18,9 +18,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
-from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, checkpoint_path, load_registry, sha256_file
+from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, checkpoint_path, fashioniq_required_paths, load_registry, sha256_file
 
-CATEGORIES = ("dress", "shirt", "toptee")
+from workbench.backend.fashioniq_layout import CATEGORIES, missing_paths, standard_paths
 
 
 def record(name: str, status: str, detail: str, **evidence: Any) -> dict[str, Any]:
@@ -50,13 +50,7 @@ def source_state(model: dict[str, Any], root: Path) -> dict[str, Any]:
 
 
 def fashioniq_base_paths(root: Path) -> tuple[Path, ...]:
-    return (
-        root / "captions",
-        root / "image_splits",
-        root / "images",
-        *(root / "captions" / f"cap.{category}.val.json" for category in CATEGORIES),
-        *(root / "image_splits" / f"split.{category}.val.json" for category in CATEGORIES),
-    )
+    return standard_paths(root)
 
 
 def csmcir_auxiliary_paths(config: WorkbenchConfig, family: str) -> tuple[Path, ...]:
@@ -67,12 +61,12 @@ def csmcir_auxiliary_paths(config: WorkbenchConfig, family: str) -> tuple[Path, 
     )
 
 
-def missing_paths(paths: tuple[Path, ...]) -> list[str]:
-    return [str(path) for path in paths if not (path.is_dir() if path.suffix == "" else path.is_file())]
+def missing_path_strings(paths: tuple[Path, ...]) -> list[str]:
+    return [str(path) for path in missing_paths(paths)]
 
 
 def fashioniq_check(root: Path) -> dict[str, Any]:
-    missing = missing_paths(fashioniq_base_paths(root))
+    missing = missing_path_strings(fashioniq_base_paths(root))
     status = "OK" if not missing else "BLOCKED"
     return record("fashioniq", status, "FashionIQ base layout available" if not missing else "FashionIQ base layout missing", root=str(root), missing=missing, categories=list(CATEGORIES))
 
@@ -118,12 +112,15 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
             ("csmcir:cot-captions", "CSMCIR COT_ours2 captions", csmcir_auxiliary_paths(config, "COT_ours2 captions")),
         )
         for name, label, paths in asset_groups:
-            missing = missing_paths(paths)
+            missing = missing_path_strings(paths)
             root = config.FASHIONIQ_ROOT if name != "csmcir:cot-captions" else source
             csmcir_assets.append(record(name, "OK" if not missing else "BLOCKED", f"{label} available" if not missing else f"{label} missing", root=str(root), missing=missing))
             runtime_blockers.extend(f"{label} missing: {path}" for path in missing)
             if name == "csmcir:cot-captions" and missing:
                 runtime_blockers.append("required COT_ours2 captions have no verified automatic acquisition source")
+    if model_id != "csmcir":
+        missing = missing_path_strings(fashioniq_required_paths(model, config.FASHIONIQ_ROOT))
+        runtime_blockers.extend(f"FashionIQ {model['fashioniq_layout']} requirement missing: {path}" for path in missing)
     checkpoints = []
     for checkpoint in model["checkpoint_variants"]:
         path = checkpoint_path(model_id, checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
