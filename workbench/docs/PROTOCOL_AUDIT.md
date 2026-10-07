@@ -49,3 +49,16 @@ ENCODER requires an external `open_clip_pytorch_model.bin` ViT-B-32 asset in its
 - Cross-protocol aggregate, consensus, Jaccard, rank-disagreement, common-distractor, and cohort requests fail closed.
 - Same-protocol comparison still requires exact query-ID universe and matching canonical category, annotation index, reference ID, target ID, and raw captions. `model_input_text` may differ.
 - Top-K set analysis requires every selected artifact to store requested depth. Target-rank analysis does not claim unavailable retrieval rows.
+
+## Audited legacy assignments
+
+| Model | Assignment | Evidence boundary |
+| --- | --- | --- |
+| CLVC-Net | `fashioniq_val_split` | Source-order annotation queries; first-seen reference/target union; reference score set to `-10e10` before descending ranking. |
+| Combiner RN50x4 noft / CLIP4Cir RN50x4 fullft | `fashioniq_original_split` | Full ordered validation split gallery; reference remains eligible. Artifact variants remain unverified. |
+| TG-CIR | `fashioniq_val_split` | Source-order annotation endpoint union and source mask before descending ranking. Correction dictionaries must be manually placed at the loader's expected dataset path. |
+| SPRC | `fashioniq_original_split` | Full ordered validation gallery; reference remains eligible. |
+| LIMN base iteration 0 | `fashioniq_val_split` | Source-order annotation endpoint union and source mask before descending ranking. Do not generalize to LIMN+ or later iterations. |
+| DCNet | unavailable | Code reads ordered `val_trg` split and masks reference, but full-gallery completeness against FashionIQ corpus remains unproved. It cannot join any cohort until that condition is independently verified. |
+
+These assignments establish analysis compatibility only. They do not certify a checkpoint, preparation artifact, environment, command, native aggregate, or instrumentation parity. NEUCORE remains outside every registered cohort: its two caption-order queries per annotation are a different query universe.

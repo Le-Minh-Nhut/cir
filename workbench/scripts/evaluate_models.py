@@ -94,7 +94,7 @@ def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | 
             blocked.append(f"source pin mismatch: expected {expected_pin}, found {actual_pin}")
     if not checkpoint_file.is_file():
         blocked.append(f"checkpoint missing: {checkpoint_file}")
-    if checkpoint["checkpoint_mapping_status"] == "UNVERIFIED":
+    if checkpoint["checkpoint_mapping_status"] != "VERIFIED_METADATA":
         blocked.append("checkpoint mapping unresolved")
     if protocol not in model["supported_protocols"]:
         blocked.append(f"protocol incompatible: {protocol}")

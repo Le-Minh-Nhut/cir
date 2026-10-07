@@ -68,4 +68,39 @@ class IntentAdapter(OfficialScriptAdapter):
     script = "test.py"
 
 
-ADAPTERS = {adapter.model_id: adapter for adapter in (CSMCIRAdapter, EncoderAdapter, HintAdapter, PairAdapter, AirKnowAdapter, ConeSepAdapter, HabitAdapter, IntentAdapter)}
+class CLVCNetAdapter(OfficialScriptAdapter):
+    model_id = "clvc_net"
+    script = "test.py"
+
+
+class DCNetAdapter(OfficialScriptAdapter):
+    model_id = "dcnet"
+    script = "test.py"
+
+
+class CombinerNoftAdapter(OfficialScriptAdapter):
+    model_id = "combiner_rn50x4_noft"
+    script = "src/validate.py"
+
+
+class CLIP4CirFullftAdapter(OfficialScriptAdapter):
+    model_id = "clip4cir_rn50x4_fullft"
+    script = "src/validate.py"
+
+
+class TGCIRAdapter(OfficialScriptAdapter):
+    model_id = "tgcir"
+    script = "test.py"
+
+
+class SPRCAdapter(OfficialScriptAdapter):
+    model_id = "sprc"
+    script = "src/blip_validate.py"
+
+
+class LIMNAdapter(OfficialScriptAdapter):
+    model_id = "limn"
+    script = "LIMN/test.py"
+
+
+ADAPTERS = {adapter.model_id: adapter for adapter in (CSMCIRAdapter, EncoderAdapter, HintAdapter, PairAdapter, AirKnowAdapter, ConeSepAdapter, HabitAdapter, IntentAdapter, CLVCNetAdapter, DCNetAdapter, CombinerNoftAdapter, CLIP4CirFullftAdapter, TGCIRAdapter, SPRCAdapter, LIMNAdapter)}

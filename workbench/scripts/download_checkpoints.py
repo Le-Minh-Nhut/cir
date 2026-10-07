@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> None:
     manifest = load_manifest(manifest_path)
     for model, checkpoint in items:
         destination = checkpoint_path(model["model_id"], checkpoint, args.output_root)
-        if args.all and checkpoint["checkpoint_mapping_status"] == "UNVERIFIED":
+        if args.all and checkpoint["checkpoint_mapping_status"] != "VERIFIED_METADATA":
             print(f"SKIPPED: unresolved checkpoint mapping ({model['model_id']} / {checkpoint['checkpoint_id']})")
             continue
         if args.all and checkpoint.get("download_url") is None:

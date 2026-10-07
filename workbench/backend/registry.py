@@ -18,6 +18,8 @@ def load_registry(path: Path = REGISTRY_PATH) -> dict[str, Any]:
         registry = yaml.safe_load(handle)
     if registry.get("schema_version") != 1 or not isinstance(registry.get("models"), list):
         raise ValueError("unsupported model registry")
+    layouts = {"fashioniq_standard", "fashioniq_ilearn_resized", "fashioniq_ilearn_resized_training", "fashioniq_clvc_resized", "fashioniq_dcnet"}
+    mapping_statuses = {"VERIFIED_METADATA", "UNVERIFIED", "URL_UNRESOLVED", "ARTIFACT_ASSOCIATED_UNVALIDATED"}
     for model in registry["models"]:
         native_protocol = model["native_protocol"]
         supported_protocols = model["supported_protocols"]
@@ -33,11 +35,21 @@ def load_registry(path: Path = REGISTRY_PATH) -> dict[str, Any]:
             raise ValueError(f"literature split label mismatch for {model['model_id']}")
         if bool(model["source_available"]) != bool(model.get("source_dir")):
             raise ValueError(f"source_dir mismatch for {model['model_id']}")
-        if model["source_available"] and model.get("fashioniq_layout") not in {"fashioniq_standard", "fashioniq_ilearn_resized"}:
+        if model["source_available"] and model.get("fashioniq_layout") not in layouts:
             raise ValueError(f"unknown FashionIQ layout for {model['model_id']}")
+        if "research_generation" in model and model["research_generation"] not in {"legacy", "recent"}:
+            raise ValueError(f"unknown research generation for {model['model_id']}")
+        if "publication_year" in model and model["publication_year"] is not None and (not isinstance(model["publication_year"], int) or model["publication_year"] < 2020):
+            raise ValueError(f"invalid publication year for {model['model_id']}")
+        if "preparation_contract" in model and model["preparation_contract"] not in {"manual_standard", "manual_ilearn_resized", "manual_clvc_resized", "manual_dcnet", "unavailable"}:
+            raise ValueError(f"unknown preparation contract for {model['model_id']}")
+        if model.get("native_protocol_condition") and native_protocol is not None:
+            raise ValueError(f"conditional native protocol must remain unavailable for {model['model_id']}")
         for checkpoint in model["checkpoint_variants"]:
             if checkpoint["evaluation_noise_pct"] != 0:
                 raise ValueError(f"non-clean evaluation policy for {model['model_id']}")
+            if checkpoint["checkpoint_mapping_status"] not in mapping_statuses:
+                raise ValueError(f"unknown checkpoint mapping state for {model['model_id']}")
     return registry
 
 
@@ -131,7 +143,7 @@ def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -
     local_sha = sha256_file(path) if downloaded else None
     official_sha = checkpoint.get("expected_sha256")
     official_sha_match = local_sha == official_sha if downloaded and official_sha else None
-    mapping_verified = checkpoint["checkpoint_mapping_status"] not in {"UNVERIFIED", "URL_UNRESOLVED"}
+    mapping_verified = checkpoint["checkpoint_mapping_status"] == "VERIFIED_METADATA"
     source_synced = bool(model.get("source_dir")) and (config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]).is_dir()
     adapter_command_ready = mapping_verified and bool(model["supported_protocols"]) and model["model_id"] in {"csmcir", "encoder"}
     runtime_verified = model.get("reproduction_status") == "VERIFIED"

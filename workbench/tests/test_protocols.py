@@ -34,3 +34,43 @@ def test_registry_exposes_three_exact_workbench_protocols() -> None:
     for model_id in ("hint", "encoder", "pair"):
         assert models[model_id]["native_protocol"] == "fashioniq_val_split"
         assert models[model_id]["supported_protocols"] == ["fashioniq_val_split"]
+
+
+def test_legacy_registry_protocols_and_blockers_are_explicit() -> None:
+    from workbench.backend.registry import load_registry
+
+    models = {model["model_id"]: model for model in load_registry()["models"]}
+
+    assert models["dcnet"]["native_protocol"] is None
+    assert "complete validation gallery" in models["dcnet"]["native_protocol_condition"]
+    for model_id in ("clvc_net", "tgcir", "limn"):
+        assert models[model_id]["native_protocol"] == "fashioniq_val_split"
+    for model_id in ("combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "sprc"):
+        assert models[model_id]["native_protocol"] == "fashioniq_original_split"
+    assert models["sprc"]["reported_r10"] is None
+    assert "discrepancy" in models["sprc"]["reported_score_note"]
+    assert all(checkpoint["checkpoint_mapping_status"] != "VERIFIED_METADATA" for model_id in ("clvc_net", "dcnet", "combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "tgcir", "sprc", "limn") for checkpoint in models[model_id]["checkpoint_variants"])
+    assert models["tgcir"]["reported_mean"] is None
+    assert "neucore" not in models
+
+
+def test_legacy_adapters_are_registered_but_commands_remain_unaudited() -> None:
+    from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+
+    legacy = {"clvc_net", "dcnet", "combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "tgcir", "sprc", "limn"}
+
+    assert legacy <= ADAPTERS.keys()
+    assert all(ADAPTERS[model_id].command is OfficialScriptAdapter.command for model_id in legacy)
+
+
+def test_legacy_layout_contracts_require_native_inputs(tmp_path) -> None:
+    from workbench.backend.registry import fashioniq_required_paths, load_registry
+
+    models = {model["model_id"]: model for model in load_registry()["models"]}
+
+    assert tmp_path / "resized_image" / "dress" in fashioniq_required_paths(models["clvc_net"], tmp_path)
+    assert tmp_path / "captions" / "cap.dress.train.json" in fashioniq_required_paths(models["clvc_net"], tmp_path)
+    assert tmp_path / "captions" / "cap.dress.glove.val.pkl" in fashioniq_required_paths(models["dcnet"], tmp_path)
+    assert tmp_path / "resized_images" in fashioniq_required_paths(models["dcnet"], tmp_path)
+    assert tmp_path / "captions" / "cap.dress.train.json" in fashioniq_required_paths(models["tgcir"], tmp_path)
+    assert tmp_path / "captions" / "cap.dress.train.json" in fashioniq_required_paths(models["limn"], tmp_path)

@@ -95,6 +95,17 @@ def test_ilearn_present_correction_files_only_clear_presence_blockers(tmp_path: 
     assert "checkpoint missing:" in blockers[0] or "source missing:" in blockers[0]
 
 
+
+def test_dcnet_reports_generated_caption_pkl_blocker(tmp_path: Path) -> None:
+    doctor = load_doctor()
+    model = next(model for model in load_registry()["models"] if model["model_id"] == "dcnet")
+
+    checks = {check["name"]: check for check in doctor.model_checks(model, config(tmp_path))}
+    blockers = checks["runtime:dcnet"]["evidence"]["checkpoints"][0]["runtime_blockers"]
+
+    assert f"FashionIQ fashioniq_dcnet requirement missing: {tmp_path / 'FashionIQ' / 'captions'}" in blockers
+    assert "checkpoint mapping unresolved" in blockers
+
 def test_workbench_scope_ignores_missing_fashioniq(monkeypatch, tmp_path: Path) -> None:
     doctor = load_doctor()
     monkeypatch.setattr(doctor, "git", lambda *_: None)

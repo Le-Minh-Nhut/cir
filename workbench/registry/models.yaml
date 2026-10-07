@@ -15,6 +15,9 @@ protocols:
 models:
   - model_id: csmcir
     method_name: CSMCIR
+    research_generation: recent
+    publication_year: null
+    preparation_contract: manual_standard
     paper_title: "CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval"
     paper_url: null
     upstream_repo_url: https://github.com/qzp2018/CSMCIR
@@ -45,6 +48,9 @@ models:
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: airknow
     method_name: Air-Know
+    research_generation: recent
+    publication_year: 2026
+    preparation_contract: manual_ilearn_resized
     paper_title: "Air-Know: Arbiter-Calibrated Knowledge-Internalizing Robust Network for Composed Image Retrieval"
     paper_url: https://arxiv.org/abs/2604.19386
     upstream_repo_url: https://github.com/iLearn-Lab/CVPR26-Air-Know
@@ -85,6 +91,9 @@ models:
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: conesep
     method_name: ConeSep
+    research_generation: recent
+    publication_year: 2026
+    preparation_contract: manual_ilearn_resized
     paper_title: "ConeSep: Cone-based Robust Noise-Unlearning Compositional Network for Composed Image Retrieval"
     paper_url: https://arxiv.org/abs/2604.20358
     upstream_repo_url: https://github.com/iLearn-Lab/CVPR26-ConeSep
@@ -135,6 +144,9 @@ models:
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: ptha_mtst
     method_name: PTHA + MTST
+    research_generation: recent
+    publication_year: 2025
+    preparation_contract: unavailable
     paper_title: Scale Up Composed Image Retrieval Learning via Modification Text Generation
     paper_url: https://arxiv.org/abs/2504.05316
     upstream_repo_url: null
@@ -153,6 +165,9 @@ models:
     checkpoint_variants: []
   - model_id: habit
     method_name: HABIT
+    research_generation: recent
+    publication_year: 2026
+    preparation_contract: manual_ilearn_resized
     paper_title: "HABIT: Chrono-Synergia Robust Progressive Learning Framework for Composed Image Retrieval"
     paper_url: https://ojs.aaai.org/index.php/AAAI/article/view/37608
     upstream_repo_url: https://github.com/iLearn-Lab/AAAI26-HABIT
@@ -203,6 +218,9 @@ models:
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: intent
     method_name: INTENT
+    research_generation: recent
+    publication_year: 2026
+    preparation_contract: manual_ilearn_resized
     paper_title: "INTENT: Invariance and Discrimination-aware Noise Mitigation for Robust Composed Image Retrieval"
     paper_url: https://ojs.aaai.org/index.php/AAAI/article/view/39181
     upstream_repo_url: https://github.com/iLearn-Lab/AAAI26-INTENT
@@ -253,6 +271,9 @@ models:
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: hint
     method_name: HINT
+    research_generation: recent
+    publication_year: 2026
+    preparation_contract: manual_ilearn_resized
     paper_title: "HINT: Composed Image Retrieval with Dual-Path Compositional Contextualized Network"
     paper_url: https://arxiv.org/abs/2603.26341
     upstream_repo_url: https://github.com/iLearn-Lab/ICASSP26-HINT
@@ -283,6 +304,9 @@ models:
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: encoder
     method_name: ENCODER
+    research_generation: recent
+    publication_year: 2025
+    preparation_contract: manual_ilearn_resized
     paper_title: "ENCODER: Entity Mining and Modification Relation Binding for Composed Image Retrieval"
     paper_url: https://ojs.aaai.org/index.php/AAAI/article/view/32541
     upstream_repo_url: https://github.com/iLearn-Lab/AAAI25-ENCODER
@@ -314,6 +338,9 @@ models:
         checkpoint_mapping_status: URL_UNRESOLVED
   - model_id: pair
     method_name: PAIR
+    research_generation: recent
+    publication_year: 2025
+    preparation_contract: manual_ilearn_resized
     paper_title: "PAIR: Complementarity-guided Disentanglement for Composed Image Retrieval"
     paper_url: https://ieeexplore.ieee.org/document/10888153
     upstream_repo_url: https://github.com/iLearn-Lab/ICASSP25-PAIR
@@ -352,3 +379,263 @@ models:
         expected_sha256: null
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
+  - model_id: clvc_net
+    method_name: CLVC-Net
+    research_generation: legacy
+    publication_year: 2021
+    paper_title: Comprehensive Linguistic-Visual Composition Network for Image Retrieval
+    paper_url: https://doi.org/10.1145/3404835.3462967
+    upstream_repo_url: https://github.com/iLearn-Lab/SIGIR21-CLVC-Net
+    upstream_default_branch: main
+    upstream_commit_sha: bd9b6889489806cb60676597880f91d918b279cb
+    source_available: true
+    source_dir: CLVCNet
+    fashioniq_layout: fashioniq_clvc_resized
+    preparation_contract: manual_clvc_resized
+    literature_split_label: val
+    native_protocol: fashioniq_val_split
+    supported_protocols: [fashioniq_val_split]
+    reported_r10: null
+    reported_r50: null
+    reported_mean: null
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    strict_clean_checkpoint_available: null
+    notes: Native pair-union and reference exclusion verified. Author Drive file exists, but filename, category mapping, hash, and runnable evaluator loading path are unverified.
+    checkpoint_variants:
+      - checkpoint_id: author_drive_unresolved
+        filename: checkpoint-unresolved.pt
+        download_url: null
+        source_url: https://drive.google.com/file/d/159rBhWyhkLN7sXAi8iyW_ljzFNLJinKa/view?usp=sharing
+        source_type: author_google_drive
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+  - model_id: dcnet
+    method_name: DCNet
+    research_generation: legacy
+    publication_year: 2021
+    paper_title: Dual Compositional Learning in Interactive Image Retrieval
+    paper_url: https://github.com/ozmig77/dcnet/blob/68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb/DCNet_Kim2021.pdf
+    upstream_repo_url: https://github.com/ozmig77/dcnet
+    upstream_default_branch: main
+    upstream_commit_sha: 68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb
+    source_available: true
+    source_dir: DCNet
+    fashioniq_layout: fashioniq_dcnet
+    preparation_contract: manual_dcnet
+    literature_split_label: original
+    native_protocol: null
+    native_protocol_condition: Requires independent proof that split.{category}.val.json is the complete validation gallery.
+    supported_protocols: []
+    reported_r10: null
+    reported_r50: null
+    reported_mean: null
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    strict_clean_checkpoint_available: null
+    notes: Native evaluator masks references and fuses log-softmax branch scores. Paper category scores are not checkpoint mapping evidence.
+    checkpoint_variants:
+      - checkpoint_id: author_drive_unresolved
+        filename: trained_model-unresolved.pth
+        download_url: null
+        source_url: https://drive.google.com/drive/folders/1wgygqF095Di67EaHaGOXbwh3wEzk9izB?usp=sharing
+        source_type: author_google_drive
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+  - model_id: combiner_rn50x4_noft
+    method_name: Combiner RN50x4 noft
+    research_generation: legacy
+    publication_year: 2023
+    paper_title: Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features
+    paper_url: https://arxiv.org/abs/2308.11485
+    upstream_repo_url: https://github.com/ABaldrati/CLIP4Cir
+    upstream_default_branch: master
+    upstream_commit_sha: dfed9f748a8a4d05abf613164e06d59b22dbdf13
+    source_available: true
+    source_dir: CLIP4Cir
+    fashioniq_layout: fashioniq_standard
+    preparation_contract: manual_standard
+    literature_split_label: original
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: null
+    reported_r50: null
+    reported_mean: null
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    strict_clean_checkpoint_available: null
+    notes: Native full-gallery reference-eligible evaluator verified. noft label, checkpoint, and requested score mapping are not author-verified.
+    checkpoint_variants:
+      - checkpoint_id: rn50x4_noft_unresolved
+        filename: rn50x4-noft-unresolved.pt
+        download_url: null
+        source_url: https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing
+        source_type: author_google_drive
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+  - model_id: clip4cir_rn50x4_fullft
+    method_name: CLIP4Cir RN50x4 fullft
+    research_generation: legacy
+    publication_year: 2023
+    paper_title: Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features
+    paper_url: https://arxiv.org/abs/2308.11485
+    upstream_repo_url: https://github.com/ABaldrati/CLIP4Cir
+    upstream_default_branch: master
+    upstream_commit_sha: dfed9f748a8a4d05abf613164e06d59b22dbdf13
+    source_available: true
+    source_dir: CLIP4Cir
+    fashioniq_layout: fashioniq_standard
+    preparation_contract: manual_standard
+    literature_split_label: original
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: null
+    reported_r50: null
+    reported_mean: null
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    strict_clean_checkpoint_available: null
+    notes: Native full-gallery reference-eligible evaluator verified. fullft label, paired CLIP/Combiner checkpoint, and requested score mapping are not author-verified.
+    checkpoint_variants:
+      - checkpoint_id: rn50x4_fullft_unresolved
+        filename: rn50x4-fullft-unresolved.pt
+        download_url: null
+        source_url: https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing
+        source_type: author_google_drive
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+  - model_id: tgcir
+    method_name: TG-CIR
+    research_generation: legacy
+    publication_year: 2023
+    paper_title: Target-Guided Composed Image Retrieval
+    paper_url: https://arxiv.org/abs/2309.01366
+    upstream_repo_url: https://github.com/iLearn-Lab/MM23-TG-CIR
+    upstream_default_branch: main
+    upstream_commit_sha: 65fa78eaf8cabe8197fcc22ccab42207c591bdee
+    source_available: true
+    source_dir: TGCIR
+    fashioniq_layout: fashioniq_ilearn_resized_training
+    preparation_contract: manual_ilearn_resized
+    literature_split_label: val
+    native_protocol: fashioniq_val_split
+    supported_protocols: [fashioniq_val_split]
+    reported_r10: 51.32
+    reported_r50: 73.09
+    reported_mean: null
+    reported_score_note: Paper reports macro R@10 and R@50; 62.205 is derivable but not presented as a reproduced metric.
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    strict_clean_checkpoint_available: null
+    notes: Native annotation endpoint-union/reference-excluded evaluator verified. Official TG-CIR.zip exists, but member FashionIQ checkpoint mapping and hash are unverified.
+    checkpoint_variants:
+      - checkpoint_id: tgcir_archive_unresolved
+        filename: tgcir-fashioniq-unresolved.pt
+        download_url: null
+        source_url: https://drive.google.com/file/d/1OdZTtJqy-RTpYXBaq5ThmH3IBnGvYCyi/view
+        source_type: author_google_drive
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+  - model_id: sprc
+    method_name: SPRC
+    research_generation: legacy
+    publication_year: 2024
+    paper_title: Sentence-level Prompts Benefit Composed Image Retrieval
+    paper_url: https://arxiv.org/abs/2310.05473
+    upstream_repo_url: https://github.com/chunmeifeng/SPRC
+    upstream_default_branch: null
+    upstream_commit_sha: 2935a5397732260d1db6fa577e5926f963e36f0f
+    source_available: true
+    source_dir: SPRC
+    fashioniq_layout: fashioniq_standard
+    preparation_contract: manual_standard
+    literature_split_label: original
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
+    reported_r10: null
+    reported_r50: 74.97
+    reported_mean: 64.85
+    reported_score_note: Paper Table 1 prints R@10 54.92 while printed per-category values average 54.72; unresolved primary-source discrepancy.
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    strict_clean_checkpoint_available: null
+    notes: Native full-gallery reference-eligible evaluator verified. BLIP-2 target checkpoint model/backbone and strict mapping are unresolved.
+    checkpoint_variants:
+      - checkpoint_id: sprc_fiq_unresolved
+        filename: sprc_fiq.pt
+        download_url: null
+        source_url: https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj
+        source_type: author_onedrive
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+  - model_id: limn
+    method_name: LIMN
+    research_generation: legacy
+    publication_year: 2024
+    paper_title: Self-Training Boosted Multi-Factor Matching Network for Composed Image Retrieval
+    paper_url: https://doi.org/10.1109/TPAMI.2023.3346434
+    upstream_repo_url: https://github.com/iLearn-Lab/TPAMI24-LIMN
+    upstream_default_branch: null
+    upstream_commit_sha: 7d7bc9b116f594a65ac22457491edf28a88d3c3e
+    source_available: true
+    source_dir: LIMN
+    fashioniq_layout: fashioniq_ilearn_resized_training
+    preparation_contract: manual_ilearn_resized
+    literature_split_label: val
+    native_protocol: fashioniq_val_split
+    supported_protocols: [fashioniq_val_split]
+    reported_r10: null
+    reported_r50: null
+    reported_mean: null
+    reproduction_status: BLOCKED_NO_AUDITED_REPLAY_COMMAND
+    strict_clean_checkpoint_available: null
+    notes: Base LIMN iteration 0 only. Author Hub artifacts and metric JSONs exist; serialized-object load and replay command remain unvalidated.
+    checkpoint_variants:
+      - checkpoint_id: base_iter0_dress
+        filename: 0_dress_best_model.pt
+        download_url: https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_dress_best_model.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: 96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c
+        status: ARTIFACT_ASSOCIATED_UNVALIDATED
+        checkpoint_mapping_status: ARTIFACT_ASSOCIATED_UNVALIDATED
+      - checkpoint_id: base_iter0_shirt
+        filename: 0_shirt_best_model.pt
+        download_url: https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_shirt_best_model.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: 9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74
+        status: ARTIFACT_ASSOCIATED_UNVALIDATED
+        checkpoint_mapping_status: ARTIFACT_ASSOCIATED_UNVALIDATED
+      - checkpoint_id: base_iter0_toptee
+        filename: 0_toptee_best_model.pt
+        download_url: https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_toptee_best_model.pt
+        source_type: author_huggingface
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: 79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2
+        status: ARTIFACT_ASSOCIATED_UNVALIDATED
+        checkpoint_mapping_status: ARTIFACT_ASSOCIATED_UNVALIDATED

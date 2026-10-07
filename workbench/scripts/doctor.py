@@ -129,7 +129,7 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
         installed = path.is_file()
         local_sha = sha256_file(path) if installed else None
         official_sha = checkpoint.get("expected_sha256")
-        mapping = checkpoint["checkpoint_mapping_status"] != "UNVERIFIED"
+        mapping = checkpoint["checkpoint_mapping_status"] == "VERIFIED_METADATA"
         blockers = list(runtime_blockers)
         if not installed:
             blockers.append(f"checkpoint missing: {path}")

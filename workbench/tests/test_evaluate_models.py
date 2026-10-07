@@ -60,6 +60,24 @@ def test_unaudited_adapter_is_skipped() -> None:
     assert reasons == ["SKIPPED: adapter command not audited"]
 
 
+def test_legacy_adapter_is_skipped_without_guessed_command() -> None:
+    module = load_module()
+    model = records()["tgcir"]
+
+    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], None, 200)
+
+    assert plan is None
+    assert reasons == ["SKIPPED: adapter command not audited"]
+
+
+def test_dcnet_cannot_plan_without_certified_protocol() -> None:
+    module = load_module()
+    model = records()["dcnet"]
+
+    assert model["native_protocol"] is None
+    assert model["supported_protocols"] == []
+
+
 def test_missing_checkpoint_is_blocked(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
     model = records()["csmcir"]
@@ -142,8 +160,8 @@ def test_encoder_requires_native_layout_before_openclip(monkeypatch, tmp_path: P
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
-    assert plan is None
     assert reasons == [
+        "checkpoint mapping unresolved",
         f"FashionIQ fashioniq_ilearn_resized requirement missing: {dataset_root / 'captions'}",
         f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}",
         f"ENCODER evaluator import missing: {source / 'datasets1.py'}",
@@ -163,25 +181,11 @@ def test_encoder_reports_actual_missing_layout_path(monkeypatch, tmp_path: Path)
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
-    assert plan is None
-    assert reasons == [f"FashionIQ fashioniq_ilearn_resized requirement missing: {missing}"]
+    assert reasons == [
+        "checkpoint mapping unresolved",
+        f"FashionIQ fashioniq_ilearn_resized requirement missing: {missing}",
+    ]
 
-
-def test_encoder_constructs_plan_with_complete_native_layout(monkeypatch, tmp_path: Path) -> None:
-    module = load_module()
-    model = records()["encoder"]
-    source, checkpoint, _ = prepare_source(monkeypatch, module, tmp_path, model)
-    for name in ("evaluate_model.py", "datasets1.py", "open_clip_pytorch_model.bin"):
-        (source / name).write_text("")
-    dataset_root = tmp_path / "FashionIQ"
-    prepare_ilearn_layout(dataset_root)
-
-    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
-
-    assert reasons == []
-    assert plan is not None
-    assert plan.checkpoint == checkpoint
-    assert plan.command[plan.command.index("--fashioniq_path") + 1] == f"{dataset_root}/"
 
 
 def test_encoder_complete_layout_still_blocks_missing_evaluator_import(monkeypatch, tmp_path: Path) -> None:
@@ -196,7 +200,10 @@ def test_encoder_complete_layout_still_blocks_missing_evaluator_import(monkeypat
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
     assert plan is None
-    assert reasons == [f"ENCODER evaluator import missing: {source / 'datasets1.py'}"]
+    assert reasons == [
+        "checkpoint mapping unresolved",
+        f"ENCODER evaluator import missing: {source / 'datasets1.py'}",
+    ]
 
 
 def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, tmp_path: Path) -> None:
@@ -210,9 +217,26 @@ def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, t
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
-    assert plan is None
-    assert reasons == [f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}"]
+    assert reasons == [
+        "checkpoint mapping unresolved",
+        f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}",
+    ]
 
+
+
+def test_encoder_complete_local_prerequisites_still_block_unresolved_mapping(monkeypatch, tmp_path: Path) -> None:
+    module = load_module()
+    model = records()["encoder"]
+    source, _, _ = prepare_source(monkeypatch, module, tmp_path, model)
+    for name in ("evaluate_model.py", "datasets1.py", "open_clip_pytorch_model.bin"):
+        (source / name).write_text("")
+    dataset_root = tmp_path / "FashionIQ"
+    prepare_ilearn_layout(dataset_root)
+
+    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
+
+    assert plan is None
+    assert reasons == ["checkpoint mapping unresolved"]
 def test_encoder_command_preserves_upstream_trailing_root_separator(tmp_path: Path) -> None:
     from workbench.backend.adapters.models import EncoderAdapter
     from workbench.backend.adapters.base import EvalRequest

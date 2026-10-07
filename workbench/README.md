@@ -146,17 +146,19 @@ Troubleshooting commands remain available: `doctor.py --scope real --model csmci
 
 This matrix describes registry metadata and blockers, not present local files, runtime compatibility, command readiness, or successful reproduction. See [docs/UPSTREAM_AUDIT.md](docs/UPSTREAM_AUDIT.md).
 
-| Model | Exact protocol | Literature label | Variants | Direct download state | Evaluation state |
-| --- | --- | --- | --- | --- | --- |
-| CSMCIR | `fashioniq_original_split` | original | `fashioniq` clean | author-linked URL recorded | command audited; fixed-root/auxiliary-file limits apply |
-| Air-Know | `fashioniq_full_gallery_ref_excluded` | original | `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
-| ConeSep | `fashioniq_full_gallery_ref_excluded` | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
-| PTHA + MTST | unavailable | n/a | none | no verified FashionIQ checkpoint | blocked |
-| HABIT | `fashioniq_full_gallery_ref_excluded` | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
-| INTENT | `fashioniq_full_gallery_ref_excluded` | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
-| HINT | `fashioniq_val_split` | val | `fashioniq` clean | author-linked URL recorded | command not audited |
-| ENCODER | `fashioniq_val_split` | val | `fashioniq` clean | Google Drive folder known; direct file URL unresolved | command audited; checkpoint and OpenCLIP asset both required |
-| PAIR | `fashioniq_val_split` | val | `pair_b1`, `pair_b2` | no verified direct URL or FashionIQ mapping | blocked |
+| Model | Exact protocol | Checkpoint evidence | Evaluation state |
+| --- | --- | --- | --- |
+| CSMCIR | `fashioniq_original_split` | author-linked clean URL | command audited; fixed-root/auxiliary-file limits apply |
+| Air-Know, ConeSep, HABIT, INTENT | `fashioniq_full_gallery_ref_excluded` | official noisy-trained variants only | command not audited; clean evaluation remains distinct from training noise |
+| HINT, ENCODER, PAIR | `fashioniq_val_split` | HINT URL; ENCODER folder; PAIR variants unresolved | HINT command unaudited; ENCODER prerequisites unresolved; PAIR blocked |
+| CLVC-Net | `fashioniq_val_split` | author Drive artifact mapping unresolved | blocked |
+| DCNet | unavailable | author Drive artifact mapping unresolved | blocked pending full-gallery proof and legacy prepared assets |
+| Combiner RN50x4 noft, CLIP4Cir RN50x4 fullft | `fashioniq_original_split` | author Drive folder only; requested variants unresolved | blocked |
+| TG-CIR | `fashioniq_val_split` | official ZIP exists; FashionIQ member unresolved | blocked |
+| SPRC | `fashioniq_original_split` | `sprc_fiq.pt` source known; BLIP-2 mapping unresolved | blocked; printed R@10 conflicts with category arithmetic |
+| LIMN base iteration 0 | `fashioniq_val_split` | author Hub has per-category artifact hashes and metric files | blocked: no audited replay command |
+
+Legacy entries preserve source pins and native evaluator evidence; they do not make assets or commands interchangeable. DCNet stays without a protocol until split completeness is independently proven. NEUCORE is deliberately unregistered because its doubled caption-order queries form a distinct query universe.
 
 A checkpoint trained with 20%, 50%, or 80% noise remains that training condition when evaluated on clean FashionIQ data. It is not a clean checkpoint. `expected_sha256: null` means no official hash is in registry; local hashes belong in ignored download manifests.
 

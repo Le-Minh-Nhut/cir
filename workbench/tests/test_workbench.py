@@ -149,13 +149,13 @@ def test_compare_rejects_unavailable_top_k(monkeypatch, tmp_path: Path) -> None:
     indexed_with_saved_depth(monkeypatch, tmp_path, 50)
     query_id = build_mock_runs()[0].queries[0].query_id
     with pytest.raises(WorkbenchError) as error:
-        main.compare(query_id, "mock_csmcir-fiq_a,mock_csmcir-fiq_b", 100)
+        main.compare(query_id, "mock_csmcir-fiq_a,mock_sprc-sprc_fiq", 100)
     assert error.value.code == "insufficient_top_k_depth"
 
 
 def test_failure_jaccard_uses_exact_target_rank_without_top_k(monkeypatch, tmp_path: Path) -> None:
     indexed_with_saved_depth(monkeypatch, tmp_path, 50)
-    rows = main.overlap("mock_csmcir-fiq_a,mock_csmcir-fiq_b", 100)
+    rows = main.overlap("mock_csmcir-fiq_a,mock_sprc-sprc_fiq", 100)
     assert len(rows) == 4 and rows[0]["jaccard"] >= 0
 
 
@@ -171,7 +171,7 @@ def test_common_distractor_has_distinct_run_provenance() -> None:
     rows = analysis_rows(build_mock_runs()[:2], 10)
     distractor = rows[0]["common_distractors"][0]
     assert distractor["run_count"] == 2
-    assert distractor["run_ids"] == ["mock_csmcir-fiq_a", "mock_csmcir-fiq_b"]
+    assert distractor["run_ids"] == ["mock_csmcir-fiq_a", "mock_sprc-sprc_fiq"]
 
 
 def test_duplicate_run_id_and_atomic_rebuild(monkeypatch, tmp_path: Path) -> None:
@@ -195,6 +195,13 @@ def test_analysis_separates_exact_protocols_and_accepts_reference_excluded_cohor
     assert len(runs) == 2 and len(maps["mock_airknow-fiq_n05"]) == 24
 
 
+def test_mock_legacy_recent_same_protocol_cohorts_align() -> None:
+    original, val = build_mock_runs()[0:2], build_mock_runs()[4:6]
+
+    assert len(aligned_queries(original)) == 24
+    assert len(aligned_queries(val)) == 24
+
+
 def test_image_resolver_supports_extensions_and_rejects_traversal(tmp_path: Path) -> None:
     root = tmp_path / "FashionIQ"; (root / "images").mkdir(parents=True); (root / "images" / "png.png").write_bytes(b"x"); (root / "dress").mkdir(); (root / "dress" / "jpg.jpg").write_bytes(b"x")
     assert resolve_image("dress", "png", root).suffix == ".png"
@@ -207,7 +214,7 @@ def test_downloader_lists_and_skips_unresolved_without_network(tmp_path: Path) -
     assert "pair_b1" in listed.stdout and "pair_b2" in listed.stdout and "CHECKPOINT_MAPPING_UNVERIFIED" in listed.stdout
     bulk = subprocess.run(["python", "workbench/scripts/download_checkpoints.py", "--all", "--dry-run", "--output-root", str(tmp_path)], text=True, capture_output=True, check=True)
     assert "SKIPPED: unresolved checkpoint mapping (pair / pair_b1)" in bulk.stdout
-    assert "SKIPPED: direct official download URL unavailable (encoder / fashioniq)" in bulk.stdout
+    assert "SKIPPED: unresolved checkpoint mapping (encoder / fashioniq)" in bulk.stdout
     assert not list(tmp_path.rglob("*.pt"))
 
 

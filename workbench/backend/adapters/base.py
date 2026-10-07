@@ -31,7 +31,7 @@ class ModelAdapter(ABC):
         path = checkpoint_path(self.model_id, checkpoint)
         if not path.is_file():
             raise FileNotFoundError(f"checkpoint missing: {path}")
-        if checkpoint["checkpoint_mapping_status"] == "UNVERIFIED":
+        if checkpoint["checkpoint_mapping_status"] != "VERIFIED_METADATA":
             raise WorkbenchError("checkpoint_mapping_unverified", "Checkpoint mapping is unresolved.", {"model_id": self.model_id, "checkpoint_id": request.checkpoint_id})
         return checkpoint
 
