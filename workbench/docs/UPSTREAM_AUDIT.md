@@ -48,7 +48,7 @@ Official validation is fixed-root/cwd-sensitive and has no ordinary dataset-root
 
 ## ENCODER limitations
 
-ENCODER's audited command uses `val-split` and requires a FashionIQ checkpoint plus upstream-root `open_clip_pytorch_model.bin`. `evaluate_model.py` calls `open_clip.create_model_and_transforms('ViT-B-32', pretrained='./open_clip_pytorch_model.bin')`; checkpoint alone is insufficient. The official Google Drive folder is recorded, but a direct FashionIQ checkpoint file URL, official checkpoint hash, and local artifact remain unresolved. Do not invent/download-substitute any of these assets during no-install workbench operation.
+ENCODER's audited command uses `val-split` and requires a FashionIQ checkpoint plus upstream-root `open_clip_pytorch_model.bin`. `evaluate_model.py` calls `open_clip.create_model_and_transforms('ViT-B-32', pretrained='./open_clip_pytorch_model.bin')`; checkpoint alone is insufficient. Its evaluator imports `datasets1`, but this file is absent from pinned source. Workbench blocks execution until the author-provenanced dependency is present. The official Google Drive folder is recorded, but a direct FashionIQ checkpoint file URL, official checkpoint hash, and local artifact remain unresolved. Do not invent/download-substitute any of these assets during no-install workbench operation.
 
 ## Provenance policy
 

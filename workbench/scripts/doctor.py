@@ -100,6 +100,8 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
         runtime_blockers.append(f"official evaluator missing: {source / adapter.script}")
     if model_id == "encoder" and not (source / "open_clip_pytorch_model.bin").is_file():
         runtime_blockers.append(f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}")
+    if model_id == "encoder" and not (source / "datasets1.py").is_file():
+        runtime_blockers.append(f"ENCODER evaluator import missing: {source / 'datasets1.py'}")
     if model_id == "csmcir":
         layout = source / "fashionIQ_dataset"
         if not layout.is_symlink():

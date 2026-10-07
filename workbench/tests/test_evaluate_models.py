@@ -133,7 +133,20 @@ def test_encoder_requires_native_layout_before_openclip(monkeypatch, tmp_path: P
     assert reasons == [
         f"FashionIQ fashioniq_ilearn_resized requirement missing: {dataset_root / 'captions'}",
         f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}",
+        f"ENCODER evaluator import missing: {source / 'datasets1.py'}",
     ]
+
+def test_encoder_command_preserves_upstream_trailing_root_separator(tmp_path: Path) -> None:
+    from workbench.backend.adapters.models import EncoderAdapter
+    from workbench.backend.adapters.base import EvalRequest
+
+    command = EncoderAdapter().command(
+        tmp_path / "ENCODER",
+        tmp_path / "fashioniq.pt",
+        EvalRequest("encoder", "fashioniq", "fashioniq_val_split", tmp_path / "FashionIQ", tmp_path / "result.json"),
+    )
+
+    assert command[command.index("--fashioniq_path") + 1] == f"{tmp_path / 'FashionIQ'}/"
 
 
 def test_execute_writes_reproducible_logs(monkeypatch, tmp_path: Path) -> None:

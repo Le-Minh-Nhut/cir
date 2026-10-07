@@ -107,6 +107,8 @@ def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | 
             blocked.append(f"FashionIQ {model['fashioniq_layout']} requirement missing: {missing}")
     if model["model_id"] == "encoder" and not (source / "open_clip_pytorch_model.bin").is_file():
         blocked.append(f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}")
+    if model["model_id"] == "encoder" and not (source / "datasets1.py").is_file():
+        blocked.append(f"ENCODER evaluator import missing: {source / 'datasets1.py'}")
     if model["model_id"] == "csmcir":
         layout = source / "fashionIQ_dataset"
         if not layout.is_symlink() or layout.resolve() != config.FASHIONIQ_ROOT.resolve():

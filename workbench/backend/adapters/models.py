@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from workbench.backend.adapters.base import EvalRequest, ModelAdapter
-from workbench.backend.registry import ROOT, checkpoint_path
+from workbench.backend.registry import checkpoint_path
 
 
 class OfficialScriptAdapter(ModelAdapter):
@@ -35,7 +35,7 @@ class EncoderAdapter(OfficialScriptAdapter):
     script = "evaluate_model.py"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        return ["python", str(source / self.script), "--dataset", "fashioniq", "--fashioniq_split", "val-split", "--fashioniq_path", str(request.dataset_root), "--ckpt_path", str(checkpoint)]
+        return ["python", str(source / self.script), "--dataset", "fashioniq", "--fashioniq_split", "val-split", "--fashioniq_path", f"{request.dataset_root}/", "--ckpt_path", str(checkpoint)]
 
 
 class HintAdapter(OfficialScriptAdapter):

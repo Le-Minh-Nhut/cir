@@ -189,9 +189,9 @@ The official phase emits aggregate metrics only. It is **not** a per-query resul
 
 ## ENCODER guide
 
-ENCODER uses `fashioniq_val_split`; its audited command passes `--fashioniq_split val-split`, `--fashioniq_path`, and `--ckpt_path`. It requires both a local FashionIQ checkpoint and the exact upstream-root `open_clip_pytorch_model.bin` asset used by `open_clip.create_model_and_transforms('ViT-B-32', pretrained='./open_clip_pytorch_model.bin')`.
+ENCODER uses `fashioniq_val_split`; its audited command passes `--fashioniq_split val-split`, `--fashioniq_path`, and `--ckpt_path`. The upstream loader concatenates the supplied root with child paths, so the adapter appends its required trailing `/`. It requires both a local FashionIQ checkpoint and the exact upstream-root `open_clip_pytorch_model.bin` asset used by `open_clip.create_model_and_transforms('ViT-B-32', pretrained='./open_clip_pytorch_model.bin')`.
 
-The registry records only an official Google Drive folder for ENCODER's FashionIQ checkpoint. Its direct file URL, official hash, and downloaded file are unresolved/unverified. Do not invent a URL, substitute a backbone, or claim the checkpoint alone is sufficient. `doctor.py` and `evaluate_models.py` report this asset prerequisite; only a reviewed acquisition with provenance can clear it.
+The registry records only an official Google Drive folder for ENCODER's FashionIQ checkpoint. Its direct file URL, official hash, and downloaded file are unresolved/unverified. Pinned `evaluate_model.py` also imports missing `datasets1.py`; `doctor.py` and `evaluate_models.py` block it rather than assuming an untracked module. Do not invent a URL, substitute a backbone or module, or claim the checkpoint alone is sufficient. Only a reviewed acquisition with provenance can clear these blockers.
 
 ## Other model blockers
 
