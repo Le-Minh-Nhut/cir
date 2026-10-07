@@ -15,9 +15,11 @@ from workbench.backend.analysis import analysis_rows_from_maps, failure_jaccard_
 from workbench.backend.errors import WorkbenchError
 from workbench.backend.index import rebuild_index
 from workbench.backend.jobs import SingleGpuQueue
-from workbench.backend.registry import checkpoint_availability, load_registry
+from workbench.backend.operator_config import resolve_config
+from workbench.backend.registry import checkpoint_availability, load_registry, sha256_file
 from workbench.backend.schemas.results import Annotation, SavedCohort
 from workbench.backend.storage import cohort_metrics, get_analysis_input, get_query, list_runs, query_page, validate_analysis_selection
+from workbench.scripts.evaluate_models import guarded_plan
 
 ROOT = Path(__file__).resolve().parents[1]
 ANNOTATIONS_PATH = ROOT / "artifacts" / "annotations.json"
@@ -163,9 +165,39 @@ def jobs():
     return JOBS.list()
 
 
+class JobInput(BaseModel):
+    model_id: str
+    checkpoint_id: str
+    protocol_id: str
+    top_k: int = Field(default=200, ge=1, le=200)
+
+
 @app.post("/api/jobs")
-def queue_job():
-    raise HTTPException(403, "Evaluation execution is disabled in laptop development mode.")
+def queue_job(payload: JobInput):
+    registry = load_registry()
+    model = next((item for item in registry["models"] if item["model_id"] == payload.model_id), None)
+    if model is None:
+        raise HTTPException(404, {"error": "model_not_found", "message": "Model is not registered.", "details": {"model_id": payload.model_id}})
+    checkpoint = next((item for item in model["checkpoint_variants"] if item["checkpoint_id"] == payload.checkpoint_id), None)
+    if checkpoint is None:
+        raise HTTPException(404, {"error": "checkpoint_not_found", "message": "Checkpoint is not registered for model.", "details": {"model_id": payload.model_id, "checkpoint_id": payload.checkpoint_id}})
+    config = resolve_config()
+    dataset_root = config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset" if payload.model_id == "csmcir" else config.FASHIONIQ_ROOT
+    plan, blockers = guarded_plan(model, checkpoint, payload.protocol_id, dataset_root, payload.top_k, config)
+    if plan is None:
+        raise HTTPException(409, {"error": "evaluation_blocked", "message": "Official evaluation is not ready.", "details": {"blockers": blockers}})
+    timestamp = datetime.now(UTC)
+    directory = ROOT / "artifacts" / "logs" / f"{timestamp:%Y%m%dT%H%M%S%fZ}_{plan.model_id}_{plan.checkpoint_id}"
+    provenance = {
+        "model_id": plan.model_id,
+        "checkpoint_id": plan.checkpoint_id,
+        "protocol_id": plan.protocol,
+        "upstream_expected_pin": plan.pin,
+        "actual_source_commit": plan.actual_source_commit,
+        "checkpoint_local_sha256": sha256_file(plan.checkpoint),
+        "dataset_root": str(plan.dataset_root),
+    }
+    return JOBS.enqueue(plan.model_id, plan.checkpoint_id, plan.protocol, plan.command, plan.cwd, directory, provenance)
 
 
 @app.post("/api/jobs/{job_id}/cancel")

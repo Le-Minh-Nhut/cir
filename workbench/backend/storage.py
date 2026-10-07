@@ -150,6 +150,9 @@ def validate_analysis_selection(run_ids: list[str], *, k: int | None = None, req
     protocols = {run["protocol_id"] for run in runs}
     if len(protocols) != 1:
         raise WorkbenchError("cross_protocol", "Cross-protocol analysis is invalid. Select runs from one FashionIQ protocol.", {"protocol_ids": sorted(protocols)})
+    data_kinds = {run["data_kind"] for run in runs}
+    if len(data_kinds) != 1:
+        raise WorkbenchError("mixed_data_kind", "Mock and experiment runs cannot share an analysis, cohort, or export.", {"data_kinds": sorted(data_kinds), "run_ids": run_ids})
     if k is not None:
         if not 1 <= k <= 200:
             raise WorkbenchError("insufficient_top_k_depth", "K must be between 1 and 200.", {"requested_k": k})

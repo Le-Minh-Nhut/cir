@@ -1,15 +1,11 @@
 schema_version: 1
 protocols:
   fashioniq_original_split:
-    label: FashionIQ — Full Gallery, Reference Eligible
-    literature_split_label: original
-    evaluation_noise_pct: 0
-  fashioniq_full_gallery_ref_excluded:
-    label: FashionIQ — Full Gallery, Reference Excluded
+    label: FashionIQ - Original Split
     literature_split_label: original
     evaluation_noise_pct: 0
   fashioniq_val_split:
-    label: FashionIQ — Val Split
+    label: FashionIQ - Val Split
     literature_split_label: val
     evaluation_noise_pct: 0
 models:
@@ -54,14 +50,14 @@ models:
     source_dir: AirKnow
     fashioniq_layout: fashioniq_ilearn_resized
     literature_split_label: original
-    native_protocol: fashioniq_full_gallery_ref_excluded
-    supported_protocols: [fashioniq_full_gallery_ref_excluded]
+    native_protocol: null
+    supported_protocols: []
     reported_r10: 55.75
     reported_r50: 75.72
     reported_mean: 65.74
     reproduction_status: NOT_RUN
     strict_clean_checkpoint_available: false
-    notes: Official Hub lists only FashionIQ 50% and 80% noise-trained weights; clean evaluation remains 0%.
+    notes: Native evaluator masks full-gallery references before recall; no approved workbench protocol maps this behavior. Official Hub lists only FashionIQ 50% and 80% noise-trained weights; clean evaluation remains 0%.
     checkpoint_variants:
       - checkpoint_id: fiq_n05
         filename: airknow_fiq_0.5.pt
@@ -94,14 +90,14 @@ models:
     source_dir: ConeSep
     fashioniq_layout: fashioniq_ilearn_resized
     literature_split_label: original
-    native_protocol: fashioniq_full_gallery_ref_excluded
-    supported_protocols: [fashioniq_full_gallery_ref_excluded]
+    native_protocol: null
+    supported_protocols: []
     reported_r10: 55.58
     reported_r50: 75.88
     reported_mean: 65.73
     reproduction_status: NOT_RUN
     strict_clean_checkpoint_available: false
-    notes: Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.
+    notes: Native evaluator masks full-gallery references before recall; no approved workbench protocol maps this behavior. Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.
     checkpoint_variants:
       - checkpoint_id: fiq_n02
         filename: ConeSep-FIQ-N0.2.pt
@@ -162,14 +158,14 @@ models:
     source_dir: HABIT
     fashioniq_layout: fashioniq_ilearn_resized
     literature_split_label: original
-    native_protocol: fashioniq_full_gallery_ref_excluded
-    supported_protocols: [fashioniq_full_gallery_ref_excluded]
+    native_protocol: null
+    supported_protocols: []
     reported_r10: 55.38
     reported_r50: 75.20
     reported_mean: 65.29
     reproduction_status: NOT_RUN
     strict_clean_checkpoint_available: false
-    notes: Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.
+    notes: Native evaluator masks full-gallery references before recall; no approved workbench protocol maps this behavior. Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.
     checkpoint_variants:
       - checkpoint_id: fiq_n02
         filename: HABIT-FIQ_N0.2.pt
@@ -212,14 +208,14 @@ models:
     source_dir: INTENT
     fashioniq_layout: fashioniq_ilearn_resized
     literature_split_label: original
-    native_protocol: fashioniq_full_gallery_ref_excluded
-    supported_protocols: [fashioniq_full_gallery_ref_excluded]
+    native_protocol: null
+    supported_protocols: []
     reported_r10: 55.31
     reported_r50: 75.16
     reported_mean: 65.24
     reproduction_status: NOT_RUN
     strict_clean_checkpoint_available: false
-    notes: Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.
+    notes: Native evaluator masks full-gallery references before recall; no approved workbench protocol maps this behavior. Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.
     checkpoint_variants:
       - checkpoint_id: fiq_n02
         filename: intent_fiq_0.2.pt

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 import subprocess
+import sys
+import time
 import urllib.error
 from pathlib import Path
 
@@ -14,6 +16,7 @@ from workbench.backend import main
 from workbench.backend.main import resolve_image
 from workbench.backend.schemas.results import ResultRun
 from workbench.backend.storage import get_analysis_input, get_run, list_runs, query_page
+from workbench.backend.jobs import SingleGpuQueue
 from workbench.tests.mock_data import build_mock_runs
 
 
@@ -30,10 +33,25 @@ def indexed(monkeypatch, tmp_path: Path) -> Path:
     return database
 
 
+def test_gpu_queue_runs_one_preflighted_command_and_persists_logs(tmp_path: Path) -> None:
+    queue = SingleGpuQueue()
+    directory = tmp_path / "logs" / "job"
+    job = queue.enqueue("demo", "checkpoint", "fashioniq_original_split", [sys.executable, "-c", "print('official output')"], tmp_path, directory, {"checkpoint_local_sha256": "digest"})
+    for _ in range(100):
+        current = next(item for item in queue.list() if item["job_id"] == job["job_id"])
+        if current["status"] in {"completed", "failed"}:
+            break
+        time.sleep(0.01)
+    assert current["status"] == "completed"
+    assert current["stdout_tail"] == "official output\n"
+    assert (directory / "stdout.log").read_text() == "official output\n"
+    assert (directory / "command.json").is_file()
+
+
 def test_mock_generation_is_deterministic_and_schema_v2_valid() -> None:
     left, right = build_mock_runs(), build_mock_runs()
     assert [item.model_dump_json() for item in left] == [item.model_dump_json() for item in right]
-    assert len(left) == 8 and all(item.schema_version == 2 for item in left)
+    assert len(left) == 4 and all(item.schema_version == 2 for item in left)
     assert {query.category for query in left[0].queries} == {"dress", "shirt", "toptee"}
     assert {item.run.literature_split_label for item in left if item.run.protocol_id != "fashioniq_val_split"} == {"original"}
     assert max(query.target_rank for query in left[0].queries) > 200
@@ -43,6 +61,18 @@ def test_schema_rejects_top_results_beyond_gallery() -> None:
     payload = build_mock_runs()[0].model_dump()
     payload["run"]["gallery_size"] = 199
     with pytest.raises(ValueError, match="effective saved retrieval depth"):
+        ResultRun.model_validate(payload)
+
+def test_schema_rejects_truncated_or_inconsistent_saved_rankings() -> None:
+    payload = build_mock_runs()[0].model_dump()
+    payload["queries"][0]["top_results"].pop()
+    with pytest.raises(ValueError, match="must match effective saved retrieval depth"):
+        ResultRun.model_validate(payload)
+
+    payload = build_mock_runs()[0].model_dump()
+    payload["queries"][0]["target_rank"] = 1
+    payload["queries"][0]["top_results"][0]["image_id"] = "not-the-target"
+    with pytest.raises(ValueError, match="does not match saved target retrieval"):
         ResultRun.model_validate(payload)
 
 
@@ -69,7 +99,7 @@ def test_schema_preserves_repeated_reference_target_annotations() -> None:
 def test_sql_list_runs_reads_metadata(monkeypatch, tmp_path: Path) -> None:
     database = indexed(monkeypatch, tmp_path)
     runs = list_runs(database_path=database)
-    assert len(runs) == 8
+    assert len(runs) == 4
     assert {run["run_id"] for run in runs} == {item.run.run_id for item in build_mock_runs()}
     assert all("queries" not in run for run in runs)
 
@@ -150,13 +180,12 @@ def test_duplicate_run_id_and_atomic_rebuild(monkeypatch, tmp_path: Path) -> Non
     assert database.read_bytes() == prior
 
 
-def test_csmcir_cannot_share_analysis_with_full_gallery_reference_excluded_models(monkeypatch, tmp_path: Path) -> None:
+def test_analysis_rejects_distinct_registered_protocols(monkeypatch, tmp_path: Path) -> None:
     indexed(monkeypatch, tmp_path)
     response = main.queries("mock_csmcir-fiq_a", limit=5, offset=5, category="dress", min_rank=1, max_rank=250)
     assert len(response["items"]) <= 5
-    for model_id in ("mock_airknow", "mock_conesep", "mock_habit", "mock_intent"):
-        with pytest.raises(WorkbenchError, match="Cross-protocol analysis is invalid"):
-            main.analysis(f"mock_csmcir-fiq_a,{model_id}-fiq_n05", 10)
+    with pytest.raises(WorkbenchError, match="Cross-protocol analysis is invalid"):
+        main.analysis("mock_csmcir-fiq_a,mock_pair-pair_b1", 10)
     runs, maps = get_analysis_input(["mock_csmcir-fiq_a", "mock_csmcir-fiq_b"], 200)
     assert len(runs) == 2 and len(maps["mock_csmcir-fiq_a"]) == 24
 

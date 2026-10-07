@@ -6,7 +6,7 @@ Local operator tooling for FashionIQ composed-image-retrieval (CIR) failure anal
 
 ## Operating rules
 
-- Use one exact protocol per run, comparison, cohort, and export. `fashioniq_original_split`, `fashioniq_full_gallery_ref_excluded`, and `fashioniq_val_split` are incompatible cohorts; shared literature label `original` does not establish evaluator compatibility.
+- Use one exact protocol per run, comparison, cohort, and export. UI modes are exactly `fashioniq_original_split` and `fashioniq_val_split`; a model whose native evaluator matches neither remains BLOCKED rather than relabeled.
 - Keep model environments isolated from workbench backend/frontend dependencies. Do not install upstream model requirements into the workbench environment.
 - Sync to registry pins; do not update a source tree to an arbitrary revision.
 - Download only registry-declared, author-linked direct URLs. A locally computed hash records local evidence; it does not become an official hash.
@@ -17,11 +17,10 @@ Local operator tooling for FashionIQ composed-image-retrieval (CIR) failure anal
 
 | ID | Exact label | Literature split label | Gallery and target rank |
 | --- | --- | --- | --- |
-| `fashioniq_original_split` | FashionIQ — Full Gallery, Reference Eligible | `original` | Full ordered `image_splits/split.{category}.val.json`; reference remains eligible. CSMCIR. |
-| `fashioniq_full_gallery_ref_excluded` | FashionIQ — Full Gallery, Reference Excluded | `original` | Full ordered `image_splits/split.{category}.val.json`; reference is excluded before Recall@K. Air-Know, ConeSep, HABIT, INTENT. |
-| `fashioniq_val_split` | FashionIQ — Val Split | `val` | First-seen ordered union of validation reference/target IDs; remove reference before Recall@K. |
+| `fashioniq_original_split` | FashionIQ - Original Split | `original` | Full ordered `image_splits/split.{category}.val.json`; reference remains eligible. CSMCIR. |
+| `fashioniq_val_split` | FashionIQ - Val Split | `val` | First-seen ordered union of validation reference/target IDs; remove reference before Recall@K. HINT, ENCODER, PAIR. |
 
-All use `dress`, `shirt`, and `toptee`, `captions/cap.{category}.val.json`, and clean evaluation (`evaluation_noise_pct: 0`). The literature `original` label names a gallery family, not identical ranking semantics. Full evidence: [docs/PROTOCOL_AUDIT.md](docs/PROTOCOL_AUDIT.md).
+All use `dress`, `shirt`, and `toptee`, `captions/cap.{category}.val.json`, and clean evaluation (`evaluation_noise_pct: 0`). Air-Know, ConeSep, HABIT, and INTENT mask full-gallery references; that is not either registered protocol, so they remain blocked from result ingestion. Full evidence: [docs/PROTOCOL_AUDIT.md](docs/PROTOCOL_AUDIT.md).
 
 CSMCIR consumes standard FashionIQ `images`; iLearn model sources consume `resized_image/{category}` plus category correction dictionaries. Dictionary files are **local, manual, and UNVERIFIED** for iLearn methods: no automatic download or DQU-CIR substitution occurs. `prepare_dataset.py` validates only standard FashionIQ because CSMCIR link preparation must stay independent; strict model preflight validates each adapter's native layout.
 
@@ -117,6 +116,10 @@ Use this sequence on a GPU host only. It is a guardrail and recordkeeping proced
 8. Only after official metric parity is established, make a reviewable **observation-only** instrumentation change that exports the evaluator's existing per-query rankings. Validate its schema-v2 artifact and rebuild the index.
 
 `evaluate_models.py` can print/run only audited official commands after source, pin, checkpoint, protocol, dataset, and model-specific prerequisites pass. It does not generate result JSON or prove reproduction. Use `--dry-run` until the reviewed environment is ready; dry run announces its plan and creates no evaluation log directory.
+### Browser GPU queue
+
+`POST /api/jobs` accepts only a registry model/checkpoint/protocol that passes the same pin, layout, asset, mapping, and audited-command checks as `evaluate_models.py`. The in-process queue starts one official subprocess at a time, writes `command.json`, `stdout.log`, and `stderr.log` beneath ignored `workbench/artifacts/logs/`, and exposes status/tails through `GET /api/jobs`. Cancellation terminates only its queued or active child process. It does not produce per-query JSON or bypass official-parity requirements.
+
 
 ## Master pipeline
 
@@ -143,13 +146,13 @@ Troubleshooting commands remain available: `doctor.py --scope real --model csmci
 This matrix describes registry metadata and blockers, not present local files, runtime compatibility, command readiness, or successful reproduction. See [docs/UPSTREAM_AUDIT.md](docs/UPSTREAM_AUDIT.md).
 
 | Model | Exact protocol | Literature label | Variants | Direct download state | Evaluation state |
-| --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- | --- |
 | CSMCIR | `fashioniq_original_split` | original | `fashioniq` clean | author-linked URL recorded | command audited; fixed-root/auxiliary-file limits apply |
-| Air-Know | `fashioniq_full_gallery_ref_excluded` | original | `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
-| ConeSep | `fashioniq_full_gallery_ref_excluded` | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
+| Air-Know | unavailable | original | `fiq_n05`, `fiq_n08` | author-linked URLs recorded | blocked: full-gallery reference-mask protocol has no approved workbench ID; only noise-trained variants |
+| ConeSep | unavailable | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | blocked: full-gallery reference-mask protocol has no approved workbench ID; only noise-trained variants |
 | PTHA + MTST | unavailable | n/a | none | no verified FashionIQ checkpoint | blocked |
-| HABIT | `fashioniq_full_gallery_ref_excluded` | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
-| INTENT | `fashioniq_full_gallery_ref_excluded` | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | command not audited; only noise-trained variants |
+| HABIT | unavailable | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | blocked: full-gallery reference-mask protocol has no approved workbench ID; only noise-trained variants |
+| INTENT | unavailable | original | `fiq_n02`, `fiq_n05`, `fiq_n08` | author-linked URLs recorded | blocked: full-gallery reference-mask protocol has no approved workbench ID; only noise-trained variants |
 | HINT | `fashioniq_val_split` | val | `fashioniq` clean | author-linked URL recorded | command not audited |
 | ENCODER | `fashioniq_val_split` | val | `fashioniq` clean | Google Drive folder known; direct file URL unresolved | command audited; checkpoint and OpenCLIP asset both required |
 | PAIR | `fashioniq_val_split` | val | `pair_b1`, `pair_b2` | no verified direct URL or FashionIQ mapping | blocked |
@@ -222,7 +225,7 @@ Image lookup accepts benchmark image IDs only and known FashionIQ `.png`, `.jpg`
 
 ## Research example
 
-1. Select only completed runs from one exact protocol, for example `fashioniq_original_split`; never combine it with `fashioniq_full_gallery_ref_excluded` only because both retain literature label `original`.
+1. Select only completed runs from one exact registered protocol. Methods with a different native evaluator remain blocked instead of sharing analysis by literature label.
 2. Choose Top-K 10, then filter **all runs fail**.
 3. Sort/inspect queries by median target rank and repeated distractors.
 4. Review reference, target, raw captions, model input text, and actual rankings before labeling a failure.
@@ -302,12 +305,12 @@ All operator scripts use `python workbench/scripts/NAME.py ...`. These are curre
 
 # evaluate_models.py
 (--list | --model MODEL_ID | --all-runnable) [--checkpoint CHECKPOINT_ID]
-[--protocol fashioniq_original_split|fashioniq_full_gallery_ref_excluded|fashioniq_val_split] [--dataset-root PATH]
+[--protocol fashioniq_original_split|fashioniq_val_split] [--dataset-root PATH]
 [--top-k POSITIVE_INTEGER] [--dry-run] [--continue-on-error]
 
 # run_eval.py — legacy command preview; pipeline uses guarded evaluate_models.py
 --model MODEL_ID --checkpoint CHECKPOINT_ID
---protocol fashioniq_original_split|fashioniq_full_gallery_ref_excluded|fashioniq_val_split --dataset-root PATH --output PATH
+--protocol fashioniq_original_split|fashioniq_val_split --dataset-root PATH --output PATH
 [--top-k INTEGER]
 
 # validate_results.py

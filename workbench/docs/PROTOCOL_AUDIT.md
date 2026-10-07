@@ -1,6 +1,6 @@
 # FashionIQ protocol audit
 
-`fashioniq_original_split`, `fashioniq_full_gallery_ref_excluded`, and `fashioniq_val_split` are incompatible analysis cohorts. Every workbench protocol declares clean FashionIQ evaluation: `evaluation_noise_pct: 0`. Training noise belongs to checkpoint provenance and does not change this evaluation setting. `literature_split_label: original` describes the full-gallery family only; it never permits cross-protocol analysis.
+`fashioniq_original_split` and `fashioniq_val_split` are incompatible analysis cohorts. Every registered workbench protocol declares clean FashionIQ evaluation: `evaluation_noise_pct: 0`. Training noise belongs to checkpoint provenance and does not change this evaluation setting. A method with a different reference policy is BLOCKED from result ingestion until a protocol ID is explicitly approved; it is never coerced into either mode.
 
 ## `fashioniq_original_split` — Full Gallery, Reference Eligible
 
@@ -15,14 +15,6 @@
 
 Evidence: `validate_blip_csmcir.py:blip_validate_fashioniq` creates per-category validation `FashionIQDataset` instances in `relative` and `classic` modes. `FashionIQDataset` reads `fashionIQ_dataset/captions`, `image_splits`, and `images`, plus linked dataset-root `qwen_captions/{dress,shirt,toptee}_cot_val.json`. The direct index call at `validate_blip_csmcir.py:612` reaches `utils_csmcir.py:extract_index_blip_caption_features`, which reads source-root `COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json`. The evaluator accepts no ordinary dataset-root CLI; preparation maintains the fixed source-root link. It emits aggregate metrics only and does not establish a per-query export or local reproduction.
 
-## `fashioniq_full_gallery_ref_excluded` — Full Gallery, Reference Excluded
-
-- Literature label: `original`.
-- Categories, annotation source, and complete ordered gallery match `fashioniq_original_split`.
-- Reference image is explicitly masked/excluded before Recall@K.
-- Recall: target occurs within the first K non-reference descending-score results.
-
-Evidence: Air-Know, ConeSep, HABIT, and INTENT native `FashionIQ` datasets select `original-split`, build complete ordered validation galleries from `split.{category}.val.json`, and replace each query reference score with `-10e10` before top-K recall. This is a distinct exact protocol from CSMCIR despite their shared literature label.
 
 ## `fashioniq_val_split` — FashionIQ Val Split
 
@@ -33,6 +25,8 @@ Evidence: Air-Know, ConeSep, HABIT, and INTENT native `FashionIQ` datasets selec
 - Recall: target occurs within the first K non-reference descending-score results.
 
 Evidence: local `src/datasets/fashioniq.py:build_pair_union_gallery` implements ordered reference/target union. Local `src/evaluation/fashioniq_encoder.py` removes reference after a stable descending sort. ENCODER and PAIR official datasets use this pair-union gallery in default `val-split`; each evaluation zeros reference similarity before ranking. HINT builds the same union and excludes reference before ranking.
+
+Air-Know, ConeSep, HABIT, and INTENT were independently audited as full-gallery evaluators that mask their references before recall. That behavior is neither `fashioniq_original_split` nor `fashioniq_val_split`, so these models have no workbench protocol assignment and cannot enter a result cohort.
 
 All inspected iLearn sources (`Air-Know`, ConeSep, HABIT, INTENT, HINT, ENCODER, and PAIR) require `captions/correction_dict_{dress,shirt,toptee}.json` in addition to their image layout. They lowercase a caption, translate `string.punctuation` to spaces, whitespace-tokenize, make exact dictionary substitutions, then compose source-order captions with ` and `. DQU-CIR pins files with matching names and behavior, but no inspected iLearn source pins those blobs. Workbench therefore only checks local presence for iLearn layouts; it does not download, verify, or attribute these files.
 

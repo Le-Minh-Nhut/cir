@@ -7,7 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 PROTOCOL_LITERATURE_LABELS = {
     "fashioniq_original_split": "original",
-    "fashioniq_full_gallery_ref_excluded": "original",
     "fashioniq_val_split": "val",
 }
 PROTOCOL_IDS = frozenset(PROTOCOL_LITERATURE_LABELS)
@@ -96,10 +95,15 @@ class ResultRun(BaseModel):
         if len({query.query_id for query in self.queries}) != len(self.queries):
             raise ValueError("query_id values must be unique per run")
         effective_depth = min(self.run.top_k_saved, self.run.gallery_size)
-        if any(len(query.top_results) > effective_depth for query in self.queries):
-            raise ValueError("query top_results exceeds effective saved retrieval depth")
-        if any(query.target_rank > self.run.gallery_size for query in self.queries):
-            raise ValueError("target_rank exceeds gallery_size")
+        for query in self.queries:
+            if len(query.top_results) != effective_depth:
+                raise ValueError("query top_results must match effective saved retrieval depth")
+            if query.target_rank > self.run.gallery_size:
+                raise ValueError("target_rank exceeds gallery_size")
+            if query.target_rank <= effective_depth and query.top_results[query.target_rank - 1].image_id != query.target_id:
+                raise ValueError("target_rank does not match saved target retrieval")
+            if query.target_rank > effective_depth and any(item.image_id == query.target_id for item in query.top_results):
+                raise ValueError("saved target retrieval conflicts with target_rank")
         return self
 
 

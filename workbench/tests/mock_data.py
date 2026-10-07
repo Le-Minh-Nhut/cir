@@ -8,10 +8,6 @@ def build_mock_runs() -> list[ResultRun]:
     cases = (
         ("fashioniq_original_split", "mock_csmcir", "Mock CSMCIR", "fiq_a", 0, 0),
         ("fashioniq_original_split", "mock_csmcir", "Mock CSMCIR", "fiq_b", 0, 1),
-        ("fashioniq_full_gallery_ref_excluded", "mock_airknow", "Mock Air-Know", "fiq_n05", 50, 0),
-        ("fashioniq_full_gallery_ref_excluded", "mock_conesep", "Mock ConeSep", "fiq_n05", 50, 1),
-        ("fashioniq_full_gallery_ref_excluded", "mock_habit", "Mock HABIT", "fiq_n05", 50, 0),
-        ("fashioniq_full_gallery_ref_excluded", "mock_intent", "Mock INTENT", "fiq_n05", 50, 1),
         ("fashioniq_val_split", "mock_pair", "Mock PAIR", "pair_b1", None, 0),
         ("fashioniq_val_split", "mock_pair", "Mock PAIR", "pair_b2", None, 1),
     )

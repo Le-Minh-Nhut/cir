@@ -15,7 +15,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True, choices=sorted(ADAPTERS))
     parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--protocol", required=True, choices=["fashioniq_original_split", "fashioniq_full_gallery_ref_excluded", "fashioniq_val_split"])
+    parser.add_argument("--protocol", required=True, choices=["fashioniq_original_split", "fashioniq_val_split"])
     parser.add_argument("--dataset-root", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--top-k", type=int, default=200)

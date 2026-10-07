@@ -131,9 +131,9 @@ def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -
     local_sha = sha256_file(path) if downloaded else None
     official_sha = checkpoint.get("expected_sha256")
     official_sha_match = local_sha == official_sha if downloaded and official_sha else None
-    mapping_verified = checkpoint["checkpoint_mapping_status"] not in {"UNVERIFIED"}
+    mapping_verified = checkpoint["checkpoint_mapping_status"] not in {"UNVERIFIED", "URL_UNRESOLVED"}
     source_synced = bool(model.get("source_dir")) and (config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]).is_dir()
-    adapter_command_ready = mapping_verified and model["model_id"] in {"csmcir", "encoder"}
+    adapter_command_ready = mapping_verified and bool(model["supported_protocols"]) and model["model_id"] in {"csmcir", "encoder"}
     runtime_verified = model.get("reproduction_status") == "VERIFIED"
     runnable = downloaded and source_synced and mapping_verified and (official_sha is None or official_sha_match is True) and adapter_command_ready
     blocking_reasons = []
