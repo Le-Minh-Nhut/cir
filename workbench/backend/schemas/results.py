@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 PROTOCOL_LITERATURE_LABELS = {
     "fashioniq_original_split": "original",
+    "fashioniq_full_gallery_ref_excluded": "original",
     "fashioniq_val_split": "val",
 }
 PROTOCOL_IDS = frozenset(PROTOCOL_LITERATURE_LABELS)

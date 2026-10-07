@@ -20,19 +20,17 @@ def test_val_split_union_order_and_reference_exclusion() -> None:
     assert gallery == ["ref-a", "target-a", "ref-b"]
     assert fashioniq_encoder_recall_at_k(torch.tensor([[0.99, 0.90, 0.80]]), ["target-a"], ["ref-a"], gallery, 1) == 100.0
 
-def test_registry_exposes_exactly_two_workbench_protocols() -> None:
-    from workbench.backend.registry import load_registry
-
-    assert list(load_registry()["protocols"]) == ["fashioniq_original_split", "fashioniq_val_split"]
-
-
-def test_registry_excludes_unmapped_full_gallery_reference_excluded_models() -> None:
+def test_registry_exposes_three_exact_workbench_protocols() -> None:
     from workbench.backend.registry import load_registry
 
     models = {model["model_id"]: model for model in load_registry()["models"]}
 
+    assert list(load_registry()["protocols"]) == ["fashioniq_original_split", "fashioniq_full_gallery_ref_excluded", "fashioniq_val_split"]
     assert models["csmcir"]["native_protocol"] == "fashioniq_original_split"
     for model_id in ("airknow", "conesep", "habit", "intent"):
         assert models[model_id]["literature_split_label"] == "original"
-        assert models[model_id]["native_protocol"] is None
-        assert models[model_id]["supported_protocols"] == []
+        assert models[model_id]["native_protocol"] == "fashioniq_full_gallery_ref_excluded"
+        assert models[model_id]["supported_protocols"] == ["fashioniq_full_gallery_ref_excluded"]
+    for model_id in ("hint", "encoder", "pair"):
+        assert models[model_id]["native_protocol"] == "fashioniq_val_split"
+        assert models[model_id]["supported_protocols"] == ["fashioniq_val_split"]
