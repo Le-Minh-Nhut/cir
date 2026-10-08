@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Iterable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
 from workbench.backend.adapters.base import EvalRequest
 from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+from workbench.backend.metrics_extraction import extract_aggregate_metrics
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
 from workbench.backend.registry import checkpoint_path, load_registry, sha256_file
 from workbench.backend.runtime import runtime_blockers
@@ -38,7 +38,10 @@ class EvaluationPlan:
     pin: str | None
     actual_source_commit: str | None
     paper_metrics: dict[str, float | None] | None = None
-
+    checkpoint_bundle: dict[str, dict[str, Any]] | None = None
+    bundle_manifest_digest: str | None = None
+    artifact_type: str = "single_file"
+    directory_members: list[dict[str, Any]] | None = None
 def command_is_audited(adapter_type: type[OfficialScriptAdapter]) -> bool:
     return getattr(adapter_type, "command", None) is not OfficialScriptAdapter.command
 
@@ -116,7 +119,59 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
     except Exception as error:
         return None, [f"official command construction failed: {error}"]
     paper_metrics = {key.removeprefix("reported_"): model.get(key) for key in ("reported_r10", "reported_r50", "reported_mean")}
-    return EvaluationPlan(model["model_id"], checkpoint["checkpoint_id"], protocol, dataset_root, source, checkpoint_file, source_cwd(model, source), command, model.get("upstream_commit_sha"), actual_pin, paper_metrics), []
+    checkpoint_bundle = None
+    bundle_manifest_digest = None
+    artifact_type = checkpoint.get("artifact_type", "single_file")
+    directory_members = None
+
+    if model["model_id"] == "limn" and checkpoint["checkpoint_id"] == "base_iter0_all_categories":
+        artifact_type = "category_specific_whole_models"
+        checkpoint_root = checkpoint_file.parent
+        checkpoint_bundle = {}
+        for cat in ("dress", "shirt", "toptee"):
+            fn = f"0_{cat}_best_model.pt"
+            fp = checkpoint_root / fn
+            c_sha = sha256_file(fp) if fp.is_file() else None
+            checkpoint_bundle[cat] = {
+                "checkpoint_id": f"base_iter0_{cat}",
+                "filename": fn,
+                "path": str(fp),
+                "sha256": c_sha,
+            }
+        bundle_manifest_digest = hashlib.sha256(
+            json.dumps(checkpoint_bundle, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+    elif artifact_type in ("run_directory", "bundle_directory"):
+        req_files = checkpoint.get("required_files") or [m["filename"] for m in checkpoint.get("bundle_members", [])]
+        directory_members = [
+            {
+                "filename": name,
+                "path": str(checkpoint_file / name),
+                "sha256": sha256_file(checkpoint_file / name) if (checkpoint_file / name).is_file() else None,
+            }
+            for name in req_files
+        ]
+        bundle_manifest_digest = hashlib.sha256(
+            json.dumps(directory_members, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+
+    return EvaluationPlan(
+        model["model_id"],
+        checkpoint["checkpoint_id"],
+        protocol,
+        dataset_root,
+        source,
+        checkpoint_file,
+        source_cwd(model, source),
+        command,
+        model.get("upstream_commit_sha"),
+        actual_pin,
+        paper_metrics,
+        checkpoint_bundle=checkpoint_bundle,
+        bundle_manifest_digest=bundle_manifest_digest,
+        artifact_type=artifact_type,
+        directory_members=directory_members,
+    ), []
 
 
 def parser_for(registry: dict) -> argparse.ArgumentParser:
@@ -143,10 +198,19 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
     started = datetime.now(UTC)
     directory = log_dir(config, plan, started)
     directory.mkdir(parents=True, exist_ok=False)
+
+    checkpoint_local_sha = None
+    if plan.checkpoint.is_file():
+        checkpoint_local_sha = sha256_file(plan.checkpoint)
+    elif plan.checkpoint.is_dir():
+        req_files = [m["filename"] for m in plan.directory_members] if plan.directory_members else None
+        checkpoint_local_sha = sha256_file(plan.checkpoint, required_files=req_files)
+
     environment = {
-        "python": sys.version,
-        "executable": sys.executable,
+        "orchestrator_python": sys.version,
+        "orchestrator_executable": sys.executable,
         "platform": sys.platform,
+        "model_interpreter": plan.command[0] if plan.command else sys.executable,
     }
     command_json = json.dumps(plan.command, separators=(",", ":"))
     environment_json = json.dumps(environment, sort_keys=True, separators=(",", ":"))
@@ -158,7 +222,12 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
         "cwd": str(plan.cwd),
         "upstream_expected_pin": plan.pin,
         "actual_source_commit": plan.actual_source_commit,
-        "checkpoint_local_sha256": sha256_file(plan.checkpoint),
+        "checkpoint_local_sha256": checkpoint_local_sha,
+        "checkpoint_artifact_type": plan.artifact_type,
+        "checkpoint_bundle": plan.checkpoint_bundle,
+        "bundle_manifest_digest": plan.bundle_manifest_digest,
+        "directory_members": plan.directory_members,
+        "model_interpreter": plan.command[0] if plan.command else sys.executable,
         "command_digest": hashlib.sha256(command_json.encode()).hexdigest(),
         "environment": environment,
         "environment_digest": hashlib.sha256(environment_json.encode()).hexdigest(),
@@ -184,27 +253,51 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
         code = process.wait()
         for thread in threads:
             thread.join()
+
     metadata["finished_at"] = datetime.now(UTC).isoformat()
     metadata["return_code"] = code
     (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+
+    stdout_content = (directory / "stdout.log").read_text(encoding="utf-8")
+    stderr_content = (directory / "stderr.log").read_text(encoding="utf-8")
+    extraction = extract_aggregate_metrics(
+        plan.model_id,
+        stdout_content,
+        stderr_content,
+        code,
+        paper_metrics=plan.paper_metrics,
+    )
+
     paper = plan.paper_metrics or {}
     report = {
         "artifact_type": "official_aggregate_evaluation_report",
         "schema_version": 1,
-        "reproduction_status": "AGGREGATE_ONLY_NOT_REPRODUCED" if code == 0 else "EVALUATION_FAILED",
+        "model_id": plan.model_id,
+        "checkpoint_id": plan.checkpoint_id,
+        "protocol_id": plan.protocol,
+        "reproduction_status": extraction.extraction_status,
         "per_query_export_available": False,
-        "raw_metrics": {"aggregate": None, "categories": None},
-        "metrics_source": None,
-        "observed_metrics": None,
+        "extraction_status": extraction.extraction_status,
+        "parser_id": extraction.parser_id,
+        "parser_version": extraction.parser_version,
+        "observed_metrics": extraction.observed_metrics,
+        "category_metrics": extraction.category_metrics,
         "paper_sanity_metrics": paper,
+        "parity_status": extraction.parity_status,
+        "metric_source": extraction.metric_source,
         "command_json": "command.json",
         "stdout_log": "stdout.log",
         "stderr_log": "stderr.log",
         "command_digest": metadata["command_digest"],
         "source_expected_commit": plan.pin,
         "source_actual_commit": plan.actual_source_commit,
-        "checkpoint_sha256": metadata["checkpoint_local_sha256"],
+        "checkpoint_artifact_type": plan.artifact_type,
+        "checkpoint_sha256": checkpoint_local_sha,
+        "checkpoint_bundle": plan.checkpoint_bundle,
+        "bundle_manifest_digest": plan.bundle_manifest_digest,
+        "directory_members": plan.directory_members,
         "environment": environment,
+        "model_interpreter": plan.command[0] if plan.command else sys.executable,
         "environment_digest": metadata["environment_digest"],
         "return_code": code,
     }

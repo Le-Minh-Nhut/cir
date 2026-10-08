@@ -19,27 +19,40 @@ The master orchestrator is `workbench/scripts/pipeline.py` (or `workbench/run.sh
 Executes full reproduction pipeline for selected model: preflight doctor, dataset check, source sync, dataset link, checkpoint acquisition, auxiliary asset download, runtime preflight, evaluation, schema validation, and derived index rebuild.
 
 ```bash
-# Dry run first (no network, filesystem mutations, or evaluation)
+# Planning mode (default for all, setup, reproduce without --apply):
+python workbench/scripts/pipeline.py all --model csmcir
+
+# Explicit dry run (zero mutations, prints stage plans):
 python workbench/scripts/pipeline.py all --model csmcir --dry-run
 
-# Execute with resume capability
-python workbench/scripts/pipeline.py all --model csmcir --resume
+# Authorized complete execution with resume capability:
+python workbench/scripts/pipeline.py all --model csmcir --apply \
+  --allow-network --allow-large-downloads --allow-env-install \
+  --allow-preparation --allow-gpu-eval --resume
 ```
 
 ### B. Master Setup Workflow (`setup`)
-Executes all preparation stages up to runtime preflight (sync sources, prepare layout, download checkpoints & auxiliary assets).
+Executes preparation stages: doctor, dataset, sync, environment, preparation, checkpoint, auxiliary-assets.
 
 ```bash
-python workbench/scripts/pipeline.py setup --model csmcir --resume
-```
+# Planning mode:
+python workbench/scripts/pipeline.py setup --model csmcir
 
+# Authorized execution with resume capability:
+python workbench/scripts/pipeline.py setup --model csmcir --apply \
+  --allow-network --allow-large-downloads --allow-env-install \
+  --allow-preparation --resume
+```
 ### C. Master Reproduction Workflow (`reproduce`)
 Runs runtime preflight and guarded evaluation.
 
 ```bash
-python workbench/scripts/pipeline.py reproduce --model csmcir --resume
-```
+# Planning mode:
+python workbench/scripts/pipeline.py reproduce --model csmcir
 
+# Authorized evaluation with resume:
+python workbench/scripts/pipeline.py reproduce --model csmcir --apply --allow-gpu-eval --resume
+```
 ### D. Master Analysis Workflow (`analyze`)
 Validates result artifacts and rebuilds DuckDB index.
 
@@ -160,3 +173,17 @@ Stage states are tracked in `workbench/artifacts/pipeline_state.json`.
    **Does not constitute reproduced per-query predictions.**
 3. **Canonical Schema-v2 Results (`workbench/artifacts/results/`)**:
    Strict JSON containing per-query retrievals, target ranks, and verified parity metrics. Ingested into DuckDB only after validation.
+---
+
+## 6. Aggregate Metric Extraction and Bundle Provenance
+
+### A. Model-Specific Parsers (`workbench/backend/metrics_extraction.py`)
+- **LIMN (`limn_structured_json`)**:
+  Extracts macro R@10, R@50, mean and per-category metrics from structured stdout JSON. Requires all three categories (`dress`, `shirt`, `toptee`) to be complete; arithmetic category macro mean is validated.
+- **CSMCIR (`csmcir_stdout_json`)**:
+  Extracts `average_recall_at10`, `average_recall_at50`, `average_recall` and per-category recalls from official `validate_blip_csmcir.py` stdout JSON.
+- **Unaudited Models**:
+  Marked `AGGREGATE_PARSER_UNAVAILABLE`. No fabricated Recall values; exit code 0 alone does not imply metric parity.
+
+### B. LIMN Bundle Provenance
+A complete LIMN evaluation run records the exact individual paths and SHA-256 hashes of all three category models (`0_dress_best_model.pt`, `0_shirt_best_model.pt`, `0_toptee_best_model.pt`), plus a deterministic `bundle_manifest_digest`. Dress is never treated as the sole identity of the three-model benchmark experiment.
