@@ -71,6 +71,52 @@ def test_unaudited_adapter_is_skipped() -> None:
     assert reasons == ["SKIPPED: adapter command not audited"]
 
 
+
+
+def test_limn_candidate_is_complete_checkpoint_bundle_and_all_runnable_schedules_once() -> None:
+    module = load_module()
+    models = list(records().values())
+
+    limn = module.candidates(module.parser_for(load_registry()).parse_args(["--model", "limn"]), models)
+    all_runnable = module.candidates(module.parser_for(load_registry()).parse_args(["--all-runnable"]), models)
+    encoder = module.candidates(module.parser_for(load_registry()).parse_args(["--model", "encoder"]), models)
+
+    assert len(limn) == 1
+    assert limn[0][1]["checkpoint_id"] == "base_iter0_all_categories"
+    assert limn[0][1]["bundle_id"] == "base_iter0_all_categories"
+    assert len([item for item in all_runnable if item[0]["model_id"] == "limn"]) == 1
+    assert [item[1]["checkpoint_id"] for item in encoder] == ["fashioniq"]
+
+
+def test_limn_explicit_category_remains_diagnostic_and_bundle_blocked(monkeypatch, tmp_path: Path) -> None:
+    module = load_module()
+    limn = records()["limn"]
+    category_checkpoint = limn["checkpoint_variants"][0]
+    bundle = module.candidates(module.parser_for(load_registry()).parse_args(["--model", "limn"]), [limn])[0][1]
+    monkeypatch.setattr(module, "runtime_blockers", lambda model, checkpoint, *args: ["checkpoint bundle incomplete: base_iter0_all_categories: missing category"])
+
+    _, _, _, diagnostic_reasons = module.blockers(limn, category_checkpoint, limn["native_protocol"], tmp_path, config(tmp_path))
+    _, _, _, bundle_reasons = module.blockers(limn, bundle, limn["native_protocol"], tmp_path, config(tmp_path))
+
+    assert diagnostic_reasons == []
+    assert bundle_reasons == ["checkpoint bundle incomplete: base_iter0_all_categories: missing category"]
+
+
+def test_limn_adapter_runs_full_bundle_or_named_category(monkeypatch, tmp_path: Path) -> None:
+    from workbench.backend.adapters.base import EvalRequest
+    from workbench.backend.adapters.models import LIMNAdapter
+
+    monkeypatch.setenv("WORKBENCH_LIMN_PYTHON", sys.executable)
+    adapter = LIMNAdapter()
+    source = tmp_path / "LIMN"
+    checkpoint_root = tmp_path / "checkpoints" / "limn"
+    dataset = tmp_path / "FashionIQ"
+    bundle = adapter.command(source, checkpoint_root / "0_dress_best_model.pt", EvalRequest("limn", "base_iter0_all_categories", "fashioniq_val_split", dataset, tmp_path / "bundle.json"))
+    diagnostic = adapter.command(source, checkpoint_root / "0_dress_best_model.pt", EvalRequest("limn", "base_iter0_dress", "fashioniq_val_split", dataset, tmp_path / "dress.json"))
+
+    assert "--category" not in bundle
+    assert bundle[bundle.index("--checkpoint-root") + 1] == str(checkpoint_root)
+    assert diagnostic[diagnostic.index("--category") + 1] == "dress"
 def test_legacy_adapter_is_skipped_without_guessed_command() -> None:
     module = load_module()
     model = records()["tgcir"]

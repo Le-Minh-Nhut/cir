@@ -72,9 +72,31 @@ def report(items: tuple[Asset, ...]) -> None:
             f"{asset.family}: destination={asset.destination} state={state} "
             f"required={str(asset.required).lower()} "
             f"automatic_download_available={str(asset.automatic_download_available).lower()} "
-            f"source_unverified={str(asset.provenance_status != 'VERIFIED').lower()} "
+            f"source_unverified={str(asset.provenance_status != 'VERIFIED' or asset.expected_sha256 is None).lower()} "
             f"source={source}"
         )
+
+def verify(asset: Asset) -> bool:
+    if not asset.destination.is_file():
+        print(f"MISSING {asset.destination}")
+        return False
+    size = asset.destination.stat().st_size
+    if size == 0:
+        print(f"INVALID EMPTY FILE {asset.destination}")
+        return False
+    digest = sha256_file(asset.destination)
+    valid = True
+    if asset.expected_sha256 is None:
+        print(f"{asset.destination}: {size} bytes sha256={digest} — checksum unavailable; provenance not checksum-verified")
+    elif digest != asset.expected_sha256:
+        print(f"{asset.destination}: {size} bytes sha256={digest} OFFICIAL SHA256 MISMATCH")
+        valid = False
+    else:
+        print(f"{asset.destination}: {size} bytes sha256={digest} OFFICIAL SHA256 MATCH")
+    if asset.provenance_status != "VERIFIED":
+        print(f"UNRESOLVED REQUIRED PROVENANCE {asset.destination}: {asset.provenance_status}")
+        valid = False
+    return valid
 
 
 def download(url: str, partial: Path) -> None:
@@ -134,7 +156,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.list:
         return 0
     if args.verify_only:
-        return 0 if all(asset.destination.is_file() for asset in items if asset.required) else 1
+        failed = False
+        for asset in items:
+            if asset.required:
+                failed |= not verify(asset)
+        return int(failed)
     selected = tuple(asset for asset in downloadable if args.force_redownload or not asset.destination.is_file())
     if args.dry_run:
         for asset in selected:
@@ -152,6 +178,10 @@ def main(argv: list[str] | None = None) -> int:
         partial.unlink(missing_ok=True)
         try:
             download(asset.source_url, partial)
+            if partial.stat().st_size == 0:
+                raise RuntimeError("downloaded auxiliary asset is empty")
+            if asset.expected_sha256 and sha256_file(partial) != asset.expected_sha256:
+                raise RuntimeError("official SHA256 mismatch")
             os.replace(partial, asset.destination)
         except Exception as error:
             partial.unlink(missing_ok=True)
@@ -159,7 +189,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         entries = record_download(entries, asset)
         save_manifest(manifest_path(config.CIR_REPO_ROOT), entries)
-        print(f"DOWNLOADED {asset.destination}: sha256={sha256_file(asset.destination)} (local hash; official hash unavailable)")
+        hash_status = "official SHA256 verified" if asset.expected_sha256 else "local hash; official SHA256 unavailable"
+        print(f"DOWNLOADED {asset.destination}: sha256={sha256_file(asset.destination)} ({hash_status})")
     if not selected:
         print("verified auxiliary downloads: complete")
     for asset in unavailable:

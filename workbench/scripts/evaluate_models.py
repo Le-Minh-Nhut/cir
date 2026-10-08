@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shlex
 import subprocess
@@ -10,6 +11,8 @@ import sys
 import threading
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+import os
+import platform
 from pathlib import Path
 from typing import Iterable
 
@@ -34,7 +37,7 @@ class EvaluationPlan:
     command: list[str]
     pin: str | None
     actual_source_commit: str | None
-
+    paper_metrics: dict[str, float | None] | None = None
 
 def command_is_audited(adapter_type: type[OfficialScriptAdapter]) -> bool:
     return getattr(adapter_type, "command", None) is not OfficialScriptAdapter.command
@@ -59,10 +62,17 @@ def candidates(args: argparse.Namespace, models: list[dict]) -> list[tuple[dict,
     selected: list[tuple[dict, dict]] = []
     for model in models:
         checkpoints = model["checkpoint_variants"]
-        if args.checkpoint:
+        if model["model_id"] == "limn":
+            bundle = model["checkpoint_bundles"][0]
+            if args.checkpoint == bundle["bundle_id"] or (not args.checkpoint):
+                anchor = next(checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] == bundle["required_checkpoint_ids"][0])
+                checkpoints = [{**anchor, "checkpoint_id": bundle["bundle_id"], "bundle_id": bundle["bundle_id"]}]
+            elif args.checkpoint:
+                checkpoints = [checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] == args.checkpoint]
+        elif args.checkpoint:
             checkpoints = [checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] == args.checkpoint]
-            if not checkpoints and args.model:
-                raise ValueError(f"unknown checkpoint for {args.model}: {args.checkpoint}")
+        if args.checkpoint and not checkpoints and args.model:
+            raise ValueError(f"unknown checkpoint for {args.model}: {args.checkpoint}")
         selected.extend((model, checkpoint) for checkpoint in checkpoints)
     if args.checkpoint and not selected:
         raise ValueError(f"unknown checkpoint: {args.checkpoint}")
@@ -81,6 +91,8 @@ def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | 
     actual_pin = pinned_revision(source) if source.is_dir() else None
     checkpoint_file = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
     reasons = runtime_blockers(model, checkpoint, config, protocol, dataset_root)
+    if model["model_id"] == "limn" and checkpoint["checkpoint_id"] != checkpoint.get("bundle_id"):
+        reasons = [reason for reason in reasons if not reason.startswith("checkpoint bundle incomplete:")]
     if model.get("source_available") and actual_pin is None and source.is_dir():
         reasons.append(f"source pin unavailable: {source}")
     return source, checkpoint_file, actual_pin, reasons
@@ -103,7 +115,8 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
         command = adapter_type().command(source, checkpoint_file, request)
     except Exception as error:
         return None, [f"official command construction failed: {error}"]
-    return EvaluationPlan(model["model_id"], checkpoint["checkpoint_id"], protocol, dataset_root, source, checkpoint_file, source_cwd(model, source), command, model.get("upstream_commit_sha"), actual_pin), []
+    paper_metrics = {key.removeprefix("reported_"): model.get(key) for key in ("reported_r10", "reported_r50", "reported_mean")}
+    return EvaluationPlan(model["model_id"], checkpoint["checkpoint_id"], protocol, dataset_root, source, checkpoint_file, source_cwd(model, source), command, model.get("upstream_commit_sha"), actual_pin, paper_metrics), []
 
 
 def parser_for(registry: dict) -> argparse.ArgumentParser:
@@ -130,6 +143,13 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
     started = datetime.now(UTC)
     directory = log_dir(config, plan, started)
     directory.mkdir(parents=True, exist_ok=False)
+    environment = {
+        "python": sys.version,
+        "executable": sys.executable,
+        "platform": sys.platform,
+    }
+    command_json = json.dumps(plan.command, separators=(",", ":"))
+    environment_json = json.dumps(environment, sort_keys=True, separators=(",", ":"))
     metadata = {
         "model_id": plan.model_id,
         "checkpoint_id": plan.checkpoint_id,
@@ -139,13 +159,16 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
         "upstream_expected_pin": plan.pin,
         "actual_source_commit": plan.actual_source_commit,
         "checkpoint_local_sha256": sha256_file(plan.checkpoint),
+        "command_digest": hashlib.sha256(command_json.encode()).hexdigest(),
+        "environment": environment,
+        "environment_digest": hashlib.sha256(environment_json.encode()).hexdigest(),
         "started_at": started.isoformat(),
         "finished_at": None,
         "return_code": None,
         "dataset_root": str(plan.dataset_root),
     }
     (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    with (directory / "stdout.log").open("w", encoding="utf-8") as stdout, (directory / "stderr.log").open("w", encoding="utf-8") as stderr:
+    with (directory / "stdout.log").open("w", encoding="utf-8", newline="") as stdout, (directory / "stderr.log").open("w", encoding="utf-8", newline="") as stderr:
         process = subprocess.Popen(plan.command, cwd=plan.cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         def tee(stream, destination, terminal):
@@ -164,6 +187,28 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
     metadata["finished_at"] = datetime.now(UTC).isoformat()
     metadata["return_code"] = code
     (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    paper = plan.paper_metrics or {}
+    report = {
+        "artifact_type": "official_aggregate_evaluation_report",
+        "schema_version": 1,
+        "reproduction_status": "AGGREGATE_ONLY_NOT_REPRODUCED" if code == 0 else "EVALUATION_FAILED",
+        "per_query_export_available": False,
+        "raw_metrics": {"aggregate": None, "categories": None},
+        "metrics_source": None,
+        "observed_metrics": None,
+        "paper_sanity_metrics": paper,
+        "command_json": "command.json",
+        "stdout_log": "stdout.log",
+        "stderr_log": "stderr.log",
+        "command_digest": metadata["command_digest"],
+        "source_expected_commit": plan.pin,
+        "source_actual_commit": plan.actual_source_commit,
+        "checkpoint_sha256": metadata["checkpoint_local_sha256"],
+        "environment": environment,
+        "environment_digest": metadata["environment_digest"],
+        "return_code": code,
+    }
+    (directory / "aggregate_report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return code
 
 

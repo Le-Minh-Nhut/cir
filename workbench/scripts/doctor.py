@@ -165,25 +165,44 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
     deferred_checks.extend(external_checks)
     runtime_blockers.extend(external_blockers)
 
-    for bundle_id, missing in checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT).items():
-        runtime_blockers.append(f"checkpoint bundle incomplete: {bundle_id}: {missing[0]}")
+    env_evidence = {"status": env_state["status"], "variable": env_state["variable"], "interpreter": env_state["interpreter"]}
+    bundle_reports = []
+    incomplete_bundles = checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT)
+    for bundle in model.get("checkpoint_bundles", []):
+        missing = incomplete_bundles.get(bundle["bundle_id"], [])
+        bundle_reports.append({
+            "bundle_id": bundle["bundle_id"],
+            "required_checkpoint_ids": bundle["required_checkpoint_ids"],
+            "complete": not missing,
+            "status": "READY" if not missing else "BLOCKED",
+            "blockers": [f"checkpoint bundle member missing or invalid: {path}" for path in missing],
+        })
     checkpoints = []
     for checkpoint in model["checkpoint_variants"]:
         path = checkpoint_path(model_id, checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
-        installed = checkpoint_is_present(path, checkpoint)
-        local_sha = sha256_file(path) if installed and path.is_file() else None
+        missing_paths = checkpoint_missing_paths(path, checkpoint)
+        installed = not missing_paths
+        required_files = checkpoint.get("required_files")
+        local_sha = sha256_file(path, required_files=required_files) if installed else None
         official_sha = checkpoint.get("expected_sha256")
         mapping = checkpoint["checkpoint_mapping_status"] == "VERIFIED_METADATA"
         blockers = list(runtime_blockers)
-        for missing in checkpoint_missing_paths(path, checkpoint):
-            blockers.append(f"checkpoint missing: {missing}")
+        blockers.extend(f"checkpoint missing or invalid: {missing}" for missing in missing_paths)
+        registry_status = checkpoint.get("status")
+        unavailable = registry_status in {"NO_CLEAN_CHECKPOINT", "BLOCKED"} or (registry_status and registry_status.startswith("BLOCKED_"))
+        if unavailable:
+            blockers.append(f"registry checkpoint unavailable: {registry_status}")
         if not mapping:
             blockers.append("checkpoint mapping unresolved")
         if official_sha and local_sha != official_sha:
             blockers.append("official hash mismatch")
-        checkpoints.append({"checkpoint_id": checkpoint["checkpoint_id"], "path": str(path), "installed": installed, "local_sha256": local_sha, "official_sha256": official_sha, "official_sha256_available": official_sha is not None, "mapping_verified": mapping, "runtime_blockers": blockers, "command_ready": not blockers})
-    status = "OK" if checkpoints and all(item["command_ready"] for item in checkpoints) else "BLOCKED"
-    checks.append(record(f"runtime:{model_id}", status, "official command ready" if status == "OK" else "official command blocked", checkpoints=checkpoints))
+        member_bundles = [bundle for bundle in bundle_reports if checkpoint["checkpoint_id"] in bundle["required_checkpoint_ids"]]
+        for bundle in member_bundles:
+            blockers.extend(f"{bundle['bundle_id']} incomplete: {reason}" for reason in bundle["blockers"])
+        checkpoints.append({"checkpoint_id": checkpoint["checkpoint_id"], "path": str(path), "artifact_type": checkpoint.get("artifact_type", "file"), "installed": installed, "local_sha256": local_sha, "official_sha256": official_sha, "official_sha256_available": official_sha is not None, "mapping_verified": mapping, "provenance_verified": mapping and official_sha is not None and local_sha == official_sha, "registry_status": registry_status, "readiness": "UNAVAILABLE" if unavailable else "BLOCKED" if blockers else "RUNNABLE", "runtime_blockers": blockers, "command_ready": not blockers})
+    runnable = bool(checkpoints) and all(item["command_ready"] for item in checkpoints) and all(bundle["complete"] for bundle in bundle_reports)
+    status = "OK" if runnable else "BLOCKED"
+    checks.append(record(f"runtime:{model_id}", status, "prerequisites present; evaluation not run" if runnable else "command unavailable", checkpoints=checkpoints, bundles=bundle_reports, environment=env_evidence, runnable=runnable, reproduction_status=model.get("reproduction_status", "NOT_REPORTED")))
     checks.extend(deferred_checks)
     checks.append(command_check)
     if environment_check is not None:

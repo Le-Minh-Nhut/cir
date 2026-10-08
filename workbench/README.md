@@ -298,11 +298,18 @@ All operator scripts use `python workbench/scripts/NAME.py ...`. These are curre
 [--model MODEL_ID | --all] [--json]
 
 # pipeline.py
-`mock` | `prepare` | `real` | `serve` | `status`
+`mock` | `prepare` | `real` | `serve` | `status` | `setup` | `reproduce` | `analyze` | `all` | `report`
 [--dataset-root PATH] [--sync-sources] [--download-checkpoints]
 [--download-auxiliary-assets] [--evaluate] [--rebuild-index] [--serve]
-[--dry-run] [--continue-on-error] [--model MODEL_ID] [--protocol PROTOCOL_ID]
+[--dry-run] [--continue-on-error] [--resume] [--force-stage STAGE]
+[--model MODEL_ID] [--protocol PROTOCOL_ID]
 [--checkpoint CHECKPOINT_ID] [--top-k POSITIVE_INTEGER]
+
+# manage_environment.py
+(--list | --model MODEL_ID) [--create --allow-env-install] [--dry-run] [--json]
+
+# prepare_model.py
+(--list | --model MODEL_ID) [--dataset-root PATH] [--execute --allow-preparation] [--dry-run] [--json]
 
 # prepare_dataset.py
 --dataset-root PATH [--check-only] [--model MODEL_ID] [--dry-run]

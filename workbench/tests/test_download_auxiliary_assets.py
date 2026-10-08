@@ -152,6 +152,38 @@ def test_verify_only_blocks_for_missing_cot_without_network(monkeypatch, tmp_pat
 
     assert module.main(["--model", "csmcir", "--verify-only"]) == 1
 
+def test_verify_only_rejects_empty_and_checksum_mismatch_without_network(monkeypatch, tmp_path: Path, capsys) -> None:
+    module = load_module()
+    config = config_at(tmp_path)
+    item = qwen_assets(module, config)[0]
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
+    monkeypatch.setattr(module.urllib.request, "urlopen", lambda _: (_ for _ in ()).throw(AssertionError("network used")))
+    item.destination.parent.mkdir(parents=True, exist_ok=True)
+    item.destination.touch()
+    assert module.main(["--model", "csmcir", "--verify-only"]) == 1
+    assert "INVALID EMPTY FILE" in capsys.readouterr().out
+
+    from dataclasses import replace
+
+    mismatched = replace(item, expected_sha256="0" * 64)
+    monkeypatch.setattr(module, "assets", lambda *_: (mismatched,))
+    item.destination.write_bytes(b"not the expected asset")
+    assert module.main(["--model", "csmcir", "--verify-only"]) == 1
+    assert "OFFICIAL SHA256 MISMATCH" in capsys.readouterr().out
+
+
+def test_verify_only_rejects_unresolved_provenance_for_present_asset(monkeypatch, tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    module = load_module()
+    config = config_at(tmp_path)
+    item = qwen_assets(module, config)[0]
+    item.destination.parent.mkdir(parents=True, exist_ok=True)
+    item.destination.write_bytes(b"present")
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
+    monkeypatch.setattr(module, "assets", lambda *_: (replace(item, provenance_status="UNVERIFIED"),))
+    assert module.main(["--model", "csmcir", "--verify-only"]) == 1
+
 
 def test_all_selects_only_registered_auxiliary_models(monkeypatch, tmp_path: Path) -> None:
     module = load_module()

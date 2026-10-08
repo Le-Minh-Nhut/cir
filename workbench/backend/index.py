@@ -19,7 +19,19 @@ def result_files(root: Path | None = None) -> list[Path]:
     from workbench.backend.operator_config import resolve_config
 
     root = root or resolve_config().WORKBENCH_RESULTS_ROOT
-    return sorted(path for path in root.rglob("*.json") if path.name != ".gitkeep")
+    files = []
+    for path in sorted(root.rglob("*.json")):
+        if path.name == ".gitkeep":
+            continue
+        try:
+            artifact = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            files.append(path)
+            continue
+        if artifact.get("artifact_type") == "official_aggregate_evaluation_report":
+            continue
+        files.append(path)
+    return files
 
 
 def load_runs(root: Path | None = None) -> list[ResultRun]:

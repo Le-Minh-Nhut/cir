@@ -92,4 +92,28 @@ This guide records source-faithful launch and prerequisite details for seven leg
 
 ## ENCODER contrast
 
+
+## Operator commands for legacy baselines
+
+Every legacy baseline can be inspected and guarded through standalone operator tools:
+
+```bash
+# Check prerequisites and blockers for DCNet:
+python workbench/scripts/doctor.py --model dcnet
+
+# Inspect environment requirements:
+python workbench/scripts/manage_environment.py --model dcnet
+
+# Inspect required raw and generated preparation artifacts:
+python workbench/scripts/prepare_model.py --model dcnet
+
+# Verify checkpoint directory integrity without network access:
+python workbench/scripts/download_checkpoints.py --model dcnet --verify-only
+
+# Dry-run execution plan:
+python workbench/scripts/evaluate_models.py --model dcnet --dry-run
+
+# Pipeline reproduction with stage resume:
+python workbench/scripts/pipeline.py reproduce --model dcnet --resume
+```
 ENCODER remains one shared FashionIQ model with one checkpoint variant. It is not a three-checkpoint category bundle. LIMN's independent category checkpoints must not be generalized to ENCODER or other shared-model baselines.

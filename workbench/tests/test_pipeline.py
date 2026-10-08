@@ -168,3 +168,75 @@ def test_csmcir_plan_uses_custom_canonical_root(monkeypatch, capsys) -> None:
     output = capsys.readouterr().out
     assert f"doctor.py --scope real --dataset-root {custom} --model csmcir" in output
     assert f"evaluate_models.py --model csmcir --dataset-root /configured/third_party/CSMCIR/fashionIQ_dataset --canonical-dataset-root {custom}" in output
+
+def test_resume_skips_completed_stage(monkeypatch, tmp_path: Path, capsys) -> None:
+    pipeline = load_pipeline()
+    state_file = tmp_path / "pipeline_state.json"
+    called = []
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 0)
+
+    stages = [
+        pipeline.run_stage("stage1", ["cmd1.py"]),
+        pipeline.run_stage("stage2", ["cmd2.py"]),
+    ]
+
+    # First run without resume -> both run and state is saved
+    rc = pipeline.run_stages(stages, dry_run=False, continue_on_error=False, resume=True, state_path=state_file)
+    assert rc == 0
+    assert len(called) == 2
+    assert state_file.is_file()
+
+    # Second run with resume -> both skipped
+    called.clear()
+    capsys.readouterr()
+    rc = pipeline.run_stages(stages, dry_run=False, continue_on_error=False, resume=True, state_path=state_file)
+    assert rc == 0
+    assert len(called) == 0
+    out = capsys.readouterr().out
+    assert "resume: already completed" in out
+
+
+def test_force_stage_overrides_resume(monkeypatch, tmp_path: Path) -> None:
+    pipeline = load_pipeline()
+    state_file = tmp_path / "pipeline_state.json"
+    called = []
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 0)
+
+    stages = [
+        pipeline.run_stage("stage1", ["cmd1.py"]),
+        pipeline.run_stage("stage2", ["cmd2.py"]),
+    ]
+
+    pipeline.run_stages(stages, dry_run=False, continue_on_error=False, resume=True, state_path=state_file)
+    called.clear()
+
+    # Force stage2 only
+    rc = pipeline.run_stages(stages, dry_run=False, continue_on_error=False, resume=True, force_stages={"stage2"}, state_path=state_file)
+    assert rc == 0
+    assert len(called) == 1
+    assert called[0] == ["cmd2.py"]
+
+
+def test_resume_reruns_when_fingerprint_changes(monkeypatch, tmp_path: Path) -> None:
+    pipeline = load_pipeline()
+    state_file = tmp_path / "pipeline_state.json"
+    called = []
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 0)
+
+    stages1 = [pipeline.run_stage("stage1", ["cmd1.py", "--arg1"])]
+    pipeline.run_stages(stages1, dry_run=False, continue_on_error=False, resume=True, state_path=state_file)
+    called.clear()
+
+    # Changing arguments changes fingerprint -> reruns!
+    stages2 = [pipeline.run_stage("stage1", ["cmd1.py", "--arg2"])]
+    pipeline.run_stages(stages2, dry_run=False, continue_on_error=False, resume=True, state_path=state_file)
+    assert len(called) == 1
+    assert called[0] == ["cmd1.py", "--arg2"]
+
+
+def test_setup_reproduce_analyze_all_modes_accepted() -> None:
+    pipeline = load_pipeline()
+    for mode in ("setup", "reproduce", "analyze", "all", "report"):
+        parser = pipeline.parser_for()
+        args = parser.parse_args([mode, "--dry-run"])
+        assert args.mode == mode

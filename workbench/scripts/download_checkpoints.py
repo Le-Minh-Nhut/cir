@@ -59,23 +59,34 @@ def save_manifest(path: Path, manifest: list[dict]) -> None:
 
 
 def verify(model: dict, checkpoint: dict, destination: Path) -> bool:
+    """Return True if the local file is intact (exists, non-empty, hash matches if known).
+
+    Provenance status (mapping, URL) is shown as a warning but does not fail file integrity.
+    Hash mismatch and missing/empty files always fail.
+    """
     if not destination.is_file():
         print(f"MISSING {destination}")
+        return False
+    size = destination.stat().st_size
+    if size == 0:
+        print(f"INVALID EMPTY FILE {destination}")
         return False
     digest = sha256_file(destination)
     expected = checkpoint.get("expected_sha256")
     if expected is None:
         status = "LOCAL SHA256 COMPUTED — official SHA256 unavailable"
-        valid = True
+        hash_valid = True
     elif digest == expected:
         status = "OFFICIAL SHA256 MATCH"
-        valid = True
+        hash_valid = True
     else:
         status = "OFFICIAL SHA256 MISMATCH"
-        valid = False
-    print(f"{destination}: {destination.stat().st_size} bytes sha256={digest} {status}")
-    return valid
-
+        hash_valid = False
+    provenance_valid = checkpoint.get("checkpoint_mapping_status") == "VERIFIED_METADATA" and checkpoint.get("download_url") is not None
+    if not provenance_valid:
+        status += " — REQUIRED PROVENANCE UNRESOLVED"
+    print(f"{destination}: {size} bytes sha256={digest} {status}")
+    return hash_valid and provenance_valid
 
 def _write_response(response, partial: Path, mode: str) -> None:
     with partial.open(mode) as output:
@@ -112,7 +123,7 @@ def download(url: str, partial: Path) -> None:
         raise RuntimeError(f"unexpected HTTP status {status} for checkpoint download")
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--list", action="store_true", help="list registry checkpoint records")
@@ -133,9 +144,10 @@ def main(argv: list[str] | None = None) -> None:
         for model, checkpoint in items:
             describe(model, checkpoint, checkpoint_path(model["model_id"], checkpoint, args.output_root))
             print(f"Status: {checkpoint['status']}\n")
-        return
+        return 0
     manifest_path = args.output_root / "download_manifest.json"
-    manifest = load_manifest(manifest_path)
+    manifest = [] if args.verify_only else load_manifest(manifest_path)
+    failed = False
     for model, checkpoint in items:
         destination = checkpoint_path(model["model_id"], checkpoint, args.output_root)
         if args.all and checkpoint["checkpoint_mapping_status"] != "VERIFIED_METADATA":
@@ -146,10 +158,11 @@ def main(argv: list[str] | None = None) -> None:
             continue
         describe(model, checkpoint, destination)
         if args.verify_only:
-            verify(model, checkpoint, destination)
+            failed |= not verify(model, checkpoint, destination)
             continue
         if checkpoint.get("download_url") is None:
             print("BLOCKED: direct official download URL unavailable; registry remains unmodified.", file=sys.stderr)
+            failed = True
             continue
         if destination.exists() and not args.force_redownload:
             if verify(model, checkpoint, destination):
@@ -173,7 +186,8 @@ def main(argv: list[str] | None = None) -> None:
         manifest.append({"model_id": model["model_id"], "checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_url": checkpoint["download_url"], "downloaded_sha256": digest, "size_bytes": destination.stat().st_size, "downloaded_at": datetime.now(UTC).isoformat(), "official_hash_available": expected is not None, "official_hash_match": digest == expected if expected else None})
         save_manifest(manifest_path, manifest)
         print(f"DOWNLOADED {destination}: {destination.stat().st_size} bytes sha256={digest}\n")
+    return int(failed)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

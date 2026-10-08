@@ -18,3 +18,20 @@ Known upstream guidance from audited READMEs:
 - LIMN base iteration 0: CUDA 12.4, Torch 1.12.1, torchvision 0.13.1, open-clip-torch 2.20.0; Python unspecified. Three category whole-model files required; wrapper invokes pinned native evaluator but remains unexecuted.
 
 These have not been created or executed here. Do not claim compatibility until each official unmodified evaluation has run.
+
+## Operator Tooling
+
+Use `workbench/scripts/manage_environment.py` to inspect and manage model environments:
+
+```bash
+# Check environment status across all registry models
+python workbench/scripts/manage_environment.py --list
+
+# Inspect one model
+python workbench/scripts/manage_environment.py --model csmcir
+
+# Create an environment from source-backed spec (requires explicit authorization)
+python workbench/scripts/manage_environment.py --model csmcir --create --allow-env-install --dry-run
+```
+
+Creation requires both `--create` and `--allow-env-install`. It will never guess or install unverified packages.

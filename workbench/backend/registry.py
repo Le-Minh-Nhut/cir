@@ -227,14 +227,21 @@ def replay_readiness(model: dict[str, Any]) -> dict[str, Any]:
 
 
 def checkpoint_missing_paths(path: Path, checkpoint: dict[str, Any]) -> list[Path]:
-    artifact_type = checkpoint.get("artifact_type")
-    if artifact_type in {"run_directory", "bundle_directory"}:
-        missing = [] if path.is_dir() else [path]
+    artifact_type = checkpoint.get("artifact_type", "file")
+    if artifact_type in {"run_directory", "bundle_directory", "bundle_placeholder"}:
         members = checkpoint.get("bundle_members")
         required_files = [member["filename"] for member in members] if members else checkpoint.get("required_files", [])
+        if not _regular_directory(path):
+            return [path]
+        missing = []
         for name in required_files:
             member_path = path / name
-            if not member_path.is_file() or member_path.stat().st_size == 0:
+            try:
+                _safe_relative_file(path, name)
+            except ValueError:
+                missing.append(member_path)
+                continue
+            if member_path.stat().st_size == 0:
                 missing.append(member_path)
             else:
                 member = next((item for item in members or [] if item["filename"] == name), None)
@@ -242,11 +249,32 @@ def checkpoint_missing_paths(path: Path, checkpoint: dict[str, Any]) -> list[Pat
                 if expected_sha and sha256_file(member_path) != expected_sha:
                     missing.append(member_path)
         return missing
-    if not path.is_file() or path.stat().st_size == 0:
+    if not _regular_file(path) or path.stat().st_size == 0:
         return [path]
     expected_sha = checkpoint.get("expected_sha256")
     return [path] if expected_sha and sha256_file(path) != expected_sha else []
 
+
+def _regular_file(path: Path) -> bool:
+    return not path.is_symlink() and path.is_file()
+
+
+def _regular_directory(path: Path) -> bool:
+    return not path.is_symlink() and path.is_dir()
+
+
+def _safe_relative_file(root: Path, name: str) -> Path:
+    relative = PurePosixPath(name)
+    if relative.is_absolute() or not relative.parts or ".." in relative.parts or "." in relative.parts:
+        raise ValueError(f"unsafe artifact member path: {name}")
+    candidate = root
+    for part in relative.parts:
+        candidate = candidate / part
+        if candidate.is_symlink():
+            raise ValueError(f"symlink artifact member is not allowed: {candidate}")
+    if not _regular_file(candidate):
+        raise ValueError(f"artifact member is not a regular file: {candidate}")
+    return candidate
 
 def checkpoint_is_present(path: Path, checkpoint: dict[str, Any]) -> bool:
     return not checkpoint_missing_paths(path, checkpoint)
@@ -306,12 +334,50 @@ def checkpoint_path(model_id: str, checkpoint: dict[str, Any], root: Path | None
     return (root or resolve_config().WORKBENCH_CHECKPOINT_ROOT) / model_id / checkpoint["filename"]
 
 
-def sha256_file(path: Path) -> str:
+def sha256_file(path: Path, required_files: list[str] | None = None) -> str:
+    """Hash file bytes for single files, or sorted relative-path/content pairs for directories.
+
+    For directory artifacts (run_directory, bundle_directory): pass required_files to hash
+    only the declared meaningful members, excluding unrelated logs or metadata. For a generic
+    directory with no required_files restriction, all regular non-symlink children are hashed.
+    Hashes are distinct by artifact type: file and directory with identical content yield
+    different digests.
+    """
     digest = hashlib.sha256()
+    if _regular_file(path):
+        _update_file_digest(digest, path)
+        return digest.hexdigest()
+    if _regular_directory(path):
+        # Directory artifact: prefix + sorted (relative-path, file-bytes) pairs.
+        digest.update(b"directory\0")
+        files = ([_safe_relative_file(path, name) for name in required_files]
+                 if required_files is not None else _regular_tree_files(path))
+        for member in sorted(files, key=lambda item: item.relative_to(path).as_posix()):
+            relative = member.relative_to(path).as_posix().encode("utf-8")
+            digest.update(len(relative).to_bytes(8, "big"))
+            digest.update(relative)
+            _update_file_digest(digest, member)
+        return digest.hexdigest()
+    raise ValueError(f"artifact is not a regular file or non-symlink directory: {path}")
+
+
+def _regular_tree_files(root: Path) -> list[Path]:
+    files = []
+    for candidate in root.rglob("*"):
+        if candidate.is_symlink():
+            raise ValueError(f"symlink artifact member is not allowed: {candidate}")
+        if candidate.is_dir():
+            continue
+        if not candidate.is_file():
+            raise ValueError(f"non-regular artifact member: {candidate}")
+        files.append(candidate)
+    return files
+
+
+def _update_file_digest(digest: Any, path: Path) -> None:
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
-    return digest.hexdigest()
 
 
 def fashioniq_required_paths(model: dict[str, Any], root: Path) -> tuple[Path, ...]:
@@ -328,7 +394,10 @@ def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -
     config = resolve_config()
     path = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
     downloaded = checkpoint_is_present(path, checkpoint)
-    local_sha = sha256_file(path) if downloaded and path.is_file() else None
+    required_files = checkpoint.get("required_files")
+    if checkpoint.get("bundle_members"):
+        required_files = [member["filename"] for member in checkpoint["bundle_members"]]
+    local_sha = sha256_file(path, required_files) if downloaded else None
     official_sha = checkpoint.get("expected_sha256")
     official_sha_match = local_sha == official_sha if downloaded and official_sha else None
     mapping_verified = checkpoint["checkpoint_mapping_status"] == "VERIFIED_METADATA"

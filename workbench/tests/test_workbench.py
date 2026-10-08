@@ -236,12 +236,33 @@ def test_verifier_distinguishes_local_and_official_hashes(tmp_path: Path, capsys
     spec = importlib.util.spec_from_file_location("downloader_verify", Path("workbench/scripts/download_checkpoints.py")); assert spec and spec.loader
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     destination = tmp_path / "checkpoint.pt"; destination.write_bytes(b"checkpoint")
-    assert module.verify({}, {"expected_sha256": None}, destination)
+    checkpoint = {"expected_sha256": None, "checkpoint_mapping_status": "VERIFIED_METADATA", "download_url": "https://example.test/checkpoint"}
+    assert module.verify({}, checkpoint, destination)
     assert "LOCAL SHA256 COMPUTED — official SHA256 unavailable" in capsys.readouterr().out
-    assert module.verify({}, {"expected_sha256": module.sha256_file(destination)}, destination)
+    checkpoint["expected_sha256"] = module.sha256_file(destination)
+    assert module.verify({}, checkpoint, destination)
     assert "OFFICIAL SHA256 MATCH" in capsys.readouterr().out
-    assert not module.verify({}, {"expected_sha256": "0" * 64}, destination)
+    checkpoint["expected_sha256"] = "0" * 64
+    assert not module.verify({}, checkpoint, destination)
     assert "OFFICIAL SHA256 MISMATCH" in capsys.readouterr().out
+
+def test_checkpoint_verifier_rejects_empty_and_unresolved_provenance(tmp_path: Path, capsys) -> None:
+    spec = importlib.util.spec_from_file_location("downloader_verify_empty", Path("workbench/scripts/download_checkpoints.py")); assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    destination = tmp_path / "checkpoint.pt"
+    checkpoint = {"expected_sha256": None, "checkpoint_mapping_status": "UNVERIFIED", "download_url": None}
+    destination.touch()
+    assert not module.verify({}, checkpoint, destination)
+    assert "INVALID EMPTY FILE" in capsys.readouterr().out
+    destination.write_bytes(b"checkpoint")
+    assert not module.verify({}, checkpoint, destination)
+    assert "REQUIRED PROVENANCE UNRESOLVED" in capsys.readouterr().out
+
+
+def test_checkpoint_verify_only_returns_failure_for_missing_file(tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location("downloader_verify_exit", Path("workbench/scripts/download_checkpoints.py")); assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    assert module.main(["--model", "csmcir", "--verify-only", "--output-root", str(tmp_path)]) == 1
 
 
 

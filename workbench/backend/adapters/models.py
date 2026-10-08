@@ -125,15 +125,16 @@ class LIMNAdapter(OfficialScriptAdapter):
     script = "LIMN/test.py"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        category = request.checkpoint_id.removeprefix("base_iter0_")
-        return [
+        command = [
             python_executable(self.model),
             str(Path(__file__).resolve().parents[3] / "workbench" / "replay" / "limn.py"),
             "--checkpoint-root", str(checkpoint.parent),
             "--dataset-root", str(request.dataset_root),
             "--source-root", str(source),
-            "--category", category,
         ]
+        if request.checkpoint_id != "base_iter0_all_categories":
+            command.extend(("--category", request.checkpoint_id.removeprefix("base_iter0_")))
+        return command
 
 
 ADAPTERS = {adapter.model_id: adapter for adapter in (CSMCIRAdapter, EncoderAdapter, HintAdapter, PairAdapter, AirKnowAdapter, ConeSepAdapter, HabitAdapter, IntentAdapter, CLVCNetAdapter, DCNetAdapter, CombinerNoftAdapter, CLIP4CirFullftAdapter, TGCIRAdapter, SPRCAdapter, LIMNAdapter)}

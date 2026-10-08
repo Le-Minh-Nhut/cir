@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -39,6 +41,20 @@ def report(model: dict, state: str, head: str | None) -> None:
     )
 
 
+def destination_for(root: Path, model: dict) -> Path:
+    source_dir = model.get("source_dir")
+    if not isinstance(source_dir, str) or not source_dir:
+        raise ValueError("source_dir must be a non-empty relative path")
+    relative = Path(source_dir)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"unsafe source_dir: {source_dir}")
+    root = root.resolve()
+    destination = (root / relative).resolve()
+    if destination == root or not destination.is_relative_to(root):
+        raise ValueError(f"unsafe source_dir: {source_dir}")
+    return destination
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
@@ -62,65 +78,115 @@ def main() -> None:
             parser.error(f"unknown model: {args.model}")
 
     failed = False
+    groups: dict[Path, list[dict]] = {}
     for model in models:
         if not model["source_available"]:
             report(model, "unavailable", None)
             print(f"[SKIP] {model['model_id']}: source unavailable")
             continue
-        destination = args.output_root / model["source_dir"] if model.get("source_dir") else args.output_root
+        try:
+            destination = destination_for(args.output_root, model)
+        except (OSError, ValueError) as error:
+            report(model, "unsafe source path", None)
+            print(f"[BLOCKED] {model['model_id']}: {error}")
+            failed = True
+            continue
+        groups.setdefault(destination, []).append(model)
+
+    for destination, group_models in groups.items():
+        model = group_models[0]
+        pin = model.get("upstream_commit_sha")
+        if any(item.get("upstream_commit_sha") != pin or item.get("upstream_repo_url") != model.get("upstream_repo_url") for item in group_models):
+            for item in group_models:
+                report(item, "conflicting source", None)
+                print(f"[BLOCKED] {item['model_id']}: shared source has conflicting pin or URL")
+            failed = True
+            continue
         if args.dry_run:
             state, head, dirty = ("missing", None, None) if not destination.exists() else ("uninspected", None, None)
         else:
             state, head, dirty = local_state(destination)
-        report(model, state, head)
-        pin = model["upstream_commit_sha"]
+        for item in group_models:
+            report(item, state, head)
+        names = ", ".join(item["model_id"] for item in group_models)
         if args.list:
-            if head == pin:
-                print(f"[OK] {model['model_id']}: pinned SHA present")
-            elif head is None:
-                print(f"[INFO] {model['model_id']}: pinned SHA unavailable locally")
-            elif head != pin:
-                print(f"[INFO] {model['model_id']}: local SHA differs from pinned")
+            status = "pinned SHA present" if head == pin else "pinned SHA unavailable locally" if head is None else "local SHA differs from pinned"
+            label = "OK" if head == pin else "INFO"
+            for item in group_models:
+                print(f"[{label}] {item['model_id']}: {status}")
             continue
         if head is not None and head != pin:
-            print(f"[WARN] {model['model_id']}: local SHA {head} differs from pinned {pin}")
-            failed = args.verify_only or failed
+            for item in group_models:
+                print(f"[WARN] {item['model_id']}: local SHA {head} differs from pinned {pin}")
         if dirty:
-            print(f"[BLOCKED] {model['model_id']}: repository is dirty; refusing to change it")
+            for item in group_models:
+                print(f"[BLOCKED] {item['model_id']}: repository is dirty; refusing to change it")
             failed = True
             continue
         if args.verify_only:
-            if head == pin:
-                print(f"[OK] {model['model_id']}: pinned SHA present")
-            elif head is None:
-                print(f"[BLOCKED] {model['model_id']}: pinned SHA unavailable locally")
-                failed = True
+            for item in group_models:
+                if head == pin:
+                    print(f"[OK] {item['model_id']}: pinned SHA present")
+                elif head is None:
+                    print(f"[BLOCKED] {item['model_id']}: pinned SHA unavailable locally")
+                else:
+                    print(f"[BLOCKED] {item['model_id']}: local SHA differs from pinned")
+            failed |= head != pin
             continue
         if args.dry_run:
             action = "clone and checkout" if state == "missing" else "checkout existing repository"
-            print(f"[RUN] {model['model_id']}: would {action} at {pin}")
+            print(f"[RUN] {names}: would {action} at {pin}")
             continue
         if state == "missing":
-            print(f"[RUN] {model['model_id']}: cloning then checking out pinned SHA")
-            subprocess.run(["git", "clone", "--no-checkout", model["upstream_repo_url"], str(destination)], check=True)
+            staging = None
+            try:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                staging = Path(tempfile.mkdtemp(prefix=f".{destination.name}.clone-", dir=destination.parent))
+                staging.rmdir()
+                subprocess.run(["git", "clone", "--no-checkout", model["upstream_repo_url"], str(staging)], check=True)
+                if args.fetch:
+                    subprocess.run(["git", "fetch", "origin", pin], cwd=staging, check=True)
+                subprocess.run(["git", "checkout", "--detach", pin], cwd=staging, check=True)
+                actual = git_output(staging, "rev-parse", "HEAD")
+                if actual != pin:
+                    raise RuntimeError(f"checked out {actual}, expected {pin}")
+                staging.rename(destination)
+            except (OSError, subprocess.CalledProcessError, RuntimeError) as error:
+                if staging is not None:
+                    shutil.rmtree(staging, ignore_errors=True)
+                for item in group_models:
+                    print(f"[BLOCKED] {item['model_id']}: clone/pin failed: {error}")
+                failed = True
+                continue
         elif state != "clean":
-            print(f"[BLOCKED] {model['model_id']}: {state}")
+            for item in group_models:
+                print(f"[BLOCKED] {item['model_id']}: {state}")
             failed = True
             continue
         elif not args.update_existing:
-            print(f"[SKIP] {model['model_id']}: existing repository needs --update-existing")
+            for item in group_models:
+                print(f"[SKIP] {item['model_id']}: existing repository needs --update-existing")
             continue
-        if args.fetch:
-            print(f"[RUN] {model['model_id']}: fetching pinned SHA")
-            subprocess.run(["git", "fetch", "origin", pin], cwd=destination, check=True)
-        print(f"[RUN] {model['model_id']}: checking out pinned SHA")
-        subprocess.run(["git", "checkout", "--detach", pin], cwd=destination, check=True)
+        else:
+            try:
+                if args.fetch:
+                    print(f"[RUN] {names}: fetching pinned SHA")
+                    subprocess.run(["git", "fetch", "origin", pin], cwd=destination, check=True)
+                print(f"[RUN] {names}: checking out pinned SHA")
+                subprocess.run(["git", "checkout", "--detach", pin], cwd=destination, check=True)
+            except (OSError, subprocess.CalledProcessError) as error:
+                for item in group_models:
+                    print(f"[BLOCKED] {item['model_id']}: Git operation failed: {error}")
+                failed = True
+                continue
         actual = git_output(destination, "rev-parse", "HEAD")
         if actual != pin:
-            print(f"[BLOCKED] {model['model_id']}: checked out {actual}, expected {pin}")
+            for item in group_models:
+                print(f"[BLOCKED] {item['model_id']}: checked out {actual}, expected {pin}")
             failed = True
         else:
-            print(f"[OK] {model['model_id']}: pinned SHA checked out")
+            for item in group_models:
+                print(f"[OK] {item['model_id']}: pinned SHA checked out")
     if failed:
         raise SystemExit(1)
 

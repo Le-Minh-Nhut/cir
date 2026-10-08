@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -15,12 +17,37 @@ from workbench.backend.operator_config import WorkbenchConfig, resolve_config
 from workbench.backend.registry import auxiliary_model_ids, load_registry
 SCRIPTS = Path(__file__).resolve().parent
 REPOSITORY = SCRIPTS.parents[1]
+STAGE_STATE_PATH = REPOSITORY / "workbench" / "artifacts" / "pipeline_state.json"
 
 
 @dataclass(frozen=True)
 class Stage:
     name: str
     commands: tuple[list[str], ...] = ()
+    skipped: str | None = None
+
+
+def stage_fingerprint(stage: Stage) -> str:
+    import hashlib
+    payload = json.dumps([stage.name, [list(c) for c in stage.commands]], sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def load_pipeline_state(path: Path = STAGE_STATE_PATH) -> dict:
+    if path.is_file():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+    return {}
+
+
+def save_pipeline_state(state: dict, path: Path = STAGE_STATE_PATH) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(".tmp")
+    temp.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    temp.replace(path)
+
     skipped: str | None = None
 
 
@@ -132,6 +159,25 @@ def stages_for(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         return real_stages(args, config)
     if args.mode == "serve":
         return [run_stage("serve", command("serve_workbench.py"))]
+    if args.mode == "setup":
+        setup_args = argparse.Namespace(**{**vars(args), "sync_sources": True, "download_checkpoints": True, "download_auxiliary_assets": True, "evaluate": False, "rebuild_index": False, "serve": False})
+        return real_stages(setup_args, config)
+    if args.mode == "reproduce":
+        reproduce_args = argparse.Namespace(**{**vars(args), "sync_sources": False, "download_checkpoints": False, "download_auxiliary_assets": False, "evaluate": True, "rebuild_index": False, "serve": False})
+        return real_stages(reproduce_args, config)
+    if args.mode == "analyze":
+        analyze_args = argparse.Namespace(**{**vars(args), "sync_sources": False, "download_checkpoints": False, "download_auxiliary_assets": False, "evaluate": False, "rebuild_index": True, "serve": False})
+        return real_stages(analyze_args, config)
+    if args.mode == "all":
+        all_args = argparse.Namespace(**{**vars(args), "sync_sources": True, "download_checkpoints": True, "download_auxiliary_assets": True, "evaluate": True, "rebuild_index": True, "serve": False})
+        return real_stages(all_args, config)
+    if args.mode == "report":
+        report_args = ["--scope", "real", "--json"]
+        if args.model:
+            report_args.extend(["--model", args.model])
+        else:
+            report_args.append("--all")
+        return [run_stage("report", command("doctor.py", *report_args))]
     return [run_stage("doctor", command("doctor.py", *( ["--model", args.model] if args.model else [])))]
 
 
@@ -143,13 +189,30 @@ def run_command(argv: list[str]) -> int:
         return 127
 
 
-def run_stages(stages: list[Stage], *, dry_run: bool, continue_on_error: bool) -> int:
+def run_stages(stages: list[Stage], *, dry_run: bool, continue_on_error: bool, resume: bool = False, force_stages: set[str] | None = None, state_path: Path = STAGE_STATE_PATH) -> int:
     failed = False
+    force_set = set(force_stages or ())
+    state = load_pipeline_state(state_path) if resume else {}
+    stage_records = state.setdefault("stages", {})
     for number, stage in enumerate(stages, 1):
         print(f"[{number}/{len(stages)}] {stage.name}")
         if not stage.commands:
             print(f"  [SKIP] {stage.skipped}")
             continue
+        fingerprint = stage_fingerprint(stage)
+        if resume and stage.name not in force_set:
+            prev = stage_records.get(stage.name, {})
+            if prev.get("status") == "COMPLETE" and prev.get("fingerprint") == fingerprint:
+                print(f"  [SKIP] resume: already completed with matching fingerprint")
+                continue
+        if not dry_run:
+            stage_records[stage.name] = {
+                "status": "RUNNING",
+                "fingerprint": fingerprint,
+                "started_at": datetime.now(UTC).isoformat(),
+            }
+            save_pipeline_state(state, state_path)
+        stage_failed = False
         for argv in stage.commands:
             print(f"  [{'PLAN' if dry_run else 'RUN'}] {shlex.join(argv)}")
             if stage.name == "evaluation":
@@ -159,16 +222,32 @@ def run_stages(stages: list[Stage], *, dry_run: bool, continue_on_error: bool) -
             status = run_command(argv)
             if status == 0:
                 continue
+            stage_failed = True
             failed = True
             print(f"  [BLOCKED] {stage.name} exited with status {status}", file=sys.stderr)
+            if not dry_run:
+                stage_records[stage.name].update({
+                    "status": "FAILED",
+                    "finished_at": datetime.now(UTC).isoformat(),
+                    "return_code": status,
+                })
+                save_pipeline_state(state, state_path)
             if stage.name == "runtime-preflight" or not continue_on_error:
                 return 1
+            break
+        if not dry_run and not stage_failed:
+            stage_records[stage.name].update({
+                "status": "COMPLETE",
+                "finished_at": datetime.now(UTC).isoformat(),
+                "return_code": 0,
+            })
+            save_pipeline_state(state, state_path)
     return 1 if failed else 0
 
 
 def parser_for() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("mock", "prepare", "real", "serve", "status"))
+    parser.add_argument("mode", choices=("mock", "prepare", "real", "serve", "status", "setup", "reproduce", "analyze", "all", "report"))
     parser.add_argument("--dataset-root", type=Path, help="canonical FashionIQ dataset root")
     parser.add_argument("--sync-sources", action="store_true", help="sync selected official source repositories")
     parser.add_argument("--download-checkpoints", action="store_true", help="download selected registry checkpoints")
@@ -178,6 +257,8 @@ def parser_for() -> argparse.ArgumentParser:
     parser.add_argument("--serve", action="store_true", help="serve after pipeline stages")
     parser.add_argument("--dry-run", action="store_true", help="print ordered stage plan without subprocesses or mutations")
     parser.add_argument("--continue-on-error", action="store_true", help="continue pipeline after a failed stage")
+    parser.add_argument("--resume", action="store_true", help="skip stages already completed with matching input fingerprints")
+    parser.add_argument("--force-stage", action="append", default=[], help="force re-execution of a stage even when --resume is set")
     parser.add_argument("--model", help="registry model selection")
     parser.add_argument("--protocol", help="official protocol selection for evaluation")
     parser.add_argument("--checkpoint", help="checkpoint selection")
@@ -194,7 +275,8 @@ def main(argv: list[str] | None = None) -> int:
     config = resolve_config()
     if args.mode == "prepare" and args.dataset_root is None and not config.FASHIONIQ_ROOT:
         parser_for().error("prepare requires --dataset-root or FASHIONIQ_ROOT")
-    return run_stages(stages_for(args, config), dry_run=args.dry_run, continue_on_error=args.continue_on_error)
+    force_stages = set(args.force_stage) if args.force_stage else None
+    return run_stages(stages_for(args, config), dry_run=args.dry_run, continue_on_error=args.continue_on_error, resume=args.resume, force_stages=force_stages)
 
 
 if __name__ == "__main__":
