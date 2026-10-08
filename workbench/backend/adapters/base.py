@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from workbench.backend.errors import WorkbenchError
-from workbench.backend.registry import checkpoint_by_id, checkpoint_path, model_by_id
+from workbench.backend.registry import checkpoint_by_id, checkpoint_is_present, checkpoint_path, model_by_id
 
 
 @dataclass(frozen=True)
@@ -29,7 +29,7 @@ class ModelAdapter(ABC):
             raise ValueError(f"{self.model_id} does not support {request.protocol_id}")
         checkpoint = checkpoint_by_id(self.model, request.checkpoint_id)
         path = checkpoint_path(self.model_id, checkpoint)
-        if not path.is_file():
+        if not checkpoint_is_present(path, checkpoint):
             raise FileNotFoundError(f"checkpoint missing: {path}")
         if checkpoint["checkpoint_mapping_status"] != "VERIFIED_METADATA":
             raise WorkbenchError("checkpoint_mapping_unverified", "Checkpoint mapping is unresolved.", {"model_id": self.model_id, "checkpoint_id": request.checkpoint_id})

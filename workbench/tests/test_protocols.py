@@ -66,13 +66,14 @@ def test_dcnet_shares_only_reference_excluded_full_gallery_cohort() -> None:
     assert models["dcnet"]["native_protocol"] != models["hint"]["native_protocol"]
 
 
-def test_legacy_adapters_are_registered_but_commands_remain_unaudited() -> None:
+def test_only_dcnet_legacy_adapter_is_command_audited() -> None:
     from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 
     legacy = {"clvc_net", "dcnet", "combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "tgcir", "sprc", "limn"}
 
     assert legacy <= ADAPTERS.keys()
-    assert all(ADAPTERS[model_id].command is OfficialScriptAdapter.command for model_id in legacy)
+    assert ADAPTERS["dcnet"].command is not OfficialScriptAdapter.command
+    assert all(ADAPTERS[model_id].command is OfficialScriptAdapter.command for model_id in legacy - {"dcnet"})
 
 
 def test_legacy_layout_contracts_require_native_inputs(tmp_path) -> None:
@@ -99,7 +100,32 @@ def test_legacy_preparation_contracts_are_source_specific_and_stay_manual() -> N
         "captions/cap.shirt.glove.val.pkl",
         "captions/cap.toptee.glove.val.pkl",
     }
-    assert {asset["name"] for asset in dcnet["external_assets"]} == {"spaCy en_vectors_web_lg", "NLTK punkt"}
+    assert {asset["name"] for asset in dcnet["external_assets"] if asset["required_for_preparation"]} == {"spaCy en_vectors_web_lg", "NLTK punkt"}
     assert dcnet["deterministic_status"] == "NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT"
     assert dcnet["automation_policy"] == "AUTHOR_ARTIFACT_PREFERRED"
     assert all(contract["automation_policy"] == "MANUAL_REQUIRED" for key, contract in contracts.items() if key != "dcnet_fashioniq")
+
+
+def test_all_legacy_external_assets_are_machine_readable_and_fail_closed() -> None:
+    from workbench.backend.registry import load_preparation_contracts
+
+    for contract in load_preparation_contracts().values():
+        for asset in contract["external_assets"]:
+            assert {"name", "kind", "state", "required_for_evaluation", "required_for_preparation", "expected_local_location", "source", "optional", "notes"} <= asset.keys()
+        assert any(asset["required_for_evaluation"] for asset in contract["external_assets"])
+
+
+def test_limn_requires_complete_category_checkpoint_bundle(tmp_path) -> None:
+    from workbench.backend.registry import checkpoint_bundle_missing_paths, load_registry
+
+    limn = next(model for model in load_registry()["models"] if model["model_id"] == "limn")
+    root = tmp_path / "checkpoints"
+    for checkpoint in limn["checkpoint_variants"][:2]:
+        path = root / "limn" / checkpoint["filename"]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"checkpoint")
+
+    missing = checkpoint_bundle_missing_paths(limn, root)
+
+    assert list(missing) == ["base_iter0_all_categories"]
+    assert missing["base_iter0_all_categories"] == [root / "limn" / "0_toptee_best_model.pt"]

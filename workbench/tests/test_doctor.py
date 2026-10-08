@@ -132,6 +132,28 @@ def test_dcnet_preparation_readiness_does_not_clear_checkpoint_blocker(tmp_path:
     assert "checkpoint mapping unresolved" in blockers
     assert not any("generated artifact missing" in blocker for blocker in blockers)
 
+
+def test_dcnet_runtime_asset_blocks_after_preparation_is_present(tmp_path: Path) -> None:
+    doctor = load_doctor()
+    model = next(model for model in load_registry()["models"] if model["model_id"] == "dcnet")
+    settings = config(tmp_path)
+    contract = doctor.preparation_contract_for_model(model)
+    assert contract is not None
+    for group in ("raw_inputs", "generated_artifacts"):
+        for path in doctor.preparation_paths(contract, settings.FASHIONIQ_ROOT, group):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if path.suffix:
+                path.write_text("[]")
+            else:
+                path.mkdir(parents=True, exist_ok=True)
+
+    checks = {check["name"]: check for check in doctor.model_checks(model, settings)}
+    blockers = checks["runtime:dcnet"]["evidence"]["checkpoints"][0]["runtime_blockers"]
+
+    assert checks["external-assets:dcnet"]["status"] == "BLOCKED"
+    assert "external runtime asset provenance unresolved: torchvision ResNet-50 ImageNet weights" in blockers
+    assert not any("spaCy en_vectors_web_lg" in blocker or "NLTK punkt" in blocker for blocker in blockers)
+
 def test_workbench_scope_ignores_missing_fashioniq(monkeypatch, tmp_path: Path) -> None:
     doctor = load_doctor()
     monkeypatch.setattr(doctor, "git", lambda *_: None)

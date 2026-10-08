@@ -151,22 +151,23 @@ This matrix describes registry metadata and blockers, not present local files, r
 | CSMCIR | `fashioniq_original_split` | author-linked clean URL | command audited; fixed-root/auxiliary-file limits apply |
 | Air-Know, ConeSep, HABIT, INTENT | `fashioniq_full_gallery_ref_excluded` | official noisy-trained variants only | command not audited; clean evaluation remains distinct from training noise |
 | HINT, ENCODER, PAIR | `fashioniq_val_split` | HINT URL; ENCODER folder; PAIR variants unresolved | HINT command unaudited; ENCODER prerequisites unresolved; PAIR blocked |
-| CLVC-Net | `fashioniq_val_split` | author Drive artifact mapping unresolved | blocked |
-| DCNet | `fashioniq_full_gallery_ref_excluded` | author Drive artifact mapping unresolved | blocked: author-generated GloVe PKLs preferred; preprocessing is stochastic |
-| Combiner RN50x4 noft, CLIP4Cir RN50x4 fullft | `fashioniq_original_split` | author Drive folder only; requested variants unresolved | blocked |
-| TG-CIR | `fashioniq_val_split` | official ZIP exists; FashionIQ member unresolved | blocked |
-| SPRC | `fashioniq_original_split` | `sprc_fiq.pt` source known; BLIP-2 mapping unresolved | blocked; printed R@10 conflicts with category arithmetic |
-| LIMN base iteration 0 | `fashioniq_val_split` | author Hub has per-category artifact hashes and metric files | blocked: no audited replay command |
+| CLVC-Net | `fashioniq_val_split` | author Drive bundle mapping unresolved | blocked: no pinned standalone replay entrypoint; ResNet-50 asset unresolved |
+| DCNet | `fashioniq_full_gallery_ref_excluded` | author run directory requires `config.json` + `trained_model.pth`; mapping/hash unresolved | command audited; blocked on prepared artifacts, ResNet-50 asset, source/environment |
+| Combiner RN50x4 noft | `fashioniq_original_split` | author Drive state mapping unresolved | blocked: RN50x4 Combiner mapping and base CLIP asset |
+| CLIP4Cir RN50x4 fullft | `fashioniq_original_split` | separate Combiner + fine-tuned CLIP pair unresolved | blocked: incomplete/unverified paired checkpoint bundle and base CLIP asset |
+| TG-CIR | `fashioniq_val_split` | official ZIP exists; FashionIQ member unresolved | blocked: no source replay CLI, ViT-B/16 asset, preparation/caches |
+| SPRC | `fashioniq_original_split` | `sprc_fiq.pt` source known; BLIP-2 model/backbone mapping unresolved | blocked; CLI shape audited; printed R@10 conflicts with category arithmetic |
+| LIMN base iteration 0 | `fashioniq_val_split` | exact three category artifacts/hashes; replay unvalidated | blocked: no replay CLI, complete bundle, DataComp OpenCLIP asset |
 
-Legacy entries preserve source pins and native evaluator evidence; they do not make assets or commands interchangeable. DCNet requires source-specific author-generated preparation artifacts before it can be considered runtime-ready. NEUCORE is deliberately unregistered because its doubled caption-order queries form a distinct query universe.
+Legacy entries preserve source pins and native evaluator evidence; they do not make assets or commands interchangeable. Doctor reports source, raw data, preparation, external evaluation assets, checkpoint/bundle, command, environment metadata, then final runtime readiness. NEUCORE is deliberately unregistered because its doubled caption-order queries form a distinct query universe.
 
 ## Legacy preparation contracts
 
-`registry/preparation_contracts.yaml` is declarative only. `doctor.py --scope real --model MODEL_ID --json` reports **raw dataset** and **preparation** separately from source, checkpoint, and command readiness. It never executes preparation scripts.
+`registry/preparation_contracts.yaml` is declarative only. `doctor.py --scope real --model MODEL_ID --json` reports **raw dataset**, **preparation**, and **external evaluation assets** separately from source, checkpoint/bundle, command, and environment metadata. It never executes preparation scripts.
 
-DCNet requires `resized_images/` plus `captions/cap.{category}.glove.val.pkl`; regenerating these PKLs is unsafe because upstream `process_cap.py` samples unseeded NumPy OOV vectors. Preserve author-generated artifacts. `spaCy en_vectors_web_lg` and NLTK `punkt` are regeneration dependencies, not evaluator substitutions.
+DCNet requires `resized_images/` plus `captions/cap.{category}.glove.val.pkl`; regenerating these PKLs is unsafe because upstream `process_cap.py` samples unseeded NumPy OOV vectors. Preserve author-generated artifacts. `spaCy en_vectors_web_lg` and NLTK `punkt` are regeneration-only, not false evaluation requirements. Standard DCNet evaluation does require unresolved ImageNet ResNet-50 weights.
 
-CLVC-Net, TG-CIR, and LIMN retain independent resized-image contracts. TG-CIR and LIMN dictionaries/caches are source-specific. No legacy contract is automatically prepared.
+CLVC-Net, TG-CIR, and LIMN retain independent resized-image contracts. TG-CIR/LIMN dictionaries and caches remain source-specific. Every required evaluation asset with unknown local location fails closed; no legacy contract is automatically prepared.
 
 A checkpoint trained with 20%, 50%, or 80% noise remains that training condition when evaluated on clean FashionIQ data. It is not a clean checkpoint. `expected_sha256: null` means no official hash is in registry; local hashes belong in ignored download manifests.
 

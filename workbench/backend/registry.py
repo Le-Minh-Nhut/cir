@@ -49,6 +49,10 @@ def load_registry(path: Path = REGISTRY_PATH) -> dict[str, Any]:
             raise ValueError(f"unknown preparation contract for {model['model_id']}")
         if model.get("native_protocol_condition") and native_protocol is not None:
             raise ValueError(f"conditional native protocol must remain unavailable for {model['model_id']}")
+        variants = {checkpoint["checkpoint_id"] for checkpoint in model["checkpoint_variants"]}
+        for bundle in model.get("checkpoint_bundles", []):
+            if {"bundle_id", "required_checkpoint_ids", "structure", "mapping_status", "notes"} - bundle.keys() or not bundle["required_checkpoint_ids"] or not set(bundle["required_checkpoint_ids"]).issubset(variants):
+                raise ValueError(f"invalid checkpoint bundle for {model['model_id']}")
         for checkpoint in model["checkpoint_variants"]:
             if checkpoint["evaluation_noise_pct"] != 0:
                 raise ValueError(f"non-clean evaluation policy for {model['model_id']}")
@@ -87,6 +91,7 @@ def load_preparation_contracts(path: Path = PREPARATION_CONTRACT_REGISTRY_PATH) 
         raise ValueError("unsupported preparation contract registry")
     contracts: dict[str, dict[str, Any]] = {}
     required = {"preparation_id", "source_family", "raw_inputs", "generated_artifacts", "external_assets", "deterministic_status", "automation_policy", "notes"}
+    asset_required = {"name", "kind", "state", "required_for_evaluation", "required_for_preparation", "expected_local_location", "source", "optional", "notes"}
     for contract in registry["contracts"]:
         if required - contract.keys() or contract["preparation_id"] in contracts:
             raise ValueError("invalid preparation contract")
@@ -98,6 +103,14 @@ def load_preparation_contracts(path: Path = PREPARATION_CONTRACT_REGISTRY_PATH) 
                     path = PurePosixPath(path_value)
                     if path.is_absolute() or ".." in path.parts:
                         raise ValueError(f"unsafe preparation path for {contract['preparation_id']}")
+        for asset in contract["external_assets"]:
+            if asset_required - asset.keys() or not isinstance(asset["required_for_evaluation"], bool) or not isinstance(asset["required_for_preparation"], bool) or not isinstance(asset["optional"], bool):
+                raise ValueError(f"invalid external asset for {contract['preparation_id']}")
+            location = asset["expected_local_location"]
+            if location is not None:
+                path = PurePosixPath(location)
+                if path.is_absolute() or ".." in path.parts:
+                    raise ValueError(f"unsafe external asset path for {contract['preparation_id']}")
         contracts[contract["preparation_id"]] = contract
     return contracts
 
@@ -114,6 +127,44 @@ def preparation_contract_for_model(model: dict[str, Any]) -> dict[str, Any] | No
 
 def preparation_paths(contract: dict[str, Any], root: Path, group: str) -> tuple[Path, ...]:
     return tuple(root / path for artifact in contract[group] for path in artifact["paths"])
+
+
+def required_runtime_assets(model: dict[str, Any]) -> list[dict[str, Any]]:
+    contract = preparation_contract_for_model(model)
+    if contract is None:
+        return []
+    return [asset for asset in contract["external_assets"] if asset["required_for_evaluation"] and not asset["optional"]]
+
+
+def external_asset_blockers(model: dict[str, Any]) -> list[str]:
+    blockers: list[str] = []
+    for asset in required_runtime_assets(model):
+        location = asset["expected_local_location"]
+        if location is None:
+            blockers.append(f"external runtime asset provenance unresolved: {asset['name']}")
+        else:
+            blockers.append(f"external runtime asset missing: {asset['name']} ({location})")
+    return blockers
+
+
+def checkpoint_missing_paths(path: Path, checkpoint: dict[str, Any]) -> list[Path]:
+    if checkpoint.get("artifact_type") == "run_directory":
+        return ([] if path.is_dir() else [path]) + [path / name for name in checkpoint.get("required_files", []) if not (path / name).is_file()]
+    return [] if path.is_file() else [path]
+
+
+def checkpoint_is_present(path: Path, checkpoint: dict[str, Any]) -> bool:
+    return not checkpoint_missing_paths(path, checkpoint)
+
+
+def checkpoint_bundle_missing_paths(model: dict[str, Any], root: Path) -> dict[str, list[Path]]:
+    variants = {checkpoint["checkpoint_id"]: checkpoint for checkpoint in model["checkpoint_variants"]}
+    missing: dict[str, list[Path]] = {}
+    for bundle in model.get("checkpoint_bundles", []):
+        paths = [path for checkpoint_id in bundle["required_checkpoint_ids"] for path in checkpoint_missing_paths(checkpoint_path(model["model_id"], variants[checkpoint_id], root), variants[checkpoint_id])]
+        if paths:
+            missing[bundle["bundle_id"]] = paths
+    return missing
 
 
 def auxiliary_assets_for_model(model_id: str) -> list[dict[str, Any]]:
@@ -179,15 +230,17 @@ def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -
 
     config = resolve_config()
     path = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
-    downloaded = path.is_file()
-    local_sha = sha256_file(path) if downloaded else None
+    downloaded = checkpoint_is_present(path, checkpoint)
+    local_sha = sha256_file(path) if downloaded and path.is_file() else None
     official_sha = checkpoint.get("expected_sha256")
     official_sha_match = local_sha == official_sha if downloaded and official_sha else None
     mapping_verified = checkpoint["checkpoint_mapping_status"] == "VERIFIED_METADATA"
     source_synced = bool(model.get("source_dir")) and (config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]).is_dir()
-    adapter_command_ready = mapping_verified and bool(model["supported_protocols"]) and model["model_id"] in {"csmcir", "encoder"}
+    adapter_command_ready = bool(model.get("command_status") == "COMMAND_AUDITED" or (model.get("command_status") is None and model["model_id"] in {"csmcir", "encoder"}))
     runtime_verified = model.get("reproduction_status") == "VERIFIED"
-    runnable = downloaded and source_synced and mapping_verified and (official_sha is None or official_sha_match is True) and adapter_command_ready
+    external_blockers = external_asset_blockers(model)
+    bundle_missing = checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT)
+    runnable = downloaded and source_synced and mapping_verified and (official_sha is None or official_sha_match is True) and adapter_command_ready and not external_blockers and not bundle_missing
     blocking_reasons = []
     if not mapping_verified:
         blocking_reasons.append("checkpoint_mapping_unverified")
@@ -197,4 +250,6 @@ def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -
         blocking_reasons.append("official_hash_mismatch")
     if not adapter_command_ready:
         blocking_reasons.append("adapter_command_unverified")
+    blocking_reasons.extend(external_blockers)
+    blocking_reasons.extend(f"checkpoint_bundle_incomplete:{bundle_id}" for bundle_id in bundle_missing)
     return {"checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_metadata": checkpoint["status"] != "BLOCKED", "source_root": str(config.WORKBENCH_THIRD_PARTY_ROOT), "checkpoint_root": str(config.WORKBENCH_CHECKPOINT_ROOT), "source_synced_locally": source_synced, "automatic_download_available": checkpoint.get("download_url") is not None, "checkpoint_downloaded": downloaded, "local_sha256": local_sha, "official_sha256_known": official_sha is not None, "official_sha256_match": official_sha_match, "mapping_verified": mapping_verified, "adapter_command_ready": adapter_command_ready, "runtime_verified": runtime_verified, "runnable": runnable, "checkpoint_path": str(path), "blocking_reasons": blocking_reasons}

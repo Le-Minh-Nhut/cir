@@ -17,7 +17,13 @@ contracts:
     external_assets:
       - name: torchvision ResNet-50 ImageNet weights
         kind: external_pretrained_asset
-        state: UNRESOLVED_CACHE
+        state: BLOCKED_EXTERNAL_ASSET_PROVENANCE
+        required_for_evaluation: true
+        required_for_preparation: false
+        expected_local_location: null
+        source: https://download.pytorch.org/models/resnet50-19c8e357.pth
+        optional: false
+        notes: Pinned resnet.py calls load_state_dict_from_url; Torch cache location is not pinned.
     deterministic_status: UNKNOWN
     automation_policy: MANUAL_REQUIRED
     notes: Upstream checkpoint loader/command mapping is unverified; do not infer or run resize commands.
@@ -45,9 +51,30 @@ contracts:
       - name: spaCy en_vectors_web_lg
         kind: external_tokenizer_asset
         state: REQUIRED_FOR_REGENERATION
+        required_for_evaluation: false
+        required_for_preparation: true
+        expected_local_location: null
+        source: spaCy model distribution
+        optional: false
+        notes: process_cap.py only; evaluator consumes generated PKLs.
       - name: NLTK punkt
         kind: external_tokenizer_asset
         state: REQUIRED_FOR_REGENERATION
+        required_for_evaluation: false
+        required_for_preparation: true
+        expected_local_location: null
+        source: NLTK data distribution
+        optional: false
+        notes: process_cap.py only; evaluator consumes generated PKLs.
+      - name: torchvision ResNet-50 ImageNet weights
+        kind: external_pretrained_asset
+        state: BLOCKED_EXTERNAL_ASSET_PROVENANCE
+        required_for_evaluation: true
+        required_for_preparation: false
+        expected_local_location: null
+        source: torchvision model weights
+        optional: false
+        notes: Standard FashionIQ config uses pretrained ResNet-50; DeepFashion DenseNet is a separate optional config.
     deterministic_status: NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT
     automation_policy: AUTHOR_ARTIFACT_PREFERRED
     notes: process_cap.py samples unseeded NumPy OOV vectors; never regenerate automatically. Later approved regeneration must record seed state, NumPy version, spaCy model/version, NLTK tokenizer/version, and generated hashes.
@@ -60,9 +87,15 @@ contracts:
         paths: [captions/cap.dress.val.json, captions/cap.shirt.val.json, captions/cap.toptee.val.json, image_splits/split.dress.val.json, image_splits/split.shirt.val.json, image_splits/split.toptee.val.json, images]
     generated_artifacts: []
     external_assets:
-      - name: OpenAI CLIP RN50x4 weights or verified paired fine-tuned CLIP state
+      - name: OpenAI CLIP RN50x4 base weights
         kind: external_pretrained_asset
-        state: BLOCKED_PROVENANCE
+        state: BLOCKED_EXTERNAL_ASSET_PROVENANCE
+        required_for_evaluation: true
+        required_for_preparation: false
+        expected_local_location: null
+        source: https://openaipublic.azureedge.net/clip/models/7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd/RN50x4.pt
+        optional: false
+        notes: clip.load requires matching base RN50x4 cache before optional fine-tuned overlay; source default cache is ~/.cache/clip.
     deterministic_status: DETERMINISTIC_AT_EVALUATION
     automation_policy: MANUAL_REQUIRED
     notes: TargetPad/CLIP preprocessing occurs in evaluator. noft/fullft artifact pairing remains unresolved; do not substitute one for the other.
@@ -89,7 +122,13 @@ contracts:
     external_assets:
       - name: OpenAI CLIP ViT-B/16 weights/cache
         kind: external_pretrained_asset
-        state: UNRESOLVED_CACHE
+        state: BLOCKED_EXTERNAL_ASSET_PROVENANCE
+        required_for_evaluation: true
+        required_for_preparation: false
+        expected_local_location: null
+        source: OpenAI CLIP clip.load default acquisition/cache
+        optional: false
+        notes: Pinned train.py calls clip.load with CUDA; local cache provenance is unverified.
     deterministic_status: UNKNOWN
     automation_policy: MANUAL_REQUIRED
     notes: Source cache files fashion_iq_data.json and test_queries/test_targets PKLs are cache artifacts; source does not validate freshness. Do not copy dictionaries or caches from another repository.
@@ -102,9 +141,15 @@ contracts:
         paths: [captions/cap.dress.val.json, captions/cap.shirt.val.json, captions/cap.toptee.val.json, image_splits/split.dress.val.json, image_splits/split.shirt.val.json, image_splits/split.toptee.val.json, images]
     generated_artifacts: []
     external_assets:
-      - name: checkpoint-compatible BLIP-2/LAVIS backbone assets
+      - name: LAVIS BLIP-2 pretrain weights
         kind: external_pretrained_asset
-        state: BLOCKED_PROVENANCE
+        state: BLOCKED_EXTERNAL_ASSET_PROVENANCE
+        required_for_evaluation: true
+        required_for_preparation: false
+        expected_local_location: null
+        source: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth
+        optional: false
+        notes: Pinned blip2_pretrain.yaml initializes ViT-g/BLIP-2; cache location and sprc_fiq.pt-compatible model mapping are unverified.
     deterministic_status: DETERMINISTIC_AT_EVALUATION
     automation_policy: MANUAL_REQUIRED
     notes: Native TargetPad and text processing occur in evaluation. sprc_fiq.pt model/backbone mapping is unresolved and loads non-strictly.
@@ -129,9 +174,15 @@ contracts:
         generator: manual placement from pinned source correct_files/
         cwd: UNKNOWN
     external_assets:
-      - name: OpenCLIP ViT-L-14 DataComp weights
+      - name: OpenCLIP ViT-L-14 DataComp XL s13B b90K weights
         kind: external_pretrained_asset
-        state: BLOCKED_EXTERNAL_ASSET
+        state: BLOCKED_EXTERNAL_ASSET_PROVENANCE
+        required_for_evaluation: true
+        required_for_preparation: false
+        expected_local_location: null
+        source: laionCLIP-ViT-L-14-DataComp.XL-s13B-b90K/open_clip_pytorch_model.bin
+        optional: false
+        notes: Pinned train.py requires a user-supplied local path; no cache/download lookup is used.
     deterministic_status: UNKNOWN
     automation_policy: MANUAL_REQUIRED
     notes: Source caches train_data.json and test_queries/test_targets PKLs are not provenance-validated. Base iteration 0 only; no replay command is audited.

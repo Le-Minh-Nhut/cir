@@ -77,6 +77,8 @@ class DCNetAdapter(OfficialScriptAdapter):
     model_id = "dcnet"
     script = "test.py"
 
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        return ["python", str(source / self.script), "--resume", str(checkpoint)]
 
 class CombinerNoftAdapter(OfficialScriptAdapter):
     model_id = "combiner_rn50x4_noft"

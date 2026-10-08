@@ -1,85 +1,77 @@
 # Legacy FashionIQ source audit
 
-Audit date: 2026-10-08. Static audit of immutable author source pins and author-linked artifacts only. No upstream clone, dataset, checkpoint, environment, preprocessing, patch, or GPU evaluation was created or run. Reported paper scores are sanity references, never reproductions.
+Audit date: 2026-10-08. Static audit of immutable author source pins, author README/requirements, and author-linked artifact metadata. No source clone, checkpoint, dataset, environment, preprocessing, patch, model execution, or GPU evaluation was created or run. Paper scores are sanity references, never reproductions. `preparation_contracts.yaml` describes requirements only; it authorizes no preprocessing.
 
-Preparation contracts live in [`preparation_contracts.yaml`](../registry/preparation_contracts.yaml). They describe required inputs; they do not authorize any preprocessing command.
+| Model | Target / protocol | Command | Checkpoint structure | Environment | Runtime status |
+| --- | --- | --- | --- | --- | --- |
+| CLVC-Net | FashionIQ / `fashioniq_val_split` | **BLOCKED:** pinned `test.py` only defines `test(...)`; README bare `python test.py` has no source-backed standalone loader. | Author Drive `CLVCNET.zip`; source saves separate `local_model.pt` and `global_model.pt`, but archive member/category mapping is unverified. | README: Python 3.7.6, Torch 1.6.0; torchvision version/CUDA unknown. | `BLOCKED_CHECKPOINT_MAPPING`, source entrypoint, ResNet-50 external weights, preparation. |
+| DCNet | standard FashionIQ / `fashioniq_full_gallery_ref_excluded` | **AUDITED:** repo root `python test.py --resume <run-directory>`. | Run directory, exactly `config.json` plus `trained_model.pth`; state dict loader. Drive association exists; artifact hash/content mapping unresolved. | Python 3.7.7, Torch 1.4.0, torchvision 0.5.0; requirements pin NLTK 3.5 and spaCy 2.3.0. | `BLOCKED_CHECKPOINT_MAPPING`, prepared artifacts, ImageNet ResNet-50 weights, source/environment. |
+| Combiner RN50x4 noft | RN50x4 noft / `fashioniq_original_split` | **BLOCKED:** validator shape audited, but no author mapping identifies requested Combiner state or proves noft selection. | One Combiner state with `Combiner` key; author Drive file mapping/hash unresolved. | README: Python 3.8, Torch 1.11.0, torchvision 0.12.0, OpenAI CLIP. | `BLOCKED_CHECKPOINT_MAPPING`, RN50x4 base CLIP asset. |
+| CLIP4Cir RN50x4 fullft | RN50x4 fullft / `fashioniq_original_split` | **BLOCKED:** required artifact paths/pairing unresolved. | Two states: `Combiner` and fine-tuned `CLIP`; never collapse to one file. Author pairing/hash unresolved. | Same CLIP4Cir README environment. | `BLOCKED_CHECKPOINT_BUNDLE`, RN50x4 base CLIP asset. |
+| TG-CIR | FashionIQ / `fashioniq_val_split` | **BLOCKED:** `test.py:test(...)` is a function; no source-backed replay CLI/checkpoint loader. | Training saves a whole model; `TG-CIR.zip` FashionIQ member/hash/loader mapping unresolved. | README: Torch 1.7.0, torchvision 0.8.0, `clip==0.2.0`; Python/CUDA unspecified. | `BLOCKED_COMMAND`, checkpoint mapping, ViT-B/16 asset, manual preparation/caches. |
+| SPRC BLIP-2 | BLIP-2 / `fashioniq_original_split` | **BLOCKED_MODEL_MAPPING:** repo-root CLI is structurally audited as `python src/blip_validate.py --dataset FashionIQ --blip-model-name <name> --backbone <type> --model-path <file>`, but `sprc_fiq.pt` has no verified model-name/backbone/class-key mapping. | `torch.load`; class-named state dict loaded `strict=False`. OneDrive `sprc_fiq.pt` structure is unverified. | Python 3.9, Torch 2.0.1, torchvision 0.15.2; requirements include transformers 4.36.2, timm 0.9.12, spaCy 3.7.2. | `BLOCKED_COMMAND_AND_CHECKPOINT_MAPPING`, LAVIS BLIP-2 asset. |
+| LIMN base iteration 0 | base only / `fashioniq_val_split` | **BLOCKED:** README commands train category models; no inference-only replay CLI. | Mandatory three-file bundle: `0_dress_best_model.pt`, `0_shirt_best_model.pt`, `0_toptee_best_model.pt`; each is a whole saved model and author-Hub artifact-associated only. | Torch 1.12.1, torchvision 0.13.1, CUDA 12.4, open-clip-torch 2.20.0; Python unspecified. | `BLOCKED_COMMAND_AND_CHECKPOINT_BUNDLE`, DataComp OpenCLIP asset, manual preparation/caches. |
 
 ## CLVC-Net
 
-- **Source / checkpoint.** [`iLearn-Lab/SIGIR21-CLVC-Net@bd9b6889489806cb60676597880f91d918b279cb`](https://github.com/iLearn-Lab/SIGIR21-CLVC-Net/tree/bd9b6889489806cb60676597880f91d918b279cb). Author Drive exists, but filename, category mapping, hash, loader pairing, command, and environment are **UNVERIFIED**.
-- **Raw inputs.** FashionIQ train/validation captions, validation split JSON, and images.
-- **Offline preprocessing / generated artifacts.** `resized_image/{dress,shirt,toptee}` JPEGs required. Resize generator details and provenance are **UNKNOWN**. Possible pretrained ResNet cache is **UNRESOLVED**.
-- **External assets.** torchvision ResNet-50 ImageNet weights/cache is unresolved.
-- **Evaluation transform.** **UNKNOWN** from audited evidence.
-- **Caption/text pipeline.** `datasets.py:FashionIQ.get_test_targets()` uses `<BOS> caption_1 <AND> caption_2 <EOS>`.
-- **Query construction / gallery / reference policy.** One query per annotation; first-seen reference/target endpoint union; `test.py:test()` masks source before descending ranking.
-- **Scoring / metrics.** Source rank/metric internals beyond source mask are **UNKNOWN**. Assignment is `fashioniq_val_split` only.
-- **Preparation determinism.** **UNKNOWN**. No automatic execution.
-- **Current blockers / instrumentation.** Checkpoint mapping, native command, transform, resize provenance, runtime all blocked. Instrument only after official aggregate metric parity.
+**Pinned source:** [`iLearn-Lab/SIGIR21-CLVC-Net@bd9b6889489806cb60676597880f91d918b279cb`](https://github.com/iLearn-Lab/SIGIR21-CLVC-Net/tree/bd9b6889489806cb60676597880f91d918b279cb).
+
+- **Checkpoint:** `train.py` saves independent whole `local_model.pt` and `global_model.pt`. Author Drive [`CLVCNET.zip`](https://drive.google.com/file/d/159rBhWyhkLN7sXAi8iyW_ljzFNLJinKa/view?usp=sharing) exposes no author-attested member/category mapping or hash. **BLOCKED_CHECKPOINT_MAPPING**.
+- **Command:** README's `python test.py` cannot be used: pinned `test.py` has no parser, main, construction, or checkpoint load. **COMMAND_BLOCKED_SOURCE_ENTRYPOINT**.
+- **Preparation:** FashionIQ start-kit resize produces `resized_image/{category}`; linked start-kit defaults to 256-square resize. Validation applies Resize(256), CenterCrop(224), ToTensor, ImageNet normalization. Never run this automatically.
+- **External runtime asset:** both branches call local `resnet50(pretrained=True)`; source uses PyTorch `resnet50-19c8e357.pth` URL but gives no fixed local cache path. Fail closed on provenance.
+- **Evaluator semantics:** `datasets.py:FashionIQ.get_test_targets()` forms endpoint union; `test.py:test()` masks reference and ranks. `fashioniq_val_split`.
 
 ## DCNet
 
-- **Source / checkpoint.** [`ozmig77/dcnet@68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb`](https://github.com/ozmig77/dcnet/tree/68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb). Author Drive folder exists. `config.json` / `trained_model.pth` association and hash are **UNVERIFIED**.
-- **Raw inputs.** Raw FashionIQ caption JSON, validation `image_splits/split.{category}.val.json`, and source JPG images.
-- **Offline preprocessing.** `preprocess/resize_img.py` writes `resized_images/`: it calls `image.resize([256, 256], Image.ANTIALIAS)`, preserves image format, and prints/continues per-image failures. `preprocess/process_cap.py` writes `glove_vecs.pkl` and caption GloVe PKLs.
-- **External assets.** `process_cap.py` requires spaCy `en_vectors_web_lg` and NLTK `punkt`.
-- **Generated artifacts.** Evaluation requires `captions/cap.{dress,shirt,toptee}.glove.val.pkl` and `resized_images/`. `data_loader/CE_dataset.py:CE.__init__` consumes the PKLs; it does not construct these vectors from raw captions at evaluation.
-- **Evaluation transform.** `data_loader/data_loaders.py:dataset_loader` validation transform is `CenterCrop(224)`, `ToTensor()`, then ImageNet mean `(0.485, 0.456, 0.406)` and std `(0.229, 0.224, 0.225)`. Training `RandomCrop(224)` / `RandomHorizontalFlip` is separate and must not be used for evaluation.
-- **Caption/text pipeline.** `process_cap.py` lowercases, replaces hyphens with spaces, removes periods, applies NLTK tokenization, loads spaCy GloVe vectors, and omits low-frequency OOV words. For OOV words with train-count over two it samples `np.random.normal(0, 0.3, (300,))`.
-- **Preparation determinism.** **NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT**: `process_cap.py` has no seed for those NumPy OOV samples. `test.py` evaluator seeds do not recreate preprocessing state. Never auto-run it. Author-generated PKLs are preferred. Any later explicitly approved regeneration must record seed state, NumPy version, spaCy model/version, NLTK tokenizer/version, and every generated hash.
-- **Query construction / gallery / reference policy.** `CE_dataset.py:CE.__init__` uses ordered `split.{category}.val.json` directly as `val_trg`. `TrainerJoint._valid_epoch` masks reference score to `-10e10` in composition and correction branches.
-- **Scoring / metrics.** DCNet ranks `F.log_softmax(score_comp) + F.log_softmax(score_corr)` after the masks; source emits top-50. This is `fashioniq_full_gallery_ref_excluded` semantics, independent of execution readiness.
-- **Current blockers / instrumentation.** Author PKLs, resize output, checkpoint/config mapping, legacy environment, command verification, and official reproduction are blocked. Export only existing final rankings after aggregate parity.
+**Pinned source:** [`ozmig77/dcnet@68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb`](https://github.com/ozmig77/dcnet/tree/68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb).
 
-## Combiner RN50x4 noft and CLIP4Cir RN50x4 fullft
+- **Checkpoint/run directory:** README and `test.py` require `python test.py --resume logdir/fashioniq_dcnet/`. `parse_config.py` reads `<resume>/config.json`; `BaseTrainer._resume_checkpoint` reads `<resume>/trained_model.pth` then `load_state_dict(checkpoint['state_dict'])`. Workbench represents this directory without faking one checkpoint file. Drive folder association exists but hash/content baseline mapping remains **UNVERIFIED**.
+- **Command:** **COMMAND_AUDITED**, repo cwd, argv exactly `python test.py --resume <run-directory>`.
+- **Standard boundary:** `configs/ce/fashioniq_dcnet.json` selects ImageNet-pretrained ResNet-50. `fashioniq_dcnet_deep.json` selects DenseNet-169 plus `deepfashion/logdir/deepfashion_densenet/best_ckpt.pth.tar`; it is a separate optional training configuration, not standard FashionIQ baseline dependency.
+- **Preparation:** `resize_img.py` writes 256×256 `resized_images/`. `process_cap.py` creates GloVe PKLs consumed by evaluation. Its unseeded `np.random.normal` OOV vectors make regeneration nondeterministic; author PKLs preferred. spaCy `en_vectors_web_lg` and NLTK `punkt` are preparation-only when PKLs exist.
+- **Runtime asset:** standard ResNet-50 ImageNet weights are evaluation-time requirement with unknown local cache provenance.
+- **Evaluator:** CenterCrop(224), ToTensor, ImageNet normalization; reference is masked in both branches and `log_softmax` scores fuse. `fashioniq_full_gallery_ref_excluded`.
 
-- **Source / checkpoint.** [`ABaldrati/CLIP4Cir@dfed9f748a8a4d05abf613164e06d59b22dbdf13`](https://github.com/ABaldrati/CLIP4Cir/tree/dfed9f748a8a4d05abf613164e06d59b22dbdf13). Author Drive folder exists; noft/fullft filenames, paired model states, hashes, and commands are separately **UNVERIFIED**.
-- **Raw inputs / preprocessing.** Standard FashionIQ PNG layout; no generated dataset artifact established by audit.
-- **External assets.** RN50x4 CLIP weights or exactly paired fine-tuned state are required; mapping is **BLOCKED_PROVENANCE**.
-- **Evaluation transform / text / query / gallery.** `src/data_utils.py` and `src/validate.py` establish one query per annotation, full ordered validation split gallery, reference eligible. TargetPad / CLIP transform details and cache state are **UNKNOWN** here.
-- **Scoring / metrics.** Source ranks full gallery without reference removal; macro category recall. Both map to `fashioniq_original_split`.
-- **Preparation determinism / blockers / instrumentation.** Evaluation determinism is expected from fixed inputs but not source-verified. Do not automate checkpoint or asset selection. Instrument only after native command and model pairing prove parity.
+## Combiner RN50x4 noft
+
+**Pinned source:** [`ABaldrati/CLIP4Cir@dfed9f748a8a4d05abf613164e06d59b22dbdf13`](https://github.com/ABaldrati/CLIP4Cir/tree/dfed9f748a8a4d05abf613164e06d59b22dbdf13).
+
+- **Checkpoint / command:** `src/validate.py` can load a Combiner key and optional CLIP key, but author Drive metadata does not map file/hash to requested RN50x4 noft label. README path placeholders cannot become a command. **COMMAND_BLOCKED_CHECKPOINT_MAPPING**.
+- **External runtime asset:** OpenAI `clip.load('RN50x4')`, source cache `~/.cache/clip`, URL hash `7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd`; no local asset provenance established.
+- **Transform:** `TargetPad(1.25)`, bicubic resize to CLIP-loaded resolution, center crop, RGB, tensor, CLIP normalization. Full split gallery retains reference. `fashioniq_original_split`.
+
+## CLIP4Cir RN50x4 fullft
+
+Same pin and evaluation transform as Combiner. Native fullft loader first loads base RN50x4 then separately overlays `CLIP` state; Combiner loader separately requires `Combiner` state. Author Drive exposes no verified pair identity, names, or hashes. Fullft remains **BLOCKED_CHECKPOINT_BUNDLE** and never becomes a synthetic single-file checkpoint.
 
 ## TG-CIR
 
-- **Source / checkpoint.** [`iLearn-Lab/MM23-TG-CIR@65fa78eaf8cabe8197fcc22ccab42207c591bdee`](https://github.com/iLearn-Lab/MM23-TG-CIR/tree/65fa78eaf8cabe8197fcc22ccab42207c591bdee). README-linked `TG-CIR.zip` exists; FashionIQ member/hash mapping is **UNVERIFIED**.
-- **Raw inputs.** FashionIQ train/validation captions and validation split JSON.
-- **Offline preprocessing / generated artifacts.** `resized_image/{dress,shirt,toptee}` required; source generator, resize transform, and reproducibility are **UNKNOWN**. Correction dictionaries must be manually placed at expected `captions/` paths. `fashion_iq_data.json` and test query/target PKLs are caches; source does not validate freshness.
-- **External assets.** OpenAI CLIP ViT-B/16 cache/weights required; exact provenance is unresolved.
-- **Evaluation transform / caption pipeline.** Exact transform is **UNKNOWN**. Dictionary substitutions are source-specific; never reuse DCNet, LIMN, or iLearn artifacts without source evidence.
-- **Query construction / gallery / reference policy.** `datasets.py:get_test_data` creates first-seen endpoint union; `test.py:test` masks source with `-10e10` before rank. `fashioniq_val_split`.
-- **Scoring / metrics.** Macro recall evaluation; finer details **UNKNOWN**.
-- **Preparation determinism / blockers / instrumentation.** **UNKNOWN**. Dictionary provenance/path, resized images, CLIP cache, runtime, and checkpoint mapping block execution. No auto-preprocessing.
+**Pinned source:** [`iLearn-Lab/MM23-TG-CIR@65fa78eaf8cabe8197fcc22ccab42207c591bdee`](https://github.com/iLearn-Lab/MM23-TG-CIR/tree/65fa78eaf8cabe8197fcc22ccab42207c591bdee).
+
+- **Checkpoint / command:** `test.py` exposes `test(params, model, testset, category)` only. `train.py` evaluates during training and saves whole `best_model.pt`; neither gives a source-backed checkpoint replay CLI. README-linked [`TG-CIR.zip`](https://drive.google.com/file/d/1OdZTtJqy-RTpYXBaq5ThmH3IBnGvYCyi/view) member mapping and hash remain **UNVERIFIED**.
+- **Preparation/caches:** source requires resized category JPEGs and source-provided correction dictionaries staged under `captions/`. `fashion_iq_data.json` gates six test PKLs with no freshness check; cache presence is not validity.
+- **Runtime asset:** `clip.load` uses ViT-B/16 on CUDA; cache/provenance unknown. Same returned CLIP preprocess serves training/evaluation.
+- **Evaluator:** endpoint union, reference `-10e10`, macro recall. `fashioniq_val_split`.
 
 ## SPRC BLIP-2
 
-- **Source / checkpoint.** [`chunmeifeng/SPRC@2935a5397732260d1db6fa577e5926f963e36f0f`](https://github.com/chunmeifeng/SPRC/tree/2935a5397732260d1db6fa577e5926f963e36f0f). Author OneDrive `sprc_fiq.pt` exists; checkpoint-to-BLIP-2/backbone mapping is **UNVERIFIED** and source loads non-strictly.
-- **Raw inputs / generated artifacts.** Standard FashionIQ PNG validation layout. No generated artifact is established.
-- **External assets.** Compatible BLIP-2/LAVIS model assets required; mapping/cache state is **BLOCKED_PROVENANCE**.
-- **Evaluation transform / caption / query / gallery.** `src/data_utils.py` and `src/validate_blip.py` use full split order, one query per annotation, reference eligible. Exact transform and text internals are **UNKNOWN** here.
-- **Scoring / metrics.** Macro category recall; `fashioniq_original_split`. Table 1 prints R@10 54.92 while category values average 54.72; retain discrepancy, do not replace either with a reproduction.
-- **Preparation determinism / blockers / instrumentation.** **UNKNOWN**. Native command, compatible backbone, checkpoint pairing, and runtime block evaluation. No auto-setup.
+**Pinned source:** [`chunmeifeng/SPRC@2935a5397732260d1db6fa577e5926f963e36f0f`](https://github.com/chunmeifeng/SPRC/tree/2935a5397732260d1db6fa577e5926f963e36f0f).
+
+- **Evaluator:** entrypoint is `src/blip_validate.py`; `src/validate_blip.py` is helper metrics code. CLI model/backbone remains unresolved for `sprc_fiq.pt`, so command is structurally audited but **COMMAND_BLOCKED_MODEL_MAPPING**.
+- **Checkpoint:** evaluator loads `checkpoint[blip_model.__class__.__name__]` with `strict=False`. Author [OneDrive `sprc_fiq.pt`](https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj) provides no inspected class-key/model/backbone proof. Do not let non-strict load simulate a verified replay.
+- **Runtime asset / transform:** LAVIS `blip2_pretrain.yaml` initializes ViT-g BLIP-2 from author-pinned pretrain URL; local cache is unknown. Local TargetPad ratio 1.25, bicubic 224, center crop, RGB, tensor, CLIP normalization. Full split gallery retains reference. `fashioniq_original_split`.
+- **Score discrepancy:** Table 1 R@10 54.92 conflicts with printed category arithmetic 54.72. Both remain documented; neither is reproduced.
 
 ## LIMN base iteration 0
 
-- **Source / checkpoint.** [`iLearn-Lab/TPAMI24-LIMN@7d7bc9b116f594a65ac22457491edf28a88d3c3e`](https://github.com/iLearn-Lab/TPAMI24-LIMN/tree/7d7bc9b116f594a65ac22457491edf28a88d3c3e). Author Hub revision [`30560ad575a56c39cc39047d1a474269338c77c0`](https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/tree/30560ad575a56c39cc39047d1a474269338c77c0) has base-iteration-0 category artifact hashes/metrics. Serialized replay remains unvalidated.
-- **Raw inputs.** FashionIQ train/validation captions and validation split JSON.
-- **Offline preprocessing / generated artifacts.** `resized_image/{dress,shirt,toptee}` required. Correction dictionaries from source `correct_files/` require manual placement. `train_data.json` and test query/target PKLs are cache artifacts without provenance/freshness validation.
-- **External assets.** OpenCLIP ViT-L-14 DataComp weights required; **BLOCKED_EXTERNAL_ASSET**.
-- **Evaluation transform / caption pipeline.** Exact transform and correction-file derivation are **UNKNOWN**.
-- **Query construction / gallery / reference policy.** `LIMN/datasets.py` builds endpoint union; `LIMN/test.py:test` masks source before descending rank. `fashioniq_val_split`; do not generalize to LIMN+ or later self-training iterations.
-- **Scoring / metrics.** Macro recall; replay details are **UNKNOWN**.
-- **Preparation determinism / blockers / instrumentation.** **UNKNOWN**. No audited replay command, runtime, local data, or OpenCLIP asset. No automatic preparation or instrumentation.
+**Pinned source:** [`iLearn-Lab/TPAMI24-LIMN@7d7bc9b116f594a65ac22457491edf28a88d3c3e`](https://github.com/iLearn-Lab/TPAMI24-LIMN/tree/7d7bc9b116f594a65ac22457491edf28a88d3c3e); author Hub revision [`30560ad575a56c39cc39047d1a474269338c77c0`](https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/tree/30560ad575a56c39cc39047d1a474269338c77c0).
 
-## Exclusions
+- **Bundle:** exact base-iteration-0 whole-model files are `0_dress_best_model.pt` (`96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c`), `0_shirt_best_model.pt` (`9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74`), and `0_toptee_best_model.pt` (`79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2`). All three are mandatory; source saves `torch.save(model, ...)`. Mapping is artifact-associated, not replay-validated.
+- **Command:** README gives category training commands from `LIMN/`; `LIMN/test.py:test(...)` has no standalone replay CLI. **COMMAND_BLOCKED_SOURCE_ENTRYPOINT**.
+- **Preparation/runtime asset:** start-kit resized images and manually staged source `correct_files/correction_dict_{category}.json`; caches lack freshness validation. `open_clip.create_model_and_transforms` requires user-supplied `laionCLIP-ViT-L-14-DataComp.XL-s13B-b90K/open_clip_pytorch_model.bin`; no cache lookup/path substitution is authorized.
+- **Evaluator:** category endpoint union, reference mask, macro recall. `fashioniq_val_split`; no LIMN+, later iteration, or partial category bundle is eligible.
 
-NEUCORE remains absent. Its forward/reverse caption-order queries double annotation query universe, so it is not a protocol fallback, artifact source, checkpoint source, or comparison cohort.
+## Exclusion
 
-## Primary sources
-
-- TG-CIR paper: [arXiv:2309.01366](https://arxiv.org/abs/2309.01366); official archive: [Google Drive](https://drive.google.com/file/d/1OdZTtJqy-RTpYXBaq5ThmH3IBnGvYCyi/view).
-- SPRC paper Table 1: [arXiv HTML](https://arxiv.org/html/2310.05473#S4.T1); author checkpoint link: [OneDrive](https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj).
-- LIMN paper: [DOI 10.1109/TPAMI.2023.3346434](https://doi.org/10.1109/TPAMI.2023.3346434).
-- CLVC-Net paper: [DOI 10.1145/3404835.3462967](https://doi.org/10.1145/3404835.3462967).
-- DCNet paper PDF: [pinned source](https://github.com/ozmig77/dcnet/blob/68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb/DCNet_Kim2021.pdf).
-- CLIP4Cir paper: [arXiv:2308.11485](https://arxiv.org/abs/2308.11485).
+NEUCORE remains absent. Its forward/reverse caption-order queries double query universe. It is not a fallback, checkpoint source, asset source, or comparison cohort.

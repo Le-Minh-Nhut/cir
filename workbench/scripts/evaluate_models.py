@@ -19,7 +19,7 @@ from workbench.backend.adapters.base import EvalRequest
 from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
 from workbench.backend.fashioniq_layout import missing_paths
-from workbench.backend.registry import checkpoint_path, fashioniq_required_paths, load_registry, preparation_contract_for_model, preparation_paths, sha256_file
+from workbench.backend.registry import checkpoint_bundle_missing_paths, checkpoint_path, checkpoint_missing_paths, external_asset_blockers, fashioniq_required_paths, load_registry, preparation_contract_for_model, preparation_paths, sha256_file
 
 
 @dataclass(frozen=True)
@@ -92,8 +92,9 @@ def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | 
             blocked.append(f"source pin unavailable: {source}")
         elif expected_pin and actual_pin != expected_pin:
             blocked.append(f"source pin mismatch: expected {expected_pin}, found {actual_pin}")
-    if not checkpoint_file.is_file():
-        blocked.append(f"checkpoint missing: {checkpoint_file}")
+    missing_checkpoint = checkpoint_missing_paths(checkpoint_file, checkpoint)
+    if missing_checkpoint:
+        blocked.append(f"checkpoint missing: {missing_checkpoint[0]}")
     if checkpoint["checkpoint_mapping_status"] != "VERIFIED_METADATA":
         blocked.append("checkpoint mapping unresolved")
     if protocol not in model["supported_protocols"]:
@@ -115,6 +116,9 @@ def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | 
                 blocked.append(f"raw benchmark input missing: {raw_missing[0]}")
             if generated_missing:
                 blocked.append(f"required generated artifact missing: {generated_missing[0]}")
+    blocked.extend(external_asset_blockers(model))
+    for bundle_id, missing in checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT).items():
+        blocked.append(f"checkpoint bundle incomplete: {bundle_id}: {missing[0]}")
     if model["model_id"] == "encoder" and not (source / "open_clip_pytorch_model.bin").is_file():
         blocked.append(f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}")
     if model["model_id"] == "encoder" and not (source / "datasets1.py").is_file():

@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
-from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, checkpoint_path, fashioniq_required_paths, load_registry, preparation_contract_for_model, preparation_paths, sha256_file
+from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, checkpoint_bundle_missing_paths, checkpoint_is_present, checkpoint_missing_paths, checkpoint_path, external_asset_blockers, fashioniq_required_paths, load_registry, preparation_contract_for_model, preparation_paths, required_runtime_assets, sha256_file
 
 from workbench.backend.fashioniq_layout import CATEGORIES, missing_paths, standard_paths
 
@@ -84,6 +84,13 @@ def preparation_checks(model: dict[str, Any], root: Path) -> tuple[list[dict[str
     return checks, blockers
 
 
+def external_asset_checks(model: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
+    assets = required_runtime_assets(model)
+    blockers = external_asset_blockers(model)
+    status = "OK" if not blockers else "BLOCKED"
+    return [record(f"external-assets:{model['model_id']}", status, "required evaluation assets resolved" if not blockers else "required evaluation assets unresolved", assets=assets, blockers=blockers)], blockers
+
+
 def fashioniq_check(root: Path) -> dict[str, Any]:
     missing = missing_path_strings(fashioniq_base_paths(root))
     status = "OK" if not missing else "BLOCKED"
@@ -104,6 +111,7 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
     source_ok = state["state"] == "clean" and (not state["pin"] or state["head"] == state["pin"])
     checks = [record(f"source:{model_id}", "OK" if source_ok else "BLOCKED", "source pin ready" if source_ok else "source unavailable, dirty, or not pinned", **state)]
     runtime_blockers: list[str] = []
+    deferred_checks: list[dict[str, Any]] = []
     csmcir_assets: list[dict[str, Any]] = []
     if not model.get("source_available"):
         runtime_blockers.append("upstream source unavailable")
@@ -113,10 +121,15 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
         runtime_blockers.append(f"source pin mismatch: expected {state['pin']}, found {state['head']}")
     source = Path(state["path"]) if state["path"] else config.WORKBENCH_THIRD_PARTY_ROOT
     adapter = ADAPTERS.get(model_id)
-    if adapter is None or getattr(adapter, "command", None) is OfficialScriptAdapter.command:
-        runtime_blockers.append("adapter command not audited")
+    command_status = model.get("command_status")
+    command_audited = command_status == "COMMAND_AUDITED" or (command_status is None and adapter is not None and getattr(adapter, "command", None) is not OfficialScriptAdapter.command)
+    command_check = record(f"command:{model_id}", "OK" if command_audited else "BLOCKED", command_status or "COMMAND_AUDITED", script=getattr(adapter, "script", None))
+    if adapter is None or not command_audited or getattr(adapter, "command", None) is OfficialScriptAdapter.command:
+        runtime_blockers.append(f"command not runnable: {command_status or 'COMMAND_UNAUDITED'}")
     elif getattr(adapter, "script", None) and not (source / adapter.script).is_file():
         runtime_blockers.append(f"official evaluator missing: {source / adapter.script}")
+    environment = model.get("environment")
+    environment_check = record(f"environment:{model_id}", "OK", environment["confidence"], environment=environment) if environment is not None else None
     if model_id == "encoder" and not (source / "open_clip_pytorch_model.bin").is_file():
         runtime_blockers.append(f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}")
     if model_id == "encoder" and not (source / "datasets1.py").is_file():
@@ -141,18 +154,24 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
                 runtime_blockers.append("required COT_ours2 captions have no verified automatic acquisition source")
     if model_id != "csmcir":
         preparation, preparation_blockers = preparation_checks(model, config.FASHIONIQ_ROOT)
-        checks.extend(preparation)
+        deferred_checks.extend(preparation)
         runtime_blockers.extend(preparation_blockers)
+    external_checks, external_blockers = external_asset_checks(model)
+    deferred_checks.extend(external_checks)
+    runtime_blockers.extend(external_blockers)
+
+    for bundle_id, missing in checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT).items():
+        runtime_blockers.append(f"checkpoint bundle incomplete: {bundle_id}: {missing[0]}")
     checkpoints = []
     for checkpoint in model["checkpoint_variants"]:
         path = checkpoint_path(model_id, checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
-        installed = path.is_file()
-        local_sha = sha256_file(path) if installed else None
+        installed = checkpoint_is_present(path, checkpoint)
+        local_sha = sha256_file(path) if installed and path.is_file() else None
         official_sha = checkpoint.get("expected_sha256")
         mapping = checkpoint["checkpoint_mapping_status"] == "VERIFIED_METADATA"
         blockers = list(runtime_blockers)
-        if not installed:
-            blockers.append(f"checkpoint missing: {path}")
+        for missing in checkpoint_missing_paths(path, checkpoint):
+            blockers.append(f"checkpoint missing: {missing}")
         if not mapping:
             blockers.append("checkpoint mapping unresolved")
         if official_sha and local_sha != official_sha:
@@ -160,6 +179,10 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
         checkpoints.append({"checkpoint_id": checkpoint["checkpoint_id"], "path": str(path), "installed": installed, "local_sha256": local_sha, "official_sha256": official_sha, "official_sha256_available": official_sha is not None, "mapping_verified": mapping, "runtime_blockers": blockers, "command_ready": not blockers})
     status = "OK" if checkpoints and all(item["command_ready"] for item in checkpoints) else "BLOCKED"
     checks.append(record(f"runtime:{model_id}", status, "official command ready" if status == "OK" else "official command blocked", checkpoints=checkpoints))
+    checks.extend(deferred_checks)
+    checks.append(command_check)
+    if environment_check is not None:
+        checks.append(environment_check)
     checks.extend(csmcir_assets)
     return checks
 

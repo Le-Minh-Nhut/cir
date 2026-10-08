@@ -399,9 +399,17 @@ models:
     reported_r10: null
     reported_r50: null
     reported_mean: null
-    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING
+    command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+    environment:
+      confidence: VERIFIED_README
+      python: '3.7.6'
+      pytorch: '1.6.0'
+      torchvision: UNKNOWN
+      cuda: UNKNOWN
+      packages: [torchvision]
     strict_clean_checkpoint_available: null
-    notes: Native pair-union and reference exclusion verified. Author Drive file exists, but filename, category mapping, hash, and runnable evaluator loading path are unverified.
+    notes: Native pair-union and reference exclusion verified. Pinned test.py has no CLI/model loader; author Drive CLVCNET.zip member/category mapping is unresolved. Evaluation requires torchvision ResNet-50 ImageNet weights through an unpinned Torch cache.
     checkpoint_variants:
       - checkpoint_id: author_drive_unresolved
         filename: checkpoint-unresolved.pt
@@ -434,12 +442,22 @@ models:
     reported_r10: null
     reported_r50: null
     reported_mean: null
-    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING
+    command_status: COMMAND_AUDITED
+    environment:
+      confidence: VERIFIED_REQUIREMENTS
+      python: '3.7.7'
+      pytorch: '1.4.0'
+      torchvision: '0.5.0'
+      cuda: UNKNOWN
+      packages: [nltk==3.5, spacy==2.3.0]
     strict_clean_checkpoint_available: null
-    notes: Native evaluator masks references and fuses log-softmax branch scores. Paper category scores are not checkpoint mapping evidence.
+    notes: Native evaluator masks references and fuses log-softmax branch scores. Standard run directory requires config.json plus trained_model.pth; standard config uses ImageNet-pretrained ResNet-50, not optional DeepFashion DenseNet.
     checkpoint_variants:
-      - checkpoint_id: author_drive_unresolved
-        filename: trained_model-unresolved.pth
+      - checkpoint_id: fashioniq_run_directory
+        filename: fashioniq_dcnet
+        artifact_type: run_directory
+        required_files: [config.json, trained_model.pth]
         download_url: null
         source_url: https://drive.google.com/drive/folders/1wgygqF095Di67EaHaGOXbwh3wEzk9izB?usp=sharing
         source_type: author_google_drive
@@ -469,12 +487,21 @@ models:
     reported_r10: null
     reported_r50: null
     reported_mean: null
-    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING
+    command_status: COMMAND_BLOCKED_CHECKPOINT_MAPPING
+    environment:
+      confidence: VERIFIED_README
+      python: '3.8'
+      pytorch: '1.11.0'
+      torchvision: '0.12.0'
+      cuda: UNKNOWN
+      packages: [pandas==1.4.2, comet_ml==3.21.0, openai_clip]
     strict_clean_checkpoint_available: null
-    notes: Native full-gallery reference-eligible evaluator verified. noft label, checkpoint, and requested score mapping are not author-verified.
+    notes: Native full-gallery reference-eligible evaluator verified. RN50x4 noft Combiner state mapping is unverified; base OpenAI CLIP RN50x4 remains an evaluation asset.
     checkpoint_variants:
       - checkpoint_id: rn50x4_noft_unresolved
         filename: rn50x4-noft-unresolved.pt
+        artifact_type: file
         download_url: null
         source_url: https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing
         source_type: author_google_drive
@@ -504,12 +531,22 @@ models:
     reported_r10: null
     reported_r50: null
     reported_mean: null
-    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    reproduction_status: BLOCKED_CHECKPOINT_BUNDLE
+    command_status: COMMAND_BLOCKED_CHECKPOINT_MAPPING
+    environment:
+      confidence: VERIFIED_README
+      python: '3.8'
+      pytorch: '1.11.0'
+      torchvision: '0.12.0'
+      cuda: UNKNOWN
+      packages: [pandas==1.4.2, comet_ml==3.21.0, openai_clip]
     strict_clean_checkpoint_available: null
-    notes: Native full-gallery reference-eligible evaluator verified. fullft label, paired CLIP/Combiner checkpoint, and requested score mapping are not author-verified.
+    notes: Native full-gallery reference-eligible evaluator verified. RN50x4 fullft needs separately loaded Combiner and fine-tuned CLIP states; author pairing is unverified.
     checkpoint_variants:
       - checkpoint_id: rn50x4_fullft_unresolved
         filename: rn50x4-fullft-unresolved.pt
+        artifact_type: bundle_placeholder
+        required_files: [combiner_state.pt, clip_state.pt]
         download_url: null
         source_url: https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing
         source_type: author_google_drive
@@ -540,9 +577,17 @@ models:
     reported_r50: 73.09
     reported_mean: null
     reported_score_note: Paper reports macro R@10 and R@50; 62.205 is derivable but not presented as a reproduced metric.
-    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    reproduction_status: BLOCKED_COMMAND
+    command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+    environment:
+      confidence: VERIFIED_README
+      python: UNKNOWN
+      pytorch: '1.7.0'
+      torchvision: '0.8.0'
+      cuda: UNKNOWN
+      packages: [clip==0.2.0, numpy==1.22.3, pandas==1.4.2, Pillow]
     strict_clean_checkpoint_available: null
-    notes: Native annotation endpoint-union/reference-excluded evaluator verified. Official TG-CIR.zip exists, but member FashionIQ checkpoint mapping and hash are unverified.
+    notes: Native annotation endpoint-union/reference-excluded evaluator verified. Pinned test.py has no CLI/checkpoint replay; TG-CIR.zip FashionIQ member mapping and hash remain unresolved.
     checkpoint_variants:
       - checkpoint_id: tgcir_archive_unresolved
         filename: tgcir-fashioniq-unresolved.pt
@@ -576,9 +621,17 @@ models:
     reported_r50: 74.97
     reported_mean: 64.85
     reported_score_note: Paper Table 1 prints R@10 54.92 while printed per-category values average 54.72; unresolved primary-source discrepancy.
-    reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
+    reproduction_status: BLOCKED_COMMAND_AND_CHECKPOINT_MAPPING
+    command_status: COMMAND_BLOCKED_MODEL_MAPPING
+    environment:
+      confidence: VERIFIED_REQUIREMENTS
+      python: '3.9'
+      pytorch: '2.0.1'
+      torchvision: '0.15.2'
+      cuda: UNKNOWN
+      packages: [transformers==4.36.2, timm==0.9.12, spacy==3.7.2, lavis]
     strict_clean_checkpoint_available: null
-    notes: Native full-gallery reference-eligible evaluator verified. BLIP-2 target checkpoint model/backbone and strict mapping are unresolved.
+    notes: Native full-gallery reference-eligible evaluator CLI is known, but sprc_fiq.pt model-name/backbone/class-key mapping is unresolved and loads non-strictly.
     checkpoint_variants:
       - checkpoint_id: sprc_fiq_unresolved
         filename: sprc_fiq.pt
@@ -611,9 +664,17 @@ models:
     reported_r10: null
     reported_r50: null
     reported_mean: null
-    reproduction_status: BLOCKED_NO_AUDITED_REPLAY_COMMAND
+    reproduction_status: BLOCKED_COMMAND_AND_CHECKPOINT_BUNDLE
+    command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+    environment:
+      confidence: VERIFIED_README
+      python: UNKNOWN
+      pytorch: '1.12.1'
+      torchvision: '0.13.1'
+      cuda: '12.4'
+      packages: [open_clip_torch==2.20.0]
     strict_clean_checkpoint_available: null
-    notes: Base LIMN iteration 0 only. Author Hub artifacts and metric JSONs exist; serialized-object load and replay command remain unvalidated.
+    notes: Base LIMN iteration 0 only. Source saves category-specific whole model objects; no author inference-only replay command is available. OpenCLIP DataComp file path is user-supplied.
     checkpoint_variants:
       - checkpoint_id: base_iter0_dress
         filename: 0_dress_best_model.pt
@@ -645,3 +706,9 @@ models:
         expected_sha256: 79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2
         status: ARTIFACT_ASSOCIATED_UNVALIDATED
         checkpoint_mapping_status: ARTIFACT_ASSOCIATED_UNVALIDATED
+    checkpoint_bundles:
+      - bundle_id: base_iter0_all_categories
+        required_checkpoint_ids: [base_iter0_dress, base_iter0_shirt, base_iter0_toptee]
+        structure: category_specific_whole_models
+        mapping_status: ARTIFACT_ASSOCIATED_UNVALIDATED
+        notes: Exactly dress, shirt, and toptee base iteration-0 files are required together; no partial bundle can represent a FashionIQ macro result.

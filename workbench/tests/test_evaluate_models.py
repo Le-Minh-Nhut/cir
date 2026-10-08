@@ -70,7 +70,7 @@ def test_legacy_adapter_is_skipped_without_guessed_command() -> None:
     assert reasons == ["SKIPPED: adapter command not audited"]
 
 
-def test_dcnet_protocol_is_known_but_unaudited_command_stays_skipped() -> None:
+def test_dcnet_audited_command_reports_non_command_blockers() -> None:
     module = load_module()
     model = records()["dcnet"]
 
@@ -78,7 +78,18 @@ def test_dcnet_protocol_is_known_but_unaudited_command_stays_skipped() -> None:
 
     assert model["native_protocol"] == "fashioniq_full_gallery_ref_excluded"
     assert plan is None
-    assert reasons == ["SKIPPED: adapter command not audited"]
+    assert not any(reason.startswith("SKIPPED:") for reason in reasons)
+    assert "checkpoint mapping unresolved" in reasons
+    assert "external runtime asset provenance unresolved: torchvision ResNet-50 ImageNet weights" in reasons
+
+
+def test_dcnet_command_preserves_native_resume_directory(tmp_path: Path) -> None:
+    from workbench.backend.adapters.base import EvalRequest
+    from workbench.backend.adapters.models import DCNetAdapter
+
+    command = DCNetAdapter().command(tmp_path / "DCNet", tmp_path / "fashioniq_dcnet", EvalRequest("dcnet", "fashioniq_run_directory", "fashioniq_full_gallery_ref_excluded", tmp_path / "FashionIQ", tmp_path / "result.json"))
+
+    assert command == ["python", str(tmp_path / "DCNet" / "test.py"), "--resume", str(tmp_path / "fashioniq_dcnet")]
 
 def test_missing_checkpoint_is_blocked(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
