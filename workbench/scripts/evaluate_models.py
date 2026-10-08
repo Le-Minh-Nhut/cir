@@ -18,8 +18,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.adapters.base import EvalRequest
 from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
-from workbench.backend.fashioniq_layout import missing_paths
-from workbench.backend.registry import checkpoint_bundle_missing_paths, checkpoint_path, checkpoint_missing_paths, external_asset_blockers, fashioniq_required_paths, load_registry, preparation_contract_for_model, preparation_paths, sha256_file
+from workbench.backend.registry import checkpoint_path, load_registry, sha256_file
+from workbench.backend.runtime import runtime_blockers
 
 
 @dataclass(frozen=True)
@@ -78,64 +78,12 @@ def list_candidates(items: Iterable[tuple[dict, dict]]) -> None:
 
 def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | None, config: WorkbenchConfig) -> tuple[Path, Path, str | None, list[str]]:
     source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"] if model.get("source_dir") else config.WORKBENCH_THIRD_PARTY_ROOT
+    actual_pin = pinned_revision(source) if source.is_dir() else None
     checkpoint_file = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
-    actual_pin = None
-    blocked: list[str] = []
-    if not model.get("source_available") or not model.get("source_dir"):
-        blocked.append("upstream source unavailable")
-    elif not source.is_dir():
-        blocked.append(f"source missing: {source}")
-    else:
-        expected_pin = model.get("upstream_commit_sha")
-        actual_pin = pinned_revision(source)
-        if expected_pin and actual_pin is None:
-            blocked.append(f"source pin unavailable: {source}")
-        elif expected_pin and actual_pin != expected_pin:
-            blocked.append(f"source pin mismatch: expected {expected_pin}, found {actual_pin}")
-    missing_checkpoint = checkpoint_missing_paths(checkpoint_file, checkpoint)
-    if missing_checkpoint:
-        blocked.append(f"checkpoint missing: {missing_checkpoint[0]}")
-    if checkpoint["checkpoint_mapping_status"] != "VERIFIED_METADATA":
-        blocked.append("checkpoint mapping unresolved")
-    if protocol not in model["supported_protocols"]:
-        blocked.append(f"protocol incompatible: {protocol}")
-    if dataset_root is None:
-        blocked.append("dataset root not provided")
-    elif not dataset_root.is_dir():
-        blocked.append(f"dataset root missing: {dataset_root}")
-    if dataset_root is not None and model["model_id"] != "csmcir":
-        contract = preparation_contract_for_model(model)
-        if contract is None:
-            missing = missing_paths(fashioniq_required_paths(model, dataset_root))
-            if missing:
-                blocked.append(f"FashionIQ {model['fashioniq_layout']} requirement missing: {missing[0]}")
-        else:
-            raw_missing = missing_paths(preparation_paths(contract, dataset_root, "raw_inputs"))
-            generated_missing = missing_paths(preparation_paths(contract, dataset_root, "generated_artifacts"))
-            if raw_missing:
-                blocked.append(f"raw benchmark input missing: {raw_missing[0]}")
-            if generated_missing:
-                blocked.append(f"required generated artifact missing: {generated_missing[0]}")
-    blocked.extend(external_asset_blockers(model))
-    for bundle_id, missing in checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT).items():
-        blocked.append(f"checkpoint bundle incomplete: {bundle_id}: {missing[0]}")
-    if model["model_id"] == "encoder" and not (source / "open_clip_pytorch_model.bin").is_file():
-        blocked.append(f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}")
-    if model["model_id"] == "encoder" and not (source / "datasets1.py").is_file():
-        blocked.append(f"ENCODER evaluator import missing: {source / 'datasets1.py'}")
-    if model["model_id"] == "csmcir":
-        layout = source / "fashionIQ_dataset"
-        if not layout.is_symlink() or layout.resolve() != config.FASHIONIQ_ROOT.resolve():
-            blocked.append(f"CSMCIR requires canonical dataset link: {layout} -> {config.FASHIONIQ_ROOT}")
-        required = [layout / name for name in ("captions", "image_splits", "images")]
-        required.extend(source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json" for category in ("dress", "shirt", "toptee"))
-        required.extend(layout / "qwen_captions" / f"{category}_cot_val.json" for category in ("dress", "shirt", "toptee"))
-        missing = next((path for path in required if not path.exists()), None)
-        if missing:
-            blocked.append(f"CSMCIR fixed dataset layout missing: {missing}")
-        elif dataset_root is not None and dataset_root.resolve() != layout.resolve():
-            blocked.append(f"CSMCIR requires --dataset-root {layout}")
-    return source, checkpoint_file, actual_pin, blocked
+    reasons = runtime_blockers(model, checkpoint, config, protocol, dataset_root)
+    if model.get("source_available") and actual_pin is None and source.is_dir():
+        reasons.append(f"source pin unavailable: {source}")
+    return source, checkpoint_file, actual_pin, reasons
 
 
 def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | None, top_k: int, config: WorkbenchConfig | None = None) -> tuple[EvaluationPlan | None, list[str]]:

@@ -98,6 +98,9 @@ def test_sync_dry_run_and_verify_only_output_contract(monkeypatch: pytest.Monkey
 def test_evaluation_listing_and_dry_run_never_execute_models(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, arguments: list[str], expected: int) -> None:
     evaluate = load_script("evaluate_models")
     monkeypatch.setattr(evaluate, "pinned_revision", lambda _: None)
+    import workbench.backend.runtime as runtime
+
+    monkeypatch.setattr(runtime, "source_clean_and_pinned", lambda model, _: (True, model["upstream_commit_sha"], None))
     monkeypatch.setattr(evaluate.subprocess, "run", lambda *args, **kwargs: pytest.fail("model command must not run"))
 
     assert evaluate.main(arguments) == expected

@@ -157,7 +157,7 @@ This matrix describes registry metadata and blockers, not present local files, r
 | CLIP4Cir RN50x4 fullft | `fashioniq_original_split` | separate Combiner + fine-tuned CLIP pair unresolved | blocked: incomplete/unverified paired checkpoint bundle and base CLIP asset |
 | TG-CIR | `fashioniq_val_split` | official ZIP exists; FashionIQ member unresolved | blocked: no source replay CLI, ViT-B/16 asset, preparation/caches |
 | SPRC | `fashioniq_original_split` | `sprc_fiq.pt` source known; BLIP-2 model/backbone mapping unresolved | blocked; CLI shape audited; printed R@10 conflicts with category arithmetic |
-| LIMN base iteration 0 | `fashioniq_val_split` | exact three category artifacts/hashes; replay unvalidated | blocked: no replay CLI, complete bundle, DataComp OpenCLIP asset |
+| LIMN base iteration 0 | `fashioniq_val_split` | exact three category artifacts/hashes; source-faithful wrapper implemented | blocked pending source/checkpoint/data/environment preflight and native inference |
 
 Legacy entries preserve source pins and native evaluator evidence; they do not make assets or commands interchangeable. Doctor reports source, raw data, preparation, external evaluation assets, checkpoint/bundle, command, environment metadata, then final runtime readiness. NEUCORE is deliberately unregistered because its doubled caption-order queries form a distinct query universe.
 
@@ -168,6 +168,7 @@ Legacy entries preserve source pins and native evaluator evidence; they do not m
 DCNet requires `resized_images/` plus `captions/cap.{category}.glove.val.pkl`; regenerating these PKLs is unsafe because upstream `process_cap.py` samples unseeded NumPy OOV vectors. Preserve author-generated artifacts. `spaCy en_vectors_web_lg` and NLTK `punkt` are regeneration-only, not false evaluation requirements. Standard DCNet evaluation does require unresolved ImageNet ResNet-50 weights.
 
 CLVC-Net, TG-CIR, and LIMN retain independent resized-image contracts. TG-CIR/LIMN dictionaries and caches remain source-specific. Every required evaluation asset with unknown local location fails closed; no legacy contract is automatically prepared.
+External legacy evaluation assets stay local and are never downloaded by preflight. Set model-specific `WORKBENCH_*_WEIGHTS` paths only after provenance checks; runtime gates verify file type, non-empty content, and published SHA-256 or source hash prefix. Torchvision ImageNet weights resolve from its native `TORCH_HOME/checkpoints` cache (default `~/.cache/torch/checkpoints`) when no explicit weight path is set. Unknown-hash assets remain blocked. See [LEGACY_REPRODUCTION_RUNBOOK.md](docs/LEGACY_REPRODUCTION_RUNBOOK.md).
 
 A checkpoint trained with 20%, 50%, or 80% noise remains that training condition when evaluated on clean FashionIQ data. It is not a clean checkpoint. `expected_sha256: null` means no official hash is in registry; local hashes belong in ignored download manifests.
 

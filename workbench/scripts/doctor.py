@@ -16,6 +16,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from workbench.backend.runtime import environment_blockers, environment_status
 from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
 from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, checkpoint_bundle_missing_paths, checkpoint_is_present, checkpoint_missing_paths, checkpoint_path, external_asset_blockers, fashioniq_required_paths, load_registry, preparation_contract_for_model, preparation_paths, required_runtime_assets, sha256_file
@@ -122,14 +123,18 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
     source = Path(state["path"]) if state["path"] else config.WORKBENCH_THIRD_PARTY_ROOT
     adapter = ADAPTERS.get(model_id)
     command_status = model.get("command_status")
-    command_audited = command_status == "COMMAND_AUDITED" or (command_status is None and adapter is not None and getattr(adapter, "command", None) is not OfficialScriptAdapter.command)
+    command_implemented = adapter is not None and getattr(adapter, "command", None) is not OfficialScriptAdapter.command
+    command_audited = command_implemented and (command_status in {"COMMAND_AUDITED", "REPLAY_COMMAND_IMPLEMENTED"} or command_status is None)
     command_check = record(f"command:{model_id}", "OK" if command_audited else "BLOCKED", command_status or "COMMAND_AUDITED", script=getattr(adapter, "script", None))
     if adapter is None or not command_audited or getattr(adapter, "command", None) is OfficialScriptAdapter.command:
         runtime_blockers.append(f"command not runnable: {command_status or 'COMMAND_UNAUDITED'}")
     elif getattr(adapter, "script", None) and not (source / adapter.script).is_file():
         runtime_blockers.append(f"official evaluator missing: {source / adapter.script}")
-    environment = model.get("environment")
-    environment_check = record(f"environment:{model_id}", "OK", environment["confidence"], environment=environment) if environment is not None else None
+    env_state = environment_status(model)
+    env_blockers = environment_blockers(model)
+    runtime_blockers.extend(env_blockers)
+    environment_check = record(f"environment:{model_id}", "OK" if not env_blockers else "BLOCKED",
+                               env_state["status"], environment=model.get("environment"), interpreter=env_state["interpreter"])
     if model_id == "encoder" and not (source / "open_clip_pytorch_model.bin").is_file():
         runtime_blockers.append(f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}")
     if model_id == "encoder" and not (source / "datasets1.py").is_file():

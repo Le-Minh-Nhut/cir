@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import hashlib
-from workbench.backend.fashioniq_layout import paths_for_layout
+import os
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 import yaml
+
+from workbench.backend.fashioniq_layout import paths_for_layout
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "registry" / "models.yaml"
@@ -111,6 +113,20 @@ def load_preparation_contracts(path: Path = PREPARATION_CONTRACT_REGISTRY_PATH) 
                 path = PurePosixPath(location)
                 if path.is_absolute() or ".." in path.parts:
                     raise ValueError(f"unsafe external asset path for {contract['preparation_id']}")
+            if "cache_path_suffix" in asset:
+                path = PurePosixPath(asset["cache_path_suffix"])
+                if path.is_absolute() or ".." in path.parts:
+                    raise ValueError(f"unsafe external asset cache path for {contract['preparation_id']}")
+            expected_sha = asset.get("expected_sha256")
+            expected_prefix = asset.get("expected_sha256_prefix")
+            if expected_sha and expected_prefix:
+                raise ValueError(f"external asset must use one checksum form for {contract['preparation_id']}")
+            if expected_sha and (len(expected_sha) != 64 or any(char not in "0123456789abcdef" for char in expected_sha.lower())):
+                raise ValueError(f"invalid external SHA-256 for {contract['preparation_id']}")
+            if expected_prefix and (len(expected_prefix) < 8 or len(expected_prefix) > 64 or any(char not in "0123456789abcdef" for char in expected_prefix.lower())):
+                raise ValueError(f"invalid external SHA-256 prefix for {contract['preparation_id']}")
+            if asset.get("location_env_var") and not asset["location_env_var"].isidentifier():
+                raise ValueError(f"invalid external asset location variable for {contract['preparation_id']}")
         contracts[contract["preparation_id"]] = contract
     return contracts
 
@@ -136,21 +152,100 @@ def required_runtime_assets(model: dict[str, Any]) -> list[dict[str, Any]]:
     return [asset for asset in contract["external_assets"] if asset["required_for_evaluation"] and not asset["optional"]]
 
 
-def external_asset_blockers(model: dict[str, Any]) -> list[str]:
-    blockers: list[str] = []
+def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
+    statuses: list[dict[str, Any]] = []
     for asset in required_runtime_assets(model):
-        location = asset["expected_local_location"]
+        configured = os.environ.get(asset.get("location_env_var", ""))
+        location = configured.strip() if configured and configured.strip() else asset.get("expected_local_location")
+        if location is None and asset.get("cache_path_suffix"):
+            cache_root = os.environ.get(asset.get("cache_root_env_var", ""))
+            root = Path(cache_root).expanduser() if cache_root else Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "torch"
+            location = str(root / asset["cache_path_suffix"])
+        expected_sha = asset.get("expected_sha256")
+        expected_prefix = asset.get("expected_sha256_prefix")
         if location is None:
-            blockers.append(f"external runtime asset provenance unresolved: {asset['name']}")
-        else:
-            blockers.append(f"external runtime asset missing: {asset['name']} ({location})")
-    return blockers
+            state = asset.get("state", "UNKNOWN")
+            status = "UNRESOLVED_PROVENANCE" if state == "BLOCKED_EXTERNAL_ASSET_PROVENANCE" else "UNCONFIGURED_LOCATION"
+            statuses.append({"name": asset["name"], "status": status, "path": None,
+                             "expected_sha256": expected_sha, "expected_sha256_prefix": expected_prefix,
+                             "actual_sha256": None})
+            continue
+        path = Path(location).expanduser()
+        if not path.is_absolute():
+            path = Path(__file__).resolve().parents[2] / path
+        path = path.resolve()
+        status = "CONFIGURED_MISSING"
+        actual_sha = None
+        if path.exists():
+            if not path.is_file():
+                status = "INVALID_FILE_TYPE"
+            elif path.stat().st_size == 0:
+                status = "EMPTY_PLACEHOLDER"
+            else:
+                actual_sha = sha256_file(path)
+                if expected_sha and actual_sha != expected_sha:
+                    status = "CHECKSUM_MISMATCH"
+                elif expected_prefix and not actual_sha.startswith(expected_prefix.lower()):
+                    status = "CHECKSUM_MISMATCH"
+                elif expected_sha or expected_prefix:
+                    status = "VERIFIED_LOCAL_ASSET"
+                else:
+                    status = "EXISTS_UNVERIFIED_CHECKSUM"
+        statuses.append({"name": asset["name"], "status": status, "path": str(path),
+                         "expected_sha256": expected_sha, "expected_sha256_prefix": expected_prefix,
+                         "actual_sha256": actual_sha})
+    return statuses
+
+
+def external_asset_blockers(model: dict[str, Any]) -> list[str]:
+    messages = {
+        "UNRESOLVED_PROVENANCE": "provenance unresolved",
+        "UNCONFIGURED_LOCATION": "local location unconfigured",
+        "CONFIGURED_MISSING": "file missing",
+        "INVALID_FILE_TYPE": "expected regular file, found non-file",
+        "EMPTY_PLACEHOLDER": "empty placeholder file",
+        "CHECKSUM_MISMATCH": "checksum mismatch",
+        "EXISTS_UNVERIFIED_CHECKSUM": "file exists but no verified checksum is available",
+    }
+    return [
+        f"external runtime asset {messages[item['status']]}: {item['name']}" + (f" ({item['path']})" if item["path"] else "")
+        for item in external_asset_statuses(model) if item["status"] != "VERIFIED_LOCAL_ASSET"
+    ]
+
+
+def replay_readiness(model: dict[str, Any]) -> dict[str, Any]:
+    """Metadata-only replay infrastructure status. Not runtime readiness."""
+    return {
+        "model_id": model["model_id"],
+        "replay_code": model.get("replay_status", "NOT_IMPLEMENTED"),
+        "command_status": model.get("command_status"),
+        "checkpoint_provenance": model.get("reproduction_status", "NOT_RUN"),
+        "category_model_policy": model.get("category_model_policy", "shared"),
+        "environment_documented": model.get("environment") is not None,
+        "protocol": model.get("native_protocol"),
+    }
 
 
 def checkpoint_missing_paths(path: Path, checkpoint: dict[str, Any]) -> list[Path]:
-    if checkpoint.get("artifact_type") == "run_directory":
-        return ([] if path.is_dir() else [path]) + [path / name for name in checkpoint.get("required_files", []) if not (path / name).is_file()]
-    return [] if path.is_file() else [path]
+    artifact_type = checkpoint.get("artifact_type")
+    if artifact_type in {"run_directory", "bundle_directory"}:
+        missing = [] if path.is_dir() else [path]
+        members = checkpoint.get("bundle_members")
+        required_files = [member["filename"] for member in members] if members else checkpoint.get("required_files", [])
+        for name in required_files:
+            member_path = path / name
+            if not member_path.is_file() or member_path.stat().st_size == 0:
+                missing.append(member_path)
+            else:
+                member = next((item for item in members or [] if item["filename"] == name), None)
+                expected_sha = member.get("expected_sha256") if member else None
+                if expected_sha and sha256_file(member_path) != expected_sha:
+                    missing.append(member_path)
+        return missing
+    if not path.is_file() or path.stat().st_size == 0:
+        return [path]
+    expected_sha = checkpoint.get("expected_sha256")
+    return [path] if expected_sha and sha256_file(path) != expected_sha else []
 
 
 def checkpoint_is_present(path: Path, checkpoint: dict[str, Any]) -> bool:
@@ -161,7 +256,8 @@ def checkpoint_bundle_missing_paths(model: dict[str, Any], root: Path) -> dict[s
     variants = {checkpoint["checkpoint_id"]: checkpoint for checkpoint in model["checkpoint_variants"]}
     missing: dict[str, list[Path]] = {}
     for bundle in model.get("checkpoint_bundles", []):
-        paths = [path for checkpoint_id in bundle["required_checkpoint_ids"] for path in checkpoint_missing_paths(checkpoint_path(model["model_id"], variants[checkpoint_id], root), variants[checkpoint_id])]
+        paths = [path for checkpoint_id in bundle["required_checkpoint_ids"]
+                 for path in checkpoint_missing_paths(checkpoint_path(model["model_id"], variants[checkpoint_id], root), variants[checkpoint_id])]
         if paths:
             missing[bundle["bundle_id"]] = paths
     return missing
@@ -227,6 +323,7 @@ def fashioniq_required_paths(model: dict[str, Any], root: Path) -> tuple[Path, .
 
 def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -> dict[str, Any]:
     from workbench.backend.operator_config import resolve_config
+    from workbench.backend.runtime import runtime_blockers
 
     config = resolve_config()
     path = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
@@ -236,20 +333,29 @@ def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -
     official_sha_match = local_sha == official_sha if downloaded and official_sha else None
     mapping_verified = checkpoint["checkpoint_mapping_status"] == "VERIFIED_METADATA"
     source_synced = bool(model.get("source_dir")) and (config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]).is_dir()
-    adapter_command_ready = bool(model.get("command_status") == "COMMAND_AUDITED" or (model.get("command_status") is None and model["model_id"] in {"csmcir", "encoder"}))
-    runtime_verified = model.get("reproduction_status") == "VERIFIED"
-    external_blockers = external_asset_blockers(model)
-    bundle_missing = checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT)
-    runnable = downloaded and source_synced and mapping_verified and (official_sha is None or official_sha_match is True) and adapter_command_ready and not external_blockers and not bundle_missing
-    blocking_reasons = []
-    if not mapping_verified:
-        blocking_reasons.append("checkpoint_mapping_unverified")
-    if not downloaded:
-        blocking_reasons.append("checkpoint_not_installed")
-    if official_sha and official_sha_match is False:
-        blocking_reasons.append("official_hash_mismatch")
-    if not adapter_command_ready:
-        blocking_reasons.append("adapter_command_unverified")
-    blocking_reasons.extend(external_blockers)
-    blocking_reasons.extend(f"checkpoint_bundle_incomplete:{bundle_id}" for bundle_id in bundle_missing)
-    return {"checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_metadata": checkpoint["status"] != "BLOCKED", "source_root": str(config.WORKBENCH_THIRD_PARTY_ROOT), "checkpoint_root": str(config.WORKBENCH_CHECKPOINT_ROOT), "source_synced_locally": source_synced, "automatic_download_available": checkpoint.get("download_url") is not None, "checkpoint_downloaded": downloaded, "local_sha256": local_sha, "official_sha256_known": official_sha is not None, "official_sha256_match": official_sha_match, "mapping_verified": mapping_verified, "adapter_command_ready": adapter_command_ready, "runtime_verified": runtime_verified, "runnable": runnable, "checkpoint_path": str(path), "blocking_reasons": blocking_reasons}
+    command_status = model.get("command_status")
+    adapter_command_ready = command_status in {"COMMAND_AUDITED", "REPLAY_COMMAND_IMPLEMENTED"}
+    if command_status is None:
+        from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+        adapter = ADAPTERS.get(model["model_id"])
+        adapter_command_ready = adapter is not None and getattr(adapter, "command", None) is not OfficialScriptAdapter.command
+    reasons = runtime_blockers(model, checkpoint, config, model.get("native_protocol"))
+    return {
+        "checkpoint_id": checkpoint["checkpoint_id"],
+        "filename": checkpoint["filename"],
+        "source_metadata": checkpoint["status"] != "BLOCKED",
+        "source_root": str(config.WORKBENCH_THIRD_PARTY_ROOT),
+        "checkpoint_root": str(config.WORKBENCH_CHECKPOINT_ROOT),
+        "source_synced_locally": source_synced,
+        "automatic_download_available": checkpoint.get("download_url") is not None,
+        "checkpoint_downloaded": downloaded,
+        "local_sha256": local_sha,
+        "official_sha256_known": official_sha is not None,
+        "official_sha256_match": official_sha_match,
+        "mapping_verified": mapping_verified,
+        "adapter_command_ready": adapter_command_ready,
+        "runtime_verified": model.get("reproduction_status") == "VERIFIED",
+        "runnable": not reasons,
+        "checkpoint_path": str(path),
+        "blocking_reasons": reasons,
+    }

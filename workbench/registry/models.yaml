@@ -303,6 +303,8 @@ models:
         status: URL_VERIFIED
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: encoder
+    category_model_policy: shared
+    checkpoint_serialization: state_dict
     method_name: ENCODER
     research_generation: recent
     publication_year: 2025
@@ -380,6 +382,10 @@ models:
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
   - model_id: clvc_net
+    replay_status: BLOCKED_NO_SOURCE_REPLAY
+    category_model_policy: shared
+    checkpoint_serialization: whole_model
+    environment_required: true
     method_name: CLVC-Net
     research_generation: legacy
     publication_year: 2021
@@ -402,6 +408,7 @@ models:
     reproduction_status: BLOCKED_CHECKPOINT_MAPPING
     command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
     environment:
+      python_env_var: WORKBENCH_CLVC_PYTHON
       confidence: VERIFIED_README
       python: '3.7.6'
       pytorch: '1.6.0'
@@ -423,6 +430,11 @@ models:
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
   - model_id: dcnet
+    replay_status: REPLAY_CODE_IMPLEMENTED
+    category_model_policy: shared
+    checkpoint_serialization: run_directory
+    replay_type: OFFICIAL_CLI
+    environment_required: true
     method_name: DCNet
     research_generation: legacy
     publication_year: 2021
@@ -445,6 +457,7 @@ models:
     reproduction_status: BLOCKED_CHECKPOINT_MAPPING
     command_status: COMMAND_AUDITED
     environment:
+      python_env_var: WORKBENCH_DCNET_PYTHON
       confidence: VERIFIED_REQUIREMENTS
       python: '3.7.7'
       pytorch: '1.4.0'
@@ -468,6 +481,11 @@ models:
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
   - model_id: combiner_rn50x4_noft
+    replay_status: REPLAY_CODE_IMPLEMENTED
+    category_model_policy: shared
+    checkpoint_serialization: state_dict
+    replay_type: OFFICIAL_CLI
+    environment_required: true
     method_name: Combiner RN50x4 noft
     research_generation: legacy
     publication_year: 2023
@@ -488,8 +506,9 @@ models:
     reported_r50: null
     reported_mean: null
     reproduction_status: BLOCKED_CHECKPOINT_MAPPING
-    command_status: COMMAND_BLOCKED_CHECKPOINT_MAPPING
+    command_status: COMMAND_AUDITED
     environment:
+      python_env_var: WORKBENCH_CLIP4CIR_PYTHON
       confidence: VERIFIED_README
       python: '3.8'
       pytorch: '1.11.0'
@@ -512,9 +531,15 @@ models:
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
   - model_id: clip4cir_rn50x4_fullft
+    replay_status: BLOCKED_CHECKPOINT_MAPPING
+    category_model_policy: shared
+    checkpoint_serialization: state_dict
+    replay_type: OFFICIAL_CLI
+    environment_required: true
     method_name: CLIP4Cir RN50x4 fullft
     research_generation: legacy
     publication_year: 2023
+    command_status: COMMAND_AUDITED
     paper_title: Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features
     paper_url: https://arxiv.org/abs/2308.11485
     upstream_repo_url: https://github.com/ABaldrati/CLIP4Cir
@@ -532,8 +557,8 @@ models:
     reported_r50: null
     reported_mean: null
     reproduction_status: BLOCKED_CHECKPOINT_BUNDLE
-    command_status: COMMAND_BLOCKED_CHECKPOINT_MAPPING
     environment:
+      python_env_var: WORKBENCH_CLIP4CIR_PYTHON
       confidence: VERIFIED_README
       python: '3.8'
       pytorch: '1.11.0'
@@ -557,6 +582,11 @@ models:
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
   - model_id: tgcir
+    replay_status: PREFLIGHT_ONLY
+    category_model_policy: shared
+    checkpoint_serialization: whole_model
+    replay_type: PREFLIGHT_ONLY
+    environment_required: true
     method_name: TG-CIR
     research_generation: legacy
     publication_year: 2023
@@ -580,6 +610,7 @@ models:
     reproduction_status: BLOCKED_COMMAND
     command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
     environment:
+      python_env_var: WORKBENCH_TGCIR_PYTHON
       confidence: VERIFIED_README
       python: UNKNOWN
       pytorch: '1.7.0'
@@ -601,7 +632,11 @@ models:
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
   - model_id: sprc
+    replay_status: BLOCKED_CHECKPOINT_MAPPING
+    category_model_policy: shared
+    checkpoint_serialization: state_dict
     method_name: SPRC
+    environment_required: true
     research_generation: legacy
     publication_year: 2024
     paper_title: Sentence-level Prompts Benefit Composed Image Retrieval
@@ -621,9 +656,10 @@ models:
     reported_r50: 74.97
     reported_mean: 64.85
     reported_score_note: Paper Table 1 prints R@10 54.92 while printed per-category values average 54.72; unresolved primary-source discrepancy.
-    reproduction_status: BLOCKED_COMMAND_AND_CHECKPOINT_MAPPING
+    reproduction_status: BLOCKED_CHECKPOINT_MAPPING
     command_status: COMMAND_BLOCKED_MODEL_MAPPING
     environment:
+      python_env_var: WORKBENCH_SPRC_PYTHON
       confidence: VERIFIED_REQUIREMENTS
       python: '3.9'
       pytorch: '2.0.1'
@@ -631,7 +667,7 @@ models:
       cuda: UNKNOWN
       packages: [transformers==4.36.2, timm==0.9.12, spacy==3.7.2, lavis]
     strict_clean_checkpoint_available: null
-    notes: Native full-gallery reference-eligible evaluator CLI is known, but sprc_fiq.pt model-name/backbone/class-key mapping is unresolved and loads non-strictly.
+    notes: Native full-gallery evaluator uses blip2_cir_rerank_learn with pretrain backbone; checkpoint class-key mapping remains unverified and loads non-strictly.
     checkpoint_variants:
       - checkpoint_id: sprc_fiq_unresolved
         filename: sprc_fiq.pt
@@ -645,6 +681,11 @@ models:
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
   - model_id: limn
+    replay_status: REPLAY_CODE_IMPLEMENTED
+    category_model_policy: independent
+    checkpoint_serialization: whole_model
+    replay_type: SOURCE_FAITHFUL_WORKBENCH_REPLAY
+    environment_required: true
     method_name: LIMN
     research_generation: legacy
     publication_year: 2024
@@ -664,9 +705,10 @@ models:
     reported_r10: null
     reported_r50: null
     reported_mean: null
-    reproduction_status: BLOCKED_COMMAND_AND_CHECKPOINT_BUNDLE
-    command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+    reproduction_status: BLOCKED_RUNTIME_PREREQUISITES
+    command_status: REPLAY_COMMAND_IMPLEMENTED
     environment:
+      python_env_var: WORKBENCH_LIMN_PYTHON
       confidence: VERIFIED_README
       python: UNKNOWN
       pytorch: '1.12.1'
@@ -674,41 +716,38 @@ models:
       cuda: '12.4'
       packages: [open_clip_torch==2.20.0]
     strict_clean_checkpoint_available: null
-    notes: Base LIMN iteration 0 only. Source saves category-specific whole model objects; no author inference-only replay command is available. OpenCLIP DataComp file path is user-supplied.
+    notes: Base LIMN iteration 0 only. Author README and pinned train.py bind iteration-0 filenames to independently run dress, shirt, and toptee categories; author Hub LFS metadata supplies hashes. Workbench replay calls pinned native test.py:test(); full runtime remains unverified.
     checkpoint_variants:
       - checkpoint_id: base_iter0_dress
         filename: 0_dress_best_model.pt
         download_url: https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_dress_best_model.pt
-        source_type: author_huggingface
         checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
-        expected_size_bytes: null
+        expected_size_bytes: 1792010157
         expected_sha256: 96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c
-        status: ARTIFACT_ASSOCIATED_UNVALIDATED
-        checkpoint_mapping_status: ARTIFACT_ASSOCIATED_UNVALIDATED
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
       - checkpoint_id: base_iter0_shirt
         filename: 0_shirt_best_model.pt
         download_url: https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_shirt_best_model.pt
-        source_type: author_huggingface
         checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
-        expected_size_bytes: null
+        expected_size_bytes: 1792010157
         expected_sha256: 9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74
-        status: ARTIFACT_ASSOCIATED_UNVALIDATED
-        checkpoint_mapping_status: ARTIFACT_ASSOCIATED_UNVALIDATED
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
       - checkpoint_id: base_iter0_toptee
         filename: 0_toptee_best_model.pt
         download_url: https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_toptee_best_model.pt
-        source_type: author_huggingface
         checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
-        expected_size_bytes: null
+        expected_size_bytes: 1792010157
         expected_sha256: 79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2
-        status: ARTIFACT_ASSOCIATED_UNVALIDATED
-        checkpoint_mapping_status: ARTIFACT_ASSOCIATED_UNVALIDATED
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
     checkpoint_bundles:
       - bundle_id: base_iter0_all_categories
         required_checkpoint_ids: [base_iter0_dress, base_iter0_shirt, base_iter0_toptee]
         structure: category_specific_whole_models
-        mapping_status: ARTIFACT_ASSOCIATED_UNVALIDATED
-        notes: Exactly dress, shirt, and toptee base iteration-0 files are required together; no partial bundle can represent a FashionIQ macro result.
+        mapping_status: VERIFIED_METADATA
+        notes: One independently trained whole-model checkpoint per FashionIQ category; all three are required for a complete macro result.

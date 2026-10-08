@@ -36,7 +36,7 @@ Air-Know, ConeSep, HABIT, and INTENT each select `original-split` in their Fashi
 | CLIP4Cir RN50x4 fullft | Same CLIP4Cir pin | Same full-gallery evaluator | Requires separate Combiner and CLIP states; author pairing unresolved. | `BLOCKED_CHECKPOINT_BUNDLE` |
 | TG-CIR | `iLearn-Lab/MM23-TG-CIR@65fa78eaf8cabe8197fcc22ccab42207c591bdee` | `fashioniq_val_split`: endpoint union, source mask | Archive member mapping unresolved; pinned `test.py` has no replay CLI; ViT-B/16 asset unresolved. | `BLOCKED_COMMAND` |
 | SPRC BLIP-2 | `chunmeifeng/SPRC@2935a5397732260d1db6fa577e5926f963e36f0f` | `fashioniq_original_split`: full split, reference eligible | `src/blip_validate.py` CLI shape audited; `sprc_fiq.pt` model/backbone/class mapping and LAVIS asset unresolved. | `BLOCKED_COMMAND_AND_CHECKPOINT_MAPPING` |
-| LIMN base iteration 0 | `iLearn-Lab/TPAMI24-LIMN@7d7bc9b116f594a65ac22457491edf28a88d3c3e` | `fashioniq_val_split`: endpoint union, source mask | Required dress/shirt/toptee whole-model bundle is artifact-associated only; no replay CLI; DataComp asset unresolved. | `BLOCKED_COMMAND_AND_CHECKPOINT_BUNDLE` |
+| LIMN base iteration 0 | `iLearn-Lab/TPAMI24-LIMN@7d7bc9b116f594a65ac22457491edf28a88d3c3e` | `fashioniq_val_split`: endpoint union, source mask | Exact author-hash-verified dress/shirt/toptee whole-model bundle; workbench wrapper calls pinned native evaluator; runtime unexecuted. | `BLOCKED_RUNTIME_PREREQUISITES` |
 
 All seven command, checkpoint, preparation, environment, and runtime-asset records are independently tracked in registry and doctor. See [LEGACY_SOURCE_AUDIT.md](LEGACY_SOURCE_AUDIT.md) for source-level evidence.
 

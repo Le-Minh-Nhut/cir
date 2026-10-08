@@ -151,8 +151,19 @@ def test_dcnet_runtime_asset_blocks_after_preparation_is_present(tmp_path: Path)
     blockers = checks["runtime:dcnet"]["evidence"]["checkpoints"][0]["runtime_blockers"]
 
     assert checks["external-assets:dcnet"]["status"] == "BLOCKED"
-    assert "external runtime asset provenance unresolved: torchvision ResNet-50 ImageNet weights" in blockers
+    assert any("external runtime asset file missing: torchvision ResNet-50 ImageNet weights" in blocker for blocker in blockers)
     assert not any("spaCy en_vectors_web_lg" in blocker or "NLTK punkt" in blocker for blocker in blockers)
+
+
+def test_doctor_blocks_unconfigured_model_environment(tmp_path: Path, monkeypatch) -> None:
+    doctor = load_doctor()
+    model = next(model for model in load_registry()["models"] if model["model_id"] == "dcnet")
+    monkeypatch.delenv("WORKBENCH_DCNET_PYTHON", raising=False)
+
+    checks = {check["name"]: check for check in doctor.model_checks(model, config(tmp_path))}
+
+    assert checks["environment:dcnet"]["status"] == "BLOCKED"
+    assert "execution environment not configured: set WORKBENCH_DCNET_PYTHON" in checks["runtime:dcnet"]["evidence"]["checkpoints"][0]["runtime_blockers"]
 
 def test_workbench_scope_ignores_missing_fashioniq(monkeypatch, tmp_path: Path) -> None:
     doctor = load_doctor()

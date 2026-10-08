@@ -15,6 +15,6 @@ Known upstream guidance from audited READMEs:
 - Combiner / CLIP4Cir: Python 3.8, Torch 1.11.0, torchvision 0.12.0, pandas 1.4.2, OpenAI CLIP. RN50x4 base CLIP cache is required. Requested noft/fullft artifact mappings remain unresolved; fullft needs separate Combiner and CLIP states.
 - TG-CIR: Torch 1.7.0, torchvision 0.8.0, `clip==0.2.0`, numpy 1.22.3, pandas 1.4.2; Python/CUDA unspecified. ViT-B/16 asset/cache required. No source replay CLI.
 - SPRC: Python 3.9, Torch 2.0.1, torchvision 0.15.2; source requirements include Transformers 4.36.2, timm 0.9.12, spaCy 3.7.2. LAVIS BLIP-2 pretrain asset required; `sprc_fiq.pt` model/backbone mapping unresolved.
-- LIMN base iteration 0: CUDA 12.4, Torch 1.12.1, torchvision 0.13.1, open-clip-torch 2.20.0; Python unspecified. User-provided DataComp OpenCLIP weights and all three category model files required; no replay CLI.
+- LIMN base iteration 0: CUDA 12.4, Torch 1.12.1, torchvision 0.13.1, open-clip-torch 2.20.0; Python unspecified. Three category whole-model files required; wrapper invokes pinned native evaluator but remains unexecuted.
 
 These have not been created or executed here. Do not claim compatibility until each official unmodified evaluation has run.

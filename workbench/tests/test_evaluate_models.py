@@ -36,6 +36,9 @@ def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Pa
     checkpoint_file.write_bytes(b"checkpoint")
     monkeypatch.setattr(module, "resolve_config", lambda: settings)
     monkeypatch.setattr(module, "pinned_revision", lambda _: model["upstream_commit_sha"])
+    import workbench.backend.runtime as runtime
+
+    monkeypatch.setattr(runtime, "source_clean_and_pinned", lambda model, _: (True, model["upstream_commit_sha"], None))
     return source, checkpoint_file, settings
 
 def prepare_ilearn_layout(root: Path) -> None:
@@ -50,6 +53,14 @@ def prepare_ilearn_layout(root: Path) -> None:
         (root / "captions" / f"cap.{category}.val.json").write_text("[]")
         (root / "captions" / f"correction_dict_{category}.json").write_text("{}")
         (root / "image_splits" / f"split.{category}.val.json").write_text("[]")
+
+def prepare_standard_layout(root: Path) -> None:
+    for directory in (root / "captions", root / "image_splits", root / "images"):
+        directory.mkdir(parents=True, exist_ok=True)
+    for category in ("dress", "shirt", "toptee"):
+        (root / "captions" / f"cap.{category}.val.json").write_text("[]")
+        (root / "image_splits" / f"split.{category}.val.json").write_text("[]")
+
 
 
 def test_unaudited_adapter_is_skipped() -> None:
@@ -80,16 +91,18 @@ def test_dcnet_audited_command_reports_non_command_blockers() -> None:
     assert plan is None
     assert not any(reason.startswith("SKIPPED:") for reason in reasons)
     assert "checkpoint mapping unresolved" in reasons
-    assert "external runtime asset provenance unresolved: torchvision ResNet-50 ImageNet weights" in reasons
+    assert any(reason.startswith("external runtime asset file missing: torchvision ResNet-50 ImageNet weights (") for reason in reasons)
 
 
-def test_dcnet_command_preserves_native_resume_directory(tmp_path: Path) -> None:
+def test_dcnet_command_uses_configured_model_interpreter(tmp_path: Path, monkeypatch) -> None:
+    import sys
     from workbench.backend.adapters.base import EvalRequest
     from workbench.backend.adapters.models import DCNetAdapter
 
+    monkeypatch.setenv("WORKBENCH_DCNET_PYTHON", sys.executable)
     command = DCNetAdapter().command(tmp_path / "DCNet", tmp_path / "fashioniq_dcnet", EvalRequest("dcnet", "fashioniq_run_directory", "fashioniq_full_gallery_ref_excluded", tmp_path / "FashionIQ", tmp_path / "result.json"))
 
-    assert command == ["python", str(tmp_path / "DCNet" / "test.py"), "--resume", str(tmp_path / "fashioniq_dcnet")]
+    assert command == [str(Path(sys.executable).resolve()), str(tmp_path / "DCNet" / "test.py"), "--resume", str(tmp_path / "fashioniq_dcnet")]
 
 def test_missing_checkpoint_is_blocked(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
@@ -99,6 +112,9 @@ def test_missing_checkpoint_is_blocked(monkeypatch, tmp_path: Path) -> None:
     (source / "fashionIQ_dataset").mkdir(parents=True)
     monkeypatch.setattr(module, "resolve_config", lambda: settings)
     monkeypatch.setattr(module, "pinned_revision", lambda _: model["upstream_commit_sha"])
+    import workbench.backend.runtime as runtime
+
+    monkeypatch.setattr(runtime, "source_clean_and_pinned", lambda model, _: (True, model["upstream_commit_sha"], None))
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], source / "fashionIQ_dataset", 200, settings)
 
@@ -113,10 +129,8 @@ def test_csmcir_dry_run_constructs_official_command(monkeypatch, tmp_path: Path,
     settings.FASHIONIQ_ROOT.mkdir()
     dataset_root = source / "fashionIQ_dataset"
     dataset_root.symlink_to(settings.FASHIONIQ_ROOT, target_is_directory=True)
-    for path in (
-        dataset_root / "captions", dataset_root / "image_splits", dataset_root / "images",
-        source / "COT_ours2" / "fashioniq", dataset_root / "qwen_captions",
-    ):
+    prepare_standard_layout(settings.FASHIONIQ_ROOT)
+    for path in (source / "COT_ours2" / "fashioniq", dataset_root / "qwen_captions"):
         path.mkdir(parents=True)
     for category in ("dress", "shirt", "toptee"):
         (source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json").write_text("")
@@ -149,7 +163,8 @@ def test_csmcir_main_accepts_link_and_explicit_canonical_root(monkeypatch, tmp_p
     canonical.mkdir()
     layout = source / "fashionIQ_dataset"
     layout.symlink_to(canonical, target_is_directory=True)
-    for path in (layout / "captions", layout / "image_splits", layout / "images", source / "COT_ours2" / "fashioniq", layout / "qwen_captions"):
+    prepare_standard_layout(canonical)
+    for path in (source / "COT_ours2" / "fashioniq", layout / "qwen_captions"):
         path.mkdir(parents=True)
     for category in ("dress", "shirt", "toptee"):
         (source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json").write_text("")
@@ -176,8 +191,8 @@ def test_encoder_requires_native_layout_before_openclip(monkeypatch, tmp_path: P
     assert reasons == [
         "checkpoint mapping unresolved",
         f"FashionIQ fashioniq_ilearn_resized requirement missing: {dataset_root / 'captions'}",
-        f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}",
         f"ENCODER evaluator import missing: {source / 'datasets1.py'}",
+        f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}",
     ]
 
 
