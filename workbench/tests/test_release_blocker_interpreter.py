@@ -172,8 +172,6 @@ def test_int04_configured_model_interpreter_is_returned(tmp_path: Path, monkeypa
     interpreter = make_venv(tmp_path)
     install_stub(interpreter, "stubdep", "1.2.3")
     monkeypatch.setenv("WORKBENCH_ENV_PROBE_PYTHON", str(interpreter))
-    monkeypatch.setattr(runtime, "verify_environment", runtime.verify_environment)
-
     model = model_for(interpreter, variable="WORKBENCH_ENV_PROBE_PYTHON", packages=["stubdep==1.2.3"])
     assert require_verified_model_interpreter(model) == str(interpreter)
 
@@ -232,7 +230,6 @@ def test_int08_wrong_dependency_version_blocks_readiness(tmp_path: Path, monkeyp
 
     report = runtime.verify_environment(model, probe=True)
     assert report.status == "DEPENDENCY_VERSION_MISMATCH"
-    assert python_executable is not None
     with pytest.raises(RuntimeError, match="not verified"):
         python_executable(model)
 
@@ -254,7 +251,12 @@ def test_int08b_wrong_python_version_detected(tmp_path: Path, monkeypatch):
 
 # ------------------------------------------------------------------------------- INT-09
 
-def test_int09_gpu_verification_deferred_on_cpu_laptop(tmp_path: Path, monkeypatch):
+def test_int09_declared_cuda_requirement_is_deferred_not_verified(tmp_path: Path, monkeypatch):
+    """A model declaring CUDA is GPU-deferred, never ready, and no code is executed.
+
+    CUDA capability can only be reported by the environment, and asking it would mean
+    running environment code during inspection. The honest verdict is deferral.
+    """
     interpreter = make_venv(tmp_path)
     install_stub(interpreter, "stubdep", "1.2.3")
     monkeypatch.setenv("INT_09_VAR", str(interpreter))
@@ -263,23 +265,22 @@ def test_int09_gpu_verification_deferred_on_cpu_laptop(tmp_path: Path, monkeypat
     forget_environment()
 
     report = runtime.verify_environment(model, probe=True)
-    has_cuda = False
-    try:
-        import torch  # noqa: F401
+    assert report.tier == "GPU_VERIFICATION_DEFERRED", report.tier
+    assert report.status == "GPU_VERIFICATION_DEFERRED"
+    assert report.cuda_available is None, "CUDA is not probed"
+    with pytest.raises(RuntimeError):
+        python_executable(model)
 
-        has_cuda = torch.cuda.is_available()
-    except Exception:
-        has_cuda = False
+    # require_cuda makes the same judgement without executing anything.
+    forget_environment()
+    forced = runtime.verify_environment(model, probe=True, require_cuda=True)
+    assert forced.tier == "GPU_VERIFICATION_DEFERRED"
+    with pytest.raises(RuntimeError, match="not verified"):
+        runtime.require_verified_model_interpreter(model, require_cuda=True)
 
-    if has_cuda:
-        assert report.tier == "CUDA_VERIFIED"
-    else:
-        assert report.tier == "GPU_VERIFICATION_DEFERRED", report.tier
-        assert report.status == "GPU_VERIFICATION_DEFERRED"
-        with pytest.raises(RuntimeError, match="GPU verification deferred"):
-            require_verified_model_interpreter(model, require_cuda=True)
-    status = environment_status(model, probe=True)
-    assert status["gpu_deferred"] == (report.tier == "GPU_VERIFICATION_DEFERRED")
+    status = runtime.environment_status(model, probe=True)
+    assert status["gpu_deferred"] is True
+    assert status["verified"] is False
 
 
 # ------------------------------------------------------------------ verification reuse

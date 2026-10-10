@@ -180,7 +180,8 @@ def test_committed_bytecode_is_not_dirty(tmp_path: Path):
     sp.run(["git", "add", "-f", "."], cwd=repo, check=True)
     sp.run(["git", "commit", "-qm", "upstream commits pyc"], cwd=repo, check=True)
 
-    assert _source_dirty(repo) is True or _source_dirty(repo) is False  # deterministic below
+    # The committed bytecode itself is not a source change; assert that concretely.
+    assert _source_dirty(repo) is False, "committed bytecode is a build product, not a change"
     # Delete the committed bytecode (a git-visible tracked deletion that is pure noise).
     (repo / "__pycache__" / "eval.cpython-313.pyc").unlink()
     assert _source_dirty(repo) is False, "deleting committed bytecode must not count as dirty"

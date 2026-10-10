@@ -607,7 +607,7 @@ def test_on_disk_inventory_ignores_sitecustomize(tmp_path):
         "import importlib.metadata as m\n"
         "m.version = lambda n: '9.9.9'\n")
 
-    inventory = runtime.installed_distributions_on_disk(env_dir)
+    inventory = runtime.environment_inventory(str(env_dir))
     assert inventory["stubdep"] == "1.2.3", "disk inventory must not be influenced by the env"
 
 

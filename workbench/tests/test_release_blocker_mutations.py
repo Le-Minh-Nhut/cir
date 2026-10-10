@@ -503,3 +503,36 @@ def test_mut_i_shared_run_directory_across_checkpoints_is_detected(tmp_path, mon
 
     _assert_mutation_killed(monkeypatch, detector, mutate,
                             label="one run directory shared across checkpoint variants")
+
+
+# ------------------------------------------------------------------------- MUT-J
+
+def test_mut_j_accepting_a_hollow_install_is_detected(tmp_path, monkeypatch):
+    """A dist-info whose RECORD lists only itself describes an incomplete install."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        dist = site_packages / "packaging-24.2.dist-info"
+        dist.mkdir(parents=True, exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: packaging\nVersion: 24.2\n")
+        # Only self-referential members: the package's module was never installed.
+        (dist / "RECORD").write_text(
+            "packaging-24.2.dist-info/METADATA,sha256=t,60\n"
+            "packaging-24.2.dist-info/RECORD,,\n")
+        break
+    monkeypatch.setenv("MUT_J_VAR", str(interpreter))
+    model = {"model_id": "mut_j", "environment_required": True,
+             "environment": {"python_env_var": "MUT_J_VAR", "packages": ["packaging==24.2"]}}
+
+    def detector() -> bool:
+        runtime.forget_environment()
+        return runtime.verify_environment(model, probe=True).tier != "RUNTIME_READY"
+
+    def mutate(ctx):
+        # The historical behaviour: any existing RECORD member counted as content, and
+        # every RECORD lists itself.
+        ctx.setattr(runtime, "_distribution_has_installed_content",
+                    lambda site_packages, name: True)
+
+    _assert_mutation_killed(monkeypatch, detector, mutate,
+                            label="a hollow install accepted as verified")

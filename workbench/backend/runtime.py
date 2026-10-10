@@ -50,20 +50,16 @@ class EnvironmentReport:
 
 
 def _run_probe(interpreter: Path, code: str, timeout: int = 60,
-               args: tuple[str, ...] = (), isolated: bool = False,
-               site_packages: Path | None = None) -> tuple[bool, str, str]:
+               args: tuple[str, ...] = (), isolated: bool = False) -> tuple[bool, str, str]:
     """Run ``code`` under ``interpreter``.
 
     ``isolated`` runs ``-I -S`` and adds the environment's own ``site-packages``
-    explicitly. ``-S`` is what matters: it stops ``site`` from importing
-    ``sitecustomize``/``usercustomize``, so no code belonging to the environment (or to
-    the user) executes while it is being inspected. The environment's *installed
-    distributions* remain visible because the directory is added by the probe itself,
-    so the answers are about the environment rather than about code standing next to it.
+    explicitly. ``-S`` stops ``site`` from importing ``sitecustomize``/``usercustomize``,
+    and the environment's directories are never added to ``sys.path`` (``site.addsitedir``
+    would execute the environment's ``.pth`` files). Nothing belonging to the environment
+    runs, so it cannot answer for itself.
     """
     prefix_flags = ["-I", "-S"] if isolated else []
-    if isolated and site_packages is not None:
-        code = f"import site; site.addsitedir({str(site_packages)!r})\n" + code
     try:
         proc = subprocess.run(
             [str(interpreter), *prefix_flags, "-c", code, *args],
@@ -346,10 +342,28 @@ def _is_native_executable(interpreter: Path) -> bool:
 
 
 def _site_packages_dirs(prefix: Path) -> list[Path]:
-    """Every site-packages directory belonging to an environment prefix."""
-    candidates = sorted(prefix.glob("lib/python*/site-packages"))
-    candidates += [prefix / "lib" / "site-packages", prefix / "Lib" / "site-packages"]
-    return [candidate for candidate in candidates if candidate.is_dir()]
+    """Every installed-distribution directory belonging to an environment prefix.
+
+    Debian/Ubuntu lay distributions out in ``dist-packages`` rather than
+    ``site-packages`` (``/usr/lib/python3/dist-packages``), and a
+    ``system_site_packages`` virtualenv resolves requirements from exactly there, so both
+    spellings are read.
+    """
+    candidates: list[Path] = []
+    for pattern in ("lib/python*/site-packages", "lib/python*/dist-packages"):
+        candidates += sorted(prefix.glob(pattern))
+    for name in ("lib", "Lib"):
+        for leaf in ("site-packages", "dist-packages"):
+            candidates.append(prefix / name / leaf)
+    result: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen or not candidate.is_dir():
+            continue
+        seen.add(key)
+        result.append(candidate)
+    return result
 
 
 _NORMALIZE_RE = None
@@ -368,96 +382,10 @@ def normalize_distribution_name(name: str) -> str:
     if _NORMALIZE_RE is None:
         _NORMALIZE_RE = re.compile(r"[-_.]+")
     return _NORMALIZE_RE.sub("-", name).strip().lower()
-
-
-def _site_packages_for_distribution(prefix: Path, name: str) -> Path | None:
-    for site_packages in _site_packages_dirs(prefix):
-        for dist in list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info")):
-            metadata = dist / "METADATA" if dist.name.endswith(".dist-info") else dist / "PKG-INFO"
-            declared, _ = _metadata_name_version(metadata)
-            if declared and normalize_distribution_name(declared) == normalize_distribution_name(name):
-                return site_packages
-    return None
-
-
-def _primary_site_packages(prefix: Path) -> Path | None:
-    """The environment's own site-packages directory, when it has one."""
-    for site_packages in _site_packages_dirs(prefix):
-        return site_packages
-    return None
-
-
-def _site_packages_dirs(prefix: Path) -> list[Path]:
-    """Every site-packages directory belonging to an environment prefix."""
-    candidates = sorted(prefix.glob("lib/python*/site-packages"))
-    candidates += [prefix / "lib" / "site-packages", prefix / "Lib" / "site-packages"]
-    return [candidate for candidate in candidates if candidate.is_dir()]
-
-
-_NORMALIZE_RE = None
-
-def normalize_distribution_name(name: str) -> str:
-    """PEP 503 canonical name: lower-cased, runs of ``-_.`` collapsed to ``-``.
-
-    ``importlib.metadata`` accepts any spelling, and an installed distribution's
-    ``METADATA`` name need not match its directory name, so both sides of the
-    probe/disk reconciliation must be normalised or a correct environment is
-    wrongly reported as forged.
-    """
-    import re
-
-    global _NORMALIZE_RE
-    if _NORMALIZE_RE is None:
-        _NORMALIZE_RE = re.compile(r"[-_.]+")
-    return _NORMALIZE_RE.sub("-", name).strip().lower()
-
-
-def _site_packages_for_distribution(prefix: Path, name: str) -> Path | None:
-    for site_packages in _site_packages_dirs(prefix):
-        for dist in list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info")):
-            metadata = dist / "METADATA" if dist.name.endswith(".dist-info") else dist / "PKG-INFO"
-            declared, _ = _metadata_name_version(metadata)
-            if declared and normalize_distribution_name(declared) == normalize_distribution_name(name):
-                return site_packages
-    return None
-
-
-def _primary_site_packages(prefix: Path) -> Path | None:
-    """The environment's own site-packages directory, when it has one."""
-    for site_packages in _site_packages_dirs(prefix):
-        return site_packages
-    return None
-
-
-def installed_distributions_on_disk(prefix: Path) -> dict[str, str | None]:
-    """Installed distributions read from the environment on disk, by the orchestrator.
-
-    This deliberately does not run anything inside the environment: a ``sitecustomize``
-    module can monkeypatch ``importlib.metadata`` and make a probe claim whatever the
-    environment wants. The inventory read from disk is what the environment *is*.
-    """
-    inventory: dict[str, str | None] = {}
-    for site_packages in _site_packages_dirs(prefix):
-        for dist_info in sorted(site_packages.glob("*.dist-info")):
-            metadata = dist_info / "METADATA"
-            name, version = _metadata_name_version(metadata)
-            if name:
-                # An unreadable version is recorded as None, never as "": an empty string
-                # would silently skip the comparison and accept a forged value.
-                inventory.setdefault(normalize_distribution_name(name), version)
-            else:
-                # Only consult the directory spelling when METADATA gave no name.
-                directory_name = dist_info.name[: -len(".dist-info")]
-                inventory.setdefault(normalize_distribution_name(directory_name), version)
-        for egg_info in sorted(site_packages.glob("*.egg-info")):
-            name, version = _metadata_name_version(egg_info / "PKG-INFO")
-            if not name:
-                name, version = egg_info.name[: -len(".egg-info")], ""
-            inventory.setdefault(normalize_distribution_name(name), version)
-    return inventory
 
 
 def _metadata_name_version(metadata: Path) -> tuple[str | None, str | None]:
+    """The ``Name`` and ``Version`` recorded in a distribution's own metadata file."""
     try:
         text = metadata.read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -474,12 +402,12 @@ def _metadata_name_version(metadata: Path) -> tuple[str | None, str | None]:
 
 
 def _distribution_has_installed_content(site_packages: Path, name: str) -> bool:
-    """True when a distribution's metadata names at least one file that exists.
+    """True when a distribution's metadata names at least one file it really installed.
 
     A ``dist-info`` whose ``RECORD`` lists only its own metadata describes an
-    installation that was never completed: the package cannot be imported, so it must
-    not satisfy a requirement. A distribution with no ``RECORD`` (a legacy egg-info) is
-    judged by the sibling files it keeps.
+    installation that was never completed (or one that was wiped): nothing could import
+    it, so it must not satisfy a requirement. A legacy ``egg-info`` has no ``RECORD`` and
+    is judged by the sibling files it keeps.
     """
     target = normalize_distribution_name(name)
     for dist in list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info")):
@@ -487,20 +415,25 @@ def _distribution_has_installed_content(site_packages: Path, name: str) -> bool:
         declared, _ = _metadata_name_version(metadata)
         if not declared:
             declared = dist.name.split("-")[0]
-        if normalize_distribution_name(declared) != target:
+        if normalize_distribution_name(str(declared)) != target:
             continue
         record = dist / "RECORD"
-        if record.is_file():
-            try:
-                lines = record.read_text(encoding="utf-8", errors="replace").splitlines()
-            except OSError:
-                return False
-            for line in lines:
-                member = line.split(",", 1)[0].strip()
-                if member and (site_packages / member).exists():
-                    return True
+        if not record.is_file():
+            return True
+        try:
+            lines = record.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
             return False
-        return True
+        for line in lines:
+            member = line.split(",", 1)[0].strip()
+            if not member:
+                continue
+            # The distribution's own metadata directory is not installed content.
+            if member.startswith(f"{dist.name}/"):
+                continue
+            if (site_packages / member).exists():
+                return True
+        return False
     return False
 
 
@@ -508,13 +441,10 @@ def distributions_without_content(prefix: str | None, names: list[str]) -> list[
     """Declared distributions that exist only as metadata, with no installed files."""
     if not prefix:
         return []
-    site_packages_dirs = _site_packages_dirs(Path(prefix))
-    missing = []
+    roots = _site_packages_dirs(Path(prefix))
+    missing: list[str] = []
     for name in names:
-        for site_packages in site_packages_dirs:
-            if _distribution_has_installed_content(site_packages, name):
-                break
-        else:
+        if not any(_distribution_has_installed_content(root, name) for root in roots):
             missing.append(name)
     return missing
 
@@ -522,8 +452,9 @@ def distributions_without_content(prefix: str | None, names: list[str]) -> list[
 def _installed_top_level_modules(prefix: str | None, base_prefix: str | None = None) -> set[str]:
     """Top-level importable names the environment installs, read from disk.
 
-    Derived from each installed distribution's own file list plus the directories present
-    in its site-packages. Nothing is executed, so no environment code can claim a module.
+    Derived from each installed distribution's own file list plus the entries present in
+    its distribution directories. Nothing is executed, so no environment code can claim
+    a module.
     """
     modules: set[str] = set()
     roots: list[Path] = []
@@ -531,12 +462,14 @@ def _installed_top_level_modules(prefix: str | None, base_prefix: str | None = N
         if candidate:
             roots.extend(_site_packages_dirs(Path(candidate)))
     for site_packages in roots:
-        for entry in site_packages.iterdir():
+        try:
+            entries = list(site_packages.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
             name = entry.name
             if entry.is_dir():
-                if name.endswith(".dist-info") or name.endswith(".egg-info") or name == "__pycache__":
-                    continue
-                if name.endswith(".libs"):
+                if name.endswith((".dist-info", ".egg-info", ".libs", "__pycache__")):
                     continue
                 modules.add(name.split(".")[0])
             elif name.endswith(".py"):
@@ -551,12 +484,12 @@ def _installed_top_level_modules(prefix: str | None, base_prefix: str | None = N
                 continue
             for line in lines:
                 member = line.split(",", 1)[0].strip()
-                if not member or member.startswith(".."):
+                if not member or member.startswith("..") or member.startswith(f"{dist.name}/"):
                     continue
                 head = member.split("/", 1)[0]
                 if head.endswith(".py"):
                     modules.add(head[: -len(".py")])
-                elif "." not in head and not head.endswith((".dist-info", ".egg-info", ".pth", ".so", ".pyd")):
+                elif "." not in head and not head.endswith((".dist-info", ".egg-info", ".pth")):
                     modules.add(head)
     return modules
 
@@ -715,9 +648,6 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         if cached is not None:
             return cached
 
-    # The environment's own site-packages, used by the isolated probes.
-    probe_site_packages = _primary_site_packages(Path(configured).parent.parent)
-
     identity = _interpreter_identity(interpreter) if probe else None
     report = EnvironmentReport(
         model_id, variable, str(interpreter), "INTERPRETER_PRESENT", "PRESENT",
@@ -835,6 +765,26 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         _remember(model, require_cuda, report)
         return report
 
+    # CUDA capability is deliberately NOT probed. Its answer can only come from the
+    # environment (``torch.cuda.is_available()``), and running environment code during
+    # inspection is exactly what this module refuses to do: an environment could answer
+    # for itself. A model declaring a CUDA requirement is reported as GPU verification
+    # deferred, which is honest and is never accepted as readiness.
+    if require_cuda or (env.get("cuda") and str(env["cuda"]).upper() != "UNKNOWN"):
+        report.tier = TIER_GPU_DEFERRED
+        report.status = "GPU_VERIFICATION_DEFERRED"
+        report.reason = ("CUDA capability cannot be verified by inspecting the environment; "
+                         "verify it on the GPU host")
+        _remember(model, require_cuda, report)
+        return report
+
+    if not report.dependency_probe_executed and not imports:
+        report.tier = TIER_REQUIREMENTS_UNVERIFIED
+        report.status = "REQUIREMENTS_UNVERIFIED"
+        report.reason = "no dependency probe was executed for this contract"
+        _remember(model, require_cuda, report)
+        return report
+
     # CUDA verification (only when the model requires it).
     if require_cuda or (env.get("cuda") and str(env["cuda"]).upper() != "UNKNOWN"):
         code = (
@@ -848,7 +798,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             "print(json.dumps(out))\n"
         )
         ok, out, _ = _run_probe(interpreter, code, isolated=True,
-                                site_packages=probe_site_packages)
+)
         if ok:
             try:
                 cuda = json.loads(out.splitlines()[-1])

@@ -139,17 +139,6 @@ def stage_input_fingerprint_info(stage: Stage, config: WorkbenchConfig | None = 
     return {"digest": digest, "weak": weak}
 
 
-def stage_fingerprint(stage: Stage) -> str:
-    if stage.input_paths or stage.model_id:
-        try:
-            return compute_stage_input_fingerprint(stage, resolve_config())
-        except Exception:
-            pass
-    import hashlib
-    payload = json.dumps([stage.name, [list(c) for c in stage.commands]], sort_keys=True)
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
 def stage_receipt_path(config: WorkbenchConfig, stage: Stage) -> Path:
     repo_root = getattr(config, "CIR_REPO_ROOT", REPOSITORY)
     key = stage_key(stage).replace(":", "_")

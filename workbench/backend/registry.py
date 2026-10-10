@@ -216,19 +216,6 @@ def external_asset_blockers(model: dict[str, Any]) -> list[str]:
     ]
 
 
-def replay_readiness(model: dict[str, Any]) -> dict[str, Any]:
-    """Metadata-only replay infrastructure status. Not runtime readiness."""
-    return {
-        "model_id": model["model_id"],
-        "replay_code": model.get("replay_status", "NOT_IMPLEMENTED"),
-        "command_status": model.get("command_status"),
-        "checkpoint_provenance": model.get("reproduction_status", "NOT_RUN"),
-        "category_model_policy": model.get("category_model_policy", "shared"),
-        "environment_documented": model.get("environment") is not None,
-        "protocol": model.get("native_protocol"),
-    }
-
-
 def checkpoint_missing_paths(path: Path, checkpoint: dict[str, Any]) -> list[Path]:
     artifact_type = checkpoint.get("artifact_type", "file")
     if artifact_type in {"run_directory", "bundle_directory", "bundle_placeholder"}:

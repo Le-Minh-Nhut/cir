@@ -290,8 +290,6 @@ def test_e2e08_one_stage_failure_does_not_block_independent_stages(master, tmp_p
 
     state = tmp_path / "state.json"
     launched: list[list[str]] = []
-    import workbench.backend.runtime as runtime
-
     original = pipeline.run_command
     pipeline.run_command = lambda argv: launched.append(argv) or (1 if "model_a" in str(argv) else 0)
     try:
@@ -310,7 +308,6 @@ def test_e2e08_one_stage_failure_does_not_block_independent_stages(master, tmp_p
     assert rc == 1
     assert any("eval_model_b" in str(argv) for argv in launched)
     assert not any("eval_model_a" in str(argv) for argv in launched)
-    assert runtime is not None
 
 
 # ---------------------------------------------------------------- E2E-09, E2E-10

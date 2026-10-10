@@ -1,3 +1,8 @@
+# Optional per-model environment field `interpreter_sha256`: the SHA-256 of the
+# interpreter binary an operator pinned for that model. When present, a mismatch is
+# refused as UNSAFE_INTERPRETER; absent or UNKNOWN means unpinned. Compute it with
+# `sha256sum "$(readlink -f "$WORKBENCH_<MODEL>_PYTHON")"` after creating the
+# environment from the upstream spec, and record it before a reproduction run.
 schema_version: 1
 protocols:
   fashioniq_original_split:

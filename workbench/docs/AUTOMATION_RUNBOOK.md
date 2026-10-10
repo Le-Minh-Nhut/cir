@@ -292,12 +292,18 @@ requirements are checked against the environment's *on-disk* inventory, read by 
 orchestrator itself via `importlib.metadata.distributions(path=...)`. Nothing is executed
 inside the environment, so a `.pth` file, a `sitecustomize` module, or any other code
 standing in `site-packages` cannot install or claim a package, and cannot influence the
-answer. (Adding the directory to `sys.path` — `site.addsitedir` — would run `.pth` files;
-that is deliberately not done.)
+answer. Two traps are deliberately avoided: the environment's directories are never added
+to `sys.path` (`site.addsitedir` would execute its `.pth` files), and CUDA capability is
+**not probed** — it can only be reported by running environment code, so a declared CUDA
+requirement is reported as `GPU_VERIFICATION_DEFERRED` and is never readiness.
+
+Both `site-packages` and the Debian/Ubuntu `dist-packages` spelling are read, so a
+`--system-site-packages` virtualenv over a `dist-packages` base resolves its requirements.
 
 A declared distribution must also have **real installed content**: a `dist-info` whose
-`RECORD` names at least one existing file, or a legacy `egg-info` with its own files. A
-metadata directory describing an installation that was never completed cannot satisfy a
+`RECORD` names at least one existing file *outside its own metadata directory*, or a
+legacy `egg-info` with its own files. A `RECORD` that lists only itself describes an
+installation that was never completed (or one that was wiped), so it cannot satisfy a
 requirement. A declared import module must correspond to a top-level name the environment
 actually installs (standard-library and builtin module names always count).
 
