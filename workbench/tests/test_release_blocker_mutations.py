@@ -197,6 +197,11 @@ def test_mut_c_treating_declared_runtime_artifacts_as_dirty_is_detected(
     monkeypatch.setenv("WORKBENCH_THIRD_PARTY_ROOT", str(third_party))
 
     def detector() -> bool:
+        # A bare `is False` would also be satisfied by an unreadable checkout, so the
+        # classification itself must be inspected.
+        entries = runtime.source_status(source)
+        assert entries is not None, "the fixture checkout must be readable"
+        assert entries["approved"], "the declared dataset link must be classified as approved"
         return runtime._source_dirty(source) is False
 
     def mutate(ctx):

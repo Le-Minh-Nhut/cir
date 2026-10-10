@@ -287,6 +287,12 @@ Dependency and import probes run under `-I` (but **not** `-S`, so the environmen
 site-packages stay visible) and must report the same `sys.prefix` as the verified
 environment; a mismatch is blocked as `DEPENDENCY_PROBE_ENVIRONMENT_MISMATCH`.
 
+A probe answer is additionally **reconciled against the environment on disk**: the
+orchestrator reads `*.dist-info/METADATA` and `*.egg-info/PKG-INFO` itself, so an
+environment containing a `sitecustomize.py` (or any other module) that monkeypatches
+`importlib.metadata` cannot claim packages it does not have. That contradiction is
+blocked as `DEPENDENCY_PROBE_FORGED`.
+
 ### Verification reuse
 
 A verified report may be reused only when the contract digest, the invocation path,
@@ -300,6 +306,10 @@ in-place member rewrite invalidates cached verification. Entries are keyed per
 and metadata only, so a same-size in-place edit inside one of its members can still go
 unnoticed; raise `_FINGERPRINT_MEMBER_LIMIT` or hash members if a stale verification is
 ever observed on a real model environment.
+
+`ponytail:` a same-size, same-mtime rewrite of a package member is likewise invisible to
+an mtime/size fingerprint. Hashing package contents would cost seconds per probe; the
+existing `WORKBENCH_NO_ENV_CACHE=1` escape hatch forces a full re-probe when that matters.
 
 ### Dependency version policy
 

@@ -4,6 +4,7 @@ import csv
 import io
 import json
 from datetime import UTC, datetime
+import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -186,8 +187,13 @@ def queue_job(payload: JobInput):
     plan, blockers = guarded_plan(model, checkpoint, payload.protocol_id, dataset_root, payload.top_k, config)
     if plan is None:
         raise HTTPException(409, {"error": "evaluation_blocked", "message": "Official evaluation is not ready.", "details": {"blockers": blockers}})
+    # Same convention as scripts/evaluate_models.log_dir: one directory per
+    # (model, checkpoint, invocation identity). A bare timestamp format here would
+    # create a second, incompatible shape under the same artifacts root.
     timestamp = datetime.now(UTC)
-    directory = ROOT / "artifacts" / "logs" / f"{timestamp:%Y%m%dT%H%M%S%fZ}_{plan.model_id}_{plan.checkpoint_id}"
+    identifier = f"{timestamp:%Y%m%dT%H%M%S%fZ}_{uuid.uuid4().hex[:8]}"
+    directory = (ROOT / "artifacts" / "logs"
+                 / f"{plan.model_id}__{plan.checkpoint_id}__{identifier}")
     provenance = {
         "model_id": plan.model_id,
         "checkpoint_id": plan.checkpoint_id,

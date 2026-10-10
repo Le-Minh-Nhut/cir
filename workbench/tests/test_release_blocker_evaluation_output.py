@@ -554,3 +554,82 @@ def test_a_foreign_environment_probe_cannot_answer_for_the_model_environment(env
     assert report.prefix != str(fabricated)
     with pytest.raises(RuntimeError):
         runtime.python_executable(model)
+
+
+# ------------------------------------------------- BLK-01/BLK-05: forged probe answers
+
+def test_an_environment_cannot_forge_its_own_package_inventory(tmp_path, monkeypatch):
+    """sitecustomize can monkeypatch importlib.metadata; the disk inventory decides."""
+    import venv as _venv
+
+    import workbench.backend.runtime as runtime
+
+    env_dir = tmp_path / "env"
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+    site_packages = next((env_dir / "lib").glob("python*/site-packages"))
+    # An empty environment that claims to have the required dependency and module.
+    (site_packages / "sitecustomize.py").write_text(
+        "import importlib.metadata as m\n"
+        "_original = m.version\n"
+        "m.version = lambda n: '1.2.3' if n == 'stubdep' else _original(n)\n"
+        "import sys, types\n"
+        "sys.modules['fakedmodule'] = types.ModuleType('fakedmodule')\n")
+
+    monkeypatch.setenv("FORGED_PKG_VAR", str(env_dir / "bin" / "python"))
+    runtime.forget_environment()
+    model = {"model_id": "forged_model", "environment_required": True,
+             "environment": {"python_env_var": "FORGED_PKG_VAR",
+                             "packages": ["stubdep==1.2.3"],
+                             "required_imports": ["fakedmodule"]}}
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier != "RUNTIME_READY", "a forged package inventory must never verify"
+    assert report.status == "DEPENDENCY_PROBE_FORGED", report.status
+    with pytest.raises(RuntimeError):
+        runtime.python_executable(model)
+
+
+def test_on_disk_inventory_ignores_sitecustomize(tmp_path):
+    """The inventory read by the orchestrator reflects disk, not a patched runtime."""
+    import venv as _venv
+
+    import workbench.backend.runtime as runtime
+
+    env_dir = tmp_path / "env"
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+    site_packages = next((env_dir / "lib").glob("python*/site-packages"))
+    dist = site_packages / "stubdep-1.2.3.dist-info"
+    dist.mkdir()
+    (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: stubdep\nVersion: 1.2.3\n")
+    (site_packages / "sitecustomize.py").write_text(
+        "import importlib.metadata as m\n"
+        "m.version = lambda n: '9.9.9'\n")
+
+    inventory = runtime.installed_distributions_on_disk(env_dir)
+    assert inventory["stubdep"] == "1.2.3", "disk inventory must not be influenced by the env"
+
+
+def test_legacy_egg_info_install_invalidates_cache(tmp_path, monkeypatch):
+    """Legacy egg-info installs have no RECORD and must still be fingerprinted."""
+    import venv as _venv
+
+    import workbench.backend.runtime as runtime
+
+    env_dir = tmp_path / "env"
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+    site_packages = next((env_dir / "lib").glob("python*/site-packages"))
+    egg = site_packages / "stubdep.egg-info"
+    egg.mkdir()
+    (egg / "PKG-INFO").write_text("Metadata-Version: 1.1\nName: stubdep\nVersion: 1.2.3\n")
+    (site_packages / "stubdep.py").write_text("VERSION = '1.2.3'\n")
+
+    monkeypatch.setenv("EGG_VAR", str(env_dir / "bin" / "python"))
+    model = {"model_id": "egg_model", "environment_required": True,
+             "environment": {"python_env_var": "EGG_VAR", "packages": ["stubdep==1.2.3"]}}
+    runtime.forget_environment()
+    assert runtime.verify_environment(model, probe=True).tier == "RUNTIME_READY"
+
+    (egg / "PKG-INFO").write_text("Metadata-Version: 1.1\nName: stubdep\nVersion: 9.9.9\n")
+    refreshed = runtime.verify_environment(model, probe=True)
+    assert refreshed.tier != "RUNTIME_READY", "an egg-info rewrite must invalidate the cache"
+    assert refreshed.status == "DEPENDENCY_VERSION_MISMATCH", refreshed.status

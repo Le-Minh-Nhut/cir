@@ -725,18 +725,32 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
     It answers a single question: *did THIS invocation produce a valid completion
     proof?* A leftover report or an old latest pointer is never accepted.
     """
-    def _resolve_checkpoint() -> Path:
-        """The checkpoint this (model, checkpoint id) pair actually evaluates."""
+    def _resolve_checkpoint() -> tuple[Path, list[dict[str, Any]] | None]:
+        """The checkpoint this (model, checkpoint id) pair evaluates, with its members.
+
+        Directory/bundle checkpoints are identified by their *declared* members, so the
+        validator must use exactly the member list the runner used. Hashing every file
+        in a run directory would reject a perfectly good proof as soon as the directory
+        contains an undeclared extra file (a config, a log, a README).
+        """
         if checkpoint_file is not None:
-            return Path(checkpoint_file)
+            return Path(checkpoint_file), None
         try:
             from workbench.backend.registry import checkpoint_by_id, checkpoint_path, model_by_id
 
             model = model_by_id(model_id)
             variant = checkpoint_by_id(model, checkpoint_id)
-            return checkpoint_path(model_id, variant, config.WORKBENCH_CHECKPOINT_ROOT)
+            path = checkpoint_path(model_id, variant, config.WORKBENCH_CHECKPOINT_ROOT)
+            required = variant.get("required_files") or [
+                member["filename"] for member in (variant.get("bundle_members") or [])
+            ]
+            members = None
+            if required:
+                members = [{"filename": name, "path": str(path / name), "sha256": None}
+                           for name in required]
+            return path, members
         except Exception:
-            return Path(".")
+            return Path("."), None
 
     def _validate(record: dict | None) -> tuple[bool, str | None, dict | None]:
         if not isinstance(record, dict):
@@ -746,9 +760,10 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
             return False, "recorded evaluation has no invocation run id", None
         reports = reports_root(config)
         proof_path = reports / f"{model_id}_{checkpoint_id}_{run_id}_completion.json"
-        resolved_checkpoint = _resolve_checkpoint()
+        resolved_checkpoint, resolved_members = _resolve_checkpoint()
         plan = EvaluationPlan(model_id, checkpoint_id, protocol, Path("."), Path("."),
-                              resolved_checkpoint, Path("."), [], pin, None)
+                              resolved_checkpoint, Path("."), [], pin, None,
+                              directory_members=resolved_members)
         if not (resolved_checkpoint.is_file() or resolved_checkpoint.is_dir()):
             # No checkpoint file to re-hash (e.g. a non-file artifact): bind the proof to
             # the digest recorded by the run itself, which is run-scoped and unforgeable

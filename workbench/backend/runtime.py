@@ -307,6 +307,68 @@ def _is_native_executable(interpreter: Path) -> bool:
     return header in _NATIVE_MAGICS
 
 
+def _site_packages_dirs(prefix: Path) -> list[Path]:
+    """Every site-packages directory belonging to an environment prefix."""
+    candidates = sorted(prefix.glob("lib/python*/site-packages"))
+    candidates += [prefix / "lib" / "site-packages", prefix / "Lib" / "site-packages"]
+    return [candidate for candidate in candidates if candidate.is_dir()]
+
+
+def installed_distributions_on_disk(prefix: Path) -> dict[str, str]:
+    """Installed distributions read from the environment on disk, by the orchestrator.
+
+    This deliberately does not run anything inside the environment: a ``sitecustomize``
+    module can monkeypatch ``importlib.metadata`` and make a probe claim whatever the
+    environment wants. The inventory read from disk is what the environment *is*.
+    """
+    inventory: dict[str, str] = {}
+    for site_packages in _site_packages_dirs(prefix):
+        for dist_info in sorted(site_packages.glob("*.dist-info")):
+            metadata = dist_info / "METADATA"
+            name, version = _metadata_name_version(metadata)
+            if name:
+                inventory[name.lower()] = version or ""
+        for egg_info in sorted(site_packages.glob("*.egg-info")):
+            name, version = _metadata_name_version(egg_info / "PKG-INFO")
+            if not name:
+                name, version = egg_info.name[: -len(".egg-info")], ""
+            inventory.setdefault(name.lower(), version)
+    return inventory
+
+
+def _metadata_name_version(metadata: Path) -> tuple[str | None, str | None]:
+    try:
+        text = metadata.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None, None
+    name = version = None
+    for line in text.splitlines():
+        if line.lower().startswith("name:") and name is None:
+            name = line.split(":", 1)[1].strip()
+        elif line.lower().startswith("version:") and version is None:
+            version = line.split(":", 1)[1].strip()
+        if name and version:
+            break
+    return name, version
+
+
+def _reconcile_probe_with_disk(installed: dict[str, Any], prefix: str) -> str | None:
+    """Return a mismatch reason when a probe disagrees with the on-disk environment."""
+    inventory = installed_distributions_on_disk(Path(prefix))
+    for name, version in installed.items():
+        if name.startswith("__") and name.endswith("__"):
+            continue
+        if version is None:
+            # The probe could not find it; the normal missing-dependency path reports it.
+            continue
+        on_disk = inventory.get(str(name).lower())
+        if on_disk is None:
+            return f"{name} is reported by the probe but is not installed on disk"
+        if str(version) != on_disk:
+            return f"{name} probe reports {version} but disk records {on_disk}"
+    return None
+
+
 def _probe_prefix_mismatch(payload: dict[str, Any], report: EnvironmentReport,
                            *, require_site: bool = True) -> bool:
     """True when a probe answered from a different environment than the verified one.
@@ -514,6 +576,15 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             report.reason = ("the dependency probe ran in a different environment: "
                              f"{installed.get('__prefix__')} != {report.prefix}")
             return report
+        probe_packages = {k: v for k, v in installed.items() if not k.startswith("__")}
+        discrepancy = _reconcile_probe_with_disk(probe_packages, str(report.prefix or ""))
+        if discrepancy:
+            # A probe answer that contradicts the environment on disk means the probe
+            # was answered by something other than the environment itself.
+            report.tier = TIER_BLOCKED
+            report.status = "DEPENDENCY_PROBE_FORGED"
+            report.reason = discrepancy
+            return report
         installed.pop("__prefix__", None)
         installed.pop("__base_prefix__", None)
         report.packages = installed
@@ -707,7 +778,8 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
     # Package directories live under the environment's lib/: their directory mtimes
     # change when a dependency is installed or removed there.
     site_packages_dirs = sorted(prefix_path.glob("lib/python*/site-packages"))
-    site_packages_dirs += [prefix_path / "Lib" / "site-packages"]
+    site_packages_dirs += [prefix_path / "lib" / "site-packages",
+                           prefix_path / "Lib" / "site-packages"]
     for site_packages in site_packages_dirs:
         if not site_packages.is_dir():
             continue
@@ -718,14 +790,24 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
         # A force-reinstall or an in-place member rewrite need not touch the directory
         # mtime, so each distribution's own metadata *and* the files it actually
         # installs (listed in its RECORD) are hashed.
-        for dist in sorted(site_packages.glob("*.dist-info")):
-            metadata = dist / "METADATA"
+        for dist in sorted(list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info"))):
+            metadata = dist / "METADATA" if dist.name.endswith(".dist-info") else dist / "PKG-INFO"
             try:
                 stat_result = metadata.stat()
             except OSError:
                 continue
             hasher.update(f"{dist.name}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
             record = dist / "RECORD"
+            if not record.is_file():
+                # A legacy egg-info has no RECORD: hash everything it contains.
+                for member in sorted(dist.iterdir()):
+                    try:
+                        member_stat = member.stat()
+                    except OSError:
+                        continue
+                    hasher.update(f"{dist.name}/{member.name}:{member_stat.st_size}:"
+                                  f"{member_stat.st_mtime_ns}".encode("utf-8"))
+                continue
             try:
                 record_text = record.read_text(encoding="utf-8", errors="replace")
             except OSError:
