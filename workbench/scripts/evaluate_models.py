@@ -375,16 +375,37 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
         return None
 
     def _bundle_members_live() -> bool:
-        """Every recorded bundle member must still hash to its recorded value."""
-        recorded = plan.checkpoint_bundle or {}
-        for category, member in recorded.items():
+        """Every bundle member must still match the manifest digest the proof recorded.
+
+        The proof carries ``bundle_manifest_digest`` (computed by the run). Recomputing the
+        members here and comparing them to *fresh* hashes would always agree, so the
+        manifest recorded by the proof is what is compared against the live member files.
+        """
+        recorded_manifest = payload.get("bundle_manifest_digest")
+        if not recorded_manifest:
+            return True
+        members = plan.checkpoint_bundle or {}
+        if not members:
+            raise EvaluationOutputError(
+                "proof records a bundle manifest but no bundle members could be resolved")
+        live = {}
+        for category, member in members.items():
             path = Path(str(member.get("path") or ""))
-            expected = member.get("sha256")
-            if not expected:
-                continue
-            if not path.is_file() or _sha(path) != expected:
+            if not path.is_file():
                 raise EvaluationOutputError(
-                    f"checkpoint bundle member {category} no longer matches its recorded digest")
+                    f"checkpoint bundle member {category} is missing: {path}")
+            live[category] = {
+                "checkpoint_id": member.get("checkpoint_id"),
+                "filename": member.get("filename") or path.name,
+                "path": str(path),
+                "sha256": _sha(path),
+            }
+        recomputed = hashlib.sha256(
+            json.dumps(live, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+        if recomputed != recorded_manifest:
+            raise EvaluationOutputError(
+                "checkpoint bundle members no longer match the recorded bundle manifest")
         return True
 
     # A bundle is one experiment: every recorded member is verified, not just the anchor.
@@ -479,6 +500,32 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
             raise EvaluationOutputError(f"declared output run directory is missing: {run_dir}")
         if not run_dir.resolve().is_relative_to(resolved_root):
             raise EvaluationOutputError(f"declared output run directory escapes the artifact root: {run_dir}")
+        # ``command.json`` is written by the runner around the subprocess itself. It is
+        # not derived from the report or the proof, so it is the run's independent witness
+        # that the execution really succeeded.
+        command_path = run_dir / "command.json"
+        if not command_path.is_file():
+            raise EvaluationOutputError(f"invocation record missing: {command_path}")
+        try:
+            command_payload = json.loads(command_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise EvaluationOutputError(f"invocation record is unreadable: {error}") from error
+        for label, key, proof_value in (
+            ("run", "run_id", payload.get("run_id")),
+            ("model", "model_id", payload.get("model_id")),
+            ("checkpoint", "checkpoint_id", payload.get("checkpoint_id")),
+            ("protocol", "protocol_id", payload.get("protocol_id")),
+            ("return code", "return_code", payload.get("return_code")),
+        ):
+            if str(command_payload.get(key)) != str(proof_value):
+                raise EvaluationOutputError(
+                    f"declared output {label} ({proof_value!r}) disagrees with the "
+                    f"invocation record ({command_payload.get(key)!r})")
+        if command_payload.get("return_code") not in (0, None):
+            raise EvaluationOutputError(
+                f"the invocation record shows a failed execution "
+                f"(return code {command_payload.get('return_code')})")
+
         logs = {}
         for name in ("stdout.log", "stderr.log"):
             log_path = run_dir / name
@@ -711,6 +758,11 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "source_actual_commit": plan.actual_source_commit,
         "checkpoint_artifact_type": plan.artifact_type,
         "checkpoint_sha256": checkpoint_local_sha,
+        # A bundle is one experiment: the manifest recorded here is what the validator
+        # compares against the live member files, so a changed member invalidates the proof.
+        "bundle_manifest_digest": plan.bundle_manifest_digest,
+        "checkpoint_bundle": plan.checkpoint_bundle,
+        "directory_members": plan.directory_members,
         "return_code": code,
         "report": str(run_report),
         "report_digest": sha256_file(run_report),
@@ -819,7 +871,22 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
         contains an undeclared extra file (a config, a log, a README).
         """
         if checkpoint_file is not None:
-            return Path(checkpoint_file), None
+            # The caller knows the path but not necessarily the member contract: resolve
+            # the declared members from the registry so a directory artifact is never
+            # hashed over undeclared extras.
+            try:
+                from workbench.backend.registry import checkpoint_by_id, model_by_id
+
+                model = model_by_id(model_id)
+                variant = checkpoint_by_id(model, checkpoint_id)
+                required = variant.get("required_files") or [
+                    member["filename"] for member in (variant.get("bundle_members") or [])
+                ]
+                members = ([{"filename": name, "path": str(Path(checkpoint_file) / name),
+                             "sha256": None} for name in required] if required else None)
+            except Exception:
+                members = None
+            return Path(checkpoint_file), members
         try:
             from workbench.backend.registry import checkpoint_by_id, checkpoint_path, model_by_id
 

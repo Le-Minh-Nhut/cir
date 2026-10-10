@@ -211,13 +211,25 @@ workbench/artifacts/reports/
 
 ### Completion contract
 
-The proof and the run report must **agree**: run id, model, checkpoint, protocol, return
-code, execution status, and the invocation evidence digest are cross-checked between the
-two, so a proof cannot re-certify a failed run by editing itself. A **bundle** (LIMN's
-three category models) is one experiment: every recorded member is re-hashed, so a changed
-member invalidates the proof even though only the anchor is passed to the evaluator. A
-directory/bundle artifact is identified by its **declared members**, so an undeclared extra
-file in a run directory does not change identity.
+Three artifacts must agree, and each checks a different thing:
+
+| Artifact | Role |
+|---|---|
+| `command.json` | the runner's own record of the invocation: argv, cwd, digests, **the subprocess return code**. It is not derived from the report or the proof, so it is the independent witness that the execution really succeeded. |
+| `<run_id>_aggregate.json` | the run's extraction result, carrying the invocation evidence digest. |
+| `<run_id>_completion.json` | the proof: run id, model, checkpoint, protocol, source commit, checkpoint digest, bundle manifest, report digest, evidence digest. |
+
+Run id, model, checkpoint, protocol, and return code are cross-checked across all three,
+and a non-zero return code in `command.json` is decisive. Rewriting the report *and* the
+proof therefore cannot re-certify a failure.
+
+A **bundle** (LIMN's three category models) is one experiment: the proof records the
+bundle manifest digest computed by the run, and the validator compares it against the live
+member files, so a changed shirt/toptee checkpoint invalidates the proof even though only
+the anchor is passed to the evaluator. A directory/bundle artifact is identified by its
+**declared members** — resolved from the registry in both the planner and the validator —
+so an undeclared extra file in a run directory does not change identity, while a declared
+member changing does.
 
 `--all-runnable` evaluation is planned as *skipped*: with no single model there is no run
 identity to bind a proof to, so run one model at a time (`--model MODEL_ID`).

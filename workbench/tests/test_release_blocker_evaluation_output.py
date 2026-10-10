@@ -828,10 +828,11 @@ def test_a_changed_bundle_member_invalidates_the_proof(env):
     bundle = {category: {"checkpoint_id": f"base_iter0_{category}", "filename": member.name,
                          "path": str(member), "sha256": sha256_file(member)}
               for category, member in members.items()}
+    manifest = hashlib.sha256(json.dumps(bundle, sort_keys=True).encode()).hexdigest()
     plan = em.EvaluationPlan(MODEL, "bundle_run", "fashioniq_original_split",
                              env["tmp"] / "FashionIQ", env["source"], members["dress"],
                              env["source"], reporting_script(env["tmp"]), PIN, PIN,
-                             checkpoint_bundle=bundle)
+                             checkpoint_bundle=bundle, bundle_manifest_digest=manifest)
     run_id = "bundle-run-id"
     assert em.execute(plan, env["config"], run_id=run_id) == 0
     proof = em.completion_proof_path(env["config"], plan, run_id)
@@ -860,3 +861,95 @@ def test_all_runnable_evaluation_is_planned_skipped_not_failed(env):
     evaluation = next(s for s in pipeline.real_stages(args, env["config"]) if s.name == "evaluation")
     assert not evaluation.commands, "a model-less evaluation must not execute"
     assert evaluation.skipped and "--model" in evaluation.skipped
+
+
+# ------------------- the invocation record is the run's independent witness (round 14)
+
+def test_a_rewritten_failed_run_is_caught_by_the_invocation_record(env):
+    """Rewriting the report and proof cannot re-certify a failure: command.json says so."""
+    failing = reporting_script(env["tmp"], exit_code=7)
+    code, run_id = run(env, failing)
+    assert code == 7
+
+    proof = reports_of(env) / f"csmcir_ckpt_v1_{run_id}_completion.json"
+    payload = json.loads(proof.read_text())
+    report_path = Path(payload["report"])
+    report = json.loads(report_path.read_text())
+
+    # Rewrite *both* artifacts consistently, leaving only the invocation record honest.
+    report["execution_status"] = "EXECUTION_COMPLETED"
+    report["return_code"] = 0
+    report_path.write_text(json.dumps(report))
+    payload["return_code"] = 0
+    payload["completion_status"] = "COMPLETED"
+    payload["report_digest"] = sha256_file(report_path)
+    proof.write_text(json.dumps(payload))
+
+    evidence = em.completion_validator(MODEL, "ckpt_v1", "fashioniq_original_split", PIN, env["config"])
+    ok, reason, _ = evidence({"run_id": run_id})
+    assert ok is False, "the invocation record must expose the rewritten failure"
+    assert "invocation record" in (reason or "")
+
+
+def test_a_bundle_member_change_is_caught_by_the_recorded_manifest(env):
+    """The proof's own bundle manifest is compared with the live members."""
+    root = env["tmp"] / "manifest_bundle"
+    root.mkdir()
+    members = {}
+    for category in ("dress", "shirt", "toptee"):
+        member = root / f"0_{category}_best_model.pt"
+        member.write_bytes(f"weights-{category}".encode())
+        members[category] = member
+
+    bundle = {category: {"checkpoint_id": f"base_iter0_{category}", "filename": member.name,
+                         "path": str(member), "sha256": sha256_file(member)}
+              for category, member in members.items()}
+    manifest = hashlib.sha256(json.dumps(bundle, sort_keys=True).encode()).hexdigest()
+    plan = em.EvaluationPlan(MODEL, "bundle_manifest_run", "fashioniq_original_split",
+                             env["tmp"] / "FashionIQ", env["source"], members["dress"],
+                             env["source"], reporting_script(env["tmp"]), PIN, PIN,
+                             checkpoint_bundle=bundle, bundle_manifest_digest=manifest)
+    run_id = "bundle-manifest-run"
+    assert em.execute(plan, env["config"], run_id=run_id) == 0
+    proof = em.completion_proof_path(env["config"], plan, run_id)
+
+    em.validate_run_manifest(plan, proof, run_id=run_id,
+                             output_root=em.artifact_root(env["config"]), config=env["config"],
+                             require_checksum=True, require_environment_identity=True)
+
+    members["shirt"].write_bytes(b"tampered weights")
+    with pytest.raises(em.EvaluationOutputError, match="bundle manifest"):
+        em.validate_run_manifest(plan, proof, run_id=run_id,
+                                 output_root=em.artifact_root(env["config"]), config=env["config"],
+                                 require_checksum=True, require_environment_identity=True)
+
+
+def test_the_pipeline_path_resolves_declared_directory_members(env, monkeypatch):
+    """Passing a checkpoint path must not discard the declared member contract."""
+    directory_checkpoint = env["tmp"] / "dcnet_run"
+    directory_checkpoint.mkdir()
+    (directory_checkpoint / "config.json").write_text("{}")
+    member = directory_checkpoint / "trained_model.pth"
+    member.write_bytes(b"state-v1")
+    members = [{"filename": "config.json", "path": str(directory_checkpoint / "config.json"),
+                "sha256": None},
+               {"filename": "trained_model.pth", "path": str(member), "sha256": None}]
+    plan = em.EvaluationPlan("dcnet", "fashioniq_run_directory",
+                             "fashioniq_full_gallery_ref_excluded", env["tmp"] / "FashionIQ",
+                             env["source"], directory_checkpoint, env["source"],
+                             reporting_script(env["tmp"]), PIN, PIN, directory_members=members)
+    run_id = "pipeline-members-run"
+    assert em.execute(plan, env["config"], run_id=run_id) == 0
+
+    # The validator is given only the checkpoint *path*, exactly as the pipeline does.
+    evidence = em.completion_validator("dcnet", "fashioniq_run_directory",
+                                       "fashioniq_full_gallery_ref_excluded", PIN,
+                                       env["config"], directory_checkpoint)
+    assert evidence({"run_id": run_id})[0] is True, "an undeclared extra must not reject"
+
+    (directory_checkpoint / "training_log.txt").write_text("undeclared\n")
+    assert evidence({"run_id": run_id})[0] is True, "declared members only"
+
+    member.write_bytes(b"state-v2-tampered")
+    ok, reason, _ = evidence({"run_id": run_id})
+    assert ok is False, "a changed declared member must invalidate the proof"
