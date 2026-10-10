@@ -1005,7 +1005,7 @@ def test_inventory_and_module_checks_agree(tmp_path, monkeypatch):
     monkeypatch.setenv("AGREE_VAR", str(interpreter))
     forget_environment()
 
-    versions, modules = runtime.inspect_environment_distributions(str(interpreter.parent.parent))
+    versions, modules, _ = runtime.inspect_environment_distributions(str(interpreter.parent.parent))
     assert versions["stubdep"] == "1.2.3"
     assert "stubdep" in modules, "an installed module is reported by the same walk"
 
@@ -1017,3 +1017,99 @@ def test_inventory_and_module_checks_agree(tmp_path, monkeypatch):
     assert report.tier == "RUNTIME_READY", f"{report.status}: {report.reason}"
     assert report.packages["stubdep"] == "1.2.3"
     assert report.imports["stubdep"] is True
+
+
+# ------------------------------- consolidated walk: distro layout and unconfirmed (round 12)
+
+def test_distro_layout_without_record_is_recognised(tmp_path, monkeypatch):
+    """A deb-style dist-info carries no RECORD; its package sits beside the metadata.
+
+    Debian/Ubuntu ``deb`` installs drop ``INSTALLER``/``WHEEL``/``METADATA`` with no
+    RECORD and no ``top_level.txt``, so the installed code must be recognised from the
+    directory next to the metadata. Missing this made a real distro environment look
+    empty (37 of 108 distributions were dropped).
+    """
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        package = site_packages / "distropkg"
+        package.mkdir(parents=True, exist_ok=True)
+        (package / "__init__.py").write_text("__version__ = '4.5.6'\n")
+        dist = site_packages / "distropkg-4.5.6.dist-info"
+        dist.mkdir(exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: distropkg\nVersion: 4.5.6\n")
+        (dist / "INSTALLER").write_text("deb\n")
+        (dist / "WHEEL").write_text("Wheel-Version: 1.0\n")
+        break
+    monkeypatch.setenv("DISTRO_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "DISTRO_VAR", "packages": ["distropkg==4.5.6"],
+                             "required_imports": ["distropkg"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier == "RUNTIME_READY", f"{report.status}: {report.reason}"
+    assert report.imports["distropkg"] is True
+
+
+def test_a_manager_installed_distribution_with_an_opaque_module_is_unconfirmed(tmp_path, monkeypatch):
+    """When the module name cannot be derived, the verdict is unverified, not ready."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        # ``beautifulsoup4`` installs ``bs4``: unguessable from the name.
+        package = site_packages / "bs4"
+        package.mkdir(parents=True, exist_ok=True)
+        (package / "__init__.py").write_text("")
+        dist = site_packages / "beautifulsoup4-4.12.0.dist-info"
+        dist.mkdir(exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: beautifulsoup4\nVersion: 4.12.0\n")
+        (dist / "INSTALLER").write_text("deb\n")
+        break
+    monkeypatch.setenv("OPAQUE_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "OPAQUE_VAR", "packages": ["beautifulsoup4==4.12.0"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier != "RUNTIME_READY", "an underivable module mapping is not readiness"
+    assert report.status == "DEPENDENCY_INSTALLATION_UNVERIFIED", report.status
+    with pytest.raises(RuntimeError):
+        runtime.python_executable(model)
+
+
+def test_dot_prefixed_self_metadata_is_not_installed_content(tmp_path, monkeypatch):
+    """A RECORD spelling its own metadata as ``./x.dist-info/...`` installs nothing."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        dist = site_packages / "ghost-1.0.dist-info"
+        dist.mkdir(parents=True, exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: ghost\nVersion: 1.0\n")
+        (dist / "RECORD").write_text("./ghost-1.0.dist-info/METADATA,sha256=x,60\n")
+        break
+    monkeypatch.setenv("DOTSPELL_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "DOTSPELL_VAR", "packages": ["ghost==1.0"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier != "RUNTIME_READY"
+    assert report.status == "DEPENDENCY_MISSING", report.status
+
+
+def test_a_real_distro_environment_is_not_reported_empty():
+    """The installed distributions of this host's distro tree are read, not dropped."""
+    import sysconfig
+
+    base = Path(sysconfig.get_path("stdlib") or "/usr/lib/python3")
+    prefix = base.parent.parent if base.parent.name.startswith("python") else Path("/usr")
+    versions, modules, unconfirmed = runtime.inspect_environment_distributions(str(prefix))
+    installed_dirs = 0
+    for site_packages in runtime._site_packages_dirs(prefix):
+        installed_dirs += len(list(site_packages.glob("*.dist-info")))
+        installed_dirs += len(list(site_packages.glob("*.egg-info")))
+    if installed_dirs == 0:
+        pytest.skip("no distribution directories on this host")
+    assert len(versions) + len(unconfirmed) >= installed_dirs * 0.9, (
+        f"only {len(versions)} + {len(unconfirmed)} of {installed_dirs} were accounted for")

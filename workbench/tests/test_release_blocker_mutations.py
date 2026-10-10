@@ -442,8 +442,8 @@ def test_mut_h_trusting_the_environment_for_its_own_inventory_is_detected(
             try:
                 payload = json.loads(result.stdout.strip().splitlines()[-1])
             except (ValueError, IndexError):
-                return {}, set()
-            return payload, set(payload)
+                return {}, set(), set()
+            return payload, set(payload), set()
 
         ctx.setattr(runtime, "inspect_environment_distributions", inventory_from_environment)
 
@@ -534,9 +534,9 @@ def test_mut_j_accepting_a_hollow_install_is_detected(tmp_path, monkeypatch):
         # every RECORD lists itself.
         original = runtime.inspect_environment_distributions
 
-        def trusting_walk(prefix, base_prefix=None):
+        def trusting_walk(prefix, base_prefix=None) -> tuple:
             # The historical behaviour: metadata alone counted as an installation.
-            versions, modules = original(prefix, base_prefix)
+            versions, modules, unconfirmed = original(prefix, base_prefix)
             for lib in (Path(prefix) / "lib").glob("python*"):
                 for dist in list((lib / "site-packages").glob("*.dist-info")) + \
                         list((lib / "site-packages").glob("*.egg-info")):
@@ -545,7 +545,7 @@ def test_mut_j_accepting_a_hollow_install_is_detected(tmp_path, monkeypatch):
                     if declared:
                         versions.setdefault(runtime.normalize_distribution_name(str(declared)),
                                             version or None)
-            return versions, modules
+            return versions, modules, unconfirmed
 
         ctx.setattr(runtime, "inspect_environment_distributions", trusting_walk)
 

@@ -312,6 +312,13 @@ of the environment (`inspect_environment_distributions`) so the version answer a
 - a legacy `egg-info` counts only when the module named in its `top_level.txt` really
   exists, or it keeps a non-descriptive sibling file.
 
+A Debian/Ubuntu `deb`-installed layout is recognised too: those drop `INSTALLER`/`WHEEL`
+and no `RECORD`, and the code sits beside the metadata as a package named after the
+distribution. Where a distribution's module name cannot be derived from its metadata
+(`beautifulsoup4` installs `bs4`), the entry is reported as
+`DEPENDENCY_INSTALLATION_UNVERIFIED` rather than guessed at or silently accepted; declare
+the module in `required_imports` to verify it.
+
 Metadata that installs nothing describes an installation that never completed (or one
 that was wiped), so it cannot satisfy a requirement: the package is reported missing. A declared import module must correspond to a top-level name the environment
 actually installs (standard-library and builtin module names always count).

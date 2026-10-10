@@ -401,6 +401,43 @@ def _metadata_name_version(metadata: Path) -> tuple[str | None, str | None]:
     return name, version
 
 
+_DESCRIPTIVE_METADATA = {"METADATA", "PKG-INFO", "RECORD", "INSTALLER", "WHEEL", "LICENSE",
+                         "LICENSE.txt", "entry_points.txt", "SOURCES.txt", "requires.txt",
+                         "dependency_links.txt", "top_level.txt", "not-zip-safe", "zip-safe"}
+
+
+def _distribution_owner_names(declared_name: str, dist_name: str) -> list[str]:
+    """Candidate module names a distribution may install beside its metadata.
+
+    Distribution names use ``-``/``_``/``.`` where module names use ``_``, so the
+    candidates are the normalised name plus its underscore spelling, then the same for
+    the metadata directory's own name.
+    """
+    candidates: list[str] = []
+    for raw in (str(declared_name), dist_name.rsplit(".", 2)[0].rsplit("-", 1)[0]):
+        if not raw:
+            continue
+        for spelling in (raw, raw.replace("-", "_"), raw.replace(".", "_"),
+                         raw.replace("-", "_").replace(".", "_")):
+            if spelling and spelling not in candidates:
+                candidates.append(spelling)
+    return candidates
+
+
+def _declared_top_level_modules(dist: Path) -> list[str]:
+    """Module names a legacy egg-info declares, or the directories it ships."""
+    names: list[str] = []
+    top_level = dist / "top_level.txt"
+    if top_level.is_file():
+        try:
+            names += [line.strip() for line in
+                      top_level.read_text(encoding="utf-8", errors="replace").splitlines()
+                      if line.strip()]
+        except OSError:
+            pass
+    return names
+
+
 def _safe_record_member(site_packages: Path, member: str, dist_name: str) -> Path | None:
     """Resolve a RECORD entry to a file inside ``site_packages``, or None.
 
@@ -409,16 +446,24 @@ def _safe_record_member(site_packages: Path, member: str, dist_name: str) -> Pat
     installed content.
     """
     member = member.strip()
-    if not member or member.startswith(("/", "\\")) or member.startswith(f"{dist_name}/"):
+    if not member or member.startswith(("/", "\\")):
         return None
-    relative = PurePosixPath(member)
-    if relative.is_absolute() or ".." in relative.parts:
+    # Normalise "./x" and repeated separators before deciding; RECORD entries are
+    # untrusted text and a "." segment must not hide the distribution's own metadata.
+    parts = [part for part in PurePosixPath(member).parts if part not in (".", "")]
+    if not parts or ".." in parts:
         return None
-    return site_packages / member
+    relative = PurePosixPath(*parts)
+    if relative.is_absolute() or relative.parts[0] == dist_name or member.startswith(f"{dist_name}/"):
+        return None
+    if relative.parts[0] == dist_name or str(relative).startswith(f"{dist_name}/"):
+        return None
+    return site_packages / relative
 
 
 def inspect_environment_distributions(prefix: str | None,
-                                      base_prefix: str | None = None) -> tuple[dict[str, str | None], set[str]]:
+                                      base_prefix: str | None = None
+                                      ) -> tuple[dict[str, str | None], set[str], set[str]]:
     """Read an environment's installed distributions from disk.
 
     One walk produces everything the callers need, so the version inventory and the
@@ -427,6 +472,10 @@ def inspect_environment_distributions(prefix: str | None,
 
     * ``versions``       — normalized name -> version (or None when unreadable).
     * ``modules``        — top-level importable names the environment installs.
+    * ``unconfirmed``    — names whose installation cannot be confirmed from disk: a
+      RECORD-less metadata directory whose distribution name differs from its module name
+      (``beautifulsoup4`` installs ``bs4``) is not decidable here, so it is reported rather
+      than guessed at or silently accepted.
 
     Nothing is executed: no ``.pth`` is run, no module is imported, and no directory is
     added to ``sys.path``. ``base_prefix`` covers a ``system_site_packages`` environment,
@@ -436,6 +485,7 @@ def inspect_environment_distributions(prefix: str | None,
 
     versions: dict[str, str | None] = {}
     modules: set[str] = set()
+    unconfirmed: set[str] = set()
     roots: list[Path] = []
     for candidate in (prefix, base_prefix):
         if candidate:
@@ -477,13 +527,15 @@ def inspect_environment_distributions(prefix: str | None,
 
         for dist in list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info")):
             dist_name = dist.name
-            metadata = dist / "METADATA" if dist_name.endswith(".dist-info") else dist / "PKG-INFO"
-            declared, version = _metadata_name_version(metadata)
-            if not declared:
-                declared = dist_name.split("-")[0]
-            key = normalize_distribution_name(str(declared))
-            versions.setdefault(key, version or None)
+            metadata_path = dist / ("METADATA" if dist_name.endswith(".dist-info") else "PKG-INFO")
+            declared_name, declared_version = _metadata_name_version(metadata_path)
+            if not declared_name:
+                declared_name = dist_name.split("-")[0]
+            key = normalize_distribution_name(str(declared_name))
 
+            # Installed *content* is what could actually be imported. Metadata that merely
+            # describes a distribution is not content, and a distribution whose files are
+            # gone describes an install that never completed (or one that was wiped).
             installed_content = False
             record = dist / "RECORD"
             if record.is_file():
@@ -497,49 +549,53 @@ def inspect_environment_distributions(prefix: str | None,
                     if resolved is None:
                         continue
                     if resolved.is_dir():
+                        installed_content = True
                         modules.add(resolved.name.split(".")[0])
                     elif resolved.is_file():
                         installed_content = True
                         if resolved.name.endswith(".py"):
                             modules.add(resolved.name[: -len(".py")])
             else:
-                # No RECORD: judge by the files the distribution actually keeps, ignoring
-                # the metadata that merely describes it.
-                descriptive = {"METADATA", "PKG-INFO", "RECORD", "INSTALLER", "WHEEL", "LICENSE",
-                               "LICENSE.txt", "entry_points.txt", "SOURCES.txt", "requires.txt",
-                               "dependency_links.txt", "top_level.txt", "not-zip-safe", "zip-safe"}
+                # No RECORD: a legacy egg-info names its modules in ``top_level.txt``, and
+                # those modules must really exist. Descriptive files do not count.
                 try:
                     siblings = list(dist.iterdir())
                 except OSError:
                     siblings = []
-                # A legacy egg-info declares its module through ``top_level.txt``; that
-                # module must really be installed, otherwise the metadata installs nothing.
-                top_level = dist / "top_level.txt"
-                declared: list[str] = []
-                if top_level.is_file():
-                    try:
-                        declared = [line.strip() for line in
-                                    top_level.read_text(encoding="utf-8", errors="replace").splitlines()
-                                    if line.strip()]
-                    except OSError:
-                        declared = []
-                for module_name in declared:
+                for module_name in _declared_top_level_modules(dist):
                     head = module_name.split(".", 1)[0]
                     if (site_packages / f"{head}.py").is_file() or (site_packages / head).is_dir():
                         installed_content = True
                         modules.add(head)
-                if any(sibling.is_file() and sibling.name not in descriptive for sibling in siblings):
+                if any(sibling.is_file() and sibling.name not in _DESCRIPTIVE_METADATA
+                       for sibling in siblings):
                     installed_content = True
                 for sibling in siblings:
                     if sibling.is_dir():
                         installed_content = True
                         modules.add(sibling.name.split(".")[0])
+                # Debian's ``deb``-installed dist-infos carry no RECORD and no
+                # ``top_level.txt``: the installed code simply sits beside the metadata as a
+                # module or package directory named after the distribution. Recognise that
+                # layout too, or a distro environment looks empty.
+                for candidate in _distribution_owner_names(declared_name, dist_name):
+                    if (site_packages / f"{candidate}.py").is_file() or (site_packages / candidate).is_dir():
+                        installed_content = True
+                        modules.add(candidate)
+                        break
 
-            if not installed_content:
-                # Metadata describing an install that never completed (or was wiped) cannot
-                # satisfy a requirement: nothing could import it.
+            if installed_content:
+                versions.setdefault(key, declared_version or None)
+            elif not record.is_file() and (dist / "INSTALLER").is_file():
+                # A package manager installed this (Debian's ``deb`` drops INSTALLER and no
+                # RECORD) and the module it provides is named differently from the
+                # distribution. That mapping is not decidable from disk, so the entry is
+                # reported as unconfirmed rather than dropped or accepted.
+                versions.setdefault(key, declared_version or None)
+                unconfirmed.add(key)
+            else:
                 versions.pop(key, None)
-    return versions, modules
+    return versions, modules, unconfirmed
 
 
 def _is_base_conda_path(path: Path) -> bool:
@@ -708,10 +764,19 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     required = _required_packages(model)
     imports = _required_imports(model)
     if required or imports:
-        report.packages, _ = inspect_environment_distributions(report.prefix, report.base_prefix)
+        report.packages, _, unconfirmed = inspect_environment_distributions(
+            report.prefix, report.base_prefix)
         report.dependency_probe_executed = True
         for pkg, want in required.items():
             key = normalize_distribution_name(pkg)
+            if key in unconfirmed:
+                report.tier = TIER_REQUIREMENTS_UNVERIFIED
+                report.status = "DEPENDENCY_INSTALLATION_UNVERIFIED"
+                report.reason = (f"{pkg} was installed by a package manager but the module it "
+                                 f"provides cannot be derived from its metadata; declare that "
+                                 f"module in required_imports to verify it")
+                _remember(model, require_cuda, report)
+                return report
             if key not in report.packages:
                 report.tier = TIER_BLOCKED
                 report.status = "DEPENDENCY_MISSING"
@@ -744,7 +809,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     # Declared importable modules are checked against the same on-disk inventory: a
     # top-level module name must correspond to something the environment installs.
     if imports:
-        _, installed_modules = inspect_environment_distributions(report.prefix, report.base_prefix)
+        _, installed_modules, _ = inspect_environment_distributions(report.prefix, report.base_prefix)
         import sys as _sys
 
         installed_modules |= set(_sys.stdlib_module_names)
