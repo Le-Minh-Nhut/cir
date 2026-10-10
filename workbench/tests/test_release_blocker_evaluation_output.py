@@ -583,9 +583,10 @@ def test_an_environment_cannot_forge_its_own_package_inventory(tmp_path, monkeyp
                              "required_imports": ["fakedmodule"]}}
     report = runtime.verify_environment(model, probe=True)
 
+    # The probe is isolated, so the environment's own monkeypatching never runs: the
+    # inventory is not forged, it is simply unobservable. Either way it is never ready.
     assert report.tier != "RUNTIME_READY", "a forged package inventory must never verify"
-    assert report.status == "DEPENDENCY_INSTALLATION_UNVERIFIED", report.status
-    assert "no on-disk installation" in (report.reason or "")
+    assert report.status in ("DEPENDENCY_INSTALLATION_UNVERIFIED", "DEPENDENCY_MISSING"), report.status
     with pytest.raises(RuntimeError):
         runtime.python_executable(model)
 
@@ -622,6 +623,7 @@ def test_legacy_egg_info_install_invalidates_cache(tmp_path, monkeypatch):
     egg = site_packages / "stubdep.egg-info"
     egg.mkdir()
     (egg / "PKG-INFO").write_text("Metadata-Version: 1.1\nName: stubdep\nVersion: 1.2.3\n")
+    (egg / "top_level.txt").write_text("stubdep\n")
     (site_packages / "stubdep.py").write_text("VERSION = '1.2.3'\n")
 
     monkeypatch.setenv("EGG_VAR", str(env_dir / "bin" / "python"))

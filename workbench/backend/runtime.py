@@ -50,15 +50,20 @@ class EnvironmentReport:
 
 
 def _run_probe(interpreter: Path, code: str, timeout: int = 60,
-               args: tuple[str, ...] = (), isolated: bool = False) -> tuple[bool, str, str]:
+               args: tuple[str, ...] = (), isolated: bool = False,
+               site_packages: Path | None = None) -> tuple[bool, str, str]:
     """Run ``code`` under ``interpreter``.
 
-    ``isolated`` adds ``-I`` so the user site and ``PYTHONPATH`` are ignored and no
-    ambient environment can answer for the one under test. It deliberately does *not*
-    add ``-S``: the environment's own ``site-packages`` must stay visible, and probes
-    that report a foreign ``sys.prefix`` are rejected by the caller instead.
+    ``isolated`` runs ``-I -S`` and adds the environment's own ``site-packages``
+    explicitly. ``-S`` is what matters: it stops ``site`` from importing
+    ``sitecustomize``/``usercustomize``, so no code belonging to the environment (or to
+    the user) executes while it is being inspected. The environment's *installed
+    distributions* remain visible because the directory is added by the probe itself,
+    so the answers are about the environment rather than about code standing next to it.
     """
-    prefix_flags = ["-I"] if isolated else []
+    prefix_flags = ["-I", "-S"] if isolated else []
+    if isolated and site_packages is not None:
+        code = f"import site; site.addsitedir({str(site_packages)!r})\n" + code
     try:
         proc = subprocess.run(
             [str(interpreter), *prefix_flags, "-c", code, *args],
@@ -365,27 +370,53 @@ def normalize_distribution_name(name: str) -> str:
     return _NORMALIZE_RE.sub("-", name).strip().lower()
 
 
-_BASELINE_INVENTORIES: dict[str, dict[str, str | None]] = {}
+def _site_packages_for_distribution(prefix: Path, name: str) -> Path | None:
+    for site_packages in _site_packages_dirs(prefix):
+        for dist in list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info")):
+            metadata = dist / "METADATA" if dist.name.endswith(".dist-info") else dist / "PKG-INFO"
+            declared, _ = _metadata_name_version(metadata)
+            if declared and normalize_distribution_name(declared) == normalize_distribution_name(name):
+                return site_packages
+    return None
 
-def baseline_inventory(prefix: Path) -> dict[str, str | None]:
-    """The environment's package inventory as first observed in this process.
 
-    A module inside the environment (``sitecustomize``, a ``.pth`` shim) runs before any
-    probe and can create or rewrite its own ``dist-info``. Re-reading disk after the
-    probe would therefore confirm the fabrication, so the first read is authoritative
-    for the process. ``forget_environment()`` clears it, which is how an operator who
-    installed something announces that the environment legitimately changed.
+def _primary_site_packages(prefix: Path) -> Path | None:
+    """The environment's own site-packages directory, when it has one."""
+    for site_packages in _site_packages_dirs(prefix):
+        return site_packages
+    return None
+
+
+def _distribution_has_installed_content(site_packages: Path, name: str) -> bool:
+    """True when a distribution's own metadata names files that exist on disk.
+
+    A ``dist-info`` directory with neither a ``RECORD`` nor any recorded member is
+    metadata without content: the package cannot be imported, so it must not satisfy a
+    requirement merely by existing.
     """
-    try:
-        key = str(Path(prefix).resolve())
-    except OSError:
-        key = str(prefix)
-    if key not in _BASELINE_INVENTORIES:
-        try:
-            _BASELINE_INVENTORIES[key] = installed_distributions_on_disk(Path(prefix))
-        except OSError:
-            _BASELINE_INVENTORIES[key] = {}
-    return _BASELINE_INVENTORIES[key]
+    for dist in list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info")):
+        metadata = dist / "METADATA" if dist.name.endswith(".dist-info") else dist / "PKG-INFO"
+        declared, _ = _metadata_name_version(metadata)
+        if not declared or normalize_distribution_name(declared) != normalize_distribution_name(name):
+            # The directory spelling may be the only identity an egg-info has.
+            if normalize_distribution_name(dist.name.split("-")[0]) != normalize_distribution_name(name):
+                continue
+        record = dist / "RECORD"
+        if record.is_file():
+            try:
+                for line in record.read_text(encoding="utf-8", errors="replace").splitlines():
+                    member = line.split(",", 1)[0].strip()
+                    if member and (site_packages / member).exists():
+                        return True
+            except OSError:
+                return False
+            continue
+        # No RECORD: an egg-info or a plain metadata directory. Treat any sibling file as
+        # content only when it is not the metadata itself.
+        if any(candidate.name not in ("METADATA", "PKG-INFO", "RECORD", "INSTALLER", "WHEEL", "LICENSE", "entry_points.txt")
+               for candidate in dist.iterdir() if candidate.is_file()):
+            return True
+    return False
 
 
 def installed_distributions_on_disk(prefix: Path) -> dict[str, str | None]:
@@ -449,7 +480,8 @@ def _reconcile_probe_with_disk(installed: dict[str, Any], prefix: str,
     """
     on_disk = dict(inventory) if inventory is not None else installed_distributions_on_disk(Path(prefix))
     if base_prefix and str(base_prefix) != str(prefix):
-        # ``system_site_packages`` environments resolve some requirements from the base.
+        # A ``system_site_packages`` environment resolves some requirements from its base
+        # interpreter, which is a legitimate, orchestrator-read location.
         for name, version in installed_distributions_on_disk(Path(base_prefix)).items():
             on_disk.setdefault(name, version)
 
@@ -464,28 +496,16 @@ def _reconcile_probe_with_disk(installed: dict[str, Any], prefix: str,
             return "unverified", (f"{name} is reported by the probe but has no on-disk "
                                   f"installation in {prefix}")
         recorded = on_disk[key]
+        if recorded and not _distribution_has_installed_content(
+                _site_packages_for_distribution(Path(prefix), str(name)) or Path(prefix), str(name)):
+            return "unverified", (f"{name} has metadata on disk but no installed files, "
+                                  f"so it cannot be imported")
         if not recorded:
             return "unverified", (f"{name} is installed on disk but its version could not "
                                   f"be read, so {version} is unconfirmed")
         if str(version) != recorded:
             return "forged", f"{name} probe reports {version} but disk records {recorded}"
     return None, None
-
-
-def _probe_prefix_mismatch(payload: dict[str, Any], report: EnvironmentReport,
-                           *, require_site: bool = True) -> bool:
-    """True when a probe answered from a different environment than the verified one.
-
-    This catches accidental cross-environment contamination (a ``PYTHONPATH`` entry,
-    an activated environment, a wrapper) as well as ``sitecustomize`` tampering.
-    """
-    reported = payload.get("__prefix__")
-    if reported is None:
-        return False
-    try:
-        return Path(str(reported)).resolve() != Path(str(report.prefix or "")).resolve()
-    except (OSError, ValueError):
-        return True
 
 
 def _is_base_conda_path(path: Path) -> bool:
@@ -604,13 +624,8 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         if cached is not None:
             return cached
 
-    # Read the on-disk package inventory *before* any code inside the environment runs.
-    # A module in the environment (sitecustomize, a .pth shim) runs before any probe and
-    # can rewrite its own metadata, so the answers are reconciled against what was on
-    # disk before the environment was given control.
-    pre_probe_inventory = None
-    if probe:
-        pre_probe_inventory = baseline_inventory(Path(configured).parent.parent)
+    # The environment's own site-packages, used by the isolated probes.
+    probe_site_packages = _primary_site_packages(Path(configured).parent.parent)
 
     identity = _interpreter_identity(interpreter) if probe else None
     report = EnvironmentReport(
@@ -662,13 +677,14 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         code = (
             "import json, sys, importlib.metadata as m\n"
             f"req={required!r}\n"
-            "out={'__prefix__': sys.prefix, '__base_prefix__': getattr(sys,'base_prefix',sys.prefix)}\n"
+            "out={}\n"
             "for pkg,ver in req.items():\n"
             "    try: out[pkg]=m.version(pkg)\n"
             "    except Exception: out[pkg]=None\n"
             "print(json.dumps(out))\n"
         )
-        ok, out, err = _run_probe(interpreter, code, isolated=True)
+        ok, out, err = _run_probe(interpreter, code, isolated=True,
+                                  site_packages=probe_site_packages)
         if not ok:
             report.tier = TIER_BLOCKED
             report.status = "DEPENDENCIES_UNREADABLE"
@@ -681,16 +697,10 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             report.status = "DEPENDENCIES_UNREADABLE"
             report.reason = "dependency probe returned invalid JSON"
             return report
-        if _probe_prefix_mismatch(installed, report, require_site=False):
-            report.tier = TIER_BLOCKED
-            report.status = "DEPENDENCY_PROBE_ENVIRONMENT_MISMATCH"
-            report.reason = ("the dependency probe ran in a different environment: "
-                             f"{installed.get('__prefix__')} != {report.prefix}")
-            return report
         probe_packages = {k: v for k, v in installed.items() if not k.startswith("__")}
         discrepancy = None
         verdict, reason = _reconcile_probe_with_disk(
-            probe_packages, str(report.prefix or ""), inventory=pre_probe_inventory,
+            probe_packages, str(report.prefix or ""),
             base_prefix=str(report.base_prefix or ""))
         if verdict == "forged":
             # A probe answer that contradicts the environment on disk means the probe
@@ -704,8 +714,6 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             report.status = "DEPENDENCY_INSTALLATION_UNVERIFIED"
             report.reason = reason
             return report
-        installed.pop("__prefix__", None)
-        installed.pop("__base_prefix__", None)
         report.packages = installed
         report.dependency_probe_executed = True
         for pkg, want in required.items():
@@ -740,14 +748,15 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         code = (
             "import json, sys\n"
             f"names={imports!r}\n"
-            "out={'__prefix__': sys.prefix}\n"
+            "out={}\n"
             "for n in names:\n"
             "    try:\n"
             "        __import__(n); out[n]=True\n"
             "    except Exception: out[n]=False\n"
             "print(json.dumps(out))\n"
         )
-        ok, out, err = _run_probe(interpreter, code, isolated=True)
+        ok, out, err = _run_probe(interpreter, code, isolated=True,
+                                  site_packages=probe_site_packages)
         if not ok:
             report.tier = TIER_BLOCKED
             report.status = "MODEL_IMPORT_FAILED"
@@ -760,13 +769,6 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             report.status = "MODEL_IMPORT_FAILED"
             report.reason = "import probe returned invalid JSON"
             return report
-        if _probe_prefix_mismatch(results, report, require_site=False):
-            report.tier = TIER_BLOCKED
-            report.status = "DEPENDENCY_PROBE_ENVIRONMENT_MISMATCH"
-            report.reason = ("the import probe ran in a different environment: "
-                             f"{results.get('__prefix__')} != {report.prefix}")
-            return report
-        results.pop("__prefix__", None)
         report.imports = results
         missing = [name for name, present in results.items() if not present]
         if missing:
@@ -798,7 +800,8 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             "except Exception: pass\n"
             "print(json.dumps(out))\n"
         )
-        ok, out, _ = _run_probe(interpreter, code, isolated=True)
+        ok, out, _ = _run_probe(interpreter, code, isolated=True,
+                                site_packages=probe_site_packages)
         if ok:
             try:
                 cuda = json.loads(out.splitlines()[-1])
@@ -1010,14 +1013,9 @@ def forget_environment(interpreter: str | None = None) -> None:
     """Drop cached verifications (all, or those for one interpreter path)."""
     if interpreter is None:
         _VERIFIED_ENVIRONMENTS.clear()
-        _BASELINE_INVENTORIES.clear()
         return
     for key in [key for key, report in _VERIFIED_ENVIRONMENTS.items() if report.interpreter == interpreter]:
         _VERIFIED_ENVIRONMENTS.pop(key, None)
-    try:
-        _BASELINE_INVENTORIES.pop(str(Path(interpreter).resolve()), None)
-    except OSError:
-        pass
 
 
 def inspect_environment(model: dict[str, Any]) -> EnvironmentReport:

@@ -287,30 +287,32 @@ Dependency and import probes run under `-I` (but **not** `-S`, so the environmen
 site-packages stay visible) and must report the same `sys.prefix` as the verified
 environment; a mismatch is blocked as `DEPENDENCY_PROBE_ENVIRONMENT_MISMATCH`.
 
-A probe answer is additionally **reconciled against the environment on disk**: the
-orchestrator reads `*.dist-info/METADATA` and `*.egg-info/PKG-INFO` itself, normalising
-names per PEP 503, so an environment containing a `sitecustomize.py` (or any other
-module) that monkeypatches `importlib.metadata` cannot claim packages it does not have.
+**Probes run isolated.** Dependency, import, and CUDA probes execute with ``-I -S`` and
+then add the environment's own `site-packages` explicitly (`site.addsitedir`). ``-S`` is
+the important flag: it stops `site` from importing `sitecustomize`/`usercustomize`, so no
+code belonging to the environment (or to the user) executes while it is being inspected.
+The environment's installed distributions stay visible, so the answers describe the
+environment rather than code standing next to it. Without this, an environment could
+monkeypatch `importlib.metadata`, or create/rewrite its own `dist-info`, and answer for
+itself.
 
-The outcome is deliberately three-way:
+**Answers are then reconciled against the environment on disk.** The orchestrator reads
+`*.dist-info/METADATA` and `*.egg-info/PKG-INFO` itself, normalising names per PEP 503, and
+requires the recorded distribution to have real installed content (a `RECORD` entry that
+exists, or an egg-info counterpart). The outcome is three-way:
 
 | Situation | Verdict |
 |---|---|
-| probe agrees with the pre-probe on-disk inventory | verified |
-| probe value contradicts an installed distribution, or claims a package that was **not** on disk before the environment ran | `DEPENDENCY_PROBE_FORGED` |
-| probe claims a package with no on-disk installation of its own (editable/`.pth`, `system_site_packages`), or the installed version cannot be read | `DEPENDENCY_INSTALLATION_UNVERIFIED` — never `RUNTIME_READY` |
+| probe agrees with disk, and the distribution has installed content | verified |
+| probe value contradicts an installed distribution | `DEPENDENCY_PROBE_FORGED` |
+| probe claims a package with no on-disk installation of its own (editable/`.pth`, `system_site_packages`), or the installed version cannot be read, or the metadata names no installed files | `DEPENDENCY_INSTALLATION_UNVERIFIED` — never `RUNTIME_READY` |
 
-**The pre-probe inventory is authoritative for the process.** A module inside the
-environment (`sitecustomize`, a `.pth` shim) runs before any probe and can create or
-rewrite its own `dist-info`; re-reading disk after the probe would therefore confirm the
-fabrication. `forget_environment()` — the documented "everything is stale" API — clears
-the cached verification *and* the inventory, which is how an operator who legitimately
-installed a package announces that the environment changed. The environment fingerprint
-already invalidates the verification on its own when a package is added or removed.
+There is no change-attribution heuristic: nothing tries to guess *why* the on-disk set
+changed, because that is not decidable in process. Isolation removes the need for it.
 
 An unversioned declaration (`openai_clip`, `Pillow`, `torchvision`) means "any version":
-presence is the requirement. `VERSION_CONSTRAINT_UNVERIFIED` is reserved for a
-constraint that cannot be parsed at all.
+presence is the requirement. `VERSION_CONSTRAINT_UNVERIFIED` is reserved for a constraint
+that cannot be parsed at all.
 
 ### Verification reuse
 

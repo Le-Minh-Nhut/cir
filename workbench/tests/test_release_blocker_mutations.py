@@ -44,10 +44,18 @@ def make_venv(root: Path, name: str = "env") -> Path:
 
 
 def install_stub(interpreter: Path, name: str, version: str) -> None:
+    """Install a real, importable distribution (module + metadata + RECORD)."""
     for lib in (interpreter.parent.parent / "lib").glob("python*"):
-        dist = lib / "site-packages" / f"{name}-{version}.dist-info"
+        site_packages = lib / "site-packages"
+        site_packages.mkdir(parents=True, exist_ok=True)
+        module = site_packages / f"{name}.py"
+        module.write_text(f"__version__ = {version!r}\n")
+        dist = site_packages / f"{name}-{version}.dist-info"
         dist.mkdir(parents=True, exist_ok=True)
         (dist / "METADATA").write_text(f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n")
+        (dist / "RECORD").write_text(
+            f"{name}.py,sha256=test,{module.stat().st_size}\n"
+            f"{name}-{version}.dist-info/METADATA,sha256=test,60\n")
         return
     raise AssertionError("no site-packages in the test environment")
 
@@ -374,41 +382,55 @@ def test_mut_g_manage_environment_using_a_non_probing_tier_is_detected(tmp_path,
 
 # ------------------------------------------------------------------------- MUT-H
 
-def test_mut_h_accepting_a_forged_package_inventory_is_detected(tmp_path, monkeypatch):
-    """The old bug: probe answers were trusted without checking the environment on disk."""
-    from workbench.backend.runtime import check_environment_isolation
+def test_mut_h_running_environment_code_during_a_probe_is_detected(tmp_path, monkeypatch):
+    """The old bug: the probes ran inside the environment, so its own code answered.
 
-    env_dir = tmp_path / "env"
-    import venv as _venv
-
-    _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
-    site_packages = next((env_dir / "lib").glob("python*/site-packages"))
-    # An empty environment claiming a dependency it does not have.
-    (site_packages / "sitecustomize.py").write_text(
-        "import importlib.metadata as m\n"
-        "_original = m.version\n"
-        "m.version = lambda n: '1.2.3' if n == 'stubdep' else _original(n)\n")
-    interpreter = env_dir / "bin" / "python"
+    ``sitecustomize`` monkeypatches ``importlib.metadata``. When the probes run isolated
+    (``-I -S`` plus an explicit ``site.addsitedir``) that code never executes and the
+    fabricated answer never appears; this mutation restores the unisolated behaviour.
+    """
+    interpreter = make_venv(tmp_path)
+    flagged = None
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        flagged = site_packages / "RAN"
+        (site_packages / "sitecustomize.py").write_text(
+            "import pathlib\n"
+            "pathlib.Path(__file__).parent.joinpath('RAN').write_text('yes')\n"
+            "import importlib.metadata as m\n"
+            "_original = m.version\n"
+            "m.version = lambda n: '1.2.3' if n == 'ghostdep' else _original(n)\n")
+        break
     monkeypatch.setenv("MUT_H_VAR", str(interpreter))
     model = {"model_id": "mut_h", "environment_required": True,
-             "environment": {"python_env_var": "MUT_H_VAR", "packages": ["stubdep==1.2.3"]}}
+             "environment": {"python_env_var": "MUT_H_VAR", "packages": ["ghostdep==1.2.3"]}}
 
     def detector() -> bool:
+        flagged.unlink(missing_ok=True)
         runtime.forget_environment()
         report = runtime.verify_environment(model, probe=True)
+        # The decisive evidence: the environment's own code never ran...
+        if flagged.exists():
+            return False
+        # ...so a package it claims but does not install is never verified.
         return report.tier != "RUNTIME_READY"
 
     def mutate(ctx):
-        # The historical behaviour: whatever the environment reported was believed.
+        # The historical behaviour: probes ran inside the environment, so its own
+        # sitecustomize executed and answered for it.
+        original = runtime._run_probe
+
+        def unisolated(interpreter, code, timeout=60, args=(), isolated=False, site_packages=None):
+            return original(interpreter, code, timeout, args, isolated=False, site_packages=None)
+
+        ctx.setattr(runtime, "_run_probe", unisolated)
         ctx.setattr(runtime, "_reconcile_probe_with_disk",
                     lambda installed, prefix, inventory=None, base_prefix=None: (None, None))
-        ctx.setattr(runtime, "baseline_inventory", lambda prefix: {})
+        ctx.setattr(runtime, "_distribution_has_installed_content",
+                    lambda site_packages, name: True)
 
     _assert_mutation_killed(monkeypatch, detector, mutate,
-                            label="a forged package inventory accepted as verified")
-
-    # A rejected variety of interpreter is still rejected.
-    assert check_environment_isolation(Path("/usr/bin/python3"))[0] is False
+                            label="probes ran environment code and trusted its answers")
 
 
 # ------------------------------------------------------------------------- MUT-I

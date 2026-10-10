@@ -45,18 +45,25 @@ def make_venv(root: Path, name: str = "model_env") -> Path:
 
 
 def install_stub(interpreter: Path, name: str, version: str) -> None:
-    """Record a real distribution in the environment's site-packages.
+    """Install a real, importable distribution into the environment's site-packages.
 
-    ``importlib.metadata`` reads exactly this layout, so this is controlled
-    dependency metadata for a lightweight test environment (no PyTorch needed).
+    A distribution is more than its metadata: it has a module and a ``RECORD`` naming
+    the files it installed, which is exactly what a real installer writes and what the
+    runtime requires before a requirement may be corroborated.
     """
     for lib in (interpreter.parent.parent / "lib").glob("python*"):
         site_packages = lib / "site-packages"
         site_packages.mkdir(parents=True, exist_ok=True)
+        module = site_packages / f"{name}.py"
+        module.write_text(f"__version__ = {version!r}\n")
         dist = site_packages / f"{name}-{version}.dist-info"
         dist.mkdir(exist_ok=True)
         (dist / "METADATA").write_text(
             f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n"
+        )
+        (dist / "RECORD").write_text(
+            f"{name}.py,sha256=test,{module.stat().st_size}\n"
+            f"{name}-{version}.dist-info/METADATA,sha256=test,60\n"
         )
         return
     raise AssertionError("no site-packages directory in the test environment")
@@ -586,10 +593,15 @@ def test_distribution_names_are_normalized_on_both_sides(tmp_path, monkeypatch):
     interpreter = make_venv(tmp_path)
     for lib in (interpreter.parent.parent / "lib").glob("python*"):
         site_packages = lib / "site-packages"
+        module = site_packages / "annotated_doc.py"
+        module.write_text("__version__ = '0.0.4'\n")
         dist = site_packages / "annotated_doc-0.0.4.dist-info"
         dist.mkdir(parents=True, exist_ok=True)
         # The directory spelling and the METADATA spelling deliberately differ.
         (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: annotated-doc\nVersion: 0.0.4\n")
+        (dist / "RECORD").write_text(
+            f"annotated_doc.py,sha256=test,{module.stat().st_size}\n"
+            "annotated_doc-0.0.4.dist-info/METADATA,sha256=test,60\n")
         break
     monkeypatch.setenv("NORMALIZE_VAR", str(interpreter))
 
@@ -630,8 +642,12 @@ def test_an_environment_cannot_fabricate_a_distribution_while_being_probed(tmp_p
     forget_environment()
     report = runtime.verify_environment(model, probe=True)
 
+    # The probe is isolated, so the environment's own code never runs and the
+    # fabricated distribution is simply not visible: the requirement is unresolved.
     assert report.tier != "RUNTIME_READY", "a distribution created during the probe is not real"
-    assert report.status in ("DEPENDENCY_INSTALLATION_UNVERIFIED", "DEPENDENCY_PROBE_FORGED"), report.status
+    assert report.status in ("DEPENDENCY_INSTALLATION_UNVERIFIED", "DEPENDENCY_MISSING",
+                             "DEPENDENCY_PROBE_FORGED"), report.status
+    assert report.packages.get("torch") is None
     with pytest.raises(RuntimeError):
         runtime.python_executable(model)
 
@@ -817,3 +833,55 @@ def test_an_external_install_between_probes_is_not_a_forgery(tmp_path, monkeypat
     forget_environment(runtime.verify_environment(model, probe=True).interpreter)
     refreshed = runtime.verify_environment(model, probe=True)
     assert refreshed.tier == "RUNTIME_READY", f"{refreshed.status}: {refreshed.reason}"
+
+
+def test_metadata_only_distribution_is_not_corroboration(tmp_path, monkeypatch):
+    """A dist-info with no installed files cannot satisfy a requirement."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        dist = lib / "site-packages" / "torch-2.0.1.dist-info"
+        dist.mkdir(parents=True, exist_ok=True)
+        # Metadata only: no module, no RECORD entries that exist.
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: torch\nVersion: 2.0.1\n")
+        (dist / "RECORD").write_text("torch/__init__.py,sha256=test,10\n")
+        break
+    monkeypatch.setenv("METADATA_ONLY_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "METADATA_ONLY_VAR", "packages": ["torch==2.0.1"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier != "RUNTIME_READY", "metadata without content is not an installation"
+    assert report.status == "DEPENDENCY_INSTALLATION_UNVERIFIED", report.status
+    with pytest.raises(RuntimeError):
+        runtime.python_executable(model)
+
+
+def test_probes_never_execute_code_belonging_to_the_environment(tmp_path, monkeypatch):
+    """An environment's sitecustomize must not run while it is being inspected."""
+    interpreter = make_venv(tmp_path)
+    marker = None
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        marker = site_packages / "RAN"
+        (site_packages / "sitecustomize.py").write_text(
+            "import pathlib\n"
+            "pathlib.Path(__file__).parent.joinpath('RAN').write_text('yes')\n")
+        module = site_packages / "stubdep.py"
+        module.write_text("__version__ = '1.2.3'\n")
+        dist = site_packages / "stubdep-1.2.3.dist-info"
+        dist.mkdir(exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: stubdep\nVersion: 1.2.3\n")
+        (dist / "RECORD").write_text(
+            f"stubdep.py,sha256=test,{module.stat().st_size}\n"
+            "stubdep-1.2.3.dist-info/METADATA,sha256=test,60\n")
+        break
+    marker.unlink(missing_ok=True)
+    monkeypatch.setenv("NO_SIDE_EFFECT_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "NO_SIDE_EFFECT_VAR", "packages": ["stubdep==1.2.3"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier == "RUNTIME_READY", f"{report.status}: {report.reason}"
+    assert not marker.exists(), "the environment's own code must never run during inspection"
