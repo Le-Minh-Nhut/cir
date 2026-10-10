@@ -563,19 +563,32 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             evaluation_args.append("--continue-on-error")
         eval_inputs = model_eval_inputs(model_obj, args, config) if model_obj else ()
         eval_outputs = model_eval_outputs(model_obj, args, config) if model_obj else ()
-        evaluation = run_stage(
-            "evaluation",
-            command("evaluate_models.py", *evaluation_args),
-            model_id=args.model,
-            checkpoint_id=args.checkpoint,
-            protocol=args.protocol,
-            dependencies=("runtime-preflight",),
-            input_paths=eval_inputs,
-            output_paths=eval_outputs,
-            required_capabilities={"allow_gpu_eval", "allow_preparation"},
-            run_id=new_run_id() if model_obj else None,
-            evidence=evaluation_evidence(model_obj, args, config) if model_obj else None,
-        )
+        if model_obj is None:
+            # `--all-runnable` evaluates whatever the registry currently allows, so no
+            # single model owns the stage: there is no run identity to bind a completion
+            # proof to and therefore no output contract that could ever be satisfied.
+            # Rather than execute evaluators and then report a guaranteed failure, the
+            # stage is planned as skipped and the operator is told how to run it per model
+            # so each result gets a run-bound proof.
+            evaluation = Stage(
+                "evaluation",
+                skipped=("--all-runnable evaluates per model; pass --model MODEL_ID so the "
+                         "run gets a run-bound completion proof"),
+            )
+        else:
+            evaluation = run_stage(
+                "evaluation",
+                command("evaluate_models.py", *evaluation_args),
+                model_id=args.model,
+                checkpoint_id=args.checkpoint,
+                protocol=args.protocol,
+                dependencies=("runtime-preflight",),
+                input_paths=eval_inputs,
+                output_paths=eval_outputs,
+                required_capabilities={"allow_gpu_eval", "allow_preparation"},
+                run_id=new_run_id(),
+                evidence=evaluation_evidence(model_obj, args, config),
+            )
     else:
         evaluation = Stage("evaluation", skipped="pass --evaluate")
     validation_index = (

@@ -211,6 +211,17 @@ workbench/artifacts/reports/
 
 ### Completion contract
 
+The proof and the run report must **agree**: run id, model, checkpoint, protocol, return
+code, execution status, and the invocation evidence digest are cross-checked between the
+two, so a proof cannot re-certify a failed run by editing itself. A **bundle** (LIMN's
+three category models) is one experiment: every recorded member is re-hashed, so a changed
+member invalidates the proof even though only the anchor is passed to the evaluator. A
+directory/bundle artifact is identified by its **declared members**, so an undeclared extra
+file in a run directory does not change identity.
+
+`--all-runnable` evaluation is planned as *skipped*: with no single model there is no run
+identity to bind a proof to, so run one model at a time (`--model MODEL_ID`).
+
 A stage may reach COMPLETE only when **all** hold:
 
 1. subprocess exit code `0`;
@@ -307,7 +318,11 @@ of the environment (`inspect_environment_distributions`) so the version answer a
 - a `dist-info` `RECORD` member must be a real file **inside** the tree, outside the
   distribution's own metadata directory, and neither absolute nor traversing
   (`..`/`.`). A `RECORD` listing only itself, or one naming `/etc/hostname`, contributes
-  nothing;
+  nothing. A directory entry counts only when it actually holds importable files, so an
+  empty directory installs nothing while a namespace package still counts;
+- a manager-installed distribution whose module name cannot be derived
+  (`beautifulsoup4` -> `bs4`) is unverified until the model declares that module in
+  `required_imports`, at which point the installed module is checked directly;
 - a `RECORD`-less `dist-info` contributes nothing by itself;
 - a legacy `egg-info` counts only when the module named in its `top_level.txt` really
   exists, or it keeps a non-descriptive sibling file.

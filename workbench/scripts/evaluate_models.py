@@ -360,16 +360,35 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
         # A placeholder path (unresolved registry entry) is not a checkpoint.
         if str(checkpoint) in (".", "") or not checkpoint.exists():
             return None
+        members = [m["filename"] for m in (plan.directory_members or [])]
         try:
+            if checkpoint.is_dir() and members:
+                # Directory/bundle artifacts are identified by their declared members:
+                # an undeclared extra file in a run directory must not change identity.
+                return _sha(checkpoint, required_files=members)
             if checkpoint.is_file():
                 return _sha(checkpoint)
             if checkpoint.is_dir():
-                required = [m["filename"] for m in (plan.directory_members or [])] or None
-                return _sha(checkpoint, required_files=required)
+                return _sha(checkpoint)
         except (OSError, ValueError):
             return None
         return None
 
+    def _bundle_members_live() -> bool:
+        """Every recorded bundle member must still hash to its recorded value."""
+        recorded = plan.checkpoint_bundle or {}
+        for category, member in recorded.items():
+            path = Path(str(member.get("path") or ""))
+            expected = member.get("sha256")
+            if not expected:
+                continue
+            if not path.is_file() or _sha(path) != expected:
+                raise EvaluationOutputError(
+                    f"checkpoint bundle member {category} no longer matches its recorded digest")
+        return True
+
+    # A bundle is one experiment: every recorded member is verified, not just the anchor.
+    _bundle_members_live()
     live_digest = _hash_checkpoint() or plan.checkpoint_sha256
     if live_digest is not None and str(declared_checkpoint) != live_digest:
         raise EvaluationOutputError(
@@ -409,6 +428,31 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
             )
         if sha256_file(report_path) != digest:
             raise EvaluationOutputError("declared output report digest does not match its report")
+        # The report records the run's own outcome; the proof may not disagree with it.
+        try:
+            report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise EvaluationOutputError(f"declared output report is unreadable: {error}") from error
+        if not isinstance(report_payload, dict):
+            raise EvaluationOutputError("declared output report is not a JSON object")
+        for label, report_key, proof_value in (
+            ("run", "run_id", payload.get("run_id")),
+            ("model", "model_id", payload.get("model_id")),
+            ("checkpoint", "checkpoint_id", payload.get("checkpoint_id")),
+            ("protocol", "protocol_id", payload.get("protocol_id")),
+            ("return code", "return_code", payload.get("return_code")),
+        ):
+            if str(report_payload.get(report_key)) != str(proof_value):
+                raise EvaluationOutputError(
+                    f"declared output {label} ({proof_value!r}) disagrees with its report "
+                    f"({report_payload.get(report_key)!r})")
+        report_status = str(report_payload.get("execution_status") or "")
+        if report_status and report_status != "EXECUTION_COMPLETED":
+            raise EvaluationOutputError(
+                f"declared output reports execution status {report_status!r}")
+        report_evidence = report_payload.get("evidence_digest")
+        if isinstance(report_evidence, str) and report_evidence and report_evidence != payload.get("evidence_digest"):
+            raise EvaluationOutputError("declared output evidence digest disagrees with its report")
     if require_environment_identity:
         env_digest = payload.get("environment_digest")
         if not isinstance(env_digest, str) or not env_digest:
@@ -572,6 +616,12 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
 
     stdout_content = (directory / "stdout.log").read_text(encoding="utf-8")
     stderr_content = (directory / "stderr.log").read_text(encoding="utf-8")
+    # Bound before the report is serialised: the report itself carries the digest of the
+    # invocation output, so a log edit invalidates the report as well as the proof.
+    evidence_digest = hashlib.sha256(
+        json.dumps({"stdout": stdout_content, "stderr": stderr_content},
+                   sort_keys=True).encode("utf-8")
+    ).hexdigest()
     extraction = extract_aggregate_metrics(
         plan.model_id,
         stdout_content,
@@ -617,6 +667,7 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "environment": environment,
         "model_interpreter": plan.command[0] if plan.command else sys.executable,
         "environment_digest": metadata["environment_digest"],
+        "evidence_digest": evidence_digest,
         "return_code": code,
     }
     report_json = json.dumps(report, indent=2) + "\n"
@@ -635,10 +686,6 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
     # official command exits 0 but emits nothing at all, there is no run-specific
     # evaluation evidence, so no proof may be minted — and the stage cannot COMPLETE.
     produced_output = bool(stdout_content.strip() or stderr_content.strip())
-    evidence_digest = hashlib.sha256(
-        json.dumps({"stdout": stdout_content, "stderr": stderr_content},
-                   sort_keys=True).encode("utf-8")
-    ).hexdigest()
     if code == 0 and not produced_output:
         print("[BLOCKED] official command exited 0 but produced no observable evaluation "
               "output; no completion proof can be minted for this invocation", file=sys.stderr)
@@ -737,6 +784,32 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
     It answers a single question: *did THIS invocation produce a valid completion
     proof?* A leftover report or an old latest pointer is never accepted.
     """
+    def _resolve_bundle() -> dict[str, dict[str, Any]] | None:
+        """Recorded bundle members for a bundled checkpoint (LIMN's three categories).
+
+        ``checkpoint_id`` may be a *bundle* id, which is not itself a checkpoint variant:
+        the bundle's required member checkpoints are the ones the evaluator consumes.
+        """
+        try:
+            from workbench.backend.registry import checkpoint_by_id, checkpoint_path, model_by_id
+
+            model = model_by_id(model_id)
+            bundle = next((b for b in model.get("checkpoint_bundles") or []
+                           if b["bundle_id"] == checkpoint_id), None)
+            if bundle is None:
+                return None
+            members: dict[str, dict[str, Any]] = {}
+            for member_id in bundle["required_checkpoint_ids"]:
+                variant = checkpoint_by_id(model, member_id)
+                path = checkpoint_path(model_id, variant, config.WORKBENCH_CHECKPOINT_ROOT)
+                members[member_id] = {
+                    "path": str(path),
+                    "sha256": sha256_file(path) if path.is_file() else None,
+                }
+            return members
+        except Exception:
+            return None
+
     def _resolve_checkpoint() -> tuple[Path, list[dict[str, Any]] | None]:
         """The checkpoint this (model, checkpoint id) pair evaluates, with its members.
 
@@ -775,7 +848,8 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
         resolved_checkpoint, resolved_members = _resolve_checkpoint()
         plan = EvaluationPlan(model_id, checkpoint_id, protocol, Path("."), Path("."),
                               resolved_checkpoint, Path("."), [], pin, None,
-                              directory_members=resolved_members)
+                              directory_members=resolved_members,
+                              checkpoint_bundle=_resolve_bundle())
         if not (resolved_checkpoint.is_file() or resolved_checkpoint.is_dir()):
             # No checkpoint file to re-hash (e.g. a non-file artifact): bind the proof to
             # the digest recorded by the run itself, which is run-scoped and unforgeable

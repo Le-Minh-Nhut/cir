@@ -757,3 +757,106 @@ def test_forged_evidence_is_distinguished_from_a_re_minted_proof(env):
     (run_dir / "stdout.log").write_text("fabricated output\n")
     ok, reason, _ = evidence({"run_id": run_id})
     assert ok is False and "evidence" in reason
+
+
+# --------------------------------- proof must agree with its report (round 13, defect 1/2)
+
+def test_a_failed_run_cannot_be_re_certified_by_editing_the_proof(env):
+    """The proof may not disagree with the run report it points at."""
+    failing = reporting_script(env["tmp"], exit_code=7)
+    code, run_id = run(env, failing)
+    assert code == 7
+
+    proof = reports_of(env) / f"csmcir_ckpt_v1_{run_id}_completion.json"
+    payload = json.loads(proof.read_text())
+    assert payload["completion_status"] == "FAILED"
+
+    # Rewrite only the proof: the report still records the failure.
+    payload["return_code"] = 0
+    payload["completion_status"] = "COMPLETED"
+    proof.write_text(json.dumps(payload))
+
+    evidence = em.completion_validator(MODEL, "ckpt_v1", "fashioniq_original_split", PIN, env["config"])
+    ok, reason, _ = evidence({"run_id": run_id})
+    assert ok is False, "a re-certified failed run must not validate"
+    assert "disagrees" in (reason or "") or "status" in (reason or "")
+
+
+def test_editing_logs_without_updating_the_report_is_detected(env):
+    """Logs are bound by the report as well as the proof.
+
+    The report records the digest of the invocation output, so a log edit contradicts the
+    report even when the proof is left alone. (An actor who rewrites the logs *and* every
+    digest in the artifacts is outside this threat model: no in-band scheme can detect
+    that, which is why the run's evidence is also recorded in the workflow report and the
+    git-ignored artifact tree is the operator's own trust domain.)
+    """
+    code, run_id = run(env, reporting_script(env["tmp"]))
+    assert code == 0
+    proof = reports_of(env) / f"csmcir_ckpt_v1_{run_id}_completion.json"
+    payload = json.loads(proof.read_text())
+    report_path = Path(payload["report"])
+    report = json.loads(report_path.read_text())
+
+    # The report itself carries the invocation evidence digest.
+    assert report.get("evidence_digest"), "the report must record its invocation evidence"
+
+    # A log edit that leaves both artifacts untouched is caught by evidence checking.
+    (Path(payload["run_directory"]) / "stdout.log").write_text("fabricated output\n")
+    evidence = em.completion_validator(MODEL, "ckpt_v1", "fashioniq_original_split", PIN, env["config"])
+    ok, reason, _ = evidence({"run_id": run_id})
+    assert ok is False and "evidence" in (reason or "")
+
+    # A report whose evidence digest disagrees with the proof is caught too.
+    report_path.write_text(json.dumps(dict(report, evidence_digest="0" * 64)))
+    payload["report_digest"] = sha256_file(report_path)
+    proof.write_text(json.dumps(payload))
+    ok, reason, _ = evidence({"run_id": run_id})
+    assert ok is False and "disagrees" in (reason or "")
+
+
+def test_a_changed_bundle_member_invalidates_the_proof(env):
+    """A bundle is one experiment: any member changing must invalidate its proof."""
+    root = env["tmp"] / "bundle_root"
+    root.mkdir()
+    members = {}
+    for category in ("dress", "shirt", "toptee"):
+        member = root / f"0_{category}_best_model.pt"
+        member.write_bytes(f"weights-{category}".encode())
+        members[category] = member
+
+    bundle = {category: {"checkpoint_id": f"base_iter0_{category}", "filename": member.name,
+                         "path": str(member), "sha256": sha256_file(member)}
+              for category, member in members.items()}
+    plan = em.EvaluationPlan(MODEL, "bundle_run", "fashioniq_original_split",
+                             env["tmp"] / "FashionIQ", env["source"], members["dress"],
+                             env["source"], reporting_script(env["tmp"]), PIN, PIN,
+                             checkpoint_bundle=bundle)
+    run_id = "bundle-run-id"
+    assert em.execute(plan, env["config"], run_id=run_id) == 0
+    proof = em.completion_proof_path(env["config"], plan, run_id)
+
+    em.validate_run_manifest(plan, proof, run_id=run_id,
+                             output_root=em.artifact_root(env["config"]), config=env["config"],
+                             require_checksum=True, require_environment_identity=True)
+
+    members["toptee"].write_bytes(b"tampered weights")
+    with pytest.raises(em.EvaluationOutputError, match="bundle member"):
+        em.validate_run_manifest(plan, proof, run_id=run_id,
+                                 output_root=em.artifact_root(env["config"]), config=env["config"],
+                                 require_checksum=True, require_environment_identity=True)
+
+
+def test_all_runnable_evaluation_is_planned_skipped_not_failed(env):
+    """--all-runnable has no single model, so it cannot own a run-bound proof.
+
+    Executing it and then reporting an unsatisfiable output contract would mark a real
+    evaluation as FAILED; the honest plan is to skip it with a clear instruction.
+    """
+    import workbench.scripts.pipeline as pipeline
+
+    args = pipeline.parser_for().parse_args(["real", "--evaluate"])
+    assert args.model is None
+    evaluation = next(s for s in pipeline.real_stages(args, env["config"]) if s.name == "evaluation")
+    assert not evaluation.commands, "a model-less evaluation must not execute"
+    assert evaluation.skipped and "--model" in evaluation.skipped
