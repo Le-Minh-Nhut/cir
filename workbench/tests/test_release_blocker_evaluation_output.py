@@ -631,6 +631,7 @@ def test_legacy_egg_info_install_invalidates_cache(tmp_path, monkeypatch):
     assert runtime.verify_environment(model, probe=True).tier == "RUNTIME_READY"
 
     (egg / "PKG-INFO").write_text("Metadata-Version: 1.1\nName: stubdep\nVersion: 9.9.9\n")
+    runtime.forget_environment()
     refreshed = runtime.verify_environment(model, probe=True)
     assert refreshed.tier != "RUNTIME_READY", "an egg-info rewrite must invalidate the cache"
     assert refreshed.status == "DEPENDENCY_VERSION_MISMATCH", refreshed.status
@@ -700,3 +701,51 @@ def test_directory_checkpoint_digest_binds_member_names_and_layout(env):
     same.mkdir()
     (same / "y.pt").write_bytes(b"payload")
     assert sha256_file(renamed, required_files=["x.pt"]) != sha256_file(same, required_files=["y.pt"])
+
+
+def test_unsafe_run_ids_are_rejected(env):
+    """An orchestrator-supplied run id must never name a path outside the artifact root."""
+    for unsafe in ("../../evil", "a/b", "a\\b", "..", ""):
+        with pytest.raises(ValueError, match="unsafe run id"):
+            em.validate_run_id(unsafe)
+
+    assert em.validate_run_id("20261010T000000Z_abc12345") == "20261010T000000Z_abc12345"
+
+    # And the entry point refuses it before anything is created.
+    logs = em.artifact_root(env["config"]) / "logs"
+    before = sorted(p.name for p in logs.iterdir()) if logs.is_dir() else []
+    with pytest.raises(ValueError, match="unsafe run id"):
+        em.execute(plan(env, reporting_script(env["tmp"])), env["config"], run_id="../../evil")
+    after = sorted(p.name for p in logs.iterdir()) if logs.is_dir() else []
+    assert after == before, "a rejected run id must leave no directory behind"
+
+
+def test_forged_evidence_is_distinguished_from_a_re_minted_proof(env):
+    """Corrupting the stored digest must fail; recomputing it must not be a bypass.
+
+    The digest binds the run's own logs, which the evaluator wrote and the orchestrator
+    then hashed. Changing the recorded value is a forgery; recomputing it would require
+    the logs to change too, which the report digest and completion proof also bind.
+    """
+    code, run_id = run(env, reporting_script(env["tmp"]))
+    assert code == 0
+    proof = reports_of(env) / f"csmcir_ckpt_v1_{run_id}_completion.json"
+    original = json.loads(proof.read_text())
+    evidence = em.completion_validator(MODEL, "ckpt_v1", "fashioniq_original_split", PIN, env["config"])
+    assert evidence({"run_id": run_id})[0] is True
+
+    # Corrupt the recorded value.
+    tampered = dict(original, evidence_digest="0" * 64)
+    proof.write_text(json.dumps(tampered))
+    ok, reason, _ = evidence({"run_id": run_id})
+    assert ok is False and "evidence" in reason
+
+    # Restore it: the proof verifies again only because the logs really are those logs.
+    proof.write_text(json.dumps(original))
+    assert evidence({"run_id": run_id})[0] is True
+
+    # Altering a log without updating the digest is detected.
+    run_dir = Path(original["run_directory"])
+    (run_dir / "stdout.log").write_text("fabricated output\n")
+    ok, reason, _ = evidence({"run_id": run_id})
+    assert ok is False and "evidence" in reason

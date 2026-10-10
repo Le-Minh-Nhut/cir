@@ -449,6 +449,18 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
     return payload
 
 
+def validate_run_id(run_id: str) -> str:
+    """Reject a run identity that could name a path outside the artifact root.
+
+    Run ids come from the orchestrator (or, in tests, from a caller), so they are
+    validated at the entry point rather than trusted: a separator or a parent
+    reference would let a run write outside ``workbench/artifacts``.
+    """
+    if not run_id or any(char in run_id for char in ("/", "\\", "\0")) or ".." in run_id:
+        raise ValueError(f"unsafe run id: {run_id!r}")
+    return run_id
+
+
 def log_dir(config: WorkbenchConfig, plan: EvaluationPlan, timestamp: datetime,
             run_id: str | None = None) -> Path:
     """Where a run's own logs live: one directory per (invocation, checkpoint).
@@ -457,7 +469,7 @@ def log_dir(config: WorkbenchConfig, plan: EvaluationPlan, timestamp: datetime,
     model, so the directory is qualified by the checkpoint the run actually used.
     """
     repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
-    identifier = run_id or make_run_id(plan, timestamp)
+    identifier = validate_run_id(run_id) if run_id else make_run_id(plan, timestamp)
     return (repo_root / "workbench" / "artifacts" / "logs"
             / f"{plan.model_id}__{plan.checkpoint_id}__{identifier}")
 
@@ -511,7 +523,7 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
 
 def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = None) -> int:
     started = datetime.now(UTC)
-    run_id = run_id or make_run_id(plan, started)
+    run_id = validate_run_id(run_id) if run_id else make_run_id(plan, started)
     root = artifact_root(config)
     reports = reports_root(config)
 

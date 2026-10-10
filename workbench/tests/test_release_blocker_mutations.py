@@ -402,7 +402,7 @@ def test_mut_h_accepting_a_forged_package_inventory_is_detected(tmp_path, monkey
         # The historical behaviour: whatever the environment reported was believed.
         ctx.setattr(runtime, "_reconcile_probe_with_disk",
                     lambda installed, prefix, inventory=None, base_prefix=None: (None, None))
-        ctx.setattr(runtime, "_baseline_inventory", lambda prefix: {})
+        ctx.setattr(runtime, "baseline_inventory", lambda prefix: {})
 
     _assert_mutation_killed(monkeypatch, detector, mutate,
                             label="a forged package inventory accepted as verified")

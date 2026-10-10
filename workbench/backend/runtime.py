@@ -367,20 +367,19 @@ def normalize_distribution_name(name: str) -> str:
 
 _BASELINE_INVENTORIES: dict[str, dict[str, str | None]] = {}
 
-def _baseline_key(prefix: Path) -> str:
-    try:
-        return str(Path(prefix).resolve())
-    except OSError:
-        return str(prefix)
+def baseline_inventory(prefix: Path) -> dict[str, str | None]:
+    """The environment's package inventory as first observed in this process.
 
-
-def _baseline_inventory(prefix: Path) -> dict[str, str | None]:
-    """The environment's package inventory as first observed, pinned for the session.
-
-    A later read cannot be trusted: an environment can write a dist-info for itself
-    while it is being probed, and that write persists.
+    A module inside the environment (``sitecustomize``, a ``.pth`` shim) runs before any
+    probe and can create or rewrite its own ``dist-info``. Re-reading disk after the
+    probe would therefore confirm the fabrication, so the first read is authoritative
+    for the process. ``forget_environment()`` clears it, which is how an operator who
+    installed something announces that the environment legitimately changed.
     """
-    key = _baseline_key(prefix)
+    try:
+        key = str(Path(prefix).resolve())
+    except OSError:
+        key = str(prefix)
     if key not in _BASELINE_INVENTORIES:
         try:
             _BASELINE_INVENTORIES[key] = installed_distributions_on_disk(Path(prefix))
@@ -600,28 +599,18 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         return EnvironmentReport(model_id, variable, str(interpreter), "INTERPRETER_PRESENT", "NOT_EXECUTABLE",
                                  reason="interpreter is not executable")
 
-    prior_verification = False
     if probe:
-        prior_verification = _cache_key(model, require_cuda) in _VERIFIED_ENVIRONMENTS
         cached = _reuse(model, require_cuda, str(interpreter))
         if cached is not None:
             return cached
 
-    # Read the on-disk package inventory *before* any code inside the environment runs:
-    # an environment can create a dist-info for itself from a sitecustomize module, so a
-    # post-probe read would confirm a fabrication. The FIRST observation is remembered
-    # and reused, because the fabrication stays on disk afterwards and a fresh read would
-    # legitimise it on the next probe.
+    # Read the on-disk package inventory *before* any code inside the environment runs.
+    # A module in the environment (sitecustomize, a .pth shim) runs before any probe and
+    # can rewrite its own metadata, so the answers are reconciled against what was on
+    # disk before the environment was given control.
     pre_probe_inventory = None
     if probe:
-        prefix = Path(configured).parent.parent
-        if prior_verification:
-            # The environment was verified earlier, so anything added since then was
-            # installed while it was idle: refresh the baseline rather than calling it a
-            # fabrication. A first-ever probe keeps the pinned baseline, because growth
-            # observed then can only have appeared while the environment was running.
-            _BASELINE_INVENTORIES[_baseline_key(prefix)] = installed_distributions_on_disk(prefix)
-        pre_probe_inventory = _baseline_inventory(prefix)
+        pre_probe_inventory = baseline_inventory(Path(configured).parent.parent)
 
     identity = _interpreter_identity(interpreter) if probe else None
     report = EnvironmentReport(
@@ -700,27 +689,8 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             return report
         probe_packages = {k: v for k, v in installed.items() if not k.startswith("__")}
         discrepancy = None
-        if pre_probe_inventory is not None:
-            post_probe_inventory = installed_distributions_on_disk(Path(str(report.prefix or "")))
-            baseline = _baseline_inventory(Path(str(report.prefix or "")))
-            invented = sorted(set(post_probe_inventory) - set(baseline))
-            if invented and not prior_verification:
-                # Nothing was verified for this environment before this probe, so the
-                # distributions appeared while the environment was running: they were
-                # created by the code the probe executed.
-                report.tier = TIER_BLOCKED
-                report.status = "DEPENDENCY_PROBE_FORGED"
-                report.reason = ("the environment created distributions while it was probed: "
-                                 f"{', '.join(invented[:3])}")
-                return report
-            if invented:
-                # An environment that was already verified is simply observed again: an
-                # operator may have installed packages while it was idle. Refresh.
-                _BASELINE_INVENTORIES[_baseline_key(Path(str(report.prefix or "")))] = post_probe_inventory
-
-        current_inventory = installed_distributions_on_disk(Path(str(report.prefix or "")))
         verdict, reason = _reconcile_probe_with_disk(
-            probe_packages, str(report.prefix or ""), inventory=current_inventory,
+            probe_packages, str(report.prefix or ""), inventory=pre_probe_inventory,
             base_prefix=str(report.base_prefix or ""))
         if verdict == "forged":
             # A probe answer that contradicts the environment on disk means the probe
@@ -746,10 +716,10 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
                 report.reason = f"missing package: {pkg}"
                 return report
             if want is None:
-                report.tier = TIER_REQUIREMENTS_UNVERIFIED
-                report.status = "VERSION_CONSTRAINT_UNVERIFIED"
-                report.reason = f"{pkg}: source declares no usable version constraint (installed {got})"
-                return report
+                # The source declares the package without pinning a version: any
+                # installed version satisfies presence. This is a requirement, not an
+                # unverifiable constraint.
+                continue
             matched = version_satisfies(want, got)
             if matched is None:
                 report.tier = TIER_REQUIREMENTS_UNVERIFIED
@@ -1044,6 +1014,10 @@ def forget_environment(interpreter: str | None = None) -> None:
         return
     for key in [key for key, report in _VERIFIED_ENVIRONMENTS.items() if report.interpreter == interpreter]:
         _VERIFIED_ENVIRONMENTS.pop(key, None)
+    try:
+        _BASELINE_INVENTORIES.pop(str(Path(interpreter).resolve()), None)
+    except OSError:
+        pass
 
 
 def inspect_environment(model: dict[str, Any]) -> EnvironmentReport:
@@ -1279,11 +1253,6 @@ def _verify_declared_artifact(source: Path, path: str, declaration: dict[str, An
             return "declared auxiliary asset has no source-backed digest to verify against"
         return None
     return "unknown declared artifact kind"
-
-# Private aliases kept for internal readability and existing imports.
-_source_status = source_status
-_is_bytecode = is_bytecode
-
 
 def _source_dirty(source: Path, model: dict[str, Any] | None = None) -> bool | None:
     """True when the checkout differs from the pin in a way that matters.

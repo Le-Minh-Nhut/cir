@@ -296,34 +296,21 @@ The outcome is deliberately three-way:
 
 | Situation | Verdict |
 |---|---|
-| probe agrees with disk | verified |
-| probe value contradicts an installed distribution, or the environment *creates* a distribution while being probed | `DEPENDENCY_PROBE_FORGED` |
+| probe agrees with the pre-probe on-disk inventory | verified |
+| probe value contradicts an installed distribution, or claims a package that was **not** on disk before the environment ran | `DEPENDENCY_PROBE_FORGED` |
 | probe claims a package with no on-disk installation of its own (editable/`.pth`, `system_site_packages`), or the installed version cannot be read | `DEPENDENCY_INSTALLATION_UNVERIFIED` — never `RUNTIME_READY` |
 
-The on-disk baseline is read **before** the environment runs any code and pinned for the
-session, because a fabricated `dist-info` persists and a later read would legitimise it.
-Growth observed on a **first** probe is attributed to the probe's own execution
-(`DEPENDENCY_PROBE_FORGED`); growth seen after the environment was already verified is
-re-baselined, so an operator installing a package between runs is not reported as an
-attack. A pinned `interpreter_sha256` is part of the contract digest, so a changed pin
-invalidates a cached verification and is enforced again.
-Names containing `-`/`_`/`.` are normalised on both sides, so `openai_clip`, `comet_ml`
-and `pyyaml` reconcile with `openai-clip`, `comet-ml` and `PyYAML` directories.
+**The pre-probe inventory is authoritative for the process.** A module inside the
+environment (`sitecustomize`, a `.pth` shim) runs before any probe and can create or
+rewrite its own `dist-info`; re-reading disk after the probe would therefore confirm the
+fabrication. `forget_environment()` — the documented "everything is stale" API — clears
+the cached verification *and* the inventory, which is how an operator who legitimately
+installed a package announces that the environment changed. The environment fingerprint
+already invalidates the verification on its own when a package is added or removed.
 
-### Binding the interpreter by digest
-
-An orchestrator cannot distinguish a genuine CPython from a program that speaks the same
-probe protocol — the program *is* what it executes. There is therefore no byte-level test
-that decides this honestly on its own, and the workbench does not pretend otherwise:
-
-- identity, isolation, and the environment's completeness are all verified from the
-  invocation path and from the environment on disk (see above);
-- an operator who needs the interpreter itself pinned records
-  ``environment.interpreter_sha256`` in the registry. The resolved binary is then hashed
-  and a mismatch is blocked as ``UNSAFE_INTERPRETER``. ``UNKNOWN``/absent means unpinned.
-
-Before a PC reproduction run, create each ``WORKBENCH_*_PYTHON`` with ``venv``/``conda``
-from the upstream spec and record its digest in the model registry.
+An unversioned declaration (`openai_clip`, `Pillow`, `torchvision`) means "any version":
+presence is the requirement. `VERSION_CONSTRAINT_UNVERIFIED` is reserved for a
+constraint that cannot be parsed at all.
 
 ### Verification reuse
 
@@ -342,7 +329,8 @@ ever observed on a real model environment.
 Directory/bundle checkpoint digests hash the **member name list first** (length-prefixed),
 then each member's name and bytes, so adding or removing an undeclared file in a run
 directory cannot re-identify the artifact, and member-name/content substitutions are
-detected.
+detected. Run ids are validated at the entry point: a separator or `..` is refused, so an
+orchestrator-supplied `--run-id` can never name a path outside `workbench/artifacts`.
 
 `ponytail:` a same-size, same-mtime rewrite of a package member is likewise invisible to
 an mtime/size fingerprint. Hashing package contents would cost seconds per probe; the

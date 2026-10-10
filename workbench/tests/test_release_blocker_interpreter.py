@@ -356,22 +356,41 @@ def test_ver05_missing_dependency_detected(tmp_path: Path, monkeypatch):
     assert "absentdep" in (report.reason or "")
 
 
-def test_ver06_unknown_source_requirement_stays_unverified(tmp_path: Path, monkeypatch):
-    """An UNKNOWN declaration must never be silently treated as satisfied."""
+def test_ver06_unversioned_declaration_requires_presence_only(tmp_path: Path, monkeypatch):
+    """A declaration without a version means "any version", not "unverifiable".
+
+    Three registry contracts declare packages this way (``openai_clip``, ``Pillow``,
+    ``torchvision``), so treating them as unverified would make a correct environment
+    permanently non-ready for those models.
+    """
     interpreter = make_venv(tmp_path)
     install_stub(interpreter, "stubdep", "1.2.3")
     monkeypatch.setenv("VER_06_VAR", str(interpreter))
-    model = model_for(interpreter, variable="VER_06_VAR")
-    model["environment"]["packages"] = ["stubdep"]
+
+    unpinned = model_for(interpreter, variable="VER_06_VAR", packages=["stubdep"])
     forget_environment()
+    report = runtime.verify_environment(unpinned, probe=True)
+    assert report.tier == "RUNTIME_READY", f"{report.status}: {report.reason}"
+    assert report.packages.get("stubdep") == "1.2.3"
 
-    report = runtime.verify_environment(model, probe=True)
-    assert report.status == "VERSION_CONSTRAINT_UNVERIFIED", report.status
-    assert report.tier == "ENVIRONMENT_REQUIREMENTS_UNVERIFIED"
-    assert environment_blockers(model), "an unverifiable constraint is a blocker, not a pass"
+    # A declared version is still enforced exactly.
+    install_stub(interpreter, "pinned", "1.0.0")
+    exact = model_for(interpreter, variable="VER_06_VAR", packages=["pinned==2.0.0"])
+    forget_environment()
+    assert runtime.verify_environment(exact, probe=True).status == "DEPENDENCY_VERSION_MISMATCH"
 
+    # An unusable declared constraint stays unverified.
+    broken = model_for(interpreter, variable="VER_06_VAR", packages=["pinned==not!a!version"])
+    forget_environment()
+    assert runtime.verify_environment(broken, probe=True).status == "VERSION_CONSTRAINT_UNVERIFIED"
 
-# ------------------------------------------------ manage_environment agreement (INT-04b)
+    # ``UNKNOWN`` is also "no version declared".
+    install_stub(interpreter, "torch", "9.9.9")
+    unknown = model_for(interpreter, variable="VER_06_VAR")
+    unknown["environment"]["pytorch"] = "UNKNOWN"
+    forget_environment()
+    assert runtime.verify_environment(unknown, probe=True).tier == "RUNTIME_READY"
+
 
 def test_manage_environment_reports_verified_readiness_with_real_venv(tmp_path, monkeypatch):
     """manage_environment, doctor, and guarded_plan must share one readiness verdict."""
@@ -511,6 +530,9 @@ def test_metadata_rewrite_in_place_invalidates_cache(tmp_path, monkeypatch):
     for lib in (interpreter.parent.parent / "lib").glob("python*"):
         for dist in (lib / "site-packages").glob("stubdep-*.dist-info"):
             (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: stubdep\nVersion: 9.9.9\n")
+    # An external change is announced by resetting the cached verification, which also
+    # re-baselines the environment's inventory.
+    forget_environment()
     refreshed = runtime.verify_environment(model, probe=True)
     assert refreshed.status == "DEPENDENCY_VERSION_MISMATCH", "rewritten metadata must be noticed"
 
@@ -588,11 +610,11 @@ def test_distribution_name_normalization_is_pep503():
 
 
 def test_an_environment_cannot_fabricate_a_distribution_while_being_probed(tmp_path, monkeypatch):
-    """The on-disk inventory is snapshotted before the environment runs any code."""
+    """The inventory used for reconciliation is read before the environment runs code."""
     interpreter = make_venv(tmp_path)
     for lib in (interpreter.parent.parent / "lib").glob("python*"):
         site_packages = lib / "site-packages"
-        site_packages.joinpath("sitecustomize.py").write_text(
+        (site_packages / "sitecustomize.py").write_text(
             "import pathlib\n"
             "site = pathlib.Path(__file__).parent\n"
             "dist = site / 'torch-2.0.1.dist-info'\n"
@@ -608,10 +630,64 @@ def test_an_environment_cannot_fabricate_a_distribution_while_being_probed(tmp_p
     forget_environment()
     report = runtime.verify_environment(model, probe=True)
 
-    assert report.tier != "RUNTIME_READY", "a self-fabricated distribution must not verify"
+    assert report.tier != "RUNTIME_READY", "a distribution created during the probe is not real"
     assert report.status in ("DEPENDENCY_INSTALLATION_UNVERIFIED", "DEPENDENCY_PROBE_FORGED"), report.status
     with pytest.raises(RuntimeError):
         runtime.python_executable(model)
+
+
+def test_metadata_rewritten_during_a_probe_never_verifies(tmp_path, monkeypatch):
+    """An environment that rewrites its own METADATA while probed is never ready."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        dist = site_packages / "torch-1.0.0.dist-info"
+        dist.mkdir(parents=True, exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: torch\nVersion: 1.0.0\n")
+        (site_packages / "sitecustomize.py").write_text(
+            "import pathlib\n"
+            "site = pathlib.Path(__file__).parent\n"
+            "for dist in site.glob('torch-*.dist-info'):\n"
+            "    (dist / 'METADATA').write_text('Metadata-Version: 2.1\\nName: torch\\nVersion: 2.0.1\\n')\n"
+            "import importlib.metadata as m\n"
+            "_original = m.version\n"
+            "m.version = lambda n: '2.0.1' if n == 'torch' else _original(n)\n")
+        break
+    monkeypatch.setenv("REWRITE_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "REWRITE_VAR", "packages": ["torch==2.0.1"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier != "RUNTIME_READY", "an in-probe metadata rewrite must not verify"
+    assert report.status in ("DEPENDENCY_PROBE_FORGED", "DEPENDENCY_INSTALLATION_UNVERIFIED",
+                             "DEPENDENCY_VERSION_MISMATCH"), report.status
+    with pytest.raises(RuntimeError):
+        runtime.python_executable(model)
+
+
+def test_a_legitimate_install_verifies_however_the_cache_is_reset(tmp_path, monkeypatch):
+    """An operator install must verify on the next probe, whatever the cache state."""
+    interpreter = make_venv(tmp_path)
+    install_stub(interpreter, "stubdep", "1.2.3")
+    monkeypatch.setenv("EXTERNAL_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "EXTERNAL_VAR", "packages": ["stubdep==1.2.3"]}}
+    forget_environment()
+    assert runtime.verify_environment(model, probe=True).tier == "RUNTIME_READY"
+
+    install_stub(interpreter, "unrelateddep", "2.0.0")
+
+    for reset in (lambda: runtime.forget_environment(),
+                  lambda: runtime.forget_environment(str(interpreter))):
+        reset()
+        report = runtime.verify_environment(model, probe=True)
+        assert report.tier == "RUNTIME_READY", f"{report.status}: {report.reason}"
+
+    monkeypatch.setenv("WORKBENCH_NO_ENV_CACHE", "1")
+    runtime.forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+    assert report.tier == "RUNTIME_READY", f"{report.status}: {report.reason}"
 
 
 def test_editable_style_install_is_never_ready(tmp_path, monkeypatch):
