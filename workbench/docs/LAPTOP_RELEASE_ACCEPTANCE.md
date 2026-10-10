@@ -90,3 +90,18 @@ git diff --check
 | Mutation tests did not mutate | 10 mutations applied with `monkeypatch.context()` and required to be killed | `test_mutation_effectiveness.py` |
 | Concurrency untested | Real multi-process flock ownership tests incl. crash recovery | `test_concurrency_ownership.py` |
 | Synthetic adapter in production registry | Moved behind `register_test_adapter` / `WORKBENCH_ALLOW_SYNTHETIC_ADAPTERS`; metric routing no longer special-cases it | `test_only_synthetic.py` |
+
+### Second review round (Gate5/Gate6)
+
+| Defect | Fix | Test |
+|---|---|---|
+| Persisted FAILED dependency ignored in a later invocation | `_UNUSABLE_DEP_STATUSES` consulted against the state file | `test_persisted_failed_dependency_blocks_later_invocation` |
+| Dependency string did not match qualified key (`checkpoint:limn` vs `checkpoint:limn:base_iter0_dress`) | prefix-aware lookup scoped to the stage's own model | `test_qualified_dependency_key_is_matched`, `test_bare_dependency_does_not_match_other_models` |
+| `dataset-link`, provisioning stages could never reach COMPLETE | real output contract or durable `receipt=True` proof | `test_dataset_link_declares_output_contract`, `test_provisioning_stage_requires_receipt` |
+| LIMN evaluation proof used the wrong checkpoint id | proof filename derived from the bundle id the evaluator writes | `test_limn_eval_output_uses_bundle_id` |
+| Index/mock writers ungated | `allow_index_write` / `allow_mock_write`; `analyze` and `mock` self-authorize | `test_validation_index_requires_index_write_capability` |
+| `--dry-run` wrote workflow state | every mutation path guarded by planning mode | `test_dry_run_never_mutates_state` |
+| Model with no checkpoint produced a run-and-fail stage | stage is skipped when no registry output exists | `test_model_without_checkpoint_has_no_side_effecting_checkpoint_stage` |
+| Committed bytecode counted as dirty; real edits inside `__pycache__` ignored | bytecode matched by concrete path/suffix only | `test_committed_bytecode_is_not_dirty`, `test_tracked_edit_inside_pycache_dir_detected` |
+| `RUNTIME_READY` without an executed dependency probe | readiness requires a real probe | `test_runtime_ready_requires_dependency_probe` |
+| Run report written with plain `write_text` | exclusive `open("x")` | `test_mut10` |
