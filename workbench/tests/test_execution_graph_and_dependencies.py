@@ -132,3 +132,32 @@ def test_all_models_builds_distinct_per_model_stages(mock_cfg):
     assert "limn" in model_ids
     assert "dcnet" in model_ids
     assert len(model_ids) >= 3, f"Expected multiple distinct model stages, got: {model_ids}"
+
+
+# 4. real mode: failed sync prevents real evaluation (dependency enforcement in legacy mode)
+def test_real_mode_failed_sync_prevents_evaluation(tmp_path: Path, monkeypatch):
+    from workbench.backend.operator_config import WorkbenchConfig
+    data = tmp_path / "FashionIQ"
+    (data / "captions").mkdir(parents=True)
+    (data / "image_splits").mkdir()
+    (data / "images").mkdir()
+    for cat in ("dress", "shirt", "toptee"):
+        (data / "image_splits" / f"split.{cat}.val.json").write_text("[]")
+        (data / "captions" / f"cap.{cat}.val.json").write_text("[]")
+    cfg = WorkbenchConfig(tmp_path / "repo", tmp_path / "d", data, "127.0.0.1", 8000, 5173,
+                          tmp_path / "ck", tmp_path / "res", tmp_path / "tp")
+    called = []
+
+    def run(argv):
+        called.append(argv)
+        return 1 if "sync_upstreams.py" in str(argv) else 0
+
+    monkeypatch.setattr(pipeline, "resolve_config", lambda: cfg)
+    monkeypatch.setattr(pipeline, "run_command", run)
+
+    rc = pipeline.main([
+        "real", "--model", "csmcir", "--sync-sources", "--evaluate",
+        "--apply", "--allow-network", "--allow-gpu-eval", "--allow-preparation",
+        "--dataset-root", str(data), "--continue-on-error",
+    ])
+    assert not any("evaluate_models.py" in str(a) for a in called), "Evaluation launched after failed sync dependency"

@@ -149,7 +149,9 @@ def validate_stage_outputs(stage: Stage, recorded: dict[str, str] | None = None)
     from workbench.backend.registry import sha256_file
 
     if not stage.output_paths:
-        return True
+        # Read-only stages may be skipped on fingerprint alone; a side-effecting stage
+        # declares no completion proof, so it must not be silently trusted as valid.
+        return not stage.required_capability
     for p in stage.output_paths:
         if not p.exists():
             return False

@@ -104,3 +104,11 @@ def test_r11_state_atomic_valid_json(tmp_path: Path):
     # No leftover temp files
     leftovers = [p for p in tmp_path.iterdir() if ".tmp." in p.name]
     assert leftovers == []
+
+
+# R12: Side-effecting stage with no output contract cannot be silently trusted
+def test_r12_side_effecting_without_output_proof_not_trusted():
+    stage = pipeline.Stage(name="checkpoint", commands=(["/download"],), required_capability="allow_large_downloads")
+    assert pipeline.validate_stage_outputs(stage) is False
+    read_only = pipeline.Stage(name="doctor", commands=(["/doctor"],))
+    assert pipeline.validate_stage_outputs(read_only) is True
