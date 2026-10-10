@@ -236,13 +236,21 @@ def test_true_master_pipeline_subprocess_e2e_complete_flow(true_e2e_workspace):
     assert res4.returncode == 0
     assert len(list(logs_dir.iterdir())) > logs_before, "Dataset mutation did not rerun evaluation"
 
-    # RUN 5: Delete the latest pointer -> --resume must detect invalid output and rerun
-    latest = w["ws"] / "workbench" / "artifacts" / "reports" / "synthetic_model_ckpt_v1_latest.json"
-    assert latest.is_file(), "latest run manifest was not created"
-    latest.unlink()
+    # RUN 5: Delete the run-bound completion proof -> --resume must detect that the
+    # current invocation's evidence is gone and rerun (a stale report is not proof).
+    reports_dir = w["ws"] / "workbench" / "artifacts" / "reports"
+    successful = reports_dir / "synthetic_model_ckpt_v1_latest_successful.json"
+    attempt = reports_dir / "synthetic_model_ckpt_v1_latest_attempt.json"
+    assert successful.is_file(), "latest_successful pointer was not created"
+    assert attempt.is_file(), "latest_attempt pointer was not created"
+    proof = reports_dir / f"synthetic_model_ckpt_v1_{json.loads(successful.read_text())['run_id']}_completion.json"
+    assert proof.is_file(), "run-bound completion proof was not created"
+    proof.unlink()
     res5 = subprocess.run(cmd2, env=env, capture_output=True, text=True)
     assert res5.returncode == 0
-    assert latest.is_file(), "latest manifest was not recreated on invalid output rerun"
+    assert successful.is_file(), "latest_successful pointer missing after recovery"
+    # The recovery run is the current latest success; a failing run must not beat it.
+    last_run = json.loads(successful.read_text())["run_id"]
     # Run-scoped immutable reports accumulate; each run has its own file.
     run_reports = list((w["ws"] / "workbench" / "artifacts" / "reports").glob("synthetic_model_ckpt_v1_2*_aggregate.json"))
     assert len(run_reports) >= 2, f"expected multiple immutable run reports, got {run_reports}"
@@ -271,6 +279,13 @@ def test_true_master_pipeline_subprocess_e2e_complete_flow(true_e2e_workspace):
     assert rep_fail["success"] is False
     assert rep_fail["status"] in ("PARTIAL", "FAILED")
     assert any(s.get("status") == "FAILED" for s in rep_fail["stages"].values())
+
+    # The failed invocation must not become the latest *successful* run.
+    assert json.loads(successful.read_text())["run_id"] == last_run, (
+        "a failed rerun replaced latest_successful")
+    failed_attempt = json.loads(attempt.read_text())
+    assert failed_attempt["return_code"] != 0, "failed attempt was not recorded as failed"
+    assert failed_attempt["run_id"] != last_run
 
 
 def test_true_master_dirty_source_blocks_evaluation(true_e2e_workspace):

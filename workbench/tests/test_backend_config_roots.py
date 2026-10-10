@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import sys
+
 from workbench.backend.adapters.base import EvalRequest
 from workbench.backend.adapters.models import CSMCIRAdapter
 from workbench.backend.index import result_files
@@ -45,7 +47,9 @@ def test_backend_uses_current_configured_roots(monkeypatch, tmp_path: Path) -> N
     assert availability["checkpoint_root"] == str(checkpoints)
     assert availability["source_root"] == str(third_party)
     assert availability["source_synced_locally"] is True
-    assert command == ["python", str(source / "src" / "validate_blip_csmcir.py"), "--dataset", "fashionIQ", "--blip-model-path", str(checkpoint_path)]
+    assert command[0] == sys.executable and command[0] != "python"
+    assert command[1:] == [str(source / "src" / "validate_blip_csmcir.py"), "--dataset", "fashionIQ",
+                           "--blip-model-path", str(checkpoint_path)]
     assert result_files() == [result]
     assert resolve_image("dress", "sample") == image
 

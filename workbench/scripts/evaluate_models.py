@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 import os
 import platform
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.adapters.base import EvalRequest
@@ -43,6 +43,7 @@ class EvaluationPlan:
     bundle_manifest_digest: str | None = None
     artifact_type: str = "single_file"
     directory_members: list[dict[str, Any]] | None = None
+    checkpoint_sha256: str | None = None
 def command_is_audited(adapter_type: type[OfficialScriptAdapter]) -> bool:
     return getattr(adapter_type, "command", None) is not OfficialScriptAdapter.command
 
@@ -186,6 +187,7 @@ def parser_for(registry: dict) -> argparse.ArgumentParser:
     parser.add_argument("--dataset-root", type=Path, help="FashionIQ root; CSMCIR requires its fixed upstream layout")
     parser.add_argument("--canonical-dataset-root", type=Path, help="canonical FashionIQ root behind a CSMCIR fixed link")
     parser.add_argument("--top-k", type=int, default=200)
+    parser.add_argument("--run-id", help="invocation run identity supplied by the orchestrator")
     parser.add_argument("--dry-run", action="store_true", help="print guarded command and log plan without writing")
     parser.add_argument("--continue-on-error", action="store_true")
     return parser
@@ -195,17 +197,263 @@ def make_run_id(plan: EvaluationPlan, timestamp: datetime) -> str:
     """Collision-resistant run identity: time + model + checkpoint + random suffix."""
     return f"{timestamp:%Y%m%dT%H%M%S%fZ}_{plan.model_id}_{plan.checkpoint_id}_{uuid.uuid4().hex[:8]}"
 
+def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
+                     output_root: Path) -> tuple[int, Path, dict]:
+    """Run the official command under this invocation's identity and collect evidence.
+
+    Returns ``(return_code, log_directory, environment)``. The environment carries
+    the run identity the evaluator is expected to stamp onto any completion proof.
+    """
+    environment = {
+        "orchestrator_python": sys.version,
+        "orchestrator_executable": sys.executable,
+        "platform": sys.platform,
+        "model_interpreter": plan.command[0] if plan.command else sys.executable,
+        "evaluation_run_id": run_id,
+        "evaluation_output_root": str(output_root),
+    }
+    directory = log_dir(config, plan, datetime.now(UTC), run_id)
+    directory.mkdir(parents=True, exist_ok=False)
+    child_env = dict(os.environ)
+    child_env.update({key: str(value) for key, value in environment.items()})
+    with (directory / "stdout.log").open("w", encoding="utf-8", newline="") as stdout, \
+            (directory / "stderr.log").open("w", encoding="utf-8", newline="") as stderr:
+        process = subprocess.Popen(plan.command, cwd=plan.cwd, text=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=child_env)
+
+        def tee(stream, destination, terminal):
+            for line in stream:
+                destination.write(line)
+                destination.flush()
+                terminal.write(line)
+                terminal.flush()
+
+        threads = [
+            threading.Thread(target=tee, args=(process.stdout, stdout, sys.stdout)),
+            threading.Thread(target=tee, args=(process.stderr, stderr, sys.stderr)),
+        ]
+        for thread in threads:
+            thread.start()
+        code = process.wait()
+        for thread in threads:
+            thread.join()
+    return code, directory, environment
+
+
+# Descriptor keys a completion proof may use to spell the run identity it belongs to.
+_RUN_ID_KEYS = ("run_id", "evaluation_run_id", "invocation_run_id")
+_MODEL_ID_KEYS = ("model_id", "model")
+_CHECKPOINT_ID_KEYS = ("checkpoint_id", "checkpoint")
+_PROTOCOL_ID_KEYS = ("protocol_id", "protocol")
+_SOURCE_COMMIT_KEYS = ("source_actual_commit", "source_commit", "actual_source_commit")
+_CHECKPOINT_SHA_KEYS = ("checkpoint_sha256", "checkpoint_digest")
+
+
+class EvaluationOutputError(RuntimeError):
+    """The evaluator's declared output does not prove *this* invocation succeeded."""
+
+
+def _first(payload: dict, keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        if key in payload:
+            return payload[key]
+    return None
+
+
+def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str,
+                          output_root: Path, config: WorkbenchConfig | None = None,
+                          require_checksum: bool = False,
+                          require_environment_identity: bool = False) -> dict:
+    """Validate that ``proof_path`` is a completion proof for *this* invocation.
+
+    A pre-existing report, a pre-existing latest pointer, or a merely-newer
+    timestamp is never sufficient: the proof must name the current run and agree
+    with this plan's model, checkpoint, protocol, and source provenance.
+    """
+    if not proof_path.exists():
+        raise EvaluationOutputError(f"declared output missing: {proof_path}")
+    if not proof_path.is_file():
+        raise EvaluationOutputError(f"declared output is not a file: {proof_path}")
+    if proof_path.stat().st_size == 0:
+        raise EvaluationOutputError(f"declared output is empty: {proof_path}")
+    try:
+        resolved_proof = proof_path.resolve()
+        resolved_root = Path(output_root).resolve()
+    except OSError as error:
+        raise EvaluationOutputError(f"declared output is unreadable: {error}") from error
+    if not (resolved_proof == resolved_root or resolved_proof.is_relative_to(resolved_root)):
+        raise EvaluationOutputError(
+            f"declared output {resolved_proof} is outside the run output root {resolved_root}"
+        )
+    try:
+        payload = json.loads(resolved_proof.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise EvaluationOutputError(f"declared output is malformed JSON: {error}") from error
+    if not isinstance(payload, dict):
+        raise EvaluationOutputError("declared output is not a JSON object")
+
+    proof_run = _first(payload, _RUN_ID_KEYS)
+    if proof_run != run_id:
+        raise EvaluationOutputError(
+            f"declared output belongs to run {proof_run!r}, not the current run {run_id!r}"
+        )
+    for label, keys, expected in (
+        ("model", _MODEL_ID_KEYS, plan.model_id),
+        ("checkpoint", _CHECKPOINT_ID_KEYS, plan.checkpoint_id),
+        ("protocol", _PROTOCOL_ID_KEYS, plan.protocol),
+    ):
+        declared = _first(payload, keys)
+        if declared is None:
+            raise EvaluationOutputError(f"declared output does not state its {label}")
+        if str(declared) != str(expected):
+            raise EvaluationOutputError(
+                f"declared output {label} is {declared!r}, expected {expected!r}"
+            )
+    if plan.pin is not None:
+        source_commit = _first(payload, _SOURCE_COMMIT_KEYS)
+        if source_commit is None:
+            raise EvaluationOutputError("declared output does not state its source commit")
+        if str(source_commit) != str(plan.pin):
+            raise EvaluationOutputError(
+                f"declared output source commit is {source_commit!r}, expected {plan.pin!r}"
+            )
+    declared_checkpoint = _first(payload, _CHECKPOINT_SHA_KEYS)
+    if declared_checkpoint is None:
+        raise EvaluationOutputError("declared output does not state its checkpoint digest")
+    if plan.checkpoint.is_file():
+        from workbench.backend.registry import sha256_file as _sha
+
+        actual_checkpoint = _sha(plan.checkpoint)
+        if str(declared_checkpoint) != actual_checkpoint:
+            raise EvaluationOutputError(
+                "declared output checkpoint digest does not match the selected checkpoint"
+            )
+    elif plan.checkpoint_sha256 is not None and str(declared_checkpoint) != plan.checkpoint_sha256:
+        raise EvaluationOutputError(
+            "declared output checkpoint digest does not match the expected checkpoint digest"
+        )
+
+    if require_checksum:
+        digest = payload.get("report_digest")
+        if not isinstance(digest, str) or not digest:
+            raise EvaluationOutputError("declared output does not carry a report digest")
+        inner = payload.get("report")
+        if not isinstance(inner, str):
+            raise EvaluationOutputError("declared output does not reference its report")
+        report_path = Path(inner)
+        if not report_path.is_absolute():
+            report_path = resolved_proof.parent / report_path
+        if not report_path.is_file() or report_path.stat().st_size == 0:
+            raise EvaluationOutputError(f"declared output references a missing report: {report_path}")
+        try:
+            resolved_report = report_path.resolve()
+        except OSError as error:
+            raise EvaluationOutputError(f"declared output report is unreadable: {error}") from error
+        if not (resolved_report == resolved_root or resolved_report.is_relative_to(resolved_root)):
+            raise EvaluationOutputError(
+                f"declared output report {resolved_report} is outside the artifact root {resolved_root}"
+            )
+        if sha256_file(report_path) != digest:
+            raise EvaluationOutputError("declared output report digest does not match its report")
+    if require_environment_identity:
+        env_digest = payload.get("environment_digest")
+        if not isinstance(env_digest, str) or not env_digest:
+            raise EvaluationOutputError("declared output does not carry an environment digest")
+        evidence_digest = payload.get("evidence_digest")
+        if not isinstance(evidence_digest, str) or not evidence_digest:
+            raise EvaluationOutputError("declared output does not carry invocation evidence")
+        run_directory = payload.get("run_directory")
+        if not isinstance(run_directory, str) or not run_directory:
+            raise EvaluationOutputError("declared output does not state its run directory")
+        run_dir = Path(run_directory)
+        # The proof must belong to THIS invocation: the run directory is derived from
+        # the run id, so a copied or renamed proof can never satisfy a new run.
+        if run_dir.name != run_id:
+            raise EvaluationOutputError(
+                f"declared output belongs to run directory {run_dir.name!r}, "
+                f"expected this invocation's {run_id!r}")
+        if config is not None:
+            expected_directory = log_dir(config, plan, datetime.now(UTC), run_id)
+            if run_dir.name != expected_directory.name:
+                raise EvaluationOutputError(
+                    f"declared output run directory {run_dir.name!r} does not match "
+                    f"this invocation's {expected_directory.name!r}")
+        if not run_dir.is_dir():
+            raise EvaluationOutputError(f"declared output run directory is missing: {run_dir}")
+        if not run_dir.resolve().is_relative_to(resolved_root):
+            raise EvaluationOutputError(f"declared output run directory escapes the artifact root: {run_dir}")
+        logs = {}
+        for name in ("stdout.log", "stderr.log"):
+            log_path = run_dir / name
+            if not log_path.is_file():
+                raise EvaluationOutputError(f"invocation log missing: {log_path}")
+            logs[name[:-4]] = log_path.read_text(encoding="utf-8")
+        observed = hashlib.sha256(json.dumps(logs, sort_keys=True).encode("utf-8")).hexdigest()
+        if observed != evidence_digest:
+            raise EvaluationOutputError("invocation evidence does not match the recorded digest")
+        if not (logs["stdout"].strip() or logs["stderr"].strip()):
+            raise EvaluationOutputError("invocation produced no observable evaluation output")
+    return payload
+
 
 def log_dir(config: WorkbenchConfig, plan: EvaluationPlan, timestamp: datetime, run_id: str | None = None) -> Path:
+    """Where a run's own logs live. One directory per invocation identity."""
     repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
     return repo_root / "workbench" / "artifacts" / "logs" / (run_id or make_run_id(plan, timestamp))
 
 
-def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
+def expected_run_identity(config: WorkbenchConfig, plan: EvaluationPlan, run_id: str) -> dict[str, str]:
+    """The identity every completion proof must carry for this invocation."""
+    return {
+        "run_id": run_id,
+        "run_directory": str(log_dir(config, plan, datetime.now(UTC), run_id)),
+        "report": str(run_report_path(config, plan, run_id)),
+        "proof": str(completion_proof_path(config, plan, run_id)),
+    }
+
+
+def artifact_root(config: WorkbenchConfig) -> Path:
+    repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
+    return repo_root / "workbench" / "artifacts"
+
+
+def reports_root(config: WorkbenchConfig) -> Path:
+    return artifact_root(config) / "reports"
+
+
+def run_report_path(config: WorkbenchConfig, plan: EvaluationPlan, run_id: str) -> Path:
+    return reports_root(config) / f"{plan.model_id}_{plan.checkpoint_id}_{run_id}_aggregate.json"
+
+
+def completion_proof_path(config: WorkbenchConfig, plan: EvaluationPlan, run_id: str) -> Path:
+    return reports_root(config) / f"{plan.model_id}_{plan.checkpoint_id}_{run_id}_completion.json"
+
+
+def latest_pointer(config: WorkbenchConfig, plan: EvaluationPlan, kind: str) -> Path:
+    """`kind` is ``attempt`` or ``successful``. Attempts and successes never mix."""
+    return reports_root(config) / f"{plan.model_id}_{plan.checkpoint_id}_latest_{kind}.json"
+
+
+def _atomic_write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + f".tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}")
+    temp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    try:
+        temp.replace(path)
+    except BaseException:
+        # A failed commit must leave the previous pointer intact and no debris behind.
+        try:
+            temp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+
+def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = None) -> int:
     started = datetime.now(UTC)
-    run_id = make_run_id(plan, started)
-    directory = log_dir(config, plan, started, run_id)
-    directory.mkdir(parents=True, exist_ok=False)
+    run_id = run_id or make_run_id(plan, started)
+    root = artifact_root(config)
+    reports = reports_root(config)
 
     checkpoint_local_sha = None
     if plan.checkpoint.is_file():
@@ -214,18 +462,22 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
         req_files = [m["filename"] for m in plan.directory_members] if plan.directory_members else None
         checkpoint_local_sha = sha256_file(plan.checkpoint, required_files=req_files)
 
-    environment = {
-        "orchestrator_python": sys.version,
-        "orchestrator_executable": sys.executable,
-        "platform": sys.platform,
-        "model_interpreter": plan.command[0] if plan.command else sys.executable,
-    }
+    run_report = run_report_path(config, plan, run_id)
+    proof_path = completion_proof_path(config, plan, run_id)
+    if run_report.exists() or proof_path.exists():
+        raise RuntimeError(f"refusing to overwrite existing run artifacts for run id {run_id}")
+
+    # The evaluator is launched under this invocation's identity; the identity is
+    # exported so a repeating evaluator can stamp it onto its own output.
+    code, directory, environment = invoke_evaluator(plan, config, run_id, root)
     command_json = json.dumps(plan.command, separators=(",", ":"))
     environment_json = json.dumps(environment, sort_keys=True, separators=(",", ":"))
+
     metadata = {
         "model_id": plan.model_id,
         "checkpoint_id": plan.checkpoint_id,
         "protocol_id": plan.protocol,
+        "run_id": run_id,
         "argv": plan.command,
         "cwd": str(plan.cwd),
         "upstream_expected_pin": plan.pin,
@@ -240,30 +492,10 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
         "environment": environment,
         "environment_digest": hashlib.sha256(environment_json.encode()).hexdigest(),
         "started_at": started.isoformat(),
-        "finished_at": None,
-        "return_code": None,
+        "finished_at": datetime.now(UTC).isoformat(),
+        "return_code": code,
         "dataset_root": str(plan.dataset_root),
     }
-    (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-    with (directory / "stdout.log").open("w", encoding="utf-8", newline="") as stdout, (directory / "stderr.log").open("w", encoding="utf-8", newline="") as stderr:
-        process = subprocess.Popen(plan.command, cwd=plan.cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        def tee(stream, destination, terminal):
-            for line in stream:
-                destination.write(line)
-                destination.flush()
-                terminal.write(line)
-                terminal.flush()
-
-        threads = [threading.Thread(target=tee, args=(process.stdout, stdout, sys.stdout)), threading.Thread(target=tee, args=(process.stderr, stderr, sys.stderr))]
-        for thread in threads:
-            thread.start()
-        code = process.wait()
-        for thread in threads:
-            thread.join()
-
-    metadata["finished_at"] = datetime.now(UTC).isoformat()
-    metadata["return_code"] = code
     (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
 
     stdout_content = (directory / "stdout.log").read_text(encoding="utf-8")
@@ -280,12 +512,18 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
     report = {
         "artifact_type": "official_aggregate_evaluation_report",
         "schema_version": 1,
+        "run_id": run_id,
+        "run_directory": str(directory),
         "model_id": plan.model_id,
         "checkpoint_id": plan.checkpoint_id,
         "protocol_id": plan.protocol,
+        # Execution completion and metric verification are separate states: a run that
+        # exited 0 with unusable aggregate output is still a completed execution.
+        "execution_status": "EXECUTION_COMPLETED" if code == 0 else "EXECUTION_FAILED",
         "reproduction_status": extraction.extraction_status,
         "per_query_export_available": False,
         "extraction_status": extraction.extraction_status,
+        "metric_extraction_available": extraction.observed_metrics is not None,
         "parser_id": extraction.parser_id,
         "parser_version": extraction.parser_version,
         "observed_metrics": extraction.observed_metrics,
@@ -309,32 +547,138 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
         "environment_digest": metadata["environment_digest"],
         "return_code": code,
     }
-    report["run_id"] = run_id
-    report["run_directory"] = str(directory)
     report_json = json.dumps(report, indent=2) + "\n"
 
-    reports_dir = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2]) / "workbench" / "artifacts" / "reports"
-    reports_dir.mkdir(parents=True, exist_ok=True)
-
-    # Immutable, run-scoped artifacts. Each run writes exactly once; existing files are
-    # never overwritten, so a previous successful experiment is always preserved.
-    (directory / "aggregate_report.json").write_text(report_json, encoding="utf-8")
-    run_report = reports_dir / f"{plan.model_id}_{plan.checkpoint_id}_{run_id}_aggregate.json"
-    # Exclusive create: a colliding run id must never overwrite an existing experiment.
+    # Immutable, run-scoped artifact. Exclusive create: a colliding run id must never
+    # overwrite a previous experiment.
+    reports.mkdir(parents=True, exist_ok=True)
     try:
         with run_report.open("x", encoding="utf-8") as handle:
             handle.write(report_json)
     except FileExistsError as error:
         raise RuntimeError(f"refusing to overwrite existing run report: {run_report}") from error
+    (directory / "aggregate_report.json").write_text(report_json, encoding="utf-8")
 
-    # Atomic, overwrite-tolerant "latest" pointer. This is convenience only; it is not
-    # the experiment artifact and never replaces a run-scoped report.
-    latest = reports_dir / f"{plan.model_id}_{plan.checkpoint_id}_latest.json"
-    temp_latest = latest.with_suffix(f".tmp.{uuid.uuid4().hex}")
-    temp_latest.write_text(json.dumps({"run_id": run_id, "run_directory": str(directory),
-                                       "report": str(run_report)}, indent=2) + "\n", encoding="utf-8")
-    temp_latest.replace(latest)
+    # A completion proof must be backed by evidence *this* invocation produced. If the
+    # official command exits 0 but emits nothing at all, there is no run-specific
+    # evaluation evidence, so no proof may be minted — and the stage cannot COMPLETE.
+    produced_output = bool(stdout_content.strip() or stderr_content.strip())
+    evidence_digest = hashlib.sha256(
+        json.dumps({"stdout": stdout_content, "stderr": stderr_content},
+                   sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    if code == 0 and not produced_output:
+        print("[BLOCKED] official command exited 0 but produced no observable evaluation "
+              "output; no completion proof can be minted for this invocation", file=sys.stderr)
+        _atomic_write_json(latest_pointer(config, plan, "attempt"), {
+            "run_id": run_id,
+            "run_directory": str(directory),
+            "report": str(run_report),
+            "return_code": code,
+            "completion_status": "NO_OBSERVABLE_OUTPUT",
+            "updated_at": datetime.now(UTC).isoformat(),
+        })
+        return code
+
+    proof = {
+        "artifact_type": "official_evaluation_completion_proof",
+        "schema_version": 1,
+        "completion_status": "COMPLETED" if code == 0 else "FAILED",
+        "run_id": run_id,
+        "model_id": plan.model_id,
+        "checkpoint_id": plan.checkpoint_id,
+        "protocol_id": plan.protocol,
+        "source_expected_commit": plan.pin,
+        "source_actual_commit": plan.actual_source_commit,
+        "checkpoint_artifact_type": plan.artifact_type,
+        "checkpoint_sha256": checkpoint_local_sha,
+        "return_code": code,
+        "report": str(run_report),
+        "report_digest": sha256_file(run_report),
+        "report_relative": run_report.name,
+        "metric_extraction_available": extraction.observed_metrics is not None,
+        "extraction_status": extraction.extraction_status,
+        "environment_digest": metadata["environment_digest"],
+        "command_digest": metadata["command_digest"],
+        "evidence_digest": evidence_digest,
+        "stdout_log": "stdout.log",
+        "stderr_log": "stderr.log",
+        "run_directory": str(directory),
+        "run_id_expected_directory": str(log_dir(config, plan, datetime.now(UTC), run_id)),
+        "invocation_identity": expected_run_identity(config, plan, run_id),
+        "completed_at": datetime.now(UTC).isoformat(),
+    }
+    try:
+        with proof_path.open("x", encoding="utf-8") as handle:
+            handle.write(json.dumps(proof, indent=2) + "\n")
+    except FileExistsError as error:
+        raise RuntimeError(f"refusing to overwrite existing completion proof: {proof_path}") from error
+
+    # Attempts always advance; successes only advance on a genuinely successful,
+    # proof-backed execution. A failed rerun can never replace latest_successful.
+    _atomic_write_json(latest_pointer(config, plan, "attempt"), {
+        "run_id": run_id,
+        "run_directory": str(directory),
+        "report": str(run_report),
+        "proof": str(proof_path),
+        "return_code": code,
+        "completion_status": proof["completion_status"],
+        "updated_at": proof["completed_at"],
+    })
+    if code == 0:
+        try:
+            validate_run_manifest(plan, proof_path, run_id=run_id, output_root=root,
+                                  config=config, require_checksum=True,
+                                  require_environment_identity=True)
+        except EvaluationOutputError as error:
+            print(f"[BLOCKED] completion proof rejected: {error}", file=sys.stderr)
+        else:
+            _atomic_write_json(latest_pointer(config, plan, "successful"), {
+                "run_id": run_id,
+                "run_directory": str(directory),
+                "report": str(run_report),
+                "proof": str(proof_path),
+                "return_code": code,
+                "completion_status": "COMPLETED",
+                "report_digest": proof["report_digest"],
+                "updated_at": proof["completed_at"],
+            })
     return code
+
+
+def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: str | None,
+                         config: WorkbenchConfig, checkpoint_file: Path | None = None):
+    """Build the pipeline-side validator for one evaluation stage.
+
+    It answers a single question: *did THIS invocation produce a valid completion
+    proof?* A leftover report or an old latest pointer is never accepted.
+    """
+    def _validate(record: dict | None) -> tuple[bool, str | None, dict | None]:
+        if not isinstance(record, dict):
+            return False, "no evaluation invocation recorded", None
+        run_id = record.get("run_id")
+        if not run_id:
+            return False, "recorded evaluation has no invocation run id", None
+        reports = reports_root(config)
+        proof_path = reports / f"{model_id}_{checkpoint_id}_{run_id}_completion.json"
+        plan = EvaluationPlan(model_id, checkpoint_id, protocol, Path("."), Path("."),
+                              checkpoint_file or Path("."), Path("."), [], pin, None)
+        try:
+            payload = validate_run_manifest(plan, proof_path, run_id=run_id,
+                                            output_root=artifact_root(config), config=config,
+                                            require_checksum=True,
+                                            require_environment_identity=True)
+        except EvaluationOutputError as error:
+            return False, str(error), None
+        if payload.get("return_code") != 0 or payload.get("completion_status") != "COMPLETED":
+            return False, f"recorded evaluation did not complete (return code {payload.get('return_code')})", None
+        return True, None, {
+            "completion_proof": str(proof_path),
+            "run_report": str(payload.get("report")),
+            "report_digest": payload.get("report_digest"),
+            "run_id": run_id,
+        }
+    return _validate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -373,7 +717,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.dry_run:
             print("[OK] dry-run: official command not executed; no logs created")
             continue
-        if execute(plan, config):
+        if execute(plan, config, run_id=args.run_id):
             print("[BLOCKED] official command failed"); failed = True
             if not args.continue_on_error: break
     return 1 if failed else 0

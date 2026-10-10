@@ -316,6 +316,40 @@ def auxiliary_model_ids() -> set[str]:
     return {asset["model_id"] for asset in load_auxiliary_assets()}
 
 
+def source_runtime_artifacts(model: dict[str, Any]) -> list[dict[str, Any]]:
+    """Paths *inside a model's source checkout* the workbench legitimately creates.
+
+    Everything here is source-backed: each entry traces to a declared registry
+    contract (an audited auxiliary asset destination, or the CSMCIR fixed canonical
+    dataset link). Anything not declared here is an unauthorized source change.
+    """
+    model_id = model["model_id"]
+    if not model.get("source_dir"):
+        return []
+    artifacts: list[dict[str, Any]] = []
+    for asset in auxiliary_assets_for_model(model_id):
+        if asset["destination_scope"] != "model_source":
+            continue
+        destination = PurePosixPath(asset["destination_path"])
+        if destination.is_absolute() or ".." in destination.parts:
+            continue
+        artifacts.append({
+            "kind": "declared_auxiliary_asset",
+            "path": asset["destination_path"],
+            "family": asset["family"],
+            "expected_sha256": asset.get("expected_sha256"),
+            "provenance_status": asset.get("provenance_status"),
+            "source": asset.get("source_path"),
+        })
+    if model_id == "csmcir":
+        artifacts.append({
+            "kind": "canonical_dataset_link",
+            "path": "fashionIQ_dataset",
+            "expects": "FASHIONIQ_ROOT",
+        })
+    return artifacts
+
+
 def model_by_id(model_id: str, registry: dict[str, Any] | None = None) -> dict[str, Any]:
     registry = registry or load_registry()
     for model in registry["models"]:

@@ -51,7 +51,9 @@ def test_verify_only_never_calls_network(monkeypatch: pytest.MonkeyPatch, tmp_pa
         calls.append(tuple(command))
         if command[-2:] == ["rev-parse", "HEAD"]:
             return type("Result", (), {"returncode": 0, "stdout": "b" * 40})()
-        if command[-2:] == ["status", "--porcelain"]:
+        # `local_state` classifies the checkout with the shared porcelain queries the
+        # execution gate uses; all of them report a clean tree here.
+        if "status" in command and "--porcelain" in command:
             return type("Result", (), {"returncode": 0, "stdout": ""})()
         pytest.fail(f"unexpected Git command: {command}")
 

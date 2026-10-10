@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.registry import load_registry
+from workbench.backend.runtime import READY_TIERS, check_environment_isolation, verify_environment
 
 
 _ENV_SPEC_CANDIDATES = ("environment.yml", "environment.yaml", "requirements.txt")
@@ -52,11 +53,19 @@ def _interpreter_status(model: dict, source_root: Path) -> dict:
     var = env.get("python_env_var")
     configured = _interpreter_from_env_var(model)
     if configured:
-        path = Path(configured).expanduser().resolve()
-        if path.is_file() and os.access(path, os.X_OK):
-            return {"status": "READY", "interpreter": str(path), "variable": var}
-        return {"status": "CONFIGURED_MISSING", "interpreter": str(path), "variable": var}
-    return {"status": "UNCONFIGURED", "interpreter": None, "variable": var}
+        # Keep the configured invocation path exactly as given: resolving a venv's
+        # bin/python can point at the shared system binary and destroy the context.
+        path = Path(configured).expanduser()
+        if not path.is_file() or not os.access(path, os.X_OK):
+            return {"status": "CONFIGURED_MISSING", "interpreter": str(path), "variable": var}
+        # This is an explicit operator inspection tool, so it pays for the probe and
+        # reports the same tier definition doctor and guarded_plan use.
+        report = verify_environment(model, probe=True)
+        return {"status": report.status, "tier": report.tier, "interpreter": str(path), "variable": var,
+                "verified": report.tier in READY_TIERS, "reason": report.reason,
+                "packages": report.packages, "probe_executed": report.probe_executed}
+    return {"status": "UNCONFIGURED", "interpreter": None, "variable": var, "tier": "UNCONFIGURED",
+            "verified": False, "reason": None}
 
 
 def status(model: dict, config) -> dict:
@@ -75,19 +84,27 @@ def status(model: dict, config) -> dict:
         "env_spec_path": str(spec) if spec else None,
         "env_spec_type": spec.name if spec else None,
         "interpreter_status": interp["status"],
+        "interpreter_tier": interp.get("tier"),
         "interpreter": interp["interpreter"],
         "env_var": interp["variable"],
+        "runtime_verified": bool(interp.get("verified")),
+        "runtime_reason": interp.get("reason"),
         "documented_python": env_meta.get("python"),
         "documented_pytorch": env_meta.get("pytorch"),
         "documented_cuda": env_meta.get("cuda"),
         "environment_confidence": env_meta.get("confidence"),
-        "ready": interp["status"] == "READY" or not model.get("environment_required"),
+        # "ready" means the *runtime* is verified, matching doctor and guarded_plan.
+        # A present-but-unverified interpreter is explicitly not ready.
+        "ready": bool(interp.get("verified")) or not model.get("environment_required"),
     }
 
 
 def print_status(s: dict) -> None:
     label = "OK" if s["ready"] else "BLOCKED"
-    print(f"[{label}] {s['model_id']}: interpreter={s['interpreter_status']} env_var={s['env_var']}")
+    tier = s.get("interpreter_tier") or s["interpreter_status"]
+    print(f"[{label}] {s['model_id']}: interpreter={s['interpreter_status']} tier={tier} env_var={s['env_var']}")
+    if s.get("runtime_reason"):
+        print(f"  runtime: {s['runtime_reason']}")
     if s["env_spec_found"]:
         print(f"  spec: {s['env_spec_path']} ({s['env_spec_type']})")
     else:
@@ -134,11 +151,12 @@ def create_env(model: dict, s: dict, dry_run: bool) -> bool:
     if not configured:
         print(f"[BLOCKED] {model_id}: {env_var} not set; point it at a pre-created venv or interpreter", file=sys.stderr)
         return False
-    interpreter = Path(configured).expanduser().resolve()
+    # Preserve the configured invocation path: resolving it would hand pip a
+    # different interpreter than the environment the operator configured.
+    interpreter = Path(configured).expanduser()
     if not interpreter.is_file():
         print(f"[BLOCKED] {model_id}: {env_var}={interpreter} not found", file=sys.stderr)
         return False
-    from workbench.backend.runtime import check_environment_isolation
     is_isolated, iso_msg = check_environment_isolation(interpreter)
     if not is_isolated:
         print(f"[BLOCKED] {model_id}: refusing installation into unsafe target interpreter: {iso_msg}", file=sys.stderr)

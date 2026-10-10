@@ -29,7 +29,14 @@ def local_state(destination: Path) -> tuple[str, str | None, bool | None]:
     head = git_output(destination, "rev-parse", "HEAD")
     if head is None:
         return "not a git repository", None, None
-    dirty = bool(git_output(destination, "status", "--porcelain"))
+    # Bytecode is a build product, never a source change: use the same
+    # classification the execution gate and doctor use, so the three cannot disagree.
+    from workbench.backend.runtime import source_status
+
+    entries = source_status(destination)
+    if entries is None:
+        return "unreadable", head, None
+    dirty = bool(entries["tracked"] or entries["unauthorized"] or entries["invalid"])
     return "dirty" if dirty else "clean", head, dirty
 
 

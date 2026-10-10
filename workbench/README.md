@@ -163,6 +163,11 @@ Legacy entries preserve source pins and native evaluator evidence; they do not m
 
 ## Legacy preparation contracts
 
+Evaluation identity: each run has an immutable `_<run_id>_aggregate.json` report and a run-bound
+`_<run_id>_completion.json` proof. `_latest_attempt.json` advances on every run; `_latest_successful.json`
+only after a proven success, so a failed rerun can never displace a previous success. See
+`docs/AUTOMATION_RUNBOOK.md` section 7.
+
 `registry/preparation_contracts.yaml` is declarative only. `doctor.py --scope real --model MODEL_ID --json` reports **raw dataset**, **preparation**, and **external evaluation assets** separately from source, checkpoint/bundle, command, and environment metadata. It never executes preparation scripts.
 
 DCNet requires `resized_images/` plus `captions/cap.{category}.glove.val.pkl`; regenerating these PKLs is unsafe because upstream `process_cap.py` samples unseeded NumPy OOV vectors. Preserve author-generated artifacts. `spaCy en_vectors_web_lg` and NLTK `punkt` are regeneration-only, not false evaluation requirements. Standard DCNet evaluation does require unresolved ImageNet ResNet-50 weights.
@@ -259,7 +264,11 @@ This tests a reproducible hypothesis. It does not prove an architectural cause.
 | ENCODER asset blocker | Both `fashioniq.pt` and `open_clip_pytorch_model.bin` are required. Direct checkpoint URL remains unresolved; do not substitute one. |
 | Checkpoint download blocked | Registry lacks direct URL/mapping or local file conflicts. Inspect with `--list`; use `--force-redownload` only for intentional replacement. |
 | `adapter command not audited` | No verified command exists. Do not derive flags from a guessed README command. |
-| Evaluation logs needed | A real evaluator run writes `command.json`, `stdout.log`, and `stderr.log` in ignored `workbench/artifacts/logs/<UTC timestamp>_<model>_<checkpoint>/`. Dry runs create none. |
+| Evaluation logs needed | A real evaluator run writes `command.json`, `stdout.log`, and `stderr.log` in ignored `workbench/artifacts/logs/<run_id>/`. Dry runs create none. |
+| Evaluation stage FAILED after exit 0 | The run produced no valid completion proof for the current invocation. Check `workbench/artifacts/reports/<model>_<checkpoint>_<run_id>_completion.json`; a leftover `_latest_successful` pointer is never accepted as proof. |
+| `execution environment not verified` | The interpreter exists but its runtime is unproven. Run `manage_environment.py --model ID --json`. Keep the configured invocation path unresolved (no `readlink -f`). |
+| Dependency version blocked | Constraints use `packaging` semantics: a bare registry version is an exact pin, so `1.12.10` cannot satisfy `1.12.1`. `UNKNOWN` declarations report `VERSION_CONSTRAINT_UNVERIFIED`. |
+| Source dirty right after CSMCIR preparation | Only the canonical `fashionIQ_dataset` symlink (resolving exactly to `FASHIONIQ_ROOT`) and registry-declared auxiliary assets with a matching recorded digest are approved runtime artifacts. Anything else still counts as dirty. |
 | Duplicate run ID or schema failure | Correct/regenerate artifact; do not edit derived database to hide it. |
 | Top-K analysis blocked | Selected artifacts did not save requested depth. Lower K or regenerate after verified instrumentation. |
 | Frontend dependency/port blocker | Use pre-provisioned frontend dependencies or select free distinct ports. Script never installs packages. |

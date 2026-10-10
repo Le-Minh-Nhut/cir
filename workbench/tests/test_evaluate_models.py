@@ -125,7 +125,9 @@ def test_limn_adapter_runs_full_bundle_or_named_category(monkeypatch, tmp_path: 
 
     interpreter = _fake_isolated_interpreter(tmp_path)
     monkeypatch.setenv("WORKBENCH_LIMN_PYTHON", str(interpreter))
-    monkeypatch.setattr("workbench.backend.adapters.models.python_executable", lambda model: str(interpreter))
+    # This test covers the LIMN command *shape*; verified interpreter selection is
+    # covered on its own by the INT-05 integration test with a real contract.
+    monkeypatch.setattr("workbench.backend.runtime.python_executable", lambda model: str(interpreter))
     adapter = LIMNAdapter()
     source = tmp_path / "LIMN"
     checkpoint_root = tmp_path / "checkpoints" / "limn"
@@ -166,7 +168,7 @@ def test_dcnet_command_uses_configured_model_interpreter(tmp_path: Path, monkeyp
 
     interpreter = _fake_isolated_interpreter(tmp_path)
     monkeypatch.setenv("WORKBENCH_DCNET_PYTHON", str(interpreter))
-    monkeypatch.setattr("workbench.backend.adapters.models.python_executable", lambda model: str(interpreter))
+    monkeypatch.setattr("workbench.backend.runtime.python_executable", lambda model: str(interpreter))
     command = DCNetAdapter().command(tmp_path / "DCNet", tmp_path / "fashioniq_dcnet", EvalRequest("dcnet", "fashioniq_run_directory", "fashioniq_full_gallery_ref_excluded", tmp_path / "FashionIQ", tmp_path / "result.json"))
 
     assert command == [str(interpreter), str(tmp_path / "DCNet" / "test.py"), "--resume", str(tmp_path / "fashioniq_dcnet")]
@@ -218,7 +220,10 @@ def test_csmcir_dry_run_constructs_official_command(monkeypatch, tmp_path: Path,
     assert reasons == []
     assert plan is not None
     assert plan.cwd == source / "src"
-    assert plan.command == ["python", str(script), "--dataset", "fashionIQ", "--blip-model-path", str(checkpoint_file)]
+    # CSMCIR requires no isolated environment, so it runs in the workbench interpreter;
+    # the command must name that interpreter, never a bare "python".
+    assert plan.command[0] == sys.executable
+    assert plan.command[1:] == [str(script), "--dataset", "fashionIQ", "--blip-model-path", str(checkpoint_file)]
     assert "[RUN] command:" in capsys.readouterr().out
 
 

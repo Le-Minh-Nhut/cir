@@ -4,7 +4,7 @@ from pathlib import Path
 
 from workbench.backend.adapters.base import EvalRequest, ModelAdapter
 from workbench.backend.registry import checkpoint_path
-from workbench.backend.runtime import python_executable
+from workbench.backend import runtime as _runtime
 
 
 class OfficialScriptAdapter(ModelAdapter):
@@ -30,7 +30,7 @@ class CSMCIRAdapter(OfficialScriptAdapter):
     script = "src/validate_blip_csmcir.py"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        return [python_executable(self.model), str(source / self.script), "--dataset", "fashionIQ", "--blip-model-path", str(checkpoint)]
+        return [_runtime.python_executable(self.model), str(source / self.script), "--dataset", "fashionIQ", "--blip-model-path", str(checkpoint)]
 
 
 class EncoderAdapter(OfficialScriptAdapter):
@@ -38,7 +38,7 @@ class EncoderAdapter(OfficialScriptAdapter):
     script = "evaluate_model.py"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        return [python_executable(self.model), str(source / self.script), "--dataset", "fashioniq", "--fashioniq_split", "val-split", "--fashioniq_path", f"{request.dataset_root}/", "--ckpt_path", str(checkpoint)]
+        return [_runtime.python_executable(self.model), str(source / self.script), "--dataset", "fashioniq", "--fashioniq_split", "val-split", "--fashioniq_path", f"{request.dataset_root}/", "--ckpt_path", str(checkpoint)]
 
 
 class HintAdapter(OfficialScriptAdapter):
@@ -81,14 +81,14 @@ class DCNetAdapter(OfficialScriptAdapter):
     script = "test.py"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        return [python_executable(self.model), str(source / self.script), "--resume", str(checkpoint)]
+        return [_runtime.python_executable(self.model), str(source / self.script), "--resume", str(checkpoint)]
 
 class CombinerNoftAdapter(OfficialScriptAdapter):
     model_id = "combiner_rn50x4_noft"
     script = "src/validate.py"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        return [python_executable(self.model), str(source / self.script), "--dataset", "fashionIQ",
+        return [_runtime.python_executable(self.model), str(source / self.script), "--dataset", "fashionIQ",
                 "--combining-function", "combiner", "--combiner-path", str(checkpoint),
                 "--projection-dim", "2560", "--hidden-dim", "5120",
                 "--clip-model-name", "RN50x4", "--target-ratio", "1.25", "--transform", "targetpad"]
@@ -102,7 +102,7 @@ class CLIP4CirFullftAdapter(OfficialScriptAdapter):
         bundle_dir = checkpoint.parent
         combiner_path = bundle_dir / "combiner_state.pt"
         clip_path = bundle_dir / "clip_state.pt"
-        return [python_executable(self.model), str(source / self.script), "--dataset", "fashionIQ",
+        return [_runtime.python_executable(self.model), str(source / self.script), "--dataset", "fashionIQ",
                 "--combining-function", "combiner", "--combiner-path", str(combiner_path),
                 "--clip-model-path", str(clip_path),
                 "--projection-dim", "2560", "--hidden-dim", "5120",
@@ -126,7 +126,7 @@ class LIMNAdapter(OfficialScriptAdapter):
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         command = [
-            python_executable(self.model),
+            _runtime.python_executable(self.model),
             str(Path(__file__).resolve().parents[3] / "workbench" / "replay" / "limn.py"),
             "--checkpoint-root", str(checkpoint.parent),
             "--dataset-root", str(request.dataset_root),
@@ -167,7 +167,7 @@ def register_synthetic_adapters_from_env() -> None:
         script = "src/evaluator.py"
 
         def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-            return [python_executable(self.model), str(source / self.script)]
+            return [_runtime.python_executable(self.model), str(source / self.script)]
 
     ADAPTERS["synthetic_model"] = _SyntheticModelAdapter
 

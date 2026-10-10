@@ -16,7 +16,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from workbench.backend.runtime import environment_blockers, environment_status
+from workbench.backend.runtime import environment_blockers, environment_status, source_status
 from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
 from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, checkpoint_bundle_missing_paths, checkpoint_is_present, checkpoint_missing_paths, checkpoint_path, external_asset_blockers, fashioniq_required_paths, load_registry, preparation_contract_for_model, preparation_paths, required_runtime_assets, sha256_file
@@ -46,8 +46,23 @@ def source_state(model: dict[str, Any], root: Path) -> dict[str, Any]:
     head = git(path, "rev-parse", "HEAD")
     if head is None:
         return {"path": str(path), "state": "not_git", "head": None, "dirty": None, "pin": model.get("upstream_commit_sha")}
-    dirty = bool(git(path, "status", "--porcelain"))
-    return {"path": str(path), "state": "dirty" if dirty else "clean", "head": head, "dirty": dirty, "pin": model.get("upstream_commit_sha")}
+    # Classify the checkout exactly like the execution gate: tracked edits and
+    # unauthorized untracked/ignored files are dirty, while declared runtime
+    # artifacts (the CSMCIR canonical dataset link, recorded auxiliary assets) are not.
+    entries = source_status(path)
+    if entries is None:
+        return {"path": str(path), "state": "not_git", "head": head, "dirty": None, "pin": model.get("upstream_commit_sha")}
+    dirty = bool(entries["tracked"] or entries["unauthorized"] or entries["invalid"])
+    reason = None
+    if dirty:
+        offenders = entries["tracked"] or entries["invalid"] or entries["unauthorized"]
+        reason = offenders[0] if offenders else None
+    return {"path": str(path), "state": "dirty" if dirty else "clean", "head": head, "dirty": dirty,
+            "pin": model.get("upstream_commit_sha"), "dirty_reason": reason,
+            "tracked_modifications": entries["tracked"],
+            "unauthorized_untracked": entries["unauthorized"],
+            "approved_runtime_artifacts": entries["approved"],
+            "invalid_runtime_artifacts": entries["invalid"]}
 
 
 def fashioniq_base_paths(root: Path) -> tuple[Path, ...]:
@@ -117,7 +132,7 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
     if not model.get("source_available"):
         runtime_blockers.append("upstream source unavailable")
     elif state["state"] != "clean":
-        runtime_blockers.append(f"source {state['state']}: {state['path']}")
+        runtime_blockers.append(f"source {state['state']}: {state['path']}: {state.get('dirty_reason')}")
     elif state["pin"] and state["head"] != state["pin"]:
         runtime_blockers.append(f"source pin mismatch: expected {state['pin']}, found {state['head']}")
     source = Path(state["path"]) if state["path"] else config.WORKBENCH_THIRD_PARTY_ROOT
@@ -130,11 +145,15 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
         runtime_blockers.append(f"command not runnable: {command_status or 'COMMAND_UNAUDITED'}")
     elif getattr(adapter, "script", None) and not (source / adapter.script).is_file():
         runtime_blockers.append(f"official evaluator missing: {source / adapter.script}")
-    env_state = environment_status(model)
+    env_state = environment_status(model, probe=True)
     env_blockers = environment_blockers(model)
     runtime_blockers.extend(env_blockers)
     environment_check = record(f"environment:{model_id}", "OK" if not env_blockers else "BLOCKED",
-                               env_state["status"], environment=model.get("environment"), interpreter=env_state["interpreter"])
+                               env_state["status"], environment=model.get("environment"),
+                               interpreter=env_state["interpreter"], tier=env_state["tier"],
+                               runtime_verified=env_state["verified"], gpu_deferred=env_state["gpu_deferred"],
+                               reason=env_state["reason"],
+                               dependencies=env_state.get("packages"))
     if model_id == "encoder" and not (source / "open_clip_pytorch_model.bin").is_file():
         runtime_blockers.append(f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}")
     if model_id == "encoder" and not (source / "datasets1.py").is_file():
@@ -165,7 +184,9 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
     deferred_checks.extend(external_checks)
     runtime_blockers.extend(external_blockers)
 
-    env_evidence = {"status": env_state["status"], "variable": env_state["variable"], "interpreter": env_state["interpreter"]}
+    env_evidence = {"status": env_state["status"], "tier": env_state["tier"], "variable": env_state["variable"],
+                    "interpreter": env_state["interpreter"], "runtime_verified": env_state["verified"],
+                    "gpu_deferred": env_state["gpu_deferred"], "reason": env_state["reason"]}
     bundle_reports = []
     incomplete_bundles = checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT)
     for bundle in model.get("checkpoint_bundles", []):

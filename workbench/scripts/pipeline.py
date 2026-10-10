@@ -11,6 +11,7 @@ import sys
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -34,6 +35,8 @@ class Stage:
     output_paths: tuple[Path, ...] = ()
     required_capabilities: frozenset[str] = frozenset()
     receipt: bool = False
+    run_id: str | None = None
+    evidence: Callable[[dict | None], tuple[bool, str | None, dict | None]] | None = None
 
 
 def stage_key(stage: Stage) -> str:
@@ -200,8 +203,16 @@ def compute_stage_output_fingerprints(stage: Stage) -> dict[str, str]:
 
 
 def validate_stage_outputs(stage: Stage, recorded: dict[str, str] | None = None,
-                           config: WorkbenchConfig | None = None) -> bool:
+                           config: WorkbenchConfig | None = None,
+                           record: dict | None = None) -> bool:
     from workbench.backend.registry import sha256_file
+
+    if stage.evidence is not None:
+        # The stage's completion proof is supplied by the stage itself: for an
+        # evaluation this is the run-bound completion artifact of THIS invocation,
+        # so a leftover report from an earlier run can never satisfy it.
+        ok, _, _ = stage.evidence(record)
+        return bool(ok)
 
     if stage.receipt and not stage.output_paths:
         cfg = config or resolve_config()
@@ -342,6 +353,13 @@ def save_pipeline_state(state: dict, path: Path = STAGE_STATE_PATH) -> None:
     temp.replace(path)
 
 
+def new_run_id() -> str:
+    """Invocation identity shared by the master and the evaluator it launches."""
+    import uuid
+
+    return f"{datetime.now(UTC):%Y%m%dT%H%M%S%fZ}_{uuid.uuid4().hex[:8]}"
+
+
 def command(script: str, *arguments: str | Path) -> list[str]:
     return [sys.executable, str(SCRIPTS / script), *(str(argument) for argument in arguments)]
 
@@ -359,6 +377,8 @@ def run_stage(
     required_capabilities: frozenset[str] | set[str] | tuple[str, ...] = frozenset(),
     required_capability: str | None = None,
     receipt: bool = False,
+    run_id: str | None = None,
+    evidence: Callable[[dict | None], tuple[bool, str | None, dict | None]] | None = None,
 ) -> Stage:
     caps = frozenset(required_capabilities)
     if required_capability:
@@ -375,6 +395,8 @@ def run_stage(
         output_paths=output_paths,
         required_capabilities=caps,
         receipt=receipt,
+        run_id=run_id,
+        evidence=evidence,
     )
 
 
@@ -444,12 +466,47 @@ def resolved_checkpoint_id(model_dict: dict, args: argparse.Namespace) -> str:
     return variants[0]["checkpoint_id"] if variants else "default"
 
 
+def resolved_checkpoint_file(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> Path:
+    """The primary checkpoint file the evaluator will be handed for this selection."""
+    from workbench.backend.registry import checkpoint_path
+
+    mid = model_dict["model_id"]
+    variants = {variant["checkpoint_id"]: variant for variant in model_dict.get("checkpoint_variants") or []}
+    ckpt_id = resolved_checkpoint_id(model_dict, args)
+    variant = variants.get(ckpt_id)
+    if variant is None:
+        for bundle in model_dict.get("checkpoint_bundles") or []:
+            if bundle["bundle_id"] == ckpt_id:
+                variant = variants.get(bundle["required_checkpoint_ids"][0])
+                break
+    if variant is None and variants:
+        variant = next(iter(variants.values()))
+    return checkpoint_path(mid, variant, config.WORKBENCH_CHECKPOINT_ROOT) if variant else Path(".")
+
+
+def evaluation_evidence(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig):
+    """Run-bound completion evidence for one evaluation stage."""
+    from workbench.scripts.evaluate_models import completion_validator
+
+    mid = model_dict["model_id"]
+    ckpt_id = resolved_checkpoint_id(model_dict, args)
+    protocol = args.protocol or model_dict.get("native_protocol")
+    return completion_validator(mid, ckpt_id, protocol, model_dict.get("upstream_commit_sha"), config,
+                                resolved_checkpoint_file(model_dict, args, config))
+
+
 def model_eval_outputs(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> tuple[Path, ...]:
+    """Declared outputs are informational only.
+
+    A run-scoped report cannot be named before the run id exists, so the real
+    completion proof is the run-bound completion artifact validated by
+    :func:`evaluation_evidence`. The pointer returned here is the *successful*
+    pointer, which only ever advances after a proof-backed success.
+    """
     mid = model_dict["model_id"]
     ckpt_id = resolved_checkpoint_id(model_dict, args)
     repo_root = getattr(config, "CIR_REPO_ROOT", REPOSITORY)
-    latest_manifest = repo_root / "workbench" / "artifacts" / "reports" / f"{mid}_{ckpt_id}_latest.json"
-    return (latest_manifest,)
+    return (repo_root / "workbench" / "artifacts" / "reports" / f"{mid}_{ckpt_id}_latest_successful.json",)
 def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
     from workbench.backend.registry import checkpoint_path, model_by_id
     model_obj = model_by_id(args.model) if args.model else None
@@ -527,6 +584,8 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             input_paths=eval_inputs,
             output_paths=eval_outputs,
             required_capabilities={"allow_gpu_eval", "allow_preparation"},
+            run_id=new_run_id() if model_obj else None,
+            evidence=evaluation_evidence(model_obj, args, config) if model_obj else None,
         )
     else:
         evaluation = Stage("evaluation", skipped="pass --evaluate")
@@ -687,6 +746,8 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             input_paths=eval_ins,
             output_paths=eval_outs,
             required_capabilities={"allow_gpu_eval", "allow_preparation"},
+            run_id=new_run_id(),
+            evidence=evaluation_evidence(m, args, config),
         ))
 
     all_eval_deps = tuple(f"evaluation:{m['model_id']}" for m in selected_models)
@@ -925,7 +986,7 @@ def run_stages(
                 prev = stage_records.get(skey) or stage_records.get(stage.name)
                 if prev and prev.get("status") == "COMPLETE" and not fingerprint_info["weak"]:
                     if prev.get("fingerprint") == fingerprint:
-                        if validate_stage_outputs(stage, prev.get("output_fingerprints"), config=cfg):
+                        if validate_stage_outputs(stage, prev.get("output_fingerprints"), config=cfg, record=prev):
                             can_skip = True
 
             if can_skip:
@@ -944,12 +1005,15 @@ def run_stages(
                     "model_id": stage.model_id,
                     "status": "RUNNING",
                     "fingerprint": fingerprint,
+                    "run_id": stage.run_id,
                     "started_at": datetime.now(UTC).isoformat(),
                 }
                 save_pipeline_state(state, state_path)
 
             stage_failed = False
             for argv in stage.commands:
+                if stage.run_id and stage.name == "evaluation" and "--run-id" not in argv:
+                    argv = [*argv, "--run-id", stage.run_id]
                 print(f"  [{'PLAN' if stage_planning else 'RUN'}] {shlex.join(argv)}")
                 if stage.name == "evaluation":
                     print("  [INFO] official reproduction only; no instrumented ranking export")
@@ -973,7 +1037,7 @@ def run_stages(
                 # stages validate once after all commands succeed (below).
                 if stage.receipt and not stage.output_paths:
                     continue  # proof is written after all commands succeed (below)
-                if len(stage.commands) == 1 and not validate_stage_outputs(stage, config=cfg):
+                if len(stage.commands) == 1 and not validate_stage_outputs(stage, config=cfg, record=stage_records.get(skey)):
                     stage_failed = True
                     failed = True
                     failed_stages.add(stage.name)
@@ -999,7 +1063,7 @@ def run_stages(
                 write_stage_receipt(cfg, stage, return_code=0)
 
             # Output proof for multi-command stages.
-            if not stage_planning and not validate_stage_outputs(stage, config=cfg):
+            if not stage_planning and not validate_stage_outputs(stage, config=cfg, record=stage_records.get(skey)):
                 failed = True
                 failed_stages.add(stage.name)
                 failed_stages.add(dependency_key(stage))
@@ -1010,7 +1074,9 @@ def run_stages(
                     "failure_reason": "output_contract_not_satisfied",
                 })
                 save_pipeline_state(state, state_path)
-                print(f"  [BLOCKED] {stage.name}: declared outputs missing or invalid after exit 0", file=sys.stderr)
+                _, evidence_reason, _ = stage.evidence(stage_records.get(skey)) if stage.evidence else (False, None, None)
+                detail = f": {evidence_reason}" if evidence_reason else ""
+                print(f"  [BLOCKED] {stage.name}: declared outputs missing or invalid after exit 0{detail}", file=sys.stderr)
                 if not continue_on_error:
                     return 1
                 continue
@@ -1018,10 +1084,15 @@ def run_stages(
             if not stage_planning:
                 completed_stages.add(stage.name)
                 completed_stages.add(skey)
+                evidence_detail = None
+                if stage.evidence is not None:
+                    _, _, evidence_detail = stage.evidence(stage_records.get(skey))
                 stage_records[skey].update({
                     "status": "COMPLETE",
                     "finished_at": datetime.now(UTC).isoformat(),
                     "return_code": 0,
+                    "run_id": stage.run_id,
+                    "evidence": evidence_detail,
                     "output_fingerprints": compute_stage_output_fingerprints(stage),
                 })
                 save_pipeline_state(state, state_path)

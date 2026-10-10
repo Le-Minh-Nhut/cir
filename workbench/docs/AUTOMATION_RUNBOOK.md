@@ -190,26 +190,148 @@ A complete LIMN evaluation run records the exact individual paths and SHA-256 ha
 
 ---
 
-## 7. Experiment run identity and immutability
+## 7. Experiment run identity, completion proofs, and immutability
 
-Each evaluation writes an immutable, run-scoped directory and report:
+Every evaluation is bound to an explicit *invocation identity* (`run_id`). The
+master generates it, exports it to the evaluator, and only accepts the stage as
+COMPLETE when the current invocation produced a valid completion proof.
 
 ```text
-workbench/artifacts/logs/<utc>_<model>_<checkpoint>_<rand>/
-    command.json          # argv, cwd, digests, checkpoint manifest, interpreter
+workbench/artifacts/logs/<run_id>/
+    command.json          # argv, cwd, digests, checkpoint manifest, interpreter, run_id
     stdout.log            # verbatim evaluator stdout
     stderr.log            # verbatim evaluator stderr
     aggregate_report.json # this run's extraction result
 workbench/artifacts/reports/
-    <model>_<checkpoint>_<run_id>_aggregate.json   # immutable, one per run
-    <model>_<checkpoint>_latest.json               # atomic pointer, not the artifact
+    <model>_<ckpt>_<run_id>_aggregate.json    # immutable run-scoped report
+    <model>_<ckpt>_<run_id>_completion.json   # run-bound completion proof
+    <model>_<ckpt>_latest_attempt.json        # atomic pointer: latest run attempted
+    <model>_<ckpt>_latest_successful.json     # atomic pointer: latest PROVEN success
 ```
 
-- A second, failed, or interrupted run never overwrites a previous success.
-- `_latest.json` is convenience only; it is updated atomically and never replaces
-  a run-scoped report.
-- Resume identifies a completed evaluation through the latest pointer and the
-  stage's declared output fingerprint.
+### Completion contract
+
+A stage may reach COMPLETE only when **all** hold:
+
+1. subprocess exit code `0`;
+2. a completion proof exists for **this** `run_id` (never an older pointer);
+3. the proof parses and its `run_id` equals the current invocation;
+4. `model_id`, `checkpoint_id`, and `protocol_id` match the plan;
+5. the recorded source commit matches the pinned commit;
+6. the recorded checkpoint digest matches the selected checkpoint;
+7. `report` and `report_digest` resolve, and the report lives under the artifact root;
+8. the invocation evidence digest matches the `stdout.log`/`stderr.log` actually written;
+9. the invocation produced observable output (exit 0 with no output mints no proof).
+
+A pre-existing report, a pre-existing latest pointer, or a newer timestamp is
+never sufficient. Execution completion is explicitly distinct from metric
+verification: a run that exits 0 with unusable aggregate output still counts as a
+completed execution, with `metric_extraction_available: false`.
+
+### latest_attempt vs latest_successful
+
+- `latest_attempt` advances on **every** run, success or failure.
+- `latest_successful` advances only after a proof-backed success.
+- A failed run therefore never displaces a previous success, and all earlier
+  run-scoped reports and proofs remain byte-identical.
+- Pointer updates are atomic (`write` + `replace`) and every run-scoped artifact is
+  created exclusively (`open("x")`), so a colliding run id raises instead of
+  overwriting an experiment. A crash mid-update leaves the previous pointer intact
+  and no temp file behind.
+
+### Resume
+
+Resume uses the run-bound proof, not the pointer: a stage recorded as COMPLETE is
+re-executed whenever its invocation proof is missing or no longer valid.
+
+## 7b. Interpreter readiness, verification reuse, and version policy
+
+Two distinct operations exist and must not be conflated:
+
+| Operation | Cost | May claim readiness |
+|---|---|---|
+| `runtime.inspect_environment(model)` | no subprocess | **never** |
+| `runtime.verify_environment(model, probe=True)` | runs probes | yes, `RUNTIME_READY` |
+| `runtime.require_verified_model_interpreter(model)` | runs probes (cached) | yes; raises otherwise |
+| `runtime.python_executable(model)` | delegates to the above | yes; raises otherwise |
+
+`python_executable()` never bypasses verification and never returns an arbitrary
+configured path: it raises `RuntimeError` unless the runtime is *verified*.
+`doctor.py`, `manage_environment.py`, and `guarded_plan()` share this one definition.
+
+### Linux virtualenv identity
+
+A venv's `bin/python` is routinely a symlink to a shared interpreter binary, so a
+matching `resolve()` proves nothing. Isolation is decided by the interpreter's own
+`sys.prefix` / `sys.base_prefix`, its reported `sys.executable`, and the
+`pyvenv.cfg` / `conda-meta` markers of the **invocation** path. The configured
+invocation path is preserved when launching Python or pip; it is never resolved away.
+
+Rejected: system Python, base Conda, the active workbench environment, interpreters
+whose reported executable differs from the configured path, and environments
+without markers.
+
+### Verification reuse
+
+A verified report may be reused only when the contract digest, the invocation path,
+the interpreter binary, the environment markers, and the environment's `lib/`
+directory mtimes are all unchanged. A dependency installed or removed inside the
+environment therefore invalidates cached verification; caching is never keyed on the
+interpreter path alone.
+
+### Dependency version policy
+
+Constraints are evaluated with `packaging.specifiers`, not string prefixes.
+
+| Declaration | Interpretation |
+|---|---|
+| `1.12.1` (bare) | exact pin: `==1.12.1` |
+| `==1.12.1` | exact |
+| `>=1.12,<1.13` | declared range |
+| `~=2.20.0` | compatible release |
+| `UNKNOWN` / empty | unverified → `VERSION_CONSTRAINT_UNVERIFIED` |
+
+`==1.12.1` rejects `1.12` and `1.12.10`. Malformed constraints or versions never
+silently pass: they report `VERSION_CONSTRAINT_UNVERIFIED`. Declared Python versions
+with fewer than three components are series requests (`3.8` matches `3.8.x`).
+Pre-releases and local version suffixes are handled by `packaging` semantics.
+
+## 7c. Source runtime artifact policy
+
+A model checkout must stay pin-clean, yet some audited contracts legitimately place
+files inside it. Source status is classified, never blanket-ignored:
+
+| Class | Meaning |
+|---|---|
+| tracked modification | a real source change → **dirty** |
+| unauthorized untracked/ignored | undeclared file → **dirty** (`.gitignore` never whitelists) |
+| approved runtime artifact | declared, provenance-verified → allowed |
+| invalid runtime artifact | declared but wrong target/digest → **dirty** |
+
+Declared artifacts are derived from audited registry contracts only:
+
+- CSMCIR `fashionIQ_dataset` — accepted only as a symlink resolving exactly to the
+  configured canonical `FASHIONIQ_ROOT`; wrong target, dangling link, or a plain
+  directory is rejected.
+- Model-source auxiliary assets (e.g. `COT_ours2/fashioniq/*_cot_val.json`) —
+  accepted only as regular files whose SHA-256 matches the registry's
+  `expected_sha256` or the digest recorded in
+  `workbench/artifacts/auxiliary/download_manifest.json` at acquisition time.
+  Symlinks, missing files, tampered content, or assets with no verifiable digest are
+  rejected. Declared auxiliary artifact *directories* are never trusted.
+- The `COT_ours2` captions have **no verified automatic acquisition source**
+  (`provenance_status: UNVERIFIED`, no URL, no published checksum). Manual placement
+  therefore leaves the checkout **dirty** and blocks strict evaluation until a
+  verifiable digest exists — by design, because an unverifiable author artifact is not
+  evidence. Closing this needs either a published checksum in the registry or a
+  supported `--record-manual` provenance path; neither is implemented, and the
+  pipeline reports the blocker explicitly rather than hiding it.
+- The allowlist applies only to the checkout the workbench configured
+  (`WORKBENCH_THIRD_PARTY_ROOT/<source_dir>`). A directory elsewhere that merely shares
+  a model's `source_dir` name is not governed by that model's contract.
+
+`doctor.py` and the execution gate share this exact classification, so preflight and
+execution cannot disagree.
 
 ## 8. Workflow ownership and locking
 

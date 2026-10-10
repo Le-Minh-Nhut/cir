@@ -27,6 +27,36 @@ export WORKBENCH_RESULTS_ROOT=$CIR_REPO_ROOT/workbench/artifacts/results
 export WORKBENCH_THIRD_PARTY_ROOT=$CIR_REPO_ROOT/workbench/third_party
 ```
 
+## 1b. Model interpreter selection (pre-flight for every legacy model)
+
+Each model with `environment_required: true` needs its own verified interpreter.
+The workbench will refuse to construct a real evaluation command until the runtime
+is *verified*, not merely present:
+
+```bash
+export WORKBENCH_LIMN_PYTHON=/opt/envs/limn/bin/python   # keep the invocation path as-is
+python workbench/scripts/manage_environment.py --model limn --json
+```
+
+- Do **not** pre-resolve venv paths (`readlink -f`): a venv's `bin/python` commonly
+  symlinks to a shared binary, and resolving it destroys the environment context.
+- Readiness requires: isolated environment, Python version agreement, and a probed
+  dependency set matching the source-declared constraints (`packaging` semantics).
+- A GPU-only check that cannot run on a CPU host reports
+  `GPU_VERIFICATION_DEFERRED`; that is not a success and will not launch a real run.
+- CSMCIR additionally requires `fashionIQ_dataset` to be a symlink to the canonical
+  `FASHIONIQ_ROOT`; the link is an approved runtime artifact and does not dirty the
+  pinned checkout, but a wrong or dangling link is rejected before execution.
+
+## 1c. PC-only verification still required
+
+Not verifiable on the laptop, and therefore still owed on the GPU host:
+
+- real checkpoint loading and official evaluator execution;
+- official Recall reproduction against paper-reported values;
+- per-query instrumentation (`per_query_export_available` is `false` today);
+- CUDA capability verification for GPU-bound models.
+
 ## 2. Acquisition and setup (explicit authorization required)
 
 ```bash
@@ -52,8 +82,15 @@ python workbench/scripts/download_checkpoints.py --model MODEL_ID --verify-only
 python workbench/scripts/pipeline.py reproduce --model MODEL_ID --apply --allow-gpu-eval --resume
 ```
 
-Aggregate report: `workbench/artifacts/reports/<model>_<checkpoint>_aggregate.json`.
-Logs: `workbench/artifacts/logs/<utc>_<model>_<checkpoint>/`.
+Aggregate report: `workbench/artifacts/reports/<model>_<checkpoint>_<run_id>_aggregate.json`.
+Completion proof: `workbench/artifacts/reports/<model>_<checkpoint>_<run_id>_completion.json`.
+Logs: `workbench/artifacts/logs/<run_id>/`.
+
+A stage is COMPLETE only when the current invocation produced a valid completion
+proof (run id, model, checkpoint, protocol, source commit, checkpoint digest, report
+digest, and invocation evidence all agree). `latest_attempt` records every run;
+`latest_successful` advances only after a proven success. If a run exits 0 without
+producing output, the stage fails and the previous success is preserved.
 
 ## 5. Verify aggregate metrics and analysis
 

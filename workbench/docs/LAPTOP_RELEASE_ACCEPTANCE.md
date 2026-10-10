@@ -89,13 +89,36 @@ git diff --check
 | Dirty source reused by resume | Fingerprint includes commit + cleanliness + provenance digest; `_source_dirty` ignores only bytecode caches | `test_production_stage_resume_invalidation.py`, `test_true_master_e2e.py` |
 | Mutation tests did not mutate | 10 mutations applied with `monkeypatch.context()` and required to be killed | `test_mutation_effectiveness.py` |
 | Concurrency untested | Real multi-process flock ownership tests incl. crash recovery | `test_concurrency_ownership.py` |
-| Synthetic adapter in production registry | Moved behind `register_test_adapter` / `WORKBENCH_ALLOW_SYNTHETIC_ADAPTERS`; metric routing no longer special-cases it | `test_only_synthetic.py` |
+| Synthetic adapter in production registry | Moved behind `register_test_adapter` / `WORKBENCH_ALLOW_SYNTHETIC_ADAPTERS`; metric routing no longer special-cases it | `workbench/tests/test_only_synthetic.py` |
+
+### Release-blocker correction pass (interpreter, source, experiment identity)
+
+| Defect | Fix | Regression tests |
+|---|---|---|
+| `python_executable()` consulted a non-probing verification, so a correctly installed model env could not build its command | split `inspect_environment()` (cheap, never ready) from `require_verified_model_interpreter()`; `python_executable()` delegates to the latter and raises otherwise | `test_release_blocker_interpreter.py` (INT-04, INT-05, INT-06, MUT-A) |
+| A valid Linux venv was rejected because its `bin/python` resolved to the orchestrator's shared binary | isolation decided by `sys.prefix`/`sys.base_prefix`, reported `sys.executable`, and invocation-path markers; configured path preserved in `manage_environment.py` | INT-01..INT-03, ENV-01/02, MUT-B |
+| Prefix version matching (`got.startswith(want)`) treated any prefix as agreement | `packaging.specifiers` matching; a bare version is an exact pin; `1.12` and `1.12.10` are now rejected for a required `1.12.1`; unusable constraints report `VERSION_CONSTRAINT_UNVERIFIED` | `test_release_blocker_interpreter.py` (VER-01..VER-06), `test_release_blocker_mutations.py` (MUT-F) |
+| Verified environments could not be reused, yet any path-keyed cache would be unsound | contract + interpreter + marker + `lib/` mtime fingerprint invalidates reuse on dependency change | `test_cache_is_not_keyed_on_interpreter_path_alone` |
+| CSMCIR preparation immediately dirtied the pinned checkout | classified source status with a narrowly scoped, provenance-verified runtime artifact allowlist shared by doctor and the gate | `test_release_blocker_source_integrity.py` (SRC-01..SRC-10, MUT-C) |
+| A stale `_latest.json` could satisfy a new evaluation, so exit 0 with no new report reported success | invocation-bound completion proofs validated against run id, model, checkpoint, protocol, source commit, checkpoint digest, report digest, evidence digest | `test_release_blocker_evaluation_output.py` (OUT-01..OUT-14, MUT-D) |
+| A failed run replaced the latest pointer associated with a successful experiment | separate `latest_attempt` / `latest_successful`; successes advance only after a proof-backed success | OUT-11..OUT-13, E2E-05..E2E-07, MUT-E |
+| Checkpoint digest and report location were not part of the completion contract | proof must state and match the selected checkpoint digest; referenced report must live under the artifact root | OUT-08, OUT-10b |
+| Exit 0 with no observable output still minted a proof | proof requires an evidence digest over the run's own logs and rejects an empty run | OUT-02, OUT-10c, E2E-05 |
+| A spoofed shell "python" with hand-written `pyvenv.cfg` reached RUNTIME_READY | interpreter identity probe carries a per-call nonce the wrapper cannot know, requires a CPython implementation, requires markers under the interpreter's own reported prefix, and requires a real Python library tree | INT-01..INT-03, MUT-B |
+| A legitimate venv under a directory named `miniconda3` was rejected as base conda | conda detection uses `conda-meta` markers and the `envs/` segment, never path substrings | INT-02 |
+| A copied/renamed completion proof certified a run that never happened | the proof's run directory must equal this invocation's run id, and the validator derives the expected invocation identity from config | OUT-01, OUT-04 |
+| Cache reuse survived an uninstall in symlinked venvs (`resolve()` landed on the shared base binary) | fingerprint follows the prefix the interpreter *reports* | `test_verified_environment_is_reused_and_content_change_invalidates_cache` |
+| `python: '3.7.x'` passed as verified on Python 3.13 | an uninterpretable declared Python version reports `VERSION_CONSTRAINT_UNVERIFIED` | ENV-04, VER-04 |
+| A GPU-deferred report skipped dependency evidence | dependency-probe guard precedes the CUDA branch | INT-09 |
+| Models without an isolated environment got a bare `"python"` command | such models use the workbench interpreter explicitly | ENV-01 |
+| A checkout elsewhere sharing a model's `source_dir` name borrowed its allowlist | the allowlist requires the configured `WORKBENCH_THIRD_PARTY_ROOT/<source_dir>` | SRC-01..SRC-10 |
+| A crashed pointer update left a temp file behind | atomic write cleans up and preserves the previous pointer on failure | OUT-13b |
 
 ### Second review round (Gate5/Gate6)
 
 | Defect | Fix | Test |
 |---|---|---|
-| Persisted FAILED dependency ignored in a later invocation | `_UNUSABLE_DEP_STATUSES` consulted against the state file | `test_persisted_failed_dependency_blocks_later_invocation` |
+| Persisted FAILED dependency ignored in a later invocation | `_UNUSABLE_DEP_STATUSES` consulted against the state file | `workbench/tests/test_execution_graph_and_dependencies.py` |
 | Dependency string did not match qualified key (`checkpoint:limn` vs `checkpoint:limn:base_iter0_dress`) | prefix-aware lookup scoped to the stage's own model | `test_qualified_dependency_key_is_matched`, `test_bare_dependency_does_not_match_other_models` |
 | `dataset-link`, provisioning stages could never reach COMPLETE | real output contract or durable `receipt=True` proof | `test_dataset_link_declares_output_contract`, `test_provisioning_stage_requires_receipt` |
 | LIMN evaluation proof used the wrong checkpoint id | proof filename derived from the bundle id the evaluator writes | `test_limn_eval_output_uses_bundle_id` |
