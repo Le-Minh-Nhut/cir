@@ -21,26 +21,6 @@ from workbench.backend.runtime import check_environment_isolation, python_execut
 import workbench.scripts.evaluate_models as em
 
 
-def _probe_reported_identity(interpreter):
-    """The historical identity: whatever the probe said about itself."""
-    import json as _json
-    import secrets as _secrets
-
-    if not runtime._is_native_executable(interpreter):
-        return None
-    nonce = _secrets.token_hex(16)
-    ok, out, _ = runtime._run_probe(interpreter, runtime._PROBE_CODE, args=(nonce,))
-    if not ok or not out:
-        return None
-    try:
-        identity = _json.loads(out.splitlines()[-1])
-    except (ValueError, IndexError):
-        return None
-    if not isinstance(identity, dict) or identity.get("nonce") != nonce:
-        return None
-    return identity
-
-
 def _probe_false_selection(runtime_module, model) -> str:
     report = runtime_module.verify_environment(model, probe=False)
     if report.tier == "RUNTIME_READY" and report.interpreter:

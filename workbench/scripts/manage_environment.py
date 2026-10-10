@@ -157,7 +157,7 @@ def create_env(model: dict, s: dict, dry_run: bool) -> bool:
     if not interpreter.is_file():
         print(f"[BLOCKED] {model_id}: {env_var}={interpreter} not found", file=sys.stderr)
         return False
-    is_isolated, iso_msg = check_environment_isolation(interpreter)
+    is_isolated, iso_msg = check_environment_isolation(interpreter, model.get("environment") or {})
     if not is_isolated:
         print(f"[BLOCKED] {model_id}: refusing installation into unsafe target interpreter: {iso_msg}", file=sys.stderr)
         return False

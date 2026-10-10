@@ -679,3 +679,65 @@ def test_disk_contradiction_is_never_ready(tmp_path, monkeypatch):
                              "DEPENDENCY_VERSION_MISMATCH"), report.status
     with pytest.raises(RuntimeError, match="not verified"):
         runtime.python_executable(model)
+
+
+def test_an_unreadable_installed_version_never_confirms_a_probe(tmp_path, monkeypatch):
+    """A dist-info whose Version is unreadable must not corroborate a probe answer."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        dist = site_packages / "torch-2.0.1.dist-info"
+        dist.mkdir(parents=True, exist_ok=True)
+        # Name present, Version absent.
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\\nName: torch\\n")
+        (site_packages / "sitecustomize.py").write_text(
+            "import importlib.metadata as m\\n"
+            "_original = m.version\\n"
+            "m.version = lambda n: '2.0.1' if n == 'torch' else _original(n)\\n")
+        break
+    monkeypatch.setenv("UNREADABLE_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "UNREADABLE_VAR", "packages": ["torch==2.0.1"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    # Either the version cannot be corroborated or the package is not found at all;
+    # both are safe, and neither may reach RUNTIME_READY.
+    assert report.tier != "RUNTIME_READY", "an unreadable on-disk version cannot corroborate"
+    assert report.status in ("DEPENDENCY_INSTALLATION_UNVERIFIED", "DEPENDENCY_MISSING"), report.status
+    with pytest.raises(RuntimeError):
+        runtime.python_executable(model)
+
+
+def test_a_pinned_digest_is_enforced_even_after_a_cached_verification(tmp_path, monkeypatch):
+    """A cache hit must never mask a pinned-interpreter mismatch."""
+    interpreter = make_venv(tmp_path)
+    install_stub(interpreter, "stubdep", "1.2.3")
+    monkeypatch.setenv("CACHE_PIN_VAR", str(interpreter))
+    unpinned = {"model_id": "m", "environment_required": True,
+                "environment": {"python_env_var": "CACHE_PIN_VAR", "packages": ["stubdep==1.2.3"]}}
+    forget_environment()
+    assert runtime.verify_environment(unpinned, probe=True).tier == "RUNTIME_READY"
+
+    pinned = {"model_id": "m", "environment_required": True,
+              "environment": {"python_env_var": "CACHE_PIN_VAR", "packages": ["stubdep==1.2.3"],
+                              "interpreter_sha256": "0" * 64}}
+    report = runtime.verify_environment(pinned, probe=True)
+    assert report.tier == "BLOCKED", "a pinned mismatch must not be served from cache"
+    assert report.status == "UNSAFE_INTERPRETER", report.status
+
+
+def test_an_external_install_between_probes_is_not_a_forgery(tmp_path, monkeypatch):
+    """Packages installed while the environment was idle must re-baseline, not block."""
+    interpreter = make_venv(tmp_path)
+    install_stub(interpreter, "stubdep", "1.2.3")
+    monkeypatch.setenv("EXTERNAL_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "EXTERNAL_VAR", "packages": ["stubdep==1.2.3"]}}
+    forget_environment()
+    assert runtime.verify_environment(model, probe=True).tier == "RUNTIME_READY"
+
+    install_stub(interpreter, "unrelateddep", "2.0.0")
+    forget_environment(runtime.verify_environment(model, probe=True).interpreter)
+    refreshed = runtime.verify_environment(model, probe=True)
+    assert refreshed.tier == "RUNTIME_READY", f"{refreshed.status}: {refreshed.reason}"

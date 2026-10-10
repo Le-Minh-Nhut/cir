@@ -298,10 +298,15 @@ The outcome is deliberately three-way:
 |---|---|
 | probe agrees with disk | verified |
 | probe value contradicts an installed distribution, or the environment *creates* a distribution while being probed | `DEPENDENCY_PROBE_FORGED` |
-| probe claims a package with no on-disk installation (editable/`.pth`, `system_site_packages`) | `DEPENDENCY_INSTALLATION_UNVERIFIED` — never `RUNTIME_READY` |
+| probe claims a package with no on-disk installation of its own (editable/`.pth`, `system_site_packages`), or the installed version cannot be read | `DEPENDENCY_INSTALLATION_UNVERIFIED` — never `RUNTIME_READY` |
 
 The on-disk baseline is read **before** the environment runs any code and pinned for the
 session, because a fabricated `dist-info` persists and a later read would legitimise it.
+Growth observed on a **first** probe is attributed to the probe's own execution
+(`DEPENDENCY_PROBE_FORGED`); growth seen after the environment was already verified is
+re-baselined, so an operator installing a package between runs is not reported as an
+attack. A pinned `interpreter_sha256` is part of the contract digest, so a changed pin
+invalidates a cached verification and is enforced again.
 Names containing `-`/`_`/`.` are normalised on both sides, so `openai_clip`, `comet_ml`
 and `pyyaml` reconcile with `openai-clip`, `comet-ml` and `PyYAML` directories.
 

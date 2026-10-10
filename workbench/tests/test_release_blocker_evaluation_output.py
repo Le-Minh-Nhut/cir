@@ -671,16 +671,32 @@ def test_an_undeclared_file_does_not_change_a_directory_checkpoint_identity(env)
                                  require_environment_identity=True)
 
 
-def test_directory_checkpoint_digest_distinguishes_member_names(env):
-    """Swapping which file holds which content must not preserve a digest."""
+def test_directory_checkpoint_digest_binds_member_names_and_layout(env):
+    """The member list is part of the identity, not just a count of hashed members.
+
+    The historical scheme hashed member *contents* without binding their names, so a
+    crafted directory could reproduce another layout's digest by splitting one member's
+    bytes:  members ('a', '') + ('b', '')  vs  a single member 'a' = "len(1)+'b'".
+    """
     from workbench.backend.registry import sha256_file
 
-    first = env["tmp"] / "swap_a"
-    second = env["tmp"] / "swap_b"
-    for directory, contents in ((first, (b"AA", b"BB")), (second, (b"BB", b"AA"))):
-        directory.mkdir()
-        (directory / "a.pt").write_bytes(contents[0])
-        (directory / "b.pt").write_bytes(contents[1])
+    crafted = env["tmp"] / "crafted"
+    crafted.mkdir()
+    # One member whose content is exactly len("b") + "b", under the name "a".
+    (crafted / "a").write_bytes(len(b"b").to_bytes(8, "big") + b"b")
 
-    names = ["a.pt", "b.pt"]
-    assert sha256_file(first, required_files=names) != sha256_file(second, required_files=names)
+    split = env["tmp"] / "split"
+    split.mkdir()
+    (split / "a").write_bytes(b"")
+    (split / "b").write_bytes(b"")
+
+    assert sha256_file(crafted, required_files=["a"]) != sha256_file(split, required_files=["a", "b"])
+
+    # Renaming a member with unchanged content must also change the digest.
+    renamed = env["tmp"] / "renamed"
+    renamed.mkdir()
+    (renamed / "x.pt").write_bytes(b"payload")
+    same = env["tmp"] / "same"
+    same.mkdir()
+    (same / "y.pt").write_bytes(b"payload")
+    assert sha256_file(renamed, required_files=["x.pt"]) != sha256_file(same, required_files=["y.pt"])

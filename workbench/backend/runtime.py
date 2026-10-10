@@ -365,18 +365,22 @@ def normalize_distribution_name(name: str) -> str:
     return _NORMALIZE_RE.sub("-", name).strip().lower()
 
 
-_BASELINE_INVENTORIES: dict[str, dict[str, str]] = {}
+_BASELINE_INVENTORIES: dict[str, dict[str, str | None]] = {}
 
-def _baseline_inventory(prefix: Path) -> dict[str, str]:
+def _baseline_key(prefix: Path) -> str:
+    try:
+        return str(Path(prefix).resolve())
+    except OSError:
+        return str(prefix)
+
+
+def _baseline_inventory(prefix: Path) -> dict[str, str | None]:
     """The environment's package inventory as first observed, pinned for the session.
 
     A later read cannot be trusted: an environment can write a dist-info for itself
     while it is being probed, and that write persists.
     """
-    try:
-        key = str(Path(prefix).resolve())
-    except OSError:
-        key = str(prefix)
+    key = _baseline_key(prefix)
     if key not in _BASELINE_INVENTORIES:
         try:
             _BASELINE_INVENTORIES[key] = installed_distributions_on_disk(Path(prefix))
@@ -385,23 +389,26 @@ def _baseline_inventory(prefix: Path) -> dict[str, str]:
     return _BASELINE_INVENTORIES[key]
 
 
-def installed_distributions_on_disk(prefix: Path) -> dict[str, str]:
+def installed_distributions_on_disk(prefix: Path) -> dict[str, str | None]:
     """Installed distributions read from the environment on disk, by the orchestrator.
 
     This deliberately does not run anything inside the environment: a ``sitecustomize``
     module can monkeypatch ``importlib.metadata`` and make a probe claim whatever the
     environment wants. The inventory read from disk is what the environment *is*.
     """
-    inventory: dict[str, str] = {}
+    inventory: dict[str, str | None] = {}
     for site_packages in _site_packages_dirs(prefix):
         for dist_info in sorted(site_packages.glob("*.dist-info")):
             metadata = dist_info / "METADATA"
             name, version = _metadata_name_version(metadata)
             if name:
-                inventory[normalize_distribution_name(name)] = version or ""
-            # A distribution directory may carry a different spelling than METADATA.
-            directory_name = dist_info.name[: -len(".dist-info")]
-            inventory.setdefault(normalize_distribution_name(directory_name), version or "")
+                # An unreadable version is recorded as None, never as "": an empty string
+                # would silently skip the comparison and accept a forged value.
+                inventory.setdefault(normalize_distribution_name(name), version)
+            else:
+                # Only consult the directory spelling when METADATA gave no name.
+                directory_name = dist_info.name[: -len(".dist-info")]
+                inventory.setdefault(normalize_distribution_name(directory_name), version)
         for egg_info in sorted(site_packages.glob("*.egg-info")):
             name, version = _metadata_name_version(egg_info / "PKG-INFO")
             if not name:
@@ -427,7 +434,7 @@ def _metadata_name_version(metadata: Path) -> tuple[str | None, str | None]:
 
 
 def _reconcile_probe_with_disk(installed: dict[str, Any], prefix: str,
-                               inventory: dict[str, str] | None = None,
+                               inventory: dict[str, str | None] | None = None,
                                base_prefix: str | None = None) -> tuple[str | None, str | None]:
     """Compare a dependency probe's answers with the environment as it is on disk.
 
@@ -453,11 +460,15 @@ def _reconcile_probe_with_disk(installed: dict[str, Any], prefix: str,
         if version is None:
             # The normal missing-dependency path reports this.
             continue
-        recorded = on_disk.get(normalize_distribution_name(str(name)))
-        if recorded is None:
+        key = normalize_distribution_name(str(name))
+        if key not in on_disk:
             return "unverified", (f"{name} is reported by the probe but has no on-disk "
                                   f"installation in {prefix}")
-        if recorded and str(version) != recorded:
+        recorded = on_disk[key]
+        if not recorded:
+            return "unverified", (f"{name} is installed on disk but its version could not "
+                                  f"be read, so {version} is unconfirmed")
+        if str(version) != recorded:
             return "forged", f"{name} probe reports {version} but disk records {recorded}"
     return None, None
 
@@ -589,7 +600,9 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         return EnvironmentReport(model_id, variable, str(interpreter), "INTERPRETER_PRESENT", "NOT_EXECUTABLE",
                                  reason="interpreter is not executable")
 
+    prior_verification = False
     if probe:
+        prior_verification = _cache_key(model, require_cuda) in _VERIFIED_ENVIRONMENTS
         cached = _reuse(model, require_cuda, str(interpreter))
         if cached is not None:
             return cached
@@ -601,7 +614,14 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     # legitimise it on the next probe.
     pre_probe_inventory = None
     if probe:
-        pre_probe_inventory = _baseline_inventory(Path(configured).parent.parent)
+        prefix = Path(configured).parent.parent
+        if prior_verification:
+            # The environment was verified earlier, so anything added since then was
+            # installed while it was idle: refresh the baseline rather than calling it a
+            # fabrication. A first-ever probe keeps the pinned baseline, because growth
+            # observed then can only have appeared while the environment was running.
+            _BASELINE_INVENTORIES[_baseline_key(prefix)] = installed_distributions_on_disk(prefix)
+        pre_probe_inventory = _baseline_inventory(prefix)
 
     identity = _interpreter_identity(interpreter) if probe else None
     report = EnvironmentReport(
@@ -684,12 +704,20 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             post_probe_inventory = installed_distributions_on_disk(Path(str(report.prefix or "")))
             baseline = _baseline_inventory(Path(str(report.prefix or "")))
             invented = sorted(set(post_probe_inventory) - set(baseline))
-            if invented:
+            if invented and not prior_verification:
+                # Nothing was verified for this environment before this probe, so the
+                # distributions appeared while the environment was running: they were
+                # created by the code the probe executed.
                 report.tier = TIER_BLOCKED
                 report.status = "DEPENDENCY_PROBE_FORGED"
                 report.reason = ("the environment created distributions while it was probed: "
                                  f"{', '.join(invented[:3])}")
                 return report
+            if invented:
+                # An environment that was already verified is simply observed again: an
+                # operator may have installed packages while it was idle. Refresh.
+                _BASELINE_INVENTORIES[_baseline_key(Path(str(report.prefix or "")))] = post_probe_inventory
+
         current_inventory = installed_distributions_on_disk(Path(str(report.prefix or "")))
         verdict, reason = _reconcile_probe_with_disk(
             probe_packages, str(report.prefix or ""), inventory=current_inventory,
@@ -857,6 +885,7 @@ def _environment_contract_digest(model: dict[str, Any]) -> str:
         "cuda": env.get("cuda"),
         "packages": list(env.get("packages") or []),
         "required_imports": list(env.get("required_imports") or []),
+        "interpreter_sha256": env.get("interpreter_sha256"),
         "environment_required": bool(model.get("environment_required")),
     }
     return hashlib.sha256(json.dumps(relevant, sort_keys=True).encode("utf-8")).hexdigest()
@@ -988,6 +1017,12 @@ def _reuse(model: dict[str, Any], require_cuda: bool, interpreter: str) -> Envir
     ):
         _VERIFIED_ENVIRONMENTS.pop(key, None)
         return None
+    # A pinned-interpreter mismatch must never be masked by a cached verification.
+    declared_digest = str((model.get("environment") or {}).get("interpreter_sha256") or "").strip().lower()
+    if declared_digest and declared_digest.upper() != "UNKNOWN":
+        if _interpreter_digest(interpreter) != declared_digest:
+            _VERIFIED_ENVIRONMENTS.pop(key, None)
+            return None
     return cached
 
 
