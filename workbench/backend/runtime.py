@@ -393,18 +393,21 @@ def _source_dirty(source: Path) -> bool | None:
     tracked = _porcelain("--untracked-files=no")
     if tracked is None:
         return None
-    if tracked.strip():
-        return True
-
     untracked = _porcelain("--untracked-files=all") or ""
     ignored = _porcelain("--untracked-files=all", "--ignored") or ""
-    for line in (untracked + "\n" + ignored).splitlines():
-        # Locally placed assets (even git-ignored ones) can change evaluator behaviour,
-        # so they count as dirty. Bytecode caches never do.
-        if "__pycache__" in line or line.endswith(".pyc"):
+
+    def _is_bytecode(line: str) -> bool:
+        # `__pycache__`/`*.pyc` are Python build products. Their presence or absence
+        # cannot change evaluator source semantics, and some upstream repositories
+        # even commit them, so they are never treated as a source change.
+        return "__pycache__" in line or line.rstrip().endswith(".pyc")
+
+    for line in (tracked + "\n" + untracked + "\n" + ignored).splitlines():
+        if not line.strip() or _is_bytecode(line):
             continue
-        if line.startswith(("?? ", "!! ")):
-            return True
+        # Any other tracked modification, untracked file, or ignored local asset
+        # (e.g. a locally placed backbone) counts as dirty.
+        return True
     return False
 
 

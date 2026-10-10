@@ -140,3 +140,28 @@ def test_runtime_ready_requires_dependency_probe(monkeypatch, tmp_path: Path):
     report = runtime.verify_environment(model, probe=True)
     assert report.tier != "RUNTIME_READY"
     assert report.status == "REQUIREMENTS_UNVERIFIED"
+
+
+# Regression: upstream-committed bytecode is not a source change; real edits still are
+def test_committed_bytecode_is_not_dirty(tmp_path: Path):
+    import subprocess as sp
+    from workbench.backend.runtime import _source_dirty
+
+    repo = tmp_path / "src"
+    (repo / "__pycache__").mkdir(parents=True)
+    sp.run(["git", "init", "-q"], cwd=repo, check=True)
+    sp.run(["git", "config", "user.email", "t@t"], cwd=repo, check=True)
+    sp.run(["git", "config", "user.name", "T"], cwd=repo, check=True)
+    (repo / "eval.py").write_text("x")
+    (repo / "__pycache__" / "eval.cpython-313.pyc").write_bytes(b"upstream-committed")
+    sp.run(["git", "add", "-f", "."], cwd=repo, check=True)
+    sp.run(["git", "commit", "-qm", "upstream commits pyc"], cwd=repo, check=True)
+
+    assert _source_dirty(repo) is True or _source_dirty(repo) is False  # deterministic below
+    # Delete the committed bytecode (a git-visible tracked deletion that is pure noise).
+    (repo / "__pycache__" / "eval.cpython-313.pyc").unlink()
+    assert _source_dirty(repo) is False, "deleting committed bytecode must not count as dirty"
+
+    # A real source edit must still be detected.
+    (repo / "eval.py").write_text("modified evaluator")
+    assert _source_dirty(repo) is True

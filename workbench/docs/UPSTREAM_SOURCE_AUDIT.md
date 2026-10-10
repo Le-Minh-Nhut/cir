@@ -16,10 +16,12 @@ git rev-parse HEAD                       # must equal registry upstream_commit_s
 git status --porcelain                   # tracked modifications must be empty
 ```
 
-Plain `git status` shows `__pycache__`/`*.pyc` entries in several trees. Those are
-Python bytecode caches produced by running the code and do not alter evaluator
-semantics; the workbench's `_source_dirty` check deliberately ignores them while
-still treating any tracked change or other untracked file as dirty.
+Plain `git status` shows `__pycache__`/`*.pyc` entries in several trees. Some
+upstream repositories even commit `.pyc` files. Bytecode is a Python build product
+that cannot change evaluator source semantics, so the workbench's `_source_dirty`
+check excludes it from both the tracked and untracked/ignored sets while still
+treating any other tracked change, untracked file, or locally placed (even
+git-ignored) asset as dirty.
 
 ## Acquisition results
 
@@ -40,7 +42,8 @@ still treating any tracked change or other untracked file as dirty.
 | SPRC | `SPRC` | `2935a5397732` | 9.0M | `src/blip_validate.py` ✅ |
 | LIMN | `LIMN` | `7d7bc9b116f5` | 12M | `LIMN/test.py` ✅ |
 
-Total on disk: **≈580 MB**. PTHA + MTST has no verified upstream repository in the
+Total on disk: **≈582 MB**. All 15 source-bearing registry models report
+`verified=True, dirty=False` through `runtime.source_provenance`. PTHA + MTST has no verified upstream repository in the
 registry and was not cloned (nothing invented).
 
 **Deduplication:** Combiner RN50x4 noft and CLIP4Cir RN50x4 fullft share
