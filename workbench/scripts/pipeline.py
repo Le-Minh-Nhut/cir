@@ -476,14 +476,19 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             ckpts = [c for c in ckpts if c["checkpoint_id"] == args.checkpoint]
         ckpt_outputs = tuple(checkpoint_path(args.model, c, config.WORKBENCH_CHECKPOINT_ROOT) for c in ckpts)
 
-    checkpoints = run_stage(
-        "checkpoint",
-        command("download_checkpoints.py", *download_args),
-        model_id=args.model,
-        checkpoint_id=args.checkpoint,
-        output_paths=ckpt_outputs,
-        required_capabilities={"allow_large_downloads", "allow_network"},
-    ) if args.download_checkpoints else Stage("checkpoint", skipped="pass --download-checkpoints")
+    if not args.download_checkpoints:
+        checkpoints = Stage("checkpoint", skipped="pass --download-checkpoints")
+    elif not ckpt_outputs:
+        checkpoints = Stage("checkpoint", skipped="no registered checkpoint output for this selection")
+    else:
+        checkpoints = run_stage(
+            "checkpoint",
+            command("download_checkpoints.py", *download_args),
+            model_id=args.model,
+            checkpoint_id=args.checkpoint,
+            output_paths=ckpt_outputs,
+            required_capabilities={"allow_large_downloads", "allow_network"},
+        )
     selected_auxiliary_models = [args.model] if args.model in auxiliary_model_ids() else ([] if args.model else sorted(auxiliary_model_ids()))
     if args.download_auxiliary_assets and selected_auxiliary_models:
         auxiliary_args = ["--model", selected_auxiliary_models[0]] if args.model else ["--all"]
@@ -625,14 +630,18 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         if args.checkpoint:
             ckpts = [c for c in ckpts if c["checkpoint_id"] == args.checkpoint]
         ckpt_outs = tuple(checkpoint_path(mid, c, config.WORKBENCH_CHECKPOINT_ROOT) for c in ckpts)
-        stages.append(run_stage(
-            "checkpoint",
-            command("download_checkpoints.py", *ckpt_args),
-            model_id=mid,
-            checkpoint_id=args.checkpoint,
-            output_paths=ckpt_outs,
-            required_capabilities={"allow_large_downloads", "allow_network"},
-        ))
+        if not ckpt_outs:
+            # No registry checkpoint exists for this model: nothing to acquire.
+            stages.append(Stage("checkpoint", skipped="model has no registered checkpoint variant"))
+        else:
+            stages.append(run_stage(
+                "checkpoint",
+                command("download_checkpoints.py", *ckpt_args),
+                model_id=mid,
+                checkpoint_id=args.checkpoint,
+                output_paths=ckpt_outs,
+                required_capabilities={"allow_large_downloads", "allow_network"},
+            ))
 
         if mid in auxiliary_model_ids():
             aux_outs = tuple(auxiliary_destination(a, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) for a in auxiliary_assets_for_model(mid))
@@ -825,14 +834,37 @@ def run_stages(
             def _dep_unusable(dep: str) -> bool:
                 if dep in failed_stages:
                     return True
-                # A recorded stage key may carry extra qualifiers (checkpoint/protocol),
-                # so a dependency string matches its own key or any qualified variant.
-                candidates = [dep] + [k for k in stage_records if k == dep or k.startswith(dep + ":")] \
-                    + [k for k in failed_stages if k == dep or k.startswith(dep + ":")]
-                for key in candidates:
-                    rec = stage_records.get(key)
-                    if isinstance(rec, dict) and rec.get("status") in _UNUSABLE_DEP_STATUSES:
+                # A dependency string may omit the checkpoint/protocol qualifier that the
+                # recorded key carries. Qualify it with THIS stage's own model so the lookup
+                # never matches a different model's stage.
+                own = stage.model_id
+
+                def _bad(key: str) -> bool:
+                    if key in failed_stages:
                         return True
+                    data = stage_records.get(key)
+                    return isinstance(data, dict) and data.get("status") in _UNUSABLE_DEP_STATUSES
+
+                # Exact match only: a bare edge name ("sync") must never match another
+                # model's qualified key ("sync:othermodel").
+                if _bad(dep):
+                    return True
+                # Same edge qualified by THIS stage's model (dep -> dep:<own>), including
+                # any checkpoint/protocol variants of that same edge.
+                if own and ":" not in dep:
+                    qualified = f"{dep}:{own}"
+                    if _bad(qualified):
+                        return True
+                    for recorded, data in stage_records.items():
+                        if recorded.startswith(qualified + ":") and isinstance(data, dict) \
+                                and data.get("status") in _UNUSABLE_DEP_STATUSES:
+                            return True
+                # A dependency that already names a model: allow its checkpoint variants.
+                if ":" in dep:
+                    for recorded, data in stage_records.items():
+                        if recorded.startswith(dep + ":") and isinstance(data, dict) \
+                                and data.get("status") in _UNUSABLE_DEP_STATUSES:
+                            return True
                 return False
 
             unmet_deps = [dep for dep in stage.dependencies if _dep_unusable(dep)]

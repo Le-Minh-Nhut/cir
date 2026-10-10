@@ -396,14 +396,26 @@ def _source_dirty(source: Path) -> bool | None:
     untracked = _porcelain("--untracked-files=all") or ""
     ignored = _porcelain("--untracked-files=all", "--ignored") or ""
 
-    def _is_bytecode(line: str) -> bool:
-        # `__pycache__`/`*.pyc` are Python build products. Their presence or absence
-        # cannot change evaluator source semantics, and some upstream repositories
-        # even commit them, so they are never treated as a source change.
-        return "__pycache__" in line or line.rstrip().endswith(".pyc")
+    def _path_of(line: str) -> str:
+        # porcelain: XY <path>, and "R  old -> new" for renames.
+        body = line[3:].strip() if len(line) > 3 else ""
+        return body.split(" -> ")[-1]
+
+    def _is_bytecode(path: str) -> bool:
+        # `__pycache__`/`*.pyc` are Python build products that cannot change evaluator
+        # source semantics, and some upstream repositories even commit them, so they
+        # are never treated as a source change. Only files *inside* a __pycache__
+        # directory qualify: a real source edit under a directory merely named
+        # "__pycache__"-ish must still be detected.
+        parts = Path(path).parts
+        if parts and parts[-1] == "__pycache__":
+            return True
+        return Path(path).suffix == ".pyc"
 
     for line in (tracked + "\n" + untracked + "\n" + ignored).splitlines():
-        if not line.strip() or _is_bytecode(line):
+        if not line.strip():
+            continue
+        if _is_bytecode(_path_of(line)):
             continue
         # Any other tracked modification, untracked file, or ignored local asset
         # (e.g. a locally placed backbone) counts as dirty.

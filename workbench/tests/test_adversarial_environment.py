@@ -165,3 +165,23 @@ def test_committed_bytecode_is_not_dirty(tmp_path: Path):
     # A real source edit must still be detected.
     (repo / "eval.py").write_text("modified evaluator")
     assert _source_dirty(repo) is True
+
+
+# Regression: a real tracked edit inside a committed __pycache__ dir is still dirty (NEW-2)
+def test_tracked_edit_inside_pycache_dir_detected(tmp_path: Path):
+    import subprocess as sp
+    from workbench.backend.runtime import _source_dirty
+
+    repo = tmp_path / "src"
+    (repo / "pkg" / "__pycache__").mkdir(parents=True)
+    sp.run(["git", "init", "-q"], cwd=repo, check=True)
+    sp.run(["git", "config", "user.email", "t@t"], cwd=repo, check=True)
+    sp.run(["git", "config", "user.name", "T"], cwd=repo, check=True)
+    note = repo / "pkg" / "__pycache__" / "notes.json"
+    note.write_text("committed non-bytecode file")
+    sp.run(["git", "add", "-f", "."], cwd=repo, check=True)
+    sp.run(["git", "commit", "-qm", "i"], cwd=repo, check=True)
+
+    assert _source_dirty(repo) is False
+    note.write_text("edited a real file inside a __pycache__ directory")
+    assert _source_dirty(repo) is True, "tracked non-bytecode edit must be detected"

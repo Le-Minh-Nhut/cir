@@ -288,3 +288,36 @@ def test_dry_run_never_mutates_state(tmp_path: Path, monkeypatch):
                              state_path=state)
     assert rc == 1
     assert not state.exists(), "dry-run must not write workflow state"
+
+
+# 12. A model with no registered checkpoint must not produce a run-and-fail stage (NEW-1)
+def test_model_without_checkpoint_has_no_side_effecting_checkpoint_stage():
+    cfg = pipeline.resolve_config()
+    args = pipeline.parser_for().parse_args(
+        ["all", "--model", "ptha_mtst", "--download-checkpoints"])
+    stage = next(s for s in pipeline.stages_for(args, cfg) if s.name == "checkpoint")
+    assert not stage.commands, "a model with no checkpoint variant must not plan a download"
+    assert stage.skipped
+
+
+# 13. A bare dependency must not be blocked by another model's failure (NEW-3)
+def test_bare_dependency_does_not_match_other_models(tmp_path: Path, monkeypatch):
+    state = tmp_path / "s.json"
+    pipeline.save_pipeline_state({"stages": {"sync:csmcir": {"status": "FAILED"}}}, state)
+    launched: list[list[str]] = []
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: launched.append(argv) or 0)
+
+    stage = pipeline.Stage(name="runtime-preflight", commands=(["/rp"],), model_id="limn",
+                           dependencies=("sync", "checkpoint"))
+    rc = pipeline.run_stages([stage], dry_run=False, continue_on_error=True, resume=True,
+                             state_path=state)
+    assert rc == 0, "another model's failed stage incorrectly blocked this model"
+    assert launched == [["/rp"]]
+
+    # Same-model failure must still block.
+    state2 = tmp_path / "s2.json"
+    pipeline.save_pipeline_state({"stages": {"sync:limn": {"status": "FAILED"}}}, state2)
+    launched.clear()
+    rc = pipeline.run_stages([stage], dry_run=False, continue_on_error=True, resume=True,
+                             state_path=state2)
+    assert rc == 1 and launched == []
