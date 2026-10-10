@@ -491,13 +491,23 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
                 f"declared output reports execution status {report_status!r}")
         # Cross-check the out-of-band ledger: an actor who rewrites every artifact inside
         # the run directory still has to rewrite the whole chained ledger.
+        claimed_entry = payload.get("ledger_entry_digest")
         ledger = read_evidence_ledger(config) if config is not None else None
+        if claimed_entry and ledger is None:
+            # The proof names the ledger entry that authorised it, so a missing or broken
+            # ledger is a failure, never a silent pass.
+            raise EvaluationOutputError(
+                "the evidence ledger is missing or its chain is broken, so the recorded "
+                "invocation cannot be corroborated")
         if ledger is not None:
             matching = [item for item in ledger if item.get("run_id") == payload.get("run_id")]
             if not matching:
                 raise EvaluationOutputError(
                     "no evidence-ledger entry for this run: the invocation was never recorded")
             witness = matching[-1]
+            if claimed_entry and witness.get("entry_digest") != claimed_entry:
+                raise EvaluationOutputError(
+                    "declared output names a different evidence-ledger entry than the ledger holds")
             for label, key, proof_value in (
                 ("model", "model_id", payload.get("model_id")),
                 ("checkpoint", "checkpoint_id", payload.get("checkpoint_id")),
@@ -853,6 +863,23 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         })
         return code
 
+    # Append the out-of-band witness. It records the outcome the runner observed, before
+    # any pointer moves, so a later rewrite of the run's own artifacts has to disagree with
+    # this ledger to look successful. The proof carries the entry digest, so deleting the
+    # ledger is detectable rather than a silent pass.
+    ledger_entry = append_evidence_entry(config, {
+        "run_id": run_id,
+        "model_id": plan.model_id,
+        "checkpoint_id": plan.checkpoint_id,
+        "protocol_id": plan.protocol,
+        "return_code": code,
+        "execution_status": report["execution_status"],
+        "report_digest": sha256_file(run_report),
+        "evidence_digest": evidence_digest,
+        "run_directory": str(directory),
+        "recorded_at": datetime.now(UTC).isoformat(),
+    })
+
     proof = {
         "artifact_type": "official_evaluation_completion_proof",
         "schema_version": 1,
@@ -871,6 +898,7 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "checkpoint_bundle": plan.checkpoint_bundle,
         "directory_members": plan.directory_members,
         "return_code": code,
+        "ledger_entry_digest": ledger_entry["entry_digest"],
         "report": str(run_report),
         "report_digest": sha256_file(run_report),
         "report_relative": run_report.name,
@@ -891,22 +919,6 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
             handle.write(json.dumps(proof, indent=2) + "\n")
     except FileExistsError as error:
         raise RuntimeError(f"refusing to overwrite existing completion proof: {proof_path}") from error
-
-    # Append the out-of-band witness. It records the outcome the runner observed, before
-    # any pointer moves, so a later rewrite of the run's own artifacts has to disagree with
-    # this ledger to look successful.
-    append_evidence_entry(config, {
-        "run_id": run_id,
-        "model_id": plan.model_id,
-        "checkpoint_id": plan.checkpoint_id,
-        "protocol_id": plan.protocol,
-        "return_code": code,
-        "execution_status": report["execution_status"],
-        "report_digest": sha256_file(run_report),
-        "evidence_digest": evidence_digest,
-        "run_directory": str(directory),
-        "recorded_at": datetime.now(UTC).isoformat(),
-    })
 
     # Attempts always advance; successes only advance on a genuinely successful,
     # proof-backed execution. A failed rerun can never replace latest_successful.

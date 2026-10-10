@@ -538,12 +538,18 @@ def inspect_environment_distributions(prefix: str | None,
     versions: dict[str, str | None] = {}
     modules: set[str] = set()
     unconfirmed: set[str] = set()
-    roots: list[Path] = []
-    for candidate in (prefix, base_prefix):
-        if candidate:
-            for root in _site_packages_dirs(Path(candidate)):
-                if root not in roots:
-                    roots.append(root)
+    # Names confirmed to install real content from their environment prefix. A
+    # `--system-site-packages` environment may also see an unconfirmable distribution of
+    # the same name in its base: the environment's own confirmed install wins.
+    confirmed: set[str] = set()
+    primary_roots: list[Path] = []
+    base_roots: list[Path] = []
+    if prefix:
+        primary_roots = _site_packages_dirs(Path(prefix))
+    if base_prefix and str(base_prefix) != str(prefix):
+        base_roots = [root for root in _site_packages_dirs(Path(base_prefix))
+                      if root not in primary_roots]
+    roots: list[Path] = primary_roots + base_roots
 
     for site_packages in roots:
         # Distribution metadata, without importing anything.
@@ -651,6 +657,10 @@ def inspect_environment_distributions(prefix: str | None,
 
             if installed_content:
                 versions.setdefault(key, declared_version or None)
+                confirmed.add(key)
+            elif key in confirmed:
+                # Already confirmed by this environment's own prefix.
+                pass
             elif not record.is_file() and (dist / "INSTALLER").is_file():
                 # A package manager installed this (Debian's ``deb`` drops INSTALLER and no
                 # RECORD) and the module it provides is named differently from the
@@ -660,6 +670,7 @@ def inspect_environment_distributions(prefix: str | None,
                 unconfirmed.add(key)
             else:
                 versions.pop(key, None)
+    unconfirmed -= confirmed
     return versions, modules, unconfirmed
 
 

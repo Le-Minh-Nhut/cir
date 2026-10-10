@@ -1017,3 +1017,32 @@ def test_an_honest_run_validates_with_the_ledger_present(env):
     evidence = em.completion_validator(MODEL, "ckpt_v1", "fashioniq_original_split", PIN, env["config"])
     ok, reason, _ = evidence({"run_id": run_id})
     assert ok is True, reason
+
+
+def test_deleting_the_ledger_is_not_a_silent_pass(env):
+    """The proof names its ledger entry, so a missing ledger is a failure."""
+    code, run_id = run(env, reporting_script(env["tmp"]))
+    assert code == 0
+    evidence = em.completion_validator(MODEL, "ckpt_v1", "fashioniq_original_split", PIN, env["config"])
+    assert evidence({"run_id": run_id})[0] is True
+
+    em.evidence_ledger_path(env["config"]).unlink()
+    ok, reason, _ = evidence({"run_id": run_id})
+    assert ok is False, "a deleted ledger must not be a silent pass"
+    assert "ledger" in (reason or "")
+
+
+def test_a_truncated_ledger_is_not_a_silent_pass(env):
+    """A chain that no longer verifies is a failure, not an absence."""
+    code, run_id = run(env, reporting_script(env["tmp"]))
+    assert code == 0
+    evidence = em.completion_validator(MODEL, "ckpt_v1", "fashioniq_original_split", PIN, env["config"])
+
+    path = em.evidence_ledger_path(env["config"])
+    lines = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    lines[0] = dict(lines[0], return_code=99)      # digest no longer matches
+    path.write_text("\n".join(json.dumps(item) for item in lines) + "\n")
+
+    ok, reason, _ = evidence({"run_id": run_id})
+    assert ok is False, "a broken chain must be rejected"
+    assert "ledger" in (reason or "")
