@@ -230,6 +230,15 @@ Side-effecting stages declare a set of required capabilities. All must be grante
 | environment provisioning | `allow_env_install`, `allow_network` |
 | model preparation (mutating) | `allow_preparation`, `allow_network` |
 | evaluation | `allow_gpu_eval`, `allow_preparation` |
+| derived index rebuild | `allow_index_write` |
+| mock result load/validate | `allow_mock_write` |
 
 Verification-only stages declare no capabilities and remain read-only. `all`,
 `setup` and `reproduce` require `--model MODEL_ID` or `--all-models`.
+
+Stages that provision without producing a tracked artifact file (source sync,
+environment probe, auxiliary assets, mock load/validate, index rebuild) obtain a
+durable completion receipt under `workbench/artifacts/receipts/<stage>.json`.
+The receipt is the stage's completion proof and is re-validated on every resume.
+`mock` and `analyze` are explicit operator workflows and self-authorize only the
+writes they perform; `--dry-run` still plans without executing.

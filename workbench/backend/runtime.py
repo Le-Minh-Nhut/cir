@@ -382,18 +382,25 @@ def _source_dirty(source: Path) -> bool | None:
     not change evaluator semantics, so they are excluded from the dirty check.
     Anything else (tracked modifications, other untracked files) is dirty.
     """
-    try:
-        tracked = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"],
-                                 cwd=source, check=True, capture_output=True, text=True).stdout
-        untracked = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "--ignored"],
-                                   cwd=source, check=True, capture_output=True, text=True).stdout
-    except (OSError, subprocess.CalledProcessError):
+    def _porcelain(*extra: str) -> str | None:
+        try:
+            result = subprocess.run(["git", "status", "--porcelain", *extra],
+                                    cwd=source, capture_output=True, text=True)
+        except OSError:
+            return None
+        return result.stdout if result.returncode == 0 else None
+
+    tracked = _porcelain("--untracked-files=no")
+    if tracked is None:
         return None
     if tracked.strip():
         return True
-    for line in untracked.splitlines():
-        # Ignored/untracked assets can change evaluator behaviour too (e.g. a locally
-        # placed backbone file), so they count as dirty except bytecode caches.
+
+    untracked = _porcelain("--untracked-files=all") or ""
+    ignored = _porcelain("--untracked-files=all", "--ignored") or ""
+    for line in (untracked + "\n" + ignored).splitlines():
+        # Locally placed assets (even git-ignored ones) can change evaluator behaviour,
+        # so they count as dirty. Bytecode caches never do.
         if "__pycache__" in line or line.endswith(".pyc"):
             continue
         if line.startswith(("?? ", "!! ")):

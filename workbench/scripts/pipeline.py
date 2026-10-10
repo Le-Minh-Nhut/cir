@@ -817,14 +817,22 @@ def run_stages(
                 print(f"  [SKIP] {stage.skipped}")
                 continue
 
+            is_side_effecting = bool(stage.required_capabilities)
+            stage_planning = planning_mode or (is_side_effecting and not apply)
+
             # Dependency execution prerequisite check. A dependency that is failing in
             # this sweep OR persisted as failing/blocked in the state file must block.
             def _dep_unusable(dep: str) -> bool:
                 if dep in failed_stages:
                     return True
-                rec = stage_records.get(dep)
-                if isinstance(rec, dict) and rec.get("status") in _UNUSABLE_DEP_STATUSES:
-                    return True
+                # A recorded stage key may carry extra qualifiers (checkpoint/protocol),
+                # so a dependency string matches its own key or any qualified variant.
+                candidates = [dep] + [k for k in stage_records if k == dep or k.startswith(dep + ":")] \
+                    + [k for k in failed_stages if k == dep or k.startswith(dep + ":")]
+                for key in candidates:
+                    rec = stage_records.get(key)
+                    if isinstance(rec, dict) and rec.get("status") in _UNUSABLE_DEP_STATUSES:
+                        return True
                 return False
 
             unmet_deps = [dep for dep in stage.dependencies if _dep_unusable(dep)]
@@ -833,7 +841,7 @@ def run_stages(
                 failed = True
                 failed_stages.add(stage.name)
                 failed_stages.add(dependency_key(stage))
-                if not dry_run and not (planning_mode and not apply):
+                if not stage_planning:
                     stage_records[skey] = {
                         "stage_id": skey,
                         "name": stage.name,
@@ -845,9 +853,6 @@ def run_stages(
                     }
                     save_pipeline_state(state, state_path)
                 continue
-
-            is_side_effecting = bool(stage.required_capabilities)
-            stage_planning = planning_mode or (is_side_effecting and not apply)
 
             # Explicit authorization check: every required capability must be granted.
             if is_side_effecting:
@@ -870,7 +875,8 @@ def run_stages(
                         "finished_at": datetime.now(UTC).isoformat(),
                         "return_code": 126,
                     }
-                    save_pipeline_state(state, state_path)
+                    if not dry_run:
+                        save_pipeline_state(state, state_path)
                     if not continue_on_error:
                         return 1
                     continue
@@ -1063,6 +1069,9 @@ def main(argv: list[str] | None = None) -> int:
         # `mock` is an explicit, self-contained development workflow; it carries its own
         # authorization for writing mock results and rebuilding the derived index only.
         authorized_caps.update({"allow_mock_write", "allow_index_write"})
+    if args.mode == "analyze":
+        # `analyze` exists solely to rebuild the derived index from validated results.
+        authorized_caps.add("allow_index_write")
     # `mock` and `analyze` are explicit, self-contained operator workflows: they carry
     # their own authorization for the exact writes they perform. `--dry-run` still plans only.
     effective_apply = args.apply or args.mode in ("mock", "analyze")

@@ -258,3 +258,33 @@ def test_validation_index_requires_index_write_capability(tmp_path: Path, monkey
                              authorized_capabilities={"allow_index_write"},
                              state_path=tmp_path / "s2.json")
     assert rc == 0 and launched == [["/validate"], ["/rebuild"]]
+
+
+# 10. Qualified dependency keys must be matched (F1 regression)
+def test_qualified_dependency_key_is_matched(tmp_path: Path, monkeypatch):
+    state = tmp_path / "s.json"
+    # Recorded key carries the checkpoint qualifier; the dependency string does not.
+    pipeline.save_pipeline_state(
+        {"stages": {"checkpoint:limn:base_iter0_dress": {"status": "FAILED"}}}, state)
+    launched: list[list[str]] = []
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: launched.append(argv) or 0)
+
+    stage = pipeline.Stage(name="runtime-preflight", commands=(["/rp"],), model_id="limn",
+                           dependencies=("checkpoint:limn",))
+    rc = pipeline.run_stages([stage], dry_run=False, continue_on_error=True, resume=True,
+                             state_path=state)
+    assert rc == 1 and launched == [], "qualified recorded key did not block its dependency"
+    assert pipeline.load_pipeline_state(state)["stages"]["runtime-preflight:limn"]["status"] == "SKIPPED_DEPENDENCY"
+
+
+# 11. A dry-run must never mutate persistent workflow state (F3 regression)
+def test_dry_run_never_mutates_state(tmp_path: Path, monkeypatch):
+    state = tmp_path / "s.json"
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: 0)
+    stages = [pipeline.Stage(name="checkpoint", commands=(["/dl"],),
+                             required_capabilities=frozenset({"allow_large_downloads", "allow_network"}))]
+    rc = pipeline.run_stages(stages, dry_run=True, apply=True,
+                             authorized_capabilities={"allow_large_downloads"},
+                             state_path=state)
+    assert rc == 1
+    assert not state.exists(), "dry-run must not write workflow state"
