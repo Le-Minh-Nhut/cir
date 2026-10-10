@@ -382,9 +382,27 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
         manifest recorded by the proof is what is compared against the live member files.
         """
         recorded_manifest = payload.get("bundle_manifest_digest")
-        if not recorded_manifest:
-            return True
         members = plan.checkpoint_bundle or {}
+        if not recorded_manifest:
+            # Without a manifest digest the bundle is still identified by the per-member
+            # digests the proof recorded: a changed member must invalidate the proof.
+            if not members:
+                return True
+            recorded_members = plan.directory_members or []
+            recorded_by_name = {
+                str(member.get("filename")): member.get("sha256")
+                for member in recorded_members if member.get("filename")
+            }
+            for category, member in members.items():
+                path = Path(str(member.get("path") or ""))
+                if not path.is_file():
+                    raise EvaluationOutputError(
+                        f"checkpoint bundle member {category} is missing: {path}")
+                expected = member.get("sha256") or recorded_by_name.get(str(member.get("filename")))
+                if expected and _sha(path) != expected:
+                    raise EvaluationOutputError(
+                        f"checkpoint bundle member {category} no longer matches its recorded digest")
+            return True
         if not members:
             raise EvaluationOutputError(
                 "proof records a bundle manifest but no bundle members could be resolved")
@@ -471,6 +489,32 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
         if report_status and report_status != "EXECUTION_COMPLETED":
             raise EvaluationOutputError(
                 f"declared output reports execution status {report_status!r}")
+        # Cross-check the out-of-band ledger: an actor who rewrites every artifact inside
+        # the run directory still has to rewrite the whole chained ledger.
+        ledger = read_evidence_ledger(config) if config is not None else None
+        if ledger is not None:
+            matching = [item for item in ledger if item.get("run_id") == payload.get("run_id")]
+            if not matching:
+                raise EvaluationOutputError(
+                    "no evidence-ledger entry for this run: the invocation was never recorded")
+            witness = matching[-1]
+            for label, key, proof_value in (
+                ("model", "model_id", payload.get("model_id")),
+                ("checkpoint", "checkpoint_id", payload.get("checkpoint_id")),
+                ("protocol", "protocol_id", payload.get("protocol_id")),
+                ("return code", "return_code", payload.get("return_code")),
+            ):
+                if str(witness.get(key)) != str(proof_value):
+                    raise EvaluationOutputError(
+                        f"declared output {label} ({proof_value!r}) disagrees with the "
+                        f"evidence ledger ({witness.get(key)!r})")
+            if witness.get("return_code") not in (0, None):
+                raise EvaluationOutputError(
+                    f"the evidence ledger records a failed execution "
+                    f"(return code {witness.get('return_code')})")
+            if str(witness.get("report_digest") or "") != str(payload.get("report_digest") or ""):
+                raise EvaluationOutputError(
+                    "declared output report digest disagrees with the evidence ledger")
         report_evidence = report_payload.get("evidence_digest")
         if isinstance(report_evidence, str) and report_evidence and report_evidence != payload.get("evidence_digest"):
             raise EvaluationOutputError("declared output evidence digest disagrees with its report")
@@ -573,6 +617,69 @@ def expected_run_identity(config: WorkbenchConfig, plan: EvaluationPlan, run_id:
         "report": str(run_report_path(config, plan, run_id)),
         "proof": str(completion_proof_path(config, plan, run_id)),
     }
+
+
+def evidence_ledger_path(config: WorkbenchConfig) -> Path:
+    """Append-only record of every invocation, kept *outside* the run directory.
+
+    The run's own artifacts (report, proof, command.json) all live under one directory and
+    are all derived from the run, so an actor who rewrites them consistently cannot be
+    caught from within. This ledger lives at the artifact root, is append-only, and chains
+    each entry to the previous one, so an edited, removed, or reordered entry is detectable
+    and a rewritten run must also rewrite the whole chain.
+    """
+    repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
+    return repo_root / "workbench" / "artifacts" / "evidence_ledger.jsonl"
+
+
+def append_evidence_entry(config: WorkbenchConfig, entry: dict) -> dict:
+    """Append one invocation record, chained to the previous entry's digest."""
+    path = evidence_ledger_path(config)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    previous = ""
+    try:
+        lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        if lines:
+            previous = json.loads(lines[-1]).get("entry_digest", "")
+    except (OSError, json.JSONDecodeError):
+        previous = ""
+    record = {**entry, "previous_digest": previous}
+    record["entry_digest"] = hashlib.sha256(
+        json.dumps(record, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, sort_keys=True) + "\n")
+    return record
+
+
+def read_evidence_ledger(config: WorkbenchConfig) -> list[dict] | None:
+    """Every ledger entry, or None when the chain is broken or unreadable."""
+    path = evidence_ledger_path(config)
+    if not path.is_file():
+        return None
+    try:
+        lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    except OSError:
+        return None
+    entries: list[dict] = []
+    previous = ""
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            return None
+        digest = record.pop("entry_digest", None)
+        if record.get("previous_digest") != previous or digest is None:
+            return None
+        expected = hashlib.sha256(
+            json.dumps(record, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        if expected != digest:
+            return None
+        record["entry_digest"] = digest
+        entries.append(record)
+        previous = digest
+    return entries
 
 
 def artifact_root(config: WorkbenchConfig) -> Path:
@@ -784,6 +891,22 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
             handle.write(json.dumps(proof, indent=2) + "\n")
     except FileExistsError as error:
         raise RuntimeError(f"refusing to overwrite existing completion proof: {proof_path}") from error
+
+    # Append the out-of-band witness. It records the outcome the runner observed, before
+    # any pointer moves, so a later rewrite of the run's own artifacts has to disagree with
+    # this ledger to look successful.
+    append_evidence_entry(config, {
+        "run_id": run_id,
+        "model_id": plan.model_id,
+        "checkpoint_id": plan.checkpoint_id,
+        "protocol_id": plan.protocol,
+        "return_code": code,
+        "execution_status": report["execution_status"],
+        "report_digest": sha256_file(run_report),
+        "evidence_digest": evidence_digest,
+        "run_directory": str(directory),
+        "recorded_at": datetime.now(UTC).isoformat(),
+    })
 
     # Attempts always advance; successes only advance on a genuinely successful,
     # proof-backed execution. A failed rerun can never replace latest_successful.

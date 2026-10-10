@@ -887,8 +887,8 @@ def test_a_rewritten_failed_run_is_caught_by_the_invocation_record(env):
 
     evidence = em.completion_validator(MODEL, "ckpt_v1", "fashioniq_original_split", PIN, env["config"])
     ok, reason, _ = evidence({"run_id": run_id})
-    assert ok is False, "the invocation record must expose the rewritten failure"
-    assert "invocation record" in (reason or "")
+    assert ok is False, "an out-of-band witness must expose the rewritten failure"
+    assert ("invocation record" in (reason or "")) or ("ledger" in (reason or "")), reason
 
 
 def test_a_bundle_member_change_is_caught_by_the_recorded_manifest(env):
@@ -953,3 +953,67 @@ def test_the_pipeline_path_resolves_declared_directory_members(env, monkeypatch)
     member.write_bytes(b"state-v2-tampered")
     ok, reason, _ = evidence({"run_id": run_id})
     assert ok is False, "a changed declared member must invalidate the proof"
+
+
+# ---------------- the hash-chained evidence ledger is the out-of-band witness (round 15)
+
+def test_the_ledger_catches_artifacts_rewritten_consistently(env):
+    """Rewriting report, proof, *and* command.json must still disagree with the ledger."""
+    failing = reporting_script(env["tmp"], exit_code=7)
+    code, run_id = run(env, failing)
+    assert code == 7
+
+    proof = reports_of(env) / f"csmcir_ckpt_v1_{run_id}_completion.json"
+    payload = json.loads(proof.read_text())
+    report_path = Path(payload["report"])
+    report = json.loads(report_path.read_text())
+    command_path = Path(payload["run_directory"]) / "command.json"
+    command = json.loads(command_path.read_text())
+
+    # Rewrite every artifact inside the run directory consistently.
+    report.update(execution_status="EXECUTION_COMPLETED", return_code=0)
+    report_path.write_text(json.dumps(report))
+    command["return_code"] = 0
+    command_path.write_text(json.dumps(command))
+    payload.update(return_code=0, completion_status="COMPLETED",
+                   report_digest=sha256_file(report_path))
+    proof.write_text(json.dumps(payload))
+
+    evidence = em.completion_validator(MODEL, "ckpt_v1", "fashioniq_original_split", PIN, env["config"])
+    ok, reason, _ = evidence({"run_id": run_id})
+    assert ok is False, "the out-of-band ledger must expose the rewritten failure"
+    assert "ledger" in (reason or "")
+
+
+def test_the_ledger_records_every_invocation_and_chains(env):
+    """Every run appends one entry, chained by digest; the chain verifies."""
+    first_code, first_run = run(env, reporting_script(env["tmp"]))
+    assert first_code == 0
+    second_code, second_run = run(env, reporting_script(env["tmp"], exit_code=7))
+    assert second_code == 7
+
+    ledger = em.read_evidence_ledger(env["config"])
+    assert ledger is not None and len(ledger) == 2
+    assert [item["run_id"] for item in ledger] == [first_run, second_run]
+    assert [item["return_code"] for item in ledger] == [0, 7]
+    assert ledger[1]["previous_digest"] == ledger[0]["entry_digest"]
+
+    # An entry whose content no longer matches its digest is rejected, and so is the
+    # whole chain that follows it.
+    path = em.evidence_ledger_path(env["config"])
+    lines = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    lines[0] = dict(lines[0], return_code=9)          # content changed, digest not
+    path.write_text("\n".join(json.dumps(item) for item in lines) + "\n")
+    assert em.read_evidence_ledger(env["config"]) is None, "a tampered chain must not verify"
+
+    # Removing an entry breaks the chain too.
+    path.write_text(json.dumps(lines[1]) + "\n")
+    assert em.read_evidence_ledger(env["config"]) is None, "a truncated chain must not verify"
+
+
+def test_an_honest_run_validates_with_the_ledger_present(env):
+    code, run_id = run(env, reporting_script(env["tmp"]))
+    assert code == 0
+    evidence = em.completion_validator(MODEL, "ckpt_v1", "fashioniq_original_split", PIN, env["config"])
+    ok, reason, _ = evidence({"run_id": run_id})
+    assert ok is True, reason

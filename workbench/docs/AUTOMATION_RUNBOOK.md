@@ -223,6 +223,22 @@ Run id, model, checkpoint, protocol, and return code are cross-checked across al
 and a non-zero return code in `command.json` is decisive. Rewriting the report *and* the
 proof therefore cannot re-certify a failure.
 
+Those three artifacts still all live inside the run directory and are all derived from the
+run, so an actor who rewrites every one of them consistently is caught instead by the
+**evidence ledger**:
+
+```text
+workbench/artifacts/evidence_ledger.jsonl   # git-ignored, append-only
+```
+
+Every invocation appends one entry — run id, model, checkpoint, protocol, return code,
+execution status, report digest, evidence digest, run directory — chained to the previous
+entry's digest. A validating run must find its own entry, and the entry must agree with the
+proof. An edited, removed, or reordered entry breaks the chain and the ledger is rejected
+wholesale. The ledger sits at the artifact root rather than inside a run directory, so
+rewriting a run consistently requires rewriting the entire chain; it is the operator's own
+record, and `clean_generated.py --logs` removes it along with the logs.
+
 A **bundle** (LIMN's three category models) is one experiment: the proof records the
 bundle manifest digest computed by the run, and the validator compares it against the live
 member files, so a changed shirt/toptee checkpoint invalidates the proof even though only

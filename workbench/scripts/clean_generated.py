@@ -45,7 +45,8 @@ def cleanup_targets(root: Path, mock_results: bool, database: bool, logs: bool) 
 
 def is_safe_target(path: Path, root: Path) -> bool:
     artifacts = root / "artifacts"
-    allowed = {artifacts / "workbench.duckdb", artifacts / "logs"}
+    allowed = {artifacts / "workbench.duckdb", artifacts / "logs",
+               artifacts / "evidence_ledger.jsonl"}
     if path in allowed:
         return _within(path, artifacts)
     return path.parent.parent == artifacts / "results" and path.name == "mock" and _within(path, artifacts / "results")

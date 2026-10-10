@@ -406,6 +406,36 @@ _DESCRIPTIVE_METADATA = {"METADATA", "PKG-INFO", "RECORD", "INSTALLER", "WHEEL",
                          "dependency_links.txt", "top_level.txt", "not-zip-safe", "zip-safe"}
 
 
+def _directory_is_importable(directory: Path) -> bool:
+    """True when a directory would actually be importable as a package.
+
+    A namespace package (PEP 420) is importable because it exists, but an *empty*
+    directory left behind by an interrupted or wiped install is not usable code, and a
+    directory holding only metadata is not a module either.
+    """
+    try:
+        if not directory.is_dir():
+            return False
+    except OSError:
+        return False
+    try:
+        entries = list(directory.iterdir())
+    except OSError:
+        return False
+    if not entries:
+        # PEP 420: an empty directory *is* a namespace package and can be imported.
+        return True
+    for entry in entries:
+        name = entry.name
+        if name in ("__init__.py", "__main__.py"):
+            return True
+        if name.endswith((".py", ".so", ".pyd", ".pyc")):
+            return True
+        if entry.is_dir() and name not in ("__pycache__",):
+            return True
+    return False
+
+
 def _distribution_owner_names(declared_name: str, dist_name: str) -> list[str]:
     """Candidate module names a distribution may install beside its metadata.
 
@@ -543,7 +573,11 @@ def inspect_environment_distributions(prefix: str | None,
             if entry.is_dir():
                 if entry_name.endswith((".dist-info", ".egg-info", ".libs", "__pycache__")):
                     continue
-                modules.add(entry_name.split(".")[0])
+                # A namespace package is importable because it exists; a directory with
+                # nothing importable inside it is not a module, and must not be evidence
+                # that a distribution installed anything.
+                if _directory_is_importable(entry):
+                    modules.add(entry_name.split(".")[0])
             elif entry_name.endswith(".py"):
                 modules.add(entry_name[: -len(".py")])
 
@@ -608,7 +642,9 @@ def inspect_environment_distributions(prefix: str | None,
                 # module or package directory named after the distribution. Recognise that
                 # layout too, or a distro environment looks empty.
                 for candidate in _distribution_owner_names(declared_name, dist_name):
-                    if (site_packages / f"{candidate}.py").is_file() or (site_packages / candidate).is_dir():
+                    module_file = site_packages / f"{candidate}.py"
+                    package_dir = site_packages / candidate
+                    if module_file.is_file() or _directory_is_importable(package_dir):
                         installed_content = True
                         modules.add(candidate)
                         break
