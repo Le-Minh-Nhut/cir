@@ -389,10 +389,19 @@ def sha256_file(path: Path, required_files: list[str] | None = None) -> str:
         digest.update(b"directory\0")
         files = ([_safe_relative_file(path, name) for name in required_files]
                  if required_files is not None else _regular_tree_files(path))
-        for member in sorted(files, key=lambda item: item.relative_to(path).as_posix()):
-            relative = member.relative_to(path).as_posix().encode("utf-8")
-            digest.update(len(relative).to_bytes(8, "big"))
-            digest.update(relative)
+        members = sorted(files, key=lambda item: item.relative_to(path).as_posix())
+        # The member list itself is hashed first, length-prefixed, so a directory
+        # artifact cannot be re-identified by adding or removing a member and the
+        # per-member framing cannot be confused with another member's content.
+        names = [member.relative_to(path).as_posix().encode("utf-8") for member in members]
+        digest.update(len(names).to_bytes(8, "big"))
+        for name in names:
+            digest.update(len(name).to_bytes(8, "big"))
+            digest.update(name)
+        for member, name in zip(members, names):
+            digest.update(b"member\0")
+            digest.update(len(name).to_bytes(8, "big"))
+            digest.update(name)
             _update_file_digest(digest, member)
         return digest.hexdigest()
     raise ValueError(f"artifact is not a regular file or non-symlink directory: {path}")

@@ -161,7 +161,8 @@ def _identity_claim_matches(interpreter: Path, identity: dict[str, Any]) -> bool
     except (OSError, ValueError):
         return False
 
-def check_environment_isolation(interpreter: Path) -> tuple[bool, str]:
+def check_environment_isolation(interpreter: Path,
+                                env: dict[str, Any] | None = None) -> tuple[bool, str]:
     """Verify the *runtime* identity of an interpreter, not just its resolved path.
 
     A Linux venv's ``bin/python`` is routinely a symlink to a system interpreter
@@ -170,6 +171,7 @@ def check_environment_isolation(interpreter: Path) -> tuple[bool, str]:
     ``sys.prefix``/``sys.base_prefix``, its reported ``sys.executable``, and the
     on-disk virtualenv/conda markers of the *invocation* path.
     """
+    env = env or {}
     invoked = Path(interpreter)
     identity = _interpreter_identity(invoked)
     if identity is None:
@@ -226,14 +228,18 @@ def check_environment_isolation(interpreter: Path) -> tuple[bool, str]:
     if not (has_pyvenv or has_conda_meta):
         return False, "isolated environment markers (pyvenv.cfg/conda-meta) are missing"
 
-    # The invoked binary must actually embed a CPython runtime: a hand-written launcher
-    # that only answers the probe protocol is not an interpreter.
-    try:
-        invoked_binary = invoked.resolve()
-    except OSError:
-        return False, "interpreter path could not be resolved"
-    if not _has_cpython_runtime(invoked_binary):
-        return False, "interpreter does not embed a CPython runtime"
+    # When the registry pins the interpreter binary, the resolved file must match. This
+    # is the sound way to bind a verified interpreter: an orchestrator cannot tell a
+    # genuine CPython from a launcher that speaks the same protocol, because the launcher
+    # *is* what it executes. A declared digest resolves that by policy.
+    declared_digest = str((env.get("interpreter_sha256") or "")).strip().lower()
+    if declared_digest and not declared_digest.upper() == "UNKNOWN":
+        actual_digest = _interpreter_digest(invoked)
+        if actual_digest is None:
+            return False, "interpreter binary could not be hashed"
+        if actual_digest != declared_digest:
+            return False, (f"interpreter digest mismatch: registry declares {declared_digest[:16]}…, "
+                           f"resolved binary is {actual_digest[:16]}…")
 
     # The interpreter must run *from* the environment it claims: a symlink that lands
     # inside another venv, or a system interpreter dressed in venv markers, is out.
@@ -286,32 +292,22 @@ _SYSTEM_INTERPRETERS = {
 _NATIVE_MAGICS = (b"\x7fELF", b"\xca\xfe\xba\xbe", b"\xcf\xfa\xed\xfe",
                   b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xce")
 
-_CPYTHON_SYMBOLS = (b"Py_Initialize", b"Py_BytesMain", b"Py_Main", b"_Py_Dealloc")
+def _interpreter_digest(interpreter: Path) -> str | None:
+    """SHA-256 of the interpreter binary an operator pinned in the registry."""
+    import hashlib
 
-def _has_cpython_runtime(binary: Path) -> bool:
-    """True when the binary embeds a CPython runtime.
-
-    A hand-written launcher that merely *speaks* the probe protocol does not contain
-    CPython's runtime symbols, so it cannot pass as a model interpreter. Scanning is
-    chunked and bounded: the symbols appear in the linked image itself.
-
-    ``ponytail:`` a wrapper that genuinely embeds libpython passes this test. That is
-    accepted, because such a wrapper really can run the official PyTorch evaluator;
-    what is rejected is a launcher that only pretends to.
-    """
     try:
-        with binary.open("rb") as handle:
-            overlap = b""
+        resolved = Path(interpreter).resolve()
+        with resolved.open("rb") as handle:
+            digest = hashlib.sha256()
             while True:
                 chunk = handle.read(1 << 20)
                 if not chunk:
-                    return False
-                window = overlap + chunk
-                if any(symbol in window for symbol in _CPYTHON_SYMBOLS):
-                    return True
-                overlap = window[-32:]
+                    break
+                digest.update(chunk)
+        return digest.hexdigest()
     except OSError:
-        return False
+        return None
 
 
 def _pyvenv_home(pyvenv: Path) -> str:
@@ -351,6 +347,44 @@ def _site_packages_dirs(prefix: Path) -> list[Path]:
     return [candidate for candidate in candidates if candidate.is_dir()]
 
 
+_NORMALIZE_RE = None
+
+def normalize_distribution_name(name: str) -> str:
+    """PEP 503 canonical name: lower-cased, runs of ``-_.`` collapsed to ``-``.
+
+    ``importlib.metadata`` accepts any spelling, and an installed distribution's
+    ``METADATA`` name need not match its directory name, so both sides of the
+    probe/disk reconciliation must be normalised or a correct environment is
+    wrongly reported as forged.
+    """
+    import re
+
+    global _NORMALIZE_RE
+    if _NORMALIZE_RE is None:
+        _NORMALIZE_RE = re.compile(r"[-_.]+")
+    return _NORMALIZE_RE.sub("-", name).strip().lower()
+
+
+_BASELINE_INVENTORIES: dict[str, dict[str, str]] = {}
+
+def _baseline_inventory(prefix: Path) -> dict[str, str]:
+    """The environment's package inventory as first observed, pinned for the session.
+
+    A later read cannot be trusted: an environment can write a dist-info for itself
+    while it is being probed, and that write persists.
+    """
+    try:
+        key = str(Path(prefix).resolve())
+    except OSError:
+        key = str(prefix)
+    if key not in _BASELINE_INVENTORIES:
+        try:
+            _BASELINE_INVENTORIES[key] = installed_distributions_on_disk(Path(prefix))
+        except OSError:
+            _BASELINE_INVENTORIES[key] = {}
+    return _BASELINE_INVENTORIES[key]
+
+
 def installed_distributions_on_disk(prefix: Path) -> dict[str, str]:
     """Installed distributions read from the environment on disk, by the orchestrator.
 
@@ -364,12 +398,15 @@ def installed_distributions_on_disk(prefix: Path) -> dict[str, str]:
             metadata = dist_info / "METADATA"
             name, version = _metadata_name_version(metadata)
             if name:
-                inventory[name.lower()] = version or ""
+                inventory[normalize_distribution_name(name)] = version or ""
+            # A distribution directory may carry a different spelling than METADATA.
+            directory_name = dist_info.name[: -len(".dist-info")]
+            inventory.setdefault(normalize_distribution_name(directory_name), version or "")
         for egg_info in sorted(site_packages.glob("*.egg-info")):
             name, version = _metadata_name_version(egg_info / "PKG-INFO")
             if not name:
                 name, version = egg_info.name[: -len(".egg-info")], ""
-            inventory.setdefault(name.lower(), version)
+            inventory.setdefault(normalize_distribution_name(name), version)
     return inventory
 
 
@@ -389,21 +426,40 @@ def _metadata_name_version(metadata: Path) -> tuple[str | None, str | None]:
     return name, version
 
 
-def _reconcile_probe_with_disk(installed: dict[str, Any], prefix: str) -> str | None:
-    """Return a mismatch reason when a probe disagrees with the on-disk environment."""
-    inventory = installed_distributions_on_disk(Path(prefix))
+def _reconcile_probe_with_disk(installed: dict[str, Any], prefix: str,
+                               inventory: dict[str, str] | None = None,
+                               base_prefix: str | None = None) -> tuple[str | None, str | None]:
+    """Compare a dependency probe's answers with the environment as it is on disk.
+
+    Returns ``(verdict, reason)`` where verdict is ``"forged"`` when disk contradicts the
+    probe, ``"unverified"`` when a declared package has no on-disk installation at all,
+    and ``None`` when the answers agree with disk.
+
+    A distribution the orchestrator cannot find on disk is *not* evidence that the
+    environment is forged: editable installs, ``.pth``-exposed projects, and
+    ``system_site_packages`` environments legitimately lack a local ``dist-info``. Such
+    a requirement is therefore reported as unverified rather than accepted, and the
+    environment never reaches RUNTIME_READY on the strength of a self-report alone.
+    """
+    on_disk = dict(inventory) if inventory is not None else installed_distributions_on_disk(Path(prefix))
+    if base_prefix and str(base_prefix) != str(prefix):
+        # ``system_site_packages`` environments resolve some requirements from the base.
+        for name, version in installed_distributions_on_disk(Path(base_prefix)).items():
+            on_disk.setdefault(name, version)
+
     for name, version in installed.items():
         if name.startswith("__") and name.endswith("__"):
             continue
         if version is None:
-            # The probe could not find it; the normal missing-dependency path reports it.
+            # The normal missing-dependency path reports this.
             continue
-        on_disk = inventory.get(str(name).lower())
-        if on_disk is None:
-            return f"{name} is reported by the probe but is not installed on disk"
-        if str(version) != on_disk:
-            return f"{name} probe reports {version} but disk records {on_disk}"
-    return None
+        recorded = on_disk.get(normalize_distribution_name(str(name)))
+        if recorded is None:
+            return "unverified", (f"{name} is reported by the probe but has no on-disk "
+                                  f"installation in {prefix}")
+        if recorded and str(version) != recorded:
+            return "forged", f"{name} probe reports {version} but disk records {recorded}"
+    return None, None
 
 
 def _probe_prefix_mismatch(payload: dict[str, Any], report: EnvironmentReport,
@@ -538,6 +594,15 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         if cached is not None:
             return cached
 
+    # Read the on-disk package inventory *before* any code inside the environment runs:
+    # an environment can create a dist-info for itself from a sitecustomize module, so a
+    # post-probe read would confirm a fabrication. The FIRST observation is remembered
+    # and reused, because the fabrication stays on disk afterwards and a fresh read would
+    # legitimise it on the next probe.
+    pre_probe_inventory = None
+    if probe:
+        pre_probe_inventory = _baseline_inventory(Path(configured).parent.parent)
+
     identity = _interpreter_identity(interpreter) if probe else None
     report = EnvironmentReport(
         model_id, variable, str(interpreter), "INTERPRETER_PRESENT", "PRESENT",
@@ -553,7 +618,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         return report
 
     if probe:
-        isolated, iso_reason = check_environment_isolation(interpreter)
+        isolated, iso_reason = check_environment_isolation(interpreter, env)
         if not isolated:
             report.tier = TIER_BLOCKED
             report.status = "UNSAFE_INTERPRETER"
@@ -614,13 +679,32 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
                              f"{installed.get('__prefix__')} != {report.prefix}")
             return report
         probe_packages = {k: v for k, v in installed.items() if not k.startswith("__")}
-        discrepancy = _reconcile_probe_with_disk(probe_packages, str(report.prefix or ""))
-        if discrepancy:
+        discrepancy = None
+        if pre_probe_inventory is not None:
+            post_probe_inventory = installed_distributions_on_disk(Path(str(report.prefix or "")))
+            baseline = _baseline_inventory(Path(str(report.prefix or "")))
+            invented = sorted(set(post_probe_inventory) - set(baseline))
+            if invented:
+                report.tier = TIER_BLOCKED
+                report.status = "DEPENDENCY_PROBE_FORGED"
+                report.reason = ("the environment created distributions while it was probed: "
+                                 f"{', '.join(invented[:3])}")
+                return report
+        current_inventory = installed_distributions_on_disk(Path(str(report.prefix or "")))
+        verdict, reason = _reconcile_probe_with_disk(
+            probe_packages, str(report.prefix or ""), inventory=current_inventory,
+            base_prefix=str(report.base_prefix or ""))
+        if verdict == "forged":
             # A probe answer that contradicts the environment on disk means the probe
             # was answered by something other than the environment itself.
             report.tier = TIER_BLOCKED
             report.status = "DEPENDENCY_PROBE_FORGED"
-            report.reason = discrepancy
+            report.reason = reason
+            return report
+        if verdict == "unverified":
+            report.tier = TIER_REQUIREMENTS_UNVERIFIED
+            report.status = "DEPENDENCY_INSTALLATION_UNVERIFIED"
+            report.reason = reason
             return report
         installed.pop("__prefix__", None)
         installed.pop("__base_prefix__", None)
@@ -921,6 +1005,7 @@ def forget_environment(interpreter: str | None = None) -> None:
     """Drop cached verifications (all, or those for one interpreter path)."""
     if interpreter is None:
         _VERIFIED_ENVIRONMENTS.clear()
+        _BASELINE_INVENTORIES.clear()
         return
     for key in [key for key, report in _VERIFIED_ENVIRONMENTS.items() if report.interpreter == interpreter]:
         _VERIFIED_ENVIRONMENTS.pop(key, None)

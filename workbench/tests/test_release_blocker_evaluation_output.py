@@ -584,7 +584,8 @@ def test_an_environment_cannot_forge_its_own_package_inventory(tmp_path, monkeyp
     report = runtime.verify_environment(model, probe=True)
 
     assert report.tier != "RUNTIME_READY", "a forged package inventory must never verify"
-    assert report.status == "DEPENDENCY_PROBE_FORGED", report.status
+    assert report.status == "DEPENDENCY_INSTALLATION_UNVERIFIED", report.status
+    assert "no on-disk installation" in (report.reason or "")
     with pytest.raises(RuntimeError):
         runtime.python_executable(model)
 
@@ -633,3 +634,53 @@ def test_legacy_egg_info_install_invalidates_cache(tmp_path, monkeypatch):
     refreshed = runtime.verify_environment(model, probe=True)
     assert refreshed.tier != "RUNTIME_READY", "an egg-info rewrite must invalidate the cache"
     assert refreshed.status == "DEPENDENCY_VERSION_MISMATCH", refreshed.status
+
+
+def test_an_undeclared_file_does_not_change_a_directory_checkpoint_identity(env):
+    """A run directory may contain undeclared files; identity is its declared members."""
+    directory_checkpoint = env["tmp"] / "run_directory"
+    directory_checkpoint.mkdir()
+    (directory_checkpoint / "config.json").write_text("{}")
+    member = directory_checkpoint / "trained_model.pth"
+    member.write_bytes(b"state-v1")
+    members = [{"filename": "config.json", "path": str(directory_checkpoint / "config.json"),
+                "sha256": None},
+               {"filename": "trained_model.pth", "path": str(member), "sha256": None}]
+    directory_plan = em.EvaluationPlan(
+        "dcnet", "fashioniq_run_directory", "fashioniq_full_gallery_ref_excluded",
+        env["tmp"] / "FashionIQ", env["source"], directory_checkpoint, env["source"],
+        reporting_script(env["tmp"]), PIN, PIN, directory_members=members)
+
+    run_id = "undeclared-file-run"
+    assert em.execute(directory_plan, env["config"], run_id=run_id) == 0
+    proof = em.completion_proof_path(env["config"], directory_plan, run_id)
+
+    # An undeclared training log appears afterwards: the proof must remain valid.
+    (directory_checkpoint / "training_log.txt").write_text("epoch 1\n")
+    assert em.validate_run_manifest(directory_plan, proof, run_id=run_id,
+                                    output_root=em.artifact_root(env["config"]),
+                                    config=env["config"], require_checksum=True,
+                                    require_environment_identity=True)
+
+    # ...but a declared member changing must invalidate it.
+    member.write_bytes(b"state-v2-tampered")
+    with pytest.raises(em.EvaluationOutputError, match="checkpoint digest"):
+        em.validate_run_manifest(directory_plan, proof, run_id=run_id,
+                                 output_root=em.artifact_root(env["config"]),
+                                 config=env["config"], require_checksum=True,
+                                 require_environment_identity=True)
+
+
+def test_directory_checkpoint_digest_distinguishes_member_names(env):
+    """Swapping which file holds which content must not preserve a digest."""
+    from workbench.backend.registry import sha256_file
+
+    first = env["tmp"] / "swap_a"
+    second = env["tmp"] / "swap_b"
+    for directory, contents in ((first, (b"AA", b"BB")), (second, (b"BB", b"AA"))):
+        directory.mkdir()
+        (directory / "a.pt").write_bytes(contents[0])
+        (directory / "b.pt").write_bytes(contents[1])
+
+    names = ["a.pt", "b.pt"]
+    assert sha256_file(first, required_files=names) != sha256_file(second, required_files=names)

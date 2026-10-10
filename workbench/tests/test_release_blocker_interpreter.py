@@ -515,27 +515,167 @@ def test_metadata_rewrite_in_place_invalidates_cache(tmp_path, monkeypatch):
     assert refreshed.status == "DEPENDENCY_VERSION_MISMATCH", "rewritten metadata must be noticed"
 
 
-def test_a_native_launcher_without_a_cpython_runtime_is_rejected(tmp_path: Path):
-    """A compiled launcher that merely speaks the probe protocol is not an interpreter.
+def test_a_declared_interpreter_digest_is_enforced(tmp_path, monkeypatch):
+    """A pinned interpreter digest is how a launcher is excluded by policy.
 
-    It carries no CPython runtime, so it must be rejected on the binary itself rather
-    than on anything it answers.
+    An orchestrator cannot distinguish a genuine CPython from a program that speaks the
+    same protocol, because the program *is* what it executes. The registry therefore
+    records the interpreter digest an operator pinned, and a mismatch is rejected.
     """
-    launcher_dir = tmp_path / "launcher" / "bin"
-    launcher_dir.mkdir(parents=True)
-    (tmp_path / "launcher" / "pyvenv.cfg").write_text("home = /usr/bin\n")
-    (tmp_path / "launcher" / "lib" / "python3.13" / "site-packages").mkdir(parents=True)
-    launcher = launcher_dir / "python"
-    # ELF header plus filler: native-looking, but no CPython symbols.
-    launcher.write_bytes(b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 8184 + b"echo json")
-    launcher.chmod(0o755)
+    interpreter = make_venv(tmp_path)
+    install_stub(interpreter, "stubdep", "1.2.3")
+    monkeypatch.setenv("DIGEST_VAR", str(interpreter))
+    digest = runtime._interpreter_digest(interpreter)
+    assert digest
 
-    assert runtime._has_cpython_runtime(launcher) is False
-    ok, reason = check_environment_isolation(launcher)
-    assert ok is False
-    # Rejected on its own bytes, not on anything it answered.
-    assert "identity" in reason or "CPython runtime" in reason
+    matching = {"model_id": "m", "environment_required": True,
+                "environment": {"python_env_var": "DIGEST_VAR", "packages": ["stubdep==1.2.3"],
+                                "interpreter_sha256": digest}}
+    forget_environment()
+    assert runtime.verify_environment(matching, probe=True).tier == "RUNTIME_READY"
+
+    mismatched = {"model_id": "m", "environment_required": True,
+                  "environment": {"python_env_var": "DIGEST_VAR", "packages": ["stubdep==1.2.3"],
+                                  "interpreter_sha256": "0" * 64}}
+    forget_environment()
+    report = runtime.verify_environment(mismatched, probe=True)
+    assert report.status == "UNSAFE_INTERPRETER", report.status
+    assert "digest mismatch" in (report.reason or "")
+    with pytest.raises(RuntimeError):
+        runtime.python_executable(mismatched)
 
 
-def test_a_real_interpreter_is_recognised_as_embedding_cpython():
-    assert runtime._has_cpython_runtime(Path(sys.executable).resolve()) is True
+def test_an_unpinned_interpreter_digest_is_not_required(tmp_path, monkeypatch):
+    """UNKNOWN/absent digest means unpinned; the environment is judged on its merits."""
+    interpreter = make_venv(tmp_path)
+    install_stub(interpreter, "stubdep", "1.2.3")
+    monkeypatch.setenv("UNPINNED_VAR", str(interpreter))
+    for value in (None, "UNKNOWN"):
+        environment = {"python_env_var": "UNPINNED_VAR", "packages": ["stubdep==1.2.3"]}
+        if value is not None:
+            environment["interpreter_sha256"] = value
+        model = {"model_id": "m", "environment_required": True, "environment": environment}
+        forget_environment()
+        assert runtime.verify_environment(model, probe=True).tier == "RUNTIME_READY"
+
+
+def test_distribution_names_are_normalized_on_both_sides(tmp_path, monkeypatch):
+    """PEP 503 normalization: '-' and '_' spellings must reconcile identically."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        dist = site_packages / "annotated_doc-0.0.4.dist-info"
+        dist.mkdir(parents=True, exist_ok=True)
+        # The directory spelling and the METADATA spelling deliberately differ.
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: annotated-doc\nVersion: 0.0.4\n")
+        break
+    monkeypatch.setenv("NORMALIZE_VAR", str(interpreter))
+
+    for declared in ("annotated_doc==0.0.4", "annotated-doc==0.0.4", "Annotated.Doc==0.0.4"):
+        model = {"model_id": "m", "environment_required": True,
+                 "environment": {"python_env_var": "NORMALIZE_VAR", "packages": [declared]}}
+        forget_environment()
+        report = runtime.verify_environment(model, probe=True)
+        assert report.tier == "RUNTIME_READY", f"{declared}: {report.status} {report.reason}"
+
+
+def test_distribution_name_normalization_is_pep503():
+    assert runtime.normalize_distribution_name("PyYAML") == "pyyaml"
+    assert runtime.normalize_distribution_name("annotated_doc") == "annotated-doc"
+    assert runtime.normalize_distribution_name("Annotated.Doc") == "annotated-doc"
+    assert runtime.normalize_distribution_name("open_clip_torch") == "open-clip-torch"
+    assert runtime.normalize_distribution_name("comet_ml") == "comet-ml"
+
+
+def test_an_environment_cannot_fabricate_a_distribution_while_being_probed(tmp_path, monkeypatch):
+    """The on-disk inventory is snapshotted before the environment runs any code."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        site_packages.joinpath("sitecustomize.py").write_text(
+            "import pathlib\n"
+            "site = pathlib.Path(__file__).parent\n"
+            "dist = site / 'torch-2.0.1.dist-info'\n"
+            "dist.mkdir(exist_ok=True)\n"
+            "(dist / 'METADATA').write_text('Metadata-Version: 2.1\\nName: torch\\nVersion: 2.0.1\\n')\n"
+            "import importlib.metadata as m\n"
+            "_original = m.version\n"
+            "m.version = lambda n: '2.0.1' if n == 'torch' else _original(n)\n")
+        break
+    monkeypatch.setenv("FABRICATE_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "FABRICATE_VAR", "packages": ["torch==2.0.1"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier != "RUNTIME_READY", "a self-fabricated distribution must not verify"
+    assert report.status in ("DEPENDENCY_INSTALLATION_UNVERIFIED", "DEPENDENCY_PROBE_FORGED"), report.status
+    with pytest.raises(RuntimeError):
+        runtime.python_executable(model)
+
+
+def test_editable_style_install_is_never_ready(tmp_path, monkeypatch):
+    """An editable/.pth install has no local dist-info, so it is never verified.
+
+    The dependency probe runs under ``-I``, which ignores ``.pth``-injected paths and
+    the user site, so a requirement visible only through an editable install is simply
+    not found: the requirement stays unresolved and the environment never reaches
+    RUNTIME_READY. Either outcome is acceptable; readiness is not.
+    """
+    import venv as _venv
+
+    import workbench.backend.runtime as runtime
+
+    env_dir = tmp_path / "env"
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+    site_packages = next((env_dir / "lib").glob("python*/site-packages"))
+    project = tmp_path / "checked_out_project"
+    project.mkdir()
+    (site_packages / "editable.pth").write_text(f"{project}\\n")
+    (site_packages / "sitecustomize.py").write_text(
+        "import importlib.metadata as m\\n"
+        "_original = m.version\\n"
+        "m.version = lambda n: '1.0.0' if n == 'myproj' else _original(n)\\n")
+
+    monkeypatch.setenv("EDITABLE_VAR", str(env_dir / "bin" / "python"))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "EDITABLE_VAR", "packages": ["myproj==1.0.0"]}}
+    runtime.forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    # Nothing on disk corroborates the requirement, so it is never accepted.
+    assert report.tier != "RUNTIME_READY", report.status
+    assert report.status in ("DEPENDENCY_INSTALLATION_UNVERIFIED", "DEPENDENCY_MISSING")
+    with pytest.raises(RuntimeError, match="not verified"):
+        runtime.python_executable(model)
+
+
+def test_disk_contradiction_is_never_ready(tmp_path, monkeypatch):
+    """A probe that contradicts an installed distribution is never accepted."""
+    import venv as _venv
+
+    import workbench.backend.runtime as runtime
+
+    env_dir = tmp_path / "env"
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+    site_packages = next((env_dir / "lib").glob("python*/site-packages"))
+    dist = site_packages / "stubdep-1.2.3.dist-info"
+    dist.mkdir()
+    (dist / "METADATA").write_text("Metadata-Version: 2.1\\nName: stubdep\\nVersion: 1.2.3\\n")
+    # The environment insists it has a different version than the one on disk.
+    (site_packages / "sitecustomize.py").write_text(
+        "import importlib.metadata as m\\n"
+        "_original = m.version\\n"
+        "m.version = lambda n: '9.9.9' if n == 'stubdep' else _original(n)\\n")
+
+    monkeypatch.setenv("CONTRADICTION_VAR", str(env_dir / "bin" / "python"))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "CONTRADICTION_VAR", "packages": ["stubdep==9.9.9"]}}
+    runtime.forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier != "RUNTIME_READY", report.status
+    assert report.status in ("DEPENDENCY_PROBE_FORGED", "DEPENDENCY_MISSING",
+                             "DEPENDENCY_VERSION_MISMATCH"), report.status
+    with pytest.raises(RuntimeError, match="not verified"):
+        runtime.python_executable(model)

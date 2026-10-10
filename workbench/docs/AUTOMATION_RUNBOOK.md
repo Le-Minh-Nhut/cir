@@ -288,22 +288,37 @@ site-packages stay visible) and must report the same `sys.prefix` as the verifie
 environment; a mismatch is blocked as `DEPENDENCY_PROBE_ENVIRONMENT_MISMATCH`.
 
 A probe answer is additionally **reconciled against the environment on disk**: the
-orchestrator reads `*.dist-info/METADATA` and `*.egg-info/PKG-INFO` itself, so an
-environment containing a `sitecustomize.py` (or any other module) that monkeypatches
-`importlib.metadata` cannot claim packages it does not have. That contradiction is
-blocked as `DEPENDENCY_PROBE_FORGED`.
+orchestrator reads `*.dist-info/METADATA` and `*.egg-info/PKG-INFO` itself, normalising
+names per PEP 503, so an environment containing a `sitecustomize.py` (or any other
+module) that monkeypatches `importlib.metadata` cannot claim packages it does not have.
 
-### Interpreter binary must embed CPython
+The outcome is deliberately three-way:
 
-Before any probe, the invoked binary must actually embed a CPython runtime
-(`Py_Initialize` / `Py_BytesMain` / `Py_Main`). A hand-written launcher that only
-*speaks* the probe protocol carries no CPython runtime and is rejected on its own bytes.
+| Situation | Verdict |
+|---|---|
+| probe agrees with disk | verified |
+| probe value contradicts an installed distribution, or the environment *creates* a distribution while being probed | `DEPENDENCY_PROBE_FORGED` |
+| probe claims a package with no on-disk installation (editable/`.pth`, `system_site_packages`) | `DEPENDENCY_INSTALLATION_UNVERIFIED` — never `RUNTIME_READY` |
 
-`ponytail:` a wrapper that genuinely embeds libpython passes, and deliberately so — such
-a wrapper really can run the official PyTorch evaluator. What is rejected is a launcher
-that merely pretends. Operators should still point each `WORKBENCH_*_PYTHON` at an
-interpreter created by `venv`/`conda` from the upstream spec and record its digest in
-the run provenance before a PC reproduction run.
+The on-disk baseline is read **before** the environment runs any code and pinned for the
+session, because a fabricated `dist-info` persists and a later read would legitimise it.
+Names containing `-`/`_`/`.` are normalised on both sides, so `openai_clip`, `comet_ml`
+and `pyyaml` reconcile with `openai-clip`, `comet-ml` and `PyYAML` directories.
+
+### Binding the interpreter by digest
+
+An orchestrator cannot distinguish a genuine CPython from a program that speaks the same
+probe protocol — the program *is* what it executes. There is therefore no byte-level test
+that decides this honestly on its own, and the workbench does not pretend otherwise:
+
+- identity, isolation, and the environment's completeness are all verified from the
+  invocation path and from the environment on disk (see above);
+- an operator who needs the interpreter itself pinned records
+  ``environment.interpreter_sha256`` in the registry. The resolved binary is then hashed
+  and a mismatch is blocked as ``UNSAFE_INTERPRETER``. ``UNKNOWN``/absent means unpinned.
+
+Before a PC reproduction run, create each ``WORKBENCH_*_PYTHON`` with ``venv``/``conda``
+from the upstream spec and record its digest in the model registry.
 
 ### Verification reuse
 
@@ -318,6 +333,11 @@ in-place member rewrite invalidates cached verification. Entries are keyed per
 and metadata only, so a same-size in-place edit inside one of its members can still go
 unnoticed; raise `_FINGERPRINT_MEMBER_LIMIT` or hash members if a stale verification is
 ever observed on a real model environment.
+
+Directory/bundle checkpoint digests hash the **member name list first** (length-prefixed),
+then each member's name and bytes, so adding or removing an undeclared file in a run
+directory cannot re-identify the artifact, and member-name/content substitutions are
+detected.
 
 `ponytail:` a same-size, same-mtime rewrite of a package member is likewise invisible to
 an mtime/size fingerprint. Hashing package contents would cost seconds per probe; the

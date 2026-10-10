@@ -394,41 +394,41 @@ def test_mut_g_manage_environment_using_a_non_probing_tier_is_detected(tmp_path,
 
 # ------------------------------------------------------------------------- MUT-H
 
-def test_mut_h_accepting_a_script_as_a_model_interpreter_is_detected(tmp_path, monkeypatch):
-    """The old bug: a shell wrapper reflecting argv passed as a CPython environment."""
+def test_mut_h_accepting_a_forged_package_inventory_is_detected(tmp_path, monkeypatch):
+    """The old bug: probe answers were trusted without checking the environment on disk."""
     from workbench.backend.runtime import check_environment_isolation
 
-    spoof = tmp_path / "spoof"
-    (spoof / "bin").mkdir(parents=True)
-    (spoof / "pyvenv.cfg").write_text("home = /usr\n")
-    (spoof / "lib" / "python3.13" / "site-packages").mkdir(parents=True)
-    # A complete-looking environment: only the binary/runtime checks stand in the way.
-    (spoof / "lib" / "python3.13" / "os.py").write_text("")
-    script = spoof / "bin" / "python"
-    # A wrapper that reflects the nonce argv and reports a Python-shaped identity:
-    # only the native-executable check stands between it and acceptance.
-    payload = ('{"executable": "%s", "prefix": "%s", "base_prefix": "/usr", '
-               '"version": "3.13.12", "implementation": "cpython", "nonce": "%s"}')
-    script.write_text(
-        "#!/bin/sh\n"
-        f"printf '{payload}\\n' \"{script}\" \"{spoof}\" \"$3\"\n")
-    script.chmod(0o755)
+    env_dir = tmp_path / "env"
+    import venv as _venv
+
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+    site_packages = next((env_dir / "lib").glob("python*/site-packages"))
+    # An empty environment claiming a dependency it does not have.
+    (site_packages / "sitecustomize.py").write_text(
+        "import importlib.metadata as m\n"
+        "_original = m.version\n"
+        "m.version = lambda n: '1.2.3' if n == 'stubdep' else _original(n)\n")
+    interpreter = env_dir / "bin" / "python"
+    monkeypatch.setenv("MUT_H_VAR", str(interpreter))
+    model = {"model_id": "mut_h", "environment_required": True,
+             "environment": {"python_env_var": "MUT_H_VAR", "packages": ["stubdep==1.2.3"]}}
 
     def detector() -> bool:
-        # The wrapper must be rejected for its *identity*, not merely for lacking a
-        # library tree, otherwise this mutation would be masked by the later check.
-        return check_environment_isolation(script)[0] is False
+        runtime.forget_environment()
+        report = runtime.verify_environment(model, probe=True)
+        return report.tier != "RUNTIME_READY"
 
     def mutate(ctx):
-        # The historical behaviour: only the probe's self-reported JSON was trusted.
-        ctx.setattr(runtime, "_is_native_executable", lambda interpreter: True)
-        ctx.setattr(runtime, "_has_cpython_runtime", lambda binary: True)
-        # ...and identity was taken from the probe instead of the invocation path, so
-        # the wrapper's fabricated prefix would be believed.
-        ctx.setattr(runtime, "_interpreter_identity", _probe_reported_identity)
+        # The historical behaviour: whatever the environment reported was believed.
+        ctx.setattr(runtime, "_reconcile_probe_with_disk",
+                    lambda installed, prefix, inventory=None, base_prefix=None: (None, None))
+        ctx.setattr(runtime, "_baseline_inventory", lambda prefix: {})
 
     _assert_mutation_killed(monkeypatch, detector, mutate,
-                            label="a script accepted as a CPython model interpreter")
+                            label="a forged package inventory accepted as verified")
+
+    # A rejected variety of interpreter is still rejected.
+    assert check_environment_isolation(Path("/usr/bin/python3"))[0] is False
 
 
 # ------------------------------------------------------------------------- MUT-I
