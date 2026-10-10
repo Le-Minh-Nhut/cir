@@ -112,6 +112,13 @@ git diff --check
 | A GPU-deferred report skipped dependency evidence | dependency-probe guard precedes the CUDA branch | INT-09 |
 | Models without an isolated environment got a bare `"python"` command | such models use the workbench interpreter explicitly | ENV-01 |
 | A checkout elsewhere sharing a model's `source_dir` name borrowed its allowlist | the allowlist requires the configured `WORKBENCH_THIRD_PARTY_ROOT/<source_dir>` | SRC-01..SRC-10 |
+| A compiled/shell launcher reflecting argv passed as CPython | interpreter identity is derived from the invocation path and an `-I` nonce probe, not from the target's self-report | `test_a_wrapper_script_is_never_a_model_interpreter`, `test_relocated_interpreter_with_forged_markers_is_rejected`, MUT-H |
+| A `sitecustomize.py` inside the environment fabricated `sys.prefix` and forged a valid completion proof | prefix comes from the invocation path; dependency/import probes must report the same prefix | `test_a_foreign_environment_probe_cannot_answer_for_the_model_environment` |
+| A legitimate `conda -p` environment was rejected as base conda | base conda detected by an `envs/` directory beside `conda-meta`, never by a path substring | `test_chained_venv_identity_is_never_taken_from_the_chain`, INT-02 |
+| Run directories collided across models sharing a checkpoint id | run directory is qualified by model **and** checkpoint, and a directory collision kills the started child | `test_run_directories_do_not_collide_across_models`, `test_run_directories_are_distinct_per_checkpoint_variant` |
+| Run/bundle directory checkpoints had no digest binding | directory checkpoints are hashed (declared members) and the digest is part of the completion contract | `test_directory_checkpoint_digest_is_part_of_the_completion_contract` |
+| Cache survived an in-place package member rewrite | fingerprint hashes each distribution's `RECORD` members | `test_metadata_rewrite_in_place_invalidates_cache` |
+| PE detection matched 4 bytes, accepting a 2-byte `MZ` and rejecting real stubs | header compared as exactly `MZ` | `test_a_wrapper_script_is_never_a_model_interpreter` |
 | A crashed pointer update left a temp file behind | atomic write cleans up and preserves the previous pointer on failure | OUT-13b |
 
 ### Second review round (Gate5/Gate6)

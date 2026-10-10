@@ -21,6 +21,26 @@ from workbench.backend.runtime import check_environment_isolation, python_execut
 import workbench.scripts.evaluate_models as em
 
 
+def _probe_reported_identity(interpreter):
+    """The historical identity: whatever the probe said about itself."""
+    import json as _json
+    import secrets as _secrets
+
+    if not runtime._is_native_executable(interpreter):
+        return None
+    nonce = _secrets.token_hex(16)
+    ok, out, _ = runtime._run_probe(interpreter, runtime._PROBE_CODE, args=(nonce,))
+    if not ok or not out:
+        return None
+    try:
+        identity = _json.loads(out.splitlines()[-1])
+    except (ValueError, IndexError):
+        return None
+    if not isinstance(identity, dict) or identity.get("nonce") != nonce:
+        return None
+    return identity
+
+
 def _probe_false_selection(runtime_module, model) -> str:
     report = runtime_module.verify_environment(model, probe=False)
     if report.tier == "RUNTIME_READY" and report.interpreter:
@@ -388,11 +408,16 @@ def test_mut_h_accepting_a_script_as_a_model_interpreter_is_detected(tmp_path, m
     script.chmod(0o755)
 
     def detector() -> bool:
+        # The wrapper must be rejected for its *identity*, not merely for lacking a
+        # library tree, otherwise this mutation would be masked by the later check.
         return check_environment_isolation(script)[0] is False
 
     def mutate(ctx):
         # The historical behaviour: only the probe's self-reported JSON was trusted.
         ctx.setattr(runtime, "_is_native_executable", lambda interpreter: True)
+        # ...and identity was taken from the probe instead of the invocation path, so
+        # the wrapper's fabricated prefix would be believed.
+        ctx.setattr(runtime, "_interpreter_identity", _probe_reported_identity)
 
     _assert_mutation_killed(monkeypatch, detector, mutate,
                             label="a script accepted as a CPython model interpreter")

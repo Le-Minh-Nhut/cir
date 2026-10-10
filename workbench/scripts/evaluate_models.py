@@ -158,6 +158,16 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
             json.dumps(directory_members, sort_keys=True).encode("utf-8")
         ).hexdigest()
 
+    checkpoint_digest = None
+    if checkpoint_file.is_file():
+        checkpoint_digest = sha256_file(checkpoint_file)
+    elif checkpoint_file.is_dir():
+        required = [member["filename"] for member in (directory_members or [])] or None
+        try:
+            checkpoint_digest = sha256_file(checkpoint_file, required_files=required)
+        except (OSError, ValueError):
+            checkpoint_digest = None
+
     return EvaluationPlan(
         model["model_id"],
         checkpoint["checkpoint_id"],
@@ -174,6 +184,7 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
         bundle_manifest_digest=bundle_manifest_digest,
         artifact_type=artifact_type,
         directory_members=directory_members,
+        checkpoint_sha256=checkpoint_digest,
     ), []
 
 
@@ -225,7 +236,13 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     except OSError as error:
         raise RuntimeError(f"cannot start the official command {plan.command[0]!r}: {error}") from error
 
-    directory.mkdir(parents=True, exist_ok=False)
+    try:
+        directory.mkdir(parents=True, exist_ok=False)
+    except BaseException:
+        # The process already started; a directory collision must not orphan it.
+        process.kill()
+        process.wait()
+        raise
     try:
         with (directory / "stdout.log").open("w", encoding="utf-8", newline="") as stdout, \
                 (directory / "stderr.log").open("w", encoding="utf-8", newline="") as stderr:
@@ -334,18 +351,41 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
     declared_checkpoint = _first(payload, _CHECKPOINT_SHA_KEYS)
     if declared_checkpoint is None:
         raise EvaluationOutputError("declared output does not state its checkpoint digest")
-    if plan.checkpoint.is_file():
-        from workbench.backend.registry import sha256_file as _sha
+    # The checkpoint identity is part of the completion contract for *every* artifact
+    # type, including run/bundle directories.
+    from workbench.backend.registry import sha256_file as _sha
 
-        actual_checkpoint = _sha(plan.checkpoint)
-        if str(declared_checkpoint) != actual_checkpoint:
-            raise EvaluationOutputError(
-                "declared output checkpoint digest does not match the selected checkpoint"
-            )
-    elif plan.checkpoint_sha256 is not None and str(declared_checkpoint) != plan.checkpoint_sha256:
+    def _hash_checkpoint() -> str | None:
+        checkpoint = plan.checkpoint
+        # A placeholder path (unresolved registry entry) is not a checkpoint.
+        if str(checkpoint) in (".", "") or not checkpoint.exists():
+            return None
+        try:
+            if checkpoint.is_file():
+                return _sha(checkpoint)
+            if checkpoint.is_dir():
+                required = [m["filename"] for m in (plan.directory_members or [])] or None
+                return _sha(checkpoint, required_files=required)
+        except (OSError, ValueError):
+            return None
+        return None
+
+    live_digest = _hash_checkpoint() or plan.checkpoint_sha256
+    if live_digest is not None and str(declared_checkpoint) != live_digest:
         raise EvaluationOutputError(
-            "declared output checkpoint digest does not match the expected checkpoint digest"
+            "declared output checkpoint digest does not match the selected checkpoint"
         )
+    if live_digest is None:
+        # No resolvable checkpoint to re-hash. The proof must at least agree with the
+        # checkpoint digest recorded by its own run-scoped report, which is written by
+        # the run and cannot be transplanted to another run.
+        recorded = _recorded_report_checkpoint_digest(proof_path)
+        if recorded is None:
+            raise EvaluationOutputError("declared output does not reference a run report")
+        if str(declared_checkpoint) != recorded:
+            raise EvaluationOutputError(
+                "declared output checkpoint digest disagrees with its run report"
+            )
 
     if require_checksum:
         digest = payload.get("report_digest")
@@ -418,7 +458,8 @@ def log_dir(config: WorkbenchConfig, plan: EvaluationPlan, timestamp: datetime,
     """
     repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
     identifier = run_id or make_run_id(plan, timestamp)
-    return repo_root / "workbench" / "artifacts" / "logs" / f"{plan.checkpoint_id}__{identifier}"
+    return (repo_root / "workbench" / "artifacts" / "logs"
+            / f"{plan.model_id}__{plan.checkpoint_id}__{identifier}")
 
 
 def expected_run_identity(config: WorkbenchConfig, plan: EvaluationPlan, run_id: str) -> dict[str, str]:
@@ -665,6 +706,18 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
     return code
 
 
+def _recorded_report_checkpoint_digest(proof_path: Path) -> str | None:
+    try:
+        payload = json.loads(proof_path.read_text(encoding="utf-8"))
+        report = Path(str(payload.get("report") or ""))
+        if not report.is_file():
+            return None
+        digest = json.loads(report.read_text(encoding="utf-8")).get("checkpoint_sha256")
+        return str(digest) if digest else None
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return None
+
+
 def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: str | None,
                          config: WorkbenchConfig, checkpoint_file: Path | None = None):
     """Build the pipeline-side validator for one evaluation stage.
@@ -672,6 +725,19 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
     It answers a single question: *did THIS invocation produce a valid completion
     proof?* A leftover report or an old latest pointer is never accepted.
     """
+    def _resolve_checkpoint() -> Path:
+        """The checkpoint this (model, checkpoint id) pair actually evaluates."""
+        if checkpoint_file is not None:
+            return Path(checkpoint_file)
+        try:
+            from workbench.backend.registry import checkpoint_by_id, checkpoint_path, model_by_id
+
+            model = model_by_id(model_id)
+            variant = checkpoint_by_id(model, checkpoint_id)
+            return checkpoint_path(model_id, variant, config.WORKBENCH_CHECKPOINT_ROOT)
+        except Exception:
+            return Path(".")
+
     def _validate(record: dict | None) -> tuple[bool, str | None, dict | None]:
         if not isinstance(record, dict):
             return False, "no evaluation invocation recorded", None
@@ -680,8 +746,17 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
             return False, "recorded evaluation has no invocation run id", None
         reports = reports_root(config)
         proof_path = reports / f"{model_id}_{checkpoint_id}_{run_id}_completion.json"
+        resolved_checkpoint = _resolve_checkpoint()
         plan = EvaluationPlan(model_id, checkpoint_id, protocol, Path("."), Path("."),
-                              checkpoint_file or Path("."), Path("."), [], pin, None)
+                              resolved_checkpoint, Path("."), [], pin, None)
+        if not (resolved_checkpoint.is_file() or resolved_checkpoint.is_dir()):
+            # No checkpoint file to re-hash (e.g. a non-file artifact): bind the proof to
+            # the digest recorded by the run itself, which is run-scoped and unforgeable
+            # across runs.
+            recorded = _recorded_report_checkpoint_digest(proof_path)
+            if recorded is None:
+                return False, "cannot verify the checkpoint identity of this proof", None
+            plan = replace(plan, checkpoint_sha256=recorded)
         try:
             payload = validate_run_manifest(plan, proof_path, run_id=run_id,
                                             output_root=artifact_root(config), config=config,

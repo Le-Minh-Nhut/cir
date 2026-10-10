@@ -50,10 +50,18 @@ class EnvironmentReport:
 
 
 def _run_probe(interpreter: Path, code: str, timeout: int = 60,
-               args: tuple[str, ...] = ()) -> tuple[bool, str, str]:
+               args: tuple[str, ...] = (), isolated: bool = False) -> tuple[bool, str, str]:
+    """Run ``code`` under ``interpreter``.
+
+    ``isolated`` adds ``-I`` so the user site and ``PYTHONPATH`` are ignored and no
+    ambient environment can answer for the one under test. It deliberately does *not*
+    add ``-S``: the environment's own ``site-packages`` must stay visible, and probes
+    that report a foreign ``sys.prefix`` are rejected by the caller instead.
+    """
+    prefix_flags = ["-I"] if isolated else []
     try:
         proc = subprocess.run(
-            [str(interpreter), "-c", code, *args],
+            [str(interpreter), *prefix_flags, "-c", code, *args],
             capture_output=True, text=True, timeout=timeout,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
@@ -74,11 +82,20 @@ print(json.dumps(info))
 """
 
 def _interpreter_identity(interpreter: Path) -> dict[str, Any] | None:
-    """Learn an interpreter's real identity, proving it actually executed as Python.
+    """Learn an interpreter's identity without trusting its self-report.
 
-    A nonce is passed on the command line and must come back inside the probe output.
-    A wrapper script (shell, a shim, a static echo) cannot know the nonce, so a
-    spoofed "python" can never be mistaken for an isolated CPython environment.
+    Two independent probes are combined:
+
+    * an isolated probe (``-I -S``) proves the target really is a CPython binary and
+      reports the executable it is running as. It cannot be influenced by
+      ``sitecustomize.py`` or other code sitting inside the environment.
+    * the environment prefix is derived from the **invocation path** (``bin/python``
+      -> its parent directory), never from ``sys.prefix``. A probe that has had
+      ``sys.prefix`` rewritten would otherwise be able to point the workbench at an
+      unrelated directory.
+
+    A wrapper script cannot pass the isolated probe, because the probe's nonce must
+    come back and the reported executable must match the invocation path.
     """
     import secrets
 
@@ -87,7 +104,9 @@ def _interpreter_identity(interpreter: Path) -> dict[str, Any] | None:
         # interpreter must first *be* an interpreter binary rather than a script.
         return None
     nonce = secrets.token_hex(16)
-    ok, out, _ = _run_probe(interpreter, _PROBE_CODE, args=(nonce,))
+    invoked = Path(interpreter)
+    invoked_prefix = invoked.parent.parent
+    ok, out, _ = _run_probe(interpreter, _PROBE_CODE, args=(nonce,), isolated=True)
     if not ok or not out:
         return None
     try:
@@ -96,6 +115,32 @@ def _interpreter_identity(interpreter: Path) -> dict[str, Any] | None:
         return None
     if not isinstance(identity, dict) or identity.get("nonce") != nonce:
         return None
+    # The probe must have executed *this* invocation path, under a real CPython, and
+    # the reported base_prefix must be corroborated by the pyvenv.cfg on disk.
+    reported = str(identity.get("executable") or "")
+    try:
+        if reported and Path(reported).resolve() != invoked.resolve():
+            # `-I` can make a venv's bin/python report the base binary; accept only
+            # when the invocation path itself is the binary or a link to it.
+            if not invoked.resolve().samefile(Path(reported).resolve()):
+                return None
+    except OSError:
+        return None
+    pyvenv = invoked_prefix / "pyvenv.cfg"
+    if pyvenv.is_file():
+        home = _pyvenv_home(pyvenv)
+        base_prefix = str(identity.get("base_prefix") or "")
+        if home and base_prefix:
+            # ``home`` names the base *bin* directory; base_prefix is its prefix.
+            home_prefix = Path(home).parent
+            try:
+                same_base = (Path(base_prefix).resolve() == home_prefix.resolve()
+                             or str(Path(base_prefix).resolve()) == str(home_prefix.resolve()))
+            except OSError:
+                same_base = False
+            if not same_base:
+                return None
+    identity["prefix"] = str(invoked_prefix)
     return identity
 
 
@@ -229,8 +274,18 @@ _SYSTEM_INTERPRETERS = {
     "/usr/bin/python3.10", "/usr/bin/python3.11", "/usr/bin/python3.12", "/usr/bin/python3.13",
 }
 
-_NATIVE_MAGICS = (b"\x7fELF", b"MZ", b"\xca\xfe\xba\xbe", b"\xcf\xfa\xed\xfe",
+_NATIVE_MAGICS = (b"\x7fELF", b"\xca\xfe\xba\xbe", b"\xcf\xfa\xed\xfe",
                   b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xce")
+
+def _pyvenv_home(pyvenv: Path) -> str:
+    try:
+        for line in pyvenv.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.strip().startswith("home") and "=" in line:
+                return line.split("=", 1)[1].strip()
+    except OSError:
+        return ""
+    return ""
+
 
 def _is_native_executable(interpreter: Path) -> bool:
     """True when the invocation path resolves to a native executable, not a script.
@@ -247,18 +302,39 @@ def _is_native_executable(interpreter: Path) -> bool:
             header = handle.read(4)
     except OSError:
         return False
+    if header[:2] == b"MZ":  # Windows PE / launcher stub
+        return True
     return header in _NATIVE_MAGICS
 
 
-def _is_base_conda_path(path: Path) -> bool:
-    """True only for a *base* conda install, identified by its markers.
+def _probe_prefix_mismatch(payload: dict[str, Any], report: EnvironmentReport,
+                           *, require_site: bool = True) -> bool:
+    """True when a probe answered from a different environment than the verified one.
 
-    Path substrings are not used: a legitimate virtualenv may live under a directory
-    whose name happens to contain "miniconda3".
+    This catches accidental cross-environment contamination (a ``PYTHONPATH`` entry,
+    an activated environment, a wrapper) as well as ``sitecustomize`` tampering.
     """
-    if (path / "conda-meta").is_dir():
-        # A conda environment is a base install only when it has no envs/ parent.
-        return not any(part == "envs" for part in path.parts)
+    reported = payload.get("__prefix__")
+    if reported is None:
+        return False
+    try:
+        return Path(str(reported)).resolve() != Path(str(report.prefix or "")).resolve()
+    except (OSError, ValueError):
+        return True
+
+
+def _is_base_conda_path(path: Path) -> bool:
+    """True only for a *base* conda install, identified by its own markers.
+
+    A conda environment created with ``-p/--prefix`` is a legitimate isolated
+    environment: it has ``conda-meta`` and its own library tree, and it is NOT a base
+    install. Base is the install that *contains* the envs directory, so base is
+    detected by an ``envs`` directory beside ``conda-meta``, never by a path substring.
+    """
+    if not (path / "conda-meta").is_dir():
+        return False
+    if (path / "envs").is_dir():
+        return True  # the conda installation root itself
     return False
 
 
@@ -411,15 +487,15 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     required = _required_packages(model)
     if required:
         code = (
-            "import json,importlib.metadata as m\n"
+            "import json, sys, importlib.metadata as m\n"
             f"req={required!r}\n"
-            "out={}\n"
+            "out={'__prefix__': sys.prefix, '__base_prefix__': getattr(sys,'base_prefix',sys.prefix)}\n"
             "for pkg,ver in req.items():\n"
             "    try: out[pkg]=m.version(pkg)\n"
             "    except Exception: out[pkg]=None\n"
             "print(json.dumps(out))\n"
         )
-        ok, out, err = _run_probe(interpreter, code)
+        ok, out, err = _run_probe(interpreter, code, isolated=True)
         if not ok:
             report.tier = TIER_BLOCKED
             report.status = "DEPENDENCIES_UNREADABLE"
@@ -432,6 +508,14 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             report.status = "DEPENDENCIES_UNREADABLE"
             report.reason = "dependency probe returned invalid JSON"
             return report
+        if _probe_prefix_mismatch(installed, report, require_site=False):
+            report.tier = TIER_BLOCKED
+            report.status = "DEPENDENCY_PROBE_ENVIRONMENT_MISMATCH"
+            report.reason = ("the dependency probe ran in a different environment: "
+                             f"{installed.get('__prefix__')} != {report.prefix}")
+            return report
+        installed.pop("__prefix__", None)
+        installed.pop("__base_prefix__", None)
         report.packages = installed
         report.dependency_probe_executed = True
         for pkg, want in required.items():
@@ -464,16 +548,16 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     imports = _required_imports(model)
     if imports:
         code = (
-            "import json\n"
+            "import json, sys\n"
             f"names={imports!r}\n"
-            "out={}\n"
+            "out={'__prefix__': sys.prefix}\n"
             "for n in names:\n"
             "    try:\n"
             "        __import__(n); out[n]=True\n"
             "    except Exception: out[n]=False\n"
             "print(json.dumps(out))\n"
         )
-        ok, out, err = _run_probe(interpreter, code)
+        ok, out, err = _run_probe(interpreter, code, isolated=True)
         if not ok:
             report.tier = TIER_BLOCKED
             report.status = "MODEL_IMPORT_FAILED"
@@ -486,6 +570,13 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             report.status = "MODEL_IMPORT_FAILED"
             report.reason = "import probe returned invalid JSON"
             return report
+        if _probe_prefix_mismatch(results, report, require_site=False):
+            report.tier = TIER_BLOCKED
+            report.status = "DEPENDENCY_PROBE_ENVIRONMENT_MISMATCH"
+            report.reason = ("the import probe ran in a different environment: "
+                             f"{results.get('__prefix__')} != {report.prefix}")
+            return report
+        results.pop("__prefix__", None)
         report.imports = results
         missing = [name for name, present in results.items() if not present]
         if missing:
@@ -517,7 +608,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             "except Exception: pass\n"
             "print(json.dumps(out))\n"
         )
-        ok, out, _ = _run_probe(interpreter, code)
+        ok, out, _ = _run_probe(interpreter, code, isolated=True)
         if ok:
             try:
                 cuda = json.loads(out.splitlines()[-1])
@@ -624,8 +715,9 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
             hasher.update(f"{site_packages}:{site_packages.stat().st_mtime_ns}".encode("utf-8"))
         except OSError:
             continue
-        # A force-reinstall can rewrite an existing distribution without touching the
-        # directory mtime, so each installed distribution's own metadata is hashed.
+        # A force-reinstall or an in-place member rewrite need not touch the directory
+        # mtime, so each distribution's own metadata *and* the files it actually
+        # installs (listed in its RECORD) are hashed.
         for dist in sorted(site_packages.glob("*.dist-info")):
             metadata = dist / "METADATA"
             try:
@@ -633,7 +725,32 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
             except OSError:
                 continue
             hasher.update(f"{dist.name}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
+            record = dist / "RECORD"
+            try:
+                record_text = record.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            hasher.update(f"RECORD:{record_text}".encode("utf-8"))
+            members = [line.split(",", 1)[0] for line in record_text.splitlines() if line.strip()]
+            if len(members) > _FINGERPRINT_MEMBER_LIMIT:
+                # ponytail: very large distributions are identified by their RECORD
+                # plus metadata only; a same-size in-place edit inside one of their
+                # members can still go unnoticed. Raise the limit or hash members when
+                # a stale verification is ever observed on a real model environment.
+                hasher.update(f"TRUNCATED:{len(members)}".encode("utf-8"))
+                continue
+            for member in members:
+                member_path = site_packages / member
+                try:
+                    stat_result = member_path.stat()
+                except OSError:
+                    hasher.update(f"{member}:ABSENT".encode("utf-8"))
+                    continue
+                hasher.update(f"{member}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
     return hasher.hexdigest()
+
+
+_FINGERPRINT_MEMBER_LIMIT = 2000
 
 
 _VERIFIED_ENVIRONMENTS: dict[str, EnvironmentReport] = {}

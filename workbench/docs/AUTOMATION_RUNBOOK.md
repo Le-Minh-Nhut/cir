@@ -262,22 +262,44 @@ configured path: it raises `RuntimeError` unless the runtime is *verified*.
 ### Linux virtualenv identity
 
 A venv's `bin/python` is routinely a symlink to a shared interpreter binary, so a
-matching `resolve()` proves nothing. Isolation is decided by the interpreter's own
-`sys.prefix` / `sys.base_prefix`, its reported `sys.executable`, and the
-`pyvenv.cfg` / `conda-meta` markers of the **invocation** path. The configured
-invocation path is preserved when launching Python or pip; it is never resolved away.
+matching `resolve()` proves nothing. Identity is established without trusting the
+target's self-report:
 
-Rejected: system Python, base Conda, the active workbench environment, interpreters
-whose reported executable differs from the configured path, and environments
-without markers.
+- **the prefix comes from the invocation path** (`<env>/bin/python` → `<env>`), never
+  from `sys.prefix`, so a probe that has had `sys.prefix` rewritten cannot point the
+  workbench at an unrelated directory;
+- the invocation path must resolve to a **native executable**, not a script, so a
+  shell wrapper cannot answer for an environment;
+- the nonce probe runs under **`-I`** (ignores user site and `PYTHONPATH`) and must
+  return the nonce and the invocation path it executed as;
+- a venv's **`pyvenv.cfg` must name its real base interpreter**;
+- the environment must contain an **installed Python tree** (`lib/python*/site-packages`,
+  `Lib/site-packages`, or `conda-meta`), so a system interpreter dressed in
+  hand-written markers is rejected.
+
+Rejected: system Python, base Conda (an install owning an `envs/` directory), the
+active workbench environment, wrapper scripts, relocated or hand-dressed interpreters,
+and environments with no installed Python tree. A legitimate conda environment created
+with `-p/--prefix`, a copied-`bin` venv, a symlinked venv, and a venv living under a
+path containing "miniconda3" are all accepted.
+
+Dependency and import probes run under `-I` (but **not** `-S`, so the environment's own
+site-packages stay visible) and must report the same `sys.prefix` as the verified
+environment; a mismatch is blocked as `DEPENDENCY_PROBE_ENVIRONMENT_MISMATCH`.
 
 ### Verification reuse
 
 A verified report may be reused only when the contract digest, the invocation path,
-the interpreter binary, the environment markers, and the environment's `lib/`
-directory mtimes are all unchanged. A dependency installed or removed inside the
-environment therefore invalidates cached verification; caching is never keyed on the
-interpreter path alone.
+the interpreter binary, the environment markers, and the installed distribution
+contents are all unchanged. The fingerprint reads each installed distribution's
+`RECORD` and hashes its members, so an install, an uninstall, a force-reinstall, or an
+in-place member rewrite invalidates cached verification. Entries are keyed per
+**model**, never on the interpreter path alone.
+
+`ponytail:` a distribution listing more than 2000 members is identified by its `RECORD`
+and metadata only, so a same-size in-place edit inside one of its members can still go
+unnoticed; raise `_FINGERPRINT_MEMBER_LIMIT` or hash members if a stale verification is
+ever observed on a real model environment.
 
 ### Dependency version policy
 

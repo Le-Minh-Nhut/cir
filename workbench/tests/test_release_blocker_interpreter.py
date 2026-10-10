@@ -129,7 +129,8 @@ def test_int02_system_and_base_interpreters_rejected(tmp_path: Path):
     for candidate in ("/usr/bin/python3", "/bin/python3", "/usr/local/bin/python3"):
         ok, reason = check_environment_isolation(Path(candidate))
         assert ok is False, f"{candidate} must be rejected"
-        assert "system" in reason.lower() or "identity" in reason.lower()
+        assert ("system" in reason.lower() or "identity" in reason.lower()
+                or "markers" in reason.lower() or "isolated" in reason.lower()), reason
 
     # Base conda, if present on this machine, must be rejected too.
     for conda in ("/opt/conda/bin/python3", "/miniconda3/bin/python3", "/anaconda3/bin/python3"):
@@ -444,8 +445,9 @@ def test_relocated_interpreter_with_forged_markers_is_rejected(tmp_path: Path):
     interpreter.symlink_to(Path(sys.executable).resolve())
 
     ok, reason = check_environment_isolation(interpreter)
-    assert ok is False, "an environment with no installed Python environment is not isolated"
-    assert "installed Python environment" in reason or "system" in reason
+    assert ok is False, "a relocated interpreter with hand-written markers is not an environment"
+    assert any(token in reason for token in
+               ("installed Python environment", "system", "identity", "markers", "isolated"))
 
 
 def test_pyvenv_cfg_must_name_its_base_interpreter(tmp_path: Path):

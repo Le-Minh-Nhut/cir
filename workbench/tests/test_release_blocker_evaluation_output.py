@@ -436,7 +436,7 @@ def test_run_directories_are_distinct_per_checkpoint_variant(env):
 
     logs = em.artifact_root(env["config"]) / "logs"
     names = sorted(path.name for path in logs.iterdir())
-    assert names == [f"fashioniq__{shared}", f"fiq_n05__{shared}"]
+    assert names == [f"csmcir__fashioniq__{shared}", f"csmcir__fiq_n05__{shared}"]
     for name in names:
         assert (logs / name / "aggregate_report.json").is_file()
 
@@ -477,3 +477,80 @@ def test_unstartable_command_leaves_no_log_debris_or_burnt_run_id(env):
                              env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
                              env["source"], reporting_script(env["tmp"]), PIN, PIN)
     assert em.execute(good, env["config"], run_id="dead-run-identity") == 0
+
+
+def test_run_directories_do_not_collide_across_models(env):
+    """Two different models sharing a checkpoint id and run id must not collide."""
+    shared = "cross-model-shared-id"
+    scripts = reporting_script(env["tmp"])
+    first = em.EvaluationPlan("csmcir", "fashioniq", "fashioniq_original_split",
+                              env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
+                              env["source"], scripts, PIN, PIN)
+    second = em.EvaluationPlan("hint", "fashioniq", "fashioniq_original_split",
+                               env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
+                               env["source"], scripts, PIN, PIN)
+
+    assert em.execute(first, env["config"], run_id=shared) == 0
+    assert em.execute(second, env["config"], run_id=shared) == 0
+
+    logs = em.artifact_root(env["config"]) / "logs"
+    assert sorted(p.name for p in logs.iterdir()) == [
+        f"csmcir__fashioniq__{shared}", f"hint__fashioniq__{shared}"]
+
+
+def test_directory_checkpoint_digest_is_part_of_the_completion_contract(env):
+    """A run/bundle directory checkpoint must be content-bound, not merely present."""
+    directory_checkpoint = env["tmp"] / "run_directory"
+    directory_checkpoint.mkdir()
+    member = directory_checkpoint / "trained_model.pth"
+    member.write_bytes(b"state-v1")
+    members = [{"filename": "trained_model.pth", "path": str(member), "sha256": None}]
+    directory_plan = em.EvaluationPlan(
+        "dcnet", "fashioniq_run_directory", "fashioniq_full_gallery_ref_excluded",
+        env["tmp"] / "FashionIQ", env["source"], directory_checkpoint, env["source"],
+        reporting_script(env["tmp"]), PIN, PIN, directory_members=members)
+
+    run_id = "dir-checkpoint-run"
+    assert em.execute(directory_plan, env["config"], run_id=run_id) == 0
+    proof = em.completion_proof_path(env["config"], directory_plan, run_id)
+    em.validate_run_manifest(directory_plan, proof, run_id=run_id,
+                             output_root=em.artifact_root(env["config"]), config=env["config"],
+                             require_checksum=True, require_environment_identity=True)
+
+    member.write_bytes(b"state-v2-tampered")
+    with pytest.raises(em.EvaluationOutputError, match="checkpoint digest"):
+        em.validate_run_manifest(directory_plan, proof, run_id=run_id,
+                                 output_root=em.artifact_root(env["config"]), config=env["config"],
+                                 require_checksum=True, require_environment_identity=True)
+
+
+def test_a_foreign_environment_probe_cannot_answer_for_the_model_environment(env, tmp_path, monkeypatch):
+    """A sitecustomize.py inside the environment must not fabricate a verified runtime."""
+    import venv as _venv
+
+    import workbench.backend.runtime as runtime
+
+    interpreter_dir = tmp_path / "fake_env"
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(interpreter_dir)
+    interpreter = interpreter_dir / "bin" / "python"
+    fabricated = tmp_path / "fabricated"
+    (fabricated / "lib" / "python3.13" / "site-packages").mkdir(parents=True)
+    (fabricated / "pyvenv.cfg").write_text("home = /usr/bin\n")
+    site_packages = next((interpreter_dir / "lib").glob("python*/site-packages"))
+    (site_packages / "sitecustomize.py").write_text(
+        "import sys\n"
+        f"sys.prefix = {str(fabricated)!r}\n"
+        "sys.base_prefix = '/usr'\n")
+
+    monkeypatch.setenv("FOREIGN_PROBE_VAR", str(interpreter))
+    runtime.forget_environment()
+    model = {"model_id": "probe_model", "environment_required": True,
+             "environment": {"python_env_var": "FOREIGN_PROBE_VAR", "packages": ["stubdep==1.2.3"]}}
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier != "RUNTIME_READY", "a fabricated prefix must never verify"
+    # Identity is derived from the invocation path, never from what the probe reports,
+    # so the fabricated prefix cannot become the verified environment.
+    assert report.prefix != str(fabricated)
+    with pytest.raises(RuntimeError):
+        runtime.python_executable(model)
