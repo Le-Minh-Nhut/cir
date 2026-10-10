@@ -82,6 +82,10 @@ def _interpreter_identity(interpreter: Path) -> dict[str, Any] | None:
     """
     import secrets
 
+    if not _is_native_executable(interpreter):
+        # argv is not a secret channel: a shell wrapper can reflect the nonce. The
+        # interpreter must first *be* an interpreter binary rather than a script.
+        return None
     nonce = secrets.token_hex(16)
     ok, out, _ = _run_probe(interpreter, _PROBE_CODE, args=(nonce,))
     if not ok or not out:
@@ -182,11 +186,28 @@ def check_environment_isolation(interpreter: Path) -> tuple[bool, str]:
     if Path(prefix).resolve() == Path(base_prefix).resolve() and not has_conda_meta:
         return False, "interpreter prefix is its own base prefix (not isolated)"
 
-    # A directory dressed in venv markers but with no Python library tree is not a
-    # usable environment: a relocated system interpreter must not pass as one.
-    has_library = any((prefix_path / "lib").glob("python*")) or has_conda_meta
-    if not has_library:
-        return False, "environment has no Python library tree"
+
+    # A directory dressed in venv markers but with no installed environment is not a
+    # usable environment: a relocated or hand-prepared system interpreter must not
+    # pass as one. A real venv/conda env has its own site-packages directory.
+    has_env_library = any((prefix_path / "lib").glob("python*/site-packages"))
+    has_env_library = has_env_library or (prefix_path / "Lib" / "site-packages").is_dir()
+    has_env_library = has_env_library or (prefix_path / "lib" / "site-packages").is_dir()
+    if not (has_env_library or has_conda_meta):
+        return False, "environment has no installed Python environment"
+    # A hand-written pyvenv.cfg must at least name the base interpreter it claims.
+    pyvenv = prefix_path / "pyvenv.cfg"
+    if pyvenv.is_file():
+        try:
+            home = next((line.split("=", 1)[1].strip()
+                         for line in pyvenv.read_text(encoding="utf-8", errors="replace").splitlines()
+                         if line.strip().startswith("home") and "=" in line), "")
+        except OSError:
+            home = ""
+        if not home:
+            return False, "pyvenv.cfg does not name its base interpreter"
+        if not Path(home).is_dir():
+            return False, f"pyvenv.cfg home is not a directory: {home}"
 
     # The interpreter must actually live in the environment it claims.
     try:
@@ -207,6 +228,27 @@ _SYSTEM_INTERPRETERS = {
     "/usr/local/bin/python", "/usr/local/bin/python3",
     "/usr/bin/python3.10", "/usr/bin/python3.11", "/usr/bin/python3.12", "/usr/bin/python3.13",
 }
+
+_NATIVE_MAGICS = (b"\x7fELF", b"MZ", b"\xca\xfe\xba\xbe", b"\xcf\xfa\xed\xfe",
+                  b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xce")
+
+def _is_native_executable(interpreter: Path) -> bool:
+    """True when the invocation path resolves to a native executable, not a script.
+
+    Official PyTorch evaluators require a real interpreter binary. Shell scripts,
+    shims, and echo wrappers that merely *report* Python-shaped JSON are rejected.
+    """
+    try:
+        target = Path(interpreter).resolve()
+    except OSError:
+        return False
+    try:
+        with target.open("rb") as handle:
+            header = handle.read(4)
+    except OSError:
+        return False
+    return header in _NATIVE_MAGICS
+
 
 def _is_base_conda_path(path: Path) -> bool:
     """True only for a *base* conda install, identified by its markers.
@@ -573,16 +615,24 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
         hasher.update(f"{marker}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
     # Package directories live under the environment's lib/: their directory mtimes
     # change when a dependency is installed or removed there.
-    for lib in sorted(prefix_path.glob("lib/python*")):
-        try:
-            hasher.update(f"{lib}:{lib.stat().st_mtime_ns}".encode("utf-8"))
-        except OSError:
+    site_packages_dirs = sorted(prefix_path.glob("lib/python*/site-packages"))
+    site_packages_dirs += [prefix_path / "Lib" / "site-packages"]
+    for site_packages in site_packages_dirs:
+        if not site_packages.is_dir():
             continue
-        site_packages = lib / "site-packages"
         try:
             hasher.update(f"{site_packages}:{site_packages.stat().st_mtime_ns}".encode("utf-8"))
         except OSError:
             continue
+        # A force-reinstall can rewrite an existing distribution without touching the
+        # directory mtime, so each installed distribution's own metadata is hashed.
+        for dist in sorted(site_packages.glob("*.dist-info")):
+            metadata = dist / "METADATA"
+            try:
+                stat_result = metadata.stat()
+            except OSError:
+                continue
+            hasher.update(f"{dist.name}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
     return hasher.hexdigest()
 
 
@@ -592,7 +642,8 @@ _VERIFIED_ENVIRONMENTS: dict[str, EnvironmentReport] = {}
 def _cache_key(model: dict[str, Any], require_cuda: bool) -> str:
     env = model.get("environment") or {}
     configured = os.environ.get(env.get("python_env_var") or "", "")
-    return f"{env.get('python_env_var')}|{configured}|{_environment_contract_digest(model)}|cuda={bool(require_cuda)}"
+    return (f"{model.get('model_id')}|{env.get('python_env_var')}|{configured}|"
+            f"{_environment_contract_digest(model)}|cuda={bool(require_cuda)}")
 
 
 def _cache_enabled() -> bool:
@@ -805,7 +856,7 @@ def _recorded_asset_digest(path: Path) -> str | None:
     """SHA-256 recorded when the workbench itself acquired this declared asset."""
     from workbench.backend.operator_config import resolve_config
 
-    root = getattr(resolve_config(), "CIR_REPO_ROOT", None) or Path.cwd()
+    root = getattr(resolve_config(), "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
     manifest = root / "workbench" / "artifacts" / "auxiliary" / "download_manifest.json"
     if not manifest.is_file():
         return None

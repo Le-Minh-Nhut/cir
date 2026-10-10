@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
@@ -213,30 +214,43 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
         "evaluation_output_root": str(output_root),
     }
     directory = log_dir(config, plan, datetime.now(UTC), run_id)
-    directory.mkdir(parents=True, exist_ok=False)
     child_env = dict(os.environ)
     child_env.update({key: str(value) for key, value in environment.items()})
-    with (directory / "stdout.log").open("w", encoding="utf-8", newline="") as stdout, \
-            (directory / "stderr.log").open("w", encoding="utf-8", newline="") as stderr:
+
+    # Start the process first: if it cannot be started at all, nothing is written and
+    # no orphaned log directory or burnt run id is left behind.
+    try:
         process = subprocess.Popen(plan.command, cwd=plan.cwd, text=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=child_env)
+    except OSError as error:
+        raise RuntimeError(f"cannot start the official command {plan.command[0]!r}: {error}") from error
 
-        def tee(stream, destination, terminal):
-            for line in stream:
-                destination.write(line)
-                destination.flush()
-                terminal.write(line)
-                terminal.flush()
+    directory.mkdir(parents=True, exist_ok=False)
+    try:
+        with (directory / "stdout.log").open("w", encoding="utf-8", newline="") as stdout, \
+                (directory / "stderr.log").open("w", encoding="utf-8", newline="") as stderr:
 
-        threads = [
-            threading.Thread(target=tee, args=(process.stdout, stdout, sys.stdout)),
-            threading.Thread(target=tee, args=(process.stderr, stderr, sys.stderr)),
-        ]
-        for thread in threads:
-            thread.start()
-        code = process.wait()
-        for thread in threads:
-            thread.join()
+            def tee(stream, destination, terminal):
+                for line in stream:
+                    destination.write(line)
+                    destination.flush()
+                    terminal.write(line)
+                    terminal.flush()
+
+            threads = [
+                threading.Thread(target=tee, args=(process.stdout, stdout, sys.stdout)),
+                threading.Thread(target=tee, args=(process.stderr, stderr, sys.stderr)),
+            ]
+            for thread in threads:
+                thread.start()
+            code = process.wait()
+            for thread in threads:
+                thread.join()
+    except BaseException:
+        process.kill()
+        process.wait()
+        shutil.rmtree(directory, ignore_errors=True)
+        raise
     return code, directory, environment
 
 
@@ -368,16 +382,15 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
         run_dir = Path(run_directory)
         # The proof must belong to THIS invocation: the run directory is derived from
         # the run id, so a copied or renamed proof can never satisfy a new run.
-        if run_dir.name != run_id:
+        # The run directory embeds both the checkpoint that was evaluated and the
+        # invocation identity, so a copied or renamed proof cannot be re-pointed at a
+        # different run or a different checkpoint.
+        expected_directory = log_dir(config, plan, datetime.now(UTC), run_id) if config is not None else None
+        expected_name = expected_directory.name if expected_directory is not None else f"{plan.checkpoint_id}__{run_id}"
+        if run_dir.name != expected_name:
             raise EvaluationOutputError(
                 f"declared output belongs to run directory {run_dir.name!r}, "
-                f"expected this invocation's {run_id!r}")
-        if config is not None:
-            expected_directory = log_dir(config, plan, datetime.now(UTC), run_id)
-            if run_dir.name != expected_directory.name:
-                raise EvaluationOutputError(
-                    f"declared output run directory {run_dir.name!r} does not match "
-                    f"this invocation's {expected_directory.name!r}")
+                f"expected this invocation's {expected_name!r}")
         if not run_dir.is_dir():
             raise EvaluationOutputError(f"declared output run directory is missing: {run_dir}")
         if not run_dir.resolve().is_relative_to(resolved_root):
@@ -396,10 +409,16 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
     return payload
 
 
-def log_dir(config: WorkbenchConfig, plan: EvaluationPlan, timestamp: datetime, run_id: str | None = None) -> Path:
-    """Where a run's own logs live. One directory per invocation identity."""
+def log_dir(config: WorkbenchConfig, plan: EvaluationPlan, timestamp: datetime,
+            run_id: str | None = None) -> Path:
+    """Where a run's own logs live: one directory per (invocation, checkpoint).
+
+    A single orchestrator invocation may evaluate several checkpoint variants of one
+    model, so the directory is qualified by the checkpoint the run actually used.
+    """
     repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
-    return repo_root / "workbench" / "artifacts" / "logs" / (run_id or make_run_id(plan, timestamp))
+    identifier = run_id or make_run_id(plan, timestamp)
+    return repo_root / "workbench" / "artifacts" / "logs" / f"{plan.checkpoint_id}__{identifier}"
 
 
 def expected_run_identity(config: WorkbenchConfig, plan: EvaluationPlan, run_id: str) -> dict[str, str]:

@@ -290,23 +290,39 @@ def test_mut_f_restoring_prefix_version_matching_is_detected(monkeypatch):
                             label="startswith version matching restored")
 
 
-def test_mut_f_bare_version_declaration_is_exact_not_prefix(monkeypatch, tmp_path):
-    """A bare declaration is an exact pin: 1.12.10 must not satisfy 1.12.1."""
-    monkeypatch.setenv("MUT_F_VAR", str(make_venv(tmp_path)))
+def test_mut_f_bare_version_declaration_is_exact_not_prefix(tmp_path, monkeypatch):
+    """A bare declaration is an exact pin: 1.12.10 must not satisfy 1.12.1.
+
+    Exercised through the production acceptance path (verify_environment), not by
+    calling the parser directly, so a loose-matching regression is caught here.
+    """
+    interpreter = make_venv(tmp_path)
+    install_stub(interpreter, "stubdep", "1.12.10")
+    monkeypatch.setenv("MUT_F_VAR", str(interpreter))
     model = {"model_id": "m", "environment_required": True,
-             "environment": {"python_env_var": "MUT_F_VAR", "pytorch": "1.12.1"}}
-    runtime.forget_environment()
+             "environment": {"python_env_var": "MUT_F_VAR", "packages": ["stubdep"]}}
+    # The registry declares the required version separately, as an exact pin.
+    model["environment"]["packages"] = ["stubdep"]
+    model["environment"]["pytorch"] = "1.12.1"
+    install_stub(interpreter, "torch", "1.12.10")
 
     def detector() -> bool:
         runtime.forget_environment()
-        # The bare declaration must be interpreted as an exact pin.
-        return runtime.declared_requirement("stubdep", "1.12.1") == "==1.12.1"
+        report = runtime.verify_environment(model, probe=True)
+        return report.status == "DEPENDENCY_VERSION_MISMATCH"
 
     def mutate(ctx):
-        ctx.setattr(runtime, "declared_requirement", lambda package, value: value)
+        def prefix_matching(constraint: str, installed: str | None) -> bool:
+            if installed is None:
+                return False
+            want = constraint.removeprefix("==")
+            got = str(installed)
+            return got.startswith(want) or want.startswith(got)
+
+        ctx.setattr(runtime, "version_satisfies", prefix_matching)
 
     _assert_mutation_killed(monkeypatch, detector, mutate,
-                            label="bare version declaration treated as a loose prefix")
+                            label="startswith matching accepted 1.12.10 for a pinned 1.12.1")
 
 
 # ------------------------------------------------------------------------- MUT-G
@@ -337,8 +353,8 @@ def test_mut_g_manage_environment_using_a_non_probing_tier_is_detected(tmp_path,
         return module.status(model, config)["ready"] is True
 
     def mutate(ctx):
-        # The old behaviour: readiness came from a non-probing inspect, whose tier
-        # never reaches RUNTIME_READY, so a correct environment read as blocked.
+        # Old behaviour: readiness came from a non-probing inspect, whose tier never
+        # reaches RUNTIME_READY, so a correct environment read as blocked.
         def never_ready_status(model, config):
             report = runtime.verify_environment(model, probe=False)
             return {"ready": False, "runtime_verified": False,
@@ -349,3 +365,89 @@ def test_mut_g_manage_environment_using_a_non_probing_tier_is_detected(tmp_path,
 
     _assert_mutation_killed(monkeypatch, detector, mutate,
                             label="manage_environment readiness from a non-probing inspect")
+
+
+# ------------------------------------------------------------------------- MUT-H
+
+def test_mut_h_accepting_a_script_as_a_model_interpreter_is_detected(tmp_path, monkeypatch):
+    """The old bug: a shell wrapper reflecting argv passed as a CPython environment."""
+    from workbench.backend.runtime import check_environment_isolation
+
+    spoof = tmp_path / "spoof"
+    (spoof / "bin").mkdir(parents=True)
+    (spoof / "pyvenv.cfg").write_text("home = /usr\n")
+    (spoof / "lib" / "python3.13" / "site-packages").mkdir(parents=True)
+    script = spoof / "bin" / "python"
+    # A wrapper that reflects the nonce argv and reports a Python-shaped identity:
+    # only the native-executable check stands between it and acceptance.
+    payload = ('{"executable": "%s", "prefix": "%s", "base_prefix": "/usr", '
+               '"version": "3.13.12", "implementation": "cpython", "nonce": "%s"}')
+    script.write_text(
+        "#!/bin/sh\n"
+        f"printf '{payload}\\n' \"{script}\" \"{spoof}\" \"$3\"\n")
+    script.chmod(0o755)
+
+    def detector() -> bool:
+        return check_environment_isolation(script)[0] is False
+
+    def mutate(ctx):
+        # The historical behaviour: only the probe's self-reported JSON was trusted.
+        ctx.setattr(runtime, "_is_native_executable", lambda interpreter: True)
+
+    _assert_mutation_killed(monkeypatch, detector, mutate,
+                            label="a script accepted as a CPython model interpreter")
+
+
+# ------------------------------------------------------------------------- MUT-I
+
+def test_mut_i_shared_run_directory_across_checkpoints_is_detected(tmp_path, monkeypatch):
+    """The old bug: one run directory per invocation, colliding across checkpoints."""
+    import importlib.util
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    spec = importlib.util.spec_from_file_location(
+        "evaluate_models_mut", Path("workbench/scripts/evaluate_models.py"))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    from workbench.backend.operator_config import WorkbenchConfig
+
+    repo = tmp_path / "repo"
+    (repo / "source").mkdir(parents=True)
+    checkpoint = repo / "ck.pt"
+    checkpoint.write_bytes(b"x")
+    config = WorkbenchConfig(repo, repo / "d", repo / "F", "127.0.0.1", 8000, 5173,
+                             repo / "ck", repo / "res", repo / "tp")
+    script = repo / "ev.py"
+    script.write_text(
+        "import json\\nprint(json.dumps({'average_recall_at10':55.0,'average_recall_at50':75.0,"
+        "'average_recall':65.0,'dress_recall_at10':60.0,'dress_recall_at50':80.0,"
+        "'shirt_recall_at10':55.0,'shirt_recall_at50':75.0,'toptee_recall_at10':50.0,"
+        "'toptee_recall_at50':70.0}))\\n")
+
+    def make_plan(checkpoint_id: str):
+        return module.EvaluationPlan("csmcir", checkpoint_id, "fashioniq_original_split",
+                                     repo / "F", repo / "source", checkpoint, repo / "source",
+                                     [sys.executable, str(script)], "a" * 40, "a" * 40)
+
+    shared = "shared-run-id-1234"
+
+    def detector() -> bool:
+        try:
+            module.execute(make_plan("fashioniq"), config, run_id=shared)
+            module.execute(make_plan("fiq_n05"), config, run_id=shared)
+        except Exception:
+            return False
+        return True
+
+    def mutate(ctx):
+        # Collapse the run directory back to the bare invocation id.
+        original_log_dir = module.log_dir
+
+        def shared_log_dir(config, plan, timestamp, run_id=None):
+            return original_log_dir(config, plan, timestamp, run_id).parent / (run_id or "x")
+
+        ctx.setattr(module, "log_dir", shared_log_dir)
+
+    _assert_mutation_killed(monkeypatch, detector, mutate,
+                            label="one run directory shared across checkpoint variants")

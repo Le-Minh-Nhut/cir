@@ -415,3 +415,65 @@ def test_out14_resume_does_not_skip_a_failed_or_incomplete_run(env):
     # FAILED here: the run produced no proof for the current run id.
     recorded = pipeline.load_pipeline_state(state)["stages"][stage_id]
     assert recorded["status"] == "FAILED", recorded["status"]
+
+
+# ------------------------------------------------- F4/F7: per-checkpoint runs, no debris
+
+def test_run_directories_are_distinct_per_checkpoint_variant(env):
+    """One invocation identity reused across checkpoint variants must not collide."""
+    shared = "shared-run-identity"
+    scripts = reporting_script(env["tmp"])
+    first = em.EvaluationPlan("csmcir", "fashioniq", "fashioniq_original_split",
+                              env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
+                              env["source"], scripts, PIN, PIN)
+    second = em.EvaluationPlan("csmcir", "fiq_n05", "fashioniq_original_split",
+                               env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
+                               env["source"], scripts, PIN, PIN)
+
+    assert em.execute(first, env["config"], run_id=shared) == 0
+    assert em.execute(second, env["config"], run_id=shared) == 0, \
+        "each checkpoint variant needs its own run directory"
+
+    logs = em.artifact_root(env["config"]) / "logs"
+    names = sorted(path.name for path in logs.iterdir())
+    assert names == [f"fashioniq__{shared}", f"fiq_n05__{shared}"]
+    for name in names:
+        assert (logs / name / "aggregate_report.json").is_file()
+
+
+def test_a_proof_from_another_checkpoint_variant_is_rejected(env):
+    shared = "cross-checkpoint-proof"
+    scripts = reporting_script(env["tmp"])
+    first = em.EvaluationPlan("csmcir", "fashioniq", "fashioniq_original_split",
+                              env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
+                              env["source"], scripts, PIN, PIN)
+    assert em.execute(first, env["config"], run_id=shared) == 0
+    proof = em.completion_proof_path(env["config"], first, shared)
+
+    other = em.EvaluationPlan("csmcir", "fiq_n05", "fashioniq_original_split",
+                              env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
+                              env["source"], scripts, PIN, PIN)
+    with pytest.raises(em.EvaluationOutputError):
+        em.validate_run_manifest(other, proof, run_id=shared,
+                                 output_root=em.artifact_root(env["config"]),
+                                 config=env["config"], require_checksum=True,
+                                 require_environment_identity=True)
+
+
+def test_unstartable_command_leaves_no_log_debris_or_burnt_run_id(env):
+    logs = em.artifact_root(env["config"]) / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    before = sorted(path.name for path in logs.iterdir())
+
+    broken = em.EvaluationPlan("csmcir", "ckpt_v1", "fashioniq_original_split",
+                               env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
+                               env["source"], ["/nonexistent/interpreter", "x"], PIN, PIN)
+    with pytest.raises(RuntimeError, match="cannot start"):
+        em.execute(broken, env["config"], run_id="dead-run-identity")
+
+    assert sorted(path.name for path in logs.iterdir()) == before, "no orphaned log directory"
+    # The run id was not burnt: it can still be used once the command is valid.
+    good = em.EvaluationPlan("csmcir", "ckpt_v1", "fashioniq_original_split",
+                             env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
+                             env["source"], reporting_script(env["tmp"]), PIN, PIN)
+    assert em.execute(good, env["config"], run_id="dead-run-identity") == 0

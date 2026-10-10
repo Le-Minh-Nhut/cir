@@ -412,3 +412,102 @@ def test_manage_environment_reports_verified_readiness_with_real_venv(tmp_path, 
     blocked = module.status(model, config)
     assert blocked["ready"] is False
     assert blocked["interpreter_status"] == "DEPENDENCY_MISSING", blocked
+
+
+# ------------------------------------------- interpreter identity cannot be forged (F1/F2)
+
+def test_a_wrapper_script_is_never_a_model_interpreter(tmp_path: Path):
+    """A shell wrapper can reflect argv; it must still never pass as CPython."""
+    spoof = tmp_path / "spoof"
+    (spoof / "bin").mkdir(parents=True)
+    (spoof / "pyvenv.cfg").write_text("home = /usr\n")
+    (spoof / "lib" / "python3.13" / "site-packages").mkdir(parents=True)
+    script = spoof / "bin" / "python"
+    payload = ('{"executable": "%s", "prefix": "%s", "base_prefix": "/usr", '
+               '"version": "3.13.12", "implementation": "cpython", "nonce": "%s"}')
+    script.write_text("#!/bin/sh\n"
+                      f"printf '{payload}\\\\n' \"{script}\" \"{spoof}\" \"$3\"\n")
+    script.chmod(0o755)
+
+    ok, reason = check_environment_isolation(script)
+    assert ok is False, "a shell wrapper must never be accepted as a Python environment"
+    assert "identity" in reason or "CPython" in reason
+
+
+def test_relocated_interpreter_with_forged_markers_is_rejected(tmp_path: Path):
+    """Hand-written venv markers around a relocated system interpreter are not an env."""
+    dressed = tmp_path / "dressed"
+    (dressed / "bin").mkdir(parents=True)
+    (dressed / "lib" / "python3.13").mkdir(parents=True)
+    (dressed / "pyvenv.cfg").write_text("home = /usr\n")
+    interpreter = dressed / "bin" / "python"
+    interpreter.symlink_to(Path(sys.executable).resolve())
+
+    ok, reason = check_environment_isolation(interpreter)
+    assert ok is False, "an environment with no installed Python environment is not isolated"
+    assert "installed Python environment" in reason or "system" in reason
+
+
+def test_pyvenv_cfg_must_name_its_base_interpreter(tmp_path: Path):
+    import venv as _venv
+
+    env_dir = tmp_path / "env"
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+    (env_dir / "pyvenv.cfg").write_text("include-system-site-packages = false\n")
+
+    ok, reason = check_environment_isolation(env_dir / "bin" / "python")
+    assert ok is False
+    assert "pyvenv.cfg" in reason
+
+
+def test_chained_venv_identity_is_never_taken_from_the_chain(tmp_path: Path):
+    """Identity comes from the environment the interpreter runs as, and must be complete."""
+    import venv as _venv
+
+    first, second = tmp_path / "venv_a", tmp_path / "venv_b"
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(first)
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(second)
+    (first / "bin" / "python").unlink()
+    (first / "bin" / "python").symlink_to(second / "bin" / "python")
+
+    ok, reason = check_environment_isolation(first / "bin" / "python")
+    assert ok is True, reason
+    assert runtime._interpreter_identity(first / "bin" / "python")["prefix"] == str(first)
+
+    (second / "lib").rename(second / "lib_moved")
+    broken = check_environment_isolation(second / "bin" / "python")
+    assert broken[0] is False, "an environment with no library tree must be rejected"
+
+
+# --------------------------------------------- cache identity is per model (F6) and per content (F5)
+
+def test_cache_entries_are_not_shared_between_models(tmp_path, monkeypatch):
+    """Two models sharing a variable and contract must not share the cached report."""
+    interpreter = make_venv(tmp_path)
+    install_stub(interpreter, "stubdep", "1.2.3")
+    monkeypatch.setenv("SHARED_MODEL_VAR", str(interpreter))
+    forget_environment()
+    contract = {"python_env_var": "SHARED_MODEL_VAR", "packages": ["stubdep==1.2.3"]}
+    alpha = {"model_id": "model_alpha", "environment_required": True, "environment": dict(contract)}
+    beta = {"model_id": "model_beta", "environment_required": True, "environment": dict(contract)}
+
+    first = runtime.verify_environment(alpha, probe=True)
+    second = runtime.verify_environment(beta, probe=True)
+    assert first is not second, "cache must be keyed per model"
+    assert second.model_id == "model_beta"
+
+
+def test_metadata_rewrite_in_place_invalidates_cache(tmp_path, monkeypatch):
+    """A force-reinstall can rewrite metadata without touching directory mtimes."""
+    interpreter = make_venv(tmp_path)
+    install_stub(interpreter, "stubdep", "1.2.3")
+    monkeypatch.setenv("INPLACE_VAR", str(interpreter))
+    model = model_for(interpreter, variable="INPLACE_VAR", packages=["stubdep==1.2.3"])
+    forget_environment()
+
+    assert runtime.verify_environment(model, probe=True).tier == "RUNTIME_READY"
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        for dist in (lib / "site-packages").glob("stubdep-*.dist-info"):
+            (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: stubdep\nVersion: 9.9.9\n")
+    refreshed = runtime.verify_environment(model, probe=True)
+    assert refreshed.status == "DEPENDENCY_VERSION_MISMATCH", "rewritten metadata must be noticed"
