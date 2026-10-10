@@ -1113,3 +1113,95 @@ def test_a_real_distro_environment_is_not_reported_empty():
         pytest.skip("no distribution directories on this host")
     assert len(versions) + len(unconfirmed) >= installed_dirs * 0.9, (
         f"only {len(versions)} + {len(unconfirmed)} of {installed_dirs} were accounted for")
+
+
+# ------------------------------- inventory: empty directory entries and opaque installs
+
+def test_a_record_naming_only_an_empty_directory_installs_nothing(tmp_path, monkeypatch):
+    """A RECORD entry that is an empty directory contributes no importable content."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        (site_packages / "hollow").mkdir(parents=True, exist_ok=True)
+        dist = site_packages / "hollow-1.0.dist-info"
+        dist.mkdir(exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: hollow\nVersion: 1.0\n")
+        (dist / "RECORD").write_text("hollow/,sha256=,0\n")
+        break
+    monkeypatch.setenv("HOLLOWDIR_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "HOLLOWDIR_VAR", "packages": ["hollow==1.0"],
+                             "required_imports": ["hollow"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier != "RUNTIME_READY", "an empty directory installs nothing"
+    assert report.status == "DEPENDENCY_MISSING", report.status
+    with pytest.raises(RuntimeError):
+        runtime.python_executable(model)
+
+
+def test_a_namespace_package_directory_is_still_accepted(tmp_path, monkeypatch):
+    """A directory entry holding a nested package is real installed content."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        nested = site_packages / "nsroot" / "sub"
+        nested.mkdir(parents=True, exist_ok=True)
+        (nested / "__init__.py").write_text("")
+        dist = site_packages / "nspkg-1.0.dist-info"
+        dist.mkdir(exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: nspkg\nVersion: 1.0\n")
+        (dist / "RECORD").write_text("nsroot/,sha256=,0\n")
+        break
+    monkeypatch.setenv("NSPACE_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "NSPACE_VAR", "packages": ["nspkg==1.0"],
+                             "required_imports": ["nsroot"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier == "RUNTIME_READY", f"{report.status}: {report.reason}"
+    assert report.imports["nsroot"] is True
+
+
+def test_a_declared_import_resolves_a_manager_installed_distribution(tmp_path, monkeypatch):
+    """An explicit required_imports entry verifies an underivable module mapping.
+
+    ``beautifulsoup4`` installs ``bs4``; the mapping is not derivable from the metadata, so
+    the model must declare it. When declared and really installed, the requirement is met.
+    """
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        package = site_packages / "bs4"
+        package.mkdir(parents=True, exist_ok=True)
+        (package / "__init__.py").write_text("")
+        dist = site_packages / "beautifulsoup4-4.12.0.dist-info"
+        dist.mkdir(exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: beautifulsoup4\nVersion: 4.12.0\n")
+        (dist / "INSTALLER").write_text("deb\n")
+        break
+    monkeypatch.setenv("OPAQUE2_VAR", str(interpreter))
+
+    declared = {"model_id": "m", "environment_required": True,
+                "environment": {"python_env_var": "OPAQUE2_VAR", "packages": ["beautifulsoup4==4.12.0"],
+                                "required_imports": ["bs4"]}}
+    forget_environment()
+    report = runtime.verify_environment(declared, probe=True)
+    assert report.tier == "RUNTIME_READY", f"{report.status}: {report.reason}"
+    assert report.imports["bs4"] is True
+
+    # Without the declaration the mapping stays underivable: never ready.
+    undeclared = {"model_id": "m", "environment_required": True,
+                  "environment": {"python_env_var": "OPAQUE2_VAR", "packages": ["beautifulsoup4==4.12.0"]}}
+    forget_environment()
+    blocked = runtime.verify_environment(undeclared, probe=True)
+    assert blocked.status == "DEPENDENCY_INSTALLATION_UNVERIFIED", blocked.status
+
+    # A declared import that is not installed must still block.
+    wrong = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "OPAQUE2_VAR", "packages": ["beautifulsoup4==4.12.0"],
+                             "required_imports": ["definitely_absent_module"]}}
+    forget_environment()
+    assert runtime.verify_environment(wrong, probe=True).tier != "RUNTIME_READY"

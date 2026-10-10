@@ -438,6 +438,28 @@ def _declared_top_level_modules(dist: Path) -> list[str]:
     return names
 
 
+def _holds_importable_content(directory: Path, depth: int = 4) -> bool:
+    """True when a directory holds at least one importable Python file.
+
+    Bounded depth keeps a large tree cheap; a namespace package legitimately exposes
+    subdirectories, but an empty one installs nothing.
+    """
+    if depth <= 0:
+        return False
+    try:
+        entries = list(directory.iterdir())
+    except OSError:
+        return False
+    for entry in entries:
+        if entry.is_file() and entry.name.endswith((".py", ".pyc", ".so")):
+            return True
+        if entry.is_dir() and (entry / "__init__.py").is_file():
+            return True
+        if entry.is_dir() and _holds_importable_content(entry, depth - 1):
+            return True
+    return False
+
+
 def _safe_record_member(site_packages: Path, member: str, dist_name: str) -> Path | None:
     """Resolve a RECORD entry to a file inside ``site_packages``, or None.
 
@@ -549,8 +571,15 @@ def inspect_environment_distributions(prefix: str | None,
                     if resolved is None:
                         continue
                     if resolved.is_dir():
-                        installed_content = True
-                        modules.add(resolved.name.split(".")[0])
+                        # A directory entry installs content only when it actually holds
+                        # importable files (a namespace package still counts, but an empty
+                        # directory does not).
+                        if any((resolved / name).is_file() for name in ("__init__.py", "__init__.pyc")):
+                            installed_content = True
+                            modules.add(resolved.name.split(".")[0])
+                        elif _holds_importable_content(resolved):
+                            installed_content = True
+                            modules.add(resolved.name.split(".")[0])
                     elif resolved.is_file():
                         installed_content = True
                         if resolved.name.endswith(".py"):
@@ -764,19 +793,29 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     required = _required_packages(model)
     imports = _required_imports(model)
     if required or imports:
-        report.packages, _, unconfirmed = inspect_environment_distributions(
+        report.packages, installed_modules, unconfirmed = inspect_environment_distributions(
             report.prefix, report.base_prefix)
+        import sys as _sys
+
+        installed_modules |= set(_sys.stdlib_module_names)
+        installed_modules |= set(_sys.builtin_module_names)
+        declared_import_modules = {name.split(".")[0] for name in imports}
         report.dependency_probe_executed = True
         for pkg, want in required.items():
             key = normalize_distribution_name(pkg)
             if key in unconfirmed:
-                report.tier = TIER_REQUIREMENTS_UNVERIFIED
-                report.status = "DEPENDENCY_INSTALLATION_UNVERIFIED"
-                report.reason = (f"{pkg} was installed by a package manager but the module it "
-                                 f"provides cannot be derived from its metadata; declare that "
-                                 f"module in required_imports to verify it")
-                _remember(model, require_cuda, report)
-                return report
+                # The distribution was installed by a package manager and the module it
+                # provides cannot be derived from its metadata (`beautifulsoup4` installs
+                # `bs4`). If the model declares the module explicitly and that module is
+                # really installed, the requirement *is* verified.
+                if not any(name.split(".")[0] in declared_import_modules for name in imports):
+                    report.tier = TIER_REQUIREMENTS_UNVERIFIED
+                    report.status = "DEPENDENCY_INSTALLATION_UNVERIFIED"
+                    report.reason = (f"{pkg} was installed by a package manager but the module "
+                                     f"it provides cannot be derived from its metadata; declare "
+                                     f"that module in required_imports to verify it")
+                    _remember(model, require_cuda, report)
+                    return report
             if key not in report.packages:
                 report.tier = TIER_BLOCKED
                 report.status = "DEPENDENCY_MISSING"
@@ -809,7 +848,6 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     # Declared importable modules are checked against the same on-disk inventory: a
     # top-level module name must correspond to something the environment installs.
     if imports:
-        _, installed_modules, _ = inspect_environment_distributions(report.prefix, report.base_prefix)
         import sys as _sys
 
         installed_modules |= set(_sys.stdlib_module_names)
