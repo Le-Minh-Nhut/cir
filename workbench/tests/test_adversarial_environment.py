@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from workbench.backend.runtime import check_environment_isolation, environment_status
+import workbench.backend.runtime as runtime
 
 
 def _venv_interpreter(root: Path, name: str = "python") -> Path:
@@ -100,3 +101,42 @@ def test_e10_manage_environment_refuses_unsafe_interpreter(monkeypatch, tmp_path
     ok = mod.create_env(model, mod.status(model, None), dry_run=False)
     assert ok is False
     assert "unsafe" in capsys.readouterr().err.lower()
+
+
+# F9 regression: a locally placed, git-ignored asset inside the source tree is dirty
+def test_ignored_source_asset_counts_as_dirty(tmp_path: Path):
+    import subprocess as sp
+    from workbench.backend.runtime import _source_dirty
+
+    repo = tmp_path / "src"
+    repo.mkdir()
+    sp.run(["git", "init", "-q"], cwd=repo, check=True)
+    sp.run(["git", "config", "user.email", "t@t"], cwd=repo, check=True)
+    sp.run(["git", "config", "user.name", "T"], cwd=repo, check=True)
+    (repo / ".gitignore").write_text("*.bin\n__pycache__/\n")
+    (repo / "eval.py").write_text("x")
+    sp.run(["git", "add", "."], cwd=repo, check=True)
+    sp.run(["git", "commit", "-qm", "init"], cwd=repo, check=True)
+
+    assert _source_dirty(repo) is False
+    (repo / "backbone.bin").write_bytes(b"locally placed weights")
+    assert _source_dirty(repo) is True, "git-ignored asset must count as dirty"
+
+    (repo / "backbone.bin").unlink()
+    (repo / "__pycache__").mkdir()
+    (repo / "__pycache__" / "eval.cpython-313.pyc").write_bytes(b"cache")
+    assert _source_dirty(repo) is False, "bytecode cache alone must not count as dirty"
+
+
+# F13 regression: RUNTIME_READY requires an executed dependency probe
+def test_runtime_ready_requires_dependency_probe(monkeypatch, tmp_path: Path):
+    import venv as _venv
+    env_dir = tmp_path / "venv"
+    _venv.EnvBuilder(with_pip=False, system_site_packages=False).create(env_dir)
+    interp = env_dir / "bin" / "python"
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "F13_ENV", "required_imports": ["json", "os"]}}
+    monkeypatch.setenv("F13_ENV", str(interp))
+    report = runtime.verify_environment(model, probe=True)
+    assert report.tier != "RUNTIME_READY"
+    assert report.status == "REQUIREMENTS_UNVERIFIED"

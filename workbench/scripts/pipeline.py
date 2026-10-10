@@ -8,7 +8,7 @@ import os
 import shlex
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -33,6 +33,7 @@ class Stage:
     input_paths: tuple[Path, ...] = ()
     output_paths: tuple[Path, ...] = ()
     required_capabilities: frozenset[str] = frozenset()
+    receipt: bool = False
 
 
 def stage_key(stage: Stage) -> str:
@@ -146,6 +147,30 @@ def stage_fingerprint(stage: Stage) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
+def stage_receipt_path(config: WorkbenchConfig, stage: Stage) -> Path:
+    repo_root = getattr(config, "CIR_REPO_ROOT", REPOSITORY)
+    key = stage_key(stage).replace(":", "_")
+    return repo_root / "workbench" / "artifacts" / "receipts" / f"{key}.json"
+
+
+def write_stage_receipt(config: WorkbenchConfig, stage: Stage, *, return_code: int) -> Path:
+    """Durable completion proof for a provisioning stage that produces no artifact file."""
+    path = stage_receipt_path(config, stage)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "stage_id": stage_key(stage),
+        "model_id": stage.model_id,
+        "commands": [list(c) for c in stage.commands],
+        "return_code": return_code,
+        "completed_at": datetime.now(UTC).isoformat(),
+        "kind": "stage_completion_receipt",
+    }
+    temp = path.with_suffix(f".tmp.{os.getpid()}")
+    temp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    temp.replace(path)
+    return path
+
+
 def compute_stage_output_fingerprints(stage: Stage) -> dict[str, str]:
     from workbench.backend.registry import sha256_file
 
@@ -162,23 +187,46 @@ def compute_stage_output_fingerprints(stage: Stage) -> dict[str, str]:
                 except Exception:
                     res[str(p)] = "ERROR"
         elif p.is_dir():
-            try:
-                res[str(p)] = sha256_file(p)
-            except Exception:
-                res[str(p)] = "DIR"
+            if not any(p.iterdir()):
+                res[str(p)] = "EMPTY"
+            else:
+                # Hash the resolved target so a symlinked dataset link is content-verified.
+                target = p.resolve()
+                try:
+                    res[str(p)] = sha256_file(target)
+                except Exception:
+                    res[str(p)] = "DIR"
     return res
 
 
-def validate_stage_outputs(stage: Stage, recorded: dict[str, str] | None = None) -> bool:
+def validate_stage_outputs(stage: Stage, recorded: dict[str, str] | None = None,
+                           config: WorkbenchConfig | None = None) -> bool:
     from workbench.backend.registry import sha256_file
 
+    if stage.receipt and not stage.output_paths:
+        cfg = config or resolve_config()
+        path = stage_receipt_path(cfg, stage)
+        if not path.is_file() or path.stat().st_size == 0:
+            return False
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return False
+        return payload.get("stage_id") == stage_key(stage) and payload.get("return_code") == 0
+
     if not stage.output_paths:
-        # Read-only stages may be skipped on fingerprint alone; a side-effecting stage
-        # declares no completion proof, so it must not be silently trusted as valid.
+        # Read-only stages may be skipped on fingerprint alone. A side-effecting stage
+        # must carry a durable completion receipt; without one it is not trusted.
         return not stage.required_capabilities
     for p in stage.output_paths:
         if not p.exists():
             return False
+        if p.is_dir():
+            # A declared directory output must resolve to a populated tree. A symlinked
+            # directory is acceptable only when its target is itself populated (the
+            # CSMCIR dataset link is exactly this case); dangling/empty links fail.
+            if not any(p.iterdir()):
+                return False
         if p.is_file():
             if p.stat().st_size == 0:
                 return False
@@ -187,8 +235,11 @@ def validate_stage_outputs(stage: Stage, recorded: dict[str, str] | None = None)
                     payload = json.loads(p.read_text(encoding="utf-8"))
                 except Exception:
                     return False
-                # A run manifest must reference an existing, non-empty run artifact.
-                if isinstance(payload, dict) and isinstance(payload.get("report"), str):
+                # A run manifest (anything named *_latest.json) must reference an
+                # existing non-empty run artifact; an empty/garbage manifest is not proof.
+                if p.name.endswith("_latest.json"):
+                    if not isinstance(payload, dict) or not isinstance(payload.get("report"), str):
+                        return False
                     referenced = Path(payload["report"])
                     if not referenced.is_file() or referenced.stat().st_size == 0:
                         return False
@@ -201,12 +252,20 @@ def validate_stage_outputs(stage: Stage, recorded: dict[str, str] | None = None)
             if expected in ("MISSING", "EMPTY"):
                 return False
             try:
-                actual = sha256_file(p) if (p.is_file() or p.is_dir()) else None
+                if p.is_dir():
+                    actual = sha256_file(p.resolve())
+                elif p.is_file():
+                    actual = sha256_file(p)
+                else:
+                    actual = None
                 if actual != expected:
                     return False
             except Exception:
                 return False
     return True
+
+
+_UNUSABLE_DEP_STATUSES = {"FAILED", "BLOCKED_AUTHORIZATION_REQUIRED", "SKIPPED_DEPENDENCY", "INTERRUPTED"}
 
 
 class WorkflowLockError(RuntimeError):
@@ -299,6 +358,7 @@ def run_stage(
     output_paths: tuple[Path, ...] = (),
     required_capabilities: frozenset[str] | set[str] | tuple[str, ...] = frozenset(),
     required_capability: str | None = None,
+    receipt: bool = False,
 ) -> Stage:
     caps = frozenset(required_capabilities)
     if required_capability:
@@ -314,6 +374,7 @@ def run_stage(
         input_paths=input_paths,
         output_paths=output_paths,
         required_capabilities=caps,
+        receipt=receipt,
     )
 
 
@@ -335,7 +396,13 @@ def layout_prepare(args: argparse.Namespace, config: WorkbenchConfig) -> Stage:
     active = args.model == "csmcir" or (args.model is None and any((args.sync_sources, args.download_checkpoints, args.download_auxiliary_assets, args.evaluate)))
     if not active:
         return Stage("dataset-link", skipped="CSMCIR preparation not selected")
-    return run_stage("dataset-link", command("prepare_dataset.py", "--dataset-root", dataset_root(args, config), "--model", "csmcir"), model_id="csmcir", required_capability="allow_preparation")
+    return run_stage(
+        "dataset-link",
+        command("prepare_dataset.py", "--dataset-root", dataset_root(args, config), "--model", "csmcir"),
+        model_id="csmcir",
+        output_paths=(config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset",),
+        required_capability="allow_preparation",
+    )
 
 
 def model_eval_inputs(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> tuple[Path, ...]:
@@ -361,9 +428,25 @@ def model_eval_inputs(model_dict: dict, args: argparse.Namespace, config: Workbe
     return tuple(inputs)
 
 
+def resolved_checkpoint_id(model_dict: dict, args: argparse.Namespace) -> str:
+    """The checkpoint id evaluate_models.py will actually use for this model.
+
+    LIMN evaluates as one bundle candidate keyed by its bundle id, so the proof
+    filename must use the bundle id, not the first category variant.
+    """
+    explicit = getattr(args, "checkpoint", None)
+    if explicit:
+        return explicit
+    bundles = model_dict.get("checkpoint_bundles") or []
+    if model_dict["model_id"] == "limn" and bundles:
+        return bundles[0]["bundle_id"]
+    variants = model_dict.get("checkpoint_variants") or []
+    return variants[0]["checkpoint_id"] if variants else "default"
+
+
 def model_eval_outputs(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> tuple[Path, ...]:
     mid = model_dict["model_id"]
-    ckpt_id = getattr(args, "checkpoint", None) or (model_dict["checkpoint_variants"][0]["checkpoint_id"] if model_dict.get("checkpoint_variants") else "default")
+    ckpt_id = resolved_checkpoint_id(model_dict, args)
     repo_root = getattr(config, "CIR_REPO_ROOT", REPOSITORY)
     latest_manifest = repo_root / "workbench" / "artifacts" / "reports" / f"{mid}_{ckpt_id}_latest.json"
     return (latest_manifest,)
@@ -404,7 +487,7 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
     selected_auxiliary_models = [args.model] if args.model in auxiliary_model_ids() else ([] if args.model else sorted(auxiliary_model_ids()))
     if args.download_auxiliary_assets and selected_auxiliary_models:
         auxiliary_args = ["--model", selected_auxiliary_models[0]] if args.model else ["--all"]
-        auxiliary = run_stage("auxiliary-assets", command("download_auxiliary_assets.py", *auxiliary_args), model_id=args.model, required_capabilities={"allow_network", "allow_large_downloads"})
+        auxiliary = run_stage("auxiliary-assets", command("download_auxiliary_assets.py", *auxiliary_args), model_id=args.model, receipt=True, required_capabilities={"allow_network", "allow_large_downloads"})
     elif args.download_auxiliary_assets:
         auxiliary = Stage("auxiliary-assets", skipped="selected model has no registered auxiliary assets")
     else:
@@ -450,6 +533,7 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             dependencies=("evaluation",),
             input_paths=(config.WORKBENCH_RESULTS_ROOT,),
             output_paths=(getattr(config, "CIR_REPO_ROOT", REPOSITORY) / "workbench" / "artifacts" / "workbench.duckdb",),
+            required_capabilities={"allow_index_write"},
         )
         if args.rebuild_index
         else Stage("validation-index", skipped="pass --rebuild-index after schema-v2 result JSON exists")
@@ -502,6 +586,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
                 command("sync_upstreams.py", "--model", mid, "--output-root", config.WORKBENCH_THIRD_PARTY_ROOT),
                 model_id=mid,
                 output_paths=sync_out,
+                receipt=True,
                 required_capabilities={"allow_network", "allow_preparation"},
             ))
 
@@ -515,6 +600,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             command("manage_environment.py", *env_cmd),
             model_id=mid,
             dependencies=(sync_dep,),
+            receipt=True,
             required_capabilities=({"allow_env_install", "allow_network"} if will_create_env else frozenset()),
         ))
 
@@ -555,6 +641,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
                 command("download_auxiliary_assets.py", "--model", mid),
                 model_id=mid,
                 output_paths=aux_outs,
+                receipt=True,
                 required_capabilities={"allow_network", "allow_large_downloads"},
             ))
 
@@ -601,6 +688,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         dependencies=all_eval_deps,
         input_paths=(config.WORKBENCH_RESULTS_ROOT,),
         output_paths=(getattr(config, "CIR_REPO_ROOT", REPOSITORY) / "workbench" / "artifacts" / "workbench.duckdb",),
+        required_capabilities={"allow_index_write"},
     ))
     return stages
 def setup_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
@@ -614,17 +702,28 @@ def reproduce_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[
 
 
 def analyze_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
+    """Analysis mode is the explicit opt-in to rebuild the derived index."""
     all_s = all_stages(args, config)
-    return [s for s in all_s if s.name == "validation-index"]
+    selected = []
+    for stage in all_s:
+        if stage.name == "validation-index":
+            selected.append(replace(stage, required_capabilities=frozenset({"allow_index_write"})))
+    return selected
 
 def stages_for(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
     if args.mode == "mock":
         doctor_args = ["--scope", "workbench", *( ["--serve"] if args.serve else [])]
         stages = [
             run_stage("doctor", command("doctor.py", *doctor_args)),
-            run_stage("load mock", command("load_mock_results.py", "--output-root", config.WORKBENCH_RESULTS_ROOT)),
-            run_stage("validate", command("validate_results.py", "--root", config.WORKBENCH_RESULTS_ROOT)),
-            run_stage("rebuild", command("rebuild_index.py", "--results-root", config.WORKBENCH_RESULTS_ROOT)),
+            run_stage("load mock", command("load_mock_results.py", "--output-root", config.WORKBENCH_RESULTS_ROOT),
+                      input_paths=(config.WORKBENCH_RESULTS_ROOT,),
+                      receipt=True, required_capabilities={"allow_mock_write"}),
+            run_stage("validate", command("validate_results.py", "--root", config.WORKBENCH_RESULTS_ROOT),
+                      input_paths=(config.WORKBENCH_RESULTS_ROOT,),
+                      receipt=True, required_capabilities={"allow_mock_write"}),
+            run_stage("rebuild", command("rebuild_index.py", "--results-root", config.WORKBENCH_RESULTS_ROOT),
+                      input_paths=(config.WORKBENCH_RESULTS_ROOT,),
+                      receipt=True, required_capabilities={"allow_index_write"}),
         ]
         return [*stages, run_stage("serve", command("serve_workbench.py")) if args.serve else Stage("serve", skipped="pass --serve")]
     if args.mode == "prepare":
@@ -718,8 +817,17 @@ def run_stages(
                 print(f"  [SKIP] {stage.skipped}")
                 continue
 
-            # Dependency execution prerequisite check
-            unmet_deps = [dep for dep in stage.dependencies if dep in failed_stages]
+            # Dependency execution prerequisite check. A dependency that is failing in
+            # this sweep OR persisted as failing/blocked in the state file must block.
+            def _dep_unusable(dep: str) -> bool:
+                if dep in failed_stages:
+                    return True
+                rec = stage_records.get(dep)
+                if isinstance(rec, dict) and rec.get("status") in _UNUSABLE_DEP_STATUSES:
+                    return True
+                return False
+
+            unmet_deps = [dep for dep in stage.dependencies if _dep_unusable(dep)]
             if unmet_deps:
                 print(f"  [SKIP] {stage.name}: SKIPPED_DEPENDENCY: dependency {unmet_deps[0]} failed", file=sys.stderr)
                 failed = True
@@ -779,7 +887,7 @@ def run_stages(
                 prev = stage_records.get(skey) or stage_records.get(stage.name)
                 if prev and prev.get("status") == "COMPLETE" and not fingerprint_info["weak"]:
                     if prev.get("fingerprint") == fingerprint:
-                        if validate_stage_outputs(stage, prev.get("output_fingerprints")):
+                        if validate_stage_outputs(stage, prev.get("output_fingerprints"), config=cfg):
                             can_skip = True
 
             if can_skip:
@@ -825,7 +933,9 @@ def run_stages(
                     break
                 # Single-command stages can be output-validated per command; multi-command
                 # stages validate once after all commands succeed (below).
-                if len(stage.commands) == 1 and not validate_stage_outputs(stage):
+                if stage.receipt and not stage.output_paths:
+                    continue  # proof is written after all commands succeed (below)
+                if len(stage.commands) == 1 and not validate_stage_outputs(stage, config=cfg):
                     stage_failed = True
                     failed = True
                     failed_stages.add(stage.name)
@@ -845,8 +955,13 @@ def run_stages(
                     return 1
                 continue
 
+            # Provisioning stages that produce no artifact file get a durable receipt
+            # as their completion proof (validated on later resumes).
+            if not stage_planning and stage.receipt and not stage.output_paths:
+                write_stage_receipt(cfg, stage, return_code=0)
+
             # Output proof for multi-command stages.
-            if not stage_planning and not validate_stage_outputs(stage):
+            if not stage_planning and not validate_stage_outputs(stage, config=cfg):
                 failed = True
                 failed_stages.add(stage.name)
                 failed_stages.add(dependency_key(stage))
@@ -900,6 +1015,7 @@ def parser_for() -> argparse.ArgumentParser:
     parser.add_argument("--allow-env-install", action="store_true", help="authorize environment creation and package installation")
     parser.add_argument("--allow-preparation", action="store_true", help="authorize model-specific preparation execution")
     parser.add_argument("--allow-gpu-eval", action="store_true", help="authorize model evaluation subprocess execution")
+    parser.add_argument("--allow-index-write", action="store_true", help="authorize rebuilding the derived DuckDB index")
     parser.add_argument("--model", help="registry model selection")
     parser.add_argument("--all-models", action="store_true", help="select all registry models")
     parser.add_argument("--protocol", help="official protocol selection for evaluation")
@@ -941,13 +1057,22 @@ def main(argv: list[str] | None = None) -> int:
         authorized_caps.add("allow_preparation")
     if args.allow_gpu_eval:
         authorized_caps.add("allow_gpu_eval")
+    if args.allow_index_write:
+        authorized_caps.add("allow_index_write")
+    if args.mode == "mock":
+        # `mock` is an explicit, self-contained development workflow; it carries its own
+        # authorization for writing mock results and rebuilding the derived index only.
+        authorized_caps.update({"allow_mock_write", "allow_index_write"})
+    # `mock` and `analyze` are explicit, self-contained operator workflows: they carry
+    # their own authorization for the exact writes they perform. `--dry-run` still plans only.
+    effective_apply = args.apply or args.mode in ("mock", "analyze")
     return run_stages(
         stages_for(args, config),
         dry_run=args.dry_run,
         continue_on_error=args.continue_on_error,
         resume=args.resume,
         force_stages=force_stages,
-        apply=args.apply,
+        apply=effective_apply,
         authorized_capabilities=authorized_caps,
         config=config,
         mode=args.mode,

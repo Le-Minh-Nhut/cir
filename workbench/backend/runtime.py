@@ -42,6 +42,7 @@ class EnvironmentReport:
     cuda_version: str | None = None
     reason: str | None = None
     probe_executed: bool = False
+    dependency_probe_executed: bool = False
 
 
 def _run_probe(interpreter: Path, code: str, timeout: int = 60) -> tuple[bool, str, str]:
@@ -243,6 +244,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             report.reason = "dependency probe returned invalid JSON"
             return report
         report.packages = installed
+        report.dependency_probe_executed = True
         for pkg, want in required.items():
             got = installed.get(pkg)
             if got is None:
@@ -329,6 +331,14 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         report.reason = "no source-backed dependency contract declared"
         return report
 
+    if not report.dependency_probe_executed:
+        # We never actually inspected the installed dependency set, so we cannot
+        # claim full runtime readiness even though the interpreter is isolated.
+        report.tier = TIER_REQUIREMENTS_UNVERIFIED
+        report.status = "REQUIREMENTS_UNVERIFIED"
+        report.reason = "no dependency probe was executed for this contract"
+        return report
+
     report.tier = "RUNTIME_READY"
     report.status = "RUNTIME_READY"
     return report
@@ -375,14 +385,18 @@ def _source_dirty(source: Path) -> bool | None:
     try:
         tracked = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"],
                                  cwd=source, check=True, capture_output=True, text=True).stdout
-        untracked = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"],
+        untracked = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all", "--ignored"],
                                    cwd=source, check=True, capture_output=True, text=True).stdout
     except (OSError, subprocess.CalledProcessError):
         return None
     if tracked.strip():
         return True
     for line in untracked.splitlines():
-        if line.startswith("?? ") and "__pycache__" not in line and not line.endswith(".pyc"):
+        # Ignored/untracked assets can change evaluator behaviour too (e.g. a locally
+        # placed backbone file), so they count as dirty except bytecode caches.
+        if "__pycache__" in line or line.endswith(".pyc"):
+            continue
+        if line.startswith(("?? ", "!! ")):
             return True
     return False
 

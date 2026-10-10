@@ -161,3 +161,100 @@ def test_real_mode_failed_sync_prevents_evaluation(tmp_path: Path, monkeypatch):
         "--dataset-root", str(data), "--continue-on-error",
     ])
     assert not any("evaluate_models.py" in str(a) for a in called), "Evaluation launched after failed sync dependency"
+
+
+# 5. A dependency persisted as FAILED in an EARLIER invocation must still block (F1/F2 regression)
+def test_persisted_failed_dependency_blocks_later_invocation(tmp_path: Path, monkeypatch):
+    state = tmp_path / "s.json"
+    pipeline.save_pipeline_state({"stages": {"sync:m": {"status": "FAILED"}}}, state)
+    launched: list[list[str]] = []
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: launched.append(argv) or 0)
+
+    stages = [
+        pipeline.Stage(name="environment", commands=(["/env"],), model_id="m",
+                       dependencies=("sync:m",)),
+        pipeline.Stage(name="evaluation", commands=(["/eval"],), model_id="m",
+                       dependencies=("environment:m",)),
+    ]
+    rc = pipeline.run_stages(stages, dry_run=False, continue_on_error=True, resume=True, state_path=state)
+    assert rc == 1
+    assert launched == [], "a persisted FAILED dependency must not allow dependent execution"
+    records = pipeline.load_pipeline_state(state)["stages"]
+    assert records["environment:m"]["status"] == "SKIPPED_DEPENDENCY"
+
+
+# 6. dataset-link declares a real output contract and can reach COMPLETE
+def test_dataset_link_declares_output_contract():
+    cfg = pipeline.resolve_config()
+    args = pipeline.parser_for().parse_args(["real", "--model", "csmcir"])
+    stage = next(s for s in pipeline.stages_for(args, cfg) if s.name == "dataset-link")
+    assert stage.output_paths, "dataset-link must declare its CSMCIR dataset link output"
+
+    # The proof must be satisfiable: create the symlink, then validate.
+    import tempfile, os
+    with tempfile.TemporaryDirectory() as td:
+        outer = Path(td) / "CSMCIR"
+        outer.mkdir()
+        target = Path(td) / "FashionIQ"
+        target.mkdir()
+        (target / "captions").mkdir()
+        (outer / "fashionIQ_dataset").symlink_to(target, target_is_directory=True)
+        probe = pipeline.Stage(name="dataset-link", commands=(["/x"],),
+                               output_paths=(outer / "fashionIQ_dataset",))
+        assert pipeline.validate_stage_outputs(probe) is True
+
+
+# 7. LIMN evaluation proof filename must match the bundle id the evaluator writes
+def test_limn_eval_output_uses_bundle_id():
+    from workbench.backend.registry import model_by_id
+    limn = model_by_id("limn")
+    args = pipeline.parser_for().parse_args(["all", "--model", "limn"])
+    outputs = pipeline.model_eval_outputs(limn, args, pipeline.resolve_config())
+    assert any("base_iter0_all_categories" in str(p) for p in outputs), outputs
+
+
+# 8. A provisioning stage with no artifact file must prove completion via a receipt
+def test_provisioning_stage_requires_receipt(tmp_path: Path, monkeypatch):
+    cfg = __import__("dataclasses").replace(
+        pipeline.resolve_config(), CIR_REPO_ROOT=tmp_path)
+    stage = pipeline.Stage(name="environment", commands=(["/env"],), model_id="m",
+                           required_capabilities=frozenset({"allow_env_install"}), receipt=True)
+
+    # No receipt yet -> not valid.
+    assert pipeline.validate_stage_outputs(stage, config=cfg) is False
+
+    launched: list[list[str]] = []
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: launched.append(argv) or 0)
+    state = tmp_path / "s.json"
+    assert pipeline.run_stages([stage], dry_run=False, apply=True,
+                               authorized_capabilities={"allow_env_install"},
+                               config=cfg, state_path=state) == 0
+    assert launched == [["/env"]]
+    # Receipt now exists and validates.
+    assert pipeline.validate_stage_outputs(stage, config=cfg) is True
+    receipt = pipeline.stage_receipt_path(cfg, stage)
+    import json as _json
+    assert _json.loads(receipt.read_text())["stage_id"] == "environment:m"
+
+
+# 9. Persistent index writes require explicit authorization
+def test_validation_index_requires_index_write_capability(tmp_path: Path, monkeypatch):
+    launched: list[list[str]] = []
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: launched.append(argv) or 0)
+    db = tmp_path / "workbench.duckdb"
+    db.write_bytes(b"index")
+    stages = [pipeline.Stage(name="validation-index",
+                             commands=(["/validate"], ["/rebuild"]),
+                             output_paths=(db,),
+                             required_capabilities=frozenset({"allow_index_write"}))]
+
+    # apply without the capability -> blocked, nothing launched
+    rc = pipeline.run_stages(stages, dry_run=False, apply=True,
+                             authorized_capabilities=set(), state_path=tmp_path / "s.json")
+    assert rc == 1 and launched == []
+
+    # with the capability -> runs
+    rc = pipeline.run_stages(stages, dry_run=False, apply=True,
+                             authorized_capabilities={"allow_index_write"},
+                             state_path=tmp_path / "s2.json")
+    assert rc == 0 and launched == [["/validate"], ["/rebuild"]]

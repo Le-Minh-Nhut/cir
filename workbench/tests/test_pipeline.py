@@ -133,7 +133,7 @@ def test_rebuild_index_stays_explicit(monkeypatch) -> None:
     monkeypatch.setattr(pipeline, "resolve_config", real_config)
     monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 0)
 
-    assert pipeline.main(["real", "--rebuild-index"]) == 0
+    assert pipeline.main(["real", "--rebuild-index", "--apply", "--allow-index-write"]) == 0
     assert [Path(argv[1]).name for argv in called][-2:] == ["validate_results.py", "rebuild_index.py"]
 
 

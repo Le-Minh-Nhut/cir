@@ -198,6 +198,7 @@ def test_true_master_pipeline_subprocess_e2e_complete_flow(true_e2e_workspace):
         "--allow-env-install",
         "--allow-preparation",
         "--allow-gpu-eval",
+        "--allow-index-write",
         "--report", str(report_file),
     ]
 

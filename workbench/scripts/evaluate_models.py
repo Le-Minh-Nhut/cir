@@ -320,7 +320,12 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
     # never overwritten, so a previous successful experiment is always preserved.
     (directory / "aggregate_report.json").write_text(report_json, encoding="utf-8")
     run_report = reports_dir / f"{plan.model_id}_{plan.checkpoint_id}_{run_id}_aggregate.json"
-    run_report.write_text(report_json, encoding="utf-8")
+    # Exclusive create: a colliding run id must never overwrite an existing experiment.
+    try:
+        with run_report.open("x", encoding="utf-8") as handle:
+            handle.write(report_json)
+    except FileExistsError as error:
+        raise RuntimeError(f"refusing to overwrite existing run report: {run_report}") from error
 
     # Atomic, overwrite-tolerant "latest" pointer. This is convenience only; it is not
     # the experiment artifact and never replaces a run-scoped report.
