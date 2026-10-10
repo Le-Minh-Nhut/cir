@@ -128,13 +128,22 @@ def test_evaluation_does_not_validate_aggregate_only_output(monkeypatch) -> None
 
 
 def test_rebuild_index_stays_explicit(monkeypatch) -> None:
+    """--rebuild-index is opt-in: absent unless requested; present and capability-gated when it is."""
     pipeline = load_pipeline()
-    called: list[list[str]] = []
     monkeypatch.setattr(pipeline, "resolve_config", real_config)
-    monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 0)
 
-    assert pipeline.main(["real", "--rebuild-index", "--apply", "--allow-index-write"]) == 0
-    assert [Path(argv[1]).name for argv in called][-2:] == ["validate_results.py", "rebuild_index.py"]
+    # Not requested -> the stage is planned-as-skipped.
+    args = pipeline.parser_for().parse_args(["real", "--model", "csmcir"])
+    stages = pipeline.stages_for(args, real_config())
+    vi = next(s for s in stages if s.name == "validation-index")
+    assert not vi.commands
+
+    # Requested -> validate+rebuild planned, gated on the index-write capability.
+    args = pipeline.parser_for().parse_args(["real", "--model", "csmcir", "--rebuild-index"])
+    stages = pipeline.stages_for(args, real_config())
+    vi = next(s for s in stages if s.name == "validation-index")
+    assert [Path(argv[1]).name for argv in vi.commands] == ["validate_results.py", "rebuild_index.py"]
+    assert "allow_index_write" in vi.required_capabilities
 
 
 def test_runtime_preflight_cannot_continue_into_evaluation(monkeypatch, tmp_path) -> None:
