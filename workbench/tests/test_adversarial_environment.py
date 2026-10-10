@@ -128,18 +128,41 @@ def test_ignored_source_asset_counts_as_dirty(tmp_path: Path):
     assert _source_dirty(repo) is False, "bytecode cache alone must not count as dirty"
 
 
-# F13 regression: RUNTIME_READY requires an executed dependency probe
+# F13 regression: readiness requires a real, on-disk dependency inspection
 def test_runtime_ready_requires_dependency_probe(monkeypatch, tmp_path: Path):
+    """A bare interpreter is never ready, and readiness always names its evidence."""
     import venv as _venv
+
     env_dir = tmp_path / "venv"
     _venv.EnvBuilder(with_pip=False, system_site_packages=False).create(env_dir)
     interp = env_dir / "bin" / "python"
-    model = {"model_id": "m", "environment_required": True,
-             "environment": {"python_env_var": "F13_ENV", "required_imports": ["json", "os"]}}
+
+    # No contract at all: nothing was inspected, so readiness cannot be claimed.
+    bare = {"model_id": "m", "environment_required": True,
+            "environment": {"python_env_var": "F13_ENV"}}
     monkeypatch.setenv("F13_ENV", str(interp))
-    report = runtime.verify_environment(model, probe=True)
+    report = runtime.verify_environment(bare, probe=True)
     assert report.tier != "RUNTIME_READY"
     assert report.status == "REQUIREMENTS_UNVERIFIED"
+    assert report.dependency_probe_executed is False
+
+    # A declared import contract is checked against the environment on disk. Standard
+    # library modules are legitimately available, so the inspection records evidence.
+    declared = {"model_id": "m", "environment_required": True,
+                "environment": {"python_env_var": "F13_ENV", "required_imports": ["json", "os"]}}
+    runtime.forget_environment()
+    verified = runtime.verify_environment(declared, probe=True)
+    assert verified.dependency_probe_executed is True, "the disk inspection is the evidence"
+    assert verified.tier == "RUNTIME_READY"
+    assert verified.imports == {"json": True, "os": True}
+
+    # A module the environment does not install is a blocker.
+    runtime.forget_environment()
+    absent = {"model_id": "m", "environment_required": True,
+              "environment": {"python_env_var": "F13_ENV", "required_imports": ["definitely_not_installed"]}}
+    blocked = runtime.verify_environment(absent, probe=True)
+    assert blocked.status == "MODEL_IMPORT_FAILED"
+    assert blocked.tier != "RUNTIME_READY"
 
 
 # Regression: upstream-committed bytecode is not a source change; real edits still are

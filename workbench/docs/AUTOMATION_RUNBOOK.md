@@ -287,25 +287,31 @@ Dependency and import probes run under `-I` (but **not** `-S`, so the environmen
 site-packages stay visible) and must report the same `sys.prefix` as the verified
 environment; a mismatch is blocked as `DEPENDENCY_PROBE_ENVIRONMENT_MISMATCH`.
 
-**Probes run isolated.** Dependency, import, and CUDA probes execute with ``-I -S`` and
-then add the environment's own `site-packages` explicitly (`site.addsitedir`). ``-S`` is
-the important flag: it stops `site` from importing `sitecustomize`/`usercustomize`, so no
-code belonging to the environment (or to the user) executes while it is being inspected.
-The environment's installed distributions stay visible, so the answers describe the
-environment rather than code standing next to it. Without this, an environment could
-monkeypatch `importlib.metadata`, or create/rewrite its own `dist-info`, and answer for
-itself.
+**No environment code runs while it is inspected.** The dependency and import
+requirements are checked against the environment's *on-disk* inventory, read by the
+orchestrator itself via `importlib.metadata.distributions(path=...)`. Nothing is executed
+inside the environment, so a `.pth` file, a `sitecustomize` module, or any other code
+standing in `site-packages` cannot install or claim a package, and cannot influence the
+answer. (Adding the directory to `sys.path` — `site.addsitedir` — would run `.pth` files;
+that is deliberately not done.)
 
-**Answers are then reconciled against the environment on disk.** The orchestrator reads
-`*.dist-info/METADATA` and `*.egg-info/PKG-INFO` itself, normalising names per PEP 503, and
-requires the recorded distribution to have real installed content (a `RECORD` entry that
-exists, or an egg-info counterpart). The outcome is three-way:
+A declared distribution must also have **real installed content**: a `dist-info` whose
+`RECORD` names at least one existing file, or a legacy `egg-info` with its own files. A
+metadata directory describing an installation that was never completed cannot satisfy a
+requirement. A declared import module must correspond to a top-level name the environment
+actually installs (standard-library and builtin module names always count).
+
+The outcome is three-way:
 
 | Situation | Verdict |
 |---|---|
-| probe agrees with disk, and the distribution has installed content | verified |
-| probe value contradicts an installed distribution | `DEPENDENCY_PROBE_FORGED` |
-| probe claims a package with no on-disk installation of its own (editable/`.pth`, `system_site_packages`), or the installed version cannot be read, or the metadata names no installed files | `DEPENDENCY_INSTALLATION_UNVERIFIED` — never `RUNTIME_READY` |
+| the declared package is installed on disk at an acceptable version, with installed content | verified |
+| a declared constraint cannot be parsed at all | `VERSION_CONSTRAINT_UNVERIFIED` |
+| the package is absent, its version cannot be read, or it has metadata but no installed files | `DEPENDENCY_MISSING` / `DEPENDENCY_INSTALLATION_UNVERIFIED` — never `RUNTIME_READY` |
+
+An editable or `system_site_packages` layout that the orchestrator cannot see on disk is
+reported unverified rather than accepted; point the model's `WORKBENCH_*_PYTHON` at the
+environment that actually holds the dependencies.
 
 There is no change-attribution heuristic: nothing tries to guess *why* the on-disk set
 changed, because that is not decidable in process. Isolation removes the need for it.

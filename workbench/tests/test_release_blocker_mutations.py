@@ -382,55 +382,72 @@ def test_mut_g_manage_environment_using_a_non_probing_tier_is_detected(tmp_path,
 
 # ------------------------------------------------------------------------- MUT-H
 
-def test_mut_h_running_environment_code_during_a_probe_is_detected(tmp_path, monkeypatch):
-    """The old bug: the probes ran inside the environment, so its own code answered.
+def test_mut_h_trusting_the_environment_for_its_own_inventory_is_detected(
+        tmp_path, monkeypatch):
+    """The old bug: the environment answered for itself, so a .pth could fabricate.
 
-    ``sitecustomize`` monkeypatches ``importlib.metadata``. When the probes run isolated
-    (``-I -S`` plus an explicit ``site.addsitedir``) that code never executes and the
-    fabricated answer never appears; this mutation restores the unisolated behaviour.
+    The inventory is now read from disk by the orchestrator. This mutation restores the
+    old behaviour of executing the environment to ask it what it has, which lets a
+    one-line ``.pth`` inside the environment install whatever it claims.
     """
     interpreter = make_venv(tmp_path)
-    flagged = None
+    marker = None
     for lib in (interpreter.parent.parent / "lib").glob("python*"):
         site_packages = lib / "site-packages"
-        flagged = site_packages / "RAN"
-        (site_packages / "sitecustomize.py").write_text(
-            "import pathlib\n"
-            "pathlib.Path(__file__).parent.joinpath('RAN').write_text('yes')\n"
-            "import importlib.metadata as m\n"
-            "_original = m.version\n"
-            "m.version = lambda n: '1.2.3' if n == 'ghostdep' else _original(n)\n")
+        marker = site_packages / "RAN"
+        # A .pth runs whenever the environment's site-packages is added to sys.path.
+        # A .pth is line-based: a single "import ..." line executes when the
+        # environment is entered, so the whole payload must be on one line.
+        payload = (
+            f"import pathlib; site = pathlib.Path({str(site_packages)!r}); "
+            "site.joinpath('RAN').write_text('yes'); "
+            "dist = site / 'ghost-9.9.9.dist-info'; dist.mkdir(exist_ok=True); "
+            "(dist / 'METADATA').write_text('Metadata-Version: 2.1\\nName: ghost\\nVersion: 9.9.9\\n'); "
+            "(dist / 'RECORD').write_text('ghost.py,sha256=t,1\\n'); "
+            "site.joinpath('ghost.py').write_text('x=1\\n')"
+        )
+        (site_packages / "evil.pth").write_text(payload + "\n")
         break
     monkeypatch.setenv("MUT_H_VAR", str(interpreter))
     model = {"model_id": "mut_h", "environment_required": True,
-             "environment": {"python_env_var": "MUT_H_VAR", "packages": ["ghostdep==1.2.3"]}}
+             "environment": {"python_env_var": "MUT_H_VAR", "packages": ["ghost==9.9.9"]}}
 
     def detector() -> bool:
-        flagged.unlink(missing_ok=True)
+        marker.unlink(missing_ok=True)
         runtime.forget_environment()
         report = runtime.verify_environment(model, probe=True)
-        # The decisive evidence: the environment's own code never ran...
-        if flagged.exists():
+        # The environment's own code must never run while it is inspected...
+        if marker.exists():
             return False
-        # ...so a package it claims but does not install is never verified.
+        # ...so a package it would fabricate is never verified.
         return report.tier != "RUNTIME_READY"
 
     def mutate(ctx):
-        # The historical behaviour: probes ran inside the environment, so its own
-        # sitecustomize executed and answered for it.
-        original = runtime._run_probe
+        # The historical behaviour: the environment's own answer was taken as the truth.
+        # Its .pth runs when it is entered, so it can install whatever it claims and then
+        # report it (and make its marker file appear).
+        def inventory_from_environment(prefix, base_prefix=None):
+            import subprocess
 
-        def unisolated(interpreter, code, timeout=60, args=(), isolated=False, site_packages=None):
-            return original(interpreter, code, timeout, args, isolated=False, site_packages=None)
+            interpreter_path = Path(str(prefix)) / "bin" / "python"
+            result = subprocess.run(
+                [str(interpreter_path), "-c",
+                 "import json, importlib.metadata as m\n"
+                 "out={}\n"
+                 "for n in ('ghost',):\n"
+                 "    try: out[n]=m.version(n)\n"
+                 "    except Exception: pass\n"
+                 "print(json.dumps(out))\n"],
+                capture_output=True, text=True)
+            try:
+                return json.loads(result.stdout.strip().splitlines()[-1])
+            except (ValueError, IndexError):
+                return {}
 
-        ctx.setattr(runtime, "_run_probe", unisolated)
-        ctx.setattr(runtime, "_reconcile_probe_with_disk",
-                    lambda installed, prefix, inventory=None, base_prefix=None: (None, None))
-        ctx.setattr(runtime, "_distribution_has_installed_content",
-                    lambda site_packages, name: True)
+        ctx.setattr(runtime, "environment_inventory", inventory_from_environment)
 
     _assert_mutation_killed(monkeypatch, detector, mutate,
-                            label="probes ran environment code and trusted its answers")
+                            label="the environment answered for its own inventory")
 
 
 # ------------------------------------------------------------------------- MUT-I
