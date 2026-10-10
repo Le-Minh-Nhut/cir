@@ -585,9 +585,13 @@ def environment_inventory(prefix: str | None, base_prefix: str | None = None) ->
             continue
         for item in found:
             try:
-                name = item.metadata["Name"]
-                version = item.version
-            except PackageNotFoundError:
+                metadata = item.metadata
+                if metadata is None:
+                    # A directory with no readable metadata is not an installation.
+                    continue
+                name = metadata["Name"]
+                version = metadata["Version"]
+            except (PackageNotFoundError, KeyError):
                 continue
             if not name:
                 continue
