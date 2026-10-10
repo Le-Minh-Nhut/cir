@@ -226,6 +226,15 @@ def check_environment_isolation(interpreter: Path) -> tuple[bool, str]:
     if not (has_pyvenv or has_conda_meta):
         return False, "isolated environment markers (pyvenv.cfg/conda-meta) are missing"
 
+    # The invoked binary must actually embed a CPython runtime: a hand-written launcher
+    # that only answers the probe protocol is not an interpreter.
+    try:
+        invoked_binary = invoked.resolve()
+    except OSError:
+        return False, "interpreter path could not be resolved"
+    if not _has_cpython_runtime(invoked_binary):
+        return False, "interpreter does not embed a CPython runtime"
+
     # The interpreter must run *from* the environment it claims: a symlink that lands
     # inside another venv, or a system interpreter dressed in venv markers, is out.
     if Path(prefix).resolve() == Path(base_prefix).resolve() and not has_conda_meta:
@@ -276,6 +285,34 @@ _SYSTEM_INTERPRETERS = {
 
 _NATIVE_MAGICS = (b"\x7fELF", b"\xca\xfe\xba\xbe", b"\xcf\xfa\xed\xfe",
                   b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xce")
+
+_CPYTHON_SYMBOLS = (b"Py_Initialize", b"Py_BytesMain", b"Py_Main", b"_Py_Dealloc")
+
+def _has_cpython_runtime(binary: Path) -> bool:
+    """True when the binary embeds a CPython runtime.
+
+    A hand-written launcher that merely *speaks* the probe protocol does not contain
+    CPython's runtime symbols, so it cannot pass as a model interpreter. Scanning is
+    chunked and bounded: the symbols appear in the linked image itself.
+
+    ``ponytail:`` a wrapper that genuinely embeds libpython passes this test. That is
+    accepted, because such a wrapper really can run the official PyTorch evaluator;
+    what is rejected is a launcher that only pretends to.
+    """
+    try:
+        with binary.open("rb") as handle:
+            overlap = b""
+            while True:
+                chunk = handle.read(1 << 20)
+                if not chunk:
+                    return False
+                window = overlap + chunk
+                if any(symbol in window for symbol in _CPYTHON_SYMBOLS):
+                    return True
+                overlap = window[-32:]
+    except OSError:
+        return False
+
 
 def _pyvenv_home(pyvenv: Path) -> str:
     try:

@@ -513,3 +513,29 @@ def test_metadata_rewrite_in_place_invalidates_cache(tmp_path, monkeypatch):
             (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: stubdep\nVersion: 9.9.9\n")
     refreshed = runtime.verify_environment(model, probe=True)
     assert refreshed.status == "DEPENDENCY_VERSION_MISMATCH", "rewritten metadata must be noticed"
+
+
+def test_a_native_launcher_without_a_cpython_runtime_is_rejected(tmp_path: Path):
+    """A compiled launcher that merely speaks the probe protocol is not an interpreter.
+
+    It carries no CPython runtime, so it must be rejected on the binary itself rather
+    than on anything it answers.
+    """
+    launcher_dir = tmp_path / "launcher" / "bin"
+    launcher_dir.mkdir(parents=True)
+    (tmp_path / "launcher" / "pyvenv.cfg").write_text("home = /usr/bin\n")
+    (tmp_path / "launcher" / "lib" / "python3.13" / "site-packages").mkdir(parents=True)
+    launcher = launcher_dir / "python"
+    # ELF header plus filler: native-looking, but no CPython symbols.
+    launcher.write_bytes(b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 8184 + b"echo json")
+    launcher.chmod(0o755)
+
+    assert runtime._has_cpython_runtime(launcher) is False
+    ok, reason = check_environment_isolation(launcher)
+    assert ok is False
+    # Rejected on its own bytes, not on anything it answered.
+    assert "identity" in reason or "CPython runtime" in reason
+
+
+def test_a_real_interpreter_is_recognised_as_embedding_cpython():
+    assert runtime._has_cpython_runtime(Path(sys.executable).resolve()) is True

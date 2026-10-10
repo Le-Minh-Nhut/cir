@@ -402,6 +402,8 @@ def test_mut_h_accepting_a_script_as_a_model_interpreter_is_detected(tmp_path, m
     (spoof / "bin").mkdir(parents=True)
     (spoof / "pyvenv.cfg").write_text("home = /usr\n")
     (spoof / "lib" / "python3.13" / "site-packages").mkdir(parents=True)
+    # A complete-looking environment: only the binary/runtime checks stand in the way.
+    (spoof / "lib" / "python3.13" / "os.py").write_text("")
     script = spoof / "bin" / "python"
     # A wrapper that reflects the nonce argv and reports a Python-shaped identity:
     # only the native-executable check stands between it and acceptance.
@@ -420,6 +422,7 @@ def test_mut_h_accepting_a_script_as_a_model_interpreter_is_detected(tmp_path, m
     def mutate(ctx):
         # The historical behaviour: only the probe's self-reported JSON was trusted.
         ctx.setattr(runtime, "_is_native_executable", lambda interpreter: True)
+        ctx.setattr(runtime, "_has_cpython_runtime", lambda binary: True)
         # ...and identity was taken from the probe instead of the invocation path, so
         # the wrapper's fabricated prefix would be believed.
         ctx.setattr(runtime, "_interpreter_identity", _probe_reported_identity)

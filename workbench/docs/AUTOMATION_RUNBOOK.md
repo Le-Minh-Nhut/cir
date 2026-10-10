@@ -293,6 +293,18 @@ environment containing a `sitecustomize.py` (or any other module) that monkeypat
 `importlib.metadata` cannot claim packages it does not have. That contradiction is
 blocked as `DEPENDENCY_PROBE_FORGED`.
 
+### Interpreter binary must embed CPython
+
+Before any probe, the invoked binary must actually embed a CPython runtime
+(`Py_Initialize` / `Py_BytesMain` / `Py_Main`). A hand-written launcher that only
+*speaks* the probe protocol carries no CPython runtime and is rejected on its own bytes.
+
+`ponytail:` a wrapper that genuinely embeds libpython passes, and deliberately so — such
+a wrapper really can run the official PyTorch evaluator. What is rejected is a launcher
+that merely pretends. Operators should still point each `WORKBENCH_*_PYTHON` at an
+interpreter created by `venv`/`conda` from the upstream spec and record its digest in
+the run provenance before a PC reproduction run.
+
 ### Verification reuse
 
 A verified report may be reused only when the contract digest, the invocation path,
