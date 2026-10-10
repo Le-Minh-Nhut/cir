@@ -2,24 +2,75 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 
-def environment_status(model: dict[str, Any]) -> dict[str, Any]:
+def check_environment_isolation(interpreter: Path) -> tuple[bool, str]:
+    """Verify interpreter is not system Python, base Conda, or current workbench environment."""
+    interp_resolved = interpreter.resolve()
+    current_interp = Path(sys.executable).resolve()
+    if interp_resolved == current_interp:
+        return False, "cannot use active workbench environment"
+
+    s_path = str(interp_resolved)
+    system_paths = ("/usr/bin/python", "/usr/bin/python3", "/bin/python", "/bin/python3", "/usr/local/bin/python", "/usr/local/bin/python3")
+    if s_path in system_paths:
+        return False, "cannot use system Python"
+
+    if any(base in s_path for base in ("/miniconda3/bin/python", "/anaconda3/bin/python", "/opt/conda/bin/python")):
+        if "/envs/" not in s_path:
+            return False, "cannot use base Conda environment"
+
+    has_pyvenv = any((p / "pyvenv.cfg").is_file() for p in (interp_resolved.parent, interp_resolved.parent.parent))
+    has_conda_meta = any((p / "conda-meta").is_dir() for p in (interp_resolved.parent, interp_resolved.parent.parent))
+    if not (has_pyvenv or has_conda_meta) and (s_path.startswith("/usr/") or s_path.startswith("/bin/")):
+        return False, "interpreter is not in an isolated environment"
+
+    return True, "ISOLATION_VERIFIED"
+
+
+def environment_status(model: dict[str, Any], probe: bool = False) -> dict[str, Any]:
     environment = model.get("environment") or {}
     variable = environment.get("python_env_var")
     if not variable:
-        return {"status": "UNCONFIGURED", "variable": None, "interpreter": None}
+        return {"status": "UNCONFIGURED", "variable": None, "interpreter": None, "tier": "UNCONFIGURED"}
     configured = os.environ.get(variable)
     if not configured:
-        return {"status": "UNCONFIGURED", "variable": variable, "interpreter": None}
+        return {"status": "UNCONFIGURED", "variable": variable, "interpreter": None, "tier": "UNCONFIGURED"}
     interpreter = Path(configured).expanduser().resolve()
     if not interpreter.is_file():
-        return {"status": "MISSING", "variable": variable, "interpreter": str(interpreter)}
+        return {"status": "MISSING", "variable": variable, "interpreter": str(interpreter), "tier": "INTERPRETER_MISSING"}
     if not os.access(interpreter, os.X_OK):
-        return {"status": "NOT_EXECUTABLE", "variable": variable, "interpreter": str(interpreter)}
-    return {"status": "READY", "variable": variable, "interpreter": str(interpreter)}
+        return {"status": "NOT_EXECUTABLE", "variable": variable, "interpreter": str(interpreter), "tier": "INTERPRETER_PRESENT"}
+
+    is_isolated, iso_msg = check_environment_isolation(interpreter)
+    if not is_isolated:
+        return {
+            "status": "UNSAFE_INTERPRETER",
+            "variable": variable,
+            "interpreter": str(interpreter),
+            "tier": "BLOCKED",
+            "isolation_reason": iso_msg,
+        }
+
+    tier = "ISOLATION_VERIFIED"
+    if probe:
+        try:
+            cmd = [str(interpreter), "-c", "import sys, json; print(json.dumps({'python': sys.version.split()[0]}))"]
+            subprocess.run(cmd, capture_output=True, text=True, check=True)
+            tier = "DEPENDENCIES_VERIFIED"
+        except Exception as e:
+            return {
+                "status": "DEPENDENCY_MISMATCH",
+                "variable": variable,
+                "interpreter": str(interpreter),
+                "tier": "BLOCKED",
+                "error": str(e),
+            }
+
+    return {"status": "READY", "variable": variable, "interpreter": str(interpreter), "tier": tier}
 
 
 def environment_blockers(model: dict[str, Any]) -> list[str]:
@@ -29,6 +80,10 @@ def environment_blockers(model: dict[str, Any]) -> list[str]:
     if state["status"] == "READY":
         return []
     variable = state["variable"] or "model-specific Python"
+    if state["status"] == "UNSAFE_INTERPRETER":
+        return [f"execution environment unsafe: {variable}={state['interpreter']} ({state.get('isolation_reason')})"]
+    if state["status"] == "DEPENDENCY_MISMATCH":
+        return [f"execution environment dependencies failed: {variable}={state['interpreter']} ({state.get('error')})"]
     if state["status"] == "MISSING":
         return [f"execution environment interpreter missing: {variable}={state['interpreter']}"]
     if state["status"] == "NOT_EXECUTABLE":
@@ -38,13 +93,11 @@ def environment_blockers(model: dict[str, Any]) -> list[str]:
 
 def python_executable(model: dict[str, Any]) -> str:
     state = environment_status(model)
-    if state["status"] == "READY":
+    if state["interpreter"] and state["status"] == "READY":
         return state["interpreter"]
     if model.get("environment_required"):
         raise RuntimeError(f"execution environment not ready: set {state['variable']}")
     return "python"
-
-
 def source_clean_and_pinned(model: dict[str, Any], source: Path) -> tuple[bool, str | None, str | None]:
     try:
         top_level = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=source,

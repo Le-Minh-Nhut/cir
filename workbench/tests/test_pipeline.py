@@ -107,7 +107,7 @@ def test_all_auxiliary_selection_uses_registry_all_mode(monkeypatch) -> None:
     monkeypatch.setattr(pipeline, "resolve_config", real_config)
     monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 0)
 
-    assert pipeline.main(["real", "--download-auxiliary-assets"]) == 0
+    assert pipeline.main(["real", "--download-auxiliary-assets", "--apply", "--allow-network", "--allow-preparation"]) == 0
     auxiliary = next(argv for argv in called if Path(argv[1]).name == "download_auxiliary_assets.py")
     assert auxiliary[2:] == ["--all"]
 
@@ -118,7 +118,7 @@ def test_evaluation_does_not_validate_aggregate_only_output(monkeypatch) -> None
     monkeypatch.setattr(pipeline, "resolve_config", real_config)
     monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 0)
 
-    assert pipeline.main(["real", "--model", "csmcir", "--evaluate"]) == 0
+    assert pipeline.main(["real", "--model", "csmcir", "--evaluate", "--apply", "--allow-gpu-eval", "--allow-preparation"]) == 0
     assert "validate_results.py" not in [Path(argv[1]).name for argv in called]
     assert "rebuild_index.py" not in [Path(argv[1]).name for argv in called]
 

@@ -135,6 +135,12 @@ class LIMNAdapter(OfficialScriptAdapter):
         if request.checkpoint_id != "base_iter0_all_categories":
             command.extend(("--category", request.checkpoint_id.removeprefix("base_iter0_")))
         return command
+class SyntheticModelAdapter(OfficialScriptAdapter):
+    model_id = "synthetic_model"
+    script = "src/evaluator.py"
+
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        return [python_executable(self.model), str(source / self.script)]
 
 
-ADAPTERS = {adapter.model_id: adapter for adapter in (CSMCIRAdapter, EncoderAdapter, HintAdapter, PairAdapter, AirKnowAdapter, ConeSepAdapter, HabitAdapter, IntentAdapter, CLVCNetAdapter, DCNetAdapter, CombinerNoftAdapter, CLIP4CirFullftAdapter, TGCIRAdapter, SPRCAdapter, LIMNAdapter)}
+ADAPTERS = {adapter.model_id: adapter for adapter in (CSMCIRAdapter, EncoderAdapter, HintAdapter, PairAdapter, AirKnowAdapter, ConeSepAdapter, HabitAdapter, IntentAdapter, CLVCNetAdapter, DCNetAdapter, CombinerNoftAdapter, CLIP4CirFullftAdapter, TGCIRAdapter, SPRCAdapter, LIMNAdapter, SyntheticModelAdapter)}

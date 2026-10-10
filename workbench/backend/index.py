@@ -73,6 +73,8 @@ def rebuild_index(results_root: Path | None = None, database_path: Path = DATABA
                 rows["queries"].append([run.run_id, query.query_id, query.category, query.annotation_index, query.reference_id, query.target_id, json.dumps(query.raw_captions), query.model_input_text, query.target_rank])
                 rows["top_results"].extend([run.run_id, query.query_id, item.rank, item.image_id, item.score] for item in query.top_results)
         for table, table_rows in rows.items():
+            if not table_rows:
+                continue
             with tempfile.NamedTemporaryFile(mode="w", newline="", dir=database_path.parent, suffix=".csv", delete=False) as file:
                 csv.writer(file).writerows(table_rows)
                 source = Path(file.name)

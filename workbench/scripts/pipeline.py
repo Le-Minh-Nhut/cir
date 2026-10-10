@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -45,6 +46,12 @@ def stage_key(stage: Stage) -> str:
     return ":".join(parts)
 
 
+def dependency_key(stage: Stage) -> str:
+    """Checkpoint/protocol-independent key used by stage dependency edges."""
+    return f"{stage.name}:{stage.model_id}" if stage.model_id else stage.name
+
+
+
 def compute_stage_input_fingerprint(stage: Stage, config: WorkbenchConfig | None = None, state: dict | None = None) -> str:
     import hashlib
     from workbench.backend.registry import sha256_file
@@ -84,14 +91,16 @@ def compute_stage_input_fingerprint(stage: Stage, config: WorkbenchConfig | None
 
     # Source git commit
     if stage.model_id and config:
-        source_dir = config.WORKBENCH_THIRD_PARTY_ROOT / stage.model_id
-        if source_dir.is_dir() and (source_dir / ".git").exists():
-            try:
+        from workbench.backend.registry import model_by_id
+        try:
+            m = model_by_id(stage.model_id)
+            sdir = m.get("source_dir") or stage.model_id
+            source_dir = config.WORKBENCH_THIRD_PARTY_ROOT / sdir
+            if source_dir.is_dir() and (source_dir / ".git").exists():
                 head = subprocess.check_output(["git", "-C", str(source_dir), "rev-parse", "HEAD"], text=True).strip()
                 hasher.update(f"GIT:{head}".encode("utf-8"))
-            except Exception:
-                pass
-
+        except Exception:
+            pass
     # Dependency state
     if state and stage.dependencies:
         stages_rec = state.get("stages", {})
@@ -233,15 +242,69 @@ def layout_prepare(args: argparse.Namespace, config: WorkbenchConfig) -> Stage:
     return run_stage("dataset-link", command("prepare_dataset.py", "--dataset-root", dataset_root(args, config), "--model", "csmcir"), model_id="csmcir", required_capability="allow_preparation")
 
 
+def model_eval_inputs(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> tuple[Path, ...]:
+    from workbench.backend.registry import checkpoint_path
+    inputs = []
+    mid = model_dict["model_id"]
+    ckpts = model_dict.get("checkpoint_variants", [])
+    if args.checkpoint:
+        ckpts = [c for c in ckpts if c["checkpoint_id"] == args.checkpoint]
+    for c in ckpts:
+        inputs.append(checkpoint_path(mid, c, config.WORKBENCH_CHECKPOINT_ROOT))
+    if mid == "limn":
+        for cat in ("dress", "shirt", "toptee"):
+            inputs.append(config.WORKBENCH_CHECKPOINT_ROOT / "limn" / f"0_{cat}_best_model.pt")
+    ds_root = dataset_root(args, config)
+    for cat in ("dress", "shirt", "toptee"):
+        inputs.append(ds_root / "image_splits" / f"split.{cat}.val.json")
+        inputs.append(ds_root / "captions" / f"cap.{cat}.val.json")
+    if mid == "csmcir":
+        for cat in ("dress", "shirt", "toptee"):
+            inputs.append(ds_root / "qwen_captions" / f"{cat}_cot_val.json")
+            inputs.append(config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "COT_ours2" / "fashioniq" / f"{cat}_cot_val.json")
+    return tuple(inputs)
+
+
+def model_eval_outputs(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> tuple[Path, ...]:
+    mid = model_dict["model_id"]
+    ckpt_id = getattr(args, "checkpoint", None) or (model_dict["checkpoint_variants"][0]["checkpoint_id"] if model_dict.get("checkpoint_variants") else "default")
+    repo_root = getattr(config, "CIR_REPO_ROOT", REPOSITORY)
+    report_file = repo_root / "workbench" / "artifacts" / "reports" / f"{mid}_{ckpt_id}_aggregate.json"
+    return (report_file,)
 def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
+    from workbench.backend.registry import checkpoint_path, model_by_id
+    model_obj = model_by_id(args.model) if args.model else None
+    sdir = model_obj.get("source_dir") if model_obj else None
+    sync_outputs = (config.WORKBENCH_THIRD_PARTY_ROOT / sdir,) if sdir else ()
+
     sync = (
-        run_stage("sync", command("sync_upstreams.py", *selection(args), "--output-root", config.WORKBENCH_THIRD_PARTY_ROOT), model_id=args.model, required_capability="allow_network")
+        run_stage(
+            "sync",
+            command("sync_upstreams.py", *selection(args), "--output-root", config.WORKBENCH_THIRD_PARTY_ROOT),
+            model_id=args.model,
+            output_paths=sync_outputs,
+            required_capability="allow_network",
+        )
         if args.sync_sources
         else Stage("sync", skipped="pass --sync-sources")
     )
     link = layout_prepare(args, config)
     download_args = [*selection(args), *(["--checkpoint", args.checkpoint] if args.checkpoint else []), "--output-root", config.WORKBENCH_CHECKPOINT_ROOT]
-    checkpoints = run_stage("checkpoint", command("download_checkpoints.py", *download_args), model_id=args.model, checkpoint_id=args.checkpoint, required_capability="allow_large_downloads") if args.download_checkpoints else Stage("checkpoint", skipped="pass --download-checkpoints")
+    ckpt_outputs = ()
+    if model_obj:
+        ckpts = model_obj.get("checkpoint_variants", [])
+        if args.checkpoint:
+            ckpts = [c for c in ckpts if c["checkpoint_id"] == args.checkpoint]
+        ckpt_outputs = tuple(checkpoint_path(args.model, c, config.WORKBENCH_CHECKPOINT_ROOT) for c in ckpts)
+
+    checkpoints = run_stage(
+        "checkpoint",
+        command("download_checkpoints.py", *download_args),
+        model_id=args.model,
+        checkpoint_id=args.checkpoint,
+        output_paths=ckpt_outputs,
+        required_capability="allow_large_downloads",
+    ) if args.download_checkpoints else Stage("checkpoint", skipped="pass --download-checkpoints")
     selected_auxiliary_models = [args.model] if args.model in auxiliary_model_ids() else ([] if args.model else sorted(auxiliary_model_ids()))
     if args.download_auxiliary_assets and selected_auxiliary_models:
         auxiliary_args = ["--model", selected_auxiliary_models[0]] if args.model else ["--all"]
@@ -268,7 +331,19 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
         evaluation_args.extend(["--top-k", str(args.top_k)])
         if args.continue_on_error:
             evaluation_args.append("--continue-on-error")
-        evaluation = run_stage("evaluation", command("evaluate_models.py", *evaluation_args), model_id=args.model, checkpoint_id=args.checkpoint, protocol=args.protocol, dependencies=("runtime-preflight",), required_capability="allow_gpu_eval")
+        eval_inputs = model_eval_inputs(model_obj, args, config) if model_obj else ()
+        eval_outputs = model_eval_outputs(model_obj, args, config) if model_obj else ()
+        evaluation = run_stage(
+            "evaluation",
+            command("evaluate_models.py", *evaluation_args),
+            model_id=args.model,
+            checkpoint_id=args.checkpoint,
+            protocol=args.protocol,
+            dependencies=("runtime-preflight",),
+            input_paths=eval_inputs,
+            output_paths=eval_outputs,
+            required_capability="allow_gpu_eval",
+        )
     else:
         evaluation = Stage("evaluation", skipped="pass --evaluate")
     validation_index = (
@@ -277,6 +352,8 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             command("validate_results.py", "--root", config.WORKBENCH_RESULTS_ROOT, "--strict-real"),
             command("rebuild_index.py", "--results-root", config.WORKBENCH_RESULTS_ROOT),
             dependencies=("evaluation",),
+            input_paths=(config.WORKBENCH_RESULTS_ROOT,),
+            output_paths=(getattr(config, "CIR_REPO_ROOT", REPOSITORY) / "workbench" / "artifacts" / "workbench.duckdb",),
         )
         if args.rebuild_index
         else Stage("validation-index", skipped="pass --rebuild-index after schema-v2 result JSON exists")
@@ -300,57 +377,146 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
 
 
 def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
-    model = args.model
+    from workbench.backend.registry import checkpoint_path, auxiliary_destination, auxiliary_assets_for_model
+    registry = load_registry()
+    models = registry["models"]
+    if args.model:
+        selected_models = [m for m in models if m["model_id"] == args.model]
+    else:
+        selected_models = models
+
     early_doctor = run_stage("doctor", command("doctor.py", "--scope", "workbench"))
     ds_check = dataset_check(args, config)
-    sync = run_stage("sync", command("sync_upstreams.py", *selection(args), "--output-root", config.WORKBENCH_THIRD_PARTY_ROOT), model_id=model, required_capability="allow_network")
-    env_cmd = ["--model", model] if model else ["--list"]
-    if getattr(args, "allow_env_install", False) and getattr(args, "apply", False):
-        env_cmd.extend(["--create", "--allow-env-install"])
-    env_stage = run_stage("environment", command("manage_environment.py", *env_cmd), model_id=model, dependencies=("sync",), required_capability="allow_env_install" if getattr(args, "allow_env_install", False) else None)
-    prep_cmd = ["--model", model, "--dataset-root", str(dataset_root(args, config))] if model else ["--list"]
-    if getattr(args, "allow_preparation", False) and getattr(args, "apply", False):
-        prep_cmd.extend(["--execute", "--allow-preparation"])
-    prep_stage = run_stage("preparation", command("prepare_model.py", *prep_cmd), model_id=model, dependencies=("dataset", "sync"), required_capability="allow_preparation" if getattr(args, "allow_preparation", False) else None)
-    download_args = [*selection(args), *(["--checkpoint", args.checkpoint] if args.checkpoint else []), "--output-root", config.WORKBENCH_CHECKPOINT_ROOT]
-    ckpt_stage = run_stage("checkpoint", command("download_checkpoints.py", *download_args), model_id=model, checkpoint_id=args.checkpoint, required_capability="allow_large_downloads")
-    selected_auxiliary_models = [args.model] if args.model in auxiliary_model_ids() else ([] if args.model else sorted(auxiliary_model_ids()))
-    if selected_auxiliary_models:
-        aux_args = ["--model", selected_auxiliary_models[0]] if args.model else ["--all"]
-        aux_stage = run_stage("auxiliary-assets", command("download_auxiliary_assets.py", *aux_args), model_id=model, required_capability="allow_network")
-    else:
-        aux_stage = Stage("auxiliary-assets", skipped="selected model has no registered auxiliary assets")
-    final_doctor_args = ["--scope", "real", "--dataset-root", str(dataset_root(args, config))]
-    if model:
-        final_doctor_args.extend(["--model", model])
-    runtime_stage = run_stage("runtime-preflight", command("doctor.py", *final_doctor_args), model_id=model, dependencies=("sync", "checkpoint", "preparation", "environment"))
-    eval_args = [*selection(args, runnable=True), "--dataset-root", str(dataset_root(args, config))]
-    if model == "csmcir":
-        eval_args[-1] = str(config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset")
-        eval_args.extend(["--canonical-dataset-root", str(dataset_root(args, config))])
-    if args.checkpoint:
-        eval_args.extend(["--checkpoint", args.checkpoint])
-    if args.protocol:
-        eval_args.extend(["--protocol", args.protocol])
-    eval_args.extend(["--top-k", str(args.top_k)])
-    if args.continue_on_error:
-        eval_args.append("--continue-on-error")
-    eval_stage = run_stage("evaluation", command("evaluate_models.py", *eval_args), model_id=model, checkpoint_id=args.checkpoint, protocol=args.protocol, dependencies=("runtime-preflight",), required_capability="allow_gpu_eval")
-    val_idx_stage = run_stage("validation-index", command("validate_results.py", "--root", config.WORKBENCH_RESULTS_ROOT, "--strict-real"), command("rebuild_index.py", "--results-root", config.WORKBENCH_RESULTS_ROOT), dependencies=("evaluation",))
-    return [early_doctor, ds_check, sync, env_stage, prep_stage, ckpt_stage, aux_stage, runtime_stage, eval_stage, val_idx_stage]
+    stages = [early_doctor, ds_check]
 
+    synced_sources = set()
+    for m in selected_models:
+        mid = m["model_id"]
+        sdir = m.get("source_dir")
+        sync_dep = f"sync:{mid}"
+        sync_out = (config.WORKBENCH_THIRD_PARTY_ROOT / sdir,) if sdir else ()
+        if sdir and sdir in synced_sources:
+            first_m = next(m2["model_id"] for m2 in selected_models if m2.get("source_dir") == sdir)
+            sync_dep = f"sync:{first_m}"
+        else:
+            if sdir:
+                synced_sources.add(sdir)
+            stages.append(run_stage(
+                "sync",
+                command("sync_upstreams.py", "--model", mid, "--output-root", config.WORKBENCH_THIRD_PARTY_ROOT),
+                model_id=mid,
+                output_paths=sync_out,
+                required_capability="allow_network",
+            ))
 
+        env_cmd = ["--model", mid]
+        if m.get("environment_required") and getattr(args, "allow_env_install", False) and getattr(args, "apply", False):
+            env_cmd.extend(["--create", "--allow-env-install"])
+        stages.append(run_stage(
+            "environment",
+            command("manage_environment.py", *env_cmd),
+            model_id=mid,
+            dependencies=(sync_dep,),
+            required_capability="allow_env_install" if getattr(args, "allow_env_install", False) else None,
+        ))
+
+        prep_cmd = ["--model", mid, "--dataset-root", str(dataset_root(args, config))]
+        prep_out = (config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset",) if mid == "csmcir" else ()
+        if mid == "csmcir" and getattr(args, "allow_preparation", False) and getattr(args, "apply", False):
+            prep_cmd.extend(["--execute", "--allow-preparation"])
+        stages.append(run_stage(
+            "preparation",
+            command("prepare_model.py", *prep_cmd),
+            model_id=mid,
+            dependencies=("dataset", sync_dep),
+            output_paths=prep_out,
+            required_capability="allow_preparation" if getattr(args, "allow_preparation", False) else None,
+        ))
+
+        ckpt_args = ["--model", mid, "--output-root", str(config.WORKBENCH_CHECKPOINT_ROOT)]
+        if args.checkpoint:
+            ckpt_args.extend(["--checkpoint", args.checkpoint])
+        ckpts = m.get("checkpoint_variants", [])
+        if args.checkpoint:
+            ckpts = [c for c in ckpts if c["checkpoint_id"] == args.checkpoint]
+        ckpt_outs = tuple(checkpoint_path(mid, c, config.WORKBENCH_CHECKPOINT_ROOT) for c in ckpts)
+        stages.append(run_stage(
+            "checkpoint",
+            command("download_checkpoints.py", *ckpt_args),
+            model_id=mid,
+            checkpoint_id=args.checkpoint,
+            output_paths=ckpt_outs,
+            required_capability="allow_large_downloads",
+        ))
+
+        if mid in auxiliary_model_ids():
+            aux_outs = tuple(auxiliary_destination(a, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) for a in auxiliary_assets_for_model(mid))
+            stages.append(run_stage(
+                "auxiliary-assets",
+                command("download_auxiliary_assets.py", "--model", mid),
+                model_id=mid,
+                output_paths=aux_outs,
+                required_capability="allow_network",
+            ))
+
+        preflight_deps = (sync_dep, f"checkpoint:{mid}", f"preparation:{mid}", f"environment:{mid}")
+        stages.append(run_stage(
+            "runtime-preflight",
+            command("doctor.py", "--scope", "real", "--dataset-root", str(dataset_root(args, config)), "--model", mid),
+            model_id=mid,
+            dependencies=preflight_deps,
+        ))
+
+        eval_args = ["--model", mid, "--dataset-root", str(dataset_root(args, config))]
+        if mid == "csmcir":
+            eval_args[2] = str(config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset")
+            eval_args.extend(["--canonical-dataset-root", str(dataset_root(args, config))])
+        if args.checkpoint:
+            eval_args.extend(["--checkpoint", args.checkpoint])
+        if args.protocol:
+            eval_args.extend(["--protocol", args.protocol])
+        eval_args.extend(["--top-k", str(args.top_k)])
+        if args.continue_on_error:
+            eval_args.append("--continue-on-error")
+
+        eval_deps = (f"runtime-preflight:{mid}",)
+        eval_ins = model_eval_inputs(m, args, config)
+        eval_outs = model_eval_outputs(m, args, config)
+        stages.append(run_stage(
+            "evaluation",
+            command("evaluate_models.py", *eval_args),
+            model_id=mid,
+            checkpoint_id=args.checkpoint,
+            protocol=args.protocol,
+            dependencies=eval_deps,
+            input_paths=eval_ins,
+            output_paths=eval_outs,
+            required_capability="allow_gpu_eval",
+        ))
+
+    all_eval_deps = tuple(f"evaluation:{m['model_id']}" for m in selected_models)
+    stages.append(run_stage(
+        "validation-index",
+        command("validate_results.py", "--root", config.WORKBENCH_RESULTS_ROOT, "--strict-real"),
+        command("rebuild_index.py", "--results-root", config.WORKBENCH_RESULTS_ROOT),
+        dependencies=all_eval_deps,
+        input_paths=(config.WORKBENCH_RESULTS_ROOT,),
+        output_paths=(getattr(config, "CIR_REPO_ROOT", REPOSITORY) / "workbench" / "artifacts" / "workbench.duckdb",),
+    ))
+    return stages
 def setup_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
-    return all_stages(args, config)[:7]
+    all_s = all_stages(args, config)
+    return [s for s in all_s if s.name in ("doctor", "dataset", "sync", "environment", "preparation", "checkpoint", "auxiliary-assets")]
 
 
 def reproduce_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
-    return all_stages(args, config)[7:9]
+    all_s = all_stages(args, config)
+    return [s for s in all_s if s.name in ("runtime-preflight", "evaluation")]
 
 
 def analyze_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
-    return [all_stages(args, config)[9]]
-
+    all_s = all_stages(args, config)
+    return [s for s in all_s if s.name == "validation-index"]
 
 def stages_for(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
     if args.mode == "mock":
@@ -401,7 +567,7 @@ def run_stages(
     continue_on_error: bool = False,
     resume: bool = False,
     force_stages: set[str] | None = None,
-    state_path: Path = STAGE_STATE_PATH,
+    state_path: Path | None = None,
     apply: bool = False,
     authorized_capabilities: set[str] | None = None,
     config: WorkbenchConfig | None = None,
@@ -409,106 +575,160 @@ def run_stages(
     report_path: Path | None = None,
 ) -> int:
     cfg = config or resolve_config()
+    if state_path is None:
+        repo_root = getattr(cfg, "CIR_REPO_ROOT", REPOSITORY)
+        state_path = repo_root / "workbench" / "artifacts" / "pipeline_state.json"
     failed = False
     force_set = set(force_stages or ())
     authorized = set(authorized_capabilities or ())
     state = load_pipeline_state(state_path) if resume else {}
     stage_records = state.setdefault("stages", {})
     rerun_stages = set()
-
+    failed_stages = set()
+    completed_stages = set()
     planning_mode = dry_run or (mode in ("all", "setup", "reproduce") and not apply)
     if mode in ("all", "setup", "reproduce") and not apply and not dry_run:
         print("  [PLAN] planning mode by default; pass --apply with capability authorization flags to execute")
 
-    for number, stage in enumerate(stages, 1):
-        skey = stage_key(stage)
-        print(f"[{number}/{len(stages)}] {stage.name}")
-        if not stage.commands:
-            print(f"  [SKIP] {stage.skipped}")
-            continue
-
-        # Authorization check
-        if apply and stage.required_capability and stage.required_capability not in authorized:
-            print(f"  [BLOCKED] {stage.name}: BLOCKED_AUTHORIZATION_REQUIRED: pass --{stage.required_capability.replace('_', '-')}", file=sys.stderr)
-            failed = True
-            if not continue_on_error:
-                return 1
-            continue
-
-        fingerprint = compute_stage_input_fingerprint(stage, cfg, state)
-
-        # Check dependency invalidation
-        dep_invalidated = any(dep in rerun_stages for dep in stage.dependencies)
-
-        # Resume check
-        can_skip = False
-        if resume and not dep_invalidated and (not force_set or (stage.name not in force_set and skey not in force_set)):
-            prev = stage_records.get(skey) or stage_records.get(stage.name)
-            if prev and prev.get("status") == "COMPLETE":
-                if prev.get("fingerprint") == fingerprint:
-                    if validate_stage_outputs(stage, prev.get("output_fingerprints")):
-                        can_skip = True
-
-        if can_skip:
-            print(f"  [SKIP] resume: already completed with matching fingerprint and verified outputs")
-            continue
-
-        rerun_stages.add(stage.name)
-        rerun_stages.add(skey)
-
-        if not planning_mode:
-            stage_records[skey] = {
-                "stage_id": skey,
-                "name": stage.name,
-                "model_id": stage.model_id,
-                "status": "RUNNING",
-                "fingerprint": fingerprint,
-                "started_at": datetime.now(UTC).isoformat(),
+    def write_report() -> None:
+        if report_path and not dry_run:
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            workflow_report = {
+                "mode": mode,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "success": not failed,
+                "status": "SUCCESS" if not failed else ("PARTIAL" if any(s.get("status") == "COMPLETE" for s in stage_records.values()) else "FAILED"),
+                "stages": stage_records,
             }
-            save_pipeline_state(state, state_path)
+            temp_rep = report_path.with_suffix(f".tmp.{os.getpid()}")
+            temp_rep.write_text(json.dumps(workflow_report, indent=2) + "\n", encoding="utf-8")
+            temp_rep.replace(report_path)
+    try:
+        for number, stage in enumerate(stages, 1):
+            skey = stage_key(stage)
+            print(f"[{number}/{len(stages)}] {stage.name}")
+            if not stage.commands:
+                print(f"  [SKIP] {stage.skipped}")
+                continue
 
-        stage_failed = False
-        for argv in stage.commands:
-            print(f"  [{'PLAN' if planning_mode else 'RUN'}] {shlex.join(argv)}")
-            if stage.name == "evaluation":
-                print("  [INFO] official reproduction only; no instrumented ranking export")
-            if planning_mode:
+            # Dependency execution prerequisite check
+            unmet_deps = [dep for dep in stage.dependencies if dep in failed_stages]
+            if unmet_deps:
+                print(f"  [SKIP] {stage.name}: SKIPPED_DEPENDENCY: dependency {unmet_deps[0]} failed", file=sys.stderr)
+                failed = True
+                failed_stages.add(stage.name)
+                failed_stages.add(dependency_key(stage))
+                if not dry_run and not (planning_mode and not apply):
+                    stage_records[skey] = {
+                        "stage_id": skey,
+                        "name": stage.name,
+                        "model_id": stage.model_id,
+                        "status": "SKIPPED_DEPENDENCY",
+                        "fingerprint": None,
+                        "finished_at": datetime.now(UTC).isoformat(),
+                        "return_code": 125,
+                    }
+                    save_pipeline_state(state, state_path)
                 continue
-            status = run_command(argv)
-            if status == 0:
+
+            is_side_effecting = bool(stage.required_capability)
+            stage_planning = planning_mode or (is_side_effecting and not apply)
+
+            # Explicit authorization check for side-effecting stages
+            if is_side_effecting:
+                if not apply and not dry_run:
+                    print(f"  [PLAN] {stage.name}: side-effecting stage requires --apply and --{stage.required_capability.replace('_', '-')} to execute")
+                elif apply and stage.required_capability not in authorized:
+                    print(f"  [BLOCKED] {stage.name}: BLOCKED_AUTHORIZATION_REQUIRED: pass --{stage.required_capability.replace('_', '-')}", file=sys.stderr)
+                    failed = True
+                    failed_stages.add(stage.name)
+                    failed_stages.add(dependency_key(stage))
+                    stage_records[skey] = {
+                        "stage_id": skey,
+                        "name": stage.name,
+                        "model_id": stage.model_id,
+                        "status": "BLOCKED_AUTHORIZATION_REQUIRED",
+                        "fingerprint": None,
+                        "finished_at": datetime.now(UTC).isoformat(),
+                        "return_code": 126,
+                    }
+                    save_pipeline_state(state, state_path)
+                    if not continue_on_error:
+                        return 1
+                    continue
+
+            fingerprint = compute_stage_input_fingerprint(stage, cfg, state)
+
+            # Check dependency invalidation
+            dep_invalidated = any(dep in rerun_stages for dep in stage.dependencies)
+
+            # Resume check
+            can_skip = False
+            if resume and not dep_invalidated and (not force_set or (stage.name not in force_set and skey not in force_set)):
+                prev = stage_records.get(skey) or stage_records.get(stage.name)
+                if prev and prev.get("status") == "COMPLETE":
+                    if prev.get("fingerprint") == fingerprint:
+                        if validate_stage_outputs(stage, prev.get("output_fingerprints")):
+                            can_skip = True
+
+            if can_skip:
+                print(f"  [SKIP] resume: already completed with matching fingerprint and verified outputs")
+                completed_stages.add(stage.name)
+                completed_stages.add(skey)
                 continue
-            stage_failed = True
-            failed = True
-            print(f"  [BLOCKED] {stage.name} exited with status {status}", file=sys.stderr)
-            if not planning_mode:
+
+            rerun_stages.add(stage.name)
+            rerun_stages.add(skey)
+
+            if not stage_planning:
+                stage_records[skey] = {
+                    "stage_id": skey,
+                    "name": stage.name,
+                    "model_id": stage.model_id,
+                    "status": "RUNNING",
+                    "fingerprint": fingerprint,
+                    "started_at": datetime.now(UTC).isoformat(),
+                }
+                save_pipeline_state(state, state_path)
+
+            stage_failed = False
+            for argv in stage.commands:
+                print(f"  [{'PLAN' if stage_planning else 'RUN'}] {shlex.join(argv)}")
+                if stage.name == "evaluation":
+                    print("  [INFO] official reproduction only; no instrumented ranking export")
+                if stage_planning:
+                    continue
+                status = run_command(argv)
+                if status == 0:
+                    continue
+                stage_failed = True
+                failed = True
+                failed_stages.add(stage.name)
+                failed_stages.add(dependency_key(stage))
+                print(f"  [BLOCKED] {stage.name} exited with status {status}", file=sys.stderr)
+                if not stage_planning:
+                    stage_records[skey].update({
+                        "status": "FAILED",
+                        "finished_at": datetime.now(UTC).isoformat(),
+                        "return_code": status,
+                    })
+                    save_pipeline_state(state, state_path)
+                if stage.name == "runtime-preflight" or not continue_on_error:
+                    return 1
+                break
+
+            if not stage_planning and not stage_failed:
+                completed_stages.add(stage.name)
+                completed_stages.add(skey)
                 stage_records[skey].update({
-                    "status": "FAILED",
+                    "status": "COMPLETE",
                     "finished_at": datetime.now(UTC).isoformat(),
-                    "return_code": status,
+                    "return_code": 0,
+                    "output_fingerprints": compute_stage_output_fingerprints(stage),
                 })
                 save_pipeline_state(state, state_path)
-            if stage.name == "runtime-preflight" or not continue_on_error:
-                return 1
-            break
-
-        if not planning_mode and not stage_failed:
-            stage_records[skey].update({
-                "status": "COMPLETE",
-                "finished_at": datetime.now(UTC).isoformat(),
-                "return_code": 0,
-                "output_fingerprints": compute_stage_output_fingerprints(stage),
-            })
-            save_pipeline_state(state, state_path)
-
-    if report_path and not planning_mode:
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        workflow_report = {
-            "mode": mode,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "success": not failed,
-            "stages": stage_records,
-        }
-        report_path.write_text(json.dumps(workflow_report, indent=2) + "\n", encoding="utf-8")
+    finally:
+        write_report()
 
     return 1 if failed else 0
 
@@ -552,6 +772,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "prepare" and args.dataset_root is None and not config.FASHIONIQ_ROOT:
         parser_for().error("prepare requires --dataset-root or FASHIONIQ_ROOT")
     force_stages = set(args.force_stage) if args.force_stage else None
+    if args.all_models and args.model:
+        parser_for().error("--all-models cannot be combined with --model")
+    if force_stages:
+        known = {s.name for s in stages_for(args, config)}
+        unknown = sorted(force_stages - known)
+        if unknown:
+            parser_for().error(f"unknown --force-stage value(s): {', '.join(unknown)}")
+    if args.dry_run and args.apply:
+        parser_for().error("--dry-run cannot be combined with --apply")
     authorized_caps = set()
     if args.allow_network:
         authorized_caps.add("allow_network")

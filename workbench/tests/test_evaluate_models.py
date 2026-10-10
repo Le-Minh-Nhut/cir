@@ -20,6 +20,17 @@ def load_module():
 
 
 
+def _fake_isolated_interpreter(tmp_path: Path) -> Path:
+    """Create a verifiable isolated-environment interpreter path for adapter tests."""
+    venv = tmp_path / "fake_venv"
+    (venv / "bin").mkdir(parents=True, exist_ok=True)
+    (venv / "pyvenv.cfg").write_text("home = /usr\n")
+    interpreter = venv / "bin" / "python"
+    interpreter.write_text("#!/bin/sh\nexit 0\n")
+    interpreter.chmod(0o755)
+    return interpreter.resolve()
+
+
 def config(tmp_path: Path) -> WorkbenchConfig:
     return WorkbenchConfig(tmp_path, tmp_path / "data", tmp_path / "FashionIQ", "127.0.0.1", 8000, 5173, tmp_path / "checkpoints", tmp_path / "results", tmp_path / "third_party")
 def records():
@@ -106,7 +117,7 @@ def test_limn_adapter_runs_full_bundle_or_named_category(monkeypatch, tmp_path: 
     from workbench.backend.adapters.base import EvalRequest
     from workbench.backend.adapters.models import LIMNAdapter
 
-    monkeypatch.setenv("WORKBENCH_LIMN_PYTHON", sys.executable)
+    monkeypatch.setenv("WORKBENCH_LIMN_PYTHON", str(_fake_isolated_interpreter(tmp_path)))
     adapter = LIMNAdapter()
     source = tmp_path / "LIMN"
     checkpoint_root = tmp_path / "checkpoints" / "limn"
@@ -145,10 +156,11 @@ def test_dcnet_command_uses_configured_model_interpreter(tmp_path: Path, monkeyp
     from workbench.backend.adapters.base import EvalRequest
     from workbench.backend.adapters.models import DCNetAdapter
 
-    monkeypatch.setenv("WORKBENCH_DCNET_PYTHON", sys.executable)
+    interpreter = _fake_isolated_interpreter(tmp_path)
+    monkeypatch.setenv("WORKBENCH_DCNET_PYTHON", str(interpreter))
     command = DCNetAdapter().command(tmp_path / "DCNet", tmp_path / "fashioniq_dcnet", EvalRequest("dcnet", "fashioniq_run_directory", "fashioniq_full_gallery_ref_excluded", tmp_path / "FashionIQ", tmp_path / "result.json"))
 
-    assert command == [str(Path(sys.executable).resolve()), str(tmp_path / "DCNet" / "test.py"), "--resume", str(tmp_path / "fashioniq_dcnet")]
+    assert command == [str(interpreter), str(tmp_path / "DCNet" / "test.py"), "--resume", str(tmp_path / "fashioniq_dcnet")]
 
 def test_missing_checkpoint_is_blocked(monkeypatch, tmp_path: Path) -> None:
     module = load_module()

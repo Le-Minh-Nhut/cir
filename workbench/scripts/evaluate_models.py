@@ -191,7 +191,8 @@ def parser_for(registry: dict) -> argparse.ArgumentParser:
 
 
 def log_dir(config: WorkbenchConfig, plan: EvaluationPlan, timestamp: datetime) -> Path:
-    return config.CIR_REPO_ROOT / "workbench" / "artifacts" / "logs" / f"{timestamp:%Y%m%dT%H%M%SZ}_{plan.model_id}_{plan.checkpoint_id}"
+    repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
+    return repo_root / "workbench" / "artifacts" / "logs" / f"{timestamp:%Y%m%dT%H%M%S%fZ}_{plan.model_id}_{plan.checkpoint_id}"
 
 
 def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
@@ -301,7 +302,11 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
         "environment_digest": metadata["environment_digest"],
         "return_code": code,
     }
-    (directory / "aggregate_report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    report_json = json.dumps(report, indent=2) + "\n"
+    (directory / "aggregate_report.json").write_text(report_json, encoding="utf-8")
+    reports_dir = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2]) / "workbench" / "artifacts" / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    (reports_dir / f"{plan.model_id}_{plan.checkpoint_id}_aggregate.json").write_text(report_json, encoding="utf-8")
     return code
 
 

@@ -31,17 +31,19 @@ def status(model: dict, config) -> dict:
     root = config.FASHIONIQ_ROOT
     contract = preparation_contract_for_model(model)
     if contract is None:
+        from workbench.backend.fashioniq_layout import standard_paths
+        missing = _check_paths(standard_paths(root))
         return {
             "model_id": model_id,
             "preparation_id": None,
-            "contract_type": "none",
-            "automation_policy": "N/A",
+            "contract_type": "standard_fashioniq",
+            "automation_policy": "NONE_REQUIRED",
             "deterministic": "N/A",
-            "raw_inputs_missing": [],
+            "raw_inputs_missing": missing,
             "generated_artifacts_missing": [],
             "external_assets": [],
-            "fully_prepared": False,
-            "notes": "No preparation contract; FashionIQ standard layout required.",
+            "fully_prepared": not missing,
+            "notes": "Standard FashionIQ layout required; no custom generated artifacts.",
         }
     raw_missing = _check_paths(preparation_paths(contract, root, "raw_inputs"))
     gen_missing = _check_paths(preparation_paths(contract, root, "generated_artifacts"))

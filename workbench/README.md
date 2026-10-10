@@ -301,9 +301,15 @@ All operator scripts use `python workbench/scripts/NAME.py ...`. These are curre
 `mock` | `prepare` | `real` | `serve` | `status` | `setup` | `reproduce` | `analyze` | `all` | `report`
 [--dataset-root PATH] [--sync-sources] [--download-checkpoints]
 [--download-auxiliary-assets] [--evaluate] [--rebuild-index] [--serve]
-[--dry-run] [--continue-on-error] [--resume] [--force-stage STAGE]
-[--model MODEL_ID] [--protocol PROTOCOL_ID]
-[--checkpoint CHECKPOINT_ID] [--top-k POSITIVE_INTEGER]
+[--dry-run] [--apply] [--continue-on-error] [--resume] [--force-stage STAGE]
+[--allow-network] [--allow-large-downloads] [--allow-env-install]
+[--allow-preparation] [--allow-gpu-eval]
+[--model MODEL_ID | --all-models] [--protocol PROTOCOL_ID]
+[--checkpoint CHECKPOINT_ID] [--top-k POSITIVE_INTEGER] [--report PATH]
+
+# Authorization: side-effecting workflows (all/setup/reproduce) plan by default.
+# Execution requires --apply plus the matching --allow-* capability.
+# --dry-run forbids --apply and writes no state or logs.
 
 # manage_environment.py
 (--list | --model MODEL_ID) [--create --allow-env-install] [--dry-run] [--json]

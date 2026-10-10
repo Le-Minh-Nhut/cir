@@ -15,7 +15,7 @@ from workbench.scripts.validate_results import validate_root
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-root", type=Path, default=resolve_config().WORKBENCH_RESULTS_ROOT)
-    parser.add_argument("--database", type=Path, default=DATABASE_PATH)
+    parser.add_argument("--database", type=Path, default=None)
     parser.add_argument("--check-only", action="store_true", help="Check result artifacts without creating an index.")
     parser.add_argument("--validate-first", action="store_true", help="Validate result artifacts before rebuilding.")
     args = parser.parse_args(argv)
@@ -24,7 +24,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.check_only:
         print("[OK] index unchanged")
         return 0
-    print(f"[OK] indexed {rebuild_index(args.results_root, args.database)} runs into {args.database}")
+    database = args.database
+    if database is None:
+        repo_root = getattr(resolve_config(), "CIR_REPO_ROOT", DATABASE_PATH.parents[1])
+        database = repo_root / "workbench" / "artifacts" / "workbench.duckdb"
+    print(f"[OK] indexed {rebuild_index(args.results_root, database)} runs into {database}")
     return 0
 
 

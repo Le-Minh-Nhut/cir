@@ -16,7 +16,10 @@ PREPARATION_CONTRACT_REGISTRY_PATH = ROOT / "registry" / "preparation_contracts.
 CHECKPOINT_ROOT = ROOT / "artifacts" / "checkpoints"
 
 
-def load_registry(path: Path = REGISTRY_PATH) -> dict[str, Any]:
+def load_registry(path: Path | None = None) -> dict[str, Any]:
+    if path is None:
+        custom = os.environ.get("WORKBENCH_REGISTRY_PATH")
+        path = Path(custom).resolve() if custom else REGISTRY_PATH
     with path.open(encoding="utf-8") as handle:
         registry = yaml.safe_load(handle)
     if registry.get("schema_version") != 1 or not isinstance(registry.get("models"), list):

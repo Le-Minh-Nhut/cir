@@ -81,7 +81,7 @@ def status(model: dict, config) -> dict:
         "documented_pytorch": env_meta.get("pytorch"),
         "documented_cuda": env_meta.get("cuda"),
         "environment_confidence": env_meta.get("confidence"),
-        "ready": interp["status"] == "READY",
+        "ready": interp["status"] == "READY" or not model.get("environment_required"),
     }
 
 
@@ -137,6 +137,11 @@ def create_env(model: dict, s: dict, dry_run: bool) -> bool:
     interpreter = Path(configured).expanduser().resolve()
     if not interpreter.is_file():
         print(f"[BLOCKED] {model_id}: {env_var}={interpreter} not found", file=sys.stderr)
+        return False
+    from workbench.backend.runtime import check_environment_isolation
+    is_isolated, iso_msg = check_environment_isolation(interpreter)
+    if not is_isolated:
+        print(f"[BLOCKED] {model_id}: refusing installation into unsafe target interpreter: {iso_msg}", file=sys.stderr)
         return False
     argv = [str(interpreter), "-m", "pip", "install", "-r", spec]
     print(f"[RUN] {model_id}: {' '.join(argv)}")
