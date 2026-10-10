@@ -135,12 +135,41 @@ class LIMNAdapter(OfficialScriptAdapter):
         if request.checkpoint_id != "base_iter0_all_categories":
             command.extend(("--category", request.checkpoint_id.removeprefix("base_iter0_")))
         return command
-class SyntheticModelAdapter(OfficialScriptAdapter):
-    model_id = "synthetic_model"
-    script = "src/evaluator.py"
-
-    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        return [python_executable(self.model), str(source / self.script)]
+ADAPTERS = {adapter.model_id: adapter for adapter in (CSMCIRAdapter, EncoderAdapter, HintAdapter, PairAdapter, AirKnowAdapter, ConeSepAdapter, HabitAdapter, IntentAdapter, CLVCNetAdapter, DCNetAdapter, CombinerNoftAdapter, CLIP4CirFullftAdapter, TGCIRAdapter, SPRCAdapter, LIMNAdapter)}
 
 
-ADAPTERS = {adapter.model_id: adapter for adapter in (CSMCIRAdapter, EncoderAdapter, HintAdapter, PairAdapter, AirKnowAdapter, ConeSepAdapter, HabitAdapter, IntentAdapter, CLVCNetAdapter, DCNetAdapter, CombinerNoftAdapter, CLIP4CirFullftAdapter, TGCIRAdapter, SPRCAdapter, LIMNAdapter, SyntheticModelAdapter)}
+def register_test_adapter(adapter_type: type[OfficialScriptAdapter]) -> None:
+    """Register an adapter for synthetic test fixtures only.
+
+    Synthetic adapters must never be reachable through normal registry-driven
+    production operation. Tests that need one call this explicitly; production
+    code paths never call it. See ``workbench/tests/test_only_synthetic.py``.
+    """
+    ADAPTERS[adapter_type.model_id] = adapter_type
+
+
+def register_synthetic_adapters_from_env() -> None:
+    """Register synthetic adapters ONLY when explicitly opted in by the harness.
+
+    Subprocess-based tests cannot share an in-process registry, so they set
+    ``WORKBENCH_ALLOW_SYNTHETIC_ADAPTERS=1`` for their own child process. Normal
+    production invocations never set this variable, so synthetic fixtures remain
+    unreachable. Synthetic output is additionally kept out of schema-v2 indexing
+    by ``data_kind`` and per-query separation.
+    """
+    import os
+
+    if os.environ.get("WORKBENCH_ALLOW_SYNTHETIC_ADAPTERS") != "1":
+        return
+
+    class _SyntheticModelAdapter(OfficialScriptAdapter):
+        model_id = "synthetic_model"
+        script = "src/evaluator.py"
+
+        def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+            return [python_executable(self.model), str(source / self.script)]
+
+    ADAPTERS["synthetic_model"] = _SyntheticModelAdapter
+
+
+register_synthetic_adapters_from_env()

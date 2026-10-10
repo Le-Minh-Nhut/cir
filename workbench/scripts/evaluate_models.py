@@ -9,6 +9,7 @@ import shlex
 import subprocess
 import sys
 import threading
+import uuid
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 import os
@@ -190,14 +191,20 @@ def parser_for(registry: dict) -> argparse.ArgumentParser:
     return parser
 
 
-def log_dir(config: WorkbenchConfig, plan: EvaluationPlan, timestamp: datetime) -> Path:
+def make_run_id(plan: EvaluationPlan, timestamp: datetime) -> str:
+    """Collision-resistant run identity: time + model + checkpoint + random suffix."""
+    return f"{timestamp:%Y%m%dT%H%M%S%fZ}_{plan.model_id}_{plan.checkpoint_id}_{uuid.uuid4().hex[:8]}"
+
+
+def log_dir(config: WorkbenchConfig, plan: EvaluationPlan, timestamp: datetime, run_id: str | None = None) -> Path:
     repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
-    return repo_root / "workbench" / "artifacts" / "logs" / f"{timestamp:%Y%m%dT%H%M%S%fZ}_{plan.model_id}_{plan.checkpoint_id}"
+    return repo_root / "workbench" / "artifacts" / "logs" / (run_id or make_run_id(plan, timestamp))
 
 
 def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
     started = datetime.now(UTC)
-    directory = log_dir(config, plan, started)
+    run_id = make_run_id(plan, started)
+    directory = log_dir(config, plan, started, run_id)
     directory.mkdir(parents=True, exist_ok=False)
 
     checkpoint_local_sha = None
@@ -302,11 +309,26 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig) -> int:
         "environment_digest": metadata["environment_digest"],
         "return_code": code,
     }
+    report["run_id"] = run_id
+    report["run_directory"] = str(directory)
     report_json = json.dumps(report, indent=2) + "\n"
-    (directory / "aggregate_report.json").write_text(report_json, encoding="utf-8")
+
     reports_dir = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2]) / "workbench" / "artifacts" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
-    (reports_dir / f"{plan.model_id}_{plan.checkpoint_id}_aggregate.json").write_text(report_json, encoding="utf-8")
+
+    # Immutable, run-scoped artifacts. Each run writes exactly once; existing files are
+    # never overwritten, so a previous successful experiment is always preserved.
+    (directory / "aggregate_report.json").write_text(report_json, encoding="utf-8")
+    run_report = reports_dir / f"{plan.model_id}_{plan.checkpoint_id}_{run_id}_aggregate.json"
+    run_report.write_text(report_json, encoding="utf-8")
+
+    # Atomic, overwrite-tolerant "latest" pointer. This is convenience only; it is not
+    # the experiment artifact and never replaces a run-scoped report.
+    latest = reports_dir / f"{plan.model_id}_{plan.checkpoint_id}_latest.json"
+    temp_latest = latest.with_suffix(f".tmp.{uuid.uuid4().hex}")
+    temp_latest.write_text(json.dumps({"run_id": run_id, "run_directory": str(directory),
+                                       "report": str(run_report)}, indent=2) + "\n", encoding="utf-8")
+    temp_latest.replace(latest)
     return code
 
 

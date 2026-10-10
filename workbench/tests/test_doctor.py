@@ -163,7 +163,9 @@ def test_doctor_blocks_unconfigured_model_environment(tmp_path: Path, monkeypatc
     checks = {check["name"]: check for check in doctor.model_checks(model, config(tmp_path))}
 
     assert checks["environment:dcnet"]["status"] == "BLOCKED"
-    assert "execution environment not configured: set WORKBENCH_DCNET_PYTHON" in checks["runtime:dcnet"]["evidence"]["checkpoints"][0]["runtime_blockers"]
+    env_blockers = [b for b in checks["runtime:dcnet"]["evidence"]["checkpoints"][0]["runtime_blockers"]
+                    if "WORKBENCH_DCNET_PYTHON" in b]
+    assert env_blockers, "unconfigured environment must be reported as a blocker"
 
 def test_workbench_scope_ignores_missing_fashioniq(monkeypatch, tmp_path: Path) -> None:
     doctor = load_doctor()

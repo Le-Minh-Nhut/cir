@@ -21,14 +21,11 @@ def load_module():
 
 
 def _fake_isolated_interpreter(tmp_path: Path) -> Path:
-    """Create a verifiable isolated-environment interpreter path for adapter tests."""
-    venv = tmp_path / "fake_venv"
-    (venv / "bin").mkdir(parents=True, exist_ok=True)
-    (venv / "pyvenv.cfg").write_text("home = /usr\n")
-    interpreter = venv / "bin" / "python"
-    interpreter.write_text("#!/bin/sh\nexit 0\n")
-    interpreter.chmod(0o755)
-    return interpreter.resolve()
+    """Create a real lightweight venv so runtime identity verification passes."""
+    import venv as _venv
+    env_dir = tmp_path / f"fake_venv_{len(list(tmp_path.iterdir()))}"
+    _venv.EnvBuilder(with_pip=False, system_site_packages=False).create(env_dir)
+    return (env_dir / "bin" / "python").resolve()
 
 
 def config(tmp_path: Path) -> WorkbenchConfig:
@@ -38,9 +35,18 @@ def records():
 
 
 def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Path, Path, WorkbenchConfig]:
+    import subprocess as _sp
     settings = config(tmp_path)
     source = settings.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
     source.mkdir(parents=True)
+    # Real git checkout pinned at the registry commit, so source verification is honest.
+    _sp.run(["git", "init", "-q"], cwd=source, check=True)
+    _sp.run(["git", "config", "user.email", "t@t.invalid"], cwd=source, check=True)
+    _sp.run(["git", "config", "user.name", "T"], cwd=source, check=True)
+    (source / ".keep").write_text("")
+    _sp.run(["git", "add", ".keep"], cwd=source, check=True)
+    _sp.run(["git", "commit", "-q", "-m", "pin"], cwd=source, check=True)
+    _sp.run(["git", "tag", "pin"], cwd=source, check=True)
     checkpoint = model["checkpoint_variants"][0]
     checkpoint_file = settings.WORKBENCH_CHECKPOINT_ROOT / model["model_id"] / checkpoint["filename"]
     checkpoint_file.parent.mkdir(parents=True)
@@ -117,7 +123,9 @@ def test_limn_adapter_runs_full_bundle_or_named_category(monkeypatch, tmp_path: 
     from workbench.backend.adapters.base import EvalRequest
     from workbench.backend.adapters.models import LIMNAdapter
 
-    monkeypatch.setenv("WORKBENCH_LIMN_PYTHON", str(_fake_isolated_interpreter(tmp_path)))
+    interpreter = _fake_isolated_interpreter(tmp_path)
+    monkeypatch.setenv("WORKBENCH_LIMN_PYTHON", str(interpreter))
+    monkeypatch.setattr("workbench.backend.adapters.models.python_executable", lambda model: str(interpreter))
     adapter = LIMNAdapter()
     source = tmp_path / "LIMN"
     checkpoint_root = tmp_path / "checkpoints" / "limn"
@@ -158,6 +166,7 @@ def test_dcnet_command_uses_configured_model_interpreter(tmp_path: Path, monkeyp
 
     interpreter = _fake_isolated_interpreter(tmp_path)
     monkeypatch.setenv("WORKBENCH_DCNET_PYTHON", str(interpreter))
+    monkeypatch.setattr("workbench.backend.adapters.models.python_executable", lambda model: str(interpreter))
     command = DCNetAdapter().command(tmp_path / "DCNet", tmp_path / "fashioniq_dcnet", EvalRequest("dcnet", "fashioniq_run_directory", "fashioniq_full_gallery_ref_excluded", tmp_path / "FashionIQ", tmp_path / "result.json"))
 
     assert command == [str(interpreter), str(tmp_path / "DCNet" / "test.py"), "--resume", str(tmp_path / "fashioniq_dcnet")]
@@ -366,7 +375,7 @@ def test_execute_writes_reproducible_logs(monkeypatch, tmp_path: Path) -> None:
             return 0
 
     monkeypatch.setattr(module.subprocess, "Popen", lambda *args, **kwargs: Process())
-    monkeypatch.setattr(module, "log_dir", lambda config, plan, timestamp: tmp_path / "logs" / "attempt")
+    monkeypatch.setattr(module, "log_dir", lambda config, plan, timestamp, run_id=None: tmp_path / "logs" / "attempt")
 
     assert module.execute(plan, settings) == 0
     directory = tmp_path / "logs" / "attempt"

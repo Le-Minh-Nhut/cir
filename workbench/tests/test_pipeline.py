@@ -103,24 +103,28 @@ def test_encoder_auxiliary_selection_does_not_invoke_csmcir(monkeypatch) -> None
 
 def test_all_auxiliary_selection_uses_registry_all_mode(monkeypatch) -> None:
     pipeline = load_pipeline()
-    called: list[list[str]] = []
     monkeypatch.setattr(pipeline, "resolve_config", real_config)
-    monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 0)
 
-    assert pipeline.main(["real", "--download-auxiliary-assets", "--apply", "--allow-network", "--allow-preparation"]) == 0
-    auxiliary = next(argv for argv in called if Path(argv[1]).name == "download_auxiliary_assets.py")
-    assert auxiliary[2:] == ["--all"]
+    args = pipeline.parser_for().parse_args(["real", "--download-auxiliary-assets"])
+    stages = pipeline.stages_for(args, real_config())
+    auxiliary = next(s for s in stages if s.name == "auxiliary-assets")
+    assert auxiliary.commands, "auxiliary-assets stage should be planned"
+    argv = auxiliary.commands[0]
+    assert Path(argv[1]).name == "download_auxiliary_assets.py"
+    assert argv[2:] == ["--all"]
 
 
 def test_evaluation_does_not_validate_aggregate_only_output(monkeypatch) -> None:
     pipeline = load_pipeline()
-    called: list[list[str]] = []
     monkeypatch.setattr(pipeline, "resolve_config", real_config)
-    monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 0)
 
-    assert pipeline.main(["real", "--model", "csmcir", "--evaluate", "--apply", "--allow-gpu-eval", "--allow-preparation"]) == 0
-    assert "validate_results.py" not in [Path(argv[1]).name for argv in called]
-    assert "rebuild_index.py" not in [Path(argv[1]).name for argv in called]
+    args = pipeline.parser_for().parse_args(["real", "--model", "csmcir", "--evaluate"])
+    stages = pipeline.stages_for(args, real_config())
+    assert any(s.name == "evaluation" for s in stages)
+    # A plain --evaluate run must not implicitly validate or index aggregate-only output:
+    # the validation-index stage must exist but be skipped, and must not be executable.
+    vi = next(s for s in stages if s.name == "validation-index")
+    assert not vi.commands, "validation-index must not run without --rebuild-index"
 
 
 def test_rebuild_index_stays_explicit(monkeypatch) -> None:
@@ -133,17 +137,30 @@ def test_rebuild_index_stays_explicit(monkeypatch) -> None:
     assert [Path(argv[1]).name for argv in called][-2:] == ["validate_results.py", "rebuild_index.py"]
 
 
-def test_runtime_preflight_cannot_continue_into_evaluation(monkeypatch) -> None:
+def test_runtime_preflight_cannot_continue_into_evaluation(monkeypatch, tmp_path) -> None:
+    """Without --continue-on-error, a failed preflight must stop the workflow (fail-fast)."""
     pipeline = load_pipeline()
     stages = [
-        pipeline.run_stage("runtime-preflight", ["doctor.py"]),
-        pipeline.run_stage("evaluation", ["evaluate_models.py"]),
+        pipeline.run_stage("runtime-preflight", ["doctor.py"], model_id="m"),
+        pipeline.run_stage("evaluation", ["evaluate_models.py"], model_id="m",
+                           dependencies=("runtime-preflight:m",)),
     ]
     called: list[list[str]] = []
     monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 2)
 
-    assert pipeline.run_stages(stages, dry_run=False, continue_on_error=True) == 1
+    # Fail-fast: the evaluation stage must never be launched after a failed preflight.
+    assert pipeline.run_stages(stages, dry_run=False, continue_on_error=False) == 1
     assert called == [["doctor.py"]]
+
+    # Even WITH --continue-on-error, a failing preflight must not let its dependent
+    # evaluation run; it must be recorded as SKIPPED_DEPENDENCY instead.
+    called.clear()
+    state = tmp_path / "state.json"
+    assert pipeline.run_stages(stages, dry_run=False, continue_on_error=True, state_path=state) == 1
+    assert called == [["doctor.py"]]
+    records = pipeline.load_pipeline_state(state)["stages"]
+    assert records["runtime-preflight:m"]["status"] == "FAILED"
+    assert records["evaluation:m"]["status"] == "SKIPPED_DEPENDENCY"
 
 
 def test_unknown_model_is_rejected_before_stages(monkeypatch) -> None:

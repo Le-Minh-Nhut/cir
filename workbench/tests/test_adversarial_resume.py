@@ -66,17 +66,24 @@ def test_r08_force_invalidates_dependents(tmp_path: Path, monkeypatch):
     assert any("/eval" in str(a) for a in called), "Dependent stage not rerun after forced dependency"
 
 
-# R09: Unknown force-stage name fails
-def test_r09_unknown_force_stage_fails(tmp_path: Path):
+# R09: Unknown force-stage name must fail before any execution
+def test_r09_unknown_force_stage_fails(tmp_path: Path, monkeypatch):
+    called: list[list[str]] = []
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 0)
     stages = [pipeline.Stage(name="doctor", commands=(["/d"],))]
-    # unknown force stage should be rejected before execution
-    try:
-        rc = pipeline.run_stages(stages, dry_run=True, force_stages={"nonexistent_stage"}, state_path=tmp_path / "s.json")
-    except SystemExit as e:
-        assert e.code not in (0, None)
-        return
-    # If not raising, must not silently execute anything
-    assert rc in (0, 1)
+
+    import pytest
+    with pytest.raises(pipeline.WorkflowLockError, match="unknown --force-stage"):
+        pipeline.run_stages(stages, dry_run=False, force_stages={"nonexistent_stage"},
+                            state_path=tmp_path / "s.json")
+    assert called == [], "unknown force-stage must not launch any subprocess"
+    assert not (tmp_path / "s.json").exists(), "unknown force-stage must not mutate workflow state"
+
+    # The CLI must reject it too, with a nonzero exit and no execution.
+    import pytest as _pytest
+    with _pytest.raises(SystemExit) as excinfo:
+        pipeline.main(["all", "--model", "csmcir", "--force-stage", "nope"])
+    assert excinfo.value.code == 2
 
 
 # R10: Independent model stages remain cached
@@ -108,7 +115,7 @@ def test_r11_state_atomic_valid_json(tmp_path: Path):
 
 # R12: Side-effecting stage with no output contract cannot be silently trusted
 def test_r12_side_effecting_without_output_proof_not_trusted():
-    stage = pipeline.Stage(name="checkpoint", commands=(["/download"],), required_capability="allow_large_downloads")
+    stage = pipeline.Stage(name="checkpoint", commands=(["/download"],), required_capabilities=frozenset({"allow_large_downloads"}))
     assert pipeline.validate_stage_outputs(stage) is False
     read_only = pipeline.Stage(name="doctor", commands=(["/doctor"],))
     assert pipeline.validate_stage_outputs(read_only) is True

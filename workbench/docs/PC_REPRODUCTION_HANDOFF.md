@@ -3,6 +3,20 @@
 Instructions for moving the verified laptop engineering to a GPU PC for real
 reproduction. **Do not** run these until a GPU host and authoritative assets are ready.
 
+## 0. Source checkout status
+
+All 14 pinned upstream repositories are cloned (source-only, no LFS) under
+`workbench/third_party/` and pin-verified. See `UPSTREAM_SOURCE_AUDIT.md` for the
+per-repo commit, size, and evaluator-file evidence. Re-verify at any time:
+
+```bash
+python workbench/scripts/sync_upstreams.py --all --list
+python workbench/scripts/sync_upstreams.py --model MODEL_ID --verify-only
+```
+
+Cloned source is not checkpoint availability. The PC host still needs the
+checkpoints and auxiliary assets listed in the table below.
+
 ## 1. Required environment variables
 
 ```bash

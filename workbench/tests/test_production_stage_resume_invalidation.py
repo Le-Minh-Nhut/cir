@@ -114,3 +114,19 @@ def test_production_sync_stage_resolves_registry_source_dir_and_declares_outputs
     fp2 = pipeline.compute_stage_input_fingerprint(sync_stage, prod_env)
 
     assert fp1 != fp2, "Sync stage fingerprint did not change after git HEAD change in CSMCIR source_dir!"
+
+
+# R04: Dirty upstream source (uncommitted tracked change) invalidates production evaluation
+def test_production_eval_stage_invalidates_on_dirty_source(prod_env):
+    parser = pipeline.parser_for()
+    args = parser.parse_args(["all", "--model", "csmcir", "--dataset-root", str(prod_env.FASHIONIQ_ROOT), "--dry-run"])
+    stages = pipeline.stages_for(args, prod_env)
+    eval_stage = next(s for s in stages if s.name == "evaluation" and s.model_id == "csmcir")
+
+    fp_clean = pipeline.compute_stage_input_fingerprint(eval_stage, prod_env)
+
+    # Uncommitted tracked modification of the upstream source tree.
+    (prod_env.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "README.md").write_text("locally edited, uncommitted")
+
+    fp_dirty = pipeline.compute_stage_input_fingerprint(eval_stage, prod_env)
+    assert fp_clean != fp_dirty, "dirty upstream source did not change the production evaluation fingerprint"

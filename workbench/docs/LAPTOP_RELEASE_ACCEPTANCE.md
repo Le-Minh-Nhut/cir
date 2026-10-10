@@ -75,3 +75,18 @@ git diff --check
   CLVC-Net/TG-CIR/SPRC checkpoint mappings and auxiliary assets.
 - **Not implemented:** per-query ranking export patches for external models
   (deferred until official aggregate parity on a GPU host).
+
+## Correction pass (independent-review defects)
+
+| Defect | Fix | Test |
+|---|---|---|
+| Environment readiness overstated | Tiered `verify_environment` (INTERPRETER_PRESENT → ISOLATION_VERIFIED → PYTHON_VERSION_VERIFIED → DEPENDENCIES_VERIFIED → MODEL_IMPORT_VERIFIED → CUDA_VERIFIED → RUNTIME_READY); no `RUNTIME_READY` without source-backed dependency proof | `test_adversarial_environment.py`, `test_mut6` |
+| Linux venv misjudged via resolved path | Isolation now decided by runtime `sys.prefix`/`sys.base_prefix`/markers, not symlink target | `test_adversarial_environment.py` (real `venv`) |
+| Stage COMPLETE without outputs | `validate_stage_outputs` is enforced after exit 0 for every stage; declared outputs must exist, be non-empty, parse, and follow run manifests | `test_pipeline.py`, `test_mut2`, `test_mut9` |
+| Aggregate report overwrote experiments | Run-scoped immutable reports `<model>_<ckpt>_<run_id>_aggregate.json` + atomic `_latest.json` pointer | `test_mut10`, `test_true_master_e2e.py` |
+| `--continue-on-error` failed at runtime-preflight | Removed name special-case; failed preflight records `FAILED`, dependents `SKIPPED_DEPENDENCY`, independent models continue | `test_pipeline.py::test_runtime_preflight_cannot_continue_into_evaluation` |
+| Compound capabilities | `Stage.required_capabilities: frozenset[str]`; checkpoint needs `allow_large_downloads`+`allow_network`, sync needs `allow_network`+`allow_preparation`, eval needs `allow_gpu_eval`+`allow_preparation` | `test_authorization_policy.py`, `test_pipeline.py` |
+| Dirty source reused by resume | Fingerprint includes commit + cleanliness + provenance digest; `_source_dirty` ignores only bytecode caches | `test_production_stage_resume_invalidation.py`, `test_true_master_e2e.py` |
+| Mutation tests did not mutate | 10 mutations applied with `monkeypatch.context()` and required to be killed | `test_mutation_effectiveness.py` |
+| Concurrency untested | Real multi-process flock ownership tests incl. crash recovery | `test_concurrency_ownership.py` |
+| Synthetic adapter in production registry | Moved behind `register_test_adapter` / `WORKBENCH_ALLOW_SYNTHETIC_ADAPTERS`; metric routing no longer special-cases it | `test_only_synthetic.py` |

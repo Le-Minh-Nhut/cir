@@ -1,103 +1,392 @@
+"""Environment verification with explicit readiness tiers and source-backed probing."""
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+# Tier ordering: each tier implies all lower tiers were verified.
+TIER_ORDER = [
+    "INTERPRETER_MISSING",
+    "INTERPRETER_PRESENT",
+    "ISOLATION_VERIFIED",
+    "PYTHON_VERSION_VERIFIED",
+    "DEPENDENCIES_VERIFIED",
+    "MODEL_IMPORT_VERIFIED",
+    "CUDA_VERIFIED",
+    "RUNTIME_READY",
+]
+TIER_UNCONFIGURED = "UNCONFIGURED"
+TIER_BLOCKED = "BLOCKED"
+TIER_GPU_DEFERRED = "GPU_VERIFICATION_DEFERRED"
+TIER_REQUIREMENTS_UNVERIFIED = "ENVIRONMENT_REQUIREMENTS_UNVERIFIED"
+
+
+@dataclass
+class EnvironmentReport:
+    model_id: str
+    variable: str | None
+    interpreter: str | None
+    tier: str
+    status: str
+    prefix: str | None = None
+    base_prefix: str | None = None
+    python_version: str | None = None
+    packages: dict[str, str | None] = field(default_factory=dict)
+    imports: dict[str, bool] = field(default_factory=dict)
+    cuda_available: bool | None = None
+    cuda_version: str | None = None
+    reason: str | None = None
+    probe_executed: bool = False
+
+
+def _run_probe(interpreter: Path, code: str, timeout: int = 60) -> tuple[bool, str, str]:
+    try:
+        proc = subprocess.run(
+            [str(interpreter), "-c", code],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return False, "", str(error)
+    return proc.returncode == 0, proc.stdout.strip(), proc.stderr.strip()
+
+
+_PROBE_CODE = r"""
+import json, sys
+info = {
+    "executable": sys.executable,
+    "prefix": sys.prefix,
+    "base_prefix": getattr(sys, "base_prefix", sys.prefix),
+    "version": ".".join(str(p) for p in sys.version_info[:3]),
+}
+print(json.dumps(info))
+"""
+
+
+def _interpreter_identity(interpreter: Path) -> dict[str, Any] | None:
+    """Run the interpreter to learn its real prefix/base_prefix/version."""
+    ok, out, _ = _run_probe(interpreter, _PROBE_CODE)
+    if not ok or not out:
+        return None
+    try:
+        return json.loads(out.splitlines()[-1])
+    except (ValueError, IndexError):
+        return None
+
 
 def check_environment_isolation(interpreter: Path) -> tuple[bool, str]:
-    """Verify interpreter is not system Python, base Conda, or current workbench environment."""
-    interp_resolved = interpreter.resolve()
-    current_interp = Path(sys.executable).resolve()
-    if interp_resolved == current_interp:
+    """Verify the *runtime* identity of an interpreter, not just its resolved path.
+
+    A Linux venv's ``bin/python`` is often a symlink to ``/usr/bin/python3``; the
+    resolved path alone is therefore not evidence of system Python. Isolation is
+    decided by the interpreter's own ``sys.prefix``/``sys.base_prefix`` and
+    environment markers.
+    """
+    resolved = interpreter.resolve()
+    if resolved == Path(sys.executable).resolve():
         return False, "cannot use active workbench environment"
 
-    s_path = str(interp_resolved)
-    system_paths = ("/usr/bin/python", "/usr/bin/python3", "/bin/python", "/bin/python3", "/usr/local/bin/python", "/usr/local/bin/python3")
-    if s_path in system_paths:
+    system_names = {"/usr/bin/python", "/usr/bin/python3", "/bin/python", "/bin/python3",
+                    "/usr/local/bin/python", "/usr/local/bin/python3", "/usr/bin/python3.11",
+                    "/usr/bin/python3.12", "/usr/bin/python3.13"}
+    identity = _interpreter_identity(interpreter)
+    if identity is None:
+        # Cannot establish runtime identity -> fail closed.
+        s = str(resolved)
+        if s in system_names:
+            return False, "cannot use system Python"
+        if any(base in s for base in ("/miniconda3/bin/python", "/anaconda3/bin/python", "/opt/conda/bin/python")) and "/envs/" not in s:
+            return False, "cannot use base Conda environment"
+        return False, "interpreter runtime identity could not be established"
+
+    prefix = str(identity.get("prefix") or "")
+    base_prefix = str(identity.get("base_prefix") or "")
+    executable = str(identity.get("executable") or "")
+
+    if not prefix:
+        return False, "interpreter has no detectable prefix"
+
+    # System / base interpreter: prefix equals base_prefix and points at a system root.
+    if prefix == base_prefix and (prefix in ("/usr", "/usr/local") or prefix == ""):
         return False, "cannot use system Python"
 
-    if any(base in s_path for base in ("/miniconda3/bin/python", "/anaconda3/bin/python", "/opt/conda/bin/python")):
-        if "/envs/" not in s_path:
-            return False, "cannot use base Conda environment"
+    if any(base in prefix for base in ("/miniconda3", "/anaconda3", "/opt/conda")) and "/envs/" not in prefix:
+        return False, "cannot use base Conda environment"
 
-    has_pyvenv = any((p / "pyvenv.cfg").is_file() for p in (interp_resolved.parent, interp_resolved.parent.parent))
-    has_conda_meta = any((p / "conda-meta").is_dir() for p in (interp_resolved.parent, interp_resolved.parent.parent))
-    if not (has_pyvenv or has_conda_meta) and (s_path.startswith("/usr/") or s_path.startswith("/bin/")):
+    # A virtualenv/conda env has prefix != base_prefix, or env markers on disk.
+    prefix_path = Path(prefix)
+    has_pyvenv = (prefix_path / "pyvenv.cfg").is_file()
+    has_conda_meta = (prefix_path / "conda-meta").is_dir()
+
+    if prefix == base_prefix and not (has_conda_meta and "/envs/" in prefix):
         return False, "interpreter is not in an isolated environment"
+
+    # Verify the interpreter actually lives inside its claimed prefix.
+    try:
+        executable_path = Path(executable).resolve()
+        prefix_resolved = prefix_path.resolve()
+        if not executable_path.is_relative_to(prefix_resolved):
+            return False, "interpreter executable does not belong to its claimed prefix"
+    except (OSError, ValueError):
+        return False, "interpreter prefix relationship could not be verified"
+
+    if not (has_pyvenv or has_conda_meta):
+        return False, "isolated environment markers (pyvenv.cfg/conda-meta) are missing"
 
     return True, "ISOLATION_VERIFIED"
 
 
-def environment_status(model: dict[str, Any], probe: bool = False) -> dict[str, Any]:
-    environment = model.get("environment") or {}
-    variable = environment.get("python_env_var")
+def _required_packages(model: dict[str, Any]) -> dict[str, str]:
+    env = model.get("environment") or {}
+    required: dict[str, str] = {}
+    if env.get("pytorch"):
+        required["torch"] = str(env["pytorch"])
+    if env.get("torchvision"):
+        required["torchvision"] = str(env["torchvision"])
+    for pkg in env.get("packages") or []:
+        if isinstance(pkg, str):
+            required.setdefault(pkg.split("==")[0], pkg.split("==")[1] if "==" in pkg else "")
+    return required
+
+
+def _required_imports(model: dict[str, Any]) -> list[str]:
+    env = model.get("environment") or {}
+    return [str(name) for name in (env.get("required_imports") or [])]
+
+
+def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cuda: bool = False) -> EnvironmentReport:
+    """Return a truthful environment report. Never claims RUNTIME_READY without proof."""
+    model_id = model.get("model_id", "<unnamed>")
+    env = model.get("environment") or {}
+    variable = env.get("python_env_var")
     if not variable:
-        return {"status": "UNCONFIGURED", "variable": None, "interpreter": None, "tier": "UNCONFIGURED"}
+        return EnvironmentReport(model_id, None, None, TIER_UNCONFIGURED, "UNCONFIGURED",
+                                 reason="no environment variable declared")
     configured = os.environ.get(variable)
     if not configured:
-        return {"status": "UNCONFIGURED", "variable": variable, "interpreter": None, "tier": "UNCONFIGURED"}
-    interpreter = Path(configured).expanduser().resolve()
+        return EnvironmentReport(model_id, variable, None, TIER_UNCONFIGURED, "UNCONFIGURED",
+                                 reason=f"{variable} not set")
+
+    interpreter = Path(configured).expanduser()
     if not interpreter.is_file():
-        return {"status": "MISSING", "variable": variable, "interpreter": str(interpreter), "tier": "INTERPRETER_MISSING"}
+        return EnvironmentReport(model_id, variable, str(interpreter), "INTERPRETER_MISSING", "MISSING",
+                                 reason="interpreter file missing")
     if not os.access(interpreter, os.X_OK):
-        return {"status": "NOT_EXECUTABLE", "variable": variable, "interpreter": str(interpreter), "tier": "INTERPRETER_PRESENT"}
+        return EnvironmentReport(model_id, variable, str(interpreter), "INTERPRETER_PRESENT", "NOT_EXECUTABLE",
+                                 reason="interpreter is not executable")
 
-    is_isolated, iso_msg = check_environment_isolation(interpreter)
-    if not is_isolated:
-        return {
-            "status": "UNSAFE_INTERPRETER",
-            "variable": variable,
-            "interpreter": str(interpreter),
-            "tier": "BLOCKED",
-            "isolation_reason": iso_msg,
-        }
+    identity = _interpreter_identity(interpreter) if probe else None
+    report = EnvironmentReport(
+        model_id, variable, str(interpreter), "INTERPRETER_PRESENT", "PRESENT",
+        prefix=(identity or {}).get("prefix"),
+        base_prefix=(identity or {}).get("base_prefix"),
+        python_version=(identity or {}).get("version"),
+        probe_executed=bool(identity),
+    )
+    if probe and identity is None:
+        report.tier = TIER_BLOCKED
+        report.status = "PROBE_FAILED"
+        report.reason = "interpreter failed its identity probe"
+        return report
 
-    tier = "ISOLATION_VERIFIED"
     if probe:
-        try:
-            cmd = [str(interpreter), "-c", "import sys, json; print(json.dumps({'python': sys.version.split()[0]}))"]
-            subprocess.run(cmd, capture_output=True, text=True, check=True)
-            tier = "DEPENDENCIES_VERIFIED"
-        except Exception as e:
-            return {
-                "status": "DEPENDENCY_MISMATCH",
-                "variable": variable,
-                "interpreter": str(interpreter),
-                "tier": "BLOCKED",
-                "error": str(e),
-            }
+        isolated, iso_reason = check_environment_isolation(interpreter)
+        if not isolated:
+            report.tier = TIER_BLOCKED
+            report.status = "UNSAFE_INTERPRETER"
+            report.reason = iso_reason
+            return report
+        report.tier = "ISOLATION_VERIFIED"
+        report.status = "ISOLATED"
 
-    return {"status": "READY", "variable": variable, "interpreter": str(interpreter), "tier": tier}
+    if not probe:
+        return report
+
+    # Python version agreement against source-declared version.
+    declared = str(env.get("python") or "").strip()
+    if declared and declared != "UNKNOWN" and report.python_version:
+        if not report.python_version.startswith(declared) and not declared.startswith(report.python_version):
+            report.tier = TIER_BLOCKED
+            report.status = "PYTHON_VERSION_MISMATCH"
+            report.reason = f"expected Python {declared}, found {report.python_version}"
+            return report
+    report.tier = "PYTHON_VERSION_VERIFIED"
+    report.status = "PYTHON_OK"
+
+    # Dependency verification.
+    required = _required_packages(model)
+    if required:
+        code = (
+            "import json,importlib.metadata as m\n"
+            f"req={required!r}\n"
+            "out={}\n"
+            "for pkg,ver in req.items():\n"
+            "    try: out[pkg]=m.version(pkg)\n"
+            "    except Exception: out[pkg]=None\n"
+            "print(json.dumps(out))\n"
+        )
+        ok, out, err = _run_probe(interpreter, code)
+        if not ok:
+            report.tier = TIER_BLOCKED
+            report.status = "DEPENDENCIES_UNREADABLE"
+            report.reason = err or "dependency probe failed"
+            return report
+        try:
+            installed = json.loads(out.splitlines()[-1])
+        except (ValueError, IndexError):
+            report.tier = TIER_BLOCKED
+            report.status = "DEPENDENCIES_UNREADABLE"
+            report.reason = "dependency probe returned invalid JSON"
+            return report
+        report.packages = installed
+        for pkg, want in required.items():
+            got = installed.get(pkg)
+            if got is None:
+                report.tier = TIER_BLOCKED
+                report.status = "DEPENDENCY_MISSING"
+                report.reason = f"missing package: {pkg}"
+                return report
+            if want and want != "UNKNOWN" and not str(got).startswith(str(want)) and not str(want).startswith(str(got)):
+                report.tier = TIER_BLOCKED
+                report.status = "DEPENDENCY_VERSION_MISMATCH"
+                report.reason = f"{pkg}: expected {want}, found {got}"
+                return report
+    report.tier = "DEPENDENCIES_VERIFIED"
+    report.status = "DEPENDENCIES_OK"
+
+    # Model import verification.
+    imports = _required_imports(model)
+    if imports:
+        code = (
+            "import json\n"
+            f"names={imports!r}\n"
+            "out={}\n"
+            "for n in names:\n"
+            "    try:\n"
+            "        __import__(n); out[n]=True\n"
+            "    except Exception: out[n]=False\n"
+            "print(json.dumps(out))\n"
+        )
+        ok, out, err = _run_probe(interpreter, code)
+        if not ok:
+            report.tier = TIER_BLOCKED
+            report.status = "MODEL_IMPORT_FAILED"
+            report.reason = err or "import probe failed"
+            return report
+        try:
+            results = json.loads(out.splitlines()[-1])
+        except (ValueError, IndexError):
+            report.tier = TIER_BLOCKED
+            report.status = "MODEL_IMPORT_FAILED"
+            report.reason = "import probe returned invalid JSON"
+            return report
+        report.imports = results
+        missing = [name for name, present in results.items() if not present]
+        if missing:
+            report.tier = TIER_BLOCKED
+            report.status = "MODEL_IMPORT_FAILED"
+            report.reason = f"import failed: {', '.join(missing)}"
+            return report
+        report.tier = "MODEL_IMPORT_VERIFIED"
+        report.status = "IMPORTS_OK"
+
+    # CUDA verification (only when the model requires it).
+    if require_cuda or env.get("cuda"):
+        code = (
+            "import json\n"
+            "out={'available': False, 'version': None}\n"
+            "try:\n"
+            "    import torch\n"
+            "    out['available']=bool(torch.cuda.is_available())\n"
+            "    out['version']=getattr(torch.version,'cuda',None)\n"
+            "except Exception: pass\n"
+            "print(json.dumps(out))\n"
+        )
+        ok, out, _ = _run_probe(interpreter, code)
+        if ok:
+            try:
+                cuda = json.loads(out.splitlines()[-1])
+                report.cuda_available = cuda.get("available")
+                report.cuda_version = cuda.get("version")
+            except (ValueError, IndexError):
+                pass
+        if report.cuda_available:
+            report.tier = "CUDA_VERIFIED"
+            report.status = "CUDA_OK"
+        else:
+            report.tier = TIER_GPU_DEFERRED
+            report.status = "GPU_VERIFICATION_DEFERRED"
+            report.reason = "CUDA runtime unavailable; GPU verification deferred"
+            return report
+    elif not required and not imports:
+        # No source-backed requirements: cannot claim full verification.
+        report.tier = TIER_REQUIREMENTS_UNVERIFIED
+        report.status = "REQUIREMENTS_UNVERIFIED"
+        report.reason = "no source-backed dependency contract declared"
+        return report
+
+    report.tier = "RUNTIME_READY"
+    report.status = "RUNTIME_READY"
+    return report
+
+
+def environment_status(model: dict[str, Any], probe: bool = False) -> dict[str, Any]:
+    """Backward-compatible dict view of the environment report."""
+    report = verify_environment(model, probe=probe)
+    data = asdict(report)
+    # Legacy consumers read `status`/`interpreter`/`variable`/`tier`.
+    data.setdefault("isolation_reason", data.get("reason"))
+    return data
 
 
 def environment_blockers(model: dict[str, Any]) -> list[str]:
     if not model.get("environment_required"):
         return []
-    state = environment_status(model)
-    if state["status"] == "READY":
+    report = verify_environment(model, probe=True)
+    if report.tier == "RUNTIME_READY":
         return []
-    variable = state["variable"] or "model-specific Python"
-    if state["status"] == "UNSAFE_INTERPRETER":
-        return [f"execution environment unsafe: {variable}={state['interpreter']} ({state.get('isolation_reason')})"]
-    if state["status"] == "DEPENDENCY_MISMATCH":
-        return [f"execution environment dependencies failed: {variable}={state['interpreter']} ({state.get('error')})"]
-    if state["status"] == "MISSING":
-        return [f"execution environment interpreter missing: {variable}={state['interpreter']}"]
-    if state["status"] == "NOT_EXECUTABLE":
-        return [f"execution environment interpreter not executable: {variable}={state['interpreter']}"]
-    return [f"execution environment not configured: set {variable}"]
+    variable = report.variable or "model-specific Python"
+    detail = f" ({report.reason})" if report.reason else ""
+    return [f"execution environment not verified: {variable}={report.interpreter} [{report.status}/{report.tier}]{detail}"]
 
 
 def python_executable(model: dict[str, Any]) -> str:
-    state = environment_status(model)
-    if state["interpreter"] and state["status"] == "READY":
-        return state["interpreter"]
+    report = verify_environment(model)
+    if report.tier == "RUNTIME_READY" and report.interpreter:
+        return report.interpreter
     if model.get("environment_required"):
-        raise RuntimeError(f"execution environment not ready: set {state['variable']}")
+        raise RuntimeError(
+            f"execution environment not ready [{report.tier}/{report.status}]: set {report.variable}"
+        )
     return "python"
+
+
+def _source_dirty(source: Path) -> bool | None:
+    """True when tracked files or non-cache untracked files differ from the pin.
+
+    ``__pycache__``/``*.pyc`` are unavoidable products of running Python and do
+    not change evaluator semantics, so they are excluded from the dirty check.
+    Anything else (tracked modifications, other untracked files) is dirty.
+    """
+    try:
+        tracked = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"],
+                                 cwd=source, check=True, capture_output=True, text=True).stdout
+        untracked = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"],
+                                   cwd=source, check=True, capture_output=True, text=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    if tracked.strip():
+        return True
+    for line in untracked.splitlines():
+        if line.startswith("?? ") and "__pycache__" not in line and not line.endswith(".pyc"):
+            return True
+    return False
+
+
 def source_clean_and_pinned(model: dict[str, Any], source: Path) -> tuple[bool, str | None, str | None]:
     try:
         top_level = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=source,
@@ -105,15 +394,49 @@ def source_clean_and_pinned(model: dict[str, Any], source: Path) -> tuple[bool, 
         if Path(top_level).resolve() != source.resolve():
             return False, None, "source path is not a Git checkout root"
         head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, check=True, capture_output=True, text=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain"], cwd=source, check=True, capture_output=True, text=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return False, None, "source is not a readable Git checkout"
+    dirty = _source_dirty(source)
+    if dirty is None:
+        return False, head, "source Git metadata unreadable"
     expected = model.get("upstream_commit_sha")
     if dirty:
         return False, head, "source checkout is dirty"
     if expected and head != expected:
         return False, head, f"source pin mismatch: expected {expected}, found {head}"
     return True, head, None
+
+
+def source_provenance(model: dict[str, Any], source: Path) -> dict[str, Any]:
+    """Record expected pin, actual pin, cleanliness, and a provenance digest."""
+    import hashlib
+
+    expected = model.get("upstream_commit_sha")
+    actual = None
+    dirty = None
+    error = None
+    try:
+        actual = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, check=True,
+                                capture_output=True, text=True).stdout.strip()
+        dirty = _source_dirty(source)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        error = f"git metadata unreadable: {exc}"
+
+    clean_and_pinned = bool(actual and not dirty and (not expected or actual == expected))
+    digest = hashlib.sha256(
+        json.dumps(
+            {"expected": expected, "actual": actual, "dirty": dirty, "error": error},
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    return {
+        "expected_commit": expected,
+        "actual_commit": actual,
+        "dirty": dirty,
+        "error": error,
+        "verified": clean_and_pinned,
+        "provenance_digest": digest,
+    }
 
 
 def runtime_blockers(model: dict[str, Any], checkpoint: dict[str, Any], config: Any,

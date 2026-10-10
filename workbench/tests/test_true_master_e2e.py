@@ -145,6 +145,7 @@ sys.exit(0)
     env = os.environ.copy()
     env["PYTHONPATH"] = str(REPOSITORY)
     env["WORKBENCH_REGISTRY_PATH"] = str(registry_yaml)
+    env["WORKBENCH_ALLOW_SYNTHETIC_ADAPTERS"] = "1"
     env["CIR_REPO_ROOT"] = str(ws)
     env["CIR_DATA_ROOT"] = str(ws / "data")
     env["FASHIONIQ_ROOT"] = str(data)
@@ -154,7 +155,7 @@ sys.exit(0)
 
     # Register an adapter for synthetic_model dynamically in evaluate_models if needed
     from workbench.backend.adapters.base import EvalRequest
-    from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter, register_test_adapter
 
     class SyntheticAdapter(OfficialScriptAdapter):
         model_id = "synthetic_model"
@@ -163,7 +164,7 @@ sys.exit(0)
         def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
             return [sys.executable, str(source / self.script)]
 
-    ADAPTERS["synthetic_model"] = SyntheticAdapter
+    register_test_adapter(SyntheticAdapter)
 
     return {
         "ws": ws,
@@ -234,13 +235,16 @@ def test_true_master_pipeline_subprocess_e2e_complete_flow(true_e2e_workspace):
     assert res4.returncode == 0
     assert len(list(logs_dir.iterdir())) > logs_before, "Dataset mutation did not rerun evaluation"
 
-    # RUN 5: Corrupt output report -> --resume must detect invalid output and rerun
-    canon_report = w["ws"] / "workbench" / "artifacts" / "reports" / "synthetic_model_ckpt_v1_aggregate.json"
-    assert canon_report.is_file(), "Canonical report was not created"
-    canon_report.unlink()
+    # RUN 5: Delete the latest pointer -> --resume must detect invalid output and rerun
+    latest = w["ws"] / "workbench" / "artifacts" / "reports" / "synthetic_model_ckpt_v1_latest.json"
+    assert latest.is_file(), "latest run manifest was not created"
+    latest.unlink()
     res5 = subprocess.run(cmd2, env=env, capture_output=True, text=True)
     assert res5.returncode == 0
-    assert canon_report.is_file(), "Canonical report was not recreated on invalid output rerun"
+    assert latest.is_file(), "latest manifest was not recreated on invalid output rerun"
+    # Run-scoped immutable reports accumulate; each run has its own file.
+    run_reports = list((w["ws"] / "workbench" / "artifacts" / "reports").glob("synthetic_model_ckpt_v1_2*_aggregate.json"))
+    assert len(run_reports) >= 2, f"expected multiple immutable run reports, got {run_reports}"
 
     # RUN 6: Induced evaluator failure -> must exit nonzero, report FAILED, preserve failure report
     fail_report = w["reports"] / "fail_report.json"
@@ -266,3 +270,47 @@ def test_true_master_pipeline_subprocess_e2e_complete_flow(true_e2e_workspace):
     assert rep_fail["success"] is False
     assert rep_fail["status"] in ("PARTIAL", "FAILED")
     assert any(s.get("status") == "FAILED" for s in rep_fail["stages"].values())
+
+
+def test_true_master_dirty_source_blocks_evaluation(true_e2e_workspace):
+    """E2E-05: a modified upstream source file (uncommitted) must block evaluation."""
+    w = true_e2e_workspace
+    evaluator = w["source_dir"] / "src" / "evaluator.py"
+    evaluator.write_text(evaluator.read_text() + "\n# uncommitted local edit\n")
+
+    report = w["reports"] / "dirty.json"
+    cmd = [
+        sys.executable, str(REPOSITORY / "workbench" / "scripts" / "pipeline.py"),
+        "all", "--model", "synthetic_model",
+        "--apply", "--allow-network", "--allow-large-downloads",
+        "--allow-env-install", "--allow-preparation", "--allow-gpu-eval",
+        "--report", str(report),
+    ]
+    res = subprocess.run(cmd, env=w["env"], capture_output=True, text=True)
+    assert res.returncode == 1, f"dirty source did not fail the workflow:\n{res.stdout}\n{res.stderr}"
+    assert "dirty" in (res.stdout + res.stderr).lower()
+    data = json.loads(report.read_text())
+    assert data["success"] is False
+
+
+def test_true_master_missing_permission_blocks_side_effects(true_e2e_workspace):
+    """E2E-11: without the GPU capability, no evaluation subprocess may run."""
+    w = true_e2e_workspace
+    logs_dir = w["ws"] / "workbench" / "artifacts" / "logs"
+    before = len(list(logs_dir.iterdir())) if logs_dir.is_dir() else 0
+
+    report = w["reports"] / "noperm.json"
+    cmd = [
+        sys.executable, str(REPOSITORY / "workbench" / "scripts" / "pipeline.py"),
+        "all", "--model", "synthetic_model",
+        "--apply", "--allow-network", "--allow-large-downloads",
+        "--allow-env-install", "--allow-preparation",
+        "--report", str(report),
+    ]
+    res = subprocess.run(cmd, env=w["env"], capture_output=True, text=True)
+    assert res.returncode == 1
+    assert "BLOCKED_AUTHORIZATION_REQUIRED" in res.stderr
+    after = len(list(logs_dir.iterdir())) if logs_dir.is_dir() else 0
+    assert after == before, "evaluation artifacts were produced without authorization"
+    data = json.loads(report.read_text())
+    assert any(s.get("status") == "BLOCKED_AUTHORIZATION_REQUIRED" for s in data["stages"].values())

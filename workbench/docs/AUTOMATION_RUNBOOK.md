@@ -187,3 +187,49 @@ Stage states are tracked in `workbench/artifacts/pipeline_state.json`.
 
 ### B. LIMN Bundle Provenance
 A complete LIMN evaluation run records the exact individual paths and SHA-256 hashes of all three category models (`0_dress_best_model.pt`, `0_shirt_best_model.pt`, `0_toptee_best_model.pt`), plus a deterministic `bundle_manifest_digest`. Dress is never treated as the sole identity of the three-model benchmark experiment.
+
+---
+
+## 7. Experiment run identity and immutability
+
+Each evaluation writes an immutable, run-scoped directory and report:
+
+```text
+workbench/artifacts/logs/<utc>_<model>_<checkpoint>_<rand>/
+    command.json          # argv, cwd, digests, checkpoint manifest, interpreter
+    stdout.log            # verbatim evaluator stdout
+    stderr.log            # verbatim evaluator stderr
+    aggregate_report.json # this run's extraction result
+workbench/artifacts/reports/
+    <model>_<checkpoint>_<run_id>_aggregate.json   # immutable, one per run
+    <model>_<checkpoint>_latest.json               # atomic pointer, not the artifact
+```
+
+- A second, failed, or interrupted run never overwrites a previous success.
+- `_latest.json` is convenience only; it is updated atomically and never replaces
+  a run-scoped report.
+- Resume identifies a completed evaluation through the latest pointer and the
+  stage's declared output fingerprint.
+
+## 8. Workflow ownership and locking
+
+`run_stages` takes an exclusive `flock` on `pipeline_state.json.lock` while
+executing non-dry-run work. Two concurrent workflows cannot both write state;
+the second is refused with a clear lock error. The lock is released when the
+process exits, including on crash, so no stale lock survives.
+
+## 9. Compound capability policy
+
+Side-effecting stages declare a set of required capabilities. All must be granted:
+
+| Stage | Required capabilities |
+|---|---|
+| source sync | `allow_network`, `allow_preparation` |
+| checkpoint acquisition | `allow_large_downloads`, `allow_network` |
+| auxiliary assets | `allow_network`, `allow_large_downloads` |
+| environment provisioning | `allow_env_install`, `allow_network` |
+| model preparation (mutating) | `allow_preparation`, `allow_network` |
+| evaluation | `allow_gpu_eval`, `allow_preparation` |
+
+Verification-only stages declare no capabilities and remain read-only. `all`,
+`setup` and `reproduce` require `--model MODEL_ID` or `--all-models`.

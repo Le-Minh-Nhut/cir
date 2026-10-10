@@ -9,25 +9,23 @@ from workbench.backend.runtime import check_environment_isolation, environment_s
 
 
 def _venv_interpreter(root: Path, name: str = "python") -> Path:
-    venv = root / "venv"
-    (venv / "bin").mkdir(parents=True, exist_ok=True)
-    (venv / "pyvenv.cfg").write_text("home = /usr\n")
-    interp = venv / "bin" / name
-    interp.write_text("#!/bin/sh\nexit 0\n")
-    interp.chmod(0o755)
-    return interp.resolve()
+    """Real lightweight venv so isolation is decided by runtime identity, not path."""
+    import venv as _venv
+    env_dir = root / "venv"
+    _venv.EnvBuilder(with_pip=False, system_site_packages=False).create(env_dir)
+    return (env_dir / "bin" / name).resolve()
 
 
-# E01: Existing Python path alone does not prove READY (isolation + status)
+# E01: A bare interpreter path alone is not RUNTIME_READY
 def test_e01_interpreter_path_alone_not_ready(tmp_path: Path):
     interp = _venv_interpreter(tmp_path)
-    model = {"environment_required": True, "environment": {"python_env_var": "TEST_ENV_X"}}
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "TEST_ENV_X"}}
     os.environ["TEST_ENV_X"] = str(interp)
     try:
-        st = environment_status(model)
-        # Status should reach ISOLATION_VERIFIED or higher, not merely "path exists"
-        assert st["tier"] in ("ISOLATION_VERIFIED", "DEPENDENCIES_VERIFIED")
-        assert st["status"] == "READY"
+        st = environment_status(model, probe=True)
+        assert st["tier"] != "RUNTIME_READY"
+        assert st["status"] in ("REQUIREMENTS_UNVERIFIED", "PYTHON_OK", "ISOLATED")
     finally:
         del os.environ["TEST_ENV_X"]
 
@@ -54,7 +52,7 @@ def test_non_isolated_path_rejected(tmp_path: Path):
 
 
 def test_missing_interpreter_tier(tmp_path: Path):
-    model = {"environment_required": True, "environment": {"python_env_var": "TEST_ENV_MISSING"}}
+    model = {"model_id": "m", "environment_required": True, "environment": {"python_env_var": "TEST_ENV_MISSING"}}
     os.environ["TEST_ENV_MISSING"] = str(tmp_path / "nope" / "python")
     try:
         st = environment_status(model)
@@ -64,22 +62,22 @@ def test_missing_interpreter_tier(tmp_path: Path):
 
 
 def test_unconfigured_env_tier():
-    model = {"environment_required": True, "environment": {"python_env_var": "TEST_ENV_UNSET"}}
+    model = {"model_id": "m", "environment_required": True, "environment": {"python_env_var": "TEST_ENV_UNSET"}}
     os.environ.pop("TEST_ENV_UNSET", None)
     st = environment_status(model)
     assert st["tier"] == "UNCONFIGURED"
 
 
 def test_probe_dependency_mismatch(tmp_path: Path):
-    """A script interpreter that fails to run is detected as DEPENDENCY_MISMATCH when probed."""
+    """A required dependency that is absent is detected as a blocker, not READY."""
     interp = _venv_interpreter(tmp_path)
-    interp.write_text("#!/bin/sh\nexit 1\n")
-    interp.chmod(0o755)
-    model = {"environment_required": True, "environment": {"python_env_var": "TEST_ENV_PROBE"}}
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "TEST_ENV_PROBE", "pytorch": "9.9.9"}}
     os.environ["TEST_ENV_PROBE"] = str(interp)
     try:
         st = environment_status(model, probe=True)
-        assert st["status"] in ("DEPENDENCY_MISMATCH", "READY")
+        assert st["tier"] != "RUNTIME_READY"
+        assert st["status"] in ("DEPENDENCY_MISSING", "DEPENDENCY_VERSION_MISMATCH")
     finally:
         del os.environ["TEST_ENV_PROBE"]
 

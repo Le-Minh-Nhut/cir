@@ -171,11 +171,15 @@ def test_06_to_13_resume_invalidation_matrix(tmp_path: Path):
     fp2 = pipeline.compute_stage_input_fingerprint(stage, cfg)
     assert fp2 != fp1
 
-    # TEST 10: Output corruption -> reruns
+    # TEST 10: Output corruption -> reruns AND must not be recorded COMPLETE
     out.write_text("corrupted json {")
     assert not pipeline.validate_stage_outputs(stage)
+    rc_corrupt = pipeline.run_stages([stage], dry_run=False, resume=True, state_path=state_file, config=cfg)
+    assert rc_corrupt == 1, "corrupt output must fail the stage, not be accepted as COMPLETE"
+    assert pipeline.load_pipeline_state(state_file)["stages"]["eval"]["status"] == "FAILED"
 
-    # TEST 12: Force-stage overrides resume
+    # TEST 12: Force-stage overrides resume (restore a valid output first)
+    out.write_text('{"res": 2}')
     assert pipeline.run_stages([stage], dry_run=False, resume=True, force_stages={"eval"}, state_path=state_file, config=cfg) == 0
 
     # TEST 13: Interrupted stage (RUNNING) is not skipped as COMPLETE

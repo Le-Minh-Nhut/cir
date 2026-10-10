@@ -305,7 +305,7 @@ def extract_aggregate_metrics(
 
     if model_id == "limn":
         return parse_limn_output(stdout_text, paper_metrics)
-    if model_id in ("csmcir", "synthetic_model"):
+    if model_id == "csmcir":
         return parse_csmcir_output(stdout_text, paper_metrics)
 
     # Models with unaudited / unverified source output format

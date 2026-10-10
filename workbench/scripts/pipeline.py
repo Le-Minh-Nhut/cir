@@ -32,7 +32,7 @@ class Stage:
     dependencies: tuple[str, ...] = ()
     input_paths: tuple[Path, ...] = ()
     output_paths: tuple[Path, ...] = ()
-    required_capability: str | None = None
+    required_capabilities: frozenset[str] = frozenset()
 
 
 def stage_key(stage: Stage) -> str:
@@ -50,6 +50,10 @@ def dependency_key(stage: Stage) -> str:
     """Checkpoint/protocol-independent key used by stage dependency edges."""
     return f"{stage.name}:{stage.model_id}" if stage.model_id else stage.name
 
+
+
+_CONTENT_HASH_LIMIT = 64 * 1024 * 1024
+_CONTENT_HASH_SUFFIXES = (".json", ".yaml", ".yml", ".txt", ".pkl", ".pt", ".pth", ".cfg", ".toml")
 
 
 def compute_stage_input_fingerprint(stage: Stage, config: WorkbenchConfig | None = None, state: dict | None = None) -> str:
@@ -89,16 +93,19 @@ def compute_stage_input_fingerprint(stage: Stage, config: WorkbenchConfig | None
             except Exception:
                 hasher.update(str(p.stat().st_mtime_ns).encode("utf-8"))
 
-    # Source git commit
+    # Source identity: commit, cleanliness, and provenance digest.
     if stage.model_id and config:
         from workbench.backend.registry import model_by_id
+        from workbench.backend.runtime import source_provenance
         try:
             m = model_by_id(stage.model_id)
             sdir = m.get("source_dir") or stage.model_id
             source_dir = config.WORKBENCH_THIRD_PARTY_ROOT / sdir
             if source_dir.is_dir() and (source_dir / ".git").exists():
-                head = subprocess.check_output(["git", "-C", str(source_dir), "rev-parse", "HEAD"], text=True).strip()
-                hasher.update(f"GIT:{head}".encode("utf-8"))
+                provenance = source_provenance(m, source_dir)
+                hasher.update(f"GIT:{provenance.get('actual_commit')}".encode("utf-8"))
+                hasher.update(f"DIRTY:{provenance.get('dirty')}".encode("utf-8"))
+                hasher.update(f"PROV:{provenance.get('provenance_digest')}".encode("utf-8"))
         except Exception:
             pass
     # Dependency state
@@ -109,6 +116,23 @@ def compute_stage_input_fingerprint(stage: Stage, config: WorkbenchConfig | None
             hasher.update(f"DEP:{dep}:{dep_data.get('status')}:{dep_data.get('fingerprint')}".encode("utf-8"))
 
     return hasher.hexdigest()
+
+
+def stage_input_fingerprint_info(stage: Stage, config: WorkbenchConfig | None = None, state: dict | None = None) -> dict:
+    """Return {"digest": str, "weak": bool}.
+
+    ``weak`` is True when any declared input could only be identified by metadata
+    (size/mtime) rather than content. Weak identities must never silently grant a
+    verified resume of a side-effecting stage.
+    """
+    digest = compute_stage_input_fingerprint(stage, config, state)
+    weak = False
+    for p in stage.input_paths:
+        if not p.exists() or p.is_dir():
+            continue
+        if p.is_file() and p.stat().st_size > _CONTENT_HASH_LIMIT and p.suffix not in _CONTENT_HASH_SUFFIXES:
+            weak = True
+    return {"digest": digest, "weak": weak}
 
 
 def stage_fingerprint(stage: Stage) -> str:
@@ -151,7 +175,7 @@ def validate_stage_outputs(stage: Stage, recorded: dict[str, str] | None = None)
     if not stage.output_paths:
         # Read-only stages may be skipped on fingerprint alone; a side-effecting stage
         # declares no completion proof, so it must not be silently trusted as valid.
-        return not stage.required_capability
+        return not stage.required_capabilities
     for p in stage.output_paths:
         if not p.exists():
             return False
@@ -160,9 +184,18 @@ def validate_stage_outputs(stage: Stage, recorded: dict[str, str] | None = None)
                 return False
             if p.suffix == ".json":
                 try:
-                    json.loads(p.read_text(encoding="utf-8"))
+                    payload = json.loads(p.read_text(encoding="utf-8"))
                 except Exception:
                     return False
+                # A run manifest must reference an existing, non-empty run artifact.
+                if isinstance(payload, dict) and isinstance(payload.get("report"), str):
+                    referenced = Path(payload["report"])
+                    if not referenced.is_file() or referenced.stat().st_size == 0:
+                        return False
+                    try:
+                        json.loads(referenced.read_text(encoding="utf-8"))
+                    except Exception:
+                        return False
         if recorded and str(p) in recorded:
             expected = recorded[str(p)]
             if expected in ("MISSING", "EMPTY"):
@@ -174,6 +207,63 @@ def validate_stage_outputs(stage: Stage, recorded: dict[str, str] | None = None)
             except Exception:
                 return False
     return True
+
+
+class WorkflowLockError(RuntimeError):
+    """Raised when another live workflow already owns this state file."""
+
+
+def _lock_path(state_path: Path) -> Path:
+    return state_path.with_suffix(state_path.suffix + ".lock")
+
+
+_LOCK_HANDLES: dict[str, object] = {}
+
+
+def acquire_workflow_lock(state_path: Path, *, timeout: float = 0.0):
+    """Acquire an exclusive advisory lock on the workflow state.
+
+    Uses ``flock`` so the lock is released automatically if the process dies.
+    Returns the live file object; the caller must keep it referenced and pass it
+    to ``release_workflow_lock``. Raises WorkflowLockError if held by a live owner
+    and ``timeout`` elapses.
+    """
+    import fcntl
+    import time
+
+    path = _lock_path(state_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(path, "w")
+    deadline = time.monotonic() + max(timeout, 0.0)
+    while True:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            handle.write(f"{os.getpid()}\n")
+            handle.flush()
+            _LOCK_HANDLES[str(path)] = handle
+            return handle
+        except OSError:
+            if time.monotonic() >= deadline:
+                handle.close()
+                raise WorkflowLockError(
+                    f"another workflow owns {state_path} (lock held); retry later"
+                )
+            time.sleep(0.05)
+
+
+def release_workflow_lock(handle) -> None:
+    import fcntl
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+    try:
+        handle.close()
+    except OSError:
+        pass
+    for key, value in list(_LOCK_HANDLES.items()):
+        if value is handle:
+            del _LOCK_HANDLES[key]
 
 
 def load_pipeline_state(path: Path = STAGE_STATE_PATH) -> dict:
@@ -207,8 +297,12 @@ def run_stage(
     dependencies: tuple[str, ...] = (),
     input_paths: tuple[Path, ...] = (),
     output_paths: tuple[Path, ...] = (),
+    required_capabilities: frozenset[str] | set[str] | tuple[str, ...] = frozenset(),
     required_capability: str | None = None,
 ) -> Stage:
+    caps = frozenset(required_capabilities)
+    if required_capability:
+        caps = caps | {required_capability}
     return Stage(
         name=name,
         commands=commands,
@@ -219,7 +313,7 @@ def run_stage(
         dependencies=dependencies,
         input_paths=input_paths,
         output_paths=output_paths,
-        required_capability=required_capability,
+        required_capabilities=caps,
     )
 
 
@@ -271,8 +365,8 @@ def model_eval_outputs(model_dict: dict, args: argparse.Namespace, config: Workb
     mid = model_dict["model_id"]
     ckpt_id = getattr(args, "checkpoint", None) or (model_dict["checkpoint_variants"][0]["checkpoint_id"] if model_dict.get("checkpoint_variants") else "default")
     repo_root = getattr(config, "CIR_REPO_ROOT", REPOSITORY)
-    report_file = repo_root / "workbench" / "artifacts" / "reports" / f"{mid}_{ckpt_id}_aggregate.json"
-    return (report_file,)
+    latest_manifest = repo_root / "workbench" / "artifacts" / "reports" / f"{mid}_{ckpt_id}_latest.json"
+    return (latest_manifest,)
 def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
     from workbench.backend.registry import checkpoint_path, model_by_id
     model_obj = model_by_id(args.model) if args.model else None
@@ -305,12 +399,12 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
         model_id=args.model,
         checkpoint_id=args.checkpoint,
         output_paths=ckpt_outputs,
-        required_capability="allow_large_downloads",
+        required_capabilities={"allow_large_downloads", "allow_network"},
     ) if args.download_checkpoints else Stage("checkpoint", skipped="pass --download-checkpoints")
     selected_auxiliary_models = [args.model] if args.model in auxiliary_model_ids() else ([] if args.model else sorted(auxiliary_model_ids()))
     if args.download_auxiliary_assets and selected_auxiliary_models:
         auxiliary_args = ["--model", selected_auxiliary_models[0]] if args.model else ["--all"]
-        auxiliary = run_stage("auxiliary-assets", command("download_auxiliary_assets.py", *auxiliary_args), model_id=args.model, required_capability="allow_network")
+        auxiliary = run_stage("auxiliary-assets", command("download_auxiliary_assets.py", *auxiliary_args), model_id=args.model, required_capabilities={"allow_network", "allow_large_downloads"})
     elif args.download_auxiliary_assets:
         auxiliary = Stage("auxiliary-assets", skipped="selected model has no registered auxiliary assets")
     else:
@@ -344,7 +438,7 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             dependencies=("runtime-preflight",),
             input_paths=eval_inputs,
             output_paths=eval_outputs,
-            required_capability="allow_gpu_eval",
+            required_capabilities={"allow_gpu_eval", "allow_preparation"},
         )
     else:
         evaluation = Stage("evaluation", skipped="pass --evaluate")
@@ -408,23 +502,26 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
                 command("sync_upstreams.py", "--model", mid, "--output-root", config.WORKBENCH_THIRD_PARTY_ROOT),
                 model_id=mid,
                 output_paths=sync_out,
-                required_capability="allow_network",
+                required_capabilities={"allow_network", "allow_preparation"},
             ))
 
+        # Only an actual provisioning action is side-effecting; plain verification is read-only.
+        will_create_env = bool(m.get("environment_required")) and getattr(args, "allow_env_install", False) and getattr(args, "apply", False)
         env_cmd = ["--model", mid]
-        if m.get("environment_required") and getattr(args, "allow_env_install", False) and getattr(args, "apply", False):
+        if will_create_env:
             env_cmd.extend(["--create", "--allow-env-install"])
         stages.append(run_stage(
             "environment",
             command("manage_environment.py", *env_cmd),
             model_id=mid,
             dependencies=(sync_dep,),
-            required_capability="allow_env_install" if getattr(args, "allow_env_install", False) else None,
+            required_capabilities=({"allow_env_install", "allow_network"} if will_create_env else frozenset()),
         ))
 
         prep_cmd = ["--model", mid, "--dataset-root", str(dataset_root(args, config))]
         prep_out = (config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset",) if mid == "csmcir" else ()
-        if mid == "csmcir" and getattr(args, "allow_preparation", False) and getattr(args, "apply", False):
+        will_prepare = mid == "csmcir" and getattr(args, "allow_preparation", False) and getattr(args, "apply", False)
+        if will_prepare:
             prep_cmd.extend(["--execute", "--allow-preparation"])
         stages.append(run_stage(
             "preparation",
@@ -432,7 +529,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             model_id=mid,
             dependencies=("dataset", sync_dep),
             output_paths=prep_out,
-            required_capability="allow_preparation" if getattr(args, "allow_preparation", False) else None,
+            required_capabilities=({"allow_preparation", "allow_network"} if will_prepare else frozenset()),
         ))
 
         ckpt_args = ["--model", mid, "--output-root", str(config.WORKBENCH_CHECKPOINT_ROOT)]
@@ -448,7 +545,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             model_id=mid,
             checkpoint_id=args.checkpoint,
             output_paths=ckpt_outs,
-            required_capability="allow_large_downloads",
+            required_capabilities={"allow_large_downloads", "allow_network"},
         ))
 
         if mid in auxiliary_model_ids():
@@ -458,7 +555,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
                 command("download_auxiliary_assets.py", "--model", mid),
                 model_id=mid,
                 output_paths=aux_outs,
-                required_capability="allow_network",
+                required_capabilities={"allow_network", "allow_large_downloads"},
             ))
 
         preflight_deps = (sync_dep, f"checkpoint:{mid}", f"preparation:{mid}", f"environment:{mid}")
@@ -493,7 +590,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             dependencies=eval_deps,
             input_paths=eval_ins,
             output_paths=eval_outs,
-            required_capability="allow_gpu_eval",
+            required_capabilities={"allow_gpu_eval", "allow_preparation"},
         ))
 
     all_eval_deps = tuple(f"evaluation:{m['model_id']}" for m in selected_models)
@@ -582,7 +679,15 @@ def run_stages(
         state_path = repo_root / "workbench" / "artifacts" / "pipeline_state.json"
     failed = False
     force_set = set(force_stages or ())
+    if force_set:
+        known = {s.name for s in stages} | {stage_key(s) for s in stages} | {dependency_key(s) for s in stages}
+        unknown = sorted(force_set - known)
+        if unknown:
+            raise WorkflowLockError(f"unknown --force-stage value(s): {', '.join(unknown)}")
     authorized = set(authorized_capabilities or ())
+    lock_fd = None
+    if not dry_run:
+        lock_fd = acquire_workflow_lock(state_path)
     state = load_pipeline_state(state_path) if resume else {}
     stage_records = state.setdefault("stages", {})
     rerun_stages = set()
@@ -633,15 +738,18 @@ def run_stages(
                     save_pipeline_state(state, state_path)
                 continue
 
-            is_side_effecting = bool(stage.required_capability)
+            is_side_effecting = bool(stage.required_capabilities)
             stage_planning = planning_mode or (is_side_effecting and not apply)
 
-            # Explicit authorization check for side-effecting stages
+            # Explicit authorization check: every required capability must be granted.
             if is_side_effecting:
+                missing_caps = sorted(stage.required_capabilities - authorized)
                 if not apply and not dry_run:
-                    print(f"  [PLAN] {stage.name}: side-effecting stage requires --apply and --{stage.required_capability.replace('_', '-')} to execute")
-                elif apply and stage.required_capability not in authorized:
-                    print(f"  [BLOCKED] {stage.name}: BLOCKED_AUTHORIZATION_REQUIRED: pass --{stage.required_capability.replace('_', '-')}", file=sys.stderr)
+                    flags = " ".join(f"--{c.replace('_', '-')}" for c in sorted(stage.required_capabilities))
+                    print(f"  [PLAN] {stage.name}: side-effecting stage requires --apply and {flags} to execute")
+                elif apply and missing_caps:
+                    flags = " ".join(f"--{c.replace('_', '-')}" for c in missing_caps)
+                    print(f"  [BLOCKED] {stage.name}: BLOCKED_AUTHORIZATION_REQUIRED: pass {flags}", file=sys.stderr)
                     failed = True
                     failed_stages.add(stage.name)
                     failed_stages.add(dependency_key(stage))
@@ -659,7 +767,8 @@ def run_stages(
                         return 1
                     continue
 
-            fingerprint = compute_stage_input_fingerprint(stage, cfg, state)
+            fingerprint_info = stage_input_fingerprint_info(stage, cfg, state)
+            fingerprint = fingerprint_info["digest"]
 
             # Check dependency invalidation
             dep_invalidated = any(dep in rerun_stages for dep in stage.dependencies)
@@ -668,7 +777,7 @@ def run_stages(
             can_skip = False
             if resume and not dep_invalidated and (not force_set or (stage.name not in force_set and skey not in force_set)):
                 prev = stage_records.get(skey) or stage_records.get(stage.name)
-                if prev and prev.get("status") == "COMPLETE":
+                if prev and prev.get("status") == "COMPLETE" and not fingerprint_info["weak"]:
                     if prev.get("fingerprint") == fingerprint:
                         if validate_stage_outputs(stage, prev.get("output_fingerprints")):
                             can_skip = True
@@ -701,25 +810,59 @@ def run_stages(
                 if stage_planning:
                     continue
                 status = run_command(argv)
-                if status == 0:
-                    continue
-                stage_failed = True
-                failed = True
-                failed_stages.add(stage.name)
-                failed_stages.add(dependency_key(stage))
-                print(f"  [BLOCKED] {stage.name} exited with status {status}", file=sys.stderr)
-                if not stage_planning:
+                if status != 0:
+                    stage_failed = True
+                    failed = True
+                    failed_stages.add(stage.name)
+                    failed_stages.add(dependency_key(stage))
+                    print(f"  [BLOCKED] {stage.name} exited with status {status}", file=sys.stderr)
                     stage_records[skey].update({
                         "status": "FAILED",
                         "finished_at": datetime.now(UTC).isoformat(),
                         "return_code": status,
                     })
                     save_pipeline_state(state, state_path)
-                if stage.name == "runtime-preflight" or not continue_on_error:
-                    return 1
-                break
+                    break
+                # Single-command stages can be output-validated per command; multi-command
+                # stages validate once after all commands succeed (below).
+                if len(stage.commands) == 1 and not validate_stage_outputs(stage):
+                    stage_failed = True
+                    failed = True
+                    failed_stages.add(stage.name)
+                    failed_stages.add(dependency_key(stage))
+                    print(f"  [BLOCKED] {stage.name}: declared outputs missing or invalid after exit 0", file=sys.stderr)
+                    stage_records[skey].update({
+                        "status": "FAILED",
+                        "finished_at": datetime.now(UTC).isoformat(),
+                        "return_code": 0,
+                        "failure_reason": "output_contract_not_satisfied",
+                    })
+                    save_pipeline_state(state, state_path)
+                    break
 
-            if not stage_planning and not stage_failed:
+            if stage_failed:
+                if not continue_on_error:
+                    return 1
+                continue
+
+            # Output proof for multi-command stages.
+            if not stage_planning and not validate_stage_outputs(stage):
+                failed = True
+                failed_stages.add(stage.name)
+                failed_stages.add(dependency_key(stage))
+                stage_records[skey].update({
+                    "status": "FAILED",
+                    "finished_at": datetime.now(UTC).isoformat(),
+                    "return_code": 0,
+                    "failure_reason": "output_contract_not_satisfied",
+                })
+                save_pipeline_state(state, state_path)
+                print(f"  [BLOCKED] {stage.name}: declared outputs missing or invalid after exit 0", file=sys.stderr)
+                if not continue_on_error:
+                    return 1
+                continue
+
+            if not stage_planning:
                 completed_stages.add(stage.name)
                 completed_stages.add(skey)
                 stage_records[skey].update({
@@ -731,6 +874,8 @@ def run_stages(
                 save_pipeline_state(state, state_path)
     finally:
         write_report()
+        if lock_fd is not None:
+            release_workflow_lock(lock_fd)
 
     return 1 if failed else 0
 
@@ -776,6 +921,8 @@ def main(argv: list[str] | None = None) -> int:
     force_stages = set(args.force_stage) if args.force_stage else None
     if args.all_models and args.model:
         parser_for().error("--all-models cannot be combined with --model")
+    if args.mode in ("all", "setup", "reproduce") and not args.model and not args.all_models:
+        parser_for().error(f"{args.mode} requires --model MODEL_ID or --all-models (explicit selection)")
     if force_stages:
         known = {s.name for s in stages_for(args, config)}
         unknown = sorted(force_stages - known)

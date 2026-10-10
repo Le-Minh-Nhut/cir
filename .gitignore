@@ -56,6 +56,7 @@ workbench/artifacts/results/**
 workbench/artifacts/*.duckdb
 workbench/artifacts/*.jsonl
 workbench/artifacts/pipeline_state.json
+workbench/artifacts/pipeline_state.json.lock
 workbench/artifacts/annotations.json
 workbench/artifacts/cohorts.json
 workbench/frontend/tsconfig.tsbuildinfo

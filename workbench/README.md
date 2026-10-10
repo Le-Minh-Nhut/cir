@@ -308,8 +308,10 @@ All operator scripts use `python workbench/scripts/NAME.py ...`. These are curre
 [--checkpoint CHECKPOINT_ID] [--top-k POSITIVE_INTEGER] [--report PATH]
 
 # Authorization: side-effecting workflows (all/setup/reproduce) plan by default.
-# Execution requires --apply plus the matching --allow-* capability.
+# Execution requires --apply plus ALL matching --allow-* capabilities.
+# all/setup/reproduce require --model MODEL_ID or --all-models.
 # --dry-run forbids --apply and writes no state or logs.
+# Concurrent non-dry-run workflows are serialized with flock on the state file.
 
 # manage_environment.py
 (--list | --model MODEL_ID) [--create --allow-env-install] [--dry-run] [--json]
