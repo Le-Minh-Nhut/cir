@@ -440,11 +440,12 @@ def test_mut_h_trusting_the_environment_for_its_own_inventory_is_detected(
                  "print(json.dumps(out))\n"],
                 capture_output=True, text=True)
             try:
-                return json.loads(result.stdout.strip().splitlines()[-1])
+                payload = json.loads(result.stdout.strip().splitlines()[-1])
             except (ValueError, IndexError):
-                return {}
+                return {}, set()
+            return payload, set(payload)
 
-        ctx.setattr(runtime, "environment_inventory", inventory_from_environment)
+        ctx.setattr(runtime, "inspect_environment_distributions", inventory_from_environment)
 
     _assert_mutation_killed(monkeypatch, detector, mutate,
                             label="the environment answered for its own inventory")
@@ -531,8 +532,22 @@ def test_mut_j_accepting_a_hollow_install_is_detected(tmp_path, monkeypatch):
     def mutate(ctx):
         # The historical behaviour: any existing RECORD member counted as content, and
         # every RECORD lists itself.
-        ctx.setattr(runtime, "_distribution_has_installed_content",
-                    lambda site_packages, name: True)
+        original = runtime.inspect_environment_distributions
+
+        def trusting_walk(prefix, base_prefix=None):
+            # The historical behaviour: metadata alone counted as an installation.
+            versions, modules = original(prefix, base_prefix)
+            for lib in (Path(prefix) / "lib").glob("python*"):
+                for dist in list((lib / "site-packages").glob("*.dist-info")) + \
+                        list((lib / "site-packages").glob("*.egg-info")):
+                    metadata = dist / "METADATA" if dist.name.endswith(".dist-info") else dist / "PKG-INFO"
+                    declared, version = runtime._metadata_name_version(metadata)
+                    if declared:
+                        versions.setdefault(runtime.normalize_distribution_name(str(declared)),
+                                            version or None)
+            return versions, modules
+
+        ctx.setattr(runtime, "inspect_environment_distributions", trusting_walk)
 
     _assert_mutation_killed(monkeypatch, detector, mutate,
                             label="a hollow install accepted as verified")

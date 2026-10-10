@@ -7,7 +7,7 @@ import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 # Tier ordering: each tier implies all lower tiers were verified.
@@ -53,11 +53,11 @@ def _run_probe(interpreter: Path, code: str, timeout: int = 60,
                args: tuple[str, ...] = (), isolated: bool = False) -> tuple[bool, str, str]:
     """Run ``code`` under ``interpreter``.
 
-    ``isolated`` runs ``-I -S`` and adds the environment's own ``site-packages``
-    explicitly. ``-S`` stops ``site`` from importing ``sitecustomize``/``usercustomize``,
-    and the environment's directories are never added to ``sys.path`` (``site.addsitedir``
-    would execute the environment's ``.pth`` files). Nothing belonging to the environment
-    runs, so it cannot answer for itself.
+    ``isolated`` runs ``-I -S``: the user site and ``PYTHONPATH`` are ignored, and ``site``
+    does not import ``sitecustomize``/``usercustomize``. The environment's directories are
+    deliberately *not* added to ``sys.path``, because ``site.addsitedir`` executes the
+    environment's ``.pth`` files. Nothing belonging to the environment runs, so it cannot
+    answer for itself. This is used only for identity, which is not a package question.
     """
     prefix_flags = ["-I", "-S"] if isolated else []
     try:
@@ -401,135 +401,145 @@ def _metadata_name_version(metadata: Path) -> tuple[str | None, str | None]:
     return name, version
 
 
-def _distribution_has_installed_content(site_packages: Path, name: str) -> bool:
-    """True when a distribution's metadata names at least one file it really installed.
+def _safe_record_member(site_packages: Path, member: str, dist_name: str) -> Path | None:
+    """Resolve a RECORD entry to a file inside ``site_packages``, or None.
 
-    A ``dist-info`` whose ``RECORD`` lists only its own metadata describes an
-    installation that was never completed (or one that was wiped): nothing could import
-    it, so it must not satisfy a requirement. A legacy ``egg-info`` has no ``RECORD`` and
-    is judged by the sibling files it keeps.
+    RECORD entries are untrusted text: they may be absolute, may traverse upwards, or may
+    name the distribution's own metadata. Only a real file inside the tree counts as
+    installed content.
     """
-    target = normalize_distribution_name(name)
-    for dist in list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info")):
-        metadata = dist / "METADATA" if dist.name.endswith(".dist-info") else dist / "PKG-INFO"
-        declared, _ = _metadata_name_version(metadata)
-        if not declared:
-            declared = dist.name.split("-")[0]
-        if normalize_distribution_name(str(declared)) != target:
-            continue
-        record = dist / "RECORD"
-        if not record.is_file():
-            return True
-        try:
-            lines = record.read_text(encoding="utf-8", errors="replace").splitlines()
-        except OSError:
-            return False
-        for line in lines:
-            member = line.split(",", 1)[0].strip()
-            if not member:
-                continue
-            # The distribution's own metadata directory is not installed content.
-            if member.startswith(f"{dist.name}/"):
-                continue
-            if (site_packages / member).exists():
-                return True
-        return False
-    return False
+    member = member.strip()
+    if not member or member.startswith(("/", "\\")) or member.startswith(f"{dist_name}/"):
+        return None
+    relative = PurePosixPath(member)
+    if relative.is_absolute() or ".." in relative.parts:
+        return None
+    return site_packages / member
 
 
-def distributions_without_content(prefix: str | None, names: list[str]) -> list[str]:
-    """Declared distributions that exist only as metadata, with no installed files."""
-    if not prefix:
-        return []
-    roots = _site_packages_dirs(Path(prefix))
-    missing: list[str] = []
-    for name in names:
-        if not any(_distribution_has_installed_content(root, name) for root in roots):
-            missing.append(name)
-    return missing
+def inspect_environment_distributions(prefix: str | None,
+                                      base_prefix: str | None = None) -> tuple[dict[str, str | None], set[str]]:
+    """Read an environment's installed distributions from disk.
 
+    One walk produces everything the callers need, so the version inventory and the
+    "does this distribution actually install anything / which top-level modules exist"
+    answers can never disagree:
 
-def _installed_top_level_modules(prefix: str | None, base_prefix: str | None = None) -> set[str]:
-    """Top-level importable names the environment installs, read from disk.
+    * ``versions``       — normalized name -> version (or None when unreadable).
+    * ``modules``        — top-level importable names the environment installs.
 
-    Derived from each installed distribution's own file list plus the entries present in
-    its distribution directories. Nothing is executed, so no environment code can claim
-    a module.
+    Nothing is executed: no ``.pth`` is run, no module is imported, and no directory is
+    added to ``sys.path``. ``base_prefix`` covers a ``system_site_packages`` environment,
+    which resolves requirements from its base interpreter.
     """
+    from importlib.metadata import PackageNotFoundError, distributions
+
+    versions: dict[str, str | None] = {}
     modules: set[str] = set()
     roots: list[Path] = []
     for candidate in (prefix, base_prefix):
         if candidate:
-            roots.extend(_site_packages_dirs(Path(candidate)))
+            for root in _site_packages_dirs(Path(candidate)):
+                if root not in roots:
+                    roots.append(root)
+
     for site_packages in roots:
+        # Distribution metadata, without importing anything.
         try:
-            entries = list(site_packages.iterdir())
-        except OSError:
-            continue
-        for entry in entries:
-            name = entry.name
-            if entry.is_dir():
-                if name.endswith((".dist-info", ".egg-info", ".libs", "__pycache__")):
-                    continue
-                modules.add(name.split(".")[0])
-            elif name.endswith(".py"):
-                modules.add(name[: -len(".py")])
-        for dist in list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info")):
-            record = dist / "RECORD"
-            if not record.is_file():
-                continue
-            try:
-                lines = record.read_text(encoding="utf-8", errors="replace").splitlines()
-            except OSError:
-                continue
-            for line in lines:
-                member = line.split(",", 1)[0].strip()
-                if not member or member.startswith("..") or member.startswith(f"{dist.name}/"):
-                    continue
-                head = member.split("/", 1)[0]
-                if head.endswith(".py"):
-                    modules.add(head[: -len(".py")])
-                elif "." not in head and not head.endswith((".dist-info", ".egg-info", ".pth")):
-                    modules.add(head)
-    return modules
-
-
-def environment_inventory(prefix: str | None, base_prefix: str | None = None) -> dict[str, str | None]:
-    """Installed distributions read from disk. No environment code executes.
-
-    ``importlib.metadata.distributions(path=...)`` walks the given directories and parses
-    metadata; unlike adding the directory to ``sys.path`` it runs no ``.pth`` or
-    ``sitecustomize`` code, so nothing standing inside the environment can influence the
-    answer. A ``system_site_packages`` environment additionally resolves requirements
-    from its base interpreter, which is read the same way.
-    """
-    from importlib.metadata import PackageNotFoundError, distributions
-
-    inventory: dict[str, str | None] = {}
-    roots: list[str] = []
-    if prefix:
-        roots.extend(str(path) for path in _site_packages_dirs(Path(prefix)))
-    if base_prefix and str(base_prefix) != str(prefix):
-        roots.extend(str(path) for path in _site_packages_dirs(Path(base_prefix)))
-    for root in roots:
-        try:
-            found = list(distributions(path=[root]))
+            found = list(distributions(path=[str(site_packages)]))
         except (OSError, ValueError):
-            continue
+            found = []
         for item in found:
             try:
                 metadata = item.metadata
                 if metadata is None:
-                    # A directory with no readable metadata is not an installation.
                     continue
                 name = metadata["Name"]
                 version = metadata["Version"]
             except (PackageNotFoundError, KeyError):
                 continue
-            if not name:
-                continue
-            inventory.setdefault(normalize_distribution_name(str(name)), version or None)
-    return inventory
+            if name:
+                versions.setdefault(normalize_distribution_name(str(name)), version or None)
+
+        # Directories in the tree are importable without any metadata at all.
+        try:
+            entries = list(site_packages.iterdir())
+        except OSError:
+            entries = []
+        for entry in entries:
+            entry_name = entry.name
+            if entry.is_dir():
+                if entry_name.endswith((".dist-info", ".egg-info", ".libs", "__pycache__")):
+                    continue
+                modules.add(entry_name.split(".")[0])
+            elif entry_name.endswith(".py"):
+                modules.add(entry_name[: -len(".py")])
+
+        for dist in list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info")):
+            dist_name = dist.name
+            metadata = dist / "METADATA" if dist_name.endswith(".dist-info") else dist / "PKG-INFO"
+            declared, version = _metadata_name_version(metadata)
+            if not declared:
+                declared = dist_name.split("-")[0]
+            key = normalize_distribution_name(str(declared))
+            versions.setdefault(key, version or None)
+
+            installed_content = False
+            record = dist / "RECORD"
+            if record.is_file():
+                try:
+                    lines = record.read_text(encoding="utf-8", errors="replace").splitlines()
+                except OSError:
+                    lines = []
+                for line in lines:
+                    member = line.split(",", 1)[0]
+                    resolved = _safe_record_member(site_packages, member, dist_name)
+                    if resolved is None:
+                        continue
+                    if resolved.is_dir():
+                        modules.add(resolved.name.split(".")[0])
+                    elif resolved.is_file():
+                        installed_content = True
+                        if resolved.name.endswith(".py"):
+                            modules.add(resolved.name[: -len(".py")])
+            else:
+                # No RECORD: judge by the files the distribution actually keeps, ignoring
+                # the metadata that merely describes it.
+                descriptive = {"METADATA", "PKG-INFO", "RECORD", "INSTALLER", "WHEEL", "LICENSE",
+                               "LICENSE.txt", "entry_points.txt", "SOURCES.txt", "requires.txt",
+                               "dependency_links.txt", "top_level.txt", "not-zip-safe", "zip-safe"}
+                try:
+                    siblings = list(dist.iterdir())
+                except OSError:
+                    siblings = []
+                # A legacy egg-info declares its module through ``top_level.txt``; that
+                # module must really be installed, otherwise the metadata installs nothing.
+                top_level = dist / "top_level.txt"
+                declared: list[str] = []
+                if top_level.is_file():
+                    try:
+                        declared = [line.strip() for line in
+                                    top_level.read_text(encoding="utf-8", errors="replace").splitlines()
+                                    if line.strip()]
+                    except OSError:
+                        declared = []
+                for module_name in declared:
+                    head = module_name.split(".", 1)[0]
+                    if (site_packages / f"{head}.py").is_file() or (site_packages / head).is_dir():
+                        installed_content = True
+                        modules.add(head)
+                if any(sibling.is_file() and sibling.name not in descriptive for sibling in siblings):
+                    installed_content = True
+                for sibling in siblings:
+                    if sibling.is_dir():
+                        installed_content = True
+                        modules.add(sibling.name.split(".")[0])
+
+            if not installed_content:
+                # Metadata describing an install that never completed (or was wiped) cannot
+                # satisfy a requirement: nothing could import it.
+                versions.pop(key, None)
+    return versions, modules
 
 
 def _is_base_conda_path(path: Path) -> bool:
@@ -698,16 +708,18 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     required = _required_packages(model)
     imports = _required_imports(model)
     if required or imports:
-        report.packages = environment_inventory(report.prefix, report.base_prefix)
+        report.packages, _ = inspect_environment_distributions(report.prefix, report.base_prefix)
         report.dependency_probe_executed = True
         for pkg, want in required.items():
-            got = report.packages.get(normalize_distribution_name(pkg))
-            if got is None:
+            key = normalize_distribution_name(pkg)
+            if key not in report.packages:
                 report.tier = TIER_BLOCKED
                 report.status = "DEPENDENCY_MISSING"
-                report.reason = f"missing package: {pkg}"
+                report.reason = (f"missing package: {pkg} (no importable installation found "
+                                 f"in the environment)")
                 _remember(model, require_cuda, report)
                 return report
+            got = report.packages[key]
             if want is None:
                 # No version declared: any installed version satisfies presence.
                 continue
@@ -724,14 +736,6 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
                 report.reason = f"{pkg}: expected {want}, found {got}"
                 _remember(model, require_cuda, report)
                 return report
-        hollow = distributions_without_content(report.prefix, list(required))
-        if hollow:
-            report.tier = TIER_REQUIREMENTS_UNVERIFIED
-            report.status = "DEPENDENCY_INSTALLATION_UNVERIFIED"
-            report.reason = (f"{hollow[0]} has metadata on disk but no installed files, "
-                             f"so it cannot be imported")
-            _remember(model, require_cuda, report)
-            return report
         report.tier = "DEPENDENCIES_VERIFIED"
         report.status = "DEPENDENCIES_OK"
     else:
@@ -740,7 +744,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     # Declared importable modules are checked against the same on-disk inventory: a
     # top-level module name must correspond to something the environment installs.
     if imports:
-        installed_modules = _installed_top_level_modules(report.prefix, report.base_prefix)
+        _, installed_modules = inspect_environment_distributions(report.prefix, report.base_prefix)
         import sys as _sys
 
         installed_modules |= set(_sys.stdlib_module_names)
@@ -785,37 +789,15 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         _remember(model, require_cuda, report)
         return report
 
-    # CUDA verification (only when the model requires it).
-    if require_cuda or (env.get("cuda") and str(env["cuda"]).upper() != "UNKNOWN"):
-        code = (
-            "import json\n"
-            "out={'available': False, 'version': None}\n"
-            "try:\n"
-            "    import torch\n"
-            "    out['available']=bool(torch.cuda.is_available())\n"
-            "    out['version']=getattr(torch.version,'cuda',None)\n"
-            "except Exception: pass\n"
-            "print(json.dumps(out))\n"
-        )
-        ok, out, _ = _run_probe(interpreter, code, isolated=True,
-)
-        if ok:
-            try:
-                cuda = json.loads(out.splitlines()[-1])
-                report.cuda_available = cuda.get("available")
-                report.cuda_version = cuda.get("version")
-            except (ValueError, IndexError):
-                pass
-        if report.cuda_available:
-            report.tier = "CUDA_VERIFIED"
-            report.status = "CUDA_OK"
-        else:
-            report.tier = TIER_GPU_DEFERRED
-            report.status = "GPU_VERIFICATION_DEFERRED"
-            report.reason = "CUDA runtime unavailable; GPU verification deferred"
-            _remember(model, require_cuda, report)
-            return report
-    elif not required and not imports:
+    if not required and not imports:
+        # No source-backed requirements: cannot claim full verification.
+        report.tier = TIER_REQUIREMENTS_UNVERIFIED
+        report.status = "REQUIREMENTS_UNVERIFIED"
+        report.reason = "no source-backed dependency contract declared"
+        _remember(model, require_cuda, report)
+        return report
+
+
         # No source-backed requirements: cannot claim full verification.
         report.tier = TIER_REQUIREMENTS_UNVERIFIED
         report.status = "REQUIREMENTS_UNVERIFIED"

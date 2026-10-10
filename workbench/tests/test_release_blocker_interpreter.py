@@ -677,8 +677,8 @@ def test_metadata_rewritten_during_a_probe_never_verifies(tmp_path, monkeypatch)
     report = runtime.verify_environment(model, probe=True)
 
     assert report.tier != "RUNTIME_READY", "an in-probe metadata rewrite must not verify"
-    assert report.status in ("DEPENDENCY_PROBE_FORGED", "DEPENDENCY_INSTALLATION_UNVERIFIED",
-                             "DEPENDENCY_VERSION_MISMATCH"), report.status
+    assert report.status in ("DEPENDENCY_MISSING", "DEPENDENCY_VERSION_MISMATCH",
+                             "DEPENDENCY_INSTALLATION_UNVERIFIED"), report.status
     with pytest.raises(RuntimeError):
         runtime.python_executable(model)
 
@@ -852,8 +852,10 @@ def test_metadata_only_distribution_is_not_corroboration(tmp_path, monkeypatch):
     forget_environment()
     report = runtime.verify_environment(model, probe=True)
 
+    # Metadata with no installed files is not an installation: the requirement is unmet.
     assert report.tier != "RUNTIME_READY", "metadata without content is not an installation"
-    assert report.status == "DEPENDENCY_INSTALLATION_UNVERIFIED", report.status
+    assert report.status == "DEPENDENCY_MISSING", report.status
+    assert "no importable installation" in (report.reason or "")
     with pytest.raises(RuntimeError):
         runtime.python_executable(model)
 
@@ -886,3 +888,132 @@ def test_probes_never_execute_code_belonging_to_the_environment(tmp_path, monkey
 
     assert report.tier == "RUNTIME_READY", f"{report.status}: {report.reason}"
     assert not marker.exists(), "the environment's own code must never run during inspection"
+
+
+# ------------------------------------- consolidated inventory: R1, R2, R3 (round 11)
+
+def test_record_less_metadata_is_not_an_installation(tmp_path, monkeypatch):
+    """Metadata that installs nothing (no RECORD, no module) cannot satisfy a requirement."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        dist = site_packages / "norec-2.0.dist-info"
+        dist.mkdir(parents=True, exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: norec\nVersion: 2.0\n")
+        break
+    monkeypatch.setenv("NOREC_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "NOREC_VAR", "packages": ["norec==2.0"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier != "RUNTIME_READY", "a RECORD-less dist-info installs nothing"
+    assert report.status == "DEPENDENCY_MISSING", report.status
+    with pytest.raises(RuntimeError):
+        runtime.python_executable(model)
+
+
+def test_empty_egg_info_is_not_an_installation(tmp_path, monkeypatch):
+    """An egg-info holding only its own PKG-INFO installs nothing."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        egg = site_packages / "ghostegg.egg-info"
+        egg.mkdir(parents=True, exist_ok=True)
+        (egg / "PKG-INFO").write_text("Metadata-Version: 1.1\nName: ghostegg\nVersion: 1.0\n")
+        (egg / "SOURCES.txt").write_text("ghostegg.egg-info/PKG-INFO\n")
+        break
+    monkeypatch.setenv("EGG_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "EGG_VAR", "packages": ["ghostegg==1.0"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier != "RUNTIME_READY", "descriptive-only egg-info installs nothing"
+    assert report.status == "DEPENDENCY_MISSING", report.status
+
+
+def test_record_members_cannot_escape_the_environment(tmp_path, monkeypatch):
+    """A RECORD naming a file outside the tree is not installed content."""
+    interpreter = make_venv(tmp_path)
+    for lib in (interpreter.parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        dist = site_packages / "travpkg-1.0.dist-info"
+        dist.mkdir(parents=True, exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: travpkg\nVersion: 1.0\n")
+        # Absolute and traversing members: both must be ignored.
+        (dist / "RECORD").write_text(
+            "/etc/hostname,sha256=x,10\n"
+            "../../../../../../etc/hostname,sha256=x,10\n"
+            "travpkg-1.0.dist-info/METADATA,sha256=x,60\n")
+        break
+    monkeypatch.setenv("TRAV_VAR", str(interpreter))
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "TRAV_VAR", "packages": ["travpkg==1.0"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    assert report.tier != "RUNTIME_READY", "an escaping RECORD member is not installed content"
+    assert report.status == "DEPENDENCY_MISSING", report.status
+
+
+def test_system_site_packages_environment_resolves_from_its_base(tmp_path, monkeypatch):
+    """A --system-site-packages venv resolves requirements from its base interpreter."""
+    import venv as _venv
+
+    base = tmp_path / "base"
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(base)
+    for lib in (base / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        module = site_packages / "basedep.py"
+        module.write_text("__version__ = '1.0.0'\n")
+        dist = site_packages / "basedep-1.0.0.dist-info"
+        dist.mkdir(parents=True, exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: basedep\nVersion: 1.0.0\n")
+        (dist / "RECORD").write_text(
+            f"basedep.py,sha256=x,{module.stat().st_size}\n"
+            "basedep-1.0.0.dist-info/METADATA,sha256=x,60\n")
+        break
+
+    overlay = tmp_path / "overlay"
+    interpreter = overlay / "bin" / "python"
+    interpreter.parent.mkdir(parents=True)
+    # A real interpreter whose pyvenv.cfg exposes the base's site-packages.
+    interpreter.symlink_to(base / "bin" / "python")
+    (overlay / "pyvenv.cfg").write_text(
+        f"home = {base / 'bin'}\ninclude-system-site-packages = true\n"
+        f"version = {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}\n")
+    (overlay / "lib").mkdir(exist_ok=True)
+
+    monkeypatch.setenv("SSP_VAR", str(interpreter))
+    forgetting = None
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "SSP_VAR", "packages": ["basedep==1.0.0"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+
+    # The dependency is resolvable from the base interpreter, so it must not be refused
+    # as missing; whatever the verdict, it must name the real reason.
+    assert report.status != "DEPENDENCY_MISSING" or report.tier == "UNSAFE_INTERPRETER", report.reason
+    assert forgetting is None
+
+
+def test_inventory_and_module_checks_agree(tmp_path, monkeypatch):
+    """One walk backs both answers, so they cannot disagree about an environment."""
+    interpreter = make_venv(tmp_path)
+    install_stub(interpreter, "stubdep", "1.2.3")
+    monkeypatch.setenv("AGREE_VAR", str(interpreter))
+    forget_environment()
+
+    versions, modules = runtime.inspect_environment_distributions(str(interpreter.parent.parent))
+    assert versions["stubdep"] == "1.2.3"
+    assert "stubdep" in modules, "an installed module is reported by the same walk"
+
+    model = {"model_id": "m", "environment_required": True,
+             "environment": {"python_env_var": "AGREE_VAR", "packages": ["stubdep==1.2.3"],
+                             "required_imports": ["stubdep"]}}
+    forget_environment()
+    report = runtime.verify_environment(model, probe=True)
+    assert report.tier == "RUNTIME_READY", f"{report.status}: {report.reason}"
+    assert report.packages["stubdep"] == "1.2.3"
+    assert report.imports["stubdep"] is True

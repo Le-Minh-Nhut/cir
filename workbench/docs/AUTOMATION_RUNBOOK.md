@@ -300,11 +300,20 @@ requirement is reported as `GPU_VERIFICATION_DEFERRED` and is never readiness.
 Both `site-packages` and the Debian/Ubuntu `dist-packages` spelling are read, so a
 `--system-site-packages` virtualenv over a `dist-packages` base resolves its requirements.
 
-A declared distribution must also have **real installed content**: a `dist-info` whose
-`RECORD` names at least one existing file *outside its own metadata directory*, or a
-legacy `egg-info` with its own files. A `RECORD` that lists only itself describes an
-installation that was never completed (or one that was wiped), so it cannot satisfy a
-requirement. A declared import module must correspond to a top-level name the environment
+A declared distribution must also have **real installed content**, judged by a single walk
+of the environment (`inspect_environment_distributions`) so the version answer and the
+"is it actually installed" answer can never disagree:
+
+- a `dist-info` `RECORD` member must be a real file **inside** the tree, outside the
+  distribution's own metadata directory, and neither absolute nor traversing
+  (`..`/`.`). A `RECORD` listing only itself, or one naming `/etc/hostname`, contributes
+  nothing;
+- a `RECORD`-less `dist-info` contributes nothing by itself;
+- a legacy `egg-info` counts only when the module named in its `top_level.txt` really
+  exists, or it keeps a non-descriptive sibling file.
+
+Metadata that installs nothing describes an installation that never completed (or one
+that was wiped), so it cannot satisfy a requirement: the package is reported missing. A declared import module must correspond to a top-level name the environment
 actually installs (standard-library and builtin module names always count).
 
 The outcome is three-way:

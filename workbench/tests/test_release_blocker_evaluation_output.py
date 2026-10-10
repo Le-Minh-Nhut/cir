@@ -600,14 +600,19 @@ def test_on_disk_inventory_ignores_sitecustomize(tmp_path):
     env_dir = tmp_path / "env"
     _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
     site_packages = next((env_dir / "lib").glob("python*/site-packages"))
+    module = site_packages / "stubdep.py"
+    module.write_text("__version__ = '1.2.3'\n")
     dist = site_packages / "stubdep-1.2.3.dist-info"
     dist.mkdir()
     (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: stubdep\nVersion: 1.2.3\n")
+    (dist / "RECORD").write_text(
+        f"stubdep.py,sha256=x,{module.stat().st_size}\n"
+        "stubdep-1.2.3.dist-info/METADATA,sha256=x,60\n")
     (site_packages / "sitecustomize.py").write_text(
         "import importlib.metadata as m\n"
         "m.version = lambda n: '9.9.9'\n")
 
-    inventory = runtime.environment_inventory(str(env_dir))
+    inventory, _ = runtime.inspect_environment_distributions(str(env_dir))
     assert inventory["stubdep"] == "1.2.3", "disk inventory must not be influenced by the env"
 
 
@@ -623,6 +628,7 @@ def test_legacy_egg_info_install_invalidates_cache(tmp_path, monkeypatch):
     egg = site_packages / "stubdep.egg-info"
     egg.mkdir()
     (egg / "PKG-INFO").write_text("Metadata-Version: 1.1\nName: stubdep\nVersion: 1.2.3\n")
+    # A real egg-info install keeps the module it describes.
     (egg / "top_level.txt").write_text("stubdep\n")
     (site_packages / "stubdep.py").write_text("VERSION = '1.2.3'\n")
 
