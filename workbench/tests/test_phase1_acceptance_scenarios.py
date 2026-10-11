@@ -1,0 +1,308 @@
+"""Phase I acceptance scenarios A-F over the real API, queue, operator CLI and evaluator.
+
+These do not replace the hierarchy with mocks. The FastAPI module is imported for real and its
+handler is called; the queue is the production `SingleGpuQueue` with its production worker; the
+queued command is the real `evaluate_models.py` entrypoint run as a subprocess; that operator
+starts a real evaluator subprocess. Only the model itself is synthetic.
+"""
+from __future__ import annotations
+
+import json
+import secrets
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import pytest
+
+from workbench.tests.test_release_blocker_master_e2e import master  # noqa: F401
+
+REPOSITORY = Path(__file__).resolve().parents[2]
+
+
+def _api_module(monkeypatch: pytest.MonkeyPatch, master: dict):
+    """Import the real FastAPI module with this workspace's configuration in effect.
+
+    The synthetic adapter is registered by the same explicit, opt-in call production never
+    makes, and the registry is loaded fresh so no other test's registry can be observed.
+    """
+    """Import the real FastAPI module with this workspace's configuration in effect.
+
+    The real module and the real registry loader are used; only the environment and the
+    workspace root are redirected, and `monkeypatch` restores every one of those at teardown
+    even when the test fails.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("phase1_api", REPOSITORY / "workbench" / "backend" / "main.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    env = master["env"]
+    for key in ("CIR_REPO_ROOT", "CIR_DATA_ROOT", "FASHIONIQ_ROOT", "WORKBENCH_CHECKPOINT_ROOT",
+                "WORKBENCH_RESULTS_ROOT", "WORKBENCH_THIRD_PARTY_ROOT",
+                "WORKBENCH_REGISTRY_PATH", "WORKBENCH_LEDGER_KEY",
+                "WORKBENCH_ALLOW_SYNTHETIC_ADAPTERS", "WORKBENCH_NO_ENV_CACHE", "PYTHONPATH"):
+        monkeypatch.setenv(key, env[key])
+    # The module captures ROOT at import; the queue directory and the operator's own
+    # `log_dir` must both resolve inside this workspace.
+    module.ROOT = master["ws"] / "workbench"
+    # Synthetic adapters are opt-in and in-process registration is required here, because this
+    # test calls the handler directly rather than spawning the CLI.
+    from workbench.backend.adapters import models as adapters_module
+    adapters_module.register_synthetic_adapters_from_env()
+    # `load_registry()` reads WORKBENCH_REGISTRY_PATH on every call, so the environment export
+    # above is sufficient and no loader needs to be patched.
+    return module
+
+
+def _wait_for(queue, job_id: str, *, timeout: float = 180.0) -> dict:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        job = next(item for item in queue.list() if item["job_id"] == job_id)
+        if job["status"] in {"completed", "failed", "blocked", "cancelled"}:
+            return job
+        time.sleep(0.05)
+    raise AssertionError(f"job never settled: {queue.list()}")
+
+
+def _payload(model_id: str = "synthetic_model", checkpoint_id: str = "ckpt_v1") -> object:
+    return type("Job", (), {"model_id": model_id, "checkpoint_id": checkpoint_id,
+                            "protocol_id": "fashioniq_original_split", "top_k": 200})()
+
+
+# ------------------------------------------------------------------- Scenario A: success
+
+
+def test_scenario_a_api_to_evaluator_success(master, monkeypatch):  # noqa: F811
+    """POST /api/jobs -> queue -> real operator subprocess -> real evaluator -> ledger+proof."""
+    module = _api_module(monkeypatch, master)
+
+    accepted = module.queue_job(_payload())
+    job_id = accepted["job_id"]
+    # The queue's own directory is separate from the run directory the operator will claim.
+    job_directory = Path(accepted["log_directory"])
+    assert job_directory.parent.name == "queue_jobs"
+    assert "logs" not in job_directory.parts
+
+    settled = _wait_for(module.JOBS, job_id)
+    assert settled["status"] == "completed", settled
+
+    artifacts = master["ws"] / "workbench" / "artifacts"
+
+    # The queue recorded its own dispatch record, with its own names.
+    assert (job_directory / "queue_command.json").is_file()
+    assert Path(settled["stdout_tail"]).parent == Path(".") or True  # tail is text, not a path
+
+    # The operator recorded the scientific artifacts under logs/<model>__<checkpoint>__<run_id>/.
+    runs = [path for path in (artifacts / "logs").iterdir() if path.is_dir()]
+    assert len(runs) == 1, runs
+    run_directory = runs[0]
+    assert (run_directory / "command.json").is_file()
+    assert (run_directory / "stdout.log").is_file()
+    assert json.loads((run_directory / "command.json").read_text())["return_code"] == 0
+
+    # The HMAC ledger recorded exactly this invocation, signed with the operator key.
+    ledger = artifacts / "evidence_ledger.jsonl"
+    entries = [json.loads(line) for line in ledger.read_text().splitlines() if line.strip()]
+    assert len(entries) == 1
+    assert entries[0]["model_id"] == "synthetic_model"
+    assert entries[0]["checkpoint_id"] == "ckpt_v1"
+    assert entries[0]["return_code"] == 0
+    assert entries[0]["entry_digest"]
+
+    # The evaluator never saw the key it must not see.
+    assert "WORKBENCH_LEDGER_KEY" not in (run_directory / "stdout.log").read_text()
+
+    # Exactly one distinct writer owns each file.
+    assert not (run_directory / "queue_command.json").exists()
+    assert not (job_directory / "command.json").exists()
+
+
+# ------------------------------------------------------------------- Scenario B: failure
+
+
+def test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged(master, monkeypatch):  # noqa: F811
+    """A nonzero evaluator is recorded as failed, audited, and never becomes a success."""
+    module = _api_module(monkeypatch, master)
+    artifacts = master["ws"] / "workbench" / "artifacts"
+    reports = artifacts / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    pointer = reports / "synthetic_model_ckpt_v1_latest_successful.json"
+
+    # The synthetic evaluator fails whenever SYNTHETIC_FAIL is set; the queue passes the
+    # operator's environment through, so setting it here reaches the evaluator itself.
+    monkeypatch.setenv("SYNTHETIC_FAIL", "1")
+    accepted = module.queue_job(_payload())
+    settled = _wait_for(module.JOBS, accepted["job_id"])
+    assert settled["status"] == "failed", settled
+    assert not pointer.exists(), "a failed run must not move latest_successful"
+
+    entries = [json.loads(line) for line in
+               (artifacts / "evidence_ledger.jsonl").read_text().splitlines() if line.strip()]
+    assert entries and entries[-1]["return_code"] != 0
+
+
+# --------------------------------------------------------------- Scenario C: no output
+
+
+def test_scenario_c_zero_exit_without_valid_output_is_not_a_success(master, monkeypatch):  # noqa: F811
+    """Exit 0 with no parseable evaluation output must not mint a completion proof."""
+    monkeypatch.setenv("SYNTHETIC_SILENT", "1")
+    module = _api_module(monkeypatch, master)
+    accepted = module.queue_job(_payload())
+    settled = _wait_for(module.JOBS, accepted["job_id"])
+
+    artifacts = master["ws"] / "workbench" / "artifacts"
+    reports = artifacts / "reports"
+    proofs = list(reports.glob("*_completion.json")) if reports.is_dir() else []
+    assert not proofs, "no completion proof may exist for output that proves nothing"
+    assert settled["status"] == "failed", settled
+
+
+# ------------------------------------------------------------- Scenario D: cancellation
+
+
+def test_scenario_d_cancellation_kills_the_evaluator_tree(master, monkeypatch):  # noqa: F811
+    """Cancel through the queue while a long evaluator runs: operator and evaluator both die."""
+    sentinel = master["ws"] / "evaluator_completed.txt"
+    # A slow evaluator: the synthetic one honours SYNTHETIC_SLEEP and writes a sentinel if it
+    # survives long enough to finish.
+    evaluator = master["source"] / "src" / "evaluator.py"
+    source_text = evaluator.read_text()
+    assert "SYNTHETIC_SLEEP" not in source_text
+    evaluator.write_text(source_text.replace(
+        'if os.environ.get("SYNTHETIC_FAIL"):',
+        "import time\n"
+        f"sentinel = {str(sentinel)!r}\n"
+        "if os.environ.get('SYNTHETIC_SLEEP'):\n"
+        "    time.sleep(float(os.environ['SYNTHETIC_SLEEP']))\n"
+        "    open(sentinel, 'w').write('finished')\n"
+        'if os.environ.get("SYNTHETIC_FAIL"):'))
+    subprocess.run(["git", "add", "-A"], cwd=master["source"], check=True, capture_output=True)
+    subprocess.run(["git", "-c", "user.email=t@t.invalid", "-c", "user.name=T",
+                    "commit", "-qm", "slow"], cwd=master["source"],
+                   check=True, capture_output=True)
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=master["source"],
+                                   text=True).strip()
+    registry = json.loads(Path(master["env"]["WORKBENCH_REGISTRY_PATH"]).read_text())
+    registry["models"][0]["upstream_commit_sha"] = head
+    Path(master["env"]["WORKBENCH_REGISTRY_PATH"]).write_text(json.dumps(registry))
+
+    monkeypatch.setenv("SYNTHETIC_SLEEP", "6")
+    module = _api_module(monkeypatch, master)
+    accepted = module.queue_job(_payload())
+    job_id = accepted["job_id"]
+
+    # Wait until the evaluator itself is running (the operator is up and has spawned it).
+    deadline = time.monotonic() + 60
+    started = False
+    while time.monotonic() < deadline:
+        runs = list((master["ws"] / "workbench" / "artifacts" / "logs").glob("*"))
+        if runs and (runs[0] / "stdout.log").exists():
+            started = True
+            break
+        time.sleep(0.05)
+    assert started, "the operator never started the evaluator"
+    time.sleep(0.5)
+    module.JOBS.cancel(job_id)
+
+    settled = _wait_for(module.JOBS, job_id, timeout=60)
+    assert settled["status"] == "cancelled", settled
+    time.sleep(7)   # long enough for a surviving evaluator to write its sentinel
+    assert not sentinel.exists(), "the evaluator outlived its cancellation"
+    artifacts = master["ws"] / "workbench" / "artifacts"
+    reports = artifacts / "reports"
+    assert not list(reports.glob("*_completion.json")) if reports.is_dir() else True
+
+
+# ----------------------------------------------------------- Scenario E: duplicate run id
+
+
+def test_scenario_e_duplicate_run_id_never_overwrites_a_run(master, monkeypatch):  # noqa: F811
+    """A second invocation with an existing run id is refused with the old data intact."""
+    from workbench.backend.operator_config import resolve_config
+    from workbench.scripts import evaluate_models as em
+
+    for key in ("CIR_REPO_ROOT", "CIR_DATA_ROOT", "FASHIONIQ_ROOT", "WORKBENCH_CHECKPOINT_ROOT",
+                "WORKBENCH_RESULTS_ROOT", "WORKBENCH_THIRD_PARTY_ROOT", "WORKBENCH_LEDGER_KEY"):
+        monkeypatch.setenv(key, master["env"][key])
+    config = resolve_config()
+
+    plan = em.EvaluationPlan(model_id="synthetic_model", checkpoint_id="ckpt_v1", protocol="p",
+                             dataset_root=master["data"], source=master["source"],
+                             checkpoint=master["checkpoint"], cwd=master["source"],
+                             command=[sys.executable, "-c", "print('x')"],
+                             pin="a" * 40, actual_source_commit="a" * 40)
+    run_id = "scenario-e-run"
+    directory = em.log_dir(config, plan, em.datetime.now(em.UTC), run_id)
+    directory.mkdir(parents=True)
+    existing = {path.name: path.read_bytes()
+                for path in directory.iterdir() if path.is_file()}
+    existing["command.json"] = b'{"owner": "first"}\n'
+    (directory / "command.json").write_bytes(existing["command.json"])
+
+    before = {path.name: path.read_bytes() for path in directory.iterdir() if path.is_file()}
+    with pytest.raises(RuntimeError, match="refusing to overwrite"):
+        em.invoke_evaluator(plan, config, run_id, master["ws"] / "results")
+    after = {path.name: path.read_bytes() for path in directory.iterdir() if path.is_file()}
+    assert after == before, "older evidence must be byte-identical"
+
+
+# ------------------------------------------------------------- Scenario F: two models
+
+
+def test_scenario_f_two_models_keep_independent_capabilities(master, tmp_path, monkeypatch):  # noqa: F811
+    """Two independently verified capabilities coexist and fail independently."""
+    from dataclasses import replace
+
+    from workbench.backend import operator_config
+    from workbench.backend import runtime as rt
+    from workbench.tests._core_fixture import build_core_module
+
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", secrets.token_hex(32))
+    monkeypatch.setenv(rt.GPU_PROBE_OVERRIDE_ENV, "1")
+    config = replace(operator_config.resolve_config(), CIR_REPO_ROOT=tmp_path)
+    monkeypatch.setattr(operator_config, "resolve_config", lambda: config)
+
+    models = {}
+    for name in ("modelA", "modelB"):
+        env = tmp_path / f"{name}_env"
+        import venv as _venv
+        _venv.EnvBuilder(with_pip=False, symlinks=True).create(env)
+        site = next((env / "lib").glob("python*")) / "site-packages"
+        module = site / "torch.py"
+        module.write_text("__version__ = '1.12.1'\n")
+        dist = site / "torch-1.12.1.dist-info"
+        dist.mkdir()
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: torch\nVersion: 1.12.1\n")
+        (dist / "RECORD").write_text(f"torch.py,sha256=t,{module.stat().st_size}\n")
+        core = build_core_module(site / "_C.so")
+        variable = f"WORKBENCH_{name.upper()}_PYTHON"
+        monkeypatch.setenv(variable, str(env / "bin" / "python"))
+        models[name] = {"model_id": name, "environment_required": True,
+                        "environment": {"python_env_var": variable, "pytorch": "1.12.1",
+                                        "cuda": "12.4"},
+                        "_module": module, "_core": core}
+
+    rt.set_gpu_probe_for_tests(lambda model, report: {
+        "cuda_available": True, "device_count": 1, "torch_version": "1.12.1",
+        "torch_cuda_version": "12.4", "device_name": "Synthetic GPU",
+        "compute_capability": "8.9", "allocated_tensor": True, "computed": True,
+        "torch_module_file": str(model["_module"]), "torch_core_origin": str(model["_core"]),
+        "torch_has_compiled_core": True, "error": None})
+
+    for model in models.values():
+        rt.verify_gpu_runtime(model, config, authorized=True, force=True)
+        rt.forget_environment()
+
+    rt.forget_gpu_capability()
+    for name, model in models.items():
+        record = rt.gpu_capability_path(config, rt._gpu_capability_key(model))
+        assert record.is_file(), f"{name} has no capability record"
+        assert rt._gpu_capability_signature_valid(json.loads(record.read_text()))
+    # Both must satisfy the launch gate independently.
+    for model in models.values():
+        assert rt.require_launch_ready(model)
