@@ -251,11 +251,12 @@ def test_int08b_wrong_python_version_detected(tmp_path: Path, monkeypatch):
 
 # ------------------------------------------------------------------------------- INT-09
 
-def test_int09_declared_cuda_requirement_is_deferred_not_verified(tmp_path: Path, monkeypatch):
-    """A model declaring CUDA is GPU-deferred, never ready, and no code is executed.
+def test_int09_declared_cuda_requirement_is_pending_not_verified(tmp_path: Path, monkeypatch):
+    """A model declaring CUDA is interpreter-ready but not launch-ready.
 
-    CUDA capability can only be reported by the environment, and asking it would mean
-    running environment code during inspection. The honest verdict is deferral.
+    Inspection must never claim GPU capability — only ``verify_gpu_runtime()`` can, and it
+    requires explicit authorization. The state is a legitimate *pending* state with a real
+    way forward, not a dead end.
     """
     interpreter = make_venv(tmp_path)
     install_stub(interpreter, "stubdep", "1.2.3")
@@ -265,22 +266,28 @@ def test_int09_declared_cuda_requirement_is_deferred_not_verified(tmp_path: Path
     forget_environment()
 
     report = runtime.verify_environment(model, probe=True)
-    assert report.tier == "GPU_VERIFICATION_DEFERRED", report.tier
-    assert report.status == "GPU_VERIFICATION_DEFERRED"
-    assert report.cuda_available is None, "CUDA is not probed"
-    with pytest.raises(RuntimeError):
-        python_executable(model)
+    assert report.tier == "GPU_VERIFICATION_PENDING", report.tier
+    assert report.status == "GPU_VERIFICATION_PENDING"
+    assert report.cuda_available is None, "inspection never probes CUDA"
 
-    # require_cuda makes the same judgement without executing anything.
-    forget_environment()
-    forced = runtime.verify_environment(model, probe=True, require_cuda=True)
-    assert forced.tier == "GPU_VERIFICATION_DEFERRED"
-    with pytest.raises(RuntimeError, match="not verified"):
-        runtime.require_verified_model_interpreter(model, require_cuda=True)
+    # The interpreter is verified (a plan may be built), but a launch is refused.
+    assert runtime.require_verified_model_interpreter(model) == str(interpreter)
+    with pytest.raises(runtime.GpuVerificationError):
+        runtime.require_launch_ready(model)
+
+    # An unauthorized probe is refused outright.
+    from dataclasses import replace
+
+    from workbench.backend.operator_config import resolve_config
+
+    with pytest.raises(runtime.GpuVerificationError, match="authorization"):
+        runtime.verify_gpu_runtime(model, replace(resolve_config(), CIR_REPO_ROOT=tmp_path),
+                                   authorized=False)
 
     status = runtime.environment_status(model, probe=True)
-    assert status["gpu_deferred"] is True
-    assert status["verified"] is False
+    assert status["gpu_pending"] is True
+    assert status["launch_ready"] is False
+    assert runtime.environment_blockers(model), "a pending GPU must surface as a blocker"
 
 
 # ------------------------------------------------------------------ verification reuse

@@ -244,6 +244,22 @@ outside the artifact tree:
 - `WORKBENCH_LEDGER_KEY` from the operator's secret store (recommended), or
 - `<CIR_REPO_ROOT>/.workbench_ledger_key`, created mode `0600` on first use.
 
+Key handling **fails closed**: an empty operator key, an unreadable or empty key file, or a
+missing key while a ledger already exists all raise `LedgerKeyError`. A key is never silently
+rotated or regenerated, because an existing verified ledger depends on the old one.
+
+Appends take an exclusive `flock` on `<ledger>.lock` for the whole read-verify-append
+sequence, so two concurrent evaluators cannot fork the chain; readers take a shared lock.
+Duplicate run ids are rejected. A ledger that fails to parse or verify is reported as corrupt
+and appends refuse to continue — never auto-reset, never truncated, preserved for forensics.
+
+**Honest trust model.** A subprocess running as the same OS user can still read any same-user
+secret; `chmod 0600` is not isolation from another process owned by that user. What the ledger
+provides is protection against accidental corruption, ordinary artifact edits, unkeyed
+tampering, missing entries, and inconsistent reports. It does **not** claim protection
+against a malicious evaluator that already holds the operator's secrets: that needs an
+OS-level trust boundary, which this release does not implement.
+
 Set `WORKBENCH_LEDGER_KEY` before a reproduction run and keep it out of the repository: the
 ledger is only as trustworthy as that key. The key is **never** passed to the official
 evaluator — model code is untrusted and must not be able to forge ledger entries. `clean_generated.py --logs` removes the ledger
@@ -293,7 +309,28 @@ completed execution, with `metric_extraction_available: false`.
   overwriting an experiment. A crash mid-update leaves the previous pointer intact
   and no temp file behind.
 
+### Invocation audit and standalone exit codes
+
+Every evaluation invocation that actually starts appends exactly one ledger entry recording
+its true outcome, including the ones that never produce a proof:
+
+| `invocation_status` | Meaning |
+|---|---|
+| `INVOCATION_COMPLETED` | the evaluator exited 0 and produced observable output |
+| `INVOCATION_FAILED` | the evaluator exited nonzero |
+| `INVOCATION_NO_OBSERVABLE_OUTPUT` | the evaluator exited 0 but printed nothing |
+
+An audit record is not a completion proof: a failed or output-less invocation is recorded in
+the ledger and never advances `latest_successful`.
+
+`execute()` keeps returning the **native** evaluator return code (metadata, reports, and the
+ledger record it unchanged). The standalone CLI returns a separate **operator** status: when
+the native code is 0 but the run's completion proof is missing or invalid, the CLI exits
+nonzero, so a direct operator invocation cannot look successful without a valid proof. Missing
+or corrupt ledger keys and a corrupt ledger likewise produce operator failure.
+
 ### Resume
+
 
 Resume uses the run-bound proof, not the pointer: a stage recorded as COMPLETE is
 re-executed whenever its invocation proof is missing or no longer valid.
@@ -312,6 +349,40 @@ Two distinct operations exist and must not be conflated:
 `python_executable()` never bypasses verification and never returns an arbitrary
 configured path: it raises `RuntimeError` unless the runtime is *verified*.
 `doctor.py`, `manage_environment.py`, and `guarded_plan()` share this one definition.
+
+### GPU readiness (CUDA-declaring models)
+
+Inspection never probes CUDA: the answer can only come from running the environment's own
+code, which inspection refuses to do. A model whose contract declares `cuda` is therefore
+reported as a *legitimate pending state* with a real way forward:
+
+| State | Meaning |
+|---|---|
+| `GPU_VERIFICATION_PENDING` | interpreter, Python version, and dependencies verified; GPU not probed |
+| `GPU_RUNTIME_READY` | an authorized probe proved PyTorch can allocate and compute on a CUDA device |
+| `GPU_PROBE_FAILED` / `GPU_VERIFICATION_DEFERRED` | the probe ran and did not verify, or the host has no CUDA |
+
+Two ready sets exist and must not be conflated: `READY_TIERS` (interpreter verified, so an
+evaluation **plan** may be built) and `LAUNCH_READY_TIERS` (**launching** permitted).
+`runtime.require_launch_ready(model)` is the launch gate; `runtime.runtime_plan_blockers(...)`
+is the plan-level view that deliberately omits the environment blocker.
+
+Authorized probe on the GPU host:
+
+```bash
+python workbench/scripts/evaluate_models.py --model MODEL_ID --verify-gpu
+```
+
+It runs `runtime.GPU_PROBE_CODE` under the model's interpreter with `-I -S` (no environment
+code executes), records device count, name, compute capability, a one-element tensor
+allocation and a trivial computation into `workbench/artifacts/gpu_capability.json`, and
+prints the structured result. A recorded capability is keyed to the interpreter and
+dependency fingerprints, so a changed environment invalidates it.
+
+The probe executes Python from the model's environment, which is **untrusted**: it is
+explicitly authorized, never runs during a read-only status query, receives no secrets, and
+does not touch the ledger or any completion proof. A test-only probe override exists for
+laptop tests and is consulted only when `WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE=1` is set.
 
 ### Linux virtualenv identity
 

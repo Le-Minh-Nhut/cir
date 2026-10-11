@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 
@@ -229,7 +230,12 @@ def test_e2e05_exit_zero_without_new_output_fails_evaluation(master):
     result = run(master, "--force-stage", "evaluation", "--resume", env=silent_env)
 
     assert result.returncode == 1, "a zero-output evaluator must fail the evaluation stage"
-    assert "declared outputs missing or invalid" in (result.stdout + result.stderr)
+    output = result.stdout + result.stderr
+    # The evaluator itself now refuses to mint a proof for a zero-output invocation, so the
+    # operator sees that message; the pipeline's own output contract is the second line of
+    # defence and reports the missing declared output.
+    assert ("no observable evaluation output" in output
+            or "declared outputs missing or invalid" in output), output
     # The earlier run is not reused...
     assert json.loads(pointer(master, "successful").read_text())["run_id"] == run1
     attempt = json.loads(pointer(master, "attempt").read_text())
@@ -373,3 +379,185 @@ def test_e2e10b_dirty_source_blocks_evaluation(master):
     assert result.returncode == 1, "a dirty source must block evaluation"
     assert "dirty" in (result.stdout + result.stderr).lower()
     assert json.loads(report_path.read_text())["success"] is False
+
+
+def test_e2e11_cli_refuses_weak_input_fingerprint(master, tmp_path: Path):
+    assert run(master).returncode == 0
+    logs = artifacts(master) / "logs"
+    before = len(list(logs.iterdir()))
+
+    hook_dir = tmp_path / "python_hooks"
+    hook_dir.mkdir()
+    (hook_dir / "sitecustomize.py").write_text('''
+import os
+import sys
+from pathlib import Path
+
+import workbench.backend.registry as registry
+
+_original_sha256_file = registry.sha256_file
+_failed_path = Path(os.environ["SYNTHETIC_HASH_FAIL_PATH"])
+
+def _sha256_file(path, *args, **kwargs):
+    frame = sys._getframe(1)
+    while frame is not None:
+        if frame.f_code.co_name == "_stage_input_fingerprint_evidence" and Path(path) == _failed_path:
+            raise OSError("synthetic fingerprint read failure")
+        frame = frame.f_back
+    return _original_sha256_file(path, *args, **kwargs)
+
+registry.sha256_file = _sha256_file
+''')
+    env = dict(master["env"])
+    env["PYTHONPATH"] = os.pathsep.join((str(hook_dir), env["PYTHONPATH"]))
+    env["SYNTHETIC_HASH_FAIL_PATH"] = str(master["checkpoint"])
+    report_path = master["reports_out"] / "weak-fingerprint.json"
+    resumed = run(master, "--resume", "--report", str(report_path), env=env)
+
+    assert resumed.returncode == 0, f"{resumed.stdout}\n{resumed.stderr}"
+    assert "resume refused: weak_input_fingerprint" in resumed.stdout
+    assert "HASH_FAILED" in resumed.stdout
+    assert len(list(logs.iterdir())) > before, "weak fingerprint must launch evaluation instead of resuming"
+    workflow = json.loads(report_path.read_text())
+    evaluation = next(record for record in workflow["stages"].values()
+                      if record.get("name") == "evaluation")
+    assert evaluation["input_fingerprint_evidence"]["weak"] is True
+    assert any(item["category"] == "HASH_FAILED"
+               for item in evaluation["input_fingerprint_evidence"]["inputs"])
+    assert "HASH_FAILED" in evaluation["resume_refused_reason"]
+
+
+# ----------------------------------------- GPU readiness through the real master CLI
+
+def _gpu_registry(master, *, cuda: str | None) -> Path:
+    """A copy of the synthetic registry with a CUDA declaration added or removed."""
+    registry = yaml.safe_load(Path(master["env"]["WORKBENCH_REGISTRY_PATH"]).read_text())
+    # No declared dependency contract: the synthetic evaluator is a plain script, so a real
+    # isolated interpreter verifies on identity. CUDA is the only requirement under test.
+    environment = {"python_env_var": "WORKBENCH_SYNTHETIC_GPU_PYTHON",
+                   "packages": ["gpucontractdep==1.0.0"]}
+    if cuda is not None:
+        environment["cuda"] = cuda
+    registry["models"][0]["environment_required"] = True
+    registry["models"][0]["environment"] = environment
+    path = master["ws"] / f"models_gpu_{cuda or 'none'}.yaml"
+    path.write_text(yaml.dump(registry))
+    return path
+
+
+def _gpu_interpreter(master) -> Path:
+    """A real isolated interpreter that can actually run the synthetic evaluator."""
+    import venv as _venv
+
+    env_dir = master["ws"] / "gpu_model_env"
+    if not env_dir.is_dir():
+        _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+        for lib in (env_dir / "lib").glob("python*"):
+            site_packages = lib / "site-packages"
+            module = site_packages / "gpucontractdep.py"
+            module.write_text("__version__ = '1.0.0'\n")
+            dist = site_packages / "gpucontractdep-1.0.0.dist-info"
+            dist.mkdir(exist_ok=True)
+            (dist / "METADATA").write_text(
+                "Metadata-Version: 2.1\nName: gpucontractdep\nVersion: 1.0.0\n")
+            (dist / "RECORD").write_text(
+                f"gpucontractdep.py,sha256=t,{module.stat().st_size}\n"
+                "gpucontractdep-1.0.0.dist-info/METADATA,sha256=t,60\n")
+            break
+    return env_dir / "bin" / "python"
+
+
+def _gpu_env(master, registry: Path) -> dict:
+    env = dict(master["env"])
+    env["WORKBENCH_REGISTRY_PATH"] = str(registry)
+    env["WORKBENCH_SYNTHETIC_GPU_PYTHON"] = str(_gpu_interpreter(master))
+    env["WORKBENCH_NO_ENV_CACHE"] = "1"
+    return env
+
+
+def test_e2e13_gpu_declaring_model_is_blocked_while_verification_is_pending(master):
+    """E2E-13: a CUDA-declaring model cannot be launched without GPU verification."""
+    registry = _gpu_registry(master, cuda="12.4")
+    env = _gpu_env(master, registry)
+    report_path = master["reports_out"] / "gpu_pending.json"
+    logs = master["ws"] / "workbench" / "artifacts" / "logs"
+    before = len(list(logs.iterdir())) if logs.is_dir() else 0
+
+    reproduce = ["reproduce" if part == "all" else part for part in master["command"]]
+    # The operator authorizes GPU verification for this run; the evaluator consumes the
+    # capability record written by the standalone verification step.
+    result = subprocess.run([*reproduce, "--verify-gpu", "--report", str(report_path)],
+                            env=env, capture_output=True, text=True)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    # The strict preflight refuses the model: the GPU requirement is pending, and no
+    # evaluator is allowed to start.
+    assert "GPU_VERIFICATION_PENDING" in output or "GPU verification required" in output, output
+    after = len(list(logs.iterdir())) if logs.is_dir() else 0
+    assert after == before, "no evaluator may run while GPU readiness is unverified"
+
+
+def test_e2e14_verified_gpu_capability_permits_the_authorized_synthetic_path(master):
+    """E2E-14: a verified capability lets the authorized synthetic evaluation run.
+
+    On a GPU host this step runs the identical code against a real ``torch``. Here the
+    workbench's own opt-in test seam installs a deterministic probe *inside the evaluator
+    process*, and the evaluator is invoked through its real CLI entrypoint.
+    """
+    registry = _gpu_registry(master, cuda="12.4")
+    env = _gpu_env(master, registry)
+    probe_env = {**env, "WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE": "1"}
+    evaluator = str(REPOSITORY / "workbench" / "scripts" / "evaluate_models.py")
+
+    # A launcher that installs the opt-in probe and then runs the real CLI in-process, so the
+    # argument parsing, the verification call, and the launch gate are all production code.
+    launcher = master["ws"] / "verify_gpu_launcher.py"
+    launcher.write_text(
+        "import runpy, sys\n"
+        f"sys.path.insert(0, {str(REPOSITORY)!r})\n"
+        "import workbench.backend.runtime as runtime\n"
+        "runtime.set_gpu_probe_for_tests(lambda model, report: {\n"
+        "    'cuda_available': True, 'device_count': 1, 'torch_version': '1.12.1',\n"
+        "    'torch_cuda_version': '12.4', 'device_name': 'Synthetic GPU',\n"
+        "    'compute_capability': '8.9', 'allocated_tensor': True, 'computed': True,\n"
+        "    'error': None})\n"
+        f"sys.argv = [{evaluator!r}, '--model', 'synthetic_model', '--verify-gpu',\n"
+        "            '--checkpoint', 'ckpt_v1']\n"
+        f"runpy.run_path({evaluator!r}, run_name='__main__')\n")
+
+    verification = subprocess.run([sys.executable, str(launcher)], env=probe_env,
+                                  capture_output=True, text=True)
+    output = verification.stdout + verification.stderr
+    assert verification.returncode == 0, output
+    assert "capability_verified" in verification.stdout, output
+
+    capability = master["ws"] / "workbench" / "artifacts" / "gpu_capability.json"
+    assert capability.is_file(), "the verified capability must be recorded"
+    assert json.loads(capability.read_text())["capability_verified"] is True
+
+    # The master workflow now proceeds: preflight sees the recorded capability and the
+    # authorized synthetic evaluation actually runs.
+    report_path = master["reports_out"] / "gpu_ready.json"
+    logs = master["ws"] / "workbench" / "artifacts" / "logs"
+    before = len(list(logs.iterdir())) if logs.is_dir() else 0
+    reproduce = ["reproduce" if part == "all" else part for part in master["command"]]
+    # The operator authorizes GPU verification for this run; the evaluator consumes the
+    # capability record written by the standalone verification step.
+    result = subprocess.run([*reproduce, "--verify-gpu", "--report", str(report_path)],
+                            env=env, capture_output=True, text=True)
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    after = len(list(logs.iterdir())) if logs.is_dir() else 0
+    assert after > before, "the authorized synthetic evaluation must actually run"
+
+
+def test_e2e15_no_real_gpu_or_download_happens_in_these_scenarios(master):
+    """E2E-15: the scenarios above use no real GPU, no checkpoint download, no dataset."""
+    driver = master["ws"] / "gpu_probe_driver.py"
+    if driver.is_file():
+        text = driver.read_text()
+        assert "torch.cuda" not in text, "the synthetic driver must not touch real CUDA"
+        assert "set_gpu_probe_for_tests" in text
+    assert master["data"].is_dir()

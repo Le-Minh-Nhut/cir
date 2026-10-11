@@ -2,6 +2,9 @@
 """Guard and run audited official evaluation commands."""
 from __future__ import annotations
 
+import fcntl
+import stat
+import tempfile
 import argparse
 import hashlib
 import json
@@ -25,7 +28,8 @@ from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.metrics_extraction import extract_aggregate_metrics
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
 from workbench.backend.registry import checkpoint_path, load_registry, sha256_file
-from workbench.backend.runtime import runtime_blockers
+from workbench.backend import runtime
+from workbench.backend.runtime import runtime_blockers, runtime_plan_blockers
 
 
 @dataclass(frozen=True)
@@ -97,7 +101,7 @@ def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | 
     source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"] if model.get("source_dir") else config.WORKBENCH_THIRD_PARTY_ROOT
     actual_pin = pinned_revision(source) if source.is_dir() else None
     checkpoint_file = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
-    reasons = runtime_blockers(model, checkpoint, config, protocol, dataset_root)
+    reasons = runtime_plan_blockers(model, checkpoint, config, protocol, dataset_root)
     if model["model_id"] == "limn" and checkpoint["checkpoint_id"] != checkpoint.get("bundle_id"):
         reasons = [reason for reason in reasons if not reason.startswith("checkpoint bundle incomplete:")]
     if model.get("source_available") and actual_pin is None and source.is_dir():
@@ -184,6 +188,8 @@ def parser_for(registry: dict) -> argparse.ArgumentParser:
     parser.add_argument("--top-k", type=int, default=200)
     parser.add_argument("--run-id", help="invocation run identity supplied by the orchestrator")
     parser.add_argument("--dry-run", action="store_true", help="print guarded command and log plan without writing")
+    parser.add_argument("--verify-gpu", action="store_true",
+                        help="authorize and record GPU capability verification before evaluation")
     parser.add_argument("--continue-on-error", action="store_true")
     return parser
 
@@ -309,6 +315,10 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
         raise EvaluationOutputError(f"declared output is malformed JSON: {error}") from error
     if not isinstance(payload, dict):
         raise EvaluationOutputError("declared output is not a JSON object")
+    if payload.get("completion_status") != "COMPLETED":
+        raise EvaluationOutputError("declared output is not a successful completion proof")
+    if payload.get("return_code") != 0:
+        raise EvaluationOutputError("declared output has a nonzero native return code")
 
     proof_run = _first(payload, _RUN_ID_KEYS)
     if proof_run != run_id:
@@ -561,6 +571,7 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
             ("checkpoint", "checkpoint_id", payload.get("checkpoint_id")),
             ("protocol", "protocol_id", payload.get("protocol_id")),
             ("return code", "return_code", payload.get("return_code")),
+            ("invocation status", "invocation_status", payload.get("invocation_status")),
         ):
             if str(report_payload.get(report_key)) != str(proof_value):
                 raise EvaluationOutputError(
@@ -599,6 +610,7 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
                 ("model", "model_id", payload.get("model_id")),
                 ("checkpoint", "checkpoint_id", payload.get("checkpoint_id")),
                 ("protocol", "protocol_id", payload.get("protocol_id")),
+                ("invocation status", "invocation_status", payload.get("invocation_status")),
                 ("return code", "return_code", payload.get("return_code")),
             ):
                 if str(witness.get(key)) != str(proof_value):
@@ -662,6 +674,8 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
                 raise EvaluationOutputError(
                     f"declared output {label} ({proof_value!r}) disagrees with the "
                     f"invocation record ({command_payload.get(key)!r})")
+        if command_payload.get("invocation_status") != "INVOCATION_COMPLETED":
+            raise EvaluationOutputError("the invocation record is not a completed run")
         if command_payload.get("return_code") not in (0, None):
             raise EvaluationOutputError(
                 f"the invocation record shows a failed execution "
@@ -773,35 +787,71 @@ def evidence_ledger_path(config: WorkbenchConfig) -> Path:
     return repo_root / "workbench" / "artifacts" / "evidence_ledger.jsonl"
 
 
+
+class LedgerKeyError(RuntimeError):
+    """The evidence ledger cannot be authenticated without its operator key."""
+
+
+class LedgerCorruptError(RuntimeError):
+    """The existing evidence ledger is malformed or does not verify."""
+
+
+class LedgerDuplicateRunError(RuntimeError):
+    """An invocation run id already exists in the evidence ledger."""
 def ledger_hmac_key(config: WorkbenchConfig) -> bytes:
-    """The out-of-band key that authenticates ledger entries.
-
-    A hash chain stored inside the artifact tree authenticates nothing: whoever can rewrite
-    a run's artifacts can also recompute the chain. The entries are therefore
-    authenticated with an HMAC key that is deliberately kept *outside* that tree, so
-    rewriting the ledger requires the key and not merely write access to the artifacts.
-
-    Key resolution order: ``WORKBENCH_LEDGER_KEY`` (recommended, from the operator's
-    secret store), then ``<CIR_REPO_ROOT>/.workbench_ledger_key`` created on first use.
-    """
+    """Load the operator key, creating a private random key only for a new ledger."""
     configured = os.environ.get("WORKBENCH_LEDGER_KEY")
-    if configured:
-        return configured.encode("utf-8")
-    repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
-    key_path = Path(repo_root) / ".workbench_ledger_key"
+    if configured is not None:
+        key = configured.strip().encode("utf-8")
+        if key:
+            return key
+        raise LedgerKeyError("WORKBENCH_LEDGER_KEY is set but empty")
+
+    repo_root = Path(getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2]))
+    key_path = repo_root / ".workbench_ledger_key"
+    key_lock_path = repo_root / ".workbench_ledger_key.lock"
     try:
-        if key_path.is_file():
-            return key_path.read_bytes().strip()
-        key = secrets.token_bytes(32)
         key_path.parent.mkdir(parents=True, exist_ok=True)
-        key_path.write_bytes(key)
-        try:
-            os.chmod(key_path, 0o600)
-        except OSError:
-            pass
-        return key
-    except OSError:
-        return b""
+        lock_fd = os.open(key_lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        with os.fdopen(lock_fd, "r+b") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                try:
+                    mode = key_path.lstat().st_mode
+                except FileNotFoundError:
+                    mode = None
+                if mode is not None:
+                    if not stat.S_ISREG(mode):
+                        raise LedgerKeyError("ledger key file is not a regular file")
+                    key = key_path.read_bytes()
+                    if not key.strip():
+                        raise LedgerKeyError("ledger key file is empty")
+                    return key
+                if evidence_ledger_path(config).exists():
+                    raise LedgerKeyError("ledger key is missing for an existing evidence ledger")
+                key = secrets.token_bytes(32)
+                fd, temporary = tempfile.mkstemp(prefix=".workbench_ledger_key.", dir=key_path.parent)
+                try:
+                    os.fchmod(fd, 0o600)
+                    with os.fdopen(fd, "wb") as handle:
+                        handle.write(key)
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    os.replace(temporary, key_path)
+                except BaseException:
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
+                    Path(temporary).unlink(missing_ok=True)
+                    raise
+                return key
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+    except LedgerKeyError:
+        raise
+    except OSError as error:
+        raise LedgerKeyError("cannot read or create the evidence ledger key") from error
 
 
 def _ledger_authentication(config: WorkbenchConfig, record_without_mac: dict) -> str:
@@ -812,57 +862,105 @@ def _ledger_authentication(config: WorkbenchConfig, record_without_mac: dict) ->
     return _hmac.new(key, canonical, hashlib.sha256).hexdigest()
 
 
+def _ledger_entries_unlocked(config: WorkbenchConfig, path: Path) -> list[dict]:
+    """Read and verify a ledger while caller holds its lock."""
+    ledger_hmac_key(config)
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        return []
+    except OSError as error:
+        raise LedgerCorruptError("evidence ledger cannot be read") from error
+    if raw and not raw.endswith(b"\n"):
+        raise LedgerCorruptError("evidence ledger ends with an incomplete line")
+    try:
+        lines = raw.decode("utf-8").splitlines()
+    except UnicodeDecodeError as error:
+        raise LedgerCorruptError("evidence ledger is not valid UTF-8") from error
+
+    entries: list[dict] = []
+    previous = ""
+    seen_runs: set[str] = set()
+    try:
+        for line in lines:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if not isinstance(record, dict):
+                raise LedgerCorruptError("evidence ledger entry is not an object")
+            claimed = record.pop("entry_digest", None)
+            if not isinstance(claimed, str) or record.get("previous_digest") != previous:
+                raise LedgerCorruptError("evidence ledger chain is broken")
+            if _ledger_authentication(config, record) != claimed:
+                raise LedgerCorruptError("evidence ledger authentication failed")
+            run_id = str(record.get("run_id") or "")
+            if run_id and run_id in seen_runs:
+                raise LedgerCorruptError("evidence ledger contains a duplicate run id")
+            if run_id:
+                seen_runs.add(run_id)
+            record["entry_digest"] = claimed
+            entries.append(record)
+            previous = claimed
+    except LedgerKeyError:
+        raise
+    except LedgerCorruptError:
+        raise
+    except LedgerDuplicateRunError:
+        raise
+    except (json.JSONDecodeError, TypeError, ValueError) as error:
+        raise LedgerCorruptError("evidence ledger entry is malformed") from error
+    return entries
+
+
+def _ledger_lock(path: Path, operation: int):
+    lock_path = path.with_name(path.name + ".lock")
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    lock = os.fdopen(fd, "r+b")
+    try:
+        fcntl.flock(lock, operation)
+    except BaseException:
+        lock.close()
+        raise
+    return lock
+
+
 def append_evidence_entry(config: WorkbenchConfig, entry: dict) -> dict:
-    """Append one invocation record, chained and authenticated."""
+    """Append one invocation record, chained and authenticated under an exclusive lock."""
     path = evidence_ledger_path(config)
     path.parent.mkdir(parents=True, exist_ok=True)
-    previous = ""
+    lock = _ledger_lock(path, fcntl.LOCK_EX)
     try:
-        lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
-        if lines:
-            previous = json.loads(lines[-1]).get("entry_digest", "")
-    except (OSError, json.JSONDecodeError):
-        previous = ""
-    record = {**entry, "previous_digest": previous}
-    record["entry_digest"] = _ledger_authentication(config, record)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, sort_keys=True) + "\n")
-    return record
+        entries = _ledger_entries_unlocked(config, path)
+        run_id = str(entry.get("run_id") or "")
+        if run_id and any(item.get("run_id") == run_id for item in entries):
+            raise LedgerDuplicateRunError("evidence ledger already records this run id")
+        previous = entries[-1]["entry_digest"] if entries else ""
+        record = {**entry, "previous_digest": previous}
+        record["entry_digest"] = _ledger_authentication(config, record)
+        with path.open("ab") as handle:
+            handle.write((json.dumps(record, sort_keys=True) + "\n").encode("utf-8"))
+            handle.flush()
+            os.fsync(handle.fileno())
+        return record
+    finally:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        lock.close()
 
 
 def read_evidence_ledger(config: WorkbenchConfig) -> list[dict] | None:
     """Every authenticated ledger entry, or None when the chain does not verify."""
     path = evidence_ledger_path(config)
-    if not path.is_file():
-        return None
     try:
-        lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
-    except (OSError, UnicodeDecodeError):
-        return None
-    entries: list[dict] = []
-    previous = ""
-    seen_runs: set[str] = set()
-    for line in lines:
+        lock = _ledger_lock(path, fcntl.LOCK_SH)
         try:
-            record = json.loads(line)
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            return None
-        claimed = record.pop("entry_digest", None)
-        if claimed is None or record.get("previous_digest") != previous:
-            return None
-        if _ledger_authentication(config, record) != claimed:
-            # The chain could only be recomputed by someone holding the out-of-band key.
-            return None
-        run_id = str(record.get("run_id") or "")
-        if run_id and run_id in seen_runs:
-            # A run identity must name exactly one invocation; a repeat would let a proof
-            # bind to another plan's entry.
-            return None
-        seen_runs.add(run_id)
-        record["entry_digest"] = claimed
-        entries.append(record)
-        previous = claimed
-    return entries
+            if not path.is_file():
+                return None
+            return _ledger_entries_unlocked(config, path)
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            lock.close()
+    except (LedgerKeyError, LedgerCorruptError, OSError):
+        return None
 
 
 def artifact_root(config: WorkbenchConfig) -> Path:
@@ -950,10 +1048,14 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "return_code": code,
         "dataset_root": str(plan.dataset_root),
     }
-    (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-
     stdout_content = (directory / "stdout.log").read_text(encoding="utf-8")
     stderr_content = (directory / "stderr.log").read_text(encoding="utf-8")
+    produced_output = bool(stdout_content.strip() or stderr_content.strip())
+    invocation_status = ("INVOCATION_FAILED" if code != 0 else
+                         "INVOCATION_COMPLETED" if produced_output else
+                         "INVOCATION_NO_OBSERVABLE_OUTPUT")
+    metadata["invocation_status"] = invocation_status
+    (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     # Bound before the report is serialised: the report itself carries the digest of the
     # invocation output, so a log edit invalidates the report as well as the proof.
     evidence_digest = hashlib.sha256(
@@ -980,6 +1082,7 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         # Execution completion and metric verification are separate states: a run that
         # exited 0 with unusable aggregate output is still a completed execution.
         "execution_status": "EXECUTION_COMPLETED" if code == 0 else "EXECUTION_FAILED",
+        "invocation_status": invocation_status,
         "reproduction_status": extraction.extraction_status,
         "per_query_export_available": False,
         "extraction_status": extraction.extraction_status,
@@ -1021,11 +1124,23 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         raise RuntimeError(f"refusing to overwrite existing run report: {run_report}") from error
     (directory / "aggregate_report.json").write_text(report_json, encoding="utf-8")
 
-    # A completion proof must be backed by evidence *this* invocation produced. If the
-    # official command exits 0 but emits nothing at all, there is no run-specific
-    # evaluation evidence, so no proof may be minted — and the stage cannot COMPLETE.
-    produced_output = bool(stdout_content.strip() or stderr_content.strip())
-    if code == 0 and not produced_output:
+
+    # Append the out-of-band witness before any pointer moves; failed and silent invocations
+    # are recorded exactly like successful ones, but never earn a completion proof.
+    ledger_entry = append_evidence_entry(config, {
+        "run_id": run_id,
+        "model_id": plan.model_id,
+        "checkpoint_id": plan.checkpoint_id,
+        "protocol_id": plan.protocol,
+        "return_code": code,
+        "invocation_status": invocation_status,
+        "execution_status": report["execution_status"],
+        "report_digest": sha256_file(run_report),
+        "evidence_digest": evidence_digest,
+        "run_directory": str(directory),
+        "recorded_at": datetime.now(UTC).isoformat(),
+    })
+    if invocation_status == "INVOCATION_NO_OBSERVABLE_OUTPUT":
         print("[BLOCKED] official command exited 0 but produced no observable evaluation "
               "output; no completion proof can be minted for this invocation", file=sys.stderr)
         _atomic_write_json(latest_pointer(config, plan, "attempt"), {
@@ -1038,27 +1153,10 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         })
         return code
 
-    # Append the out-of-band witness. It records the outcome the runner observed, before
-    # any pointer moves, so a later rewrite of the run's own artifacts has to disagree with
-    # this ledger to look successful. The proof carries the entry digest, so deleting the
-    # ledger is detectable rather than a silent pass.
-    ledger_entry = append_evidence_entry(config, {
-        "run_id": run_id,
-        "model_id": plan.model_id,
-        "checkpoint_id": plan.checkpoint_id,
-        "protocol_id": plan.protocol,
-        "return_code": code,
-        "execution_status": report["execution_status"],
-        "report_digest": sha256_file(run_report),
-        "evidence_digest": evidence_digest,
-        "run_directory": str(directory),
-        "recorded_at": datetime.now(UTC).isoformat(),
-    })
-
     proof = {
         "artifact_type": "official_evaluation_completion_proof",
         "schema_version": 1,
-        "completion_status": "COMPLETED" if code == 0 else "FAILED",
+        "completion_status": "COMPLETED" if invocation_status == "INVOCATION_COMPLETED" and code == 0 else "FAILED",
         "run_id": run_id,
         "model_id": plan.model_id,
         "checkpoint_id": plan.checkpoint_id,
@@ -1073,6 +1171,7 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
                                    or manifest_digest(_plan_members(plan))),
         "checkpoint_bundle": plan.checkpoint_bundle,
         "directory_members": plan.directory_members,
+        "invocation_status": invocation_status,
         "return_code": code,
         "ledger_entry_digest": ledger_entry["entry_digest"],
         "report": str(run_report),
@@ -1107,7 +1206,7 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "completion_status": proof["completion_status"],
         "updated_at": proof["completed_at"],
     })
-    if code == 0:
+    if invocation_status == "INVOCATION_COMPLETED" and code == 0:
         try:
             validate_run_manifest(plan, proof_path, run_id=run_id, output_root=root,
                                   config=config, require_checksum=True,
@@ -1313,11 +1412,59 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[RUN] command: {shlex.join(plan.command)}")
         print(f"[RUN] log directory: {planned_logs}")
         print(f"[RUN] provenance: {planned_logs / 'command.json'}")
+        gpu = (model.get("environment") or {}).get("cuda")
+        gpu_required = gpu is not None and str(gpu).upper() != "UNKNOWN"
         if args.dry_run:
             print("[OK] dry-run: official command not executed; no logs created")
             continue
-        if execute(plan, config, run_id=args.run_id):
+        if gpu_required and args.verify_gpu:
+            try:
+                capability = runtime.verify_gpu_runtime(
+                    model, config, authorized=True, require_cuda=True)
+                print(json.dumps(capability, sort_keys=True))
+            except (runtime.GpuVerificationError, RuntimeError) as error:
+                print(f"[BLOCKED] GPU verification failed: {error}", file=sys.stderr)
+                failed = True
+                if not args.continue_on_error: break
+                continue
+        if gpu_required and not args.verify_gpu:
+            print("[BLOCKED] GPU verification required; run with --verify-gpu on the GPU host",
+                  file=sys.stderr)
+            failed = True
+            if not args.continue_on_error: break
+            continue
+        try:
+            runtime.require_launch_ready(model)
+        except (runtime.GpuVerificationError, RuntimeError) as error:
+            suffix = ("; run with --verify-gpu on the GPU host" if gpu_required
+                      and not args.verify_gpu else "")
+            print(f"[BLOCKED] evaluation launch refused: {error}{suffix}", file=sys.stderr)
+            failed = True
+            if not args.continue_on_error: break
+            continue
+        run_id = args.run_id
+        if run_id and len(items) > 1:
+            run_id = f"{run_id}_{model['model_id']}_{checkpoint['checkpoint_id']}"
+        if not run_id:
+            run_id = make_run_id(plan, datetime.now(UTC))
+        try:
+            code = execute(plan, config, run_id=run_id)
+        except RuntimeError as error:
+            print(f"[BLOCKED] evaluation could not be audited: {error}", file=sys.stderr)
+            failed = True
+            if not args.continue_on_error: break
+            continue
+        if code:
             print("[BLOCKED] official command failed"); failed = True
+            if not args.continue_on_error: break
+            continue
+        evidence = completion_validator(plan.model_id, plan.checkpoint_id, plan.protocol,
+                                        plan.pin, config, plan.checkpoint)
+        ok, reason, _ = evidence({"run_id": run_id})
+        if not ok:
+            print(f"[BLOCKED] evaluation produced no valid completion proof: {reason}",
+                  file=sys.stderr)
+            failed = True
             if not args.continue_on_error: break
     return 1 if failed else 0
 

@@ -60,8 +60,10 @@ _CONTENT_HASH_LIMIT = 64 * 1024 * 1024
 _CONTENT_HASH_SUFFIXES = (".json", ".yaml", ".yml", ".txt", ".pkl", ".pt", ".pth", ".cfg", ".toml")
 
 
-def compute_stage_input_fingerprint(stage: Stage, config: WorkbenchConfig | None = None, state: dict | None = None) -> str:
+def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | None = None,
+                                      state: dict | None = None) -> dict:
     import hashlib
+    import stat
     from workbench.backend.registry import sha256_file
 
     hasher = hashlib.sha256()
@@ -75,68 +77,120 @@ def compute_stage_input_fingerprint(stage: Stage, config: WorkbenchConfig | None
     for cmd in stage.commands:
         hasher.update(shlex.join(cmd).encode("utf-8"))
 
-    # Hashing declared input paths
-    for p in stage.input_paths:
-        hasher.update(str(p).encode("utf-8"))
-        if not p.exists():
-            hasher.update(b":MISSING\0")
-        elif p.is_file():
-            hasher.update(b":FILE\0")
-            hasher.update(str(p.stat().st_size).encode("utf-8"))
-            if p.stat().st_size <= 10 * 1024 * 1024 or p.suffix in (".json", ".yaml", ".yml", ".txt", ".pkl", ".pt", ".pth"):
+    inputs = []
+    weak = False
+    for path in stage.input_paths:
+        item = {"path": str(path)}
+        hasher.update(str(path).encode("utf-8"))
+        try:
+            details = path.stat()
+        except FileNotFoundError:
+            category = "MISSING"
+        except OSError as error:
+            category = "UNREADABLE"
+            item["error"] = f"{type(error).__name__}: {error}"
+        else:
+            if stat.S_ISREG(details.st_mode) and details.st_size > _CONTENT_HASH_LIMIT \
+                    and path.suffix not in _CONTENT_HASH_SUFFIXES:
+                category = "METADATA_ONLY"
+                item.update(size_bytes=details.st_size, mtime_ns=details.st_mtime_ns)
+                hasher.update(f"{category}:{details.st_size}:{details.st_mtime_ns}".encode("utf-8"))
+            elif stat.S_ISREG(details.st_mode) or stat.S_ISDIR(details.st_mode):
                 try:
-                    hasher.update(sha256_file(p).encode("utf-8"))
-                except Exception:
-                    hasher.update(str(p.stat().st_mtime_ns).encode("utf-8"))
+                    content_digest = sha256_file(path)
+                except Exception as error:
+                    category = "HASH_FAILED"
+                    item["error"] = f"{type(error).__name__}: {error}"
+                else:
+                    category = "CONTENT_VERIFIED"
+                    item["sha256"] = content_digest
+                    hasher.update(content_digest.encode("utf-8"))
             else:
-                hasher.update(str(p.stat().st_mtime_ns).encode("utf-8"))
-        elif p.is_dir():
-            hasher.update(b":DIR\0")
-            try:
-                hasher.update(sha256_file(p).encode("utf-8"))
-            except Exception:
-                hasher.update(str(p.stat().st_mtime_ns).encode("utf-8"))
+                category = "UNREADABLE"
+                item["error"] = "path is not a regular file or directory"
 
-    # Source identity: commit, cleanliness, and provenance digest.
+        item["category"] = category
+        inputs.append(item)
+        hasher.update(f":{category}\0".encode("utf-8"))
+        if category != "CONTENT_VERIFIED":
+            weak = True
+
+    source_info = None
     if stage.model_id and config:
         from workbench.backend.registry import model_by_id
         from workbench.backend.runtime import source_provenance
+
         try:
-            m = model_by_id(stage.model_id)
-            sdir = m.get("source_dir") or stage.model_id
-            source_dir = config.WORKBENCH_THIRD_PARTY_ROOT / sdir
-            if source_dir.is_dir() and (source_dir / ".git").exists():
-                provenance = source_provenance(m, source_dir)
-                hasher.update(f"GIT:{provenance.get('actual_commit')}".encode("utf-8"))
-                hasher.update(f"DIRTY:{provenance.get('dirty')}".encode("utf-8"))
-                hasher.update(f"PROV:{provenance.get('provenance_digest')}".encode("utf-8"))
-        except Exception:
+            model = model_by_id(stage.model_id)
+        except KeyError:
+            # Ad-hoc stage identifiers used by callers need not name registry models.
             pass
-    # Dependency state
+        except Exception as error:
+            source_info = {"category": "HASH_FAILED", "error": f"{type(error).__name__}: {error}"}
+            hasher.update(f"SOURCE:{source_info['category']}:{source_info['error']}".encode("utf-8"))
+            weak = True
+        else:
+            source_name = model.get("source_dir")
+            if source_name:
+                source_dir = config.WORKBENCH_THIRD_PARTY_ROOT / source_name
+                source_info = {"path": str(source_dir)}
+                try:
+                    source_stat = source_dir.stat()
+                except FileNotFoundError:
+                    source_info["category"] = "MISSING"
+                except OSError as error:
+                    source_info.update(category="UNREADABLE", error=f"{type(error).__name__}: {error}")
+                else:
+                    if not stat.S_ISDIR(source_stat.st_mode):
+                        source_info["category"] = "UNREADABLE"
+                    else:
+                        try:
+                            (source_dir / ".git").stat()
+                        except OSError as error:
+                            source_info.update(category="UNREADABLE", error=f"{type(error).__name__}: {error}")
+                        else:
+                            try:
+                                provenance = source_provenance(model, source_dir)
+                            except Exception as error:
+                                source_info.update(category="HASH_FAILED", error=f"{type(error).__name__}: {error}")
+                            else:
+                                source_info.update(
+                                    category=("CONTENT_VERIFIED"
+                                              if provenance.get("actual_commit") and provenance.get("dirty") is False
+                                              else "UNREADABLE" if provenance.get("error")
+                                              else "UNVERIFIED"),
+                                    actual_commit=provenance.get("actual_commit"),
+                                    dirty=provenance.get("dirty"),
+                                    provenance_digest=provenance.get("provenance_digest"),
+                                )
+                                if provenance.get("error"):
+                                    source_info["error"] = provenance["error"]
+                hasher.update(f"SOURCE:{source_info['category']}:{source_info.get('provenance_digest')}"
+                              .encode("utf-8"))
+                if source_info.get("error"):
+                    hasher.update(source_info["error"].encode("utf-8"))
+                if source_info["category"] != "CONTENT_VERIFIED":
+                    weak = True
+
     if state and stage.dependencies:
         stages_rec = state.get("stages", {})
         for dep in stage.dependencies:
             dep_data = stages_rec.get(dep, {})
             hasher.update(f"DEP:{dep}:{dep_data.get('status')}:{dep_data.get('fingerprint')}".encode("utf-8"))
 
-    return hasher.hexdigest()
+    return {"digest": hasher.hexdigest(), "weak": weak, "inputs": inputs,
+            "source_provenance": source_info}
 
 
-def stage_input_fingerprint_info(stage: Stage, config: WorkbenchConfig | None = None, state: dict | None = None) -> dict:
-    """Return {"digest": str, "weak": bool}.
+def compute_stage_input_fingerprint(stage: Stage, config: WorkbenchConfig | None = None,
+                                    state: dict | None = None) -> str:
+    return _stage_input_fingerprint_evidence(stage, config, state)["digest"]
 
-    ``weak`` is True when any declared input could only be identified by metadata
-    (size/mtime) rather than content. Weak identities must never silently grant a
-    verified resume of a side-effecting stage.
-    """
-    digest = compute_stage_input_fingerprint(stage, config, state)
-    weak = False
-    for p in stage.input_paths:
-        if not p.exists() or p.is_dir():
-            continue
-        if p.is_file() and p.stat().st_size > _CONTENT_HASH_LIMIT and p.suffix not in _CONTENT_HASH_SUFFIXES:
-            weak = True
-    return {"digest": digest, "weak": weak}
+
+def stage_input_fingerprint_info(stage: Stage, config: WorkbenchConfig | None = None,
+                                 state: dict | None = None) -> dict:
+    """Return a digest plus per-input evidence; only content-verified inputs are resumable."""
+    return _stage_input_fingerprint_evidence(stage, config, state)
 
 
 def stage_receipt_path(config: WorkbenchConfig, stage: Stage) -> Path:
@@ -559,6 +613,8 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
         if args.protocol:
             evaluation_args.extend(["--protocol", args.protocol])
         evaluation_args.extend(["--top-k", str(args.top_k)])
+        if getattr(args, "verify_gpu", False):
+            evaluation_args.append("--verify-gpu")
         if args.continue_on_error:
             evaluation_args.append("--continue-on-error")
         eval_inputs = model_eval_inputs(model_obj, args, config) if model_obj else ()
@@ -732,6 +788,8 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         if args.protocol:
             eval_args.extend(["--protocol", args.protocol])
         eval_args.extend(["--top-k", str(args.top_k)])
+        if getattr(args, "verify_gpu", False):
+            eval_args.append("--verify-gpu")
         if args.continue_on_error:
             eval_args.append("--continue-on-error")
 
@@ -991,6 +1049,16 @@ def run_stages(
                         if validate_stage_outputs(stage, prev.get("output_fingerprints"), config=cfg, record=prev):
                             can_skip = True
 
+            weak_categories = [f"{item['path']} ({item['category']})"
+                               for item in fingerprint_info["inputs"]
+                               if item["category"] != "CONTENT_VERIFIED"]
+            source = fingerprint_info.get("source_provenance")
+            if source and source.get("category") != "CONTENT_VERIFIED":
+                weak_categories.append(f"{source.get('path', 'source provenance')} ({source['category']})")
+            resume_block_reason = (f"weak_input_fingerprint: {', '.join(weak_categories)}"
+                                   if fingerprint_info["weak"] else None)
+            if resume and not can_skip and resume_block_reason:
+                print(f"  [INFO] resume refused: {resume_block_reason}")
             if can_skip:
                 print(f"  [SKIP] resume: already completed with matching fingerprint and verified outputs")
                 completed_stages.add(stage.name)
@@ -1007,10 +1075,13 @@ def run_stages(
                     "model_id": stage.model_id,
                     "status": "RUNNING",
                     "fingerprint": fingerprint,
+                    "input_fingerprint_evidence": fingerprint_info,
+                    "resume_refused_reason": resume_block_reason,
                     "run_id": stage.run_id,
                     "started_at": datetime.now(UTC).isoformat(),
                 }
                 save_pipeline_state(state, state_path)
+
 
             stage_failed = False
             for argv in stage.commands:
@@ -1126,6 +1197,8 @@ def parser_for() -> argparse.ArgumentParser:
     parser.add_argument("--allow-env-install", action="store_true", help="authorize environment creation and package installation")
     parser.add_argument("--allow-preparation", action="store_true", help="authorize model-specific preparation execution")
     parser.add_argument("--allow-gpu-eval", action="store_true", help="authorize model evaluation subprocess execution")
+    parser.add_argument("--verify-gpu", action="store_true",
+                        help="run the authorized GPU capability probe before evaluating (GPU hosts only)")
     parser.add_argument("--allow-index-write", action="store_true", help="authorize rebuilding the derived DuckDB index")
     parser.add_argument("--model", help="registry model selection")
     parser.add_argument("--all-models", action="store_true", help="select all registry models")

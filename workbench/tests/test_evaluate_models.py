@@ -110,7 +110,10 @@ def test_limn_explicit_category_remains_diagnostic_and_bundle_blocked(monkeypatc
     limn = records()["limn"]
     category_checkpoint = limn["checkpoint_variants"][0]
     bundle = module.candidates(module.parser_for(load_registry()).parse_args(["--model", "limn"]), [limn])[0][1]
-    monkeypatch.setattr(module, "runtime_blockers", lambda model, checkpoint, *args: ["checkpoint bundle incomplete: base_iter0_all_categories: missing category"])
+    # `guarded_plan` deliberately uses the plan-level view (GPU readiness is a launch
+    # concern), so this is the function the production path consults.
+    monkeypatch.setattr(module, "runtime_plan_blockers",
+                        lambda model, checkpoint, *args: ["checkpoint bundle incomplete: base_iter0_all_categories: missing category"])
 
     _, _, _, diagnostic_reasons = module.blockers(limn, category_checkpoint, limn["native_protocol"], tmp_path, config(tmp_path))
     _, _, _, bundle_reasons = module.blockers(limn, bundle, limn["native_protocol"], tmp_path, config(tmp_path))

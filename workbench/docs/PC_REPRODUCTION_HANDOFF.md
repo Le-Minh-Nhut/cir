@@ -17,6 +17,18 @@ python workbench/scripts/sync_upstreams.py --model MODEL_ID --verify-only
 Cloned source is not checkpoint availability. The PC host still needs the
 checkpoints and auxiliary assets listed in the table below.
 
+## 0b. Evidence ledger key (set this before any real run)
+
+```bash
+export WORKBENCH_LEDGER_KEY="$(head -c 32 /dev/urandom | base64)"   # from your secret store
+```
+
+Every completion proof is corroborated by an append-only, HMAC-authenticated ledger at
+`workbench/artifacts/evidence_ledger.jsonl`. The key is kept outside the artifact tree and is
+never passed to the evaluator. Losing the key makes existing entries unverifiable; the
+workbench never silently rotates or regenerates it. The honest trust model (and what the
+ledger does *not* protect against) is documented in `AUTOMATION_RUNBOOK.md`.
+
 ## 1. Required environment variables
 
 ```bash
@@ -48,6 +60,32 @@ python workbench/scripts/manage_environment.py --model limn --json
   `FASHIONIQ_ROOT`; the link is an approved runtime artifact and does not dirty the
   pinned checkout, but a wrong or dangling link is rejected before execution.
 
+## 1d. GPU verification procedure (GPU host only)
+
+A CUDA-declaring model (LIMN declares `cuda: '12.4'`) is `GPU_VERIFICATION_PENDING` until a
+real probe proves PyTorch can use a device. Run it once per environment:
+
+```bash
+export WORKBENCH_LIMN_PYTHON=/opt/envs/limn/bin/python
+python workbench/scripts/evaluate_models.py --model limn --verify-gpu
+```
+
+The command prints a structured capability result and writes
+`workbench/artifacts/gpu_capability.json`. It verifies the **model environment**, not the
+host: device count, device name, compute capability, a one-element tensor allocation, and a
+trivial computation. A CUDA toolkit or a driver version is not proof that PyTorch can use
+CUDA — only this probe is. The recorded capability is keyed to the interpreter and dependency
+fingerprints, so rebuilding the environment invalidates it and it must be re-run.
+
+Then the orchestrated evaluation proceeds:
+
+```bash
+python workbench/scripts/pipeline.py reproduce --model limn --apply --allow-gpu-eval --verify-gpu --resume
+```
+
+`--verify-gpu` is what authorizes the probe inside the orchestrated path; without it a
+CUDA-declaring model is refused before any evaluator starts.
+
 ## 1c. PC-only verification still required
 
 Not verifiable on the laptop, and therefore still owed on the GPU host:
@@ -55,7 +93,8 @@ Not verifiable on the laptop, and therefore still owed on the GPU host:
 - real checkpoint loading and official evaluator execution;
 - official Recall reproduction against paper-reported values;
 - per-query instrumentation (`per_query_export_available` is `false` today);
-- CUDA capability verification for GPU-bound models.
+- **the real GPU capability probe** for CUDA-bound models (the implementation and its failure
+  handling already exist and are tested; only a real device result is missing).
 
 ## 2. Acquisition and setup (explicit authorization required)
 

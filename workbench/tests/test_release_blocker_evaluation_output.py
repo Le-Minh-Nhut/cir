@@ -434,8 +434,10 @@ def test_out14_resume_does_not_skip_a_failed_or_incomplete_run(env):
 # ------------------------------------------------- F4/F7: per-checkpoint runs, no debris
 
 def test_run_directories_are_distinct_per_checkpoint_variant(env):
-    """One invocation identity reused across checkpoint variants must not collide."""
+    """Each checkpoint variant gets its own invocation id and run directory."""
     shared = "shared-run-identity"
+    first_run_id = f"{shared}_fashioniq"
+    second_run_id = f"{shared}_fiq_n05"
     scripts = reporting_script(env["tmp"])
     first = em.EvaluationPlan("csmcir", "fashioniq", "fashioniq_original_split",
                               env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
@@ -444,13 +446,13 @@ def test_run_directories_are_distinct_per_checkpoint_variant(env):
                                env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
                                env["source"], scripts, PIN, PIN)
 
-    assert em.execute(first, env["config"], run_id=shared) == 0
-    assert em.execute(second, env["config"], run_id=shared) == 0, \
+    assert em.execute(first, env["config"], run_id=first_run_id) == 0
+    assert em.execute(second, env["config"], run_id=second_run_id) == 0, \
         "each checkpoint variant needs its own run directory"
 
     logs = em.artifact_root(env["config"]) / "logs"
     names = sorted(path.name for path in logs.iterdir())
-    assert names == [f"csmcir__fashioniq__{shared}", f"csmcir__fiq_n05__{shared}"]
+    assert names == [f"csmcir__fashioniq__{first_run_id}", f"csmcir__fiq_n05__{second_run_id}"]
     for name in names:
         assert (logs / name / "aggregate_report.json").is_file()
 
@@ -494,8 +496,10 @@ def test_unstartable_command_leaves_no_log_debris_or_burnt_run_id(env):
 
 
 def test_run_directories_do_not_collide_across_models(env):
-    """Two different models sharing a checkpoint id and run id must not collide."""
+    """Different models get distinct invocation IDs and log directories."""
     shared = "cross-model-shared-id"
+    first_run_id = f"{shared}_csmcir"
+    second_run_id = f"{shared}_hint"
     scripts = reporting_script(env["tmp"])
     first = em.EvaluationPlan("csmcir", "fashioniq", "fashioniq_original_split",
                               env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
@@ -504,12 +508,12 @@ def test_run_directories_do_not_collide_across_models(env):
                                env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
                                env["source"], scripts, PIN, PIN)
 
-    assert em.execute(first, env["config"], run_id=shared) == 0
-    assert em.execute(second, env["config"], run_id=shared) == 0
+    assert em.execute(first, env["config"], run_id=first_run_id) == 0
+    assert em.execute(second, env["config"], run_id=second_run_id) == 0
 
     logs = em.artifact_root(env["config"]) / "logs"
     assert sorted(p.name for p in logs.iterdir()) == [
-        f"csmcir__fashioniq__{shared}", f"hint__fashioniq__{shared}"]
+        f"csmcir__fashioniq__{first_run_id}", f"hint__fashioniq__{second_run_id}"]
 
 
 def test_directory_checkpoint_digest_is_part_of_the_completion_contract(env):
@@ -1132,3 +1136,417 @@ def test_the_ledger_key_is_never_given_to_the_evaluator(env, monkeypatch):
     assert "operator-secret-key" not in stdout, "the ledger key must not reach the evaluator"
     payload = json.loads(stdout.splitlines()[-1])
     assert payload["leaked"] is None
+
+
+# ----------------------- KEY, LEDGER, AUDIT, EXIT and CUDA regression coverage
+
+def test_key02_empty_operator_key_is_rejected(env, monkeypatch):
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", " \t ")
+    with pytest.raises(em.LedgerKeyError, match="empty"):
+        em.ledger_hmac_key(env["config"])
+
+
+def test_key03_unreadable_key_file_fails_closed(env, monkeypatch):
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY")
+    key_path = env["repo"] / ".workbench_ledger_key"
+    key_path.write_bytes(b"existing-key")
+    original = Path.read_bytes
+
+    def unreadable(path):
+        if path == key_path:
+            raise PermissionError("denied")
+        return original(path)
+
+    monkeypatch.setattr(Path, "read_bytes", unreadable)
+    with pytest.raises(em.LedgerKeyError):
+        em.ledger_hmac_key(env["config"])
+
+
+def test_key04_fallback_is_private_random_and_not_predictable(env, monkeypatch):
+    import stat
+
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY")
+    key = em.ledger_hmac_key(env["config"])
+    path = env["repo"] / ".workbench_ledger_key"
+    assert len(key) == 32
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    other = env["tmp"] / "other-repo"
+    other.mkdir()
+    assert em.ledger_hmac_key(type("Config", (), {"CIR_REPO_ROOT": other})()) != key
+
+
+def test_key09_existing_ledger_never_acquires_a_new_fallback_key(env, monkeypatch):
+    em.append_evidence_entry(env["config"], {"run_id": "old-ledger-entry"})
+    ledger_path = em.evidence_ledger_path(env["config"])
+    original = ledger_path.read_bytes()
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY")
+    with pytest.raises(em.LedgerKeyError, match="missing"):
+        em.ledger_hmac_key(env["config"])
+    assert ledger_path.read_bytes() == original
+    assert not (env["repo"] / ".workbench_ledger_key").exists()
+
+
+def test_key10_wrong_key_rejects_verification(env, monkeypatch):
+    em.append_evidence_entry(env["config"], {"run_id": "wrong-key-run"})
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "another-operator-key")
+    assert em.read_evidence_ledger(env["config"]) is None
+
+
+def test_key05_to_08_key_stays_out_of_evaluator_and_artifacts(env, monkeypatch):
+    key = "key-never-in-artifacts-2893"
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", key)
+    probe = env["tmp"] / "key_probe.py"
+    probe.write_text(
+        "import json, os\n"
+        "print(json.dumps({'key': os.environ.get('WORKBENCH_LEDGER_KEY')}))\n")
+    invocation = plan(env, [sys.executable, str(probe)])
+    run_id = "key-output-check"
+    assert em.execute(invocation, env["config"], run_id=run_id) == 0
+    proof = json.loads(em.completion_proof_path(env["config"], invocation, run_id).read_text())
+    directory = Path(proof["run_directory"])
+    stdout = (directory / "stdout.log").read_text()
+    command = (directory / "command.json").read_text()
+    report = (directory / "aggregate_report.json").read_text()
+    assert json.loads(stdout.splitlines()[-1])["key"] is None
+    assert all(key not in value for value in (stdout, command, report))
+    assert "WORKBENCH_LEDGER_KEY" not in command
+
+
+def test_key11_failed_key_operation_cannot_create_success_proof(env, monkeypatch):
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", " \n")
+    invocation = plan(env, reporting_script(env["tmp"]))
+    with pytest.raises(em.LedgerKeyError):
+        em.execute(invocation, env["config"], run_id="key-failure-run")
+    assert not em.completion_proof_path(env["config"], invocation, "key-failure-run").exists()
+    assert not em.latest_pointer(env["config"], invocation, "successful").exists()
+
+
+def test_ledger01_to_04_real_concurrent_processes_preserve_chain(env, monkeypatch):
+    import os
+    import subprocess
+    import threading
+    import time
+
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "concurrent-ledger-test-key")
+    root = env["repo"]
+    code = "\n".join((
+        "import os,pathlib,time,types; import workbench.scripts.evaluate_models as e",
+        f"root=pathlib.Path({str(root)!r})",
+        "(root / ('ready-' + os.environ['LEDGER_RUN'])).touch()",
+        "deadline=time.monotonic()+5",
+        "while len(list(root.glob('ready-*'))) < 2 and time.monotonic() < deadline:",
+        "    time.sleep(.005)",
+        "original=e._ledger_authentication",
+        "e._ledger_authentication=lambda c,r:(time.sleep(.2),original(c,r))[1]",
+        "e.append_evidence_entry(types.SimpleNamespace(CIR_REPO_ROOT=root),",
+        "    {'run_id':os.environ['LEDGER_RUN']})",
+    ))
+    child_env = {**os.environ, "WORKBENCH_LEDGER_KEY": "concurrent-ledger-test-key"}
+    observed = []
+    reader_errors = []
+    stop = threading.Event()
+
+    def reader():
+        while not stop.is_set():
+            try:
+                snapshot = em.read_evidence_ledger(env["config"])
+                assert snapshot is None or all(
+                    (not index and entry["previous_digest"] == "") or
+                    (index and entry["previous_digest"] == snapshot[index - 1]["entry_digest"])
+                    for index, entry in enumerate(snapshot))
+                observed.append(snapshot)
+            except BaseException as error:
+                reader_errors.append(error)
+                return
+            time.sleep(.005)
+
+    thread = threading.Thread(target=reader)
+    thread.start()
+    deadline = time.monotonic() + 2
+    while not observed and time.monotonic() < deadline:
+        time.sleep(.005)
+    children = [subprocess.Popen(
+        [sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[2],
+        env={**child_env, "LEDGER_RUN": f"parallel-{index}"}) for index in range(2)]
+    try:
+        assert [child.wait(timeout=10) for child in children] == [0, 0]
+    finally:
+        stop.set()
+        thread.join(timeout=5)
+    ledger = em.read_evidence_ledger(env["config"])
+    assert ledger is not None and {entry["run_id"] for entry in ledger} == {
+        "parallel-0", "parallel-1"}
+    assert len(ledger) == 2
+    assert ledger[1]["previous_digest"] == ledger[0]["entry_digest"]
+    assert observed
+    assert reader_errors == []
+
+
+def test_ledger05_duplicate_run_id_rejected(env):
+    em.append_evidence_entry(env["config"], {"run_id": "duplicate-id"})
+    with pytest.raises(em.LedgerDuplicateRunError):
+        em.append_evidence_entry(env["config"], {"run_id": "duplicate-id"})
+
+
+def test_ledger06_killed_lock_holder_releases_kernel_lock(env):
+    code = (
+        "import pathlib,types,time; import workbench.scripts.evaluate_models as e; "
+        f"path=e.evidence_ledger_path(types.SimpleNamespace(CIR_REPO_ROOT=pathlib.Path({str(env['repo'])!r}))); "
+        "path.parent.mkdir(parents=True, exist_ok=True); "
+        "lock=e._ledger_lock(path, e.fcntl.LOCK_EX); "
+        "print('locked',flush=True); time.sleep(60)"
+    )
+    import os
+    import subprocess
+    child = subprocess.Popen([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[2],
+                             env=dict(os.environ), stdout=subprocess.PIPE, text=True)
+    try:
+        assert child.stdout.readline().strip() == "locked"
+    finally:
+        child.kill()
+        child.wait(timeout=5)
+    entry = em.append_evidence_entry(env["config"], {"run_id": "after-killed-lock"})
+    assert em.read_evidence_ledger(env["config"])[0]["entry_digest"] == entry["entry_digest"]
+
+
+def test_ledger07_to_10_corruption_and_malformed_utf8_preserved(env):
+    em.append_evidence_entry(env["config"], {"run_id": "forensic-entry"})
+    path = em.evidence_ledger_path(env["config"])
+    path.write_bytes(b"{broken-ledger}\n")
+    corrupt = path.read_bytes()
+    assert em.read_evidence_ledger(env["config"]) is None
+    with pytest.raises(em.LedgerCorruptError):
+        em.append_evidence_entry(env["config"], {"run_id": "must-not-reset"})
+    assert path.read_bytes() == corrupt
+    path.write_bytes(b"\xff\n")
+    assert em.read_evidence_ledger(env["config"]) is None
+    with pytest.raises(em.LedgerCorruptError):
+        em.append_evidence_entry(env["config"], {"run_id": "bad-utf8"})
+    assert path.read_bytes() == b"\xff\n"
+
+
+@pytest.mark.parametrize(("kind", "code", "status", "proof_status"), [
+    ("success", 0, "INVOCATION_COMPLETED", "COMPLETED"),
+    ("failure", 7, "INVOCATION_FAILED", "FAILED"),
+    ("silent", 0, "INVOCATION_NO_OBSERVABLE_OUTPUT", None),
+])
+def test_audit01_to10_every_started_outcome_is_recorded(env, kind, code, status, proof_status):
+    command = silent_script(env["tmp"]) if kind == "silent" else reporting_script(
+        env["tmp"], exit_code=code)
+    invocation = plan(env, command)
+    run_id = f"audit-{kind}"
+    assert em.execute(invocation, env["config"], run_id=run_id) == code
+    ledger = em.read_evidence_ledger(env["config"])
+    assert ledger is not None and [entry["run_id"] for entry in ledger] == [run_id]
+    entry = ledger[0]
+    assert entry["invocation_status"] == status
+    assert entry["return_code"] == code
+    report = json.loads(em.run_report_path(env["config"], invocation, run_id).read_text())
+    assert report["invocation_status"] == entry["invocation_status"]
+    assert report["return_code"] == entry["return_code"]
+    proof_path = em.completion_proof_path(env["config"], invocation, run_id)
+    if proof_status is None:
+        assert not proof_path.exists()
+        return
+    proof = json.loads(proof_path.read_text())
+    assert proof["completion_status"] == proof_status
+    assert proof["return_code"] == code
+    assert proof["invocation_status"] == status
+
+
+def test_audit_failure_and_silent_run_never_advance_latest_successful(env):
+    success, success_id = run(env, reporting_script(env["tmp"]))
+    assert success == 0
+    invocation = plan(env, reporting_script(env["tmp"], exit_code=9))
+    assert em.execute(invocation, env["config"], run_id="audit-failed-rerun") == 9
+    successful = em.latest_pointer(env["config"], invocation, "successful")
+    saved = successful.read_bytes()
+    assert em.execute(plan(env, silent_script(env["tmp"])), env["config"],
+                      run_id="audit-silent-rerun") == 0
+    assert successful.read_bytes() == saved
+    assert json.loads(saved)["run_id"] == success_id
+
+
+def test_exit01_native_zero_without_current_valid_proof_is_cli_failure(env, monkeypatch, capsys):
+    previous_code, _ = run(env, reporting_script(env["tmp"]))
+    assert previous_code == 0
+    invocation = plan(env, silent_script(env["tmp"]))
+    model = {"model_id": MODEL, "native_protocol": invocation.protocol}
+    monkeypatch.setattr(em, "load_registry", lambda: {
+        "protocols": [invocation.protocol], "models": [model]})
+    monkeypatch.setattr(em, "candidates", lambda args, models: [(model, {"checkpoint_id": invocation.checkpoint_id})])
+    monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
+    monkeypatch.setattr(em, "guarded_plan", lambda *args: (invocation, []))
+    result = em.main(["--model", MODEL, "--run-id", "current-silent-run"])
+    assert result != 0
+    assert "[BLOCKED]" in capsys.readouterr().err
+    assert not em.completion_proof_path(env["config"], invocation, "current-silent-run").exists()
+
+
+def test_exit02_native_return_code_is_preserved_in_metadata(env):
+    invocation = plan(env, reporting_script(env["tmp"], exit_code=11))
+    assert em.execute(invocation, env["config"], run_id="native-code-run") == 11
+    directory = em.log_dir(env["config"], invocation, em.datetime.now(em.UTC), "native-code-run")
+    metadata = json.loads((directory / "command.json").read_text())
+    report = json.loads((directory / "aggregate_report.json").read_text())
+    ledger = em.read_evidence_ledger(env["config"])
+    assert metadata["return_code"] == report["return_code"] == ledger[0]["return_code"] == 11
+
+
+def test_exit03_missing_key_causes_standalone_operator_failure(env, monkeypatch, capsys):
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "original-ledger-key")
+    em.append_evidence_entry(env["config"], {"run_id": "existing-keyed-entry"})
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY")
+    invocation = plan(env, reporting_script(env["tmp"]))
+    model = {"model_id": MODEL, "native_protocol": invocation.protocol}
+    monkeypatch.setattr(em, "load_registry", lambda: {
+        "protocols": [invocation.protocol], "models": [model]})
+    monkeypatch.setattr(em, "candidates", lambda args, models: [(model, {"checkpoint_id": invocation.checkpoint_id})])
+    monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
+    monkeypatch.setattr(em, "guarded_plan", lambda *args: (invocation, []))
+    assert em.main(["--model", MODEL, "--run-id", "missing-key-run"]) != 0
+    assert "[BLOCKED]" in capsys.readouterr().err
+
+
+def test_exit04_corrupt_ledger_causes_standalone_operator_failure(env, monkeypatch, capsys):
+    em.append_evidence_entry(env["config"], {"run_id": "pre-corrupt-entry"})
+    path = em.evidence_ledger_path(env["config"])
+    path.write_text("corrupt\n")
+    preserved = path.read_bytes()
+    invocation = plan(env, reporting_script(env["tmp"]))
+    model = {"model_id": MODEL, "native_protocol": invocation.protocol}
+    monkeypatch.setattr(em, "load_registry", lambda: {
+        "protocols": [invocation.protocol], "models": [model]})
+    monkeypatch.setattr(em, "candidates", lambda args, models: [(model, {"checkpoint_id": invocation.checkpoint_id})])
+    monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
+    monkeypatch.setattr(em, "guarded_plan", lambda *args: (invocation, []))
+    assert em.main(["--model", MODEL, "--run-id", "corrupt-ledger-run"]) != 0
+    assert "[BLOCKED]" in capsys.readouterr().err
+    assert path.read_bytes() == preserved
+
+
+def test_exit05_multiple_checkpoints_get_distinct_verified_run_ids(env, monkeypatch):
+    command = reporting_script(env["tmp"])
+    first = plan(env, command)
+    second = em.replace(first, checkpoint_id="ckpt_v2")
+    model = {"model_id": MODEL, "native_protocol": first.protocol}
+    checkpoints = [{"checkpoint_id": first.checkpoint_id}, {"checkpoint_id": second.checkpoint_id}]
+    monkeypatch.setattr(em, "load_registry", lambda: {
+        "protocols": [first.protocol], "models": [model]})
+    monkeypatch.setattr(em, "candidates", lambda args, models: [(model, item) for item in checkpoints])
+    monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
+    monkeypatch.setattr(em, "guarded_plan", lambda model, checkpoint, *args:
+                        (first if checkpoint["checkpoint_id"] == first.checkpoint_id else second, []))
+    assert em.main(["--model", MODEL, "--run-id", "multi-run"]) == 0
+    first_proof = em.completion_proof_path(env["config"], first, "multi-run_csmcir_ckpt_v1")
+    second_proof = em.completion_proof_path(env["config"], second, "multi-run_csmcir_ckpt_v2")
+    assert first_proof.is_file() and second_proof.is_file()
+    assert json.loads(first_proof.read_text())["run_id"] != json.loads(second_proof.read_text())["run_id"]
+
+
+
+def _cuda_cli_model(tmp_path, monkeypatch):
+    import venv
+    import workbench.backend.runtime as runtime
+
+    runtime.forget_environment()
+    runtime.forget_gpu_capability()
+    runtime.clear_gpu_probe_for_tests()
+    interpreter_dir = tmp_path / f"cuda-env-{uuid.uuid4().hex[:8]}"
+    venv.EnvBuilder(with_pip=False).create(interpreter_dir)
+    for site in interpreter_dir.glob("lib/python*/site-packages"):
+        module = site / "torch.py"
+        module.write_text("__version__ = '1.12.1'\n")
+        dist = site / "torch-1.12.1.dist-info"
+        dist.mkdir()
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: torch\nVersion: 1.12.1\n")
+        (dist / "RECORD").write_text(f"torch.py,sha256=t,{module.stat().st_size}\n")
+        break
+    variable = f"CUDA_TEST_PYTHON_{uuid.uuid4().hex[:8]}"
+    monkeypatch.setenv(variable, str(interpreter_dir / "bin" / "python"))
+    model = {"model_id": "limn", "environment_required": True,
+             "source_dir": "gpu-source", "native_protocol": "fashioniq_val_split",
+             "environment": {"python_env_var": variable, "pytorch": "1.12.1", "cuda": "12.4"}}
+    monkeypatch.setattr(runtime, "runtime_blockers", lambda *args: [
+        "execution environment not verified: GPU pending"])
+    monkeypatch.setattr(em, "runtime_plan_blockers", lambda *args: [
+        "execution environment not verified: GPU pending"])
+    return model, runtime
+
+
+def _install_test_adapter(monkeypatch, env, invocation):
+    class Adapter(em.OfficialScriptAdapter):
+        model_id = "limn"
+        script = "gpu_evaluator.py"
+
+        def command(self, source, checkpoint, request):
+            return invocation.command
+
+    source = env["tmp"] / "gpu-source"
+    source.mkdir(exist_ok=True)
+    (source / Adapter.script).write_text("# audited synthetic evaluator\n")
+    monkeypatch.setitem(em.ADAPTERS, "limn", Adapter)
+    monkeypatch.setattr(em, "blockers", lambda *args: (source, invocation.checkpoint, PIN, []))
+
+
+def test_cuda02_and_cuda14_unverified_gpu_blocks_real_cli_launch(env, monkeypatch, capsys):
+    model, runtime = _cuda_cli_model(env["tmp"], monkeypatch)
+    marker = env["tmp"] / "evaluator-started"
+    evaluator = env["tmp"] / "gpu_no_start.py"
+    evaluator.write_text(f"from pathlib import Path; Path({str(marker)!r}).touch(); print('started')\n")
+    invocation = em.replace(plan(env, [sys.executable, str(evaluator)]),
+                            model_id="limn", checkpoint_id="gpu_ckpt", protocol="fashioniq_val_split")
+    _install_test_adapter(monkeypatch, env, invocation)
+    monkeypatch.setattr(em, "load_registry", lambda: {
+        "protocols": [invocation.protocol], "models": [model]})
+    monkeypatch.setattr(em, "candidates", lambda args, models: [(model, {"checkpoint_id": "gpu_ckpt"})])
+    monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
+    monkeypatch.setattr(em, "guarded_plan", lambda *args: (invocation, []))
+    assert runtime.verify_environment(model, probe=True).tier == runtime.TIER_GPU_PENDING
+    assert em.main(["--model", "limn", "--run-id", "cuda-unverified-run"]) != 0
+    assert "--verify-gpu" in capsys.readouterr().err
+    assert not marker.exists()
+
+
+def test_cuda11_guarded_plan_builds_for_verified_interpreter(env, monkeypatch):
+    model, runtime = _cuda_cli_model(env["tmp"], monkeypatch)
+    runtime.forget_environment()
+    assert runtime.verify_environment(model, probe=True).tier == runtime.TIER_GPU_PENDING
+    invocation = em.replace(plan(env, [sys.executable, "unused.py"]),
+                            model_id="limn", checkpoint_id="gpu_ckpt", protocol="fashioniq_val_split")
+    _install_test_adapter(monkeypatch, env, invocation)
+    monkeypatch.setattr(runtime, "runtime_blockers", lambda *args: [
+        "execution environment not verified: GPU pending"])
+    monkeypatch.setattr(em, "runtime_plan_blockers", lambda *args: [
+        "execution environment not verified: GPU pending"])
+    command_plan, reasons = em.guarded_plan(
+        model, {"checkpoint_id": "gpu_ckpt", "filename": "checkpoint.pt",
+                "checkpoint_mapping_status": "VERIFIED_METADATA"},
+        invocation.protocol, env["tmp"] / "FashionIQ", 10, env["config"])
+    assert command_plan is not None, reasons
+    with pytest.raises(runtime.GpuVerificationError):
+        runtime.require_launch_ready(model)
+
+
+def test_exit13_synthetic_gpu_verification_reports_result_and_allows_execution(
+        env, monkeypatch, capsys):
+    model, runtime = _cuda_cli_model(env["tmp"], monkeypatch)
+    monkeypatch.setenv(runtime.GPU_PROBE_OVERRIDE_ENV, "1")
+    runtime.set_gpu_probe_for_tests(lambda model, report: {
+        "cuda_available": True, "device_count": 1, "torch_version": "1.12.1",
+        "torch_cuda_version": "12.4", "device_name": "Synthetic GPU",
+        "compute_capability": "8.9", "allocated_tensor": True, "computed": True,
+        "error": None})
+    evaluator = reporting_script(env["tmp"])
+    invocation = em.replace(plan(env, evaluator), model_id="limn", checkpoint_id="gpu_ckpt",
+                            protocol="fashioniq_val_split")
+    _install_test_adapter(monkeypatch, env, invocation)
+    monkeypatch.setattr(em, "load_registry", lambda: {
+        "protocols": [invocation.protocol], "models": [model]})
+    monkeypatch.setattr(em, "candidates", lambda args, models: [(model, {"checkpoint_id": "gpu_ckpt"})])
+    monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
+    monkeypatch.setattr(em, "guarded_plan", lambda *args: (invocation, []))
+    assert em.main(["--model", "limn", "--run-id", "synthetic-gpu-run", "--verify-gpu"]) == 0
+    assert '"capability_verified": true' in capsys.readouterr().out
+    assert em.completion_proof_path(env["config"], invocation,
+                                    "synthetic-gpu-run").is_file()

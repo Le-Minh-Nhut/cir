@@ -486,12 +486,17 @@ def test_mut_i_shared_run_directory_across_checkpoints_is_detected(tmp_path, mon
     shared = "shared-run-id-1234"
 
     def detector() -> bool:
-        try:
-            module.execute(make_plan("fashioniq"), config, run_id=shared)
-            module.execute(make_plan("fiq_n05"), config, run_id=shared)
-        except Exception:
-            return False
-        return True
+        """The invariant: one run id across variants yields two DISTINCT run directories.
+
+        The global ledger now rejects a repeated run id outright, so the detector asserts the
+        distinctness directly rather than relying on a second execute() succeeding.
+        """
+        import datetime as _dt
+
+        now = _dt.datetime.now(_dt.UTC)
+        first = module.log_dir(config, make_plan("fashioniq"), now, shared)
+        second = module.log_dir(config, make_plan("fiq_n05"), now, shared)
+        return first != second
 
     def mutate(ctx):
         # Collapse the run directory back to the bare invocation id.
@@ -551,3 +556,122 @@ def test_mut_j_accepting_a_hollow_install_is_detected(tmp_path, monkeypatch):
 
     _assert_mutation_killed(monkeypatch, detector, mutate,
                             label="a hollow install accepted as verified")
+
+
+# ------------------------------------------------------------------ MUT-10 (CUDA)
+
+def test_mut10_gpu_pending_promoted_to_ready_is_detected(tmp_path, monkeypatch):
+    """A GPU-pending model must never be reported as launch-ready.
+
+    Restores the historical behaviour where a CUDA-declaring model's interpreter readiness
+    was treated as launch readiness, which is exactly the dead-end/unsafe inversion this
+    pass removed.
+    """
+    from dataclasses import replace
+
+    import venv as _venv
+
+    import workbench.backend.runtime as rt
+    from workbench.backend.operator_config import resolve_config
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env_dir = repo / "env"
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+    for lib in (env_dir / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        (site_packages / "torch.py").write_text("__version__ = '1.12.1'\n")
+        dist = site_packages / "torch-1.12.1.dist-info"
+        dist.mkdir(exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: torch\nVersion: 1.12.1\n")
+        (dist / "RECORD").write_text("torch.py,sha256=t,20\n")
+        break
+    monkeypatch.setenv("MUT10_PYTHON", str(env_dir / "bin" / "python"))
+    model = {"model_id": "limn", "environment_required": True,
+             "environment": {"python_env_var": "MUT10_PYTHON", "pytorch": "1.12.1", "cuda": "12.4"}}
+    config = replace(resolve_config(), CIR_REPO_ROOT=repo)
+
+    def detector() -> bool:
+        rt.forget_environment()
+        rt.forget_gpu_capability()
+        try:
+            rt.require_launch_ready(model)
+        except rt.GpuVerificationError:
+            return True
+        return False
+
+    def mutate(ctx):
+        # The historical behaviour: interpreter readiness was launch readiness.
+        ctx.setattr(rt, "LAUNCH_READY_TIERS", set(rt.READY_TIERS))
+        ctx.setattr(rt, "require_launch_ready",
+                    lambda model, **kwargs: rt.require_verified_model_interpreter(model))
+
+    _assert_mutation_killed(monkeypatch, detector, mutate,
+                            label="GPU_VERIFICATION_PENDING promoted to launch-ready")
+    assert config.CIR_REPO_ROOT == repo
+
+
+# ------------------------------------------------------------------ MUT-01 (CUDA)
+
+def test_mut01_permanent_gpu_deferral_is_detected(tmp_path, monkeypatch):
+    """Restoring the permanent GPU_VERIFICATION_DEFERRED dead end must fail the transition.
+
+    The historical behaviour returned a tier that no authorized probe could ever resolve,
+    so a GPU-declaring model had no path to execution at all.
+    """
+    from dataclasses import replace
+
+    import venv as _venv
+
+    import workbench.backend.runtime as rt
+    from workbench.backend.operator_config import resolve_config
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env_dir = repo / "env"
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+    for lib in (env_dir / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        (site_packages / "torch.py").write_text("__version__ = '1.12.1'\n")
+        dist = site_packages / "torch-1.12.1.dist-info"
+        dist.mkdir(exist_ok=True)
+        (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: torch\nVersion: 1.12.1\n")
+        (dist / "RECORD").write_text("torch.py,sha256=t,20\n")
+        break
+    monkeypatch.setenv("MUT01_PYTHON", str(env_dir / "bin" / "python"))
+    model = {"model_id": "limn", "environment_required": True,
+             "environment": {"python_env_var": "MUT01_PYTHON", "pytorch": "1.12.1", "cuda": "12.4"}}
+    config = replace(resolve_config(), CIR_REPO_ROOT=repo)
+    monkeypatch.setenv(rt.GPU_PROBE_OVERRIDE_ENV, "1")
+    rt.set_gpu_probe_for_tests(lambda model, report: {
+        "cuda_available": True, "allocated_tensor": True, "computed": True,
+        "device_name": "Synthetic GPU", "compute_capability": "8.9", "error": None})
+
+    def detector() -> bool:
+        rt.forget_environment()
+        rt.forget_gpu_capability()
+        try:
+            rt.verify_gpu_runtime(model, config, authorized=True)
+            return rt.verify_environment(model, probe=True).tier == "GPU_RUNTIME_READY"
+        except Exception:
+            # The transition is unreachable, i.e. the dead end is back.
+            return False
+
+    def mutate(ctx):
+        # The historical behaviour: the CUDA branch always reported the dead-end tier.
+        original = rt.verify_environment
+
+        def permanent_deferral(model_, *, probe=True, require_cuda=False):
+            report = original(model_, probe=probe, require_cuda=require_cuda)
+            if rt._requires_gpu(model_):
+                report.tier = rt.TIER_GPU_DEFERRED
+                report.status = rt.TIER_GPU_DEFERRED
+            return report
+
+        ctx.setattr(rt, "verify_environment", permanent_deferral)
+        ctx.setattr(rt, "require_launch_ready",
+                    lambda model_, **kwargs: rt.require_verified_model_interpreter(model_))
+
+    _assert_mutation_killed(monkeypatch, detector, mutate,
+                            label="permanent GPU_VERIFICATION_DEFERRED restored")
+    rt.clear_gpu_probe_for_tests()

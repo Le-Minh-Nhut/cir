@@ -24,6 +24,12 @@ TIER_ORDER = [
 TIER_UNCONFIGURED = "UNCONFIGURED"
 TIER_BLOCKED = "BLOCKED"
 TIER_GPU_DEFERRED = "GPU_VERIFICATION_DEFERRED"
+# A CUDA-declaring model whose interpreter, version, and dependencies are verified but
+# whose GPU capability has not been probed yet. It is a *legitimate pending state*, not a
+# dead end: verify_gpu_runtime() moves it to GPU_RUNTIME_READY on a real GPU host.
+TIER_GPU_PENDING = "GPU_VERIFICATION_PENDING"
+TIER_GPU_PROBE_FAILED = "GPU_PROBE_FAILED"
+TIER_GPU_READY = "GPU_RUNTIME_READY"
 TIER_REQUIREMENTS_UNVERIFIED = "ENVIRONMENT_REQUIREMENTS_UNVERIFIED"
 
 
@@ -41,6 +47,7 @@ class EnvironmentReport:
     imports: dict[str, bool] = field(default_factory=dict)
     cuda_available: bool | None = None
     cuda_version: str | None = None
+    gpu_capability: dict[str, Any] | None = None
     reason: str | None = None
     probe_executed: bool = False
     dependency_probe_executed: bool = False
@@ -764,6 +771,113 @@ def _required_imports(model: dict[str, Any]) -> list[str]:
     return [str(name) for name in (env.get("required_imports") or [])]
 
 
+# Statuses that mean the environment itself is unusable, so a GPU probe must not run.
+_BLOCKED_STATUSES = {
+    "PROBE_FAILED", "UNSAFE_INTERPRETER", "PYTHON_VERSION_MISMATCH", "DEPENDENCIES_UNREADABLE",
+    "DEPENDENCY_MISSING", "DEPENDENCY_VERSION_MISMATCH", "VERSION_CONSTRAINT_UNVERIFIED",
+    "MODEL_IMPORT_FAILED", "REQUIREMENTS_UNVERIFIED",
+}
+
+
+def _requires_gpu(model: dict[str, Any]) -> bool:
+    """True when a model's contract declares a CUDA requirement.
+
+    ``cuda: UNKNOWN`` means the upstream source did not state one, so it is not a
+    requirement. Any other value is a real requirement that must be verified on a GPU host.
+    """
+    env = model.get("environment") or {}
+    declared = env.get("cuda")
+    if declared is None:
+        return False
+    return str(declared).upper() != "UNKNOWN"
+
+
+def gpu_capability_path(config: Any) -> Path:
+    repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
+    return Path(repo_root) / "workbench" / "artifacts" / "gpu_capability.json"
+
+
+_GPU_CAPABILITY: dict[str, dict[str, Any]] = {}
+
+
+def forget_gpu_capability() -> None:
+    _GPU_CAPABILITY.clear()
+
+
+def record_gpu_capability(model: dict[str, Any], result: dict[str, Any],
+                          config: Any | None = None) -> dict[str, Any]:
+    """Persist a verified GPU capability result, keyed to the environment it describes.
+
+    The key includes the interpreter fingerprint and the dependency fingerprint, so a
+    changed interpreter or a changed installed dependency set invalidates it rather than
+    silently reusing a stale verification.
+    """
+    key = _gpu_capability_key(model)
+    payload = {**result, "capability_key": key}
+    _GPU_CAPABILITY[key] = payload
+    if config is not None:
+        try:
+            path = gpu_capability_path(config)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        except OSError:
+            pass
+    return payload
+
+
+def _gpu_capability_key(model: dict[str, Any]) -> str:
+    import hashlib
+
+    env = model.get("environment") or {}
+    configured = os.environ.get(env.get("python_env_var") or "", "")
+    interpreter = Path(configured).expanduser() if configured else None
+    fingerprint = None
+    if interpreter is not None and interpreter.is_file():
+        fingerprint = _interpreter_fingerprint(
+            str(interpreter), _environment_contract_digest(model),
+            str(interpreter.parent.parent))
+    return hashlib.sha256(
+        json.dumps({
+            "model_id": model.get("model_id"),
+            "interpreter": configured,
+            "interpreter_fingerprint": fingerprint,
+            "contract": _environment_contract_digest(model),
+        }, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+
+def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport) -> dict[str, Any] | None:
+    """A previously verified capability for exactly this environment, or None.
+
+    The result is read back from disk when it was recorded by another process (the master
+    verifies and a later preflight or doctor run must see it), and the key includes the
+    interpreter and dependency fingerprints so a changed environment cannot reuse it.
+    """
+    key = _gpu_capability_key(model)
+    cached = _GPU_CAPABILITY.get(key)
+    if cached is None:
+        from workbench.backend.operator_config import resolve_config
+
+        payload = None
+        try:
+            path = gpu_capability_path(resolve_config())
+            if path.is_file():
+                payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            payload = None
+        if isinstance(payload, dict) and payload.get("capability_key") == key:
+            cached = payload
+            _GPU_CAPABILITY[key] = payload
+    if cached is None:
+        return None
+    # The cached result must describe this very environment: a changed interpreter or
+    # dependency set produces a different key and therefore no reuse.
+    if cached.get("interpreter_fingerprint") and report.environment_fingerprint:
+        if cached["interpreter_fingerprint"] != report.environment_fingerprint:
+            return None
+    return cached
+
+
 def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cuda: bool = False) -> EnvironmentReport:
     """Return a truthful environment report. Never claims RUNTIME_READY without proof."""
     model_id = model.get("model_id", "<unnamed>")
@@ -919,16 +1033,27 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         _remember(model, require_cuda, report)
         return report
 
-    # CUDA capability is deliberately NOT probed. Its answer can only come from the
-    # environment (``torch.cuda.is_available()``), and running environment code during
-    # inspection is exactly what this module refuses to do: an environment could answer
-    # for itself. A model declaring a CUDA requirement is reported as GPU verification
-    # deferred, which is honest and is never accepted as readiness.
-    if require_cuda or (env.get("cuda") and str(env["cuda"]).upper() != "UNKNOWN"):
-        report.tier = TIER_GPU_DEFERRED
-        report.status = "GPU_VERIFICATION_DEFERRED"
-        report.reason = ("CUDA capability cannot be verified by inspecting the environment; "
-                         "verify it on the GPU host")
+    # Read-only inspection never probes CUDA: the answer can only come from running the
+    # environment's own code, which inspection refuses to do. A CUDA-declaring model is
+    # therefore reported as pending — a legitimate state with a real way forward — and only
+    # verify_gpu_runtime() can move it to GPU_RUNTIME_READY.
+    if _requires_gpu(model):
+        # Interpreter, Python version, and dependencies are verified; GPU capability is a
+        # separate question that inspection must never answer. The model is pending, and
+        # verify_gpu_runtime() is the authorized path that resolves it on the GPU host.
+        cached_gpu = _cached_gpu_capability(model, report)
+        if cached_gpu is not None and cached_gpu.get("capability_verified"):
+            report.gpu_capability = cached_gpu
+            report.cuda_available = bool(cached_gpu.get("cuda_available"))
+            report.cuda_version = cached_gpu.get("torch_cuda_version")
+            report.tier = TIER_GPU_READY
+            report.status = TIER_GPU_READY
+            _remember(model, require_cuda, report)
+            return report
+        report.tier = TIER_GPU_PENDING
+        report.status = TIER_GPU_PENDING
+        report.reason = ("CUDA capability must be verified on the GPU host with "
+                         "verify_gpu_runtime() before this model can be launched")
         _remember(model, require_cuda, report)
         return report
 
@@ -948,21 +1073,6 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         return report
 
 
-        # No source-backed requirements: cannot claim full verification.
-        report.tier = TIER_REQUIREMENTS_UNVERIFIED
-        report.status = "REQUIREMENTS_UNVERIFIED"
-        report.reason = "no source-backed dependency contract declared"
-        _remember(model, require_cuda, report)
-        return report
-
-    if not report.dependency_probe_executed:
-        # We never actually inspected the installed dependency set, so we cannot
-        # claim full runtime readiness even though the interpreter is isolated.
-        report.tier = TIER_REQUIREMENTS_UNVERIFIED
-        report.status = "REQUIREMENTS_UNVERIFIED"
-        report.reason = "no dependency probe was executed for this contract"
-        _remember(model, require_cuda, report)
-        return report
 
     report.tier = "RUNTIME_READY"
     report.status = "RUNTIME_READY"
@@ -970,9 +1080,13 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     return report
 
 
-# Tiers that constitute a verified runtime. INTERPRETER_PRESENT / ISOLATION_VERIFIED
-# alone are *not* readiness: nothing about the installed dependencies was observed.
-READY_TIERS = {"RUNTIME_READY"}
+# Tiers that constitute a verified *interpreter* runtime (interpreter, Python version,
+# dependencies, declared imports). GPU capability is a separate question: a model that
+# declares CUDA is interpreter-ready but not launch-ready until its GPU is probed.
+READY_TIERS = {"RUNTIME_READY", TIER_GPU_PENDING, TIER_GPU_READY}
+# Tiers that permit *launching* a real evaluation. A CUDA-declaring model must reach
+# GPU_RUNTIME_READY first; CPU-only models never leave RUNTIME_READY.
+LAUNCH_READY_TIERS = {"RUNTIME_READY", TIER_GPU_READY}
 
 
 def _environment_contract_digest(model: dict[str, Any]) -> str:
@@ -1177,6 +1291,158 @@ def require_verified_model_interpreter(model: dict[str, Any], *, require_cuda: b
     )
 
 
+def require_launch_ready(model: dict[str, Any], *, require_cuda: bool = True) -> str:
+    """Return the interpreter for a model that is ready to *launch*, GPU included.
+
+    Building an evaluation *plan* only needs a verified interpreter; starting a real
+    evaluation of a CUDA-declaring model additionally needs a verified GPU capability.
+    This is the gate the evaluator and the pipeline use before launching.
+    """
+    interpreter = require_verified_model_interpreter(model, require_cuda=require_cuda)
+    if not _requires_gpu(model):
+        return interpreter
+    report = verify_environment(model, probe=True, require_cuda=require_cuda)
+    if report.tier in LAUNCH_READY_TIERS:
+        return interpreter
+    raise GpuVerificationError(
+        f"GPU runtime not verified [{report.tier}/{report.status}]: {report.reason or ''}".strip())
+
+
+# The authorized GPU probe. It runs a tiny, bounded computation; it never loads a model,
+# never downloads anything, and never allocates substantial device memory.
+GPU_PROBE_CODE = r"""
+import json, sys
+out = {
+    "probe": "gpu_capability",
+    "cuda_available": False,
+    "device_count": 0,
+    "torch_version": None,
+    "torch_cuda_version": None,
+    "device_name": None,
+    "compute_capability": None,
+    "allocated_tensor": False,
+    "computed": False,
+    "error": None,
+}
+try:
+    import torch
+except Exception as error:
+    out["error"] = f"torch unavailable: {error}"
+    print(json.dumps(out))
+    sys.exit(0)
+out["torch_version"] = getattr(torch, "__version__", None)
+out["torch_cuda_version"] = getattr(torch.version, "cuda", None)
+out["cuda_available"] = bool(torch.cuda.is_available())
+out["device_count"] = int(torch.cuda.device_count()) if out["cuda_available"] else 0
+if out["cuda_available"]:
+    try:
+        index = 0
+        out["device_name"] = torch.cuda.get_device_name(index)
+        major, minor = torch.cuda.get_device_capability(index)
+        out["compute_capability"] = f"{major}.{minor}"
+        # A one-element tensor is enough to prove the device is usable.
+        device = torch.device("cuda", index)
+        tensor = torch.ones(1, device=device)
+        out["allocated_tensor"] = True
+        doubled = (tensor * 2).sum().item()
+        out["computed"] = doubled == 2.0
+    except Exception as error:
+        out["error"] = f"cuda device unusable: {error}"
+print(json.dumps(out))
+"""
+
+# A test-only probe override. It is consulted ONLY when the named integration-test opt-in
+# environment variable is set, so production execution can never select it.
+GPU_PROBE_OVERRIDE_ENV = "WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE"
+_GPU_PROBE_OVERRIDE: Any = None
+
+
+def set_gpu_probe_for_tests(probe: Any) -> None:
+    """Install a deterministic GPU probe for integration tests only."""
+    global _GPU_PROBE_OVERRIDE
+    _GPU_PROBE_OVERRIDE = probe
+
+
+def clear_gpu_probe_for_tests() -> None:
+    global _GPU_PROBE_OVERRIDE
+    _GPU_PROBE_OVERRIDE = None
+
+
+def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool = False,
+                       require_cuda: bool = True, force: bool = False) -> dict[str, Any]:
+    """Run the authorized GPU capability probe for a model and record the result.
+
+    This is deliberately *not* part of inspection: it executes code from the selected
+    interpreter, which is untrusted. It must therefore be explicitly authorized, it
+    receives no secrets, and it never updates completion proofs or claims reproduction.
+
+    Returns a structured capability result. Raises ``GpuVerificationError`` when the probe
+    cannot establish that PyTorch can really use a CUDA device.
+    """
+    if not authorized:
+        raise GpuVerificationError(
+            "GPU verification requires explicit authorization (pass authorized=True)")
+
+    if not force:
+        # A capability already verified for exactly this environment is a recorded
+        # observation, not a guess: an evaluation launch consumes the record instead of
+        # re-running the probe. `force=True` re-probes (the operator's explicit re-check).
+        existing = _cached_gpu_capability(model, verify_environment(model, probe=True))
+        if existing is not None and existing.get("capability_verified"):
+            return existing
+
+    report = verify_environment(model, probe=True)
+    if report.tier in (TIER_UNCONFIGURED, "INTERPRETER_MISSING", TIER_GPU_DEFERRED) or not report.interpreter:
+        raise GpuVerificationError(
+            f"cannot probe GPU before the interpreter is usable [{report.tier}/{report.status}]")
+    if report.tier == TIER_BLOCKED or report.status in _BLOCKED_STATUSES:
+        raise GpuVerificationError(
+            f"cannot probe GPU: the environment is blocked [{report.status}] {report.reason or ''}".strip())
+    if report.tier not in READY_TIERS:
+        raise GpuVerificationError(
+            f"cannot probe GPU: the environment is not verified [{report.tier}/{report.status}]")
+
+    interpreter = Path(report.interpreter)
+    override = None
+    if os.environ.get(GPU_PROBE_OVERRIDE_ENV) == "1":
+        override = _GPU_PROBE_OVERRIDE
+    if override is not None:
+        result = dict(override(model, report))
+    else:
+        # `-I -S`: the probe must not import environment-provided site code either.
+        ok, out, err = _run_probe(interpreter, GPU_PROBE_CODE, isolated=True, timeout=300)
+        if not ok or not out:
+            raise GpuVerificationError(f"GPU probe did not run: {err or 'no output'}")
+        try:
+            result = json.loads(out.splitlines()[-1])
+        except (ValueError, IndexError) as error:
+            raise GpuVerificationError(f"GPU probe returned unreadable output: {error}") from error
+
+    capability = bool(result.get("cuda_available") and result.get("allocated_tensor")
+                      and result.get("computed"))
+    payload = {
+        **result,
+        "capability_verified": capability,
+        "interpreter": str(interpreter),
+        "interpreter_fingerprint": report.environment_fingerprint,
+        "dependency_fingerprint": report.contract_digest,
+        "probe_source": "override" if override is not None else "interpreter",
+        "probed_at": datetime.now(UTC).isoformat(),
+    }
+    if require_cuda and not capability:
+        reason = result.get("error") or "CUDA unavailable or unusable"
+        record_gpu_capability(model, payload, config)
+        raise GpuVerificationError(f"GPU capability not verified: {reason}")
+
+    record_gpu_capability(model, payload, config)
+    forget_environment()
+    return payload
+
+
+class GpuVerificationError(RuntimeError):
+    """Raised when a GPU capability requirement cannot be verified."""
+
+
 def environment_status(model: dict[str, Any], probe: bool = False) -> dict[str, Any]:
     """Backward-compatible dict view of the environment report."""
     report = verify_environment(model, probe=probe)
@@ -1184,7 +1450,10 @@ def environment_status(model: dict[str, Any], probe: bool = False) -> dict[str, 
     # Legacy consumers read `status`/`interpreter`/`variable`/`tier`.
     data.setdefault("isolation_reason", data.get("reason"))
     data["verified"] = report.tier in READY_TIERS
+    data["launch_ready"] = report.tier in LAUNCH_READY_TIERS
     data["gpu_deferred"] = report.tier == TIER_GPU_DEFERRED
+    data["gpu_pending"] = report.tier == TIER_GPU_PENDING
+    data["gpu_verified"] = report.tier == TIER_GPU_READY
     return data
 
 
@@ -1194,7 +1463,7 @@ def environment_blockers(model: dict[str, Any]) -> list[str]:
         return []
     probe_environment = globals().get("verify_environment", verify_environment)
     report = probe_environment(model, probe=True)
-    if report.tier in READY_TIERS:
+    if report.tier in LAUNCH_READY_TIERS:
         return []
     variable = report.variable or "model-specific Python"
     detail = f" ({report.reason})" if report.reason else ""
@@ -1453,6 +1722,20 @@ def source_provenance(model: dict[str, Any], source: Path) -> dict[str, Any]:
         "verified": clean_and_pinned,
         "provenance_digest": digest,
     }
+
+
+def runtime_plan_blockers(model: dict[str, Any], checkpoint: dict[str, Any], config: Any,
+                           protocol: str | None = None,
+                           dataset_root: Path | None = None) -> list[str]:
+    """Prerequisites for *building* an evaluation plan, GPU excluded.
+
+    Constructing a command is a planning act: it needs a verified interpreter, a resolved
+    checkpoint, a pinned source, and the declared layout. Launching that command on a
+    GPU-dependent model additionally needs a verified GPU capability, which is what
+    ``runtime_blockers`` (the launch gate) enforces.
+    """
+    return [blocker for blocker in runtime_blockers(model, checkpoint, config, protocol, dataset_root)
+            if not blocker.startswith("execution environment not verified:")]
 
 
 def runtime_blockers(model: dict[str, Any], checkpoint: dict[str, Any], config: Any,

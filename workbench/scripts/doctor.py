@@ -146,6 +146,7 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
     elif getattr(adapter, "script", None) and not (source / adapter.script).is_file():
         runtime_blockers.append(f"official evaluator missing: {source / adapter.script}")
     env_state = environment_status(model, probe=True)
+    # Launch-level blockers: a CUDA-declaring model stays blocked until its GPU is verified.
     env_blockers = environment_blockers(model)
     runtime_blockers.extend(env_blockers)
     environment_check = record(f"environment:{model_id}", "OK" if not env_blockers else "BLOCKED",
