@@ -31,14 +31,17 @@ def test_doctor_selected_model_json_contract(monkeypatch: pytest.MonkeyPatch, ca
     }
     selected: dict[str, object] = {}
 
-    def collect(*, model_id: str | None = None, all_models: bool = False, scope: str = "workbench", serving: bool = False) -> dict:
-        selected.update(model_id=model_id, all_models=all_models, scope=scope, serving=serving)
+    def collect(*, model_id: str | None = None, all_models: bool = False, scope: str = "workbench",
+                serving: bool = False, allow_gpu_pending: bool = False) -> dict:
+        selected.update(model_id=model_id, all_models=all_models, scope=scope, serving=serving,
+                        allow_gpu_pending=allow_gpu_pending)
         return report
 
     monkeypatch.setattr(doctor, "collect", collect)
 
     assert doctor.main(["--model", "encoder", "--json"]) == 2
-    assert selected == {"model_id": "encoder", "all_models": False, "scope": "workbench", "serving": False}
+    assert selected == {"model_id": "encoder", "all_models": False, "scope": "workbench",
+                        "serving": False, "allow_gpu_pending": False}
     assert json.loads(capsys.readouterr().out) == report
 
 

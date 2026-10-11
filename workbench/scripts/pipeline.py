@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shlex
+import stat
 import subprocess
 import sys
 from dataclasses import dataclass, replace
@@ -58,6 +60,56 @@ def dependency_key(stage: Stage) -> str:
 
 _CONTENT_HASH_LIMIT = 64 * 1024 * 1024
 _CONTENT_HASH_SUFFIXES = (".json", ".yaml", ".yml", ".txt", ".pkl", ".pt", ".pth", ".cfg", ".toml")
+# The stage input list names files and top-level directories. Model assets and marker files
+# live inside those directories, so a change going *into* the tree was invisible to the
+# resolver: the directory's own mtime does not move. The walk is fixed-budget rather than
+# unbounded, and the budget is part of the fingerprint, so a truncated listing is a distinct,
+# reproducible value instead of a silent partial comparison.
+_WALK_LIMIT = 200_000
+_WALK_SIZE_LIMIT = 2 * 1024 * 1024 * 1024
+
+
+def _walk_digest(root: Path) -> tuple[str, int, int, bool]:
+    """Digest of *root*'s inventory: relative path, kind and content for every entry.
+
+    Returns ``(digest, files, bytes, truncated_by_budget)``. Raises ``OSError`` if the tree
+    cannot be walked, which the caller treats as weak evidence rather than a verified input.
+
+    File *content* is hashed, not only names and sizes: a rewritten weight file generally keeps
+    its size, and a digest that ignores content would call that tree unchanged.
+    """
+    from workbench.backend.registry import sha256_file
+
+    inventory = hashlib.sha256()
+    files = 0
+    total = 0
+    truncated = False
+    for current, directories, names in os.walk(root, followlinks=False):
+        directories.sort()
+        for name in sorted(names):
+            path = Path(current) / name
+            try:
+                details = path.lstat()
+            except OSError:
+                continue
+            kind = "d" if stat.S_ISDIR(details.st_mode) else "l" if stat.S_ISLNK(details.st_mode) else "f"
+            relative = path.relative_to(root)
+            entry = f"{kind}\0{relative}\0{details.st_size}\0"
+            if kind == "f" and details.st_size <= _CONTENT_HASH_LIMIT:
+                try:
+                    entry += sha256_file(path)
+                except Exception:
+                    entry += "UNREADABLE"
+            inventory.update(entry.encode("utf-8"))
+            files += 1
+            total += details.st_size
+            if files >= _WALK_LIMIT or total >= _WALK_SIZE_LIMIT:
+                # ponytail: bounded inventory. A change past the budget is invisible, so the
+                # budget length is folded into the digest and the caller records the fact.
+                truncated = True
+                inventory.update(f"TRUNCATED:{files}:{total}".encode("utf-8"))
+                return inventory.hexdigest(), files, total, truncated
+    return inventory.hexdigest(), files, total, truncated
 
 
 def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | None = None,
@@ -95,7 +147,20 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                 category = "METADATA_ONLY"
                 item.update(size_bytes=details.st_size, mtime_ns=details.st_mtime_ns)
                 hasher.update(f"{category}:{details.st_size}:{details.st_mtime_ns}".encode("utf-8"))
-            elif stat.S_ISREG(details.st_mode) or stat.S_ISDIR(details.st_mode):
+            elif stat.S_ISDIR(details.st_mode):
+                # A directory input names a whole tree; its contents are the input, so the
+                # inventory is hashed rather than the directory's own metadata.
+                try:
+                    walk_digest, walk_files, walk_bytes, walk_truncated = _walk_digest(path)
+                except OSError as error:
+                    category = "HASH_FAILED"
+                    item["error"] = f"{type(error).__name__}: {error}"
+                else:
+                    category = "TREE_VERIFIED"
+                    item.update(tree_digest=walk_digest, tree_files=walk_files,
+                                tree_bytes=walk_bytes, tree_truncated=walk_truncated)
+                    hasher.update(f"TREE:{walk_digest}:{walk_truncated}".encode("utf-8"))
+            elif stat.S_ISREG(details.st_mode):
                 try:
                     content_digest = sha256_file(path)
                 except Exception as error:
@@ -112,7 +177,7 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
         item["category"] = category
         inputs.append(item)
         hasher.update(f":{category}\0".encode("utf-8"))
-        if category != "CONTENT_VERIFIED":
+        if category not in {"CONTENT_VERIFIED", "TREE_VERIFIED"}:
             weak = True
 
     source_info = None
@@ -598,6 +663,12 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
     else:
         auxiliary = Stage("auxiliary-assets", skipped="pass --download-auxiliary-assets")
     final_doctor_args: list[str] = ["--scope", "real", "--dataset-root", str(dataset_root(args, config))]
+    if getattr(args, "verify_gpu", False):
+        # This preflight runs immediately before the evaluation stage that carries
+        # --verify-gpu, so a GPU whose authorized probe has not run yet must not stop the
+        # workflow here: the probe is the next thing to happen, and a failed probe still
+        # stops it, because the evaluation stage consumes a real capability.
+        final_doctor_args.append("--allow-gpu-pending")
     if args.model:
         final_doctor_args.extend(["--model", args.model])
         strict_runtime = run_stage("runtime-preflight", command("doctor.py", *final_doctor_args), model_id=args.model, dependencies=("sync", "checkpoint")) if args.evaluate else Stage("runtime-preflight", skipped="pass --evaluate")
@@ -772,9 +843,15 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             ))
 
         preflight_deps = (sync_dep, f"checkpoint:{mid}", f"preparation:{mid}", f"environment:{mid}")
+        preflight_args = ["--scope", "real", "--dataset-root", str(dataset_root(args, config)),
+                          "--model", mid]
+        if getattr(args, "verify_gpu", False):
+            # The evaluation stage that follows carries --verify-gpu, so a GPU whose
+            # authorized probe has not run yet is the state this workflow is about to change.
+            preflight_args.append("--allow-gpu-pending")
         stages.append(run_stage(
             "runtime-preflight",
-            command("doctor.py", "--scope", "real", "--dataset-root", str(dataset_root(args, config)), "--model", mid),
+            command("doctor.py", *preflight_args),
             model_id=mid,
             dependencies=preflight_deps,
         ))

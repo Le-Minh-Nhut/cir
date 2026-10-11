@@ -205,6 +205,7 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     Returns ``(return_code, log_directory, environment)``. The environment carries
     the run identity the evaluator is expected to stamp onto any completion proof.
     """
+    directory = log_dir(config, plan, datetime.now(UTC), run_id)
     environment = {
         "orchestrator_python": sys.version,
         "orchestrator_executable": sys.executable,
@@ -213,26 +214,46 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
         "evaluation_run_id": run_id,
         "evaluation_output_root": str(output_root),
     }
-    directory = log_dir(config, plan, datetime.now(UTC), run_id)
     child_env = dict(os.environ)
     child_env.update({key: str(value) for key, value in environment.items()})
     # The official evaluator is untrusted model code: it must never receive the ledger's
-    # authentication key, or it could forge ledger entries and defeat the out-of-band
-    # witness entirely.
+    # authentication key or any WORKBENCH_SECRET_* value, or it could forge ledger entries and
+    # read operator material. The GPU probe has always been filtered this way; the evaluator
+    # path, which runs longer and writes more, was not.
     child_env.pop("WORKBENCH_LEDGER_KEY", None)
+    for key in [name for name in child_env if name.startswith("WORKBENCH_SECRET_")]:
+        child_env.pop(key, None)
 
-    # Start the process first: if it cannot be started at all, nothing is written and
-    # no orphaned log directory or burnt run id is left behind.
+    # Private temp space per run, created before the process so the child's TMPDIR is fixed
+    # at launch. The host temp dir is world-readable, so anything the evaluator writes there
+    # outlives the run and is exposed to every local user; a run-scoped 0700 directory keeps
+    # leaked material inside a tree the operator already controls. If the directory already
+    # exists this run is a collision and is refused below, exactly as before.
+    temp_root = directory / "tmp"
+    temp_root.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        temp_root.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    os.chmod(temp_root, 0o700)
+    child_env["TMPDIR"] = str(temp_root)
+    environment["TMPDIR"] = str(temp_root)
+
+    # Start the process first: if it cannot be started at all, no orphaned log directory or
+    # burnt run id is left behind.
     try:
         process = subprocess.Popen(plan.command, cwd=plan.cwd, text=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=child_env)
     except OSError as error:
+        shutil.rmtree(directory, ignore_errors=True)
         raise RuntimeError(f"cannot start the official command {plan.command[0]!r}: {error}") from error
 
+    # Claim the run directory now that the process exists, so a collision is a deterministic
+    # refusal rather than a judge of whether the directory was created by this invocation.
     try:
-        directory.mkdir(parents=True, exist_ok=False)
+        directory.mkdir(parents=True, exist_ok=True)
     except BaseException:
-        # The process already started; a directory collision must not orphan it.
+        # The child already started; a directory collision must not orphan it.
         process.kill()
         process.wait()
         raise

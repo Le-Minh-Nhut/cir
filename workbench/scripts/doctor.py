@@ -121,7 +121,8 @@ def writable_path_check(name: str, path: Path) -> dict[str, Any]:
     return record(f"generated:{name}", "OK" if writable else "BLOCKED", "generated path writable" if writable else "generated path not writable", path=str(path), checked_parent=str(ancestor))
 
 
-def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[str, Any]]:
+def model_checks(model: dict[str, Any], config: WorkbenchConfig,
+                 allow_gpu_pending: bool = False) -> list[dict[str, Any]]:
     model_id = model["model_id"]
     state = source_state(model, config.WORKBENCH_THIRD_PARTY_ROOT)
     source_ok = state["state"] == "clean" and (not state["pin"] or state["head"] == state["pin"])
@@ -148,13 +149,30 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig) -> list[dict[st
     env_state = environment_status(model, probe=True)
     # Launch-level blockers: a CUDA-declaring model stays blocked until its GPU is verified.
     env_blockers = environment_blockers(model)
+    if allow_gpu_pending:
+        # This report is produced by the strict preflight that immediately *precedes* the
+        # authorized probe, so "the probe has not run yet" is the state the next stage
+        # changes. Every other blocker still blocks, and a probe that fails still stops the
+        # run: the evaluation stage consumes a real GPU_RUNTIME_READY capability.
+        env_blockers = [reason for reason in env_blockers
+                        if "GPU_VERIFICATION_PENDING" not in reason]
     runtime_blockers.extend(env_blockers)
-    environment_check = record(f"environment:{model_id}", "OK" if not env_blockers else "BLOCKED",
-                               env_state["status"], environment=model.get("environment"),
-                               interpreter=env_state["interpreter"], tier=env_state["tier"],
-                               runtime_verified=env_state["verified"], gpu_deferred=env_state["gpu_deferred"],
-                               reason=env_state["reason"],
-                               dependencies=env_state.get("packages"))
+    if allow_gpu_pending and env_state["status"] == "GPU_VERIFICATION_PENDING":
+        environment_check = record(f"environment:{model_id}", "OK",
+                                   "authorized GPU probe runs in the next stage",
+                                   environment=model.get("environment"),
+                                   interpreter=env_state["interpreter"], tier=env_state["tier"],
+                                   runtime_verified=env_state["verified"],
+                                   gpu_deferred=env_state["gpu_deferred"],
+                                   reason=env_state["reason"],
+                                   dependencies=env_state.get("packages"))
+    else:
+        environment_check = record(f"environment:{model_id}", "OK" if not env_blockers else "BLOCKED",
+                                   env_state["status"], environment=model.get("environment"),
+                                   interpreter=env_state["interpreter"], tier=env_state["tier"],
+                                   runtime_verified=env_state["verified"], gpu_deferred=env_state["gpu_deferred"],
+                                   reason=env_state["reason"],
+                                   dependencies=env_state.get("packages"))
     if model_id == "encoder" and not (source / "open_clip_pytorch_model.bin").is_file():
         runtime_blockers.append(f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}")
     if model_id == "encoder" and not (source / "datasets1.py").is_file():
@@ -252,7 +270,7 @@ def workbench_checks(config: WorkbenchConfig, serving: bool = False) -> list[dic
     return checks
 
 
-def collect(config: WorkbenchConfig | None = None, model_id: str | None = None, all_models: bool = False, scope: str = "workbench", serving: bool = False) -> dict[str, Any]:
+def collect(config: WorkbenchConfig | None = None, model_id: str | None = None, all_models: bool = False, scope: str = "workbench", serving: bool = False, allow_gpu_pending: bool = False) -> dict[str, Any]:
     config = config or resolve_config()
     scope = "real" if scope == "workbench" and (model_id or all_models) else scope
     checks = workbench_checks(config, serving)
@@ -271,7 +289,7 @@ def collect(config: WorkbenchConfig | None = None, model_id: str | None = None, 
         if not models:
             return {"overall": "BLOCKED", "checks": checks + [record("selection", "BLOCKED", f"unknown model: {model_id}")]}
     for model in models if (all_models or model_id or scope == "real") else []:
-        checks.extend(model_checks(model, config))
+        checks.extend(model_checks(model, config, allow_gpu_pending=allow_gpu_pending))
     overall = "BLOCKED" if any(item["status"] == "BLOCKED" for item in checks) else "WARNING" if any(item["status"] == "WARNING" for item in checks) else "READY"
     return {"overall": overall, "checks": checks}
 
@@ -285,12 +303,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dataset-root", type=Path, help="canonical FashionIQ root for real preflight")
     parser.add_argument("--serve", action="store_true", help="also require frontend service dependencies")
     parser.add_argument("--json", action="store_true", help="emit machine-readable report")
+    parser.add_argument("--allow-gpu-pending", action="store_true",
+                        help="tolerate a GPU whose authorized probe has not run yet: used by the "
+                             "strict preflight that immediately precedes --verify-gpu")
     args = parser.parse_args(argv)
     if args.dataset_root:
         config = replace(resolve_config(), FASHIONIQ_ROOT=args.dataset_root.resolve())
-        report = collect(config, model_id=args.model, all_models=args.all, scope=args.scope, serving=args.serve)
+        report = collect(config, model_id=args.model, all_models=args.all, scope=args.scope,
+                         serving=args.serve, allow_gpu_pending=args.allow_gpu_pending)
     else:
-        report = collect(model_id=args.model, all_models=args.all, scope=args.scope, serving=args.serve)
+        report = collect(model_id=args.model, all_models=args.all, scope=args.scope,
+                         serving=args.serve, allow_gpu_pending=args.allow_gpu_pending)
     if args.json:
         print(json.dumps(report, sort_keys=True))
     else:

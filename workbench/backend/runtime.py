@@ -873,22 +873,47 @@ def _gpu_cache_key() -> bytes:
     """The operator key for GPU capability records.
 
     Resolution order mirrors the ledger: ``WORKBENCH_LEDGER_KEY`` from the operator's secret
-    store, then ``<CIR_REPO_ROOT>/.workbench_ledger_key``. Failure returns b"", which makes
-    every persisted record unverified rather than trusted.
+    store, then ``<CIR_REPO_ROOT>/.workbench_ledger_key``. The file is created on first use,
+    exactly as the ledger creates it, so an operator who relies on the documented fallback key
+    can still persist and reuse a verified capability. Failures return b"", which makes every
+    persisted record unverified rather than trusted.
     """
+    import secrets
+    import stat as _stat
+
     configured = os.environ.get("WORKBENCH_LEDGER_KEY")
-    if configured:
+    if configured is not None:
         return configured.strip().encode("utf-8")
     try:
         from workbench.backend.operator_config import resolve_config
 
-        repo_root = Path(getattr(resolve_config(), "CIR_REPO_ROOT", Path(__file__).resolve().parents[2]))
+        repo_root = Path(getattr(resolve_config(), "CIR_REPO_ROOT",
+                                 Path(__file__).resolve().parents[2]))
         key_path = repo_root / ".workbench_ledger_key"
         if key_path.is_file():
+            if not _stat.S_ISREG(key_path.lstat().st_mode):
+                return b""
             return key_path.read_bytes().strip()
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        key = secrets.token_bytes(32)
+        fd, temporary = tempfile.mkstemp(prefix=".workbench_ledger_key.", dir=key_path.parent)
+        try:
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(key)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, key_path)
+        except BaseException:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            Path(temporary).unlink(missing_ok=True)
+            raise
+        return key
     except OSError:
         return b""
-    return b""
 
 
 def _gpu_capability_signature_valid(payload: dict[str, Any]) -> bool:
@@ -1176,31 +1201,19 @@ def _environment_contract_digest(model: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(relevant, sort_keys=True).encode("utf-8")).hexdigest()
 
 
-_MEMBER_DIGEST_MEMO: dict[tuple[str, int, int], str] = {}
-
-
 def _member_digest(path: Path) -> str:
-    """Content digest of an installed file, memoised on (path, size, mtime).
+    """Content digest of an installed file.
 
-    The memo is process-local: a rewrite that preserves both size and mtime is still caught
-    by any later verification in a fresh process, which is exactly where a stale persisted
-    capability would be consumed.
+    Hashed every time. The memo that used to live here was keyed on (path, size, mtime), which
+    is exactly the triple an in-place rewrite can preserve — os.utime restores mtime — so the
+    memo could hand back a digest for content that had changed and a stale GPU capability would
+    stay valid. Verification runs during environment checks, not per query: a full hash is
+    affordable, and a digest that can be wrong is not evidence.
     """
     from workbench.backend.registry import sha256_file
     from pathlib import Path as _Path
 
-    try:
-        stat_result = path.stat()
-    except OSError:
-        return sha256_file(_Path(path))
-    key = (str(path), stat_result.st_size, stat_result.st_mtime_ns)
-    cached = _MEMBER_DIGEST_MEMO.get(key)
-    if cached is None:
-        cached = sha256_file(_Path(path))
-        if len(_MEMBER_DIGEST_MEMO) > 200_000:
-            _MEMBER_DIGEST_MEMO.clear()
-        _MEMBER_DIGEST_MEMO[key] = cached
-    return cached
+    return sha256_file(_Path(path))
 
 
 def _interpreter_fingerprint(interpreter: str, contract_digest: str,
