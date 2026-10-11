@@ -233,9 +233,20 @@ workbench/artifacts/evidence_ledger.jsonl   # git-ignored, append-only
 
 Every invocation appends one entry — run id, model, checkpoint, protocol, return code,
 execution status, report digest, evidence digest, run directory — chained to the previous
-entry's digest. A validating run must find its own entry, and the entry must agree with the
-proof. An edited, removed, or reordered entry breaks the chain and the ledger is rejected
-wholesale. The ledger sits at the artifact root rather than inside a run directory, so
+entry's digest **and authenticated with an out-of-band key**. A validating run must find its
+own entry, the entry must agree with the proof, and the whole chain must verify; an edited,
+removed, reordered, or duplicated entry rejects the ledger wholesale.
+
+A plain hash chain stored next to the artifacts authenticates nothing, because whoever can
+rewrite a run can recompute it. The entries are therefore HMAC-signed with a key kept
+outside the artifact tree:
+
+- `WORKBENCH_LEDGER_KEY` from the operator's secret store (recommended), or
+- `<CIR_REPO_ROOT>/.workbench_ledger_key`, created mode `0600` on first use.
+
+Set `WORKBENCH_LEDGER_KEY` before a reproduction run and keep it out of the repository: the
+ledger is only as trustworthy as that key. `clean_generated.py --logs` removes the ledger
+along with the logs, since it is generated run metadata. The ledger sits at the artifact root rather than inside a run directory, so
 rewriting a run consistently requires rewriting the entire chain; it is the operator's own
 record, and `clean_generated.py --logs` removes it along with the logs.
 
@@ -249,6 +260,9 @@ member changing does.
 
 `--all-runnable` evaluation is planned as *skipped*: with no single model there is no run
 identity to bind a proof to, so run one model at a time (`--model MODEL_ID`).
+
+An absent ledger is never a silent pass: a proof must name the ledger entry that authorised
+it, so deleting the ledger, the entry, or the claim fails validation.
 
 A stage may reach COMPLETE only when **all** hold:
 

@@ -40,6 +40,8 @@ def cleanup_targets(root: Path, mock_results: bool, database: bool, logs: bool) 
         targets.append(artifacts / "workbench.duckdb")
     if logs:
         targets.append(artifacts / "logs")
+        # The evidence ledger is generated run metadata, like the logs it corroborates.
+        targets.append(artifacts / "evidence_ledger.jsonl")
     return targets
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import secrets
 import shlex
 import shutil
 import subprocess
@@ -129,34 +130,16 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
 
     if model["model_id"] == "limn" and checkpoint["checkpoint_id"] == "base_iter0_all_categories":
         artifact_type = "category_specific_whole_models"
-        checkpoint_root = checkpoint_file.parent
-        checkpoint_bundle = {}
-        for cat in ("dress", "shirt", "toptee"):
-            fn = f"0_{cat}_best_model.pt"
-            fp = checkpoint_root / fn
-            c_sha = sha256_file(fp) if fp.is_file() else None
-            checkpoint_bundle[cat] = {
-                "checkpoint_id": f"base_iter0_{cat}",
-                "filename": fn,
-                "path": str(fp),
-                "sha256": c_sha,
-            }
-        bundle_manifest_digest = hashlib.sha256(
-            json.dumps(checkpoint_bundle, sort_keys=True).encode("utf-8")
-        ).hexdigest()
+        names = [f"0_{cat}_best_model.pt" for cat in ("dress", "shirt", "toptee")]
+        checkpoint_bundle = build_artifact_manifest(checkpoint_file.parent, names)
+        directory_members = list(checkpoint_bundle.values())
+        bundle_manifest_digest = manifest_digest(checkpoint_bundle)
     elif artifact_type in ("run_directory", "bundle_directory"):
-        req_files = checkpoint.get("required_files") or [m["filename"] for m in checkpoint.get("bundle_members", [])]
-        directory_members = [
-            {
-                "filename": name,
-                "path": str(checkpoint_file / name),
-                "sha256": sha256_file(checkpoint_file / name) if (checkpoint_file / name).is_file() else None,
-            }
-            for name in req_files
-        ]
-        bundle_manifest_digest = hashlib.sha256(
-            json.dumps(directory_members, sort_keys=True).encode("utf-8")
-        ).hexdigest()
+        req_files = (checkpoint.get("required_files")
+                     or [m["filename"] for m in checkpoint.get("bundle_members", [])])
+        manifest = build_artifact_manifest(checkpoint_file, req_files)
+        directory_members = list(manifest.values())
+        bundle_manifest_digest = manifest_digest(manifest)
 
     checkpoint_digest = None
     if checkpoint_file.is_file():
@@ -374,6 +357,100 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
             return None
         return None
 
+    def _members_live() -> bool:
+        """Compare the live artifact members with the manifest recorded by the *run*.
+
+        Two independent checks, so neither a rewritten proof nor an absent manifest can
+        disable change detection:
+
+        * the live member files must reproduce the manifest digest the proof records;
+        * that digest must equal the one the run's own report records.
+
+        The report is corroborated by the out-of-band ledger, so rewriting the proof alone
+        cannot re-bless changed checkpoint members.
+        """
+        multi_member = (plan.artifact_type in ("run_directory", "bundle_directory",
+                                               "category_specific_whole_models")
+                        or bool(plan.checkpoint_bundle)
+                        or bool(plan.directory_members))
+        if not multi_member:
+            return True
+
+        members: dict[str, dict[str, Any]] = {}
+        for name, member in (plan.checkpoint_bundle or {}).items():
+            members[name] = member
+        for member in plan.directory_members or []:
+            name = str(member.get("filename") or "")
+            if name:
+                members.setdefault(name, member)
+
+        recorded_manifest = payload.get("bundle_manifest_digest")
+        if not recorded_manifest:
+            # An absent manifest may not disable change detection: the per-member digests
+            # the run recorded are the fallback, and they must actually be present.
+            recorded_by_name = {str(m.get("filename")): m.get("sha256")
+                                for m in (plan.directory_members or []) if m.get("filename")}
+            checked = False
+            for name, member in members.items():
+                path = Path(str(member.get("path") or ""))
+                if not path.is_file():
+                    raise EvaluationOutputError(f"checkpoint member {name} is missing: {path}")
+                expected = member.get("sha256") or recorded_by_name.get(str(name))
+                if expected:
+                    checked = True
+                    if _sha(path) != expected:
+                        raise EvaluationOutputError(
+                            f"checkpoint member {name} no longer matches its recorded digest")
+            if not checked:
+                raise EvaluationOutputError(
+                    "no recorded member digest is available for this multi-member checkpoint")
+            recorded_report = _recorded_report_manifest(proof_path)
+            if recorded_report:
+                raise EvaluationOutputError(
+                    "declared output does not record the artifact manifest its run produced")
+            return True
+
+        if not members:
+            raise EvaluationOutputError(
+                "declared output records an artifact manifest but no members could be resolved")
+        live: dict[str, dict[str, Any]] = {}
+        for name, member in members.items():
+            path = Path(str(member.get("path") or ""))
+            if not path.is_file():
+                raise EvaluationOutputError(f"checkpoint member {name} is missing: {path}")
+            live[name] = {
+                "filename": member.get("filename") or path.name,
+                "path": str(path),
+                "sha256": _sha(path),
+            }
+        if manifest_digest(live) != recorded_manifest:
+            raise EvaluationOutputError(
+                "checkpoint members no longer match the recorded artifact manifest")
+        recorded_report = _recorded_report_manifest(proof_path)
+        if recorded_report is not None and recorded_report != recorded_manifest:
+            raise EvaluationOutputError(
+                "declared output artifact manifest disagrees with its run report")
+        return True
+
+    def _hash_checkpoint() -> str | None:
+        checkpoint = plan.checkpoint
+        # A placeholder path (unresolved registry entry) is not a checkpoint.
+        if str(checkpoint) in (".", "") or not checkpoint.exists():
+            return None
+        members = [m["filename"] for m in (plan.directory_members or [])]
+        try:
+            if checkpoint.is_dir() and members:
+                # Directory/bundle artifacts are identified by their declared members:
+                # an undeclared extra file in a run directory must not change identity.
+                return _sha(checkpoint, required_files=members)
+            if checkpoint.is_file():
+                return _sha(checkpoint)
+            if checkpoint.is_dir():
+                return _sha(checkpoint)
+        except (OSError, ValueError):
+            return None
+        return None
+
     def _bundle_members_live() -> bool:
         """Every bundle member must still match the manifest digest the proof recorded.
 
@@ -427,7 +504,7 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
         return True
 
     # A bundle is one experiment: every recorded member is verified, not just the anchor.
-    _bundle_members_live()
+    _members_live()
     live_digest = _hash_checkpoint() or plan.checkpoint_sha256
     if live_digest is not None and str(declared_checkpoint) != live_digest:
         raise EvaluationOutputError(
@@ -492,13 +569,19 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
         # Cross-check the out-of-band ledger: an actor who rewrites every artifact inside
         # the run directory still has to rewrite the whole chained ledger.
         claimed_entry = payload.get("ledger_entry_digest")
-        ledger = read_evidence_ledger(config) if config is not None else None
-        if claimed_entry and ledger is None:
-            # The proof names the ledger entry that authorised it, so a missing or broken
-            # ledger is a failure, never a silent pass.
-            raise EvaluationOutputError(
-                "the evidence ledger is missing or its chain is broken, so the recorded "
-                "invocation cannot be corroborated")
+        if config is not None:
+            # Every completion is ledger-backed: the claim is required, not optional, so a
+            # rewritten proof cannot switch corroboration off by dropping the field.
+            if not claimed_entry:
+                raise EvaluationOutputError(
+                    "declared output does not name its evidence-ledger entry")
+            ledger = read_evidence_ledger(config)
+            if ledger is None:
+                raise EvaluationOutputError(
+                    "the evidence ledger is missing or its chain is broken, so the recorded "
+                    "invocation cannot be corroborated")
+        else:
+            ledger = None
         if ledger is not None:
             matching = [item for item in ledger if item.get("run_id") == payload.get("run_id")]
             if not matching:
@@ -629,21 +712,104 @@ def expected_run_identity(config: WorkbenchConfig, plan: EvaluationPlan, run_id:
     }
 
 
-def evidence_ledger_path(config: WorkbenchConfig) -> Path:
-    """Append-only record of every invocation, kept *outside* the run directory.
+def _plan_members(plan: "EvaluationPlan") -> dict[str, dict[str, Any]] | None:
+    """The plan's multi-member manifest, with each member's digest taken from disk.
 
-    The run's own artifacts (report, proof, command.json) all live under one directory and
-    are all derived from the run, so an actor who rewrites them consistently cannot be
-    caught from within. This ledger lives at the artifact root, is append-only, and chains
-    each entry to the previous one, so an edited, removed, or reordered entry is detectable
-    and a rewritten run must also rewrite the whole chain.
+    A plan may carry recorded members whose digests are placeholders (the pipeline builds
+    them before the run). The manifest that identity is computed over must describe the
+    files as they are, so the digests are read here rather than copied from the plan.
     """
+    names: list[str] = []
+    root: Path | None = None
+    for name in plan.directory_members or []:
+        filename = str(name.get("filename") or "")
+        if filename:
+            names.append(filename)
+            root = root or Path(str(name.get("path") or "")).parent
+    for name in (plan.checkpoint_bundle or {}):
+        names.append(str(name))
+    if not names:
+        return None
+    if root is None:
+        first = next(iter((plan.checkpoint_bundle or {}).values()), None)
+        root = Path(str(first.get("path") or "")).parent if first else None
+    if root is None:
+        return None
+    return build_artifact_manifest(root, sorted(set(names)))
+
+
+def build_artifact_manifest(checkpoint_path_value: Path, members: list[str]) -> dict[str, dict[str, Any]]:
+    """The canonical member manifest for a multi-file checkpoint artifact.
+
+    Bundle checkpoints (LIMN's three category models) and run/bundle directories are
+    described by the *same* shape: a filename-keyed record of filename, path, and digest.
+    One builder means the planner, the evaluator, and the validator cannot disagree about
+    what was consumed.
+    """
+    manifest: dict[str, dict[str, Any]] = {}
+    for name in members:
+        member_path = Path(checkpoint_path_value) / name
+        manifest[name] = {
+            "filename": name,
+            "path": str(member_path),
+            "sha256": sha256_file(member_path) if member_path.is_file() else None,
+        }
+    return manifest
+
+
+def manifest_digest(manifest: dict[str, dict[str, Any]] | None) -> str | None:
+    if not manifest:
+        return None
+    return hashlib.sha256(json.dumps(manifest, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def evidence_ledger_path(config: WorkbenchConfig) -> Path:
+    """Append-only record of every invocation, kept *outside* the run directory."""
     repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
     return repo_root / "workbench" / "artifacts" / "evidence_ledger.jsonl"
 
 
+def ledger_hmac_key(config: WorkbenchConfig) -> bytes:
+    """The out-of-band key that authenticates ledger entries.
+
+    A hash chain stored inside the artifact tree authenticates nothing: whoever can rewrite
+    a run's artifacts can also recompute the chain. The entries are therefore
+    authenticated with an HMAC key that is deliberately kept *outside* that tree, so
+    rewriting the ledger requires the key and not merely write access to the artifacts.
+
+    Key resolution order: ``WORKBENCH_LEDGER_KEY`` (recommended, from the operator's
+    secret store), then ``<CIR_REPO_ROOT>/.workbench_ledger_key`` created on first use.
+    """
+    configured = os.environ.get("WORKBENCH_LEDGER_KEY")
+    if configured:
+        return configured.encode("utf-8")
+    repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
+    key_path = Path(repo_root) / ".workbench_ledger_key"
+    try:
+        if key_path.is_file():
+            return key_path.read_bytes().strip()
+        key = secrets.token_bytes(32)
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        key_path.write_bytes(key)
+        try:
+            os.chmod(key_path, 0o600)
+        except OSError:
+            pass
+        return key
+    except OSError:
+        return b""
+
+
+def _ledger_authentication(config: WorkbenchConfig, record_without_mac: dict) -> str:
+    import hmac as _hmac
+
+    key = ledger_hmac_key(config)
+    canonical = json.dumps(record_without_mac, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return _hmac.new(key, canonical, hashlib.sha256).hexdigest()
+
+
 def append_evidence_entry(config: WorkbenchConfig, entry: dict) -> dict:
-    """Append one invocation record, chained to the previous entry's digest."""
+    """Append one invocation record, chained and authenticated."""
     path = evidence_ledger_path(config)
     path.parent.mkdir(parents=True, exist_ok=True)
     previous = ""
@@ -654,41 +820,44 @@ def append_evidence_entry(config: WorkbenchConfig, entry: dict) -> dict:
     except (OSError, json.JSONDecodeError):
         previous = ""
     record = {**entry, "previous_digest": previous}
-    record["entry_digest"] = hashlib.sha256(
-        json.dumps(record, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
+    record["entry_digest"] = _ledger_authentication(config, record)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, sort_keys=True) + "\n")
     return record
 
 
 def read_evidence_ledger(config: WorkbenchConfig) -> list[dict] | None:
-    """Every ledger entry, or None when the chain is broken or unreadable."""
+    """Every authenticated ledger entry, or None when the chain does not verify."""
     path = evidence_ledger_path(config)
     if not path.is_file():
         return None
     try:
         lines = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return None
     entries: list[dict] = []
     previous = ""
+    seen_runs: set[str] = set()
     for line in lines:
         try:
             record = json.loads(line)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             return None
-        digest = record.pop("entry_digest", None)
-        if record.get("previous_digest") != previous or digest is None:
+        claimed = record.pop("entry_digest", None)
+        if claimed is None or record.get("previous_digest") != previous:
             return None
-        expected = hashlib.sha256(
-            json.dumps(record, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
-        if expected != digest:
+        if _ledger_authentication(config, record) != claimed:
+            # The chain could only be recomputed by someone holding the out-of-band key.
             return None
-        record["entry_digest"] = digest
+        run_id = str(record.get("run_id") or "")
+        if run_id and run_id in seen_runs:
+            # A run identity must name exactly one invocation; a repeat would let a proof
+            # bind to another plan's entry.
+            return None
+        seen_runs.add(run_id)
+        record["entry_digest"] = claimed
         entries.append(record)
-        previous = digest
+        previous = claimed
     return entries
 
 
@@ -765,7 +934,8 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "checkpoint_local_sha256": checkpoint_local_sha,
         "checkpoint_artifact_type": plan.artifact_type,
         "checkpoint_bundle": plan.checkpoint_bundle,
-        "bundle_manifest_digest": plan.bundle_manifest_digest,
+        "bundle_manifest_digest": (plan.bundle_manifest_digest
+                                   or manifest_digest(_plan_members(plan))),
         "directory_members": plan.directory_members,
         "model_interpreter": plan.command[0] if plan.command else sys.executable,
         "command_digest": hashlib.sha256(command_json.encode()).hexdigest(),
@@ -826,7 +996,8 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "checkpoint_artifact_type": plan.artifact_type,
         "checkpoint_sha256": checkpoint_local_sha,
         "checkpoint_bundle": plan.checkpoint_bundle,
-        "bundle_manifest_digest": plan.bundle_manifest_digest,
+        "bundle_manifest_digest": (plan.bundle_manifest_digest
+                                   or manifest_digest(_plan_members(plan))),
         "directory_members": plan.directory_members,
         "environment": environment,
         "model_interpreter": plan.command[0] if plan.command else sys.executable,
@@ -894,7 +1065,8 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "checkpoint_sha256": checkpoint_local_sha,
         # A bundle is one experiment: the manifest recorded here is what the validator
         # compares against the live member files, so a changed member invalidates the proof.
-        "bundle_manifest_digest": plan.bundle_manifest_digest,
+        "bundle_manifest_digest": (plan.bundle_manifest_digest
+                                   or manifest_digest(_plan_members(plan))),
         "checkpoint_bundle": plan.checkpoint_bundle,
         "directory_members": plan.directory_members,
         "return_code": code,
@@ -964,6 +1136,19 @@ def _recorded_report_checkpoint_digest(proof_path: Path) -> str | None:
         return None
 
 
+def _recorded_report_manifest(proof_path: Path) -> str | None:
+    """The artifact manifest digest recorded by the proof's own run report."""
+    try:
+        payload = json.loads(proof_path.read_text(encoding="utf-8"))
+        report = Path(str(payload.get("report") or ""))
+        if not report.is_file():
+            return None
+        value = json.loads(report.read_text(encoding="utf-8")).get("bundle_manifest_digest")
+        return str(value) if value else None
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return None
+
+
 def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: str | None,
                          config: WorkbenchConfig, checkpoint_file: Path | None = None):
     """Build the pipeline-side validator for one evaluation stage.
@@ -972,10 +1157,13 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
     proof?* A leftover report or an old latest pointer is never accepted.
     """
     def _resolve_bundle() -> dict[str, dict[str, Any]] | None:
-        """Recorded bundle members for a bundled checkpoint (LIMN's three categories).
+        """Recorded bundle members for a bundled checkpoint, in the canonical shape.
 
         ``checkpoint_id`` may be a *bundle* id, which is not itself a checkpoint variant:
-        the bundle's required member checkpoints are the ones the evaluator consumes.
+        the bundle's required member checkpoints are the ones the evaluator consumes. The
+        shape must be exactly what ``build_artifact_manifest`` produces — filename-keyed
+        with filename/path/digest — or the live manifest cannot reproduce the recorded
+        digest and an unchanged bundle would be rejected.
         """
         try:
             from workbench.backend.registry import checkpoint_by_id, checkpoint_path, model_by_id
@@ -985,17 +1173,22 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
                            if b["bundle_id"] == checkpoint_id), None)
             if bundle is None:
                 return None
-            members: dict[str, dict[str, Any]] = {}
+            names: list[str] = []
             for member_id in bundle["required_checkpoint_ids"]:
                 variant = checkpoint_by_id(model, member_id)
-                path = checkpoint_path(model_id, variant, config.WORKBENCH_CHECKPOINT_ROOT)
-                members[member_id] = {
-                    "path": str(path),
-                    "sha256": sha256_file(path) if path.is_file() else None,
-                }
-            return members
+                names.append(str(checkpoint_path(model_id, variant,
+                                                 config.WORKBENCH_CHECKPOINT_ROOT).name))
+            root = config.WORKBENCH_CHECKPOINT_ROOT / model_id
+            return build_artifact_manifest(root, names)
         except Exception:
             return None
+
+    def _resolve_directory_manifest(path: Path, members: list[dict[str, Any]] | None
+                                    ) -> dict[str, dict[str, Any]] | None:
+        names = [str(m.get("filename")) for m in (members or []) if m.get("filename")]
+        if not names:
+            return None
+        return build_artifact_manifest(path, names)
 
     def _resolve_checkpoint() -> tuple[Path, list[dict[str, Any]] | None]:
         """The checkpoint this (model, checkpoint id) pair evaluates, with its members.
@@ -1048,10 +1241,15 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
         reports = reports_root(config)
         proof_path = reports / f"{model_id}_{checkpoint_id}_{run_id}_completion.json"
         resolved_checkpoint, resolved_members = _resolve_checkpoint()
+        resolved_bundle = _resolve_bundle()
+        resolved_directory = _resolve_directory_manifest(resolved_checkpoint, resolved_members)
+        if resolved_directory is not None and resolved_bundle is None:
+            resolved_bundle = resolved_directory
         plan = EvaluationPlan(model_id, checkpoint_id, protocol, Path("."), Path("."),
                               resolved_checkpoint, Path("."), [], pin, None,
                               directory_members=resolved_members,
-                              checkpoint_bundle=_resolve_bundle())
+                              checkpoint_bundle=resolved_bundle,
+                              bundle_manifest_digest=manifest_digest(resolved_bundle))
         if not (resolved_checkpoint.is_file() or resolved_checkpoint.is_dir()):
             # No checkpoint file to re-hash (e.g. a non-file artifact): bind the proof to
             # the digest recorded by the run itself, which is run-scoped and unforgeable

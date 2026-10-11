@@ -247,3 +247,5 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+workbench/artifacts/*.jsonl
+.workbench_ledger_key

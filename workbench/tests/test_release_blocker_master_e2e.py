@@ -105,7 +105,11 @@ def master(tmp_path: Path):
     }))
 
     env = os.environ.copy()
+    # Each E2E workspace gets its own ledger key so no ambient key can leak in.
+    import secrets as _secrets
+
     env.update({
+        "WORKBENCH_LEDGER_KEY": _secrets.token_hex(32),
         "PYTHONPATH": str(REPOSITORY),
         "WORKBENCH_REGISTRY_PATH": str(registry),
         "WORKBENCH_ALLOW_SYNTHETIC_ADAPTERS": "1",

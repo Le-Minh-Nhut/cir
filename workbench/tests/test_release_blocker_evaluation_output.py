@@ -27,6 +27,20 @@ PIN = "a" * 40
 CKPT = "c" * 40
 
 
+@pytest.fixture(autouse=True)
+def _fresh_ledger_key(tmp_path: Path, monkeypatch):
+    """Give every test its own ledger key.
+
+    The ledger is authenticated with an out-of-band key, so tests that tamper with a ledger
+    must not share a key with tests that trust one: a fresh key per test keeps the suite
+    order-independent.
+    """
+    import secrets as _secrets
+
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", _secrets.token_hex(32))
+    yield
+
+
 @pytest.fixture
 def env(tmp_path: Path):
     """A minimal but real evaluation environment: real subprocess, real logs."""
@@ -226,7 +240,7 @@ def test_out08_mismatched_checkpoint_digest_and_report_digest_rejected(env):
     payload2 = json.loads(proof2.read_text())
     payload2["checkpoint_sha256"] = "e" * 64
     proof2.write_text(json.dumps(payload2))
-    with pytest.raises(em.EvaluationOutputError, match="checkpoint digest"):
+    with pytest.raises(em.EvaluationOutputError, match="(checkpoint digest|artifact manifest|checkpoint member)"):
         em.validate_run_manifest(
             plan(env, reporting_script(env["tmp"])),
             proof2,
@@ -518,7 +532,7 @@ def test_directory_checkpoint_digest_is_part_of_the_completion_contract(env):
                              require_checksum=True, require_environment_identity=True)
 
     member.write_bytes(b"state-v2-tampered")
-    with pytest.raises(em.EvaluationOutputError, match="checkpoint digest"):
+    with pytest.raises(em.EvaluationOutputError, match="(checkpoint digest|artifact manifest|checkpoint member)"):
         em.validate_run_manifest(directory_plan, proof, run_id=run_id,
                                  output_root=em.artifact_root(env["config"]), config=env["config"],
                                  require_checksum=True, require_environment_identity=True)
@@ -673,7 +687,7 @@ def test_an_undeclared_file_does_not_change_a_directory_checkpoint_identity(env)
 
     # ...but a declared member changing must invalidate it.
     member.write_bytes(b"state-v2-tampered")
-    with pytest.raises(em.EvaluationOutputError, match="checkpoint digest"):
+    with pytest.raises(em.EvaluationOutputError, match="(checkpoint digest|artifact manifest|checkpoint member)"):
         em.validate_run_manifest(directory_plan, proof, run_id=run_id,
                                  output_root=em.artifact_root(env["config"]),
                                  config=env["config"], require_checksum=True,
@@ -756,7 +770,8 @@ def test_forged_evidence_is_distinguished_from_a_re_minted_proof(env):
     run_dir = Path(original["run_directory"])
     (run_dir / "stdout.log").write_text("fabricated output\n")
     ok, reason, _ = evidence({"run_id": run_id})
-    assert ok is False and "evidence" in reason
+    assert ok is False, "a changed log must not validate"
+    assert ("evidence" in (reason or "")) or ("ledger" in (reason or "")), reason
 
 
 # --------------------------------- proof must agree with its report (round 13, defect 1/2)
@@ -825,10 +840,11 @@ def test_a_changed_bundle_member_invalidates_the_proof(env):
         member.write_bytes(f"weights-{category}".encode())
         members[category] = member
 
-    bundle = {category: {"checkpoint_id": f"base_iter0_{category}", "filename": member.name,
-                         "path": str(member), "sha256": sha256_file(member)}
-              for category, member in members.items()}
-    manifest = hashlib.sha256(json.dumps(bundle, sort_keys=True).encode()).hexdigest()
+    # The canonical manifest shape: filename-keyed, filename/path/digest per member.
+    bundle = {member.name: {"filename": member.name, "path": str(member),
+                            "sha256": sha256_file(member)}
+              for member in members.values()}
+    manifest = em.manifest_digest(bundle)
     plan = em.EvaluationPlan(MODEL, "bundle_run", "fashioniq_original_split",
                              env["tmp"] / "FashionIQ", env["source"], members["dress"],
                              env["source"], reporting_script(env["tmp"]), PIN, PIN,
@@ -842,7 +858,7 @@ def test_a_changed_bundle_member_invalidates_the_proof(env):
                              require_checksum=True, require_environment_identity=True)
 
     members["toptee"].write_bytes(b"tampered weights")
-    with pytest.raises(em.EvaluationOutputError, match="bundle member"):
+    with pytest.raises(em.EvaluationOutputError, match="(bundle|artifact manifest|checkpoint member)"):
         em.validate_run_manifest(plan, proof, run_id=run_id,
                                  output_root=em.artifact_root(env["config"]), config=env["config"],
                                  require_checksum=True, require_environment_identity=True)
@@ -901,10 +917,11 @@ def test_a_bundle_member_change_is_caught_by_the_recorded_manifest(env):
         member.write_bytes(f"weights-{category}".encode())
         members[category] = member
 
-    bundle = {category: {"checkpoint_id": f"base_iter0_{category}", "filename": member.name,
-                         "path": str(member), "sha256": sha256_file(member)}
-              for category, member in members.items()}
-    manifest = hashlib.sha256(json.dumps(bundle, sort_keys=True).encode()).hexdigest()
+    # The canonical manifest shape: filename-keyed, filename/path/digest per member.
+    bundle = {member.name: {"filename": member.name, "path": str(member),
+                            "sha256": sha256_file(member)}
+              for member in members.values()}
+    manifest = em.manifest_digest(bundle)
     plan = em.EvaluationPlan(MODEL, "bundle_manifest_run", "fashioniq_original_split",
                              env["tmp"] / "FashionIQ", env["source"], members["dress"],
                              env["source"], reporting_script(env["tmp"]), PIN, PIN,
@@ -918,7 +935,7 @@ def test_a_bundle_member_change_is_caught_by_the_recorded_manifest(env):
                              require_checksum=True, require_environment_identity=True)
 
     members["shirt"].write_bytes(b"tampered weights")
-    with pytest.raises(em.EvaluationOutputError, match="bundle manifest"):
+    with pytest.raises(em.EvaluationOutputError, match="(artifact manifest|bundle|checkpoint member)"):
         em.validate_run_manifest(plan, proof, run_id=run_id,
                                  output_root=em.artifact_root(env["config"]), config=env["config"],
                                  require_checksum=True, require_environment_identity=True)
@@ -1046,3 +1063,46 @@ def test_a_truncated_ledger_is_not_a_silent_pass(env):
     ok, reason, _ = evidence({"run_id": run_id})
     assert ok is False, "a broken chain must be rejected"
     assert "ledger" in (reason or "")
+
+
+def test_the_ledger_requires_its_out_of_band_key(env, monkeypatch, tmp_path):
+    """A rewritten chain must not verify: entries are authenticated with an external key."""
+    code, run_id = run(env, reporting_script(env["tmp"]))
+    assert code == 0
+    ledger_path = em.evidence_ledger_path(env["config"])
+    assert em.read_evidence_ledger(env["config"]) is not None
+
+    # Rewrite the chain with a different key (an actor without the operator's key).
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "a-different-key")
+    lines = [json.loads(line) for line in ledger_path.read_text().splitlines() if line.strip()]
+    forged = []
+    previous = ""
+    for line in lines:
+        line = dict(line)
+        line["previous_digest"] = previous
+        line.pop("entry_digest", None)
+        digest = em._ledger_authentication(env["config"], line)
+        line["entry_digest"] = digest
+        previous = digest
+        forged.append(line)
+    ledger_path.write_text("\n".join(json.dumps(item, sort_keys=True) for item in forged) + "\n")
+
+    # The operator's own key rejects the forged chain.
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "the-operators-key")
+    assert em.read_evidence_ledger(env["config"]) is None
+
+
+def test_a_duplicate_run_id_in_the_ledger_is_rejected(env):
+    """A run identity must name exactly one invocation."""
+    code, run_id = run(env, reporting_script(env["tmp"]))
+    assert code == 0
+    ledger_path = em.evidence_ledger_path(env["config"])
+    lines = [json.loads(line) for line in ledger_path.read_text().splitlines() if line.strip()]
+    # Re-append the same run's entry as a new chained record.
+    duplicate = dict(lines[-1])
+    duplicate["previous_digest"] = lines[-1]["entry_digest"]
+    duplicate.pop("entry_digest", None)
+    duplicate["entry_digest"] = em._ledger_authentication(env["config"], duplicate)
+    ledger_path.write_text(
+        "\n".join(json.dumps(item, sort_keys=True) for item in lines + [duplicate]) + "\n")
+    assert em.read_evidence_ledger(env["config"]) is None, "a duplicated run id must not verify"
