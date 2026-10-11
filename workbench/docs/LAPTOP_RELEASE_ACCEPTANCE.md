@@ -182,3 +182,22 @@ observed with the filesystem exhausted), so it cannot be mistaken for a passing 
 | Committed bytecode counted as dirty; real edits inside `__pycache__` ignored | bytecode matched by concrete path/suffix only | `test_committed_bytecode_is_not_dirty`, `test_tracked_edit_inside_pycache_dir_detected` |
 | `RUNTIME_READY` without an executed dependency probe | readiness requires a real probe | `test_runtime_ready_requires_dependency_probe` |
 | Run report written with plain `write_text` | exclusive `open("x")` | `test_mut10` |
+
+### Third adversarial round (GateA / GateB / FinalGate)
+
+Each defect below was reproduced by running the code, and each contradicted a guarantee the
+runbook already made. Every row has a regression test.
+
+| Defect | Fix | Test |
+|---|---|---|
+| A hand-built `torch` package (plain module, or `_C` as `.py`, or a text file named `_C.so`, or a copy of `/bin/true`) could mint an operator-signed GPU capability | the orchestrator loads the reported core itself in a child process and requires CPython's `PyInit__C`; the module must live inside the verified environment and is hashed | `test_a_stub_module_cannot_supply_gpu_evidence`, `test_a_python_file_named_under_torch_cannot_claim_a_compiled_core`, `test_a_fake_shared_library_cannot_claim_a_compiled_core`, `test_an_unrelated_binary_named_C_so_cannot_corroborate`, `test_a_torch_module_outside_the_environment_cannot_corroborate` |
+| A distribution with more members than the fingerprint cap kept a stale capability after an in-place member edit | every member is hashed in full | `test_cuda10_changed_dependency_fingerprint_invalidates_verification` |
+| The member-digest memo was keyed on `(path, size, mtime)`, so a rewrite that restored mtime returned the old digest | digests are computed every time | `test_a_same_mtime_rewrite_cannot_keep_an_old_member_digest` |
+| A cancellation landing between `Popen` and process registration was overwritten by `running`; the child ran to completion | creation, registration and the status transition share one critical section | `test_cancellation_cannot_slip_between_creation_and_registration` |
+| A duplicate run id started a second evaluator that then had no ledger entry | uniqueness is checked before the child starts | `test_a_duplicate_run_id_is_refused_before_the_evaluator_starts` |
+| Queued (API) evaluator children inherited `WORKBENCH_LEDGER_KEY` and `WORKBENCH_SECRET_*` | the queue filters the child environment | `test_queued_job_children_get_no_operator_secrets` |
+| CLI evaluator children received the same secrets, and wrote temporary files into the shared host temp dir | the CLI filters secrets too and gives the child a run-scoped `TMPDIR` at mode `0700` | `test_the_evaluator_child_gets_no_operator_secrets_and_a_private_temp_dir` |
+| `POST /api/jobs` queued the raw model evaluator, bypassing the invocation ledger entirely | the handler queues the audited orchestrator with an explicit run id | `test_the_api_queues_the_audited_orchestrator_not_the_raw_evaluator` |
+| The documented first-run `--verify-gpu` workflow deadlocked: the strict preflight refused the pending GPU before the stage that probes it | the preflight immediately preceding an authorized probe takes `--allow-gpu-pending`, tolerating only that one state; a failed probe still stops the run | E2E-13, `test_e2e13_gpu_declaring_model_is_blocked_while_verification_is_pending` |
+| A fallback-key-only operator could never persist a signed capability (`_gpu_cache_key` read a key file it never created, and the fix first shipped without `import tempfile`) | the key file is created on first use, as the ledger does | `test_the_fallback_key_is_created_so_a_capability_can_be_signed` |
+| A directory stage input was fingerprinted by its own metadata, so a changed checkpoint member was invisible to resume | directory inputs are inventoried with per-file content digests under a recorded budget | `test_fp13_same_size_member_rewrite_invalidates_a_directory_input` |
