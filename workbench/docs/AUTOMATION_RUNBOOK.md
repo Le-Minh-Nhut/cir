@@ -391,6 +391,19 @@ A recorded capability lives inside the writable artifact tree, so it is **HMAC-s
 the operator key** and an unsigned or mis-signed record is ignored entirely. Forging a
 capability therefore requires the operator's key, exactly as forging a ledger entry does.
 
+A capability also requires **corroboration** that the probe ran against a real installation:
+the reported `torch` module must be a genuine installation carrying its compiled core
+extension (`torch._C`), and the orchestrator records that module's SHA-256 in the capability
+record. A single importable `torch.py` that simply answers the probe's questions therefore
+cannot produce a capability, even with write access to the environment.
+
+**Residual risk, stated plainly.** The operator authorizes the probe, and the probe runs code
+from the model's environment — which, by construction, is code the workbench did not audit.
+Corroboration raises the cost of a fake from "one stub file" to "a real PyTorch installation
+plus a compiled core", but an operator who authorizes a GPU probe on an environment an
+attacker controls is trusting that environment. This is documented rather than hidden; it is
+the same trust boundary as `WORKBENCH_*_PYTHON` itself.
+
 The queued-job path (`POST /api/jobs`) enforces the same launch gate as the CLI, and the
 queue consumer **re-checks** readiness immediately before dispatch, because a job can wait
 while the environment changes. A test-only probe override exists for

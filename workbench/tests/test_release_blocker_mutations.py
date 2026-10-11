@@ -646,9 +646,21 @@ def test_mut01_permanent_gpu_deferral_is_detected(tmp_path, monkeypatch):
              "environment": {"python_env_var": "MUT01_PYTHON", "pytorch": "1.12.1", "cuda": "12.4"}}
     config = replace(resolve_config(), CIR_REPO_ROOT=repo)
     monkeypatch.setenv(rt.GPU_PROBE_OVERRIDE_ENV, "1")
+    # The payload names an importable module in the environment so the orchestrator's
+    # corroboration (module digest + compiled core) is satisfied by a real file.
+    (env_dir / "lib").mkdir(exist_ok=True)
+    for lib in (env_dir / "lib").glob("python*"):
+        module = lib / "site-packages" / "torch.py"
+        module.write_text("__version__ = '1.12.1'\n")
+        torch_module = str(module)
+        break
+    else:
+        torch_module = str(env_dir / "torch.py")
+        Path(torch_module).write_text("__version__ = '1.12.1'\n")
     rt.set_gpu_probe_for_tests(lambda model, report: {
         "cuda_available": True, "allocated_tensor": True, "computed": True,
-        "device_name": "Synthetic GPU", "compute_capability": "8.9", "error": None})
+        "device_name": "Synthetic GPU", "compute_capability": "8.9", "error": None,
+        "torch_module_file": torch_module, "torch_has_compiled_core": True})
 
     def detector() -> bool:
         rt.forget_environment()

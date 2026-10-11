@@ -77,6 +77,9 @@ SUCCESS = {
     "cuda_available": True, "device_count": 1, "torch_version": "1.12.1",
     "torch_cuda_version": "12.4", "device_name": "Synthetic GPU",
     "compute_capability": "8.9", "allocated_tensor": True, "computed": True, "error": None,
+    # Corroboration that the probe executed a real installation. The fixture installs the
+    # module it names, so the digest is computed from a file that exists.
+    "torch_has_compiled_core": True,
 }
 UNAVAILABLE = {
     "cuda_available": False, "device_count": 0, "torch_version": "1.12.1",
@@ -87,9 +90,22 @@ ALLOCATION_FAILED = {**SUCCESS, "allocated_tensor": False, "computed": False,
                      "error": "CUDA out of memory"}
 
 
-def install_probe(payload: dict, monkeypatch) -> None:
+def install_probe(payload: dict, monkeypatch, install_prefix: Path | None = None) -> None:
+    """Install a deterministic probe result for tests.
+
+    The payload names an importable ``torch`` inside the environment under test, so the
+    orchestrator's corroboration (module digest + compiled core) is satisfied by a real file.
+    """
     monkeypatch.setenv(runtime.GPU_PROBE_OVERRIDE_ENV, "1")
-    runtime.set_gpu_probe_for_tests(lambda model, report: dict(payload))
+    resolved = dict(payload)
+    if resolved.get("torch_has_compiled_core") and install_prefix is not None:
+        site_packages = next((lib / "site-packages"
+                              for lib in (install_prefix / "lib").glob("python*")), None)
+        if site_packages is not None:
+            module = site_packages / "torch.py"
+            module.write_text("__version__ = '1.12.1'\n")
+            resolved["torch_module_file"] = str(module)
+    runtime.set_gpu_probe_for_tests(lambda model, report: dict(resolved))
 
 
 # ------------------------------------------------------------------------------ CUDA-01
@@ -112,7 +128,7 @@ def test_cuda02_gpu_model_cannot_launch_without_verification(workspace):
 # ------------------------------------------------------------------------------ CUDA-03
 
 def test_cuda03_authorized_successful_probe_verifies_capability(workspace, monkeypatch):
-    install_probe(SUCCESS, monkeypatch)
+    install_probe(SUCCESS, monkeypatch, workspace['interpreter'].parent.parent)
     result = runtime.verify_gpu_runtime(workspace["model"], workspace["config"], authorized=True)
 
     assert result["capability_verified"] is True
@@ -141,7 +157,7 @@ def test_cuda13_verified_result_has_a_production_path_to_launch(workspace, monke
     """The transition PENDING -> GPU_RUNTIME_READY is reachable through production code."""
     assert runtime.verify_environment(workspace["model"], probe=True).tier == "GPU_VERIFICATION_PENDING"
 
-    install_probe(SUCCESS, monkeypatch)
+    install_probe(SUCCESS, monkeypatch, workspace['interpreter'].parent.parent)
     runtime.verify_gpu_runtime(workspace["model"], workspace["config"], authorized=True)
 
     assert runtime.require_launch_ready(workspace["model"]) == str(workspace["interpreter"])
@@ -186,7 +202,7 @@ def test_cuda08_device_allocation_failure_blocks(workspace, monkeypatch):
 def test_cuda09_changed_interpreter_invalidates_cached_gpu_verification(workspace, monkeypatch):
     import venv as _venv
 
-    install_probe(SUCCESS, monkeypatch)
+    install_probe(SUCCESS, monkeypatch, workspace['interpreter'].parent.parent)
     runtime.verify_gpu_runtime(workspace["model"], workspace["config"], authorized=True)
     assert runtime.verify_environment(workspace["model"], probe=True).tier == "GPU_RUNTIME_READY"
 
@@ -201,7 +217,7 @@ def test_cuda09_changed_interpreter_invalidates_cached_gpu_verification(workspac
 
 
 def test_cuda10_changed_dependency_fingerprint_invalidates_verification(workspace, monkeypatch):
-    install_probe(SUCCESS, monkeypatch)
+    install_probe(SUCCESS, monkeypatch, workspace['interpreter'].parent.parent)
     runtime.verify_gpu_runtime(workspace["model"], workspace["config"], authorized=True)
     assert runtime.verify_environment(workspace["model"], probe=True).tier == "GPU_RUNTIME_READY"
 
@@ -487,7 +503,7 @@ def test_a_same_size_dependency_rewrite_invalidates_the_capability(workspace, mo
     module = site_packages / "torch.py"
     module.write_text("__version__ = '1.12.1'\n")
 
-    install_probe(SUCCESS, monkeypatch)
+    install_probe(SUCCESS, monkeypatch, workspace['interpreter'].parent.parent)
     runtime.verify_gpu_runtime(workspace["model"], workspace["config"], authorized=True)
     assert runtime.verify_environment(workspace["model"], probe=True).tier == "GPU_RUNTIME_READY"
 
@@ -499,3 +515,45 @@ def test_a_same_size_dependency_rewrite_invalidates_the_capability(workspace, mo
     rechecked = runtime.verify_environment(workspace["model"], probe=True)
     assert rechecked.tier != "GPU_RUNTIME_READY", \
         "a same-size package rewrite must invalidate the recorded capability"
+
+
+def test_a_stub_module_cannot_supply_gpu_evidence(workspace, monkeypatch):
+    """A single importable `torch.py` is not evidence of a real PyTorch installation.
+
+    The probe reports whatever the imported module says, so a capability additionally
+    requires corroboration: the module must be a real installation with its compiled core
+    extension, and the orchestrator records the module's digest. A stub answers the probe's
+    questions but cannot corroborate itself.
+    """
+    monkeypatch.setenv(runtime.GPU_PROBE_OVERRIDE_ENV, "1")
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "stub-probe-key")
+
+    for lib in (workspace["interpreter"].parent.parent / "lib").glob("python*"):
+        site_packages = lib / "site-packages"
+        stub = site_packages / "torch.py"
+        stub.write_text(
+            "__version__ = '1.12.1'\n"
+            "class _Cuda:\n"
+            "    def is_available(self): return True\n"
+            "    def device_count(self): return 1\n"
+            "    def get_device_name(self, i): return 'fake GPU'\n"
+            "    def get_device_capability(self, i): return (8, 9)\n"
+            "cuda = _Cuda()\n"
+            "class _T:\n"
+            "    def __init__(self, *a, **k): pass\n"
+            "    def __mul__(self, o): return self\n"
+            "    def sum(self): return self\n"
+            "    def item(self): return 2.0\n"
+            "def ones(*a, **k): return _T()\n")
+        break
+
+    # The stub claims everything the probe asks; it has no compiled core extension.
+    runtime.set_gpu_probe_for_tests(lambda model, report: {
+        "cuda_available": True, "device_count": 1, "torch_version": "1.12.1",
+        "torch_cuda_version": "12.4", "device_name": "fake GPU",
+        "compute_capability": "8.9", "allocated_tensor": True, "computed": True,
+        "torch_module_file": str(stub), "torch_has_compiled_core": False, "error": None})
+
+    with pytest.raises(runtime.GpuVerificationError, match="compiled core"):
+        runtime.verify_gpu_runtime(workspace["model"], workspace["config"], authorized=True)
+    assert runtime.verify_environment(workspace["model"], probe=True).tier == "GPU_VERIFICATION_PENDING"

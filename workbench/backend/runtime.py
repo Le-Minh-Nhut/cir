@@ -1432,6 +1432,9 @@ out = {
     "compute_capability": None,
     "allocated_tensor": False,
     "computed": False,
+    "torch_module_file": None,
+    "torch_has_compiled_core": False,
+    "torch_file_digest": None,
     "error": None,
 }
 try:
@@ -1441,6 +1444,15 @@ except Exception as error:
     print(json.dumps(out))
     sys.exit(0)
 out["torch_version"] = getattr(torch, "__version__", None)
+# Corroboration that this is a real installation rather than a single stub module: a real
+# PyTorch ships a compiled core extension, and its module lives inside the environment.
+try:
+    import torch as _torch
+    out["torch_module_file"] = getattr(_torch, "__file__", None)
+    out["torch_has_compiled_core"] = bool(
+        __import__("importlib.util", fromlist=["find_spec"]).find_spec("torch._C") is not None)
+except Exception:
+    pass
 out["torch_cuda_version"] = getattr(getattr(torch, "version", None), "cuda", None)
 cuda_module = getattr(torch, "cuda", None)
 out["cuda_available"] = bool(getattr(cuda_module, "is_available", lambda: False)())
@@ -1532,8 +1544,21 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
         except (ValueError, IndexError) as error:
             raise GpuVerificationError(f"GPU probe returned unreadable output: {error}") from error
 
+    torch_file = result.get("torch_module_file")
+    torch_digest = None
+    if isinstance(torch_file, str) and torch_file:
+        try:
+            from workbench.backend.registry import sha256_file
+
+            torch_digest = sha256_file(Path(torch_file))
+        except (OSError, ValueError):
+            torch_digest = None
+    result["torch_file_digest"] = torch_digest
+    # A capability requires a real torch installation inside the verified environment, not a
+    # single importable stub that answers the probe's questions.
     capability = bool(result.get("cuda_available") and result.get("allocated_tensor")
-                      and result.get("computed"))
+                      and result.get("computed") and result.get("torch_has_compiled_core")
+                      and torch_digest)
     payload = {
         **result,
         "capability_verified": capability,
@@ -1544,7 +1569,11 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
         "probed_at": datetime.now(UTC).isoformat(),
     }
     if require_cuda and not capability:
-        reason = result.get("error") or "CUDA unavailable or unusable"
+        if result.get("cuda_available") and not result.get("torch_has_compiled_core"):
+            reason = ("the imported torch has no compiled core extension, so the CUDA report "
+                      "is not corroborated by a real PyTorch installation")
+        else:
+            reason = result.get("error") or "CUDA unavailable or unusable"
         record_gpu_capability(model, payload, config)
         raise GpuVerificationError(f"GPU capability not verified: {reason}")
 
