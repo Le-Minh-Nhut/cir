@@ -9,8 +9,12 @@ environment or GPU evaluation was run for this document.
 | Protocol ID | Candidate universe | Reference | Literature label |
 |---|---|---|---|
 | `fashioniq_original_split` | complete `image_splits/split.{category}.val.json`, in file order | eligible (may outrank the target) | `original` |
-| `fashioniq_full_gallery_ref_excluded` | the same complete split file, in file order | removed from that query's ranking | `original` |
-| `fashioniq_val_split` | first-seen ordered union of each validation annotation's reference then target | removed from that query's ranking | `val` |
+| `fashioniq_full_gallery_ref_excluded` | the same complete split file, in file order | excluded from that query's ranking | `original` |
+| `fashioniq_val_split` | first-seen ordered union of each validation annotation's reference then target | excluded from that query's ranking | `val` |
+
+"Excluded" is the cohort property, which is what a comparison depends on. The pinned evaluators
+implement it by masking the reference score to `-10e10` and sorting; the workbench removes the
+column. Both make the reference unretrievable, by different means — see the note below.
 
 These are three different cohorts. A target's rank — and therefore Recall@K — changes when the
 reference is removed, and changes again when the gallery shrinks to the pair union. No
@@ -25,17 +29,23 @@ valid, and the workbench refuses them.
   families share a candidate universe — the exception is applied per query, not by shrinking the
   gallery — while `fashioniq_val` builds the pair union.
 - `recall_at_k` is reference-eligible. `recall_at_k_reference_excluded` **removes** the reference
-  column from the ranking, which is what the upstream evaluators do; masking it to a very
-  negative score is equivalent for the top-k hit test, but removal is the literal behaviour, so
-  the workbench does not rely on the equivalence.
+  column from the ranking. The pinned evaluators instead *mask* the reference score to `-10e10`
+  and then sort (`sims[i, targets.index(source)] = -10e10` before `argsort`). The two agree on the
+  top-k hit test whenever every other score clears the mask, but they are different operations,
+  and the mask relies on that bound; the workbench removes the column explicitly and its tests pin
+  the cohort's behaviour rather than asserting numeric equivalence with the mask.
 - `evaluate_fashioniq_recall(..., reference_ids=None | Sequence[str])` requires references exactly
   when exclusion is active. A protocol mix-up therefore cannot be silently evaluated as a plain
   one.
 - The denominator is always the query count. `macro_average_fashioniq` takes the equal-weight
   mean of category recalls, and the reported mean is the arithmetic mean of macro R@10 and R@50.
 
-Before this pass the third branch did not exist: `fashioniq_full_gallery_ref_excluded` — the
-native protocol of five registered models — raised `Unsupported FashionIQ protocol`.
+Two gaps existed before this pass. `fashioniq_full_gallery_ref_excluded` — the native protocol of
+five registered models — had no branch at all and raised `Unsupported FashionIQ protocol`. And
+the two older families were reachable only through the shorter internal spellings
+(`fashioniq_original`, `fashioniq_val`), so a caller holding a **registry** protocol id could not
+build either of them. Both spellings are now accepted for each family, and a test asserts that
+every protocol id the registry declares is buildable.
 
 ## Per-model evidence
 

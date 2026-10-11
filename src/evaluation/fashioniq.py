@@ -40,11 +40,15 @@ def recall_at_k_reference_excluded(
 ) -> float:
     """Recall@k with each query's own reference removed from the ranked gallery.
 
-    This is the iLearn full-gallery protocol: the candidate universe is the whole validation
-    split in its declared order, and a query cannot retrieve its own reference. Removing the
-    reference from the ranking and masking it to a very negative score are equivalent for the
-    top-k hit test, but removing it is what the upstream evaluator does, so the workbench does
-    the same rather than relying on the equivalence.
+    This is the iLearn full-gallery protocol. The candidate universe is the whole validation
+    split in its declared order, and a query cannot retrieve its own reference.
+
+    The pinned evaluators *mask* the reference score to a very negative value and then sort
+    (`sims[i, targets.index(source)] = -10e10` before `argsort`). Removing the column and masking
+    it are equivalent for the top-k hit test whenever all other scores exceed the mask, but the
+    two are not the same operation, and the mask depends on that bound holding. This helper
+    removes the column explicitly, which is what the *cohort* means, and the tests pin the
+    behaviour rather than relying on the equivalence.
     """
     assert scores.ndim == 2
     query_count, gallery_count = scores.shape
@@ -118,7 +122,15 @@ def build_val_gallery(annotations: Sequence[FashionIQAnnotation]) -> list[str]:
     return gallery_ids
 
 def build_fashioniq_gallery(protocol: str, split_root: str | Path, category: str, annotations: Sequence[FashionIQAnnotation], split: str,) -> list[str]:
-    if protocol == "fashioniq_original":
+    """Build the candidate universe for one protocol.
+
+    Both spellings are accepted: the registry's protocol ids (`fashioniq_original_split`,
+    `fashioniq_full_gallery_ref_excluded`, `fashioniq_val_split`) and the shorter internal names
+    earlier callers used (`fashioniq_original`, `fashioniq_val`). A caller holding a registry id
+    could not evaluate the two older families at all, which is a gap rather than a naming
+    preference; the two spellings of each family are the same cohort, so they share a branch.
+    """
+    if protocol in ("fashioniq_original", "fashioniq_original_split"):
         return build_original_gallery(split_root=split_root, category=category, split=split)
 
     if protocol == "fashioniq_full_gallery_ref_excluded":
@@ -128,7 +140,7 @@ def build_fashioniq_gallery(protocol: str, split_root: str | Path, category: str
         # per-query property: the gallery itself is what the upstream evaluator scores against.
         return build_original_gallery(split_root=split_root, category=category, split=split)
 
-    if protocol == "fashioniq_val":
+    if protocol in ("fashioniq_val", "fashioniq_val_split"):
         return build_val_gallery(annotations)
 
     raise ValueError(f"Unsupported FashionIQ protocol: {protocol}")
