@@ -105,18 +105,22 @@ class SingleGpuQueue:
                         launch_guard(job)
                     except Exception as error:
                         with self._condition:
-                            job.status = "blocked"
-                            self._append(job, "stderr_tail", f"[BLOCKED] {error}\n")
+                            # A cancellation that already happened must not be overwritten.
+                            if job.status != "cancelled":
+                                job.status = "blocked"
+                                self._append(job, "stderr_tail", f"[BLOCKED] {error}\n")
                         continue
                 metadata = {**job.provenance, "job_id": job.job_id, "argv": job.command, "cwd": job.cwd, "started_at": job.started_at, "finished_at": None, "return_code": None}
                 (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
                 with (directory / "stdout.log").open("w", encoding="utf-8") as stdout, (directory / "stderr.log").open("w", encoding="utf-8") as stderr:
                     with self._condition:
                         # The guard above can be slow, so a cancellation that arrived while it
-                        # ran must still win: nothing is launched for a cancelled job.
+                        # ran must still win. The status check and the process creation happen
+                        # under the same lock, so a concurrent cancel cannot slip between them.
                         if job.status == "cancelled":
                             continue
-                    process = subprocess.Popen(job.command, cwd=job.cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                        process = subprocess.Popen(job.command, cwd=job.cwd, text=True,
+                                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     with self._condition:
                         job.status = "running"
                         self._processes[job.job_id] = process

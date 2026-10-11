@@ -373,10 +373,12 @@ Authorized probe on the GPU host:
 python workbench/scripts/evaluate_models.py --model MODEL_ID --verify-gpu
 ```
 
-It runs `runtime.GPU_PROBE_CODE` under the model's interpreter with `-I -S` (no environment
-code executes), records device count, name, compute capability, a one-element tensor
-allocation and a trivial computation into `workbench/artifacts/gpu_capability.json`, and
-prints the structured result. A recorded capability is keyed to the interpreter and
+It runs `runtime.GPU_PROBE_CODE` under the model's interpreter with `-I -S` (so no
+environment site code executes) and hands it the environment's distribution directories
+explicitly, because `-S` also stops `site` from applying the environment's own configuration.
+The probe records device count, name, compute capability, a one-element tensor allocation and
+a trivial computation into `workbench/artifacts/gpu_capability.json`, and prints the
+structured result. A recorded capability is keyed to the interpreter and
 dependency fingerprints, so a changed environment invalidates it.
 
 The probe executes Python from the model's environment, which is **untrusted**: it is

@@ -44,7 +44,8 @@ def _job_launch_guard(job: object) -> None:
         return
     model = next((item for item in load_registry()["models"] if item["model_id"] == model_id), None)
     if model is None:
-        return
+        # A model that is no longer registered cannot be shown to be ready: refuse it.
+        raise RuntimeError(f"model is not registered: {model_id}")
     runtime.require_launch_ready(model)
 
 

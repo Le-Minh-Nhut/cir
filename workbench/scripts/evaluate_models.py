@@ -1020,6 +1020,16 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
 
     # The evaluator is launched under this invocation's identity; the identity is
     # exported so a repeating evaluator can stamp it onto its own output.
+    # The ledger key and chain must be usable *before* the evaluator starts: an invocation
+    # that cannot be audited must not be launched at all, otherwise a started run would leave
+    # no audit entry.
+    try:
+        ledger_hmac_key(config)
+        if evidence_ledger_path(config).exists() and read_evidence_ledger(config) is None:
+            raise LedgerCorruptError("evidence ledger does not verify")
+    except LedgerKeyError as error:
+        raise RuntimeError(f"evaluation could not be audited: {error}") from error
+
     code, directory, environment = invoke_evaluator(plan, config, run_id, root)
     command_json = json.dumps(plan.command, separators=(",", ":"))
     environment_json = json.dumps(environment, sort_keys=True, separators=(",", ":"))

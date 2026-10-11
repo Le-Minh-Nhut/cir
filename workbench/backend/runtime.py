@@ -1181,10 +1181,13 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
     """Identity of the *environment content*, not merely its path.
 
     A path alone says nothing about later package changes inside that environment,
-    so the interpreter binary, the environment marker files, and the contract are all
-    part of the fingerprint. Any change invalidates a cached verification.
+    so the interpreter binary, the environment marker files, the installed distributions'
+    own member content, and the contract are all part of the fingerprint. Any change
+    invalidates a cached verification.
     """
     import hashlib
+
+    from workbench.backend.registry import sha256_file
     hasher = hashlib.sha256()
     hasher.update(contract_digest.encode("utf-8"))
     path = Path(interpreter)
@@ -1258,6 +1261,13 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
                 continue
             for member in members:
                 member_path = site_packages / member
+                try:
+                    # Content, not size+mtime: a same-size, same-mtime rewrite (a patch, a
+                    # force-reinstall in place) must invalidate a cached capability.
+                    hasher.update(f"{member}:{sha256_file(member_path)}".encode("utf-8"))
+                    continue
+                except (OSError, ValueError):
+                    pass
                 try:
                     stat_result = member_path.stat()
                 except OSError:
@@ -1381,6 +1391,14 @@ def require_launch_ready(model: dict[str, Any], *, require_cuda: bool = True) ->
 # never downloads anything, and never allocates substantial device memory.
 GPU_PROBE_CODE = r"""
 import json, sys
+
+# The probe must import the environment's real dependencies (torch and its runtime), so the
+# directories named on the command line are added to sys.path. They are passed explicitly by
+# the orchestrator, derived from the environment's invocation path, because `-S` prevents
+# sysconfig from applying the environment's own site configuration.
+for _candidate in list(sys.argv[1:]):
+    if _candidate and _candidate not in sys.path:
+        sys.path.insert(0, _candidate)
 out = {
     "probe": "gpu_capability",
     "cuda_available": False,
@@ -1400,9 +1418,11 @@ except Exception as error:
     print(json.dumps(out))
     sys.exit(0)
 out["torch_version"] = getattr(torch, "__version__", None)
-out["torch_cuda_version"] = getattr(torch.version, "cuda", None)
-out["cuda_available"] = bool(torch.cuda.is_available())
-out["device_count"] = int(torch.cuda.device_count()) if out["cuda_available"] else 0
+out["torch_cuda_version"] = getattr(getattr(torch, "version", None), "cuda", None)
+cuda_module = getattr(torch, "cuda", None)
+out["cuda_available"] = bool(getattr(cuda_module, "is_available", lambda: False)())
+if out["cuda_available"]:
+    out["device_count"] = int(getattr(cuda_module, "device_count", lambda: 0)())
 if out["cuda_available"]:
     try:
         index = 0
@@ -1479,7 +1499,9 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
         result = dict(override(model, report))
     else:
         # `-I -S`: the probe must not import environment-provided site code either.
-        ok, out, err = _run_probe(interpreter, GPU_PROBE_CODE, isolated=True, timeout=300)
+        probe_paths = tuple(str(path) for path in _site_packages_dirs(interpreter.parent.parent))
+        ok, out, err = _run_probe(interpreter, GPU_PROBE_CODE, isolated=True, timeout=300,
+                                  args=probe_paths)
         if not ok or not out:
             raise GpuVerificationError(f"GPU probe did not run: {err or 'no output'}")
         try:

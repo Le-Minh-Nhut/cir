@@ -1215,8 +1215,11 @@ def test_key05_to_08_key_stays_out_of_evaluator_and_artifacts(env, monkeypatch):
 def test_key11_failed_key_operation_cannot_create_success_proof(env, monkeypatch):
     monkeypatch.setenv("WORKBENCH_LEDGER_KEY", " \n")
     invocation = plan(env, reporting_script(env["tmp"]))
-    with pytest.raises(em.LedgerKeyError):
+    # The key is validated *before* the evaluator starts, so the failure is an audit
+    # preflight error rather than a crash mid-run.
+    with pytest.raises((em.LedgerKeyError, RuntimeError)) as error:
         em.execute(invocation, env["config"], run_id="key-failure-run")
+    assert "audited" in str(error.value) or isinstance(error.value, em.LedgerKeyError)
     assert not em.completion_proof_path(env["config"], invocation, "key-failure-run").exists()
     assert not em.latest_pointer(env["config"], invocation, "successful").exists()
 

@@ -235,7 +235,8 @@ def test_cuda12_no_real_gpu_probe_runs_in_the_laptop_suite(workspace, monkeypatc
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
     runtime.clear_gpu_probe_for_tests()
 
-    assert "torch.cuda.is_available" in runtime.GPU_PROBE_CODE, "the real probe must exist"
+    assert "import torch" in runtime.GPU_PROBE_CODE, "the real probe must exist"
+    assert "is_available" in runtime.GPU_PROBE_CODE
 
     called: list[str] = []
     original = runtime._run_probe
@@ -453,3 +454,48 @@ def test_cancellation_wins_even_after_a_slow_launch_guard(workspace, monkeypatch
     _time.sleep(0.2)
     assert seen, "the guard never ran"
     assert dispatched == [], "a cancelled job must never be dispatched"
+
+
+def test_the_gpu_probe_can_import_the_environment_dependencies(workspace):
+    """The authorized probe must see the environment's real packages.
+
+    `-S` prevents site from applying the environment's own configuration, so the probe is
+    handed the environment's distribution directories explicitly. Without this the probe
+    could never import torch and the production GPU path would be unusable.
+    """
+    assert runtime.verify_environment(workspace["model"], probe=True).tier == "GPU_VERIFICATION_PENDING"
+
+    # The fixture already installs a stub torch module; the probe must be able to import it.
+    import json as _json
+
+    probe_paths = tuple(str(path) for path in
+                        runtime._site_packages_dirs(workspace["interpreter"].parent.parent))
+    ok, out, err = runtime._run_probe(workspace["interpreter"], runtime.GPU_PROBE_CODE,
+                                      isolated=True, timeout=120, args=probe_paths)
+    assert ok, err
+    payload = _json.loads(out.splitlines()[-1])
+    assert payload["error"] is None, payload["error"]
+    assert payload["torch_version"] == "1.12.1"
+    assert payload["cuda_available"] is False
+
+
+def test_a_same_size_dependency_rewrite_invalidates_the_capability(workspace, monkeypatch):
+    """A same-size, same-mtime package edit must not keep a stale capability valid."""
+    interpreter_dir = workspace["interpreter"].parent.parent
+    site_packages = next((lib / "site-packages" for lib in (interpreter_dir / "lib").glob("python*")), None)
+    assert site_packages is not None
+    module = site_packages / "torch.py"
+    module.write_text("__version__ = '1.12.1'\n")
+
+    install_probe(SUCCESS, monkeypatch)
+    runtime.verify_gpu_runtime(workspace["model"], workspace["config"], authorized=True)
+    assert runtime.verify_environment(workspace["model"], probe=True).tier == "GPU_RUNTIME_READY"
+
+    before = module.stat()
+    module.write_text("__version__ = '9.9.9'\n")          # same size
+    __import__("os").utime(module, ns=(before.st_atime_ns, before.st_mtime_ns))
+    runtime.forget_environment()
+
+    rechecked = runtime.verify_environment(workspace["model"], probe=True)
+    assert rechecked.tier != "GPU_RUNTIME_READY", \
+        "a same-size package rewrite must invalidate the recorded capability"
