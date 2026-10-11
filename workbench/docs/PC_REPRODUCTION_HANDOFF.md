@@ -179,3 +179,50 @@ python workbench/scripts/pipeline.py reproduce --model MODEL_ID --apply --allow-
 ```
 
 State: `workbench/artifacts/pipeline_state.json` (atomic writes).
+
+## 8. Engineering status at the Phase I/II handoff
+
+The laptop side of the chain is complete and verified. Before starting any GPU work, know which
+guarantees hold and which are still open.
+
+**What runs immediately on the PC, no checkpoint needed:**
+
+```bash
+python workbench/scripts/doctor.py --all                      # registry, sources, layouts, assets
+python workbench/scripts/prepare_dataset.py --dataset-root <FashionIQ>   # refuses a bad layout
+python workbench/scripts/evaluate_models.py --model limn --verify-gpu-only   # records a capability
+python -m pytest tests/unit workbench/tests -q                # 565 tests
+```
+
+**What the preflight now catches before a GPU run**: a missing dataset path, a missing declared
+auxiliary asset, an image whose extension is not the one the evaluator hard-codes (CSMCIR opens
+`.png` while the official release ships `.jpg`), an unverified GPU capability, a stale capability
+after an environment change, an unclean or unpinned source checkout, and a run id that already
+exists.
+
+**What still requires the GPU host**: every checkpoint download and verification, every
+environment build, every native evaluator run, and every Recall number. No score in any document
+in this repository is a reproduction.
+
+**What remains scientifically open, per model**, with the audit that records it:
+
+| Model | Open item | Where |
+|---|---|---|
+| airknow, conesep, habit, intent, hint, pair, clvc_net, tgcir, sprc, dcnet | pinned evaluator is a callable with no source-supported CLI; reaching a runnable command is itself unresolved | `audits/PHASE2_SOURCES_{A,B,C,D}.md` |
+| csmcir | LAVIS base weight and COT_ours2 provenance; torchvision version | `PHASE2_SOURCES_A.md` |
+| encoder | base OpenCLIP binary provenance; `datasets1.py` presence | `PHASE2_SOURCES_A.md` |
+| pair | which of `pair-B1.pt` / `pair-B2.pt` is the FashionIQ benchmark model; nothing in the source settles it | `PHASE2_SOURCES_A.md` |
+| clvc_net | one registered pair cannot cover three per-category whole models | `PHASE2_SOURCES_B.md` |
+| combiner_rn50x4_noft, clip4cir_rn50x4_fullft | the validator hardcodes `<checkout>/fashionIQ_dataset`, so a canonical root alone is insufficient | `PHASE2_SOURCES_B.md` |
+| sprc | native inference ignores its reference argument, so local scores would be text-only | `PHASE2_SOURCES_C.md` |
+| dcnet | author-generated GloVe PKLs must not be regenerated and called equivalent | `PHASE2_SOURCES_B.md` |
+
+**How to establish Recall parity**: for one model, run the native evaluator on the pinned source
+with the author checkpoint, capture per-category and per-query rankings, and compare against the
+paper-reported values as sanity references only. The completion proof records the command,
+environment, source commit and checkpoint digest for exactly that run; a number without a proof is
+not evidence.
+
+**Two invariants worth re-checking on the GPU host**: a queued job and a CLI run must produce the
+same ledger entry shape (queue logs live under `artifacts/queue_jobs/`, run artifacts under
+`artifacts/logs/`), and cancelling a job must leave no evaluator process behind.
