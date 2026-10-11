@@ -1516,6 +1516,52 @@ def clear_gpu_probe_for_tests() -> None:
     _GPU_PROBE_OVERRIDE = None
 
 
+_CORE_PROBE_CODE = r"""
+import ctypes, json, sys
+
+out = {"pyinit": False, "error": None}
+try:
+    library = ctypes.CDLL(sys.argv[1])
+except Exception as error:
+    out["error"] = f"{type(error).__name__}: {error}"
+else:
+    try:
+        getattr(library, sys.argv[2])
+    except AttributeError as error:
+        out["error"] = f"{type(error).__name__}: {error}"
+    else:
+        out["pyinit"] = True
+print(json.dumps(out))
+"""
+
+
+def _exports_python_init(path: Path, symbol: str = "PyInit__C") -> bool:
+    """True when *path* is a loadable extension exporting CPython's ``PyInit__C``.
+
+    The load happens in a child process running *this* interpreter, never in the orchestrator:
+    dlopen executes the library's initialisers, and the library belongs to an environment this
+    workbench does not trust. The child receives a filtered environment (no operator secrets).
+    """
+    try:
+        import subprocess
+    except Exception:  # pragma: no cover - stdlib import cannot fail
+        return False
+    child_env = {key: value for key, value in os.environ.items()
+                 if key != "WORKBENCH_LEDGER_KEY" and not key.startswith("WORKBENCH_SECRET_")}
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-I", "-c", _CORE_PROBE_CODE, str(path), symbol],
+            capture_output=True, text=True, timeout=60, env=child_env, cwd="/")
+    except (OSError, ValueError):
+        return False
+    if completed.returncode != 0:
+        return False
+    try:
+        return bool(json.loads(completed.stdout.splitlines()[-1]).get("pyinit"))
+    except (ValueError, IndexError):
+        return False
+
+
 def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool = False,
                        require_cuda: bool = True, force: bool = False) -> dict[str, Any]:
     """Run the authorized GPU capability probe for a model and record the result.
@@ -1571,7 +1617,11 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
     torch_file = result.get("torch_module_file")
     torch_digest = None
     # The module must be inside the environment whose dependencies were just verified, so a
-    # same-content module elsewhere on the machine cannot satisfy the digest.
+    # same-content module elsewhere on the machine cannot satisfy the digest. The reported
+    # `_C` origin is a claim made by model code, so it is not trusted either: the orchestrator
+    # loads the file itself and requires it to export CPython's `PyInit__C`. A copy of an
+    # unrelated binary (or a hand-written file with a plausible header) therefore cannot
+    # corroborate, whatever the probe's mutable metadata says.
     environment_root = interpreter.parent.parent
     if isinstance(torch_file, str) and torch_file:
         try:
@@ -1584,12 +1634,27 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
                 result["torch_module_outside_environment"] = str(candidate)
         except (OSError, ValueError):
             torch_digest = None
+
+    core_origin = result.get("torch_core_origin")
+    core_loadable = False
+    if isinstance(core_origin, str) and core_origin:
+        try:
+            core_candidate = Path(core_origin).resolve()
+            core_loadable = bool(
+                core_candidate.is_file()
+                and core_candidate.is_relative_to(environment_root.resolve())
+                and _exports_python_init(core_candidate, "PyInit__C"))
+        except (OSError, ValueError):
+            core_loadable = False
+        if not core_loadable:
+            result["torch_core_not_loadable"] = str(core_origin)
+    result["torch_core_loadable"] = core_loadable
     result["torch_file_digest"] = torch_digest
     # A capability requires a real torch installation inside the verified environment, not a
     # single importable stub that answers the probe's questions.
     capability = bool(result.get("cuda_available") and result.get("allocated_tensor")
                       and result.get("computed") and result.get("torch_has_compiled_core")
-                      and torch_digest)
+                      and core_loadable and torch_digest)
     payload = {
         **result,
         "capability_verified": capability,

@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from workbench.backend import runtime
+from workbench.tests._core_fixture import build_core_module
 from workbench.backend.operator_config import WorkbenchConfig
 from workbench.backend.runtime import check_environment_isolation, python_executable
 import workbench.scripts.evaluate_models as em
@@ -653,14 +654,17 @@ def test_mut01_permanent_gpu_deferral_is_detected(tmp_path, monkeypatch):
         module = lib / "site-packages" / "torch.py"
         module.write_text("__version__ = '1.12.1'\n")
         torch_module = str(module)
+        torch_core = str(build_core_module(lib / "site-packages" / "_C_fixture.so"))
         break
     else:
         torch_module = str(env_dir / "torch.py")
         Path(torch_module).write_text("__version__ = '1.12.1'\n")
+        torch_core = str(build_core_module(env_dir / "_C_fixture.so"))
     rt.set_gpu_probe_for_tests(lambda model, report: {
         "cuda_available": True, "allocated_tensor": True, "computed": True,
         "device_name": "Synthetic GPU", "compute_capability": "8.9", "error": None,
-        "torch_module_file": torch_module, "torch_has_compiled_core": True})
+        "torch_module_file": torch_module, "torch_has_compiled_core": True,
+        "torch_core_origin": torch_core})
 
     def detector() -> bool:
         rt.forget_environment()

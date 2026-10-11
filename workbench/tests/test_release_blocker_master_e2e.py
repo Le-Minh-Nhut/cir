@@ -18,6 +18,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from workbench.tests._core_fixture import build_core_module
+
 REPOSITORY = Path(__file__).resolve().parents[2]
 
 EVALUATOR_SOURCE = '''#!/usr/bin/env python3
@@ -515,6 +517,7 @@ def test_e2e14_verified_gpu_capability_permits_the_authorized_synthetic_path(mas
     launcher = master["ws"] / "verify_gpu_launcher.py"
     torch_stub = _gpu_interpreter(master).parent.parent / "torch_corroboration.py"
     torch_stub.write_text("__version__ = '1.12.1'\n")
+    torch_core = build_core_module(torch_stub.parent / "_C_fixture.so")
     launcher.write_text(
         "import runpy, sys\n"
         f"sys.path.insert(0, {str(REPOSITORY)!r})\n"
@@ -524,6 +527,7 @@ def test_e2e14_verified_gpu_capability_permits_the_authorized_synthetic_path(mas
         "    'torch_cuda_version': '12.4', 'device_name': 'Synthetic GPU',\n"
         "    'compute_capability': '8.9', 'allocated_tensor': True, 'computed': True,\n"
         f"    'torch_module_file': {str(torch_stub)!r},\n"
+        f"    'torch_core_origin': {str(torch_core)!r},\n"
         "    'torch_has_compiled_core': True, 'error': None})\n"
         f"sys.argv = [{evaluator!r}, '--model', 'synthetic_model', '--verify-gpu',\n"
         "            '--checkpoint', 'ckpt_v1']\n"

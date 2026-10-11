@@ -17,6 +17,7 @@ import pytest
 
 import workbench.backend.runtime as runtime
 from workbench.backend.operator_config import resolve_config
+from workbench.tests._core_fixture import build_core_module
 
 
 @pytest.fixture(autouse=True)
@@ -105,6 +106,9 @@ def install_probe(payload: dict, monkeypatch, install_prefix: Path | None = None
             module = site_packages / "torch.py"
             module.write_text("__version__ = '1.12.1'\n")
             resolved["torch_module_file"] = str(module)
+            # A real environment's core is a loadable extension exporting PyInit__C; the
+            # fixture compiles one so the orchestrator's child-process load succeeds.
+            resolved["torch_core_origin"] = str(build_core_module(site_packages / "_C_fixture.so"))
     runtime.set_gpu_probe_for_tests(lambda model, report: dict(resolved))
 
 
@@ -626,6 +630,41 @@ def test_a_torch_module_outside_the_environment_cannot_corroborate(workspace, tm
         "torch_module_file": str(outside), "torch_has_compiled_core": True, "error": None})
     try:
         with pytest.raises(runtime.GpuVerificationError, match="compiled|corroborated|verified"):
+            runtime.verify_gpu_runtime(workspace["model"], workspace["config"], authorized=True)
+    finally:
+        runtime.clear_gpu_probe_for_tests()
+
+
+def test_an_unrelated_binary_named_C_so_cannot_corroborate(workspace):
+    """The core must export CPython's PyInit__C, not merely be a native binary.
+
+    A copy of any ELF executable passed the header and suffix checks, and `find_spec` metadata
+    is mutable model code, so the orchestrator loads the reported file itself in a child
+    process and requires the module init symbol. `/bin/true` is a real native binary that does
+    not export it.
+    """
+    for lib in (workspace["interpreter"].parent.parent / "lib").glob("python*"):
+        package = lib / "site-packages" / "torch"
+        package.mkdir(parents=True, exist_ok=True)
+        (package / "__init__.py").write_text("__version__ = '1.12.1'\n")
+        (package / "_C.so").write_bytes(Path("/bin/true").read_bytes())
+        break
+
+    assert runtime._exports_python_init(
+        next((workspace["interpreter"].parent.parent / "lib").glob("python*")
+             ) / "site-packages" / "torch" / "_C.so") is False
+    runtime.set_gpu_probe_for_tests(lambda model, report: {
+        "cuda_available": True, "device_count": 1, "torch_version": "1.12.1",
+        "torch_cuda_version": "12.4", "device_name": "fake",
+        "compute_capability": "8.9", "allocated_tensor": True, "computed": True,
+        "torch_has_compiled_core": True,
+        "torch_core_origin": str(next((workspace["interpreter"].parent.parent / "lib")
+                                      .glob("python*"))/"site-packages"/"torch"/"_C.so"),
+        "torch_module_file": str(next((workspace["interpreter"].parent.parent / "lib")
+                                      .glob("python*"))/"site-packages"/"torch"/"__init__.py"),
+        "error": None})
+    try:
+        with pytest.raises(runtime.GpuVerificationError):
             runtime.verify_gpu_runtime(workspace["model"], workspace["config"], authorized=True)
     finally:
         runtime.clear_gpu_probe_for_tests()

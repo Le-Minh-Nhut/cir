@@ -406,7 +406,11 @@ attacker controls is trusting that environment. This is documented rather than h
 the same trust boundary as `WORKBENCH_*_PYTHON` itself. Precisely what corroboration checks:
 the imported module must live **inside** the verified environment, its `torch._C` must be a
 real native binary (the file header is inspected, so neither `_C.py` nor a text file named
-`_C.so` counts), and the module's SHA-256 is recorded.
+`_C.so` counts), the module's SHA-256 is recorded, and the orchestrator **loads the reported
+core itself** in a child process and requires it to export CPython's `PyInit__C`. Because the
+`_C` path is reported by model code, none of that metadata is trusted on its own — a copy of
+an unrelated binary, or a core whose path is mutated through `sys.modules`/`find_spec`, fails
+the load.
 
 The queued-job path (`POST /api/jobs`) enforces the same launch gate as the CLI, and the
 queue consumer **re-checks** readiness immediately before dispatch, because a job can wait
