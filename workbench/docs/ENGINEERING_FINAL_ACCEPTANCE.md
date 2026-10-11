@@ -5,7 +5,7 @@ engineering chain only; scientific source-faithfulness is covered by
 `UPSTREAM_DATA_PREPARATION_AUDIT.md`, `SOURCE_TO_WORKBENCH_PARITY_MATRIX.md` and
 `FASHIONIQ_PROTOCOL_PARITY.md`.
 
-Verification: `python -m pytest tests/unit workbench/tests -q` — **564 passing**, plus
+Verification: `python -m pytest tests/unit workbench/tests -q` — **565 passing**, plus
 `python -m compileall -q src workbench` and `git diff --check` clean.
 
 ## The chain

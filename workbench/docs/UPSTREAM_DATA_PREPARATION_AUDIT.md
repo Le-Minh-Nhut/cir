@@ -198,7 +198,7 @@ Two consequences matter scientifically:
 
 ## Tests executed
 
-`python -m pytest tests/unit workbench/tests -q` — 564 passing, including the new protocol,
+`python -m pytest tests/unit workbench/tests -q` — 565 passing, including the new protocol,
 caption and image-extension tests. No test in this pass reproduces a model score, and none claims
 to.
 
