@@ -1,0 +1,20 @@
+{
+  "probe": "gpu_capability",
+  "cuda_available": false,
+  "device_count": 0,
+  "torch_version": null,
+  "torch_cuda_version": null,
+  "device_name": null,
+  "compute_capability": null,
+  "allocated_tensor": false,
+  "computed": false,
+  "error": "torch unavailable: No module named 'torch'",
+  "capability_verified": false,
+  "interpreter": "/tmp/real-system-site-probe-7hn2fske/overlay/bin/python",
+  "interpreter_fingerprint": "b8397b43819cb54d5fb33e08d17b0736100bbcd261281be3219d23558f8dc17c",
+  "dependency_fingerprint": "684e0556f44b444cb0f19444beb325819dd3a1a4dff29e1fa4a6207899be6db0",
+  "probe_source": "interpreter",
+  "probed_at": "2026-10-11T15:04:46.113393+00:00",
+  "capability_key": "72f4c02b99e0bc9b98057075b114ae1a1a002edfe3034b948269885d9cfcde75",
+  "signature": "66d1527f4259e9f03fd1e0d90e5596b45369fa5f6428374d83b40fa3604bf547"
+}

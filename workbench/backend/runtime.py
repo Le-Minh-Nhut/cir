@@ -1176,6 +1176,33 @@ def _environment_contract_digest(model: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(relevant, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+_MEMBER_DIGEST_MEMO: dict[tuple[str, int, int], str] = {}
+
+
+def _member_digest(path: Path) -> str:
+    """Content digest of an installed file, memoised on (path, size, mtime).
+
+    The memo is process-local: a rewrite that preserves both size and mtime is still caught
+    by any later verification in a fresh process, which is exactly where a stale persisted
+    capability would be consumed.
+    """
+    from workbench.backend.registry import sha256_file
+    from pathlib import Path as _Path
+
+    try:
+        stat_result = path.stat()
+    except OSError:
+        return sha256_file(_Path(path))
+    key = (str(path), stat_result.st_size, stat_result.st_mtime_ns)
+    cached = _MEMBER_DIGEST_MEMO.get(key)
+    if cached is None:
+        cached = sha256_file(_Path(path))
+        if len(_MEMBER_DIGEST_MEMO) > 200_000:
+            _MEMBER_DIGEST_MEMO.clear()
+        _MEMBER_DIGEST_MEMO[key] = cached
+    return cached
+
+
 def _interpreter_fingerprint(interpreter: str, contract_digest: str,
                             prefix: str | None = None) -> str:
     """Identity of the *environment content*, not merely its path.
@@ -1252,19 +1279,15 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
                 continue
             hasher.update(f"RECORD:{record_text}".encode("utf-8"))
             members = [line.split(",", 1)[0] for line in record_text.splitlines() if line.strip()]
-            if len(members) > _FINGERPRINT_MEMBER_LIMIT:
-                # ponytail: very large distributions are identified by their RECORD
-                # plus metadata only; a same-size in-place edit inside one of their
-                # members can still go unnoticed. Raise the limit or hash members when
-                # a stale verification is ever observed on a real model environment.
-                hasher.update(f"TRUNCATED:{len(members)}".encode("utf-8"))
-                continue
             for member in members:
                 member_path = site_packages / member
                 try:
                     # Content, not size+mtime: a same-size, same-mtime rewrite (a patch, a
-                    # force-reinstall in place) must invalidate a cached capability.
-                    hasher.update(f"{member}:{sha256_file(member_path)}".encode("utf-8"))
+                    # force-reinstall in place) must invalidate a cached capability. Large
+                    # distributions are hashed in full here — this runs during environment
+                    # verification, not per query — with a process-local digest memo so a
+                    # repeated verification of an unchanged environment stays cheap.
+                    hasher.update(f"{member}:{_member_digest(member_path)}".encode("utf-8"))
                     continue
                 except (OSError, ValueError):
                     pass
@@ -1277,7 +1300,7 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
     return hasher.hexdigest()
 
 
-_FINGERPRINT_MEMBER_LIMIT = 2000
+
 
 
 _VERIFIED_ENVIRONMENTS: dict[str, EnvironmentReport] = {}
