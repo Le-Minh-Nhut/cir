@@ -392,10 +392,11 @@ the operator key** and an unsigned or mis-signed record is ignored entirely. For
 capability therefore requires the operator's key, exactly as forging a ledger entry does.
 
 A capability also requires **corroboration** that the probe ran against a real installation:
-the reported `torch` module must be a genuine installation carrying its compiled core
-extension (`torch._C`), and the orchestrator records that module's SHA-256 in the capability
-record. A single importable `torch.py` that simply answers the probe's questions therefore
-cannot produce a capability, even with write access to the environment.
+the reported `torch` module must be a genuine installation whose `torch._C` resolves to a
+compiled shared library (`.so`/`.pyd`/`.dylib`/`.dll`), and the orchestrator records that
+module's SHA-256 in the capability record. Neither a single importable `torch.py` nor a
+pure-Python directory named `torch` containing an `_C.py` can produce a capability, even with
+write access to the environment.
 
 **Residual risk, stated plainly.** The operator authorizes the probe, and the probe runs code
 from the model's environment — which, by construction, is code the workbench did not audit.

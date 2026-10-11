@@ -158,7 +158,10 @@ def test_runtime_preflight_cannot_continue_into_evaluation(monkeypatch, tmp_path
     monkeypatch.setattr(pipeline, "run_command", lambda argv: called.append(argv) or 2)
 
     # Fail-fast: the evaluation stage must never be launched after a failed preflight.
-    assert pipeline.run_stages(stages, dry_run=False, continue_on_error=False) == 1
+    # The workflow state is per-test: the live state path is globally locked, so using it
+    # here would make the test depend on whatever else is running.
+    assert pipeline.run_stages(stages, dry_run=False, continue_on_error=False,
+                               state_path=tmp_path / "state.json") == 1
     assert called == [["doctor.py"]]
 
     # Even WITH --continue-on-error, a failing preflight must not let its dependent
