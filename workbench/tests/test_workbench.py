@@ -45,7 +45,7 @@ def test_mock_generation_is_deterministic_and_schema_v2_valid() -> None:
 
 def test_gpu_queue_runs_one_preflighted_command_and_persists_logs(tmp_path: Path) -> None:
     queue = SingleGpuQueue()
-    directory = tmp_path / "logs" / "job"
+    directory = tmp_path / "queue_jobs" / "job"
     job = queue.enqueue("demo", "checkpoint", "fashioniq_original_split", [sys.executable, "-c", "print('official output')"], tmp_path, directory, {"checkpoint_local_sha256": "digest"})
     for _ in range(100):
         current = next(item for item in queue.list() if item["job_id"] == job["job_id"])
@@ -54,8 +54,10 @@ def test_gpu_queue_runs_one_preflighted_command_and_persists_logs(tmp_path: Path
         time.sleep(0.01)
     assert current["status"] == "completed"
     assert current["stdout_tail"] == "official output\n"
-    assert (directory / "stdout.log").read_text() == "official output\n"
-    assert (directory / "command.json").is_file()
+    # Queue-owned logs: the run's scientific artifacts live in a different tree, owned by the
+    # operator, so these files can never describe or overwrite them.
+    assert (directory / "queue_stdout.log").read_text() == "official output\n"
+    assert (directory / "queue_command.json").is_file()
 
 
 def test_schema_rejects_top_results_beyond_gallery() -> None:

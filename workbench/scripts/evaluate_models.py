@@ -189,7 +189,10 @@ def parser_for(registry: dict) -> argparse.ArgumentParser:
     parser.add_argument("--run-id", help="invocation run identity supplied by the orchestrator")
     parser.add_argument("--dry-run", action="store_true", help="print guarded command and log plan without writing")
     parser.add_argument("--verify-gpu", action="store_true",
-                        help="authorize and record GPU capability verification before evaluation")
+                        help="authorize or refresh GPU capability verification before/instead of evaluation")
+    parser.add_argument("--verify-gpu-only", action="store_true",
+                        help="verify GPU readiness only: record the capability and exit, never "
+                             "loading a checkpoint or running an evaluator")
     parser.add_argument("--continue-on-error", action="store_true")
     return parser
 
@@ -224,39 +227,37 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     for key in [name for name in child_env if name.startswith("WORKBENCH_SECRET_")]:
         child_env.pop(key, None)
 
-    # Private temp space per run, created before the process so the child's TMPDIR is fixed
-    # at launch. The host temp dir is world-readable, so anything the evaluator writes there
-    # outlives the run and is exposed to every local user; a run-scoped 0700 directory keeps
-    # leaked material inside a tree the operator already controls. If the directory already
-    # exists this run is a collision and is refused below, exactly as before.
-    temp_root = directory / "tmp"
-    temp_root.parent.mkdir(parents=True, exist_ok=True)
+    # Claim the run directory EXCLUSIVELY, before anything is launched. `exist_ok=False` is an
+    # atomic filesystem claim, so of two concurrent invocations sharing a run id exactly one
+    # wins. An existing directory belongs to an earlier invocation: it is refused as-is, never
+    # reused, never deleted, and never silently replaced by a different run id — its evidence
+    # must survive untouched.
     try:
-        temp_root.mkdir(mode=0o700)
-    except FileExistsError:
-        pass
+        directory.mkdir(parents=True, exist_ok=False)
+    except FileExistsError as error:
+        raise RuntimeError(
+            f"refusing to overwrite existing run directory for run id {run_id}: {directory}"
+        ) from error
+
+    # Private temp space per run, created before the process so the child's TMPDIR is fixed at
+    # launch. The host temp dir is world-readable, so anything the evaluator writes there
+    # outlives the run and is exposed to every local user; a run-scoped 0700 directory keeps
+    # leaked material inside a tree the operator already controls.
+    temp_root = directory / "tmp"
+    temp_root.mkdir(mode=0o700)
     os.chmod(temp_root, 0o700)
     child_env["TMPDIR"] = str(temp_root)
     environment["TMPDIR"] = str(temp_root)
 
-    # Start the process first: if it cannot be started at all, no orphaned log directory or
-    # burnt run id is left behind.
     try:
         process = subprocess.Popen(plan.command, cwd=plan.cwd, text=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=child_env)
     except OSError as error:
+        # Only this invocation's own freshly claimed directory is removed; nothing else can be
+        # in it, because the claim above refuses a directory that already existed. The run id
+        # is released with it, so no burnt identity is left behind.
         shutil.rmtree(directory, ignore_errors=True)
         raise RuntimeError(f"cannot start the official command {plan.command[0]!r}: {error}") from error
-
-    # Claim the run directory now that the process exists, so a collision is a deterministic
-    # refusal rather than a judge of whether the directory was created by this invocation.
-    try:
-        directory.mkdir(parents=True, exist_ok=True)
-    except BaseException:
-        # The child already started; a directory collision must not orphan it.
-        process.kill()
-        process.wait()
-        raise
     try:
         with (directory / "stdout.log").open("w", encoding="utf-8", newline="") as stdout, \
                 (directory / "stderr.log").open("w", encoding="utf-8", newline="") as stderr:
@@ -1419,6 +1420,35 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
     return _validate
 
 
+def verify_gpu_only(items: list[tuple[dict, dict]], config: WorkbenchConfig) -> int:
+    """Probe GPU readiness for each selected model, record the capability, and stop.
+
+    This is the documented hardware preflight. It builds no evaluation plan, so it cannot load
+    a checkpoint, start an evaluator, compute Recall, write a completion proof, or move
+    ``latest_successful``. A model that declares no CUDA requirement is reported as such rather
+    than probed.
+    """
+    failed = False
+    for model, checkpoint in items:
+        gpu = (model.get("environment") or {}).get("cuda")
+        gpu_required = gpu is not None and str(gpu).upper() != "UNKNOWN"
+        print(f"[RUN] {model['model_id']} / {checkpoint['checkpoint_id']}")
+        if not gpu_required:
+            print(f"[SKIP] {model['model_id']} declares no CUDA requirement")
+            continue
+        try:
+            capability = runtime.verify_gpu_runtime(model, config, authorized=True,
+                                                    require_cuda=True, force=True)
+        except (runtime.GpuVerificationError, RuntimeError) as error:
+            print(f"[BLOCKED] GPU verification failed: {error}", file=sys.stderr)
+            failed = True
+            continue
+        print(json.dumps(capability, sort_keys=True))
+        capability_file = runtime.gpu_capability_path(config, capability.get("capability_key"))
+        print(f"[OK] capability recorded: {capability_file}")
+    return 1 if failed else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     registry = load_registry()
     args = parser_for(registry).parse_args(argv)
@@ -1435,6 +1465,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.canonical_dataset_root:
         config = replace(config, FASHIONIQ_ROOT=args.canonical_dataset_root.resolve())
     dataset_root = args.dataset_root or config.FASHIONIQ_ROOT
+    if args.verify_gpu_only:
+        # An explicit hardware preflight: probe and record, then stop. It must not build a plan
+        # at all, because planning is what loads checkpoint and dataset contracts.
+        return verify_gpu_only(items, config)
     failed = False
     for model, checkpoint in items:
         protocol = args.protocol or model["native_protocol"]
@@ -1458,26 +1492,28 @@ def main(argv: list[str] | None = None) -> int:
             print("[OK] dry-run: official command not executed; no logs created")
             continue
         if gpu_required and args.verify_gpu:
+            # `--verify-gpu` means "establish or refresh the capability", whether or not one is
+            # already recorded. `force` makes that explicit instead of leaving it to the cache.
             try:
                 capability = runtime.verify_gpu_runtime(
-                    model, config, authorized=True, require_cuda=True)
+                    model, config, authorized=True, require_cuda=True, force=True)
                 print(json.dumps(capability, sort_keys=True))
             except (runtime.GpuVerificationError, RuntimeError) as error:
                 print(f"[BLOCKED] GPU verification failed: {error}", file=sys.stderr)
                 failed = True
                 if not args.continue_on_error: break
                 continue
-        if gpu_required and not args.verify_gpu:
-            print("[BLOCKED] GPU verification required; run with --verify-gpu on the GPU host",
-                  file=sys.stderr)
-            failed = True
-            if not args.continue_on_error: break
-            continue
+        # There is deliberately no "you forgot --verify-gpu" refusal here. A CUDA-declaring
+        # model needs a *valid recorded capability*, and --verify-gpu is how one is created or
+        # refreshed; requiring the flag on every invocation both forced a re-probe of an
+        # already-verified environment and made the API/queue contract contradictory, because
+        # the queue validates readiness and then does not pass the flag. The launch gate below
+        # is the single authority: no valid capability, no launch.
         try:
             runtime.require_launch_ready(model)
         except (runtime.GpuVerificationError, RuntimeError) as error:
-            suffix = ("; run with --verify-gpu on the GPU host" if gpu_required
-                      and not args.verify_gpu else "")
+            suffix = ("; run `--verify-gpu-only` on the GPU host to record a capability"
+                      if gpu_required else "")
             print(f"[BLOCKED] evaluation launch refused: {error}{suffix}", file=sys.stderr)
             failed = True
             if not args.continue_on_error: break

@@ -227,7 +227,10 @@ def queue_job(payload: JobInput):
             "--model", plan.model_id, "--checkpoint", plan.checkpoint_id,
             "--protocol", plan.protocol, "--dataset-root", str(plan.dataset_root),
             "--top-k", str(payload.top_k), "--run-id", run_id]
-    directory = ROOT / "artifacts" / "logs" / f"{plan.model_id}__{plan.checkpoint_id}__{run_id}"
+    # The queue owns `queue_jobs/<job_id>/`; the operator owns the run directory
+    # `logs/<model>__<checkpoint>__<run_id>/` under exactly the name the operator computes for
+    # itself. Handing the queue the operator's directory made two writers share one tree.
+    job_directory = ROOT / "artifacts" / "queue_jobs" / uuid.uuid4().hex
     provenance = {
         "model_id": plan.model_id,
         "checkpoint_id": plan.checkpoint_id,
@@ -239,7 +242,7 @@ def queue_job(payload: JobInput):
         "dataset_root": str(plan.dataset_root),
     }
     return JOBS.enqueue(plan.model_id, plan.checkpoint_id, plan.protocol, argv, ROOT,
-                        directory, provenance)
+                        job_directory, provenance)
 
 
 @app.post("/api/jobs/{job_id}/cancel")

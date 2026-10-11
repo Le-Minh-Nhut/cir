@@ -67,24 +67,35 @@ real probe proves PyTorch can use a device. Run it once per environment:
 
 ```bash
 export WORKBENCH_LIMN_PYTHON=/opt/envs/limn/bin/python
-python workbench/scripts/evaluate_models.py --model limn --verify-gpu
+python workbench/scripts/evaluate_models.py --model limn --verify-gpu-only
 ```
 
-The command prints a structured capability result and writes
-`workbench/artifacts/gpu_capability.json`. It verifies the **model environment**, not the
-host: device count, device name, compute capability, a one-element tensor allocation, and a
-trivial computation. A CUDA toolkit or a driver version is not proof that PyTorch can use
-CUDA — only this probe is. The recorded capability is keyed to the interpreter and dependency
-fingerprints, so rebuilding the environment invalidates it and it must be re-run.
+`--verify-gpu-only` is the hardware preflight: it inspects the environment, runs the
+explicitly authorized probe, records the capability, prints the structured result, and exits.
+It never loads a checkpoint, never starts an evaluator, never computes Recall, never writes a
+completion proof, and never moves `latest_successful`. It verifies the **model environment**,
+not the host: device count, device name, compute capability, a one-element tensor allocation,
+and a trivial computation. A CUDA toolkit or a driver version is not proof that PyTorch can use
+CUDA — only this probe is.
+
+Records are per-capability, under `workbench/artifacts/gpu_capabilities/<capability_key>.json`,
+so verifying a second model does not overwrite the first. The key includes the interpreter and
+dependency fingerprints, so rebuilding an environment invalidates that model's record and it
+must be re-run.
+
+`--verify-gpu` (without `-only`) means the same thing but *then continues into evaluation* — it
+establishes or refreshes the capability and proceeds if the launch gate is satisfied.
 
 Then the orchestrated evaluation proceeds:
 
 ```bash
-python workbench/scripts/pipeline.py reproduce --model limn --apply --allow-gpu-eval --verify-gpu --resume
+python workbench/scripts/pipeline.py reproduce --model limn --apply --allow-gpu-eval --resume
 ```
 
-`--verify-gpu` is what authorizes the probe inside the orchestrated path; without it a
-CUDA-declaring model is refused before any evaluator starts.
+Note there is no `--verify-gpu` here. A CUDA-declaring model launches when a valid recorded
+capability exists for this exact environment; the launch gate is the authority, and a missing
+or stale capability refuses the launch naming what to run. `--verify-gpu` remains available on
+the pipeline when the operator wants the probe re-run inside that workflow.
 
 ## 1c. PC-only verification still required
 

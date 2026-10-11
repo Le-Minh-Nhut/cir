@@ -95,7 +95,15 @@ def _walk_digest(root: Path) -> tuple[str, int, int, bool]:
             kind = "d" if stat.S_ISDIR(details.st_mode) else "l" if stat.S_ISLNK(details.st_mode) else "f"
             relative = path.relative_to(root)
             entry = f"{kind}\0{relative}\0{details.st_size}\0"
-            if kind == "f" and details.st_size <= _CONTENT_HASH_LIMIT:
+            if kind == "l":
+                # A symlink's identity is its target, not the file it points at: an unchanged
+                # target is an unchanged input, and a retargeted link must be visible even when
+                # the linked content happens to be identical.
+                try:
+                    entry += os.readlink(path)
+                except OSError:
+                    entry += "UNREADABLE_LINK"
+            elif kind == "f" and details.st_size <= _CONTENT_HASH_LIMIT:
                 try:
                     entry += sha256_file(path)
                 except Exception:
@@ -156,7 +164,11 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                     category = "HASH_FAILED"
                     item["error"] = f"{type(error).__name__}: {error}"
                 else:
-                    category = "TREE_VERIFIED"
+                    # A budget-truncated inventory is *not* content-verified: files past the
+                    # limit were never read, so the digest cannot support verified resume. The
+                    # truncation flag is recorded, and the category says plainly that this is
+                    # weak evidence.
+                    category = "TREE_TRUNCATED" if walk_truncated else "TREE_VERIFIED"
                     item.update(tree_digest=walk_digest, tree_files=walk_files,
                                 tree_bytes=walk_bytes, tree_truncated=walk_truncated)
                     hasher.update(f"TREE:{walk_digest}:{walk_truncated}".encode("utf-8"))

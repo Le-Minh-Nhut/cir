@@ -34,17 +34,34 @@ class Job:
     stderr_tail: str = ""
 
 
-def _child_environment(job: Job) -> dict[str, str]:
-    """The environment an untrusted evaluator child runs with.
+# Operator configuration the queue must pass on, because the process it starts *is* the
+# trusted operator and cannot do its job without it. Everything else that looks secret is
+# removed. The operator itself strips these from the environment it hands to the official
+# evaluator, which is the untrusted side of the boundary.
+_OPERATOR_ENV_ALLOWLIST = ("WORKBENCH_LEDGER_KEY",)
 
-    A queued job is model code: it must never receive the ledger's authentication key or any
-    ``WORKBENCH_SECRET_*`` value, exactly as the CLI evaluator path filters them, or it could
-    forge ledger entries and read operator material.
+
+def _child_environment(job: Job) -> dict[str, str]:
+    """The environment the queued process runs with.
+
+    What the queue starts is the trusted evaluation operator (``evaluate_models.py``), and the
+    operator needs the ledger key to authenticate the entry it appends. Stripping it here — as
+    an earlier revision did, while still calling the child "untrusted" — made a queued run
+    unable to audit itself at all.
+
+    The names on ``_OPERATOR_ENV_ALLOWLIST`` are therefore preserved, and every other
+    ``WORKBENCH_SECRET_*`` is dropped: those belong to operator configuration the operator does
+    not need. The operator in turn removes ``WORKBENCH_LEDGER_KEY`` and ``WORKBENCH_SECRET_*``
+    from the environment it gives the official evaluator, so model code never sees them.
+
+    This is not OS-level isolation: a same-user process can still read same-user files. It is
+    the minimum privilege each role needs, nothing more.
     """
     child_env = dict(os.environ)
-    child_env.pop("WORKBENCH_LEDGER_KEY", None)
-    for key in [name for name in child_env if name.startswith("WORKBENCH_SECRET_")]:
-        child_env.pop(key, None)
+    for name in [key for key in child_env
+                 if key.startswith("WORKBENCH_SECRET_")
+                 and key not in _OPERATOR_ENV_ALLOWLIST]:
+        child_env.pop(name, None)
     child_env["evaluation_run_id"] = job.job_id
     return child_env
 
@@ -83,7 +100,7 @@ class SingleGpuQueue:
                 if process is None:
                     raise ValueError("running process is unavailable")
                 job.status = "cancelled"
-                process.terminate()
+                self._terminate_group(process)
             else:
                 raise ValueError(f"cannot cancel {job.status} job")
             return asdict(job)
@@ -96,6 +113,46 @@ class SingleGpuQueue:
             job.status = "preparing"
             job.started_at = now()
             return job
+
+    @staticmethod
+    def _terminate_group(process: "subprocess.Popen[str]", *, grace: float = 10.0) -> None:
+        """Stop the job's whole process group: the operator and the evaluator it started.
+
+        ``start_new_session`` made the job a session and group leader, so its pid is the group
+        id. SIGTERM first so the operator can unwind, then SIGKILL for anything that ignores
+        it. Both calls are guarded against a group that already exited (ESRCH) and against a
+        recycled pid, which the group signal cannot hit because the group id exists only while
+        one of its processes does.
+        """
+        import signal
+        import time
+
+        if process.poll() is not None:
+            return
+        try:
+            group = os.getpgid(process.pid)
+        except (OSError, ProcessLookupError):
+            group = None
+        for signum, deadline in ((signal.SIGTERM, grace), (signal.SIGKILL, 2.0)):
+            if process.poll() is not None:
+                return
+            try:
+                if group is not None:
+                    os.killpg(group, signum)
+                else:
+                    process.send_signal(signum)
+            except (OSError, ProcessLookupError):
+                return
+            waited = 0.0
+            while waited < deadline and process.poll() is None:
+                time.sleep(0.05)
+                waited += 0.05
+        # Never report a cancelled job while a process it owns is still alive.
+        if process.poll() is None:
+            try:
+                process.kill()
+            except OSError:
+                pass
 
     @staticmethod
     def _append(job: Job, field: str, line: str) -> None:
@@ -126,9 +183,15 @@ class SingleGpuQueue:
                                 job.status = "blocked"
                                 self._append(job, "stderr_tail", f"[BLOCKED] {error}\n")
                         continue
+                # Queue bookkeeping lives under `queue_jobs/<job_id>/` and the run's
+                # scientific artifacts under `logs/<model>__<checkpoint>__<run_id>/`. They are
+                # different writers with different lifetimes: the queue records dispatch, the
+                # operator records evidence. Sharing one directory let the queue's
+                # `command.json` describe the run instead of the operator's own record, and the
+                # evidence digest pointed at a file the queue could rewrite.
                 metadata = {**job.provenance, "job_id": job.job_id, "argv": job.command, "cwd": job.cwd, "started_at": job.started_at, "finished_at": None, "return_code": None}
-                (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-                with (directory / "stdout.log").open("w", encoding="utf-8") as stdout, (directory / "stderr.log").open("w", encoding="utf-8") as stderr:
+                (directory / "queue_command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+                with (directory / "queue_stdout.log").open("w", encoding="utf-8") as stdout, (directory / "queue_stderr.log").open("w", encoding="utf-8") as stderr:
                     with self._condition:
                         # The guard above can be slow, so a cancellation that arrived while it
                         # ran must still win. Creation, registration (which is what cancel
@@ -137,9 +200,17 @@ class SingleGpuQueue:
                         # then be overwritten by `running`.
                         if job.status == "cancelled":
                             continue
+                        # The job command is the evaluation operator, which starts the
+                        # official evaluator as its own child. Killing only the operator's PID
+                        # would leave that evaluator — the process actually holding the GPU —
+                        # running. The job therefore leads its own process group and a
+                        # cancellation signals the group. A child that deliberately detaches
+                        # into a new session escapes this; containment of arbitrary hostile
+                        # code needs an OS sandbox, which this workbench does not claim.
                         process = subprocess.Popen(job.command, cwd=job.cwd, text=True,
                                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                                   env=_child_environment(job))
+                                                   env=_child_environment(job),
+                                                   start_new_session=True)
                         job.status = "running"
                         self._processes[job.job_id] = process
 
@@ -164,7 +235,7 @@ class SingleGpuQueue:
                         job.status = "completed" if code == 0 else "failed"
                     job.completed_at = now()
                 metadata.update(finished_at=job.completed_at, return_code=code)
-                (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+                (directory / "queue_command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
             except Exception as error:
                 with self._condition:
                     self._processes.pop(job.job_id, None)

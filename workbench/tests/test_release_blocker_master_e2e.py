@@ -486,9 +486,11 @@ def test_e2e13_gpu_declaring_model_is_blocked_while_verification_is_pending(mast
     before = len(list(logs.iterdir())) if logs.is_dir() else 0
 
     reproduce = ["reproduce" if part == "all" else part for part in master["command"]]
-    # The operator authorizes GPU verification for this run; the evaluator consumes the
-    # capability record written by the standalone verification step.
-    result = subprocess.run([*reproduce, "--verify-gpu", "--report", str(report_path)],
+    # The operator authorizes GPU capability consumption. It deliberately does NOT pass
+    # --verify-gpu here: this run exercises the production contract that a valid recorded
+    # capability is enough to launch, whereas --verify-gpu would ask the *synthetic evaluator's*
+    # interpreter for a real probe.
+    result = subprocess.run([*reproduce, "--report", str(report_path)],
                             env=env, capture_output=True, text=True)
 
     output = result.stdout + result.stderr
@@ -542,9 +544,11 @@ def test_e2e14_verified_gpu_capability_permits_the_authorized_synthetic_path(mas
     assert verification.returncode == 0, output
     assert "capability_verified" in verification.stdout, output
 
-    capability = master["ws"] / "workbench" / "artifacts" / "gpu_capability.json"
-    assert capability.is_file(), "the verified capability must be recorded"
-    assert json.loads(capability.read_text())["capability_verified"] is True
+    capability_dir = master["ws"] / "workbench" / "artifacts" / "gpu_capabilities"
+    records = sorted(capability_dir.glob("*.json"))
+    assert records, "the verified capability must be recorded as a per-key record"
+    assert any(json.loads(path.read_text())["capability_verified"] is True for path in records)
+    capability = records[0]
 
     # The master workflow now proceeds: preflight sees the recorded capability and the
     # authorized synthetic evaluation actually runs.
@@ -552,9 +556,11 @@ def test_e2e14_verified_gpu_capability_permits_the_authorized_synthetic_path(mas
     logs = master["ws"] / "workbench" / "artifacts" / "logs"
     before = len(list(logs.iterdir())) if logs.is_dir() else 0
     reproduce = ["reproduce" if part == "all" else part for part in master["command"]]
-    # The operator authorizes GPU verification for this run; the evaluator consumes the
-    # capability record written by the standalone verification step.
-    result = subprocess.run([*reproduce, "--verify-gpu", "--report", str(report_path)],
+    # The operator authorizes GPU capability consumption. It deliberately does NOT pass
+    # --verify-gpu here: this run exercises the production contract that a valid recorded
+    # capability is enough to launch, whereas --verify-gpu would ask the *synthetic evaluator's*
+    # interpreter for a real probe.
+    result = subprocess.run([*reproduce, "--report", str(report_path)],
                             env=env, capture_output=True, text=True)
 
     output = result.stdout + result.stderr

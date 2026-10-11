@@ -328,7 +328,8 @@ def test_a_forged_capability_record_cannot_grant_readiness(workspace, monkeypatc
     Forging it must require the operator key: a record written without a signature, or with a
     signature that does not verify, is ignored entirely.
     """
-    capability_path = workspace["config"].CIR_REPO_ROOT / "workbench" / "artifacts" / "gpu_capability.json"
+    key = runtime._gpu_capability_key(workspace["model"])
+    capability_path = runtime.gpu_capability_path(workspace["config"], key)
     capability_path.parent.mkdir(parents=True, exist_ok=True)
 
     forged = {
@@ -779,12 +780,14 @@ def test_the_fallback_key_is_created_so_a_capability_can_be_signed(tmp_path, mon
     assert runtime._gpu_capability_signature_valid({**record, "signature": signature})
 
 
-def test_queued_job_children_get_no_operator_secrets(workspace, monkeypatch):
-    """The queue dispatch path must filter secrets exactly as the CLI path does.
+def test_queued_job_children_get_the_operator_key_but_no_stray_secrets(workspace, monkeypatch):
+    """The queue starts the *trusted operator*, so it must hand it the ledger key.
 
-    The CLI evaluator child had `WORKBENCH_LEDGER_KEY` and `WORKBENCH_SECRET_*` stripped while
-    the API/queued path handed them straight to the model environment, which could then forge
-    ledger entries.
+    The queued command is ``evaluate_models.py``, which authenticates the ledger entry it
+    appends; without the key a queued run could not audit itself at all. Other
+    ``WORKBENCH_SECRET_*`` values are operator configuration the operator does not need and are
+    dropped — while the operator, in turn, strips the key from the environment it gives the
+    official evaluator.
     """
     import importlib.util
     import time as _time
@@ -809,8 +812,8 @@ def test_queued_job_children_get_no_operator_secrets(workspace, monkeypatch):
     while _time.monotonic() < deadline and queue.list()[0]["status"] != "completed":
         _time.sleep(0.02)
     assert queue.list()[0]["status"] == "completed"
-    leaked = json.loads((workspace["repo"] / "logs" / "stdout.log").read_text().strip().splitlines()[-1])
-    assert leaked == [], leaked
+    leaked = json.loads((workspace["repo"] / "logs" / "queue_stdout.log").read_text().strip().splitlines()[-1])
+    assert leaked == ["WORKBENCH_LEDGER_KEY"], leaked
 
 
 def test_the_api_queues_the_audited_orchestrator_not_the_raw_evaluator(workspace, monkeypatch):

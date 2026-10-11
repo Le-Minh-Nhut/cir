@@ -798,9 +798,24 @@ def _requires_gpu(model: dict[str, Any]) -> bool:
     return str(declared).upper() != "UNKNOWN"
 
 
-def gpu_capability_path(config: Any) -> Path:
+def gpu_capability_directory(config: Any) -> Path:
     repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
-    return Path(repo_root) / "workbench" / "artifacts" / "gpu_capability.json"
+    return Path(repo_root) / "workbench" / "artifacts" / "gpu_capabilities"
+
+
+def gpu_capability_path(config: Any, capability_key: str | None = None) -> Path:
+    """Where one GPU capability record lives.
+
+    Capabilities are keyed by model + interpreter + dependency fingerprint, so more than one
+    model can be verified on the same host. A single fixed ``gpu_capability.json`` meant
+    verifying model B overwrote model A's record, and a fresh process could no longer find A's
+    verification at all. The directory keeps them side by side; the key is a digest, so it is
+    safe as a filename.
+    """
+    directory = gpu_capability_directory(config)
+    if capability_key is None:
+        return directory / "gpu_capability.json"
+    return directory / f"{capability_key}.json"
 
 
 _GPU_CAPABILITY: dict[str, dict[str, Any]] = {}
@@ -826,9 +841,13 @@ def record_gpu_capability(model: dict[str, Any], result: dict[str, Any],
     _GPU_CAPABILITY[key] = payload
     if config is not None:
         try:
-            path = gpu_capability_path(config)
+            path = gpu_capability_path(config, key)
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            # Atomic replace: a reader either sees the previous record or the new one, never a
+            # half-written file that would read as a forged record.
+            temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+            temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            os.replace(temporary, path)
         except OSError:
             pass
     return payload
@@ -950,7 +969,14 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport) -> 
 
         payload = None
         try:
-            path = gpu_capability_path(resolve_config())
+            config_for_records = resolve_config()
+            path = gpu_capability_path(config_for_records, key)
+            if not path.is_file():
+                # Records written before capabilities became per-key live in one file; accept
+                # one only when it names this very key, so a foreign record can never be
+                # promoted into evidence for this model.
+                legacy = gpu_capability_path(config_for_records)
+                path = legacy if legacy.is_file() else path
             if path.is_file():
                 payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):

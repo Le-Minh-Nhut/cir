@@ -370,16 +370,23 @@ is the plan-level view that deliberately omits the environment blocker.
 Authorized probe on the GPU host:
 
 ```bash
-python workbench/scripts/evaluate_models.py --model MODEL_ID --verify-gpu
+python workbench/scripts/evaluate_models.py --model MODEL_ID --verify-gpu-only   # preflight only
+python workbench/scripts/evaluate_models.py --model MODEL_ID --verify-gpu        # verify, then evaluate
 ```
 
 It runs `runtime.GPU_PROBE_CODE` under the model's interpreter with `-I -S` (so no
 environment site code executes) and hands it the environment's distribution directories
 explicitly, because `-S` also stops `site` from applying the environment's own configuration.
 The probe records device count, name, compute capability, a one-element tensor allocation and
-a trivial computation into `workbench/artifacts/gpu_capability.json`, and prints the
-structured result. A recorded capability is keyed to the interpreter and
-dependency fingerprints, so a changed environment invalidates it.
+a trivial computation into `workbench/artifacts/gpu_capabilities/<capability_key>.json`, and
+prints the structured result. Records are per model+environment, so verifying one model never
+overwrites another's, and the key includes the interpreter and dependency fingerprints, so a
+changed environment invalidates it.
+
+`--verify-gpu-only` is the hardware preflight: probe, record, print, exit — no plan is built, so
+no checkpoint is loaded and no evaluator can start. A CUDA-declaring model is launched by the
+launch gate alone; a valid recorded capability is sufficient, and `--verify-gpu` exists to
+create or refresh one rather than being a per-invocation prerequisite.
 
 The probe executes Python from the model's environment, which is **untrusted**: it is
 explicitly authorized, never runs during a read-only status query, and does not touch the
