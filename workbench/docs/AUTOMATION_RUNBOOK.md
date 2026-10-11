@@ -392,11 +392,10 @@ the operator key** and an unsigned or mis-signed record is ignored entirely. For
 capability therefore requires the operator's key, exactly as forging a ledger entry does.
 
 A capability also requires **corroboration** that the probe ran against a real installation:
-the reported `torch` module must be a genuine installation whose `torch._C` resolves to a
-compiled shared library (`.so`/`.pyd`/`.dylib`/`.dll`), and the orchestrator records that
-module's SHA-256 in the capability record. Neither a single importable `torch.py` nor a
-pure-Python directory named `torch` containing an `_C.py` can produce a capability, even with
-write access to the environment.
+the reported `torch` module must be a genuine installation with a loadable `torch._C`, and the
+orchestrator records that module's SHA-256 in the capability record. Neither a single
+importable `torch.py` nor a pure-Python directory named `torch` can produce a capability, even
+with write access to the environment.
 
 **Residual risk, stated plainly.** The operator authorizes the probe, and the probe runs code
 from the model's environment — which, by construction, is code the workbench did not audit.
@@ -411,6 +410,18 @@ core itself** in a child process and requires it to export CPython's `PyInit__C`
 `_C` path is reported by model code, none of that metadata is trusted on its own — a copy of
 an unrelated binary, or a core whose path is mutated through `sys.modules`/`find_spec`, fails
 the load.
+
+**What corroboration cannot do — the honest limit.** The CUDA evidence itself
+(`is_available`, device properties, a tensor operation) is necessarily produced by Python code
+imported from the model's environment. A corroborated core proves the environment contains a
+loadable PyTorch-shaped extension, not that a GPU answered. An adversarial pass reached
+exactly this conclusion after four rounds of hardening: the design is *structurally
+unverifiable* for that last step, because every available signal is computed inside the thing
+being checked. Each round still raised the cost of a fake — from one stub file, to a shared
+library, to a genuine compiled extension — but a real independence guarantee would need an
+out-of-band or hardware-attested GPU check, which is out of scope for a laptop workbench. The
+capability record is therefore evidence for the operator, not proof against a hostile
+environment; treat a model environment as trusted before authorizing a probe on it.
 
 The queued-job path (`POST /api/jobs`) enforces the same launch gate as the CLI, and the
 queue consumer **re-checks** readiness immediately before dispatch, because a job can wait
