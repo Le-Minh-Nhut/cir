@@ -29,6 +29,15 @@ python -m pytest tests/unit -q
 git diff --check
 ```
 
+**The suite needs free space in the pytest temp root.** The master E2E and synthetic
+scenarios build real venvs and workspaces per test — one full run retains roughly 1.3 GB under
+`/tmp/pytest-of-$USER`. On a tmpfs `/tmp` that is shared with other work, a run can therefore
+fail with `OSError: [Errno 122] Disk quota exceeded` in unrelated-looking tests; that is an
+environment failure, not a defect, and it is order-independent. Clear
+`/tmp/pytest-of-*` between runs, or point `--basetemp` at a filesystem with several GB free.
+A run that stops producing correct results this way exits nonzero (48 failed, 29 errors were
+observed with the filesystem exhausted), so it cannot be mistaken for a passing suite.
+
 | Suite | File | Purpose |
 |---|---|---|
 | True master E2E | `workbench/tests/test_true_master_e2e.py` | Real `pipeline.py` subprocess: full graph, resume, invalidation, failure report |
