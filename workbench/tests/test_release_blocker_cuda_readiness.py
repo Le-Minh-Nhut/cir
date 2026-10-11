@@ -8,6 +8,7 @@ the ordinary acceptance suite never runs it.
 """
 from __future__ import annotations
 
+import json
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -16,6 +17,15 @@ import pytest
 
 import workbench.backend.runtime as runtime
 from workbench.backend.operator_config import resolve_config
+
+
+@pytest.fixture(autouse=True)
+def _ledger_key(monkeypatch):
+    """A GPU capability record is authenticated with the operator key, so tests set one."""
+    import secrets as _secrets
+
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", _secrets.token_hex(32))
+    yield
 
 
 @pytest.fixture(autouse=True)
@@ -289,3 +299,80 @@ def test_the_test_only_probe_is_unreachable_without_the_optin(workspace, monkeyp
     # The GPU probe itself is only reached after the environment verifies; assert that the
     # capability was not granted rather than that a specific call happened.
     assert runtime.verify_environment(workspace["model"], probe=True).tier != "GPU_RUNTIME_READY"
+
+
+def test_a_forged_capability_record_cannot_grant_readiness(workspace, monkeypatch):
+    """The recorded capability lives in the writable artifact tree, so it is authenticated.
+
+    Forging it must require the operator key: a record written without a signature, or with a
+    signature that does not verify, is ignored entirely.
+    """
+    capability_path = workspace["config"].CIR_REPO_ROOT / "workbench" / "artifacts" / "gpu_capability.json"
+    capability_path.parent.mkdir(parents=True, exist_ok=True)
+
+    forged = {
+        "capability_key": runtime._gpu_capability_key(workspace["model"]),
+        "capability_verified": True,
+        "cuda_available": True,
+        "allocated_tensor": True,
+        "computed": True,
+        "probe_source": "forged",
+    }
+    capability_path.write_text(json.dumps(forged))
+    runtime.forget_environment()
+    runtime.forget_gpu_capability()
+
+    assert runtime.verify_environment(workspace["model"], probe=True).tier == "GPU_VERIFICATION_PENDING"
+    with pytest.raises(runtime.GpuVerificationError):
+        runtime.require_launch_ready(workspace["model"])
+
+    # A signature made with a different key is rejected too.
+    forged["signature"] = "0" * 64
+    capability_path.write_text(json.dumps(forged))
+    runtime.forget_environment()
+    runtime.forget_gpu_capability()
+    assert runtime.verify_environment(workspace["model"], probe=True).tier == "GPU_VERIFICATION_PENDING"
+
+
+def test_the_api_queue_cannot_start_an_unverified_gpu_evaluation(workspace, monkeypatch):
+    """The queued-job path must enforce the same launch gate as the CLI.
+
+    The UI plans through `guarded_plan`, which deliberately permits a GPU-pending model; the
+    queue consumer must therefore refuse to start it.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("workbench_main_gpu",
+                                                  Path("workbench/backend/main.py"))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    started: list[object] = []
+    monkeypatch.setattr(module, "JOBS",
+                        type("Q", (), {"enqueue": lambda self, *a, **k: started.append(a) or {"id": "x"}})())
+
+    checkpoint = {"checkpoint_id": "ckpt", "filename": "f.pt",
+                  "checkpoint_mapping_status": "VERIFIED_METADATA"}
+    model = {**workspace["model"], "checkpoint_variants": [checkpoint],
+             "native_protocol": "p", "supported_protocols": ["p"],
+             "upstream_commit_sha": "a" * 40, "source_dir": "SyntheticModel"}
+    monkeypatch.setattr(module, "load_registry", lambda: {"models": [model], "protocols": {}})
+    monkeypatch.setattr(module, "guarded_plan",
+                        lambda *a, **k: (type("P", (), {
+                            "model_id": model["model_id"], "checkpoint_id": "ckpt",
+                            "protocol": "p", "pin": "a" * 40, "actual_source_commit": "a" * 40,
+                            "checkpoint": workspace["repo"] / "ckpt.pt",
+                            "dataset_root": workspace["repo"] / "F", "command": ["x"],
+                            "cwd": workspace["repo"]})(), []))
+    monkeypatch.setattr(module, "resolve_config", lambda: workspace["config"])
+    (workspace["repo"] / "ckpt.pt").write_bytes(b"x")
+
+    payload = type("Job", (), {"model_id": model["model_id"], "checkpoint_id": "ckpt",
+                               "protocol_id": "p", "top_k": 200})()
+    with pytest.raises(module.HTTPException) as error:
+        module.queue_job(payload)
+    assert error.value.status_code == 409
+    assert error.value.detail["error"] == "gpu_verification_required"
+    assert started == [], "no job may be queued while GPU readiness is unverified"
+    assert checkpoint["checkpoint_id"] == "ckpt"

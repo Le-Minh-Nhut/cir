@@ -1,6 +1,7 @@
 """Environment verification with explicit readiness tiers and source-backed probing."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -28,7 +29,6 @@ TIER_GPU_DEFERRED = "GPU_VERIFICATION_DEFERRED"
 # whose GPU capability has not been probed yet. It is a *legitimate pending state*, not a
 # dead end: verify_gpu_runtime() moves it to GPU_RUNTIME_READY on a real GPU host.
 TIER_GPU_PENDING = "GPU_VERIFICATION_PENDING"
-TIER_GPU_PROBE_FAILED = "GPU_PROBE_FAILED"
 TIER_GPU_READY = "GPU_RUNTIME_READY"
 TIER_REQUIREMENTS_UNVERIFIED = "ENVIRONMENT_REQUIREMENTS_UNVERIFIED"
 
@@ -814,6 +814,9 @@ def record_gpu_capability(model: dict[str, Any], result: dict[str, Any],
     """
     key = _gpu_capability_key(model)
     payload = {**result, "capability_key": key}
+    signature = _gpu_capability_signature(payload)
+    if signature:
+        payload["signature"] = signature
     _GPU_CAPABILITY[key] = payload
     if config is not None:
         try:
@@ -846,6 +849,58 @@ def _gpu_capability_key(model: dict[str, Any]) -> str:
     ).hexdigest()
 
 
+def _gpu_capability_signature(record_without_signature: dict[str, Any]) -> str | None:
+    """HMAC of a GPU capability record, using the operator key kept outside the artifacts."""
+    try:
+        key = _gpu_cache_key()
+    except Exception:
+        return None
+    if not key:
+        return None
+    import hmac as _hmac
+
+    canonical = json.dumps(record_without_signature, sort_keys=True,
+                           separators=(",", ":")).encode("utf-8")
+    return _hmac.new(key, canonical, hashlib.sha256).hexdigest()
+
+
+def _gpu_cache_key() -> bytes:
+    """The operator key for GPU capability records.
+
+    Resolution order mirrors the ledger: ``WORKBENCH_LEDGER_KEY`` from the operator's secret
+    store, then ``<CIR_REPO_ROOT>/.workbench_ledger_key``. Failure returns b"", which makes
+    every persisted record unverified rather than trusted.
+    """
+    configured = os.environ.get("WORKBENCH_LEDGER_KEY")
+    if configured:
+        return configured.strip().encode("utf-8")
+    try:
+        from workbench.backend.operator_config import resolve_config
+
+        repo_root = Path(getattr(resolve_config(), "CIR_REPO_ROOT", Path(__file__).resolve().parents[2]))
+        key_path = repo_root / ".workbench_ledger_key"
+        if key_path.is_file():
+            return key_path.read_bytes().strip()
+    except OSError:
+        return b""
+    return b""
+
+
+def _gpu_capability_signature_valid(payload: dict[str, Any]) -> bool:
+    claimed = payload.get("signature")
+    if not isinstance(claimed, str) or not claimed:
+        return False
+    body = {key: value for key, value in payload.items() if key != "signature"}
+    expected = _gpu_capability_signature(body)
+    return bool(expected) and hmac_compare(expected, claimed)
+
+
+def hmac_compare(expected: str, claimed: str) -> bool:
+    import hmac as _hmac
+
+    return _hmac.compare_digest(expected, claimed)
+
+
 def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport) -> dict[str, Any] | None:
     """A previously verified capability for exactly this environment, or None.
 
@@ -855,6 +910,10 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport) -> 
     """
     key = _gpu_capability_key(model)
     cached = _GPU_CAPABILITY.get(key)
+    if cached is not None and not _gpu_capability_signature_valid(cached):
+        # A record that cannot be authenticated is not evidence.
+        _GPU_CAPABILITY.pop(key, None)
+        cached = None
     if cached is None:
         from workbench.backend.operator_config import resolve_config
 
@@ -865,9 +924,14 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport) -> 
                 payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             payload = None
+        # The file lives inside the writable artifact tree, so its own fields are not
+        # evidence: it is authenticated with the same out-of-band key as the ledger, and a
+        # record whose signature does not verify is ignored entirely (never trusted, never
+        # rewritten). Forging a capability therefore requires the operator's key.
         if isinstance(payload, dict) and payload.get("capability_key") == key:
-            cached = payload
-            _GPU_CAPABILITY[key] = payload
+            if _gpu_capability_signature_valid(payload):
+                cached = payload
+                _GPU_CAPABILITY[key] = payload
     if cached is None:
         return None
     # The cached result must describe this very environment: a changed interpreter or

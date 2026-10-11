@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from workbench.backend.analysis import analysis_rows_from_maps, failure_jaccard_from_maps
+from workbench.backend import runtime
 from workbench.backend.errors import WorkbenchError
 from workbench.backend.index import rebuild_index
 from workbench.backend.jobs import SingleGpuQueue
@@ -187,6 +188,15 @@ def queue_job(payload: JobInput):
     plan, blockers = guarded_plan(model, checkpoint, payload.protocol_id, dataset_root, payload.top_k, config)
     if plan is None:
         raise HTTPException(409, {"error": "evaluation_blocked", "message": "Official evaluation is not ready.", "details": {"blockers": blockers}})
+    # A plan may be built for a CUDA-declaring model whose GPU is unverified, but the queue
+    # must not *start* one: the launch gate is enforced here exactly as it is in the CLI.
+    try:
+        runtime.require_launch_ready(model)
+    except (runtime.GpuVerificationError, RuntimeError) as error:
+        raise HTTPException(409, {"error": "gpu_verification_required",
+                                  "message": "GPU runtime is not verified for this model.",
+                                  "details": {"reason": str(error),
+                                              "status": runtime.environment_status(model, probe=True)["status"]}})
     # Same convention as scripts/evaluate_models.log_dir: one directory per
     # (model, checkpoint, invocation identity). A bare timestamp format here would
     # create a second, incompatible shape under the same artifacts root.

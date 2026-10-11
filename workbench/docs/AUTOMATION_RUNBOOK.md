@@ -358,9 +358,9 @@ reported as a *legitimate pending state* with a real way forward:
 
 | State | Meaning |
 |---|---|
-| `GPU_VERIFICATION_PENDING` | interpreter, Python version, and dependencies verified; GPU not probed |
+| `GPU_VERIFICATION_PENDING` | interpreter, Python version, and dependencies verified; GPU not probed or the probe did not verify |
 | `GPU_RUNTIME_READY` | an authorized probe proved PyTorch can allocate and compute on a CUDA device |
-| `GPU_PROBE_FAILED` / `GPU_VERIFICATION_DEFERRED` | the probe ran and did not verify, or the host has no CUDA |
+| `GPU_VERIFICATION_DEFERRED` | the host has no CUDA; the probe is not run at all |
 
 Two ready sets exist and must not be conflated: `READY_TIERS` (interpreter verified, so an
 evaluation **plan** may be built) and `LAUNCH_READY_TIERS` (**launching** permitted).

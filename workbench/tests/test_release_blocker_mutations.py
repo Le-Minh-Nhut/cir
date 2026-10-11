@@ -587,6 +587,7 @@ def test_mut10_gpu_pending_promoted_to_ready_is_detected(tmp_path, monkeypatch):
         (dist / "RECORD").write_text("torch.py,sha256=t,20\n")
         break
     monkeypatch.setenv("MUT10_PYTHON", str(env_dir / "bin" / "python"))
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "mut10-operator-key")
     model = {"model_id": "limn", "environment_required": True,
              "environment": {"python_env_var": "MUT10_PYTHON", "pytorch": "1.12.1", "cuda": "12.4"}}
     config = replace(resolve_config(), CIR_REPO_ROOT=repo)
@@ -639,6 +640,8 @@ def test_mut01_permanent_gpu_deferral_is_detected(tmp_path, monkeypatch):
         (dist / "RECORD").write_text("torch.py,sha256=t,20\n")
         break
     monkeypatch.setenv("MUT01_PYTHON", str(env_dir / "bin" / "python"))
+    # A GPU capability record is authenticated with the operator key, so set one.
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "mut01-operator-key")
     model = {"model_id": "limn", "environment_required": True,
              "environment": {"python_env_var": "MUT01_PYTHON", "pytorch": "1.12.1", "cuda": "12.4"}}
     config = replace(resolve_config(), CIR_REPO_ROOT=repo)
