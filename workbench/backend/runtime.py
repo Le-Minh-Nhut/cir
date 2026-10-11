@@ -2021,7 +2021,7 @@ def runtime_blockers(model: dict[str, Any], checkpoint: dict[str, Any], config: 
                      protocol: str | None = None, dataset_root: Path | None = None) -> list[str]:
     """Shared final preflight used by UI availability and guarded execution."""
     from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
-    from workbench.backend.fashioniq_layout import missing_paths
+    from workbench.backend.fashioniq_layout import image_extension_problems, missing_paths
     from workbench.backend.registry import (
         checkpoint_bundle_missing_paths, checkpoint_is_present, checkpoint_missing_paths,
         checkpoint_path, external_asset_blockers, fashioniq_required_paths,
@@ -2068,6 +2068,13 @@ def runtime_blockers(model: dict[str, Any], checkpoint: dict[str, Any], config: 
     if missing:
         layout = model.get("fashioniq_layout") or "FashionIQ"
         blockers.append(f"FashionIQ {layout} requirement missing: {missing[0]}")
+    # An official evaluator's image path is hard-coded in its own source, so the files on disk
+    # must carry the extension it opens. Checking it here surfaces an extension mismatch on the
+    # laptop instead of as a missing image in the middle of a GPU run.
+    for extension in model.get("fashioniq_image_extensions") or ():
+        problems = image_extension_problems(dataset_root, extension)
+        if problems:
+            blockers.append(f"FashionIQ image extension requirement: {problems[0]}")
     blockers.extend(external_asset_blockers(model))
     if model["model_id"] == "encoder" and source is not None:
         if not (source / "datasets1.py").is_file():

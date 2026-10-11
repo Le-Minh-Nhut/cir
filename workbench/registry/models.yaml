@@ -31,6 +31,11 @@ models:
     source_available: true
     source_dir: CSMCIR
     fashioniq_layout: fashioniq_standard
+    # The official release ships `.jpg` (its own README shows this), but this evaluator's image
+    # path is hard-coded to `.png` (`src/data_utils_csmcir.py:FashionIQDataset.__getitem__`).
+    # The preflight therefore requires the basenames to be present with this extension, so the
+    # mismatch is reported on the laptop rather than as a missing-image failure on the GPU host.
+    fashioniq_image_extensions: [".png"]
     literature_split_label: original
     native_protocol: fashioniq_original_split
     supported_protocols: [fashioniq_original_split]

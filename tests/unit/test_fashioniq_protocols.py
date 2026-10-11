@@ -172,3 +172,48 @@ def test_duplicate_gallery_ids_are_refused(tmp_path: Path) -> None:
     root = _split_root(tmp_path, ["a", "a"])
     with pytest.raises(AssertionError):
         build_fashioniq_gallery("fashioniq_original", root, "dress", ANNOTATIONS, "val")
+
+
+# --------------------------------------------------------------------- image inventory
+
+def test_an_official_evaluator_extension_mismatch_is_reported(tmp_path: Path) -> None:
+    """CSMCIR opens `{id}.png` while the official release ships `.jpg`.
+
+    The evaluator's extension is hard-coded in its source, so a `.jpg` layout can only fail on
+    the GPU host as a missing file. The laptop preflight must report it instead.
+    """
+    from workbench.backend.fashioniq_layout import image_extension_problems
+
+    root = tmp_path / "FashionIQ"
+    (root / "images").mkdir(parents=True)
+    (root / "image_splits").mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        (root / "image_splits" / f"split.{category}.val.json").write_text(json.dumps(["a", "b"]))
+    for name in ("a.jpg", "b.jpg"):
+        (root / "images" / name).write_bytes(b"\xff\xd8\xff")
+
+    problems = image_extension_problems(root, ".png")
+    assert problems, "a .jpg-only layout must fail a .png requirement"
+    assert ".png" in problems[0]
+
+    # Converting the basenames satisfies the declared requirement.
+    for name in ("a", "b"):
+        (root / "images" / f"{name}.png").write_bytes(b"\x89PNG")
+    assert image_extension_problems(root, ".png") == []
+
+
+def test_an_extension_requirement_is_checked_against_every_validation_id(tmp_path: Path) -> None:
+    """A single missing image must be reported, with the offending id named."""
+    from workbench.backend.fashioniq_layout import image_extension_problems
+
+    root = tmp_path / "FashionIQ"
+    (root / "images").mkdir(parents=True)
+    (root / "image_splits").mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        ids = ["present", "absent"] if category == "dress" else ["present"]
+        (root / "image_splits" / f"split.{category}.val.json").write_text(json.dumps(ids))
+    (root / "images" / "present.png").write_bytes(b"\x89PNG")
+
+    problems = image_extension_problems(root, ".png")
+    assert len(problems) == 1, problems
+    assert "absent.png" in problems[0]

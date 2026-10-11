@@ -44,6 +44,13 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
             raise ValueError(f"source_dir mismatch for {model['model_id']}")
         if model["source_available"] and model.get("fashioniq_layout") not in layouts:
             raise ValueError(f"unknown FashionIQ layout for {model['model_id']}")
+        extensions = model.get("fashioniq_image_extensions")
+        if extensions is not None:
+            if not isinstance(extensions, list) or not extensions:
+                raise ValueError(f"fashioniq_image_extensions must be a non-empty list for {model['model_id']}")
+            for extension in extensions:
+                if not isinstance(extension, str) or not extension.startswith(".") or len(extension) < 2:
+                    raise ValueError(f"invalid image extension {extension!r} for {model['model_id']}")
         if "research_generation" in model and model["research_generation"] not in {"legacy", "recent"}:
             raise ValueError(f"unknown research generation for {model['model_id']}")
         if "publication_year" in model and model["publication_year"] is not None and (not isinstance(model["publication_year"], int) or model["publication_year"] < 2020):

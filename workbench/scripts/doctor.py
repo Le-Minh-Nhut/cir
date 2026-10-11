@@ -21,7 +21,9 @@ from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
 from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, checkpoint_bundle_missing_paths, checkpoint_missing_paths, checkpoint_path, external_asset_blockers, fashioniq_required_paths, load_registry, preparation_contract_for_model, preparation_paths, required_runtime_assets, sha256_file
 
-from workbench.backend.fashioniq_layout import CATEGORIES, missing_paths, standard_paths
+from workbench.backend.fashioniq_layout import (
+    CATEGORIES, image_extension_problems, missing_paths, standard_paths,
+)
 
 
 def record(name: str, status: str, detail: str, **evidence: Any) -> dict[str, Any]:
@@ -86,6 +88,9 @@ def preparation_checks(model: dict[str, Any], root: Path) -> tuple[list[dict[str
     if contract is None:
         missing = missing_path_strings(fashioniq_required_paths(model, root))
         blockers = [f"FashionIQ {model['fashioniq_layout']} requirement missing: {path}" for path in missing]
+        for extension in model.get("fashioniq_image_extensions") or ():
+            blockers.extend(f"FashionIQ image extension requirement: {problem}"
+                            for problem in image_extension_problems(root, extension))
         return [], blockers
     raw_missing = missing_path_strings(preparation_paths(contract, root, "raw_inputs"))
     generated_missing = missing_path_strings(preparation_paths(contract, root, "generated_artifacts"))
