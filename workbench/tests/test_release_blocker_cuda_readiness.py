@@ -811,3 +811,50 @@ def test_queued_job_children_get_no_operator_secrets(workspace, monkeypatch):
     assert queue.list()[0]["status"] == "completed"
     leaked = json.loads((workspace["repo"] / "logs" / "stdout.log").read_text().strip().splitlines()[-1])
     assert leaked == [], leaked
+
+
+def test_the_api_queues_the_audited_orchestrator_not_the_raw_evaluator(workspace, monkeypatch):
+    """A job queued through the API must run the orchestrator, which writes the ledger entry.
+
+    The handler used to pass the adapter's own command straight to the queue, so an evaluation
+    launched from the web UI bypassed the invocation ledger and produced no audit entry at all.
+    """
+    import importlib.util
+    from dataclasses import replace
+
+    spec = importlib.util.spec_from_file_location("api_queue_audit",
+                                                  Path("workbench/backend/main.py"))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    queued: list[tuple] = []
+    monkeypatch.setattr(module, "JOBS", type("Q", (), {
+        "enqueue": lambda self, *a, **k: queued.append(a) or {"job_id": "x"}})())
+
+    checkpoint = {"checkpoint_id": "ckpt", "filename": "f.pt",
+                  "checkpoint_mapping_status": "VERIFIED_METADATA"}
+    model = {**workspace["model"], "checkpoint_variants": [checkpoint],
+             "native_protocol": "p", "supported_protocols": ["p"],
+             "upstream_commit_sha": "a" * 40, "source_dir": "SyntheticModel"}
+    monkeypatch.setattr(module, "load_registry", lambda: {"models": [model], "protocols": {}})
+    monkeypatch.setattr(module, "guarded_plan", lambda *a, **k: (type("P", (), {
+        "model_id": model["model_id"], "checkpoint_id": "ckpt", "protocol": "p",
+        "pin": "a" * 40, "actual_source_commit": "a" * 40,
+        "checkpoint": workspace["repo"] / "ckpt.pt",
+        "dataset_root": workspace["repo"] / "F", "command": ["RAW_MODEL_EVALUATOR"],
+        "cwd": workspace["repo"]})(), []))
+    monkeypatch.setattr(module, "resolve_config",
+                        lambda: replace(workspace["config"], CIR_REPO_ROOT=workspace["repo"]))
+    monkeypatch.setattr(module.runtime, "require_launch_ready", lambda model: None)
+    (workspace["repo"] / "ckpt.pt").write_bytes(b"x")
+
+    payload = type("Job", (), {"model_id": model["model_id"], "checkpoint_id": "ckpt",
+                               "protocol_id": "p", "top_k": 200})()
+    module.queue_job(payload)
+
+    assert queued, "the job must be queued"
+    argv = queued[0][3]
+    assert "evaluate_models.py" in " ".join(argv), argv
+    assert "RAW_MODEL_EVALUATOR" not in argv, "the raw evaluator bypasses the ledger"
+    assert "--run-id" in argv and argv[argv.index("--run-id") + 1]

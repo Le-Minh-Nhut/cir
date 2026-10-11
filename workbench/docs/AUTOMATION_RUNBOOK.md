@@ -438,7 +438,10 @@ from the CLI or by the queue — never receives `WORKBENCH_LEDGER_KEY` or any
 (`<run log dir>/tmp`, mode `0700`) so anything it writes stays inside the run's own tree
 instead of the shared, world-readable host temp directory.
 
-The queued-job path (`POST /api/jobs`) enforces the same launch gate as the CLI, and the
+The queued-job path (`POST /api/jobs`) dispatches the audited orchestrator
+(`evaluate_models.py`) with an explicit run id, so a result produced through the API carries the
+same invocation ledger entry and completion proof as a CLI run; it never invokes a model's
+evaluator directly. It enforces the same launch gate as the CLI, and the
 queue consumer **re-checks** readiness immediately before dispatch, because a job can wait
 while the environment changes. That re-check narrows but cannot close the window: a mutation
 landing between the guard and `Popen` is racing an operator-authorized probe on an

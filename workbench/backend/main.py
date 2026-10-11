@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import sys
 from datetime import UTC, datetime
 import uuid
 from pathlib import Path
@@ -24,6 +25,7 @@ from workbench.backend.storage import cohort_metrics, get_analysis_input, get_qu
 from workbench.scripts.evaluate_models import guarded_plan
 
 ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS_DIR = ROOT / "scripts"
 ANNOTATIONS_PATH = ROOT / "artifacts" / "annotations.json"
 COHORTS_PATH = ROOT / "artifacts" / "cohorts.json"
 LABELS = ["preservation_failure", "under_edit", "over_edit", "partial_edit", "wrong_attribute", "wrong_entity_binding", "reference_dominance", "text_dominance", "fine_grained_visual_confusion", "ambiguous_ground_truth", "possible_dataset_issue", "duplicate_or_near_duplicate", "other", "unknown"]
@@ -217,23 +219,27 @@ def queue_job(payload: JobInput):
                                   "message": "GPU runtime is not verified for this model.",
                                   "details": {"reason": str(error),
                                               "status": runtime.environment_status(model, probe=True)["status"]}})
-    # Same convention as scripts/evaluate_models.log_dir: one directory per
-    # (model, checkpoint, invocation identity). A bare timestamp format here would
-    # create a second, incompatible shape under the same artifacts root.
-    timestamp = datetime.now(UTC)
-    identifier = f"{timestamp:%Y%m%dT%H%M%S%fZ}_{uuid.uuid4().hex[:8]}"
-    directory = (ROOT / "artifacts" / "logs"
-                 / f"{plan.model_id}__{plan.checkpoint_id}__{identifier}")
+    # The queue runs the *audited orchestrator*, not the adapter command directly. Going
+    # straight to the model's evaluator bypassed the invocation ledger, so a result produced
+    # through the API left no audit entry and could not be distinguished from an unrun one.
+    run_id = f"{datetime.now(UTC):%Y%m%dT%H%M%S%fZ}_{uuid.uuid4().hex[:8]}"
+    argv = [sys.executable, str(SCRIPTS_DIR / "evaluate_models.py"),
+            "--model", plan.model_id, "--checkpoint", plan.checkpoint_id,
+            "--protocol", plan.protocol, "--dataset-root", str(plan.dataset_root),
+            "--top-k", str(payload.top_k), "--run-id", run_id]
+    directory = ROOT / "artifacts" / "logs" / f"{plan.model_id}__{plan.checkpoint_id}__{run_id}"
     provenance = {
         "model_id": plan.model_id,
         "checkpoint_id": plan.checkpoint_id,
         "protocol_id": plan.protocol,
+        "run_id": run_id,
         "upstream_expected_pin": plan.pin,
         "actual_source_commit": plan.actual_source_commit,
         "checkpoint_local_sha256": sha256_file(plan.checkpoint),
         "dataset_root": str(plan.dataset_root),
     }
-    return JOBS.enqueue(plan.model_id, plan.checkpoint_id, plan.protocol, plan.command, plan.cwd, directory, provenance)
+    return JOBS.enqueue(plan.model_id, plan.checkpoint_id, plan.protocol, argv, ROOT,
+                        directory, provenance)
 
 
 @app.post("/api/jobs/{job_id}/cancel")
