@@ -1565,3 +1565,29 @@ def test_exit13_synthetic_gpu_verification_reports_result_and_allows_execution(
     assert '"capability_verified": true' in capsys.readouterr().out
     assert em.completion_proof_path(env["config"], invocation,
                                     "synthetic-gpu-run").is_file()
+
+
+def test_a_duplicate_run_id_is_refused_before_the_evaluator_starts(env):
+    """An invocation that cannot be audited must not be launched.
+
+    The ledger refuses a duplicate run id only when the entry is appended, which happens after
+    the evaluator has run. Two plans sharing an explicit run id therefore both started, and the
+    second left run logs with no audit entry. The uniqueness check now precedes the launch.
+    """
+    marker = env["tmp"] / "duplicate_started"
+    evaluator = env["tmp"] / "duplicate_evaluator.py"
+    evaluator.write_text(f"from pathlib import Path; Path({str(marker)!r}).touch()\n"
+                         "import json; print(json.dumps({'average_recall_at10': 1.0,"
+                         "'average_recall_at50': 2.0, 'average_recall': 1.5}))\n")
+    invocation = plan(env, [sys.executable, str(evaluator)])
+    run_id = "duplicate-run-id"
+
+    assert em.execute(invocation, env["config"], run_id=run_id) == 0
+    assert marker.exists(), "the first invocation should run"
+    assert len(em.read_evidence_ledger(env["config"])) == 1
+
+    marker.unlink()
+    with pytest.raises(RuntimeError, match="already records run id"):
+        em.execute(em.replace(invocation, checkpoint_id="ckpt_v2"), env["config"], run_id=run_id)
+    assert not marker.exists(), "the duplicate-id invocation must not start"
+    assert len(em.read_evidence_ledger(env["config"])) == 1

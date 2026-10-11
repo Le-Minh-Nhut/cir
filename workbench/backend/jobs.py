@@ -115,13 +115,14 @@ class SingleGpuQueue:
                 with (directory / "stdout.log").open("w", encoding="utf-8") as stdout, (directory / "stderr.log").open("w", encoding="utf-8") as stderr:
                     with self._condition:
                         # The guard above can be slow, so a cancellation that arrived while it
-                        # ran must still win. The status check and the process creation happen
-                        # under the same lock, so a concurrent cancel cannot slip between them.
+                        # ran must still win. Creation, registration (which is what cancel
+                        # terminates) and the status transition happen under the same lock, so
+                        # no cancellation can observe `preparing` with no process to kill and
+                        # then be overwritten by `running`.
                         if job.status == "cancelled":
                             continue
                         process = subprocess.Popen(job.command, cwd=job.cwd, text=True,
                                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    with self._condition:
                         job.status = "running"
                         self._processes[job.job_id] = process
 

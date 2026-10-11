@@ -1027,7 +1027,16 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         ledger_hmac_key(config)
         if evidence_ledger_path(config).exists() and read_evidence_ledger(config) is None:
             raise LedgerCorruptError("evidence ledger does not verify")
+        # The ledger itself refuses a duplicate run id, but only when the entry is appended —
+        # which is after the evaluator has already run. Two plans sharing an explicit run id
+        # would therefore both start, and the second would be unauditable. Check first: an
+        # invocation that cannot be recorded must not be launched.
+        existing = [item.get("run_id") for item in read_evidence_ledger(config) or []]
+        if run_id in existing:
+            raise LedgerDuplicateRunError(f"evidence ledger already records run id {run_id}")
     except LedgerKeyError as error:
+        raise RuntimeError(f"evaluation could not be audited: {error}") from error
+    except LedgerDuplicateRunError as error:
         raise RuntimeError(f"evaluation could not be audited: {error}") from error
 
     code, directory, environment = invoke_evaluator(plan, config, run_id, root)

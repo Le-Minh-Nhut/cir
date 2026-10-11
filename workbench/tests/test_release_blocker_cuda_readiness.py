@@ -668,3 +668,64 @@ def test_an_unrelated_binary_named_C_so_cannot_corroborate(workspace):
             runtime.verify_gpu_runtime(workspace["model"], workspace["config"], authorized=True)
     finally:
         runtime.clear_gpu_probe_for_tests()
+
+
+def test_cancellation_cannot_slip_between_creation_and_registration(workspace, monkeypatch):
+    """A cancel that arrives exactly while the process is being created must still kill it.
+
+    Process creation and registration used to sit in two separate critical sections, so a
+    cancellation arriving in the gap saw `preparing` with no registered process, marked the job
+    cancelled, and the worker then published `running` over it — the child ran to completion
+    uncancelled.
+    """
+    import importlib.util
+    import subprocess as real_subprocess
+    import threading
+    import time as _time
+
+    spec = importlib.util.spec_from_file_location("jobs_cancel_window",
+                                                  Path("workbench/backend/jobs.py"))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    sentinel = workspace["repo"] / "child_ran_to_completion.txt"
+    script = f"import time\ntime.sleep(2)\nopen({str(sentinel)!r}, 'w').write('ran')\n"
+    real_popen = real_subprocess.Popen
+
+    class SlowPopen:
+        """Makes the creation-to-registration window wide enough to lose the race in."""
+
+        def __init__(self, *args, **kwargs):
+            self._process = real_popen(*args, **kwargs)
+            _time.sleep(0.3)
+
+        def __getattr__(self, name):
+            return getattr(self._process, name)
+
+    monkeypatch.setattr(module, "subprocess", type("S", (), {
+        "Popen": staticmethod(SlowPopen), "PIPE": real_subprocess.PIPE})())
+
+    queue = module.SingleGpuQueue()
+    queue.enqueue("limn", "ckpt", "p", [sys.executable, "-c", script], workspace["repo"],
+                  workspace["repo"] / "logs", {"model_id": "limn"})
+    job_id = queue.list()[0]["job_id"]
+
+    def cancel_once_running() -> None:
+        deadline = _time.monotonic() + 10
+        while _time.monotonic() < deadline:
+            if queue.list()[0]["status"] == "running":
+                queue.cancel(job_id)
+                return
+            _time.sleep(0.001)
+
+    canceller = threading.Thread(target=cancel_once_running)
+    canceller.start()
+    deadline = _time.monotonic() + 10
+    while _time.monotonic() < deadline and queue.list()[0]["status"] != "cancelled":
+        _time.sleep(0.02)
+    canceller.join()
+    _time.sleep(2.5)   # long enough for an uncancelled child to finish and write its file
+
+    assert queue.list()[0]["status"] == "cancelled"
+    assert not sentinel.exists(), "a cancelled job's process ran to completion"
