@@ -557,3 +557,29 @@ def test_a_stub_module_cannot_supply_gpu_evidence(workspace, monkeypatch):
     with pytest.raises(runtime.GpuVerificationError, match="compiled core"):
         runtime.verify_gpu_runtime(workspace["model"], workspace["config"], authorized=True)
     assert runtime.verify_environment(workspace["model"], probe=True).tier == "GPU_VERIFICATION_PENDING"
+
+
+def test_a_python_file_named_under_torch_cannot_claim_a_compiled_core(workspace):
+    """`torch._C` must be a compiled extension, not merely an importable Python module.
+
+    `importlib.util.find_spec("torch._C")` succeeds for a plain `_C.py`, so checking only for
+    its presence would let a pure-Python directory named `torch` mint a signed capability
+    without any PyTorch build. The probe records the resolved origin and only a shared library
+    counts as a compiled core.
+    """
+    import json as _json
+
+    for lib in (workspace["interpreter"].parent.parent / "lib").glob("python*"):
+        package = lib / "site-packages" / "torch"
+        package.mkdir(parents=True, exist_ok=True)
+        (package / "__init__.py").write_text("__version__ = '1.12.1'\n")
+        (package / "_C.py").write_text("nothing = True\n")
+        break
+
+    ok, out, err = runtime._run_probe(
+        workspace["interpreter"], runtime.GPU_PROBE_CODE, isolated=True, timeout=60,
+        args=tuple(runtime._site_packages_dirs(workspace["interpreter"].parent.parent)))
+    assert ok, err
+    result = _json.loads(out.splitlines()[-1])
+    assert result["torch_has_compiled_core"] is False
+    assert str(result["torch_core_origin"]).endswith("_C.py")

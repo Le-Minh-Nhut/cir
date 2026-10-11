@@ -1434,6 +1434,7 @@ out = {
     "computed": False,
     "torch_module_file": None,
     "torch_has_compiled_core": False,
+    "torch_core_origin": None,
     "torch_file_digest": None,
     "error": None,
 }
@@ -1449,8 +1450,19 @@ out["torch_version"] = getattr(torch, "__version__", None)
 try:
     import torch as _torch
     out["torch_module_file"] = getattr(_torch, "__file__", None)
-    out["torch_has_compiled_core"] = bool(
-        __import__("importlib.util", fromlist=["find_spec"]).find_spec("torch._C") is not None)
+    # "Compiled core" means a real shared library, not merely a module named `_C`: a Python
+    # file satisfies find_spec but is not a build of PyTorch.
+    try:
+        import importlib.util as _ilu
+
+        _spec = _ilu.find_spec("torch._C")
+        _origin = getattr(_spec, "origin", None) if _spec is not None else None
+        out["torch_has_compiled_core"] = bool(
+            isinstance(_origin, str)
+            and _origin.endswith((".so", ".pyd", ".dylib", ".dll")))
+        out["torch_core_origin"] = _origin
+    except Exception:
+        out["torch_has_compiled_core"] = False
 except Exception:
     pass
 out["torch_cuda_version"] = getattr(getattr(torch, "version", None), "cuda", None)
