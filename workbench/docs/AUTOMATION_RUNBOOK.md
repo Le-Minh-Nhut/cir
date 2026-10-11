@@ -245,7 +245,8 @@ outside the artifact tree:
 - `<CIR_REPO_ROOT>/.workbench_ledger_key`, created mode `0600` on first use.
 
 Set `WORKBENCH_LEDGER_KEY` before a reproduction run and keep it out of the repository: the
-ledger is only as trustworthy as that key. `clean_generated.py --logs` removes the ledger
+ledger is only as trustworthy as that key. The key is **never** passed to the official
+evaluator — model code is untrusted and must not be able to forge ledger entries. `clean_generated.py --logs` removes the ledger
 along with the logs, since it is generated run metadata. The ledger sits at the artifact root rather than inside a run directory, so
 rewriting a run consistently requires rewriting the entire chain; it is the operator's own
 record, and `clean_generated.py --logs` removes it along with the logs.

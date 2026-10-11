@@ -210,6 +210,10 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     directory = log_dir(config, plan, datetime.now(UTC), run_id)
     child_env = dict(os.environ)
     child_env.update({key: str(value) for key, value in environment.items()})
+    # The official evaluator is untrusted model code: it must never receive the ledger's
+    # authentication key, or it could forge ledger entries and defeat the out-of-band
+    # witness entirely.
+    child_env.pop("WORKBENCH_LEDGER_KEY", None)
 
     # Start the process first: if it cannot be started at all, nothing is written and
     # no orphaned log directory or burnt run id is left behind.

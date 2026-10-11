@@ -1106,3 +1106,29 @@ def test_a_duplicate_run_id_in_the_ledger_is_rejected(env):
     ledger_path.write_text(
         "\n".join(json.dumps(item, sort_keys=True) for item in lines + [duplicate]) + "\n")
     assert em.read_evidence_ledger(env["config"]) is None, "a duplicated run id must not verify"
+
+
+def test_the_ledger_key_is_never_given_to_the_evaluator(env, monkeypatch):
+    """Model code must not be able to read the key that authenticates the ledger."""
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "operator-secret-key")
+
+    probe = env["tmp"] / "leak_probe.py"
+    probe.write_text(
+        "import json, os\n"
+        "print(json.dumps({'leaked': os.environ.get('WORKBENCH_LEDGER_KEY'),\n"
+        " 'average_recall_at10': 55.0, 'average_recall_at50': 75.0, 'average_recall': 65.0,\n"
+        " 'dress_recall_at10': 60.0, 'dress_recall_at50': 80.0,\n"
+        " 'shirt_recall_at10': 55.0, 'shirt_recall_at50': 75.0,\n"
+        " 'toptee_recall_at10': 50.0, 'toptee_recall_at50': 70.0}))\n")
+    plan = em.EvaluationPlan(MODEL, "ckpt_v1", "fashioniq_original_split",
+                             env["tmp"] / "FashionIQ", env["source"], env["checkpoint"],
+                             env["source"], [sys.executable, str(probe)], PIN, PIN)
+    run_id = "leak-probe-run"
+    assert em.execute(plan, env["config"], run_id=run_id) == 0
+
+    stdout = (Path(json.loads(
+        em.completion_proof_path(env["config"], plan, run_id).read_text())["run_directory"])
+        / "stdout.log").read_text()
+    assert "operator-secret-key" not in stdout, "the ledger key must not reach the evaluator"
+    payload = json.loads(stdout.splitlines()[-1])
+    assert payload["leaked"] is None
