@@ -67,10 +67,15 @@ def _run_probe(interpreter: Path, code: str, timeout: int = 60,
     answer for itself. This is used only for identity, which is not a package question.
     """
     prefix_flags = ["-I", "-S"] if isolated else []
+    # The probe executes code from the model's environment, which is untrusted. It must not
+    # be handed the operator's secrets: the ledger key (and any variable derived from it)
+    # is removed from the child environment, so a probe cannot read or forge ledger entries.
+    child_env = {key: value for key, value in os.environ.items()
+                 if key != "WORKBENCH_LEDGER_KEY" and not key.startswith("WORKBENCH_SECRET_")}
     try:
         proc = subprocess.run(
             [str(interpreter), *prefix_flags, "-c", code, *args],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True, text=True, timeout=timeout, env=child_env,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         return False, "", str(error)

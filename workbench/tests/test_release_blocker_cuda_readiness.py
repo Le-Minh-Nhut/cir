@@ -376,3 +376,44 @@ def test_the_api_queue_cannot_start_an_unverified_gpu_evaluation(workspace, monk
     assert error.value.detail["error"] == "gpu_verification_required"
     assert started == [], "no job may be queued while GPU readiness is unverified"
     assert checkpoint["checkpoint_id"] == "ckpt"
+
+
+def test_the_queue_rechecks_readiness_before_dispatch(workspace, monkeypatch):
+    """A capability invalidated while a job waits must stop the dispatch.
+
+    The request handler's check is not enough: the environment can change between enqueue and
+    dispatch, so the consumer re-checks immediately before starting the process.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("jobs_gpu_probe",
+                                                  Path("workbench/backend/jobs.py"))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    dispatched: list[list[str]] = []
+    monkeypatch.setattr(module, "subprocess", type("S", (), {
+        "Popen": staticmethod(lambda *a, **k: dispatched.append(list(a)) or pytest.fail("dispatched"))})())
+
+    queue = module.SingleGpuQueue()
+
+    def refusing_guard(job):
+        raise RuntimeError("execution environment not verified [GPU_VERIFICATION_PENDING]")
+
+    queue.launch_guard = refusing_guard
+    queue.enqueue("limn", "ckpt", "p", ["gpu-evaluator"], workspace["repo"],
+                  workspace["repo"] / "logs", {"model_id": "limn"})
+    import time as _time
+
+    deadline = _time.monotonic() + 5
+    job = None
+    while _time.monotonic() < deadline:
+        jobs = queue.list()
+        if jobs and jobs[0]["status"] != "queued":
+            job = jobs[0]
+            break
+        _time.sleep(0.02)
+    assert job is not None, "the worker never processed the job"
+    assert dispatched == [], "a job whose runtime is no longer ready must not dispatch"
+    assert job["status"] == "blocked", job["status"]

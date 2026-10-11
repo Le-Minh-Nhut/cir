@@ -32,6 +32,25 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http
 JOBS = SingleGpuQueue()
 
 
+def _job_launch_guard(job: object) -> None:
+    """Refuse to dispatch a queued evaluation whose runtime is no longer launch-ready.
+
+    The request handler checks readiness when the job is accepted, but the environment can
+    change while a job waits (a GPU capability is invalidated by an interpreter or
+    dependency change). The consumer therefore re-checks immediately before dispatch.
+    """
+    model_id = getattr(job, "model_id", None)
+    if not model_id:
+        return
+    model = next((item for item in load_registry()["models"] if item["model_id"] == model_id), None)
+    if model is None:
+        return
+    runtime.require_launch_ready(model)
+
+
+JOBS.launch_guard = _job_launch_guard
+
+
 @app.exception_handler(WorkbenchError)
 async def workbench_error(_: Request, error: WorkbenchError) -> JSONResponse:
     return JSONResponse(status_code=400, content=error.payload())

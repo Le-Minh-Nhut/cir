@@ -380,8 +380,18 @@ prints the structured result. A recorded capability is keyed to the interpreter 
 dependency fingerprints, so a changed environment invalidates it.
 
 The probe executes Python from the model's environment, which is **untrusted**: it is
-explicitly authorized, never runs during a read-only status query, receives no secrets, and
-does not touch the ledger or any completion proof. A test-only probe override exists for
+explicitly authorized, never runs during a read-only status query, and does not touch the
+ledger or any completion proof. `WORKBENCH_LEDGER_KEY` and any `WORKBENCH_SECRET_*`
+variable are removed from the probe's child environment. That is secret *exclusion by
+construction*, not isolation: a same-user process can still read same-user files.
+
+A recorded capability lives inside the writable artifact tree, so it is **HMAC-signed with
+the operator key** and an unsigned or mis-signed record is ignored entirely. Forging a
+capability therefore requires the operator's key, exactly as forging a ledger entry does.
+
+The queued-job path (`POST /api/jobs`) enforces the same launch gate as the CLI, and the
+queue consumer **re-checks** readiness immediately before dispatch, because a job can wait
+while the environment changes. A test-only probe override exists for
 laptop tests and is consulted only when `WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE=1` is set.
 
 ### Linux virtualenv identity

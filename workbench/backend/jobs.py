@@ -95,6 +95,19 @@ class SingleGpuQueue:
             directory = Path(job.log_directory)
             try:
                 directory.mkdir(parents=True, exist_ok=False)
+                # Rediness is re-checked here, immediately before dispatch: a job may sit in
+                # the queue while the environment changes (the GPU capability is invalidated
+                # by an interpreter or dependency change), and a stale check in the request
+                # handler must not authorise a launch.
+                launch_guard = getattr(self, "launch_guard", None)
+                if launch_guard is not None:
+                    try:
+                        launch_guard(job)
+                    except Exception as error:
+                        with self._condition:
+                            job.status = "blocked"
+                            self._append(job, "stderr_tail", f"[BLOCKED] {error}\n")
+                        continue
                 metadata = {**job.provenance, "job_id": job.job_id, "argv": job.command, "cwd": job.cwd, "started_at": job.started_at, "finished_at": None, "return_code": None}
                 (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
                 with (directory / "stdout.log").open("w", encoding="utf-8") as stdout, (directory / "stderr.log").open("w", encoding="utf-8") as stderr:
