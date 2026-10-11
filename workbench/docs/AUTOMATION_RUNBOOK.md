@@ -403,12 +403,18 @@ from the model's environment — which, by construction, is code the workbench d
 Corroboration raises the cost of a fake from "one stub file" to "a real PyTorch installation
 plus a compiled core", but an operator who authorizes a GPU probe on an environment an
 attacker controls is trusting that environment. This is documented rather than hidden; it is
-the same trust boundary as `WORKBENCH_*_PYTHON` itself.
+the same trust boundary as `WORKBENCH_*_PYTHON` itself. Precisely what corroboration checks:
+the imported module must live **inside** the verified environment, its `torch._C` must be a
+real native binary (the file header is inspected, so neither `_C.py` nor a text file named
+`_C.so` counts), and the module's SHA-256 is recorded.
 
 The queued-job path (`POST /api/jobs`) enforces the same launch gate as the CLI, and the
 queue consumer **re-checks** readiness immediately before dispatch, because a job can wait
-while the environment changes. A test-only probe override exists for
-laptop tests and is consulted only when `WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE=1` is set.
+while the environment changes. That re-check narrows but cannot close the window: a mutation
+landing between the guard and `Popen` is racing an operator-authorized probe on an
+operator-chosen environment, which is outside this workbench's trust model. A test-only probe
+override exists for laptop tests and is consulted only when
+`WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE=1` is set.
 
 ### Linux virtualenv identity
 

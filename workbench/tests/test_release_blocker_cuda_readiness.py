@@ -583,3 +583,49 @@ def test_a_python_file_named_under_torch_cannot_claim_a_compiled_core(workspace)
     result = _json.loads(out.splitlines()[-1])
     assert result["torch_has_compiled_core"] is False
     assert str(result["torch_core_origin"]).endswith("_C.py")
+
+
+def test_a_fake_shared_library_cannot_claim_a_compiled_core(workspace):
+    """A file named `_C.so` must actually be a native binary.
+
+    Following only the suffix still let a pure-Python `torch` package place arbitrary bytes
+    in `_C.so` and satisfy corroboration. The probe inspects the header, so a text file named
+    like a library is rejected.
+    """
+    import json as _json
+
+    for lib in (workspace["interpreter"].parent.parent / "lib").glob("python*"):
+        package = lib / "site-packages" / "torch"
+        package.mkdir(parents=True, exist_ok=True)
+        (package / "__init__.py").write_text("__version__ = '1.12.1'\n")
+        (package / "_C.so").write_bytes(b"not a shared library")
+        break
+
+    ok, out, err = runtime._run_probe(
+        workspace["interpreter"], runtime.GPU_PROBE_CODE, isolated=True, timeout=60,
+        args=tuple(runtime._site_packages_dirs(workspace["interpreter"].parent.parent)))
+    assert ok, err
+    result = _json.loads(out.splitlines()[-1])
+    assert result["torch_has_compiled_core"] is False
+    assert str(result["torch_core_origin"]).endswith("_C.so")
+
+
+def test_a_torch_module_outside_the_environment_cannot_corroborate(workspace, tmp_path):
+    """The corroborating module must live inside the verified environment.
+
+    Otherwise an identical copy of torch elsewhere on the machine satisfies the recorded
+    digest without the verified environment containing the installation it claims.
+    """
+    outside = tmp_path / "elsewhere" / "torch.py"
+    outside.parent.mkdir(parents=True, exist_ok=True)
+    outside.write_text("__version__ = '1.12.1'\n")
+    runtime.set_gpu_probe_for_tests(lambda model, report: {
+        "cuda_available": True, "device_count": 1, "torch_version": "1.12.1",
+        "torch_cuda_version": "12.4", "device_name": "Synthetic GPU",
+        "compute_capability": "8.9", "allocated_tensor": True, "computed": True,
+        "torch_module_file": str(outside), "torch_has_compiled_core": True, "error": None})
+    try:
+        with pytest.raises(runtime.GpuVerificationError, match="compiled|corroborated|verified"):
+            runtime.verify_gpu_runtime(workspace["model"], workspace["config"], authorized=True)
+    finally:
+        runtime.clear_gpu_probe_for_tests()

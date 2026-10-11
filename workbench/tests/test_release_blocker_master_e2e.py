@@ -1,6 +1,6 @@
 """Level 3 master E2E through the real pipeline CLI: evaluation identity and integrity.
 
-E2E-01..E2E-10.
+E2E-01..E2E-15 (E2E-12 was never assigned).
 
 Everything here runs the real ``pipeline.py`` as a subprocess: stage planning,
 ``run_stages``, evaluator launch, evidence validation, and workflow reporting are

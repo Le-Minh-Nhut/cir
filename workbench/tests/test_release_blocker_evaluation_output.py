@@ -1535,9 +1535,13 @@ def test_exit13_synthetic_gpu_verification_reports_result_and_allows_execution(
         env, monkeypatch, capsys):
     model, runtime = _cuda_cli_model(env["tmp"], monkeypatch)
     monkeypatch.setenv(runtime.GPU_PROBE_OVERRIDE_ENV, "1")
-    # The synthetic capability must be corroborated by a real module in the environment,
+    # The synthetic capability must be corroborated by a real module inside this environment,
     # exactly as a genuine probe's torch installation would be.
-    torch_module = env["tmp"] / "torch_corroboration.py"
+    torch_module = None
+    for site in env["tmp"].glob("cuda-env-*/lib/python*/site-packages"):
+        torch_module = site / "torch_corroboration.py"
+        break
+    assert torch_module is not None
     torch_module.write_text("__version__ = '1.12.1'\n")
     runtime.set_gpu_probe_for_tests(lambda model, report: {
         "cuda_available": True, "device_count": 1, "torch_version": "1.12.1",

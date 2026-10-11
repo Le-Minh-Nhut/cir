@@ -1450,17 +1450,29 @@ out["torch_version"] = getattr(torch, "__version__", None)
 try:
     import torch as _torch
     out["torch_module_file"] = getattr(_torch, "__file__", None)
-    # "Compiled core" means a real shared library, not merely a module named `_C`: a Python
-    # file satisfies find_spec but is not a build of PyTorch.
+    # "Compiled core" means a real native extension, not merely a file named `_C`: a Python
+    # file satisfies find_spec, and a file with a .so suffix can contain anything. The
+    # content is therefore inspected for a native binary header, and the extension must live
+    # inside this environment.
     try:
         import importlib.util as _ilu
 
         _spec = _ilu.find_spec("torch._C")
         _origin = getattr(_spec, "origin", None) if _spec is not None else None
-        out["torch_has_compiled_core"] = bool(
-            isinstance(_origin, str)
-            and _origin.endswith((".so", ".pyd", ".dylib", ".dll")))
         out["torch_core_origin"] = _origin
+        if isinstance(_origin, str):
+            try:
+                with open(_origin, "rb") as _handle:
+                    _header = _handle.read(4)
+            except OSError:
+                _header = b""
+            _native = (_header[:4] == b"\x7fELF" or _header[:2] in (b"MZ",)
+                       or _header[:4] in (b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf",
+                                          b"\xca\xfe\xba\xbe"))
+            out["torch_has_compiled_core"] = bool(
+                _native and _origin.endswith((".so", ".pyd", ".dylib", ".dll")))
+        else:
+            out["torch_has_compiled_core"] = False
     except Exception:
         out["torch_has_compiled_core"] = False
 except Exception:
@@ -1558,11 +1570,18 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
 
     torch_file = result.get("torch_module_file")
     torch_digest = None
+    # The module must be inside the environment whose dependencies were just verified, so a
+    # same-content module elsewhere on the machine cannot satisfy the digest.
+    environment_root = interpreter.parent.parent
     if isinstance(torch_file, str) and torch_file:
         try:
-            from workbench.backend.registry import sha256_file
+            candidate = Path(torch_file).resolve()
+            if candidate.is_file() and candidate.is_relative_to(environment_root.resolve()):
+                from workbench.backend.registry import sha256_file
 
-            torch_digest = sha256_file(Path(torch_file))
+                torch_digest = sha256_file(candidate)
+            else:
+                result["torch_module_outside_environment"] = str(candidate)
         except (OSError, ValueError):
             torch_digest = None
     result["torch_file_digest"] = torch_digest
