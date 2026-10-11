@@ -417,3 +417,39 @@ def test_the_queue_rechecks_readiness_before_dispatch(workspace, monkeypatch):
     assert job is not None, "the worker never processed the job"
     assert dispatched == [], "a job whose runtime is no longer ready must not dispatch"
     assert job["status"] == "blocked", job["status"]
+
+
+def test_cancellation_wins_even_after_a_slow_launch_guard(workspace, monkeypatch):
+    """A job cancelled while the dispatch guard ran must not be started."""
+    import importlib.util
+    import time as _time
+
+    spec = importlib.util.spec_from_file_location("jobs_cancel_probe",
+                                                  Path("workbench/backend/jobs.py"))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    dispatched: list[list[str]] = []
+    monkeypatch.setattr(module, "subprocess", type("S", (), {
+        "Popen": staticmethod(lambda *a, **k: dispatched.append(list(a)) or pytest.fail("dispatched"))})())
+
+    queue = module.SingleGpuQueue()
+    seen: list[str] = []
+
+    def slow_guard(job):
+        seen.append(job.job_id)
+        queue.cancel(job.job_id)          # cancellation arrives while the guard runs
+        _time.sleep(0.05)
+
+    queue.launch_guard = slow_guard
+    queued = queue.enqueue("limn", "ckpt", "p", ["gpu-evaluator"], workspace["repo"],
+                           workspace["repo"] / "logs", {"model_id": "limn"})
+    job_id = queued.get("job_id") or queued.get("id")
+
+    deadline = _time.monotonic() + 5
+    while _time.monotonic() < deadline and job_id not in seen:
+        _time.sleep(0.02)
+    _time.sleep(0.2)
+    assert seen, "the guard never ran"
+    assert dispatched == [], "a cancelled job must never be dispatched"

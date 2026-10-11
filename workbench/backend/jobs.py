@@ -95,7 +95,7 @@ class SingleGpuQueue:
             directory = Path(job.log_directory)
             try:
                 directory.mkdir(parents=True, exist_ok=False)
-                # Rediness is re-checked here, immediately before dispatch: a job may sit in
+                # Readiness is re-checked here, immediately before dispatch: a job may sit in
                 # the queue while the environment changes (the GPU capability is invalidated
                 # by an interpreter or dependency change), and a stale check in the request
                 # handler must not authorise a launch.
@@ -111,6 +111,11 @@ class SingleGpuQueue:
                 metadata = {**job.provenance, "job_id": job.job_id, "argv": job.command, "cwd": job.cwd, "started_at": job.started_at, "finished_at": None, "return_code": None}
                 (directory / "command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
                 with (directory / "stdout.log").open("w", encoding="utf-8") as stdout, (directory / "stderr.log").open("w", encoding="utf-8") as stderr:
+                    with self._condition:
+                        # The guard above can be slow, so a cancellation that arrived while it
+                        # ran must still win: nothing is launched for a cancelled job.
+                        if job.status == "cancelled":
+                            continue
                     process = subprocess.Popen(job.command, cwd=job.cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     with self._condition:
                         job.status = "running"
