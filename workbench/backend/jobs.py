@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -31,6 +32,21 @@ class Job:
     error: str | None = None
     stdout_tail: str = ""
     stderr_tail: str = ""
+
+
+def _child_environment(job: Job) -> dict[str, str]:
+    """The environment an untrusted evaluator child runs with.
+
+    A queued job is model code: it must never receive the ledger's authentication key or any
+    ``WORKBENCH_SECRET_*`` value, exactly as the CLI evaluator path filters them, or it could
+    forge ledger entries and read operator material.
+    """
+    child_env = dict(os.environ)
+    child_env.pop("WORKBENCH_LEDGER_KEY", None)
+    for key in [name for name in child_env if name.startswith("WORKBENCH_SECRET_")]:
+        child_env.pop(key, None)
+    child_env["evaluation_run_id"] = job.job_id
+    return child_env
 
 
 class SingleGpuQueue:
@@ -122,7 +138,8 @@ class SingleGpuQueue:
                         if job.status == "cancelled":
                             continue
                         process = subprocess.Popen(job.command, cwd=job.cwd, text=True,
-                                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                                   env=_child_environment(job))
                         job.status = "running"
                         self._processes[job.job_id] = process
 

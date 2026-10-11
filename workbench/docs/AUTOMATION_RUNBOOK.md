@@ -432,10 +432,11 @@ The tolerance covers only `GPU_VERIFICATION_PENDING` for that one stage; a probe
 still stops the run, because the evaluation stage consumes a real `GPU_RUNTIME_READY`
 capability. A preflight run on its own still reports the pending state as `BLOCKED`.
 
-Every untrusted child gets a filtered environment: the official evaluator, like the GPU probe,
-never receives `WORKBENCH_LEDGER_KEY` or any `WORKBENCH_SECRET_*`, and it is given a private
-`TMPDIR` (`<run log dir>/tmp`, mode `0700`) so anything it writes stays inside the run's own
-tree instead of the shared, world-readable host temp directory.
+Every untrusted child gets a filtered environment: the official evaluator — whether launched
+from the CLI or by the queue — never receives `WORKBENCH_LEDGER_KEY` or any
+`WORKBENCH_SECRET_*`. The CLI evaluator is additionally given a private `TMPDIR`
+(`<run log dir>/tmp`, mode `0700`) so anything it writes stays inside the run's own tree
+instead of the shared, world-readable host temp directory.
 
 The queued-job path (`POST /api/jobs`) enforces the same launch gate as the CLI, and the
 queue consumer **re-checks** readiness immediately before dispatch, because a job can wait

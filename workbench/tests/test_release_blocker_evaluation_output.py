@@ -1591,3 +1591,38 @@ def test_a_duplicate_run_id_is_refused_before_the_evaluator_starts(env):
         em.execute(em.replace(invocation, checkpoint_id="ckpt_v2"), env["config"], run_id=run_id)
     assert not marker.exists(), "the duplicate-id invocation must not start"
     assert len(em.read_evidence_ledger(env["config"])) == 1
+
+
+def test_the_evaluator_child_gets_no_operator_secrets_and_a_private_temp_dir(
+        env, monkeypatch, tmp_path):
+    """Untrusted evaluator code must not receive the ledger key or any WORKBENCH_SECRET_*.
+
+    The GPU probe always filtered its child this way; the evaluator path, which runs longer and
+    writes more, did not — so a model environment could read the operator's key and forge
+    ledger entries. The child also gets a run-scoped TMPDIR instead of the shared host temp
+    directory, which every local user can read.
+    """
+    import os
+
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "operator-secret-value")
+    monkeypatch.setenv("WORKBENCH_SECRET_ALPHA", "another-secret-value")
+
+    reporter = env["tmp"] / "env_report.py"
+    reporter.write_text(
+        "import json, os, tempfile\n"
+        "print(json.dumps({'workbench': sorted(k for k in os.environ if 'WORKBENCH' in k),\n"
+        "                  'run_id': os.environ.get('evaluation_run_id'),\n"
+        "                  'tmpdir': tempfile.gettempdir()}))\n")
+    invocation = plan(env, [sys.executable, str(reporter)])
+
+    code, directory, environment = em.invoke_evaluator(
+        invocation, env["config"], "secret-filter-run", env["tmp"] / "out")
+    assert code == 0
+    reported = json.loads((directory / "stdout.log").read_text().strip().splitlines()[-1])
+    assert not any(name.startswith("WORKBENCH_") for name in reported["workbench"]), reported
+    assert reported["run_id"] == "secret-filter-run", "the run identity must reach the child"
+
+    run_temp = directory / "tmp"
+    assert Path(reported["tmpdir"]) == run_temp
+    assert run_temp.stat().st_mode & 0o777 == 0o700
+    assert environment["TMPDIR"] == str(run_temp)

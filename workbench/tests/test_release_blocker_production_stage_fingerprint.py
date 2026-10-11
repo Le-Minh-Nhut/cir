@@ -273,3 +273,29 @@ def test_fp12_generated_production_stage_records_fields_and_resumes(
     assert _run_eval(stage, workspace, monkeypatch, state, launched) == 0
     assert len(launched) == 1
     assert "[SKIP] resume: already completed" in capsys.readouterr().out
+
+
+def test_fp13_same_size_member_rewrite_invalidates_a_directory_input(tmp_path: Path):
+    """A directory input is the tree, so a rewritten member must change the fingerprint.
+
+    The stage input list names the checkpoint *directory*. Resolving it by the directory's own
+    metadata made a changed member invisible: the directory's mtime does not move when a file
+    inside it is rewritten, and weight files usually keep their size.
+    """
+    checkpoint = tmp_path / "run_directory"
+    checkpoint.mkdir()
+    (checkpoint / "config.json").write_text("{}")
+    member = checkpoint / "trained_model.pth"
+    member.write_bytes(b"weights-v1")
+    stage = pipeline.Stage("evaluation", commands=(("/synthetic",),), input_paths=(checkpoint,))
+
+    first = pipeline.stage_input_fingerprint_info(stage)
+    assert first["inputs"][0]["category"] == "TREE_VERIFIED"
+    assert first["weak"] is False
+
+    member.write_bytes(b"weights-v2")          # same size: 10 bytes either way
+    second = pipeline.stage_input_fingerprint_info(stage)
+    assert second["digest"] != first["digest"], "a same-size member rewrite must be visible"
+
+    third = pipeline.stage_input_fingerprint_info(stage)
+    assert third["digest"] == second["digest"], "an unchanged tree must stay stable"

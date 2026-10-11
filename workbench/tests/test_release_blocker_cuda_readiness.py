@@ -729,3 +729,85 @@ def test_cancellation_cannot_slip_between_creation_and_registration(workspace, m
 
     assert queue.list()[0]["status"] == "cancelled"
     assert not sentinel.exists(), "a cancelled job's process ran to completion"
+
+
+def test_a_same_mtime_rewrite_cannot_keep_an_old_member_digest(tmp_path):
+    """The member digest must describe content, not a stat triple.
+
+    A memo keyed on (path, size, mtime) is defeated by an in-place rewrite that restores
+    mtime — `os.utime` does it — so a stale GPU capability could stay valid through a change
+    the fingerprint was supposed to catch.
+    """
+    import os as _os
+
+    module = tmp_path / "member.py"
+    module.write_text("content-v1\n")
+    before = module.stat()
+    first = runtime._member_digest(module)
+
+    module.write_text("content-v2\n")            # same size, same name
+    _os.utime(module, ns=(before.st_atime_ns, before.st_mtime_ns))
+    after = module.stat()
+    assert after.st_size == before.st_size and after.st_mtime_ns == before.st_mtime_ns
+
+    assert runtime._member_digest(module) != first
+
+
+def test_the_fallback_key_is_created_so_a_capability_can_be_signed(tmp_path, monkeypatch):
+    """An operator who relies on the documented fallback key must still get a signed record.
+
+    The ledger creates `<repo>/.workbench_ledger_key` on first use. Capability signing read the
+    same file but never created it, so a fallback-key-only operator produced an unsigned
+    capability and `require_launch_ready` refused it forever.
+    """
+    from dataclasses import replace
+
+    from workbench.backend import operator_config
+
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY", raising=False)
+    monkeypatch.setattr(operator_config, "resolve_config",
+                        lambda: replace(resolve_config(), CIR_REPO_ROOT=tmp_path))
+
+    key = runtime._gpu_cache_key()
+    assert key and len(key) == 32, "the fallback key must be created, not silently empty"
+    assert (tmp_path / ".workbench_ledger_key").is_file()
+
+    # The same key signs and verifies a record, which is what launch readiness consumes.
+    record = {"capability_verified": True, "interpreter": "/x/python"}
+    signature = runtime._gpu_capability_signature(record)
+    assert signature
+    assert runtime._gpu_capability_signature_valid({**record, "signature": signature})
+
+
+def test_queued_job_children_get_no_operator_secrets(workspace, monkeypatch):
+    """The queue dispatch path must filter secrets exactly as the CLI path does.
+
+    The CLI evaluator child had `WORKBENCH_LEDGER_KEY` and `WORKBENCH_SECRET_*` stripped while
+    the API/queued path handed them straight to the model environment, which could then forge
+    ledger entries.
+    """
+    import importlib.util
+    import time as _time
+
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "queued-operator-secret")
+    monkeypatch.setenv("WORKBENCH_SECRET_BETA", "queued-other-secret")
+
+    spec = importlib.util.spec_from_file_location("jobs_secret_filter",
+                                                  Path("workbench/backend/jobs.py"))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    probe = workspace["repo"] / "report_env.py"
+    probe.write_text("import os, json\n"
+                     "print(json.dumps(sorted(k for k in os.environ if 'WORKBENCH' in k)))\n")
+    queue = module.SingleGpuQueue()
+    queue.enqueue("limn", "ckpt", "p", [sys.executable, str(probe)], workspace["repo"],
+                  workspace["repo"] / "logs", {"model_id": "limn"})
+
+    deadline = _time.monotonic() + 15
+    while _time.monotonic() < deadline and queue.list()[0]["status"] != "completed":
+        _time.sleep(0.02)
+    assert queue.list()[0]["status"] == "completed"
+    leaked = json.loads((workspace["repo"] / "logs" / "stdout.log").read_text().strip().splitlines()[-1])
+    assert leaked == [], leaked
