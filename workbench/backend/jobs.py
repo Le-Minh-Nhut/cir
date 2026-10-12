@@ -169,8 +169,9 @@ class SingleGpuQueue:
         if group is not None:
             try:
                 os.killpg(group, 0)
+                return True
             except ProcessLookupError:
-                return False
+                return False         # nothing left in the group
             except PermissionError:
                 return True          # exists, but not ours to signal
             except OSError:

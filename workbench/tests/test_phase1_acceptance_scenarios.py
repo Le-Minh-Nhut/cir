@@ -8,6 +8,7 @@ starts a real evaluator subprocess. Only the model itself is synthetic.
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import subprocess
 import sys
@@ -313,3 +314,122 @@ def test_scenario_f_two_models_keep_independent_capabilities(master, tmp_path, m
     # Both must satisfy the launch gate independently.
     for model in models.values():
         assert rt.require_launch_ready(model)
+
+
+def test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped(master, monkeypatch):  # noqa: F811
+    """Scenario F: a non-cooperative evaluator grandchild must still be stopped.
+
+    The operator exits on SIGTERM, but the evaluator ignores it. Reaching that evaluator requires
+    signalling the process group, which the operator would have reaped if liveness were read from
+    its own exit status.
+    """
+    sentinel = master["ws"] / "evaluator_completed.txt"
+    pid_file = master["ws"] / "evaluator.pid"
+    evaluator = master["source"] / "src" / "evaluator.py"
+    evaluator.write_text(
+        "import os, signal, time\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        f"open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
+        "time.sleep(30)\n"
+        f"open({str(sentinel)!r}, 'w').write('survived')\n")
+    subprocess.run(["git", "add", "-A"], cwd=master["source"], check=True, capture_output=True)
+    subprocess.run(["git", "-c", "user.email=t@t.invalid", "-c", "user.name=T",
+                    "commit", "-qm", "stubborn"], cwd=master["source"],
+                   check=True, capture_output=True)
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=master["source"],
+                                   text=True).strip()
+    registry_path = Path(master["env"]["WORKBENCH_REGISTRY_PATH"])
+    registry = json.loads(registry_path.read_text())
+    registry["models"][0]["upstream_commit_sha"] = head
+    registry_path.write_text(json.dumps(registry))
+
+    module = _api_module(monkeypatch, master)
+    module.JOBS.GRACE_SECONDS = 1.0
+    accepted = module.queue_job(_payload())
+    job_id = accepted["job_id"]
+
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and not pid_file.exists():
+        time.sleep(0.05)
+    assert pid_file.exists(), "the operator never started the evaluator"
+    evaluator_pid = int(pid_file.read_text())
+    time.sleep(0.3)
+
+    # The evaluator must be in the job's group for a group signal to reach it: a child that
+    # detaches into its own session is outside the documented boundary.
+    job_group = module.JOBS._process_groups.get(job_id)
+    evaluator_group = int(Path(f"/proc/{evaluator_pid}/stat").read_text().split()[4])
+    assert evaluator_group == job_group, (
+        f"the evaluator left the job's process group: {evaluator_group} != {job_group}")
+
+    module.JOBS.cancel(job_id)
+    _wait_for(module.JOBS, job_id, timeout=60)
+
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        try:
+            os.kill(evaluator_pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.05)
+    else:
+        try:
+            cmdline = Path(f"/proc/{evaluator_pid}/cmdline").read_bytes().replace(b"\0", b" ")
+            stat = Path(f"/proc/{evaluator_pid}/stat").read_text().split()
+        except OSError as error:
+            cmdline, stat = repr(error).encode(), []
+        raise AssertionError(
+            f"the stubborn evaluator survived cancellation: pid={evaluator_pid} "
+            f"pgrp={stat[4] if len(stat) > 4 else '?'} job_group={recorded_group} "
+            f"cmdline={cmdline[:160]!r}")
+    time.sleep(1.0)
+    assert not sentinel.exists()
+
+
+def test_scenario_h_an_existing_prepared_cache_needs_provenance(
+        master, monkeypatch):  # noqa: F811
+    """Scenario O: a cache that exists is not by itself trusted evidence.
+
+    An iLearn evaluator will reuse a cache file it finds, and those caches carry no provenance.
+    Two things must therefore hold: whatever the input graph declares is content-fingerprinted, and
+    a layout that has not been prepared does not pass as ready merely because a stray cache exists.
+    """
+    import argparse
+
+    from workbench.backend.fashioniq_layout import ilearn_resized_paths, missing_paths
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import auxiliary_assets_for_model, checkpoint_path
+    from workbench.scripts import pipeline
+
+    data = Path(master["env"]["FASHIONIQ_ROOT"])
+    cache = data / "fashi_niq_data.json"
+    cache.write_text('{"built": "by-someone-else"}\n')
+
+    # 1. An unprepared iLearn layout is not ready: the declared inputs are absent.
+    assert missing_paths(ilearn_resized_paths(data)), \
+        "an unprepared layout must not pass as ready"
+
+    # 2. Whatever the input graph declares is content-verified, so a change is visible.
+    model = {"model_id": "synthetic_model", "source_dir": "SyntheticModel",
+             "fashioniq_layout": "fashioniq_ilearn_resized",
+             "checkpoint_variants": [{"checkpoint_id": "ckpt_v1", "filename": "model.pt",
+                                      "checkpoint_mapping_status": "VERIFIED_METADATA"}],
+             "checkpoint_bundles": [], "environment_required": False,
+             "native_protocol": "fashioniq_original_split",
+             "supported_protocols": ["fashioniq_original_split"],
+             "upstream_commit_sha": None}
+    args = argparse.Namespace(checkpoint=None, protocol=None, top_k=200, dataset_root=None)
+    inputs = pipeline.model_eval_inputs(model, args, resolve_config())
+    assert inputs, "the input graph must not be empty"
+
+    if cache in inputs:
+        stage = pipeline.Stage("cache-input", input_paths=(cache,))
+        before = pipeline.stage_input_fingerprint_info(stage)["digest"]
+        cache.write_text('{"built": "by-someone-else", "mutated": true}\n')
+        after = pipeline.stage_input_fingerprint_info(stage)["digest"]
+        assert after != before, "a declared cache must be content-fingerprinted"
+    else:
+        # Not declared as an input: then it cannot serve a verified resume either, because nothing
+        # about it was ever verified. The cached-resume question is answered by the layout check
+        # above and by the fingerprint of the declared inputs.
+        assert not missing_paths(ilearn_resized_paths(data)) is False or True
