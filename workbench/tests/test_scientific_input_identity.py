@@ -327,3 +327,77 @@ def test_data_id_12_a_shared_input_change_invalidates_both_models(
     assert str(ws["data"] / "captions" / "cap.dress.val.json") in paths
     # And its own checkpoint is the only checkpoint it names.
     assert str(ws["checkpoints"] / "shared_a" / "model.pt") not in paths
+
+
+# ------------------------------------------------------- inaccessible and external content
+
+def test_an_inaccessible_directory_is_not_content_verified(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A directory the walk cannot enter has contents the fingerprint never saw.
+
+    `os.walk` skips an unreadable directory silently, so a tree holding a file nobody could read
+    was reportable as fully content-verified. The failure is now recorded and the tree is partial.
+    """
+    root = tmp_path / "tree"
+    (root / "visible").mkdir(parents=True)
+    (root / "visible" / "a.txt").write_text("a")
+    blocked = root / "blocked"
+    blocked.mkdir()
+    (blocked / "secret.bin").write_bytes(b"unreadable-content")
+
+    real_walk = pipeline.os.walk
+
+    def walk_with_a_failure(top, *, followlinks=False, onerror=None):
+        # Enter the visible part, then report the blocked directory exactly as the kernel would.
+        yield from real_walk(root / "visible", followlinks=False, onerror=onerror)
+        assert onerror is not None, "the walk must be given an error callback"
+        onerror(OSError(13, "Permission denied", str(blocked)))
+
+    monkeypatch.setattr(pipeline.os, "walk", walk_with_a_failure)
+    inventory, category, files, total, truncated = pipeline._walk_evidence(root)
+
+    assert category == pipeline.TREE_PARTIAL, category
+    assert category not in pipeline.VERIFIED_TREE_CATEGORIES
+    assert not truncated, "an inaccessible directory is partial evidence, not a budget problem"
+    assert inventory is not None
+
+
+def test_a_symlink_leaving_the_root_is_not_verified_evidence(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """An external target's bytes are never read by this walk, so it cannot count as verified.
+
+    Counting the link as verified would let a file outside the tree change without invalidating a
+    resumed stage.
+    """
+    root = tmp_path / "tree"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = outside / "photo.png"
+    target.write_bytes(b"external-v1")
+    (root / "img.png").symlink_to(target)
+
+    inventory, category, files, total, truncated = pipeline._walk_evidence(root)
+    assert category == pipeline.TREE_PARTIAL, category
+    assert category not in pipeline.VERIFIED_TREE_CATEGORIES
+
+    # And the recorded entry says why.
+    entry_categories = [
+        item["category"]
+        for item in pipeline.stage_input_fingerprint_info(
+            pipeline.Stage("link", input_paths=(root,)))["inputs"]
+        if item["category"] in {pipeline.TREE_PARTIAL, pipeline.TREE_CONTENT_VERIFIED}
+    ]
+    assert entry_categories == [pipeline.TREE_PARTIAL], entry_categories
+
+
+def test_a_symlink_inside_the_root_is_verified(tmp_path: Path) -> None:
+    """A link that stays inside is covered by the target's own entry in the same walk."""
+    root = tmp_path / "tree"
+    (root / "real").mkdir(parents=True)
+    (root / "real" / "img.png").write_bytes(b"internal")
+    (root / "img.png").symlink_to(root / "real" / "img.png")
+
+    inventory, category, files, total, truncated = pipeline._walk_evidence(root)
+    assert category == pipeline.TREE_CONTENT_VERIFIED, category
+    assert files == 2, files
