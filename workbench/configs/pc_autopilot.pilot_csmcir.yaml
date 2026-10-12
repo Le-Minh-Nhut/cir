@@ -1,0 +1,52 @@
+# First GPU pilot: CSMCIR under the strict clean checkpoint policy.
+#
+# CSMCIR is the shortest verified path to an official evaluation: one checkpoint with a recorded
+# clean (0% training-noise) condition, a verified download URL, a pinned command and a resolved
+# dataset path through its own fixed `fashionIQ_dataset` link.
+#
+# Its one open prerequisite is the author `COT_ours2/fashioniq` captions, which have no verified
+# author download source. If those captions are absent the run reports the corresponding asset
+# blocker instead of evaluating; that is the intended behaviour, not a failure of this config.
+#
+# Copy to a private path outside the repository, replace the `paths` values with this machine's
+# real locations, and add the secret separately:
+#
+#   export WORKBENCH_LEDGER_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+#   ./workbench/run.sh autopilot --config <this file> --apply --resume
+
+schema_version: 1
+selected_models:
+  - csmcir
+
+# Only weights whose recorded training condition is exactly 0. This is the default, and it is
+# stated explicitly because this profile is meant to be read as a strict-clean experiment.
+checkpoint_policy: strict_clean
+checkpoint_overrides: {}
+
+paths:
+  registry: ../registry/models.yaml
+  # The FashionIQ root itself: the directory containing captions/, image_splits/, images/.
+  dataset_root: ../../data/FashionIQ
+  # Generated state: run directories, evidence ledger, completion proofs, reports, GPU capability
+  # records, environment prefixes, the derived index. Keep it on persistent storage.
+  artifacts: ../artifacts
+  checkpoints: ../artifacts/checkpoints
+  results: ../artifacts/results
+  third_party: ../third_party
+
+budgets:
+  # 10 GiB. CSMCIR's single checkpoint is far smaller; the margin covers the auxiliary captions and
+  # leaves room for the LIMN bundle (5,376,030,471 bytes across three files) without re-editing.
+  max_download_bytes: 10737418240
+  max_models: 4
+  top_k: 200
+
+permissions:
+  allow_network: true
+  allow_large_downloads: true
+  # Leave this false unless you have reviewed each model's pinned requirements. Creating the
+  # environment is the step that installs research code, and that should be a deliberate act.
+  allow_env_install: false
+  allow_preparation: true
+  allow_gpu_eval: true
+  allow_index_write: true

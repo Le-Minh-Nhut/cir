@@ -135,8 +135,14 @@ def load_config(path: Path, *, registry: dict[str, Any] | None = None) -> Autopi
 
 
 def _configuration_digest(config: AutopilotConfig) -> str:
-    value = {"selected_models": config.selected_model_ids, "paths": {key: str(path) for key, path in config.paths.items()},
-             "budgets": config.budgets, "permissions": config.permissions}
+    value = {
+        "selected_models": list(config.selected_model_ids),
+        "paths": {key: str(path) for key, path in sorted(config.paths.items())},
+        "budgets": dict(config.budgets),
+        "permissions": dict(config.permissions),
+        "checkpoint_policy": config.checkpoint_policy,
+        "checkpoint_overrides": {k: sorted(v) for k, v in sorted(config.checkpoint_overrides.items())},
+    }
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
@@ -338,11 +344,42 @@ def _execute(config: AutopilotConfig, plan: dict[str, Any], *, resume: bool, for
                    if select.get("checkpoint_ids")}
     if not models:
         return {"exit_code": 0, "stages": {}, "missing_permissions": {}, "selected_models": []}
+    # Provision before the stages are built. The pipeline's `environment` stage can create an
+    # environment, but every later stage (runtime preflight, GPU probe, evaluation) is launched as a
+    # subprocess with an interpreter taken from this mapping, and that mapping is computed once,
+    # here. Leaving provisioning to the stage therefore meant the mapping was still empty when the
+    # preflight ran, and every model reported UNCONFIGURED.
+    assignment: dict[str, Any] = {}
+    provision_authorized = bool(config.permissions["allow_env_install"])
+    if provision_authorized:
+        try:
+            from workbench.backend.environment_planner import provision_environment_plan
+
+            provisioned = provision_environment_plan(
+                models, plan["environment_plan"], artifacts_root=config.paths["artifacts"],
+                allowed=True, third_party_root=config.paths["third_party"])
+            if isinstance(provisioned, dict):
+                # `provision_environment_plan` returns the assignment document, which embeds the
+                # provisioned plan under "plan"; that embedded plan is the one whose groups carry
+                # real state, and it is what the environment_plan.json contract expects.
+                plan["environment_plan"] = provisioned.get("plan") or provisioned
+                assignment = {"models": provisioned.get("models") or {},
+                              "groups": provisioned.get("groups") or []}
+        except Exception as error:
+            # A provisioning failure is reported through the stages it affects; it must not abort
+            # the whole run, because independent models may still be prepared and evaluated.
+            assignment = {"error": f"{type(error).__name__}: {error}"}
     try:
         from workbench.backend.environment_planner import apply_interpreter_mapping
         mapping = apply_interpreter_mapping(models, plan["environment_plan"], environ=os.environ)
     except ImportError:
         mapping = {}
+    # A model the provisioner actually assigned takes the provisioned interpreter, which may differ
+    # from the planning-time one after a group split.
+    for mid, info in (assignment.get("models") or {}).items():
+        interpreter = info.get("interpreter")
+        if interpreter and info.get("state") not in ("FAILED", "BLOCKED"):
+            mapping[mid] = interpreter
     child_environment = {
         "WORKBENCH_REGISTRY_PATH": str(config.paths["registry"]),
         "FASHIONIQ_ROOT": str(config.paths["dataset_root"]),
@@ -359,6 +396,8 @@ def _execute(config: AutopilotConfig, plan: dict[str, Any], *, resume: bool, for
     args = Namespace(
         mode="all", model=None, selected_model_ids=selected_ids,
         checkpoint_ids=checkpoints,
+        checkpoint_policy=config.checkpoint_policy,
+        checkpoint_overrides=dict(config.checkpoint_overrides),
         dataset_root=config.paths["dataset_root"], checkpoint=None,
         protocol=None, top_k=config.budgets["top_k"], continue_on_error=True,
         allow_env_install=config.permissions["allow_env_install"],
@@ -369,14 +408,24 @@ def _execute(config: AutopilotConfig, plan: dict[str, Any], *, resume: bool, for
     with patch.dict(os.environ, child_environment):
         stages = pipeline.all_stages(args, _workbench_config(config))
         environment_plan_path = config.paths["artifacts"] / "environment_plan.json"
-        plan_cmd = ["plan_environments.py", "--output", str(environment_plan_path),
-                    "--third-party-root", str(config.paths["third_party"])]
-        for mid in selected_ids:
-            plan_cmd.extend(["--model", mid])
-        stages.insert(0, pipeline.run_stage(
-            "environment-plan", pipeline.command(*plan_cmd),
-            output_paths=(environment_plan_path,),
-        ))
+        # The plan file is written here, from the SAME provisioning call that produced the
+        # interpreter mapping above, and no planning stage is inserted for that case: a second
+        # planner run would provision again and overwrite the file with a reuse-only view, so the
+        # recorded plan would disagree with the assignment the run actually used. Without the
+        # capability there is nothing to provision, and the read-only planning stage runs instead.
+        if provision_authorized:
+            environment_plan_path.write_text(json.dumps(plan["environment_plan"], indent=2, sort_keys=True) + "\n",
+                                             encoding="utf-8")
+        else:
+            plan_cmd = ["plan_environments.py", "--output", str(environment_plan_path),
+                        "--artifacts-root", str(config.paths["artifacts"]),
+                        "--third-party-root", str(config.paths["third_party"])]
+            for mid in selected_ids:
+                plan_cmd.extend(["--model", mid])
+            stages.insert(0, pipeline.run_stage(
+                "environment-plan", pipeline.command(*plan_cmd),
+                output_paths=(environment_plan_path,),
+            ))
         allowed = {name for name, value in config.permissions.items() if value}
         force = {pipeline.stage_key(stage) for stage in stages if stage.model_id in set(force_models)}
         state_path = _artifact_paths(config)["pipeline_state"]
@@ -395,7 +444,7 @@ def _execute(config: AutopilotConfig, plan: dict[str, Any], *, resume: bool, for
             for model_id in recipients:
                 missing.setdefault(model_id, []).extend(missing_caps)
     return {"exit_code": exit_code, "stages": records, "selected_models": selected_ids,
-            "checkpoint_ids": checkpoints,
+            "checkpoint_ids": checkpoints, "environment_assignment": assignment,
             "missing_permissions": {mid: sorted(set(items)) for mid, items in missing.items()}}
 
 
@@ -425,6 +474,7 @@ def _resolve_evaluation_metrics(
     related: list[dict[str, Any]],
     config: AutopilotConfig,
     plan: dict[str, Any],
+    execution: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], str | None]:
     from workbench.backend.metrics_extraction import extract_aggregate_metrics
     from workbench.backend.registry import sha256_file
@@ -434,9 +484,22 @@ def _resolve_evaluation_metrics(
     model = models.get(model_id, {})
     method_name = model.get("method_name") or model_id
     native_protocol = model.get("native_protocol") or "unknown"
-    env_groups = plan.get("environment_plan", {}).get("groups", [])
-    env_group = next((g.get("environment_id") for g in env_groups if model_id in g.get("members", [])), None)
-
+    env_group = None
+    if execution and isinstance(execution.get("environment_assignment"), dict):
+        env_group = execution["environment_assignment"].get("models", {}).get(model_id, {}).get("environment_id")
+    if env_group is None and "artifacts" in config.paths:
+        assignment_path = config.paths["artifacts"] / "environment_assignment.json"
+        if assignment_path.is_file():
+            try:
+                assignment = json.loads(assignment_path.read_text(encoding="utf-8"))
+                env_group = assignment.get("models", {}).get(model_id, {}).get("environment_id")
+            except Exception:
+                pass
+    if env_group is None and isinstance(plan.get("environment_assignment"), dict):
+        env_group = plan["environment_assignment"].get("models", {}).get(model_id, {}).get("environment_id")
+    if env_group is None:
+        env_groups = plan.get("environment_plan", {}).get("groups", [])
+        env_group = next((g.get("environment_id") for g in env_groups if model_id in g.get("members", [])), None)
     eval_stage = next((item for item in related if isinstance(item, dict) and item.get("name") == "evaluation"), None)
     run_id = None
     if eval_stage:
@@ -592,8 +655,8 @@ def _resolve_evaluation_metrics(
         ok, val_reason, _ = validator({"run_id": run_id})
         if not ok:
             return base_fields, f"corrupted evidence rejected: {val_reason}"
-    except Exception:
-        pass
+    except Exception as exc:
+        return base_fields, f"corrupted evidence rejected: validation error: {exc}"
 
     is_synthetic = bool(
         model.get("synthetic_source")
@@ -686,6 +749,16 @@ def _resolve_evaluation_metrics(
             else "no aggregate recall values extracted"
         )
         base_fields["metrics"] = None
+        base_fields["dress_r10"] = None
+        base_fields["dress_r50"] = None
+        base_fields["shirt_r10"] = None
+        base_fields["shirt_r50"] = None
+        base_fields["toptee_r10"] = None
+        base_fields["toptee_r50"] = None
+        base_fields["macro_r10"] = None
+        base_fields["macro_r50"] = None
+        base_fields["measured_difference"] = None
+        base_fields["evaluation_kind"] = "NOT_RUN"
 
     return base_fields, None
 
@@ -744,7 +817,7 @@ def _classify(plan: dict[str, Any], execution: dict[str, Any], config: Autopilot
         if status not in STATUSES:
             status = "FAILED_EVALUATION"
 
-        eval_info, eval_err = _resolve_evaluation_metrics(model_id, related, config, plan)
+        eval_info, eval_err = _resolve_evaluation_metrics(model_id, related, config, plan, execution)
         if status in ("COMPLETED", "COMPLETED_WITH_LIMITATIONS") and eval_err:
             status = "FAILED_OUTPUT_VALIDATION"
             reasons.append(eval_err)
@@ -755,6 +828,15 @@ def _classify(plan: dict[str, Any], execution: dict[str, Any], config: Autopilot
             if not eval_info.get("missing_metrics_reason"):
                 eval_info["missing_metrics_reason"] = f"model status is {status}"
 
+        if status not in ("COMPLETED", "COMPLETED_WITH_LIMITATIONS"):
+            for k in ("dress_r10", "dress_r50", "shirt_r10", "shirt_r50", "toptee_r10", "toptee_r50", "macro_r10", "macro_r50"):
+                eval_info[k] = None
+            eval_info["measured_difference"] = None
+            eval_info["evaluation_kind"] = "NOT_RUN" if (status == "NOT_RUN" or status.startswith("BLOCKED_")) else "FAILED"
+            eval_info["metrics"] = None
+
+        if eval_info.get("aggregate_only"):
+            eval_info["per_query_export_available"] = False
         val_idx_complete = records.get("validation-index", {}).get("status") == "COMPLETE"
         index_available = bool(val_idx_complete and eval_info.get("per_query_export_available"))
         row = {
@@ -776,14 +858,28 @@ def _classify(plan: dict[str, Any], execution: dict[str, Any], config: Autopilot
 def _write_reports(config: AutopilotConfig, plan: dict[str, Any], rows: list[dict[str, Any]], blockers: list[dict[str, Any]],
                    execution: dict[str, Any], *, planned: bool) -> dict[str, Any]:
     paths = _artifact_paths(config)
+    for row in rows:
+        st = row.get("status")
+        if st not in ("COMPLETED", "COMPLETED_WITH_LIMITATIONS"):
+            for k in ("dress_r10", "dress_r50", "shirt_r10", "shirt_r50", "toptee_r10", "toptee_r50", "macro_r10", "macro_r50"):
+                row[k] = None
+            row["metrics"] = None
+            row["measured_difference"] = None
+            row["evaluation_kind"] = "NOT_RUN" if (st == "NOT_RUN" or st.startswith("BLOCKED_")) else "FAILED"
+            if not row.get("missing_metrics_reason"):
+                row["missing_metrics_reason"] = f"model status is {st}"
+        if row.get("aggregate_only"):
+            row["per_query_export_available"] = False
+            row["index_available"] = False
     completed = sum(row["status"] == "COMPLETED" for row in rows)
     limited = sum(row["status"] == "COMPLETED_WITH_LIMITATIONS" for row in rows)
-    failed = len(rows) - completed - limited
+    failed = sum(row["status"] not in ("COMPLETED", "COMPLETED_WITH_LIMITATIONS") for row in rows)
+    pipeline_failed = execution.get("exit_code") not in (0, None)
     if planned:
         outcome, code = "PLANNED", 0
-    elif failed == 0 and limited == 0:
+    elif failed == 0 and limited == 0 and completed > 0 and not pipeline_failed:
         outcome, code = "FULL_SUCCESS", 0
-    elif completed + limited:
+    elif completed + limited > 0:
         outcome, code = "PARTIAL", 2
     else:
         outcome, code = "WORKFLOW_FAILURE", 1
@@ -805,6 +901,7 @@ def _write_reports(config: AutopilotConfig, plan: dict[str, Any], rows: list[dic
     summary = {"schema_version": 1, "status": outcome, "exit_code": code, "generated_at": generated,
                "selected_models": list(config.selected_model_ids), "solver_verified": plan["solver_verified"],
                "global_index_status": global_index_status,
+               "environment_assignment": {row["model_id"]: row.get("environment_group") for row in rows},
                "counts": {"selected": len(rows), "completed": completed, "completed_with_limitations": limited,
                           "blocked_or_failed": failed}, "models": rows}
     manifest = {"schema_version": 1, "configuration_digest": plan["configuration_digest"],
@@ -839,14 +936,14 @@ def _write_reports(config: AutopilotConfig, plan: dict[str, Any], rows: list[dic
         f"Global index status: **{global_index_status}**",
         "## Model Execution Status",
         "",
-        "| Model | Method | Status | Blockers | Run ID |",
-        "|---|---|---|---|---|",
+        "| Model | Method | Status | Environment Group | Blockers | Run ID |",
+        "|---|---|---|---|---|---|",
     ]
     for row in rows:
         blockers_str = "; ".join(row.get("blockers") or []) or "none"
         run_str = row.get("run_id") or "none"
-        md.append(f"| {row['model_id']} | {row.get('method_name', row['model_id'])} | {row['status']} | {blockers_str} | {run_str} |")
-
+        env_str = row.get("environment_group") or "none"
+        md.append(f"| {row['model_id']} | {row.get('method_name', row['model_id'])} | {row['status']} | {env_str} | {blockers_str} | {run_str} |")
     md.extend([
         "",
         "## Category Recall Evaluation (Dress / Shirt / Toptee)",

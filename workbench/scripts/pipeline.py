@@ -42,6 +42,9 @@ class Stage:
     receipt: bool = False
     run_id: str | None = None
     evidence: Callable[[dict | None], tuple[bool, str | None, dict | None]] | None = None
+    checkpoint_policy: str | None = None
+    checkpoint_selection: tuple[str, ...] = ()
+    checkpoint_overrides: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
 
 def stage_key(stage: Stage) -> str:
@@ -304,6 +307,10 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                     hasher.update(f"MODELS_SEL:{cmd[idx+1]}".encode("utf-8"))
                 elif arg in ("--third-party-root", "--source-root") and idx + 1 < len(cmd):
                     hasher.update(f"SOURCE_ROOT:{cmd[idx+1]}".encode("utf-8"))
+                elif arg in ("--artifacts-root",) and idx + 1 < len(cmd):
+                    hasher.update(f"ARTIFACTS_ROOT:{cmd[idx+1]}".encode("utf-8"))
+                elif arg in ("--output",) and idx + 1 < len(cmd):
+                    hasher.update(f"OUTPUT:{cmd[idx+1]}".encode("utf-8"))
     # The preprocessing recipe is part of what a result means: the same data evaluated under a
     # different layout, caption policy or image extension is a different experiment. It is a
     # derived identity rather than a file, so a model whose registry declaration changes
@@ -312,7 +319,11 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
         from workbench.backend.registry import model_by_id
 
         try:
-            recipe_digest = preparation_recipe_digest(model_by_id(stage.model_id))
+            recipe_digest = preparation_recipe_digest(
+                model_by_id(stage.model_id),
+                checkpoint_policy=stage.checkpoint_policy if stage.name == "evaluation" else None,
+                checkpoint_selection=stage.checkpoint_selection if stage.name == "evaluation" else (),
+                checkpoint_overrides=stage.checkpoint_overrides if stage.name == "evaluation" else ())
         except Exception:
             recipe_digest = "UNKNOWN_RECIPE"
         hasher.update(f"RECIPE:{recipe_digest}".encode("utf-8"))
@@ -745,6 +756,9 @@ def run_stage(
     model_id: str | None = None,
     checkpoint_id: str | None = None,
     protocol: str | None = None,
+    checkpoint_policy: str | None = None,
+    checkpoint_selection: tuple[str, ...] = (),
+    checkpoint_overrides: tuple[tuple[str, tuple[str, ...]], ...] = (),
     dependencies: tuple[str, ...] = (),
     input_paths: tuple[Path, ...] = (),
     output_paths: tuple[Path, ...] = (),
@@ -763,7 +777,9 @@ def run_stage(
         skipped=skipped,
         model_id=model_id,
         checkpoint_id=checkpoint_id,
-        protocol=protocol,
+        checkpoint_policy=checkpoint_policy,
+        checkpoint_selection=checkpoint_selection,
+        checkpoint_overrides=checkpoint_overrides,
         dependencies=dependencies,
         input_paths=input_paths,
         output_paths=output_paths,
@@ -792,11 +808,27 @@ def layout_prepare(args: argparse.Namespace, config: WorkbenchConfig) -> Stage:
     active = args.model == "csmcir" or (args.model is None and any((args.sync_sources, args.download_checkpoints, args.download_auxiliary_assets, args.evaluate)))
     if not active:
         return Stage("dataset-link", skipped="CSMCIR preparation not selected")
+    link = config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset"
+    target = dataset_root(args, config)
+    is_valid_link = False
+    if link.is_symlink():
+        try:
+            is_valid_link = link.resolve() == target.resolve()
+        except (OSError, RuntimeError):
+            is_valid_link = False
+    if is_valid_link:
+        return run_stage(
+            "dataset-link",
+            command("prepare_dataset.py", "--dataset-root", target, "--model", "csmcir", "--check-only"),
+            model_id="csmcir",
+            output_paths=(link,),
+            required_capabilities=frozenset(),
+        )
     return run_stage(
         "dataset-link",
-        command("prepare_dataset.py", "--dataset-root", dataset_root(args, config), "--model", "csmcir"),
+        command("prepare_dataset.py", "--dataset-root", target, "--model", "csmcir"),
         model_id="csmcir",
-        output_paths=(config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset",),
+        output_paths=(link,),
         required_capability="allow_preparation",
     )
 
@@ -869,7 +901,9 @@ def _execution_identity(model: dict, config: WorkbenchConfig) -> dict:
     return {"digest": digest.hexdigest()}
 
 
-def preparation_recipe_digest(model_dict: dict) -> str:
+def preparation_recipe_digest(model_dict: dict, *, checkpoint_policy: str | None = None,
+                               checkpoint_selection: tuple[str, ...] = (),
+                               checkpoint_overrides: tuple[tuple[str, tuple[str, ...]], ...] = ()) -> str:
     """Digest of the preprocessing recipe this model is evaluated under.
 
     The recipe is what turns raw FashionIQ into the model's inputs: layout, caption policy,
@@ -889,6 +923,10 @@ def preparation_recipe_digest(model_dict: dict) -> str:
         "validation_caption_policy": model_dict.get("validation_caption_policy"),
         "correction_policy": model_dict.get("correction_policy"),
     }
+    if checkpoint_policy is not None or checkpoint_selection or checkpoint_overrides:
+        relevant["checkpoint_policy"] = checkpoint_policy
+        relevant["checkpoint_selection"] = list(checkpoint_selection)
+        relevant["checkpoint_overrides"] = {mid: list(ids) for mid, ids in checkpoint_overrides}
     return hashlib.sha256(
         json.dumps(relevant, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
@@ -1047,6 +1085,7 @@ def model_eval_outputs(model_dict: dict, args: argparse.Namespace, config: Workb
     ckpt_id = resolved_checkpoint_id(model_dict, args)
     return (_artifacts_root(config) / "reports" / f"{mid}_{ckpt_id}_latest_successful.json",)
 def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
+    from workbench.backend.fashioniq_layout import canonical_dataset_link_path
     from workbench.backend.registry import checkpoint_path, model_by_id
     model_obj = model_by_id(args.model) if args.model else None
     sdir = model_obj.get("source_dir") if model_obj else None
@@ -1106,10 +1145,17 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
     else:
         strict_runtime = Stage("runtime-preflight", skipped="per-model strict guards run inside --all-runnable evaluation")
     if args.evaluate:
-        evaluation_args = [*selection(args, runnable=True), "--dataset-root", str(dataset_root(args, config))]
-        if args.model == "csmcir":
-            evaluation_args[-1] = str(config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset")
-            evaluation_args.extend(["--canonical-dataset-root", str(dataset_root(args, config))])
+        evaluation_args = list(selection(args, runnable=True))
+        link_path = canonical_dataset_link_path(model_obj, config.WORKBENCH_THIRD_PARTY_ROOT) if model_obj else None
+        if link_path:
+            evaluation_args.extend([
+                "--dataset-root", str(link_path),
+                "--canonical-dataset-root", str(dataset_root(args, config)),
+            ])
+        else:
+            evaluation_args.extend([
+                "--dataset-root", str(dataset_root(args, config)),
+            ])
         if args.checkpoint:
             evaluation_args.extend(["--checkpoint", args.checkpoint])
         if args.protocol:
@@ -1140,6 +1186,10 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
                 model_id=args.model,
                 checkpoint_id=args.checkpoint,
                 protocol=args.protocol,
+                checkpoint_policy=getattr(args, "checkpoint_policy", None),
+                checkpoint_selection=tuple(_checkpoint_ids(args, args.model)),
+                checkpoint_overrides=tuple(sorted(
+                    (mid, tuple(ids)) for mid, ids in getattr(args, "checkpoint_overrides", {}).items())),
                 dependencies=("runtime-preflight",),
                 input_paths=eval_inputs,
                 output_paths=eval_outputs,
@@ -1344,7 +1394,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
                     model_id=mid,
                     output_paths=sync_out,
                     receipt=True,
-                    required_capabilities={"allow_network", "allow_preparation"},
+                    required_capabilities={"allow_network"},
                 ))
 
         # Only an actual provisioning action is side-effecting; plain verification is read-only.
@@ -1365,8 +1415,15 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         prep_owner = next((candidate["model_id"] for candidate in selected_models
                            if prep_link and canonical_dataset_link_path(
                                candidate, config.WORKBENCH_THIRD_PARTY_ROOT) == prep_link), None)
-        prep_cmd = ["--model", mid, "--dataset-root", str(dataset_root(args, config))]
-        will_prepare = bool(prep_link) and prep_owner == mid and getattr(args, "allow_preparation", False) and getattr(args, "apply", False)
+        target_root = dataset_root(args, config)
+        is_link_valid = False
+        if prep_link and prep_link.is_symlink():
+            try:
+                is_link_valid = prep_link.resolve() == target_root.resolve()
+            except (OSError, RuntimeError):
+                is_link_valid = False
+        prep_cmd = ["--model", mid, "--dataset-root", str(target_root)]
+        will_prepare = bool(prep_link) and prep_owner == mid and not is_link_valid and getattr(args, "allow_preparation", False) and getattr(args, "apply", False)
         if will_prepare:
             prep_cmd.extend(["--execute", "--allow-preparation"])
         prep_deps = ["dataset", sync_dep]
@@ -1375,14 +1432,14 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         # A model whose declared dataset link is missing cannot be prepared without authorization,
         # so an `--apply` run that lacks it is refused as unauthorized rather than allowed to reach
         # the read-only verify step, exit nonzero, and surface as an unexplained stage failure.
-        needs_preparation = bool(prep_link) and prep_owner == mid and getattr(args, "apply", False)
+        needs_preparation = bool(prep_link) and prep_owner == mid and not is_link_valid and getattr(args, "apply", False)
         stages.append(run_stage(
             "preparation",
             command("prepare_model.py", *prep_cmd),
             model_id=mid,
             dependencies=tuple(prep_deps),
             output_paths=(prep_link,) if prep_link and prep_owner == mid else (),
-            required_capabilities=({"allow_preparation", "allow_network"} if needs_preparation else frozenset()),
+            required_capabilities=({"allow_preparation"} if needs_preparation else frozenset()),
         ))
 
         selected_checkpoints = _checkpoint_ids(args, mid)
@@ -1491,10 +1548,17 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             dependencies=preflight_deps,
         ))
 
-        eval_args = ["--model", mid, "--dataset-root", str(dataset_root(args, config))]
-        if mid == "csmcir":
-            eval_args[2] = str(config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset")
-            eval_args.extend(["--canonical-dataset-root", str(dataset_root(args, config))])
+        eval_args = ["--model", mid]
+        link_path = canonical_dataset_link_path(m, config.WORKBENCH_THIRD_PARTY_ROOT)
+        if link_path:
+            eval_args.extend([
+                "--dataset-root", str(link_path),
+                "--canonical-dataset-root", str(dataset_root(args, config)),
+            ])
+        else:
+            eval_args.extend([
+                "--dataset-root", str(dataset_root(args, config)),
+            ])
         eval_selection = _checkpoint_ids(args, mid)
         eval_args.extend(_checkpoint_args(args, mid))
         if args.protocol:
@@ -1514,6 +1578,11 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             model_id=mid,
             checkpoint_id=eval_selection[0] if len(eval_selection) == 1 else None,
             protocol=args.protocol,
+            checkpoint_policy=getattr(args, "checkpoint_policy", None),
+            checkpoint_selection=tuple(eval_selection),
+            checkpoint_overrides=tuple(sorted(
+                (override_mid, tuple(ids))
+                for override_mid, ids in getattr(args, "checkpoint_overrides", {}).items())),
             dependencies=eval_deps,
             input_paths=eval_ins,
             output_paths=eval_outs,

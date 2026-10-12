@@ -552,12 +552,17 @@ def test_bounded_split_and_retry(tmp_path, monkeypatch):
 def test_manage_environment_respects_shared_group(tmp_path, monkeypatch):
     from workbench.scripts import manage_environment
 
+    fake_interp = tmp_path / "bin" / "python"
+    fake_interp.parent.mkdir(parents=True, exist_ok=True)
+    fake_interp.touch()
+    os.chmod(fake_interp, 0o755)
     assignment = {
         "models": {
             "shared-a": {
                 "environment_id": "cir-shared123",
-                "interpreter": "/artifacts/environments/cir-shared123/bin/python",
+                "interpreter": str(fake_interp),
                 "group_members": ["shared-a", "shared-b"],
+                "state": "RUNTIME_VERIFIED",
                 "shared": True,
             }
         }
@@ -634,3 +639,301 @@ def test_real_conda_cold_start_shared_environment_and_reuse(tmp_path):
     assert rerun_group["state"] == "RUNTIME_VERIFIED"
     assert rerun_group["runtime_verification_status"] == "READY"
     assert any("reused verified interpreter" in ev for ev in rerun_group["evidence"])
+
+
+def test_p0_03_manage_environment_failure_propagates(tmp_path, monkeypatch):
+    from workbench.scripts import manage_environment
+
+    m = {
+        "model_id": "fail-model",
+        "environment": {
+            "python": "3.11",
+            "packages": ["impossible-pkg==99.99.99"],
+            "confidence": "TEST",
+        },
+    }
+    assignment = {
+        "models": {
+            "fail-model": {
+                "environment_id": "cir-failgroup",
+                "interpreter": str(tmp_path / "nonexistent" / "bin" / "python"),
+                "group_members": ["fail-model"],
+                "shared": False,
+            }
+        }
+    }
+    assign_path = tmp_path / "environment_assignment.json"
+    planner.write_environment_assignment(assignment, assign_path)
+    config = SimpleNamespace(WORKBENCH_ARTIFACTS_ROOT=tmp_path, WORKBENCH_THIRD_PARTY_ROOT=tmp_path)
+
+    monkeypatch.setattr(planner, "_solver_command", lambda: None)
+    from workbench.backend import registry
+    monkeypatch.setattr(registry, "load_registry", lambda: {"models": [m]})
+    provision = planner.provision_environment_plan
+    result = {}
+
+    def capture_assignment(*args, **kwargs):
+        assignment_result = provision(*args, **kwargs)
+        result.update(assignment_result)
+        return assignment_result
+
+    monkeypatch.setattr(planner, "provision_environment_plan", capture_assignment)
+    st = {"model_id": "fail-model", "source_synced": True, "env_spec_path": None, "env_spec_type": None, "ready": False}
+    ok = manage_environment.create_env(m, st, dry_run=False, config=config)
+    assert ok is False
+    assert result["groups"][0]["installation_status"] == "FAILED"
+    assert result["groups"][0]["state"] == "FAILED"
+    assert result["models"]["fail-model"]["state"] == "FAILED"
+
+
+def test_p0_04_safe_replacement_and_atomic_commit(tmp_path, monkeypatch):
+    m = {
+        "model_id": "safe-replace-model",
+        "environment": {
+            "python": "3.11",
+            "packages": ["pyyaml==6.0"],
+            "confidence": "TEST",
+        },
+    }
+    plan = planner.plan_environments([m], solver=accepted, artifacts_root=tmp_path)
+    group = plan["groups"][0]
+    env_id = group["environment_id"]
+    existing_prefix = tmp_path / "environments" / env_id
+    existing_prefix.mkdir(parents=True, exist_ok=True)
+    sentinel = existing_prefix / "sentinel.txt"
+    sentinel.write_text("keep_this_safe", encoding="utf-8")
+
+    # 1. Force verification to fail during provisioning.
+    monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
+
+    def mock_subp_run(argv, *args, **kwargs):
+        if "create" in argv and "--prefix" in argv:
+            prefix = Path(argv[argv.index("--prefix") + 1])
+            interpreter = prefix / "bin" / "python"
+            interpreter.parent.mkdir(parents=True, exist_ok=True)
+            interpreter.touch()
+            os.chmod(interpreter, 0o755)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", mock_subp_run)
+
+    def failing_verify(staging_group, *args, **kwargs):
+        staging_prefix = Path(staging_group["conda_env_path"])
+        assert staging_prefix.name.startswith(f".staging-{env_id}-")
+        assert not (staging_prefix / planner.MARKER_FILENAME).exists()
+        return False, "verification failed intentionally", {}
+
+    monkeypatch.setattr(planner, "_verify_group_interpreter", failing_verify)
+    fail_assign = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True)
+
+    # Sentinel file must still exist and no invalid assignment published
+    assert sentinel.is_file()
+    assert sentinel.read_text(encoding="utf-8") == "keep_this_safe"
+    assert not (tmp_path / "environment_assignment.json").is_file()
+    assert fail_assign["groups"][0]["state"] == "FAILED"
+
+    # 2. Now run real safe replacement logic where replacement succeeds to a NEW prefix
+    def mock_verify_group(staging_group, *a, **k):
+        assert not (Path(staging_group["conda_env_path"]) / planner.MARKER_FILENAME).exists()
+        return True, "verification passed", {}
+
+    monkeypatch.setattr(planner, "_verify_group_interpreter", mock_verify_group)
+    monkeypatch.undo()  # restore _provision_group
+    monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
+    monkeypatch.setattr(planner, "_verify_group_interpreter", mock_verify_group)
+
+    plan["interpreter_mapping"]["safe-replace-model"] = str(
+        tmp_path / "environments" / "cir-stale-mapping" / "bin" / "python")
+    # Mock subprocess.run to create the staging interpreter file so rename succeeds
+    def mock_subp_run(argv, *a, **k):
+        if "create" in argv and "--prefix" in argv:
+            p = Path(argv[argv.index("--prefix") + 1])
+            interp = p / "bin" / "python"
+            interp.parent.mkdir(parents=True, exist_ok=True)
+            interp.touch()
+            os.chmod(interp, 0o755)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", mock_subp_run)
+
+    success_assign = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True)
+    new_group = success_assign["groups"][0]
+    assert new_group["state"] == "RUNTIME_VERIFIED"
+    new_prefix = Path(new_group["conda_env_path"])
+    # Shows successful replacement goes to a NEW prefix
+    assert new_prefix != existing_prefix
+    assert new_prefix.name.startswith(f"{env_id}-")
+    # Existing prefix with sentinel file still intact
+    assert sentinel.is_file()
+    assert sentinel.read_text(encoding="utf-8") == "keep_this_safe"
+    # Assignment is committed atomically
+    assert (tmp_path / "environment_assignment.json").is_file()
+    loaded_assignment = planner.load_environment_assignment(tmp_path / "environment_assignment.json")
+    assert loaded_assignment["models"]["safe-replace-model"]["interpreter"] == new_group["interpreter"]
+    assert loaded_assignment["models"]["safe-replace-model"]["environment_id"] == new_group["environment_id"]
+    assert loaded_assignment["models"]["safe-replace-model"]["conda_env_path"] == str(new_prefix)
+    # Workbench marker recorded
+    assert planner._is_workbench_managed(new_prefix, env_id) is True
+    assert planner._is_workbench_managed(existing_prefix) is False
+
+
+def test_p0_05_package_manager_env_strips_credentials(monkeypatch):
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "sensitive_ledger_key_12345")
+    monkeypatch.setenv("WORKBENCH_SECRET_TOKEN", "sensitive_secret_token_abcde")
+    monkeypatch.setenv("HF_TOKEN", "hf_secret_token")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "aws_secret")
+
+    child_env = planner._package_manager_env()
+    assert "WORKBENCH_LEDGER_KEY" not in child_env
+    assert "WORKBENCH_SECRET_TOKEN" not in child_env
+    assert "HF_TOKEN" not in child_env
+    assert "AWS_SECRET_ACCESS_KEY" not in child_env
+    assert "PATH" in child_env
+
+    # Run actual python probe with sanitized environment
+    probe_code = "import os; assert 'WORKBENCH_LEDGER_KEY' not in os.environ"
+    res = subprocess.run([sys.executable, "-c", probe_code], env=child_env, capture_output=True, text=True)
+    assert res.returncode == 0
+
+
+def test_interrupted_staging_prefix_is_never_adopted(tmp_path, monkeypatch):
+    from workbench.scripts import manage_environment
+
+    item = model("staged-model", python="3.11", env_var="STAGED_MODEL_PYTHON")
+    plan = planner.plan_environments([item], solver=accepted, artifacts_root=tmp_path)
+    group = plan["groups"][0]
+    prefix = tmp_path / "environments" / f".staging-{group['environment_id']}-interrupted"
+    interpreter = prefix / "bin" / "python"
+    interpreter.parent.mkdir(parents=True)
+    interpreter.touch()
+    os.chmod(interpreter, 0o755)
+    sentinel = prefix / "do-not-adopt"
+    sentinel.write_text("left by interrupted provisioning", encoding="utf-8")
+    (prefix / planner.MARKER_FILENAME).write_text(
+        json.dumps({"managed_by": "workbench", "environment_id": group["environment_id"]}), encoding="utf-8")
+    monkeypatch.setenv("STAGED_MODEL_PYTHON", str(interpreter))
+
+    group["interpreter"] = str(interpreter)
+    group["conda_env_path"] = str(prefix)
+    assert planner.apply_interpreter_mapping([item], plan)["staged-model"] is None
+    installation, verification, reused = planner._group_status(
+        {"members": ["staged-model"], "unresolved": []},
+        {"staged-model": item}, {"staged-model": planner.model_constraints(item)}, "available")
+    assert (installation, verification, reused) == ("EXISTING_UNVERIFIED", "IMPORT_CHECK_FAILED", None)
+
+    ok, reason = planner._provision_group(
+        group, {"staged-model": item}, {"staged-model": planner.model_constraints(item)},
+        tmp_path, None, True, "conda")
+    assert not ok and "interrupted staging" in reason.lower()
+    assert group["state"] == "FAILED"
+    assert sentinel.read_text(encoding="utf-8") == "left by interrupted provisioning"
+    assert not planner._is_workbench_managed(prefix, group["environment_id"])
+
+    assignment = {"models": {"staged-model": {
+        "environment_id": group["environment_id"], "interpreter": str(interpreter),
+        "conda_env_path": str(prefix), "group_members": ["staged-model"]}}}
+    planner.write_environment_assignment(assignment, tmp_path / "environment_assignment.json")
+    (tmp_path / "environment_plan.json").write_text(json.dumps({"groups": [group]}), encoding="utf-8")
+    config = SimpleNamespace(WORKBENCH_ARTIFACTS_ROOT=tmp_path)
+    assert manage_environment._check_shared_assignment("staged-model", config) is None
+    status = manage_environment._interpreter_status(item, tmp_path)
+    assert status["status"] == "INTERRUPTED_STAGING" and status["verified"] is False
+
+
+def test_real_provisioning_children_withhold_ledger_key(tmp_path, monkeypatch):
+    source = _write_import_fixture(monkeypatch, tmp_path, "import packaging\n")
+    item = {"model_id": "encoder", "source_dir": "ENCODER", "source_available": True,
+            "environment": {"python": "3.11", "packages": ["packaging==26.3"], "confidence": "TEST"}}
+    plan = planner.plan_environments([item], solver=accepted, artifacts_root=tmp_path,
+                                     third_party_root=tmp_path / "third_party")
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "fake-ledger-key-for-child-test")
+    monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
+    monkeypatch.setattr(planner, "_pip_specs_for_group", lambda *args: ["packaging==26.3"])
+    monkeypatch.setattr(planner.runtime, "inspect_environment_distributions",
+                        lambda prefix: ({"sample": "1", "packaging": "26.3"}, {"sample", "packaging"}, set()))
+    monkeypatch.setattr(planner.runtime, "verify_environment",
+                        lambda *args, **kwargs: SimpleNamespace(
+                            tier="RUNTIME_READY", status="READY", reason="ok"))
+
+    actual_run = subprocess.run
+    child_commands = []
+
+    def provisioner_run(argv, *args, **kwargs):
+        assert "WORKBENCH_LEDGER_KEY" not in kwargs["env"]
+        child_commands.append(argv)
+        if argv[0] == "conda" and argv[1] == "create":
+            prefix = Path(argv[argv.index("--prefix") + 1])
+            interpreter = prefix / "bin" / "python"
+            interpreter.parent.mkdir(parents=True, exist_ok=True)
+            interpreter.write_text(
+                f"#!{sys.executable}\nimport os, sys\n"
+                "assert 'WORKBENCH_LEDGER_KEY' not in os.environ\n"
+                "if sys.argv[1:3] == ['-m', 'pip']:\n"
+                "    assert sys.argv[3] in ('check', 'install')\n"
+                "    raise SystemExit(0)\n"
+                "if '-c' in sys.argv:\n"
+                "    assert sys.argv[sys.argv.index('-c') + 1].startswith('import ')\n"
+                "    raise SystemExit(0)\n"
+                f"os.execv({sys.executable!r}, [{sys.executable!r}, *sys.argv[1:]])\n",
+                encoding="utf-8")
+            os.chmod(interpreter, 0o755)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return actual_run(argv, *args, **kwargs)
+    monkeypatch.setattr(subprocess, "run", provisioner_run)
+    assignment = planner.provision_environment_plan(
+        [item], plan, artifacts_root=tmp_path, allowed=True, third_party_root=tmp_path / "third_party")
+
+    group = assignment["groups"][0]
+    assert group["state"] == "RUNTIME_VERIFIED", group
+    assert planner._is_workbench_managed(Path(group["conda_env_path"]), group["environment_id"])
+    assert any(len(argv) > 3 and argv[1:3] == ["-m", "pip"] and argv[3] == "check"
+               for argv in child_commands), child_commands
+    assert any(argv[1:4] == ["-m", "pip", "install"] for argv in child_commands)
+    assert any("-c" in argv for argv in child_commands)
+    assert sum("-c" in argv for argv in child_commands) >= 2
+
+
+def test_p1_03_range_constraint_enforced_against_installed(tmp_path, monkeypatch):
+    m = {
+        "model_id": "range-model",
+        "environment": {
+            "python": "3.11",
+            "packages": ["numpy>=1.21,<1.24"],
+            "confidence": "TEST",
+        },
+    }
+    plan = planner.plan_environments([m], solver=accepted, artifacts_root=tmp_path)
+    group = plan["groups"][0]
+
+    fake_interp = tmp_path / "env" / "bin" / "python"
+    fake_interp.parent.mkdir(parents=True, exist_ok=True)
+    fake_interp.touch()
+    os.chmod(fake_interp, 0o755)
+    group["interpreter"] = str(fake_interp)
+    group["conda_env_path"] = str(fake_interp.parent.parent)
+
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
+
+    # Case 1: numpy installed version 1.25.0 is OUTSIDE range >=1.21,<1.24 -> must refuse RUNTIME_VERIFIED
+    monkeypatch.setattr(planner.runtime, "inspect_environment_distributions",
+                        lambda prefix: ({"numpy": "1.25.0"}, {"numpy"}, set()))
+    ok, reason, details = planner._verify_group_interpreter(
+        group, {"range-model": m}, {"range-model": planner.model_constraints(m)}
+    )
+    assert ok is False
+    assert "numpy" in reason.lower()
+    assert "mismatch" in reason.lower()
+    assert details["verified_versions"]["numpy"]["installed"] == "1.25.0"
+
+    # Case 2: numpy installed version 1.22.0 is INSIDE range >=1.21,<1.24 -> accepted
+    monkeypatch.setattr(planner.runtime, "inspect_environment_distributions",
+                        lambda prefix: ({"numpy": "1.22.0"}, {"numpy"}, set()))
+    # The tier must be one the runtime actually treats as ready, or the refusal under test would
+    # come from the stub rather than from the version check.
+    monkeypatch.setattr(planner.runtime, "verify_environment",
+                        lambda *a, **k: SimpleNamespace(tier="RUNTIME_READY", status="READY", reason="ok"))
+    ok2, reason2, details2 = planner._verify_group_interpreter(
+        group, {"range-model": m}, {"range-model": planner.model_constraints(m)}
+    )
+    assert ok2 is True
+    assert details2["verified_versions"]["numpy"]["installed"] == "1.22.0"

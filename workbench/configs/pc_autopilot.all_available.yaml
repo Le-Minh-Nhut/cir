@@ -1,0 +1,56 @@
+# Every eligible model, with the noise-trained cohort made explicit.
+#
+# This profile runs the whole registry. Models that cannot be evaluated for reasons outside the
+# software -- no source, no checkpoint, an unverified mapping, a missing author asset, no audited
+# evaluator command -- finish as BLOCKED with the exact reason rather than being skipped silently.
+# Read `reports/autopilot_summary.md` and `reports/blockers.json` afterwards.
+#
+# `include_flagged_conditions` is what makes the noise-trained cohort selectable instead of
+# automatically refused. It is necessary but not sufficient: a model that registers SEVERAL
+# variants without declaring which one is the benchmark checkpoint is still blocked, because
+# choosing among them would be a guess. As of the current registry that leaves Air-Know, ConeSep,
+# HABIT and INTENT blocked with `BLOCKED_CHECKPOINT_SELECTION` plus the list of options, and the
+# three models with a single source-backed variant (CSMCIR, HINT, LIMN) runnable. To run a specific
+# flagged variant, name it in `checkpoint_overrides` and it will be recorded as an operator override
+# rather than as a clean checkpoint.
+#
+# Copy to a private path outside the repository, replace the `paths` values, and export the key:
+#
+#   export WORKBENCH_LEDGER_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+#   ./workbench/run.sh autopilot --config <this file> --apply --resume
+#
+# Environment creation is authorized here because this profile is intended to run unattended on the
+# GPU host; the planner installs each compatible group into its own prefix under `artifacts` and
+# never touches an environment it did not create.
+
+schema_version: 1
+selected_models: all_registered
+
+checkpoint_policy: include_flagged_conditions
+# A model whose registered variants are ambiguous stays blocked unless you resolve the mapping by
+# hand and name the variant here, e.g. `pair: [pair_b1]`. Naming a checkpoint is recorded in the
+# report as an operator override rather than as a clean checkpoint.
+checkpoint_overrides: {}
+
+paths:
+  registry: ../registry/models.yaml
+  dataset_root: ../../data/FashionIQ
+  artifacts: ../artifacts
+  checkpoints: ../artifacts/checkpoints
+  results: ../artifacts/results
+  third_party: ../third_party
+
+budgets:
+  # Covers the LIMN bundle (5,376,030,471 bytes) plus the registered auxiliary captions, with margin
+  # for the remaining models' checkpoints. Raise it only after checking the registry sizes.
+  max_download_bytes: 21474836480
+  max_models: 32
+  top_k: 200
+
+permissions:
+  allow_network: true
+  allow_large_downloads: true
+  allow_env_install: true
+  allow_preparation: true
+  allow_gpu_eval: true
+  allow_index_write: true

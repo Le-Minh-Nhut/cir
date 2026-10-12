@@ -18,7 +18,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.registry import load_registry
+from workbench.backend.environment_planner import _is_staging_path, _package_manager_env
 from workbench.backend.runtime import READY_TIERS, check_environment_isolation, verify_environment
+
 
 
 _ENV_SPEC_CANDIDATES = ("environment.yml", "environment.yaml", "requirements.txt")
@@ -52,6 +54,9 @@ def _interpreter_status(model: dict, source_root: Path) -> dict:
     env = model.get("environment") or {}
     var = env.get("python_env_var")
     configured = _interpreter_from_env_var(model)
+    if configured and _is_staging_path(configured):
+        return {"status": "INTERRUPTED_STAGING", "tier": "NOT_READY", "interpreter": configured,
+                "variable": var, "verified": False, "reason": "interrupted staging environment is not authoritative"}
     if configured:
         # Keep the configured invocation path exactly as given: resolving a venv's
         # bin/python can point at the shared system binary and destroy the context.
@@ -75,7 +80,18 @@ def _check_shared_assignment(model_id: str, config) -> dict | None:
             data = load_environment_assignment(assignment_path)
             model_info = data.get("models", {}).get(model_id)
             if model_info and model_info.get("environment_id"):
-                return model_info
+                for group in data.get("groups", []):
+                    if (group.get("environment_id") == model_info["environment_id"] and
+                            model_id in group.get("members", [])):
+                        return {**group, "group_members": list(group["members"]),
+                                "shared": len(group["members"]) > 1}
+                if data.get("groups"):
+                    return None
+                if (not data.get("groups") and
+                        model_id in model_info.get("group_members", []) and
+                        not any(_is_staging_path(model_info.get(key))
+                                for key in ("interpreter", "conda_env_path"))):
+                    return model_info
         except Exception:
             pass
     plan_path = config.WORKBENCH_ARTIFACTS_ROOT / "environment_plan.json"
@@ -85,6 +101,8 @@ def _check_shared_assignment(model_id: str, config) -> dict | None:
             plan = json.loads(plan_path.read_text(encoding="utf-8"))
             for group in plan.get("groups", []):
                 members = group.get("members", [])
+                if any(_is_staging_path(group.get(key)) for key in ("interpreter", "conda_env_path")):
+                    continue
                 if model_id in members and len(members) >= 1:
                     return {
                         "environment_id": group.get("environment_id"),
@@ -132,10 +150,18 @@ def status(model: dict, config) -> dict:
         res["shared_group"] = shared_info.get("environment_id")
         res["shared_members"] = shared_info.get("group_members")
         res["shared_interpreter"] = shared_info.get("interpreter")
-        if shared_info.get("interpreter") and not res.get("interpreter"):
-            res["interpreter"] = shared_info["interpreter"]
+        assigned = shared_info.get("interpreter")
+        state = shared_info.get("state")
+        if assigned:
+            res["interpreter"] = assigned
+            if state == "RUNTIME_VERIFIED" and Path(assigned).is_file() and os.access(assigned, os.X_OK):
+                res["interpreter_status"] = "GROUP_READY"
+                res["runtime_verified"] = True
+                res["ready"] = True
+            elif state in ("FAILED", "BLOCKED"):
+                res["ready"] = False
+                res["runtime_reason"] = f"assigned group {res['shared_group']} is {state}"
     return res
-
 
 def print_status(s: dict) -> None:
     label = "OK" if s["ready"] else "BLOCKED"
@@ -165,21 +191,53 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None) -> bool:
         env_id = shared_info.get("environment_id")
         interp = shared_info.get("interpreter")
         print(f"[GROUP] {model_id}: assigned to shared group {env_id} (members: {members_str}); interpreter: {interp}")
-        if interp and not Path(interp).is_file() and not dry_run:
-            from workbench.backend.environment_planner import plan_environments, provision_environment_plan
-            from workbench.backend.registry import load_registry
-            registry = load_registry()
-            group_models = [m for m in registry["models"] if m["model_id"] in shared_info.get("group_members", [])]
-            plan_path = config.WORKBENCH_ARTIFACTS_ROOT / "environment_plan.json"
-            if plan_path.is_file():
-                try:
-                    import json
-                    plan = json.loads(plan_path.read_text(encoding="utf-8"))
-                except Exception:
-                    plan = plan_environments(group_models, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
-            else:
-                plan = plan_environments(group_models, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
-            provision_environment_plan(registry["models"], plan, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT, allowed=True)
+        if dry_run:
+            print(f"[OK] dry-run: would provision or reuse group {env_id}")
+            return True
+        if (shared_info.get("state") == "RUNTIME_VERIFIED" and interp and
+                not _is_staging_path(interp) and Path(interp).is_file() and os.access(interp, os.X_OK)):
+            return True
+        from workbench.backend.environment_planner import plan_environments, provision_environment_plan
+        from workbench.backend.registry import load_registry
+        registry = load_registry()
+        group_members = shared_info.get("group_members", [model_id])
+        group_models = [m for m in registry["models"] if m["model_id"] in group_members]
+        if not group_models:
+            group_models = [model]
+        plan_path = config.WORKBENCH_ARTIFACTS_ROOT / "environment_plan.json"
+        plan = None
+        if plan_path.is_file():
+            try:
+                import json
+                plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            except Exception:
+                plan = None
+        if plan is None:
+            plan = plan_environments(group_models, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
+        assignment = provision_environment_plan(
+            registry["models"] if registry.get("models") else group_models,
+            plan,
+            artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT,
+            allowed=True,
+        )
+        m_info = (assignment.get("models") or {}).get(model_id) or {}
+        g_for_model = next((g for g in assignment.get("groups", []) if model_id in g.get("members", [])), None)
+
+        if (
+            m_info.get("state") in ("FAILED", "BLOCKED")
+            or m_info.get("installation_status") in ("FAILED", "BLOCKED")
+            or (g_for_model and g_for_model.get("state") in ("FAILED", "BLOCKED"))
+            or (g_for_model and g_for_model.get("installation_status") in ("FAILED", "BLOCKED"))
+            or (g_for_model and g_for_model.get("runtime_verification_status") not in ("READY", "NOT_REQUIRED"))
+        ):
+            print(f"[FAILED] {model_id}: provisioning failed for group {env_id}", file=sys.stderr)
+            return False
+
+        assigned_interp = m_info.get("interpreter") or (g_for_model.get("interpreter") if g_for_model else None)
+        if not assigned_interp or not Path(assigned_interp).is_file() or not os.access(assigned_interp, os.X_OK):
+            print(f"[FAILED] {model_id}: interpreter missing or not executable: {assigned_interp}", file=sys.stderr)
+            return False
+
         return True
     if not s["source_synced"]:
         print(f"[BLOCKED] {model_id}: source not synced — sync first with sync_upstreams.py", file=sys.stderr)
@@ -200,7 +258,7 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None) -> bool:
         if dry_run:
             print(f"[OK] dry-run: would create conda env {env_name!r} from {spec}")
             return True
-        result = subprocess.run(argv)
+        result = subprocess.run(argv, env=_package_manager_env())
         if result.returncode != 0:
             print(f"[BLOCKED] {model_id}: conda env create failed", file=sys.stderr)
             return False
@@ -230,7 +288,7 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None) -> bool:
     if dry_run:
         print(f"[OK] dry-run: would install {spec} into {interpreter}")
         return True
-    result = subprocess.run(argv)
+    result = subprocess.run(argv, env=_package_manager_env())
     if result.returncode != 0:
         print(f"[BLOCKED] {model_id}: pip install failed", file=sys.stderr)
         return False

@@ -292,3 +292,294 @@ def test_environment_plan_fingerprint_invalidated_by_selection_change(tmp_path: 
     fp2 = pipeline.compute_stage_input_fingerprint(stage2, config)
 
     assert fp1 != fp2, "Fingerprint must change when selection changes!"
+
+
+def test_csmcir_evaluation_command_parses_against_real_evaluator_parser(tmp_path: Path) -> None:
+    import subprocess
+    from argparse import Namespace
+    from workbench.scripts.evaluate_models import parser_for
+
+    config = _config(tmp_path)
+    registry = load_registry()
+    expected_ds = config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset"
+    expected_canonical = config.FASHIONIQ_ROOT
+
+    # 1. Per-model branch (all_stages)
+    args_all = Namespace(
+        mode="all", model=None, selected_model_ids=["csmcir"],
+        checkpoint_ids={"csmcir": ["fashioniq"]},
+        dataset_root=config.FASHIONIQ_ROOT, checkpoint=None,
+        protocol="fashioniq_val_split", top_k=50, continue_on_error=True,
+        allow_env_install=True, allow_preparation=True, apply=True,
+        verify_gpu=True, sync_sources=True, download_checkpoints=True,
+        download_auxiliary_assets=False, evaluate=True, rebuild_index=True, serve=False,
+    )
+    stages_all = pipeline.all_stages(args_all, config)
+    eval_stage_all = next(s for s in stages_all if s.name == "evaluation" and s.model_id == "csmcir")
+    cmd_all = eval_stage_all.commands[0]
+    eval_argv_all = cmd_all[2:]
+    parsed_all = parser_for(registry).parse_args(eval_argv_all)
+
+    assert parsed_all.model == "csmcir"
+    assert parsed_all.dataset_root == expected_ds
+    assert parsed_all.canonical_dataset_root == expected_canonical
+    assert parsed_all.checkpoint == ["fashioniq"]
+    assert parsed_all.protocol == "fashioniq_val_split"
+    assert parsed_all.top_k == 50
+    assert eval_stage_all.required_capabilities == {"allow_gpu_eval", "allow_preparation"}
+
+    smoke_all = subprocess.run([*cmd_all, "--dry-run"], capture_output=True, text=True)
+    assert smoke_all.returncode in (0, 1)
+
+    # 2. Single-model branch (real_stages)
+    args_real = Namespace(
+        mode="real", model="csmcir",
+        dataset_root=config.FASHIONIQ_ROOT, checkpoint="fashioniq",
+        protocol="fashioniq_val_split", top_k=50, continue_on_error=True,
+        allow_env_install=True, allow_preparation=True, apply=True,
+        verify_gpu=True, sync_sources=True, download_checkpoints=True,
+        download_auxiliary_assets=False, evaluate=True, rebuild_index=True, serve=False,
+    )
+    stages_real = pipeline.real_stages(args_real, config)
+    eval_stage_real = next(s for s in stages_real if s.name == "evaluation" and s.model_id == "csmcir")
+    cmd_real = eval_stage_real.commands[0]
+    eval_argv_real = cmd_real[2:]
+    parsed_real = parser_for(registry).parse_args(eval_argv_real)
+
+    assert parsed_real.model == "csmcir"
+    assert parsed_real.dataset_root == expected_ds
+    assert parsed_real.canonical_dataset_root == expected_canonical
+    assert parsed_real.checkpoint == ["fashioniq"]
+    assert parsed_real.protocol == "fashioniq_val_split"
+    assert parsed_real.top_k == 50
+    assert eval_stage_real.required_capabilities == {"allow_gpu_eval", "allow_preparation"}
+
+    smoke_real = subprocess.run([*cmd_real, "--dry-run"], capture_output=True, text=True)
+    assert smoke_real.returncode in (0, 1)
+
+
+def test_fixed_dataset_link_authorization_semantics(tmp_path: Path, monkeypatch) -> None:
+    from argparse import Namespace
+    from workbench.scripts import prepare_dataset
+
+    config = _config(tmp_path)
+    config.FASHIONIQ_ROOT.mkdir(parents=True, exist_ok=True)
+    csmcir_dir = config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR"
+    csmcir_dir.mkdir(parents=True, exist_ok=True)
+    link_path = csmcir_dir / "fashionIQ_dataset"
+    source_marker = csmcir_dir / ".checkout-fixture"
+    source_marker.write_text("fixture")
+    monkeypatch.setattr("workbench.backend.runtime.source_clean_and_pinned",
+                        lambda model, source: (True, "pin", None))
+
+    # 1. VALID existing link: verified offline without network or preparation permissions
+    link_path.symlink_to(config.FASHIONIQ_ROOT, target_is_directory=True)
+    args_valid = Namespace(
+        mode="all", model=None, selected_model_ids=["csmcir"],
+        checkpoint_ids={"csmcir": ["fashioniq"]},
+        dataset_root=config.FASHIONIQ_ROOT, checkpoint=None,
+        protocol="fashioniq_val_split", top_k=50, continue_on_error=True,
+        allow_env_install=False, allow_preparation=False, apply=True,
+        verify_gpu=False, sync_sources=False, download_checkpoints=False,
+        download_auxiliary_assets=False, evaluate=True, rebuild_index=False, serve=False,
+    )
+    monkeypatch.setattr(pipeline, "evaluation_evidence", lambda *args: lambda record: (True, None, None))
+    stages_valid = pipeline.all_stages(args_valid, config)
+    prep_valid = next(s for s in stages_valid if s.name == "preparation" and s.model_id == "csmcir")
+    assert prep_valid.required_capabilities == frozenset()
+    assert "--execute" not in prep_valid.commands[0]
+    sync_valid = next(s for s in stages_valid if s.name == "sync" and s.model_id == "csmcir")
+    assert sync_valid.required_capabilities == frozenset()
+    assert "--verify-only" in sync_valid.commands[0]
+    ok, _ = prepare_dataset.prepare_canonical_link(
+        config.FASHIONIQ_ROOT, csmcir_dir, "fashionIQ_dataset", check_only=True, dry_run=False)
+    assert ok
+    calls = []
+    monkeypatch.setattr(pipeline, "validate_stage_outputs", lambda *args, **kwargs: True)
+    monkeypatch.setattr(pipeline, "run_command", lambda argv: calls.append(argv) or 0)
+    eval_valid = next(s for s in stages_valid if s.name == "evaluation" and s.model_id == "csmcir")
+    assert pipeline.run_stages(
+        [sync_valid, prep_valid, eval_valid], dry_run=False, continue_on_error=False,
+        apply=True, mode="all", authorized_capabilities={"allow_preparation", "allow_gpu_eval"},
+        state_path=tmp_path / "valid-link-state.json", config=config) == 0
+    assert [Path(argv[1]).name for argv in calls] == [
+        "sync_upstreams.py", "prepare_model.py", "evaluate_models.py"]
+
+    # 2. MISSING link: preparation authorized but network disabled does NOT require network
+    link_path.unlink()
+    args_missing = Namespace(
+        mode="all", model=None, selected_model_ids=["csmcir"],
+        checkpoint_ids={"csmcir": ["fashioniq"]},
+        dataset_root=config.FASHIONIQ_ROOT, checkpoint=None,
+        protocol="fashioniq_val_split", top_k=50, continue_on_error=True,
+        allow_env_install=False, allow_preparation=True, apply=True,
+        verify_gpu=False, sync_sources=False, download_checkpoints=False,
+        download_auxiliary_assets=False, evaluate=True, rebuild_index=False, serve=False,
+    )
+    stages_missing = pipeline.all_stages(args_missing, config)
+    prep_missing = next(s for s in stages_missing if s.name == "preparation" and s.model_id == "csmcir")
+    assert prep_missing.required_capabilities == {"allow_preparation"}
+    assert "allow_network" not in prep_missing.required_capabilities
+    assert "--execute" in prep_missing.commands[0]
+    calls.clear()
+    assert pipeline.run_stages(
+        [prep_missing], dry_run=False, continue_on_error=False, apply=True, mode="all",
+        authorized_capabilities={"allow_preparation"},
+        state_path=tmp_path / "missing-link-state.json", config=config) == 0
+    ok, _ = prepare_dataset.prepare_canonical_link(
+        config.FASHIONIQ_ROOT, csmcir_dir, "fashionIQ_dataset", check_only=False, dry_run=False)
+    assert ok and link_path.is_symlink()
+
+    # 3. MISSING source: sync stage still requires network
+    link_path.unlink()
+    source_marker.unlink()
+    csmcir_dir.rmdir()
+    stages_no_source = pipeline.all_stages(args_missing, config)
+    sync_missing = next(s for s in stages_no_source if s.name == "sync" and s.model_id == "csmcir")
+    assert sync_missing.required_capabilities == {"allow_network"}
+    assert "allow_preparation" not in sync_missing.required_capabilities
+    calls.clear()
+    assert pipeline.run_stages(
+        [sync_missing], dry_run=False, continue_on_error=False, apply=True, mode="all",
+        authorized_capabilities={"allow_preparation"},
+        state_path=tmp_path / "missing-source-state.json", config=config) == 1
+    assert calls == []
+
+    # 4. WRONG link target: rejected and not treated as valid
+    csmcir_dir.mkdir(parents=True)
+    source_marker.write_text("fixture")
+    wrong_dir = tmp_path / "wrong_fashioniq"
+    wrong_dir.mkdir(parents=True, exist_ok=True)
+    link_path.symlink_to(wrong_dir, target_is_directory=True)
+    stages_wrong = pipeline.all_stages(args_valid, config)
+    prep_wrong = next(s for s in stages_wrong if s.name == "preparation" and s.model_id == "csmcir")
+    assert prep_wrong.required_capabilities == {"allow_preparation"}
+    ok, msgs = prepare_dataset.prepare_canonical_link(
+        config.FASHIONIQ_ROOT, csmcir_dir, "fashionIQ_dataset", check_only=True, dry_run=False
+    )
+    assert ok is False
+    assert any("resolves to" in m for m in msgs)
+
+
+def test_environment_plan_fingerprint_invalidated_by_artifacts_root(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    env_plan_path = tmp_path / "artifacts" / "environment_plan.json"
+
+    cmd1 = pipeline.command("plan_environments.py", "--output", env_plan_path,
+                            "--third-party-root", config.WORKBENCH_THIRD_PARTY_ROOT,
+                            "--artifacts-root", tmp_path / "artifacts1", "--model", "limn")
+    stage1 = pipeline.run_stage("environment-plan", cmd1, output_paths=(env_plan_path,))
+    fp1 = pipeline.compute_stage_input_fingerprint(stage1, config)
+
+    cmd2 = pipeline.command("plan_environments.py", "--output", env_plan_path,
+                            "--third-party-root", config.WORKBENCH_THIRD_PARTY_ROOT,
+                            "--artifacts-root", tmp_path / "artifacts2", "--model", "limn")
+    stage2 = pipeline.run_stage("environment-plan", cmd2, output_paths=(env_plan_path,))
+    fp2 = pipeline.compute_stage_input_fingerprint(stage2, config)
+
+    assert fp1 != fp2, "Fingerprint must change when artifacts-root changes!"
+
+
+def test_evaluation_fingerprint_tracks_checkpoint_policy_and_overrides(tmp_path: Path) -> None:
+    from argparse import Namespace
+
+    config = _config(tmp_path)
+    base = dict(
+        mode="all", model=None, selected_model_ids=["csmcir"], checkpoint=None,
+        checkpoint_ids={"csmcir": ["fashioniq"]}, checkpoint_overrides={},
+        dataset_root=config.FASHIONIQ_ROOT, protocol=None, top_k=200,
+        continue_on_error=True, allow_env_install=False, allow_preparation=False,
+        apply=False, verify_gpu=False, sync_sources=False, download_checkpoints=False,
+        download_auxiliary_assets=False, evaluate=True, rebuild_index=False, serve=False,
+    )
+
+    def fingerprint(policy: str, overrides: dict[str, list[str]] | None = None) -> str:
+        args = Namespace(**(base | {"checkpoint_policy": policy,
+                                    "checkpoint_overrides": overrides or {}}))
+        stage = next(stage for stage in pipeline.all_stages(args, config)
+                     if stage.name == "evaluation" and stage.model_id == "csmcir")
+        return pipeline.compute_stage_input_fingerprint(stage, config)
+
+    strict_digest = fingerprint("strict_clean")
+    assert fingerprint("strict_clean") == strict_digest
+    include_flagged_digest = fingerprint("include_flagged_conditions")
+    assert include_flagged_digest != strict_digest
+    override_digest = fingerprint("strict_clean", {"csmcir": ["fashioniq"]})
+    assert override_digest != strict_digest
+
+
+def test_every_registered_model_command_parses_with_its_real_script(tmp_path: Path, monkeypatch) -> None:
+    import argparse
+    import ast
+    import importlib.util
+    import inspect
+    import sys
+
+    config = _config(tmp_path)
+    models = load_registry()["models"]
+    monkeypatch.setattr("workbench.backend.runtime.source_clean_and_pinned",
+                        lambda model, source: (False, None, "fixture"))
+    monkeypatch.setattr("workbench.backend.runtime.verify_environment",
+                        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("fixture")))
+
+    class Parsed(Exception):
+        pass
+
+    failures = []
+    for model in models:
+        model_id = model["model_id"]
+        args = argparse.Namespace(
+            mode="all", model=None, selected_model_ids=[model_id], checkpoint=None,
+            checkpoint_ids={}, checkpoint_policy="strict_clean", checkpoint_overrides={},
+            dataset_root=config.FASHIONIQ_ROOT, protocol=None, top_k=200,
+            continue_on_error=True, allow_env_install=False, allow_preparation=False,
+            apply=False, verify_gpu=False, sync_sources=False, download_checkpoints=True,
+            download_auxiliary_assets=True, evaluate=True, rebuild_index=False, serve=False,
+        )
+        stages = pipeline.all_stages(args, config)
+        real_args = argparse.Namespace(
+            mode="real", model=model_id, dataset_root=config.FASHIONIQ_ROOT,
+            checkpoint=None, protocol=None, top_k=200, continue_on_error=True,
+            allow_env_install=False, allow_preparation=False, apply=False,
+            verify_gpu=False, sync_sources=True, download_checkpoints=True,
+            download_auxiliary_assets=True, evaluate=True, rebuild_index=False, serve=False,
+        )
+        stages.extend(pipeline.real_stages(real_args, config))
+        for stage in stages:
+            for argv in stage.commands:
+                if len(argv) > 2 and argv[1] == "-c":
+                    try:
+                        ast.parse(argv[2])
+                    except SyntaxError as error:
+                        failures.append(f"{model_id}/{stage.name}: invalid Python command: {error}")
+                    continue
+                script_path = Path(argv[1])
+                spec = importlib.util.spec_from_file_location(
+                    f"pipeline_sweep_{script_path.stem}", script_path)
+                if spec is None or spec.loader is None:
+                    failures.append(f"{model_id}/{stage.name}: cannot load {script_path}")
+                    continue
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[spec.name] = module
+                spec.loader.exec_module(module)
+                parse_args = argparse.ArgumentParser.parse_args
+
+                def capture(parser, parsed_argv=None, namespace=None):
+                    raise Parsed(parse_args(parser, parsed_argv, namespace))
+
+                try:
+                    with monkeypatch.context() as patch:
+                        patch.setattr(argparse.ArgumentParser, "parse_args", capture)
+                        main = module.main
+                        if "argv" in inspect.signature(main).parameters:
+                            main(argv[2:])
+                        else:
+                            patch.setattr(sys, "argv", [str(script_path), *argv[2:]])
+                            main()
+                except Parsed:
+                    pass
+                except SystemExit as error:
+                    failures.append(f"{model_id}/{stage.name}: {script_path.name} rejected "
+                                    f"{argv[2:]} (exit {error.code})")
+
+    assert not failures, "\n".join(failures)

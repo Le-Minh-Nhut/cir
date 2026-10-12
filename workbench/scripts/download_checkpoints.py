@@ -24,17 +24,49 @@ def selected(args: argparse.Namespace, models: list[dict]) -> list[tuple[dict, d
         models = [item for item in models if item["model_id"] == args.model]
         if not models:
             raise ValueError(f"unknown model: {args.model}")
+    requested = [args.checkpoint] if isinstance(args.checkpoint, str) else list(args.checkpoint or [])
     records: list[tuple[dict, dict]] = []
     for model in models:
-        variants = model["checkpoint_variants"]
-        if args.checkpoint:
-            variants = [item for item in variants if item["checkpoint_id"] == args.checkpoint]
-            if not variants and args.model:
-                raise ValueError(f"unknown checkpoint for {args.model}: {args.checkpoint}")
-        if len(variants) > 1 and model["model_id"] == "pair" and not (args.all or args.list) and not args.checkpoint:
-            print("PAIR has unresolved variants; select --checkpoint pair_b1 or pair_b2.", file=sys.stderr)
-            continue
+        mid = model["model_id"]
+        variants = model.get("checkpoint_variants", [])
+        variant_by_id = {item["checkpoint_id"]: item for item in variants}
+        bundles = {b["bundle_id"]: b for b in model.get("checkpoint_bundles", [])}
+        if requested:
+            if args.model:
+                unknown = [cid for cid in requested if cid not in variant_by_id and cid not in bundles]
+                if unknown:
+                    raise ValueError(f"unknown checkpoint for {args.model}: {', '.join(unknown)}")
+            selected_variants: list[dict] = []
+            for req in requested:
+                if req in bundles:
+                    bundle = bundles[req]
+                    for req_id in bundle.get("required_checkpoint_ids", []):
+                        if req_id in variant_by_id:
+                            if variant_by_id[req_id] not in selected_variants:
+                                selected_variants.append(variant_by_id[req_id])
+                        else:
+                            raise ValueError(f"unknown checkpoint bundle member for {mid}: {req_id}")
+                elif req in variant_by_id:
+                    if variant_by_id[req] not in selected_variants:
+                        selected_variants.append(variant_by_id[req])
+            if args.model and not selected_variants:
+                raise ValueError(f"unknown checkpoint for {args.model}: {', '.join(requested)}")
+            if mid == "limn":
+                bundle = next((b for b in model.get("checkpoint_bundles", []) if b.get("bundle_id") == "base_iter0_all_categories"), None)
+                if bundle:
+                    req_bundle_ids = set(bundle.get("required_checkpoint_ids", []))
+                    if any(req == bundle.get("bundle_id") or req in req_bundle_ids for req in requested):
+                        unrelated = [v["checkpoint_id"] for v in selected_variants if v["checkpoint_id"] not in req_bundle_ids]
+                        if unrelated:
+                            raise ValueError(f"unrelated variant in LIMN bundle selection: {', '.join(unrelated)}")
+            variants = selected_variants
+        else:
+            if len(variants) > 1 and mid == "pair" and not (getattr(args, "all", False) or getattr(args, "list", False)):
+                print("PAIR has unresolved variants; select --checkpoint pair_b1 or pair_b2.", file=sys.stderr)
+                continue
         records.extend((model, checkpoint) for checkpoint in variants)
+    if requested and not records:
+        raise ValueError(f"unknown checkpoint: {', '.join(requested)}")
     return records
 
 
@@ -129,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--list", action="store_true", help="list registry checkpoint records")
     group.add_argument("--model", help="select one model")
     group.add_argument("--all", action="store_true", help="select all downloadable model records")
-    parser.add_argument("--checkpoint", help="select one checkpoint variant; required for unresolved PAIR variants")
+    parser.add_argument("--checkpoint", action="append", help="select checkpoint variant(s); repeatable for multi-checkpoint bundles")
     parser.add_argument("--dry-run", action="store_true", help="print planned operations; never access network")
     parser.add_argument("--verify-only", action="store_true", help="verify local files only; never access network")
     parser.add_argument("--force-redownload", action="store_true", help="replace existing local file after explicit request")

@@ -48,6 +48,12 @@ def test_mixed_statuses_write_complete_reports_and_partial_exit(tmp_path, monkey
     assert all(json.loads(row["metrics"]) is None for row in records)
     assert json.loads(paths["blockers"].read_text()) == blockers
     assert paths["summary_md"].is_file() and paths["manifest"].is_file()
+    summary = json.loads(paths["summary_json"].read_text())
+    assert summary["status"] == "PARTIAL"
+    assert summary["global_index_status"] == "NOT_APPLICABLE"
+    md_text = paths["summary_md"].read_text()
+    assert "Status: **PARTIAL**" in md_text
+    assert "Global index status: **NOT_APPLICABLE**" in md_text
 
 
 def test_report_exit_distinguishes_full_and_failed_workflows(tmp_path, monkeypatch):
@@ -221,6 +227,9 @@ print(json.dumps({
     assert blockers == []
 
     rep = autopilot._write_reports(config, plan, rows, blockers, execution, planned=False)
+    paths = autopilot._artifact_paths(config)
+    md_text = paths["summary_md"].read_text()
+    assert "OFFICIAL_VERIFIED" in md_text and "60.00%" in md_text
     assert rep["exit_code"] == 0
     paths = autopilot._artifact_paths(config)
     summary_data = json.loads(paths["summary_json"].read_text())
@@ -241,6 +250,8 @@ print(json.dumps({
     assert t_row["dress_r10"] is None
     assert any("corrupted evidence rejected" in b for b in t_row["blockers"])
     assert len(blockers_tampered) == 1
+    autopilot._write_reports(config, plan, rows_tampered, blockers_tampered, execution, planned=False)
+    assert "aggregate report digest mismatch" in autopilot._artifact_paths(config)["summary_md"].read_text()
 
 
 def test_markdown_report_renders_synthetic_table_and_null_reasons(tmp_path: Path, monkeypatch):
@@ -398,3 +409,216 @@ def test_markdown_report_renders_synthetic_table_and_null_reasons(tmp_path: Path
     assert syn_csv["dress_r10"] == "60.00"
     assert unp_csv["dress_r10"] == "null"
     assert unp_csv["missing_metrics_reason"] == "aggregate parser unavailable for model"
+
+
+def test_completion_validator_exception_and_failure_not_completed(tmp_path: Path) -> None:
+    import hashlib
+    from unittest.mock import patch
+
+    artifacts = tmp_path / "artifacts"
+    reports = artifacts / "reports"
+    reports.mkdir(parents=True)
+
+    proof_file = reports / "synth_ckpt_r1_completion.json"
+    report_file = reports / "synth_ckpt_r1_aggregate.json"
+
+    report_content = json.dumps({"execution_status": "COMPLETED", "return_code": 0})
+    report_file.write_text(report_content)
+    rep_digest = hashlib.sha256(report_content.encode()).hexdigest()
+
+    proof_data = {
+        "model_id": "synth",
+        "checkpoint_id": "ckpt",
+        "run_id": "r1",
+        "completion_status": "COMPLETED",
+        "return_code": 0,
+        "report": str(report_file),
+        "report_digest": rep_digest,
+    }
+    proof_file.write_text(json.dumps(proof_data))
+
+    cfg = autopilot.AutopilotConfig(
+        path=tmp_path / "cfg.yaml",
+        selected_model_ids=("synth",),
+        paths={"artifacts": artifacts, "checkpoints": tmp_path / "checkpoints", "results": tmp_path / "results",
+               "dataset_root": tmp_path, "registry": tmp_path, "third_party": tmp_path},
+        budgets={"max_download_bytes": 0, "max_models": 1, "top_k": 10},
+        permissions={},
+        registry={"models": [{"model_id": "synth", "native_protocol": "fashioniq_original_split"}]},
+    )
+    plan = {"schema_version": 1, "solver_verified": True, "configuration_digest": "fixture",
+            "models": [{"model_id": "synth", "status": "NOT_RUN", "blockers": []}]}
+    eval_record = {"model_id": "synth", "name": "evaluation", "status": "COMPLETE", "run_id": "r1",
+                   "evidence": {"completion_proof": str(proof_file)}}
+    execution = {"exit_code": 0, "stages": {"evaluation:synth": eval_record}}
+
+    # Case 1: Validator raises exception -> FAILED_OUTPUT_VALIDATION, not COMPLETED, no Recall published
+    with patch("workbench.scripts.evaluate_models.completion_validator") as mock_val:
+        mock_val.side_effect = RuntimeError("injected validator crash")
+        rows, blockers = autopilot._classify(plan, execution, cfg)
+        row = rows[0]
+        assert row["status"] == "FAILED_OUTPUT_VALIDATION"
+        assert row["status"] != "COMPLETED"
+        assert row["metrics"] is None
+        assert all(row[key] is None for key in (
+            "dress_r10", "dress_r50", "shirt_r10", "shirt_r50",
+            "toptee_r10", "toptee_r50", "macro_r10", "macro_r50"))
+        assert row["evaluation_kind"] != "OFFICIAL_VERIFIED"
+        assert any("injected validator crash" in r for b in blockers for r in b.get("reasons", []))
+        autopilot._write_reports(cfg, plan, rows, blockers, execution, planned=False)
+        report_md = autopilot._artifact_paths(cfg)["summary_md"].read_text()
+        assert "injected validator crash" in report_md
+        assert "OFFICIAL_VERIFIED" not in report_md and "null (" in report_md
+
+    # Case 2: Validator returns genuine failure -> FAILED_OUTPUT_VALIDATION
+    with patch("workbench.scripts.evaluate_models.completion_validator") as mock_val:
+        mock_val.return_value = lambda req: (False, "invalid checksum", None)
+        rows, blockers = autopilot._classify(plan, execution, cfg)
+        row = rows[0]
+        assert row["status"] == "FAILED_OUTPUT_VALIDATION"
+        assert row["status"] != "COMPLETED"
+        assert row["metrics"] is None
+        assert all(row[key] is None for key in (
+            "dress_r10", "dress_r50", "shirt_r10", "shirt_r50",
+            "toptee_r10", "toptee_r50", "macro_r10", "macro_r50"))
+        assert any("invalid checksum" in r for b in blockers for r in b.get("reasons", []))
+        autopilot._write_reports(cfg, plan, rows, blockers, execution, planned=False)
+        report_md = autopilot._artifact_paths(cfg)["summary_md"].read_text()
+        assert "invalid checksum" in report_md
+        assert "OFFICIAL_VERIFIED" not in report_md and "null (" in report_md
+
+
+def test_environment_split_shows_final_assignment_in_report(tmp_path: Path) -> None:
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True)
+
+    # environment_assignment.json reflects post-split state
+    assign_path = artifacts / "environment_assignment.json"
+    assignment = {
+        "models": {
+            "model_a": {"environment_id": "group_shared"},
+            "model_b": {"environment_id": "group_split_model_b"},
+        }
+    }
+    assign_path.write_text(json.dumps(assignment))
+
+    cfg = autopilot.AutopilotConfig(
+        path=tmp_path / "cfg.yaml",
+        selected_model_ids=("model_a", "model_b"),
+        paths={"artifacts": artifacts, "checkpoints": tmp_path / "checkpoints", "results": tmp_path / "results",
+               "dataset_root": tmp_path, "registry": tmp_path, "third_party": tmp_path},
+        budgets={"max_download_bytes": 0, "max_models": 2, "top_k": 10},
+        permissions={},
+        registry={"models": [{"model_id": "model_a"}, {"model_id": "model_b"}]},
+    )
+
+    # Initial plan had both in "group_shared"
+    plan = {
+        "schema_version": 1,
+        "solver_verified": True,
+        "configuration_digest": "cfg_digest",
+        "environment_plan": {"groups": [{"environment_id": "group_shared", "members": ["model_a", "model_b"]}]},
+        "models": [{"model_id": "model_a", "status": "NOT_RUN", "blockers": []},
+                   {"model_id": "model_b", "status": "NOT_RUN", "blockers": []}],
+    }
+    execution = {"exit_code": 0, "stages": {}}
+
+    rows, blockers = autopilot._classify(plan, execution, cfg)
+    report = autopilot._write_reports(cfg, plan, rows, blockers, execution, planned=False)
+
+    row_map = {r["model_id"]: r["environment_group"] for r in rows}
+    assert row_map["model_a"] == "group_shared"
+    assert row_map["model_b"] == "group_split_model_b"
+    assert report["summary"]["environment_assignment"]["model_b"] == "group_split_model_b"
+
+
+def test_report_consistency_invariants(tmp_path: Path) -> None:
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir(parents=True)
+
+    cfg = autopilot.AutopilotConfig(
+        path=tmp_path / "cfg.yaml",
+        selected_model_ids=("succ", "fail", "block"),
+        paths={"artifacts": artifacts, "checkpoints": tmp_path / "checkpoints", "results": tmp_path / "results",
+               "dataset_root": tmp_path, "registry": tmp_path, "third_party": tmp_path},
+        budgets={"max_download_bytes": 0, "max_models": 3, "top_k": 10},
+        permissions={},
+        registry={"models": [
+            {"model_id": "succ", "method_name": "SuccModel"},
+            {"model_id": "fail", "method_name": "FailModel"},
+            {"model_id": "block", "method_name": "BlockModel"},
+        ]},
+    )
+    plan = {
+        "schema_version": 1,
+        "solver_verified": True,
+        "configuration_digest": "cfg_digest",
+        "models": [],
+    }
+
+    # Model with NOT_RUN status must never show verified recall even if metrics were populated
+    row_succ = {
+        "model_id": "succ", "method_name": "SuccModel", "status": "COMPLETED",
+        "environment_group": "env_a", "blockers": [], "missing_permissions": [],
+        "run_id": "r_succ", "evaluation_kind": "OFFICIAL_VERIFIED",
+        "dress_r10": 55.0, "dress_r50": 75.0, "shirt_r10": 50.0, "shirt_r50": 70.0,
+        "toptee_r10": 45.0, "toptee_r50": 65.0, "macro_r10": 50.0, "macro_r50": 70.0,
+        "measured_difference": None, "completion_proof": "proof.json",
+        "aggregate_only": True, "per_query_export_available": False,
+        "missing_metrics_reason": None, "metrics": {"observed_metrics": {"r10": 50.0}},
+    }
+    row_fail = {
+        "model_id": "fail", "method_name": "FailModel", "status": "FAILED_EVALUATION",
+        "environment_group": "env_a", "blockers": ["exit 1"], "missing_permissions": [],
+        "run_id": "r_fail", "evaluation_kind": "FAILED",
+        "dress_r10": None, "dress_r50": None, "shirt_r10": None, "shirt_r50": None,
+        "toptee_r10": None, "toptee_r50": None, "macro_r10": None, "macro_r50": None,
+        "measured_difference": None, "completion_proof": None,
+        "aggregate_only": True, "per_query_export_available": False,
+        "missing_metrics_reason": "exit 1", "metrics": None,
+    }
+    row_block = {
+        "model_id": "block", "method_name": "BlockModel", "status": "NOT_RUN",
+        "environment_group": "env_b", "blockers": ["blocked"], "missing_permissions": [],
+        "run_id": None, "evaluation_kind": "NOT_RUN",
+        # Attempting to supply metrics for NOT_RUN model must be scrubbed by report writer
+        "dress_r10": 99.0, "dress_r50": 99.0, "shirt_r10": 99.0, "shirt_r50": 99.0,
+        "toptee_r10": 99.0, "toptee_r50": 99.0, "macro_r10": 99.0, "macro_r50": 99.0,
+        "measured_difference": None, "completion_proof": None,
+        "aggregate_only": True, "per_query_export_available": True,
+        "missing_metrics_reason": "model status is NOT_RUN", "metrics": {"r10": 99.0},
+    }
+
+    rows = [row_succ, row_fail, row_block]
+    blockers = [{"model_id": "fail", "status": "FAILED_EVALUATION", "reasons": ["exit 1"]},
+                {"model_id": "block", "status": "NOT_RUN", "reasons": ["blocked"]}]
+    execution = {"exit_code": 1, "stages": {}}
+
+    report = autopilot._write_reports(cfg, plan, rows, blockers, execution, planned=False)
+
+    # Invariant 1: Mixed set outcome is PARTIAL, never FULL_SUCCESS
+    assert report["summary"]["status"] == "PARTIAL"
+    assert report["summary"]["status"] != "FULL_SUCCESS"
+
+    # Invariant 2: Global index status reported separately
+    assert report["summary"]["global_index_status"] == "NOT_APPLICABLE"
+
+    # Invariant 3: NOT_RUN model has its metrics wiped, never shows verified recall
+    row_b = next(r for r in report["summary"]["models"] if r["model_id"] == "block")
+    assert row_b["dress_r10"] is None
+    assert row_b["macro_r10"] is None
+    assert row_b["metrics"] is None
+    assert row_b["evaluation_kind"] == "NOT_RUN"
+    assert row_b["evaluation_kind"] != "OFFICIAL_VERIFIED"
+
+    # Invariant 4: Aggregate-only model cannot have per-query export
+    assert row_b["per_query_export_available"] is False
+
+    # Invariant 5: Markdown output check
+    paths = autopilot._artifact_paths(cfg)
+    md_text = paths["summary_md"].read_text()
+    assert "Status: **PARTIAL**" in md_text
+    # Check that block model line has null, not 99.00%
+    block_lines = [l for l in md_text.splitlines() if "block" in l and "NOT_RUN" in l]
+    assert any("null (model status is NOT_RUN)" in l for l in block_lines)
+    assert not any("99.00%" in l for l in block_lines)

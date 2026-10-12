@@ -269,3 +269,30 @@ def test_setup_reproduce_analyze_all_modes_accepted() -> None:
         parser = pipeline.parser_for()
         args = parser.parse_args([mode, "--dry-run"])
         assert args.mode == mode
+
+
+def test_all_stages_csmcir_evaluation_command_parses_with_evaluate_models() -> None:
+    pipeline = load_pipeline()
+    from workbench.backend.registry import load_registry
+    from workbench.scripts.evaluate_models import parser_for
+
+    registry = load_registry()
+    args = pipeline.parser_for().parse_args([
+        "all", "--model", "csmcir", "--dataset-root", "/custom/FashionIQ",
+        "--apply", "--evaluate", "--checkpoint", "fashioniq", "--protocol", "fashioniq_val_split", "--top-k", "100",
+    ])
+    config = real_config()
+    stages = pipeline.all_stages(args, config)
+    eval_stage = next(s for s in stages if s.name == "evaluation" and s.model_id == "csmcir")
+    cmd = eval_stage.commands[0]
+    # Ensure --dataset-root is preserved as flag and not replaced by path
+    assert "--dataset-root" in cmd
+    assert "--canonical-dataset-root" in cmd
+    parsed = parser_for(registry).parse_args(cmd[2:])
+    assert parsed.model == "csmcir"
+    assert parsed.dataset_root == Path("/configured/third_party/CSMCIR/fashionIQ_dataset")
+    assert parsed.canonical_dataset_root == Path("/custom/FashionIQ")
+    assert parsed.checkpoint == ["fashioniq"]
+    assert parsed.protocol == "fashioniq_val_split"
+    assert parsed.top_k == 100
+    assert eval_stage.required_capabilities == {"allow_gpu_eval", "allow_preparation"}

@@ -79,7 +79,20 @@ def candidates(args: argparse.Namespace, models: list[dict]) -> list[tuple[dict,
         checkpoints = model["checkpoint_variants"]
         requested = list(args.checkpoint or [])
         if model["model_id"] == "limn":
-            bundle = model["checkpoint_bundles"][0]
+            # LIMN evaluates its three per-category checkpoints as one declared bundle. A registry
+            # that does not declare one is not a reason to raise from inside candidate resolution:
+            # fall back to the plain variants so the model is either evaluated directly or refused
+            # by the ordinary guard, with a message that names the real problem.
+            bundles = model.get("checkpoint_bundles") or []
+            if not bundles:
+                if requested:
+                    checkpoints = [checkpoint for checkpoint in checkpoints
+                                   if checkpoint["checkpoint_id"] in set(requested)]
+                if requested and not checkpoints and args.model:
+                    raise ValueError(f"unknown checkpoint for {args.model}: {', '.join(requested)}")
+                selected.extend((model, checkpoint) for checkpoint in checkpoints)
+                continue
+            bundle = bundles[0]
             if args.checkpoint == [bundle["bundle_id"]] or not requested:
                 anchor = next(checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] == bundle["required_checkpoint_ids"][0])
                 checkpoints = [{**anchor, "checkpoint_id": bundle["bundle_id"], "bundle_id": bundle["bundle_id"]}]

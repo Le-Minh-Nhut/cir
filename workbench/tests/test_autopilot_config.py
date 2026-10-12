@@ -80,11 +80,16 @@ def test_plan_environments_subprocess_receives_selection_and_source_root(tmp_pat
     # subprocess: LIMN records no training condition, so the default strict policy would (correctly)
     # block it and only CSMCIR would be left to check.
     document["checkpoint_policy"] = "include_flagged_conditions"
+    document["checkpoint_overrides"] = {"csmcir": ["fashioniq"]}
     path.write_text(yaml.safe_dump(document), encoding="utf-8")
     config = autopilot.load_config(path, registry=real_reg)
     plan = autopilot.resolved_plan(config, dry_run=True)
+    captured_args = []
+    monkeypatch.setattr(pipeline, "all_stages", lambda args, config: captured_args.append(args) or [])
     with patch.object(pipeline, "run_stages", return_value=0) as mock_run:
         autopilot._execute(config, plan, resume=False, force_models=[])
+        assert captured_args[0].checkpoint_policy == "include_flagged_conditions"
+        assert captured_args[0].checkpoint_overrides == {"csmcir": ["fashioniq"]}
         stages = mock_run.call_args[0][0]
         env_plan_stage = stages[0]
         assert env_plan_stage.name == "environment-plan"
@@ -210,3 +215,24 @@ def test_an_unregistered_policy_or_override_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="not selected"):
         autopilot.load_config(_config(tmp_path, {"selected_models": ["clean_model"],
                                        "checkpoint_overrides": {"noisy_model": ["n50"]}}))
+
+
+def test_configuration_digest_includes_checkpoint_policy_and_overrides(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    cfg_clean = autopilot.load_config(_config(tmp_path, {"checkpoint_policy": "strict_clean"}))
+    cfg_flagged = replace(cfg_clean, checkpoint_policy="include_flagged_conditions")
+    cfg_override = replace(cfg_clean, checkpoint_overrides={"noisy_model": ["n50"]})
+
+    digest_clean = autopilot._configuration_digest(cfg_clean)
+    digest_clean_repeat = autopilot._configuration_digest(cfg_clean)
+    digest_flagged = autopilot._configuration_digest(cfg_flagged)
+    digest_override = autopilot._configuration_digest(cfg_override)
+
+    # Same config produces identical digest repeatedly
+    assert digest_clean == digest_clean_repeat
+    # Changing policy changes experiment identity
+    assert digest_clean != digest_flagged
+    # Changing overrides changes experiment identity
+    assert digest_clean != digest_override
+    assert digest_flagged != digest_override

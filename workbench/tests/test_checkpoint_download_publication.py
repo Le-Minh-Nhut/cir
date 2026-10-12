@@ -95,3 +95,150 @@ def test_invalid_partial_does_not_block_recovery(tmp_path: Path, monkeypatch) ->
     current = checkpoint
     assert module.main(["--model", "synthetic", "--output-root", str(destination_root)]) == 0
     assert (destination_root / "synthetic" / "weights.pt").read_bytes() == BODY
+
+
+def test_limn_repeatable_selection_runs_real_cli_offline(tmp_path: Path) -> None:
+    import hashlib
+    import os
+    import subprocess
+    import yaml
+    from workbench.backend.registry import load_registry
+
+    registry = load_registry()
+    limn = next(model for model in registry["models"] if model["model_id"] == "limn")
+    output_root = tmp_path / "checkpoints"
+    limn_dir = output_root / "limn"
+    limn_dir.mkdir(parents=True)
+    ids = ["base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee"]
+    filenames = []
+    for checkpoint in limn["checkpoint_variants"]:
+        payload = f"synthetic {checkpoint['checkpoint_id']}".encode()
+        checkpoint["expected_size_bytes"] = len(payload)
+        checkpoint["expected_sha256"] = hashlib.sha256(payload).hexdigest()
+        destination = limn_dir / checkpoint["filename"]
+        destination.write_bytes(payload)
+        filenames.append(destination.name)
+
+    registry_path = tmp_path / "registry.yaml"
+    registry_path.write_text(yaml.safe_dump(registry), encoding="utf-8")
+    env = os.environ.copy()
+    env["WORKBENCH_REGISTRY_PATH"] = str(registry_path)
+    command = [sys.executable, str(SCRIPT), "--model", "limn", "--output-root", str(output_root)]
+    for checkpoint_id in ids:
+        command.extend(("--checkpoint", checkpoint_id))
+    result = subprocess.run(command, capture_output=True, text=True, env=env)
+
+    assert result.returncode == 0, result.stderr
+    checkpoint_lines = [line for line in result.stdout.splitlines() if line.startswith("Checkpoint:")]
+    assert len(checkpoint_lines) == 3
+    assert [line.split(" / ", 1)[0].removeprefix("Checkpoint: ") for line in checkpoint_lines] == ids
+    assert "DOWNLOADED" not in result.stdout
+    assert sorted(path.name for path in limn_dir.iterdir()) == sorted(filenames)
+
+    for invalid_id, expected in (("unknown_checkpoint", "unknown checkpoint for limn"),
+                                 ("fashioniq", "unknown checkpoint for limn")):
+        rejected = subprocess.run(
+            [sys.executable, str(SCRIPT), "--model", "limn", "--output-root", str(output_root),
+             "--checkpoint", "base_iter0_dress", "--checkpoint", invalid_id],
+            capture_output=True, text=True, env=env,
+        )
+        assert rejected.returncode == 2
+        assert expected in rejected.stderr and invalid_id in rejected.stderr
+
+
+def test_limn_three_category_checkpoints_selected_and_verified(tmp_path: Path, monkeypatch) -> None:
+    module = _module()
+    from workbench.backend.registry import load_registry
+
+    reg = load_registry()
+    limn = next(m for m in reg["models"] if m["model_id"] == "limn")
+    output_root = tmp_path / "checkpoints"
+    limn_dir = output_root / "limn"
+    limn_dir.mkdir(parents=True)
+
+    expected_map = {}
+    for variant in limn["checkpoint_variants"]:
+        fn = limn_dir / variant["filename"]
+        fn.write_bytes(b"synthetic valid content")
+        expected_map[variant["filename"]] = variant["expected_sha256"]
+
+    # Synthetic local files pass sha256 check
+    orig_sha = module.sha256_file
+    monkeypatch.setattr(module, "sha256_file", lambda p: expected_map.get(Path(p).name, orig_sha(p)))
+    monkeypatch.setattr(module, "download", lambda url, partial: pytest.fail("network download attempted"))
+
+    cmd = ["--model", "limn", "--output-root", str(output_root),
+           "--checkpoint", "base_iter0_dress",
+           "--checkpoint", "base_iter0_shirt",
+           "--checkpoint", "base_iter0_toptee"]
+
+    parser_args = module.argparse.Namespace(
+        model="limn",
+        checkpoint=["base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee"],
+        all=False,
+        list=False,
+    )
+    items = module.selected(parser_args, reg["models"])
+    assert len(items) == 3
+    selected_cids = [item[1]["checkpoint_id"] for item in items]
+    assert selected_cids == ["base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee"]
+
+    code = module.main(cmd)
+    assert code == 0
+
+
+def test_limn_unknown_checkpoint_refused(tmp_path: Path) -> None:
+    module = _module()
+    from workbench.backend.registry import load_registry
+
+    reg = load_registry()
+    args = module.argparse.Namespace(
+        model="limn",
+        checkpoint=["unknown_ckpt"],
+        all=False,
+        list=False,
+    )
+    with pytest.raises(ValueError, match="unknown checkpoint for limn: unknown_ckpt"):
+        module.selected(args, reg["models"])
+
+    with pytest.raises(SystemExit) as exc:
+        module.main(["--model", "limn", "--output-root", str(tmp_path), "--checkpoint", "unknown_ckpt"])
+    assert exc.value.code == 2
+
+
+def test_limn_wrong_category_checkpoint_refused(tmp_path: Path) -> None:
+    module = _module()
+    from workbench.backend.registry import load_registry
+
+    reg = load_registry()
+    args = module.argparse.Namespace(
+        model="limn",
+        checkpoint=["base_iter0_dress", "base_iter0_shirt", "base_iter0_shoes"],
+        all=False,
+        list=False,
+    )
+    with pytest.raises(ValueError, match="unknown checkpoint for limn: base_iter0_shoes"):
+        module.selected(args, reg["models"])
+
+    with pytest.raises(SystemExit) as exc:
+        module.main(["--model", "limn", "--output-root", str(tmp_path),
+                     "--checkpoint", "base_iter0_dress",
+                     "--checkpoint", "base_iter0_shirt",
+                     "--checkpoint", "base_iter0_shoes"])
+    assert exc.value.code == 2
+
+
+def test_limn_bundle_expands_to_three_declared_members() -> None:
+    module = _module()
+    from workbench.backend.registry import load_registry
+
+    reg = load_registry()
+    args = module.argparse.Namespace(
+        model="limn",
+        checkpoint=["base_iter0_all_categories"],
+        all=False,
+        list=False,
+    )
+    items = module.selected(args, reg["models"])
+    assert len(items) == 3
+    assert [c["checkpoint_id"] for _, c in items] == ["base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee"]

@@ -17,6 +17,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 import sys
+import uuid
 from typing import Any, Callable
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
@@ -32,6 +33,88 @@ CONDA_CHANNELS = ("conda-forge", "pytorch", "defaults")
 
 _SOLVE_CACHE: dict[tuple[Any, ...], tuple[bool, str]] = {}
 _SOLVE_CACHE_OWNERS: dict[int, Callable] = {}
+
+#: Explicit allowlist for package installation and verification subprocesses.
+#: Package managers and probes only receive variables essential for resolution and installation,
+#: stopping credential propagation (e.g. WORKBENCH_LEDGER_KEY, cloud tokens, API keys).
+_PACKAGE_MANAGER_ENV_ALLOWLIST = (
+    # Execution basics: locating binaries, user home directory, temporary directories
+    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "TEMP", "TMP",
+    # Locale and encoding: python and package tools require consistent text decoding
+    "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "LC_MESSAGES", "TZ",
+    # Network and proxy: package index access through enterprise proxies or custom CA bundles
+    "HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "ALL_PROXY", "NO_PROXY",
+    "http_proxy", "https_proxy", "ftp_proxy", "all_proxy", "no_proxy",
+    "SSL_CERT_FILE", "SSL_CERT_DIR", "CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE",
+    # CUDA and GPU discovery: package wheels or builds selecting matching CUDA architectures
+    "CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES", "NVIDIA_DRIVER_CAPABILITIES",
+    # Conda environment discovery and package caches
+    "CONDA_EXE", "CONDA_PYTHON_EXE", "CONDA_ROOT", "CONDA_PREFIX", "CONDA_PKGS_DIRS",
+    "CONDA_SHLVL", "CONDA_DEFAULT_ENV",
+    # Pip and library caches
+    "PIP_CACHE_DIR", "TORCH_HOME", "HF_HOME", "TRANSFORMERS_CACHE",
+    "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
+    # Python runtime flags
+    "PYTHONIOENCODING", "PYTHONHASHSEED",
+)
+
+_PACKAGE_MANAGER_ENV_DENY_PREFIXES = (
+    "WORKBENCH_LEDGER_KEY", "WORKBENCH_SECRET_",
+    "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACEHUB_API_TOKEN",
+    "WANDB_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+    "GITHUB_TOKEN", "GH_TOKEN", "GITLAB_TOKEN",
+    "AWS_", "AZURE_", "GOOGLE_", "GCP_",
+    "DOCKER_", "KUBECONFIG", "SLACK_", "STRIPE_", "NPM_",
+)
+
+
+def _package_manager_env(extra_env: dict[str, str] | None = None) -> dict[str, str]:
+    """Build an explicit allowlist environment for provisioning and verification subprocesses."""
+    env: dict[str, str] = {}
+    for key in _PACKAGE_MANAGER_ENV_ALLOWLIST:
+        val = os.environ.get(key)
+        if val is not None:
+            env[key] = val
+    for key in list(env):
+        if any(key == p or key.startswith(p) for p in _PACKAGE_MANAGER_ENV_DENY_PREFIXES):
+            env.pop(key, None)
+    if extra_env:
+        for k, v in extra_env.items():
+            if not any(k == p or k.startswith(p) for p in _PACKAGE_MANAGER_ENV_DENY_PREFIXES):
+                env[k] = str(v)
+    return env
+
+
+MARKER_FILENAME = ".workbench_managed_env.json"
+
+def _is_staging_path(path: Path | str | None) -> bool:
+    return path is not None and any(part.startswith(".staging-") for part in Path(path).parts)
+
+
+def _is_workbench_managed(prefix: Path, environment_id: str | None = None) -> bool:
+    if _is_staging_path(prefix):
+        return False
+    marker = Path(prefix) / MARKER_FILENAME
+    if not marker.is_file():
+        return False
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+        if data.get("managed_by") != "workbench":
+            return False
+        if environment_id is not None and data.get("environment_id") != environment_id:
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def _mark_workbench_managed(prefix: Path, environment_id: str) -> None:
+    marker = Path(prefix) / MARKER_FILENAME
+    data = {
+        "managed_by": "workbench",
+        "environment_id": environment_id,
+    }
+    marker.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 _SOLVERS = ("conda", "mamba", "micromamba")
 _UNKNOWN = {"", "UNKNOWN", "NONE", "NULL"}
@@ -446,7 +529,7 @@ def _solver_solve(command: str, constraints: dict) -> tuple[bool, str]:
             argv.extend(("-c", channel))
         argv.extend(specs)
         try:
-            process = subprocess.run(argv, capture_output=True, text=True, check=False,
+            process = subprocess.run(argv, env=_package_manager_env(), capture_output=True, text=True, check=False,
                                      timeout=SOLVER_TIMEOUT_SECONDS)
         except subprocess.TimeoutExpired as exc:
             return False, f"{command} timed out after {exc.timeout} seconds"
@@ -521,7 +604,7 @@ def _reusable_interpreter(members: list[str], by_id: dict[str, dict], specs: dic
     for mid in members:
         variable = (by_id[mid].get("environment") or {}).get("python_env_var")
         path = os.environ.get(variable or "")
-        if not path:
+        if not path or _is_staging_path(path):
             return None
         paths.append(path)
     try:
@@ -555,6 +638,16 @@ def _constraint_names(constraints: dict) -> str:
 
 def _model_id(model: dict) -> str:
     return str(model.get("model_id") or "<unnamed>")
+
+
+def _environment_digest(members: list[str], constraints: dict) -> str:
+    lock = {"members": sorted(members), "constraints": {key: constraints[key] for
+            key in ("python", "torch", "torchvision", "cuda", "packages", "ranges")}}
+    return hashlib.sha256(json.dumps(lock, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _environment_id(members: list[str], constraints: dict) -> str:
+    return f"cir-{_environment_digest(members, constraints)[:16]}"
 
 
 def _source_reason(message: str, specs: list[dict]) -> str:
@@ -599,6 +692,10 @@ def _group_status(group: dict, models: dict[str, dict], specs: dict[str, dict], 
         if not path:
             continue
         paths.append(path)
+        if _is_staging_path(path):
+            reports.append(None)
+            group["unresolved"].append(f"{mid}: interrupted staging environment cannot be reused")
+            continue
         if Path(path).resolve() == Path(sys.executable).resolve():
             reports.append(None)
             group["unresolved"].append(f"{mid}: system Python cannot be a model environment target")
@@ -631,7 +728,7 @@ def _group_status(group: dict, models: dict[str, dict], specs: dict[str, dict], 
         verification = "NOT_READY"
     else:
         verification = "NOT_CONFIGURED"
-    return installation, verification, paths[0] if same else None
+    return installation, verification, paths[0] if same and ready else None
 
 
 def plan_environments(models: list[dict], *, solver=None,
@@ -734,10 +831,7 @@ def plan_environments(models: list[dict], *, solver=None,
     groups = []
     for draft in drafts:
         members, constraints = sorted(draft["members"]), draft["constraints"]
-        lock = {"members": members, "constraints": {key: constraints[key] for
-                key in ("python", "torch", "torchvision", "cuda", "packages", "ranges")}}
-        digest = hashlib.sha256(json.dumps(lock, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-        environment_id = f"cir-{digest[:16]}"
+        environment_id = _environment_id(members, constraints)
         env_path = artifacts_root / "environments" / environment_id
         unresolved = []
         for mid in members:
@@ -759,7 +853,7 @@ def plan_environments(models: list[dict], *, solver=None,
                  "packages": group_packages,
                  "cuda_runtime": _display(constraints["cuda"]), "conda_env_path": str(env_path),
                  "interpreter": str(env_path / ("python.exe" if os.name == "nt" else "bin/python")),
-                 "lock_digest": digest,
+                 "lock_digest": _environment_digest(members, constraints),
                  "evidence": constraints["evidence"] + [
                      f"Configured conda channels: {', '.join(CONDA_CHANNELS)}"] + (
                      [f"Conda channels searched: {', '.join(CONDA_CHANNELS)}"]
@@ -818,7 +912,9 @@ def apply_interpreter_mapping(models: list[dict], plan: dict,
         for mid in group["members"]:
             model = by_id.get(mid)
             variable = (model.get("environment") or {}).get("python_env_var") if model else None
-            mapping[mid] = environ.get(variable) if variable and environ.get(variable) else group.get("interpreter")
+            interpreter = environ.get(variable) if variable and environ.get(variable) else group.get("interpreter")
+            mapping[mid] = (None if _is_staging_path(group.get("conda_env_path")) or _is_staging_path(interpreter)
+                            else interpreter)
     return mapping
 
 
@@ -863,6 +959,7 @@ def _verify_group_interpreter(
     details: dict[str, Any] = {"verified_versions": {}, "evaluator_imports": {}, "probes": []}
     try:
         pip_res = subprocess.run([str(interpreter), "-m", "pip", "check"],
+                                 env=_package_manager_env(),
                                  capture_output=True, text=True, check=False, timeout=60)
     except Exception as exc:
         return False, f"pip check invocation failed: {exc}", details
@@ -877,30 +974,33 @@ def _verify_group_interpreter(
         return False, f"Failed to inspect environment distributions: {exc}", details
 
     constraints = group["constraints"]
-    for name, terms in constraints.get("packages", {}).items():
+    for name in sorted(set(constraints.get("packages", {})) | set(constraints.get("ranges", {}))):
         if name == "cuda-version":
             continue
-        exact_terms = [v for op, v in terms if op in ("==", "===")]
-        if exact_terms:
-            req_ver = exact_terms[0]
+        terms = constraints.get("packages", {}).get(name, []) + constraints.get("ranges", {}).get(name, [])
+        if terms:
+            spec_str = ",".join(f"{op}{val}" for op, val in terms)
             norm_name = runtime.normalize_distribution_name(name)
             inst_ver = installed.get(norm_name)
-            details["verified_versions"][name] = {"required": req_ver, "installed": inst_ver}
+            details["verified_versions"][name] = {"required": spec_str, "installed": inst_ver}
             if inst_ver is None:
-                return False, f"Required package {name} ({req_ver}) is not installed", details
-            if not runtime.version_satisfies(f"=={req_ver}", inst_ver):
-                return False, f"Package {name} version mismatch: required {req_ver}, installed {inst_ver}", details
+                return False, f"Required package {name} ({spec_str}) is not installed", details
+            satisfies = runtime.version_satisfies(spec_str, inst_ver)
+            if satisfies is False or satisfies is None:
+                return False, f"Package {name} version mismatch: required {spec_str}, installed {inst_ver}", details
 
     for key, field_name in (("torch", "torch"), ("torchvision", "torchvision")):
         terms = constraints.get(key, [])
-        exact = [v for op, v in terms if op in ("==", "===")]
-        if exact:
+        if terms:
+            spec_str = ",".join(f"{op}{val}" for op, val in terms)
             norm_name = runtime.normalize_distribution_name(field_name)
             inst_ver = installed.get(norm_name)
-            details["verified_versions"][field_name] = {"required": exact[0], "installed": inst_ver}
-            if inst_ver is None or not runtime.version_satisfies(f"=={exact[0]}", inst_ver):
-                return False, f"{field_name} version mismatch: required {exact[0]}, installed {inst_ver}", details
-
+            details["verified_versions"][field_name] = {"required": spec_str, "installed": inst_ver}
+            if inst_ver is None:
+                return False, f"Required package {field_name} ({spec_str}) is not installed", details
+            satisfies = runtime.version_satisfies(spec_str, inst_ver)
+            if satisfies is False or satisfies is None:
+                return False, f"{field_name} version mismatch: required {spec_str}, installed {inst_ver}", details
     probe_modules = []
     for pkg in sorted(set(constraints.get("packages", {})) | {"torch", "torchvision"}):
         if pkg in ("cuda-version",) or pkg not in installed:
@@ -913,6 +1013,7 @@ def _verify_group_interpreter(
         code = "import " + ", ".join(probe_modules)
         try:
             res = subprocess.run([str(interpreter), "-c", code],
+                                 env=_package_manager_env(),
                                  capture_output=True, text=True, check=False, timeout=60)
         except Exception as exc:
             return False, f"Native module import probe failed: {exc}", details
@@ -929,6 +1030,7 @@ def _verify_group_interpreter(
             code = "; ".join(f"import {m}" for m in sorted(eval_imports))
             try:
                 res = subprocess.run([str(interpreter), "-c", code],
+                                     env=_package_manager_env(),
                                      capture_output=True, text=True, check=False, timeout=60)
             except Exception as exc:
                 return False, f"{mid}: evaluator import probe failed: {exc}", details
@@ -962,10 +1064,7 @@ def _build_group_dict(
     solver_cmd: str | None,
 ) -> dict:
     members = sorted(members)
-    lock = {"members": members, "constraints": {key: constraints[key] for
-            key in ("python", "torch", "torchvision", "cuda", "packages", "ranges")}}
-    digest = hashlib.sha256(json.dumps(lock, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    environment_id = f"cir-{digest[:16]}"
+    environment_id = _environment_id(members, constraints)
     env_path = artifacts_root / "environments" / environment_id
     unresolved = []
     for mid in members:
@@ -990,7 +1089,7 @@ def _build_group_dict(
         "cuda_runtime": _display(constraints["cuda"]),
         "conda_env_path": str(env_path),
         "interpreter": str(env_path / ("python.exe" if os.name == "nt" else "bin/python")),
-        "lock_digest": digest,
+        "lock_digest": _environment_digest(members, constraints),
         "evidence": list(constraints["evidence"]),
         "split_reasons": [],
         "installation_status": "NOT_INSTALLED",
@@ -1015,8 +1114,13 @@ def _provision_group(
 ) -> tuple[bool, str]:
     interpreter = Path(group["interpreter"])
     prefix = Path(group["conda_env_path"])
+    if _is_staging_path(prefix) or _is_staging_path(interpreter):
+        group["installation_status"] = "FAILED"
+        group["runtime_verification_status"] = "FAILED"
+        group["state"] = "FAILED"
+        return False, "Interrupted staging prefixes cannot be adopted as environments"
 
-    if interpreter.is_file() and os.access(interpreter, os.X_OK):
+    if interpreter.is_file() and os.access(interpreter, os.X_OK) and not prefix.name.startswith(".staging-"):
         ok, reason, details = _verify_group_interpreter(group, by_id, specs, third_party_root)
         if ok:
             group["installation_status"] = "REUSED"
@@ -1036,12 +1140,22 @@ def _provision_group(
         group["runtime_verification_status"] = "SOLVER_UNAVAILABLE"
         return False, "No conda/mamba/micromamba solver available to create environment"
 
-    if prefix.exists():
-        try:
-            shutil.rmtree(prefix)
-        except Exception:
-            pass
+    target_prefix = prefix
+    if target_prefix.exists():
+        idx = 1
+        while (prefix.parent / f"{prefix.name}-{idx}").exists():
+            idx += 1
+        target_prefix = prefix.parent / f"{prefix.name}-{idx}"
+
     prefix.parent.mkdir(parents=True, exist_ok=True)
+    while True:
+        staging_prefix = prefix.parent / f".staging-{group['environment_id']}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+        try:
+            staging_prefix.mkdir()
+            break
+        except FileExistsError:
+            continue
+    staging_interp = staging_prefix / ("python.exe" if os.name == "nt" else "bin/python")
 
     conda_specs = []
     py_terms = group["constraints"].get("python", [])
@@ -1061,7 +1175,7 @@ def _provision_group(
             for op, val in terms:
                 conda_specs.append(f"{name}{'=' if op in ('==', '===') else op}{val}")
 
-    argv = [solver_cmd, "create", "--prefix", str(prefix), "--override-channels"]
+    argv = [solver_cmd, "create", "--prefix", str(staging_prefix), "--override-channels"]
     for ch in CONDA_CHANNELS:
         argv.extend(("-c", ch))
     argv.extend(conda_specs)
@@ -1069,56 +1183,77 @@ def _provision_group(
 
     group["evidence"].append(f"conda create: {' '.join(argv)}")
     try:
-        proc = subprocess.run(argv, capture_output=True, text=True, check=False, timeout=SOLVER_TIMEOUT_SECONDS)
+        proc = subprocess.run(argv, env=_package_manager_env(), capture_output=True, text=True, check=False, timeout=SOLVER_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired as exc:
+        shutil.rmtree(staging_prefix, ignore_errors=True)
         group["evidence"].append(f"conda create timed out after {exc.timeout}s")
         group["installation_status"] = "FAILED"
+        group["state"] = "FAILED"
         return False, f"conda create timed out after {exc.timeout}s"
     except OSError as exc:
+        shutil.rmtree(staging_prefix, ignore_errors=True)
         group["installation_status"] = "FAILED"
+        group["state"] = "FAILED"
         return False, f"conda create failed: {exc}"
 
     group["evidence"].append(f"conda create exited {proc.returncode}")
     if proc.returncode != 0:
+        shutil.rmtree(staging_prefix, ignore_errors=True)
         group["installation_status"] = "FAILED"
+        group["state"] = "FAILED"
         err = (proc.stderr or proc.stdout).strip()[:500]
         group["evidence"].append(f"conda create error: {err}")
         return False, f"conda create exited {proc.returncode}: {err}"
 
-    if not interpreter.is_file():
+    if not staging_interp.is_file():
+        shutil.rmtree(staging_prefix, ignore_errors=True)
         group["installation_status"] = "FAILED"
-        return False, f"Target interpreter {interpreter} not found after conda create"
+        group["state"] = "FAILED"
+        return False, f"Target interpreter {staging_interp} not found after conda create"
 
     pip_specs = _pip_specs_for_group(group, by_id)
     if pip_specs:
-        pip_argv = [str(interpreter), "-m", "pip", "install", *pip_specs]
+        pip_argv = [str(staging_interp), "-m", "pip", "install", *pip_specs]
         group["evidence"].append(f"pip install: {' '.join(pip_argv)}")
         try:
-            pip_proc = subprocess.run(pip_argv, capture_output=True, text=True, check=False, timeout=SOLVER_TIMEOUT_SECONDS)
+            pip_proc = subprocess.run(pip_argv, env=_package_manager_env(), capture_output=True, text=True, check=False, timeout=SOLVER_TIMEOUT_SECONDS)
         except Exception as exc:
+            shutil.rmtree(staging_prefix, ignore_errors=True)
             group["installation_status"] = "FAILED"
+            group["state"] = "FAILED"
             return False, f"pip install failed: {exc}"
 
         group["evidence"].append(f"pip install exited {pip_proc.returncode}")
         if pip_proc.returncode != 0:
+            shutil.rmtree(staging_prefix, ignore_errors=True)
             group["installation_status"] = "FAILED"
+            group["state"] = "FAILED"
             err = (pip_proc.stderr or pip_proc.stdout).strip()[:500]
             group["evidence"].append(f"pip install error: {err}")
             return False, f"pip install exited {pip_proc.returncode}: {err}"
 
-    group["installation_status"] = "INSTALLED"
-    group["state"] = "INSTALLED"
-    group["evidence"].append("INSTALLED: conda and pip package installation succeeded")
-
-    ok, reason, details = _verify_group_interpreter(group, by_id, specs, third_party_root)
+    staging_group = dict(group)
+    staging_group["conda_env_path"] = str(staging_prefix)
+    staging_group["interpreter"] = str(staging_interp)
+    ok, reason, details = _verify_group_interpreter(staging_group, by_id, specs, third_party_root)
     group["verification_details"] = details
     if not ok:
+        shutil.rmtree(staging_prefix, ignore_errors=True)
+        group["installation_status"] = "FAILED"
         group["runtime_verification_status"] = "IMPORT_CHECK_FAILED"
+        group["state"] = "FAILED"
         group["evidence"].append(f"Verification failed: {reason}")
         return False, reason
 
+    staging_prefix.rename(target_prefix)
+    _mark_workbench_managed(target_prefix, group["environment_id"])
+    final_interp = target_prefix / ("python.exe" if os.name == "nt" else "bin/python")
+    group["conda_env_path"] = str(target_prefix)
+    group["interpreter"] = str(final_interp)
+    group["installation_status"] = "INSTALLED"
     group["state"] = "RUNTIME_VERIFIED"
     group["runtime_verification_status"] = "READY"
+    group["evidence"].append("INSTALLED: conda and pip package installation succeeded")
     group["evidence"].append("RUNTIME_VERIFIED: pip check, exact versions, and member evaluator imports verified")
     return True, "Provisioning succeeded"
 
@@ -1157,8 +1292,10 @@ def _provision_all_groups(
                 break
         if not affected_mid:
             for name, vinfo in v_details.get("verified_versions", {}).items():
-                if vinfo.get("installed") is None or not runtime.version_satisfies(f"=={vinfo.get('required')}", vinfo.get("installed")):
-                    cand = [m for m in group["members"] if name in specs[m].get("packages", {})]
+                req = vinfo.get("required", "")
+                spec_req = req if any(req.startswith(op) for op in ("==", ">=", "<=", ">", "<", "!=", "~=")) else f"=={req}"
+                if vinfo.get("installed") is None or not runtime.version_satisfies(spec_req, vinfo.get("installed")):
+                    cand = [m for m in group["members"] if name in specs[m].get("packages", {}) or name in specs[m].get("ranges", {})]
                     if len(cand) == 1:
                         affected_mid = cand[0]
                         break
@@ -1185,7 +1322,9 @@ def _provision_all_groups(
 def write_environment_assignment(assignment: dict, path: Path | str) -> Path:
     p = Path(path).resolve()
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(assignment, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temp_path = p.with_suffix(f".tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}")
+    temp_path.write_text(json.dumps(assignment, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temp_path.replace(p)
     return p
 
 
@@ -1220,12 +1359,16 @@ def provision_environment_plan(
         groups, by_id, specs, artifacts_root, resolved_third_party, allowed, solver_cmd
     )
     plan["groups"] = provisioned_groups
-    plan["interpreter_mapping"] = apply_interpreter_mapping(models, plan, environ=environ)
+    plan["interpreter_mapping"] = {
+        mid: (None if _is_staging_path(group.get("interpreter")) or _is_staging_path(group.get("conda_env_path"))
+              else group.get("interpreter"))
+        for group in provisioned_groups for mid in group["members"]
+    }
 
     models_assignment = {}
     for g in provisioned_groups:
         for mid in g["members"]:
-            interp = plan["interpreter_mapping"].get(mid) or g.get("interpreter")
+            interp = g.get("interpreter")
             models_assignment[mid] = {
                 "environment_id": g["environment_id"],
                 "interpreter": interp,
@@ -1263,9 +1406,16 @@ def provision_environment_plan(
         "plan": plan,
     }
 
-    assignment_path = artifacts_root / "environment_assignment.json"
-    write_environment_assignment(assignment, assignment_path)
-    plan["environment_assignment_path"] = str(assignment_path)
+    has_failures = any(
+        g.get("state") == "FAILED" or g.get("installation_status") == "FAILED"
+        for g in provisioned_groups
+    )
+    if not has_failures and (not allowed or all(g.get("state") == "RUNTIME_VERIFIED" for g in provisioned_groups)):
+        assignment_path = artifacts_root / "environment_assignment.json"
+        write_environment_assignment(assignment, assignment_path)
+        plan["environment_assignment_path"] = str(assignment_path)
+    else:
+        plan["environment_assignment_path"] = None
     return assignment
 
 
@@ -1313,7 +1463,13 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.allow_install:
-        provision_environment_plan(models, plan, artifacts_root=args.artifacts_root, allowed=True, third_party_root=third_party_root)
+        # The written plan must be the provisioned one: `provision_environment_plan` mutates and
+        # returns the plan whose groups carry their real state, and writing the pre-provisioning
+        # draft would report CONSTRAINTS_COMPATIBLE for a group that is RUNTIME_VERIFIED.
+        provisioned = provision_environment_plan(models, plan, artifacts_root=args.artifacts_root,
+                                                allowed=True, third_party_root=third_party_root)
+        if isinstance(provisioned, dict):
+            plan = provisioned
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
