@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
+
+REPOSITORY = Path(__file__).resolve().parents[2]
 
 from workbench.backend.operator_config import WorkbenchConfig
 
@@ -203,10 +206,12 @@ def test_a_dangling_link_is_reported_not_replaced(tmp_path: Path, monkeypatch, c
 
     assert module.main(["--dataset-root", str(root), "--model", "combiner_rn50x4_noft"]) == 1
     out = capsys.readouterr().out
-    assert "resolves to" in out or "cannot resolve" in out
-    assert link.is_symlink() and not link.resolve().exists() or True
-    # The link was not repointed at the canonical root.
-    assert not (source / "fashionIQ_dataset").resolve().exists()
+    assert "resolves to" in out or "cannot resolve" in out, out
+    # The dangling link was reported and left exactly as it was: still a link, still pointing at
+    # the missing path, and not repointed at the canonical root.
+    assert link.is_symlink()
+    assert not link.resolve().exists()
+    assert os.readlink(link) == str(tmp_path / "does-not-exist")
 
 
 def test_the_declared_link_is_approved_as_a_source_runtime_artifact() -> None:
@@ -222,3 +227,62 @@ def test_the_declared_link_is_approved_as_a_source_runtime_artifact() -> None:
     limn = model_by_id("limn")
     assert all(item["kind"] != "canonical_dataset_link"
                for item in source_runtime_artifacts(limn))
+
+
+def test_the_normal_workflow_stages_every_declared_link(tmp_path: Path, monkeypatch, capsys) -> None:
+    """`prepare_model.py --execute` must stage the link, not only the separate helper.
+
+    The entry point an operator actually runs is the model workflow. If it refuses a model whose
+    evaluator hard-codes its dataset root, the link only ever exists when someone remembers the
+    other script — which is how a run reaches the GPU host with an unresolved data root.
+    """
+    import subprocess
+    import sys as _sys
+
+    from workbench.backend.registry import load_registry
+
+    third_party = tmp_path / "third_party"
+    data = fashioniq_root(tmp_path)
+    checkouts = {"csmcir": "CSMCIR", "sprc": "SPRC",
+                 "combiner_rn50x4_noft": "CLIP4Cir", "clip4cir_rn50x4_fullft": "CLIP4Cir"}
+    for checkout in set(checkouts.values()):
+        (third_party / checkout).mkdir(parents=True)
+
+    env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
+           "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
+
+    declared = {model["model_id"] for model in load_registry()["models"]
+                if model.get("canonical_dataset_link")}
+    assert declared == set(checkouts), declared
+
+    for model_id, checkout in checkouts.items():
+        result = subprocess.run(
+            [_sys.executable, str(REPOSITORY / "workbench" / "scripts" / "prepare_model.py"),
+             "--model", model_id, "--execute", "--allow-preparation",
+             "--dataset-root", str(data)],
+            env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
+        assert result.returncode == 0, (model_id, result.stdout, result.stderr)
+        link = third_party / checkout / "fashionIQ_dataset"
+        assert link.is_symlink(), model_id
+        assert link.resolve() == data.resolve(), model_id
+
+
+def test_a_model_without_a_declared_link_is_refused_by_execute(
+        tmp_path: Path, monkeypatch, capsys) -> None:
+    """Nothing is prepared for a model that declares no fixed link."""
+    import subprocess
+    import sys as _sys
+
+    third_party = tmp_path / "third_party"
+    (third_party / "LIMN").mkdir(parents=True)
+    data = fashioniq_root(tmp_path)
+    env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
+           "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
+
+    result = subprocess.run(
+        [_sys.executable, str(REPOSITORY / "workbench" / "scripts" / "prepare_model.py"),
+         "--model", "limn", "--execute", "--allow-preparation", "--dataset-root", str(data)],
+        env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "no verified automated preparation step" in result.stderr
+    assert not (third_party / "LIMN" / "fashionIQ_dataset").exists()

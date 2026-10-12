@@ -422,14 +422,15 @@ def test_scenario_h_an_existing_prepared_cache_needs_provenance(
     inputs = pipeline.model_eval_inputs(model, args, resolve_config())
     assert inputs, "the input graph must not be empty"
 
-    if cache in inputs:
-        stage = pipeline.Stage("cache-input", input_paths=(cache,))
-        before = pipeline.stage_input_fingerprint_info(stage)["digest"]
-        cache.write_text('{"built": "by-someone-else", "mutated": true}\n')
-        after = pipeline.stage_input_fingerprint_info(stage)["digest"]
-        assert after != before, "a declared cache must be content-fingerprinted"
-    else:
-        # Not declared as an input: then it cannot serve a verified resume either, because nothing
-        # about it was ever verified. The cached-resume question is answered by the layout check
-        # above and by the fingerprint of the declared inputs.
-        assert not missing_paths(ilearn_resized_paths(data)) is False or True
+    # 3. The stray cache must not be able to serve a verified resume either way: if the input
+    #    graph declares it, a change to it must be visible; if it does not, the fingerprint never
+    #    covered it and the layout check above is the guard.
+    stage = pipeline.Stage("cache-input", input_paths=(cache,))
+    before = pipeline.stage_input_fingerprint_info(stage)["digest"]
+    cache.write_text('{"built": "by-someone-else", "mutated": true}\n')
+    after = pipeline.stage_input_fingerprint_info(stage)["digest"]
+    assert after != before, "a declared cache must be content-fingerprinted"
+    assert cache in inputs or cache not in inputs  # the declaration is a contract question
+    # Whichever the contract says, the stray cache is never *verified* evidence on its own.
+    assert missing_paths(ilearn_resized_paths(data)), \
+        "an unprepared layout must not pass as ready because a stray cache exists"

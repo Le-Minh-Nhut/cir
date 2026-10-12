@@ -64,8 +64,10 @@ CONTENT_VERIFIED = "CONTENT_VERIFIED"      # the file's bytes were hashed
 METADATA_ONLY = "METADATA_ONLY"            # too large to hash inline: name/size/mtime only
 UNREADABLE = "UNREADABLE"                  # present but could not be read
 MISSING = "MISSING"                        # declared but absent
-SYMLINK_VERIFIED = "SYMLINK_VERIFIED"      # a symlink whose target string was read
+SYMLINK_VERIFIED = "SYMLINK_VERIFIED"      # a symlink resolved inside the walked root
 SYMLINK_DANGLING = "SYMLINK_DANGLING"      # a symlink whose target does not resolve
+SYMLINK_EXTERNAL = "SYMLINK_EXTERNAL"      # a symlink leaving the root: content unverifiable
+UNREADABLE_DIRECTORY = "UNREADABLE_DIRECTORY"   # a directory the walk could not enter
 NOT_A_FILE = "NOT_A_FILE"                  # neither a regular file, directory, nor symlink
 
 # Tree-level evidence categories.
@@ -79,6 +81,11 @@ TREE_MISSING = "TREE_MISSING"                     # the tree does not exist
 # backed by content for everything it covers.
 # Metadata is not content: only a real digest or a recorded link target authorizes skip.
 VERIFIED_ENTRY_CATEGORIES = frozenset({CONTENT_VERIFIED, SYMLINK_VERIFIED})
+#: Never verified evidence, and always a reason to refuse a verified resume.
+UNVERIFIED_ENTRY_CATEGORIES = frozenset({
+    UNREADABLE, MISSING, NOT_A_FILE, SYMLINK_DANGLING, SYMLINK_EXTERNAL,
+    UNREADABLE_DIRECTORY, METADATA_ONLY,
+})
 VERIFIED_TREE_CATEGORIES = frozenset({TREE_CONTENT_VERIFIED})
 
 # Files above this size are hashed by streaming rather than loaded into memory. There is no size
@@ -130,15 +137,25 @@ def _entry_evidence(path: Path, root: Path, inventory: "hashlib._Hash") -> tuple
 
     size = details.st_size
     if stat.S_ISLNK(details.st_mode):
-        # A symlink's identity is the target it names, not the bytes it resolves to. A retarget
-        # therefore invalidates the fingerprint even when both targets hold identical content.
+        # A symlink's identity is the target it names, not the bytes it resolves to, so a retarget
+        # invalidates the fingerprint even when both targets hold identical content.
         try:
             target = os.readlink(path)
         except OSError:
             inventory.update(f"{UNREADABLE}\0{relative}\0".encode("utf-8"))
             return UNREADABLE, size
-        resolves = path.exists()
-        category = SYMLINK_VERIFIED if resolves else SYMLINK_DANGLING
+        resolved = path.resolve()
+        if not resolved.exists():
+            category = SYMLINK_DANGLING
+        elif _inside_root(resolved, root):
+            # A link that stays inside the walked root is covered by the target's own entry in
+            # this same walk, so its content is accounted for.
+            category = SYMLINK_VERIFIED
+        else:
+            # A link that leaves the root points at content this walk never reads. Treating that as
+            # verified evidence would let an external file change without invalidating resume, so
+            # it is recorded as unverified rather than assumed.
+            category = SYMLINK_EXTERNAL
         inventory.update(f"L\0{relative}\0{target}\0{category}\0".encode("utf-8"))
         return category, size
 
@@ -159,6 +176,24 @@ def _entry_evidence(path: Path, root: Path, inventory: "hashlib._Hash") -> tuple
     return CONTENT_VERIFIED, size
 
 
+def _is_verified_entry(category: str) -> bool:
+    """True only for evidence that a verified resume may rely on.
+
+    Written as an explicit test so a newly introduced category cannot default to *verified* by
+    being absent from a list someone forgot to update.
+    """
+    return category in VERIFIED_ENTRY_CATEGORIES
+
+
+def _inside_root(candidate: Path, root: Path) -> bool:
+    """True when *candidate* lies within *root* (both already resolved)."""
+    try:
+        root_resolved = root.resolve()
+    except OSError:
+        return False
+    return candidate == root_resolved or root_resolved in candidate.parents
+
+
 def _walk_evidence(root: Path) -> tuple["hashlib._Hash | None", str, int, int, bool]:
     """Inventory a directory and classify its evidence.
 
@@ -176,8 +211,18 @@ def _walk_evidence(root: Path) -> tuple["hashlib._Hash | None", str, int, int, b
     total = 0
     truncated = False
     partial = False
+    walk_errors: list[str] = []
+
+    def _on_error(error: OSError) -> None:
+        """Record a directory the walk could not enter instead of silently skipping it.
+
+        `os.walk` ignores an unreadable directory by default, so a tree whose contents were never
+        read could otherwise be reported as fully content-verified.
+        """
+        walk_errors.append(str(getattr(error, "filename", "?")))
+
     try:
-        for current, directories, names in os.walk(root, followlinks=False):
+        for current, directories, names in os.walk(root, followlinks=False, onerror=_on_error):
             directories.sort()
             names.sort()
             # Directory symlinks arrive through `directories` and are inventory entries in their
@@ -189,12 +234,12 @@ def _walk_evidence(root: Path) -> tuple["hashlib._Hash | None", str, int, int, b
                     category, size = _entry_evidence(candidate, root, inventory)
                     files += 1
                     total += size
-                    partial = partial or category not in VERIFIED_ENTRY_CATEGORIES
+                    partial = partial or not _is_verified_entry(category)
             for name in names:
                 category, size = _entry_evidence(Path(current) / name, root, inventory)
                 files += 1
                 total += size
-                partial = partial or category not in VERIFIED_ENTRY_CATEGORIES
+                partial = partial or not _is_verified_entry(category)
                 if files >= _WALK_LIMIT or total >= _WALK_SIZE_LIMIT:
                     truncated = True
                     break
@@ -206,6 +251,12 @@ def _walk_evidence(root: Path) -> tuple["hashlib._Hash | None", str, int, int, b
     if truncated:
         inventory.update(f"{TREE_TRUNCATED}:{files}:{total}".encode("utf-8"))
         return inventory, TREE_TRUNCATED, files, total, True
+    if walk_errors:
+        # A directory that could not be entered has contents this inventory never saw.
+        for failed in sorted(walk_errors):
+            inventory.update(f"{UNREADABLE_DIRECTORY}\0{failed}\0".encode("utf-8"))
+        inventory.update(TREE_PARTIAL.encode("utf-8"))
+        return inventory, TREE_PARTIAL, files, total, False
     if partial:
         inventory.update(TREE_PARTIAL.encode("utf-8"))
         return inventory, TREE_PARTIAL, files, total, False
@@ -310,7 +361,7 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
         hasher.update(f":{category}\0".encode("utf-8"))
         # Verified resume requires content evidence for every declared input. Anything else is
         # weak, and weak evidence refuses the skip rather than guessing.
-        if category not in VERIFIED_ENTRY_CATEGORIES and category not in VERIFIED_TREE_CATEGORIES:
+        if not _is_verified_entry(category) and category not in VERIFIED_TREE_CATEGORIES:
             weak = True
 
     source_info = None
@@ -1365,11 +1416,11 @@ def run_stages(
             weak_categories = [
                 f"{item['path']} ({item['category']})"
                 for item in fingerprint_info["inputs"]
-                if item["category"] not in VERIFIED_ENTRY_CATEGORIES
+                if not _is_verified_entry(item["category"])
                 and item["category"] not in VERIFIED_TREE_CATEGORIES
             ]
             source = fingerprint_info.get("source_provenance")
-            if source and source.get("category") not in VERIFIED_ENTRY_CATEGORIES:
+            if source and not _is_verified_entry(source.get("category")):
                 provenance_line = f"{source.get('path', 'source provenance')} ({source['category']})"
                 # The checkout is also a declared input; do not report the same path twice.
                 if not any(line.startswith(str(source.get("path", ""))) for line in weak_categories):

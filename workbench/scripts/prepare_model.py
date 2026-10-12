@@ -76,16 +76,21 @@ def print_status(s: dict) -> None:
         print(f"  notes: {s['notes']}")
 
 
-def _csmcir_link(config, dry_run: bool, check_only: bool) -> bool:
-    """Delegate CSMCIR dataset symlink to prepare_dataset.py."""
+def _fixed_link(config, model_id: str, dry_run: bool, check_only: bool) -> bool:
+    """Stage the model's declared fixed dataset link through the shared helper.
+
+    Any model whose pinned evaluator hard-codes its dataset root declares
+    `canonical_dataset_link`, and `prepare_dataset.py` implements the staging. Delegating keeps
+    one implementation of link creation and verification instead of a second one here.
+    """
     scripts = Path(__file__).resolve().parent
     argv = [sys.executable, str(scripts / "prepare_dataset.py"),
-            "--dataset-root", str(config.FASHIONIQ_ROOT), "--model", "csmcir"]
+            "--dataset-root", str(config.FASHIONIQ_ROOT), "--model", model_id]
     if dry_run:
         argv.append("--dry-run")
     elif check_only:
         argv.append("--check-only")
-    print(f"[RUN] CSMCIR preparation: {' '.join(argv)}")
+    print(f"[RUN] {model_id} dataset-link preparation: {' '.join(argv)}")
     result = subprocess.run(argv)
     return result.returncode == 0
 
@@ -138,13 +143,18 @@ def main(argv: list[str] | None = None) -> int:
     print_status(s)
 
     if args.execute:
-        if model["model_id"] == "csmcir":
-            ok = _csmcir_link(config, args.dry_run, check_only=False)
+        if model.get("canonical_dataset_link"):
+            ok = _fixed_link(config, model["model_id"], args.dry_run, check_only=False)
             return 0 if ok else 1
         print(f"[BLOCKED] {model['model_id']}: no verified automated preparation step; manual preparation required.",
               file=sys.stderr)
         print(f"  policy={s['automation_policy']} notes={s['notes']}", file=sys.stderr)
         return 2
+
+    if model.get("canonical_dataset_link") and not args.dry_run:
+        # A read-only status run still reports whether the declared link is correct, without
+        # creating it: the check is part of readiness, the creation is the authorized step.
+        _fixed_link(config, model["model_id"], dry_run=False, check_only=True)
 
     return 0 if s["fully_prepared"] else 1
 
