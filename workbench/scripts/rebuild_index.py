@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from workbench.backend.index import DATABASE_PATH, rebuild_index
+from workbench.backend.index import configured_database_path, rebuild_index
 from workbench.backend.operator_config import resolve_config
 from workbench.scripts.validate_results import validate_root
 
@@ -26,8 +26,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     database = args.database
     if database is None:
-        repo_root = getattr(resolve_config(), "CIR_REPO_ROOT", DATABASE_PATH.parents[1])
-        database = repo_root / "workbench" / "artifacts" / "workbench.duckdb"
+        database = configured_database_path(resolve_config())
     print(f"[OK] indexed {rebuild_index(args.results_root, database)} runs into {database}")
     return 0
 

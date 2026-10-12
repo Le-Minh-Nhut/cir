@@ -799,8 +799,10 @@ def _requires_gpu(model: dict[str, Any]) -> bool:
 
 
 def gpu_capability_directory(config: Any) -> Path:
-    repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
-    return Path(repo_root) / "workbench" / "artifacts" / "gpu_capabilities"
+    artifacts_root = getattr(config, "WORKBENCH_ARTIFACTS_ROOT", None)
+    if artifacts_root is None:
+        artifacts_root = Path(getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])) / "workbench" / "artifacts"
+    return Path(artifacts_root) / "gpu_capabilities"
 
 
 def gpu_capability_path(config: Any, capability_key: str | None = None) -> Path:
@@ -1909,8 +1911,8 @@ def _recorded_asset_digest(path: Path) -> str | None:
     """SHA-256 recorded when the workbench itself acquired this declared asset."""
     from workbench.backend.operator_config import resolve_config
 
-    root = getattr(resolve_config(), "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
-    manifest = root / "workbench" / "artifacts" / "auxiliary" / "download_manifest.json"
+    config = resolve_config()
+    manifest = config.WORKBENCH_ARTIFACTS_ROOT / "auxiliary" / "download_manifest.json"
     if not manifest.is_file():
         return None
     try:
@@ -2067,23 +2069,13 @@ def runtime_plan_blockers(model: dict[str, Any], checkpoint: dict[str, Any], con
 
 def runtime_blockers(model: dict[str, Any], checkpoint: dict[str, Any], config: Any,
                      protocol: str | None = None, dataset_root: Path | None = None) -> list[str]:
-    """Shared final preflight used by UI availability and guarded execution."""
-    from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
-    from workbench.backend.fashioniq_layout import image_extension_problems, missing_paths
     from workbench.backend.registry import (
         checkpoint_bundle_missing_paths, checkpoint_is_present, checkpoint_missing_paths,
-        checkpoint_path, external_asset_blockers, fashioniq_required_paths,
-        preparation_contract_for_model, preparation_paths, sha256_file,
+        checkpoint_path, sha256_file,
     )
+    from workbench.backend.preflight import preflight_blockers
 
-    blockers: list[str] = []
-    source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"] if model.get("source_dir") else None
-    if source is None or not source.is_dir():
-        blockers.append(f"source missing: {source}")
-    else:
-        clean, _, reason = source_clean_and_pinned(model, source)
-        if not clean:
-            blockers.append(reason or "source unavailable")
+    blockers = preflight_blockers(model, config, dataset_root=dataset_root)
     if protocol is not None and protocol not in model.get("supported_protocols", []):
         blockers.append(f"protocol incompatible: {protocol}")
     checkpoint_file = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
@@ -2096,49 +2088,5 @@ def runtime_blockers(model: dict[str, Any], checkpoint: dict[str, Any], config: 
         blockers.append("official checkpoint hash mismatch")
     for bundle_id, missing in checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT).items():
         blockers.append(f"checkpoint bundle incomplete: {bundle_id}: {missing[0]}")
-    adapter_type = ADAPTERS.get(model["model_id"])
-    command_implemented = (adapter_type is not None and
-                           getattr(adapter_type, "command", None) is not OfficialScriptAdapter.command)
-    command_audited = (model.get("command_status") in {"COMMAND_AUDITED", "REPLAY_COMMAND_IMPLEMENTED"} or
-                       (model.get("command_status") is None and command_implemented)) and command_implemented
-    if not command_audited:
-        blockers.append("adapter command not audited")
-    elif source is not None and getattr(adapter_type, "script", None) and not (source / adapter_type.script).is_file():
-        blockers.append(f"official evaluator missing: {source / adapter_type.script}")
-    blockers.extend(environment_blockers(model))
-    dataset_root = dataset_root or config.FASHIONIQ_ROOT
-    contract = preparation_contract_for_model(model)
-    if contract is None:
-        missing = missing_paths(fashioniq_required_paths(model, dataset_root))
-    else:
-        missing = missing_paths(preparation_paths(contract, dataset_root, "raw_inputs") +
-                                preparation_paths(contract, dataset_root, "generated_artifacts"))
-    if missing:
-        layout = model.get("fashioniq_layout") or "FashionIQ"
-        blockers.append(f"FashionIQ {layout} requirement missing: {missing[0]}")
-    # An official evaluator's image path is hard-coded in its own source, so the files on disk
-    # must carry the extension it opens. Checking it here surfaces an extension mismatch on the
-    # laptop instead of as a missing image in the middle of a GPU run.
-    for extension in model.get("fashioniq_image_extensions") or ():
-        problems = image_extension_problems(dataset_root, extension,
-                                            model.get("fashioniq_layout"))
-        if problems:
-            blockers.append(f"FashionIQ image extension requirement: {problems[0]}")
-    blockers.extend(external_asset_blockers(model))
-    if model["model_id"] == "encoder" and source is not None:
-        if not (source / "datasets1.py").is_file():
-            blockers.append(f"ENCODER evaluator import missing: {source / 'datasets1.py'}")
-        if not (source / "open_clip_pytorch_model.bin").is_file():
-            blockers.append(f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}")
-    if model["model_id"] == "csmcir" and source is not None:
-        layout = source / "fashionIQ_dataset"
-        if not layout.is_symlink() or layout.resolve() != config.FASHIONIQ_ROOT.resolve():
-            blockers.append(f"CSMCIR requires canonical dataset link: {layout} -> {config.FASHIONIQ_ROOT}")
-        for group, paths in (
-            ("Qwen captions", tuple(config.FASHIONIQ_ROOT / "qwen_captions" / f"{category}_cot_val.json" for category in ("dress", "shirt", "toptee"))),
-            ("COT_ours2 captions", tuple(source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json" for category in ("dress", "shirt", "toptee"))),
-        ):
-            group_missing = missing_paths(paths)
-            if group_missing:
-                blockers.append(f"CSMCIR {group} missing: {group_missing[0]}")
-    return blockers
+
+    return list(dict.fromkeys(blockers))

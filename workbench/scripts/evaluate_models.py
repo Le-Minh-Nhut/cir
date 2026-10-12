@@ -27,9 +27,13 @@ from workbench.backend.adapters.base import EvalRequest
 from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.metrics_extraction import extract_aggregate_metrics
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
-from workbench.backend.registry import checkpoint_path, load_registry, sha256_file
+from workbench.backend.registry import (
+    checkpoint_bundle_missing_paths, checkpoint_is_present, checkpoint_missing_paths,
+    checkpoint_path, load_registry, sha256_file,
+)
 from workbench.backend import runtime
-from workbench.backend.runtime import runtime_blockers, runtime_plan_blockers
+from workbench.backend.preflight import preflight_blockers
+from workbench.backend.runtime import runtime_plan_blockers
 
 
 @dataclass(frozen=True)
@@ -104,10 +108,9 @@ def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | 
     reasons = runtime_plan_blockers(model, checkpoint, config, protocol, dataset_root)
     if model["model_id"] == "limn" and checkpoint["checkpoint_id"] != checkpoint.get("bundle_id"):
         reasons = [reason for reason in reasons if not reason.startswith("checkpoint bundle incomplete:")]
-    if model.get("source_available") and actual_pin is None and source.is_dir():
-        reasons.append(f"source pin unavailable: {source}")
-    return source, checkpoint_file, actual_pin, reasons
-
+    shared = preflight_blockers(model, config, dataset_root=dataset_root)
+    reasons.extend(reason for reason in shared if not reason.startswith("execution environment not verified:") and reason not in reasons)
+    return source, checkpoint_file, actual_pin, list(dict.fromkeys(reasons))
 
 def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | None, top_k: int, config: WorkbenchConfig | None = None) -> tuple[EvaluationPlan | None, list[str]]:
     config = config or resolve_config()
@@ -787,10 +790,11 @@ def log_dir(config: WorkbenchConfig, plan: EvaluationPlan, timestamp: datetime,
     A single orchestrator invocation may evaluate several checkpoint variants of one
     model, so the directory is qualified by the checkpoint the run actually used.
     """
-    repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
+    artifacts_root = getattr(config, "WORKBENCH_ARTIFACTS_ROOT", None)
+    if artifacts_root is None:
+        artifacts_root = Path(getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])) / "workbench" / "artifacts"
     identifier = validate_run_id(run_id) if run_id else make_run_id(plan, timestamp)
-    return (repo_root / "workbench" / "artifacts" / "logs"
-            / f"{plan.model_id}__{plan.checkpoint_id}__{identifier}")
+    return (Path(artifacts_root) / "logs" / f"{plan.model_id}__{plan.checkpoint_id}__{identifier}")
 
 
 def expected_run_identity(config: WorkbenchConfig, plan: EvaluationPlan, run_id: str) -> dict[str, str]:
@@ -856,8 +860,10 @@ def manifest_digest(manifest: dict[str, dict[str, Any]] | None) -> str | None:
 
 def evidence_ledger_path(config: WorkbenchConfig) -> Path:
     """Append-only record of every invocation, kept *outside* the run directory."""
-    repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
-    return repo_root / "workbench" / "artifacts" / "evidence_ledger.jsonl"
+    artifacts_root = getattr(config, "WORKBENCH_ARTIFACTS_ROOT", None)
+    if artifacts_root is None:
+        artifacts_root = Path(getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])) / "workbench" / "artifacts"
+    return Path(artifacts_root) / "evidence_ledger.jsonl"
 
 
 
@@ -1035,10 +1041,11 @@ def read_evidence_ledger(config: WorkbenchConfig) -> list[dict] | None:
     except (LedgerKeyError, LedgerCorruptError, OSError):
         return None
 
-
 def artifact_root(config: WorkbenchConfig) -> Path:
-    repo_root = getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])
-    return repo_root / "workbench" / "artifacts"
+    artifacts_root = getattr(config, "WORKBENCH_ARTIFACTS_ROOT", None)
+    if artifacts_root is None:
+        artifacts_root = Path(getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2])) / "workbench" / "artifacts"
+    return Path(artifacts_root)
 
 
 def reports_root(config: WorkbenchConfig) -> Path:

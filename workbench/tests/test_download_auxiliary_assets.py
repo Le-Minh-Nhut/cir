@@ -94,7 +94,7 @@ def test_downloads_qwen_atomically_and_writes_local_hash_manifest(monkeypatch, t
     assert urls == [asset.source_url for asset in items]
     assert [destination for _, destination in renamed] == [asset.destination for asset in items]
     assert [asset.destination.read_bytes() for asset in items] == [b"payload-1", b"payload-2", b"payload-3"]
-    manifest = json.loads(module.manifest_path(config.CIR_REPO_ROOT).read_text())
+    manifest = json.loads(module.manifest_path(config.WORKBENCH_ARTIFACTS_ROOT).read_text())
     assert {entry["destination"] for entry in manifest} == {str(asset.destination) for asset in items}
     assert {entry["downloaded_sha256"] for entry in manifest} == {hashlib.sha256(asset.destination.read_bytes()).hexdigest() for asset in items}
 

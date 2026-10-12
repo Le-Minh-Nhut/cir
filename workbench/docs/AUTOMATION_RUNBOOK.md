@@ -28,8 +28,13 @@ python workbench/scripts/pipeline.py all --model csmcir --dry-run
 # Authorized complete execution with resume capability:
 python workbench/scripts/pipeline.py all --model csmcir --apply \
   --allow-network --allow-large-downloads --allow-env-install \
-  --allow-preparation --allow-gpu-eval --resume
+  --allow-preparation --allow-gpu-eval --allow-index-write --resume
 ```
+
+Every capability the selected stages declare must be granted, or the stage is refused before it
+runs. The evaluation stage declares `allow_preparation` and `allow_gpu_eval` together, and the
+validation-index stage declares `allow_index_write`; a command that omits one is rejected rather
+than silently skipped.
 
 ### B. Master Setup Workflow (`setup`)
 Executes preparation stages: doctor, dataset, sync, environment, preparation, checkpoint, auxiliary-assets.
@@ -51,7 +56,8 @@ Runs runtime preflight and guarded evaluation.
 python workbench/scripts/pipeline.py reproduce --model csmcir
 
 # Authorized evaluation with resume:
-python workbench/scripts/pipeline.py reproduce --model csmcir --apply --allow-gpu-eval --resume
+python workbench/scripts/pipeline.py reproduce --model csmcir --apply \
+  --allow-preparation --allow-gpu-eval --resume
 ```
 ### D. Master Analysis Workflow (`analyze`)
 Validates result artifacts and rebuilds DuckDB index.

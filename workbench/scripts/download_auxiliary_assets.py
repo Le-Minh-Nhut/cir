@@ -51,8 +51,8 @@ def assets(model_ids: set[str], third_party_root: Path, fashioniq_root: Path) ->
     )
 
 
-def manifest_path(repo_root: Path) -> Path:
-    return repo_root / "workbench" / "artifacts" / "auxiliary" / "download_manifest.json"
+def manifest_path(artifacts_root: Path) -> Path:
+    return artifacts_root / "auxiliary" / "download_manifest.json"
 
 
 def load_manifest(path: Path) -> list[dict]:
@@ -170,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{asset.family}: BLOCKED — required asset has no verified automatic acquisition source")
         print("DRY RUN: no network request and no filesystem mutation.")
         return 0
-    entries = load_manifest(manifest_path(config.CIR_REPO_ROOT))
+    entries = load_manifest(manifest_path(config.WORKBENCH_ARTIFACTS_ROOT))
     for asset in selected:
         assert asset.source_url is not None
         partial = asset.destination.with_suffix(asset.destination.suffix + ".part")
@@ -188,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"BLOCKED: {asset.destination}: {error}", file=sys.stderr)
             return 1
         entries = record_download(entries, asset)
-        save_manifest(manifest_path(config.CIR_REPO_ROOT), entries)
+        save_manifest(manifest_path(config.WORKBENCH_ARTIFACTS_ROOT), entries)
         hash_status = "official SHA256 verified" if asset.expected_sha256 else "local hash; official SHA256 unavailable"
         print(f"DOWNLOADED {asset.destination}: sha256={sha256_file(asset.destination)} ({hash_status})")
     if not selected:

@@ -162,14 +162,34 @@ def register_synthetic_adapters_from_env() -> None:
     if os.environ.get("WORKBENCH_ALLOW_SYNTHETIC_ADAPTERS") != "1":
         return
 
-    class _SyntheticModelAdapter(OfficialScriptAdapter):
-        model_id = "synthetic_model"
-        script = "src/evaluator.py"
+    def _make(model_id: str, script: str) -> type[OfficialScriptAdapter]:
+        class _SyntheticAdapter(OfficialScriptAdapter):
+            def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+                return [_runtime.python_executable(self.model), str(source / self.script)]
 
-        def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-            return [_runtime.python_executable(self.model), str(source / self.script)]
+        _SyntheticAdapter.model_id = model_id
+        _SyntheticAdapter.script = script
+        return _SyntheticAdapter
 
-    ADAPTERS["synthetic_model"] = _SyntheticModelAdapter
+    # One adapter per model the registry declares as synthetic. A multi-model harness therefore
+    # needs no code change here: declaring `synthetic_script` on a registry entry is enough, which
+    # is what lets the autopilot end-to-end test drive several models through one command.
+    try:
+        from workbench.backend.registry import load_registry
+
+        declared = [
+            (model["model_id"], model.get("synthetic_script") or "src/evaluator.py")
+            for model in load_registry()["models"]
+            if model.get("synthetic_source")
+        ]
+    except Exception:
+        declared = []
+    if not declared:
+        # A registry that predates the marker still gets the single synthetic model the older
+        # harnesses rely on.
+        declared = [("synthetic_model", "src/evaluator.py")]
+    for model_id, script in declared:
+        ADAPTERS[model_id] = _make(model_id, script)
 
 
 register_synthetic_adapters_from_env()

@@ -69,10 +69,10 @@ FASHIONIQ_ROOT=data/FashionIQ
 WORKBENCH_HOST=127.0.0.1
 WORKBENCH_BACKEND_PORT=8000
 WORKBENCH_FRONTEND_PORT=5173
+WORKBENCH_ARTIFACTS_ROOT=workbench/artifacts
 WORKBENCH_CHECKPOINT_ROOT=workbench/artifacts/checkpoints
 WORKBENCH_RESULTS_ROOT=workbench/artifacts/results
 WORKBENCH_THIRD_PARTY_ROOT=workbench/third_party
-```
 
 All listed roots are operational: `CIR_DATA_ROOT` supplies the default `FASHIONIQ_ROOT`; the checkpoint, result, and third-party roots select their corresponding local stores. `doctor.py` resolves and reports this configuration; scripts with explicit root options use their passed paths. Do not put secrets in this file.
 
@@ -127,13 +127,18 @@ Use this sequence on a GPU host only. It is a guardrail and recordkeeping proced
 CSMCIR has one canonical guarded setup/evaluation command. It validates canonical FashionIQ, syncs pinned source, creates its fixed dataset link, downloads recorded checkpoint, downloads verified Qwen text, runs strict CSMCIR runtime preflight, then starts unmodified official aggregate evaluation only if every prerequisite passes:
 
 ```bash
+# Plan only: prints the ordered stages and changes nothing.
 python workbench/scripts/pipeline.py real \
-  --model csmcir \
-  --dataset-root "$FASHIONIQ_ROOT" \
-  --sync-sources \
-  --download-checkpoints \
-  --download-auxiliary-assets \
-  --evaluate
+  --model csmcir --dataset-root "$FASHIONIQ_ROOT" \
+  --sync-sources --download-checkpoints --download-auxiliary-assets --evaluate
+
+# Execute the same stages. Each selected stage's declared capability must be granted, or the
+# stage is refused rather than silently skipped.
+python workbench/scripts/pipeline.py real \
+  --model csmcir --dataset-root "$FASHIONIQ_ROOT" \
+  --sync-sources --download-checkpoints --download-auxiliary-assets --evaluate \
+  --apply --allow-network --allow-large-downloads \
+  --allow-preparation --allow-gpu-eval
 ```
 
 Use `--dry-run` first. The pipeline never installs environments, changes evaluator semantics, or treats aggregate official metrics as schema-v2 result JSON. `--rebuild-index` remains explicit and only belongs after an instrumented evaluation has written canonical result JSON.

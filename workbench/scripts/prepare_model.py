@@ -14,51 +14,35 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.operator_config import resolve_config
-from workbench.backend.fashioniq_layout import missing_paths
-from workbench.backend.registry import (
-    load_registry,
-    preparation_contract_for_model,
-    preparation_paths,
-)
-
-
-def _check_paths(paths: tuple[Path, ...]) -> list[str]:
-    return [str(p) for p in missing_paths(paths)]
-
+from workbench.backend.preflight import model_requirements, preflight_blockers
+from workbench.backend.registry import load_registry, preparation_contract_for_model
 
 def status(model: dict, config) -> dict:
+    blockers = preflight_blockers(model, config)
     model_id = model["model_id"]
-    root = config.FASHIONIQ_ROOT
     contract = preparation_contract_for_model(model)
-    if contract is None:
-        from workbench.backend.fashioniq_layout import standard_paths
-        missing = _check_paths(standard_paths(root))
-        return {
-            "model_id": model_id,
-            "preparation_id": None,
-            "contract_type": "standard_fashioniq",
-            "automation_policy": "NONE_REQUIRED",
-            "deterministic": "N/A",
-            "raw_inputs_missing": missing,
-            "generated_artifacts_missing": [],
-            "external_assets": [],
-            "fully_prepared": not missing,
-            "notes": "Standard FashionIQ layout required; no custom generated artifacts.",
-        }
-    raw_missing = _check_paths(preparation_paths(contract, root, "raw_inputs"))
-    gen_missing = _check_paths(preparation_paths(contract, root, "generated_artifacts"))
-    return {
+    requirements = model_requirements(model, config)
+    evidence = requirements["evidence"]
+    raw_missing = evidence["raw_inputs_missing"]
+    generated_missing = evidence["generated_artifacts_missing"]
+    result = {
         "model_id": model_id,
-        "preparation_id": contract["preparation_id"],
-        "contract_type": contract.get("source_family"),
-        "automation_policy": contract["automation_policy"],
-        "deterministic": contract["deterministic_status"],
+        "preparation_id": contract["preparation_id"] if contract else None,
+        "contract_type": contract.get("source_family") if contract else "standard_fashioniq",
+        "automation_policy": contract["automation_policy"] if contract else "NONE_REQUIRED",
+        "deterministic": contract["deterministic_status"] if contract else "N/A",
         "raw_inputs_missing": raw_missing,
-        "generated_artifacts_missing": gen_missing,
-        "external_assets": contract["external_assets"],
-        "fully_prepared": not raw_missing and not gen_missing,
-        "notes": contract["notes"],
+        "generated_artifacts_missing": generated_missing,
+        "external_assets": contract["external_assets"] if contract else [],
+        "fully_prepared": not requirements["blocks"],
+        "blockers": blockers,
+        "notes": contract["notes"] if contract else "Standard FashionIQ layout required; no custom generated artifacts.",
     }
+    if evidence["image_extension_problems"]:
+        result["image_extension_problems"] = evidence["image_extension_problems"]
+    if evidence["dataset_link"]:
+        result["dataset_link"] = evidence["dataset_link"]
+    return result
 
 
 def print_status(s: dict) -> None:

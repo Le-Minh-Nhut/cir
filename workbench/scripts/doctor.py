@@ -26,6 +26,7 @@ from workbench.backend.fashioniq_layout import (
 )
 
 
+from workbench.backend.preflight import model_requirements, preflight_blockers
 def record(name: str, status: str, detail: str, **evidence: Any) -> dict[str, Any]:
     return {"name": name, "status": status, "detail": detail, "evidence": evidence}
 
@@ -84,26 +85,38 @@ def missing_path_strings(paths: tuple[Path, ...]) -> list[str]:
 
 
 def preparation_checks(model: dict[str, Any], root: Path) -> tuple[list[dict[str, Any]], list[str]]:
+    config = replace(resolve_config(), FASHIONIQ_ROOT=root)
+    requirements = model_requirements(model, config)
+    evidence = requirements["evidence"]
     contract = preparation_contract_for_model(model)
+    raw_missing = evidence["raw_inputs_missing"]
+    generated_missing = evidence["generated_artifacts_missing"]
+    extension_problems = evidence["image_extension_problems"]
     if contract is None:
-        missing = missing_path_strings(fashioniq_required_paths(model, root))
-        blockers = [f"FashionIQ {model['fashioniq_layout']} requirement missing: {path}" for path in missing]
-        for extension in model.get("fashioniq_image_extensions") or ():
-            blockers.extend(
-                f"FashionIQ image extension requirement: {problem}"
-                for problem in image_extension_problems(root, extension,
-                                                        model.get("fashioniq_layout")))
+        blockers = [f"FashionIQ {model.get('fashioniq_layout') or 'FashionIQ'} requirement missing: {path}"
+                    for path in raw_missing]
+        blockers.extend(f"FashionIQ image extension requirement: {problem}"
+                        for problem in extension_problems)
         return [], blockers
-    raw_missing = missing_path_strings(preparation_paths(contract, root, "raw_inputs"))
-    generated_missing = missing_path_strings(preparation_paths(contract, root, "generated_artifacts"))
-    raw_status = "OK" if not raw_missing else "BLOCKED"
+    raw_status = "OK" if not raw_missing and not extension_problems else "BLOCKED"
     preparation_status = "BLOCKED" if generated_missing else "MANUAL"
     checks = [
-        record(f"raw-dataset:{model['model_id']}", raw_status, "raw benchmark inputs available" if not raw_missing else "raw benchmark inputs missing", preparation_id=contract["preparation_id"], missing=raw_missing),
-        record(f"preparation:{model['model_id']}", preparation_status, "manual source-specific preparation required" if not generated_missing else "required generated artifacts missing", preparation_id=contract["preparation_id"], required_generated_artifacts=contract["generated_artifacts"], external_assets=contract["external_assets"], deterministic_status=contract["deterministic_status"], automation_policy=contract["automation_policy"], notes=contract["notes"], missing=generated_missing),
+        record(f"raw-dataset:{model['model_id']}", raw_status,
+               "raw benchmark inputs available" if raw_status == "OK" else "raw benchmark inputs missing",
+               preparation_id=contract["preparation_id"], missing=raw_missing,
+               image_extension_problems=extension_problems),
+        record(f"preparation:{model['model_id']}", preparation_status,
+               "manual source-specific preparation required" if not generated_missing else "required generated artifacts missing",
+               preparation_id=contract["preparation_id"],
+               required_generated_artifacts=contract["generated_artifacts"],
+               external_assets=contract["external_assets"],
+               deterministic_status=contract["deterministic_status"],
+               automation_policy=contract["automation_policy"], notes=contract["notes"],
+               missing=generated_missing),
     ]
     blockers = [f"raw benchmark input missing: {path}" for path in raw_missing]
     blockers.extend(f"required generated artifact missing: {path}" for path in generated_missing)
+    blockers.extend(f"FashionIQ image extension requirement: {problem}" for problem in extension_problems)
     return checks, blockers
 
 
@@ -133,127 +146,96 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig,
     model_id = model["model_id"]
     state = source_state(model, config.WORKBENCH_THIRD_PARTY_ROOT)
     source_ok = state["state"] == "clean" and (not state["pin"] or state["head"] == state["pin"])
-    checks = [record(f"source:{model_id}", "OK" if source_ok else "BLOCKED", "source pin ready" if source_ok else "source unavailable, dirty, or not pinned", **state)]
-    runtime_blockers: list[str] = []
-    deferred_checks: list[dict[str, Any]] = []
-    csmcir_assets: list[dict[str, Any]] = []
-    if not model.get("source_available"):
-        runtime_blockers.append("upstream source unavailable")
-    elif state["state"] != "clean":
-        runtime_blockers.append(f"source {state['state']}: {state['path']}: {state.get('dirty_reason')}")
-    elif state["pin"] and state["head"] != state["pin"]:
-        runtime_blockers.append(f"source pin mismatch: expected {state['pin']}, found {state['head']}")
-    source = Path(state["path"]) if state["path"] else config.WORKBENCH_THIRD_PARTY_ROOT
+    checks = [record(f"source:{model_id}", "OK" if source_ok else "BLOCKED",
+                     "source pin ready" if source_ok else "source unavailable, dirty, or not pinned", **state)]
+    blockers = preflight_blockers(model, config)
+    env_state = environment_status(model, probe=True)
+    if allow_gpu_pending and env_state["status"] == "GPU_VERIFICATION_PENDING":
+        blockers = [reason for reason in blockers if "GPU_VERIFICATION_PENDING" not in reason]
+    env_blockers = environment_blockers(model)
+    if allow_gpu_pending:
+        env_blockers = [reason for reason in env_blockers if "GPU_VERIFICATION_PENDING" not in reason]
+    environment_check = record(
+        f"environment:{model_id}", "OK" if not env_blockers else "BLOCKED",
+        "authorized GPU probe runs in the next stage" if allow_gpu_pending and env_state["status"] == "GPU_VERIFICATION_PENDING" else env_state["status"],
+        environment=model.get("environment"), interpreter=env_state["interpreter"], tier=env_state["tier"],
+        runtime_verified=env_state["verified"], gpu_deferred=env_state["gpu_deferred"],
+        reason=env_state["reason"], dependencies=env_state.get("packages"))
     adapter = ADAPTERS.get(model_id)
     command_status = model.get("command_status")
     command_implemented = adapter is not None and getattr(adapter, "command", None) is not OfficialScriptAdapter.command
-    command_audited = command_implemented and (command_status in {"COMMAND_AUDITED", "REPLAY_COMMAND_IMPLEMENTED"} or command_status is None)
-    command_check = record(f"command:{model_id}", "OK" if command_audited else "BLOCKED", command_status or "COMMAND_AUDITED", script=getattr(adapter, "script", None))
-    if adapter is None or not command_audited or getattr(adapter, "command", None) is OfficialScriptAdapter.command:
-        runtime_blockers.append(f"command not runnable: {command_status or 'COMMAND_UNAUDITED'}")
-    elif getattr(adapter, "script", None) and not (source / adapter.script).is_file():
-        runtime_blockers.append(f"official evaluator missing: {source / adapter.script}")
-    env_state = environment_status(model, probe=True)
-    # Launch-level blockers: a CUDA-declaring model stays blocked until its GPU is verified.
-    env_blockers = environment_blockers(model)
-    if allow_gpu_pending:
-        # This report is produced by the strict preflight that immediately *precedes* the
-        # authorized probe, so "the probe has not run yet" is the state the next stage
-        # changes. Every other blocker still blocks, and a probe that fails still stops the
-        # run: the evaluation stage consumes a real GPU_RUNTIME_READY capability.
-        env_blockers = [reason for reason in env_blockers
-                        if "GPU_VERIFICATION_PENDING" not in reason]
-    runtime_blockers.extend(env_blockers)
-    if allow_gpu_pending and env_state["status"] == "GPU_VERIFICATION_PENDING":
-        environment_check = record(f"environment:{model_id}", "OK",
-                                   "authorized GPU probe runs in the next stage",
-                                   environment=model.get("environment"),
-                                   interpreter=env_state["interpreter"], tier=env_state["tier"],
-                                   runtime_verified=env_state["verified"],
-                                   gpu_deferred=env_state["gpu_deferred"],
-                                   reason=env_state["reason"],
-                                   dependencies=env_state.get("packages"))
-    else:
-        environment_check = record(f"environment:{model_id}", "OK" if not env_blockers else "BLOCKED",
-                                   env_state["status"], environment=model.get("environment"),
-                                   interpreter=env_state["interpreter"], tier=env_state["tier"],
-                                   runtime_verified=env_state["verified"], gpu_deferred=env_state["gpu_deferred"],
-                                   reason=env_state["reason"],
-                                   dependencies=env_state.get("packages"))
-    if model_id == "encoder" and not (source / "open_clip_pytorch_model.bin").is_file():
-        runtime_blockers.append(f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}")
-    if model_id == "encoder" and not (source / "datasets1.py").is_file():
-        runtime_blockers.append(f"ENCODER evaluator import missing: {source / 'datasets1.py'}")
+    command_audited = command_implemented and command_status in {None, "COMMAND_AUDITED", "REPLAY_COMMAND_IMPLEMENTED"}
+    command_check = record(f"command:{model_id}", "OK" if command_audited else "BLOCKED",
+                           command_status or "COMMAND_AUDITED", script=getattr(adapter, "script", None))
+
+    deferred_checks: list[dict[str, Any]] = []
+    csmcir_assets: list[dict[str, Any]] = []
     if model_id == "csmcir":
-        layout = source / "fashionIQ_dataset"
-        if not layout.is_symlink():
-            runtime_blockers.append(f"CSMCIR fixed dataset layout missing: {layout}")
-        elif layout.resolve() != config.FASHIONIQ_ROOT.resolve():
-            runtime_blockers.append(f"CSMCIR dataset link resolves to {layout.resolve()}, expected {config.FASHIONIQ_ROOT.resolve()}")
-        asset_groups = (
+        groups = (
             ("csmcir:base-dataset", "FashionIQ base dataset", fashioniq_base_paths(config.FASHIONIQ_ROOT)),
             ("csmcir:qwen-captions", "CSMCIR Qwen captions", csmcir_auxiliary_paths(config, "Qwen captions")),
             ("csmcir:cot-captions", "CSMCIR COT_ours2 captions", csmcir_auxiliary_paths(config, "COT_ours2 captions")),
         )
-        for name, label, paths in asset_groups:
+        for name, label, paths in groups:
             missing = missing_path_strings(paths)
-            root = config.FASHIONIQ_ROOT if name != "csmcir:cot-captions" else source
-            csmcir_assets.append(record(name, "OK" if not missing else "BLOCKED", f"{label} available" if not missing else f"{label} missing", root=str(root), missing=missing))
-            runtime_blockers.extend(f"{label} missing: {path}" for path in missing)
-            if name == "csmcir:cot-captions" and missing:
-                runtime_blockers.append("required COT_ours2 captions have no verified automatic acquisition source")
-    if model_id != "csmcir":
-        preparation, preparation_blockers = preparation_checks(model, config.FASHIONIQ_ROOT)
+            root = config.FASHIONIQ_ROOT if name != "csmcir:cot-captions" else Path(state["path"] or config.WORKBENCH_THIRD_PARTY_ROOT)
+            csmcir_assets.append(record(name, "OK" if not missing else "BLOCKED",
+                                        f"{label} available" if not missing else f"{label} missing",
+                                        root=str(root), missing=missing))
+    else:
+        preparation, _ = preparation_checks(model, config.FASHIONIQ_ROOT)
         deferred_checks.extend(preparation)
-        runtime_blockers.extend(preparation_blockers)
-    external_checks, external_blockers = external_asset_checks(model)
+    external_checks, _ = external_asset_checks(model)
     deferred_checks.extend(external_checks)
-    runtime_blockers.extend(external_blockers)
 
     env_evidence = {"status": env_state["status"], "tier": env_state["tier"], "variable": env_state["variable"],
                     "interpreter": env_state["interpreter"], "runtime_verified": env_state["verified"],
                     "gpu_deferred": env_state["gpu_deferred"], "reason": env_state["reason"]}
-    bundle_reports = []
     incomplete_bundles = checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT)
-    for bundle in model.get("checkpoint_bundles", []):
-        missing = incomplete_bundles.get(bundle["bundle_id"], [])
-        bundle_reports.append({
-            "bundle_id": bundle["bundle_id"],
-            "required_checkpoint_ids": bundle["required_checkpoint_ids"],
-            "complete": not missing,
-            "status": "READY" if not missing else "BLOCKED",
-            "blockers": [f"checkpoint bundle member missing or invalid: {path}" for path in missing],
-        })
+    bundle_reports = [{
+        "bundle_id": bundle["bundle_id"], "required_checkpoint_ids": bundle["required_checkpoint_ids"],
+        "complete": not incomplete_bundles.get(bundle["bundle_id"], []),
+        "status": "READY" if not incomplete_bundles.get(bundle["bundle_id"], []) else "BLOCKED",
+        "blockers": [f"checkpoint bundle member missing or invalid: {path}"
+                     for path in incomplete_bundles.get(bundle["bundle_id"], [])],
+    } for bundle in model.get("checkpoint_bundles", [])]
     checkpoints = []
     for checkpoint in model["checkpoint_variants"]:
         path = checkpoint_path(model_id, checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
-        missing_paths = checkpoint_missing_paths(path, checkpoint)
-        installed = not missing_paths
-        required_files = checkpoint.get("required_files")
-        local_sha = sha256_file(path, required_files=required_files) if installed else None
+        missing = checkpoint_missing_paths(path, checkpoint)
+        installed = not missing
+        local_sha = sha256_file(path, required_files=checkpoint.get("required_files")) if installed else None
         official_sha = checkpoint.get("expected_sha256")
         mapping = checkpoint["checkpoint_mapping_status"] == "VERIFIED_METADATA"
-        blockers = list(runtime_blockers)
-        blockers.extend(f"checkpoint missing or invalid: {missing}" for missing in missing_paths)
+        reasons = list(blockers)
+        reasons.extend(f"checkpoint missing or invalid: {item}" for item in missing)
         registry_status = checkpoint.get("status")
         unavailable = registry_status in {"NO_CLEAN_CHECKPOINT", "BLOCKED"} or (registry_status and registry_status.startswith("BLOCKED_"))
         if unavailable:
-            blockers.append(f"registry checkpoint unavailable: {registry_status}")
+            reasons.append(f"registry checkpoint unavailable: {registry_status}")
         if not mapping:
-            blockers.append("checkpoint mapping unresolved")
+            reasons.append("checkpoint mapping unresolved")
         if official_sha and local_sha != official_sha:
-            blockers.append("official hash mismatch")
-        member_bundles = [bundle for bundle in bundle_reports if checkpoint["checkpoint_id"] in bundle["required_checkpoint_ids"]]
-        for bundle in member_bundles:
-            blockers.extend(f"{bundle['bundle_id']} incomplete: {reason}" for reason in bundle["blockers"])
-        checkpoints.append({"checkpoint_id": checkpoint["checkpoint_id"], "path": str(path), "artifact_type": checkpoint.get("artifact_type", "file"), "installed": installed, "local_sha256": local_sha, "official_sha256": official_sha, "official_sha256_available": official_sha is not None, "mapping_verified": mapping, "provenance_verified": mapping and official_sha is not None and local_sha == official_sha, "registry_status": registry_status, "readiness": "UNAVAILABLE" if unavailable else "BLOCKED" if blockers else "RUNNABLE", "runtime_blockers": blockers, "command_ready": not blockers})
-    runnable = bool(checkpoints) and all(item["command_ready"] for item in checkpoints) and all(bundle["complete"] for bundle in bundle_reports)
-    status = "OK" if runnable else "BLOCKED"
-    checks.append(record(f"runtime:{model_id}", status, "prerequisites present; evaluation not run" if runnable else "command unavailable", checkpoints=checkpoints, bundles=bundle_reports, environment=env_evidence, runnable=runnable, reproduction_status=model.get("reproduction_status", "NOT_REPORTED")))
+            reasons.append("official hash mismatch")
+        for bundle in bundle_reports:
+            if checkpoint["checkpoint_id"] in bundle["required_checkpoint_ids"]:
+                reasons.extend(f"{bundle['bundle_id']} incomplete: {item}" for item in bundle["blockers"])
+        checkpoints.append({"checkpoint_id": checkpoint["checkpoint_id"], "path": str(path),
+                            "artifact_type": checkpoint.get("artifact_type", "file"), "installed": installed,
+                            "local_sha256": local_sha, "official_sha256": official_sha,
+                            "official_sha256_available": official_sha is not None, "mapping_verified": mapping,
+                            "provenance_verified": mapping and official_sha is not None and local_sha == official_sha,
+                            "registry_status": registry_status,
+                            "readiness": "UNAVAILABLE" if unavailable else "BLOCKED" if reasons else "RUNNABLE",
+                            "runtime_blockers": reasons, "command_ready": not reasons})
+    runnable = bool(checkpoints) and all(item["command_ready"] for item in checkpoints) and all(item["complete"] for item in bundle_reports)
+    checks.append(record(f"runtime:{model_id}", "OK" if runnable else "BLOCKED",
+                         "prerequisites present; evaluation not run" if runnable else "command unavailable",
+                         checkpoints=checkpoints, bundles=bundle_reports, environment=env_evidence,
+                         runnable=runnable, reproduction_status=model.get("reproduction_status", "NOT_REPORTED")))
     checks.extend(deferred_checks)
     checks.append(command_check)
-    if environment_check is not None:
-        checks.append(environment_check)
+    checks.append(environment_check)
     checks.extend(csmcir_assets)
     return checks
 
@@ -301,18 +283,20 @@ def collect(config: WorkbenchConfig | None = None, model_id: str | None = None, 
     return {"overall": overall, "checks": checks}
 
 
-def main(argv: list[str] | None = None) -> int:
+def parser_for() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--model", help="inspect one registry model in real scope")
     group.add_argument("--all", action="store_true", help="inspect every registry model in real scope")
-    parser.add_argument("--scope", choices=("workbench", "real"), default="workbench", help="workbench checks local service prerequisites; real checks model and dataset prerequisites")
-    parser.add_argument("--dataset-root", type=Path, help="canonical FashionIQ root for real preflight")
-    parser.add_argument("--serve", action="store_true", help="also require frontend service dependencies")
-    parser.add_argument("--json", action="store_true", help="emit machine-readable report")
-    parser.add_argument("--allow-gpu-pending", action="store_true",
-                        help="tolerate a GPU whose authorized probe has not run yet: used by the "
-                             "strict preflight that immediately precedes --verify-gpu")
+    parser.add_argument("--scope", choices=("workbench", "real"), default="workbench")
+    parser.add_argument("--dataset-root", type=Path)
+    parser.add_argument("--serve", action="store_true")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--allow-gpu-pending", action="store_true")
+    return parser
+
+def main(argv: list[str] | None = None) -> int:
+    parser = parser_for()
     args = parser.parse_args(argv)
     if args.dataset_root:
         config = replace(resolve_config(), FASHIONIQ_ROOT=args.dataset_root.resolve())

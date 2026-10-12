@@ -10,8 +10,8 @@ All 14 pinned upstream repositories are cloned (source-only, no LFS) under
 per-repo commit, size, and evaluator-file evidence. Re-verify at any time:
 
 ```bash
-python workbench/scripts/sync_upstreams.py --all --list
-python workbench/scripts/sync_upstreams.py --model MODEL_ID --verify-only
+python workbench/scripts/sync_upstreams.py --list          # inspect the pin inventory (no network)
+python workbench/scripts/sync_upstreams.py --all --verify-only   # verify every local checkout
 ```
 
 Cloned source is not checkpoint availability. The PC host still needs the
@@ -89,7 +89,8 @@ establishes or refreshes the capability and proceeds if the launch gate is satis
 Then the orchestrated evaluation proceeds:
 
 ```bash
-python workbench/scripts/pipeline.py reproduce --model limn --apply --allow-gpu-eval --resume
+python workbench/scripts/pipeline.py reproduce --model limn --apply \
+    --allow-preparation --allow-gpu-eval --resume
 ```
 
 Note there is no `--verify-gpu` here. A CUDA-declaring model launches when a valid recorded
@@ -129,7 +130,7 @@ python workbench/scripts/download_checkpoints.py --model MODEL_ID --verify-only
 ## 4. Real evaluation
 
 ```bash
-python workbench/scripts/pipeline.py reproduce --model MODEL_ID --apply --allow-gpu-eval --resume
+python workbench/scripts/pipeline.py reproduce --model MODEL_ID --apply --allow-preparation --allow-gpu-eval --resume
 ```
 
 Aggregate report: `workbench/artifacts/reports/<model>_<checkpoint>_<run_id>_aggregate.json`.
@@ -174,8 +175,8 @@ python workbench/scripts/rebuild_index.py --results-root "$WORKBENCH_RESULTS_ROO
 ## 7. Resume and recovery
 
 ```bash
-python workbench/scripts/pipeline.py reproduce --model MODEL_ID --apply --allow-gpu-eval --resume
-python workbench/scripts/pipeline.py reproduce --model MODEL_ID --apply --allow-gpu-eval --force-stage evaluation
+python workbench/scripts/pipeline.py reproduce --model MODEL_ID --apply --allow-preparation --allow-gpu-eval --resume
+python workbench/scripts/pipeline.py reproduce --model MODEL_ID --apply --allow-preparation --allow-gpu-eval --force-stage evaluation
 ```
 
 State: `workbench/artifacts/pipeline_state.json` (atomic writes).
@@ -210,20 +211,28 @@ selection, an unpinned or dirty source checkout, and a run id that already exist
    it out of the repository. It signs the evidence ledger and the GPU capability records.
 4. Set the optional paths only if they differ from the defaults: `CIR_REPO_ROOT`, `FASHIONIQ_ROOT`,
    `WORKBENCH_CHECKPOINT_ROOT`, `WORKBENCH_RESULTS_ROOT`, `WORKBENCH_THIRD_PARTY_ROOT`.
-5. `python workbench/scripts/sync_upstreams.py --verify-only` to confirm every pinned checkout.
+5. `python workbench/scripts/sync_upstreams.py --all --verify-only` to confirm every pinned checkout.
 
 ### 8c. Dataset verification
 
 ```bash
-python workbench/scripts/prepare_dataset.py --dataset-root <FashionIQ>          # check only
-python workbench/scripts/prepare_dataset.py --dataset-root <FashionIQ> --model limn   # dry-run
-python workbench/scripts/prepare_dataset.py --dataset-root <FashionIQ> --model limn   # create link
-python workbench/scripts/doctor.py --model limn                                  # confirms READY
+# The canonical root itself, for every model:
+python workbench/scripts/prepare_dataset.py --dataset-root <FashionIQ>
+
+# The one model-specific link step, for a model that hard-codes its dataset root.
+# CSMCIR, SPRC, combiner_rn50x4_noft and clip4cir_rn50x4_fullft declare one; LIMN does not.
+python workbench/scripts/prepare_dataset.py --dataset-root <FashionIQ> --model csmcir --dry-run
+python workbench/scripts/prepare_dataset.py --dataset-root <FashionIQ> --model csmcir
 ```
 
-`--model` selects a model whose pinned evaluator hard-codes its dataset root; the step stages that
-one link after verifying the canonical root, leaves any existing file or differently-targeted link
-untouched, and is idempotent. CSMCIR, SPRC and both CLIP4Cir variants declare such a link.
+`--model` stages that one link after verifying the canonical root, leaves any existing file or
+differently-targeted link untouched, and is idempotent. For a model with no declared link the flag
+is a no-op that says so, which is the correct answer: those models' layout requirements are met by
+the canonical root plus the manual artifacts named in `preparation_contracts.yaml`.
+
+`doctor.py --model MODEL_ID` then reports whether that model is actually ready. It is a status
+check, not a preparation step: it will report BLOCKED while a manual artifact (LIMN's resized
+images and correction dictionaries, for example) is still missing.
 
 ### 8d. Checkpoint placement and verification
 
@@ -262,7 +271,8 @@ python workbench/scripts/evaluate_models.py --model limn --verify-gpu-only
 python workbench/scripts/pipeline.py reproduce --model limn --dataset-root <FashionIQ>
 
 # 3. execute
-python workbench/scripts/pipeline.py reproduce --model limn --apply --allow-gpu-eval --resume
+python workbench/scripts/pipeline.py reproduce --model limn --apply \
+    --allow-preparation --allow-gpu-eval --resume
 
 # 4. inspect the proof, the ledger entry, and the aggregate metrics
 python -c "import json,pathlib; p=pathlib.Path('workbench/artifacts/reports'); \
@@ -278,8 +288,9 @@ numbers are sanity references, never reproductions.
 ### 8g. Resume
 
 ```bash
-python workbench/scripts/pipeline.py reproduce --model limn --apply --allow-gpu-eval --resume
-python workbench/scripts/pipeline.py reproduce --model limn --apply --allow-gpu-eval --force-stage evaluation
+python workbench/scripts/pipeline.py reproduce --model limn --apply \
+    --allow-preparation --allow-gpu-eval --resume
+python workbench/scripts/pipeline.py reproduce --model limn --apply --allow-preparation --allow-gpu-eval --force-stage evaluation
 ```
 
 Resume skips a stage only when every declared input — checkpoints, captions, splits, correction

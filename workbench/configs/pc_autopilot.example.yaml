@@ -1,0 +1,20 @@
+schema_version: 1
+selected_models: all_registered
+paths:
+  registry: ../registry/models.yaml
+  dataset_root: ../../data/FashionIQ
+  artifacts: ../artifacts
+  checkpoints: ../artifacts/checkpoints
+  results: ../artifacts/results
+  third_party: ../third_party
+budgets:
+  max_download_bytes: 5368709120
+  max_models: 256
+  top_k: 200
+permissions:
+  allow_network: false
+  allow_large_downloads: false
+  allow_env_install: false
+  allow_preparation: false
+  allow_gpu_eval: false
+  allow_index_write: false

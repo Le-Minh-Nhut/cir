@@ -21,7 +21,10 @@ from workbench.backend.operator_config import WorkbenchConfig, resolve_config
 from workbench.backend.registry import auxiliary_model_ids, load_registry
 SCRIPTS = Path(__file__).resolve().parent
 REPOSITORY = SCRIPTS.parents[1]
-STAGE_STATE_PATH = REPOSITORY / "workbench" / "artifacts" / "pipeline_state.json"
+def _artifacts_root(config: WorkbenchConfig | None = None) -> Path:
+    cfg = config or resolve_config()
+    configured = getattr(cfg, "WORKBENCH_ARTIFACTS_ROOT", None)
+    return Path(configured) if configured is not None else Path(getattr(cfg, "CIR_REPO_ROOT", REPOSITORY)) / "workbench" / "artifacts"
 
 
 @dataclass(frozen=True)
@@ -194,7 +197,7 @@ def _inside_root(candidate: Path, root: Path) -> bool:
     return candidate == root_resolved or root_resolved in candidate.parents
 
 
-def _walk_evidence(root: Path) -> tuple["hashlib._Hash | None", str, int, int, bool]:
+def _walk_evidence(root: Path, *, skip_paths: frozenset[Path] = frozenset()) -> tuple["hashlib._Hash | None", str, int, int, bool]:
     """Inventory a directory and classify its evidence.
 
     Returns ``(hash, category, files, bytes, truncated)``; ``hash`` is None only when the tree
@@ -230,13 +233,19 @@ def _walk_evidence(root: Path) -> tuple["hashlib._Hash | None", str, int, int, b
             # walk deliberately does not descend into it.
             for name in list(directories):
                 candidate = Path(current) / name
+                if candidate in skip_paths:
+                    directories.remove(name)
+                    continue
                 if candidate.is_symlink():
                     category, size = _entry_evidence(candidate, root, inventory)
                     files += 1
                     total += size
                     partial = partial or not _is_verified_entry(category)
             for name in names:
-                category, size = _entry_evidence(Path(current) / name, root, inventory)
+                candidate = Path(current) / name
+                if candidate in skip_paths:
+                    continue
+                category, size = _entry_evidence(candidate, root, inventory)
                 files += 1
                 total += size
                 partial = partial or not _is_verified_entry(category)
@@ -275,8 +284,6 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                                       state: dict | None = None) -> dict:
     import hashlib
     import stat
-    from workbench.backend.registry import sha256_file
-
     hasher = hashlib.sha256()
     hasher.update(stage.name.encode("utf-8"))
     if stage.model_id:
@@ -301,13 +308,24 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
             recipe_digest = "UNKNOWN_RECIPE"
         hasher.update(f"RECIPE:{recipe_digest}".encode("utf-8"))
 
+    # Evaluation identity covers the code that executes the experiment without making it an input
+    # or weakening resume: implementation digests are derived identity, like the recipe.
+    if stage.name == "evaluation" and stage.model_id and config:
+        from workbench.backend.registry import model_by_id
+
+        try:
+            execution_identity = _execution_identity(model_by_id(stage.model_id), config)
+        except Exception as error:
+            execution_identity = {"digest": f"UNKNOWN:{type(error).__name__}:{error}"}
+        hasher.update(f"EXECUTION:{execution_identity['digest']}".encode("utf-8"))
+
     inputs = []
     weak = False
     for path in stage.input_paths:
         item = {"path": str(path)}
         hasher.update(str(path).encode("utf-8"))
         try:
-            details = path.stat()
+            details = path.lstat()
         except FileNotFoundError:
             category = MISSING
         except OSError as error:
@@ -315,22 +333,75 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
             item["error"] = f"{type(error).__name__}: {error}"
         else:
             if stat.S_ISLNK(details.st_mode):
-                # A declared symlink is an input in its own right: the target it names is what a
-                # later stage resolves, so a retarget must invalidate the stage.
                 try:
                     target = os.readlink(path)
                 except OSError as error:
                     category = UNREADABLE
                     item["error"] = f"{type(error).__name__}: {error}"
                 else:
-                    category = SYMLINK_VERIFIED if path.resolve().exists() else SYMLINK_DANGLING
                     item["symlink_target"] = target
-                    hasher.update(f"L:{target}:{category}".encode("utf-8"))
+                    try:
+                        resolved = path.resolve(strict=True)
+                    except (FileNotFoundError, RuntimeError):
+                        category = SYMLINK_DANGLING
+                        hasher.update(f"L:{target}:{category}".encode("utf-8"))
+                    except OSError as error:
+                        category = UNREADABLE
+                        item["error"] = f"{type(error).__name__}: {error}"
+                    else:
+                        item["resolved_target"] = str(resolved)
+                        roots = [config.WORKBENCH_THIRD_PARTY_ROOT] if config else []
+                        if config:
+                            roots.append(config.FASHIONIQ_ROOT)
+                        for declared in stage.input_paths:
+                            if declared.name in {"captions", "image_splits", "images", "resized_image", "resized_images"}:
+                                roots.append(declared.parent)
+                            elif declared.parent.name in {"captions", "image_splits", "images", "resized_image", "resized_images"}:
+                                roots.append(declared.parent.parent)
+                        if not any(_inside_root(resolved, root) for root in roots):
+                            category = SYMLINK_EXTERNAL
+                            hasher.update(f"L:{target}:{resolved}:{category}".encode("utf-8"))
+                        else:
+                            try:
+                                target_details = resolved.stat()
+                                if stat.S_ISDIR(target_details.st_mode):
+                                    skip_paths = frozenset()
+                                    inventory, target_category, files, total, truncated = _walk_evidence(resolved)
+                                    item.update(target_tree_files=files, target_tree_bytes=total,
+                                                target_tree_truncated=truncated,
+                                                target_tree_category=target_category)
+                                    if inventory is None:
+                                        category = UNREADABLE
+                                    else:
+                                        target_digest = inventory.hexdigest()
+                                        item["target_tree_digest"] = target_digest
+                                        category = (SYMLINK_VERIFIED
+                                                    if target_category == TREE_CONTENT_VERIFIED else UNREADABLE)
+                                        hasher.update(
+                                            f"L:{target}:{resolved}:{target_category}:{target_digest}".encode("utf-8"))
+                                elif stat.S_ISREG(target_details.st_mode):
+                                    target_digest = _file_digest(resolved)
+                                    category = SYMLINK_VERIFIED
+                                    item["target_sha256"] = target_digest
+                                    hasher.update(f"L:{target}:{resolved}:{target_digest}".encode("utf-8"))
+                                else:
+                                    category = NOT_A_FILE
+                                    item["error"] = "symlink target is not a regular file or directory"
+                            except OSError as error:
+                                category = UNREADABLE
+                                item["error"] = f"{type(error).__name__}: {error}"
             elif stat.S_ISDIR(details.st_mode):
-                # A directory input names a whole tree; its contents are the input. The category
-                # comes from the walk itself, so a truncated or partially unreadable inventory
-                # can never be reported as fully content-verified.
-                inventory, category, walk_files, walk_bytes, walk_truncated = _walk_evidence(path)
+                skip_paths = frozenset()
+                if stage.name == "evaluation" and stage.model_id and config:
+                    from workbench.backend.registry import model_by_id
+                    from workbench.backend.fashioniq_layout import canonical_dataset_link_path
+
+                    model = model_by_id(stage.model_id)
+                    declared_link = canonical_dataset_link_path(model, config.WORKBENCH_THIRD_PARTY_ROOT)
+                    if declared_link and path == declared_link.parent:
+                        skip_paths = frozenset({declared_link})
+                inventory, category, walk_files, walk_bytes, walk_truncated = _walk_evidence(
+                    path, skip_paths=skip_paths)
                 item.update(tree_files=walk_files, tree_bytes=walk_bytes,
                             tree_truncated=walk_truncated)
                 if inventory is None:
@@ -340,9 +411,6 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                     item["tree_digest"] = inventory.hexdigest()
                     hasher.update(f"TREE:{inventory.hexdigest()}:{category}".encode("utf-8"))
             elif stat.S_ISREG(details.st_mode):
-                # Every regular file is content-hashed, whatever its size: a checkpoint is a
-                # scientific input and its bytes are what the fingerprint must bind. Streaming
-                # keeps a multi-GiB read bounded in memory.
                 try:
                     content_digest = _file_digest(path)
                 except OSError as error:
@@ -355,12 +423,9 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
             else:
                 category = NOT_A_FILE
                 item["error"] = "path is not a regular file, directory, or symlink"
-
         item["category"] = category
         inputs.append(item)
         hasher.update(f":{category}\0".encode("utf-8"))
-        # Verified resume requires content evidence for every declared input. Anything else is
-        # weak, and weak evidence refuses the skip rather than guessing.
         if not _is_verified_entry(category) and category not in VERIFIED_TREE_CATEGORIES:
             weak = True
 
@@ -372,7 +437,6 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
         try:
             model = model_by_id(stage.model_id)
         except KeyError:
-            # Ad-hoc stage identifiers used by callers need not name registry models.
             pass
         except Exception as error:
             source_info = {"category": "HASH_FAILED", "error": f"{type(error).__name__}: {error}"}
@@ -444,9 +508,8 @@ def stage_input_fingerprint_info(stage: Stage, config: WorkbenchConfig | None = 
 
 
 def stage_receipt_path(config: WorkbenchConfig, stage: Stage) -> Path:
-    repo_root = getattr(config, "CIR_REPO_ROOT", REPOSITORY)
     key = stage_key(stage).replace(":", "_")
-    return repo_root / "workbench" / "artifacts" / "receipts" / f"{key}.json"
+    return _artifacts_root(config) / "receipts" / f"{key}.json"
 
 
 def write_stage_receipt(config: WorkbenchConfig, stage: Stage, *, return_code: int) -> Path:
@@ -465,6 +528,8 @@ def write_stage_receipt(config: WorkbenchConfig, stage: Stage, *, return_code: i
     temp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     temp.replace(path)
     return path
+
+
 
 
 def compute_stage_output_fingerprints(stage: Stage) -> dict[str, str]:
@@ -493,6 +558,11 @@ def compute_stage_output_fingerprints(stage: Stage) -> dict[str, str]:
                 except Exception:
                     res[str(p)] = "DIR"
     return res
+
+
+def database_path(config: WorkbenchConfig) -> Path:
+    """Where the derived result index lives."""
+    return _artifacts_root(config) / "workbench.duckdb"
 
 
 def validate_stage_outputs(stage: Stage, recorded: dict[str, str] | None = None,
@@ -629,7 +699,8 @@ def release_workflow_lock(handle) -> None:
             del _LOCK_HANDLES[key]
 
 
-def load_pipeline_state(path: Path = STAGE_STATE_PATH) -> dict:
+def load_pipeline_state(path: Path | None = None) -> dict:
+    path = path or _artifacts_root() / "pipeline_state.json"
     if path.is_file():
         try:
             return json.loads(path.read_text(encoding="utf-8"))
@@ -638,8 +709,9 @@ def load_pipeline_state(path: Path = STAGE_STATE_PATH) -> dict:
     return {}
 
 
-def save_pipeline_state(state: dict, path: Path = STAGE_STATE_PATH) -> None:
+def save_pipeline_state(state: dict, path: Path | None = None) -> None:
     import os
+    path = path or _artifacts_root() / "pipeline_state.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(f".tmp.{os.getpid()}")
     temp.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
@@ -718,6 +790,55 @@ def layout_prepare(args: argparse.Namespace, config: WorkbenchConfig) -> Stage:
         output_paths=(config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset",),
         required_capability="allow_preparation",
     )
+
+
+def _execution_identity(model: dict, config: WorkbenchConfig) -> dict:
+    root = REPOSITORY
+    digest = hashlib.sha256()
+
+    def add_file(label: str, path: Path) -> None:
+        try:
+            content = _file_digest(path)
+        except OSError as error:
+            content = f"UNREADABLE:{type(error).__name__}:{error}"
+        digest.update(f"{label}:{content}\0".encode("utf-8"))
+
+    code_files = [*(root / "workbench" / "replay").rglob("*.py"),
+                  *(root / "workbench" / "backend" / "adapters").glob("*.py"),
+                  root / "workbench" / "scripts" / "evaluate_models.py"]
+    for path in sorted(set(code_files)):
+        if "__pycache__" not in path.parts:
+            add_file(path.relative_to(root).as_posix(), path)
+
+    env = model.get("environment") or {}
+    configured = os.environ.get(env.get("python_env_var") or "")
+    interpreter = configured or (sys.executable if not model.get("environment_required") else "UNCONFIGURED")
+    digest.update(f"INTERPRETER:{interpreter}\0".encode("utf-8"))
+    if interpreter != "UNCONFIGURED":
+        interpreter_path = Path(interpreter).expanduser()
+        try:
+            interpreter_path = interpreter_path.resolve(strict=True)
+        except (OSError, RuntimeError):
+            digest.update(b"INTERPRETER_CONTENT:UNAVAILABLE\0")
+        else:
+            if interpreter_path.is_file():
+                add_file("INTERPRETER_CONTENT", interpreter_path)
+            else:
+                digest.update(b"INTERPRETER_CONTENT:UNAVAILABLE\0")
+
+    source_name = model.get("source_dir")
+    if source_name:
+        source = config.WORKBENCH_THIRD_PARTY_ROOT / source_name
+        lock_names = {"environment.yml", "environment.yaml", "conda-lock.yml", "conda-lock.yaml",
+                      "environment.lock.yml", "environment.lock.yaml", "requirements.txt",
+                      "poetry.lock", "uv.lock", "Pipfile.lock"}
+        if source.is_dir():
+            paths = [source / name for name in lock_names]
+            paths.extend(source.glob("requirements*.lock"))
+            for path in sorted(set(paths)):
+                if path.is_file():
+                    add_file(f"LOCK:{path.relative_to(source).as_posix()}", path)
+    return {"digest": digest.hexdigest()}
 
 
 def preparation_recipe_digest(model_dict: dict) -> str:
@@ -823,9 +944,14 @@ def model_eval_inputs(model_dict: dict, args: argparse.Namespace, config: Workbe
         inputs.append(auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, ds_root))
 
     # 5. The evaluator implementation itself: a changed script changes the result.
+    from workbench.backend.fashioniq_layout import canonical_dataset_link_path
+
     source_dir = model_dict.get("source_dir")
     if source_dir:
         inputs.append(config.WORKBENCH_THIRD_PARTY_ROOT / source_dir)
+    link_path = canonical_dataset_link_path(model_dict, config.WORKBENCH_THIRD_PARTY_ROOT)
+    if link_path:
+        inputs.append(link_path)
 
     # 6. The preprocessing recipe is not a file to stat: it is a derived identity, folded into the
     #    fingerprint below by `_stage_input_fingerprint_evidence`. Requiring a written recipe
@@ -888,17 +1014,10 @@ def evaluation_evidence(model_dict: dict, args: argparse.Namespace, config: Work
 
 
 def model_eval_outputs(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> tuple[Path, ...]:
-    """Declared outputs are informational only.
-
-    A run-scoped report cannot be named before the run id exists, so the real
-    completion proof is the run-bound completion artifact validated by
-    :func:`evaluation_evidence`. The pointer returned here is the *successful*
-    pointer, which only ever advances after a proof-backed success.
-    """
+    """Declared outputs are informational only; run-bound proof is validated separately."""
     mid = model_dict["model_id"]
     ckpt_id = resolved_checkpoint_id(model_dict, args)
-    repo_root = getattr(config, "CIR_REPO_ROOT", REPOSITORY)
-    return (repo_root / "workbench" / "artifacts" / "reports" / f"{mid}_{ckpt_id}_latest_successful.json",)
+    return (_artifacts_root(config) / "reports" / f"{mid}_{ckpt_id}_latest_successful.json",)
 def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
     from workbench.backend.registry import checkpoint_path, model_by_id
     model_obj = model_by_id(args.model) if args.model else None
@@ -1006,10 +1125,11 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
         run_stage(
             "validation-index",
             command("validate_results.py", "--root", config.WORKBENCH_RESULTS_ROOT, "--strict-real"),
-            command("rebuild_index.py", "--results-root", config.WORKBENCH_RESULTS_ROOT),
+            command("rebuild_index.py", "--results-root", config.WORKBENCH_RESULTS_ROOT,
+                "--database", database_path(config)),
             dependencies=("evaluation",),
             input_paths=(config.WORKBENCH_RESULTS_ROOT,),
-            output_paths=(getattr(config, "CIR_REPO_ROOT", REPOSITORY) / "workbench" / "artifacts" / "workbench.duckdb",),
+            output_paths=(database_path(config),),
             required_capabilities={"allow_index_write"},
         )
         if args.rebuild_index
@@ -1034,6 +1154,7 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
 
 
 def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
+    from workbench.backend.fashioniq_layout import canonical_dataset_link_path
     from workbench.backend.registry import checkpoint_path, auxiliary_destination, auxiliary_assets_for_model
     registry = load_registry()
     models = registry["models"]
@@ -1081,17 +1202,23 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             required_capabilities=({"allow_env_install", "allow_network"} if will_create_env else frozenset()),
         ))
 
+        prep_link = canonical_dataset_link_path(m, config.WORKBENCH_THIRD_PARTY_ROOT)
+        prep_owner = next((candidate["model_id"] for candidate in selected_models
+                           if prep_link and canonical_dataset_link_path(
+                               candidate, config.WORKBENCH_THIRD_PARTY_ROOT) == prep_link), None)
         prep_cmd = ["--model", mid, "--dataset-root", str(dataset_root(args, config))]
-        prep_out = (config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset",) if mid == "csmcir" else ()
-        will_prepare = mid == "csmcir" and getattr(args, "allow_preparation", False) and getattr(args, "apply", False)
+        will_prepare = bool(prep_link) and prep_owner == mid and getattr(args, "allow_preparation", False) and getattr(args, "apply", False)
         if will_prepare:
             prep_cmd.extend(["--execute", "--allow-preparation"])
+        prep_deps = ["dataset", sync_dep]
+        if prep_owner and prep_owner != mid:
+            prep_deps.append(f"preparation:{prep_owner}")
         stages.append(run_stage(
             "preparation",
             command("prepare_model.py", *prep_cmd),
             model_id=mid,
-            dependencies=("dataset", sync_dep),
-            output_paths=prep_out,
+            dependencies=tuple(prep_deps),
+            output_paths=(prep_link,) if prep_link and prep_owner == mid else (),
             required_capabilities=({"allow_preparation", "allow_network"} if will_prepare else frozenset()),
         ))
 
@@ -1175,10 +1302,11 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
     stages.append(run_stage(
         "validation-index",
         command("validate_results.py", "--root", config.WORKBENCH_RESULTS_ROOT, "--strict-real"),
-        command("rebuild_index.py", "--results-root", config.WORKBENCH_RESULTS_ROOT),
+        command("rebuild_index.py", "--results-root", config.WORKBENCH_RESULTS_ROOT,
+                "--database", database_path(config)),
         dependencies=all_eval_deps,
         input_paths=(config.WORKBENCH_RESULTS_ROOT,),
-        output_paths=(getattr(config, "CIR_REPO_ROOT", REPOSITORY) / "workbench" / "artifacts" / "workbench.duckdb",),
+        output_paths=(database_path(config),),
         required_capabilities={"allow_index_write"},
     ))
     return stages
@@ -1265,8 +1393,7 @@ def run_stages(
 ) -> int:
     cfg = config or resolve_config()
     if state_path is None:
-        repo_root = getattr(cfg, "CIR_REPO_ROOT", REPOSITORY)
-        state_path = repo_root / "workbench" / "artifacts" / "pipeline_state.json"
+        state_path = _artifacts_root(cfg) / "pipeline_state.json"
     failed = False
     force_set = set(force_stages or ())
     if force_set:

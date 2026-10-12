@@ -58,7 +58,8 @@ def test_doctor_reports_csmcir_and_encoder_runtime_blockers(monkeypatch: pytest.
     encoder = doctor.model_checks(models["encoder"], config)[1]["evidence"]["checkpoints"][0]
 
     assert csmcir["command_ready"] is False
-    assert any(blocker.startswith("CSMCIR fixed dataset layout missing:") for blocker in csmcir["runtime_blockers"])
+    # The missing link is reported with the wording every entry point now shares.
+    assert any(blocker.startswith("canonical dataset link missing:") for blocker in csmcir["runtime_blockers"])
     assert encoder["command_ready"] is False
     assert f"ENCODER asset missing: {tmp_path / 'third_party' / 'ENCODER' / 'open_clip_pytorch_model.bin'}" in encoder["runtime_blockers"]
     assert f"ENCODER evaluator import missing: {tmp_path / 'third_party' / 'ENCODER' / 'datasets1.py'}" in encoder["runtime_blockers"]

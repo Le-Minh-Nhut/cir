@@ -6,6 +6,12 @@ from pathlib import Path
 CATEGORIES = ("dress", "shirt", "toptee")
 
 
+def canonical_dataset_link_path(model: dict, source_root: Path) -> Path | None:
+    """Return model's declared in-checkout FashionIQ link, if any."""
+    source_dir = model.get("source_dir")
+    link_name = model.get("canonical_dataset_link")
+    return source_root / source_dir / link_name if source_dir and link_name else None
+
 def standard_paths(root: Path) -> tuple[Path, ...]:
     return (
         root / "captions",

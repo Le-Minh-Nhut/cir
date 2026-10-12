@@ -14,6 +14,7 @@ _KEYS = {
     "WORKBENCH_HOST",
     "WORKBENCH_BACKEND_PORT",
     "WORKBENCH_FRONTEND_PORT",
+    "WORKBENCH_ARTIFACTS_ROOT",
     "WORKBENCH_CHECKPOINT_ROOT",
     "WORKBENCH_RESULTS_ROOT",
     "WORKBENCH_THIRD_PARTY_ROOT",
@@ -31,6 +32,12 @@ class WorkbenchConfig:
     WORKBENCH_CHECKPOINT_ROOT: Path
     WORKBENCH_RESULTS_ROOT: Path
     WORKBENCH_THIRD_PARTY_ROOT: Path
+    WORKBENCH_ARTIFACTS_ROOT: Path | None = None
+
+    def __post_init__(self) -> None:
+        if self.WORKBENCH_ARTIFACTS_ROOT is None:
+            object.__setattr__(self, "WORKBENCH_ARTIFACTS_ROOT",
+                               self.CIR_REPO_ROOT / "workbench" / "artifacts")
 
 
 def _read_env(path: Path) -> dict[str, str]:
@@ -72,6 +79,8 @@ def resolve_config() -> WorkbenchConfig:
     repo_root = _path(values.get("CIR_REPO_ROOT", str(_DEFAULT_REPO_ROOT)), _DEFAULT_REPO_ROOT)
     data_root = _path(values.get("CIR_DATA_ROOT", "data"), repo_root)
     workbench_root = repo_root / "workbench"
+    artifacts_root = _path(values.get("WORKBENCH_ARTIFACTS_ROOT",
+                                      str(workbench_root / "artifacts")), repo_root)
     return WorkbenchConfig(
         CIR_REPO_ROOT=repo_root,
         CIR_DATA_ROOT=data_root,
@@ -79,8 +88,9 @@ def resolve_config() -> WorkbenchConfig:
         WORKBENCH_HOST=values.get("WORKBENCH_HOST", "127.0.0.1"),
         WORKBENCH_BACKEND_PORT=_port("WORKBENCH_BACKEND_PORT", values.get("WORKBENCH_BACKEND_PORT", "8000")),
         WORKBENCH_FRONTEND_PORT=_port("WORKBENCH_FRONTEND_PORT", values.get("WORKBENCH_FRONTEND_PORT", "5173")),
-        WORKBENCH_CHECKPOINT_ROOT=_path(values.get("WORKBENCH_CHECKPOINT_ROOT", str(workbench_root / "artifacts" / "checkpoints")), repo_root),
-        WORKBENCH_RESULTS_ROOT=_path(values.get("WORKBENCH_RESULTS_ROOT", str(workbench_root / "artifacts" / "results")), repo_root),
+        WORKBENCH_ARTIFACTS_ROOT=artifacts_root,
+        WORKBENCH_CHECKPOINT_ROOT=_path(values.get("WORKBENCH_CHECKPOINT_ROOT", str(artifacts_root / "checkpoints")), repo_root),
+        WORKBENCH_RESULTS_ROOT=_path(values.get("WORKBENCH_RESULTS_ROOT", str(artifacts_root / "results")), repo_root),
         WORKBENCH_THIRD_PARTY_ROOT=_path(values.get("WORKBENCH_THIRD_PARTY_ROOT", str(workbench_root / "third_party")), repo_root),
     )
 
@@ -94,4 +104,5 @@ WORKBENCH_BACKEND_PORT = _CONFIG.WORKBENCH_BACKEND_PORT
 WORKBENCH_FRONTEND_PORT = _CONFIG.WORKBENCH_FRONTEND_PORT
 WORKBENCH_CHECKPOINT_ROOT = _CONFIG.WORKBENCH_CHECKPOINT_ROOT
 WORKBENCH_RESULTS_ROOT = _CONFIG.WORKBENCH_RESULTS_ROOT
+WORKBENCH_ARTIFACTS_ROOT = _CONFIG.WORKBENCH_ARTIFACTS_ROOT
 WORKBENCH_THIRD_PARTY_ROOT = _CONFIG.WORKBENCH_THIRD_PARTY_ROOT

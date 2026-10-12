@@ -1,0 +1,38 @@
+{
+  "cuda_available": true,
+  "device_count": 1,
+  "torch_version": "1.12.1",
+  "torch_cuda_version": "12.4",
+  "device_name": "Synthetic GPU",
+  "compute_capability": "8.9",
+  "allocated_tensor": true,
+  "computed": true,
+  "torch_module_file": "/tmp/pytest-of-heheboiz/pytest-0/test_scenario_f_two_models_kee0/modelB_env/lib/python3.13/site-packages/torch.py",
+  "torch_core_origin": "/tmp/pytest-of-heheboiz/pytest-0/test_scenario_f_two_models_kee0/modelB_env/lib/python3.13/site-packages/_C.so",
+  "torch_has_compiled_core": true,
+  "error": null,
+  "torch_core_loadable": true,
+  "torch_file_digest": "1e552da3468031949de7639cdc0cc2c9c4a8453205947e624dcf66660bf3c378",
+  "capability_verified": true,
+  "interpreter": "/tmp/pytest-of-heheboiz/pytest-0/test_scenario_f_two_models_kee0/modelB_env/bin/python",
+  "interpreter_fingerprint": "9fa9fa8928ea9861e652fed3972be54d9ce555cd6d4b5ef625e0434f1a20c389",
+  "dependency_fingerprint": "7ff2f4ed2e0d2029d9b4c07deb880b89f2f15a558ba19c688c09d0dad726165a",
+  "probe_source": "override",
+  "probed_at": "2026-10-12T14:09:36.306069+00:00",
+  "host_identity": {
+    "node": "heheboiz-Legion-5-15ARH7",
+    "machine": "x86_64",
+    "cuda_visible_devices": "<unset>",
+    "driver": "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.178.04  Release Build  (dvs-builder@U22-I3-AE18-16-4)  Tue Jul  7 12:18:12 UTC 2026"
+  },
+  "revalidation": "re-probe when the interpreter, dependency set, host, driver or device visibility changes",
+  "expires_on": [
+    "interpreter change",
+    "dependency change",
+    "host change",
+    "driver change",
+    "CUDA_VISIBLE_DEVICES change"
+  ],
+  "capability_key": "9ca79d0ef587df693d1d6104ec00086a3f33accc48ab5c72af726d55ae2e8a99",
+  "signature": "53ec4d06c49b682864cf282f011897546cd458053d8e498cad9fa68b71b9f132"
+}

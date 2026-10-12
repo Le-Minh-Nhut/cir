@@ -215,8 +215,11 @@ def test_limn_eval_output_uses_bundle_id():
 
 # 8. A provisioning stage with no artifact file must prove completion via a receipt
 def test_provisioning_stage_requires_receipt(tmp_path: Path, monkeypatch):
+    # Overriding only CIR_REPO_ROOT would keep the artifacts root resolved for the real
+    # repository, and a receipt left there by another run could answer for this stage.
     cfg = __import__("dataclasses").replace(
-        pipeline.resolve_config(), CIR_REPO_ROOT=tmp_path)
+        pipeline.resolve_config(), CIR_REPO_ROOT=tmp_path,
+        WORKBENCH_ARTIFACTS_ROOT=tmp_path / "workbench" / "artifacts")
     stage = pipeline.Stage(name="environment", commands=(["/env"],), model_id="m",
                            required_capabilities=frozenset({"allow_env_install"}), receipt=True)
 

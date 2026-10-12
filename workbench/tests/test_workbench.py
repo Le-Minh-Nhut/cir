@@ -29,7 +29,7 @@ def write_results(root: Path) -> None:
 def indexed(monkeypatch, tmp_path: Path) -> Path:
     root = tmp_path / "results"; root.mkdir(); write_results(root)
     database = tmp_path / "workbench.duckdb"; rebuild_index(root, database)
-    monkeypatch.setattr("workbench.backend.storage.DATABASE_PATH", database)
+    monkeypatch.setattr("workbench.backend.storage.configured_database_path", lambda: database)
     return database
 
 
@@ -143,7 +143,7 @@ def indexed_with_saved_depth(monkeypatch, tmp_path: Path, depth: int) -> Path:
             query["top_results"] = query["top_results"][:depth]
         (root / f"{payload['run']['run_id']}.json").write_text(ResultRun.model_validate(payload).model_dump_json())
     database = tmp_path / "workbench.duckdb"; rebuild_index(root, database)
-    monkeypatch.setattr("workbench.backend.storage.DATABASE_PATH", database)
+    monkeypatch.setattr("workbench.backend.storage.configured_database_path", lambda: database)
     return database
 
 

@@ -114,6 +114,7 @@ def test_limn_explicit_category_remains_diagnostic_and_bundle_blocked(monkeypatc
     # concern), so this is the function the production path consults.
     monkeypatch.setattr(module, "runtime_plan_blockers",
                         lambda model, checkpoint, *args: ["checkpoint bundle incomplete: base_iter0_all_categories: missing category"])
+    monkeypatch.setattr(module, "preflight_blockers", lambda *args, **kwargs: [])
 
     _, _, _, diagnostic_reasons = module.blockers(limn, category_checkpoint, limn["native_protocol"], tmp_path, config(tmp_path))
     _, _, _, bundle_reasons = module.blockers(limn, bundle, limn["native_protocol"], tmp_path, config(tmp_path))
@@ -287,12 +288,11 @@ def test_encoder_reports_actual_missing_layout_path(monkeypatch, tmp_path: Path)
     missing.unlink()
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
-
+    assert plan is None
     assert reasons == [
-        "checkpoint mapping unresolved",
         f"FashionIQ fashioniq_ilearn_resized requirement missing: {missing}",
+        "checkpoint mapping unresolved",
     ]
-
 
 
 def test_encoder_complete_layout_still_blocks_missing_evaluator_import(monkeypatch, tmp_path: Path) -> None:
@@ -306,12 +306,10 @@ def test_encoder_complete_layout_still_blocks_missing_evaluator_import(monkeypat
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
-    assert plan is None
     assert reasons == [
-        "checkpoint mapping unresolved",
         f"ENCODER evaluator import missing: {source / 'datasets1.py'}",
+        "checkpoint mapping unresolved",
     ]
-
 
 def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
@@ -324,11 +322,11 @@ def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, t
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
+    assert plan is None
     assert reasons == [
-        "checkpoint mapping unresolved",
         f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}",
+        "checkpoint mapping unresolved",
     ]
-
 
 
 def test_encoder_complete_local_prerequisites_still_block_unresolved_mapping(monkeypatch, tmp_path: Path) -> None:

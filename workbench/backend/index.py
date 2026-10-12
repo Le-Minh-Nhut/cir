@@ -11,14 +11,30 @@ from workbench.backend.errors import WorkbenchError
 from workbench.backend.schemas.results import ResultRun
 
 ROOT = Path(__file__).resolve().parents[1]
-RESULTS_ROOT = ROOT / "artifacts" / "results"
-DATABASE_PATH = ROOT / "artifacts" / "workbench.duckdb"
+
+
+def database_path(config=None) -> Path:
+    from workbench.backend.operator_config import resolve_config
+
+    return (config or resolve_config()).WORKBENCH_ARTIFACTS_ROOT / "workbench.duckdb"
+
+configured_database_path = database_path
+
+
+def results_path(config=None) -> Path:
+    from workbench.backend.operator_config import resolve_config
+
+    return (config or resolve_config()).WORKBENCH_RESULTS_ROOT
+
+
+DATABASE_PATH = configured_database_path()
+RESULTS_ROOT = results_path()
 
 
 def result_files(root: Path | None = None) -> list[Path]:
     from workbench.backend.operator_config import resolve_config
 
-    root = root or resolve_config().WORKBENCH_RESULTS_ROOT
+    root = root or results_path()
     files = []
     for path in sorted(root.rglob("*.json")):
         if path.name == ".gitkeep":
@@ -56,8 +72,10 @@ def _create_schema(connection) -> None:
     connection.execute("CREATE INDEX top_results_by_query ON top_results(run_id, query_id, rank)")
 
 
-def rebuild_index(results_root: Path | None = None, database_path: Path = DATABASE_PATH) -> int:
+def rebuild_index(results_root: Path | None = None, database_path: Path | None = None) -> int:
     import duckdb
+
+    database_path = database_path or configured_database_path()
 
     runs = load_runs(results_root)
     database_path.parent.mkdir(parents=True, exist_ok=True)

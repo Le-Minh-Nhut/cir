@@ -847,8 +847,9 @@ def test_the_api_queues_the_audited_orchestrator_not_the_raw_evaluator(workspace
         "checkpoint": workspace["repo"] / "ckpt.pt",
         "dataset_root": workspace["repo"] / "F", "command": ["RAW_MODEL_EVALUATOR"],
         "cwd": workspace["repo"]})(), []))
-    monkeypatch.setattr(module, "resolve_config",
-                        lambda: replace(workspace["config"], CIR_REPO_ROOT=workspace["repo"]))
+    monkeypatch.setattr(module, "resolve_config", lambda: replace(
+        workspace["config"], CIR_REPO_ROOT=workspace["repo"],
+        WORKBENCH_ARTIFACTS_ROOT=workspace["repo"] / "workbench" / "artifacts"))
     monkeypatch.setattr(module.runtime, "require_launch_ready", lambda model: None)
     (workspace["repo"] / "ckpt.pt").write_bytes(b"x")
 

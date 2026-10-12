@@ -19,6 +19,14 @@ protocols:
     evaluation_noise_pct: 0
 models:
   - model_id: csmcir
+    environment:
+      python_env_var: WORKBENCH_CSMCIR_PYTHON
+      confidence: VERIFIED_README
+      python: '3.9'
+      pytorch: '2.0.1'
+      torchvision: '0.15.2'
+      cuda: UNKNOWN
+      packages: []
     # The pinned evaluator derives its data root from `__file__` and opens
     # `<checkout>/fashionIQ_dataset`; the canonical root is staged there by the authorized
     # preparation step, and this declaration is what approves the link as a runtime artifact.
@@ -61,6 +69,14 @@ models:
         status: URL_VERIFIED
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: airknow
+    environment:
+      python_env_var: WORKBENCH_AIRKNOW_PYTHON
+      confidence: VERIFIED_README
+      python: '3.8.10'
+      pytorch: '2.1.0'
+      torchvision: '0.16.0'
+      cuda: '12.6'
+      packages: [scikit-learn==1.3.2, transformers==4.25.0, salesforce-lavis==1.0.2, timm==0.9.16]
     method_name: Air-Know
     research_generation: recent
     publication_year: 2026
@@ -105,6 +121,14 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: conesep
+    environment:
+      python_env_var: WORKBENCH_CONESEP_PYTHON
+      confidence: VERIFIED_README
+      python: '3.8.10'
+      pytorch: '2.1.0'
+      torchvision: '0.16.0'
+      cuda: '12.6'
+      packages: [scikit-learn==1.3.2, transformers==4.25.0, salesforce-lavis==1.0.2, timm==0.9.16]
     method_name: ConeSep
     research_generation: recent
     publication_year: 2026
@@ -180,6 +204,14 @@ models:
     notes: No author-linked FashionIQ fine-tuned checkpoint verified. CIRR pretraining evidence is not eligible.
     checkpoint_variants: []
   - model_id: habit
+    environment:
+      python_env_var: WORKBENCH_HABIT_PYTHON
+      confidence: VERIFIED_README
+      python: '3.8.10'
+      pytorch: '2.1.0'
+      torchvision: '0.16.0'
+      cuda: '12.6'
+      packages: [open-clip-torch==2.24.0, scikit-learn==1.3.2, transformers==4.25.0, salesforce-lavis==1.0.2, timm==0.9.16]
     method_name: HABIT
     research_generation: recent
     publication_year: 2026
@@ -234,6 +266,14 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: intent
+    environment:
+      python_env_var: WORKBENCH_INTENT_PYTHON
+      confidence: VERIFIED_README
+      python: '3.9'
+      pytorch: '2.1.0'
+      torchvision: '0.16.0'
+      cuda: '12.6'
+      packages: [open-clip-torch==2.24.0, scikit-learn==1.3.2, transformers==4.25.0, salesforce-lavis==1.0.2, timm==0.9.16]
     method_name: INTENT
     research_generation: recent
     publication_year: 2026
@@ -288,6 +328,14 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: hint
+    environment:
+      python_env_var: WORKBENCH_HINT_PYTHON
+      confidence: VERIFIED_README
+      python: '3.8.10'
+      pytorch: '2.1.0'
+      torchvision: '0.16.0'
+      cuda: '12.6'
+      packages: [open-clip-torch==2.24.0, scikit-learn==1.3.2, transformers==4.25.0, salesforce-lavis==1.0.2, timm==0.9.16]
     method_name: HINT
     research_generation: recent
     publication_year: 2026
@@ -322,6 +370,14 @@ models:
         status: URL_VERIFIED
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: encoder
+    environment:
+      python_env_var: WORKBENCH_ENCODER_PYTHON
+      confidence: VERIFIED_REQUIREMENTS
+      python: '3.9'
+      pytorch: '1.13.1'
+      torchvision: '0.14.1'
+      cuda: UNKNOWN
+      packages: []
     category_model_policy: shared
     checkpoint_serialization: state_dict
     method_name: ENCODER
@@ -359,6 +415,14 @@ models:
         status: VERIFIED_METADATA
         checkpoint_mapping_status: URL_UNRESOLVED
   - model_id: pair
+    environment:
+      python_env_var: WORKBENCH_PAIR_PYTHON
+      confidence: VERIFIED_README
+      python: '3.8.10'
+      pytorch: '2.0.0'
+      torchvision: UNKNOWN
+      cuda: '11.8'
+      packages: []
     method_name: PAIR
     research_generation: recent
     publication_year: 2025
@@ -554,7 +618,7 @@ models:
       pytorch: '1.11.0'
       torchvision: '0.12.0'
       cuda: UNKNOWN
-      packages: [pandas==1.4.2, comet_ml==3.21.0, openai_clip]
+      packages: [pandas==1.4.2, comet-ml==3.21.0, clip]
     strict_clean_checkpoint_available: null
     notes: Native full-gallery reference-eligible evaluator verified. RN50x4 noft Combiner state mapping is unverified; base OpenAI CLIP RN50x4 remains an evaluation asset.
     checkpoint_variants:
@@ -610,7 +674,7 @@ models:
       pytorch: '1.11.0'
       torchvision: '0.12.0'
       cuda: UNKNOWN
-      packages: [pandas==1.4.2, comet_ml==3.21.0, openai_clip]
+      packages: [pandas==1.4.2, comet-ml==3.21.0, clip]
     strict_clean_checkpoint_available: null
     notes: Native full-gallery reference-eligible evaluator verified. RN50x4 fullft needs separately loaded Combiner and fine-tuned CLIP states; author pairing is unverified.
     checkpoint_variants:

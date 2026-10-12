@@ -29,8 +29,9 @@ def _within(path: Path, root: Path) -> bool:
     return True
 
 
-def cleanup_targets(root: Path, mock_results: bool, database: bool, logs: bool) -> list[Path]:
-    artifacts = root / "artifacts"
+def cleanup_targets(root: Path, mock_results: bool, database: bool, logs: bool,
+                    artifacts_root: Path | None = None) -> list[Path]:
+    artifacts = artifacts_root or root / "artifacts"
     targets: list[Path] = []
     if mock_results:
         results = artifacts / "results"
@@ -45,8 +46,8 @@ def cleanup_targets(root: Path, mock_results: bool, database: bool, logs: bool) 
     return targets
 
 
-def is_safe_target(path: Path, root: Path) -> bool:
-    artifacts = root / "artifacts"
+def is_safe_target(path: Path, root: Path, artifacts_root: Path | None = None) -> bool:
+    artifacts = artifacts_root or root / "artifacts"
     allowed = {artifacts / "workbench.duckdb", artifacts / "logs",
                artifacts / "evidence_ledger.jsonl"}
     if path in allowed:
@@ -54,10 +55,16 @@ def is_safe_target(path: Path, root: Path) -> bool:
     return path.parent.parent == artifacts / "results" and path.name == "mock" and _within(path, artifacts / "results")
 
 
-def clean(root: Path, mock_results: bool, database: bool, logs: bool, dry_run: bool) -> int:
-    targets = cleanup_targets(root, mock_results, database, logs)
+def clean(root: Path, mock_results: bool, database: bool, logs: bool, dry_run: bool,
+          artifacts_root: Path | None = None, repository_root: Path | None = None) -> int:
+    artifacts = (artifacts_root or root / "artifacts").resolve()
+    repository = (repository_root or root).resolve()
+    if artifacts == repository or repository.is_relative_to(artifacts):
+        print(f"[BLOCKED] refusing unsafe artifacts root: {artifacts}", file=sys.stderr)
+        return 2
+    targets = cleanup_targets(root, mock_results, database, logs, artifacts)
     for target in targets:
-        if not is_safe_target(target, root):
+        if not is_safe_target(target, root, artifacts):
             print(f"[BLOCKED] refusing unsafe path: {target}", file=sys.stderr)
             return 2
     if not targets:
@@ -80,12 +87,17 @@ def clean(root: Path, mock_results: bool, database: bool, logs: bool, dry_run: b
 
 
 def main(argv: list[str] | None = None, root: Path = WORKBENCH_ROOT) -> int:
+    from workbench.backend.operator_config import resolve_config
+
     args = parser().parse_args(argv)
     selected = args.all_generated or args.mock_results or args.database or args.logs
     if not selected:
         print("[BLOCKED] select --mock-results, --database, --logs, or --all-generated", file=sys.stderr)
         return 2
-    return clean(root, args.all_generated or args.mock_results, args.all_generated or args.database, args.all_generated or args.logs, args.dry_run)
+    config = resolve_config()
+    artifacts = config.WORKBENCH_ARTIFACTS_ROOT if root == WORKBENCH_ROOT else root / "artifacts"
+    return clean(root, args.all_generated or args.mock_results, args.all_generated or args.database,
+                 args.all_generated or args.logs, args.dry_run, artifacts, config.CIR_REPO_ROOT)
 
 
 if __name__ == "__main__":

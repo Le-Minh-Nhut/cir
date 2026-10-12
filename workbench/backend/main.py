@@ -26,8 +26,8 @@ from workbench.scripts.evaluate_models import guarded_plan
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT / "scripts"
-ANNOTATIONS_PATH = ROOT / "artifacts" / "annotations.json"
-COHORTS_PATH = ROOT / "artifacts" / "cohorts.json"
+ANNOTATIONS_PATH = resolve_config().WORKBENCH_ARTIFACTS_ROOT / "annotations.json"
+COHORTS_PATH = resolve_config().WORKBENCH_ARTIFACTS_ROOT / "cohorts.json"
 LABELS = ["preservation_failure", "under_edit", "over_edit", "partial_edit", "wrong_attribute", "wrong_entity_binding", "reference_dominance", "text_dominance", "fine_grained_visual_confusion", "ambiguous_ground_truth", "possible_dataset_issue", "duplicate_or_near_duplicate", "other", "unknown"]
 app = FastAPI(title="CIR Failure Analysis Workbench")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_methods=["*"], allow_headers=["*"])
@@ -230,7 +230,7 @@ def queue_job(payload: JobInput):
     # The queue owns `queue_jobs/<job_id>/`; the operator owns the run directory
     # `logs/<model>__<checkpoint>__<run_id>/` under exactly the name the operator computes for
     # itself. Handing the queue the operator's directory made two writers share one tree.
-    job_directory = ROOT / "artifacts" / "queue_jobs" / uuid.uuid4().hex
+    job_directory = config.WORKBENCH_ARTIFACTS_ROOT / "queue_jobs" / uuid.uuid4().hex
     provenance = {
         "model_id": plan.model_id,
         "checkpoint_id": plan.checkpoint_id,

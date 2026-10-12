@@ -91,8 +91,12 @@ def test_ilearn_present_correction_files_only_clear_presence_blockers(tmp_path: 
     checks = {check["name"]: check for check in doctor.model_checks(model, settings)}
     blockers = checks["runtime:hint"]["evidence"]["checkpoints"][0]["runtime_blockers"]
 
+    # Supplying every declared layout file clears the layout blockers; what remains is the model's
+    # other missing prerequisites, and the shared preflight reports them whether or not a layout
+    # blocker precedes them.
     assert not any("fashioniq_ilearn_resized requirement missing" in blocker for blocker in blockers)
-    assert "checkpoint missing:" in blockers[0] or "source missing:" in blockers[0]
+    assert any("checkpoint missing:" in blocker or "source missing:" in blocker
+               or "upstream source unavailable" in blocker for blocker in blockers), blockers
 
 
 

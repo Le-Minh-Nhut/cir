@@ -7,11 +7,11 @@ from statistics import mean, median
 from typing import Any
 
 from workbench.backend.errors import WorkbenchError
-from workbench.backend.index import DATABASE_PATH
+from workbench.backend.index import configured_database_path
 
 
-def _database_path(database_path: Path | None) -> Path:
-    path = database_path or DATABASE_PATH
+def _database_path(path: Path | None) -> Path:
+    path = path or configured_database_path()
     if not path.is_file():
         raise WorkbenchError("index_unavailable", "DuckDB index is unavailable. Rebuild it from canonical result JSON.", {"database_path": str(path)})
     return path

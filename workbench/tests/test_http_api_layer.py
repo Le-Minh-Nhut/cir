@@ -107,6 +107,7 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(module, "guarded_plan", lambda *a, **k: (plan, []))
     monkeypatch.setattr(module, "resolve_config", lambda: type("C", (), {
         "WORKBENCH_THIRD_PARTY_ROOT": repo / "third_party",
+        "WORKBENCH_ARTIFACTS_ROOT": repo / "workbench" / "artifacts",
         "FASHIONIQ_ROOT": repo / "FashionIQ"})())
     system = __import__("workbench.backend.runtime", fromlist=["runtime"])
     monkeypatch.setattr(system, "require_launch_ready", lambda model: "/usr/bin/python3")
