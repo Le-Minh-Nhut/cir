@@ -58,66 +58,166 @@ def dependency_key(stage: Stage) -> str:
 
 
 
-_CONTENT_HASH_LIMIT = 64 * 1024 * 1024
-_CONTENT_HASH_SUFFIXES = (".json", ".yaml", ".yml", ".txt", ".pkl", ".pt", ".pth", ".cfg", ".toml")
-# The stage input list names files and top-level directories. Model assets and marker files
-# live inside those directories, so a change going *into* the tree was invisible to the
-# resolver: the directory's own mtime does not move. The walk is fixed-budget rather than
-# unbounded, and the budget is part of the fingerprint, so a truncated listing is a distinct,
-# reproducible value instead of a silent partial comparison.
+# Entry-level evidence categories. A digest alone does not say whether every required byte was
+# read, so the category travels with it and decides whether resume may trust the fingerprint.
+CONTENT_VERIFIED = "CONTENT_VERIFIED"      # the file's bytes were hashed
+METADATA_ONLY = "METADATA_ONLY"            # too large to hash inline: name/size/mtime only
+UNREADABLE = "UNREADABLE"                  # present but could not be read
+MISSING = "MISSING"                        # declared but absent
+SYMLINK_VERIFIED = "SYMLINK_VERIFIED"      # a symlink whose target string was read
+SYMLINK_DANGLING = "SYMLINK_DANGLING"      # a symlink whose target does not resolve
+NOT_A_FILE = "NOT_A_FILE"                  # neither a regular file, directory, nor symlink
+
+# Tree-level evidence categories.
+TREE_CONTENT_VERIFIED = "TREE_CONTENT_VERIFIED"   # every entry inside was content-verified
+TREE_PARTIAL = "TREE_PARTIAL"                     # some entry was not content-verified
+TREE_TRUNCATED = "TREE_TRUNCATED"                 # the inventory budget was exhausted
+TREE_UNREADABLE = "TREE_UNREADABLE"               # the tree itself could not be walked
+TREE_MISSING = "TREE_MISSING"                     # the tree does not exist
+
+# Only these authorize a verified resume: a fingerprint that claims strong verification must be
+# backed by content for everything it covers.
+# Metadata is not content: only a real digest or a recorded link target authorizes skip.
+VERIFIED_ENTRY_CATEGORIES = frozenset({CONTENT_VERIFIED, SYMLINK_VERIFIED})
+VERIFIED_TREE_CATEGORIES = frozenset({TREE_CONTENT_VERIFIED})
+
+# Files above this size are hashed by streaming rather than loaded into memory. There is no size
+# at which content stops being required for verification: a checkpoint is a scientific input and
+# its bytes are what the fingerprint must bind. The limit below only chooses the read strategy.
+_STREAM_HASH_THRESHOLD = 8 * 1024 * 1024
+_STREAM_CHUNK = 4 * 1024 * 1024
+# A declared directory is walked with a fixed budget so a pathological tree cannot run forever.
+# A truncated walk is *partial* evidence, never verified.
 _WALK_LIMIT = 200_000
-_WALK_SIZE_LIMIT = 2 * 1024 * 1024 * 1024
+_WALK_SIZE_LIMIT = 64 * 1024 * 1024 * 1024
 
 
-def _walk_digest(root: Path) -> tuple[str, int, int, bool]:
-    """Digest of *root*'s inventory: relative path, kind and content for every entry.
+def _stream_digest(path: Path) -> str:
+    """SHA-256 of a file read in bounded chunks, so a multi-GiB input needs no large allocation."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(_STREAM_CHUNK), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
-    Returns ``(digest, files, bytes, truncated_by_budget)``. Raises ``OSError`` if the tree
-    cannot be walked, which the caller treats as weak evidence rather than a verified input.
 
-    File *content* is hashed, not only names and sizes: a rewritten weight file generally keeps
-    its size, and a digest that ignores content would call that tree unchanged.
-    """
+def _file_digest(path: Path) -> str:
+    """Content digest of a regular file, streaming when it is large."""
+    try:
+        if path.stat().st_size > _STREAM_HASH_THRESHOLD:
+            return _stream_digest(path)
+    except OSError:
+        pass
     from workbench.backend.registry import sha256_file
+
+    return sha256_file(path)
+
+
+def _entry_evidence(path: Path, root: Path, inventory: "hashlib._Hash") -> tuple[str, int]:
+    """Fold one filesystem entry into *inventory* and report its evidence category.
+
+    Every entry contributes its relative path and kind; regular files contribute their content
+    digest, symlinks the target string they point at. Nothing here silently downgrades a failure
+    into verified evidence: an unreadable file, a dangling link and a non-regular object each
+    have their own category, and the caller turns any of them into PARTIAL.
+    """
+    relative = path.relative_to(root)
+    try:
+        details = path.lstat()
+    except OSError:
+        inventory.update(f"{MISSING}\0{relative}\0".encode("utf-8"))
+        return MISSING, 0
+
+    size = details.st_size
+    if stat.S_ISLNK(details.st_mode):
+        # A symlink's identity is the target it names, not the bytes it resolves to. A retarget
+        # therefore invalidates the fingerprint even when both targets hold identical content.
+        try:
+            target = os.readlink(path)
+        except OSError:
+            inventory.update(f"{UNREADABLE}\0{relative}\0".encode("utf-8"))
+            return UNREADABLE, size
+        resolves = path.exists()
+        category = SYMLINK_VERIFIED if resolves else SYMLINK_DANGLING
+        inventory.update(f"L\0{relative}\0{target}\0{category}\0".encode("utf-8"))
+        return category, size
+
+    if stat.S_ISDIR(details.st_mode):
+        inventory.update(f"D\0{relative}\0".encode("utf-8"))
+        return CONTENT_VERIFIED, 0
+
+    if not stat.S_ISREG(details.st_mode):
+        inventory.update(f"{NOT_A_FILE}\0{relative}\0".encode("utf-8"))
+        return NOT_A_FILE, size
+
+    try:
+        digest = _file_digest(path)
+    except OSError:
+        inventory.update(f"{UNREADABLE}\0{relative}\0{size}\0".encode("utf-8"))
+        return UNREADABLE, size
+    inventory.update(f"F\0{relative}\0{size}\0{digest}\0".encode("utf-8"))
+    return CONTENT_VERIFIED, size
+
+
+def _walk_evidence(root: Path) -> tuple["hashlib._Hash | None", str, int, int, bool]:
+    """Inventory a directory and classify its evidence.
+
+    Returns ``(hash, category, files, bytes, truncated)``; ``hash`` is None only when the tree
+    could not be walked at all. Follows no symlinks, so a link cycle cannot expand the walk, and
+    the tree-level category is PARTIAL whenever a single entry was not content-verified.
+    """
+    if not root.exists():
+        return None, TREE_MISSING, 0, 0, False
+    if not root.is_dir():
+        return None, TREE_UNREADABLE, 0, 0, False
 
     inventory = hashlib.sha256()
     files = 0
     total = 0
     truncated = False
-    for current, directories, names in os.walk(root, followlinks=False):
-        directories.sort()
-        for name in sorted(names):
-            path = Path(current) / name
-            try:
-                details = path.lstat()
-            except OSError:
-                continue
-            kind = "d" if stat.S_ISDIR(details.st_mode) else "l" if stat.S_ISLNK(details.st_mode) else "f"
-            relative = path.relative_to(root)
-            entry = f"{kind}\0{relative}\0{details.st_size}\0"
-            if kind == "l":
-                # A symlink's identity is its target, not the file it points at: an unchanged
-                # target is an unchanged input, and a retargeted link must be visible even when
-                # the linked content happens to be identical.
-                try:
-                    entry += os.readlink(path)
-                except OSError:
-                    entry += "UNREADABLE_LINK"
-            elif kind == "f" and details.st_size <= _CONTENT_HASH_LIMIT:
-                try:
-                    entry += sha256_file(path)
-                except Exception:
-                    entry += "UNREADABLE"
-            inventory.update(entry.encode("utf-8"))
-            files += 1
-            total += details.st_size
-            if files >= _WALK_LIMIT or total >= _WALK_SIZE_LIMIT:
-                # ponytail: bounded inventory. A change past the budget is invisible, so the
-                # budget length is folded into the digest and the caller records the fact.
-                truncated = True
-                inventory.update(f"TRUNCATED:{files}:{total}".encode("utf-8"))
-                return inventory.hexdigest(), files, total, truncated
-    return inventory.hexdigest(), files, total, truncated
+    partial = False
+    try:
+        for current, directories, names in os.walk(root, followlinks=False):
+            directories.sort()
+            names.sort()
+            # Directory symlinks arrive through `directories` and are inventory entries in their
+            # own right: a retargeted link to another directory must be visible even though the
+            # walk deliberately does not descend into it.
+            for name in list(directories):
+                candidate = Path(current) / name
+                if candidate.is_symlink():
+                    category, size = _entry_evidence(candidate, root, inventory)
+                    files += 1
+                    total += size
+                    partial = partial or category not in VERIFIED_ENTRY_CATEGORIES
+            for name in names:
+                category, size = _entry_evidence(Path(current) / name, root, inventory)
+                files += 1
+                total += size
+                partial = partial or category not in VERIFIED_ENTRY_CATEGORIES
+                if files >= _WALK_LIMIT or total >= _WALK_SIZE_LIMIT:
+                    truncated = True
+                    break
+            if truncated:
+                break
+    except OSError:
+        return None, TREE_UNREADABLE, files, total, truncated
+
+    if truncated:
+        inventory.update(f"{TREE_TRUNCATED}:{files}:{total}".encode("utf-8"))
+        return inventory, TREE_TRUNCATED, files, total, True
+    if partial:
+        inventory.update(TREE_PARTIAL.encode("utf-8"))
+        return inventory, TREE_PARTIAL, files, total, False
+    inventory.update(TREE_CONTENT_VERIFIED.encode("utf-8"))
+    return inventory, TREE_CONTENT_VERIFIED, files, total, False
+
+
+def _walk_digest(root: Path) -> tuple[str, int, int, bool]:
+    """Backwards-compatible view of :func:`_walk_evidence`: ``(digest, files, bytes, truncated)``."""
+    inventory, category, files, total, truncated = _walk_evidence(root)
+    digest = inventory.hexdigest() if inventory is not None else ""
+    return digest, files, total, truncated or category != TREE_CONTENT_VERIFIED
 
 
 def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | None = None,
@@ -137,6 +237,19 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
     for cmd in stage.commands:
         hasher.update(shlex.join(cmd).encode("utf-8"))
 
+    # The preprocessing recipe is part of what a result means: the same data evaluated under a
+    # different layout, caption policy or image extension is a different experiment. It is a
+    # derived identity rather than a file, so a model whose registry declaration changes
+    # invalidates resume even though no input file moved.
+    if stage.model_id and config:
+        from workbench.backend.registry import model_by_id
+
+        try:
+            recipe_digest = preparation_recipe_digest(model_by_id(stage.model_id))
+        except Exception:
+            recipe_digest = "UNKNOWN_RECIPE"
+        hasher.update(f"RECIPE:{recipe_digest}".encode("utf-8"))
+
     inputs = []
     weak = False
     for path in stage.input_paths:
@@ -145,51 +258,59 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
         try:
             details = path.stat()
         except FileNotFoundError:
-            category = "MISSING"
+            category = MISSING
         except OSError as error:
-            category = "UNREADABLE"
+            category = UNREADABLE
             item["error"] = f"{type(error).__name__}: {error}"
         else:
-            if stat.S_ISREG(details.st_mode) and details.st_size > _CONTENT_HASH_LIMIT \
-                    and path.suffix not in _CONTENT_HASH_SUFFIXES:
-                category = "METADATA_ONLY"
-                item.update(size_bytes=details.st_size, mtime_ns=details.st_mtime_ns)
-                hasher.update(f"{category}:{details.st_size}:{details.st_mtime_ns}".encode("utf-8"))
-            elif stat.S_ISDIR(details.st_mode):
-                # A directory input names a whole tree; its contents are the input, so the
-                # inventory is hashed rather than the directory's own metadata.
+            if stat.S_ISLNK(details.st_mode):
+                # A declared symlink is an input in its own right: the target it names is what a
+                # later stage resolves, so a retarget must invalidate the stage.
                 try:
-                    walk_digest, walk_files, walk_bytes, walk_truncated = _walk_digest(path)
+                    target = os.readlink(path)
                 except OSError as error:
-                    category = "HASH_FAILED"
+                    category = UNREADABLE
                     item["error"] = f"{type(error).__name__}: {error}"
                 else:
-                    # A budget-truncated inventory is *not* content-verified: files past the
-                    # limit were never read, so the digest cannot support verified resume. The
-                    # truncation flag is recorded, and the category says plainly that this is
-                    # weak evidence.
-                    category = "TREE_TRUNCATED" if walk_truncated else "TREE_VERIFIED"
-                    item.update(tree_digest=walk_digest, tree_files=walk_files,
-                                tree_bytes=walk_bytes, tree_truncated=walk_truncated)
-                    hasher.update(f"TREE:{walk_digest}:{walk_truncated}".encode("utf-8"))
+                    category = SYMLINK_VERIFIED if path.resolve().exists() else SYMLINK_DANGLING
+                    item["symlink_target"] = target
+                    hasher.update(f"L:{target}:{category}".encode("utf-8"))
+            elif stat.S_ISDIR(details.st_mode):
+                # A directory input names a whole tree; its contents are the input. The category
+                # comes from the walk itself, so a truncated or partially unreadable inventory
+                # can never be reported as fully content-verified.
+                inventory, category, walk_files, walk_bytes, walk_truncated = _walk_evidence(path)
+                item.update(tree_files=walk_files, tree_bytes=walk_bytes,
+                            tree_truncated=walk_truncated)
+                if inventory is None:
+                    item["error"] = f"tree could not be walked: {path}"
+                    hasher.update(f"{category}\0".encode("utf-8"))
+                else:
+                    item["tree_digest"] = inventory.hexdigest()
+                    hasher.update(f"TREE:{inventory.hexdigest()}:{category}".encode("utf-8"))
             elif stat.S_ISREG(details.st_mode):
+                # Every regular file is content-hashed, whatever its size: a checkpoint is a
+                # scientific input and its bytes are what the fingerprint must bind. Streaming
+                # keeps a multi-GiB read bounded in memory.
                 try:
-                    content_digest = sha256_file(path)
-                except Exception as error:
-                    category = "HASH_FAILED"
+                    content_digest = _file_digest(path)
+                except OSError as error:
+                    category = UNREADABLE
                     item["error"] = f"{type(error).__name__}: {error}"
                 else:
-                    category = "CONTENT_VERIFIED"
+                    category = CONTENT_VERIFIED
                     item["sha256"] = content_digest
                     hasher.update(content_digest.encode("utf-8"))
             else:
-                category = "UNREADABLE"
-                item["error"] = "path is not a regular file or directory"
+                category = NOT_A_FILE
+                item["error"] = "path is not a regular file, directory, or symlink"
 
         item["category"] = category
         inputs.append(item)
         hasher.update(f":{category}\0".encode("utf-8"))
-        if category not in {"CONTENT_VERIFIED", "TREE_VERIFIED"}:
+        # Verified resume requires content evidence for every declared input. Anything else is
+        # weak, and weak evidence refuses the skip rather than guessing.
+        if category not in VERIFIED_ENTRY_CATEGORIES and category not in VERIFIED_TREE_CATEGORIES:
             weak = True
 
     source_info = None
@@ -229,7 +350,8 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                             try:
                                 provenance = source_provenance(model, source_dir)
                             except Exception as error:
-                                source_info.update(category="HASH_FAILED", error=f"{type(error).__name__}: {error}")
+                                source_info.update(category=UNREADABLE,
+                                               error=f"{type(error).__name__}: {error}")
                             else:
                                 source_info.update(
                                     category=("CONTENT_VERIFIED"
@@ -547,27 +669,126 @@ def layout_prepare(args: argparse.Namespace, config: WorkbenchConfig) -> Stage:
     )
 
 
+def preparation_recipe_digest(model_dict: dict) -> str:
+    """Digest of the preprocessing recipe this model is evaluated under.
+
+    The recipe is what turns raw FashionIQ into the model's inputs: layout, caption policy,
+    image extension, auxiliary assets and checkpoint selection. Recording it as part of the
+    evaluation fingerprint means changing the recipe invalidates resume even when no data file
+    moved.
+    """
+    relevant = {
+        "model_id": model_dict.get("model_id"),
+        "fashioniq_layout": model_dict.get("fashioniq_layout"),
+        "fashioniq_image_extensions": model_dict.get("fashioniq_image_extensions"),
+        "preparation_contract": model_dict.get("preparation_contract"),
+        "preparation_id": model_dict.get("preparation_id"),
+        "native_protocol": model_dict.get("native_protocol"),
+        "supported_protocols": model_dict.get("supported_protocols"),
+        "literature_split_label": model_dict.get("literature_split_label"),
+        "validation_caption_policy": model_dict.get("validation_caption_policy"),
+        "correction_policy": model_dict.get("correction_policy"),
+    }
+    return hashlib.sha256(
+        json.dumps(relevant, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def recipe_path(config: WorkbenchConfig, model_id: str) -> Path:
+    return config.WORKBENCH_RESULTS_ROOT / "__preparation_recipe__" / f"{model_id}.json"
+
+
+def write_preparation_recipe(model_dict: dict, config: WorkbenchConfig) -> Path:
+    """Record this model's recipe so later runs can prove they used the same one."""
+    path = recipe_path(config, model_dict["model_id"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "model_id": model_dict["model_id"],
+        "recipe_digest": preparation_recipe_digest(model_dict),
+        "upstream_commit_sha": model_dict.get("upstream_commit_sha"),
+        "recorded_at": datetime.now(UTC).isoformat(),
+    }
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+    return path
+
+
 def model_eval_inputs(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> tuple[Path, ...]:
-    from workbench.backend.registry import checkpoint_path
-    inputs = []
+    """Every scientific input this model's evaluation actually consumes.
+
+    The evaluation stage is fingerprinted over this list, so a file that changes without appearing
+    here changes the model's answer without invalidating resume. The list is therefore built from
+    the model's source-backed layout, its registered auxiliary assets, and its checkpoint
+    selection — not from a shared guess about what FashionIQ looks like.
+
+    The image *directories* are included per model because the evaluators open image files whose
+    names come from the splits: a rewritten image inside a declared directory must invalidate the
+    stage, and the directory walk content-hashes every member.
+    """
+    from workbench.backend.registry import (
+        auxiliary_assets_for_model, auxiliary_destination, checkpoint_path,
+        fashioniq_required_paths, load_registry, preparation_contract_for_model,
+        preparation_paths,
+    )
+
+    inputs: list[Path] = []
     mid = model_dict["model_id"]
-    ckpts = model_dict.get("checkpoint_variants", [])
+
+    # 1. Checkpoints: the selected variants, plus LIMN's per-category whole models.
+    ckpts = model_dict.get("checkpoint_variants") or []
     if args.checkpoint:
         ckpts = [c for c in ckpts if c["checkpoint_id"] == args.checkpoint]
-    for c in ckpts:
-        inputs.append(checkpoint_path(mid, c, config.WORKBENCH_CHECKPOINT_ROOT))
+    for variant in ckpts:
+        inputs.append(checkpoint_path(mid, variant, config.WORKBENCH_CHECKPOINT_ROOT))
     if mid == "limn":
-        for cat in ("dress", "shirt", "toptee"):
-            inputs.append(config.WORKBENCH_CHECKPOINT_ROOT / "limn" / f"0_{cat}_best_model.pt")
+        for category in ("dress", "shirt", "toptee"):
+            inputs.append(config.WORKBENCH_CHECKPOINT_ROOT / "limn" / f"0_{category}_best_model.pt")
+
+    # 2. The FashionIQ inputs this model's layout declares. `fashioniq_required_paths` already
+    #    encodes the layout's captions, splits, correction dictionaries, resized-image and
+    #    annotation requirements, so a model-specific requirement is picked up automatically
+    #    instead of being re-listed (and forgotten) here.
     ds_root = dataset_root(args, config)
-    for cat in ("dress", "shirt", "toptee"):
-        inputs.append(ds_root / "image_splits" / f"split.{cat}.val.json")
-        inputs.append(ds_root / "captions" / f"cap.{cat}.val.json")
-    if mid == "csmcir":
-        for cat in ("dress", "shirt", "toptee"):
-            inputs.append(ds_root / "qwen_captions" / f"{cat}_cot_val.json")
-            inputs.append(config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "COT_ours2" / "fashioniq" / f"{cat}_cot_val.json")
-    return tuple(inputs)
+    layout_paths = fashioniq_required_paths(model_dict, ds_root)
+    if layout_paths:
+        inputs.extend(layout_paths)
+    else:
+        for category in ("dress", "shirt", "toptee"):
+            inputs.append(ds_root / "image_splits" / f"split.{category}.val.json")
+            inputs.append(ds_root / "captions" / f"cap.{category}.val.json")
+
+    # 3. Preparation-contract inputs, which carry the source-required train annotations, caches
+    #    and generated artifacts the layout check alone does not name.
+    contract = preparation_contract_for_model(model_dict)
+    if contract is not None:
+        inputs.extend(preparation_paths(contract, ds_root, "raw_inputs"))
+        inputs.extend(preparation_paths(contract, ds_root, "generated_artifacts"))
+
+    # 4. Registered auxiliary assets, including the ones placed inside the model's own checkout
+    #    (CSMCIR's COT captions, for example). These are evaluation inputs, not decoration.
+    for asset in auxiliary_assets_for_model(mid):
+        if asset.get("required_for") != "official_evaluation":
+            continue
+        inputs.append(auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, ds_root))
+
+    # 5. The evaluator implementation itself: a changed script changes the result.
+    source_dir = model_dict.get("source_dir")
+    if source_dir:
+        inputs.append(config.WORKBENCH_THIRD_PARTY_ROOT / source_dir)
+
+    # 6. The preprocessing recipe is not a file to stat: it is a derived identity, folded into the
+    #    fingerprint below by `_stage_input_fingerprint_evidence`. Requiring a written recipe
+    #    artifact here would make every run weak before preparation had ever run.
+
+    # De-duplicate while preserving order: identical paths twice add no evidence.
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for path in inputs:
+        key = str(path)
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return tuple(unique)
 
 
 def resolved_checkpoint_id(model_dict: dict, args: argparse.Namespace) -> str:
@@ -1138,12 +1359,21 @@ def run_stages(
                         if validate_stage_outputs(stage, prev.get("output_fingerprints"), config=cfg, record=prev):
                             can_skip = True
 
-            weak_categories = [f"{item['path']} ({item['category']})"
-                               for item in fingerprint_info["inputs"]
-                               if item["category"] != "CONTENT_VERIFIED"]
+            # Report every input that is *not* verified evidence, using the same vocabulary the
+            # fingerprint itself used to decide weakness — otherwise a fully content-verified
+            # directory tree would be listed as if it were weak.
+            weak_categories = [
+                f"{item['path']} ({item['category']})"
+                for item in fingerprint_info["inputs"]
+                if item["category"] not in VERIFIED_ENTRY_CATEGORIES
+                and item["category"] not in VERIFIED_TREE_CATEGORIES
+            ]
             source = fingerprint_info.get("source_provenance")
-            if source and source.get("category") != "CONTENT_VERIFIED":
-                weak_categories.append(f"{source.get('path', 'source provenance')} ({source['category']})")
+            if source and source.get("category") not in VERIFIED_ENTRY_CATEGORIES:
+                provenance_line = f"{source.get('path', 'source provenance')} ({source['category']})"
+                # The checkout is also a declared input; do not report the same path twice.
+                if not any(line.startswith(str(source.get("path", ""))) for line in weak_categories):
+                    weak_categories.append(provenance_line)
             resume_block_reason = (f"weak_input_fingerprint: {', '.join(weak_categories)}"
                                    if fingerprint_info["weak"] else None)
             if resume and not can_skip and resume_block_reason:

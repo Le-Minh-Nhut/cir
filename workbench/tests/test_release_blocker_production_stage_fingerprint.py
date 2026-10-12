@@ -89,12 +89,12 @@ def test_fp01_success_is_content_verified(tmp_path: Path):
     source = tmp_path / "input.json"
     source.write_text('{"value": 1}')
     info = pipeline.stage_input_fingerprint_info(pipeline.Stage("success", input_paths=(source,)))
-    assert info["inputs"][0]["category"] == "CONTENT_VERIFIED"
+    assert info["inputs"][0]["category"] == pipeline.CONTENT_VERIFIED
     assert info["inputs"][0]["sha256"] == registry.sha256_file(source)
     assert info["weak"] is False
 
 
-def test_fp02_oserror_is_hash_failed_and_changes_digest(tmp_path: Path, monkeypatch):
+def test_fp02_oserror_is_unreadable_and_changes_digest(tmp_path: Path, monkeypatch):
     source = tmp_path / "input.bin"
     source.write_bytes(b"input")
     stage = pipeline.Stage("hash-error", input_paths=(source,))
@@ -102,12 +102,12 @@ def test_fp02_oserror_is_hash_failed_and_changes_digest(tmp_path: Path, monkeypa
     monkeypatch.setattr(registry, "sha256_file",
                         lambda *args, **kwargs: (_ for _ in ()).throw(OSError("read failed")))
     failed = pipeline.stage_input_fingerprint_info(stage)
-    assert failed["inputs"][0]["category"] == "HASH_FAILED"
+    assert failed["inputs"][0]["category"] == pipeline.UNREADABLE
     assert failed["weak"] is True
     assert failed["digest"] != verified["digest"]
 
 
-def test_fp03_hash_failed_input_cannot_resume_and_reason_is_recorded(tmp_path: Path, monkeypatch):
+def test_fp03_unreadable_input_cannot_resume_and_reason_is_recorded(tmp_path: Path, monkeypatch):
     source = tmp_path / "checkpoint.pt"
     source.write_bytes(b"checkpoint")
     stage = pipeline.Stage("hash-resume", commands=(("/synthetic",),), input_paths=(source,))
@@ -120,14 +120,15 @@ def test_fp03_hash_failed_input_cannot_resume_and_reason_is_recorded(tmp_path: P
     assert pipeline.run_stages([stage], resume=True, state_path=state) == 0
     assert len(calls) == 2
     record = pipeline.load_pipeline_state(state)["stages"]["hash-resume"]
-    assert record["input_fingerprint_evidence"]["inputs"][0]["category"] == "HASH_FAILED"
-    assert "HASH_FAILED" in record["resume_refused_reason"]
+    assert record["input_fingerprint_evidence"]["inputs"][0]["category"] == pipeline.UNREADABLE
+    assert pipeline.UNREADABLE in record["resume_refused_reason"]
 
 
 def test_fp04_large_same_size_change_forces_rerun(tmp_path: Path, monkeypatch):
     source = tmp_path / "large.bin"
+    # Larger than the in-memory hash threshold, so this exercises the streaming path.
     with source.open("wb") as handle:
-        handle.truncate(pipeline._CONTENT_HASH_LIMIT + 1)
+        handle.truncate(pipeline._STREAM_HASH_THRESHOLD + 1)
     stage = pipeline.Stage("large-input", commands=(("/synthetic",),), input_paths=(source,))
     state = tmp_path / "state.json"
     calls: list[list[str]] = []
@@ -207,13 +208,20 @@ def test_fp08_unchanged_verified_content_resumes(tmp_path: Path, monkeypatch):
     assert len(calls) == 1
 
 
-def test_fp09_metadata_only_is_explicitly_weak(tmp_path: Path):
+def test_fp09_a_large_file_is_content_verified_not_metadata_only(tmp_path: Path):
+    """Size never downgrades an input to metadata: a checkpoint's bytes are the input.
+
+    An earlier revision stopped hashing files above a 64 MiB threshold and still called the
+    result verified evidence, so a checkpoint could change without invalidating resume.
+    """
     source = tmp_path / "large.bin"
     with source.open("wb") as handle:
-        handle.truncate(pipeline._CONTENT_HASH_LIMIT + 1)
-    info = pipeline.stage_input_fingerprint_info(pipeline.Stage("metadata", input_paths=(source,)))
-    assert info["inputs"][0]["category"] == "METADATA_ONLY"
-    assert info["weak"] is True
+        handle.truncate(pipeline._STREAM_HASH_THRESHOLD + 1)
+    info = pipeline.stage_input_fingerprint_info(pipeline.Stage("large", input_paths=(source,)))
+    entry = info["inputs"][0]
+    assert entry["category"] == pipeline.CONTENT_VERIFIED
+    assert entry["sha256"]
+    assert info["weak"] is False
 
 
 def test_fp10_git_provenance_error_cannot_preserve_verified_fingerprint(
@@ -242,17 +250,18 @@ def test_fp10_git_provenance_error_cannot_preserve_verified_fingerprint(
                         lambda *args: (_ for _ in ()).throw(OSError("git metadata unreadable")))
     failed_info = pipeline.stage_input_fingerprint_info(stage, workspace["config"])
     assert failed_info["weak"] is True
-    assert failed_info["source_provenance"]["category"] == "HASH_FAILED"
+    assert failed_info["source_provenance"]["category"] == pipeline.UNREADABLE
     assert failed_info["digest"] != verified
     assert pipeline.run_stages([stage], resume=True, config=workspace["config"], state_path=state) == 0
     assert len(calls) == 2
 
 
-def test_fp11_non_regular_declared_input_is_unreadable(tmp_path: Path):
+def test_fp11_non_regular_declared_input_is_not_a_file(tmp_path: Path):
     source = tmp_path / "pipe"
     os.mkfifo(source)
-    info = pipeline.stage_input_fingerprint_info(pipeline.Stage("unreadable", input_paths=(source,)))
-    assert info["inputs"][0]["category"] == "UNREADABLE"
+    info = pipeline.stage_input_fingerprint_info(pipeline.Stage("not-a-file", input_paths=(source,)))
+    # A FIFO is not a regular file: it has no content digest, so it cannot be verified evidence.
+    assert info["inputs"][0]["category"] == pipeline.NOT_A_FILE
     assert info["weak"] is True
 
 
@@ -266,7 +275,7 @@ def test_fp12_generated_production_stage_records_fields_and_resumes(
     assert _run_eval(stage, workspace, monkeypatch, state, launched) == 0
     record = pipeline.load_pipeline_state(state)["stages"][pipeline.stage_key(stage)]
     assert record["input_fingerprint_evidence"]["inputs"]
-    assert all(item["category"] == "CONTENT_VERIFIED"
+    assert all(item["category"] == pipeline.CONTENT_VERIFIED
                for item in record["input_fingerprint_evidence"]["inputs"])
     assert record["input_fingerprint_evidence"]["weak"] is False
 
@@ -290,7 +299,7 @@ def test_fp13_same_size_member_rewrite_invalidates_a_directory_input(tmp_path: P
     stage = pipeline.Stage("evaluation", commands=(("/synthetic",),), input_paths=(checkpoint,))
 
     first = pipeline.stage_input_fingerprint_info(stage)
-    assert first["inputs"][0]["category"] == "TREE_VERIFIED"
+    assert first["inputs"][0]["category"] == pipeline.TREE_CONTENT_VERIFIED
     assert first["weak"] is False
 
     member.write_bytes(b"weights-v2")          # same size: 10 bytes either way
