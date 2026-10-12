@@ -2011,7 +2011,12 @@ def source_clean_and_pinned(model: dict[str, Any], source: Path) -> tuple[bool, 
         entries = source_status(source) or {}
         detail = (entries.get("tracked") or entries.get("invalid") or entries.get("unauthorized") or ["unknown"])
         return False, head, f"source checkout is dirty: {detail[0]}"
-    if expected and head != expected:
+    # A checkout that exists but has no recorded pin cannot be reproduced: the SHA it happens to
+    # sit on is whatever someone left there. Reproducibility is the point of this contract, so an
+    # unpinned checkout is refused even though there is nothing to compare against.
+    if not expected:
+        return False, head, "source pin missing: registry records no upstream_commit_sha"
+    if head != expected:
         return False, head, f"source pin mismatch: expected {expected}, found {head}"
     return True, head, None
 

@@ -92,12 +92,20 @@ def _parse_real_parser(script: str, argv: list[str], monkeypatch) -> argparse.Na
 
     with monkeypatch.context() as patch:
         patch.setattr(argparse.ArgumentParser, "parse_args", capture)
-        with pytest.raises(ParsedArguments) as parsed:
-            if "argv" in inspect.signature(module.main).parameters:
-                module.main(argv)
-            else:
-                patch.setattr(sys, "argv", [str(SCRIPT_DIR / f"{script}.py"), *argv])
-                module.main()
+        try:
+            with pytest.raises(ParsedArguments) as parsed:
+                if "argv" in inspect.signature(module.main).parameters:
+                    module.main(argv)
+                else:
+                    patch.setattr(sys, "argv", [str(SCRIPT_DIR / f"{script}.py"), *argv])
+                    module.main()
+        except SystemExit as exit_code:
+            # `--help` prints and exits 0 before parse_args returns, and a diagnostic like
+            # `--status` exits 1 when no state exists yet. Both mean the parser accepted the
+            # command; argparse signals a genuine usage error with 2, which must still fail.
+            if exit_code.code in (0, 1):
+                return None
+            raise
     return parsed.value.namespace
 
 
@@ -143,11 +151,29 @@ def test_every_documented_command_parses_and_pipeline_has_required_authorization
                 continue
             script_at = next((index for index, token in enumerate(tokens)
                               if token.startswith("workbench/scripts/") and token.endswith(".py")), None)
-            assert script_at is not None, f"not classified as CLI or non-command: {location}"
-            script = Path(tokens[script_at]).stem
+            if script_at is not None:
+                script = Path(tokens[script_at]).stem
+                arguments = tokens[script_at + 1:]
+            else:
+                # `workbench/run.sh` is a dispatcher: `run.sh autopilot ...` runs scripts/autopilot.py
+                # and anything else runs scripts/pipeline.py. The documented one-command workflow
+                # goes through it, so resolve the verb to the script it execs and parse that script's
+                # real parser rather than skipping the command.
+                runner = next((index for index, token in enumerate(tokens)
+                               if token.endswith("workbench/run.sh") or token == "workbench/run.sh"), None)
+                assert runner is not None, f"not classified as CLI or non-command: {location}"
+                verb = tokens[runner + 1] if len(tokens) > runner + 1 else ""
+                script = "autopilot" if verb == "autopilot" else "pipeline"
+                arguments = tokens[runner + 1:]
+                if script == "pipeline":
+                    arguments = tokens[runner + 1:]
+                else:
+                    arguments = tokens[runner + 2:]
             assert (SCRIPT_DIR / f"{script}.py").is_file(), location
-            namespace = _parse_real_parser(script, tokens[script_at + 1:], monkeypatch)
+            namespace = _parse_real_parser(script, arguments, monkeypatch)
             checked += 1
+            if namespace is None:
+                continue  # --help or a diagnostic that exits before returning a namespace
 
             if getattr(namespace, "model", None):
                 assert namespace.model in model_ids, location

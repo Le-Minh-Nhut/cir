@@ -1,0 +1,36 @@
+{
+  "cuda_available": true,
+  "device_count": 1,
+  "torch_version": "1.12.1",
+  "torch_cuda_version": "12.4",
+  "device_name": "Synthetic GPU",
+  "compute_capability": "8.9",
+  "allocated_tensor": false,
+  "computed": false,
+  "error": "CUDA out of memory",
+  "torch_has_compiled_core": true,
+  "torch_core_loadable": false,
+  "torch_file_digest": null,
+  "capability_verified": false,
+  "interpreter": "/tmp/pytest-of-heheboiz/pytest-0/test_cuda08_device_allocation_0/repo/limn_env/bin/python",
+  "interpreter_fingerprint": "172bf12d3233541a2030bee3ac9e48b5e8be943b99731d22f6dd1e4fb5df193d",
+  "dependency_fingerprint": "0c216b9880668a18434b692cb1cd5cffedc7f424190d09bb63e8c9e5ba0e23f7",
+  "probe_source": "override",
+  "probed_at": "2026-10-12T15:30:40.445048+00:00",
+  "host_identity": {
+    "node": "heheboiz-Legion-5-15ARH7",
+    "machine": "x86_64",
+    "cuda_visible_devices": "<unset>",
+    "driver": "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.178.04  Release Build  (dvs-builder@U22-I3-AE18-16-4)  Tue Jul  7 12:18:12 UTC 2026"
+  },
+  "revalidation": "re-probe when the interpreter, dependency set, host, driver or device visibility changes",
+  "expires_on": [
+    "interpreter change",
+    "dependency change",
+    "host change",
+    "driver change",
+    "CUDA_VISIBLE_DEVICES change"
+  ],
+  "capability_key": "fcc5c744261857cb9d7eef5e18ddb999210b236bc8ddc3646e01815694e119c3",
+  "signature": "7de13d0455b4c3129bf40542ff1ba9a4b22c05af20db2a21266cc63103e8645b"
+}

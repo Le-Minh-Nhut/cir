@@ -116,21 +116,26 @@ def _environment_plan(models: list[dict[str, Any]], *, dry_run: bool,
             pass
         else:
             result = plan_environments(models, artifacts_root=artifacts_root)
-            # A group that was REUSED from a verified interpreter was not solved, and must not be
-            # described as solver-verified. `COMPLETED` means every executed model's environment is
-            # either solver-verified or verified at runtime.
+            # Read the statuses the planner actually writes: VERIFIED and CACHED_VERIFIED come from
+            # a real solve, NOT_RUN_REUSED means a previously verified interpreter was reused, and
+            # NOT_RUN / UNAVAILABLE / PARTIAL mean no successful solve backs the plan. `COMPLETED`
+            # requires every group to carry real evidence -- a solve, or a runtime-verified
+            # interpreter -- and `solver_verified` names only the solved case.
             status = result.get("solver_verification_status") or (
-                "UNAVAILABLE" if result.get("solver") in (None, "unavailable") else "RUN")
-            reused_ready = [
-                group for group in result.get("groups", [])
-                if group.get("runtime_verification_status") == "READY"
-            ]
-            verified = status == "RUN" or len(reused_ready) == len(result.get("groups", [])) > 0
-            return {"solver_verified": verified,
-                    "source": ("environment_planner" if status == "RUN"
-                               else "runtime_verified_reuse" if reused_ready
-                               else "solver_unavailable"),
-                    "solver_verification_status": status, **result}
+                "UNAVAILABLE" if result.get("solver") in (None, "unavailable") else "NOT_RUN")
+            groups = result.get("groups", [])
+            solved = [group for group in groups
+                      if group.get("solver_verification_status") in ("VERIFIED", "CACHED_VERIFIED")]
+            reused_ready = [group for group in groups
+                            if group.get("solver_verification_status") == "NOT_RUN_REUSED"
+                            and group.get("runtime_verification_status") == "READY"]
+            covered = len(solved) + len(reused_ready)
+            verified = bool(groups) and covered == len(groups)
+            source = ("environment_planner" if solved
+                      else "runtime_verified_reuse" if reused_ready
+                      else "solver_unavailable")
+            return {"solver_verified": verified, "solver_solved": bool(solved),
+                    "source": source, "solver_verification_status": status, **result}
     return {"solver_verified": False, "source": "registry_only_fallback", "blocked": [],
             "groups": [{"environment_id": model["model_id"], "members": [model["model_id"]],
                         "python": (model.get("environment") or {}).get("python"), "packages": {},
@@ -242,7 +247,8 @@ def _execute(config: AutopilotConfig, plan: dict[str, Any], *, resume: bool, for
         if interpreter and (by_id[mid].get("environment") or {}).get("python_env_var")
     })
     args = Namespace(
-        mode="all", model=None, dataset_root=config.paths["dataset_root"], checkpoint=None,
+        mode="all", model=None, selected_model_ids=list(config.selected_model_ids),
+        dataset_root=config.paths["dataset_root"], checkpoint=None,
         protocol=None, top_k=config.budgets["top_k"], continue_on_error=True,
         allow_env_install=config.permissions["allow_env_install"],
         allow_preparation=config.permissions["allow_preparation"], apply=True,

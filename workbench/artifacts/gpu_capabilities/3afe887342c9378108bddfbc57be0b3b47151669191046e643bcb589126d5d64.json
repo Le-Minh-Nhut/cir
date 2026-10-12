@@ -1,0 +1,40 @@
+{
+  "probe": "gpu_capability",
+  "cuda_available": false,
+  "device_count": 0,
+  "torch_version": "1.12.1",
+  "torch_cuda_version": null,
+  "device_name": null,
+  "compute_capability": null,
+  "allocated_tensor": false,
+  "computed": false,
+  "torch_module_file": "/tmp/pytest-of-heheboiz/pytest-0/test_an_unrelated_binary_named0/repo/limn_env/lib/python3.13/site-packages/torch/__init__.py",
+  "torch_has_compiled_core": true,
+  "torch_core_origin": "/tmp/pytest-of-heheboiz/pytest-0/test_an_unrelated_binary_named0/repo/limn_env/lib/python3.13/site-packages/torch/_C.so",
+  "torch_file_digest": "1e552da3468031949de7639cdc0cc2c9c4a8453205947e624dcf66660bf3c378",
+  "error": null,
+  "torch_core_not_loadable": "/tmp/pytest-of-heheboiz/pytest-0/test_an_unrelated_binary_named0/repo/limn_env/lib/python3.13/site-packages/torch/_C.so",
+  "torch_core_loadable": false,
+  "capability_verified": false,
+  "interpreter": "/tmp/pytest-of-heheboiz/pytest-0/test_an_unrelated_binary_named0/repo/limn_env/bin/python",
+  "interpreter_fingerprint": "50db906ec13ad61ba6456af9ce89b71222f9925f47968996777d4e3966254fb2",
+  "dependency_fingerprint": "0c216b9880668a18434b692cb1cd5cffedc7f424190d09bb63e8c9e5ba0e23f7",
+  "probe_source": "interpreter",
+  "probed_at": "2026-10-12T15:30:42.440636+00:00",
+  "host_identity": {
+    "node": "heheboiz-Legion-5-15ARH7",
+    "machine": "x86_64",
+    "cuda_visible_devices": "<unset>",
+    "driver": "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.178.04  Release Build  (dvs-builder@U22-I3-AE18-16-4)  Tue Jul  7 12:18:12 UTC 2026"
+  },
+  "revalidation": "re-probe when the interpreter, dependency set, host, driver or device visibility changes",
+  "expires_on": [
+    "interpreter change",
+    "dependency change",
+    "host change",
+    "driver change",
+    "CUDA_VISIBLE_DEVICES change"
+  ],
+  "capability_key": "3afe887342c9378108bddfbc57be0b3b47151669191046e643bcb589126d5d64",
+  "signature": "22f82947ed017e18c0029bdbd70687213ee041e6fafe45313483c7c91b5df655"
+}

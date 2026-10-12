@@ -1,0 +1,35 @@
+{
+  "cuda_available": false,
+  "device_count": 0,
+  "torch_version": "1.12.1",
+  "torch_cuda_version": null,
+  "device_name": null,
+  "compute_capability": null,
+  "allocated_tensor": false,
+  "computed": false,
+  "error": "torch reports CUDA unavailable",
+  "torch_core_loadable": false,
+  "torch_file_digest": null,
+  "capability_verified": false,
+  "interpreter": "/tmp/pytest-of-heheboiz/pytest-0/test_cuda04_failed_probe_block0/repo/limn_env/bin/python",
+  "interpreter_fingerprint": "5767b6caff0b47d0b45d1b8e44b9f3b4f4bbf12f500bc40393373d558db0bba6",
+  "dependency_fingerprint": "0c216b9880668a18434b692cb1cd5cffedc7f424190d09bb63e8c9e5ba0e23f7",
+  "probe_source": "override",
+  "probed_at": "2026-10-12T15:30:39.918446+00:00",
+  "host_identity": {
+    "node": "heheboiz-Legion-5-15ARH7",
+    "machine": "x86_64",
+    "cuda_visible_devices": "<unset>",
+    "driver": "NVRM version: NVIDIA UNIX Open Kernel Module for x86_64  580.178.04  Release Build  (dvs-builder@U22-I3-AE18-16-4)  Tue Jul  7 12:18:12 UTC 2026"
+  },
+  "revalidation": "re-probe when the interpreter, dependency set, host, driver or device visibility changes",
+  "expires_on": [
+    "interpreter change",
+    "dependency change",
+    "host change",
+    "driver change",
+    "CUDA_VISIBLE_DEVICES change"
+  ],
+  "capability_key": "fcae12042f3b08ba2c860c833ea17c635526c03c210bd1ff0bd07cfdb0ec6a61",
+  "signature": "95905917d2ca39918ad42a7e4a71a2503b8529777e9386740e105f2fe50ea105"
+}

@@ -1158,7 +1158,20 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
     from workbench.backend.registry import checkpoint_path, auxiliary_destination, auxiliary_assets_for_model
     registry = load_registry()
     models = registry["models"]
-    if args.model:
+    # An explicit selection wins over "everything". `--model` names one model and
+    # `selected_model_ids` names a set; without either, every registered model is planned, which
+    # is the documented meaning of an unqualified `all`. A caller that has already resolved a
+    # selection (the autopilot) must be able to hand it in, or a run configured for one model
+    # would silently plan all sixteen.
+    requested = getattr(args, "selected_model_ids", None)
+    if requested is not None:
+        wanted = list(requested)
+        known = {m["model_id"] for m in models}
+        unknown = [mid for mid in wanted if mid not in known]
+        if unknown:
+            raise ValueError(f"unknown --model value(s): {', '.join(sorted(unknown))}")
+        selected_models = [m for m in models if m["model_id"] in set(wanted)]
+    elif args.model:
         selected_models = [m for m in models if m["model_id"] == args.model]
     else:
         selected_models = models
