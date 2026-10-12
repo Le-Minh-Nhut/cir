@@ -67,6 +67,36 @@ def _interpreter_status(model: dict, source_root: Path) -> dict:
     return {"status": "UNCONFIGURED", "interpreter": None, "variable": var, "tier": "UNCONFIGURED",
             "verified": False, "reason": None}
 
+def _check_shared_assignment(model_id: str, config) -> dict | None:
+    assignment_path = config.WORKBENCH_ARTIFACTS_ROOT / "environment_assignment.json"
+    if assignment_path.is_file():
+        try:
+            from workbench.backend.environment_planner import load_environment_assignment
+            data = load_environment_assignment(assignment_path)
+            model_info = data.get("models", {}).get(model_id)
+            if model_info and model_info.get("environment_id"):
+                return model_info
+        except Exception:
+            pass
+    plan_path = config.WORKBENCH_ARTIFACTS_ROOT / "environment_plan.json"
+    if plan_path.is_file():
+        try:
+            import json
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            for group in plan.get("groups", []):
+                members = group.get("members", [])
+                if model_id in members and len(members) >= 1:
+                    return {
+                        "environment_id": group.get("environment_id"),
+                        "interpreter": group.get("interpreter"),
+                        "conda_env_path": group.get("conda_env_path"),
+                        "group_members": members,
+                        "shared": len(members) > 1,
+                    }
+        except Exception:
+            pass
+    return None
+
 
 def status(model: dict, config) -> dict:
     model_id = model["model_id"]
@@ -75,7 +105,7 @@ def status(model: dict, config) -> dict:
     env_meta = model.get("environment") or {}
     spec = _find_env_spec(source) if source and source.is_dir() else None
     interp = _interpreter_status(model, source) if source else {"status": "NO_SOURCE", "interpreter": None, "variable": None}
-    return {
+    res = {
         "model_id": model_id,
         "environment_required": bool(model.get("environment_required")),
         "source_synced": source is not None and source.is_dir(),
@@ -97,12 +127,22 @@ def status(model: dict, config) -> dict:
         # A present-but-unverified interpreter is explicitly not ready.
         "ready": bool(interp.get("verified")) or not model.get("environment_required"),
     }
+    shared_info = _check_shared_assignment(model_id, config)
+    if shared_info:
+        res["shared_group"] = shared_info.get("environment_id")
+        res["shared_members"] = shared_info.get("group_members")
+        res["shared_interpreter"] = shared_info.get("interpreter")
+        if shared_info.get("interpreter") and not res.get("interpreter"):
+            res["interpreter"] = shared_info["interpreter"]
+    return res
 
 
 def print_status(s: dict) -> None:
     label = "OK" if s["ready"] else "BLOCKED"
     tier = s.get("interpreter_tier") or s["interpreter_status"]
     print(f"[{label}] {s['model_id']}: interpreter={s['interpreter_status']} tier={tier} env_var={s['env_var']}")
+    if s.get("shared_group"):
+        print(f"  shared: group={s['shared_group']} members={', '.join(s.get('shared_members') or [])}")
     if s.get("runtime_reason"):
         print(f"  runtime: {s['runtime_reason']}")
     if s["env_spec_found"]:
@@ -115,8 +155,32 @@ def print_status(s: dict) -> None:
         print(f"  documented: python={s['documented_python']} pytorch={s['documented_pytorch']} cuda={s['documented_cuda']}")
 
 
-def create_env(model: dict, s: dict, dry_run: bool) -> bool:
+def create_env(model: dict, s: dict, dry_run: bool, config=None) -> bool:
     model_id = model["model_id"]
+    if config is None:
+        config = resolve_config()
+    shared_info = _check_shared_assignment(model_id, config)
+    if shared_info:
+        members_str = ", ".join(shared_info.get("group_members", []))
+        env_id = shared_info.get("environment_id")
+        interp = shared_info.get("interpreter")
+        print(f"[GROUP] {model_id}: assigned to shared group {env_id} (members: {members_str}); interpreter: {interp}")
+        if interp and not Path(interp).is_file() and not dry_run:
+            from workbench.backend.environment_planner import plan_environments, provision_environment_plan
+            from workbench.backend.registry import load_registry
+            registry = load_registry()
+            group_models = [m for m in registry["models"] if m["model_id"] in shared_info.get("group_members", [])]
+            plan_path = config.WORKBENCH_ARTIFACTS_ROOT / "environment_plan.json"
+            if plan_path.is_file():
+                try:
+                    import json
+                    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+                except Exception:
+                    plan = plan_environments(group_models, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
+            else:
+                plan = plan_environments(group_models, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
+            provision_environment_plan(registry["models"], plan, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT, allowed=True)
+        return True
     if not s["source_synced"]:
         print(f"[BLOCKED] {model_id}: source not synced — sync first with sync_upstreams.py", file=sys.stderr)
         return False
@@ -216,7 +280,7 @@ def main(argv: list[str] | None = None) -> int:
     print_status(s)
 
     if args.create:
-        ok = create_env(model, s, args.dry_run)
+        ok = create_env(model, s, args.dry_run, config=config)
         return 0 if ok else 1
 
     return 0 if s["ready"] else 1

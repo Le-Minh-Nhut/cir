@@ -295,6 +295,15 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
     for cmd in stage.commands:
         hasher.update(shlex.join(cmd).encode("utf-8"))
 
+    if stage.name == "environment-plan":
+        for cmd in stage.commands:
+            for idx, arg in enumerate(cmd):
+                if arg in ("--model", "-m") and idx + 1 < len(cmd):
+                    hasher.update(f"MODEL_SEL:{cmd[idx+1]}".encode("utf-8"))
+                elif arg in ("--selected-models",) and idx + 1 < len(cmd):
+                    hasher.update(f"MODELS_SEL:{cmd[idx+1]}".encode("utf-8"))
+                elif arg in ("--third-party-root", "--source-root") and idx + 1 < len(cmd):
+                    hasher.update(f"SOURCE_ROOT:{cmd[idx+1]}".encode("utf-8"))
     # The preprocessing recipe is part of what a result means: the same data evaluated under a
     # different layout, caption policy or image extension is a different experiment. It is a
     # derived identity rather than a file, so a model whose registry declaration changes
@@ -816,6 +825,10 @@ def _execution_identity(model: dict, config: WorkbenchConfig) -> dict:
     digest.update(f"INTERPRETER:{interpreter}\0".encode("utf-8"))
     if interpreter != "UNCONFIGURED":
         interpreter_path = Path(interpreter).expanduser()
+        # The environment prefix must come from the *invoked* path: a virtualenv's `python` is a
+        # symlink to the base interpreter, so resolving it first would point the package scan at
+        # the base installation instead of the environment being evaluated.
+        environment_prefix = interpreter_path.parent.parent
         try:
             interpreter_path = interpreter_path.resolve(strict=True)
         except (OSError, RuntimeError):
@@ -825,6 +838,21 @@ def _execution_identity(model: dict, config: WorkbenchConfig) -> dict:
                 add_file("INTERPRETER_CONTENT", interpreter_path)
             else:
                 digest.update(b"INTERPRETER_CONTENT:UNAVAILABLE\0")
+            # The interpreter binary alone does not describe the environment. Installing,
+            # upgrading or force-reinstalling a dependency changes what the evaluator imports
+            # without touching the interpreter file, the requirements files or our source, so a
+            # run would resume and reuse a result produced by different package content. The
+            # installed-distribution fingerprint already hashes each distribution's metadata and
+            # the files its RECORD lists, which is the evidence the GPU capability cache uses —
+            # reuse it rather than inventing a second package identity.
+            try:
+                from workbench.backend import runtime as _runtime
+
+                digest.update(f"ENVIRONMENT_CONTENT:{_runtime._interpreter_fingerprint(str(interpreter_path), _runtime._environment_contract_digest(model), str(environment_prefix))}\0".encode("utf-8"))
+            except Exception as error:
+                # An unreadable environment is not a reason to claim identity we could not
+                # establish: record the gap so the fingerprint differs from a verified one.
+                digest.update(f"ENVIRONMENT_CONTENT:UNVERIFIED:{type(error).__name__}\0".encode("utf-8"))
 
     source_name = model.get("source_dir")
     if source_name:
@@ -1152,6 +1180,103 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
         serve,
     ]
 
+def probe_gpu_capability(model_id: str, config: WorkbenchConfig | None = None) -> int:
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import model_by_id
+    from workbench.backend import runtime
+
+    cfg = config or resolve_config()
+    model = model_by_id(model_id)
+    gpu = (model.get("environment") or {}).get("cuda")
+    gpu_required = gpu is not None and str(gpu).upper() != "UNKNOWN"
+    if not gpu_required:
+        print(f"[SKIP] {model_id} declares no CUDA requirement")
+        return 0
+
+    try:
+        report = runtime.verify_environment(model, probe=True)
+        cached = runtime._cached_gpu_capability(model, report)
+        if cached is not None and cached.get("capability_verified"):
+            print(f"[REUSE] valid GPU capability exists for {model_id}: {cached.get('capability_key')}")
+            return 0
+    except Exception:
+        pass
+
+    print(f"[PROBE] probing GPU capability for {model_id}...")
+    try:
+        capability = runtime.verify_gpu_runtime(
+            model, cfg, authorized=True, require_cuda=True, force=False
+        )
+        print(f"[OK] GPU capability verified and recorded: {capability.get('capability_key')}")
+        return 0
+    except (runtime.GpuVerificationError, RuntimeError, Exception) as exc:
+        print(f"[BLOCKED] GPU verification failed: {exc}", file=sys.stderr)
+        return 1
+
+
+def run_validation_index(config: WorkbenchConfig | None = None) -> int:
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.index import database_path, load_runs, rebuild_index
+    from workbench.scripts.validate_results import validate_root
+
+    cfg = config or resolve_config()
+    db = database_path(cfg)
+    results_root = cfg.WORKBENCH_RESULTS_ROOT
+
+    try:
+        runs = load_runs(results_root)
+    except Exception as error:
+        print(f"[WARN] validation-index: error loading indexable runs: {error}", file=sys.stderr)
+        runs = []
+
+    # An aggregate-only evaluation legitimately produces no schema-v2 per-query run. That is not a
+    # reason to fail the stage: the stage's declared output is the derived database, and an empty
+    # database is the honest result of indexing nothing. Skipping the rebuild instead left the
+    # declared output missing, which the output contract then reported as a blocked stage.
+    if not runs:
+        try:
+            count = rebuild_index(results_root, db)
+        except Exception as error:
+            print(f"[BLOCKED] index rebuild failed: {error}", file=sys.stderr)
+            return 1
+        print(f"[OK] no schema-v2 indexable runs found; wrote an empty index ({count} runs) to {db}")
+        return 0
+
+    valid = validate_root(results_root, strict_real=True)
+    if not valid:
+        print("[BLOCKED] validation failed for indexable runs", file=sys.stderr)
+        return 1
+
+    try:
+        count = rebuild_index(results_root, db)
+        print(f"[OK] indexed {count} runs into {db}")
+        return 0
+    except Exception as error:
+        print(f"[BLOCKED] index rebuild failed: {error}", file=sys.stderr)
+        return 1
+
+
+def _checkpoint_ids(args: argparse.Namespace, model_id: str) -> list[str]:
+    """The checkpoint IDs selected for one model.
+
+    `--checkpoint` names one for a single-model invocation. `checkpoint_ids` is the mapping the
+    autopilot resolved from its checkpoint policy, and it is authoritative when present: the
+    evaluator's own candidate resolution otherwise returns every registered variant.
+    """
+    resolved = getattr(args, "checkpoint_ids", None)
+    if isinstance(resolved, dict) and model_id in resolved:
+        return list(resolved[model_id])
+    single = getattr(args, "checkpoint", None)
+    return [single] if single else []
+
+
+def _checkpoint_args(args: argparse.Namespace, model_id: str) -> list[str]:
+    values = _checkpoint_ids(args, model_id)
+    argv: list[str] = []
+    for value in values:
+        argv.extend(["--checkpoint", value])
+    return argv
+
 
 def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
     from workbench.backend.fashioniq_layout import canonical_dataset_link_path
@@ -1186,20 +1311,41 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         sdir = m.get("source_dir")
         sync_dep = f"sync:{mid}"
         sync_out = (config.WORKBENCH_THIRD_PARTY_ROOT / sdir,) if sdir else ()
+        is_source_verified = False
+        if sdir:
+            source_dir = config.WORKBENCH_THIRD_PARTY_ROOT / sdir
+            if source_dir.is_dir():
+                from workbench.backend.runtime import source_clean_and_pinned
+                try:
+                    clean_pinned, _, _ = source_clean_and_pinned(m, source_dir)
+                    is_source_verified = bool(clean_pinned)
+                except Exception:
+                    is_source_verified = False
+
         if sdir and sdir in synced_sources:
             first_m = next(m2["model_id"] for m2 in selected_models if m2.get("source_dir") == sdir)
             sync_dep = f"sync:{first_m}"
         else:
             if sdir:
                 synced_sources.add(sdir)
-            stages.append(run_stage(
-                "sync",
-                command("sync_upstreams.py", "--model", mid, "--output-root", config.WORKBENCH_THIRD_PARTY_ROOT),
-                model_id=mid,
-                output_paths=sync_out,
-                receipt=True,
-                required_capabilities={"allow_network", "allow_preparation"},
-            ))
+            if is_source_verified:
+                stages.append(run_stage(
+                    "sync",
+                    command("sync_upstreams.py", "--model", mid, "--verify-only", "--output-root", config.WORKBENCH_THIRD_PARTY_ROOT),
+                    model_id=mid,
+                    output_paths=sync_out,
+                    receipt=True,
+                    required_capabilities=frozenset(),
+                ))
+            else:
+                stages.append(run_stage(
+                    "sync",
+                    command("sync_upstreams.py", "--model", mid, "--output-root", config.WORKBENCH_THIRD_PARTY_ROOT),
+                    model_id=mid,
+                    output_paths=sync_out,
+                    receipt=True,
+                    required_capabilities={"allow_network", "allow_preparation"},
+                ))
 
         # Only an actual provisioning action is side-effecting; plain verification is read-only.
         will_create_env = bool(m.get("environment_required")) and getattr(args, "allow_env_install", False) and getattr(args, "apply", False)
@@ -1226,47 +1372,112 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         prep_deps = ["dataset", sync_dep]
         if prep_owner and prep_owner != mid:
             prep_deps.append(f"preparation:{prep_owner}")
+        # A model whose declared dataset link is missing cannot be prepared without authorization,
+        # so an `--apply` run that lacks it is refused as unauthorized rather than allowed to reach
+        # the read-only verify step, exit nonzero, and surface as an unexplained stage failure.
+        needs_preparation = bool(prep_link) and prep_owner == mid and getattr(args, "apply", False)
         stages.append(run_stage(
             "preparation",
             command("prepare_model.py", *prep_cmd),
             model_id=mid,
             dependencies=tuple(prep_deps),
             output_paths=(prep_link,) if prep_link and prep_owner == mid else (),
-            required_capabilities=({"allow_preparation", "allow_network"} if will_prepare else frozenset()),
+            required_capabilities=({"allow_preparation", "allow_network"} if needs_preparation else frozenset()),
         ))
 
-        ckpt_args = ["--model", mid, "--output-root", str(config.WORKBENCH_CHECKPOINT_ROOT)]
-        if args.checkpoint:
-            ckpt_args.extend(["--checkpoint", args.checkpoint])
+        selected_checkpoints = _checkpoint_ids(args, mid)
+        ckpt_args = ["--model", mid, "--output-root", str(config.WORKBENCH_CHECKPOINT_ROOT),
+                     *_checkpoint_args(args, mid)]
         ckpts = m.get("checkpoint_variants", [])
-        if args.checkpoint:
-            ckpts = [c for c in ckpts if c["checkpoint_id"] == args.checkpoint]
+        if selected_checkpoints:
+            ckpts = [c for c in ckpts if c["checkpoint_id"] in set(selected_checkpoints)]
+        else:
+            # No policy resolved a selection here. A model with more than one variant would be
+            # ambiguous, so plan the verification stage without claiming a choice: the downloader
+            # applies its own unresolved-variant rule.
+            ckpts = ckpts
         ckpt_outs = tuple(checkpoint_path(mid, c, config.WORKBENCH_CHECKPOINT_ROOT) for c in ckpts)
         if not ckpt_outs:
             # No registry checkpoint exists for this model: nothing to acquire.
             stages.append(Stage("checkpoint", skipped="model has no registered checkpoint variant"))
         else:
-            stages.append(run_stage(
-                "checkpoint",
-                command("download_checkpoints.py", *ckpt_args),
-                model_id=mid,
-                checkpoint_id=args.checkpoint,
-                output_paths=ckpt_outs,
-                required_capabilities={"allow_large_downloads", "allow_network"},
-            ))
+            from workbench.scripts.download_checkpoints import verify as verify_checkpoint
+            all_ckpts_verified = bool(ckpt_outs) and all(
+                p.is_file() and verify_checkpoint(m, c, p)
+                for c, p in zip(ckpts, ckpt_outs)
+            )
+            if all_ckpts_verified:
+                stages.append(run_stage(
+                    "checkpoint",
+                    command("download_checkpoints.py", "--verify-only", *ckpt_args),
+                    model_id=mid,
+                    checkpoint_id=selected_checkpoints[0] if len(selected_checkpoints) == 1 else None,
+                    output_paths=ckpt_outs,
+                    required_capabilities=frozenset(),
+                ))
+            else:
+                stages.append(run_stage(
+                    "checkpoint",
+                    command("download_checkpoints.py", *ckpt_args),
+                    model_id=mid,
+                    checkpoint_id=selected_checkpoints[0] if len(selected_checkpoints) == 1 else None,
+                    output_paths=ckpt_outs,
+                    required_capabilities={"allow_large_downloads", "allow_network"},
+                ))
 
         if mid in auxiliary_model_ids():
             aux_outs = tuple(auxiliary_destination(a, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) for a in auxiliary_assets_for_model(mid))
-            stages.append(run_stage(
-                "auxiliary-assets",
-                command("download_auxiliary_assets.py", "--model", mid),
-                model_id=mid,
-                output_paths=aux_outs,
-                receipt=True,
-                required_capabilities={"allow_network", "allow_large_downloads"},
-            ))
+            from workbench.scripts.download_auxiliary_assets import assets as get_aux_assets, verify as verify_aux_asset
+            aux_items = get_aux_assets({mid}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
+            all_aux_verified = bool(aux_items) and all(
+                not item.required or (item.destination.is_file() and verify_aux_asset(item))
+                for item in aux_items
+            )
+            if all_aux_verified:
+                stages.append(run_stage(
+                    "auxiliary-assets",
+                    command("download_auxiliary_assets.py", "--model", mid, "--verify-only"),
+                    model_id=mid,
+                    output_paths=aux_outs,
+                    receipt=True,
+                    required_capabilities=frozenset(),
+                ))
+            else:
+                stages.append(run_stage(
+                    "auxiliary-assets",
+                    command("download_auxiliary_assets.py", "--model", mid),
+                    model_id=mid,
+                    output_paths=aux_outs,
+                    receipt=True,
+                    required_capabilities={"allow_network", "allow_large_downloads"},
+                ))
 
-        preflight_deps = (sync_dep, f"checkpoint:{mid}", f"preparation:{mid}", f"environment:{mid}")
+        gpu = (m.get("environment") or {}).get("cuda")
+        gpu_required = gpu is not None and str(gpu).upper() != "UNKNOWN"
+        has_valid_gpu = False
+        if gpu_required:
+            try:
+                from workbench.backend import runtime
+                rep = runtime.verify_environment(m, probe=True)
+                cached_cap = runtime._cached_gpu_capability(m, rep)
+                if cached_cap is not None and cached_cap.get("capability_verified"):
+                    has_valid_gpu = True
+            except Exception:
+                has_valid_gpu = False
+
+        gpu_cmd = [sys.executable, "-c",
+                   "import sys, workbench.scripts.pipeline as p; sys.exit(p.probe_gpu_capability(sys.argv[1]))",
+                   mid]
+        stages.append(run_stage(
+            "gpu-verification",
+            gpu_cmd,
+            model_id=mid,
+            dependencies=(f"environment:{mid}",),
+            required_capabilities={"allow_gpu_eval"} if (gpu_required and not has_valid_gpu) else frozenset(),
+            receipt=True,
+        ))
+
+        preflight_deps = (sync_dep, f"checkpoint:{mid}", f"preparation:{mid}", f"environment:{mid}", f"gpu-verification:{mid}")
         preflight_args = ["--scope", "real", "--dataset-root", str(dataset_root(args, config)),
                           "--model", mid]
         if getattr(args, "verify_gpu", False):
@@ -1284,8 +1495,8 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         if mid == "csmcir":
             eval_args[2] = str(config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset")
             eval_args.extend(["--canonical-dataset-root", str(dataset_root(args, config))])
-        if args.checkpoint:
-            eval_args.extend(["--checkpoint", args.checkpoint])
+        eval_selection = _checkpoint_ids(args, mid)
+        eval_args.extend(_checkpoint_args(args, mid))
         if args.protocol:
             eval_args.extend(["--protocol", args.protocol])
         eval_args.extend(["--top-k", str(args.top_k)])
@@ -1301,7 +1512,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             "evaluation",
             command("evaluate_models.py", *eval_args),
             model_id=mid,
-            checkpoint_id=args.checkpoint,
+            checkpoint_id=eval_selection[0] if len(eval_selection) == 1 else None,
             protocol=args.protocol,
             dependencies=eval_deps,
             input_paths=eval_ins,
@@ -1312,11 +1523,11 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         ))
 
     all_eval_deps = tuple(f"evaluation:{m['model_id']}" for m in selected_models)
+    val_cmd = [sys.executable, "-c",
+               "import sys, workbench.scripts.pipeline as p; sys.exit(p.run_validation_index())"]
     stages.append(run_stage(
         "validation-index",
-        command("validate_results.py", "--root", config.WORKBENCH_RESULTS_ROOT, "--strict-real"),
-        command("rebuild_index.py", "--results-root", config.WORKBENCH_RESULTS_ROOT,
-                "--database", database_path(config)),
+        val_cmd,
         dependencies=all_eval_deps,
         input_paths=(config.WORKBENCH_RESULTS_ROOT,),
         output_paths=(database_path(config),),
@@ -1325,12 +1536,12 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
     return stages
 def setup_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
     all_s = all_stages(args, config)
-    return [s for s in all_s if s.name in ("doctor", "dataset", "sync", "environment", "preparation", "checkpoint", "auxiliary-assets")]
+    return [s for s in all_s if s.name in ("doctor", "dataset", "sync", "environment", "preparation", "checkpoint", "auxiliary-assets", "gpu-verification")]
 
 
 def reproduce_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
     all_s = all_stages(args, config)
-    return [s for s in all_s if s.name in ("runtime-preflight", "evaluation")]
+    return [s for s in all_s if s.name in ("gpu-verification", "runtime-preflight", "evaluation")]
 
 
 def analyze_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:

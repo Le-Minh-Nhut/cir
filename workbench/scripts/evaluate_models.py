@@ -77,20 +77,29 @@ def candidates(args: argparse.Namespace, models: list[dict]) -> list[tuple[dict,
     selected: list[tuple[dict, dict]] = []
     for model in models:
         checkpoints = model["checkpoint_variants"]
+        requested = list(args.checkpoint or [])
         if model["model_id"] == "limn":
             bundle = model["checkpoint_bundles"][0]
-            if args.checkpoint == bundle["bundle_id"] or (not args.checkpoint):
+            if args.checkpoint == [bundle["bundle_id"]] or not requested:
                 anchor = next(checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] == bundle["required_checkpoint_ids"][0])
                 checkpoints = [{**anchor, "checkpoint_id": bundle["bundle_id"], "bundle_id": bundle["bundle_id"]}]
-            elif args.checkpoint:
-                checkpoints = [checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] == args.checkpoint]
-        elif args.checkpoint:
-            checkpoints = [checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] == args.checkpoint]
-        if args.checkpoint and not checkpoints and args.model:
-            raise ValueError(f"unknown checkpoint for {args.model}: {args.checkpoint}")
+            elif requested:
+                # Naming every member of a declared bundle is the same experiment as naming the
+                # bundle, so resolve it to the bundle anchor rather than evaluating the categories
+                # as three unrelated runs.
+                required = set(bundle["required_checkpoint_ids"])
+                if required and set(requested) == required:
+                    anchor = next(checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] == bundle["required_checkpoint_ids"][0])
+                    checkpoints = [{**anchor, "checkpoint_id": bundle["bundle_id"], "bundle_id": bundle["bundle_id"]}]
+                else:
+                    checkpoints = [checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] in set(requested)]
+        elif requested:
+            checkpoints = [checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] in set(requested)]
+        if requested and not checkpoints and args.model:
+            raise ValueError(f"unknown checkpoint for {args.model}: {', '.join(requested)}")
         selected.extend((model, checkpoint) for checkpoint in checkpoints)
     if args.checkpoint and not selected:
-        raise ValueError(f"unknown checkpoint: {args.checkpoint}")
+        raise ValueError(f"unknown checkpoint: {', '.join(args.checkpoint)}")
     return selected
 
 
@@ -184,7 +193,8 @@ def parser_for(registry: dict) -> argparse.ArgumentParser:
     selector.add_argument("--list", action="store_true", help="list registry candidates and command-audit state")
     selector.add_argument("--model", help="select one registry model")
     selector.add_argument("--all-runnable", action="store_true", help="guard every registry candidate for official execution")
-    parser.add_argument("--checkpoint", help="select one checkpoint ID")
+    parser.add_argument("--checkpoint", action="append",
+                        help="select a checkpoint ID; repeat to select a bundle's members")
     parser.add_argument("--protocol", choices=sorted(registry["protocols"]), help="protocol; defaults to each model native protocol")
     parser.add_argument("--dataset-root", type=Path, help="FashionIQ root; CSMCIR requires its fixed upstream layout")
     parser.add_argument("--canonical-dataset-root", type=Path, help="canonical FashionIQ root behind a CSMCIR fixed link")

@@ -177,3 +177,118 @@ def test_solver_evidence_is_reported_from_the_planner_statuses(monkeypatch) -> N
     unavailable = report([{"solver_verification_status": "UNAVAILABLE",
                            "runtime_verification_status": "NOT_CONFIGURED"}], "UNAVAILABLE")
     assert unavailable["solver_verified"] is False and unavailable["solver_solved"] is False
+
+
+def test_offline_reuse_requires_no_network_permissions(tmp_path: Path, monkeypatch) -> None:
+    config = _config(tmp_path)
+    args = pipeline.parser_for().parse_args(["all", "--model", "limn"])
+
+    # Case A: Present and verified -> frozenset(), --verify-only
+    monkeypatch.setattr("workbench.backend.runtime.source_clean_and_pinned", lambda m, s: (True, "pin", None))
+    monkeypatch.setattr("workbench.scripts.download_checkpoints.verify", lambda m, c, p: True)
+    for f in ("0_dress_best_model.pt", "0_shirt_best_model.pt", "0_toptee_best_model.pt"):
+        p = config.WORKBENCH_CHECKPOINT_ROOT / "limn" / f
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b"dummy")
+    (config.WORKBENCH_THIRD_PARTY_ROOT / "LIMN").mkdir(parents=True, exist_ok=True)
+
+    stages = pipeline.all_stages(args, config)
+    sync_stage = next(s for s in stages if s.name == "sync")
+    ckpt_stage = next(s for s in stages if s.name == "checkpoint")
+    assert sync_stage.required_capabilities == frozenset()
+    assert "--verify-only" in sync_stage.commands[0]
+    assert ckpt_stage.required_capabilities == frozenset()
+    assert "--verify-only" in ckpt_stage.commands[0]
+
+    # Case B: Missing resources -> requires network permissions
+    monkeypatch.setattr("workbench.backend.runtime.source_clean_and_pinned", lambda m, s: (False, None, "missing"))
+    for p in (config.WORKBENCH_CHECKPOINT_ROOT / "limn").glob("*.pt"):
+        p.unlink()
+
+    stages_missing = pipeline.all_stages(args, config)
+    sync_m = next(s for s in stages_missing if s.name == "sync")
+    ckpt_m = next(s for s in stages_missing if s.name == "checkpoint")
+    assert "allow_network" in sync_m.required_capabilities
+    assert "allow_network" in ckpt_m.required_capabilities
+    assert "allow_large_downloads" in ckpt_m.required_capabilities
+    assert "--verify-only" not in sync_m.commands[0]
+    assert "--verify-only" not in ckpt_m.commands[0]
+
+
+def test_gpu_verification_stage_state_machine(tmp_path: Path, monkeypatch) -> None:
+    import json
+    import secrets
+    from workbench.backend import runtime
+    from workbench.tests.test_release_blocker_cuda_readiness import install_probe, SUCCESS
+
+    config = _config(tmp_path)
+    config.WORKBENCH_ARTIFACTS_ROOT.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", secrets.token_hex(32))
+
+    prefix = tmp_path / "env"
+    site = prefix / "lib" / "python3.10" / "site-packages"
+    site.mkdir(parents=True, exist_ok=True)
+    interp = prefix / "bin" / "python"
+    interp.parent.mkdir(parents=True, exist_ok=True)
+    interp.write_text("#!/bin/sh\n")
+
+    model = {
+        "model_id": "csmcir",
+        "environment": {"python": "3.10", "cuda": "12.4", "python_env_var": "WORKBENCH_CSMCIR_PYTHON"},
+        "checkpoint_variants": [],
+    }
+    monkeypatch.setenv("WORKBENCH_CSMCIR_PYTHON", str(interp))
+    monkeypatch.setattr("workbench.backend.registry.model_by_id", lambda mid: model)
+
+    calls = []
+    install_probe(SUCCESS, monkeypatch, install_prefix=prefix)
+    orig_probe = runtime._GPU_PROBE_OVERRIDE
+    def tracked_probe(m, rep):
+        calls.append(True)
+        return orig_probe(m, rep)
+    runtime.set_gpu_probe_for_tests(tracked_probe)
+
+    runtime.forget_gpu_capability()
+    key = runtime._gpu_capability_key(model)
+    cap_file = runtime.gpu_capability_path(config, key)
+    assert not cap_file.exists()
+
+    rep = runtime.EnvironmentReport(
+        model_id="csmcir", tier=runtime.TIER_GPU_PENDING, status=runtime.TIER_GPU_PENDING,
+        interpreter=interp, variable="WORKBENCH_CSMCIR_PYTHON",
+    )
+    monkeypatch.setattr(runtime, "verify_environment", lambda m, probe=True: rep)
+
+    # 1. Probe runs when capability absent
+    assert pipeline.probe_gpu_capability("csmcir", config) == 0
+    assert len(calls) == 1
+    assert cap_file.exists()
+
+    # 2. Reused when valid
+    assert pipeline.probe_gpu_capability("csmcir", config) == 0
+    assert len(calls) == 1
+
+    # 3. Refused and re-probed when stale/tampered
+    payload = json.loads(cap_file.read_text())
+    payload["signature"] = "tampered"
+    cap_file.write_text(json.dumps(payload))
+    runtime.forget_gpu_capability()
+    assert pipeline.probe_gpu_capability("csmcir", config) == 0
+    assert len(calls) == 2
+
+
+def test_environment_plan_fingerprint_invalidated_by_selection_change(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    env_plan_path = tmp_path / "artifacts" / "environment_plan.json"
+
+    cmd1 = pipeline.command("plan_environments.py", "--output", env_plan_path,
+                            "--third-party-root", config.WORKBENCH_THIRD_PARTY_ROOT, "--model", "limn")
+    stage1 = pipeline.run_stage("environment-plan", cmd1, output_paths=(env_plan_path,))
+    fp1 = pipeline.compute_stage_input_fingerprint(stage1, config)
+
+    cmd2 = pipeline.command("plan_environments.py", "--output", env_plan_path,
+                            "--third-party-root", config.WORKBENCH_THIRD_PARTY_ROOT, "--model", "csmcir")
+    stage2 = pipeline.run_stage("environment-plan", cmd2, output_paths=(env_plan_path,))
+    fp2 = pipeline.compute_stage_input_fingerprint(stage2, config)
+
+    assert fp1 != fp2, "Fingerprint must change when selection changes!"

@@ -15,6 +15,7 @@ is not present, so a missing CLI cannot pass as success here.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
 import subprocess
@@ -216,6 +217,8 @@ def workbench(tmp_path: Path) -> dict:
             "allow_gpu_eval": True,
             "allow_index_write": True,
         },
+        "checkpoint_policy": "strict_clean",
+        "checkpoint_overrides": {},
     }))
 
     # Real isolated interpreters, shared the way the planner is supposed to share them: alpha,
@@ -363,27 +366,82 @@ def test_no_model_reports_a_fabricated_metric(workbench: dict) -> None:
 
 # ------------------------------------------------------------------------------- resume, AUTO-31
 
+def _model_run_evidence(workbench: dict, summary: dict, model_id: str) -> dict:
+    row = next((m for m in summary.get("models", []) if m["model_id"] == model_id), {})
+    run_id = row.get("run_id")
+    if not run_id:
+        latest_file = workbench["reports"] / f"{model_id}_ckpt_latest_successful.json"
+        if latest_file.is_file():
+            run_id = json.loads(latest_file.read_text()).get("run_id")
+    if not run_id:
+        state_file = workbench["artifacts"] / "autopilot_pipeline_state.json"
+        if state_file.is_file():
+            stage = json.loads(state_file.read_text()).get("stages", {}).get(f"evaluation:{model_id}") or {}
+            run_id = stage.get("run_id")
+    assert run_id and isinstance(run_id, str), f"completed model {model_id} must have a non-null run_id"
+
+    latest_file = workbench["reports"] / f"{model_id}_ckpt_latest_successful.json"
+    assert latest_file.is_file(), f"latest successful report pointer missing for {model_id}"
+    latest_data = json.loads(latest_file.read_text())
+    assert latest_data.get("run_id") == run_id
+
+    proof_path = Path(latest_data.get("proof") or (workbench["reports"] / f"{model_id}_ckpt_{run_id}_completion.json"))
+    assert proof_path.is_file(), f"completion proof missing for {model_id} at {proof_path}"
+    proof_digest = hashlib.sha256(proof_path.read_bytes()).hexdigest()
+    report_digest = latest_data.get("report_digest")
+    assert report_digest, f"report digest missing for {model_id}"
+
+    logs = workbench["artifacts"] / "logs"
+    invocations = len([p for p in logs.iterdir() if p.is_dir() and p.name.startswith(f"{model_id}__")]) if logs.is_dir() else 0
+
+    return {
+        "run_id": run_id,
+        "proof_path": str(proof_path),
+        "proof_digest": proof_digest,
+        "report_digest": report_digest,
+        "invocations": invocations,
+    }
+
+
 def test_resuming_reuses_completed_work_and_touches_nothing_else(workbench: dict) -> None:
     """A second invocation with --resume must not redo verified work or re-download."""
     _autopilot(workbench, "--apply")
     first = _summary(workbench)
 
-    completed_before = {
-        entry["model_id"]: entry.get("run_id") or entry.get("completion_proof")
-        for entry in first["models"] if entry["status"].startswith("COMPLETED")
-    }
-    assert completed_before, "the first run must complete something"
+    completed_models = [
+        entry["model_id"] for entry in first["models"] if entry["status"].startswith("COMPLETED")
+    ]
+    assert completed_models, "the first run must complete something"
+
+    evidence_before = {m: _model_run_evidence(workbench, first, m) for m in completed_models}
+    for m, ev in evidence_before.items():
+        assert ev["run_id"] is not None and len(ev["run_id"]) > 0, f"run_id for {m} must be non-empty"
 
     result = _autopilot(workbench, "--apply", "--resume")
     second = _summary(workbench)
     by_id = {entry["model_id"]: entry for entry in second["models"]}
 
-    for model_id, identity in completed_before.items():
+    evidence_after = {m: _model_run_evidence(workbench, second, m) for m in completed_models}
+
+    for model_id in completed_models:
         assert by_id[model_id]["status"].startswith("COMPLETED"), (model_id, by_id[model_id])
-        # Either the same run identity is reported, or the artifacts on disk were left untouched;
-        # what must not happen is a re-run of verified work.
-        assert by_id[model_id].get("run_id") in (None, identity) or \
-            by_id[model_id].get("completion_proof") == identity, by_id[model_id]
+        # Strengthened resume check: same run_id, completion proof digest, and report digest
+        assert evidence_after[model_id]["run_id"] == evidence_before[model_id]["run_id"]
+        assert evidence_after[model_id]["proof_digest"] == evidence_before[model_id]["proof_digest"]
+        assert evidence_after[model_id]["report_digest"] == evidence_before[model_id]["report_digest"]
+        assert evidence_after[model_id]["proof_path"] == evidence_before[model_id]["proof_path"]
+        # Evaluator invocation count did not increase (zero new invocations)
+        assert evidence_after[model_id]["invocations"] == evidence_before[model_id]["invocations"]
+
+    # Verify pipeline state skipped stages: no new downloads, source acquisitions, or installs
+    state = json.loads((workbench["artifacts"] / "autopilot_pipeline_state.json").read_text())
+    stages = state.get("stages", {})
+    for m in completed_models:
+        eval_stage = stages.get(f"evaluation:{m}") or next(
+            (v for k, v in stages.items() if k.startswith(f"evaluation:{m}")), None
+        )
+        assert eval_stage and eval_stage.get("status") == "COMPLETE"
+        assert eval_stage.get("run_id") == evidence_before[m]["run_id"]
     assert result.returncode != 0  # still partial, because delta and epsilon never succeed
 
 
@@ -391,8 +449,8 @@ def test_mutating_one_scientific_input_invalidates_only_that_model(workbench: di
     """A changed checkpoint invalidates the model that reads it, not its neighbours."""
     _autopilot(workbench, "--apply")
     before = _summary(workbench)
-    before_proofs = {entry["model_id"]: entry.get("run_id") or entry.get("completion_proof")
-                     for entry in before["models"]}
+    completed_before = [entry["model_id"] for entry in before["models"] if entry["status"].startswith("COMPLETED")]
+    before_evidence = {m: _model_run_evidence(workbench, before, m) for m in completed_before}
 
     logs = workbench["artifacts"] / "logs"
     alpha_runs_before = len([p for p in logs.iterdir() if p.is_dir() and p.name.startswith("alpha__")]) \
@@ -405,15 +463,18 @@ def test_mutating_one_scientific_input_invalidates_only_that_model(workbench: di
     alpha_runs_after = len([p for p in logs.iterdir() if p.is_dir() and p.name.startswith("alpha__")]) \
         if logs.is_dir() else 0
     assert alpha_runs_after > alpha_runs_before, "alpha must re-run after its checkpoint changed"
-    after_proofs = {entry["model_id"]: entry.get("run_id") or entry.get("completion_proof")
-                    for entry in after["models"]}
+
+    after_evidence = {m: _model_run_evidence(workbench, after, m) for m in ("alpha", "beta", "gamma", "zeta")}
+    assert after_evidence["alpha"]["run_id"] != before_evidence["alpha"]["run_id"], "alpha run_id must change"
+
     after_status = {entry["model_id"]: entry["status"] for entry in after["models"]}
 
     for model_id in ("beta", "gamma", "zeta"):
-        if before_proofs.get(model_id):
+        if model_id in before_evidence:
             assert after_status[model_id].startswith("COMPLETED"), \
                 f"{model_id} was invalidated by an unrelated model's checkpoint change"
-
+            assert after_evidence[model_id]["run_id"] == before_evidence[model_id]["run_id"]
+            assert after_evidence[model_id]["proof_digest"] == before_evidence[model_id]["proof_digest"]
 
 # ----------------------------------------------------------------------------- reports, AUTO-30
 

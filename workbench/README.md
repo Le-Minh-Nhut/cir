@@ -32,8 +32,7 @@ CSMCIR consumes standard FashionIQ `images`; iLearn model sources use `resized_i
 
 ## Environment policy
 
-The workbench does not install packages by default. Use an isolated upstream environment per compatible dependency group; never combine model stacks with the workbench environment. Autopilot can plan compatible environments, but a solve does not mean installation or runtime verification. See `envs/README.md` and [Autopilot Operator Guide](docs/AUTOPILOT_GUIDE.md).
-
+The workbench keeps upstream model environments isolated from the workbench environment. Autopilot plans and PROVISIONS shared conda environments when authorized (`allow_env_install: true`), allocating one prefix per compatible group under the artifacts root, reading source requirements from the configured upstream root (`paths.third_party`), and recording four distinct states (`CONSTRAINTS_COMPATIBLE`, `SOLVER_COMPATIBLE`, `INSTALLED`, `RUNTIME_VERIFIED`). Only `RUNTIME_VERIFIED` permits evaluation, and existing verified environments are reused without reinstall. Authoritative assignments are recorded in `environment_assignment.json`. See [Autopilot Operator Guide](docs/AUTOPILOT_GUIDE.md).
 ## Local configuration
 
 `workbench/config/workbench.env.example` documents local service/path defaults. Explicit CLI settings take precedence over process environment, local env file, and built-in default. Relative paths resolve against `CIR_REPO_ROOT`. Do not put secrets in this file.
@@ -42,16 +41,15 @@ For GPU-PC reproduction, use dedicated autopilot YAML config. It owns FashionIQ,
 
 ## GPU-PC reproduction
 
-[Autopilot Operator Guide](docs/AUTOPILOT_GUIDE.md) is the primary operator document. Configure its paths, budgets, and explicit capabilities first. Its single primary execution command is:
+[Autopilot Operator Guide](docs/AUTOPILOT_GUIDE.md) is the primary operator document. Configure its paths, budgets (example 10 GiB to cover LIMN checkpoints and auxiliary assets), checkpoint policy (`strict_clean` default vs `include_flagged_conditions`, and optional `checkpoint_overrides`), and explicit capabilities first. Offline reuse validates already present and verified assets with no network permission. Its single primary execution command is:
 
 ```bash
 ./workbench/run.sh autopilot --config /path/to/pc_autopilot.yaml --apply --resume
 ```
 
-This command is accepted by the autopilot parser. Keep config, selected models, artifact roots, GPU visibility, and HMAC ledger key stable when resuming. Read generated summary and blocker reports: a successful exit does not imply every selected model completed. Never run individual stage scripts as an alternative reproduction workflow.
+This command is accepted by the autopilot parser. Keep config, selected models, artifact roots, GPU visibility, and HMAC ledger key stable when resuming. Autopilot orchestrates stages in order (doctor, dataset, sync, environment, preparation, checkpoint, auxiliary-assets, environment-plan, gpu-verification, runtime-preflight, evaluation, validation-index), executes GPU verification as an explicit authorized stage, and writes consolidated summary, CSV, and blocker reports with real aggregate metrics (Recall@10/@50 across dress/shirt/toptee, macro, protocol, checkpoint provenance, duration, and completion-proof references). Successful process exit does not imply every selected model completed. Never run individual stage scripts as an alternative reproduction workflow.
 
 The registry marks `ptha_mtst` blocked for lack of a verified FashionIQ checkpoint/source integration; `tgcir` lacks a replay CLI and required assets; `pair`, `clvc_net`, `dcnet`, Combiner/CLIP4Cir, and `sprc` have unresolved checkpoint mappings/assets; `encoder` has unresolved checkpoint acquisition and missing pinned-source module; Air-Know, ConeSep, HABIT, and INTENT have noise-trained variants rather than clean-trained weights and no audited command constructor; HINT's command is unaudited; LIMN still needs checkpoints, resized images, dictionaries, and verified environment; CSMCIR still needs provenance-verified COT captions. These are blockers, not runnable model claims. Current status: [docs/UPSTREAM_AUDIT.md](docs/UPSTREAM_AUDIT.md).
-
 ### Optional diagnostics
 
 These inspect CLI help or saved autopilot status; they do not replace the primary command.

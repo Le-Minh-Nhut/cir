@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import json
 import os
+import shutil
+import subprocess
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 
 from workbench.backend import environment_planner as planner
-
 
 def model(model_id, *, python="3.9", torch="UNKNOWN", torchvision="UNKNOWN", packages=None,
           ranges=None, env_var=None):
@@ -394,3 +398,239 @@ def test_registry_planning_does_not_group_unavailable_model_and_finishes():
     assert source_backed <= grouped | blocked.keys()
     assert all(blocked[mid].strip() for mid in source_backed - grouped)
     assert all("source:" in blocked[mid].lower() for mid in source_backed - grouped)
+
+def test_custom_third_party_root_p0_02(tmp_path):
+    custom_root = tmp_path / "custom_third_party"
+    custom_dir = custom_root / "CUSTOM_MODEL"
+    custom_dir.mkdir(parents=True)
+    (custom_dir / "requirements.txt").write_text("custom-dep==9.9.9\n", encoding="utf-8")
+
+    custom_model = {
+        "model_id": "custom-model",
+        "source_dir": "CUSTOM_MODEL",
+        "source_available": True,
+        "environment": {"python": "3.9", "pytorch": "1.12.1", "torchvision": "0.13.1", "confidence": "CUSTOM"},
+    }
+
+    plan_custom = planner.plan_environments([custom_model], third_party_root=custom_root, solver=accepted)
+    spec_custom = planner.model_constraints(custom_model, third_party_root=custom_root)
+    assert "custom-dep" in spec_custom["packages"]
+    assert spec_custom["packages"]["custom-dep"] == "9.9.9"
+
+    from workbench.backend.registry import load_registry
+    models_by_id = {m["model_id"]: m for m in load_registry()["models"]}
+    csmcir = models_by_id["csmcir"]
+    spec_no_csmcir = planner.model_constraints(csmcir, third_party_root=custom_root)
+    assert "pandas" not in spec_no_csmcir["packages"]
+    spec_default_csmcir = planner.model_constraints(csmcir)
+    assert "pandas" in spec_default_csmcir["packages"]
+    out_json = tmp_path / "custom_plan.json"
+    ret = planner.main(["--third-party-root", str(custom_root), "--model", "custom-model", "--output", str(out_json)])
+    assert ret == 0
+    assert out_json.is_file()
+    plan_data = json.loads(out_json.read_text(encoding="utf-8"))
+    assert plan_data["third_party_root"] == str(custom_root.resolve())
+
+    with pytest.raises(FileNotFoundError):
+        planner.main(["--third-party-root", str(tmp_path / "nonexistent_dir"), "--output", str(out_json)])
+
+def test_p1_04_missing_pip_only_package_not_runtime_verified(tmp_path, monkeypatch):
+    m = {
+        "model_id": "pip-check-test",
+        "environment": {
+            "python": "3.11",
+            "packages": ["pyyaml==6.0"],
+            "pip_packages": ["open-clip-torch==2.20.0"],
+            "confidence": "TEST",
+        },
+    }
+    plan = planner.plan_environments([m], solver=accepted, artifacts_root=tmp_path)
+    group = plan["groups"][0]
+    assert group["state"] == "SOLVER_COMPATIBLE"
+    assert group["runtime_verification_status"] != "RUNTIME_VERIFIED"
+
+    fake_interp = tmp_path / "env" / "bin" / "python"
+    fake_interp.parent.mkdir(parents=True)
+    fake_interp.touch()
+    os.chmod(fake_interp, 0o755)
+    group["interpreter"] = str(fake_interp)
+    group["conda_env_path"] = str(fake_interp.parent.parent)
+
+    monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
+    monkeypatch.setattr(planner.runtime, "inspect_environment_distributions",
+                        lambda prefix: ({"pyyaml": "6.0"}, {"yaml"}, set()))
+
+    ok, reason, details = planner._verify_group_interpreter(group, {"pip-check-test": m},
+                                                            {"pip-check-test": planner.model_constraints(m)})
+    assert not ok
+    assert "open-clip-torch" in reason.lower()
+    assert group["runtime_verification_status"] != "RUNTIME_VERIFIED"
+
+
+def test_four_states_distinctly_recorded(tmp_path, monkeypatch):
+    m = model("four-states", python="3.11", packages=["numpy==1.24.0"])
+
+    monkeypatch.setattr(planner, "_solver_command", lambda: None)
+    unavail_plan = planner.plan_environments([m], solver=None)
+    unavail_group = unavail_plan["groups"][0]
+    assert unavail_group["state"] == "CONSTRAINTS_COMPATIBLE"
+    assert any("CONSTRAINTS_COMPATIBLE" in ev for ev in unavail_group["evidence"])
+
+    monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
+    solved_plan = planner.plan_environments([m], solver=accepted)
+    solved_group = solved_plan["groups"][0]
+    assert solved_group["state"] == "SOLVER_COMPATIBLE"
+    assert any("SOLVER_COMPATIBLE" in ev for ev in solved_group["evidence"])
+    group_copy = dict(solved_group)
+    group_copy["state"] = "INSTALLED"
+    group_copy["evidence"] = list(group_copy["evidence"]) + ["INSTALLED: packages are present"]
+    assert group_copy["state"] == "INSTALLED"
+
+    group_copy["state"] = "RUNTIME_VERIFIED"
+    group_copy["evidence"].append("RUNTIME_VERIFIED: imports and versions verified in that interpreter")
+    assert group_copy["state"] == "RUNTIME_VERIFIED"
+    states = {"CONSTRAINTS_COMPATIBLE", "SOLVER_COMPATIBLE", "INSTALLED", "RUNTIME_VERIFIED"}
+    assert len(states) == 4
+
+
+def test_idempotent_environment_reuse(tmp_path, monkeypatch):
+    m = model("reuse-test", python="3.11", packages=["pyyaml==6.0"])
+    fake_interp = tmp_path / "env" / "bin" / "python"
+    fake_interp.parent.mkdir(parents=True)
+    fake_interp.touch()
+    os.chmod(fake_interp, 0o755)
+
+    plan = planner.plan_environments([m], solver=accepted, artifacts_root=tmp_path)
+    plan["groups"][0]["interpreter"] = str(fake_interp)
+    plan["groups"][0]["conda_env_path"] = str(fake_interp.parent.parent)
+
+    monkeypatch.setattr(planner, "_verify_group_interpreter", lambda *a, **k: (True, "OK", {}))
+    calls = []
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: calls.append(a) or SimpleNamespace(returncode=0, stdout="", stderr=""))
+
+    assignment = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True)
+    group = assignment["groups"][0]
+    assert group["installation_status"] == "REUSED"
+    assert group["state"] == "RUNTIME_VERIFIED"
+    assert len(calls) == 0
+
+
+def test_bounded_split_and_retry(tmp_path, monkeypatch):
+    m_good = {"model_id": "good-model", "environment": {"python": "3.11", "packages": ["pkg-a==1.0"], "confidence": "T"}}
+    m_bad = {"model_id": "bad-model", "environment": {"python": "3.11", "packages": ["pkg-b==1.0"], "confidence": "T"}}
+
+    plan = planner.plan_environments([m_good, m_bad], solver=accepted, artifacts_root=tmp_path)
+    assert len(plan["groups"]) == 1
+
+    def mock_provision(group, by_id, specs, artifacts_root, third_party_root, allowed, solver_cmd):
+        if "bad-model" in group["members"] and "good-model" in group["members"]:
+            group["verification_details"] = {"evaluator_imports": {"bad-model": {"returncode": 1}}}
+            return False, "bad-model evaluator import failed"
+        if "good-model" in group["members"]:
+            group["state"] = "RUNTIME_VERIFIED"
+            group["installation_status"] = "INSTALLED"
+            group["runtime_verification_status"] = "READY"
+            return True, "good-model passed"
+        group["verification_details"] = {"evaluator_imports": {"bad-model": {"returncode": 1}}}
+        return False, "bad-model persistently fails"
+
+    monkeypatch.setattr(planner, "_provision_group", mock_provision)
+    assignment = planner.provision_environment_plan([m_good, m_bad], plan, artifacts_root=tmp_path, allowed=True)
+
+    good_group = next(g for g in assignment["groups"] if "good-model" in g["members"])
+    bad_group = next(g for g in assignment["groups"] if "bad-model" in g["members"])
+
+    assert good_group["state"] == "RUNTIME_VERIFIED"
+    assert good_group["members"] == ["good-model"]
+    assert bad_group["members"] == ["bad-model"]
+    assert bad_group["installation_status"] == "FAILED"
+    assert any("Split" in r for r in good_group["split_reasons"])
+    assert any("Split" in r for r in bad_group["split_reasons"])
+
+
+def test_manage_environment_respects_shared_group(tmp_path, monkeypatch):
+    from workbench.scripts import manage_environment
+
+    assignment = {
+        "models": {
+            "shared-a": {
+                "environment_id": "cir-shared123",
+                "interpreter": "/artifacts/environments/cir-shared123/bin/python",
+                "group_members": ["shared-a", "shared-b"],
+                "shared": True,
+            }
+        }
+    }
+    assign_path = tmp_path / "environment_assignment.json"
+    planner.write_environment_assignment(assignment, assign_path)
+
+    config = SimpleNamespace(WORKBENCH_ARTIFACTS_ROOT=tmp_path, WORKBENCH_THIRD_PARTY_ROOT=tmp_path)
+    info = manage_environment._check_shared_assignment("shared-a", config)
+    assert info is not None
+    assert info["environment_id"] == "cir-shared123"
+    assert info["shared"] is True
+
+    st = {"model_id": "shared-a", "source_synced": True, "env_spec_path": None, "env_spec_type": None}
+    created = manage_environment.create_env({"model_id": "shared-a"}, st, dry_run=False, config=config)
+    assert created is True
+
+
+@pytest.mark.skipif(shutil.which("conda") is None, reason="conda binary not available on PATH")
+def test_real_conda_cold_start_shared_environment_and_reuse(tmp_path):
+    # REAL package-manager test: real conda cold-start shared environment and reuse
+    m1 = {
+        "model_id": "real-cold-a",
+        "source_available": True,
+        "environment": {
+            "python": "3.11",
+            "packages": ["pyyaml==6.0.3"],
+            "pip_packages": ["packaging==26.3"],
+            "confidence": "REAL_TEST",
+        },
+    }
+    m2 = {
+        "model_id": "real-cold-b",
+        "source_available": True,
+        "environment": {
+            "python": "3.11",
+            "packages": ["pyyaml==6.0.3"],
+            "pip_packages": ["packaging==26.3"],
+            "confidence": "REAL_TEST",
+        },
+    }
+
+    artifacts_dir = tmp_path / "artifacts"
+    plan = planner.plan_environments([m1, m2], artifacts_root=artifacts_dir)
+    assert len(plan["groups"]) == 1
+    group = plan["groups"][0]
+    assert set(group["members"]) == {"real-cold-a", "real-cold-b"}
+    assert group["state"] == "SOLVER_COMPATIBLE"
+
+    assignment = planner.provision_environment_plan(
+        [m1, m2], plan, artifacts_root=artifacts_dir, allowed=True
+    )
+    prov_group = assignment["groups"][0]
+    assert prov_group["state"] == "RUNTIME_VERIFIED"
+    assert prov_group["installation_status"] == "INSTALLED"
+    assert prov_group["runtime_verification_status"] == "READY"
+
+    interp_a = assignment["models"]["real-cold-a"]["interpreter"]
+    interp_b = assignment["models"]["real-cold-b"]["interpreter"]
+    assert interp_a == interp_b
+    assert Path(interp_a).is_file()
+    assert os.access(interp_a, os.X_OK)
+
+    probe_res = subprocess.run([interp_a, "-c", "import yaml, packaging; print(yaml.__name__, packaging.__name__)"],
+                               capture_output=True, text=True, check=False)
+    assert probe_res.returncode == 0
+    assert "yaml packaging" in probe_res.stdout
+
+    rerun_assignment = planner.provision_environment_plan(
+        [m1, m2], plan, artifacts_root=artifacts_dir, allowed=True
+    )
+    rerun_group = rerun_assignment["groups"][0]
+    assert rerun_group["installation_status"] == "REUSED"
+    assert rerun_group["state"] == "RUNTIME_VERIFIED"
+    assert rerun_group["runtime_verification_status"] == "READY"
+    assert any("reused verified interpreter" in ev for ev in rerun_group["evidence"])

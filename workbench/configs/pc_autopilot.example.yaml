@@ -1,5 +1,12 @@
 schema_version: 1
 selected_models: all_registered
+# Checkpoint selection. `strict_clean` evaluates only weights whose recorded training condition is
+# exactly 0, so a model that publishes only noise-trained checkpoints is BLOCKED rather than silently
+# evaluated. `include_flagged_conditions` runs those as an exploratory secondary cohort, each badged with
+# the condition the registry records. `checkpoint_overrides` is an operator-resolved mapping (model id ->
+# checkpoint id list) and wins over the policy, badged as an override rather than as clean.
+checkpoint_policy: strict_clean
+checkpoint_overrides: {}
 paths:
   registry: ../registry/models.yaml
   dataset_root: ../../data/FashionIQ
@@ -8,7 +15,8 @@ paths:
   results: ../artifacts/results
   third_party: ../third_party
 budgets:
-  max_download_bytes: 5368709120
+  # 10 GiB: covers the 3 declared LIMN checkpoints (5,376,030,471 bytes ~ 5.01 GiB) plus safety margin and auxiliary downloads
+  max_download_bytes: 10737418240
   max_models: 256
   top_k: 200
 permissions:

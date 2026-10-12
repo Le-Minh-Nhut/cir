@@ -4,27 +4,29 @@ Release A covers laptop-verifiable orchestration and evidence handling. Real GPU
 
 ## Scope and acceptance status
 
-The laptop work established guarded registry-driven execution stages, explicit authorization, content-based resume, environment isolation checks, model-specific preparation, checkpoint bundle identity, source-backed aggregate extraction, schema-v2/index integrity, and workflow status reporting. It does not establish that external checkpoints, FashionIQ assets, model environments, or a real GPU are ready.
+The laptop work established guarded registry-driven execution stages, explicit authorization, content-based resume bound to installed dependency content, environment isolation checks, model-specific preparation ownership, checkpoint bundle identity, temporary-file atomic download verification, source-backed aggregate extraction, schema-v2/index integrity, and workflow status reporting. Shared-conda provisioning was exercised for real on this host with harmless packages across the four recorded states (`CONSTRAINTS_COMPATIBLE`, `SOLVER_COMPATIBLE`, `INSTALLED`, `RUNTIME_VERIFIED`), and the synthetic six-model cold-start E2E pipeline passes offline. It does not establish that external checkpoints, FashionIQ assets, model environments, or a real GPU are ready.
 
 | Criterion | Status |
 |---|---|
 | Authorization enforced for selected stages | PASS |
 | Registry-derived execution dependencies enforced | PASS |
 | Independent models can continue after another model blocks | PASS |
-| Resume rejects missing/corrupt outputs and changed inputs | PASS |
-| Environment verification does not overstate readiness | PASS |
-| Checkpoint file/directory/bundle identity handled | PASS |
+| Resume rejects missing/corrupt outputs and changed inputs/dependencies | PASS |
+| Shared-conda provisioning exercised on host with harmless packages | PASS |
+| Synthetic six-model cold-start E2E execution passes | PASS |
+| Environment verification does not overstate readiness (4 states recorded) | PASS |
+| Checkpoint file/directory/bundle identity handled with temporary-file atomicity | PASS |
 | Aggregate and per-query schemas remain distinct | PASS |
-| Workflow reports success, partial, failure, or blocked outcomes | PASS |
-| Real GPU inference required | NOT REQUIRED for Release A |
+| Consolidated reporting records Recall@10/@50 metrics and blockers | PASS |
+| Real GPU inference and capability verification | NOT REQUIRED for Release A (Release B) |
+| Real FashionIQ evaluation and numerical paper parity | NOT REQUIRED for Release A (Release B) |
 
 ## Laptop / PC boundary
 
-- **Finished on laptop:** orchestration, verification, provenance, authorization, resume, and offline synthetic acceptance.
-- **Pending on GPU PC:** official evaluator runs on real checkpoints, real aggregate metric parity, and model-specific GPU capability verification.
+- **Finished on laptop:** orchestration, verification, provenance, authorization, dependency-content resume, shared-conda provisioning exercised for real with harmless packages, and synthetic six-model cold-start E2E execution.
+- **Pending on GPU PC (Release B):** official evaluator execution with real checkpoints, real FashionIQ dataset evaluation, numerical paper-metric parity, and model-specific GPU capability verification on a CUDA host.
 - **Pending external evidence/assets:** unresolved checkpoint mappings and required model assets remain blockers as recorded in registry and [UPSTREAM_AUDIT.md](UPSTREAM_AUDIT.md).
 - **Not available yet:** per-query ranking export for external models; aggregate output alone is not schema-v2 query evidence.
-
 ## Release B operator command
 
 Use [Autopilot Operator Guide](AUTOPILOT_GUIDE.md) for GPU-PC prerequisites, configuration, authorization, checkpoint policy, GPU selection, budgets, ledger key, environment groups, resume, reports, and blockers. Its one primary execution command is:

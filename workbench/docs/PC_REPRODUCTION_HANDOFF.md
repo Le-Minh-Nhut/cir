@@ -1,6 +1,6 @@
 # PC Reproduction Handoff (Release B)
 
-Release B runs on a provisioned GPU PC only. Start with the [Autopilot Operator Guide](AUTOPILOT_GUIDE.md): it is the primary runbook for paths, permissions, environment grouping, checkpoint policy, GPU choice, budgets, ledger key, launch, resume, reports, and blockers.
+Release B runs on a provisioned GPU PC only. Start with the [Autopilot Operator Guide](AUTOPILOT_GUIDE.md): it is the primary runbook for paths, permissions, environment grouping and provisioning, checkpoint policy, GPU selection, budgets, ledger key, launch, resume, reports, and blockers.
 
 ## One primary execution command
 
@@ -10,7 +10,7 @@ After configuring the PC-specific YAML and explicitly granting the capabilities 
 ./workbench/run.sh autopilot --config /path/to/pc_autopilot.yaml --apply --resume
 ```
 
-Use same config, artifact roots, selected models, GPU visibility, and HMAC key on resume. Do not run the individual stage scripts as an alternative workflow. Full reproduction is not guaranteed by laptop-side engineering; reports distinguish completed, blocked, and failed models.
+Use same config, artifact roots, selected models, GPU visibility, and HMAC key on resume. Do not run individual stage scripts as an alternative reproduction workflow: autopilot orchestrates doctor, dataset, sync, environment, preparation, checkpoint, auxiliary-assets, environment-plan, gpu-verification, runtime-preflight, evaluation, and validation-index stages under explicit capability guards. Full reproduction is not guaranteed by laptop-side engineering; reports distinguish completed, blocked, and failed models.
 
 ## PC-only acceptance still owed
 

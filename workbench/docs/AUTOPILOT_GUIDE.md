@@ -1,24 +1,28 @@
 # Autopilot operator guide
 
-Primary GPU-PC runbook for guarded FashionIQ reproduction. Autopilot orchestrates pinned-source sync, checkpoint acquisition, preparation, evaluation, validation, and index rebuild. It does not make a blocked registry entry runnable, invent assets, or install environments unless explicitly authorized. A completed run is not proof of paper-metric parity.
+Primary GPU-PC runbook for guarded FashionIQ reproduction. Autopilot orchestrates pinned-source sync, checkpoint acquisition, preparation, environment planning and provisioning, GPU capability verification, evaluation, validation, and index rebuild. It does not make a blocked registry entry runnable, invent assets, or claim paper parity.
 
 ## 1. GPU-PC prerequisites
 
-Use the CIR checkout on the GPU PC with workbench runtime dependencies already available. Provide a CUDA-capable host, persistent storage, and operator-controlled secret storage. Keep each upstream's model environment separate from workbench environment; never install upstream dependencies into workbench backend environment.
+Use the CIR checkout on the GPU PC with workbench runtime dependencies already available. Provide a Linux host with a CUDA-capable GPU, persistent disk storage, and operator-controlled secret storage. Keep each upstream's model environment separate from the workbench environment; never install upstream dependencies into the workbench backend environment.
 
-FashionIQ root must already exist and contain standard `captions/`, `image_splits/`, and `images/` layout. Some models additionally require resized images, dictionaries, caches, captions, or other model-specific assets. Autopilot downloads registered auxiliary assets (for example CSMCIR Qwen captions) only when required permissions are granted. Other required local assets must be present with verified provenance; CSMCIR `COT_ours2/fashioniq` captions have no verified author download source. Do not substitute assets.
+FashionIQ root must already exist and contain the standard `captions/`, `image_splits/`, and `images/` directory layout. Some models additionally require resized images (`resized_image/{category}`), dictionaries, caches, captions, or other model-specific assets. Autopilot downloads registered auxiliary assets (for example CSMCIR Qwen captions) only when required permissions (`allow_network` + `allow_large_downloads`) are granted. Other required local assets must be present with verified provenance; CSMCIR `COT_ours2/fashioniq` captions have no verified author download source and must be supplied locally. Do not substitute assets.
 
-## 2. Set dataset, artifact, and upstream roots
+Offline reuse: a source repository, checkpoint, or auxiliary asset that is already present and verified is validated and reused with NO network permission. Acquisition still requires explicit network permission. Checkpoint downloads verify size and SHA-256 on a temporary file (`.part`) and only then publish via atomic replacement (`os.replace`), so a rejected or interrupted download never leaves a corrupt file that blocks recovery.
 
-Create PC-specific YAML from `workbench/configs/pc_autopilot.example.yaml`. `paths` requires exactly `registry`, `dataset_root`, `artifacts`, `checkpoints`, `results`, and `third_party`; unknown keys are rejected. Relative paths resolve from config file's directory. `registry` must name existing file and `dataset_root` existing directory; other paths need an existing directory parent.
+## 2. Set dataset, artifact, checkpoint, results, and upstream roots
 
-Set `paths.dataset_root` to FashionIQ root itself, not `images/` or `captions/`. Set `paths.artifacts` to persistent storage; it owns run state, reports, evidence ledger, completion proofs, GPU capability records, environment plans, and derived DuckDB index. Keep `paths.checkpoints` and `paths.results` in persistent storage too. Set `paths.third_party` to location for pinned upstream checkouts. CIR code checkout is `CIR_REPO_ROOT`; it supplies workbench code and registry defaults, separate from configured upstream-clone root.
+Create PC-specific YAML from `workbench/configs/pc_autopilot.example.yaml`. `paths` requires exactly `registry`, `dataset_root`, `artifacts`, `checkpoints`, `results`, and `third_party`; unknown keys are rejected. Relative paths resolve from the config file's directory. `registry` must name an existing file and `dataset_root` an existing directory; other paths need an existing directory parent.
 
-Example config (replace PC paths; preserve every key):
+Set `paths.dataset_root` to the FashionIQ root itself, not `images/` or `captions/`. Set `paths.artifacts` to persistent storage; it owns run state, reports, evidence ledger, completion proofs, GPU capability records, environment plans, `environment_assignment.json`, and the derived DuckDB index. Set `paths.checkpoints` and `paths.results` in persistent storage too. Set `paths.third_party` to the location for pinned upstream checkouts. Upstream requirement files are read from this configured upstream root (`paths.third_party`), never a hardcoded default. The CIR code checkout is `CIR_REPO_ROOT`; it supplies workbench code and registry defaults, separate from the configured upstream-clone root.
+
+Example config (replace PC paths; preserve required keys):
 
 ```yaml
 schema_version: 1
 selected_models: all_registered
+checkpoint_policy: strict_clean
+checkpoint_overrides: {}
 paths:
   registry: /opt/cir/workbench/registry/models.yaml
   dataset_root: /data/FashionIQ
@@ -27,35 +31,36 @@ paths:
   results: /data/cir-workbench/results
   third_party: /data/cir-upstreams
 budgets:
-  max_download_bytes: 5368709120
+  max_download_bytes: 10737418240
   max_models: 256
   top_k: 200
 permissions:
   allow_network: true
   allow_large_downloads: true
-  allow_env_install: false
+  allow_env_install: true
   allow_preparation: true
   allow_gpu_eval: true
   allow_index_write: true
 ```
 
-`selected_models` accepts `all_registered` or non-empty list of exact registry IDs. Prefer explicit list of models whose evidence and prerequisites you reviewed. `all_registered` includes blocked entries; it does not make them runnable. `max_models` must cover selection. Keep selected IDs unchanged after execution starts so resume can use existing state.
+`selected_models` accepts `all_registered` or a non-empty list of exact registry IDs. Prefer an explicit list of models whose evidence and prerequisites you reviewed. `all_registered` includes blocked entries; it does not make them runnable. `max_models` must cover the selection. Keep selected IDs unchanged after execution starts so resume can use existing state.
 
-## 3. Configure conda or mamba
+## 3. Install or point at conda or mamba
 
-Put `conda`, `mamba`, or `micromamba` on operator `PATH` before planning. Environment planner checks source-backed Python/package constraints, groups compatible models, and attempts real solves when solver exists. It searches `conda-forge`, `pytorch`, and `defaults`; channel gap is reported separately from package conflict. Solver plan is not an installed or runtime-verified environment.
+Put `conda`, `mamba`, or `micromamba` on the operator `PATH` before launching autopilot. The environment planner checks source-backed Python and package constraints read directly from the configured upstream root (`paths.third_party`). It groups compatible models, searches `conda-forge`, `pytorch`, and `defaults`, and provisions shared conda environments when authorized (`allow_env_install: true`).
 
-Provision isolated environments from pinned upstream requirements before evaluation. Planner groups recommend sharing; they do not install grouped environments. Set each model's registry-declared `WORKBENCH_<MODEL>_PYTHON` variable to exact executable path. Compatible models may share one environment. Explicit per-model variables are respected instead of replaced by group assignment. With `allow_env_install: false`, existing environments are inspected only. Enable it only to authorize source-backed per-model environment creation; also grant `allow_network`. This is not installation of a shared planner group. Missing/unverified interpreters stay blocked; runtime checks cover Python, isolation, dependencies, and required CUDA capability.
+With `allow_env_install: false`, the planner inspects existing environments without installing new packages; missing or unverified environments will block evaluation. Pre-existing environments can also be specified manually: setting a model's registry-declared `WORKBENCH_<MODEL>_PYTHON` variable points that model to an exact interpreter executable, taking precedence over automatic planner group assignments.
 
 ## 4. Authorize downloads and other side effects
 
 Permissions live in config, not CLI flags. Full workflow stage capabilities:
 
-- source sync: `allow_network` + `allow_preparation`;
-- checkpoint acquisition: `allow_network` + `allow_large_downloads`;
-- registered auxiliary-asset acquisition: `allow_network` + `allow_large_downloads`;
-- environment creation, only if intentionally enabled: `allow_env_install` + `allow_network`;
+- source sync: `allow_network` + `allow_preparation` (verified offline with no permission if already clean and pinned);
+- checkpoint acquisition: `allow_network` + `allow_large_downloads` (verify-only with no permission if already valid);
+- registered auxiliary-asset acquisition: `allow_network` + `allow_large_downloads` (verify-only with no permission if already valid);
+- environment provisioning: `allow_env_install` + `allow_network` (when creating shared conda groups);
 - mutating model preparation: `allow_preparation` + `allow_network`;
+- GPU verification: `allow_gpu_eval` (runs only when probing; reuses still-valid capability with no permission);
 - evaluation: `allow_preparation` + `allow_gpu_eval`;
 - result validation/index rebuild: `allow_index_write`.
 
@@ -63,9 +68,15 @@ A selected stage missing any declared capability is blocked as `BLOCKED_AUTHORIZ
 
 ## 5. Choose checkpoint policy
 
-Autopilot config has no checkpoint-ID override. Review selected model's `checkpoint_variants` and bundle metadata in `workbench/registry/models.yaml`. Keep checkpoint training-noise condition distinct from clean (0%) evaluation policy; noisy-trained weights are not clean-trained weights. Never guess unresolved mappings, URLs, hashes, or provenance. When registry requires multiple category files or paired bundle, every declared member is required.
+The config supports two optional checkpoint keys: `checkpoint_policy` and `checkpoint_overrides`.
 
-Autopilot cannot choose between ambiguous checkpoint variants on operator's behalf. Exclude such models until registry mapping and intended policy are resolved. Download-byte budget requires registry sizes; unknown required size blocks acquisition rather than being estimated. Locally computed digest records local evidence, not author-published hash.
+`checkpoint_policy` controls handling of recorded training conditions:
+- `strict_clean` (default): evaluates only weights whose recorded training condition is exactly 0% noise. A model that publishes only noise-trained checkpoints (such as Air-Know, ConeSep, HABIT, and INTENT) is BLOCKED (`BLOCKED_CHECKPOINT`) rather than silently evaluated.
+- `include_flagged_conditions`: runs those checkpoints as an exploratory secondary cohort, with each model badged by the condition the registry records.
+
+`checkpoint_overrides` is an operator-resolved mapping (`model_id` -> list of checkpoint IDs). An override wins over the policy and is badged as an override rather than clean.
+
+Checkpoint downloads verify size and SHA-256 on a temporary file (`.part`) and only publish via atomic replacement once verified. A rejected or interrupted download never leaves a partial file that blocks recovery.
 
 Do not describe registry-blocked models as runnable:
 
@@ -86,63 +97,118 @@ These are current known blockers, not a readiness guarantee for other models. Ac
 
 ## 6. Select the GPU
 
-Set PC scheduler/process environment's `CUDA_VISIBLE_DEVICES` to device(s) intended for evaluation before launch. GPU selection is not a config key. Keep visibility unchanged between capability verification and evaluation: records bind to host, driver, interpreter/dependencies, and visible devices. Stale or differently scoped capability blocks CUDA evaluation. Toolkit or driver version alone does not prove PyTorch can use a device.
+Set the PC process environment's `CUDA_VISIBLE_DEVICES` to the device(s) intended for evaluation before launch. GPU selection is not a config key. Keep visibility unchanged between capability verification and evaluation: records bind to host, driver, interpreter/dependencies, and visible devices. Stale or differently scoped capability blocks CUDA evaluation.
+
+GPU verification is an explicit authorized stage (`gpu-verification`) in the autopilot pipeline using the assigned model interpreter, preserving `CUDA_VISIBLE_DEVICES`. A still-valid capability is reused without re-probing; a stale capability is refused and re-probed. The operator no longer runs `evaluate_models.py --verify-gpu-only` by hand.
 
 ## 7. Set resource and download budgets
 
-`budgets` accepts exactly three integer fields: `max_download_bytes` (non-negative), `max_models` (positive), and `top_k` (positive). `max_models` must cover selected count. `top_k` sets retrieval depth. `max_download_bytes` caps registry-sized checkpoint acquisition across selected models; existing checkpoint files do not consume budget. Unknown required checkpoint size prevents budget verification and blocks acquisition.
+`budgets` accepts exactly three integer fields: `max_download_bytes` (non-negative), `max_models` (positive), and `top_k` (positive). `max_models` must cover the selected count. `top_k` sets retrieval depth. `max_download_bytes` caps registry-sized checkpoint acquisition across selected models. The example budget is 10 GiB (`10737418240`) because the three declared LIMN checkpoints total 5,376,030,471 bytes (~5.01 GiB), plus auxiliary assets and safety margin. Existing verified checkpoint files do not consume budget. Unknown required checkpoint size prevents budget verification and blocks acquisition.
 
 Autopilot has no CPU, RAM, VRAM, runtime, or concurrency budget fields. Apply those through PC/scheduler policy and model selection; do not add unsupported keys.
 
 ## 8. Configure the HMAC ledger key
 
-Before real run, provide stable high-entropy `WORKBENCH_LEDGER_KEY` via PC secret manager/environment. Keep it outside repository, config, artifacts, logs, and model environments. Reuse same key for later verification; changing or losing it makes existing HMAC evidence unverifiable. Evaluator child processes do not receive key.
+Before a real run, provide a stable high-entropy `WORKBENCH_LEDGER_KEY` via PC secret manager or process environment. Keep it outside repository, config, artifacts, logs, and model environments. Reuse the same key for later verification; changing or losing it makes existing HMAC evidence unverifiable. Evaluator child processes do not receive the key.
 
-Without environment key, documented fallback creates `.workbench_ledger_key` under `CIR_REPO_ROOT` with mode `0600`. Prefer external secret storage on shared/backed-up PC. Empty key or existing ledger without its key fails closed. See [AUTOMATION_RUNBOOK.md](AUTOMATION_RUNBOOK.md) for trust boundaries.
+Without an environment key, a documented fallback creates `.workbench_ledger_key` under `CIR_REPO_ROOT` with mode `0600`. Prefer external secret storage on shared or backed-up PCs. An empty key or existing ledger without its key fails closed. See [AUTOMATION_RUNBOOK.md](AUTOMATION_RUNBOOK.md) for trust boundaries.
 
-## 9. Review environment groups and assignments
+## 9. Environment grouping and provisioning
 
-An applied run writes `<paths.artifacts>/autopilot_execution_plan.json`, including `environment_plan`; its environment stage writes `<paths.artifacts>/environment_plan.json`. Inspect each group's `members`, `constraints`, `evidence`, `split_reasons`, `unresolved`, `conda_env_path`, `interpreter`, `solver_verification_status`, `installation_status`, and `runtime_verification_status`; check `blocked` for models without a usable source/checkpoint basis. Planner groups compatible constraints; it does not install or certify the interpreter. Do not infer readiness from solver result or proposed path.
+The environment planner groups compatible models and PROVISIONS the shared conda environments it plans when authorized (`allow_env_install: true`):
 
-Registry-derived planning groups 16 models into 10 environments. `ptha_mtst` is blocked because it has neither source nor checkpoint; `tgcir` has a replay/prerequisite blocker. Actual solves/runtime states depend on PC. Explicit `WORKBENCH_<MODEL>_PYTHON` assignments take precedence; point compatible group members to same executable to share it. `manage_environment.py` can inspect per-model interpreter readiness, but that does not clear registry blockers.
+- **Prefix isolation:** one prefix per compatible group under `<paths.artifacts>/envs/<environment_id>`.
+- **Authoritative assignment:** writes `<paths.artifacts>/environment_assignment.json`, mapping each model to its assigned environment group, prefix, interpreter, and provisioning state.
+- **Configured source root:** source requirements are read from the configured upstream checkout root (`paths.third_party`), never a hardcoded default.
+- **Two-phase install:** for each group, conda-resolvable constraints are solved and installed first (`conda create --prefix <prefix> ...`), followed by pip-only packages installed into that prefix (`python -m pip install ...`).
+- **Four recorded states:**
+  1. `CONSTRAINTS_COMPATIBLE`: constraints parsed and merged across group members without contradiction;
+  2. `SOLVER_COMPATIBLE`: solver (conda/mamba) verified satisfiability for group constraints;
+  3. `INSTALLED`: conda prefix and pip-only packages successfully installed;
+  4. `RUNTIME_VERIFIED`: `pip check` passed, exact package versions verified, and per-member evaluator imports verified with the assigned interpreter.
+- **Evaluation gate:** ONLY `RUNTIME_VERIFIED` permits evaluation. Any lower state blocks the model with `BLOCKED_ENVIRONMENT`.
+- **Deterministic reuse:** a previously `RUNTIME_VERIFIED` group with an unchanged digest and interpreter is reused with no reinstall.
+- **Splits:** when models have conflicting requirements (such as incompatible Python versions or contradictory package version ranges), the planner cannot combine them; it records the split reasons and separates them into distinct groups.
+
+Explicit `WORKBENCH_<MODEL>_PYTHON` assignments take precedence over planner groups when set by the operator.
 
 ## 10. Launch autopilot
 
-This is the one primary execution command. It uses config grants and resumes only verified completed stages. Keep config, selection, paths, GPU visibility, and key stable on retries.
+This is the one primary execution command. It uses config grants and resumes only verified completed stages. Keep config, selection, paths, GPU visibility, and key stable across invocations.
 
 ```bash
 ./workbench/run.sh autopilot --config /path/to/pc_autopilot.yaml --apply --resume
 ```
 
-`--apply` executes; `--resume` is safe on first invocation. Autopilot records attempts, evaluates after dependencies and guards pass, and continues independent models while reporting blocked/failed rows. Successful process exit does not imply all selected models completed; inspect reports.
+Pipeline stages executed in order by autopilot:
+1. `doctor` (workbench environment preflight);
+2. `dataset` (FashionIQ canonical layout validation);
+3. `sync` (per model: pinned official upstream source checkout);
+4. `environment` (per model: environment inspection/creation when `allow_env_install`);
+5. `preparation` (per model: canonical dataset linking, one owner per shared link);
+6. `checkpoint` (per model: download with temporary-file verification, or verify-only);
+7. `auxiliary-assets` (per model: registered auxiliary evaluation assets);
+8. `environment-plan` (shared conda environment planning and provisioning);
+9. `gpu-verification` (per model: authorized probe using assigned interpreter, preserved `CUDA_VISIBLE_DEVICES`);
+10. `runtime-preflight` (per model: preflight gate before evaluation);
+11. `evaluation` (per model: guarded official evaluation);
+12. `validation-index` (global: validate outputs and rebuild DuckDB serving index).
+
+`--apply` executes side-effecting stages; `--resume` is safe on first invocation. Autopilot continues independent models when one blocks or fails. Successful process exit does not imply all selected models completed; inspect reports.
 
 ## 11. Resume
 
-After fixing reported local cause, rerun same primary command. Content-verified stages can be reused; changed inputs rerun dependent work. Preserve selected IDs and artifact roots. Do not delete ledger, evidence, reports, or checkpoints to force retry. If blocker is unresolved registry fact, resolve it with authoritative provenance rather than editing local data to satisfy gate.
+After fixing a reported local cause, rerun the same primary command with `--resume`:
+
+```bash
+./workbench/run.sh autopilot --config /path/to/pc_autopilot.yaml --apply --resume
+```
+
+Resume is bound to installed dependency content (not just the interpreter path and requirements files): the interpreter binary, environment marker files, and package directory modification times are fingerprinted. A rewritten dependency invalidates the affected evaluation while unrelated ones stay reusable. Content-verified stages are reused without redundant computation. Preserve selected IDs, artifact roots, and HMAC key across retries.
 
 ## 12. Read reports
 
 All paths below are under `paths.artifacts`:
 
-- `autopilot_execution_plan.json`: selected IDs, plan, environment grouping, pre-execution blockers;
-- `environment_plan.json`: group constraints, evidence, and interpreter assignments;
+- `autopilot_execution_plan.json`: selected IDs, stage plan, environment grouping, pre-execution blockers;
+- `environment_plan.json`: group constraints, evidence, solver status;
+- `environment_assignment.json`: authoritative environment groups, prefix paths, assigned interpreters, and four-state provisioning statuses;
 - `autopilot_pipeline_state.json`: stage state used for resume;
-- `reports/autopilot_summary.md` and `reports/autopilot_summary.json`: outcome and per-model status/blockers;
-- `reports/autopilot_results.csv`: per-model status, blockers, missing permissions, run ID, metrics;
+- `reports/autopilot_summary.md` and `reports/autopilot_summary.json`: outcome, execution status, and category recall table;
+- `reports/autopilot_results.csv`: machine-readable CSV with status, blockers, and metric columns;
 - `reports/blockers.json`: machine-readable blocker details;
-- `reports/run_manifest.json`: selected IDs, config digest, execution flag, outcome, pipeline exit code.
+- `reports/run_manifest.json`: selected IDs, config digest, outcome, pipeline exit code.
 
-`COMPLETED` means guarded evaluation and output validation passed. `COMPLETED_WITH_LIMITATIONS` means workflow completed without solver verification. `BLOCKED_*` means prerequisite/authorization stopped model; `FAILED_*` means execution/output validation failed. Autopilot's per-model metrics field is currently null; aggregate evaluator reports and completion proofs are separate evidence. Paper values are references, not reproduced results.
+The consolidated report records real aggregate metrics:
+- Run identity: `run_id`, `model_id`, `method_name`, `native_protocol`;
+- Environment and weights: `environment_group`, `checkpoint_id`, `checkpoint_provenance`;
+- Category Recall: Recall@10 and Recall@50 for `dress` (`dress_r10`, `dress_r50`), `shirt` (`shirt_r10`, `shirt_r50`), and `toptee` (`toptee_r10`, `toptee_r50`);
+- Macro Recall: `macro_r10`, `macro_r50`;
+- Reference comparison: `paper_r10`, `paper_r50`, `paper_mean`, and `measured_difference` (observed minus paper);
+- Audit trail: `evaluation_duration_seconds`, `completion_proof` path, `aggregate_report` path;
+- Evaluation kind: `SYNTHETIC` or `OFFICIAL_VERIFIED`.
+
+Metrics conventions:
+- Absent values are `null` with a recorded reason (`missing_metrics_reason`), never zero.
+- Evaluated models are marked `aggregate_only: true`; per-query export unavailability is explicitly stated (`per_query_export_available: false`).
+- Model scientific status (`COMPLETED`, `COMPLETED_WITH_LIMITATIONS`, `BLOCKED_*`, `FAILED_*`) is independent of global index status (`global_index_status`: `COMPLETED`, `PARTIAL`, `NOT_APPLICABLE`).
+- Global index rebuild applies only when per-query results are available.
 
 ## 13. Handle a blocked model
 
-Read model row in `reports/autopilot_summary.md` or CSV, matching entry in `reports/blockers.json`, then stage state. Fix only verified local cause. Authorization blocker needs explicit approval and corresponding config permission. Dataset/preparation blocker needs exact layout/assets. Checkpoint blocker needs registry-linked file/mapping and integrity evidence. Environment/GPU blocker needs assigned interpreter to pass runtime checks and capability to match current host/device. Source blocker needs exact registry-pinned clean checkout. Evaluator blocker means no audited usable command exists.
+Read the model row in `reports/autopilot_summary.md` or CSV, matching entry in `reports/blockers.json`, then stage state. Fix only the verified local cause:
+- Authorization blocker: grant missing permission in config `permissions`.
+- Dataset or preparation blocker: check FashionIQ canonical directory layout and model-specific assets.
+- Checkpoint blocker: check registry-linked URL, file hash, or training noise condition (`checkpoint_policy`).
+- Environment blocker: check solver compatibility, conda/mamba availability, and whether `allow_env_install` was granted.
+- GPU blocker: check `CUDA_VISIBLE_DEVICES`, driver, PyTorch CUDA capability for the assigned interpreter.
+- Source blocker: check git clone status and commit pin in `paths.third_party`.
 
-If registry identifies unresolved author checkpoint, provenance, replay entrypoint, or model asset, keep model blocked and exclude it from selected-model list until authoritative evidence resolves it. Never substitute nearby checkpoint or claim model ran. Independent models may complete; report partial success as partial, not full reproduction.
+If the registry identifies an unresolved author checkpoint, provenance, replay entrypoint, or model asset, keep the model blocked and exclude it from the selected-model list until authoritative evidence resolves it. Never substitute an arbitrary checkpoint or claim a model ran. Independent models may complete; report partial success as partial, not full reproduction.
 
 ## Optional diagnostics
 
-These inspect parser options, saved state, or interpreter readiness; none replaces primary execution command.
+These commands inspect parser options, saved state, or interpreter readiness; none replaces the primary execution command.
 
 ```bash
 # Optional diagnostic: show accepted autopilot options.
@@ -151,13 +217,14 @@ These inspect parser options, saved state, or interpreter readiness; none replac
 # Optional diagnostic: read saved autopilot status as JSON.
 ./workbench/run.sh autopilot --config /path/to/pc_autopilot.yaml --status --json
 
+# Optional diagnostic: read latest autopilot report as JSON.
+./workbench/run.sh autopilot --config /path/to/pc_autopilot.yaml --report --json
+
+# Optional diagnostic: resolve plan without mutations or subprocesses.
+./workbench/run.sh autopilot --config /path/to/pc_autopilot.yaml --dry-run
+
 # Optional diagnostic: inspect registered model interpreter readiness.
 python workbench/scripts/manage_environment.py --list --json
-
-# Optional diagnostic: probe LIMN GPU capability only; does not clear its checkpoint/data/environment blockers.
-python workbench/scripts/evaluate_models.py --model limn --verify-gpu-only
 ```
-
-The LIMN probe needs verified configured interpreter and usable visible GPU. Keep `CUDA_VISIBLE_DEVICES`, key, and interpreter unchanged for evaluation. A successful probe is not model readiness.
 
 For research status and protocol definitions, see [../README.md](../README.md), [UPSTREAM_AUDIT.md](UPSTREAM_AUDIT.md), and [RESULT_SCHEMA.md](RESULT_SCHEMA.md).

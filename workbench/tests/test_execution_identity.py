@@ -162,3 +162,44 @@ def test_external_dataset_symlink_remains_unverified(tmp_path: Path) -> None:
     evidence = pipeline.stage_input_fingerprint_info(pipeline.Stage("evaluation", input_paths=(link,)), config)
     assert evidence["inputs"][0]["category"] == pipeline.SYMLINK_EXTERNAL
     assert evidence["weak"] is True
+
+
+def test_installed_package_rewrite_invalidates_execution_identity(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A dependency rewritten in place must invalidate resume.
+
+    The interpreter binary, the pinned source and the requirements files are all unchanged in this
+    scenario, so an identity built only from those would happily resume a result produced by
+    different package content.
+    """
+    import subprocess
+    import sys
+
+    model = {"model_id": "installed_dependency_identity", "source_dir": "Model",
+             "environment_required": True,
+             "environment": {"python_env_var": "EXECUTION_TEST_PYTHON"}}
+    config, stage = _workspace(tmp_path, monkeypatch, model)
+    (config.WORKBENCH_THIRD_PARTY_ROOT / "Model").mkdir()
+
+    prefix = tmp_path / "model-env"
+    subprocess.run([sys.executable, "-m", "venv", "--without-pip", str(prefix)], check=True)
+    monkeypatch.setenv("EXECUTION_TEST_PYTHON", str(prefix / "bin" / "python"))
+
+    site_packages = next((prefix / "lib").glob("python*/site-packages"))
+    dist = site_packages / "demo-1.0.dist-info"
+    dist.mkdir(parents=True)
+    (dist / "METADATA").write_text("Name: demo\nVersion: 1.0\n")
+    (dist / "RECORD").write_text("demo.py,sha256=unused,5\n")
+    module = site_packages / "demo.py"
+    module.write_text("value = 1\n")
+
+    before = pipeline.stage_input_fingerprint_info(stage, config)["digest"]
+
+    # Same length, same path, same interpreter: only the installed bytes differ. A fingerprint
+    # built from size and mtime alone would miss this.
+    module.write_text("value = 2\n")
+    after_rewrite = pipeline.stage_input_fingerprint_info(stage, config)["digest"]
+    assert after_rewrite != before
+
+    # And an untouched environment must stay stable, or resume would never reuse anything.
+    assert pipeline.stage_input_fingerprint_info(stage, config)["digest"] == after_rewrite

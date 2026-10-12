@@ -177,11 +177,20 @@ def main(argv: list[str] | None = None) -> int:
             partial.unlink(missing_ok=True)
             destination.unlink(missing_ok=True)
         download(checkpoint["download_url"], partial)
-        os.replace(partial, destination)
-        digest = sha256_file(destination)
+        # Verify the bytes while they are still a temporary file. Publishing first and checking
+        # afterwards left a corrupt `destination` on disk, which then blocked recovery: the next
+        # invocation saw an existing file and refused to overwrite it without --force-redownload.
+        size = partial.stat().st_size
+        expected_size = checkpoint.get("expected_size_bytes")
+        if type(expected_size) is int and expected_size > 0 and size != expected_size:
+            partial.unlink(missing_ok=True)
+            raise RuntimeError(f"size mismatch for {destination}: expected {expected_size} bytes, got {size}")
+        digest = sha256_file(partial)
         expected = checkpoint.get("expected_sha256")
         if expected and digest != expected:
-            raise RuntimeError(f"sha256 mismatch for {destination}")
+            partial.unlink(missing_ok=True)
+            raise RuntimeError(f"sha256 mismatch for {destination}: expected {expected}, got {digest}")
+        os.replace(partial, destination)
         manifest = [entry for entry in manifest if not (entry["model_id"] == model["model_id"] and entry["checkpoint_id"] == checkpoint["checkpoint_id"])]
         manifest.append({"model_id": model["model_id"], "checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_url": checkpoint["download_url"], "downloaded_sha256": digest, "size_bytes": destination.stat().st_size, "downloaded_at": datetime.now(UTC).isoformat(), "official_hash_available": expected is not None, "official_hash_match": digest == expected if expected else None})
         save_manifest(manifest_path, manifest)
