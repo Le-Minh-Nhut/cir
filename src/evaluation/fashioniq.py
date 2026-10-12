@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 import torch
 
@@ -11,7 +12,7 @@ def recall_at_k(scores: torch.Tensor, target_ids: Sequence[str], gallery_ids: Se
 
     assert query_count == len(target_ids)
     assert gallery_count == len(gallery_ids)
-    assert 0 < k <= gallery_count
+    _assert_comparable(scores, query_count, gallery_count, k)
     assert len(set(gallery_ids)) == gallery_count
 
     gallery_index = {}
@@ -55,7 +56,7 @@ def recall_at_k_reference_excluded(
 
     assert query_count == len(target_ids) == len(reference_ids)
     assert gallery_count == len(gallery_ids)
-    assert 0 < k <= gallery_count
+    _assert_comparable(scores, query_count, gallery_count, k)
     assert len(set(gallery_ids)) == gallery_count
 
     gallery_index = {image_id: index for index, image_id in enumerate(gallery_ids)}
@@ -121,29 +122,90 @@ def build_val_gallery(annotations: Sequence[FashionIQAnnotation]) -> list[str]:
     assert len(set(gallery_ids)) == len(gallery_ids)
     return gallery_ids
 
+def _assert_comparable(scores: torch.Tensor, query_count: int, gallery_count: int, k: int) -> None:
+    """Reject inputs that could not produce a meaningful Recall.
+
+    A NaN or infinite similarity makes the ranking depend on comparison behaviour rather than on
+    the model, and an empty query set has no hits to average. Both are refused loudly instead of
+    producing a number nobody can interpret.
+
+    Ties: :func:`torch.argsort` is not guaranteed stable, so two candidates with identical scores
+    may order either way. Ties are therefore an ambiguity in the ranking, not a property the
+    workbench can pin; the recall of a cohort containing ties is reported as computed.
+    """
+    assert scores.ndim == 2, "scores must be [queries, gallery]"
+    assert query_count > 0, "a cohort with no queries has no Recall"
+    assert gallery_count > 0, "a cohort with no gallery has no Recall"
+    assert 0 < k <= gallery_count, f"k={k} is outside the gallery of {gallery_count}"
+    assert bool(torch.isfinite(scores).all()), "scores contain non-finite values"
+
+
+@dataclass(frozen=True, slots=True)
+class FashionIQProtocol:
+    """One FashionIQ evaluation cohort, defined by what a comparison depends on.
+
+    ``gallery`` and ``reference_excluded`` are the two properties that change a target's rank,
+    so they are declared together rather than inferred from caller arguments. Every entry point
+    resolves a protocol through :data:`FASHIONIQ_PROTOCOLS`; an unknown name is an error, never a
+    silent fallback to reference-eligible evaluation.
+    """
+
+    protocol_id: str
+    gallery: str            # "full_split" | "pair_union"
+    reference_excluded: bool
+    aliases: tuple[str, ...] = ()
+
+
+FASHIONIQ_PROTOCOLS: dict[str, FashionIQProtocol] = {
+    "fashioniq_original_split": FashionIQProtocol(
+        protocol_id="fashioniq_original_split", gallery="full_split",
+        reference_excluded=False, aliases=("fashioniq_original",)),
+    "fashioniq_full_gallery_ref_excluded": FashionIQProtocol(
+        protocol_id="fashioniq_full_gallery_ref_excluded", gallery="full_split",
+        reference_excluded=True),
+    "fashioniq_val_split": FashionIQProtocol(
+        protocol_id="fashioniq_val_split", gallery="pair_union",
+        reference_excluded=True, aliases=("fashioniq_val",)),
+}
+
+_PROTOCOL_BY_NAME: dict[str, FashionIQProtocol] = {
+    name: protocol
+    for protocol in FASHIONIQ_PROTOCOLS.values()
+    for name in (protocol.protocol_id, *protocol.aliases)
+}
+
+
+def resolve_fashioniq_protocol(protocol: str) -> FashionIQProtocol:
+    """The cohort for *protocol*, by registry id or accepted alias.
+
+    Unknown names raise: there is no default, because defaulting a misspelled exclusion protocol
+    to reference-eligible evaluation would silently change every reported rank.
+    """
+    try:
+        return _PROTOCOL_BY_NAME[protocol]
+    except KeyError:
+        accepted = sorted(_PROTOCOL_BY_NAME)
+        raise ValueError(
+            f"Unsupported FashionIQ protocol: {protocol!r}; accepted: {accepted}") from None
+
+
 def build_fashioniq_gallery(protocol: str, split_root: str | Path, category: str, annotations: Sequence[FashionIQAnnotation], split: str,) -> list[str]:
     """Build the candidate universe for one protocol.
 
-    Both spellings are accepted: the registry's protocol ids (`fashioniq_original_split`,
-    `fashioniq_full_gallery_ref_excluded`, `fashioniq_val_split`) and the shorter internal names
-    earlier callers used (`fashioniq_original`, `fashioniq_val`). A caller holding a registry id
-    could not evaluate the two older families at all, which is a gap rather than a naming
-    preference; the two spellings of each family are the same cohort, so they share a branch.
+    Both the registry protocol ids and the shorter internal aliases resolve here, so a caller
+    holding either spelling gets the same cohort. Gallery construction follows the protocol
+    table, never a caller argument.
     """
-    if protocol in ("fashioniq_original", "fashioniq_original_split"):
+    resolved = resolve_fashioniq_protocol(protocol)
+
+    if resolved.gallery == "full_split":
+        # The whole validation split in its declared order. Reference exclusion is a per-query
+        # property applied at recall time, not a change to the candidate universe: the gallery
+        # is what the upstream evaluator scores against.
         return build_original_gallery(split_root=split_root, category=category, split=split)
 
-    if protocol == "fashioniq_full_gallery_ref_excluded":
-        # Same candidate universe as the original split — the whole validation split in its
-        # declared order — with the reference excluded from ranking rather than included. The
-        # exception is applied in `evaluate_fashioniq_recall`, not here, because exclusion is a
-        # per-query property: the gallery itself is what the upstream evaluator scores against.
-        return build_original_gallery(split_root=split_root, category=category, split=split)
+    return build_val_gallery(annotations)
 
-    if protocol in ("fashioniq_val", "fashioniq_val_split"):
-        return build_val_gallery(annotations)
-
-    raise ValueError(f"Unsupported FashionIQ protocol: {protocol}")
 
 def evaluate_fashioniq_category(
     scores: torch.Tensor,
@@ -192,6 +254,8 @@ def evaluate_fashioniq(
     device,
     text_cache: TextFeatureCache,
 ):
+    # Resolve before any work: an unknown protocol must fail before a single score is computed.
+    resolved = resolve_fashioniq_protocol(protocol)
     category_results = {}
 
     for category, val_loader in val_loaders.items():
@@ -239,14 +303,14 @@ def evaluate_fashioniq(
                 reference_ids.append(reference_id)
 
         scores = torch.cat(score_batches)
-        # The exclusion protocol needs per-query references; the reference-eligible protocol
-        # must not receive them, so a protocol mix-up cannot pass unnoticed.
-        excluded = protocol == "fashioniq_full_gallery_ref_excluded"
+        # The reference policy is the protocol's, not the caller's: an excluded cohort always
+        # receives per-query references, and a reference-eligible cohort never does, so neither
+        # a mix-up nor an omitted argument can silently change the ranking rule.
         category_results[category] = evaluate_fashioniq_category(
             scores=scores,
             target_ids=target_ids,
             gallery_ids=gallery_ids,
-            reference_ids=reference_ids if excluded else None,
+            reference_ids=reference_ids if resolved.reference_excluded else None,
         )
 
     average = macro_average_fashioniq(category_results)
