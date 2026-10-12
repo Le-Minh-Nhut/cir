@@ -201,3 +201,21 @@ runbook already made. Every row has a regression test.
 | The documented first-run `--verify-gpu` workflow deadlocked: the strict preflight refused the pending GPU before the stage that probes it | the preflight immediately preceding an authorized probe takes `--allow-gpu-pending`, tolerating only that one state; a failed probe still stops the run | E2E-13, `test_e2e13_gpu_declaring_model_is_blocked_while_verification_is_pending` |
 | A fallback-key-only operator could never persist a signed capability (`_gpu_cache_key` read a key file it never created, and the fix first shipped without `import tempfile`) | the key file is created on first use, as the ledger does | `test_the_fallback_key_is_created_so_a_capability_can_be_signed` |
 | A directory stage input was fingerprinted by its own metadata, so a changed checkpoint member was invisible to resume | directory inputs are inventoried with per-file content digests under a recorded budget | `test_fp13_same_size_member_rewrite_invalidates_a_directory_input` |
+
+
+### Release-closure pass (SCI-01, RES-01..03, JOB-01, SEC-01, GPU-01, PREP-01..05, TEST-01/02)
+
+| Defect | Fix | Test |
+|---|---|---|
+| `fashioniq_val_split` was evaluated with the reference eligible, and only internal protocol aliases were accepted | one protocol table defines gallery and reference policy; unknown names are refused | `tests/unit/test_fashioniq_dispatch.py` drives the production entry point over a 53-image gallery |
+| A directory could be reported content-verified when members were never read (size threshold, unreadable file, unread directory symlink) | entries and trees carry explicit evidence classes; only content evidence authorizes verified resume; every regular file is content-hashed by streaming | `test_release_blocker_production_stage_fingerprint.py`, `test_scientific_input_identity.py` |
+| A retargeted directory symlink was invisible to the fingerprint | symlinks are inventoried with their targets, including symlinks to directories | `test_scientific_input_identity.py::test_data_id_08_...` |
+| Image content, correction dictionaries, resized trees, prepared pickles and auxiliary captions were not evaluation inputs | the input graph is built from the model's layout, preparation contract, registered assets, evaluator implementation and recipe | `test_scientific_input_identity.py` (DATA-ID-01..12) |
+| A non-cooperative evaluator survived cancellation while the job reported `cancelled` | liveness comes from the process group, escalation always runs, group id captured at dispatch, bounded wait outside the queue lock | `test_process_group_cancellation.py`, acceptance scenario F |
+| The evaluator environment was the operator's whole environment minus two names | allowlist with a deny-prefix rule that a passthrough declaration cannot override | `test_credential_boundary.py` |
+| A GPU capability was not bound to the host or driver | machine, driver and visible devices are part of the key; the record states its revalidation rule | `test_gpu_capability_host_identity.py` |
+| The image-extension check looked in `images/` for every model | it follows the layout's declared image directory | `tests/unit/test_fashioniq_protocols.py` |
+| The fixed dataset link was staged for CSMCIR only | one registry declaration drives staging, verification and source-artifact approval for CSMCIR, SPRC and both CLIP4Cir variants | `test_prepare_dataset.py` |
+| CLVC-Net claimed a shared checkpoint policy | the per-category local/global structure is recorded, identities UNVERIFIED | registry contract |
+| An `assert ... or True` made a test unfalsifiable | replaced by an assertion on the dispatched argv | `test_phase1_acceptance_scenarios.py` |
+| The E2E never exercised the HTTP stack | ASGI-level tests over the real application | `test_http_api_layer.py` |

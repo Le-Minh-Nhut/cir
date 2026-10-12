@@ -23,9 +23,14 @@ valid, and the workbench refuses them.
 
 ## Workbench implementation, after this pass
 
-`src/evaluation/fashioniq.py`:
+`src/evaluation/fashioniq.py` holds one authoritative table, `FASHIONIQ_PROTOCOLS`, mapping each
+protocol id (and its accepted alias) to its gallery source and its reference policy.
+`resolve_fashioniq_protocol()` raises for an unknown name, so no misspelling can default to
+reference-eligible evaluation, and every entry point resolves through the table rather than
+deciding the reference rule from a caller argument.
 
-- `build_fashioniq_gallery(protocol, ...)` branches on all three names. The two full-gallery
+- `build_fashioniq_gallery(protocol, ...)` resolves the protocol and branches on its declared
+  gallery. The two full-gallery
   families share a candidate universe — the exception is applied per query, not by shrinking the
   gallery — while `fashioniq_val` builds the pair union.
 - `recall_at_k` is reference-eligible. `recall_at_k_reference_excluded` **removes** the reference
@@ -37,6 +42,10 @@ valid, and the workbench refuses them.
 - `evaluate_fashioniq_recall(..., reference_ids=None | Sequence[str])` requires references exactly
   when exclusion is active. A protocol mix-up therefore cannot be silently evaluated as a plain
   one.
+- Inputs that could not produce an interpretable number are refused rather than averaged: a
+  non-finite score, an empty query set, a gallery smaller than k, and a reference or target absent
+  from the gallery it is ranked against. Ties remain an ambiguity of the ranking itself, which the
+  workbench does not claim to pin.
 - The denominator is always the query count. `macro_average_fashioniq` takes the equal-weight
   mean of category recalls, and the reported mean is the arithmetic mean of macro R@10 and R@50.
 

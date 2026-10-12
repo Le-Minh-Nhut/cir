@@ -194,6 +194,9 @@ Two consequences matter scientifically:
 | `recall_at_k_reference_excluded` removes the reference from the ranking | Matches the upstream evaluators instead of relying on mask equivalence |
 | `evaluate_fashioniq_recall` requires references exactly when exclusion is active | A protocol mix-up cannot be silently evaluated as a plain one |
 | Registry gains `fashioniq_image_extensions`, validated and checked in both preflight views | CSMCIR opens `.png`; the official release ships `.jpg` |
+| The image check follows each layout's real image directory | iLearn reads `resized_image/<category>/{id}.jpg`, DCNet `resized_images/{id}.jpg`; checking `images/` for every model missed the real mismatch |
+| The fixed-dataset-link step is generalized from one registry declaration | CSMCIR, SPRC and both CLIP4Cir variants hard-code `<checkout>/fashionIQ_dataset`; only CSMCIR was staged before |
+| CLVC-Net records its per-category local/global structure | Its trainer saves a separate whole model per category; one shared pair is not a substitute. Identities remain UNVERIFIED |
 | `tests/unit/test_fashioniq_protocols.py`, `test_fashioniq_caption_policies.py` | Pin the laptop-testable protocol and caption semantics |
 
 ## Tests executed

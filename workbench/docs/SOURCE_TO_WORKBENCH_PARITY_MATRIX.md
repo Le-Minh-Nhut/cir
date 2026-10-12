@@ -48,7 +48,9 @@ with the source at that boundary, never that a score was reproduced.
 
 | Finding | Consequence | Status |
 |---|---|---|
-| The third protocol had no implementation (`src/evaluation/fashioniq.py`) | Five registered models named a protocol the evaluator could not build | **Fixed** in this pass, with the reference rule enforced by the function signature |
+| The third protocol had no implementation (`src/evaluation/fashioniq.py`) | Five registered models named a protocol the evaluator could not build | **Fixed**: one protocol table defines gallery and reference policy, and unknown names are refused |
+| `fashioniq_val_split` was evaluated with the reference eligible | An excluding cohort scored as if the reference were a valid answer | **Fixed**: the reference rule is a property of the resolved protocol |
+| Only internal protocol aliases were accepted | A caller holding a registry id could not build the two older families | **Fixed**: both spellings resolve |
 | CSMCIR opens `{id}.png`; the official release ships `.jpg` | A `.jpg` layout failed only as a missing file on the GPU host | **Fixed**: the registry declares `fashioniq_image_extensions` and both preflight views check every validation id |
 | Nine of fifteen adapters inherit the abstract `command()` | Those models cannot be launched at all, which matches their `BLOCKED` command status | Open, and expected: it reflects source reality (callable-only evaluators) |
 | No iLearn method publishes a category macro | The workbench macro is a workbench aggregate, never a source metric | Recorded in the audits and in `FASHIONIQ_PROTOCOL_PARITY.md` |
