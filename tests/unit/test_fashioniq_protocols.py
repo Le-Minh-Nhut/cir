@@ -246,3 +246,53 @@ def test_registry_protocol_ids_and_internal_aliases_build_the_same_cohort(
     from workbench.backend.registry import load_registry
     for protocol_id in load_registry()["protocols"]:
         assert build_fashioniq_gallery(protocol_id, root, "dress", ANNOTATIONS, "val")
+
+
+def test_the_image_check_looks_where_the_layout_reads(tmp_path: Path) -> None:
+    """Each layout reads a different image directory, so the check follows the layout.
+
+    The iLearn family opens `resized_image/<category>/{id}.jpg`, DCNet `resized_images/{id}.jpg`,
+    and the standard layout `images/{id}.png`. Checking `images/` for every model both misses a
+    real mismatch and reports a false one.
+    """
+    from workbench.backend.fashioniq_layout import image_extension_problems
+
+    root = tmp_path / "FashionIQ"
+    (root / "image_splits").mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        (root / "image_splits" / f"split.{category}.val.json").write_text(json.dumps(["a", "b"]))
+
+    # iLearn: per-category resized JPEGs.
+    for category in ("dress", "shirt", "toptee"):
+        folder = root / "resized_image" / category
+        folder.mkdir(parents=True)
+        for name in ("a", "b"):
+            (folder / f"{name}.jpg").write_bytes(b"\xff\xd8\xff")
+    assert image_extension_problems(root, ".jpg", "fashioniq_ilearn_resized") == []
+    # A missing member is reported with the offending id.
+    (root / "resized_image" / "dress" / "b.jpg").unlink()
+    problems = image_extension_problems(root, ".jpg", "fashioniq_ilearn_resized")
+    assert len(problems) == 1 and "b.jpg" in problems[0]
+
+    # DCNet: flat resized JPEGs, a different directory again.
+    assert image_extension_problems(root, ".jpg", "fashioniq_dcnet"), \
+        "resized_images is not resized_image"
+    flat = root / "resized_images"
+    flat.mkdir()
+    for name in ("a", "b"):
+        (flat / f"{name}.jpg").write_bytes(b"\xff\xd8\xff")
+    assert image_extension_problems(root, ".jpg", "fashioniq_dcnet") == []
+
+    # An unknown layout must be refused rather than silently checked as the standard one.
+    assert "unknown FashionIQ layout" in image_extension_problems(root, ".jpg", "nope")[0]
+
+
+def test_every_model_with_an_extension_requirement_has_a_known_layout() -> None:
+    """The declaration and the layout must agree, or the check would look in the wrong place."""
+    from workbench.backend.fashioniq_layout import _LAYOUT_IMAGE_DIRECTORY
+    from workbench.backend.registry import load_registry
+
+    for model in load_registry()["models"]:
+        if not model.get("fashioniq_image_extensions"):
+            continue
+        assert model.get("fashioniq_layout") in _LAYOUT_IMAGE_DIRECTORY, model["model_id"]

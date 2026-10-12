@@ -89,8 +89,10 @@ def preparation_checks(model: dict[str, Any], root: Path) -> tuple[list[dict[str
         missing = missing_path_strings(fashioniq_required_paths(model, root))
         blockers = [f"FashionIQ {model['fashioniq_layout']} requirement missing: {path}" for path in missing]
         for extension in model.get("fashioniq_image_extensions") or ():
-            blockers.extend(f"FashionIQ image extension requirement: {problem}"
-                            for problem in image_extension_problems(root, extension))
+            blockers.extend(
+                f"FashionIQ image extension requirement: {problem}"
+                for problem in image_extension_problems(root, extension,
+                                                        model.get("fashioniq_layout")))
         return [], blockers
     raw_missing = missing_path_strings(preparation_paths(contract, root, "raw_inputs"))
     generated_missing = missing_path_strings(preparation_paths(contract, root, "generated_artifacts"))

@@ -217,6 +217,7 @@ def test_mut_d_accepting_a_leftover_pointer_as_proof_is_detected(tmp_path, monke
     successful = em.reports_root(ws["config"]) / "csmcir_ckpt_v1_latest_successful.json"
     assert successful.is_file()
 
+    monkeypatch.setenv("WORKBENCH_EVALUATOR_ENV_PASSTHROUGH", "MUT_SILENT")
     monkeypatch.setenv("MUT_SILENT", "1")
     silent = uuid.uuid4().hex[:10]
     assert em.execute(plan_for(ws), ws["config"], run_id=silent) == 0
@@ -259,6 +260,7 @@ def test_mut_e_advancing_latest_successful_after_failure_is_detected(tmp_path, m
     assert json.loads(successful.read_text())["run_id"] == good
 
     def detector() -> bool:
+        monkeypatch.setenv("WORKBENCH_EVALUATOR_ENV_PASSTHROUGH", "MUT_FAIL")
         monkeypatch.setenv("MUT_FAIL", "1")
         bad = uuid.uuid4().hex[:10]
         try:

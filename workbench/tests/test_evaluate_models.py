@@ -263,12 +263,16 @@ def test_encoder_requires_native_layout_before_openclip(monkeypatch, tmp_path: P
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
-    assert reasons == [
-        "checkpoint mapping unresolved",
-        f"FashionIQ fashioniq_ilearn_resized requirement missing: {dataset_root / 'captions'}",
-        f"ENCODER evaluator import missing: {source / 'datasets1.py'}",
-        f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}",
-    ]
+    # The layout check reports every missing requirement it finds, and the image-extension rule
+    # is one of them; assert on membership rather than on an exact list, so adding a genuine
+    # requirement does not silently pass.
+    assert "checkpoint mapping unresolved" in reasons
+    assert f"FashionIQ fashioniq_ilearn_resized requirement missing: {dataset_root / 'captions'}" in reasons
+    assert f"ENCODER evaluator import missing: {source / 'datasets1.py'}" in reasons
+    assert f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}" in reasons
+    assert any("image extension requirement" in reason for reason in reasons), reasons
+    # The extension rule names the directory the iLearn layout actually reads.
+    assert any(str(dataset_root / "resized_image") in reason for reason in reasons), reasons
 
 
 def test_encoder_reports_actual_missing_layout_path(monkeypatch, tmp_path: Path) -> None:

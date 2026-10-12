@@ -40,6 +40,19 @@ class Job:
 # evaluator, which is the untrusted side of the boundary.
 _OPERATOR_ENV_ALLOWLIST = ("WORKBENCH_LEDGER_KEY",)
 
+#: Credentials the operator never needs to run an evaluation. The operator's own allowlist above
+#: names the single exception; everything else here is withheld from the queued process as well,
+#: so the boundary is enforced at both hops rather than only at the inner one.
+_OPERATOR_ENV_DENY_PREFIXES = (
+    "WORKBENCH_SECRET_",
+    "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACEHUB_API_TOKEN",
+    "WANDB_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+    "GITHUB_TOKEN", "GH_TOKEN", "GITLAB_TOKEN",
+    "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+    "AZURE_", "GOOGLE_APPLICATION_CREDENTIALS", "GCP_",
+    "DOCKER_", "KUBECONFIG", "SLACK_TOKEN", "STRIPE_", "NPM_TOKEN",
+)
+
 
 def _child_environment(job: Job) -> dict[str, str]:
     """The environment the queued process runs with.
@@ -58,10 +71,14 @@ def _child_environment(job: Job) -> dict[str, str]:
     the minimum privilege each role needs, nothing more.
     """
     child_env = dict(os.environ)
-    for name in [key for key in child_env
-                 if key.startswith("WORKBENCH_SECRET_")
-                 and key not in _OPERATOR_ENV_ALLOWLIST]:
-        child_env.pop(name, None)
+    # The operator needs its own configuration and the ledger key. Unrelated credentials are not
+    # part of operating the workbench, so they are withheld here as well: a queued operator has no
+    # reason to hold the operator's cloud or hub tokens.
+    for name in list(child_env):
+        if any(name == prefix or name.startswith(prefix)
+               for prefix in _OPERATOR_ENV_DENY_PREFIXES
+               if name not in _OPERATOR_ENV_ALLOWLIST):
+            child_env.pop(name, None)
     child_env["evaluation_run_id"] = job.job_id
     return child_env
 
@@ -72,6 +89,10 @@ class SingleGpuQueue:
     def __init__(self) -> None:
         self._jobs: list[Job] = []
         self._processes: dict[str, subprocess.Popen[str]] = {}
+        # Jobs whose cancellation is in progress: the worker must not publish a completion for
+        # them while their group is still being torn down.
+        self._cancelling: set[str] = set()
+        self._process_groups: dict[str, int | None] = {}
         self._condition = Condition(Lock())
         self._worker = Thread(target=self._work, daemon=True)
         self._worker.start()
@@ -88,6 +109,14 @@ class SingleGpuQueue:
             return [asdict(job) for job in self._jobs]
 
     def cancel(self, job_id: str) -> dict:
+        """Cancel a job and, for a running one, stop every process in its group.
+
+        The signal and the bounded wait happen *outside* the queue lock: the shutdown can take
+        seconds, and holding the condition for it would stall status queries and the worker. The
+        handle is removed under the lock first, so the worker's finalization cannot race the
+        cancellation into publishing `completed`, and the job is only reported as cancelled once
+        nothing it owns is still alive.
+        """
         with self._condition:
             job = next((item for item in self._jobs if item.job_id == job_id), None)
             if job is None:
@@ -95,15 +124,27 @@ class SingleGpuQueue:
             if job.status in {"queued", "preparing"}:
                 job.status = "cancelled"
                 job.completed_at = now()
-            elif job.status == "running":
-                process = self._processes.get(job_id)
-                if process is None:
-                    raise ValueError("running process is unavailable")
-                job.status = "cancelled"
-                self._terminate_group(process)
-            else:
+                return asdict(job)
+            if job.status != "running":
                 raise ValueError(f"cannot cancel {job.status} job")
-            return asdict(job)
+            process = self._processes.pop(job_id, None)
+            group = self._process_groups.pop(job_id, None)
+            if process is None:
+                raise ValueError("running process is unavailable")
+            job.status = "cancelled"
+            self._cancelling.add(job_id)
+
+        survivor = self._terminate_group(process, group=group)
+
+        with self._condition:
+            self._cancelling.discard(job_id)
+            live = next((item for item in self._jobs if item.job_id == job_id), None)
+            if live is not None and survivor:
+                # Truthful reporting: a process this job owns outlived the cancellation.
+                live.error = "cancellation could not stop every process in the job's group"
+                self._append(live, "stderr_tail",
+                             "[WARN] a process in this job's group survived cancellation\n")
+            return asdict(live) if live is not None else {"job_id": job_id, "status": "cancelled"}
 
     def _next_job(self) -> Job:
         with self._condition:
@@ -115,44 +156,82 @@ class SingleGpuQueue:
             return job
 
     @staticmethod
-    def _terminate_group(process: "subprocess.Popen[str]", *, grace: float = 10.0) -> None:
-        """Stop the job's whole process group: the operator and the evaluator it started.
+    def _group_alive(group: int | None, process: "subprocess.Popen[str]") -> bool:
+        """True while the job's process group still has a member running.
+
+        The operator exiting is not the same event as the group being gone: the evaluator it
+        started is a separate process in the same group and may outlive it deliberately (it can
+        ignore SIGTERM). Liveness is therefore taken from the *group*, using signal 0, which is a
+        permission/absence probe and never delivers a signal.
+        """
+        import signal
+
+        if group is not None:
+            try:
+                os.killpg(group, 0)
+            except ProcessLookupError:
+                return False
+            except PermissionError:
+                return True          # exists, but not ours to signal
+            except OSError:
+                pass
+        return process.poll() is None
+
+    #: Seconds SIGTERM is given before SIGKILL escalates. A class-level constant so an operator
+    #: (or a test) can shorten the bounded wait deliberately.
+    GRACE_SECONDS = 10.0
+
+    @staticmethod
+    def _terminate_group(process: "subprocess.Popen[str]", *, group: int | None = None,
+                         grace: float | None = None) -> bool:
+        """Stop the job's whole process group and report whether anything still runs.
 
         ``start_new_session`` made the job a session and group leader, so its pid is the group
-        id. SIGTERM first so the operator can unwind, then SIGKILL for anything that ignores
-        it. Both calls are guarded against a group that already exited (ESRCH) and against a
-        recycled pid, which the group signal cannot hit because the group id exists only while
-        one of its processes does.
+        id. SIGTERM first with a bounded grace period, then SIGKILL for members that ignore it —
+        escalation must not be skipped merely because the *operator* exited, because the
+        evaluator is the group member that actually holds the GPU.
+
+        A group id is only meaningful while a member exists, so a recycled pid cannot be signalled
+        accidentally: once ``killpg`` reports ESRCH there is nothing left in that group. A child
+        that deliberately calls ``setsid`` leaves this group and is outside the boundary this
+        workbench documents.
         """
         import signal
         import time
 
-        if process.poll() is not None:
-            return
-        try:
-            group = os.getpgid(process.pid)
-        except (OSError, ProcessLookupError):
-            group = None
-        for signum, deadline in ((signal.SIGTERM, grace), (signal.SIGKILL, 2.0)):
-            if process.poll() is not None:
-                return
+        if grace is None:
+            grace = SingleGpuQueue.GRACE_SECONDS
+        if group is None:
+            # Fall back to the live lookup only when dispatch could not record the group.
+            try:
+                group = os.getpgid(process.pid)
+            except (OSError, ProcessLookupError):
+                group = None
+
+        for signum, deadline in ((signal.SIGTERM, grace), (signal.SIGKILL, 5.0)):
+            if not SingleGpuQueue._group_alive(group, process):
+                return False
             try:
                 if group is not None:
                     os.killpg(group, signum)
                 else:
                     process.send_signal(signum)
             except (OSError, ProcessLookupError):
-                return
+                return False
             waited = 0.0
-            while waited < deadline and process.poll() is None:
+            while waited < deadline and SingleGpuQueue._group_alive(group, process):
                 time.sleep(0.05)
                 waited += 0.05
-        # Never report a cancelled job while a process it owns is still alive.
-        if process.poll() is None:
+
+        alive = SingleGpuQueue._group_alive(group, process)
+        if alive:
+            # Last resort: the direct child, so at least the operator cannot linger.
             try:
                 process.kill()
             except OSError:
                 pass
+            alive = SingleGpuQueue._group_alive(group, process)
+        return alive
 
     @staticmethod
     def _append(job: Job, field: str, line: str) -> None:
@@ -213,6 +292,12 @@ class SingleGpuQueue:
                                                    start_new_session=True)
                         job.status = "running"
                         self._processes[job.job_id] = process
+                        # Capture the group now: once the leader exits, `getpgid` on its pid
+                        # fails and the evaluator it started would become unreachable.
+                        try:
+                            self._process_groups[job.job_id] = os.getpgid(process.pid)
+                        except (OSError, ProcessLookupError):
+                            self._process_groups[job.job_id] = None
 
                     def copy(stream, destination, field: str) -> None:
                         assert stream is not None
@@ -231,7 +316,9 @@ class SingleGpuQueue:
                 with self._condition:
                     self._processes.pop(job.job_id, None)
                     job.return_code = code
-                    if job.status != "cancelled":
+                    # A cancellation in flight wins: the worker must not publish a completion for
+                    # a job whose group is still being torn down, whatever the child's exit code.
+                    if job.status != "cancelled" and job.job_id not in self._cancelling:
                         job.status = "completed" if code == 0 else "failed"
                     job.completed_at = now()
                 metadata.update(finished_at=job.completed_at, return_code=code)
@@ -240,6 +327,6 @@ class SingleGpuQueue:
                 with self._condition:
                     self._processes.pop(job.job_id, None)
                     job.error = str(error)
-                    if job.status != "cancelled":
+                    if job.status != "cancelled" and job.job_id not in self._cancelling:
                         job.status = "failed"
                     job.completed_at = now()

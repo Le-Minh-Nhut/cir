@@ -827,14 +827,25 @@ def forget_gpu_capability() -> None:
 
 def record_gpu_capability(model: dict[str, Any], result: dict[str, Any],
                           config: Any | None = None) -> dict[str, Any]:
-    """Persist a verified GPU capability result, keyed to the environment it describes.
+    """Persist a verified GPU capability result, keyed to the environment and host it describes.
 
-    The key includes the interpreter fingerprint and the dependency fingerprint, so a
-    changed interpreter or a changed installed dependency set invalidates it rather than
-    silently reusing a stale verification.
+    The key includes the interpreter fingerprint, the dependency fingerprint and the host
+    identity (machine, driver, visible devices), so a changed interpreter, a changed dependency
+    set, or a different host invalidates it rather than silently reusing a stale verification.
     """
     key = _gpu_capability_key(model)
-    payload = {**result, "capability_key": key}
+    payload = {
+        **result,
+        "capability_key": key,
+        # What this record covers, stated on the record:
+        "host_identity": result.get("host_identity") or _host_identity(),
+        "revalidation": result.get(
+            "revalidation",
+            "re-probe when the interpreter, dependency set, host, driver or device visibility changes"),
+        "expires_on": result.get("expires_on") or [
+            "interpreter change", "dependency change", "host change",
+            "driver change", "CUDA_VISIBLE_DEVICES change"],
+    }
     signature = _gpu_capability_signature(payload)
     if signature:
         payload["signature"] = signature
@@ -851,6 +862,34 @@ def record_gpu_capability(model: dict[str, Any], result: dict[str, Any],
         except OSError:
             pass
     return payload
+
+
+def _host_identity() -> dict[str, str]:
+    """Identity of the host a capability was recorded on.
+
+    A capability says "this environment could use CUDA on this machine at this time". Moving the
+    same environment to a different host, or changing the driver, changes what that claim is worth,
+    so the host and driver identity are part of the key and a record does not silently transfer.
+    """
+    identity: dict[str, str] = {}
+    try:
+        identity["node"] = os.uname().nodename
+        identity["machine"] = os.uname().machine
+    except OSError:
+        pass
+    # The visible devices are part of the claim: a capability recorded for device 0 must not
+    # authorize a run that is now restricted to no device.
+    identity["cuda_visible_devices"] = os.environ.get("CUDA_VISIBLE_DEVICES", "<unset>")
+    for path in ("/proc/driver/nvidia/version", "/sys/module/nvidia/version"):
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as handle:
+                line = handle.readline().strip()
+        except OSError:
+            continue
+        if line:
+            identity["driver"] = line
+            break
+    return identity
 
 
 def _gpu_capability_key(model: dict[str, Any]) -> str:
@@ -870,6 +909,8 @@ def _gpu_capability_key(model: dict[str, Any]) -> str:
             "interpreter": configured,
             "interpreter_fingerprint": fingerprint,
             "contract": _environment_contract_digest(model),
+            # Host identity: a capability describes a host, not only an environment.
+            "host": _host_identity(),
         }, sort_keys=True).encode("utf-8")
     ).hexdigest()
 
@@ -1703,6 +1744,13 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
         "dependency_fingerprint": report.contract_digest,
         "probe_source": "override" if override is not None else "interpreter",
         "probed_at": datetime.now(UTC).isoformat(),
+        # A capability is bound to this host, driver and device visibility. It is evidence, not
+        # proof against a hostile environment, and it expires whenever any of that identity
+        # changes — the key changes with it, so a stale record is simply not found.
+        "host_identity": _host_identity(),
+        "revalidation": "re-probe when the interpreter, dependency set, host, driver or device visibility changes",
+        "expires_on": ["interpreter change", "dependency change", "host change",
+                       "driver change", "CUDA_VISIBLE_DEVICES change"],
     }
     if require_cuda and not capability:
         if result.get("cuda_available") and not result.get("torch_has_compiled_core"):
@@ -2072,7 +2120,8 @@ def runtime_blockers(model: dict[str, Any], checkpoint: dict[str, Any], config: 
     # must carry the extension it opens. Checking it here surfaces an extension mismatch on the
     # laptop instead of as a missing image in the middle of a GPU run.
     for extension in model.get("fashioniq_image_extensions") or ():
-        problems = image_extension_problems(dataset_root, extension)
+        problems = image_extension_problems(dataset_root, extension,
+                                            model.get("fashioniq_layout"))
         if problems:
             blockers.append(f"FashionIQ image extension requirement: {problems[0]}")
     blockers.extend(external_asset_blockers(model))

@@ -201,6 +201,65 @@ def make_run_id(plan: EvaluationPlan, timestamp: datetime) -> str:
     """Collision-resistant run identity: time + model + checkpoint + random suffix."""
     return f"{timestamp:%Y%m%dT%H%M%S%fZ}_{plan.model_id}_{plan.checkpoint_id}_{uuid.uuid4().hex[:8]}"
 
+#: Names an official evaluator legitimately needs. Everything else in the operator's environment
+#: is withheld: it is model code, and a research script has no business reading the operator's
+#: tokens, cloud credentials or ledger key. An authenticated download belongs in an explicit
+#: acquisition step, not in the evaluation.
+_EVALUATOR_ENV_ALLOWLIST = (
+    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR",
+    "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ",
+    # CUDA/GPU visibility: which devices the run may use is a deliberate operator decision.
+    "CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES", "NVIDIA_DRIVER_CAPABILITIES",
+    # Python and library discovery for the model's own interpreter.
+    "PYTHONPATH", "PYTHONHOME", "LD_LIBRARY_PATH", "LIBRARY_PATH",
+    # Where models and datasets live, so the evaluator can find its inputs.
+    "CIR_REPO_ROOT", "CIR_DATA_ROOT", "FASHIONIQ_ROOT",
+    "WORKBENCH_CHECKPOINT_ROOT", "WORKBENCH_RESULTS_ROOT", "WORKBENCH_THIRD_PARTY_ROOT",
+    "TORCH_HOME", "HF_HOME", "TRANSFORMERS_CACHE", "XDG_CACHE_HOME",
+)
+
+#: Prefixes that are never forwarded, whatever else matches: a prefix rule catches names this
+#: list has not seen yet, which is the failure mode a fixed allowlist alone would miss.
+_EVALUATOR_ENV_DENY_PREFIXES = (
+    "WORKBENCH_LEDGER_KEY", "WORKBENCH_SECRET_",
+    "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACEHUB_API_TOKEN",
+    "WANDB_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+    "GITHUB_TOKEN", "GH_TOKEN", "GITLAB_TOKEN",
+    "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+    "AZURE_", "GOOGLE_APPLICATION_CREDENTIALS", "GCP_",
+    "DOCKER_", "KUBECONFIG", "SLACK_TOKEN", "STRIPE_", "NPM_TOKEN",
+)
+
+
+def _evaluator_environment(identity: dict[str, object]) -> dict[str, str]:
+    """Build the environment for the untrusted official evaluator, by allowlist.
+
+    Copying `os.environ` and removing a few names propagated every unrelated credential the
+    operator happened to hold — tokens, cloud keys, CI secrets — into model code. Here only names
+    the evaluator genuinely needs are forwarded, and anything matching a sensitive prefix is
+    refused even if it would otherwise be allowed, so an unfamiliar secret name cannot slip
+    through by not being on a list.
+    """
+    child_env: dict[str, str] = {}
+    # An operator may declare extra names a specific model legitimately needs (a library prefix
+    # path, a cache location). The declaration is explicit and reviewable, rather than implied by
+    # whatever happened to be in the caller's shell.
+    extra = os.environ.get("WORKBENCH_EVALUATOR_ENV_PASSTHROUGH", "")
+    declared = [name.strip() for name in extra.split(":") if name.strip()]
+    for name in (*_EVALUATOR_ENV_ALLOWLIST, *declared):
+        value = os.environ.get(name)
+        if value is not None:
+            child_env[name] = value
+    for name in list(child_env):
+        if any(name == prefix or name.startswith(prefix)
+               for prefix in _EVALUATOR_ENV_DENY_PREFIXES):
+            child_env.pop(name, None)
+    # The run identity is the operator's own contract with the evaluator, so it is set last and
+    # cannot be shadowed by an inherited name.
+    child_env.update({key: str(value) for key, value in identity.items()})
+    return child_env
+
+
 def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
                      output_root: Path) -> tuple[int, Path, dict]:
     """Run the official command under this invocation's identity and collect evidence.
@@ -217,15 +276,7 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
         "evaluation_run_id": run_id,
         "evaluation_output_root": str(output_root),
     }
-    child_env = dict(os.environ)
-    child_env.update({key: str(value) for key, value in environment.items()})
-    # The official evaluator is untrusted model code: it must never receive the ledger's
-    # authentication key or any WORKBENCH_SECRET_* value, or it could forge ledger entries and
-    # read operator material. The GPU probe has always been filtered this way; the evaluator
-    # path, which runs longer and writes more, was not.
-    child_env.pop("WORKBENCH_LEDGER_KEY", None)
-    for key in [name for name in child_env if name.startswith("WORKBENCH_SECRET_")]:
-        child_env.pop(key, None)
+    child_env = _evaluator_environment(environment)
 
     # Claim the run directory EXCLUSIVELY, before anything is launched. `exist_ok=False` is an
     # atomic filesystem claim, so of two concurrent invocations sharing a run id exactly one

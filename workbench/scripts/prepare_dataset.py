@@ -25,45 +25,64 @@ def validate_fashioniq(root: Path) -> list[str]:
 
 
 
-def prepare_csmcir(root: Path, source: Path, *, check_only: bool, dry_run: bool) -> bool:
-    destination = source / "fashionIQ_dataset"
-    if not source.is_dir():
-        print(f"[BLOCKED] CSMCIR source missing: {source}")
-        return False
+def prepare_canonical_link(root: Path, source: Path, link_name: str, *, check_only: bool,
+                           dry_run: bool) -> tuple[bool, list[str]]:
+    """Stage (or verify) a pinned evaluator's hard-coded dataset root.
 
-    # Auxiliary files are runtime prerequisites. Link preparation must stay runnable
-    # before their optional acquisition stage; strict doctor checks them before eval.
+    Some official evaluators have no dataset-root option: they derive the root from their own file
+    location and read `<checkout>/<link_name>`. That path is therefore part of the source contract,
+    not a caller choice, and it is created only when the canonical root is verified, the source
+    checkout is present, the destination is unoccupied, and the operator authorized the step.
+
+    Returns ``(ok, messages)``. Never overwrites a file or a differently-targeted link.
+    """
+    messages: list[str] = []
+    destination = source / link_name
+    if not source.is_dir():
+        return False, [f"[BLOCKED] source checkout missing: {source}"]
 
     if destination.is_symlink():
         try:
             linked_root = destination.resolve()
         except (OSError, RuntimeError) as error:
-            print(f"[BLOCKED] CSMCIR dataset link cannot resolve: {destination}: {error}")
-            return False
+            return False, [f"[BLOCKED] dataset link cannot resolve: {destination}: {error}"]
         if linked_root != root:
-            print(f"[BLOCKED] CSMCIR dataset link resolves to {linked_root}, expected {root}")
-            return False
-        print(f"[OK] CSMCIR dataset link: {destination} -> {root}")
-        return True
+            return False, [f"[BLOCKED] dataset link resolves to {linked_root}, expected {root}"]
+        messages.append(f"[OK] dataset link already correct: {destination} -> {root}")
+        return True, messages
+
     if os.path.lexists(destination):
-        print(f"[BLOCKED] CSMCIR dataset destination already exists: {destination}")
-        return False
+        # A real directory or file here is either a manual staging or a mistake: never destroy it.
+        return False, [f"[BLOCKED] dataset destination already exists and is not the expected link: {destination}"]
+
     if check_only:
-        print(f"[WARN] CSMCIR dataset link absent: {destination} (check-only)")
-        return True
+        messages.append(f"[WARN] dataset link absent: {destination} (check-only)")
+        return True, messages
     if dry_run:
-        print(f"[OK] dry-run: would link {destination} -> {root}")
-        return True
+        messages.append(f"[OK] dry-run: would link {destination} -> {root}")
+        return True, messages
+
     destination.symlink_to(root, target_is_directory=True)
-    print(f"[OK] CSMCIR dataset link created: {destination} -> {root}")
-    return True
+    messages.append(f"[OK] dataset link created: {destination} -> {root}")
+    return True, messages
+
+
+def models_requiring_link() -> dict[str, str]:
+    """model_id -> declared in-checkout dataset link, from the registry."""
+    from workbench.backend.registry import load_registry
+
+    return {
+        model["model_id"]: model["canonical_dataset_link"]
+        for model in load_registry()["models"]
+        if model.get("canonical_dataset_link")
+    }
 
 
 def parser_for() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-root", type=Path, help="canonical FashionIQ dataset root; defaults to configured FASHIONIQ_ROOT")
     parser.add_argument("--check-only", action="store_true", help="validate only; never create a link")
-    parser.add_argument("--model", help="prepare fixed layout only for csmcir")
+    parser.add_argument("--model", help="prepare the fixed dataset link a model's pinned evaluator requires")
     parser.add_argument("--dry-run", action="store_true", help="show link creation without changing files")
     return parser
 
@@ -84,15 +103,31 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"[OK] FashionIQ base layout valid: {root}")
 
-    if args.model == "csmcir":
-        source = config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR"
-        return 0 if prepare_csmcir(root, source, check_only=args.check_only, dry_run=args.dry_run) else 1
-    if args.model:
-        print(f"[WARN] {args.model}: layout preparation not verified")
-    else:
-        print("[WARN] no model selected: check only; layout preparation not verified")
-    return 0
+    links = models_requiring_link()
+    if not args.model:
+        if links:
+            print(f"[WARN] no model selected: check only; {len(links)} model(s) declare a "
+                  f"canonical dataset link")
+        else:
+            print("[WARN] no model selected: check only; layout preparation not verified")
+        return 0
+    if args.model not in links:
+        print(f"[WARN] {args.model}: no declared fixed dataset link; layout preparation not verified")
+        return 0
 
+    from workbench.backend.registry import model_by_id
+
+    try:
+        model = model_by_id(args.model)
+    except KeyError:
+        print(f"[BLOCKED] unknown model: {args.model}")
+        return 1
+    source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
+    ok, messages = prepare_canonical_link(root, source, links[args.model],
+                                          check_only=args.check_only, dry_run=args.dry_run)
+    for message in messages:
+        print(message)
+    return 0 if ok else 1
 
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -70,18 +70,40 @@ def paths_for_layout(root: Path, layout: str) -> tuple[Path, ...]:
     raise ValueError(f"unknown FashionIQ layout: {layout}")
 
 
-def image_extension_problems(root: Path, extension: str) -> list[str]:
-    """Every gallery image referenced by the validation splits must have *extension*.
+#: The image directory each layout actually opens, plus whether it is flat or per-category.
+#: An evaluator's image path is hard-coded in its own source, so the check has to look where that
+#: source looks — `images/{id}.png` for the standard layout, `resized_image/{category}/{id}.jpg`
+#: for the iLearn family, `resized_images/{id}.jpg` for DCNet.
+_LAYOUT_IMAGE_DIRECTORY = {
+    "fashioniq_standard": ("images", False),
+    "fashioniq_ilearn_resized": ("resized_image", True),
+    "fashioniq_ilearn_resized_training": ("resized_image", True),
+    "fashioniq_clvc_resized": ("resized_image", True),
+    "fashioniq_dcnet": ("resized_images", False),
+}
 
-    An official evaluator's image path is hard-coded in its source, so the split files and the
-    files on disk have to agree. CSMCIR reads `fashionIQ_dataset/images/{id}.png` while the
-    official FashionIQ release ships `.jpg`, which its own README shows; without this check the
-    mismatch only appears when a GPU run fails on the first missing image.
+
+def image_extension_problems(root: Path, extension: str,
+                             layout: str | None = None) -> list[str]:
+    """Every gallery image referenced by the validation splits must exist with *extension*.
+
+    An official evaluator hard-codes both the directory and the extension it opens, so the split
+    files and the files on disk have to agree. CSMCIR reads `images/{id}.png` while the official
+    FashionIQ release ships `.jpg`; the iLearn family reads `resized_image/<category>/{id}.jpg`.
+    Without this check the mismatch appears only when a run fails on the first missing image.
     """
     problems: list[str] = []
-    images = root / "images"
+    if layout is None:
+        layout = "fashioniq_standard"
+    try:
+        directory_name, per_category = _LAYOUT_IMAGE_DIRECTORY[layout]
+    except KeyError:
+        return [f"unknown FashionIQ layout for an image-extension check: {layout}"]
+
+    images = root / directory_name
     if not images.is_dir():
         return [f"image directory missing: {images}"]
+
     for category in CATEGORIES:
         split = root / "image_splits" / f"split.{category}.val.json"
         if not split.is_file():
@@ -92,12 +114,19 @@ def image_extension_problems(root: Path, extension: str) -> list[str]:
         except (OSError, ValueError) as error:
             problems.append(f"split file unreadable: {split} ({error})")
             continue
+        if per_category:
+            folder = images / category
+            if not folder.is_dir():
+                problems.append(f"image directory missing: {folder}")
+                continue
+        else:
+            folder = images
         missing = [image_id for image_id in image_ids
-                   if not (images / f"{image_id}{extension}").is_file()]
+                   if not (folder / f"{image_id}{extension}").is_file()]
         if missing:
             problems.append(
                 f"{len(missing)} of {len(image_ids)} {category} validation images lack "
-                f"{extension} in {images} (first: {missing[0]}{extension})")
+                f"{extension} in {folder} (first: {missing[0]}{extension})")
     return problems
 
 

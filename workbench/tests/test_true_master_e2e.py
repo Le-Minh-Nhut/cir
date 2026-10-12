@@ -259,6 +259,7 @@ def test_true_master_pipeline_subprocess_e2e_complete_flow(true_e2e_workspace):
     fail_report = w["reports"] / "fail_report.json"
     fail_env = dict(env)
     fail_env["SYNTHETIC_FAIL"] = "1"
+    fail_env["WORKBENCH_EVALUATOR_ENV_PASSTHROUGH"] = "SYNTHETIC_FAIL"
     cmd_fail = [
         sys.executable,
         pipeline_script,

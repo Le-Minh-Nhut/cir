@@ -92,9 +92,12 @@ def test_scenario_a_api_to_evaluator_success(master, monkeypatch):  # noqa: F811
 
     artifacts = master["ws"] / "workbench" / "artifacts"
 
-    # The queue recorded its own dispatch record, with its own names.
+    # The queue recorded its own dispatch record, with its own names, and the record names the
+    # orchestrator it dispatched rather than the model's evaluator.
     assert (job_directory / "queue_command.json").is_file()
-    assert Path(settled["stdout_tail"]).parent == Path(".") or True  # tail is text, not a path
+    dispatched = json.loads((job_directory / "queue_command.json").read_text())
+    assert "evaluate_models.py" in " ".join(dispatched["argv"]), dispatched["argv"]
+    assert dispatched["run_id"] and dispatched["return_code"] == 0
 
     # The operator recorded the scientific artifacts under logs/<model>__<checkpoint>__<run_id>/.
     runs = [path for path in (artifacts / "logs").iterdir() if path.is_dir()]
@@ -132,9 +135,11 @@ def test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged(master, 
     reports.mkdir(parents=True, exist_ok=True)
     pointer = reports / "synthetic_model_ckpt_v1_latest_successful.json"
 
-    # The synthetic evaluator fails whenever SYNTHETIC_FAIL is set; the queue passes the
-    # operator's environment through, so setting it here reaches the evaluator itself.
+    # The synthetic evaluator fails whenever SYNTHETIC_FAIL is set. The evaluator child receives
+    # an allowlist, so a fixture switch must be *declared* for passthrough rather than happening
+    # to leak from the caller's shell.
     monkeypatch.setenv("SYNTHETIC_FAIL", "1")
+    monkeypatch.setenv("WORKBENCH_EVALUATOR_ENV_PASSTHROUGH", "SYNTHETIC_FAIL")
     accepted = module.queue_job(_payload())
     settled = _wait_for(module.JOBS, accepted["job_id"])
     assert settled["status"] == "failed", settled
@@ -151,6 +156,7 @@ def test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged(master, 
 def test_scenario_c_zero_exit_without_valid_output_is_not_a_success(master, monkeypatch):  # noqa: F811
     """Exit 0 with no parseable evaluation output must not mint a completion proof."""
     monkeypatch.setenv("SYNTHETIC_SILENT", "1")
+    monkeypatch.setenv("WORKBENCH_EVALUATOR_ENV_PASSTHROUGH", "SYNTHETIC_SILENT")
     module = _api_module(monkeypatch, master)
     accepted = module.queue_job(_payload())
     settled = _wait_for(module.JOBS, accepted["job_id"])
@@ -192,6 +198,7 @@ def test_scenario_d_cancellation_kills_the_evaluator_tree(master, monkeypatch): 
     Path(master["env"]["WORKBENCH_REGISTRY_PATH"]).write_text(json.dumps(registry))
 
     monkeypatch.setenv("SYNTHETIC_SLEEP", "6")
+    monkeypatch.setenv("WORKBENCH_EVALUATOR_ENV_PASSTHROUGH", "SYNTHETIC_SLEEP")
     module = _api_module(monkeypatch, master)
     accepted = module.queue_job(_payload())
     job_id = accepted["job_id"]

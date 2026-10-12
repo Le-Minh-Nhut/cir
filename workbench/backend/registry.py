@@ -44,6 +44,12 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
             raise ValueError(f"source_dir mismatch for {model['model_id']}")
         if model["source_available"] and model.get("fashioniq_layout") not in layouts:
             raise ValueError(f"unknown FashionIQ layout for {model['model_id']}")
+        link = model.get("canonical_dataset_link")
+        if link is not None:
+            link_path = PurePosixPath(link)
+            if link_path.is_absolute() or ".." in link_path.parts or len(link_path.parts) != 1:
+                raise ValueError(
+                    f"canonical_dataset_link must be a single in-checkout name for {model['model_id']}")
         extensions = model.get("fashioniq_image_extensions")
         if extensions is not None:
             if not isinstance(extensions, list) or not extensions:
@@ -335,12 +341,18 @@ def source_runtime_artifacts(model: dict[str, Any]) -> list[dict[str, Any]]:
             "provenance_status": asset.get("provenance_status"),
             "source": asset.get("source_path"),
         })
-    if model_id == "csmcir":
-        artifacts.append({
-            "kind": "canonical_dataset_link",
-            "path": "fashionIQ_dataset",
-            "expects": "FASHIONIQ_ROOT",
-        })
+    # Any model whose pinned evaluator hard-codes a dataset root declares it here; the same
+    # declaration is what authorizes the link as a runtime artifact rather than a source edit.
+    for model_with_link in load_registry()["models"]:
+        if model_with_link["model_id"] != model_id:
+            continue
+        link = model_with_link.get("canonical_dataset_link")
+        if link:
+            artifacts.append({
+                "kind": "canonical_dataset_link",
+                "path": link,
+                "expects": "FASHIONIQ_ROOT",
+            })
     return artifacts
 
 

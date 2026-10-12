@@ -123,6 +123,8 @@ def master(tmp_path: Path):
         "WORKBENCH_RESULTS_ROOT": str(ws / "results"),
         "WORKBENCH_THIRD_PARTY_ROOT": str(third_party),
         "WORKBENCH_NO_ENV_CACHE": "1",
+        # The evaluator child receives an allowlist; fixture switches are declared explicitly.
+        "WORKBENCH_EVALUATOR_ENV_PASSTHROUGH": "SYNTHETIC_FAIL:SYNTHETIC_SILENT:SYNTHETIC_SLEEP",
     })
     command = [sys.executable, str(REPOSITORY / "workbench" / "scripts" / "pipeline.py"),
                "all", "--model", "synthetic_model", "--apply", "--allow-network",
@@ -229,6 +231,7 @@ def test_e2e05_exit_zero_without_new_output_fails_evaluation(master):
 
     silent_env = dict(master["env"])
     silent_env["SYNTHETIC_SILENT"] = "1"
+    silent_env["WORKBENCH_EVALUATOR_ENV_PASSTHROUGH"] = "SYNTHETIC_SILENT"
     result = run(master, "--force-stage", "evaluation", "--resume", env=silent_env)
 
     assert result.returncode == 1, "a zero-output evaluator must fail the evaluation stage"
@@ -264,6 +267,7 @@ def test_e2e06_failed_rerun_preserves_previous_successful_experiment(master):
 
     fail_env = dict(master["env"])
     fail_env["SYNTHETIC_FAIL"] = "1"
+    fail_env["WORKBENCH_EVALUATOR_ENV_PASSTHROUGH"] = "SYNTHETIC_FAIL"
     report_path = master["reports_out"] / "failed.json"
     failed = run(master, "--force-stage", "evaluation", "--report", str(report_path), env=fail_env)
 
@@ -284,6 +288,7 @@ def test_e2e07_recovery_after_failure_succeeds_and_advances(master):
 
     fail_env = dict(master["env"])
     fail_env["SYNTHETIC_FAIL"] = "1"
+    fail_env["WORKBENCH_EVALUATOR_ENV_PASSTHROUGH"] = "SYNTHETIC_FAIL"
     assert run(master, "--force-stage", "evaluation", env=fail_env).returncode == 1
 
     assert run(master, "--force-stage", "evaluation").returncode == 0
@@ -418,15 +423,15 @@ registry.sha256_file = _sha256_file
 
     assert resumed.returncode == 0, f"{resumed.stdout}\n{resumed.stderr}"
     assert "resume refused: weak_input_fingerprint" in resumed.stdout
-    assert "HASH_FAILED" in resumed.stdout
+    assert "UNREADABLE" in resumed.stdout
     assert len(list(logs.iterdir())) > before, "weak fingerprint must launch evaluation instead of resuming"
     workflow = json.loads(report_path.read_text())
     evaluation = next(record for record in workflow["stages"].values()
                       if record.get("name") == "evaluation")
     assert evaluation["input_fingerprint_evidence"]["weak"] is True
-    assert any(item["category"] == "HASH_FAILED"
+    assert any(item["category"] == "UNREADABLE"
                for item in evaluation["input_fingerprint_evidence"]["inputs"])
-    assert "HASH_FAILED" in evaluation["resume_refused_reason"]
+    assert "UNREADABLE" in evaluation["resume_refused_reason"]
 
 
 # ----------------------------------------- GPU readiness through the real master CLI

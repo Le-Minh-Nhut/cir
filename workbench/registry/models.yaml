@@ -19,6 +19,10 @@ protocols:
     evaluation_noise_pct: 0
 models:
   - model_id: csmcir
+    # The pinned evaluator derives its data root from `__file__` and opens
+    # `<checkout>/fashionIQ_dataset`; the canonical root is staged there by the authorized
+    # preparation step, and this declaration is what approves the link as a runtime artifact.
+    canonical_dataset_link: fashionIQ_dataset
     method_name: CSMCIR
     research_generation: recent
     publication_year: null
@@ -69,6 +73,7 @@ models:
     source_available: true
     source_dir: AirKnow
     fashioniq_layout: fashioniq_ilearn_resized
+    fashioniq_image_extensions: [".jpg"]
     literature_split_label: original
     native_protocol: fashioniq_full_gallery_ref_excluded
     supported_protocols: [fashioniq_full_gallery_ref_excluded]
@@ -112,6 +117,7 @@ models:
     source_available: true
     source_dir: ConeSep
     fashioniq_layout: fashioniq_ilearn_resized
+    fashioniq_image_extensions: [".jpg"]
     literature_split_label: original
     native_protocol: fashioniq_full_gallery_ref_excluded
     supported_protocols: [fashioniq_full_gallery_ref_excluded]
@@ -186,6 +192,7 @@ models:
     source_available: true
     source_dir: HABIT
     fashioniq_layout: fashioniq_ilearn_resized
+    fashioniq_image_extensions: [".jpg"]
     literature_split_label: original
     native_protocol: fashioniq_full_gallery_ref_excluded
     supported_protocols: [fashioniq_full_gallery_ref_excluded]
@@ -239,6 +246,7 @@ models:
     source_available: true
     source_dir: INTENT
     fashioniq_layout: fashioniq_ilearn_resized
+    fashioniq_image_extensions: [".jpg"]
     literature_split_label: original
     native_protocol: fashioniq_full_gallery_ref_excluded
     supported_protocols: [fashioniq_full_gallery_ref_excluded]
@@ -292,6 +300,7 @@ models:
     source_available: true
     source_dir: HINT
     fashioniq_layout: fashioniq_ilearn_resized
+    fashioniq_image_extensions: [".jpg"]
     native_protocol: fashioniq_val_split
     literature_split_label: val
     supported_protocols: [fashioniq_val_split]
@@ -327,6 +336,7 @@ models:
     source_available: true
     source_dir: ENCODER
     fashioniq_layout: fashioniq_ilearn_resized
+    fashioniq_image_extensions: [".jpg"]
     native_protocol: fashioniq_val_split
     literature_split_label: val
     supported_protocols: [fashioniq_val_split]
@@ -361,6 +371,7 @@ models:
     source_available: true
     source_dir: PAIR
     fashioniq_layout: fashioniq_ilearn_resized
+    fashioniq_image_extensions: [".jpg"]
     native_protocol: fashioniq_val_split
     literature_split_label: val
     supported_protocols: [fashioniq_val_split]
@@ -393,7 +404,18 @@ models:
         checkpoint_mapping_status: UNVERIFIED
   - model_id: clvc_net
     replay_status: BLOCKED_NO_SOURCE_REPLAY
-    category_model_policy: shared
+    # The pinned trainer builds and saves a separate whole model per FashionIQ category
+    # (`train.py:load_dataset`, `train_and_evaluate` over dress/shirt/toptee). One shared pair of
+    # checkpoints is not scientifically equivalent: each category needs its own local/global pair.
+    # Filenames and identities remain UNVERIFIED, so this describes the structure to be routed
+    # once the author archive mapping is established, not a set of known files.
+    category_model_policy: independent
+    category_checkpoint_structure:
+      categories: [dress, shirt, toptee]
+      per_category_members: [local, global]
+      member_count_expected: 6
+      mapping_status: UNVERIFIED
+      notes: author Drive archive member/category mapping unresolved; do not claim six available files
     checkpoint_serialization: whole_model
     environment_required: true
     method_name: CLVC-Net
@@ -407,6 +429,7 @@ models:
     source_available: true
     source_dir: CLVCNet
     fashioniq_layout: fashioniq_clvc_resized
+    fashioniq_image_extensions: [".jpg"]
     preparation_contract: manual_clvc_resized
     preparation_id: clvc_net_fashioniq
     literature_split_label: val
@@ -456,6 +479,7 @@ models:
     source_available: true
     source_dir: DCNet
     fashioniq_layout: fashioniq_dcnet
+    fashioniq_image_extensions: [".jpg"]
     preparation_contract: manual_dcnet
     preparation_id: dcnet_fashioniq
     literature_split_label: original
@@ -491,6 +515,12 @@ models:
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
   - model_id: combiner_rn50x4_noft
+    # The pinned validator has no dataset-root option: `src/data_utils.py:base_path` fixes the data root to
+    # `<checkout>/fashionIQ_dataset` and opens `.jpg` images there. The canonical FashionIQ
+    # root is staged at that path by an explicitly authorized preparation step, and the link
+    # is approved as a runtime artifact so it does not read as a source modification.
+    canonical_dataset_link: fashionIQ_dataset
+    fashioniq_image_extensions: [".jpg"]
     replay_status: REPLAY_CODE_IMPLEMENTED
     category_model_policy: shared
     checkpoint_serialization: state_dict
@@ -541,6 +571,12 @@ models:
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
   - model_id: clip4cir_rn50x4_fullft
+    # The pinned validator has no dataset-root option: `src/data_utils.py:base_path` fixes the data root to
+    # `<checkout>/fashionIQ_dataset` and opens `.jpg` images there. The canonical FashionIQ
+    # root is staged at that path by an explicitly authorized preparation step, and the link
+    # is approved as a runtime artifact so it does not read as a source modification.
+    canonical_dataset_link: fashionIQ_dataset
+    fashioniq_image_extensions: [".jpg"]
     replay_status: BLOCKED_CHECKPOINT_MAPPING
     category_model_policy: shared
     checkpoint_serialization: state_dict
@@ -608,6 +644,7 @@ models:
     source_available: true
     source_dir: TGCIR
     fashioniq_layout: fashioniq_ilearn_resized_training
+    fashioniq_image_extensions: [".jpg"]
     preparation_contract: manual_ilearn_resized
     preparation_id: tgcir_fashioniq
     literature_split_label: val
@@ -642,6 +679,12 @@ models:
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
   - model_id: sprc
+    # `src/data_utils.py:base_path` derives the data root from the file location and the
+    # pinned dataset opens `fashionIQ_dataset/images/{id}.png`; there is no dataset-root
+    # CLI option. The link is staged by the same authorized preparation step as CSMCIR's,
+    # and the extension requirement is checked before any run.
+    canonical_dataset_link: fashionIQ_dataset
+    fashioniq_image_extensions: [".png"]
     replay_status: BLOCKED_CHECKPOINT_MAPPING
     category_model_policy: shared
     checkpoint_serialization: state_dict
@@ -707,6 +750,7 @@ models:
     source_available: true
     source_dir: LIMN
     fashioniq_layout: fashioniq_ilearn_resized_training
+    fashioniq_image_extensions: [".jpg"]
     preparation_contract: manual_ilearn_resized
     preparation_id: limn_fashioniq
     literature_split_label: val
