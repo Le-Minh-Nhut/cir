@@ -180,49 +180,127 @@ python workbench/scripts/pipeline.py reproduce --model MODEL_ID --apply --allow-
 
 State: `workbench/artifacts/pipeline_state.json` (atomic writes).
 
-## 8. Engineering status at the Phase I/II handoff
+## 8. Engineering status and the first run on the PC
 
-The laptop side of the chain is complete and verified. Before starting any GPU work, know which
-guarantees hold and which are still open.
+The laptop side of the chain is complete and verified. Before starting GPU work, know which
+guarantees hold and which remain open.
 
-**What runs immediately on the PC, no checkpoint needed:**
+### 8a. What runs on the laptop today, no checkpoint needed
 
 ```bash
-python workbench/scripts/doctor.py --all                      # registry, sources, layouts, assets
-python workbench/scripts/prepare_dataset.py --dataset-root <FashionIQ>   # refuses a bad layout
-python workbench/scripts/evaluate_models.py --model limn --verify-gpu-only   # records a capability
-python -m pytest tests/unit workbench/tests -q                # 565 tests
+python -m pytest tests/unit workbench/tests -q      # 640 tests
+python -m compileall -q src workbench
+python workbench/scripts/doctor.py --all            # registry, sources, layouts, assets, images
+python workbench/scripts/prepare_dataset.py --dataset-root <FashionIQ> --model <model>
+python workbench/scripts/evaluate_models.py --model <model> --verify-gpu-only
 ```
 
-**What the preflight now catches before a GPU run**: a missing dataset path, a missing declared
-auxiliary asset, an image whose extension is not the one the evaluator hard-codes (CSMCIR opens
-`.png` while the official release ships `.jpg`), an unverified GPU capability, a stale capability
-after an environment change, an unclean or unpinned source checkout, and a run id that already
-exists.
+The preflight refuses, before any GPU run: a missing dataset path, a missing declared auxiliary
+asset, an image whose extension is not the one the evaluator hard-codes, an unprepared iLearn or
+DCNet layout, a GPU capability that is absent, stale, or bound to a different host or device
+selection, an unpinned or dirty source checkout, and a run id that already exists.
 
-**What still requires the GPU host**: every checkpoint download and verification, every
-environment build, every native evaluator run, and every Recall number. No score in any document
-in this repository is a reproduction.
+### 8b. Environment setup order
 
-**What remains scientifically open, per model**, with the audit that records it:
+1. `python -m venv .venv && . .venv/bin/activate && pip install -e .` for the workbench itself.
+2. One environment per model, from `workbench/envs/<model>.yaml` (keep the upstream versions; the
+   workbench does not force one Torch/LAVIS version across models). Export the variable the
+   registry names, e.g. `WORKBENCH_LIMN_PYTHON`.
+3. `export WORKBENCH_LEDGER_KEY=$(python -c "import secrets;print(secrets.token_hex(32))")` and keep
+   it out of the repository. It signs the evidence ledger and the GPU capability records.
+4. Set the optional paths only if they differ from the defaults: `CIR_REPO_ROOT`, `FASHIONIQ_ROOT`,
+   `WORKBENCH_CHECKPOINT_ROOT`, `WORKBENCH_RESULTS_ROOT`, `WORKBENCH_THIRD_PARTY_ROOT`.
+5. `python workbench/scripts/sync_upstreams.py --verify-only` to confirm every pinned checkout.
 
-| Model | Open item | Where |
-|---|---|---|
-| airknow, conesep, habit, intent, hint, pair, clvc_net, tgcir, sprc, dcnet | pinned evaluator is a callable with no source-supported CLI; reaching a runnable command is itself unresolved | `audits/PHASE2_SOURCES_{A,B,C,D}.md` |
-| csmcir | LAVIS base weight and COT_ours2 provenance; torchvision version | `PHASE2_SOURCES_A.md` |
-| encoder | base OpenCLIP binary provenance; `datasets1.py` presence | `PHASE2_SOURCES_A.md` |
-| pair | which of `pair-B1.pt` / `pair-B2.pt` is the FashionIQ benchmark model; nothing in the source settles it | `PHASE2_SOURCES_A.md` |
-| clvc_net | one registered pair cannot cover three per-category whole models | `PHASE2_SOURCES_B.md` |
-| combiner_rn50x4_noft, clip4cir_rn50x4_fullft | the validator hardcodes `<checkout>/fashionIQ_dataset`, so a canonical root alone is insufficient | `PHASE2_SOURCES_B.md` |
-| sprc | native inference ignores its reference argument, so local scores would be text-only | `PHASE2_SOURCES_C.md` |
-| dcnet | author-generated GloVe PKLs must not be regenerated and called equivalent | `PHASE2_SOURCES_B.md` |
+### 8c. Dataset verification
 
-**How to establish Recall parity**: for one model, run the native evaluator on the pinned source
-with the author checkpoint, capture per-category and per-query rankings, and compare against the
-paper-reported values as sanity references only. The completion proof records the command,
-environment, source commit and checkpoint digest for exactly that run; a number without a proof is
-not evidence.
+```bash
+python workbench/scripts/prepare_dataset.py --dataset-root <FashionIQ>          # check only
+python workbench/scripts/prepare_dataset.py --dataset-root <FashionIQ> --model limn   # dry-run
+python workbench/scripts/prepare_dataset.py --dataset-root <FashionIQ> --model limn   # create link
+python workbench/scripts/doctor.py --model limn                                  # confirms READY
+```
 
-**Two invariants worth re-checking on the GPU host**: a queued job and a CLI run must produce the
-same ledger entry shape (queue logs live under `artifacts/queue_jobs/`, run artifacts under
-`artifacts/logs/`), and cancelling a job must leave no evaluator process behind.
+`--model` selects a model whose pinned evaluator hard-codes its dataset root; the step stages that
+one link after verifying the canonical root, leaves any existing file or differently-targeted link
+untouched, and is idempotent. CSMCIR, SPRC and both CLIP4Cir variants declare such a link.
+
+### 8d. Checkpoint placement and verification
+
+Follow `workbench/scripts/download_checkpoints.py` (dry-run first). Each downloaded file must be
+hashed and compared against the registry's `expected_sha256`; the script refuses to overwrite a
+different file and records the observed digest in its manifest. Missing hashes are recorded as
+unknown rather than assumed.
+
+### 8e. Recommended first model: LIMN
+
+Chosen for the shortest fully verified path, not for its score:
+
+- the evaluator command is implemented and drives the pinned `test()`, per category;
+- all three category checkpoints have download URLs **and** published SHA-256 digests;
+- the layout contract covers the train captions and correction dictionaries a fresh constructor
+  needs, and the replay uses an isolated cache root so no stale source cache is reused;
+- no external pretrained asset is required for evaluation;
+- its cohort is `fashioniq_val_split`, whose reference rule is now exercised end to end.
+
+Prerequisites to unblock it: download the three category checkpoints, place the resized images and
+the three correction dictionaries, and build a CUDA 12.4 / torch 1.12.1 / open_clip 2.20.0
+environment with `WORKBENCH_LIMN_PYTHON` exported.
+
+Runners-up: `csmcir` has an implemented command but no published checkpoint digest and an
+unverified COT caption provenance; `encoder` needs an external OpenCLIP binary; `dcnet` and the
+CLIP4Cir pair have implemented commands but unresolved checkpoint mapping and a required base
+asset.
+
+### 8f. First real evaluation, and how to verify it
+
+```bash
+# 1. verify the environment and record a capability (no evaluation runs)
+python workbench/scripts/evaluate_models.py --model limn --verify-gpu-only
+
+# 2. build the plan without executing it
+python workbench/scripts/pipeline.py reproduce --model limn --dataset-root <FashionIQ>
+
+# 3. execute
+python workbench/scripts/pipeline.py reproduce --model limn --apply --allow-gpu-eval --resume
+
+# 4. inspect the proof, the ledger entry, and the aggregate metrics
+python -c "import json,pathlib; p=pathlib.Path('workbench/artifacts/reports'); \
+print([f.name for f in p.glob('*_completion.json')])"
+tail -n 1 workbench/artifacts/evidence_ledger.jsonl
+cat workbench/artifacts/results/fashioniq_val_split/limn/*.json
+```
+
+A run is only evidence when its completion proof exists and names the current run id, its ledger
+entry verifies, and the recorded metrics are the model's own per-category values. Paper-reported
+numbers are sanity references, never reproductions.
+
+### 8g. Resume
+
+```bash
+python workbench/scripts/pipeline.py reproduce --model limn --apply --allow-gpu-eval --resume
+python workbench/scripts/pipeline.py reproduce --model limn --apply --allow-gpu-eval --force-stage evaluation
+```
+
+Resume skips a stage only when every declared input — checkpoints, captions, splits, correction
+dictionaries, image trees, prepared caches, auxiliary assets, the evaluator implementation and the
+recorded preprocessing recipe — is content-verified and unchanged. Anything else reruns, and the
+refusal reason names the input and its evidence class.
+
+### 8h. Remaining blockers, by model
+
+| Model | Missing item | Evidence source | How the operator verifies it |
+|---|---|---|---|
+| limn | 3 category checkpoints | registry `download_url` + `expected_sha256` | `download_checkpoints.py`, then digest comparison |
+| csmcir | LAVIS base weights; COT_ours2 captions | pinned `lavis/configs/models/blip2/blip2_pretrain.yaml`; `utils_csmcir.py` | download, hash, and place; preflight then reports the layout ready |
+| sprc | checkpoint class-key/backbone mapping | pinned `blip_validate.py`, `PRETRAINED_MODEL_CONFIG_DICT` | load the checkpoint with the registered class and compare state-dict keys |
+| encoder | `open_clip_pytorch_model.bin`; `datasets1.py` | pinned `evaluate_model.py` imports | place the binary; the runtime already reports both as blockers |
+| pair | which of `pair-B1.pt`/`pair-B2.pt` is the FashionIQ model | nothing in the pinned source settles it | must stay UNVERIFIED until author evidence appears |
+| clvc_net | member/category mapping of the author archive | pinned `train.py` saves per-category whole models | establish which archive member is which category/member before routing |
+| dcnet | GloVe validation PKLs; ResNet-50 weights | `preparation_contracts.yaml:dcnet_fashioniq` | provide the author's PKLs rather than regenerating them |
+| combiner / clip4cir | RN50x4 base weights; checkpoint pairing | `preparation_contracts.yaml:clip4cir_fashioniq` | download and hash the base; keep the variants distinct |
+| tgcir | replay entrypoint; ViT-B/16 | pinned `test.py` has no CLI | provide a source-supported entrypoint |
+| airknow, conesep, habit, intent, hint | runnable command; noisy-only checkpoints | `PHASE2_SOURCES_{C,D}.md` | remains blocked; noisy-trained weights are excluded from strict-clean comparison by default |
+
+No score in this repository is a reproduction. Do not claim benchmark parity before a real
+evaluation produces a completion proof.
