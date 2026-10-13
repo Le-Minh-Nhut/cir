@@ -51,11 +51,14 @@ def test_mock_serve_is_opt_in(monkeypatch) -> None:
 
 
 def real_config() -> SimpleNamespace:
+    from workbench.backend.operator_config import resolve_config
     return SimpleNamespace(
+        CIR_REPO_ROOT=Path("/configured"),
         FASHIONIQ_ROOT=Path("/configured/FashionIQ"),
         WORKBENCH_THIRD_PARTY_ROOT=Path("/configured/third_party"),
         WORKBENCH_CHECKPOINT_ROOT=Path("/configured/checkpoints"),
         WORKBENCH_RESULTS_ROOT=Path("/configured/results"),
+        WORKBENCH_ARTIFACTS_ROOT=resolve_config().WORKBENCH_ARTIFACTS_ROOT,
     )
 
 
