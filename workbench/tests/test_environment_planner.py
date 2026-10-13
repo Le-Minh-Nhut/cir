@@ -1303,3 +1303,65 @@ def test_missing_unpinned_declared_package_blocks_verification(tmp_path, monkeyp
     assert ok is False
     assert "declared-package" in reason
     assert "is not installed" in reason
+
+
+def test_unpinned_declared_package_routes_to_exact_spec_set_and_verifies_ready(tmp_path, monkeypatch):
+    conda_model = model("unpinned-conda", packages=["scipy"])
+    conda_plan = planner.plan_environments([conda_model], solver=accepted, artifacts_root=tmp_path)
+    conda_group = conda_plan["groups"][0]
+    conda_specs = planner._conda_specs_for_group(conda_group)
+    pip_specs = planner._pip_specs_for_group(conda_group, {"unpinned-conda": conda_model})
+
+    assert "scipy" in conda_specs
+    assert "scipy" not in pip_specs
+    assert ("scipy" in conda_specs) ^ ("scipy" in pip_specs)
+
+    pip_model = model("unpinned-pip", packages=["clip"])
+    pip_plan = planner.plan_environments([pip_model], solver=accepted, artifacts_root=tmp_path)
+    pip_group = pip_plan["groups"][0]
+    pip_conda_specs = planner._conda_specs_for_group(pip_group)
+    pip_pip_specs = planner._pip_specs_for_group(pip_group, {"unpinned-pip": pip_model})
+
+    assert "clip" not in pip_conda_specs
+    assert "clip" in pip_pip_specs
+    assert ("clip" in pip_conda_specs) ^ ("clip" in pip_pip_specs)
+
+    monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
+    monkeypatch.setattr(planner, "_evaluator_imports", lambda *a, **k: set())
+    monkeypatch.setattr(planner.runtime, "inspect_environment_distributions",
+                        lambda prefix: ({"scipy": "1.11.4"}, {"scipy"}, set()))
+    monkeypatch.setattr(planner.runtime, "verify_environment",
+                        lambda *args, **kwargs: SimpleNamespace(
+                            tier="RUNTIME_READY", status="READY", reason="ok"))
+
+    child_commands = []
+    actual_run = subprocess.run
+
+    def provisioner_run(argv, *args, **kwargs):
+        child_commands.append(argv)
+        if argv[0] == "conda" and argv[1] == "create":
+            prefix = Path(argv[argv.index("--prefix") + 1])
+            interpreter = prefix / "bin" / "python"
+            interpreter.parent.mkdir(parents=True, exist_ok=True)
+            interpreter.write_text(
+                f"#!{sys.executable}\nimport os, sys\n"
+                "if sys.argv[1:3] == ['-m', 'pip']:\n"
+                "    raise SystemExit(0)\n"
+                "if '-c' in sys.argv:\n"
+                "    raise SystemExit(0)\n"
+                f"os.execv({sys.executable!r}, [{sys.executable!r}, *sys.argv[1:]])\n",
+                encoding="utf-8")
+            os.chmod(interpreter, 0o755)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+        return actual_run(argv, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", provisioner_run)
+
+    assignment = planner.provision_environment_plan(
+        [conda_model], conda_plan, artifacts_root=tmp_path, allowed=True, network_allowed=True)
+    prov_group = assignment["groups"][0]
+    conda_create_cmd = next(argv for argv in child_commands if argv[0] == "conda" and argv[1] == "create")
+
+    assert "scipy" in conda_create_cmd
+    assert prov_group["runtime_verification_status"] == "READY"
+    assert prov_group["state"] == "RUNTIME_VERIFIED"

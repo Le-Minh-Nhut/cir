@@ -1041,6 +1041,21 @@ def model_eval_inputs(model_dict: dict, args: argparse.Namespace, config: Workbe
     return tuple(unique)
 
 
+def _bundle_anchor_for_selection(model_dict: dict[str, Any] | None, selected: Sequence[str] | set[str] | None) -> str | None:
+    """Return bundle_id when selection names the bundle or all its members, else None."""
+    if not model_dict or not selected:
+        return None
+    selected_set = set(selected)
+    for bundle in model_dict.get("checkpoint_bundles") or []:
+        bundle_id = bundle.get("bundle_id")
+        if bundle_id and selected_set == {bundle_id}:
+            return bundle_id
+        required = set(bundle.get("required_checkpoint_ids") or [])
+        if required and selected_set == required:
+            return bundle_id
+    return None
+
+
 def resolved_checkpoint_id(model_dict: dict, args: argparse.Namespace) -> str:
     """The checkpoint id evaluate_models.py will actually use for this model.
 
@@ -1051,20 +1066,26 @@ def resolved_checkpoint_id(model_dict: dict, args: argparse.Namespace) -> str:
     selections = getattr(args, "checkpoint_ids", None)
     if isinstance(selections, dict) and model_dict["model_id"] in selections:
         selected = selections[model_dict["model_id"]]
-        if len(selected) == 1 and any(bundle["bundle_id"] == selected[0] for bundle in bundles):
-            return selected[0]
+        anchor = _bundle_anchor_for_selection(model_dict, selected)
+        if anchor:
+            return anchor
         values = _checkpoint_ids(args, model_dict["model_id"], model_dict)
         if values:
             return values[0]
         return "default"
     explicit = getattr(args, "checkpoint", None)
     if explicit:
+        if isinstance(explicit, (list, tuple, set)):
+            anchor = _bundle_anchor_for_selection(model_dict, explicit)
+            if anchor:
+                return anchor
+            if len(explicit) == 1:
+                return next(iter(explicit))
         return explicit
     if model_dict["model_id"] == "limn" and bundles:
         return bundles[0]["bundle_id"]
     variants = model_dict.get("checkpoint_variants") or []
     return variants[0]["checkpoint_id"] if variants else "default"
-
 
 def resolved_checkpoint_file(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> Path:
     """The primary checkpoint file the evaluator will be handed for this selection."""

@@ -49,27 +49,14 @@ wandb/
 *.pth
 *.ckpt
 workbench/third_party/
-workbench/artifacts/checkpoints/**
+# Everything under artifacts/ is generated run state. Ignoring the whole directory and then
+# re-including the two markers is the only form that cannot be defeated by a new filename: the
+# earlier per-file list silently let a new lock or queue file become committable.
+workbench/artifacts/**
+!workbench/artifacts/checkpoints/
 !workbench/artifacts/checkpoints/.gitkeep
-workbench/artifacts/results/**
+!workbench/artifacts/results/
 !workbench/artifacts/results/.gitkeep
-workbench/artifacts/*.duckdb
-workbench/artifacts/*.jsonl
-workbench/artifacts/pipeline_state.json
-workbench/artifacts/pipeline_state.json.lock
-# Environments assignments and plans are generated run state, not source: only the two .gitkeep
-# markers under artifacts/ are tracked.
-workbench/artifacts/environment_assignment.json
-workbench/artifacts/environment_plan.json
-workbench/artifacts/autopilot_execution_plan.json
-workbench/artifacts/autopilot_pipeline_state.json
-workbench/artifacts/source_acquisition_state.json
-workbench/artifacts/environments/
-workbench/artifacts/gpu_capability.json
-workbench/artifacts/gpu_capabilities/
-workbench/artifacts/receipts/
-workbench/artifacts/annotations.json
-workbench/artifacts/cohorts.json
 workbench/frontend/tsconfig.tsbuildinfo
 workbench/artifacts/runs/
 workbench/artifacts/logs/

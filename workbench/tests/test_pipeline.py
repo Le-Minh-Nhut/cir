@@ -424,3 +424,47 @@ def test_limn_bundle_selection_resolves_to_bundle_id() -> None:
     assert pipeline.resolved_checkpoint_id(
         model, SimpleNamespace(checkpoint=None, checkpoint_ids={"limn": ["limn_bundle"]})
     ) == "limn_bundle"
+    assert pipeline.resolved_checkpoint_id(
+        model, SimpleNamespace(checkpoint=None, checkpoint_ids={"limn": ["dress", "shirt"]})
+    ) == "limn_bundle"
+
+
+def test_limn_bundle_all_members_selection_resolves_to_bundle_id_and_output_paths() -> None:
+    pipeline = load_pipeline()
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import model_by_id
+
+    limn = model_by_id("limn")
+    bundle = limn["checkpoint_bundles"][0]
+    bundle_id = bundle["bundle_id"]
+    member_ids = list(bundle["required_checkpoint_ids"])
+    assert member_ids == ["base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee"]
+
+    args = SimpleNamespace(
+        mode="all",
+        model=None,
+        selected_model_ids=["limn"],
+        dataset_root=None,
+        checkpoint=None,
+        checkpoint_ids={"limn": member_ids},
+        checkpoint_policy="strict_clean",
+        checkpoint_overrides={},
+        protocol=None,
+        top_k=200,
+        continue_on_error=True,
+        verify_gpu=False,
+        sync_sources=False,
+        download_checkpoints=False,
+        download_auxiliary_assets=False,
+        evaluate=True,
+        rebuild_index=False,
+    )
+
+    resolved = pipeline.resolved_checkpoint_id(limn, args)
+    assert resolved == bundle_id
+
+    cfg = resolve_config()
+    stages = pipeline.all_stages(args, cfg)
+    eval_stage = next(s for s in stages if s.name == "evaluation" and s.model_id == "limn")
+    assert eval_stage.output_paths
+    assert all(bundle_id in path.name for path in eval_stage.output_paths)

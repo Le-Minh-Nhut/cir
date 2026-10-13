@@ -564,7 +564,7 @@ def _conda_constraints(constraints: dict) -> dict:
     return {
         "python": constraints["python"],
         "packages": {name: terms for name, terms in constraints["packages"].items()
-                     if name not in pip_only and terms},
+                     if name not in pip_only},
         "ranges": {name: terms for name, terms in constraints["ranges"].items()
                    if name not in pip_only and terms},
     }
@@ -1011,6 +1011,27 @@ def apply_interpreter_mapping(models: list[dict], plan: dict,
     return mapping
 
 
+def _conda_specs_for_group(group: dict) -> list[str]:
+    conda_specs = []
+    py_terms = group["constraints"].get("python", [])
+    if py_terms:
+        for op, val in py_terms:
+            conda_specs.append(f"python{'=' if op in ('==', '===') else op}{val}")
+    else:
+        conda_specs.append("python=3.10")
+    conda_specs.append("pip")
+
+    conda_constraints = _conda_constraints(group["constraints"])
+    for name in sorted(set(conda_constraints["packages"]) | set(conda_constraints["ranges"])):
+        terms = conda_constraints["packages"].get(name, []) + conda_constraints["ranges"].get(name, [])
+        if not terms:
+            conda_specs.append(name)
+        else:
+            for op, val in terms:
+                conda_specs.append(f"{name}{'=' if op in ('==', '===') else op}{val}")
+    return conda_specs
+
+
 def _pip_specs_for_group(group: dict, models: dict[str, dict]) -> list[str]:
     constraints = group["constraints"]
     specs = []
@@ -1347,24 +1368,7 @@ def _install_at_prefix(
     ) -> tuple[bool, str]:
     """Create and verify the environment at its own final path, then mark it managed."""
 
-    conda_specs = []
-    py_terms = group["constraints"].get("python", [])
-    if py_terms:
-        for op, val in py_terms:
-            conda_specs.append(f"python{'=' if op in ('==', '===') else op}{val}")
-    else:
-        conda_specs.append("python=3.10")
-    conda_specs.append("pip")
-
-    conda_constraints = _conda_constraints(group["constraints"])
-    for name in sorted(set(conda_constraints["packages"]) | set(conda_constraints["ranges"])):
-        terms = conda_constraints["packages"].get(name, []) + conda_constraints["ranges"].get(name, [])
-        if not terms:
-            conda_specs.append(name)
-        else:
-            for op, val in terms:
-                conda_specs.append(f"{name}{'=' if op in ('==', '===') else op}{val}")
-
+    conda_specs = _conda_specs_for_group(group)
     argv = [solver_cmd, "create", "--prefix", str(staging_prefix), "--override-channels"]
     for ch in CONDA_CHANNELS:
         argv.extend(("-c", ch))
