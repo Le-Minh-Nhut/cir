@@ -157,8 +157,11 @@ def _environment_plan(models: list[dict[str, Any]], *, dry_run: bool,
         else:
             kwargs = {"artifacts_root": artifacts_root}
             if third_party_root is not None:
+                # Passed explicitly, never written into os.environ: the root is a parameter of this
+                # call, and setting a process-global copy leaked it into every later call in the
+                # same process (and into unrelated work in tests), so a model would be resolved
+                # against a root chosen by an earlier, different request.
                 kwargs["third_party_root"] = third_party_root
-                os.environ["WORKBENCH_THIRD_PARTY_ROOT"] = str(third_party_root)
             try:
                 result = plan_environments(models, **kwargs)
             except TypeError:
@@ -440,17 +443,36 @@ def _execute(config: AutopilotConfig, plan: dict[str, Any], *, resume: bool, for
     try:
         from workbench.backend.environment_planner import apply_interpreter_mapping
         mapping = apply_interpreter_mapping(models, plan["environment_plan"], environ=os.environ)
+        if not provision_authorized:
+            assignment_path = config.paths["artifacts"] / "environment_assignment.json"
+            try:
+                from workbench.backend.environment_planner import load_environment_assignment
+                persisted = load_environment_assignment(assignment_path) if assignment_path.is_file() else {}
+            except (OSError, ValueError, TypeError):
+                persisted = {}
+            persisted_models = persisted.get("models") or {}
+            verified_mapping = apply_interpreter_mapping(
+                models, {"groups": persisted.get("groups") or []}, environ=os.environ)
+            for mid, info in persisted_models.items():
+                model = by_id.get(mid)
+                variable = (model.get("environment") or {}).get("python_env_var") if model else None
+                if variable and os.environ.get(variable):
+                    continue
+                if (mid in verified_mapping and info.get("state") == "RUNTIME_VERIFIED"
+                        and info.get("interpreter") == verified_mapping[mid]):
+                    mapping[mid] = verified_mapping[mid]
+                elif mid in by_id:
+                    mapping.pop(mid, None)
     except ImportError:
         mapping = {}
     # A model the provisioner actually assigned takes the provisioned interpreter, which may differ
     # from the planning-time one after a group split.
     for mid, info in (assignment.get("models") or {}).items():
         interpreter = info.get("interpreter")
-        if interpreter and info.get("state") not in ("FAILED", "BLOCKED"):
+        if interpreter and info.get("state") == "RUNTIME_VERIFIED":
             mapping[mid] = interpreter
         else:
-            # The provisioner judged this model's environment unusable. A planning-time path must
-            # not survive that judgement: it would be handed to the evaluator as the environment.
+            # A failed or unverified environment must not leave a planning-time path usable.
             mapping.pop(mid, None)
     child_environment = {
         "WORKBENCH_REGISTRY_PATH": str(config.paths["registry"]),
@@ -1122,16 +1144,13 @@ def run(config_path: Path, *, apply: bool, resume: bool, force_models: list[str]
         # silently planned from the registry's coarse fallback.
         blocked_ids = {item["model_id"]: item["reason"] for item in acquisition["blocked"]}
         for row in plan["models"]:
-            if row["model_id"] in blocked_ids and row["status"] == "NOT_RUN":
-                row.update(status="BLOCKED_SOURCE",
-                           blockers=[f"pinned source not acquired: {blocked_ids[row['model_id']]}"])
+            if row["model_id"] in blocked_ids:
+                reason = f"pinned source not acquired: {blocked_ids[row['model_id']]}"
+                if row["status"] == "NOT_RUN":
+                    row.update(status="BLOCKED_SOURCE", blockers=[reason])
+                elif reason not in row.get("blockers", []):
+                    row.setdefault("blockers", []).append(reason)
     plan["source_acquisition"] = acquisition
-    previous = None
-    if paths["plan"].exists():
-        previous = json.loads(paths["plan"].read_text(encoding="utf-8"))
-        if previous.get("execution_started") and previous.get("selected_models") != list(config.selected_model_ids):
-            raise ValueError("refusing to change selected_models after autopilot execution started")
-    plan = resolved_plan(config, dry_run=mode == "dry-run")
     if mode == "dry-run":
         return {"exit_code": 0, "summary": {"status": "NOT_RUN", "selected_models": list(config.selected_model_ids),
                                                 "solver_verified": plan["solver_verified"], "plan": plan}}

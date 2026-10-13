@@ -146,7 +146,7 @@ def _create_fake_conda_cli(bin_dir: Path) -> Path:
         "    venv.EnvBuilder(with_pip=False, symlinks=True).create(prefix)",
         "    site = next(prefix.glob('lib/python*/site-packages'), prefix)",
         "    joined = ' '.join(argv)",
-        "    torch_version, torchvision_version = ('2.0.1', '0.15.2') if ('2.0.1' in joined or 'gamma' in str(prefix)) else ('1.12.1', '0.13.1')",
+        "    torch_version, torchvision_version = ('2.0.1', '0.15.2') if ('2.0.1' in joined or '0.15.2' in joined or 'gamma' in str(prefix)) else ('1.12.1', '0.13.1')",
         "    def write_pkg(name, version):",
         "        (site / (name + '.py')).write_text('__version__ = ' + repr(version) + NL)",
         "        dist = site / (name + '-' + version + '.dist-info')",
@@ -157,7 +157,7 @@ def _create_fake_conda_cli(bin_dir: Path) -> Path:
         "    # `packaging` is a pip-provided runtime dependency that the planner's own evaluator-import",
         "    # trace reaches through pip's metadata, so a fake environment that installs anything via pip",
         "    # must expose it, exactly as a real pip-installed environment does.",
-        "    for name, version in (('torch', torch_version), ('torchvision', torchvision_version), ('yaml', '6.0'), ('pyyaml', '6.0'), ('packaging', '24.0')):",
+        "    for name, version in (('yaml', '6.0'), ('pyyaml', '6.0'), ('packaging', '24.0')):",
         "        write_pkg(name, version)",
         "    pip_dir = site / 'pip'",
         "    Path(__file__).with_name('provision_calls.txt').open('a').write('create' + NL)",
@@ -779,9 +779,12 @@ def test_offline_run_reaches_eligible_evaluation_without_network_permission(cold
     cfg["permissions"]["allow_env_install"] = False
     cfg_path.write_text(json.dumps(cfg, indent=2))
 
+    package_manager_calls_before = cold_workbench["package_manager_calls"].read_text()
     result = _run_sh_autopilot(cold_workbench, "--apply", "--resume")
+    assert cold_workbench["package_manager_calls"].read_text() == package_manager_calls_before
     summary = _summary(cold_workbench)
 
+    assert result.returncode != 0  # delta remains blocked without network permission
     by_id = {m["model_id"]: m for m in summary["models"]}
     # Eligible models (whose resources are verified on disk) reach evaluation and complete
     for mid in ("alpha", "beta", "gamma", "zeta"):
@@ -790,6 +793,37 @@ def test_offline_run_reaches_eligible_evaluation_without_network_permission(cold
 
     # Model delta requires missing checkpoint; without network permission it is refused/blocked
     assert by_id["delta"]["status"].startswith("BLOCKED"), by_id["delta"]
+
+
+def test_offline_run_without_assignment_stays_unconfigured(cold_workbench: dict) -> None:
+    cfg_path = cold_workbench["config"]
+    cfg = json.loads(cfg_path.read_text())
+    cfg["permissions"].update(allow_network=False, allow_large_downloads=False, allow_env_install=False)
+    cfg_path.write_text(json.dumps(cfg, indent=2))
+    assert not (cold_workbench["artifacts"] / "environment_assignment.json").exists()
+
+    _run_sh_autopilot(cold_workbench, "--apply")
+    by_id = {m["model_id"]: m for m in _summary(cold_workbench)["models"]}
+    assert by_id["alpha"]["status"] == "BLOCKED_ENVIRONMENT"
+    assert "environment stage failed" in by_id["alpha"]["blockers"]
+
+
+def test_offline_run_does_not_publish_unverified_assignment_interpreter(cold_workbench: dict) -> None:
+    _run_sh_autopilot(cold_workbench, "--apply")
+    cfg_path = cold_workbench["config"]
+    cfg = json.loads(cfg_path.read_text())
+    cfg["permissions"].update(allow_network=False, allow_large_downloads=False, allow_env_install=False)
+    cfg_path.write_text(json.dumps(cfg, indent=2))
+    assignment_path = cold_workbench["artifacts"] / "environment_assignment.json"
+    assignment = json.loads(assignment_path.read_text())
+    assignment["models"]["alpha"].update(state="FAILED", runtime_verification_status="FAILED")
+    assignment_path.write_text(json.dumps(assignment, indent=2))
+
+    _run_sh_autopilot(cold_workbench, "--apply", "--resume")
+    by_id = {m["model_id"]: m for m in _summary(cold_workbench)["models"]}
+    assert by_id["alpha"]["status"] == "BLOCKED_ENVIRONMENT"
+    assert any("WORKBENCH_ALPHA_PYTHON=None [UNCONFIGURED/UNCONFIGURED]" in reason
+               for reason in by_id["alpha"]["blockers"])
 
 def test_first_run_gpu_capability_state_machine(cold_workbench: dict) -> None:
     """First-run GPU state machine: no capability, synthetic verification succeeds, stale blocks, valid reused."""

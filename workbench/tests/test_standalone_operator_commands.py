@@ -36,11 +36,11 @@ def test_manage_environment_create_requires_authorization() -> None:
 
 def test_manage_environment_dry_run_authorized(capsys: pytest.CaptureFixture[str]) -> None:
     env_mod = load_script("manage_environment")
-    # For a model without synced source spec, create should be blocked
     rc = env_mod.main(["--model", "csmcir", "--create", "--allow-env-install", "--dry-run"])
     out = capsys.readouterr()
-    # Source not synced -> blocks safely without mutating
-    assert rc == 1 or "[BLOCKED]" in out.err or "[BLOCKED]" in out.out
+    # Shared environment groups are planned without inspecting unsynced source in dry-run.
+    assert rc == 0
+    assert "[OK] dry-run: would provision or reuse group" in out.out
 
 
 def test_prepare_model_list(capsys: pytest.CaptureFixture[str]) -> None:
@@ -70,7 +70,10 @@ def test_prepare_model_executes_only_declared_recipe_steps(capsys: pytest.Captur
     combined = captured.out + captured.err
     # Not the old blanket refusal: DCNet has a real declared step now.
     assert "no verified automated preparation step" not in captured.err
-    # This host has no canonical dataset, so the resize cannot be performed and the command must say
-    # exactly that rather than claim success.
-    assert rc == 1, (captured.out, captured.err)
-    assert "canonical images directory missing" in combined or "dry-run" in combined, combined
+    # DCNet's GloVe PKL generation is nondeterministic, so its author artifact is required
+    # while its resize may still be attempted in dry-run.
+    assert rc == 0, (captured.out, captured.err)
+    assert "[MANUAL]" in captured.out
+    assert "NONDETERMINISTIC_WITHOUT_AUTHOR_ARTIFACT" in captured.out
+    assert "would resize" in captured.out
+    assert "dry-run" in combined, combined

@@ -38,7 +38,7 @@ def qwen_assets(module, config: WorkbenchConfig, *, with_hash: bool = True):
     prove hash verification is enforced keep the real hash and serve matching or mismatching bytes.
     """
     items = tuple(asset for asset in module.assets({"csmcir"}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
-                  if asset.automatic_download_available)
+                  if asset.family == "Qwen captions")
     if with_hash:
         return items
     from dataclasses import replace
@@ -56,8 +56,8 @@ def load_module():
 def test_assets_list_qwen_and_unverified_cot(tmp_path: Path) -> None:
     module = load_module()
     items = module.assets({"csmcir"}, tmp_path / "third_party", tmp_path / "FashionIQ")
-    qwen = tuple(asset for asset in items if asset.automatic_download_available)
-    cot = tuple(asset for asset in items if not asset.automatic_download_available)
+    qwen = tuple(asset for asset in items if asset.family == "Qwen captions")
+    cot = tuple(asset for asset in items if asset.family == "COT_ours2 captions")
 
     assert len(qwen) == len(cot) == 3
     assert all(asset.required and asset.source_url and asset.source_revision == "cf0c19bb346266c295b4b5772ebf03bd1c4f0467" and asset.provenance_status == "VERIFIED" for asset in qwen)
@@ -242,3 +242,176 @@ def test_all_selects_only_registered_auxiliary_models(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(module.urllib.request, "urlopen", lambda _: (_ for _ in ()).throw(AssertionError("network used")))
 
     assert module.main(["--all", "--dry-run"]) == 0
+
+def test_validate_auxiliary_asset_invalid_json(tmp_path: Path) -> None:
+    from workbench.backend.registry import validate_auxiliary_asset
+    file_path = tmp_path / "bad.json"
+    file_path.write_bytes(b"{not valid json")
+    asset = {
+        "model_id": "csmcir",
+        "family": "Qwen captions",
+        "provenance_status": "VERIFIED",
+        "content_contract": {"record_key_fields": ["Final_Caption"], "expected_record_count": 1},
+    }
+    ok, issues = validate_auxiliary_asset(asset, file_path)
+    assert not ok
+    assert any("INVALID JSON" in issue for issue in issues)
+
+
+def test_validate_auxiliary_asset_wrong_record_fields(tmp_path: Path) -> None:
+    from workbench.backend.registry import validate_auxiliary_asset
+    file_path = tmp_path / "wrong_fields.json"
+    file_path.write_text(json.dumps({"img_001": {"Wrong_Field": "text"}}), encoding="utf-8")
+    asset = {
+        "model_id": "csmcir",
+        "family": "Qwen captions",
+        "provenance_status": "VERIFIED",
+        "content_contract": {"record_key_fields": ["Core_Essence", "Final_Caption"], "expected_record_count": 1},
+    }
+    ok, issues = validate_auxiliary_asset(asset, file_path)
+    assert not ok
+    assert any("missing required fields" in issue or "SCHEMA MISMATCH" in issue for issue in issues)
+
+
+def test_validate_auxiliary_asset_record_count_disagreement(tmp_path: Path) -> None:
+    from workbench.backend.registry import validate_auxiliary_asset
+    file_path = tmp_path / "count_mismatch.json"
+    file_path.write_text(json.dumps({"img_001": {"Final_Caption": "text"}}), encoding="utf-8")
+    asset = {
+        "model_id": "csmcir",
+        "family": "Qwen captions",
+        "provenance_status": "VERIFIED",
+        "content_contract": {"record_key_fields": ["Final_Caption"], "expected_record_count": 10},
+    }
+    ok, issues = validate_auxiliary_asset(asset, file_path)
+    assert not ok
+    assert any("RECORD COUNT MISMATCH" in issue for issue in issues)
+
+
+def test_validate_auxiliary_asset_id_absent_from_declared_split(tmp_path: Path) -> None:
+    from workbench.backend.registry import validate_auxiliary_asset
+    file_path = tmp_path / "absent_id.json"
+    file_path.write_text(json.dumps({"img_999": {"Final_Caption": "text"}}), encoding="utf-8")
+    split_dir = tmp_path / "image_splits"
+    split_dir.mkdir(parents=True, exist_ok=True)
+    split_file = split_dir / "split.dress.val.json"
+    split_file.write_text(json.dumps(["img_001", "img_002"]), encoding="utf-8")
+    asset = {
+        "model_id": "csmcir",
+        "family": "Qwen captions",
+        "provenance_status": "VERIFIED",
+        "content_contract": {
+            "record_key_fields": ["Final_Caption"],
+            "expected_record_count": 1,
+            "id_source": "image_splits/split.dress.val.json",
+        },
+    }
+    ok, issues = validate_auxiliary_asset(asset, file_path, fashioniq_root=tmp_path)
+    assert not ok
+    assert any("SPLIT ID MISMATCH" in issue for issue in issues)
+
+
+def test_validate_auxiliary_asset_operator_supplied_unverified_distinguished_from_missing(tmp_path: Path) -> None:
+    from workbench.backend.registry import validate_auxiliary_asset
+    file_path = tmp_path / "cot_present.json"
+    file_path.write_text(json.dumps({"img_001": {"Final_Caption": "text"}}), encoding="utf-8")
+    asset = {
+        "model_id": "csmcir",
+        "family": "COT_ours2 captions",
+        "provenance_status": "UNVERIFIED",
+        "content_contract": {"record_key_fields": ["Final_Caption"], "expected_record_count": 1},
+    }
+    res_present = validate_auxiliary_asset(asset, file_path)
+    assert not res_present.ok
+    assert res_present.status == "OPERATOR_SUPPLIED_UNVERIFIED"
+    assert any("OPERATOR_SUPPLIED_UNVERIFIED" in issue for issue in res_present.issues)
+
+    res_missing = validate_auxiliary_asset(asset, tmp_path / "nonexistent.json")
+    assert not res_missing.ok
+    assert res_missing.status == "MISSING"
+    assert res_present.status != res_missing.status
+
+
+def test_validate_auxiliary_asset_missing_required_asset(tmp_path: Path) -> None:
+    from workbench.backend.registry import validate_auxiliary_asset
+    missing_path = tmp_path / "missing.json"
+    asset = {
+        "model_id": "csmcir",
+        "family": "Qwen captions",
+        "provenance_status": "VERIFIED",
+    }
+    res = validate_auxiliary_asset(asset, missing_path)
+    assert not res.ok
+    assert res.status == "MISSING"
+    assert any("MISSING" in issue for issue in res.issues)
+
+
+def test_validate_auxiliary_asset_valid_verified_with_matching_sha256(tmp_path: Path) -> None:
+    from workbench.backend.registry import validate_auxiliary_asset
+    payload = json.dumps({"img_001": {"Core_Essence": "a", "Visual_Attributes": "b", "Observation_Process": "c", "Final_Caption": "d"}}).encode("utf-8")
+    file_path = tmp_path / "valid.json"
+    file_path.write_bytes(payload)
+    digest = hashlib.sha256(payload).hexdigest()
+    asset = {
+        "model_id": "csmcir",
+        "family": "Qwen captions",
+        "provenance_status": "VERIFIED",
+        "expected_sha256": digest,
+        "expected_size_bytes": len(payload),
+        "content_contract": {
+            "record_key_fields": ["Core_Essence", "Visual_Attributes", "Observation_Process", "Final_Caption"],
+            "expected_record_count": 1,
+        },
+    }
+    res = validate_auxiliary_asset(asset, file_path, split_ids={"img_001"})
+    assert res.ok is True
+    assert res.status == "VERIFIED"
+    assert res.issues == []
+
+
+def test_validate_auxiliary_asset_rejects_missing_declared_split_ids(tmp_path: Path) -> None:
+    from workbench.backend.registry import validate_auxiliary_asset
+    file_path = tmp_path / "partial.json"
+    file_path.write_text(json.dumps({"img_001": {"Final_Caption": "text"}}), encoding="utf-8")
+    split_dir = tmp_path / "image_splits"
+    split_dir.mkdir()
+    (split_dir / "split.dress.val.json").write_text(json.dumps(["img_001", "img_002"]), encoding="utf-8")
+    asset = {"provenance_status": "VERIFIED", "content_contract": {
+        "record_key_fields": ["Final_Caption"], "id_source": "image_splits/split.dress.val.json",
+    }}
+
+    result = validate_auxiliary_asset(asset, file_path, fashioniq_root=tmp_path)
+
+    assert not result.ok, "validator must refuse JSON missing required split ids"
+    assert any("1 split ids missing" in issue for issue in result.issues)
+
+
+def test_validate_auxiliary_asset_rejects_missing_declared_split_source(tmp_path: Path) -> None:
+    from workbench.backend.registry import validate_auxiliary_asset
+    file_path = tmp_path / "captions.json"
+    file_path.write_text(json.dumps({"img_001": {"Final_Caption": "text"}}), encoding="utf-8")
+    asset = {"provenance_status": "VERIFIED", "content_contract": {
+        "record_key_fields": ["Final_Caption"], "id_source": "image_splits/missing.json",
+    }}
+
+    result = validate_auxiliary_asset(asset, file_path, fashioniq_root=tmp_path)
+
+    assert not result.ok, "validator must refuse an unreadable declared split source"
+    assert any("SPLIT ID SOURCE INVALID" in issue for issue in result.issues)
+
+
+def test_csmcir_auxiliary_backbones_resolve_to_user_cache_paths(monkeypatch, tmp_path: Path) -> None:
+    from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "xdg"))
+    monkeypatch.setenv("TORCH_HOME", str(tmp_path / "torch"))
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
+    assets = auxiliary_assets_for_model("csmcir")
+    expected = {
+        "LAVIS BLIP-2 pretrain weights": tmp_path / "xdg/lavis/blip2_pretrained.pth",
+        "EVA-ViT-g backbone weights": tmp_path / "torch/hub/checkpoints/eva_vit_g.pth",
+        "bert-base-uncased tokenizer": tmp_path / "hf/hub/models--bert-base-uncased/vocab.txt",
+    }
+
+    for family, path in expected.items():
+        asset = next(item for item in assets if item["family"] == family)
+        assert auxiliary_destination(asset, tmp_path / "source", tmp_path / "fashioniq") == path

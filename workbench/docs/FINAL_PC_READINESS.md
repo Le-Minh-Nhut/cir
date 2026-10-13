@@ -7,14 +7,14 @@ host: none of them has been executed on the laptop, and nothing in this document
 ## 1. Commit and command
 
 - Branch: `research/cir-failure-workbench`
-- Base commit for this document: `5be9fdc8c35d11c5d8fc8d7563a82808a812fef4`
+- Base commit for this document: `70851dd3d9481053c29082d37fbb18983516253d`
 - `main` remains `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333`
 
 One command, after the configuration file exists:
 
 ```bash
 ./workbench/run.sh autopilot \
-    --config workbench/configs/pc_autopilot.yaml \
+    --config workbench/configs/pc_autopilot.pilot_csmcir.yaml \
     --apply \
     --resume
 ```
@@ -36,21 +36,21 @@ document is a diagnostic.
 Before the first run, create the ledger signing key **once** and keep it:
 
 ```bash
-umask 077 && mkdir -p ~/.config/cir
-python -c "import secrets,pathlib;pathlib.Path.home().joinpath('.config/cir/workbench_ledger_key').write_text(secrets.token_hex(32))"
+umask 077 && mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/cir"
+python -c "import os,pathlib,secrets; (pathlib.Path(os.environ.get('XDG_CONFIG_HOME') or pathlib.Path.home()/'.config')/'cir'/'workbench_ledger_key').write_text(secrets.token_hex(32))"
 ```
 
 Then export the *same* key in every shell that runs the workbench:
 
 ```bash
-export WORKBENCH_LEDGER_KEY="$(cat ~/.config/cir/workbench_ledger_key)"
+export WORKBENCH_LEDGER_KEY="$(cat "${XDG_CONFIG_HOME:-$HOME/.config}/cir/workbench_ledger_key")"
 ```
 
 Keep it outside the repo, the config, and the artifacts. It signs completion evidence, and the
 evidence chain is only as trustworthy as that key: **do not regenerate it per shell**, because a new
 key makes every earlier run's evidence unverifiable. Evaluator and package-manager children do not
 receive it. Leaving the variable unset is also safe -- a `0600` key file is created under the
-private config directory (`~/.config/cir/`) on first use and reused thereafter -- but a secret store is preferable on a shared
+private config directory (`$XDG_CONFIG_HOME/cir/`, default `~/.config/cir/`) on first use and reused thereafter -- but a secret store is preferable on a shared
 machine. An empty key, or a missing key while a ledger already exists, fails closed.
 
 ## 3. Configuration
@@ -64,6 +64,10 @@ Copy `workbench/configs/pc_autopilot.example.yaml` and edit. Required keys: `sch
 ledger, completion proofs, GPU capability records and the derived index; keep it on persistent
 storage. `paths.third_party` is where pinned upstream checkouts live -- the planner reads each
 model's requirements from there, so it must be the same root the sync stage populates.
+
+Every entry under `paths` that is not absolute is resolved **relative to the config file's own
+directory**, so a config copied out of the repository must use absolute paths for all six keys:
+`registry`, `dataset_root`, `artifacts`, `checkpoints`, `results`, `third_party`.
 
 Two ready-made profiles are provided:
 
@@ -81,9 +85,9 @@ Two ready-made profiles are provided:
 | checkpoint verification (file present) | none |
 | auxiliary asset acquisition | `allow_network`, `allow_large_downloads` |
 | environment creation | `allow_env_install`, `allow_network` |
-| preparation (dataset link creation) | `allow_preparation` |
-| preparation (link already valid) | none |
-| evaluation | `allow_gpu_eval`, `allow_preparation` |
+| preparation (generable artifacts or dataset link) | `allow_preparation` |
+| preparation (artifacts/link already valid) | none |
+| evaluation | `allow_gpu_eval` |
 | index rebuild | `allow_index_write` |
 
 A stage whose declared capability is not granted is refused as `BLOCKED_AUTHORIZATION_REQUIRED`. A
@@ -112,8 +116,8 @@ group** under the artifacts root, recording four distinct states:
 Only `RUNTIME_VERIFIED` permits evaluation. Installation is conda-resolvable packages first, then
 pip-only packages, then `pip check` and the version/import checks. A group that fails is split, only
 the affected members, within a bounded number of attempts; valid groups are preserved and an
-existing environment is never deleted -- a replacement is built in a staging prefix and committed
-atomically only after it verifies. An environment the workbench did not create is never removed.
+existing environment is never deleted -- environments are created directly at their final prefix
+under a process-level advisory lock (`.provision-<environment_id>.lock`). An environment the workbench did not create is never removed.
 
 The authoritative assignment is `<paths.artifacts>/environment_assignment.json`. Inspect it, plus
 `environment_plan.json`, before a long run. An explicitly exported `WORKBENCH_<MODEL>_PYTHON` takes
@@ -154,12 +158,19 @@ blocker spelled out.
 ## 9. First GPU pilot
 
 `workbench/configs/pc_autopilot.pilot_csmcir.yaml` -- CSMCIR under `strict_clean`: the only model with
-a recorded clean checkpoint, a pinned command and a resolved dataset path. Its one open prerequisite
-is the `COT_ours2/fashioniq` captions; if those are absent the model reports `BLOCKED_CHECKPOINT`
-or the corresponding asset blocker rather than running.
+a recorded clean checkpoint, a pinned command and a resolved dataset path. The pilot config sets
+`allow_env_install: true` to cold-start and provision the missing conda environment directly on the PC,
+with `allow_network`, `allow_large_downloads`, `allow_preparation`, `allow_gpu_eval`, and `allow_index_write`
+all enabled.
+
+Honest expectations: CSMCIR requires its checkpoint (author-published and downloadable) AND the
+`COT_ours2/fashioniq` captions (no author download source published). The Qwen captions and checkpoint
+are downloadable, but until the operator manually supplies `COT_ours2/fashioniq/`, the pilot reports
+the `COT_ours2` asset blocker rather than evaluating.
 
 LIMN is the next candidate and needs `include_flagged_conditions` (its checkpoints record no
-training condition) plus the three files, the resized images and the dictionaries.
+training condition) plus three category checkpoints (~5.01 GiB total), resized images prepared,
+and correction dictionaries. It is not less blocked than CSMCIR and is not selected by default.
 
 ```bash
 ./workbench/run.sh autopilot --config workbench/configs/pc_autopilot.pilot_csmcir.yaml --apply --resume

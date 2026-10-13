@@ -170,11 +170,12 @@ def main() -> None:
                 print(f"[BLOCKED] {item['model_id']}: {state}")
             failed = True
             continue
-        elif not args.update_existing:
-            for item in group_models:
-                print(f"[SKIP] {item['model_id']}: existing repository needs --update-existing")
-            continue
-        else:
+        elif head != pin:
+            if not (args.update_existing or args.fetch):
+                for item in group_models:
+                    print(f"[BLOCKED] {item['model_id']}: BLOCKED_SOURCE_PIN_MISMATCH wanted {pin} actual {head}")
+                failed = True
+                continue
             try:
                 if args.fetch:
                     print(f"[RUN] {names}: fetching pinned SHA")
@@ -189,7 +190,7 @@ def main() -> None:
         actual = git_output(destination, "rev-parse", "HEAD")
         if actual != pin:
             for item in group_models:
-                print(f"[BLOCKED] {item['model_id']}: checked out {actual}, expected {pin}")
+                print(f"[BLOCKED] {item['model_id']}: BLOCKED_SOURCE_PIN_MISMATCH wanted {pin} actual {actual}")
             failed = True
         else:
             for item in group_models:

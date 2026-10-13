@@ -111,3 +111,82 @@ def test_ptha_unavailable_source_skips_git_status(
     assert "local=unavailable" in output
     assert "local=dirty" not in output
     assert "[SKIP] ptha_mtst: source unavailable" in output
+
+
+def _make_scratch_git_repo(path: Path) -> tuple[str, str]:
+    import subprocess
+    path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=path, check=True)
+    subprocess.run(["git", "config", "user.name", "test"], cwd=path, check=True)
+    (path / "file.txt").write_text("initial")
+    subprocess.run(["git", "add", "."], cwd=path, check=True)
+    subprocess.run(["git", "commit", "-qm", "pin_commit"], cwd=path, check=True)
+    pin_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=path, text=True).strip()
+    (path / "file.txt").write_text("updated")
+    subprocess.run(["git", "commit", "-qam", "other_commit"], cwd=path, check=True)
+    other_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=path, text=True).strip()
+    return pin_sha, other_sha
+
+
+def test_clean_checkout_at_wrong_sha_fails_without_update_existing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sync = load_sync_module()
+    repo = tmp_path / "Demo"
+    pin_sha, other_sha = _make_scratch_git_repo(repo)
+    m = model()
+    m["upstream_commit_sha"] = pin_sha
+    monkeypatch.setattr(sync, "load_registry", lambda: {"models": [m]})
+    monkeypatch.setattr(sys, "argv", ["sync_upstreams.py", "--model", "demo", "--output-root", str(tmp_path)])
+
+    with pytest.raises(SystemExit, match="1"):
+        sync.main()
+
+    output = capsys.readouterr().out
+    assert "BLOCKED_SOURCE_PIN_MISMATCH" in output
+    assert f"wanted {pin_sha} actual {other_sha}" in output
+
+
+def test_clean_checkout_at_wrong_sha_reaches_pin_with_update_existing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import subprocess
+    sync = load_sync_module()
+    repo = tmp_path / "Demo"
+    pin_sha, _ = _make_scratch_git_repo(repo)
+    m = model()
+    m["upstream_commit_sha"] = pin_sha
+    monkeypatch.setattr(sync, "load_registry", lambda: {"models": [m]})
+    monkeypatch.setattr(
+        sys, "argv", ["sync_upstreams.py", "--model", "demo", "--update-existing", "--output-root", str(tmp_path)]
+    )
+
+    sync.main()
+
+    output = capsys.readouterr().out
+    assert "[OK] demo: pinned SHA checked out" in output
+    actual = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    assert actual == pin_sha
+
+
+def test_dirty_checkout_is_refused_and_unmodified(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sync = load_sync_module()
+    repo = tmp_path / "Demo"
+    pin_sha, _ = _make_scratch_git_repo(repo)
+    (repo / "file.txt").write_text("uncommitted dirty change")
+    m = model()
+    m["upstream_commit_sha"] = pin_sha
+    monkeypatch.setattr(sync, "load_registry", lambda: {"models": [m]})
+    monkeypatch.setattr(
+        sys, "argv", ["sync_upstreams.py", "--model", "demo", "--update-existing", "--output-root", str(tmp_path)]
+    )
+
+    with pytest.raises(SystemExit, match="1"):
+        sync.main()
+
+    output = capsys.readouterr().out
+    assert "[BLOCKED] demo: repository is dirty; refusing to change it" in output
+    assert (repo / "file.txt").read_text() == "uncommitted dirty change"

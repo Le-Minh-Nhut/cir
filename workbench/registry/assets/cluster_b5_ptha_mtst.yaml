@@ -1,0 +1,60 @@
+schema_version: 1
+cluster: b5_ptha_mtst
+notes: "PTHA+MTST (Scale Up Composed Image Retrieval Learning via Modification Text Generation) is registered with no obtainable source checkout and no checkpoint variant. This entry records that state from the workbench registry rather than from a pinned checkout, because there is no checkout to read."
+
+models:
+  - model_id: ptha_mtst
+    source_dir: null
+    upstream_commit: null
+    eval_entrypoint: null
+    eval_command_evidence: "None. The registry records source_available: false and an empty checkpoint_variants list, so no official evaluation entrypoint has been identified or pinned."
+    evaluation_data_flow: "Not established. Without an official repository checkout or a published FashionIQ checkpoint there is no evaluation code path to trace, and the workbench does not reconstruct a method from its paper."
+    assets:
+      - logical_asset_id: ptha_mtst_source_checkout
+        asset_role: source_repository
+        required_for_evaluation: true
+        upstream_source_file: null
+        upstream_line: null
+        upstream_function: null
+        expected_relative_path: null
+        expected_format: directory
+        expected_structure: null
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: null
+        acquisition_status: BLOCKED
+        current_blocker: "The workbench registry records this model with source_available: false. No official repository has been pinned, so neither the evaluation source nor its auxiliary assets can be audited."
+        notes: "Recorded from workbench/registry/models.yaml. Replacing this blocker requires the operator to supply an official repository URL and revision; the workbench does not invent one."
+      - logical_asset_id: ptha_mtst_checkpoint
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: null
+        upstream_line: null
+        upstream_function: null
+        expected_relative_path: null
+        expected_format: pt
+        expected_structure: null
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: null
+        acquisition_status: BLOCKED
+        current_blocker: "No FashionIQ fine-tuned checkpoint is published by the authors. The only identified public checkpoint evidence relates to CIRR pretraining, and a CIRR checkpoint is not a FashionIQ checkpoint."
+        notes: "The registry records an empty checkpoint_variants list for this model, so no selection can be resolved and the checkpoint policy has nothing to refuse or accept."
+    unresolved:
+      - "No official source repository is recorded, so the evaluation path, its auxiliary assets and its protocol cannot be established from source."
+      - "No official FashionIQ checkpoint is published; a CIRR-derived checkpoint must never be evaluated as FashionIQ."
+    search_locations_checked:
+      - "workbench/registry/models.yaml (this model's record: source_available false, empty checkpoint_variants)"
+      - "No pinned checkout exists under workbench/third_party/ for this model"

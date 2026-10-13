@@ -296,3 +296,131 @@ def test_all_stages_csmcir_evaluation_command_parses_with_evaluate_models() -> N
     assert parsed.protocol == "fashioniq_val_split"
     assert parsed.top_k == 100
     assert eval_stage.required_capabilities == {"allow_gpu_eval", "allow_preparation"}
+
+
+def test_selected_checkpoint_bytes_mutation_changes_fingerprint_unselected_does_not(tmp_path: Path):
+    pipeline = load_pipeline()
+    from dataclasses import replace
+    from workbench.backend.operator_config import resolve_config
+
+    ckpt_dir = tmp_path / "checkpoints" / "airknow"
+    ckpt_dir.mkdir(parents=True)
+    ckpt_a = ckpt_dir / "airknow_fiq_0.5.pt"
+    ckpt_b = ckpt_dir / "airknow_fiq_0.8.pt"
+    ckpt_a.write_bytes(b"initial bytes A")
+    ckpt_b.write_bytes(b"initial bytes B")
+
+    cfg = replace(resolve_config(), WORKBENCH_CHECKPOINT_ROOT=tmp_path / "checkpoints")
+    args = SimpleNamespace(
+        mode="all",
+        model="airknow",
+        selected_model_ids=["airknow"],
+        dataset_root=None,
+        checkpoint=None,
+        checkpoint_ids={"airknow": ["fiq_n05"]},
+        checkpoint_policy="strict_clean",
+        checkpoint_overrides={},
+        protocol=None,
+        top_k=10,
+        continue_on_error=True,
+        verify_gpu=False,
+        sync_sources=False,
+        download_checkpoints=False,
+        download_auxiliary_assets=False,
+        evaluate=True,
+        rebuild_index=False,
+    )
+    stages = pipeline.all_stages(args, cfg)
+    eval_stage = next(s for s in stages if s.name == "evaluation" and s.model_id == "airknow")
+
+    fp1 = pipeline.compute_stage_input_fingerprint(eval_stage, cfg)
+
+    # Mutate unselected checkpoint B
+    ckpt_b.write_bytes(b"mutated bytes B")
+    fp2 = pipeline.compute_stage_input_fingerprint(eval_stage, cfg)
+    assert fp1 == fp2, "mutating unselected checkpoint B must not change evaluation input fingerprint"
+
+    # Mutate selected checkpoint A
+    ckpt_a.write_bytes(b"mutated bytes A")
+    fp3 = pipeline.compute_stage_input_fingerprint(eval_stage, cfg)
+    assert fp3 != fp1, "mutating selected checkpoint A must change evaluation input fingerprint"
+
+
+def test_declared_external_backbone_asset_presence_in_model_eval_inputs(tmp_path: Path, monkeypatch):
+    pipeline = load_pipeline()
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import load_registry
+
+    registry = load_registry()
+    model = next(m for m in registry["models"] if m["model_id"] == "clip4cir_rn50x4_fullft")
+    weight_path = tmp_path / "RN50x4.pt"
+    monkeypatch.setenv("WORKBENCH_CLIP4CIR_RN50X4_WEIGHTS", str(weight_path))
+
+    cfg = resolve_config()
+    args = SimpleNamespace(checkpoint=None, dataset_root=None)
+
+    # Absent file -> absent from inputs
+    inputs_absent = pipeline.model_eval_inputs(model, args, cfg)
+    assert weight_path not in inputs_absent, "absent external asset file must not appear in model_eval_inputs"
+
+    # Present file -> appears in inputs
+    weight_path.write_bytes(b"pretrained clip backbone weights")
+    inputs_present = pipeline.model_eval_inputs(model, args, cfg)
+    assert weight_path in inputs_present, "present external asset file must appear in model_eval_inputs"
+
+
+def test_empty_checkpoint_selection_excludes_all_checkpoint_inputs() -> None:
+    pipeline = load_pipeline()
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import checkpoint_path, load_registry
+
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "airknow")
+    cfg = resolve_config()
+    args = SimpleNamespace(checkpoint=None, checkpoint_ids={"airknow": []}, dataset_root=None)
+
+    inputs = pipeline.model_eval_inputs(model, args, cfg, checkpoint_ids=[])
+    checkpoint_paths = [checkpoint_path("airknow", variant, cfg.WORKBENCH_CHECKPOINT_ROOT)
+                        for variant in model["checkpoint_variants"]]
+    assert not set(checkpoint_paths) & set(inputs), "explicit empty selection must not include any checkpoint paths"
+
+
+def test_no_checkpoint_selection_includes_every_registered_variant() -> None:
+    pipeline = load_pipeline()
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import checkpoint_path, load_registry
+
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "airknow")
+    cfg = resolve_config()
+    args = SimpleNamespace(checkpoint=None, checkpoint_ids=None, dataset_root=None)
+
+    inputs = pipeline.model_eval_inputs(model, args, cfg)
+    checkpoint_paths = [checkpoint_path("airknow", variant, cfg.WORKBENCH_CHECKPOINT_ROOT)
+                        for variant in model["checkpoint_variants"]]
+    assert set(checkpoint_paths) <= set(inputs), "no-selection regression: every registered checkpoint path must be fingerprinted"
+
+
+def test_autopilot_checkpoint_selection_controls_resolved_output() -> None:
+    pipeline = load_pipeline()
+    from workbench.backend.registry import load_registry
+
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "airknow")
+    assert model["checkpoint_variants"][0]["checkpoint_id"] == "fiq_n05"
+    cfg = real_config()
+    args = SimpleNamespace(checkpoint=None, checkpoint_ids={"airknow": ["fiq_n08"]})
+
+    assert pipeline.resolved_checkpoint_id(model, args) == "fiq_n08"
+    assert pipeline.model_eval_outputs(model, args, cfg)[0].name == "airknow_fiq_n08_latest_successful.json"
+    assert pipeline.resolved_checkpoint_id(model, SimpleNamespace(checkpoint="fiq_n06")) == "fiq_n06"
+
+
+def test_limn_bundle_selection_resolves_to_bundle_id() -> None:
+    pipeline = load_pipeline()
+    model = {
+        "model_id": "limn",
+        "checkpoint_bundles": [{"bundle_id": "limn_bundle", "required_checkpoint_ids": ["dress", "shirt"]}],
+        "checkpoint_variants": [{"checkpoint_id": "dress"}, {"checkpoint_id": "shirt"}],
+    }
+
+    assert pipeline.resolved_checkpoint_id(
+        model, SimpleNamespace(checkpoint=None, checkpoint_ids={"limn": ["limn_bundle"]})
+    ) == "limn_bundle"

@@ -72,6 +72,30 @@ def test_a_valid_download_is_published_with_its_manifest(tmp_path: Path, monkeyp
     assert (tmp_path / "checkpoints" / "download_manifest.json").is_file()
 
 
+def test_failed_force_redownload_preserves_existing_checkpoint(tmp_path: Path, monkeypatch) -> None:
+    module = _module()
+    destination_root = tmp_path / "checkpoints"
+    import hashlib
+    checkpoint = dict(CHECKPOINT, expected_sha256=hashlib.sha256(BODY).hexdigest())
+    destination = destination_root / "synthetic" / "weights.pt"
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(BODY)
+    model = {"model_id": "synthetic", "method_name": "Synthetic", "source_dir": None}
+    monkeypatch.setattr(module, "resolve_config", lambda: SimpleNamespace(
+        WORKBENCH_CHECKPOINT_ROOT=destination_root))
+    monkeypatch.setattr(module, "selected", lambda args, models: [(model, checkpoint)])
+    monkeypatch.setattr(module, "load_registry", lambda: {"models": [model]})
+
+    def failed_download(url, partial: Path) -> None:
+        raise OSError("network unavailable")
+
+    monkeypatch.setattr(module, "download", failed_download)
+    with pytest.raises(OSError, match="network unavailable"):
+        module.main(["--model", "synthetic", "--output-root", str(destination_root),
+                     "--force-redownload"])
+
+    assert destination.read_bytes() == BODY
+
 def test_invalid_partial_does_not_block_recovery(tmp_path: Path, monkeypatch) -> None:
     """After a rejected download, a corrected source must be able to publish."""
     module = _module()

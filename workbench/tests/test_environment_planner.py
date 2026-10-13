@@ -208,7 +208,8 @@ def _write_import_fixture(monkeypatch, tmp_path, script):
     source.mkdir(parents=True)
     (source / "evaluate_model.py").write_text(script, encoding="utf-8")
     monkeypatch.setattr(planner, "WORKBENCH_ROOT", tmp_path)
-    monkeypatch.setattr(ADAPTERS["encoder"], "script", "evaluate_model.py")
+    adapter = type("FixtureEncoderAdapter", (ADAPTERS["encoder"],), {"script": "evaluate_model.py"})
+    monkeypatch.setitem(ADAPTERS, "encoder", adapter)
     return source
 
 
@@ -308,6 +309,23 @@ def test_conda_solver_uses_configured_channels(monkeypatch):
     assert [argv[i + 1] for i, arg in enumerate(argv) if arg == "-c"] == list(planner.CONDA_CHANNELS)
 
 
+def test_pip_only_registry_pin_skips_conda_but_resolvable_pin_reaches_it(monkeypatch):
+    calls = []
+    monkeypatch.setattr(planner.subprocess, "run", lambda argv, **kwargs: calls.append(argv) or SimpleNamespace(
+        returncode=0, stderr="", stdout=""))
+    item = model("declared-pins", packages=["comet-ml==3.21.0", "numpy==1.22.3"])
+    constraints = planner._constraints([planner.model_constraints(item)])[0]
+
+    assert constraints["packages"]["comet-ml"] == [("==", "3.21.0")]
+    assert constraints["packages"]["numpy"] == [("==", "1.22.3")]
+    assert "comet-ml" not in planner._conda_constraints(constraints)["packages"]
+    assert "numpy" in planner._conda_constraints(constraints)["packages"]
+    assert planner._solver_solve("conda", planner._conda_constraints(constraints))[0]
+    specs = calls[0][calls[0].index("--override-channels") + 1:]
+    assert "comet-ml=3.21.0" not in specs
+    assert "numpy=1.22.3" in specs
+
+
 def test_group_evidence_records_channels_used(monkeypatch):
     monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
     monkeypatch.setattr(planner, "_solver_solve", lambda command, constraints: (True, "ok"))
@@ -390,7 +408,8 @@ def test_registry_planning_does_not_group_unavailable_model_and_finishes():
     started = monotonic()
     result = planner.plan_environments(load_registry()["models"])
     elapsed = monotonic() - started
-    assert elapsed < 120
+    # Real conda channel solves vary with network latency; 300s matches solver timeout.
+    assert elapsed < planner.SOLVER_TIMEOUT_SECONDS
     assert not any("ptha_mtst" in group["members"] for group in result["groups"])
     source_backed = {item["model_id"] for item in load_registry()["models"]
                      if item.get("source_available") or item.get("source_dir") or
@@ -725,7 +744,7 @@ def test_real_conda_cold_start_shared_environment_and_reuse(tmp_path, monkeypatc
         [m1, m2], plan, artifacts_root=artifacts_dir, allowed=True, network_allowed=True
     )
     prov_group = assignment["groups"][0]
-    assert prov_group["state"] == "RUNTIME_VERIFIED"
+    assert prov_group["state"] == "RUNTIME_VERIFIED", prov_group["evidence"]
     assert prov_group["installation_status"] == "INSTALLED"
     assert prov_group["runtime_verification_status"] == "READY"
 
@@ -841,15 +860,14 @@ def test_p0_04_safe_replacement_and_atomic_commit(tmp_path, monkeypatch):
     assert sentinel.read_text(encoding="utf-8") == "keep_this_safe"
     assert not (tmp_path / "environment_assignment.json").is_file()
     assert fail_assign["groups"][0]["state"] == "FAILED"
-
+    assert fail_assign["groups"][0]["interpreter"] is None
+    assert fail_assign["models"]["safe-replace-model"]["interpreter"] is None
     # 2. Now run real safe replacement logic where replacement succeeds to a NEW prefix
     def mock_verify_group(staging_group, *a, **k):
         # Not yet managed: the marker is only written once the environment passed verification.
         assert not (Path(staging_group["conda_env_path"]) / planner.MARKER_FILENAME).exists()
         return True, "verification passed", {}
-
-    monkeypatch.setattr(planner, "_verify_group_interpreter", mock_verify_group)
-    monkeypatch.undo()  # restore _provision_group
+    monkeypatch.undo()  # restore _provision_group before patching retry-specific behavior
     monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
     monkeypatch.setattr(planner, "_verify_group_interpreter", mock_verify_group)
     # A retry starts from a freshly resolved plan: the failed attempt cleared the group's
@@ -1200,3 +1218,88 @@ def test_an_absent_pinned_source_blocks_verification(tmp_path, monkeypatch):
     assert ok is False
     assert "cannot verify evaluator imports" in reason
     assert details["evaluator_imports"]["absent-source"]["modules"] is None
+
+
+def test_evaluator_imports_excludes_checkout_subpackages(monkeypatch, tmp_path):
+    source = _write_import_fixture(monkeypatch, tmp_path, "import internal\n")
+    (source / "internal").mkdir()
+    (source / "internal" / "__init__.py").write_text("import nested\n", encoding="utf-8")
+    (source / "internal" / "nested.py").write_text("value = 1\n", encoding="utf-8")
+
+    imports = planner._evaluator_imports({"model_id": "encoder", "source_dir": "ENCODER"})
+
+    assert imports is not None
+    assert not any((source / name).is_dir() for name in imports)
+
+
+def test_registry_package_pins_survive_import_filtering(monkeypatch, tmp_path):
+    _write_import_fixture(monkeypatch, tmp_path, "import numpy\n")
+    item = {"model_id": "encoder", "source_dir": "ENCODER",
+            "environment": {"python": "3.9", "packages": ["numpy==1.22", "pandas==1.5"]}}
+
+    spec = planner.model_constraints(item)
+
+    assert spec["packages"] == {"numpy": "1.22", "pandas": "1.5"}
+
+
+
+def test_partial_verification_publishes_only_verified_interpreters(tmp_path, monkeypatch):
+    items = [model("verified", python="3.10"), model("unverified", python="3.11")]
+    plan = planner.plan_environments(items, solver=accepted, artifacts_root=tmp_path)
+    verified_interpreter = tmp_path / "verified" / "bin" / "python"
+    verified_interpreter.parent.mkdir(parents=True)
+    verified_interpreter.touch()
+    os.chmod(verified_interpreter, 0o755)
+    groups = plan["groups"]
+    verified_group = next(group for group in groups if "verified" in group["members"])
+    unverified_group = next(group for group in groups if "unverified" in group["members"])
+    verified_group.update(state="RUNTIME_VERIFIED", interpreter=str(verified_interpreter))
+    unverified_group.update(state="SOLVER_COMPATIBLE", interpreter=str(verified_interpreter))
+    monkeypatch.setattr(planner, "_provision_all_groups", lambda initial, *args, **kwargs: initial)
+
+    assignment = planner.provision_environment_plan(items, plan, artifacts_root=tmp_path,
+                                                    allowed=True, network_allowed=False)
+
+    path = tmp_path / "environment_assignment.json"
+    assert path.is_file()
+    persisted = planner.load_environment_assignment(path)
+    assert persisted["models"]["verified"]["interpreter"] == str(verified_interpreter)
+    assert Path(persisted["models"]["verified"]["interpreter"]).is_file()
+    assert persisted["models"]["unverified"]["interpreter"] is None
+    assert persisted["models"]["unverified"]["reason"]
+    assert assignment["models"]["verified"]["interpreter"] == str(verified_interpreter)
+def test_operator_interpreter_survives_unverified_provisioning(tmp_path, monkeypatch):
+    item = model("operator-model", python="3.11", env_var="WORKBENCH_OPERATOR_MODEL_PYTHON")
+    interpreter = tmp_path / "operator-env" / "bin" / "python"
+    interpreter.parent.mkdir(parents=True)
+    interpreter.touch()
+    os.chmod(interpreter, 0o755)
+    monkeypatch.setenv("WORKBENCH_OPERATOR_MODEL_PYTHON", str(interpreter))
+    plan = planner.plan_environments([item], solver=accepted, artifacts_root=tmp_path)
+
+    assignment = planner.provision_environment_plan([item], plan, artifacts_root=tmp_path,
+                                                    allowed=False, network_allowed=False)
+
+    assert assignment["interpreter_mapping"]["operator-model"] == str(interpreter)
+
+
+def test_missing_unpinned_declared_package_blocks_verification(tmp_path, monkeypatch):
+    item = model("missing-unpinned", packages=["declared-package"])
+    interpreter = tmp_path / "env" / "bin" / "python"
+    interpreter.parent.mkdir(parents=True)
+    interpreter.touch()
+    os.chmod(interpreter, 0o755)
+    group = {"interpreter": str(interpreter), "conda_env_path": str(interpreter.parent.parent),
+             "members": ["missing-unpinned"], "constraints": {
+                 "packages": {"declared-package": []}, "ranges": {}, "torch": [], "torchvision": []}}
+    monkeypatch.setattr(subprocess, "run",
+                        lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
+    monkeypatch.setattr(planner.runtime, "inspect_environment_distributions",
+                        lambda prefix: ({}, set(), set()))
+
+    ok, reason, _ = planner._verify_group_interpreter(
+        group, {"missing-unpinned": item}, {"missing-unpinned": planner.model_constraints(item)})
+
+    assert ok is False
+    assert "declared-package" in reason
+    assert "is not installed" in reason

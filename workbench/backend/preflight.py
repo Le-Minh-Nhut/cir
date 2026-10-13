@@ -11,6 +11,7 @@ def model_requirements(model: dict, config: Any, *, dataset_root: Path | None = 
     from workbench.backend.registry import (
         auxiliary_assets_for_model, auxiliary_destination, external_asset_statuses,
         fashioniq_required_paths, preparation_contract_for_model, preparation_paths,
+        validate_auxiliary_asset,
     )
 
     root = dataset_root or config.FASHIONIQ_ROOT
@@ -36,14 +37,20 @@ def model_requirements(model: dict, config: Any, *, dataset_root: Path | None = 
     for asset in auxiliary_assets_for_model(model["model_id"]):
         path = auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, canonical_root)
         paths.append(path)
-        missing = not path.is_file()
-        auxiliary.append({"name": asset["family"], "path": str(path), "missing": missing})
+        res = validate_auxiliary_asset(asset, path, fashioniq_root=canonical_root)
+        missing = res.status == "MISSING"
+        auxiliary.append({"name": asset["family"], "path": str(path), "missing": missing, "status": res.status, "issues": res.issues})
+        prefix = "CSMCIR " if model["model_id"] == "csmcir" else ""
         if missing:
-            prefix = "CSMCIR " if model["model_id"] == "csmcir" else ""
             blocks.append(f"{prefix}{asset['family']} missing: {path}")
             if asset["family"] == "COT_ours2 captions":
                 blocks.append("required COT_ours2 captions have no verified automatic acquisition source")
-
+        elif not res.ok:
+            if res.status == "OPERATOR_SUPPLIED_UNVERIFIED":
+                blocks.append(f"{prefix}{asset['family']} unverified: {path} (operator-supplied unverified provenance)")
+            else:
+                for issue in res.issues:
+                    blocks.append(f"{prefix}{asset['family']} invalid: {issue}")
     link = model.get("canonical_dataset_link")
     link_evidence = None
     if link and source is not None:

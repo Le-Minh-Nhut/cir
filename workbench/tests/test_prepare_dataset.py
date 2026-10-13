@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+import hashlib
 import importlib.util
 import os
 from pathlib import Path
@@ -429,18 +430,21 @@ def test_a_receipt_without_its_images_is_not_treated_as_prepared(tmp_path, monke
     # A receipt that covers only some categories is incomplete: resuming over it would skip
     # preparation and fail later on the missing category.
     receipt_path = data / "resized_image" / ".workbench_resize_receipt.json"
-    # Restore the image the previous step deleted, then write a receipt naming only one category.
+    # Restore the image the previous step deleted with identical 256x256 dimensions and bytes.
     from PIL import Image as _Image
-    _Image.new("RGB", (8, 8), (10, 20, 30)).save(data / "resized_image" / "shirt" / "B00001.jpg", "JPEG")
+    with _Image.open(data / "images" / "B00001.jpg") as handle:
+        handle.convert("RGB").resize((256, 256), _Image.LANCZOS).save(data / "resized_image" / "shirt" / "B00001.jpg", "JPEG")
     partial = json.loads(receipt_path.read_text())
     from workbench.scripts.prepare_model import write_resize_receipt
     write_resize_receipt(receipt_path, model_id="limn", layout="per_category", image_size=256,
-                         extension=".jpg", source_script="s", written=1,
-                         coverage={"dress": partial["categories"]["dress"]})
+                         extension=".jpg", source_script=partial.get("source_script", "start_kit/resize_images.py"), written=1,
+                         coverage={"dress": partial["categories"]["dress"]},
+                         recipe_digest=partial.get("recipe_digest"))
     assert prepare_model.resize_is_complete(config, model, contract) is False
     write_resize_receipt(receipt_path, model_id="limn", layout="per_category", image_size=256,
-                         extension=".jpg", source_script="s", written=3,
-                         coverage=partial["categories"])
+                         extension=".jpg", source_script=partial.get("source_script", "start_kit/resize_images.py"), written=3,
+                         coverage=partial["categories"],
+                         recipe_digest=partial.get("recipe_digest"))
     assert prepare_model.resize_is_complete(config, model, contract) is True
 
 
@@ -477,9 +481,11 @@ def test_an_existing_resized_image_is_not_overwritten(tmp_path: Path, monkeypatc
     for category in ("dress", "shirt", "toptee"):
         (third_party / "LIMN" / "correct_files" / f"correction_dict_{category}.json").write_text("{}")
     data = _limn_dataset(tmp_path)
+    from PIL import Image as _PILImage
     sentinel = data / "resized_image" / "dress" / "B00000.jpg"
     sentinel.parent.mkdir(parents=True)
-    sentinel.write_bytes(b"operator-supplied")
+    _PILImage.new("RGB", (256, 256), (42, 42, 42)).save(sentinel, "JPEG")
+    sentinel_bytes = sentinel.read_bytes()
     env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
            "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
 
@@ -488,4 +494,264 @@ def test_an_existing_resized_image_is_not_overwritten(tmp_path: Path, monkeypatc
          "--model", "limn", "--execute", "--allow-preparation", "--dataset-root", str(data)],
         env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
     assert result.returncode == 0, (result.stdout, result.stderr)
-    assert sentinel.read_bytes() == b"operator-supplied", "an existing file must be preserved"
+    assert sentinel.read_bytes() == sentinel_bytes, "an existing file must be preserved"
+
+
+def test_resize_receipt_invalidated_when_image_bytes_or_contract_change(tmp_path: Path) -> None:
+    """DATA-01 regression test: the preparation receipt must not stay valid when prepared image bytes are wrong.
+
+    In one test:
+    1. valid 256x256 image + receipt -> True
+    2. replace with 8x8 same filename -> False
+    3. replace with corrupt JPEG bytes -> False
+    4. change one byte with same length -> False
+    5. change the recipe's image_size in the contract -> False
+    """
+    import copy
+    import subprocess
+    import sys as _sys
+    from dataclasses import replace as _replace
+    from PIL import Image
+
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import load_registry
+    from workbench.scripts import prepare_model
+
+    third_party = tmp_path / "third_party"
+    (third_party / "LIMN" / "correct_files").mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        (third_party / "LIMN" / "correct_files" / f"correction_dict_{category}.json").write_text("{}")
+    data = _limn_dataset(tmp_path)
+    env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
+           "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
+    result = subprocess.run(
+        [_sys.executable, str(REPOSITORY / "workbench" / "scripts" / "prepare_model.py"),
+         "--model", "limn", "--execute", "--allow-preparation", "--dataset-root", str(data)],
+        env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
+    assert result.returncode == 0, (result.stdout, result.stderr)
+
+    config = _replace(resolve_config(), FASHIONIQ_ROOT=data,
+                      WORKBENCH_THIRD_PARTY_ROOT=third_party)
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "limn")
+    contract = prepare_model.preparation_contract_for_model(model)
+
+    target_image = data / "resized_image" / "shirt" / "B00001.jpg"
+    valid_bytes = target_image.read_bytes()
+
+    # 1. Valid 256x256 image + receipt -> True
+    assert prepare_model.resize_is_complete(config, model, contract) is True
+
+    # 2. Replace with 8x8 same filename -> False
+    Image.new("RGB", (8, 8), (10, 20, 30)).save(target_image, "JPEG")
+    assert prepare_model.resize_is_complete(config, model, contract) is False
+
+    # 3. Replace with corrupt JPEG bytes -> False
+    target_image.write_bytes(b"not a valid jpeg byte stream")
+    assert prepare_model.resize_is_complete(config, model, contract) is False
+
+    # 4. Change one byte with same length -> False
+    tampered = bytearray(valid_bytes)
+    tampered[100] = (tampered[100] + 1) % 256
+    target_image.write_bytes(bytes(tampered))
+    assert len(target_image.read_bytes()) == len(valid_bytes)
+    assert prepare_model.resize_is_complete(config, model, contract) is False
+
+    # Restore valid image to confirm state is clean before contract check
+    target_image.write_bytes(valid_bytes)
+    assert prepare_model.resize_is_complete(config, model, contract) is True
+
+    # 5. Change the recipe's image_size in the contract -> False
+    tampered_contract = copy.deepcopy(contract)
+    for artifact in tampered_contract.get("generated_artifacts", []):
+        if artifact.get("generator") == prepare_model.RESIZE_GENERATOR:
+            artifact["parameters"]["image_size"] = 512
+    assert prepare_model.resize_is_complete(config, model, tampered_contract) is False
+
+
+def test_older_receipt_without_digests_does_not_validate(tmp_path: Path) -> None:
+    """Older receipts without digests must NOT validate as complete."""
+    from dataclasses import replace as _replace
+    from PIL import Image
+
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import load_registry
+    from workbench.scripts import prepare_model
+
+    data = _limn_dataset(tmp_path)
+    for cat in ("dress", "shirt", "toptee"):
+        (data / "resized_image" / cat).mkdir(parents=True)
+        Image.new("RGB", (256, 256), (10, 20, 30)).save(data / "resized_image" / cat / f"B0000{['dress', 'shirt', 'toptee'].index(cat)}.jpg", "JPEG")
+
+    # Old-style receipt lacking digests and recipe_digest
+    old_receipt = {
+        "kind": "workbench_resize_receipt",
+        "model_id": "limn",
+        "layout": "per_category",
+        "image_size": 256,
+        "extension": ".jpg",
+        "source_script": "start_kit/resize_images.py",
+        "categories": {
+            cat: {
+                "expected": 1,
+                "present": 1,
+                "ids": [f"B0000{idx}"],
+            }
+            for idx, cat in enumerate(("dress", "shirt", "toptee"))
+        },
+        "written_now": 3,
+    }
+    receipt_file = data / "resized_image" / prepare_model.RESIZE_RECEIPT_NAME
+    receipt_file.write_text(json.dumps(old_receipt, indent=2))
+
+    config = _replace(resolve_config(), FASHIONIQ_ROOT=data)
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "limn")
+    contract = prepare_model.preparation_contract_for_model(model)
+    assert prepare_model.resize_is_complete(config, model, contract) is False
+
+
+def test_resize_refuses_destination_equal_to_source(tmp_path: Path) -> None:
+    """DATA-02: Guard refuses to write a resized image whose destination equals its source path."""
+    import copy
+    from dataclasses import replace as _replace
+
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import load_registry
+    from workbench.scripts import prepare_model
+
+    data = _limn_dataset(tmp_path)
+    config = _replace(resolve_config(), FASHIONIQ_ROOT=data)
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "limn")
+    contract = copy.deepcopy(prepare_model.preparation_contract_for_model(model))
+
+    # Tamper with layout to point into canonical images directory (destination == source)
+    for artifact in contract.get("generated_artifacts", []):
+        if artifact.get("generator") == prepare_model.RESIZE_GENERATOR:
+            artifact["parameters"]["layout"] = "flat"
+
+    # If resized_images symlinks or points to images root:
+    (data / "resized_images").symlink_to(data / "images")
+    ok, message = prepare_model._run_resize(config, model, contract, dry_run=False)
+    assert ok is False
+    assert "destination path equals canonical source path" in message or "canonical images directory" in message
+
+
+def test_resize_receipt_refuses_partial_canonical_split_coverage(tmp_path: Path) -> None:
+    """A receipt whose IDs cover only part of the canonical split is refused."""
+    from dataclasses import replace as _replace
+    from PIL import Image
+
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import load_registry
+    from workbench.scripts import prepare_model
+
+    data = _limn_dataset(tmp_path)
+    split_dress = data / "image_splits" / "split.dress.val.json"
+    split_dress.write_text(json.dumps(["B00000", "B00000_extra1", "B00000_extra2"]))
+
+    for cat in ("dress", "shirt", "toptee"):
+        cat_dir = data / "resized_image" / cat
+        cat_dir.mkdir(parents=True, exist_ok=True)
+        img_file = cat_dir / f"B0000{['dress', 'shirt', 'toptee'].index(cat)}.jpg"
+        Image.new("RGB", (256, 256), (10, 20, 30)).save(img_file, "JPEG")
+
+    coverage = {}
+    for idx, cat in enumerate(("dress", "shirt", "toptee")):
+        identifier = f"B0000{idx}"
+        img_bytes = (data / "resized_image" / cat / f"{identifier}.jpg").read_bytes()
+        digest = hashlib.sha256(img_bytes).hexdigest()
+        coverage[cat] = {
+            "expected": 1,
+            "present": 1,
+            "ids": [identifier],
+            "digests": {identifier: digest},
+        }
+
+    config = _replace(resolve_config(), FASHIONIQ_ROOT=data)
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "limn")
+    contract = prepare_model.preparation_contract_for_model(model)
+    recipe_params = next(a for a in contract["generated_artifacts"] if a["generator"] == prepare_model.RESIZE_GENERATOR)["parameters"]
+    r_digest = prepare_model.recipe_digest(recipe_params)
+
+    receipt_path = prepare_model.resize_receipt_path(config, "per_category")
+    prepare_model.write_resize_receipt(
+        receipt_path,
+        model_id="limn",
+        layout="per_category",
+        image_size=256,
+        extension=".jpg",
+        source_script="start_kit/resize_images.py",
+        coverage=coverage,
+        written=3,
+        recipe_digest=r_digest,
+    )
+
+    assert prepare_model.resize_is_complete(config, model, contract) is False
+
+    split_dress.unlink()
+    assert prepare_model.resize_is_complete(config, model, contract) is False
+
+
+def test_corrupt_destination_image_is_regenerated_rather_than_skipped(tmp_path: Path) -> None:
+    """A destination containing a corrupt/truncated JPEG is regenerated rather than skipped."""
+    import subprocess
+    import sys as _sys
+    from PIL import Image
+
+    third_party = tmp_path / "third_party"
+    (third_party / "LIMN" / "correct_files").mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        (third_party / "LIMN" / "correct_files" / f"correction_dict_{category}.json").write_text("{}")
+    data = _limn_dataset(tmp_path)
+
+    corrupt_dest = data / "resized_image" / "dress" / "B00000.jpg"
+    corrupt_dest.parent.mkdir(parents=True, exist_ok=True)
+    corrupt_bytes = b"\xff\xd8\xff\xe0corrupt-truncated-jpeg"
+    corrupt_dest.write_bytes(corrupt_bytes)
+
+    env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
+           "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
+
+    result = subprocess.run(
+        [_sys.executable, str(REPOSITORY / "workbench" / "scripts" / "prepare_model.py"),
+         "--model", "limn", "--execute", "--allow-preparation", "--dataset-root", str(data)],
+        env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
+    assert result.returncode == 0, (result.stdout, result.stderr)
+
+    assert corrupt_dest.read_bytes() != corrupt_bytes
+    with Image.open(corrupt_dest) as handle:
+        assert handle.size == (256, 256)
+        handle.load()
+
+
+def test_declared_extension_is_honoured(tmp_path: Path) -> None:
+    """The declared recipe extension is honoured for generated files and completion checks."""
+    import copy
+    from dataclasses import replace as _replace
+    from PIL import Image
+
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import load_registry
+    from workbench.scripts import prepare_model
+
+    data = _limn_dataset(tmp_path)
+    config = _replace(resolve_config(), FASHIONIQ_ROOT=data)
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "limn")
+    contract = copy.deepcopy(prepare_model.preparation_contract_for_model(model))
+
+    for artifact in contract.get("generated_artifacts", []):
+        if artifact.get("generator") == prepare_model.RESIZE_GENERATOR:
+            artifact["parameters"]["extension"] = ".png"
+
+    ok, message = prepare_model._run_resize(config, model, contract, dry_run=False)
+    assert ok is True, message
+
+    png_file = data / "resized_image" / "dress" / "B00000.png"
+    jpg_file = data / "resized_image" / "dress" / "B00000.jpg"
+    assert png_file.is_file()
+    assert not jpg_file.exists()
+
+    with Image.open(png_file) as handle:
+        assert handle.format == "PNG"
+        assert handle.size == (256, 256)
+
+    assert prepare_model.resize_is_complete(config, model, contract) is True

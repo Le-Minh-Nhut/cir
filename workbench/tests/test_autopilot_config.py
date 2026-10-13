@@ -322,3 +322,37 @@ def test_an_unknown_selected_checkpoint_size_blocks_rather_than_guessing(tmp_pat
     autopilot._enforce_download_budget(config, rows)
     assert rows[0]["status"] == "BLOCKED_CHECKPOINT"
     assert "unknown" in rows[0]["blockers"][0]
+
+
+def test_offline_blocked_source_acquisition_survives_into_final_rows(tmp_path: Path):
+    dirs = {name: tmp_path / name for name in ("dataset", "artifacts", "checkpoints", "results", "third_party")}
+    for d in dirs.values():
+        d.mkdir()
+    reg_path = tmp_path / "models.yaml"
+    reg_path.write_text(Path("workbench/registry/models.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+
+    cfg_data = {
+        "schema_version": 1,
+        "selected_models": ["csmcir"],
+        "paths": {"registry": str(reg_path), "dataset_root": str(dirs["dataset"]),
+                  "artifacts": str(dirs["artifacts"]), "checkpoints": str(dirs["checkpoints"]),
+                  "results": str(dirs["results"]), "third_party": str(dirs["third_party"])},
+        "budgets": {"max_download_bytes": 1024, "max_models": 20, "top_k": 10},
+        "permissions": {key: False for key in autopilot.PERMISSIONS},
+    }
+    cfg_path = tmp_path / "autopilot.yaml"
+    cfg_path.write_text(yaml.safe_dump(cfg_data), encoding="utf-8")
+
+    result = autopilot.run(cfg_path, apply=True, resume=False, force_models=[], mode="all")
+
+    plan = json.loads((dirs["artifacts"] / "autopilot_execution_plan.json").read_text(encoding="utf-8"))
+    assert "source_acquisition" in plan, "plan must retain source_acquisition state"
+    assert plan["source_acquisition"]["blocked"], "source_acquisition must record blocked acquisition"
+
+    model_row = next(r for r in result["summary"]["models"] if r["model_id"] == "csmcir")
+    assert model_row["status"] == "BLOCKED_SOURCE", f"expected BLOCKED_SOURCE but got {model_row['status']}"
+    assert any("pinned source not acquired" in b for b in model_row["blockers"]), "blocker reason must survive into final rows"
+
+    blockers = json.loads((dirs["artifacts"] / "reports" / "blockers.json").read_text(encoding="utf-8"))
+    csmcir_blocker = next(b for b in blockers if b["model_id"] == "csmcir")
+    assert csmcir_blocker["status"] == "BLOCKED_SOURCE"

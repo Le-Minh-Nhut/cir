@@ -1,3 +1,20 @@
+# Example Autopilot profile.
+#
+# Copy to a private path outside the repository and edit for your host.
+#
+# Paths note:
+# Every entry under `paths` that is not absolute is resolved relative to this config file's own
+# directory. When copied outside the repository, all six `paths` keys (`registry`, `dataset_root`,
+# `artifacts`, `checkpoints`, `results`, `third_party`) must be set to absolute paths.
+#
+# Ledger signing key:
+# Create the key once and export it in each shell that runs the workbench:
+#   umask 077 && mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/cir"
+#   python -c "import os,pathlib,secrets; (pathlib.Path(os.environ.get('XDG_CONFIG_HOME') or pathlib.Path.home()/'.config')/'cir'/'workbench_ledger_key').write_text(secrets.token_hex(32))"
+#   export WORKBENCH_LEDGER_KEY="$(cat "${XDG_CONFIG_HOME:-$HOME/.config}/cir/workbench_ledger_key")"
+# Omitting the variable is also safe: a 0600 key file is created under $XDG_CONFIG_HOME/cir/
+# (default ~/.config/cir/) on first use and reused thereafter.
+#
 schema_version: 1
 selected_models: all_registered
 # Checkpoint selection. `strict_clean` evaluates only weights whose recorded training condition is

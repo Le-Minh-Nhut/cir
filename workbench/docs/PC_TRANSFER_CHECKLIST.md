@@ -27,7 +27,7 @@ What to copy, what to rebuild, and what only exists on the GPU host.
 The portable form of an environment is its *specification*: the group assignment
 (`<artifacts>/environment_assignment.json`), the resolved constraints in
 (`<artifacts>/environment_plan.json`) and the pinned source revision. On the PC, Autopilot rebuilds
-each group at its own prefix from those.
+each group directly at its own final prefix under a process-level advisory lock (`.provision-<environment_id>.lock`).
 
 ## PC-only checks the laptop cannot perform
 
@@ -62,9 +62,9 @@ Full per-model detail, with the source line that reads each path, is in
 git clone <repo> && cd cir
 git checkout <the frozen commit>
 
-umask 077 && mkdir -p ~/.config/cir
-python -c "import secrets,pathlib;pathlib.Path.home().joinpath('.config/cir/workbench_ledger_key').write_text(secrets.token_hex(32))"
-export WORKBENCH_LEDGER_KEY="$(cat ~/.config/cir/workbench_ledger_key)"
+umask 077 && mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/cir"
+python -c "import os,pathlib,secrets; (pathlib.Path(os.environ.get('XDG_CONFIG_HOME') or pathlib.Path.home()/'.config')/'cir'/'workbench_ledger_key').write_text(secrets.token_hex(32))"
+export WORKBENCH_LEDGER_KEY="$(cat "${XDG_CONFIG_HOME:-$HOME/.config}/cir/workbench_ledger_key")"
 
 cp workbench/configs/pc_autopilot.all_available.yaml /path/outside/repo/pc.yaml
 $EDITOR /path/outside/repo/pc.yaml
@@ -76,9 +76,10 @@ directory**, so a config copied out of the repository must use absolute paths fo
 machine's real locations. `load_config` refuses a config whose `registry` does not exist rather than
 guessing, so a wrong relative path fails immediately and names the key.
 
-Then autopilot acquires the pinned sources, plans and provisions the environments, prepares the
-dataset-derived artifacts, obtains the obtainable assets, verifies checkpoints and the GPU, and runs
-every eligible evaluator. Rerun the same command with `--resume` after any interruption:
+Then autopilot acquires the pinned sources, plans and provisions the environments (created directly at their
+final prefix under a lock), runs the preparation stage for any model whose contract declares generable artifacts,
+obtains the obtainable assets, verifies checkpoints and the GPU, and runs every eligible evaluator. Rerun the same
+command with `--resume` after any interruption:
 
 ```bash
 ./workbench/run.sh autopilot --config /path/outside/repo/pc.yaml --apply --resume
@@ -86,18 +87,22 @@ every eligible evaluator. Rerun the same command with `--resume` after any inter
 
 ### Permissions decide how much autopilot may do
 
-Start from `pc_autopilot.all_available.yaml`, whose `permissions` block already authorizes the whole
-first run. `pc_autopilot.pilot_csmcir.yaml` is the narrower profile: it ships with
-`allow_env_install: false` on purpose, because installing research code should be a deliberate act
-after the requirements have been reviewed. A PC with no environments yet therefore cannot use that
-profile unchanged -- set `allow_env_install: true` first, or stay on the all-available config.
+Start from `pc_autopilot.pilot_csmcir.yaml` for a focused single-model first run, or
+`pc_autopilot.all_available.yaml` to run every eligible model with flagged conditions explicit.
+
+`pc_autopilot.pilot_csmcir.yaml` is the first-GPU-pilot profile: it sets `allow_env_install: true` so the pilot
+can cold-start and provision its missing conda environment directly on the PC, with `allow_network`,
+`allow_large_downloads`, `allow_preparation`, `allow_gpu_eval`, and `allow_index_write` all enabled.
+Because CSMCIR requires both its downloadable checkpoint and external `COT_ours2` captions (which lack an
+author download source), running this pilot cold-start will report the `COT_ours2` asset blocker rather than
+produce Recall until the operator supplies that file.
 
 | Permission | What it authorizes |
 |---|---|
 | `allow_env_install` | creating the conda environments |
 | `allow_network` | reaching an index or a download source |
 | `allow_large_downloads` | fetching checkpoints |
-| `allow_preparation` | writing dataset-derived artifacts (resized images, staged dictionaries) |
+| `allow_preparation` | writing dataset-derived artifacts (resized images, staged dictionaries, dataset links) |
 | `allow_gpu_eval` | running the GPU capability probe |
 | `allow_index_write` | rebuilding the results index |
 

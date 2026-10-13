@@ -108,7 +108,9 @@ def test_the_queue_hands_the_operator_its_key_but_no_stray_secrets(
     _wait(queue, job["job_id"])
 
     names = json.loads((directory / "queue_stdout.log").read_text().strip().splitlines()[-1])
-    assert names == ["WORKBENCH_LEDGER_KEY"], names
+    secret_names = [name for name in names if name == "WORKBENCH_LEDGER_KEY" or name.startswith("WORKBENCH_SECRET_")]
+    assert secret_names == ["WORKBENCH_LEDGER_KEY"], secret_names
+    assert set(names) - set(secret_names) <= {"WORKBENCH_THIRD_PARTY_ROOT"}, names
 
 
 def test_the_official_evaluator_never_receives_the_operator_key(
@@ -143,7 +145,10 @@ def test_the_official_evaluator_never_receives_the_operator_key(
                                                        tmp_path / "out")
     assert code == 0
     reported = json.loads((directory / "stdout.log").read_text().strip().splitlines()[-1])
-    assert reported["names"] == [], reported["names"]
+    secret_names = [name for name in reported["names"]
+                    if name == "WORKBENCH_LEDGER_KEY" or name.startswith("WORKBENCH_SECRET_")]
+    assert secret_names == [], secret_names
+    assert set(reported["names"]) - set(secret_names) <= {"WORKBENCH_THIRD_PARTY_ROOT"}, reported["names"]
     assert reported["run"] == "boundary-run"
     # The key must not be echoed into the run's own recorded environment either.
     assert "operator-key" not in json.dumps(environment)

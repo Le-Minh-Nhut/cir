@@ -57,6 +57,14 @@ workbench/artifacts/*.duckdb
 workbench/artifacts/*.jsonl
 workbench/artifacts/pipeline_state.json
 workbench/artifacts/pipeline_state.json.lock
+# Environments assignments and plans are generated run state, not source: only the two .gitkeep
+# markers under artifacts/ are tracked.
+workbench/artifacts/environment_assignment.json
+workbench/artifacts/environment_plan.json
+workbench/artifacts/autopilot_execution_plan.json
+workbench/artifacts/autopilot_pipeline_state.json
+workbench/artifacts/source_acquisition_state.json
+workbench/artifacts/environments/
 workbench/artifacts/gpu_capability.json
 workbench/artifacts/gpu_capabilities/
 workbench/artifacts/receipts/

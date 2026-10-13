@@ -212,9 +212,9 @@ def test_image_resolver_supports_extensions_and_rejects_traversal(tmp_path: Path
 
 
 def test_downloader_lists_and_skips_unresolved_without_network(tmp_path: Path) -> None:
-    listed = subprocess.run(["python", "workbench/scripts/download_checkpoints.py", "--list"], text=True, capture_output=True, check=True)
+    listed = subprocess.run([sys.executable, "workbench/scripts/download_checkpoints.py", "--list"], text=True, capture_output=True, check=True)
     assert "pair_b1" in listed.stdout and "pair_b2" in listed.stdout and "CHECKPOINT_MAPPING_UNVERIFIED" in listed.stdout
-    bulk = subprocess.run(["python", "workbench/scripts/download_checkpoints.py", "--all", "--dry-run", "--output-root", str(tmp_path)], text=True, capture_output=True, check=True)
+    bulk = subprocess.run([sys.executable, "workbench/scripts/download_checkpoints.py", "--all", "--dry-run", "--output-root", str(tmp_path)], text=True, capture_output=True, check=True)
     assert "SKIPPED: unresolved checkpoint mapping (pair / pair_b1)" in bulk.stdout
     assert "SKIPPED: unresolved checkpoint mapping (encoder / fashioniq)" in bulk.stdout
     assert not list(tmp_path.rglob("*.pt"))

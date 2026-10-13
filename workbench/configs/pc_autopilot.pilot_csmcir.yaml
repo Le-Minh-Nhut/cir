@@ -4,22 +4,32 @@
 # clean (0% training-noise) condition, a verified download URL, a pinned command and a resolved
 # dataset path through its own fixed `fashionIQ_dataset` link.
 #
-# Its one open prerequisite is the author `COT_ours2/fashioniq` captions, which have no verified
-# author download source. If those captions are absent the run reports the corresponding asset
-# blocker instead of evaluating; that is the intended behaviour, not a failure of this config.
+# Honest status: CSMCIR needs its checkpoint (author-published and downloadable) AND the
+# COT_ours2 captions (no author source published). The Qwen captions and checkpoint are downloadable,
+# but because the author never published COT_ours2/fashioniq, the pilot is expected to report the
+# COT asset blocker rather than produce Recall until the operator manually supplies that file.
 #
-# Copy to a private path outside the repository, replace the `paths` values with this machine's
-# real locations, and add the secret separately:
+# LIMN comparison: LIMN is the next candidate, but a LIMN-based pilot is not less blocked as a first run:
+# three category checkpoints must be downloaded (~5.01 GiB total), its resized images must be prepared
+# (fashioniq_ilearn_resized_training), category correction dictionaries must be supplied, and it requires
+# checkpoint_policy: include_flagged_conditions (its checkpoints record no training condition). LIMN is
+# therefore not genuinely less blocked than CSMCIR and is not selected by default.
+#
+# When copied outside the repository, every entry under `paths` that is not absolute is resolved
+# relative to this config file's own directory, so all six `paths` keys (`registry`, `dataset_root`,
+# `artifacts`, `checkpoints`, `results`, `third_party`) must be set to absolute paths.
 #
 # Create the ledger signing key ONCE, keep it, and reuse it for every run of this workbench:
 # the key signs the evidence ledger, so a new key each shell makes every earlier run unverifiable.
-#   umask 077 && mkdir -p ~/.config/cir
-#   python -c "import secrets,pathlib; pathlib.Path.home().joinpath('.config/cir/workbench_ledger_key').write_text(secrets.token_hex(32))"
+# The key lives under $XDG_CONFIG_HOME/cir/ (default ~/.config/cir/):
+#   umask 077 && mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/cir"
+#   python -c "import os,pathlib,secrets; (pathlib.Path(os.environ.get('XDG_CONFIG_HOME') or pathlib.Path.home()/'.config')/'cir'/'workbench_ledger_key').write_text(secrets.token_hex(32))"
 # Then, in each shell that runs the workbench:
-#   export WORKBENCH_LEDGER_KEY="$(cat ~/.config/cir/workbench_ledger_key)"
-# Omitting the variable entirely is also safe: a 0600 key file is created under the private
-# config directory (~/.config/cir/) on first use and reused thereafter. An empty key, or a missing key with an existing
-# ledger, fails closed.
+#   export WORKBENCH_LEDGER_KEY="$(cat "${XDG_CONFIG_HOME:-$HOME/.config}/cir/workbench_ledger_key")"
+# Omitting the variable entirely is also safe: a 0600 key file is created under $XDG_CONFIG_HOME/cir/
+# on first use and reused thereafter. An empty key, or a missing key with an existing ledger, fails closed.
+#
+# Run command:
 #   ./workbench/run.sh autopilot --config <this file> --apply --resume
 
 schema_version: 1
@@ -52,9 +62,9 @@ budgets:
 permissions:
   allow_network: true
   allow_large_downloads: true
-  # Leave this false unless you have reviewed each model's pinned requirements. Creating the
-  # environment is the step that installs research code, and that should be a deliberate act.
-  allow_env_install: false
+  # allow_env_install: true authorizes conda environment creation and package installation
+  # for the selected model group on cold-start. Pinned requirements are installed into a dedicated prefix.
+  allow_env_install: true
   allow_preparation: true
   allow_gpu_eval: true
   allow_index_write: true

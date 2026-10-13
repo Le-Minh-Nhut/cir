@@ -195,6 +195,34 @@ def test_missing_checkpoint_is_blocked(monkeypatch, tmp_path: Path) -> None:
     assert any(reason.startswith("checkpoint missing:") for reason in reasons)
 
 
+def prepare_csmcir_caption_assets(monkeypatch, source: Path, dataset_root: Path) -> None:
+    from workbench.backend import registry
+
+    assets = registry.auxiliary_assets_for_model
+    def fixture_assets(model_id):
+        items = assets(model_id)
+        for asset in items:
+            asset = dict(asset)
+            if asset["family"] in {"Qwen captions", "COT_ours2 captions"}:
+                asset["expected_sha256"] = None
+                asset["expected_size_bytes"] = None
+                asset["provenance_status"] = "VERIFIED"
+                if asset.get("content_contract"):
+                    asset["content_contract"] = {**asset["content_contract"], "expected_record_count": 1}
+            yield asset
+    monkeypatch.setattr(registry, "auxiliary_assets_for_model", lambda model_id: list(fixture_assets(model_id)))
+    for index, category in enumerate(("dress", "shirt", "toptee")):
+        image_id = f"B00000000{index}"
+        (dataset_root / "image_splits" / f"split.{category}.val.json").write_text(json.dumps([image_id]))
+        payload = json.dumps({image_id: {
+            "Core_Essence": "garment", "Visual_Attributes": "blue",
+            "Observation_Process": "visual inspection", "Final_Caption": "a blue garment",
+        }})
+        (source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json").write_text(payload)
+        (dataset_root / "qwen_captions" / f"{category}_cot_val.json").write_text(payload)
+        (dataset_root / "images" / f"{image_id}.png").write_bytes(b"fixture")
+
+
 def test_csmcir_dry_run_constructs_official_command(monkeypatch, tmp_path: Path, capsys) -> None:
     module = load_module()
     model = records()["csmcir"]
@@ -205,16 +233,17 @@ def test_csmcir_dry_run_constructs_official_command(monkeypatch, tmp_path: Path,
     prepare_standard_layout(settings.FASHIONIQ_ROOT)
     for path in (source / "COT_ours2" / "fashioniq", dataset_root / "qwen_captions"):
         path.mkdir(parents=True)
-    for category in ("dress", "shirt", "toptee"):
-        (source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json").write_text("")
-        (dataset_root / "qwen_captions" / f"{category}_cot_val.json").write_text("")
+    prepare_csmcir_caption_assets(monkeypatch, source, dataset_root)
     script = source / "src" / "validate_blip_csmcir.py"
     script.parent.mkdir()
     script.write_text("")
     import workbench.backend.adapters.models as adapters
 
     monkeypatch.setattr(adapters, "checkpoint_path", lambda *_: checkpoint_file)
-    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200, settings)
+    strict_plan, strict_reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200, settings)
+    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200, settings, dry_run=True)
+    assert strict_plan is None
+    assert any("LAVIS BLIP-2 pretrain weights unverified" in reason for reason in strict_reasons)
     result = module.main([
         "--model", "csmcir", "--checkpoint", "fashioniq", "--protocol", model["native_protocol"],
         "--dataset-root", str(dataset_root), "--dry-run",
@@ -228,7 +257,10 @@ def test_csmcir_dry_run_constructs_official_command(monkeypatch, tmp_path: Path,
     # the command must name that interpreter, never a bare "python".
     assert plan.command[0] == sys.executable
     assert plan.command[1:] == [str(script), "--dataset", "fashionIQ", "--blip-model-path", str(checkpoint_file)]
-    assert "[RUN] command:" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "[RUN] command:" in output
+    assert "[PLAN] first-use downloads:" in output
+    assert "dry-run cannot verify acquisition or evaluator success" in output
 
 
 def test_csmcir_main_accepts_link_and_explicit_canonical_root(monkeypatch, tmp_path: Path) -> None:
@@ -242,9 +274,7 @@ def test_csmcir_main_accepts_link_and_explicit_canonical_root(monkeypatch, tmp_p
     prepare_standard_layout(canonical)
     for path in (source / "COT_ours2" / "fashioniq", layout / "qwen_captions"):
         path.mkdir(parents=True)
-    for category in ("dress", "shirt", "toptee"):
-        (source / "COT_ours2" / "fashioniq" / f"{category}_cot_val.json").write_text("")
-        (layout / "qwen_captions" / f"{category}_cot_val.json").write_text("")
+    prepare_csmcir_caption_assets(monkeypatch, source, layout)
     script = source / "src" / "validate_blip_csmcir.py"
     script.parent.mkdir()
     script.write_text("")

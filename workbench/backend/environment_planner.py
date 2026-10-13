@@ -281,7 +281,7 @@ def _evaluator_imports(model: dict, third_party_root: Path | None = None) -> set
                 relative = path.relative_to(root.resolve()).with_suffix("")
             except ValueError:
                 continue
-            parts = relative.parts if path.name == "__init__.py" else relative.parts[:-1]
+            parts = relative.parts[:-1]
             module_package = ".".join(parts)
             break
 
@@ -320,6 +320,8 @@ def _evaluator_imports(model: dict, third_party_root: Path | None = None) -> set
                     return False
             elif module.startswith("."):
                 return False
+            elif any((root / Path(*module.split("."))).is_dir() for root in roots):
+                continue
             elif module.split(".", 1)[0] not in standard:
                 external.add(module.split(".", 1)[0])
         return True
@@ -401,6 +403,8 @@ def model_constraints(model: dict, third_party_root: Path | None = None) -> dict
         available = {name for name, _ in source_pins}
         modules = imports - {"torch", "torchvision"}
         selected_names = {name for module in modules for name in _distribution_names(module, available)}
+        if not requirements:
+            selected_names.update(available)
         if requirements:
             selected_names.update(available & {"torch", "torchvision"})
         selected = [item for item in source_pins if item[0] in selected_names]
@@ -418,6 +422,9 @@ def model_constraints(model: dict, third_party_root: Path | None = None) -> dict
 
     for name in set(packages) | set(ranges):
         if name in _NON_CONDA_PACKAGES:
+            pip_only.add(name)
+        if any(op in ("==", "===") and version in _NON_CONDA_PACKAGE_PINS.get(name, ())
+               for op, version in _terms(packages.get(name, "") or ranges.get(name, ""), name)):
             pip_only.add(name)
 
     torch = str(env.get("pytorch") or "UNKNOWN")
@@ -537,14 +544,23 @@ def _solver_command() -> str | None:
 
 
 _NON_CONDA_PACKAGES = {
-    "apex", "clip", "cuda-version", "decord", "fairscale", "ftfy", "horovod", "iopath",
+    # `clip` is OpenAI's CLIP package: probed against conda-forge/pytorch/defaults it returns
+    # PackagesNotFoundError, so it must never reach a conda solve.
+    "apex", "clip", "cuda-version", "decord", "fairscale", "ftfy", "horovod",
     "open-clip-torch", "opencv-python", "opencv-python-headless", "salesforce-lavis",
     "torch", "torchvision",
 }
+_NON_CONDA_PACKAGE_PINS = {"comet-ml": {"3.21.0"}, "transformers": {"4.25.0"}}
+
 
 def _conda_constraints(constraints: dict) -> dict:
     """Keep only constraints conda's configured channels can resolve."""
     pip_only = set(constraints.get("pip_only", ())) | _NON_CONDA_PACKAGES
+    for name in set(constraints["packages"]) | set(constraints["ranges"]):
+        terms = constraints["packages"].get(name, []) + constraints["ranges"].get(name, [])
+        if any(op in ("==", "===") and version in _NON_CONDA_PACKAGE_PINS.get(name, ())
+               for op, version in terms):
+            pip_only.add(name)
     return {
         "python": constraints["python"],
         "packages": {name: terms for name, terms in constraints["packages"].items()
@@ -601,14 +617,14 @@ def _solver_reason(message: str, constraints: dict, scope: str,
         detail = f"incompatible package/version constraints: {message or 'no solution'}"
     else:
         detail = message or "no solution"
-    searched = ", ".join(channels) if channels else "none (injected solver)"
     return outcome, (f"{outcome}: solver rejected {scope} constraints ({_constraint_names(constraints)}): "
-                    f"{detail}; channels searched: {searched}")
-
+                    f"{detail}; channels searched: {', '.join(channels) if channels else 'none (injected solver)'}")
 
 def _solve(solver: Callable | None, command: str | None, constraints: dict) -> tuple[bool, str, bool]:
-    canonical = json.dumps({**{key: constraints[key] for key in
-                               ("python", "torch", "torchvision", "cuda", "packages", "ranges")},
+    solve_constraints = constraints if solver is not None else _conda_constraints(constraints)
+    canonical = json.dumps({**{key: solve_constraints[key] for key in
+                               (("python", "torch", "torchvision", "cuda", "packages", "ranges", "pip_only")
+                                if solver is not None else ("python", "packages", "ranges"))},
                             "channels": CONDA_CHANNELS if solver is None else ()},
                            sort_keys=True, separators=(",", ":"))
     context = ("command", command or "") if solver is None else ("injected", id(solver))
@@ -1010,6 +1026,11 @@ def _pip_specs_for_group(group: dict, models: dict[str, dict]) -> list[str]:
             specs.append(f"torchvision{'' if any(vision_spec.startswith(op) for op in ('==', '>=', '<=', '>', '<', '~=', '!=')) else '=='}{vision_spec}")
 
     pip_only_names = set(constraints.get("pip_only", [])) | _NON_CONDA_PACKAGES
+    pip_only_names.update(name for name in set(constraints.get("packages", {})) |
+                          set(constraints.get("ranges", {}))
+                          if any(op in ("==", "===") and version in _NON_CONDA_PACKAGE_PINS.get(name, ())
+                                 for op, version in constraints.get("packages", {}).get(name, []) +
+                                 constraints.get("ranges", {}).get(name, [])))
     for name in sorted(set(constraints.get("packages", {})) | set(constraints.get("ranges", {}))):
         if name in ("cuda-version", "torch", "torchvision"):
             continue
@@ -1060,13 +1081,13 @@ def _verify_group_interpreter(
         if name == "cuda-version":
             continue
         terms = constraints.get("packages", {}).get(name, []) + constraints.get("ranges", {}).get(name, [])
+        spec_str = ",".join(f"{op}{val}" for op, val in terms)
+        norm_name = runtime.normalize_distribution_name(name)
+        inst_ver = installed.get(norm_name)
+        details["verified_versions"][name] = {"required": spec_str or "declared", "installed": inst_ver}
+        if inst_ver is None:
+            return False, f"Required package {name} ({spec_str or 'declared'}) is not installed", details
         if terms:
-            spec_str = ",".join(f"{op}{val}" for op, val in terms)
-            norm_name = runtime.normalize_distribution_name(name)
-            inst_ver = installed.get(norm_name)
-            details["verified_versions"][name] = {"required": spec_str, "installed": inst_ver}
-            if inst_ver is None:
-                return False, f"Required package {name} ({spec_str}) is not installed", details
             satisfies = runtime.version_satisfies(spec_str, inst_ver)
             if satisfies is False or satisfies is None:
                 return False, f"Package {name} version mismatch: required {spec_str}, installed {inst_ver}", details
@@ -1207,10 +1228,9 @@ def _provision_group(
     solver_cmd: str | None,
     network_allowed: bool,
 ) -> tuple[bool, str]:
-    # `interpreter` is None until verification proves it; the path to install into is the planned
-    # one, which is exactly what provisioning is about to create.
-    interpreter = Path(group["interpreter"])
     prefix = Path(group["conda_env_path"])
+    interpreter = Path(group.get("interpreter") or
+                       prefix / ("python.exe" if os.name == "nt" else "bin/python"))
     if _is_staging_path(prefix) or _is_staging_path(interpreter):
         group["installation_status"] = "FAILED"
         group["runtime_verification_status"] = "FAILED"
@@ -1500,9 +1520,9 @@ def _verify_console_scripts(prefix: Path, interpreter: Path) -> tuple[bool, str]
         # the case this check exists for.
         if not Path(shebang).name.startswith("python"):
             continue
-        if uses_env and Path(shebang).name in {"python", "python3"}:
-            # `#!/usr/bin/env python` deliberately defers to PATH, which inside this prefix is this
-            # prefix's python; there is no absolute path that can go stale.
+        if uses_env and Path(shebang).name in {"python", "python3", *(Path(path).name for path in acceptable)}:
+            # `#!/usr/bin/env python` and versioned python names defer to PATH. Conda writes
+            # versioned env shebangs for utilities such as `2to3`.
             continue
         inspected += 1
         try:
@@ -1652,6 +1672,7 @@ def provision_environment_plan(
         groups, by_id, specs, artifacts_root, resolved_third_party, allowed, solver_cmd,
         network_allowed=network_allowed,
     )
+    operator_mapping = plan.get("interpreter_mapping", {})
     for _group in provisioned_groups:
         _clear_unverified_group_interpreter(_group)
     plan["groups"] = provisioned_groups
@@ -1659,25 +1680,26 @@ def provision_environment_plan(
     # prefix has been removed, so publishing its path handed every later stage a nonexistent
     # interpreter and the autopilot propagated it to child processes as WORKBENCH_<MODEL>_PYTHON.
     plan["interpreter_mapping"] = {
-        mid: (group.get("interpreter") if group.get("state") == "RUNTIME_VERIFIED" else None)
+        mid: (group.get("interpreter") if group.get("state") == "RUNTIME_VERIFIED"
+              else operator_mapping.get(mid))
         for group in provisioned_groups for mid in group["members"]
     }
 
     models_assignment = {}
     for g in provisioned_groups:
         for mid in g["members"]:
-            # A group that is not RUNTIME_VERIFIED has no usable environment: whatever path the
-            # planner recorded is either absent (cleaned up after a failure) or unverified.
-            interp = g.get("interpreter") if g.get("state") == "RUNTIME_VERIFIED" else None
+            verified = g.get("state") == "RUNTIME_VERIFIED"
             models_assignment[mid] = {
                 "environment_id": g["environment_id"],
-                "interpreter": interp,
-                "conda_env_path": g.get("conda_env_path"),
+                "interpreter": g.get("interpreter") if verified else None,
+                "conda_env_path": g.get("conda_env_path") if verified else None,
                 "state": g.get("state", "UNKNOWN"),
                 "installation_status": g.get("installation_status"),
                 "runtime_verification_status": g.get("runtime_verification_status"),
                 "shared": len(g["members"]) > 1,
                 "group_members": list(g["members"]),
+                **({} if verified else {"reason": "; ".join(g.get("unresolved", [])) or
+                                         f"environment not runtime verified (state: {g.get('state', 'UNKNOWN')})"}),
             }
     for b in plan.get("blocked", []):
         mid = b["model_id"]
@@ -1706,11 +1728,7 @@ def provision_environment_plan(
         "plan": plan,
     }
 
-    has_failures = any(
-        g.get("state") == "FAILED" or g.get("installation_status") == "FAILED"
-        for g in provisioned_groups
-    )
-    if not has_failures and (not allowed or all(g.get("state") == "RUNTIME_VERIFIED" for g in provisioned_groups)):
+    if any(g.get("state") == "RUNTIME_VERIFIED" for g in provisioned_groups):
         assignment_path = artifacts_root / "environment_assignment.json"
         write_environment_assignment(assignment, assignment_path)
         plan["environment_assignment_path"] = str(assignment_path)

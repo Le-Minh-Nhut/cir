@@ -207,7 +207,6 @@ def main(argv: list[str] | None = None) -> int:
         partial = destination.with_suffix(destination.suffix + ".part")
         if args.force_redownload:
             partial.unlink(missing_ok=True)
-            destination.unlink(missing_ok=True)
         download(checkpoint["download_url"], partial)
         # Verify the bytes while they are still a temporary file. Publishing first and checking
         # afterwards left a corrupt `destination` on disk, which then blocked recovery: the next

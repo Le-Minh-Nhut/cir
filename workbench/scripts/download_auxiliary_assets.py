@@ -16,7 +16,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.operator_config import resolve_config
-from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, auxiliary_model_ids, auxiliary_source_url, sha256_file
+from workbench.backend.registry import (
+    auxiliary_assets_for_model, auxiliary_destination, auxiliary_model_ids,
+    auxiliary_source_url, sha256_file, validate_auxiliary_asset,
+)
 
 @dataclass(frozen=True)
 class Asset:
@@ -30,6 +33,9 @@ class Asset:
     source_revision: str | None
     expected_sha256: str | None
     provenance_status: str
+    expected_sha256_prefix: str | None = None
+    expected_size_bytes: int | None = None
+    content_contract: dict[str, Any] | None = None
 
 
 def assets(model_ids: set[str], third_party_root: Path, fashioniq_root: Path) -> tuple[Asset, ...]:
@@ -45,6 +51,9 @@ def assets(model_ids: set[str], third_party_root: Path, fashioniq_root: Path) ->
             asset["source_revision"],
             asset["expected_sha256"],
             asset["provenance_status"],
+            asset.get("expected_sha256_prefix"),
+            asset.get("expected_size_bytes"),
+            asset.get("content_contract"),
         )
         for model_id in model_ids
         for asset in auxiliary_assets_for_model(model_id)
@@ -68,35 +77,44 @@ def report(items: tuple[Asset, ...]) -> None:
     for asset in items:
         state = "present" if asset.destination.is_file() else "missing"
         source = asset.source_url or "unverified author download source"
+        prefix = getattr(asset, "expected_sha256_prefix", None)
+        source_unverified = asset.provenance_status != "VERIFIED" or (asset.expected_sha256 is None and prefix is None)
         print(
             f"{asset.family}: destination={asset.destination} state={state} "
             f"required={str(asset.required).lower()} "
             f"automatic_download_available={str(asset.automatic_download_available).lower()} "
-            f"source_unverified={str(asset.provenance_status != 'VERIFIED' or asset.expected_sha256 is None).lower()} "
+            f"source_unverified={str(source_unverified).lower()} "
             f"source={source}"
         )
 
-def verify(asset: Asset) -> bool:
-    if not asset.destination.is_file():
+def verify(asset: Asset, *, fashioniq_root: Path | None = None) -> bool:
+    res = validate_auxiliary_asset(asset, asset.destination, fashioniq_root=fashioniq_root)
+    if res.status == "MISSING":
         print(f"MISSING {asset.destination}")
         return False
-    size = asset.destination.stat().st_size
-    if size == 0:
+    if res.status == "INVALID_EMPTY_FILE":
         print(f"INVALID EMPTY FILE {asset.destination}")
         return False
+    size = asset.destination.stat().st_size
     digest = sha256_file(asset.destination)
-    valid = True
-    if asset.expected_sha256 is None:
+    prefix = getattr(asset, "expected_sha256_prefix", None)
+    if asset.expected_sha256 is None and not prefix:
         print(f"{asset.destination}: {size} bytes sha256={digest} — checksum unavailable; provenance not checksum-verified")
-    elif digest != asset.expected_sha256:
+    elif (asset.expected_sha256 and digest != asset.expected_sha256) or (prefix and not digest.startswith(prefix)):
         print(f"{asset.destination}: {size} bytes sha256={digest} OFFICIAL SHA256 MISMATCH")
-        valid = False
     else:
         print(f"{asset.destination}: {size} bytes sha256={digest} OFFICIAL SHA256 MATCH")
     if asset.provenance_status != "VERIFIED":
         print(f"UNRESOLVED REQUIRED PROVENANCE {asset.destination}: {asset.provenance_status}")
-        valid = False
-    return valid
+    for issue in res.issues:
+        if (
+            "OFFICIAL SHA256 MISMATCH" not in issue
+            and "OPERATOR_SUPPLIED_UNVERIFIED" not in issue
+            and "MISSING" not in issue
+            and "INVALID EMPTY FILE" not in issue
+        ):
+            print(issue)
+    return res.ok
 
 
 def download(url: str, partial: Path) -> None:
@@ -159,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         failed = False
         for asset in items:
             if asset.required:
-                failed |= not verify(asset)
+                failed |= not verify(asset, fashioniq_root=config.FASHIONIQ_ROOT)
         return int(failed)
     selected = tuple(asset for asset in downloadable if args.force_redownload or not asset.destination.is_file())
     if args.dry_run:
@@ -180,8 +198,12 @@ def main(argv: list[str] | None = None) -> int:
             download(asset.source_url, partial)
             if partial.stat().st_size == 0:
                 raise RuntimeError("downloaded auxiliary asset is empty")
-            if asset.expected_sha256 and sha256_file(partial) != asset.expected_sha256:
+            digest = sha256_file(partial)
+            if asset.expected_sha256 and digest != asset.expected_sha256:
                 raise RuntimeError("official SHA256 mismatch")
+            prefix = getattr(asset, "expected_sha256_prefix", None)
+            if prefix and not digest.startswith(prefix):
+                raise RuntimeError("official SHA256 prefix mismatch")
             os.replace(partial, asset.destination)
         except Exception as error:
             partial.unlink(missing_ok=True)
@@ -189,7 +211,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         entries = record_download(entries, asset)
         save_manifest(manifest_path(config.WORKBENCH_ARTIFACTS_ROOT), entries)
-        hash_status = "official SHA256 verified" if asset.expected_sha256 else "local hash; official SHA256 unavailable"
+        prefix = getattr(asset, "expected_sha256_prefix", None)
+        hash_status = "official SHA256 verified" if asset.expected_sha256 else "official SHA256 prefix verified" if prefix else "local hash; official SHA256 unavailable"
         print(f"DOWNLOADED {asset.destination}: sha256={sha256_file(asset.destination)} ({hash_status})")
     if not selected:
         print("verified auxiliary downloads: complete")

@@ -1,0 +1,1353 @@
+schema_version: 1
+cluster: b3_ilearn
+models:
+  - model_id: airknow
+    source_dir: AirKnow
+    upstream_commit: 6ab6fa95b746f85b08eea4cb66eb51448bce99b7
+    eval_entrypoint: test_BLIP2.py
+    eval_command_evidence: "AirKnow/train_BLIP2.py:298 — 't = test.test(args, model, trainset, category, txt_processors)' in train_and_evaluate(); invoked via 'python train_BLIP2.py --dataset fashioniq --fashioniq_path <path>/ ...' (AirKnow/README.md:205-213)"
+    shared_with:
+      byte_identical_files:
+        - file: data_utils.py
+          siblings: [conesep, habit, intent]
+          sha256: c6a90c6d7a57a8bf6ff00874ff0b497042a98f121d5c21f7dbbe03ec417430d8
+          size_bytes: 18058
+          lines: 427
+          evidence: "Byte-identical across all four checkouts; implements TargetPad and targetpad_transform(1.25, 224) (lines 92-106)."
+        - file: utils.py
+          siblings: [conesep, habit, intent]
+          sha256: 694a5081a6eb6408d66e746a5d42188ff6e6cf1e4a5bf4d289aa841ee135cf50
+          size_bytes: 4576
+          lines: 145
+          evidence: "Byte-identical across all four checkouts; implements Params, RunningAverage, set_logger."
+        - file: lavis/configs/models/blip2/blip2_pretrain.yaml
+          siblings: [conesep, habit, intent]
+          evidence: "Identical 38 lines; configures Salesforce BLIP-2 pretrained weights at line 10."
+      fork_diff_evidence:
+        - "AirKnow/test_BLIP2.py:10 calls model.train() leaving the model in training mode during validation, whereas ConeSep, HABIT, and INTENT call model.eval()."
+        - "AirKnow/test_BLIP2.py:11 indents the entire function body in 'with torch.no_grad():'."
+        - "AirKnow/test_BLIP2.py:12-79 contains fashion200k testing (present in HABIT and INTENT, absent in ConeSep)."
+        - "AirKnow/test_BLIP2.py:90-96,158-166 contains lasco and birds handling (absent in ConeSep)."
+        - "AirKnow/test_BLIP2.py:179-273 defines lasco helper functions with empty string paths load_obj('') (INTENT hardcodes /root/autodl-tmp/LaSCo/)."
+        - "AirKnow/datasets.py contains 1041 lines including FashionIQ_V, CIRR_V, LaSCo, Birds, and Fashion200k classes (absent in ConeSep, HABIT, INTENT)."
+        - "AirKnow/lavis/models/blip2_models/blip2.py lines 102-103 adds 'if Qformer.cls.predictions.bias in state_dict: del state_dict[Qformer.cls.predictions.bias]' (absent in ConeSep, HABIT, INTENT)."
+        - "AirKnow/lavis/models/eva_vit.py line 443 defines URL (ConeSep, HABIT, INTENT define it at line 442)."
+    evaluation_data_flow: "Evaluation runs via test_BLIP2.py:test() called from train_BLIP2.py:298 over categories dress, shirt, toptee. In datasets.py:FashionIQ.get_test_data() (lines 181-224), captions are normalized via captions/correction_dict_{category}.json and joined with ' and '; images are loaded from resized_image/{category}/{id}.jpg with targetpad_transform(1.25, 224) (data_utils.py:92-106). Query and gallery features are extracted by model.extract_retrieval_compose() and extract_retrieval_target() (lavis/models/blip2_models/blip2_cir.py:127-192), using BLIP-2 pretrained weights (blip2_pretrain.yaml:10) and /root/bert-base-uncased (blip2.py:32). Dot-product similarity masks reference index to -10e10 before ranking."
+    search_locations_checked:
+      - workbench/third_party/AirKnow/README.md
+      - workbench/third_party/AirKnow/test_BLIP2.py
+      - workbench/third_party/AirKnow/train_BLIP2.py
+      - workbench/third_party/AirKnow/datasets.py
+      - workbench/third_party/AirKnow/data_utils.py
+      - workbench/third_party/AirKnow/utils.py
+      - workbench/third_party/AirKnow/lavis/configs/models/blip2/blip2_pretrain.yaml
+      - workbench/third_party/AirKnow/lavis/models/blip2_models/blip2.py
+      - workbench/third_party/AirKnow/lavis/models/blip2_models/blip2_cir.py
+      - workbench/third_party/AirKnow/lavis/models/eva_vit.py
+      - workbench/registry/models.yaml
+    unresolved:
+      - "test_BLIP2.py lacks a __main__ entrypoint; evaluation only runs as an internal training subroutine from train_BLIP2.py:298."
+      - "train_BLIP2.py defines --restore_file at line 67 but never implements loading weights from it."
+      - "No clean (0% noise) trained checkpoint exists or is published upstream; only 50% and 80% noise checkpoints are available on Hugging Face."
+      - "AirKnow/test_BLIP2.py:10 leaves the model in model.train() during evaluation."
+      - "lavis/models/blip2_models/blip2.py hardcodes absolute host path /root/bert-base-uncased at lines 32, 48, and 55."
+      - "Correction dictionaries (captions/correction_dict_{dress,shirt,toptee}.json) are missing from the checkout with no download URL or generator."
+    assets:
+      - logical_asset_id: lavis_blip2_pretrained_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: lavis/configs/models/blip2/blip2_pretrain.yaml
+        upstream_line: 10
+        upstream_function: BaseModel.load_checkpoint_from_config
+        expected_relative_path: .cache/lavis/blip2_pretrained.pth
+        expected_format: pth
+        expected_structure: "PyTorch checkpoint dict containing pretrained ViT-g visual encoder and Q-Former weights"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: "https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth"
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch state_dict loadable with keys matching EVA-CLIP visual encoder and BertLMHeadModel Q-Former"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Configured in lavis/configs/models/blip2/blip2_pretrain.yaml:10; loaded during model initialization by create_model_and_optimizer() in train_BLIP2.py:196."
+
+      - logical_asset_id: lavis_eva_vit_g_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: lavis/models/eva_vit.py
+        upstream_line: 443
+        upstream_function: create_eva_vit_g
+        expected_relative_path: .cache/lavis/eva_vit_g.pth
+        expected_format: pth
+        expected_structure: "PyTorch state dict for EVA-CLIP ViT-g visual encoder"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: "https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth"
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch state dict matching VisionTransformer ViT-g parameter keys"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Downloaded and loaded by download_cached_file in lavis/models/eva_vit.py:444, called from blip2.py:72."
+
+      - logical_asset_id: bert_base_uncased_tokenizer_and_config
+        asset_role: tokenizer
+        required_for_evaluation: true
+        upstream_source_file: lavis/models/blip2_models/blip2.py
+        upstream_line: 32
+        upstream_function: Blip2Base.init_tokenizer
+        expected_relative_path: /root/bert-base-uncased
+        expected_format: directory
+        expected_structure: "HuggingFace Transformers BERT model directory containing vocab.txt, config.json, pytorch_model.bin"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: "https://huggingface.co/bert-base-uncased"
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Valid HuggingFace BERT model directory loadable by BertTokenizer.from_pretrained and BertConfig.from_pretrained"
+        acquisition_status: AVAILABLE
+        current_blocker: "Upstream source hardcodes absolute host path /root/bert-base-uncased in blip2.py lines 32, 48, and 55."
+        notes: "Used by Blip2Base.init_tokenizer (line 32) and Blip2Base.init_Qformer (lines 48, 55)."
+
+      - logical_asset_id: fashioniq_correction_dict_dress
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 187
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/correction_dict_dress.json
+        expected_format: json
+        expected_structure: "JSON key-value mapping of variant/misspelled words to canonical token strings"
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON object mapping string tokens to string replacements"
+        acquisition_status: BLOCKED
+        current_blocker: "Upstream repository neither tracks captions/correction_dict_dress.json nor provides a download URL or generation script."
+        notes: "Opened directly in datasets.py:187 by FashionIQ.get_test_data('dress') and in datasets.py:110 by FashionIQ.train_init_process()."
+
+      - logical_asset_id: fashioniq_correction_dict_shirt
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 187
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/correction_dict_shirt.json
+        expected_format: json
+        expected_structure: "JSON key-value mapping of variant/misspelled words to canonical token strings"
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON object mapping string tokens to string replacements"
+        acquisition_status: BLOCKED
+        current_blocker: "Upstream repository neither tracks captions/correction_dict_shirt.json nor provides a download URL or generation script."
+        notes: "Opened directly in datasets.py:187 by FashionIQ.get_test_data('shirt') and in datasets.py:110 by FashionIQ.train_init_process()."
+
+      - logical_asset_id: fashioniq_correction_dict_toptee
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 187
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/correction_dict_toptee.json
+        expected_format: json
+        expected_structure: "JSON key-value mapping of variant/misspelled words to canonical token strings"
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON object mapping string tokens to string replacements"
+        acquisition_status: BLOCKED
+        current_blocker: "Upstream repository neither tracks captions/correction_dict_toptee.json nor provides a download URL or generation script."
+        notes: "Opened directly in datasets.py:187 by FashionIQ.get_test_data('toptee') and in datasets.py:110 by FashionIQ.train_init_process()."
+
+      - logical_asset_id: fashioniq_resized_images
+        asset_role: resized_images
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 154
+        upstream_function: FashionIQ.get_img
+        expected_relative_path: resized_image/{dress,shirt,toptee}/{image_id}.jpg
+        expected_format: directory
+        expected_structure: "Directory tree resized_image/ with subdirectories dress/, shirt/, toptee/ containing .jpg images"
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: [images/]
+        output_validation_contract: "JPEG images under resized_image/<category>/<id>.jpg matching IDs in split.<category>.val.json"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Loaded by datasets.py:154 (get_img) and datasets.py:165 (get_test_img) using self.image_dir = self.path + 'resized_image'. Requires trailing slash."
+
+      - logical_asset_id: fashioniq_val_captions
+        asset_role: caption_source
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 185
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/cap.{dress,shirt,toptee}.val.json
+        expected_format: json
+        expected_structure: "JSON list of validation triplets with candidate, target, and captions fields"
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Standard FashionIQ validation caption JSON files"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Canonical FashionIQ validation captions provided by operator."
+
+      - logical_asset_id: fashioniq_val_splits
+        asset_role: annotation
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 183
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: image_splits/split.{dress,shirt,toptee}.val.json
+        expected_format: json
+        expected_structure: "JSON list of validation image ID strings representing the full category gallery"
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Standard FashionIQ validation split JSON files"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Canonical FashionIQ validation splits defining full gallery ordering."
+
+      - logical_asset_id: fashioniq_cache_data_json
+        asset_role: generated_caches
+        required_for_evaluation: false
+        upstream_source_file: datasets.py
+        upstream_line: 38
+        upstream_function: FashionIQ.__init__
+        expected_relative_path: fashion_iq_data.json
+        expected_format: json
+        expected_structure: "JSON list of train triplets with target, candidate, and captions keys"
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: datasets.py
+        generation_parameters: "FashionIQ.__init__ invokes FashionIQ.train_init_process() when fashion_iq_data.json is missing"
+        raw_input_dependencies:
+          - captions/cap.dress.train.json
+          - captions/cap.shirt.train.json
+          - captions/cap.toptee.train.json
+          - captions/correction_dict_dress.json
+          - captions/correction_dict_shirt.json
+          - captions/correction_dict_toptee.json
+        output_validation_contract: "JSON list of train triplets"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Generated during FashionIQ.__init__ on cache miss; loaded from dataset root on cache hit."
+
+      - logical_asset_id: fashioniq_cache_test_queries_and_targets_pkl
+        asset_role: generated_caches
+        required_for_evaluation: false
+        upstream_source_file: datasets.py
+        upstream_line: 48
+        upstream_function: FashionIQ.__init__
+        expected_relative_path: "test_queries_{dress,shirt,toptee}.pkl, test_targets_{dress,shirt,toptee}.pkl"
+        expected_format: pkl
+        expected_structure: "Six pickle files containing lists of preprocessed validation query and target dictionaries"
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: datasets.py
+        generation_parameters: "FashionIQ.__init__ calls FashionIQ.get_test_data() when fashion_iq_data.json is missing"
+        raw_input_dependencies:
+          - captions/cap.dress.val.json
+          - captions/cap.shirt.val.json
+          - captions/cap.toptee.val.json
+          - image_splits/split.dress.val.json
+          - image_splits/split.shirt.val.json
+          - image_splits/split.toptee.val.json
+          - captions/correction_dict_dress.json
+          - captions/correction_dict_shirt.json
+          - captions/correction_dict_toptee.json
+          - resized_image/dress
+          - resized_image/shirt
+          - resized_image/toptee
+        output_validation_contract: "Six pickle files loadable via pickle.load returning query and target records"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Written to dataset root on first initialization; loaded on subsequent runs."
+
+      - logical_asset_id: fashioniq_train_captions_on_cache_miss
+        asset_role: caption_source
+        required_for_evaluation: false
+        upstream_source_file: datasets.py
+        upstream_line: 108
+        upstream_function: FashionIQ.train_init_process
+        expected_relative_path: captions/cap.{dress,shirt,toptee}.train.json
+        expected_format: json
+        expected_structure: "JSON list of training triplets"
+        classification: OPTIONAL_NOT_REQUIRED_FOR_EVALUATION
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Standard FashionIQ training caption JSON files"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Training captions are read only during initial cache generation in train_init_process()."
+
+  - model_id: conesep
+    source_dir: ConeSep
+    upstream_commit: bd4bf629ebe68045c1a54dcc61e4a3ea65f8759b
+    eval_entrypoint: test.py
+    eval_command_evidence: "ConeSep/train.py:216 — 't = test.test(args, model, trainset, category, txt_processors)' in train_and_evaluate(); invoked via 'python train.py --dataset fashioniq --fashioniq_path <path>/ ...' (ConeSep/README.md:213-221)"
+    shared_with:
+      byte_identical_files:
+        - file: data_utils.py
+          siblings: [airknow, habit, intent]
+          sha256: c6a90c6d7a57a8bf6ff00874ff0b497042a98f121d5c21f7dbbe03ec417430d8
+          size_bytes: 18058
+          lines: 427
+          evidence: "Byte-identical across all four checkouts."
+        - file: utils.py
+          siblings: [airknow, habit, intent]
+          sha256: 694a5081a6eb6408d66e746a5d42188ff6e6cf1e4a5bf4d289aa841ee135cf50
+          size_bytes: 4576
+          lines: 145
+          evidence: "Byte-identical across all four checkouts."
+        - file: lavis/configs/models/blip2/blip2_pretrain.yaml
+          siblings: [airknow, habit, intent]
+          evidence: "Identical 38 lines; configures Salesforce BLIP-2 pretrained weights at line 10."
+        - file: lavis/models/blip2_models/blip2.py
+          siblings: [habit, intent]
+          size_bytes: 10842
+          lines: 316
+          evidence: "Byte-identical between ConeSep, HABIT, and INTENT; differs from AirKnow by omitting lines 102-103."
+        - file: lavis/models/eva_vit.py
+          siblings: [habit, intent]
+          lines: 442
+          evidence: "Byte-identical between ConeSep, HABIT, and INTENT."
+      fork_diff_evidence:
+        - "ConeSep/test.py is 170 lines total (most compact). Lines 12-17 handle dress, shirt, toptee, shoes; completely omits fashion200k, lasco, and birds."
+        - "ConeSep/test.py:10 sets model.eval() (unlike AirKnow:10 which calls model.train())."
+        - "ConeSep/datasets.py:26 FashionIQ.__init__ accepts (path, transform=None, noise_ratio=0), omitting category and split arguments present in HABIT and INTENT."
+        - "ConeSep model class is ConeSep in lavis/models/blip2_models/ConeSep.py (AirKnow and INTENT use blip2_cir.py; HABIT uses HABIT.py)."
+    evaluation_data_flow: "Evaluation runs via test.py:test() called from train.py:216 over categories dress, shirt, toptee. In datasets.py:FashionIQ.get_test_data() (lines 164-208), captions are normalized via captions/correction_dict_{category}.json and joined with ' and '; images are loaded from resized_image/{category}/{id}.jpg with targetpad_transform(1.25, 224) (data_utils.py:92-106). Query and gallery features are extracted by ConeSep.extract_retrieval_compose() and extract_retrieval_target() (lavis/models/blip2_models/ConeSep.py), using BLIP-2 pretrained weights (blip2_pretrain.yaml:10) and /root/bert-base-uncased (blip2.py:32). Dot-product similarity masks reference index to -10e10 before ranking."
+    search_locations_checked:
+      - workbench/third_party/ConeSep/README.md
+      - workbench/third_party/ConeSep/test.py
+      - workbench/third_party/ConeSep/train.py
+      - workbench/third_party/ConeSep/datasets.py
+      - workbench/third_party/ConeSep/data_utils.py
+      - workbench/third_party/ConeSep/utils.py
+      - workbench/third_party/ConeSep/lavis/configs/models/blip2/blip2_pretrain.yaml
+      - workbench/third_party/ConeSep/lavis/models/blip2_models/blip2.py
+      - workbench/third_party/ConeSep/lavis/models/blip2_models/ConeSep.py
+      - workbench/third_party/ConeSep/lavis/models/eva_vit.py
+      - workbench/registry/models.yaml
+    unresolved:
+      - "test.py lacks a __main__ entrypoint; evaluation only runs as an internal training subroutine from train.py:216."
+      - "train.py defines --restore_file at line 76 but never implements loading weights from it."
+      - "No clean (0% noise) trained checkpoint exists or is published upstream; only 20%, 50%, and 80% noise checkpoints are available on Hugging Face."
+      - "lavis/models/blip2_models/blip2.py hardcodes absolute host path /root/bert-base-uncased at lines 32, 48, and 55."
+      - "Correction dictionaries (captions/correction_dict_{dress,shirt,toptee}.json) are missing from the checkout with no download URL or generator."
+    assets:
+      - logical_asset_id: lavis_blip2_pretrained_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: lavis/configs/models/blip2/blip2_pretrain.yaml
+        upstream_line: 10
+        upstream_function: BaseModel.load_checkpoint_from_config
+        expected_relative_path: .cache/lavis/blip2_pretrained.pth
+        expected_format: pth
+        expected_structure: "PyTorch checkpoint dict containing pretrained ViT-g visual encoder and Q-Former weights"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: "https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth"
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch state_dict loadable with keys matching EVA-CLIP visual encoder and BertLMHeadModel Q-Former"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Configured in lavis/configs/models/blip2/blip2_pretrain.yaml:10; loaded during model initialization by create_model_and_optimizer() in train.py:134."
+
+      - logical_asset_id: lavis_eva_vit_g_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: lavis/models/eva_vit.py
+        upstream_line: 442
+        upstream_function: create_eva_vit_g
+        expected_relative_path: .cache/lavis/eva_vit_g.pth
+        expected_format: pth
+        expected_structure: "PyTorch state dict for EVA-CLIP ViT-g visual encoder"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: "https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth"
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch state dict matching VisionTransformer ViT-g parameter keys"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Downloaded and loaded by download_cached_file in lavis/models/eva_vit.py:443, called from blip2.py:72."
+
+      - logical_asset_id: bert_base_uncased_tokenizer_and_config
+        asset_role: tokenizer
+        required_for_evaluation: true
+        upstream_source_file: lavis/models/blip2_models/blip2.py
+        upstream_line: 32
+        upstream_function: Blip2Base.init_tokenizer
+        expected_relative_path: /root/bert-base-uncased
+        expected_format: directory
+        expected_structure: "HuggingFace Transformers BERT model directory containing vocab.txt, config.json, pytorch_model.bin"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: "https://huggingface.co/bert-base-uncased"
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Valid HuggingFace BERT model directory loadable by BertTokenizer.from_pretrained and BertConfig.from_pretrained"
+        acquisition_status: AVAILABLE
+        current_blocker: "Upstream source hardcodes absolute host path /root/bert-base-uncased in blip2.py lines 32, 48, and 55."
+        notes: "Used by Blip2Base.init_tokenizer (line 32) and Blip2Base.init_Qformer (lines 48, 55)."
+
+      - logical_asset_id: fashioniq_correction_dict_dress
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 170
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/correction_dict_dress.json
+        expected_format: json
+        expected_structure: "JSON key-value mapping of variant/misspelled words to canonical token strings"
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON object mapping string tokens to string replacements"
+        acquisition_status: BLOCKED
+        current_blocker: "Upstream repository neither tracks captions/correction_dict_dress.json nor provides a download URL or generation script."
+        notes: "Opened directly in datasets.py:170 by FashionIQ.get_test_data('dress') and in datasets.py:96 by FashionIQ.train_init_process()."
+
+      - logical_asset_id: fashioniq_correction_dict_shirt
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 170
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/correction_dict_shirt.json
+        expected_format: json
+        expected_structure: "JSON key-value mapping of variant/misspelled words to canonical token strings"
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON object mapping string tokens to string replacements"
+        acquisition_status: BLOCKED
+        current_blocker: "Upstream repository neither tracks captions/correction_dict_shirt.json nor provides a download URL or generation script."
+        notes: "Opened directly in datasets.py:170 by FashionIQ.get_test_data('shirt') and in datasets.py:96 by FashionIQ.train_init_process()."
+
+      - logical_asset_id: fashioniq_correction_dict_toptee
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 170
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/correction_dict_toptee.json
+        expected_format: json
+        expected_structure: "JSON key-value mapping of variant/misspelled words to canonical token strings"
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON object mapping string tokens to string replacements"
+        acquisition_status: BLOCKED
+        current_blocker: "Upstream repository neither tracks captions/correction_dict_toptee.json nor provides a download URL or generation script."
+        notes: "Opened directly in datasets.py:170 by FashionIQ.get_test_data('toptee') and in datasets.py:96 by FashionIQ.train_init_process()."
+
+      - logical_asset_id: fashioniq_resized_images
+        asset_role: resized_images
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 141
+        upstream_function: FashionIQ.get_img
+        expected_relative_path: resized_image/{dress,shirt,toptee}/{image_id}.jpg
+        expected_format: directory
+        expected_structure: "Directory tree resized_image/ with subdirectories dress/, shirt/, toptee/ containing .jpg images"
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: [images/]
+        output_validation_contract: "JPEG images under resized_image/<category>/<id>.jpg matching IDs in split.<category>.val.json"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Loaded by datasets.py:141 (get_img) and datasets.py:151 (get_test_img) using self.image_dir = self.path + 'resized_image'. Requires trailing slash."
+
+      - logical_asset_id: fashioniq_val_captions
+        asset_role: caption_source
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 168
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/cap.{dress,shirt,toptee}.val.json
+        expected_format: json
+        expected_structure: "JSON list of validation triplets with candidate, target, and captions fields"
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Standard FashionIQ validation caption JSON files"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Canonical FashionIQ validation captions provided by operator."
+
+      - logical_asset_id: fashioniq_val_splits
+        asset_role: annotation
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 166
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: image_splits/split.{dress,shirt,toptee}.val.json
+        expected_format: json
+        expected_structure: "JSON list of validation image ID strings representing the full category gallery"
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Standard FashionIQ validation split JSON files"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Canonical FashionIQ validation splits defining full gallery ordering."
+
+      - logical_asset_id: fashioniq_cache_data_json
+        asset_role: generated_caches
+        required_for_evaluation: false
+        upstream_source_file: datasets.py
+        upstream_line: 34
+        upstream_function: FashionIQ.__init__
+        expected_relative_path: fashion_iq_data.json
+        expected_format: json
+        expected_structure: "JSON list of train triplets"
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: datasets.py
+        generation_parameters: "FashionIQ.__init__ invokes FashionIQ.train_init_process() when fashion_iq_data.json is missing"
+        raw_input_dependencies:
+          - captions/cap.dress.train.json
+          - captions/cap.shirt.train.json
+          - captions/cap.toptee.train.json
+          - captions/correction_dict_dress.json
+          - captions/correction_dict_shirt.json
+          - captions/correction_dict_toptee.json
+        output_validation_contract: "JSON list of train triplets"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Generated during FashionIQ.__init__ on cache miss; loaded from dataset root on cache hit."
+
+      - logical_asset_id: fashioniq_cache_test_queries_and_targets_pkl
+        asset_role: generated_caches
+        required_for_evaluation: false
+        upstream_source_file: datasets.py
+        upstream_line: 44
+        upstream_function: FashionIQ.__init__
+        expected_relative_path: "test_queries_{dress,shirt,toptee}.pkl, test_targets_{dress,shirt,toptee}.pkl"
+        expected_format: pkl
+        expected_structure: "Six pickle files containing lists of validation query and target dictionaries"
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: datasets.py
+        generation_parameters: "FashionIQ.__init__ calls FashionIQ.get_test_data() when fashion_iq_data.json is missing"
+        raw_input_dependencies:
+          - captions/cap.dress.val.json
+          - captions/cap.shirt.val.json
+          - captions/cap.toptee.val.json
+          - image_splits/split.dress.val.json
+          - image_splits/split.shirt.val.json
+          - image_splits/split.toptee.val.json
+          - captions/correction_dict_dress.json
+          - captions/correction_dict_shirt.json
+          - captions/correction_dict_toptee.json
+          - resized_image/dress
+          - resized_image/shirt
+          - resized_image/toptee
+        output_validation_contract: "Six pickle files loadable via pickle.load"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Written to dataset root on first initialization; loaded on subsequent runs."
+
+      - logical_asset_id: fashioniq_train_captions_on_cache_miss
+        asset_role: caption_source
+        required_for_evaluation: false
+        upstream_source_file: datasets.py
+        upstream_line: 94
+        upstream_function: FashionIQ.train_init_process
+        expected_relative_path: captions/cap.{dress,shirt,toptee}.train.json
+        expected_format: json
+        expected_structure: "JSON list of training triplets"
+        classification: OPTIONAL_NOT_REQUIRED_FOR_EVALUATION
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Standard FashionIQ training caption JSON files"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Training captions are read only during initial cache generation in train_init_process()."
+
+  - model_id: habit
+    source_dir: HABIT
+    upstream_commit: 6ddc2cd63eac1f65693f4e821c34fb3b42aee306
+    eval_entrypoint: test.py
+    eval_command_evidence: "HABIT/train.py:283 — 't = test.test(args, model, trainset, category, txt_processors)' in train_and_evaluate(); invoked via 'python train.py --dataset fashioniq --fashioniq_path <path>/ ...' (HABIT/README.md:211-219)"
+    shared_with:
+      byte_identical_files:
+        - file: data_utils.py
+          siblings: [airknow, conesep, intent]
+          sha256: c6a90c6d7a57a8bf6ff00874ff0b497042a98f121d5c21f7dbbe03ec417430d8
+          size_bytes: 18058
+          lines: 427
+          evidence: "Byte-identical across all four checkouts."
+        - file: utils.py
+          siblings: [airknow, conesep, intent]
+          sha256: 694a5081a6eb6408d66e746a5d42188ff6e6cf1e4a5bf4d289aa841ee135cf50
+          size_bytes: 4576
+          lines: 145
+          evidence: "Byte-identical across all four checkouts."
+        - file: lavis/configs/models/blip2/blip2_pretrain.yaml
+          siblings: [airknow, conesep, intent]
+          evidence: "Identical 38 lines; configures Salesforce BLIP-2 pretrained weights at line 10."
+        - file: lavis/models/blip2_models/blip2.py
+          siblings: [conesep, intent]
+          size_bytes: 10842
+          lines: 316
+          evidence: "Byte-identical between ConeSep, HABIT, and INTENT."
+        - file: lavis/models/eva_vit.py
+          siblings: [conesep, intent]
+          lines: 442
+          evidence: "Byte-identical between ConeSep, HABIT, and INTENT."
+      fork_diff_evidence:
+        - "HABIT/test.py lines 9-176 are near byte-identical to INTENT/test.py:9-176 (differing only by whitespace at line 145)."
+        - "HABIT/test.py:10 sets model.eval() (unlike AirKnow:10 which calls model.train())."
+        - "HABIT/test.py lines 179-263 directly define test_cirr_valset, saving cirr_sims.npy at line 236 (omits INTENT's lasco helper functions)."
+        - "HABIT/datasets.py:28 FashionIQ.__init__ accepts category=None, transform=None, noise_ratio=0, split='original-split' (ConeSep omits category and split)."
+        - "HABIT model class is HABIT in lavis/models/blip2_models/HABIT.py (AirKnow and INTENT use blip2_cir.py; ConeSep uses ConeSep.py)."
+    evaluation_data_flow: "Evaluation runs via test.py:test() called from train.py:283 over categories dress, shirt, toptee. In datasets.py:FashionIQ.get_test_data() (lines 168-212), captions are normalized via captions/correction_dict_{category}.json and joined with ' and '; images are loaded from resized_image/{category}/{id}.jpg with targetpad_transform(1.25, 224) (data_utils.py:92-106). Query and gallery features are extracted by HABIT.extract_retrieval_compose() and HABIT.extract_retrieval_target() (lavis/models/blip2_models/HABIT.py:126-191), using BLIP-2 pretrained weights (blip2_pretrain.yaml:10) and /root/bert-base-uncased (blip2.py:32). Dot-product similarity masks reference index to -10e10 before ranking."
+    search_locations_checked:
+      - workbench/third_party/HABIT/README.md
+      - workbench/third_party/HABIT/test.py
+      - workbench/third_party/HABIT/train.py
+      - workbench/third_party/HABIT/datasets.py
+      - workbench/third_party/HABIT/data_utils.py
+      - workbench/third_party/HABIT/utils.py
+      - workbench/third_party/HABIT/lavis/configs/models/blip2/blip2_pretrain.yaml
+      - workbench/third_party/HABIT/lavis/models/blip2_models/blip2.py
+      - workbench/third_party/HABIT/lavis/models/blip2_models/HABIT.py
+      - workbench/third_party/HABIT/lavis/models/eva_vit.py
+      - workbench/registry/models.yaml
+    unresolved:
+      - "test.py lacks a __main__ entrypoint; evaluation only runs as an internal training subroutine from train.py:283."
+      - "train.py defines --restore_file at line 79 but never implements loading weights from it."
+      - "No clean (0% noise) trained checkpoint exists or is published upstream; only 20%, 50%, and 80% noise checkpoints are available on Hugging Face."
+      - "lavis/models/blip2_models/blip2.py hardcodes absolute host path /root/bert-base-uncased at lines 32, 48, and 55."
+      - "Correction dictionaries (captions/correction_dict_{dress,shirt,toptee}.json) are missing from the checkout with no download URL or generator."
+    assets:
+      - logical_asset_id: lavis_blip2_pretrained_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: lavis/configs/models/blip2/blip2_pretrain.yaml
+        upstream_line: 10
+        upstream_function: BaseModel.load_checkpoint_from_config
+        expected_relative_path: .cache/lavis/blip2_pretrained.pth
+        expected_format: pth
+        expected_structure: "PyTorch checkpoint dict containing pretrained ViT-g visual encoder and Q-Former weights"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: "https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth"
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch state_dict loadable with keys matching EVA-CLIP visual encoder and BertLMHeadModel Q-Former"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Configured in lavis/configs/models/blip2/blip2_pretrain.yaml:10; loaded during model initialization by create_model_and_optimizer() in train.py:179."
+
+      - logical_asset_id: lavis_eva_vit_g_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: lavis/models/eva_vit.py
+        upstream_line: 442
+        upstream_function: create_eva_vit_g
+        expected_relative_path: .cache/lavis/eva_vit_g.pth
+        expected_format: pth
+        expected_structure: "PyTorch state dict for EVA-CLIP ViT-g visual encoder"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: "https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth"
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch state dict matching VisionTransformer ViT-g parameter keys"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Downloaded and loaded by download_cached_file in lavis/models/eva_vit.py:443, called from blip2.py:72."
+
+      - logical_asset_id: bert_base_uncased_tokenizer_and_config
+        asset_role: tokenizer
+        required_for_evaluation: true
+        upstream_source_file: lavis/models/blip2_models/blip2.py
+        upstream_line: 32
+        upstream_function: Blip2Base.init_tokenizer
+        expected_relative_path: /root/bert-base-uncased
+        expected_format: directory
+        expected_structure: "HuggingFace Transformers BERT model directory containing vocab.txt, config.json, pytorch_model.bin"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: "https://huggingface.co/bert-base-uncased"
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Valid HuggingFace BERT model directory loadable by BertTokenizer.from_pretrained and BertConfig.from_pretrained"
+        acquisition_status: AVAILABLE
+        current_blocker: "Upstream source hardcodes absolute host path /root/bert-base-uncased in blip2.py lines 32, 48, and 55."
+        notes: "Used by Blip2Base.init_tokenizer (line 32) and Blip2Base.init_Qformer (lines 48, 55)."
+
+      - logical_asset_id: fashioniq_correction_dict_dress
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 174
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/correction_dict_dress.json
+        expected_format: json
+        expected_structure: "JSON key-value mapping of variant/misspelled words to canonical token strings"
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON object mapping string tokens to string replacements"
+        acquisition_status: BLOCKED
+        current_blocker: "Upstream repository neither tracks captions/correction_dict_dress.json nor provides a download URL or generation script."
+        notes: "Opened directly in datasets.py:174 by FashionIQ.get_test_data('dress') and in datasets.py:100 by FashionIQ.train_init_process()."
+
+      - logical_asset_id: fashioniq_correction_dict_shirt
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 174
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/correction_dict_shirt.json
+        expected_format: json
+        expected_structure: "JSON key-value mapping of variant/misspelled words to canonical token strings"
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON object mapping string tokens to string replacements"
+        acquisition_status: BLOCKED
+        current_blocker: "Upstream repository neither tracks captions/correction_dict_shirt.json nor provides a download URL or generation script."
+        notes: "Opened directly in datasets.py:174 by FashionIQ.get_test_data('shirt') and in datasets.py:100 by FashionIQ.train_init_process()."
+
+      - logical_asset_id: fashioniq_correction_dict_toptee
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 174
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/correction_dict_toptee.json
+        expected_format: json
+        expected_structure: "JSON key-value mapping of variant/misspelled words to canonical token strings"
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON object mapping string tokens to string replacements"
+        acquisition_status: BLOCKED
+        current_blocker: "Upstream repository neither tracks captions/correction_dict_toptee.json nor provides a download URL or generation script."
+        notes: "Opened directly in datasets.py:174 by FashionIQ.get_test_data('toptee') and in datasets.py:100 by FashionIQ.train_init_process()."
+
+      - logical_asset_id: fashioniq_resized_images
+        asset_role: resized_images
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 145
+        upstream_function: FashionIQ.get_img
+        expected_relative_path: resized_image/{dress,shirt,toptee}/{image_id}.jpg
+        expected_format: directory
+        expected_structure: "Directory tree resized_image/ with subdirectories dress/, shirt/, toptee/ containing .jpg images"
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: [images/]
+        output_validation_contract: "JPEG images under resized_image/<category>/<id>.jpg matching IDs in split.<category>.val.json"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Loaded by datasets.py:145 (get_img) and datasets.py:155 (get_test_img) using self.image_dir = self.path + 'resized_image'. Requires trailing slash."
+
+      - logical_asset_id: fashioniq_val_captions
+        asset_role: caption_source
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 172
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/cap.{dress,shirt,toptee}.val.json
+        expected_format: json
+        expected_structure: "JSON list of validation triplets with candidate, target, and captions fields"
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Standard FashionIQ validation caption JSON files"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Canonical FashionIQ validation captions provided by operator."
+
+      - logical_asset_id: fashioniq_val_splits
+        asset_role: annotation
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 170
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: image_splits/split.{dress,shirt,toptee}.val.json
+        expected_format: json
+        expected_structure: "JSON list of validation image ID strings representing the full category gallery"
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Standard FashionIQ validation split JSON files"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Canonical FashionIQ validation splits defining full gallery ordering."
+
+      - logical_asset_id: fashioniq_cache_data_json
+        asset_role: generated_caches
+        required_for_evaluation: false
+        upstream_source_file: datasets.py
+        upstream_line: 38
+        upstream_function: FashionIQ.__init__
+        expected_relative_path: fashion_iq_data.json
+        expected_format: json
+        expected_structure: "JSON list of train triplets"
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: datasets.py
+        generation_parameters: "FashionIQ.__init__ invokes FashionIQ.train_init_process() when fashion_iq_data.json is missing"
+        raw_input_dependencies:
+          - captions/cap.dress.train.json
+          - captions/cap.shirt.train.json
+          - captions/cap.toptee.train.json
+          - captions/correction_dict_dress.json
+          - captions/correction_dict_shirt.json
+          - captions/correction_dict_toptee.json
+        output_validation_contract: "JSON list of train triplets"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Generated during FashionIQ.__init__ on cache miss; loaded from dataset root on cache hit."
+
+      - logical_asset_id: fashioniq_cache_test_queries_and_targets_pkl
+        asset_role: generated_caches
+        required_for_evaluation: false
+        upstream_source_file: datasets.py
+        upstream_line: 48
+        upstream_function: FashionIQ.__init__
+        expected_relative_path: "test_queries_{dress,shirt,toptee}.pkl, test_targets_{dress,shirt,toptee}.pkl"
+        expected_format: pkl
+        expected_structure: "Six pickle files containing lists of validation query and target dictionaries"
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: datasets.py
+        generation_parameters: "FashionIQ.__init__ calls FashionIQ.get_test_data() when fashion_iq_data.json is missing"
+        raw_input_dependencies:
+          - captions/cap.dress.val.json
+          - captions/cap.shirt.val.json
+          - captions/cap.toptee.val.json
+          - image_splits/split.dress.val.json
+          - image_splits/split.shirt.val.json
+          - image_splits/split.toptee.val.json
+          - captions/correction_dict_dress.json
+          - captions/correction_dict_shirt.json
+          - captions/correction_dict_toptee.json
+          - resized_image/dress
+          - resized_image/shirt
+          - resized_image/toptee
+        output_validation_contract: "Six pickle files loadable via pickle.load"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Written to dataset root on first initialization; loaded on subsequent runs."
+
+      - logical_asset_id: fashioniq_train_captions_on_cache_miss
+        asset_role: caption_source
+        required_for_evaluation: false
+        upstream_source_file: datasets.py
+        upstream_line: 98
+        upstream_function: FashionIQ.train_init_process
+        expected_relative_path: captions/cap.{dress,shirt,toptee}.train.json
+        expected_format: json
+        expected_structure: "JSON list of training triplets"
+        classification: OPTIONAL_NOT_REQUIRED_FOR_EVALUATION
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Standard FashionIQ training caption JSON files"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Training captions are read only during initial cache generation in train_init_process()."
+
+  - model_id: intent
+    source_dir: INTENT
+    upstream_commit: 2a75fc6f57d1a036bf3167a7fe1d2cee072f51f3
+    eval_entrypoint: test.py
+    eval_command_evidence: "INTENT/train_INTENT.py:284 — 't = test.test(args, model, trainset, category, txt_processors)' in train_and_evaluate(); invoked via 'python train_INTENT.py --dataset fashioniq --fashioniq_path <path>/ ...' (INTENT/README.md:179-183)"
+    shared_with:
+      byte_identical_files:
+        - file: data_utils.py
+          siblings: [airknow, conesep, habit]
+          sha256: c6a90c6d7a57a8bf6ff00874ff0b497042a98f121d5c21f7dbbe03ec417430d8
+          size_bytes: 18058
+          lines: 427
+          evidence: "Byte-identical across all four checkouts."
+        - file: utils.py
+          siblings: [airknow, conesep, habit]
+          sha256: 694a5081a6eb6408d66e746a5d42188ff6e6cf1e4a5bf4d289aa841ee135cf50
+          size_bytes: 4576
+          lines: 145
+          evidence: "Byte-identical across all four checkouts."
+        - file: lavis/configs/models/blip2/blip2_pretrain.yaml
+          siblings: [airknow, conesep, habit]
+          evidence: "Identical 38 lines; configures Salesforce BLIP-2 pretrained weights at line 10."
+        - file: lavis/models/blip2_models/blip2.py
+          siblings: [conesep, habit]
+          size_bytes: 10842
+          lines: 316
+          evidence: "Byte-identical between ConeSep, HABIT, and INTENT."
+        - file: lavis/models/eva_vit.py
+          siblings: [conesep, habit]
+          lines: 442
+          evidence: "Byte-identical between ConeSep, HABIT, and INTENT."
+      fork_diff_evidence:
+        - "INTENT/test.py lines 9-176 are near byte-identical to HABIT/test.py:9-176 (differing only by whitespace/blank line 145)."
+        - "INTENT/test.py:10 sets model.eval() (unlike AirKnow:10 which calls model.train())."
+        - "INTENT/test.py lines 178-273 define lasco_query, lasco_target, and test_lasco with hardcoded /root/autodl-tmp/LaSCo/ paths at lines 180, 200, 224 (AirKnow has empty strings; HABIT and ConeSep omit them)."
+        - "INTENT/test.py lines 276-359 define test_cirr_valset without saving cirr_sims.npy (HABIT saves it at line 236)."
+        - "INTENT/datasets.py:26 FashionIQ.__init__ accepts category=None, transform=None, noise_ratio=0, split='original-split' (ConeSep omits category and split)."
+        - "INTENT model class is Blip2QformerCir in lavis/models/blip2_models/blip2_cir.py (matches AirKnow; ConeSep uses ConeSep.py, HABIT uses HABIT.py)."
+    evaluation_data_flow: "Evaluation runs via test.py:test() called from train_INTENT.py:284 over categories dress, shirt, toptee. In datasets.py:FashionIQ.get_test_data() (lines 166-210), captions are normalized via captions/correction_dict_{category}.json and joined with ' and '; images are loaded from resized_image/{category}/{id}.jpg with targetpad_transform(1.25, 224) (data_utils.py:92-106). Query and gallery features are extracted by Blip2QformerCir.extract_retrieval_compose() and extract_retrieval_target() (lavis/models/blip2_models/blip2_cir.py:127-184), using BLIP-2 pretrained weights (blip2_pretrain.yaml:10) and /root/bert-base-uncased (blip2.py:32). Dot-product similarity masks reference index to -10e10 before ranking."
+    search_locations_checked:
+      - workbench/third_party/INTENT/README.md
+      - workbench/third_party/INTENT/test.py
+      - workbench/third_party/INTENT/train_INTENT.py
+      - workbench/third_party/INTENT/datasets.py
+      - workbench/third_party/INTENT/data_utils.py
+      - workbench/third_party/INTENT/utils.py
+      - workbench/third_party/INTENT/lavis/configs/models/blip2/blip2_pretrain.yaml
+      - workbench/third_party/INTENT/lavis/models/blip2_models/blip2.py
+      - workbench/third_party/INTENT/lavis/models/blip2_models/blip2_cir.py
+      - workbench/third_party/INTENT/lavis/models/eva_vit.py
+      - workbench/registry/models.yaml
+    unresolved:
+      - "test.py lacks a __main__ entrypoint; evaluation only runs as an internal training subroutine from train_INTENT.py:284."
+      - "train_INTENT.py does not support --restore_file or checkpoint reloading for standalone evaluation."
+      - "No clean (0% noise) trained checkpoint exists or is published upstream; only 20%, 50%, and 80% noise checkpoints are available on Hugging Face."
+      - "lavis/models/blip2_models/blip2.py hardcodes absolute host path /root/bert-base-uncased at lines 32, 48, and 55."
+      - "Correction dictionaries (captions/correction_dict_{dress,shirt,toptee}.json) are missing from the checkout with no download URL or generator."
+    assets:
+      - logical_asset_id: lavis_blip2_pretrained_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: lavis/configs/models/blip2/blip2_pretrain.yaml
+        upstream_line: 10
+        upstream_function: BaseModel.load_checkpoint_from_config
+        expected_relative_path: .cache/lavis/blip2_pretrained.pth
+        expected_format: pth
+        expected_structure: "PyTorch checkpoint dict containing pretrained ViT-g visual encoder and Q-Former weights"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: "https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth"
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch state_dict loadable with keys matching EVA-CLIP visual encoder and BertLMHeadModel Q-Former"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Configured in lavis/configs/models/blip2/blip2_pretrain.yaml:10; loaded during model initialization by create_model_and_optimizer() in train_INTENT.py:165."
+
+      - logical_asset_id: lavis_eva_vit_g_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: lavis/models/eva_vit.py
+        upstream_line: 442
+        upstream_function: create_eva_vit_g
+        expected_relative_path: .cache/lavis/eva_vit_g.pth
+        expected_format: pth
+        expected_structure: "PyTorch state dict for EVA-CLIP ViT-g visual encoder"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: "https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth"
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch state dict matching VisionTransformer ViT-g parameter keys"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Downloaded and loaded by download_cached_file in lavis/models/eva_vit.py:443, called from blip2.py:72."
+
+      - logical_asset_id: bert_base_uncased_tokenizer_and_config
+        asset_role: tokenizer
+        required_for_evaluation: true
+        upstream_source_file: lavis/models/blip2_models/blip2.py
+        upstream_line: 32
+        upstream_function: Blip2Base.init_tokenizer
+        expected_relative_path: /root/bert-base-uncased
+        expected_format: directory
+        expected_structure: "HuggingFace Transformers BERT model directory containing vocab.txt, config.json, pytorch_model.bin"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: "https://huggingface.co/bert-base-uncased"
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Valid HuggingFace BERT model directory loadable by BertTokenizer.from_pretrained and BertConfig.from_pretrained"
+        acquisition_status: AVAILABLE
+        current_blocker: "Upstream source hardcodes absolute host path /root/bert-base-uncased in blip2.py lines 32, 48, and 55."
+        notes: "Used by Blip2Base.init_tokenizer (line 32) and Blip2Base.init_Qformer (lines 48, 55)."
+
+      - logical_asset_id: fashioniq_correction_dict_dress
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 172
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/correction_dict_dress.json
+        expected_format: json
+        expected_structure: "JSON key-value mapping of variant/misspelled words to canonical token strings"
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON object mapping string tokens to string replacements"
+        acquisition_status: BLOCKED
+        current_blocker: "Upstream repository neither tracks captions/correction_dict_dress.json nor provides a download URL or generation script."
+        notes: "Opened directly in datasets.py:172 by FashionIQ.get_test_data('dress') and in datasets.py:98 by FashionIQ.train_init_process()."
+
+      - logical_asset_id: fashioniq_correction_dict_shirt
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 172
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/correction_dict_shirt.json
+        expected_format: json
+        expected_structure: "JSON key-value mapping of variant/misspelled words to canonical token strings"
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON object mapping string tokens to string replacements"
+        acquisition_status: BLOCKED
+        current_blocker: "Upstream repository neither tracks captions/correction_dict_shirt.json nor provides a download URL or generation script."
+        notes: "Opened directly in datasets.py:172 by FashionIQ.get_test_data('shirt') and in datasets.py:98 by FashionIQ.train_init_process()."
+
+      - logical_asset_id: fashioniq_correction_dict_toptee
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 172
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/correction_dict_toptee.json
+        expected_format: json
+        expected_structure: "JSON key-value mapping of variant/misspelled words to canonical token strings"
+        classification: OFFICIAL_ASSET_UNAVAILABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON object mapping string tokens to string replacements"
+        acquisition_status: BLOCKED
+        current_blocker: "Upstream repository neither tracks captions/correction_dict_toptee.json nor provides a download URL or generation script."
+        notes: "Opened directly in datasets.py:172 by FashionIQ.get_test_data('toptee') and in datasets.py:98 by FashionIQ.train_init_process()."
+
+      - logical_asset_id: fashioniq_resized_images
+        asset_role: resized_images
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 143
+        upstream_function: FashionIQ.get_img
+        expected_relative_path: resized_image/{dress,shirt,toptee}/{image_id}.jpg
+        expected_format: directory
+        expected_structure: "Directory tree resized_image/ with subdirectories dress/, shirt/, toptee/ containing .jpg images"
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: [images/]
+        output_validation_contract: "JPEG images under resized_image/<category>/<id>.jpg matching IDs in split.<category>.val.json"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Loaded by datasets.py:143 (get_img) and datasets.py:153 (get_test_img) using self.image_dir = self.path + 'resized_image'. Requires trailing slash."
+
+      - logical_asset_id: fashioniq_val_captions
+        asset_role: caption_source
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 170
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: captions/cap.{dress,shirt,toptee}.val.json
+        expected_format: json
+        expected_structure: "JSON list of validation triplets with candidate, target, and captions fields"
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Standard FashionIQ validation caption JSON files"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Canonical FashionIQ validation captions provided by operator."
+
+      - logical_asset_id: fashioniq_val_splits
+        asset_role: annotation
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 168
+        upstream_function: FashionIQ.get_test_data
+        expected_relative_path: image_splits/split.{dress,shirt,toptee}.val.json
+        expected_format: json
+        expected_structure: "JSON list of validation image ID strings representing the full category gallery"
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Standard FashionIQ validation split JSON files"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Canonical FashionIQ validation splits defining full gallery ordering."
+
+      - logical_asset_id: fashioniq_cache_data_json
+        asset_role: generated_caches
+        required_for_evaluation: false
+        upstream_source_file: datasets.py
+        upstream_line: 36
+        upstream_function: FashionIQ.__init__
+        expected_relative_path: fashion_iq_data.json
+        expected_format: json
+        expected_structure: "JSON list of train triplets"
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: datasets.py
+        generation_parameters: "FashionIQ.__init__ invokes FashionIQ.train_init_process() when fashion_iq_data.json is missing"
+        raw_input_dependencies:
+          - captions/cap.dress.train.json
+          - captions/cap.shirt.train.json
+          - captions/cap.toptee.train.json
+          - captions/correction_dict_dress.json
+          - captions/correction_dict_shirt.json
+          - captions/correction_dict_toptee.json
+        output_validation_contract: "JSON list of train triplets"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Generated during FashionIQ.__init__ on cache miss; loaded from dataset root on cache hit."
+
+      - logical_asset_id: fashioniq_cache_test_queries_and_targets_pkl
+        asset_role: generated_caches
+        required_for_evaluation: false
+        upstream_source_file: datasets.py
+        upstream_line: 46
+        upstream_function: FashionIQ.__init__
+        expected_relative_path: "test_queries_{dress,shirt,toptee}.pkl, test_targets_{dress,shirt,toptee}.pkl"
+        expected_format: pkl
+        expected_structure: "Six pickle files containing lists of validation query and target dictionaries"
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: datasets.py
+        generation_parameters: "FashionIQ.__init__ calls FashionIQ.get_test_data() when fashion_iq_data.json is missing"
+        raw_input_dependencies:
+          - captions/cap.dress.val.json
+          - captions/cap.shirt.val.json
+          - captions/cap.toptee.val.json
+          - image_splits/split.dress.val.json
+          - image_splits/split.shirt.val.json
+          - image_splits/split.toptee.val.json
+          - captions/correction_dict_dress.json
+          - captions/correction_dict_shirt.json
+          - captions/correction_dict_toptee.json
+          - resized_image/dress
+          - resized_image/shirt
+          - resized_image/toptee
+        output_validation_contract: "Six pickle files loadable via pickle.load"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Written to dataset root on first initialization; loaded on subsequent runs."
+
+      - logical_asset_id: fashioniq_train_captions_on_cache_miss
+        asset_role: caption_source
+        required_for_evaluation: false
+        upstream_source_file: datasets.py
+        upstream_line: 96
+        upstream_function: FashionIQ.train_init_process
+        expected_relative_path: captions/cap.{dress,shirt,toptee}.train.json
+        expected_format: json
+        expected_structure: "JSON list of training triplets"
+        classification: OPTIONAL_NOT_REQUIRED_FOR_EVALUATION
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Standard FashionIQ training caption JSON files"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Training captions are read only during initial cache generation in train_init_process()."

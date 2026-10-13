@@ -3,10 +3,27 @@
 
 Default: read-only status from preparation_contracts.yaml. Use --execute --allow-preparation
 to run only the one verified automated CSMCIR dataset link step. All other preparation is manual.
+
+Dataset separation contract (DATA-02):
+Three-way separation of dataset paths:
+1. Canonical raw dataset (read-only): The operator-supplied canonical benchmark files
+   (`images/`, `image_splits/`, canonical `captions/`) are immutable inputs. Preparation
+   and evaluation MUST NEVER mutate, delete, or overwrite raw canonical inputs.
+2. Model-specific generated artifacts: Generated files derived from raw inputs
+   (such as resized JPEG images and staged correction dictionaries).
+3. Evaluator-compatible staged layout: Specific target layout required by pinned evaluators,
+   such as `resized_image/<category>/` (per-category) or `resized_images/` (flat).
+
+Required writable root:
+All generated artifacts and receipts are staged strictly within the operator-configured
+`FASHIONIQ_ROOT` directory under dedicated derived paths (`resized_image/`, `resized_images/`,
+or staged caption dictionaries). Resizing derives beside/around canonical files and never writes
+over canonical raw images (`images/`).
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -77,10 +94,33 @@ def resize_receipt_path(config, layout: str) -> Path:
     return config.FASHIONIQ_ROOT / ("resized_images" if layout == "flat" else "resized_image") / RESIZE_RECEIPT_NAME
 
 
+def recipe_digest(parameters: dict) -> str:
+    """Stable digest of recipe parameters."""
+    normalized = json.dumps(parameters or {}, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
 def write_resize_receipt(receipt: Path, *, model_id: str, layout: str, image_size: int,
-                         extension: str, source_script: str, coverage: dict, written: int) -> None:
+                         extension: str, source_script: str, coverage: dict, written: int,
+                         recipe_digest: str | None = None) -> None:
     """Write the coverage receipt atomically, so a crash never leaves a half-written one."""
     receipt.parent.mkdir(parents=True, exist_ok=True)
+    if recipe_digest is None:
+        for c in coverage.values():
+            if isinstance(c, dict) and c.get("recipe_digest"):
+                recipe_digest = str(c["recipe_digest"])
+                break
+    if recipe_digest is None:
+        recipe_digest = hashlib.sha256(
+            json.dumps({"image_size": image_size, "extension": extension, "layout": layout, "source_script": source_script},
+                       sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+    recipe_identity = {
+        "image_size": image_size,
+        "extension": extension,
+        "layout": layout,
+        "recipe_digest": recipe_digest,
+    }
     payload = {
         "kind": "workbench_resize_receipt",
         "model_id": model_id,
@@ -88,6 +128,9 @@ def write_resize_receipt(receipt: Path, *, model_id: str, layout: str, image_siz
         "image_size": image_size,
         "extension": extension,
         "source_script": source_script,
+        "recipe_digest": recipe_digest,
+        "recipe_parameters_digest": recipe_digest,
+        "recipe_identity": recipe_identity,
         "categories": coverage,
         "written_now": written,
     }
@@ -95,21 +138,29 @@ def write_resize_receipt(receipt: Path, *, model_id: str, layout: str, image_siz
     temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(temporary, receipt)
 
-
 def resize_is_complete(config, model: dict, contract: dict) -> bool | None:
     """Whether the declared resize is finished, judged from its receipt and the files it names.
 
     Returns None when the model declares no resize. A receipt alone is not enough: the files it
-    promises may have been removed afterwards, which is exactly the case a resume would otherwise
-    skip over.
+    promises may have been removed or tampered with afterwards, which is exactly the case a resume
+    would otherwise skip over. Older receipts lacking digests do not validate as complete.
     """
     recipe = next((a for a in contract.get("generated_artifacts", [])
                    if a.get("generator") == RESIZE_GENERATOR), None)
     if recipe is None:
         return None
-    layout = (recipe.get("parameters") or {}).get("layout")
+    parameters = recipe.get("parameters") or {}
+    layout = parameters.get("layout")
     if layout not in ("per_category", "flat"):
         return False
+    recipe_size = parameters.get("image_size")
+    if not isinstance(recipe_size, int) or recipe_size <= 0:
+        return False
+    recipe_ext = parameters.get("extension") or ".jpg"
+    if not recipe_ext.startswith("."):
+        recipe_ext = f".{recipe_ext}"
+    expected_recipe_digest = recipe_digest(parameters)
+
     receipt = resize_receipt_path(config, layout)
     if not receipt.is_file():
         return False
@@ -117,49 +168,90 @@ def resize_is_complete(config, model: dict, contract: dict) -> bool | None:
         declared = json.loads(receipt.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return False
+
+    recorded_recipe_digest = declared.get("recipe_digest") or declared.get("recipe_parameters_digest")
+    if not recorded_recipe_digest or recorded_recipe_digest != expected_recipe_digest:
+        return False
+    if declared.get("layout") != layout:
+        return False
+    if declared.get("image_size") != recipe_size:
+        return False
+    if declared.get("extension") != recipe_ext:
+        return False
+
     categories = declared.get("categories")
     if not isinstance(categories, dict) or not categories:
         return False
-    # The receipt must cover every canonical category, and each must be internally consistent: a
-    # receipt written after only one category finished would otherwise satisfy the gate and the
-    # resumed run would skip preparation, failing later on a missing input.
+
     from workbench.backend.fashioniq_layout import CATEGORIES as _CATEGORIES
 
     if set(categories) != set(_CATEGORIES):
         return False
+
+    try:
+        from PIL import Image
+    except ImportError:
+        return False
+
     base = config.FASHIONIQ_ROOT / ("resized_images" if layout == "flat" else "resized_image")
-    if layout == "flat":
-        # Every category writes into the one directory, so a per-category count of the shared pool is
-        # meaningless. The receipt records the identifiers it covered, and those are what is checked:
-        # a count could be satisfied by unrelated files, and duplicate identifiers across categories
-        # would inflate an expected total that unique files can never reach.
-        if not base.is_dir():
-            return False
-        expected_ids: set[str] = set()
-        for counts in categories.values():
-            if not isinstance(counts, dict) or counts.get("expected") != counts.get("present"):
-                return False
-            ids = counts.get("ids")
-            if not isinstance(ids, list) or len(ids) != int(counts.get("present") or -1):
-                return False
-            expected_ids.update(str(item) for item in ids)
-        return all((base / f"{identifier}.jpg").is_file() for identifier in expected_ids)
+    if not base.is_dir():
+        return False
+    splits_root = config.FASHIONIQ_ROOT / "image_splits"
+
     for category, counts in categories.items():
         if not isinstance(counts, dict) or counts.get("expected") != counts.get("present"):
             return False
-        target = base / category
-        if not target.is_dir():
+        split_file = splits_root / f"split.{category}.val.json"
+        if not split_file.is_file():
+            return False
+        try:
+            expected_ids = json.loads(split_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return False
+        if not isinstance(expected_ids, list):
+            return False
+
+        target_dir = base if layout == "flat" else base / category
+        if not target_dir.is_dir():
             return False
         ids = counts.get("ids")
-        if isinstance(ids, list) and ids:
-            # The receipt names the files it wrote, so the check is membership, not a count: extra
-            # images in the directory cannot stand in for a missing one.
-            if any(not (target / f"{identifier}.jpg").is_file() for identifier in ids):
-                return False
-            continue
-        present = len([p for p in target.iterdir() if p.is_file() and p.suffix == ".jpg"])
-        if present < int(counts.get("present") or 0):
+        if not isinstance(ids, list) or len(ids) != int(counts.get("present") or -1):
             return False
+        if set(ids) != set(expected_ids) or len(ids) != len(expected_ids):
+            return False
+        digests = counts.get("digests")
+        if not isinstance(digests, dict):
+            images_map = counts.get("images")
+            if isinstance(images_map, dict):
+                digests = {k: v.get("sha256") for k, v in images_map.items() if isinstance(v, dict)}
+            else:
+                return False
+        if not digests:
+            return False
+        for identifier in ids:
+            str_id = str(identifier)
+            expected_hash = digests.get(str_id)
+            if not expected_hash:
+                return False
+            target = target_dir / f"{str_id}{recipe_ext}"
+            if not target.is_file():
+                return False
+            try:
+                data = target.read_bytes()
+            except OSError:
+                return False
+            if hashlib.sha256(data).hexdigest() != expected_hash:
+                return False
+            try:
+                with Image.open(target) as img:
+                    expected_format = Image.registered_extensions().get(recipe_ext.lower(), "JPEG")
+                    if img.format != expected_format:
+                        return False
+                    if img.size != (recipe_size, recipe_size):
+                        return False
+                    img.load()
+            except Exception:
+                return False
     return True
 
 
@@ -241,6 +333,12 @@ def _stage_source_assets(config, model: dict, contract: dict, *, dry_run: bool) 
 def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[bool, str]:
     """Materialize the declared, source-documented per-category resized image set.
 
+    DATA-02: Three-way dataset separation:
+    1. Canonical raw dataset (read-only): `images/`, `image_splits/`, canonical `captions/`.
+    2. Model-specific generated artifacts: resized JPEG images and staged dictionaries.
+    3. Evaluator-compatible staged layout: `resized_image/<category>/` (per-category) or `resized_images/` (flat).
+    Required writable root: `config.FASHIONIQ_ROOT` (derived paths only; canonical `images/` is read-only).
+
     The pinned evaluator reads `resized_image/<category>/<id>.jpg` (`LIMN/datasets.py:112`), while
     the documented tool — the FashionIQ `start_kit/resize_images.py` the model's own README points
     at — writes a flat directory at its documented default size. The transform is therefore applied
@@ -282,9 +380,18 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
     if layout not in ("per_category", "flat"):
         return False, f"resize recipe declares no usable layout: {layout!r}"
     extension = parameters.get("extension") or ".jpg"
+    if not extension.startswith("."):
+        extension = f".{extension}"
+    recipe_parameters_digest = recipe_digest(parameters)
+    recipe_identity = {
+        "image_size": size,
+        "extension": extension,
+        "layout": layout,
+        "recipe_digest": recipe_parameters_digest,
+    }
 
     written, missing = 0, []
-    coverage: dict[str, dict[str, int]] = {}
+    coverage: dict[str, dict] = {}
     for category in CATEGORIES:
         split_file = splits_root / f"split.{category}.val.json"
         if not split_file.is_file():
@@ -320,15 +427,65 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
             if not source_image.is_file():
                 missing.append(str(source_image))
                 continue
-            destination = output_dir / f"{identifier}.jpg"
+            destination = output_dir / f"{identifier}{extension}"
+            # DATA-02: Refuse to write a resized image whose destination equals its source path
+            # or targets the canonical raw images directory.
+            if destination.resolve() == source_image.resolve() or destination == source_image:
+                return False, f"destination path equals canonical source path: {destination}"
+            try:
+                destination.resolve().relative_to(images_root.resolve())
+                return False, f"refusing to write derived artifact into canonical images directory: {destination}"
+            except ValueError:
+                pass
             if destination.is_file():
-                continue
-            with Image.open(source_image) as handle:
-                handle.convert("RGB").resize((size, size), Image.LANCZOS).save(destination, "JPEG")
+                try:
+                    with Image.open(destination) as existing:
+                        if existing.size == (size, size):
+                            existing.load()
+                            continue
+                except Exception:
+                    pass
+            save_format = Image.registered_extensions().get(extension.lower(), "JPEG")
+            temp_file = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+            try:
+                with Image.open(source_image) as handle:
+                    handle.convert("RGB").resize((size, size), Image.LANCZOS).save(temp_file, format=save_format)
+                os.replace(temp_file, destination)
+            finally:
+                if temp_file.exists():
+                    try:
+                        temp_file.unlink()
+                    except OSError:
+                        pass
             written += 1
-        present_ids = sorted(i for i in identifiers if (output_dir / f"{i}.jpg").is_file())
-        coverage[category] = {"expected": len(identifiers), "present": len(present_ids),
-                              "ids": present_ids}
+        present_ids = sorted(i for i in identifiers if (output_dir / f"{i}{extension}").is_file())
+        category_digests: dict[str, str] = {}
+        category_sizes: dict[str, list[int]] = {}
+        category_images: dict[str, dict] = {}
+        for identifier in present_ids:
+            dest = output_dir / f"{identifier}{extension}"
+            img_bytes = dest.read_bytes()
+            h = hashlib.sha256(img_bytes).hexdigest()
+            category_digests[identifier] = h
+            category_sizes[identifier] = [size, size]
+            category_images[identifier] = {
+                "size": [size, size],
+                "bytes": len(img_bytes),
+                "sha256": h,
+            }
+        coverage[category] = {
+            "expected": len(identifiers),
+            "present": len(present_ids),
+            "ids": present_ids,
+            "image_size": size,
+            "extension": extension,
+            "layout": layout,
+            "recipe_digest": recipe_parameters_digest,
+            "recipe_identity": recipe_identity,
+            "digests": category_digests,
+            "sizes": category_sizes,
+            "images": category_images,
+        }
     if dry_run:
         return True, "dry-run"
     if missing and written == 0:
@@ -342,7 +499,7 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
     receipt = resize_receipt_path(config, layout)
     write_resize_receipt(receipt, model_id=model["model_id"], layout=layout, image_size=size,
                          extension=extension, source_script=source_recipe, coverage=coverage,
-                         written=written)
+                         written=written, recipe_digest=recipe_parameters_digest)
     return True, f"resized {written} image(s) at {size}px per {source_recipe}"
 
 

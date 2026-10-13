@@ -1,6 +1,7 @@
 from __future__ import annotations
-
+from dataclasses import dataclass
 import hashlib
+import json
 import os
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -95,10 +96,22 @@ def load_auxiliary_assets(path: Path = AUXILIARY_ASSET_REGISTRY_PATH) -> list[di
         destination = PurePosixPath(asset["destination_path"])
         if destination.is_absolute() or ".." in destination.parts:
             raise ValueError(f"unsafe auxiliary destination for {asset['model_id']}: {asset['destination_path']}")
-        if asset["destination_scope"] not in {"fashioniq_root", "model_source"}:
+        if asset["destination_scope"] not in {"fashioniq_root", "model_source", "user_cache"}:
             raise ValueError(f"unknown auxiliary destination scope: {asset['destination_scope']}")
-        if available != (asset["source_type"] == "author_huggingface" and bool(asset["source_repo"]) and bool(asset["source_revision"]) and bool(asset["source_path"])):
-            raise ValueError(f"auxiliary source mismatch for {asset['model_id']}: {asset['destination_path']}")
+        if asset["destination_scope"] == "user_cache" and asset.get("cache_root_env_var") not in {"XDG_CACHE_HOME", "TORCH_HOME", "HF_HOME"}:
+            raise ValueError(f"unknown auxiliary cache root for {asset['model_id']}: {asset.get('cache_root_env_var')}")
+        if available:
+            if asset["source_type"] == "author_huggingface":
+                valid_src = bool(asset["source_repo"]) and bool(asset["source_revision"]) and bool(asset["source_path"])
+            elif asset["source_type"] == "direct_url":
+                valid_src = bool(asset["source_repo"])
+            else:
+                valid_src = False
+            if not valid_src:
+                raise ValueError(f"auxiliary source mismatch for {asset['model_id']}: {asset['destination_path']}")
+        else:
+            if asset["source_type"] != "none":
+                raise ValueError(f"auxiliary source mismatch for {asset['model_id']}: {asset['destination_path']}")
     return registry["assets"]
 
 
@@ -299,6 +312,12 @@ def auxiliary_assets_for_model(model_id: str) -> list[dict[str, Any]]:
 
 
 def auxiliary_destination(asset: dict[str, Any], third_party_root: Path, fashioniq_root: Path) -> Path:
+    if asset["destination_scope"] == "user_cache":
+        env_var = asset["cache_root_env_var"]
+        root = Path(os.environ[env_var]).expanduser() if os.environ.get(env_var) else Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser()
+        if env_var in {"TORCH_HOME", "HF_HOME"} and not os.environ.get(env_var):
+            root /= "torch" if env_var == "TORCH_HOME" else "huggingface"
+        return root / asset["destination_path"]
     if asset["destination_scope"] == "fashioniq_root":
         return fashioniq_root / asset["destination_path"]
     if asset["destination_scope"] == "model_source":
@@ -309,8 +328,153 @@ def auxiliary_destination(asset: dict[str, Any], third_party_root: Path, fashion
 def auxiliary_source_url(asset: dict[str, Any]) -> str | None:
     if not asset["automatic_download_available"]:
         return None
-    return f"{asset['source_repo']}/resolve/{asset['source_revision']}/{asset['source_path']}"
+    if asset.get("source_type") == "direct_url":
+        return asset["source_repo"]
+    if asset.get("source_type") == "author_huggingface":
+        return f"{asset['source_repo']}/resolve/{asset['source_revision']}/{asset['source_path']}"
+    return None
 
+
+@dataclass(frozen=True)
+class AuxiliaryValidationResult:
+    ok: bool
+    status: str
+    issues: list[str]
+
+    def __iter__(self):
+        return iter((self.ok, self.issues))
+
+
+def validate_auxiliary_asset(
+    asset: dict[str, Any] | Any,
+    path: Path | None = None,
+    *,
+    fashioniq_root: Path | None = None,
+    split_ids: set[str] | None = None,
+) -> AuxiliaryValidationResult:
+    if isinstance(asset, dict):
+        rec = asset
+    else:
+        rec = {
+            k: getattr(asset, k)
+            for k in (
+                "model_id", "family", "destination", "required", "automatic_download_available",
+                "source_url", "source_revision", "expected_sha256", "provenance_status",
+                "expected_sha256_prefix", "expected_size_bytes", "content_contract",
+            )
+            if hasattr(asset, k)
+        }
+    if path is None:
+        target = rec.get("destination") or rec.get("path")
+        path = Path(target) if target else None
+    if path is None:
+        return AuxiliaryValidationResult(False, "MISSING", ["no path specified for asset validation"])
+    path = Path(path)
+
+    if not path.is_file():
+        return AuxiliaryValidationResult(False, "MISSING", [f"MISSING {path}"])
+
+    try:
+        size = path.stat().st_size
+    except OSError as err:
+        return AuxiliaryValidationResult(False, "MISSING", [f"MISSING {path}: {err}"])
+
+    if size == 0:
+        return AuxiliaryValidationResult(False, "INVALID_EMPTY_FILE", [f"INVALID EMPTY FILE {path}"])
+
+    issues: list[str] = []
+    status = "VALID"
+
+    expected_size = rec.get("expected_size_bytes")
+    if expected_size is not None and size != expected_size:
+        issues.append(f"{path}: {size} bytes (expected {expected_size} bytes)")
+
+    expected_sha = rec.get("expected_sha256")
+    expected_prefix = rec.get("expected_sha256_prefix")
+    digest = None
+    if expected_sha is not None or expected_prefix is not None:
+        try:
+            digest = sha256_file(path)
+        except Exception as err:
+            issues.append(f"checksum computation error for {path}: {err}")
+        if digest is not None:
+            if expected_sha is not None and digest != expected_sha:
+                issues.append(f"{path}: {size} bytes sha256={digest} OFFICIAL SHA256 MISMATCH")
+                status = "CHECKSUM_MISMATCH"
+            elif expected_prefix is not None and not digest.startswith(expected_prefix):
+                issues.append(f"{path}: {size} bytes sha256={digest} OFFICIAL SHA256 PREFIX MISMATCH")
+                status = "CHECKSUM_MISMATCH"
+
+    contract = rec.get("content_contract")
+    is_json = path.suffix == ".json" or contract is not None
+    if is_json:
+        data = None
+        try:
+            raw_text = path.read_text(encoding="utf-8")
+            data = json.loads(raw_text)
+        except Exception as err:
+            issues.append(f"INVALID JSON {path}: {err}")
+            if status == "VALID":
+                status = "INVALID_JSON"
+
+        if data is not None and contract:
+            if not isinstance(data, dict):
+                issues.append(f"SCHEMA MISMATCH {path}: expected JSON object mapping, got {type(data).__name__}")
+                if status == "VALID":
+                    status = "SCHEMA_MISMATCH"
+            else:
+                exp_count = contract.get("expected_record_count")
+                if exp_count is not None and len(data) != exp_count:
+                    issues.append(f"RECORD COUNT MISMATCH {path}: expected {exp_count}, got {len(data)}")
+                    if status == "VALID":
+                        status = "RECORD_COUNT_MISMATCH"
+
+                req_fields = contract.get("record_key_fields")
+                if req_fields:
+                    for k, v in data.items():
+                        if not isinstance(v, dict):
+                            issues.append(f"SCHEMA MISMATCH {path}: record for {k} is not a dict")
+                            status = "SCHEMA_MISMATCH"
+                            break
+                        missing_fields = set(req_fields) - set(v.keys())
+                        if missing_fields:
+                            issues.append(f"SCHEMA MISMATCH {path}: record {k} missing required fields: {sorted(missing_fields)}")
+                            if status == "VALID":
+                                status = "SCHEMA_MISMATCH"
+                            break
+
+                id_source = contract.get("id_source")
+                check_ids = split_ids
+                if check_ids is None and id_source:
+                    split_file = fashioniq_root / id_source if fashioniq_root else None
+                    try:
+                        if split_file is None:
+                            raise OSError("FashionIQ root was not provided")
+                        split_data = json.loads(split_file.read_text(encoding="utf-8"))
+                        if not isinstance(split_data, list):
+                            raise ValueError("expected JSON list of split ids")
+                        check_ids = set(split_data)
+                    except (OSError, json.JSONDecodeError, ValueError) as err:
+                        issues.append(f"SPLIT ID SOURCE INVALID {path}: cannot read declared split {split_file or id_source}: {err}")
+                if check_ids is not None:
+                    keys = set(data.keys())
+                    unknown_ids = keys - check_ids
+                    missing_ids = check_ids - keys
+                    if unknown_ids or missing_ids:
+                        issues.append(f"SPLIT ID MISMATCH {path}: {len(unknown_ids)} keys not in declared split, {len(missing_ids)} split ids missing")
+                        if status == "VALID":
+                            status = "SPLIT_ID_MISMATCH"
+
+    provenance = rec.get("provenance_status")
+    if provenance != "VERIFIED":
+        status = "OPERATOR_SUPPLIED_UNVERIFIED"
+        issues.append(f"OPERATOR_SUPPLIED_UNVERIFIED {path}: provenance status is {provenance}")
+        return AuxiliaryValidationResult(False, status, issues)
+
+    if issues:
+        return AuxiliaryValidationResult(False, status if status != "VALID" else "INVALID", issues)
+
+    return AuxiliaryValidationResult(True, "VERIFIED", [])
 
 def auxiliary_model_ids() -> set[str]:
     return {asset["model_id"] for asset in load_auxiliary_assets()}

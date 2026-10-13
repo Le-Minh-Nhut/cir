@@ -190,12 +190,17 @@ def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | 
     reasons.extend(reason for reason in shared if not reason.startswith("execution environment not verified:") and reason not in reasons)
     return source, checkpoint_file, actual_pin, list(dict.fromkeys(reasons))
 
-def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | None, top_k: int, config: WorkbenchConfig | None = None) -> tuple[EvaluationPlan | None, list[str]]:
+def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | None, top_k: int, config: WorkbenchConfig | None = None, *, dry_run: bool = False) -> tuple[EvaluationPlan | None, list[str]]:
     config = config or resolve_config()
     adapter_type = ADAPTERS.get(model["model_id"])
     if adapter_type is None or not command_is_audited(adapter_type):
         return None, ["SKIPPED: adapter command not audited"]
     source, checkpoint_file, actual_pin, blocked = blockers(model, checkpoint, protocol, dataset_root, config)
+    if dry_run and model["model_id"] == "csmcir":
+        # Pinned LAVIS downloads these caches via download_cached_file/from_pretrained; absence is
+        # expected before first use, but only execution can prove acquisition works.
+        planned = ("LAVIS BLIP-2 pretrain weights", "EVA-ViT-g backbone weights", "bert-base-uncased tokenizer")
+        blocked = [reason for reason in blocked if not any(name in reason for name in planned)]
     script = getattr(adapter_type, "script", None)
     if source.is_dir() and script and not (source / script).is_file():
         blocked.append(f"official evaluator missing: {source / script}")
@@ -1658,7 +1663,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[RUN] {model['model_id']} / {checkpoint['checkpoint_id']}")
         if protocol is None:
             print("[BLOCKED] protocol unavailable"); failed = True; continue
-        plan, reasons = guarded_plan(model, checkpoint, protocol, dataset_root, args.top_k, config)
+        plan, reasons = guarded_plan(model, checkpoint, protocol, dataset_root, args.top_k, config, dry_run=args.dry_run)
         if plan is None:
             for reason in reasons: print(f"{'[SKIP]' if reason.startswith('SKIPPED:') else '[BLOCKED]'} {reason}")
             failed = failed or any(not reason.startswith("SKIPPED:") for reason in reasons)
@@ -1672,6 +1677,8 @@ def main(argv: list[str] | None = None) -> int:
         gpu = (model.get("environment") or {}).get("cuda")
         gpu_required = gpu is not None and str(gpu).upper() != "UNKNOWN"
         if args.dry_run:
+            if model["model_id"] == "csmcir":
+                print("[PLAN] first-use downloads: LAVIS BLIP-2, EVA-ViT-g, bert-base-uncased; dry-run cannot verify acquisition or evaluator success")
             print("[OK] dry-run: official command not executed; no logs created")
             continue
         if gpu_required and args.verify_gpu:

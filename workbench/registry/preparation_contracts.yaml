@@ -17,6 +17,11 @@ contracts:
     - image_splits/split.shirt.val.json
     - image_splits/split.toptee.val.json
     - images
+  # DATA-02: Three-way dataset separation:
+  # 1. Canonical raw dataset (read-only): `images/`, `image_splits/`, canonical `captions/`.
+  # 2. Model-specific generated artifacts: resized JPEG images and staged dictionaries.
+  # 3. Evaluator-compatible staged layout: `resized_image/<category>/` (per-category) or `resized_images/` (flat).
+  # Required writable root: `FASHIONIQ_ROOT` (derived paths only; canonical raw `images/` is read-only).
   generated_artifacts:
   - name: category-local resized JPEG images
     kind: generated_repo_artifact
@@ -77,6 +82,11 @@ contracts:
     - captions/cap.toptee.glove.val.pkl
     generator: process_cap.py
     cwd: preprocess
+  # DATA-02: Three-way dataset separation:
+  # 1. Canonical raw dataset (read-only): `images/`, `image_splits/`, canonical `captions/`.
+  # 2. Model-specific generated artifacts: resized JPEG images and staged dictionaries.
+  # 3. Evaluator-compatible staged layout: `resized_image/<category>/` (per-category) or `resized_images/` (flat).
+  # Required writable root: `FASHIONIQ_ROOT` (derived paths only; canonical raw `images/` is read-only).
   - name: resized evaluation images
     kind: generated_repo_artifact
     scope: fashioniq_root
@@ -253,6 +263,11 @@ contracts:
     - image_splits/split.shirt.val.json
     - image_splits/split.toptee.val.json
   generated_artifacts:
+  # DATA-02: Three-way dataset separation:
+  # 1. Canonical raw dataset (read-only): `images/`, `image_splits/`, canonical `captions/`.
+  # 2. Model-specific generated artifacts: resized JPEG images and staged dictionaries.
+  # 3. Evaluator-compatible staged layout: `resized_image/<category>/` (per-category) or `resized_images/` (flat).
+  # Required writable root: `FASHIONIQ_ROOT` (derived paths only; canonical raw `images/` is read-only).
   - name: category-local resized JPEG images
     kind: generated_repo_artifact
     scope: fashioniq_root

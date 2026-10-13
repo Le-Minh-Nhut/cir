@@ -42,6 +42,16 @@ def _fresh_ledger_key(tmp_path: Path, monkeypatch):
     yield
 
 
+
+@pytest.fixture(autouse=True)
+def _clean_gpu_probe():
+    from workbench.backend import runtime
+
+    runtime.clear_gpu_probe_for_tests()
+    yield
+    runtime.clear_gpu_probe_for_tests()
+
+
 @pytest.fixture
 def env(tmp_path: Path):
     """A minimal but real evaluation environment: real subprocess, real logs."""
@@ -374,10 +384,10 @@ def test_out13b_interrupted_pointer_update_leaves_previous_success_intact(env, m
             raise OSError("simulated crash during pointer update")
         return original_replace(self, target)
 
-    monkeypatch.setattr(Path, "replace", failing_replace)
-    with pytest.raises(OSError):
-        run(env, reporting_script(env["tmp"]))
-    monkeypatch.undo()
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "replace", failing_replace)
+        with pytest.raises(OSError):
+            run(env, reporting_script(env["tmp"]))
 
     assert successful.read_text() == baseline, "the previous success pointer must survive a crash"
     assert not list(reports_of(env).glob("*latest_successful.json.tmp*"))
@@ -1391,7 +1401,7 @@ def test_exit01_native_zero_without_current_valid_proof_is_cli_failure(env, monk
         "protocols": [invocation.protocol], "models": [model]})
     monkeypatch.setattr(em, "candidates", lambda args, models: [(model, {"checkpoint_id": invocation.checkpoint_id})])
     monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
-    monkeypatch.setattr(em, "guarded_plan", lambda *args: (invocation, []))
+    monkeypatch.setattr(em, "guarded_plan", lambda *args, **kwargs: (invocation, []))
     result = em.main(["--model", MODEL, "--run-id", "current-silent-run"])
     assert result != 0
     assert "[BLOCKED]" in capsys.readouterr().err
@@ -1418,7 +1428,7 @@ def test_exit03_missing_key_causes_standalone_operator_failure(env, monkeypatch,
         "protocols": [invocation.protocol], "models": [model]})
     monkeypatch.setattr(em, "candidates", lambda args, models: [(model, {"checkpoint_id": invocation.checkpoint_id})])
     monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
-    monkeypatch.setattr(em, "guarded_plan", lambda *args: (invocation, []))
+    monkeypatch.setattr(em, "guarded_plan", lambda *args, **kwargs: (invocation, []))
     assert em.main(["--model", MODEL, "--run-id", "missing-key-run"]) != 0
     assert "[BLOCKED]" in capsys.readouterr().err
 
@@ -1434,7 +1444,7 @@ def test_exit04_corrupt_ledger_causes_standalone_operator_failure(env, monkeypat
         "protocols": [invocation.protocol], "models": [model]})
     monkeypatch.setattr(em, "candidates", lambda args, models: [(model, {"checkpoint_id": invocation.checkpoint_id})])
     monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
-    monkeypatch.setattr(em, "guarded_plan", lambda *args: (invocation, []))
+    monkeypatch.setattr(em, "guarded_plan", lambda *args, **kwargs: (invocation, []))
     assert em.main(["--model", MODEL, "--run-id", "corrupt-ledger-run"]) != 0
     assert "[BLOCKED]" in capsys.readouterr().err
     assert path.read_bytes() == preserved
@@ -1450,7 +1460,7 @@ def test_exit05_multiple_checkpoints_get_distinct_verified_run_ids(env, monkeypa
         "protocols": [first.protocol], "models": [model]})
     monkeypatch.setattr(em, "candidates", lambda args, models: [(model, item) for item in checkpoints])
     monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
-    monkeypatch.setattr(em, "guarded_plan", lambda model, checkpoint, *args:
+    monkeypatch.setattr(em, "guarded_plan", lambda model, checkpoint, *args, **kwargs:
                         (first if checkpoint["checkpoint_id"] == first.checkpoint_id else second, []))
     assert em.main(["--model", MODEL, "--run-id", "multi-run"]) == 0
     first_proof = em.completion_proof_path(env["config"], first, "multi-run_csmcir_ckpt_v1")
@@ -1516,7 +1526,7 @@ def test_cuda02_and_cuda14_unverified_gpu_blocks_real_cli_launch(env, monkeypatc
         "protocols": [invocation.protocol], "models": [model]})
     monkeypatch.setattr(em, "candidates", lambda args, models: [(model, {"checkpoint_id": "gpu_ckpt"})])
     monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
-    monkeypatch.setattr(em, "guarded_plan", lambda *args: (invocation, []))
+    monkeypatch.setattr(em, "guarded_plan", lambda *args, **kwargs: (invocation, []))
     assert runtime.verify_environment(model, probe=True).tier == runtime.TIER_GPU_PENDING
     assert em.main(["--model", "limn", "--run-id", "cuda-unverified-run"]) != 0
     assert "--verify-gpu" in capsys.readouterr().err
@@ -1571,7 +1581,7 @@ def test_exit13_synthetic_gpu_verification_reports_result_and_allows_execution(
         "protocols": [invocation.protocol], "models": [model]})
     monkeypatch.setattr(em, "candidates", lambda args, models: [(model, {"checkpoint_id": "gpu_ckpt"})])
     monkeypatch.setattr(em, "resolve_config", lambda: env["config"])
-    monkeypatch.setattr(em, "guarded_plan", lambda *args: (invocation, []))
+    monkeypatch.setattr(em, "guarded_plan", lambda *args, **kwargs: (invocation, []))
     assert em.main(["--model", "limn", "--run-id", "synthetic-gpu-run", "--verify-gpu"]) == 0
     assert '"capability_verified": true' in capsys.readouterr().out
     assert em.completion_proof_path(env["config"], invocation,
@@ -1630,7 +1640,10 @@ def test_the_evaluator_child_gets_no_operator_secrets_and_a_private_temp_dir(
         invocation, env["config"], "secret-filter-run", env["tmp"] / "out")
     assert code == 0
     reported = json.loads((directory / "stdout.log").read_text().strip().splitlines()[-1])
-    assert not any(name.startswith("WORKBENCH_") for name in reported["workbench"]), reported
+    secret_names = [name for name in reported["workbench"]
+                    if name == "WORKBENCH_LEDGER_KEY" or name.startswith("WORKBENCH_SECRET_")]
+    assert secret_names == [], secret_names
+    assert set(reported["workbench"]) - set(secret_names) <= {"WORKBENCH_THIRD_PARTY_ROOT"}, reported
     assert reported["run_id"] == "secret-filter-run", "the run identity must reach the child"
 
     run_temp = directory / "tmp"

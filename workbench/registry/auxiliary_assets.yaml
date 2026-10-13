@@ -21,6 +21,7 @@ assets:
     - Final_Caption
     expected_record_count: 3817
     key_kind: fashioniq_image_id
+    id_source: image_splits/split.dress.val.json
     observed_from_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
 - model_id: csmcir
   family: Qwen captions
@@ -43,6 +44,7 @@ assets:
     - Final_Caption
     expected_record_count: 6346
     key_kind: fashioniq_image_id
+    id_source: image_splits/split.shirt.val.json
     observed_from_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
 - model_id: csmcir
   family: Qwen captions
@@ -65,6 +67,7 @@ assets:
     - Final_Caption
     expected_record_count: 5373
     key_kind: fashioniq_image_id
+    id_source: image_splits/split.toptee.val.json
     observed_from_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
 - model_id: csmcir
   family: COT_ours2 captions
@@ -78,6 +81,12 @@ assets:
   automatic_download_available: false
   provenance_status: UNVERIFIED
   expected_sha256: null
+  content_contract:
+    record_key_fields:
+    - Final_Caption
+    expected_record_count: 3817
+    key_kind: fashioniq_image_id
+    id_source: image_splits/split.dress.val.json
 - model_id: csmcir
   family: COT_ours2 captions
   required_for: official_evaluation
@@ -90,6 +99,12 @@ assets:
   automatic_download_available: false
   provenance_status: UNVERIFIED
   expected_sha256: null
+  content_contract:
+    record_key_fields:
+    - Final_Caption
+    expected_record_count: 6346
+    key_kind: fashioniq_image_id
+    id_source: image_splits/split.shirt.val.json
 - model_id: csmcir
   family: COT_ours2 captions
   required_for: official_evaluation
@@ -102,3 +117,113 @@ assets:
   automatic_download_available: false
   provenance_status: UNVERIFIED
   expected_sha256: null
+  content_contract:
+    record_key_fields:
+    - Final_Caption
+    expected_record_count: 5373
+    key_kind: fashioniq_image_id
+    id_source: image_splits/split.toptee.val.json
+- model_id: clvc_net
+  family: torchvision ResNet-50 ImageNet weights
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://download.pytorch.org/models/resnet50-19c8e357.pth
+  source_revision: null
+  source_path: null
+  destination_scope: model_source
+  destination_path: checkpoints/resnet50-19c8e357.pth
+  automatic_download_available: true
+  expected_sha256: null
+  expected_sha256_prefix: 19c8e357
+  provenance_status: VERIFIED
+- model_id: combiner_rn50x4_noft
+  family: OpenAI CLIP RN50x4 base weights
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://openaipublic.azureedge.net/clip/models/7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd/RN50x4.pt
+  source_revision: null
+  source_path: null
+  destination_scope: user_cache
+  destination_path: clip/RN50x4.pt
+  cache_root_env_var: XDG_CACHE_HOME
+  automatic_download_available: true
+  expected_sha256: 7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd
+  provenance_status: VERIFIED
+- model_id: clip4cir_rn50x4_fullft
+  family: OpenAI CLIP RN50x4 base weights
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://openaipublic.azureedge.net/clip/models/7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd/RN50x4.pt
+  source_revision: null
+  source_path: null
+  destination_scope: user_cache
+  destination_path: clip/RN50x4.pt
+  cache_root_env_var: XDG_CACHE_HOME
+  automatic_download_available: true
+  expected_sha256: 7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd
+  provenance_status: VERIFIED
+- model_id: sprc
+  family: LAVIS BLIP-2 pretrain weights
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth
+  source_revision: null
+  source_path: null
+  destination_scope: user_cache
+  destination_path: lavis/blip2_pretrained.pth
+  cache_root_env_var: XDG_CACHE_HOME
+  automatic_download_available: true
+  expected_sha256: null
+  provenance_status: UNVERIFIED
+- model_id: sprc
+  family: EVA-ViT-g backbone weights
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth
+  source_revision: null
+  source_path: null
+  destination_scope: user_cache
+  destination_path: hub/checkpoints/eva_vit_g.pth
+  cache_root_env_var: TORCH_HOME
+  automatic_download_available: true
+  expected_sha256: null
+  provenance_status: UNVERIFIED
+- model_id: csmcir
+  family: LAVIS BLIP-2 pretrain weights
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth
+  source_revision: null
+  source_path: null
+  destination_scope: user_cache
+  destination_path: lavis/blip2_pretrained.pth
+  cache_root_env_var: XDG_CACHE_HOME
+  automatic_download_available: true
+  expected_sha256: null
+  provenance_status: UNVERIFIED
+- model_id: csmcir
+  family: EVA-ViT-g backbone weights
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth
+  source_revision: null
+  source_path: null
+  destination_scope: user_cache
+  destination_path: hub/checkpoints/eva_vit_g.pth
+  cache_root_env_var: TORCH_HOME
+  automatic_download_available: true
+  expected_sha256: null
+  provenance_status: UNVERIFIED
+- model_id: csmcir
+  family: bert-base-uncased tokenizer
+  required_for: official_evaluation
+  source_type: author_huggingface
+  source_repo: https://huggingface.co/bert-base-uncased
+  source_revision: main
+  source_path: vocab.txt
+  destination_scope: user_cache
+  destination_path: hub/models--bert-base-uncased/vocab.txt
+  cache_root_env_var: HF_HOME
+  automatic_download_available: true
+  expected_sha256: null
+  provenance_status: UNVERIFIED

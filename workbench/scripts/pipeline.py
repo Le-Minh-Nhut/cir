@@ -10,11 +10,11 @@ import shlex
 import stat
 import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
@@ -951,7 +951,7 @@ def write_preparation_recipe(model_dict: dict, config: WorkbenchConfig) -> Path:
     return path
 
 
-def model_eval_inputs(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> tuple[Path, ...]:
+def model_eval_inputs(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig, checkpoint_ids: Sequence[str] | None = None) -> tuple[Path, ...]:
     """Every scientific input this model's evaluation actually consumes.
 
     The evaluation stage is fingerprinted over this list, so a file that changes without appearing
@@ -965,23 +965,22 @@ def model_eval_inputs(model_dict: dict, args: argparse.Namespace, config: Workbe
     """
     from workbench.backend.registry import (
         auxiliary_assets_for_model, auxiliary_destination, checkpoint_path,
-        fashioniq_required_paths, load_registry, preparation_contract_for_model,
-        preparation_paths,
+        external_asset_statuses, fashioniq_required_paths, load_registry,
+        preparation_contract_for_model, preparation_paths,
     )
 
     inputs: list[Path] = []
     mid = model_dict["model_id"]
 
-    # 1. Checkpoints: the selected variants, plus LIMN's per-category whole models.
+    # 1. Checkpoints: the selected variants.
     ckpts = model_dict.get("checkpoint_variants") or []
-    if args.checkpoint:
-        ckpts = [c for c in ckpts if c["checkpoint_id"] == args.checkpoint]
+    selected_ckpt_ids: list[str] | None = _checkpoint_ids(args, mid, model_dict) if checkpoint_ids is None else _expand_selection(model_dict, list(checkpoint_ids))
+
+    if selected_ckpt_ids is not None:
+        selected_set = set(selected_ckpt_ids)
+        ckpts = [c for c in ckpts if c["checkpoint_id"] in selected_set]
     for variant in ckpts:
         inputs.append(checkpoint_path(mid, variant, config.WORKBENCH_CHECKPOINT_ROOT))
-    if mid == "limn":
-        for category in ("dress", "shirt", "toptee"):
-            inputs.append(config.WORKBENCH_CHECKPOINT_ROOT / "limn" / f"0_{category}_best_model.pt")
-
     # 2. The FashionIQ inputs this model's layout declares. `fashioniq_required_paths` already
     #    encodes the layout's captions, splits, correction dictionaries, resized-image and
     #    annotation requirements, so a model-specific requirement is picked up automatically
@@ -1009,6 +1008,14 @@ def model_eval_inputs(model_dict: dict, args: argparse.Namespace, config: Workbe
             continue
         inputs.append(auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, ds_root))
 
+
+    # 4b. External pretrained runtime assets declared as required_for_evaluation
+    for asset_status in external_asset_statuses(model_dict):
+        raw_path = asset_status.get("path")
+        if raw_path:
+            asset_path = Path(raw_path)
+            if asset_path.exists():
+                inputs.append(asset_path)
     # 5. The evaluator implementation itself: a changed script changes the result.
     from workbench.backend.fashioniq_layout import canonical_dataset_link_path
 
@@ -1040,10 +1047,19 @@ def resolved_checkpoint_id(model_dict: dict, args: argparse.Namespace) -> str:
     LIMN evaluates as one bundle candidate keyed by its bundle id, so the proof
     filename must use the bundle id, not the first category variant.
     """
+    bundles = model_dict.get("checkpoint_bundles") or []
+    selections = getattr(args, "checkpoint_ids", None)
+    if isinstance(selections, dict) and model_dict["model_id"] in selections:
+        selected = selections[model_dict["model_id"]]
+        if len(selected) == 1 and any(bundle["bundle_id"] == selected[0] for bundle in bundles):
+            return selected[0]
+        values = _checkpoint_ids(args, model_dict["model_id"], model_dict)
+        if values:
+            return values[0]
+        return "default"
     explicit = getattr(args, "checkpoint", None)
     if explicit:
         return explicit
-    bundles = model_dict.get("checkpoint_bundles") or []
     if model_dict["model_id"] == "limn" and bundles:
         return bundles[0]["bundle_id"]
     variants = model_dict.get("checkpoint_variants") or []
@@ -1110,7 +1126,7 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
     ckpt_outputs = ()
     if model_obj:
         ckpts = model_obj.get("checkpoint_variants", [])
-        if cli_selection:
+        if cli_selection is not None:
             ckpts = [c for c in ckpts if c["checkpoint_id"] in set(cli_selection)]
         ckpt_outputs = tuple(checkpoint_path(args.model, c, config.WORKBENCH_CHECKPOINT_ROOT) for c in ckpts)
 
@@ -1123,7 +1139,7 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             "checkpoint",
             command("download_checkpoints.py", *download_args),
             model_id=args.model,
-            checkpoint_id=cli_selection[0] if len(cli_selection) == 1 else None,
+            checkpoint_id=cli_selection[0] if cli_selection is not None and len(cli_selection) == 1 else None,
             output_paths=ckpt_outputs,
             required_capabilities={"allow_large_downloads", "allow_network"},
         )
@@ -1168,7 +1184,8 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             evaluation_args.append("--verify-gpu")
         if args.continue_on_error:
             evaluation_args.append("--continue-on-error")
-        eval_inputs = model_eval_inputs(model_obj, args, config) if model_obj else ()
+        eval_selection = _checkpoint_ids(args, args.model, model_obj)
+        eval_inputs = model_eval_inputs(model_obj, args, config, checkpoint_ids=eval_selection) if model_obj else ()
         eval_outputs = model_eval_outputs(model_obj, args, config) if model_obj else ()
         if model_obj is None:
             # `--all-runnable` evaluates whatever the registry currently allows, so no
@@ -1190,7 +1207,7 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
                 checkpoint_id=args.checkpoint,
                 protocol=args.protocol,
                 checkpoint_policy=getattr(args, "checkpoint_policy", None),
-                checkpoint_selection=tuple(_checkpoint_ids(args, args.model, model_obj)),
+                checkpoint_selection=tuple(eval_selection or ()),
                 checkpoint_overrides=tuple(sorted(
                     (mid, tuple(ids)) for mid, ids in getattr(args, "checkpoint_overrides", {}).items())),
                 dependencies=("runtime-preflight",),
@@ -1359,22 +1376,17 @@ def _evaluation_capabilities(model: dict[str, Any] | None, config: WorkbenchConf
     return capabilities
 
 
-def _checkpoint_ids(args: argparse.Namespace, model_id: str, model: dict[str, Any] | None = None) -> list[str]:
-    """The checkpoint IDs selected for one model.
-
-    `--checkpoint` names one for a single-model invocation, or a bundle id. `checkpoint_ids` is the
-    mapping the autopilot resolved from its checkpoint policy, and it is authoritative when present:
-    the evaluator's own candidate resolution otherwise returns every registered variant.
-    """
+def _checkpoint_ids(args: argparse.Namespace, model_id: str, model: dict[str, Any] | None = None) -> list[str] | None:
+    """Return expanded IDs, or None when no selection was supplied."""
     resolved = getattr(args, "checkpoint_ids", None)
     if isinstance(resolved, dict) and model_id in resolved:
         return _expand_selection(model, list(resolved[model_id]))
     single = getattr(args, "checkpoint", None)
-    return _expand_selection(model, [single] if single else [])
+    return _expand_selection(model, [single]) if single else None
 
 
 def _checkpoint_args(args: argparse.Namespace, model_id: str, model: dict[str, Any] | None = None) -> list[str]:
-    values = _checkpoint_ids(args, model_id, model)
+    values = _checkpoint_ids(args, model_id, model) or []
     argv: list[str] = []
     for value in values:
         argv.extend(["--checkpoint", value])
@@ -1550,12 +1562,10 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         ckpt_args = ["--model", mid, "--output-root", str(config.WORKBENCH_CHECKPOINT_ROOT),
                      *_checkpoint_args(args, mid, m)]
         ckpts = m.get("checkpoint_variants", [])
-        if selected_checkpoints:
+        if selected_checkpoints is not None:
             ckpts = [c for c in ckpts if c["checkpoint_id"] in set(selected_checkpoints)]
         else:
-            # No policy resolved a selection here. A model with more than one variant would be
-            # ambiguous, so plan the verification stage without claiming a choice: the downloader
-            # applies its own unresolved-variant rule.
+            # No explicit selection: fingerprint and verify every registered variant.
             ckpts = ckpts
         ckpt_outs = tuple(checkpoint_path(mid, c, config.WORKBENCH_CHECKPOINT_ROOT) for c in ckpts)
         if not ckpt_outs:
@@ -1572,7 +1582,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
                     "checkpoint",
                     command("download_checkpoints.py", "--verify-only", *ckpt_args),
                     model_id=mid,
-                    checkpoint_id=selected_checkpoints[0] if len(selected_checkpoints) == 1 else None,
+                    checkpoint_id=selected_checkpoints[0] if selected_checkpoints is not None and len(selected_checkpoints) == 1 else None,
                     output_paths=ckpt_outs,
                     required_capabilities=frozenset(),
                 ))
@@ -1581,7 +1591,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
                     "checkpoint",
                     command("download_checkpoints.py", *ckpt_args),
                     model_id=mid,
-                    checkpoint_id=selected_checkpoints[0] if len(selected_checkpoints) == 1 else None,
+                    checkpoint_id=selected_checkpoints[0] if selected_checkpoints is not None and len(selected_checkpoints) == 1 else None,
                     output_paths=ckpt_outs,
                     required_capabilities={"allow_large_downloads", "allow_network"},
                 ))
@@ -1679,16 +1689,16 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             eval_args.append("--continue-on-error")
 
         eval_deps = (f"runtime-preflight:{mid}",)
-        eval_ins = model_eval_inputs(m, args, config)
+        eval_ins = model_eval_inputs(m, args, config, checkpoint_ids=eval_selection)
         eval_outs = model_eval_outputs(m, args, config)
         stages.append(run_stage(
             "evaluation",
             command("evaluate_models.py", *eval_args),
             model_id=mid,
-            checkpoint_id=eval_selection[0] if len(eval_selection) == 1 else None,
+            checkpoint_id=eval_selection[0] if eval_selection and len(eval_selection) == 1 else None,
             protocol=args.protocol,
             checkpoint_policy=getattr(args, "checkpoint_policy", None),
-            checkpoint_selection=tuple(eval_selection),
+            checkpoint_selection=tuple(eval_selection or ()),
             checkpoint_overrides=tuple(sorted(
                 (override_mid, tuple(ids))
                 for override_mid, ids in getattr(args, "checkpoint_overrides", {}).items())),

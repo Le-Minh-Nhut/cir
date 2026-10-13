@@ -22,7 +22,7 @@ from workbench.tests.test_release_blocker_master_e2e import master  # noqa: F401
 REPOSITORY = Path(__file__).resolve().parents[2]
 
 
-def _api_module(monkeypatch: pytest.MonkeyPatch, master: dict):
+def _api_module(monkeypatch: pytest.MonkeyPatch, master: dict, request: pytest.FixtureRequest):
     """Import the real FastAPI module with this workspace's configuration in effect.
 
     The synthetic adapter is registered by the same explicit, opt-in call production never
@@ -53,6 +53,13 @@ def _api_module(monkeypatch: pytest.MonkeyPatch, master: dict):
     # Synthetic adapters are opt-in and in-process registration is required here, because this
     # test calls the handler directly rather than spawning the CLI.
     from workbench.backend.adapters import models as adapters_module
+    # Registration writes into the module-global ADAPTERS dict and nothing restored it, so later
+    # tests in the same session saw synthetic adapters where they expected the real ones. Restore
+    # the CONTENTS at teardown, not the name: modules that did `from ... import ADAPTERS` hold the
+    # same dict object, so rebinding would leave them pointing at the synthetic-filled dict.
+    _adapters_before = dict(adapters_module.ADAPTERS)
+    request.addfinalizer(lambda: (adapters_module.ADAPTERS.clear(),
+                                  adapters_module.ADAPTERS.update(_adapters_before)))
     adapters_module.register_synthetic_adapters_from_env()
     # `load_registry()` reads WORKBENCH_REGISTRY_PATH on every call, so the environment export
     # above is sufficient and no loader needs to be patched.
@@ -77,9 +84,9 @@ def _payload(model_id: str = "synthetic_model", checkpoint_id: str = "ckpt_v1") 
 # ------------------------------------------------------------------- Scenario A: success
 
 
-def test_scenario_a_api_to_evaluator_success(master, monkeypatch):  # noqa: F811
+def test_scenario_a_api_to_evaluator_success(master, monkeypatch, request):  # noqa: F811
     """POST /api/jobs -> queue -> real operator subprocess -> real evaluator -> ledger+proof."""
-    module = _api_module(monkeypatch, master)
+    module = _api_module(monkeypatch, master, request)
 
     accepted = module.queue_job(_payload())
     job_id = accepted["job_id"]
@@ -128,9 +135,9 @@ def test_scenario_a_api_to_evaluator_success(master, monkeypatch):  # noqa: F811
 # ------------------------------------------------------------------- Scenario B: failure
 
 
-def test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged(master, monkeypatch):  # noqa: F811
+def test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged(master, monkeypatch, request):  # noqa: F811
     """A nonzero evaluator is recorded as failed, audited, and never becomes a success."""
-    module = _api_module(monkeypatch, master)
+    module = _api_module(monkeypatch, master, request)
     artifacts = master["ws"] / "workbench" / "artifacts"
     reports = artifacts / "reports"
     reports.mkdir(parents=True, exist_ok=True)
@@ -154,11 +161,11 @@ def test_scenario_b_evaluator_failure_is_recorded_and_pointer_unchanged(master, 
 # --------------------------------------------------------------- Scenario C: no output
 
 
-def test_scenario_c_zero_exit_without_valid_output_is_not_a_success(master, monkeypatch):  # noqa: F811
+def test_scenario_c_zero_exit_without_valid_output_is_not_a_success(master, monkeypatch, request):  # noqa: F811
     """Exit 0 with no parseable evaluation output must not mint a completion proof."""
     monkeypatch.setenv("SYNTHETIC_SILENT", "1")
     monkeypatch.setenv("WORKBENCH_EVALUATOR_ENV_PASSTHROUGH", "SYNTHETIC_SILENT")
-    module = _api_module(monkeypatch, master)
+    module = _api_module(monkeypatch, master, request)
     accepted = module.queue_job(_payload())
     settled = _wait_for(module.JOBS, accepted["job_id"])
 
@@ -172,7 +179,7 @@ def test_scenario_c_zero_exit_without_valid_output_is_not_a_success(master, monk
 # ------------------------------------------------------------- Scenario D: cancellation
 
 
-def test_scenario_d_cancellation_kills_the_evaluator_tree(master, monkeypatch):  # noqa: F811
+def test_scenario_d_cancellation_kills_the_evaluator_tree(master, monkeypatch, request):  # noqa: F811
     """Cancel through the queue while a long evaluator runs: operator and evaluator both die."""
     sentinel = master["ws"] / "evaluator_completed.txt"
     # A slow evaluator: the synthetic one honours SYNTHETIC_SLEEP and writes a sentinel if it
@@ -200,7 +207,7 @@ def test_scenario_d_cancellation_kills_the_evaluator_tree(master, monkeypatch): 
 
     monkeypatch.setenv("SYNTHETIC_SLEEP", "6")
     monkeypatch.setenv("WORKBENCH_EVALUATOR_ENV_PASSTHROUGH", "SYNTHETIC_SLEEP")
-    module = _api_module(monkeypatch, master)
+    module = _api_module(monkeypatch, master, request)
     accepted = module.queue_job(_payload())
     job_id = accepted["job_id"]
 
@@ -229,7 +236,7 @@ def test_scenario_d_cancellation_kills_the_evaluator_tree(master, monkeypatch): 
 # ----------------------------------------------------------- Scenario E: duplicate run id
 
 
-def test_scenario_e_duplicate_run_id_never_overwrites_a_run(master, monkeypatch):  # noqa: F811
+def test_scenario_e_duplicate_run_id_never_overwrites_a_run(master, monkeypatch, request):  # noqa: F811
     """A second invocation with an existing run id is refused with the old data intact."""
     from workbench.backend.operator_config import resolve_config
     from workbench.scripts import evaluate_models as em
@@ -316,7 +323,7 @@ def test_scenario_f_two_models_keep_independent_capabilities(master, tmp_path, m
         assert rt.require_launch_ready(model)
 
 
-def test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped(master, monkeypatch):  # noqa: F811
+def test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped(master, monkeypatch, request):  # noqa: F811
     """Scenario F: a non-cooperative evaluator grandchild must still be stopped.
 
     The operator exits on SIGTERM, but the evaluator ignores it. Reaching that evaluator requires
@@ -343,7 +350,7 @@ def test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped(master, monkeyp
     registry["models"][0]["upstream_commit_sha"] = head
     registry_path.write_text(json.dumps(registry))
 
-    module = _api_module(monkeypatch, master)
+    module = _api_module(monkeypatch, master, request)
     module.JOBS.GRACE_SECONDS = 1.0
     accepted = module.queue_job(_payload())
     job_id = accepted["job_id"]

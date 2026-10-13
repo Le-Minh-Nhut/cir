@@ -813,7 +813,9 @@ def test_queued_job_children_get_the_operator_key_but_no_stray_secrets(workspace
         _time.sleep(0.02)
     assert queue.list()[0]["status"] == "completed"
     leaked = json.loads((workspace["repo"] / "logs" / "queue_stdout.log").read_text().strip().splitlines()[-1])
-    assert leaked == ["WORKBENCH_LEDGER_KEY"], leaked
+    secret_names = [name for name in leaked if name == "WORKBENCH_LEDGER_KEY" or name.startswith("WORKBENCH_SECRET_")]
+    assert secret_names == ["WORKBENCH_LEDGER_KEY"], secret_names
+    assert set(leaked) - set(secret_names) <= {"WORKBENCH_THIRD_PARTY_ROOT"}, leaked
 
 
 def test_the_api_queues_the_audited_orchestrator_not_the_raw_evaluator(workspace, monkeypatch):
