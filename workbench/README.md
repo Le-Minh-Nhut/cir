@@ -4,6 +4,16 @@ Local tooling for FashionIQ composed-image-retrieval failure analysis. Official 
 
 > **Status boundary:** no official model evaluation or reproduction has run in this checkout. Paper metrics are registry sanity references, never local metrics. Mock artifacts are development data, never research evidence.
 
+## Moving to the GPU PC
+
+| Document | What it answers |
+| --- | --- |
+| [docs/FINAL_PC_READINESS.md](docs/FINAL_PC_READINESS.md) | what this commit supports, the prerequisites, the one command, and what a run produces |
+| [docs/PC_TRANSFER_CHECKLIST.md](docs/PC_TRANSFER_CHECKLIST.md) | what to copy, what to rebuild, and each permission's effect |
+| [docs/AUXILIARY_ASSET_AUDIT.md](docs/AUXILIARY_ASSET_AUDIT.md) | every external asset each model needs, its source line, and its precise blocker |
+| [docs/AUTOMATED_DATA_PREPARATION.md](docs/AUTOMATED_DATA_PREPARATION.md) | what the workbench prepares by itself, and the rule that decides |
+| [docs/READINESS_MATRIX.md](docs/READINESS_MATRIX.md) | the current per-model state, generated from the registry |
+
 ## Operating rules
 
 - Use one exact registered protocol per run, comparison, cohort, and export.

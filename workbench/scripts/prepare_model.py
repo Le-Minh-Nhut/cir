@@ -120,6 +120,13 @@ def resize_is_complete(config, model: dict, contract: dict) -> bool | None:
     categories = declared.get("categories")
     if not isinstance(categories, dict) or not categories:
         return False
+    # The receipt must cover every canonical category, and each must be internally consistent: a
+    # receipt written after only one category finished would otherwise satisfy the gate and the
+    # resumed run would skip preparation, failing later on a missing input.
+    from workbench.backend.fashioniq_layout import CATEGORIES as _CATEGORIES
+
+    if set(categories) != set(_CATEGORIES):
+        return False
     base = config.FASHIONIQ_ROOT / ("resized_images" if layout == "flat" else "resized_image")
     if layout == "flat":
         # Every category writes into the one directory, so a per-category count of the shared pool is

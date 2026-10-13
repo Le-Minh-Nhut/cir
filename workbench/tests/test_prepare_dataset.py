@@ -426,6 +426,23 @@ def test_a_receipt_without_its_images_is_not_treated_as_prepared(tmp_path, monke
     assert prepare_model.resize_is_complete(config, other,
                                             prepare_model.preparation_contract_for_model(other)) is None
 
+    # A receipt that covers only some categories is incomplete: resuming over it would skip
+    # preparation and fail later on the missing category.
+    receipt_path = data / "resized_image" / ".workbench_resize_receipt.json"
+    # Restore the image the previous step deleted, then write a receipt naming only one category.
+    from PIL import Image as _Image
+    _Image.new("RGB", (8, 8), (10, 20, 30)).save(data / "resized_image" / "shirt" / "B00001.jpg", "JPEG")
+    partial = json.loads(receipt_path.read_text())
+    from workbench.scripts.prepare_model import write_resize_receipt
+    write_resize_receipt(receipt_path, model_id="limn", layout="per_category", image_size=256,
+                         extension=".jpg", source_script="s", written=1,
+                         coverage={"dress": partial["categories"]["dress"]})
+    assert prepare_model.resize_is_complete(config, model, contract) is False
+    write_resize_receipt(receipt_path, model_id="limn", layout="per_category", image_size=256,
+                         extension=".jpg", source_script="s", written=3,
+                         coverage=partial["categories"])
+    assert prepare_model.resize_is_complete(config, model, contract) is True
+
 
 def test_a_dry_run_reports_the_resize_without_writing(tmp_path: Path, monkeypatch) -> None:
     """`--dry-run` must describe the resize and leave the dataset untouched."""
