@@ -130,8 +130,9 @@ assets:
   source_repo: https://download.pytorch.org/models/resnet50-19c8e357.pth
   source_revision: null
   source_path: null
-  destination_scope: model_source
-  destination_path: checkpoints/resnet50-19c8e357.pth
+  destination_scope: user_cache
+  destination_path: hub/checkpoints/resnet50-19c8e357.pth
+  cache_root_env_var: TORCH_HOME
   automatic_download_available: true
   expected_sha256: null
   expected_sha256_prefix: 19c8e357

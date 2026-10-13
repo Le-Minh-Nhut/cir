@@ -415,3 +415,36 @@ def test_csmcir_auxiliary_backbones_resolve_to_user_cache_paths(monkeypatch, tmp
     for family, path in expected.items():
         asset = next(item for item in assets if item["family"] == family)
         assert auxiliary_destination(asset, tmp_path / "source", tmp_path / "fashioniq") == path
+
+
+def test_clvc_net_auxiliary_resnet50_resolves_to_user_cache_path(monkeypatch, tmp_path: Path) -> None:
+    from dataclasses import replace
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.preflight import model_requirements
+    from workbench.backend.registry import (
+        auxiliary_assets_for_model,
+        auxiliary_destination,
+        load_registry,
+    )
+
+    torch_home = tmp_path / "torch"
+    monkeypatch.setenv("TORCH_HOME", str(torch_home))
+    source_root = tmp_path / "source"
+    fashioniq_root = tmp_path / "fashioniq"
+
+    assets = auxiliary_assets_for_model("clvc_net")
+    asset = next(item for item in assets if "ResNet-50" in item["family"])
+    resolved = auxiliary_destination(asset, source_root, fashioniq_root)
+    expected = torch_home / "hub/checkpoints/resnet50-19c8e357.pth"
+
+    assert resolved == expected
+    assert not resolved.is_relative_to(source_root)
+
+    config = replace(resolve_config(), WORKBENCH_THIRD_PARTY_ROOT=source_root, FASHIONIQ_ROOT=fashioniq_root)
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "clvc_net")
+    reqs = model_requirements(model, config)
+    preflight_asset = next(a for a in reqs["evidence"]["auxiliary_assets"] if "ResNet-50" in a["name"])
+
+    assert Path(preflight_asset["path"]) == expected
+    assert Path(preflight_asset["path"]) == resolved
+    assert not Path(preflight_asset["path"]).is_relative_to(source_root)

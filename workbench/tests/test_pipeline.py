@@ -468,3 +468,107 @@ def test_limn_bundle_all_members_selection_resolves_to_bundle_id_and_output_path
     eval_stage = next(s for s in stages if s.name == "evaluation" and s.model_id == "limn")
     assert eval_stage.output_paths
     assert all(bundle_id in path.name for path in eval_stage.output_paths)
+def test_explicitly_empty_checkpoint_selection_refuses_evaluation_stage() -> None:
+    pipeline = load_pipeline()
+    from workbench.backend.operator_config import resolve_config
+    cfg = resolve_config()
+    args = SimpleNamespace(
+        mode="all",
+        model=None,
+        selected_model_ids=["csmcir"],
+        dataset_root=None,
+        checkpoint=None,
+        checkpoint_ids={"csmcir": []},
+        checkpoint_policy="strict_clean",
+        checkpoint_overrides={},
+        protocol=None,
+        top_k=200,
+        continue_on_error=True,
+        verify_gpu=False,
+        sync_sources=False,
+        download_checkpoints=False,
+        download_auxiliary_assets=False,
+        evaluate=True,
+        rebuild_index=False,
+    )
+    stages = pipeline.all_stages(args, cfg)
+    eval_stage = next(s for s in stages if s.name == "evaluation" and s.model_id == "csmcir")
+    assert eval_stage.skipped is not None
+    assert "refusing evaluation run" in eval_stage.skipped
+    assert not eval_stage.commands
+    assert eval_stage.evidence is None
+
+
+def test_multivariant_model_unselected_agrees_with_evaluator() -> None:
+    import argparse
+    pipeline = load_pipeline()
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import model_by_id
+    from workbench.scripts.evaluate_models import candidates
+
+    cfg = resolve_config()
+    airknow = model_by_id("airknow")
+    assert len(airknow["checkpoint_variants"]) > 1
+
+    args = SimpleNamespace(
+        mode="all",
+        model=None,
+        selected_model_ids=["airknow"],
+        dataset_root=None,
+        checkpoint=None,
+        checkpoint_ids=None,
+        checkpoint_policy="strict_clean",
+        checkpoint_overrides={},
+        protocol=None,
+        top_k=200,
+        continue_on_error=True,
+        verify_gpu=False,
+        sync_sources=False,
+        download_checkpoints=False,
+        download_auxiliary_assets=False,
+        evaluate=True,
+        rebuild_index=False,
+    )
+    stages = pipeline.all_stages(args, cfg)
+    eval_stage = next(s for s in stages if s.name == "evaluation" and s.model_id == "airknow")
+    declared_id = pipeline.resolved_checkpoint_id(airknow, args)
+
+    assert eval_stage.checkpoint_id == declared_id
+    assert any(declared_id in p.name for p in eval_stage.output_paths)
+    cmd = eval_stage.commands[0]
+    ckpt_idx = cmd.index("--checkpoint")
+    eval_flag_id = cmd[ckpt_idx + 1]
+    assert eval_flag_id == declared_id
+
+    parser_eval = argparse.ArgumentParser()
+    parser_eval.add_argument("--model")
+    parser_eval.add_argument("--checkpoint", action="append")
+    parsed_eval_args = parser_eval.parse_args(["--model", "airknow", "--checkpoint", eval_flag_id])
+    eval_candidates = candidates(parsed_eval_args, [airknow])
+    assert len(eval_candidates) == 1
+    assert eval_candidates[0][1]["checkpoint_id"] == declared_id
+
+
+def test_sequence_checkpoint_argument_and_resolved_checkpoint_id_string() -> None:
+    pipeline = load_pipeline()
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import model_by_id
+
+    cfg = resolve_config()
+    airknow = model_by_id("airknow")
+
+    for seq in (["fiq_n05", "fiq_n08"], ("fiq_n05", "fiq_n08"), {"fiq_n05", "fiq_n08"}):
+        ns = SimpleNamespace(checkpoint=seq, checkpoint_ids=None)
+        expanded = pipeline._checkpoint_ids(ns, "airknow", airknow)
+        assert isinstance(expanded, list)
+        assert set(expanded) == {"fiq_n05", "fiq_n08"}
+
+        resolved = pipeline.resolved_checkpoint_id(airknow, ns)
+        assert isinstance(resolved, str)
+        assert resolved in ("fiq_n05", "fiq_n08")
+        assert isinstance(pipeline.resolved_checkpoint_file(airknow, ns, cfg), Path)
+    ns_custom = SimpleNamespace(checkpoint=["custom_a", "custom_b"], checkpoint_ids=None)
+    resolved_custom = pipeline.resolved_checkpoint_id(airknow, ns_custom)
+    assert isinstance(resolved_custom, str)
+    assert resolved_custom == "custom_a"
+    assert isinstance(pipeline.resolved_checkpoint_file(airknow, ns_custom, cfg), Path)

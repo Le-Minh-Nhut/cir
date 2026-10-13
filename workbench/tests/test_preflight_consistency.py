@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
-
 from workbench.backend import runtime
 from workbench.backend.operator_config import WorkbenchConfig
 from workbench.backend.preflight import preflight_blockers
@@ -83,7 +83,7 @@ def test_preflight_explicit_dataset_root_honours_canonical_link_and_auxiliary_as
     link = source / model["canonical_dataset_link"]
     link.symlink_to(explicit_root, target_is_directory=True)
 
-    reqs = doctor.model_requirements(model, config, dataset_root=explicit_root)
+    reqs = doctor.model_requirements(model, config, dataset_root=explicit_root, canonical_root=explicit_root)
     link_blocks = [b for b in reqs["blocks"] if "canonical dataset link" in b]
     assert not link_blocks, f"canonical link resolving to explicit root must not block: {link_blocks}"
 
@@ -99,7 +99,7 @@ def test_preflight_explicit_dataset_root_honours_canonical_link_and_auxiliary_as
 
     checkpoint = model["checkpoint_variants"][0]
     evaluator_reasons = evaluate_models.blockers(
-        model, checkpoint, model.get("native_protocol"), explicit_root, config
+        model, checkpoint, model.get("native_protocol"), link, replace(config, FASHIONIQ_ROOT=explicit_root)
     )[3]
     assert not any("canonical dataset link" in b for b in evaluator_reasons)
 
@@ -108,5 +108,32 @@ def test_preflight_explicit_dataset_root_honours_canonical_link_and_auxiliary_as
     wrong_root.mkdir()
     link.symlink_to(wrong_root, target_is_directory=True)
 
-    reqs_wrong = doctor.model_requirements(model, config, dataset_root=explicit_root)
+    reqs_wrong = doctor.model_requirements(model, config, dataset_root=explicit_root, canonical_root=explicit_root)
     assert f"canonical dataset link resolves to {wrong_root}, expected {explicit_root}" in reqs_wrong["blocks"]
+    evaluator_wrong = evaluate_models.blockers(
+        model, checkpoint, model.get("native_protocol"), link, replace(config, FASHIONIQ_ROOT=explicit_root)
+    )[3]
+    assert f"canonical dataset link resolves to {wrong_root}, expected {explicit_root}" in evaluator_wrong
+
+
+def test_evaluator_tautology_regression_blocks_symlink_resolving_elsewhere(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "csmcir")
+    canonical_root = tmp_path / "canonical_fashioniq"
+    canonical_root.mkdir()
+    wrong_root = tmp_path / "wrong_fashioniq"
+    wrong_root.mkdir()
+
+    source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
+    source.mkdir(parents=True)
+    link = source / model["canonical_dataset_link"]
+    link.symlink_to(wrong_root, target_is_directory=True)
+
+    eval_config = replace(config, FASHIONIQ_ROOT=canonical_root)
+    blocks_wrong = preflight_blockers(model, eval_config, dataset_root=link)
+    assert f"canonical dataset link resolves to {wrong_root}, expected {canonical_root}" in blocks_wrong
+
+    link.unlink()
+    link.symlink_to(canonical_root, target_is_directory=True)
+    blocks_correct = preflight_blockers(model, eval_config, dataset_root=link)
+    assert not any("canonical dataset link" in b for b in blocks_correct)

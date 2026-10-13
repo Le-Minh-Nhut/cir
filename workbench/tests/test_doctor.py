@@ -203,7 +203,7 @@ def test_doctor_preflight_honours_explicit_dataset_root(tmp_path: Path) -> None:
     source.mkdir(parents=True)
     (source / "fashionIQ_dataset").symlink_to(override_root, target_is_directory=True)
 
-    reqs = doctor.model_requirements(model, settings, dataset_root=override_root)
+    reqs = doctor.model_requirements(model, settings, dataset_root=override_root, canonical_root=override_root)
     assert not any("canonical dataset link" in b for b in reqs["blocks"])
     missing_qwen = str(override_root / "qwen_captions" / "dress_cot_val.json")
     assert f"CSMCIR Qwen captions missing: {missing_qwen}" in reqs["blocks"]

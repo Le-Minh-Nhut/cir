@@ -86,7 +86,7 @@ def missing_path_strings(paths: tuple[Path, ...]) -> list[str]:
 
 def preparation_checks(model: dict[str, Any], root: Path) -> tuple[list[dict[str, Any]], list[str]]:
     config = replace(resolve_config(), FASHIONIQ_ROOT=root)
-    requirements = model_requirements(model, config)
+    requirements = model_requirements(model, config, canonical_root=root)
     evidence = requirements["evidence"]
     contract = preparation_contract_for_model(model)
     raw_missing = evidence["raw_inputs_missing"]
@@ -148,7 +148,7 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig,
     source_ok = state["state"] == "clean" and (not state["pin"] or state["head"] == state["pin"])
     checks = [record(f"source:{model_id}", "OK" if source_ok else "BLOCKED",
                      "source pin ready" if source_ok else "source unavailable, dirty, or not pinned", **state)]
-    blockers = preflight_blockers(model, config)
+    blockers = preflight_blockers(model, config, canonical_root=config.FASHIONIQ_ROOT)
     env_state = environment_status(model, probe=True)
     if allow_gpu_pending and env_state["status"] == "GPU_VERIFICATION_PENDING":
         blockers = [reason for reason in blockers if "GPU_VERIFICATION_PENDING" not in reason]

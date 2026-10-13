@@ -5,7 +5,13 @@ from pathlib import Path
 from typing import Any
 
 
-def model_requirements(model: dict, config: Any, *, dataset_root: Path | None = None) -> dict[str, Any]:
+def model_requirements(
+    model: dict,
+    config: Any,
+    *,
+    dataset_root: Path | None = None,
+    canonical_root: Path | None = None,
+) -> dict[str, Any]:
     """Resolve data, preparation, external asset, and fixed-link requirements."""
     from workbench.backend.fashioniq_layout import image_extension_problems, missing_paths
     from workbench.backend.registry import (
@@ -15,7 +21,7 @@ def model_requirements(model: dict, config: Any, *, dataset_root: Path | None = 
     )
 
     root = Path(dataset_root) if dataset_root else config.FASHIONIQ_ROOT
-    canonical_root = root
+    canonical_root = Path(canonical_root) if canonical_root is not None else config.FASHIONIQ_ROOT
     source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"] if model.get("source_dir") else None
     contract = preparation_contract_for_model(model)
     raw = preparation_paths(contract, root, "raw_inputs") if contract else fashioniq_required_paths(model, root)
@@ -85,12 +91,18 @@ def model_requirements(model: dict, config: Any, *, dataset_root: Path | None = 
                          "dataset_link": link_evidence}}
 
 
-def preflight_blockers(model: dict, config: Any, *, dataset_root: Path | None = None) -> list[str]:
+def preflight_blockers(
+    model: dict,
+    config: Any,
+    *,
+    dataset_root: Path | None = None,
+    canonical_root: Path | None = None,
+) -> list[str]:
     """Single shared blocker list for model data and runtime prerequisites."""
     from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
     from workbench.backend.runtime import environment_blockers, source_clean_and_pinned
 
-    requirements = model_requirements(model, config, dataset_root=dataset_root)
+    requirements = model_requirements(model, config, dataset_root=dataset_root, canonical_root=canonical_root)
     blockers = list(requirements["blocks"])
     model_id = model["model_id"]
     source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"] if model.get("source_dir") else None

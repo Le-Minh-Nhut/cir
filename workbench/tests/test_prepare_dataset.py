@@ -755,3 +755,37 @@ def test_declared_extension_is_honoured(tmp_path: Path) -> None:
         assert handle.size == (256, 256)
 
     assert prepare_model.resize_is_complete(config, model, contract) is True
+
+
+def test_destination_with_wrong_format_is_regenerated_rather_than_skipped(tmp_path: Path) -> None:
+    """A destination with correct dimensions but wrong format is regenerated rather than skipped."""
+    import copy
+    from dataclasses import replace as _replace
+    from PIL import Image
+
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import load_registry
+    from workbench.scripts import prepare_model
+
+    data = _limn_dataset(tmp_path)
+    config = _replace(resolve_config(), FASHIONIQ_ROOT=data)
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "limn")
+    contract = copy.deepcopy(prepare_model.preparation_contract_for_model(model))
+
+    target = data / "resized_image" / "dress" / "B00000.jpg"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (256, 256), color=(255, 0, 0)).save(target, format="PNG")
+
+    with Image.open(target) as handle:
+        assert handle.format == "PNG"
+        assert handle.size == (256, 256)
+
+    ok, message = prepare_model._run_resize(config, model, contract, dry_run=False)
+    assert ok is True, message
+
+    with Image.open(target) as handle:
+        assert handle.format == "JPEG"
+        assert handle.size == (256, 256)
+        handle.load()
+
+    assert prepare_model.resize_is_complete(config, model, contract) is True

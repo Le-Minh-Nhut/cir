@@ -37,10 +37,10 @@ from workbench.backend.preflight import model_requirements, preflight_blockers
 from workbench.backend.registry import load_registry, preparation_contract_for_model
 
 def status(model: dict, config) -> dict:
-    blockers = preflight_blockers(model, config)
+    blockers = preflight_blockers(model, config, canonical_root=config.FASHIONIQ_ROOT)
     model_id = model["model_id"]
     contract = preparation_contract_for_model(model)
-    requirements = model_requirements(model, config)
+    requirements = model_requirements(model, config, canonical_root=config.FASHIONIQ_ROOT)
     evidence = requirements["evidence"]
     raw_missing = evidence["raw_inputs_missing"]
     generated_missing = evidence["generated_artifacts_missing"]
@@ -437,15 +437,15 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
                 return False, f"refusing to write derived artifact into canonical images directory: {destination}"
             except ValueError:
                 pass
+            save_format = Image.registered_extensions().get(extension.lower(), "JPEG")
             if destination.is_file():
                 try:
                     with Image.open(destination) as existing:
-                        if existing.size == (size, size):
+                        if existing.size == (size, size) and existing.format == save_format:
                             existing.load()
                             continue
                 except Exception:
                     pass
-            save_format = Image.registered_extensions().get(extension.lower(), "JPEG")
             temp_file = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
             try:
                 with Image.open(source_image) as handle:

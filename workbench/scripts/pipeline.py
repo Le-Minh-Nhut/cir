@@ -1045,7 +1045,7 @@ def _bundle_anchor_for_selection(model_dict: dict[str, Any] | None, selected: Se
     """Return bundle_id when selection names the bundle or all its members, else None."""
     if not model_dict or not selected:
         return None
-    selected_set = set(selected)
+    selected_set = {selected} if isinstance(selected, str) else set(selected)
     for bundle in model_dict.get("checkpoint_bundles") or []:
         bundle_id = bundle.get("bundle_id")
         if bundle_id and selected_set == {bundle_id}:
@@ -1071,21 +1071,21 @@ def resolved_checkpoint_id(model_dict: dict, args: argparse.Namespace) -> str:
             return anchor
         values = _checkpoint_ids(args, model_dict["model_id"], model_dict)
         if values:
-            return values[0]
-        return "default"
+            return str(values[0])
+        return ""
     explicit = getattr(args, "checkpoint", None)
-    if explicit:
-        if isinstance(explicit, (list, tuple, set)):
-            anchor = _bundle_anchor_for_selection(model_dict, explicit)
-            if anchor:
-                return anchor
-            if len(explicit) == 1:
-                return next(iter(explicit))
-        return explicit
+    if explicit is not None:
+        anchor = _bundle_anchor_for_selection(model_dict, explicit)
+        if anchor:
+            return anchor
+        values = _checkpoint_ids(args, model_dict["model_id"], model_dict)
+        if values:
+            return str(values[0])
+        return ""
     if model_dict["model_id"] == "limn" and bundles:
-        return bundles[0]["bundle_id"]
+        return str(bundles[0]["bundle_id"])
     variants = model_dict.get("checkpoint_variants") or []
-    return variants[0]["checkpoint_id"] if variants else "default"
+    return str(variants[0]["checkpoint_id"]) if variants else ""
 
 def resolved_checkpoint_file(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> Path:
     """The primary checkpoint file the evaluator will be handed for this selection."""
@@ -1142,13 +1142,18 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
     link = layout_prepare(args, config)
     # The operator may name a bundle; the acquisition and verification stages then need its members.
     cli_selection = _checkpoint_ids(args, args.model, model_obj)
-    download_args = [*selection(args), *_checkpoint_args(args, args.model, model_obj),
+    forced_download_args = _checkpoint_args(args, args.model, model_obj)
+    download_args = [*selection(args), *forced_download_args,
                      "--output-root", config.WORKBENCH_CHECKPOINT_ROOT]
     ckpt_outputs = ()
     if model_obj:
         ckpts = model_obj.get("checkpoint_variants", [])
         if cli_selection is not None:
             ckpts = [c for c in ckpts if c["checkpoint_id"] in set(cli_selection)]
+        elif forced_download_args:
+            forced_ids = {forced_download_args[i + 1] for i in range(0, len(forced_download_args), 2) if forced_download_args[i] == "--checkpoint"}
+            if forced_ids:
+                ckpts = [c for c in ckpts if c["checkpoint_id"] in forced_ids]
         ckpt_outputs = tuple(checkpoint_path(args.model, c, config.WORKBENCH_CHECKPOINT_ROOT) for c in ckpts)
 
     if not args.download_checkpoints:
@@ -1196,8 +1201,14 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             evaluation_args.extend([
                 "--dataset-root", str(dataset_root(args, config)),
             ])
-        if args.checkpoint:
-            evaluation_args.extend(["--checkpoint", args.checkpoint])
+        if model_obj:
+            evaluation_args.extend(_checkpoint_args(args, args.model, model_obj))
+        elif args.checkpoint:
+            if isinstance(args.checkpoint, (list, tuple, set)):
+                for cp in args.checkpoint:
+                    evaluation_args.extend(["--checkpoint", str(cp)])
+            else:
+                evaluation_args.extend(["--checkpoint", str(args.checkpoint)])
         if args.protocol:
             evaluation_args.extend(["--protocol", args.protocol])
         evaluation_args.extend(["--top-k", str(args.top_k)])
@@ -1206,9 +1217,14 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
         if args.continue_on_error:
             evaluation_args.append("--continue-on-error")
         eval_selection = _checkpoint_ids(args, args.model, model_obj)
-        eval_inputs = model_eval_inputs(model_obj, args, config, checkpoint_ids=eval_selection) if model_obj else ()
-        eval_outputs = model_eval_outputs(model_obj, args, config) if model_obj else ()
-        if model_obj is None:
+        if eval_selection is not None and not eval_selection:
+            evaluation = Stage(
+                "evaluation",
+                skipped=f"refusing evaluation run: checkpoint selection for {args.model} is explicitly empty",
+                model_id=args.model,
+                checkpoint_selection=(),
+            )
+        elif model_obj is None:
             # `--all-runnable` evaluates whatever the registry currently allows, so no
             # single model owns the stage: there is no run identity to bind a completion
             # proof to and therefore no output contract that could ever be satisfied.
@@ -1221,11 +1237,13 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
                          "run gets a run-bound completion proof"),
             )
         else:
+            eval_inputs = model_eval_inputs(model_obj, args, config, checkpoint_ids=eval_selection) if model_obj else ()
+            eval_outputs = model_eval_outputs(model_obj, args, config) if model_obj else ()
             evaluation = run_stage(
                 "evaluation",
                 command("evaluate_models.py", *evaluation_args),
                 model_id=args.model,
-                checkpoint_id=args.checkpoint,
+                checkpoint_id=resolved_checkpoint_id(model_obj, args),
                 protocol=args.protocol,
                 checkpoint_policy=getattr(args, "checkpoint_policy", None),
                 checkpoint_selection=tuple(eval_selection or ()),
@@ -1401,13 +1419,35 @@ def _checkpoint_ids(args: argparse.Namespace, model_id: str, model: dict[str, An
     """Return expanded IDs, or None when no selection was supplied."""
     resolved = getattr(args, "checkpoint_ids", None)
     if isinstance(resolved, dict) and model_id in resolved:
-        return _expand_selection(model, list(resolved[model_id]))
+        raw = resolved[model_id]
+        items = list(raw) if isinstance(raw, (list, tuple, set)) else [raw]
+        return _expand_selection(model, items)
     single = getattr(args, "checkpoint", None)
-    return _expand_selection(model, [single]) if single else None
+    if single is not None:
+        items = list(single) if isinstance(single, (list, tuple, set)) else [single]
+        return _expand_selection(model, items)
+    return None
 
 
 def _checkpoint_args(args: argparse.Namespace, model_id: str, model: dict[str, Any] | None = None) -> list[str]:
-    values = _checkpoint_ids(args, model_id, model) or []
+    values = _checkpoint_ids(args, model_id, model)
+    if values is None:
+        model_dict = model
+        if model_dict is None:
+            try:
+                registry = load_registry()
+                model_dict = next((m for m in registry["models"] if m["model_id"] == model_id), None)
+            except Exception:
+                model_dict = None
+        if model_dict is not None:
+            cid = resolved_checkpoint_id(model_dict, args)
+            if cid:
+                expanded = _expand_selection(model_dict, [cid])
+                argv: list[str] = []
+                for val in expanded:
+                    argv.extend(["--checkpoint", val])
+                return argv
+        return []
     argv: list[str] = []
     for value in values:
         argv.extend(["--checkpoint", value])
@@ -1580,14 +1620,16 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         ))
 
         selected_checkpoints = _checkpoint_ids(args, mid, m)
+        forced_args = _checkpoint_args(args, mid, m)
         ckpt_args = ["--model", mid, "--output-root", str(config.WORKBENCH_CHECKPOINT_ROOT),
-                     *_checkpoint_args(args, mid, m)]
+                     *forced_args]
         ckpts = m.get("checkpoint_variants", [])
         if selected_checkpoints is not None:
             ckpts = [c for c in ckpts if c["checkpoint_id"] in set(selected_checkpoints)]
-        else:
-            # No explicit selection: fingerprint and verify every registered variant.
-            ckpts = ckpts
+        elif forced_args:
+            forced_ids = {forced_args[i + 1] for i in range(0, len(forced_args), 2) if forced_args[i] == "--checkpoint"}
+            if forced_ids:
+                ckpts = [c for c in ckpts if c["checkpoint_id"] in forced_ids]
         ckpt_outs = tuple(checkpoint_path(mid, c, config.WORKBENCH_CHECKPOINT_ROOT) for c in ckpts)
         if not ckpt_outs:
             # No registry checkpoint exists for this model: nothing to acquire.
@@ -1700,6 +1742,14 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
                 "--dataset-root", str(dataset_root(args, config)),
             ])
         eval_selection = _checkpoint_ids(args, mid, m)
+        if eval_selection is not None and not eval_selection:
+            stages.append(Stage(
+                "evaluation",
+                skipped=f"refusing evaluation run: checkpoint selection for {mid} is explicitly empty",
+                model_id=mid,
+                checkpoint_selection=(),
+            ))
+            continue
         eval_args.extend(_checkpoint_args(args, mid, m))
         if args.protocol:
             eval_args.extend(["--protocol", args.protocol])
@@ -1716,7 +1766,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             "evaluation",
             command("evaluate_models.py", *eval_args),
             model_id=mid,
-            checkpoint_id=eval_selection[0] if eval_selection and len(eval_selection) == 1 else None,
+            checkpoint_id=resolved_checkpoint_id(m, args),
             protocol=args.protocol,
             checkpoint_policy=getattr(args, "checkpoint_policy", None),
             checkpoint_selection=tuple(eval_selection or ()),
