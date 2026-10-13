@@ -101,3 +101,33 @@ def test_cleanup_removes_only_supported_generated_outputs(tmp_path: Path, capsys
     assert not cleanup.is_safe_target(checkpoints, tmp_path)
     assert not cleanup.is_safe_target(data, tmp_path)
     assert not cleanup.is_safe_target(third_party, tmp_path)
+
+
+def test_probe_environment_denies_sensitive_credentials(monkeypatch) -> None:
+    import json
+    import sys
+    from workbench.backend import runtime
+
+    monkeypatch.setenv("HF_TOKEN", "secret-hf")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "secret-aws")
+    monkeypatch.setenv("WANDB_API_KEY", "secret-wandb")
+    monkeypatch.setenv("OPENAI_API_KEY", "secret-openai")
+    monkeypatch.setenv("GITHUB_TOKEN", "secret-github")
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "secret-ledger")
+    monkeypatch.setenv("WORKBENCH_SECRET_TEST", "secret-test")
+    monkeypatch.setenv("SAFE_TEST_VAR", "safe-value")
+
+    env = runtime._probe_child_env()
+    assert env.get("SAFE_TEST_VAR") == "safe-value"
+    for denied in ("HF_TOKEN", "AWS_SECRET_ACCESS_KEY", "WANDB_API_KEY", "OPENAI_API_KEY",
+                   "GITHUB_TOKEN", "WORKBENCH_LEDGER_KEY", "WORKBENCH_SECRET_TEST"):
+        assert denied not in env
+
+    code = (
+        "import os, json; "
+        "keys = [k for k in ('HF_TOKEN', 'AWS_SECRET_ACCESS_KEY', 'WANDB_API_KEY') if k in os.environ]; "
+        "print(json.dumps(keys))"
+    )
+    ok, out, err = runtime._run_probe(Path(sys.executable), code)
+    assert ok, err
+    assert json.loads(out) == []

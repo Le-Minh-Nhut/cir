@@ -387,7 +387,8 @@ def test_fixed_dataset_link_authorization_semantics(tmp_path: Path, monkeypatch)
         verify_gpu=False, sync_sources=False, download_checkpoints=False,
         download_auxiliary_assets=False, evaluate=True, rebuild_index=False, serve=False,
     )
-    monkeypatch.setattr(pipeline, "evaluation_evidence", lambda *args: lambda record: (True, None, None))
+    monkeypatch.setattr(pipeline, "evaluation_evidence",
+                        lambda model_dict, args, config, checkpoint_id=None: lambda record: (True, None, None))
     stages_valid = pipeline.all_stages(args_valid, config)
     prep_valid = next(s for s in stages_valid if s.name == "preparation" and s.model_id == "csmcir")
     assert prep_valid.required_capabilities == frozenset()

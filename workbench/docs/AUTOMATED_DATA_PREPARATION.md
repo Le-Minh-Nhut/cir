@@ -64,8 +64,13 @@ approximation.
 ## Verifying a preparation run
 
 ```bash
-./workbench/run.sh pipeline --model limn --dataset-root <dataset> --prepare --allow-preparation
-./workbench/run.sh prepare-model --model limn --dataset-root <dataset>   # read-only status
+# Execute the automated preparation for one model (the mode is `prepare`; run.sh forwards to
+# pipeline.py, which requires a mode from {mock,prepare,real,serve,status,setup,reproduce,analyze,
+# all,report}).
+./workbench/run.sh prepare --model limn --dataset-root <dataset> --apply --allow-preparation
+
+# Read-only preparation status, straight from the script.
+python3 workbench/scripts/prepare_model.py --model limn --dataset-root <dataset>
 ```
 
 Real regressions for the two automated generation steps live in

@@ -96,7 +96,7 @@ def _stage_for(ws: dict, monkeypatch: pytest.MonkeyPatch, model: dict) -> pipeli
     monkeypatch.setattr(registry, "auxiliary_model_ids", lambda: set())
     monkeypatch.setattr(registry, "auxiliary_assets_for_model", lambda model_id: [])
     monkeypatch.setattr(pipeline, "evaluation_evidence",
-                        lambda *args: (lambda record: (True, None, None)))
+                        lambda model_dict, args, config, checkpoint_id=None: (lambda record: (True, None, None)))
     args = pipeline.parser_for().parse_args(
         ["all", "--model", model["model_id"], "--dataset-root", str(ws["data"])])
     return next(stage for stage in pipeline.all_stages(args, ws["config"])
@@ -226,7 +226,7 @@ def test_data_id_07_preprocessing_recipe_change_invalidates(
     monkeypatch.setattr(registry, "auxiliary_model_ids", lambda: set())
     monkeypatch.setattr(registry, "auxiliary_assets_for_model", lambda model_id: [])
     monkeypatch.setattr(pipeline, "evaluation_evidence",
-                        lambda *args: (lambda record: (True, None, None)))
+                        lambda model_dict, args, config, checkpoint_id=None: (lambda record: (True, None, None)))
     _checkpoint(ws, model)
 
     stage = _stage_for(ws, monkeypatch, model)

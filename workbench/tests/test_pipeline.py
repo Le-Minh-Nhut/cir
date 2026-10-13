@@ -575,3 +575,206 @@ def test_sequence_checkpoint_argument_and_resolved_checkpoint_id_string() -> Non
     assert isinstance(resolved_custom, str)
     assert resolved_custom == "custom_a"
     assert isinstance(pipeline.resolved_checkpoint_file(airknow, ns_custom, cfg), Path)
+
+
+def test_multi_checkpoint_non_bundle_evaluator_outputs_and_validator_agree() -> None:
+    pipeline = load_pipeline()
+    from workbench.backend.operator_config import resolve_config
+    cfg = resolve_config()
+
+    args = SimpleNamespace(
+        mode="all",
+        model="airknow",
+        selected_model_ids=["airknow"],
+        dataset_root=None,
+        checkpoint=["fiq_n05", "fiq_n08"],
+        checkpoint_ids=None,
+        checkpoint_policy=None,
+        checkpoint_overrides={},
+        protocol=None,
+        top_k=200,
+        continue_on_error=True,
+        verify_gpu=False,
+        sync_sources=False,
+        download_checkpoints=False,
+        download_auxiliary_assets=False,
+        evaluate=True,
+        rebuild_index=False,
+    )
+    stages = pipeline.all_stages(args, cfg)
+    eval_stages = [s for s in stages if s.name == "evaluation" and s.model_id == "airknow"]
+    assert len(eval_stages) == 1
+    stage = eval_stages[0]
+
+    cmd = stage.commands[0]
+    evaluator_checkpoints = {cmd[i + 1] for i in range(len(cmd) - 1) if cmd[i] == "--checkpoint"}
+    output_checkpoints = {p.name.split("_latest_successful.json")[0].removeprefix("airknow_") for p in stage.output_paths}
+    validator_checkpoints = set(getattr(stage.evidence, "checkpoint_ids", ()))
+
+    assert evaluator_checkpoints == {"fiq_n05", "fiq_n08"}
+    assert output_checkpoints == {"fiq_n05", "fiq_n08"}
+    assert validator_checkpoints == {"fiq_n05", "fiq_n08"}
+    assert evaluator_checkpoints == validator_checkpoints
+    assert evaluator_checkpoints == output_checkpoints
+
+    real_args = SimpleNamespace(
+        mode="real",
+        model="airknow",
+        selected_model_ids=["airknow"],
+        dataset_root=None,
+        checkpoint=["fiq_n05", "fiq_n08"],
+        checkpoint_ids=None,
+        checkpoint_policy=None,
+        checkpoint_overrides={},
+        protocol=None,
+        top_k=200,
+        continue_on_error=True,
+        verify_gpu=False,
+        sync_sources=False,
+        download_checkpoints=False,
+        download_auxiliary_assets=False,
+        evaluate=True,
+        rebuild_index=False,
+        serve=False,
+    )
+    real_stages = pipeline.real_stages(real_args, cfg)
+    real_eval_stages = [s for s in real_stages if s.name == "evaluation" and s.model_id == "airknow"]
+    assert len(real_eval_stages) == 1
+    real_stage = real_eval_stages[0]
+    real_cmd = real_stage.commands[0]
+    real_eval_ckpts = {real_cmd[i + 1] for i in range(len(real_cmd) - 1) if real_cmd[i] == "--checkpoint"}
+    real_output_ckpts = {p.name.split("_latest_successful.json")[0].removeprefix("airknow_") for p in real_stage.output_paths}
+    real_val_ckpts = set(getattr(real_stage.evidence, "checkpoint_ids", ()))
+    assert real_eval_ckpts == {"fiq_n05", "fiq_n08"}
+    assert real_output_ckpts == {"fiq_n05", "fiq_n08"}
+    assert real_val_ckpts == {"fiq_n05", "fiq_n08"}
+    assert real_eval_ckpts == real_val_ckpts
+
+
+def test_multi_checkpoint_run_with_only_one_proof_not_completed(monkeypatch: pytest.MonkeyPatch) -> None:
+    pipeline = load_pipeline()
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import model_by_id
+    from workbench.scripts import evaluate_models
+    cfg = resolve_config()
+    airknow = model_by_id("airknow")
+    ns = SimpleNamespace(checkpoint=["fiq_n05", "fiq_n08"], checkpoint_ids=None, protocol=None)
+
+    # Simulate completion_validator where fiq_n05 succeeds but fiq_n08 fails
+    def mock_validator(mid, cid, protocol, pin, config, ckpt_file=None):
+        def _val(record):
+            if cid == "fiq_n05":
+                return True, None, {"proof": "valid_proof", "checkpoint_id": cid}
+            return False, f"declared output missing for {cid}", None
+        return _val
+
+    monkeypatch.setattr(evaluate_models, "completion_validator", mock_validator)
+
+    evidence_fn = pipeline.evaluation_evidence(airknow, ns, cfg)
+    ok, reason, details = evidence_fn({"run_id": "run_123"})
+    assert ok is False
+    assert "fiq_n08" in str(reason)
+
+    stage = pipeline.Stage(
+        "evaluation",
+        model_id="airknow",
+        checkpoint_selection=("fiq_n05", "fiq_n08"),
+        evidence=evidence_fn,
+        output_paths=pipeline.model_eval_outputs(airknow, ns, cfg),
+    )
+    assert pipeline.validate_stage_outputs(stage, record={"run_id": "run_123"}, config=cfg) is False
+
+
+def test_bundle_anchor_empty_and_single_variant_behaviors_preserved() -> None:
+    pipeline = load_pipeline()
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import model_by_id
+    cfg = resolve_config()
+
+    # 1. Bundle-anchor: LIMN bundle selection resolves to bundle anchor
+    limn = model_by_id("limn")
+    bundle = limn["checkpoint_bundles"][0]
+    bundle_id = bundle["bundle_id"]
+    member_ids = list(bundle["required_checkpoint_ids"])
+
+    args_bundle = SimpleNamespace(
+        mode="all",
+        model=None,
+        selected_model_ids=["limn"],
+        dataset_root=None,
+        checkpoint=None,
+        checkpoint_ids={"limn": member_ids},
+        checkpoint_policy="strict_clean",
+        checkpoint_overrides={},
+        protocol=None,
+        top_k=200,
+        continue_on_error=True,
+        verify_gpu=False,
+        sync_sources=False,
+        download_checkpoints=False,
+        download_auxiliary_assets=False,
+        evaluate=True,
+        rebuild_index=False,
+    )
+    stages = pipeline.all_stages(args_bundle, cfg)
+    limn_stage = next(s for s in stages if s.name == "evaluation" and s.model_id == "limn")
+    assert limn_stage.checkpoint_id == bundle_id
+    assert all(bundle_id in p.name for p in limn_stage.output_paths)
+    assert getattr(limn_stage.evidence, "checkpoint_ids", None) == (bundle_id,)
+
+    # 2. Explicitly empty selection yields skipped refusal stage
+    args_empty = SimpleNamespace(
+        mode="all",
+        model=None,
+        selected_model_ids=["airknow"],
+        dataset_root=None,
+        checkpoint=None,
+        checkpoint_ids={"airknow": []},
+        checkpoint_policy="strict_clean",
+        checkpoint_overrides={},
+        protocol=None,
+        top_k=200,
+        continue_on_error=True,
+        verify_gpu=False,
+        sync_sources=False,
+        download_checkpoints=False,
+        download_auxiliary_assets=False,
+        evaluate=True,
+        rebuild_index=False,
+    )
+    empty_stages = pipeline.all_stages(args_empty, cfg)
+    empty_stage = next(s for s in empty_stages if s.name == "evaluation" and s.model_id == "airknow")
+    assert empty_stage.skipped is not None
+    assert "refusing evaluation run" in empty_stage.skipped
+    assert not empty_stage.commands
+    assert empty_stage.evidence is None
+
+    # 3. Single-variant selection is unaffected
+    args_single = SimpleNamespace(
+        mode="all",
+        model="airknow",
+        selected_model_ids=["airknow"],
+        dataset_root=None,
+        checkpoint=["fiq_n08"],
+        checkpoint_ids=None,
+        checkpoint_policy=None,
+        checkpoint_overrides={},
+        protocol=None,
+        top_k=200,
+        continue_on_error=True,
+        verify_gpu=False,
+        sync_sources=False,
+        download_checkpoints=False,
+        download_auxiliary_assets=False,
+        evaluate=True,
+        rebuild_index=False,
+    )
+    single_stages = pipeline.all_stages(args_single, cfg)
+    single_stage = next(s for s in single_stages if s.name == "evaluation" and s.model_id == "airknow")
+    assert single_stage.checkpoint_id == "fiq_n08"
+    assert len(single_stage.output_paths) == 1
+    assert "fiq_n08" in single_stage.output_paths[0].name
+    assert getattr(single_stage.evidence, "checkpoint_ids", None) == ("fiq_n08",)
+    single_cmd = single_stage.commands[0]
+    single_ckpts = [single_cmd[i + 1] for i in range(len(single_cmd) - 1) if single_cmd[i] == "--checkpoint"]
+    assert single_ckpts == ["fiq_n08"]

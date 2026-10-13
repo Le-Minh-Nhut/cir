@@ -53,7 +53,7 @@ def _production_eval_stage(workspace, monkeypatch, model: dict) -> pipeline.Stag
                         if model_id == model["model_id"] else (_ for _ in ()).throw(KeyError(model_id)))
     monkeypatch.setattr(registry, "auxiliary_model_ids", lambda: set())
     monkeypatch.setattr(pipeline, "evaluation_evidence",
-                        lambda *args: (lambda record: (True, None, None)))
+                        lambda model_dict, args, config, checkpoint_id=None: (lambda record: (True, None, None)))
     args = pipeline.parser_for().parse_args([
         "all", "--model", model["model_id"], "--dataset-root", str(workspace["data"]),
     ])

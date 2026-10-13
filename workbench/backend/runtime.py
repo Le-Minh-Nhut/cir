@@ -56,6 +56,25 @@ class EnvironmentReport:
     environment_fingerprint: str | None = None
     verified_at: str | None = None
 
+_PROBE_ENV_DENY_PREFIXES = (
+    "WORKBENCH_LEDGER_KEY", "WORKBENCH_SECRET_",
+    "HF_TOKEN", "HUGGING_FACE_HUB_TOKEN", "HUGGINGFACEHUB_API_TOKEN",
+    "WANDB_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+    "GITHUB_TOKEN", "GH_TOKEN", "GITLAB_TOKEN",
+    "AWS_", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
+    "AZURE_", "GOOGLE_", "GOOGLE_APPLICATION_CREDENTIALS", "GCP_",
+    "DOCKER_", "KUBECONFIG", "SLACK_", "SLACK_TOKEN", "STRIPE_", "NPM_", "NPM_TOKEN",
+)
+
+
+def _probe_child_env() -> dict[str, str]:
+    """Filtered child environment for probes running untrusted model code."""
+    return {
+        key: value for key, value in os.environ.items()
+        if not any(key == prefix or key.startswith(prefix)
+                   for prefix in _PROBE_ENV_DENY_PREFIXES)
+    }
+
 
 def _run_probe(interpreter: Path, code: str, timeout: int = 60,
                args: tuple[str, ...] = (), isolated: bool = False) -> tuple[bool, str, str]:
@@ -69,10 +88,8 @@ def _run_probe(interpreter: Path, code: str, timeout: int = 60,
     """
     prefix_flags = ["-I", "-S"] if isolated else []
     # The probe executes code from the model's environment, which is untrusted. It must not
-    # be handed the operator's secrets: the ledger key (and any variable derived from it)
-    # is removed from the child environment, so a probe cannot read or forge ledger entries.
-    child_env = {key: value for key, value in os.environ.items()
-                 if key != "WORKBENCH_LEDGER_KEY" and not key.startswith("WORKBENCH_SECRET_")}
+    # be handed the operator's secrets. Deny sensitive credential prefixes.
+    child_env = _probe_child_env()
     try:
         proc = subprocess.run(
             [str(interpreter), *prefix_flags, "-c", code, *args],
@@ -1629,8 +1646,7 @@ def _exports_python_init(path: Path, symbol: str = "PyInit__C") -> bool:
         import subprocess
     except Exception:  # pragma: no cover - stdlib import cannot fail
         return False
-    child_env = {key: value for key, value in os.environ.items()
-                 if key != "WORKBENCH_LEDGER_KEY" and not key.startswith("WORKBENCH_SECRET_")}
+    child_env = _probe_child_env()
     try:
         completed = subprocess.run(
             [sys.executable, "-I", "-c", _CORE_PROBE_CODE, str(path), symbol],

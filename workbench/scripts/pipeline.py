@@ -1055,6 +1055,25 @@ def _bundle_anchor_for_selection(model_dict: dict[str, Any] | None, selected: Se
             return bundle_id
     return None
 
+def evaluated_checkpoint_ids(model_dict: dict, args: argparse.Namespace) -> list[str]:
+    """The checkpoint ids evaluate_models.py will actually evaluate for this model and args."""
+    selection = _checkpoint_ids(args, model_dict["model_id"], model_dict)
+    if selection is not None:
+        if not selection:
+            return []
+        anchor = _bundle_anchor_for_selection(model_dict, selection)
+        if anchor:
+            return [anchor]
+        return list(selection)
+    anchor = _bundle_anchor_for_selection(model_dict, None)
+    if anchor:
+        return [anchor]
+    bundles = model_dict.get("checkpoint_bundles") or []
+    if model_dict.get("model_id") == "limn" and bundles:
+        return [str(bundles[0]["bundle_id"])]
+    cid = resolved_checkpoint_id(model_dict, args)
+    return [cid] if cid else []
+
 
 def resolved_checkpoint_id(model_dict: dict, args: argparse.Namespace) -> str:
     """The checkpoint id evaluate_models.py will actually use for this model.
@@ -1087,13 +1106,14 @@ def resolved_checkpoint_id(model_dict: dict, args: argparse.Namespace) -> str:
     variants = model_dict.get("checkpoint_variants") or []
     return str(variants[0]["checkpoint_id"]) if variants else ""
 
-def resolved_checkpoint_file(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> Path:
+def resolved_checkpoint_file(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig,
+                             checkpoint_id: str | None = None) -> Path:
     """The primary checkpoint file the evaluator will be handed for this selection."""
     from workbench.backend.registry import checkpoint_path
 
     mid = model_dict["model_id"]
     variants = {variant["checkpoint_id"]: variant for variant in model_dict.get("checkpoint_variants") or []}
-    ckpt_id = resolved_checkpoint_id(model_dict, args)
+    ckpt_id = checkpoint_id or resolved_checkpoint_id(model_dict, args)
     variant = variants.get(ckpt_id)
     if variant is None:
         for bundle in model_dict.get("checkpoint_bundles") or []:
@@ -1102,25 +1122,71 @@ def resolved_checkpoint_file(model_dict: dict, args: argparse.Namespace, config:
                 break
     if variant is None and variants:
         variant = next(iter(variants.values()))
-    return checkpoint_path(mid, variant, config.WORKBENCH_CHECKPOINT_ROOT) if variant else Path(".")
+    try:
+        return checkpoint_path(mid, variant, config.WORKBENCH_CHECKPOINT_ROOT) if variant else Path(".")
+    except (KeyError, TypeError):
+        return Path(".")
 
 
-def evaluation_evidence(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig):
+def evaluation_evidence(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig,
+                        checkpoint_id: str | None = None):
     """Run-bound completion evidence for one evaluation stage."""
     from workbench.scripts.evaluate_models import completion_validator
 
     mid = model_dict["model_id"]
-    ckpt_id = resolved_checkpoint_id(model_dict, args)
-    protocol = args.protocol or model_dict.get("native_protocol")
-    return completion_validator(mid, ckpt_id, protocol, model_dict.get("upstream_commit_sha"), config,
-                                resolved_checkpoint_file(model_dict, args, config))
+    protocol = getattr(args, "protocol", None) or model_dict.get("native_protocol")
+    pin = model_dict.get("upstream_commit_sha")
+
+    if checkpoint_id is not None:
+        cids = [checkpoint_id]
+    else:
+        cids = evaluated_checkpoint_ids(model_dict, args)
+
+    if not cids:
+        cid = resolved_checkpoint_id(model_dict, args)
+        cids = [cid] if cid else []
+
+    if len(cids) <= 1:
+        cid = cids[0] if cids else ""
+        val = completion_validator(mid, cid, protocol, pin, config,
+                                   resolved_checkpoint_file(model_dict, args, config, checkpoint_id=cid))
+        setattr(val, "checkpoint_ids", tuple(cids))
+        return val
+
+    validators = {
+        cid: completion_validator(mid, cid, protocol, pin, config,
+                                  resolved_checkpoint_file(model_dict, args, config, checkpoint_id=cid))
+        for cid in cids
+    }
+
+    def _validate_all(record: dict | None = None) -> tuple[bool, str | None, dict | None]:
+        if record is None:
+            return False, "no evaluation invocation recorded", None
+        base_run_id = record.get("run_id")
+        if not base_run_id:
+            return False, "recorded evaluation has no invocation run id", None
+        details: dict[str, Any] = {}
+        for cid, val in validators.items():
+            sub_run_id = f"{base_run_id}_{mid}_{cid}"
+            ok, reason, item_detail = val({"run_id": sub_run_id})
+            if not ok:
+                return False, f"checkpoint {cid}: {reason}", None
+            details[cid] = item_detail
+        return True, None, {"checkpoints": details, "run_id": base_run_id}
+
+    setattr(_validate_all, "checkpoint_ids", tuple(cids))
+    return _validate_all
 
 
-def model_eval_outputs(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig) -> tuple[Path, ...]:
+def model_eval_outputs(model_dict: dict, args: argparse.Namespace, config: WorkbenchConfig,
+                       checkpoint_id: str | None = None) -> tuple[Path, ...]:
     """Declared outputs are informational only; run-bound proof is validated separately."""
     mid = model_dict["model_id"]
-    ckpt_id = resolved_checkpoint_id(model_dict, args)
-    return (_artifacts_root(config) / "reports" / f"{mid}_{ckpt_id}_latest_successful.json",)
+    if checkpoint_id is not None:
+        cids = [checkpoint_id]
+    else:
+        cids = evaluated_checkpoint_ids(model_dict, args)
+    return tuple(_artifacts_root(config) / "reports" / f"{mid}_{cid}_latest_successful.json" for cid in cids)
 def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]:
     from workbench.backend.fashioniq_layout import canonical_dataset_link_path
     from workbench.backend.registry import checkpoint_path, model_by_id
