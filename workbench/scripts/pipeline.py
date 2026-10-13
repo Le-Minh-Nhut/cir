@@ -1103,12 +1103,15 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
         else Stage("sync", skipped="pass --sync-sources")
     )
     link = layout_prepare(args, config)
-    download_args = [*selection(args), *(["--checkpoint", args.checkpoint] if args.checkpoint else []), "--output-root", config.WORKBENCH_CHECKPOINT_ROOT]
+    # The operator may name a bundle; the acquisition and verification stages then need its members.
+    cli_selection = _checkpoint_ids(args, args.model, model_obj)
+    download_args = [*selection(args), *_checkpoint_args(args, args.model, model_obj),
+                     "--output-root", config.WORKBENCH_CHECKPOINT_ROOT]
     ckpt_outputs = ()
     if model_obj:
         ckpts = model_obj.get("checkpoint_variants", [])
-        if args.checkpoint:
-            ckpts = [c for c in ckpts if c["checkpoint_id"] == args.checkpoint]
+        if cli_selection:
+            ckpts = [c for c in ckpts if c["checkpoint_id"] in set(cli_selection)]
         ckpt_outputs = tuple(checkpoint_path(args.model, c, config.WORKBENCH_CHECKPOINT_ROOT) for c in ckpts)
 
     if not args.download_checkpoints:
@@ -1120,7 +1123,7 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
             "checkpoint",
             command("download_checkpoints.py", *download_args),
             model_id=args.model,
-            checkpoint_id=args.checkpoint,
+            checkpoint_id=cli_selection[0] if len(cli_selection) == 1 else None,
             output_paths=ckpt_outputs,
             required_capabilities={"allow_large_downloads", "allow_network"},
         )
@@ -1187,13 +1190,13 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
                 checkpoint_id=args.checkpoint,
                 protocol=args.protocol,
                 checkpoint_policy=getattr(args, "checkpoint_policy", None),
-                checkpoint_selection=tuple(_checkpoint_ids(args, args.model)),
+                checkpoint_selection=tuple(_checkpoint_ids(args, args.model, model_obj)),
                 checkpoint_overrides=tuple(sorted(
                     (mid, tuple(ids)) for mid, ids in getattr(args, "checkpoint_overrides", {}).items())),
                 dependencies=("runtime-preflight",),
                 input_paths=eval_inputs,
                 output_paths=eval_outputs,
-                required_capabilities={"allow_gpu_eval", "allow_preparation"},
+                required_capabilities=_evaluation_capabilities(model_obj, config),
                 run_id=new_run_id(),
                 evidence=evaluation_evidence(model_obj, args, config),
             )
@@ -1306,22 +1309,72 @@ def run_validation_index(config: WorkbenchConfig | None = None) -> int:
         return 1
 
 
-def _checkpoint_ids(args: argparse.Namespace, model_id: str) -> list[str]:
+def _expand_selection(model: dict[str, Any] | None, values: list[str]) -> list[str]:
+    """Expand any declared bundle id into the checkpoint ids it requires.
+
+    The evaluator already treats naming a bundle as naming its members, so the surrounding stages
+    must agree: given `base_iter0_all_categories` the acquisition and verification stages have to
+    plan all three category files, not look for a variant that does not exist under that name.
+    """
+    if not model or not values:
+        return list(values)
+    bundles = {bundle["bundle_id"]: list(bundle.get("required_checkpoint_ids") or [])
+               for bundle in (model.get("checkpoint_bundles") or [])}
+    expanded: list[str] = []
+    for value in values:
+        expanded.extend(bundles.get(value) or [value])
+    return list(dict.fromkeys(expanded))
+
+
+def _dataset_link_ready(model: dict[str, Any] | None, config: WorkbenchConfig) -> bool:
+    """True when the model's declared fixed dataset link already resolves to the configured root.
+
+    An evaluation whose link is already correct has nothing to prepare, so it must not demand
+    `allow_preparation`: that capability authorizes creating the link, not using it. Requiring it
+    unconditionally refused entirely-authorized GPU evaluations on a prepared machine.
+    """
+    from workbench.backend.fashioniq_layout import canonical_dataset_link_path
+
+    if model is None:
+        return False
+    link = canonical_dataset_link_path(model, config.WORKBENCH_THIRD_PARTY_ROOT)
+    if not link:
+        return False
+    try:
+        return link.is_symlink() and link.resolve() == config.FASHIONIQ_ROOT.resolve()
+    except OSError:
+        return False
+
+
+def _evaluation_capabilities(model: dict[str, Any] | None, config: WorkbenchConfig) -> set[str]:
+    """Capabilities one model's evaluation stage must be granted.
+
+    Evaluation itself is GPU work. It also writes under the results root, which is the preparation
+    boundary, so that capability is required only when the model's declared link still needs
+    creating.
+    """
+    capabilities = {"allow_gpu_eval"}
+    if not _dataset_link_ready(model, config):
+        capabilities.add("allow_preparation")
+    return capabilities
+
+
+def _checkpoint_ids(args: argparse.Namespace, model_id: str, model: dict[str, Any] | None = None) -> list[str]:
     """The checkpoint IDs selected for one model.
 
-    `--checkpoint` names one for a single-model invocation. `checkpoint_ids` is the mapping the
-    autopilot resolved from its checkpoint policy, and it is authoritative when present: the
-    evaluator's own candidate resolution otherwise returns every registered variant.
+    `--checkpoint` names one for a single-model invocation, or a bundle id. `checkpoint_ids` is the
+    mapping the autopilot resolved from its checkpoint policy, and it is authoritative when present:
+    the evaluator's own candidate resolution otherwise returns every registered variant.
     """
     resolved = getattr(args, "checkpoint_ids", None)
     if isinstance(resolved, dict) and model_id in resolved:
-        return list(resolved[model_id])
+        return _expand_selection(model, list(resolved[model_id]))
     single = getattr(args, "checkpoint", None)
-    return [single] if single else []
+    return _expand_selection(model, [single] if single else [])
 
 
-def _checkpoint_args(args: argparse.Namespace, model_id: str) -> list[str]:
-    values = _checkpoint_ids(args, model_id)
+def _checkpoint_args(args: argparse.Namespace, model_id: str, model: dict[str, Any] | None = None) -> list[str]:
+    values = _checkpoint_ids(args, model_id, model)
     argv: list[str] = []
     for value in values:
         argv.extend(["--checkpoint", value])
@@ -1442,9 +1495,9 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             required_capabilities=({"allow_preparation"} if needs_preparation else frozenset()),
         ))
 
-        selected_checkpoints = _checkpoint_ids(args, mid)
+        selected_checkpoints = _checkpoint_ids(args, mid, m)
         ckpt_args = ["--model", mid, "--output-root", str(config.WORKBENCH_CHECKPOINT_ROOT),
-                     *_checkpoint_args(args, mid)]
+                     *_checkpoint_args(args, mid, m)]
         ckpts = m.get("checkpoint_variants", [])
         if selected_checkpoints:
             ckpts = [c for c in ckpts if c["checkpoint_id"] in set(selected_checkpoints)]
@@ -1559,8 +1612,8 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             eval_args.extend([
                 "--dataset-root", str(dataset_root(args, config)),
             ])
-        eval_selection = _checkpoint_ids(args, mid)
-        eval_args.extend(_checkpoint_args(args, mid))
+        eval_selection = _checkpoint_ids(args, mid, m)
+        eval_args.extend(_checkpoint_args(args, mid, m))
         if args.protocol:
             eval_args.extend(["--protocol", args.protocol])
         eval_args.extend(["--top-k", str(args.top_k)])
@@ -1586,7 +1639,7 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             dependencies=eval_deps,
             input_paths=eval_ins,
             output_paths=eval_outs,
-            required_capabilities={"allow_gpu_eval", "allow_preparation"},
+            required_capabilities=_evaluation_capabilities(m, config),
             run_id=new_run_id(),
             evidence=evaluation_evidence(m, args, config),
         ))

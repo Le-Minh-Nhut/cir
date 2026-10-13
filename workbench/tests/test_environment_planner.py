@@ -582,8 +582,12 @@ def test_manage_environment_respects_shared_group(tmp_path, monkeypatch):
 
 
 @pytest.mark.skipif(shutil.which("conda") is None, reason="conda binary not available on PATH")
-def test_real_conda_cold_start_shared_environment_and_reuse(tmp_path):
-    # REAL package-manager test: real conda cold-start shared environment and reuse
+def test_real_conda_cold_start_shared_environment_and_reuse(tmp_path, monkeypatch):
+    # REAL package-manager test: real conda cold-start shared environment and reuse.
+    # These stand-in models have no adapter, so the evaluator-import trace cannot resolve an entry
+    # point; that refusal has its own regression. Here the models stand in for ones whose evaluator
+    # imports exactly the distributions they declare, so the constraint set under test is built.
+    monkeypatch.setattr(planner, "_evaluator_imports", lambda *a, **k: {"yaml", "packaging"})
     m1 = {
         "model_id": "real-cold-a",
         "source_available": True,
@@ -894,11 +898,15 @@ def test_real_provisioning_children_withhold_ledger_key(tmp_path, monkeypatch):
 
 
 def test_p1_03_range_constraint_enforced_against_installed(tmp_path, monkeypatch):
+    monkeypatch.setattr(planner, "_evaluator_imports", lambda *a, **k: set())
+    # Declared as a pip package so the constraint survives import tracing: this test is about the
+    # range check itself, and a `packages` declaration is filtered to what the evaluator actually
+    # imports (which is nothing here, since the model has no adapter).
     m = {
         "model_id": "range-model",
         "environment": {
             "python": "3.11",
-            "packages": ["numpy>=1.21,<1.24"],
+            "pip_packages": ["numpy>=1.21,<1.24"],
             "confidence": "TEST",
         },
     }
@@ -914,7 +922,11 @@ def test_p1_03_range_constraint_enforced_against_installed(tmp_path, monkeypatch
 
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
 
-    # Case 1: numpy installed version 1.25.0 is OUTSIDE range >=1.21,<1.24 -> must refuse RUNTIME_VERIFIED
+    # Case 1: numpy installed version 1.25.0 is OUTSIDE range >=1.21,<1.24 -> must refuse RUNTIME_VERIFIED.
+    # The runtime probe must report ready too, or the refusal under test would come from the probe
+    # rather than from the version check.
+    monkeypatch.setattr(planner.runtime, "verify_environment",
+                        lambda *a, **k: SimpleNamespace(tier="RUNTIME_READY", status="READY", reason="ok"))
     monkeypatch.setattr(planner.runtime, "inspect_environment_distributions",
                         lambda prefix: ({"numpy": "1.25.0"}, {"numpy"}, set()))
     ok, reason, details = planner._verify_group_interpreter(
@@ -928,12 +940,37 @@ def test_p1_03_range_constraint_enforced_against_installed(tmp_path, monkeypatch
     # Case 2: numpy installed version 1.22.0 is INSIDE range >=1.21,<1.24 -> accepted
     monkeypatch.setattr(planner.runtime, "inspect_environment_distributions",
                         lambda prefix: ({"numpy": "1.22.0"}, {"numpy"}, set()))
-    # The tier must be one the runtime actually treats as ready, or the refusal under test would
-    # come from the stub rather than from the version check.
-    monkeypatch.setattr(planner.runtime, "verify_environment",
-                        lambda *a, **k: SimpleNamespace(tier="RUNTIME_READY", status="READY", reason="ok"))
     ok2, reason2, details2 = planner._verify_group_interpreter(
         group, {"range-model": m}, {"range-model": planner.model_constraints(m)}
     )
     assert ok2 is True
     assert details2["verified_versions"]["numpy"]["installed"] == "1.22.0"
+
+
+def test_an_absent_pinned_source_blocks_verification(tmp_path, monkeypatch):
+    """A source that is not present yet must not yield RUNTIME_VERIFIED.
+
+    The evaluator-import trace cannot run before the pinned checkout exists, and treating that as
+    "nothing to verify" marked an environment verified without ever having looked at what the
+    evaluator imports -- the same interpreter then failed as soon as the source arrived.
+    """
+    monkeypatch.setattr(planner, "_evaluator_imports", lambda *a, **k: None)
+    monkeypatch.setattr(planner.subprocess, "run",
+                        lambda *a, **k: SimpleNamespace(returncode=0, stdout="", stderr=""))
+    monkeypatch.setattr(planner.runtime, "inspect_environment_distributions",
+                        lambda *a, **k: ({}, set(), set()))
+
+    interpreter = tmp_path / "env" / "bin" / "python"
+    interpreter.parent.mkdir(parents=True)
+    interpreter.touch()
+    os.chmod(interpreter, 0o755)
+    group = {"environment_id": "cir-test", "members": ["absent-source"],
+             "interpreter": str(interpreter), "conda_env_path": str(interpreter.parent.parent),
+             "constraints": {"python": [], "packages": {}, "ranges": {}, "torch": [], "torchvision": []}}
+    model = {"model_id": "absent-source", "source_dir": "Absent", "environment": {}}
+
+    ok, reason, details = planner._verify_group_interpreter(group, {"absent-source": model},
+                                                            {"absent-source": planner.model_constraints(model)})
+    assert ok is False
+    assert "cannot verify evaluator imports" in reason
+    assert details["evaluator_imports"]["absent-source"]["modules"] is None

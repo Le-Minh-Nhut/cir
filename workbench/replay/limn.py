@@ -7,7 +7,7 @@ import json
 import sys
 from argparse import ArgumentParser
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable
@@ -190,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
         "protocol": "fashioniq_val_split", "evaluation_noise_pct": 0,
         "category_model_policy": "independent",
         "complete_benchmark": aggregate["complete"], "categories": [asdict(result) for result in results],
-        "aggregate": aggregate, "timestamp": datetime.now(UTC).isoformat(),
+        "aggregate": aggregate, "timestamp": datetime.now(timezone.utc).isoformat(),
         "runtime": {"python": sys.executable, "source_root": str(args.source_root.resolve()),
                     "dataset_root": str(args.dataset_root.resolve()),
                     "checkpoint_root": str(args.checkpoint_root.resolve())},

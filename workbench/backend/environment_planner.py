@@ -1026,6 +1026,18 @@ def _verify_group_interpreter(
             continue
         spec = specs.get(mid) or {}
         eval_imports = _evaluator_imports(model, third_party_root)
+        if eval_imports is None:
+            # `None` means the trace could not run, which in practice means the pinned checkout is
+            # not present yet. Treating that as "nothing to check" would mark an environment
+            # RUNTIME_VERIFIED without ever having looked at what the evaluator imports -- and the
+            # same interpreter then fails once the source arrives. An unverifiable requirement is a
+            # refusal, not a pass.
+            source = (resolve_third_party_root(third_party_root) / str(model.get("source_dir"))).resolve() \
+                if model.get("source_dir") else None
+            detail = f"pinned source not present ({source})" if source and not source.is_dir() \
+                else "no evaluator entry point could be resolved for this model"
+            details["evaluator_imports"][mid] = {"modules": None, "returncode": None, "reason": detail}
+            return False, f"{mid}: cannot verify evaluator imports: {detail}", details
         if eval_imports:
             code = "; ".join(f"import {m}" for m in sorted(eval_imports))
             try:
