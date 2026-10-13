@@ -975,13 +975,19 @@ def ledger_hmac_key(config: WorkbenchConfig) -> bytes:
     config_home = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
     private_key_path = config_home / "cir" / "workbench_ledger_key"
     if legacy_key_path.is_file() and private_key_path.is_file():
-        # Two key files is a state that cannot be resolved by preference: whichever this function
-        # picked would be the wrong one for a ledger signed with the other, and the operator would
-        # see only an unverifiable ledger. Fail closed and say exactly what to do.
-        raise LedgerKeyError(
-            "two ledger keys exist "
-            f"({legacy_key_path} and {private_key_path}); keep one and remove the other, or set "
-            "WORKBENCH_LEDGER_KEY explicitly to choose")
+        # Two key files disagreeing is a state that cannot be resolved by preference: whichever this
+        # function picked would be the wrong one for a ledger signed with the other, and the operator
+        # would see only an unverifiable ledger. Identical bytes are a completed migration, not a
+        # conflict, so that case proceeds.
+        try:
+            same = legacy_key_path.read_bytes() == private_key_path.read_bytes()
+        except OSError as error:
+            raise LedgerKeyError("cannot compare the two ledger key files") from error
+        if not same:
+            raise LedgerKeyError(
+                "two different ledger keys exist "
+                f"({legacy_key_path} and {private_key_path}); keep one and remove the other, or set "
+                "WORKBENCH_LEDGER_KEY explicitly to choose")
     if legacy_key_path.is_file():
         key_path = legacy_key_path
         key_lock_path = repo_root / ".workbench_ledger_key.lock"

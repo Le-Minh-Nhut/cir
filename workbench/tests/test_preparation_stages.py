@@ -392,9 +392,11 @@ def test_fixed_dataset_link_authorization_semantics(tmp_path: Path, monkeypatch)
     prep_valid = next(s for s in stages_valid if s.name == "preparation" and s.model_id == "csmcir")
     assert prep_valid.required_capabilities == frozenset()
     # The command is stable across runs of a workflow (it is part of the stage fingerprint), so an
-    # `--apply` invocation builds the executable form even when the link is already correct. Nothing
-    # executes it here: the stage claims no capability, so the runner treats it as read-only.
-    assert prep_valid.commands[0].count("--execute") in (0, 1)
+    # `--apply` invocation builds the executable form even when the link is already correct. The
+    # stage claims no capability, which is what makes it read-only: the runner refuses to execute a
+    # capability-bearing stage without authorization, and executes nothing here.
+    assert "--execute" in prep_valid.commands[0]
+    assert "--allow-preparation" in prep_valid.commands[0]
     sync_valid = next(s for s in stages_valid if s.name == "sync" and s.model_id == "csmcir")
     assert sync_valid.required_capabilities == frozenset()
     assert "--verify-only" in sync_valid.commands[0]

@@ -572,12 +572,11 @@ def test_scenario_a_real_run_sh_cold_start_exercises_full_flow(cold_workbench: d
 
 def test_strengthened_resume_reuses_all_verified_work_and_creates_no_new_invocations(cold_workbench: dict) -> None:
     """Strengthened resume: assert SAME run_id, SAME proof digest, SAME report digest, zero new invocations."""
-    # First invocation. The environment is created *during* this run, so the evaluation stage's
-    # execution identity (which hashes the installed environment) is only settled afterwards.
+    # First invocation on a cold workbench: autopilot provisions the environments *before* it builds
+    # the stage list, so the evaluation stage's execution identity is already final on this run and
+    # the resume below must reuse every completed stage. That cold-to-warm transition is what this
+    # test exists to cover.
     _run_sh_autopilot(cold_workbench, "--apply")
-    # Settle that identity, then measure: resume is what this test is about, not the ordinary rerun
-    # that the environment creation itself necessarily causes.
-    _run_sh_autopilot(cold_workbench, "--apply", "--resume")
     first_summary = _summary(cold_workbench)
 
     completed_models = [

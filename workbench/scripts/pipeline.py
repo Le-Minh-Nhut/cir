@@ -1511,7 +1511,8 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             # A receipt can outlive the files it promised, so a declared resize is only satisfied
             # when its receipt AND the images it recorded are still present. Without this a resumed
             # run would skip preparation over a dataset whose resized set had been emptied.
-            if prepare_model.resize_is_complete(config, m, prep_contract) is False:
+            if prepare_model.resize_is_complete(replace(config, FASHIONIQ_ROOT=prep_dataset_root),
+                                                m, prep_contract) is False:
                 owed_artifacts = prep_artifacts
         link_is_owed = bool(prep_link) and prep_owner == mid and not is_link_valid
 

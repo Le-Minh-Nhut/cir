@@ -67,8 +67,14 @@ python -c "import secrets,pathlib;pathlib.Path.home().joinpath('.config/cir/work
 export WORKBENCH_LEDGER_KEY="$(cat ~/.config/cir/workbench_ledger_key)"
 
 cp workbench/configs/pc_autopilot.all_available.yaml /path/outside/repo/pc.yaml
-$EDITOR /path/outside/repo/pc.yaml     # set paths.dataset_root and the artifact roots
+$EDITOR /path/outside/repo/pc.yaml
 ```
+
+Every entry under `paths` that is not absolute is resolved **relative to the config file's own
+directory**, so a config copied out of the repository must use absolute paths for all six keys:
+`registry`, `dataset_root`, `artifacts`, `checkpoints`, `results`, `third_party`. Point them at this
+machine's real locations. `load_config` refuses a config whose `registry` does not exist rather than
+guessing, so a wrong relative path fails immediately and names the key.
 
 Then autopilot acquires the pinned sources, plans and provisions the environments, prepares the
 dataset-derived artifacts, obtains the obtainable assets, verifies checkpoints and the GPU, and runs

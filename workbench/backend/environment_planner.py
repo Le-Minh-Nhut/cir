@@ -980,7 +980,15 @@ def apply_interpreter_mapping(models: list[dict], plan: dict,
             # had its prefix cleaned up, and handing that path to the evaluator presented a
             # nonexistent interpreter as the environment; a group whose environment is already
             # installed at the planned path is exactly the reuse case and stays usable.
-            if group.get("state") == "RUNTIME_VERIFIED" or Path(interpreter).is_file():
+            # A path is usable as an interpreter only if it is an executable file right now: a
+            # verified group's interpreter can have been deleted afterwards, and a mere existing
+            # file is not a runnable interpreter.
+            try:
+                usable = Path(interpreter).is_file() and os.access(interpreter, os.X_OK)
+            except OSError:
+                usable = False
+            if usable and (group.get("state") == "RUNTIME_VERIFIED"
+                           or _is_workbench_managed(group.get("conda_env_path"), group.get("environment_id"))):
                 mapping[mid] = interpreter
             else:
                 mapping[mid] = None
@@ -1022,6 +1030,10 @@ def _verify_group_interpreter(
     third_party_root: Path | None = None,
 ) -> tuple[bool, str, dict]:
     raw = group.get("interpreter")
+    if not raw:
+        # A group whose interpreter was cleared (nothing verified) has nothing to verify against;
+        # this is a refusal with a reason, not an exception.
+        return False, "no interpreter is recorded for this group", {}
     interpreter = Path(raw)
     if not interpreter.is_file() or not os.access(interpreter, os.X_OK):
         return False, f"Interpreter {interpreter} is missing or not executable", {}
@@ -1208,11 +1220,10 @@ def _provision_group(
     # Reuse is a claim that this prefix is ours. Either the workbench recorded it as managed, or the
     # operator explicitly pointed a model at it through its environment variable; an unmarked prefix
     # that merely lives at the planned path might be the operator's own environment.
-    operator_supplied = any(
-        (by_id[mid].get("environment") or {}).get("python_env_var")
-        and os.environ.get((by_id[mid].get("environment") or {}).get("python_env_var"))
-        and Path(os.environ[(by_id[mid].get("environment") or {})["python_env_var"]]).resolve() == interpreter.resolve()
-        for mid in group["members"] if mid in by_id)
+    # Operator intent is per model, not per group. One model's explicit interpreter must not make a
+    # whole shared group adopt a prefix the other members never authorized.
+    operator_supplied = all(
+        _operator_declared_interpreter(by_id[mid], interpreter) for mid in group["members"] if mid in by_id)
     marked = _is_workbench_managed(prefix, group["environment_id"])
     if (marked or operator_supplied) and interpreter.is_file() and os.access(interpreter, os.X_OK) and not prefix.name.startswith(".staging-"):
         ok, reason, details = _verify_group_interpreter(group, by_id, specs, third_party_root)
@@ -1585,6 +1596,23 @@ def load_environment_assignment(path: Path | str) -> dict:
     p = Path(path).resolve()
     with p.open(encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _operator_declared_interpreter(model: dict, interpreter: Path) -> bool:
+    """Whether the operator pointed this model at this exact interpreter.
+
+    Compared by prefix rather than by resolving the interpreter: a conda `bin/python` is commonly a
+    symlink chain ending at a shared base binary, so resolving both sides made an unrelated model
+    look like it matched a system interpreter.
+    """
+    variable = (model.get("environment") or {}).get("python_env_var")
+    configured = os.environ.get(variable) if variable else None
+    if not configured:
+        return False
+    try:
+        return Path(configured).parent == interpreter.parent
+    except OSError:
+        return False
 
 
 def _clear_unverified_group_interpreter(group: dict) -> None:

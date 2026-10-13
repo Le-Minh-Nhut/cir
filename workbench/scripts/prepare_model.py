@@ -122,21 +122,34 @@ def resize_is_complete(config, model: dict, contract: dict) -> bool | None:
         return False
     base = config.FASHIONIQ_ROOT / ("resized_images" if layout == "flat" else "resized_image")
     if layout == "flat":
-        # Every category writes into the one directory, so the honest check is the total the receipt
-        # recorded, not a per-category count of a shared pool. Counting the pool per category let a
-        # dataset with one category missing still look complete.
+        # Every category writes into the one directory, so a per-category count of the shared pool is
+        # meaningless. The receipt records the identifiers it covered, and those are what is checked:
+        # a count could be satisfied by unrelated files, and duplicate identifiers across categories
+        # would inflate an expected total that unique files can never reach.
         if not base.is_dir():
             return False
-        expected_total = sum(int(counts.get("present") or 0) for counts in categories.values()
-                             if isinstance(counts, dict))
-        present_total = len([p for p in base.iterdir() if p.is_file() and p.suffix == ".jpg"])
-        return present_total >= expected_total
+        expected_ids: set[str] = set()
+        for counts in categories.values():
+            if not isinstance(counts, dict) or counts.get("expected") != counts.get("present"):
+                return False
+            ids = counts.get("ids")
+            if not isinstance(ids, list) or len(ids) != int(counts.get("present") or -1):
+                return False
+            expected_ids.update(str(item) for item in ids)
+        return all((base / f"{identifier}.jpg").is_file() for identifier in expected_ids)
     for category, counts in categories.items():
         if not isinstance(counts, dict) or counts.get("expected") != counts.get("present"):
             return False
         target = base / category
         if not target.is_dir():
             return False
+        ids = counts.get("ids")
+        if isinstance(ids, list) and ids:
+            # The receipt names the files it wrote, so the check is membership, not a count: extra
+            # images in the directory cannot stand in for a missing one.
+            if any(not (target / f"{identifier}.jpg").is_file() for identifier in ids):
+                return False
+            continue
         present = len([p for p in target.iterdir() if p.is_file() and p.suffix == ".jpg"])
         if present < int(counts.get("present") or 0):
             return False
