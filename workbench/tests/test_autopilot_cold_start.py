@@ -333,7 +333,7 @@ def cold_workbench(tmp_path: Path) -> dict:
     # 2. NO WORKBENCH_<MODEL>_PYTHON environment variables are exported
     env = {
         **os.environ,
-        "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}",
+        "PATH": f"{fake_bin}:{Path(sys.executable).parent}:{os.environ.get('PATH', '')}",
         "PYTHONPATH": str(REPOSITORY),
         "CIR_REPO_ROOT": str(ws),
         "CIR_DATA_ROOT": str(ws / "data"),
@@ -824,6 +824,68 @@ def test_offline_run_does_not_publish_unverified_assignment_interpreter(cold_wor
     assert by_id["alpha"]["status"] == "BLOCKED_ENVIRONMENT"
     assert any("WORKBENCH_ALPHA_PYTHON=None [UNCONFIGURED/UNCONFIGURED]" in reason
                for reason in by_id["alpha"]["blockers"])
+
+def test_environment_stage_requires_install_capability_to_create_environment(cold_workbench: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The environment stage requires allow_env_install capability to create a new environment."""
+    from argparse import Namespace
+    from dataclasses import replace
+    from workbench.backend.operator_config import resolve_config
+    from workbench.scripts.pipeline import all_stages, run_stages
+
+    monkeypatch.setenv("WORKBENCH_REGISTRY_PATH", str(cold_workbench["ws"] / "models.yaml"))
+    cfg = replace(
+        resolve_config(),
+        CIR_REPO_ROOT=cold_workbench["ws"],
+        CIR_DATA_ROOT=cold_workbench["ws"] / "data",
+        FASHIONIQ_ROOT=cold_workbench["data"],
+        WORKBENCH_ARTIFACTS_ROOT=cold_workbench["artifacts"],
+        WORKBENCH_CHECKPOINT_ROOT=cold_workbench["checkpoints"],
+        WORKBENCH_RESULTS_ROOT=cold_workbench["results"],
+        WORKBENCH_THIRD_PARTY_ROOT=cold_workbench["third_party"],
+    )
+    # 1. Pipeline construction: creating requires allow_env_install, plain verification does not
+    create_args = Namespace(
+        mode="all", model="alpha", selected_model_ids=["alpha"],
+        checkpoint_ids=None, checkpoint_policy=None, checkpoint_overrides={},
+        dataset_root=cold_workbench["data"], checkpoint=None, protocol=None,
+        top_k=200, continue_on_error=True, allow_env_install=True,
+        allow_preparation=False, apply=True, verify_gpu=False,
+        sync_sources=True, download_checkpoints=True,
+        download_auxiliary_assets=False, evaluate=True, rebuild_index=False,
+    )
+    stages_create = all_stages(create_args, cfg)
+    env_create = next(s for s in stages_create if s.name == "environment" and s.model_id == "alpha")
+    assert "allow_env_install" in env_create.required_capabilities
+    assert "--create" in env_create.commands[0]
+
+    verify_args = Namespace(
+        mode="all", model="alpha", selected_model_ids=["alpha"],
+        checkpoint_ids=None, checkpoint_policy=None, checkpoint_overrides={},
+        dataset_root=cold_workbench["data"], checkpoint=None, protocol=None,
+        top_k=200, continue_on_error=True, allow_env_install=False,
+        allow_preparation=False, apply=True, verify_gpu=False,
+        sync_sources=True, download_checkpoints=True,
+        download_auxiliary_assets=False, evaluate=True, rebuild_index=False,
+    )
+    stages_verify = all_stages(verify_args, cfg)
+    env_verify = next(s for s in stages_verify if s.name == "environment" and s.model_id == "alpha")
+    assert "allow_env_install" not in env_verify.required_capabilities
+    assert "--create" not in env_verify.commands[0]
+
+    # 2. Runner execution: a creation stage executed without authorized capability is refused
+    state_path = cold_workbench["artifacts"] / "test_cap_state.json"
+    rc = run_stages(
+        [env_create],
+        apply=True,
+        authorized_capabilities=set(),
+        state_path=state_path,
+        config=cfg,
+        mode="all",
+        continue_on_error=True,
+    )
+    assert rc != 0
+    state = json.loads(state_path.read_text())
+    assert state["stages"]["environment:alpha"]["status"] == "BLOCKED_AUTHORIZATION_REQUIRED"
 
 def test_first_run_gpu_capability_state_machine(cold_workbench: dict) -> None:
     """First-run GPU state machine: no capability, synthetic verification succeeds, stale blocks, valid reused."""
