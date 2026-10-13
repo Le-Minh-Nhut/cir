@@ -89,6 +89,17 @@ def test_e10_manage_environment_refuses_unsafe_interpreter(monkeypatch, tmp_path
     spec = importlib.util.spec_from_file_location("manage_environment_adv", Path("workbench/scripts/manage_environment.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+    # The subject under test is the unsafe-interpreter refusal, which only runs for a model that is
+    # NOT in a shared group. Point the artifacts root at a fresh directory so a generated
+    # environment_assignment.json left behind in the repository cannot divert the call into group
+    # provisioning, where the refusal never happens and this assertion tests nothing.
+    from workbench.backend.operator_config import WorkbenchConfig
+    isolated = WorkbenchConfig(
+        tmp_path, tmp_path / "data", tmp_path / "FashionIQ", "127.0.0.1", 8000, 5173,
+        tmp_path / "checkpoints", tmp_path / "results", tmp_path / "third_party",
+        WORKBENCH_ARTIFACTS_ROOT=tmp_path / "artifacts",
+    )
+    monkeypatch.setattr(mod, "resolve_config", lambda: isolated)
     # Simulate an interpreter configured to system python
     monkeypatch.setattr(mod, "status", lambda model, config: {
         "model_id": model["model_id"], "source_synced": True,

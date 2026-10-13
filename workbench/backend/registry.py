@@ -26,7 +26,15 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
     if registry.get("schema_version") != 1 or not isinstance(registry.get("models"), list):
         raise ValueError("unsupported model registry")
     layouts = {"fashioniq_standard", "fashioniq_ilearn_resized", "fashioniq_ilearn_resized_training", "fashioniq_clvc_resized", "fashioniq_dcnet"}
-    mapping_statuses = {"VERIFIED_METADATA", "UNVERIFIED", "URL_UNRESOLVED", "ARTIFACT_ASSOCIATED_UNVALIDATED"}
+    mapping_statuses = {"VERIFIED_METADATA", "UNVERIFIED", "ARTIFACT_ASSOCIATED_UNVALIDATED"}
+    #: A variant's ``status`` records where its bytes come from; ``checkpoint_mapping_status``
+    #: records whether the upstream repository establishes WHICH benchmark variant it is. They are
+    #: separate facts about the same asset, so they have separate vocabularies: a mapping can be
+    #: verified while the file has no source at all, and an unresolved URL says nothing about the
+    #: mapping. Letting one value be legal in both places previously hid an entry that had the two
+    #: fields transposed, which made a runnable model unresolvable.
+    source_statuses = {"URL_VERIFIED", "NO_CLEAN_CHECKPOINT", "URL_UNRESOLVED", "NO_SOURCE",
+                       "CHECKPOINT_MAPPING_UNVERIFIED"}
     preparation_contracts = load_preparation_contracts()
     for model in registry["models"]:
         native_protocol = model["native_protocol"]
@@ -77,6 +85,22 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
                 raise ValueError(f"non-clean evaluation policy for {model['model_id']}")
             if checkpoint["checkpoint_mapping_status"] not in mapping_statuses:
                 raise ValueError(f"unknown checkpoint mapping state for {model['model_id']}")
+            # The two fields must agree on whether the mapping is established. Only one source
+            # state means "we do not know which benchmark variant this is"; every other state
+            # records a fact about obtainability, which is independent of the mapping. This is what
+            # catches the transposition: a mapping field claiming verification while the source
+            # field says the mapping is unresolved. A variant that records no source state is not
+            # making a claim about the mapping, so there is nothing to contradict.
+            source_state = checkpoint.get("status")
+            if source_state is not None:
+                if source_state not in source_statuses:
+                    raise ValueError(f"unknown checkpoint source state {source_state!r} for "
+                                     f"{model['model_id']}")
+                mapping_unverified = source_state == "CHECKPOINT_MAPPING_UNVERIFIED"
+                if mapping_unverified != (checkpoint["checkpoint_mapping_status"] == "UNVERIFIED"):
+                    raise ValueError(
+                        f"checkpoint source state {source_state!r} and mapping state "
+                        f"{checkpoint['checkpoint_mapping_status']!r} disagree for {model['model_id']}")
     return registry
 
 

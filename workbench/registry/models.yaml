@@ -412,8 +412,8 @@ models:
         evaluation_noise_pct: 0
         expected_size_bytes: null
         expected_sha256: null
-        status: VERIFIED_METADATA
-        checkpoint_mapping_status: URL_UNRESOLVED
+        status: URL_UNRESOLVED
+        checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: pair
     environment:
       python_env_var: WORKBENCH_PAIR_PYTHON

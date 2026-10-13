@@ -32,7 +32,7 @@ round.
 | `workbench/backend/metrics_extraction.py` | backend | 320 | `e45524a2239f9429` | FULLY_REVIEWED |
 | `workbench/backend/operator_config.py` | backend | 108 | `46585f87a66db836` | FULLY_REVIEWED |
 | `workbench/backend/preflight.py` | backend | 131 | `aba473962c259aee` | FULLY_REVIEWED |
-| `workbench/backend/registry.py` | backend | 646 | `dd8772acb7afe6a5` | FULLY_REVIEWED |
+| `workbench/backend/registry.py` | backend | 670 | `f9346ea50b65b061` | FULLY_REVIEWED |
 | `workbench/backend/runtime.py` | backend | 2113 | `62e8775914affe8b` | FULLY_REVIEWED |
 | `workbench/backend/schemas/__init__.py` | backend | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
 | `workbench/backend/schemas/results.py` | backend | 127 | `c145a75b38651da8` | FULLY_REVIEWED |

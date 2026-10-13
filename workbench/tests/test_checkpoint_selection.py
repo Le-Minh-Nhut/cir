@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+import yaml
 
 from workbench.backend.checkpoint_selection import (INCLUDE_FLAGGED_CONDITIONS, STRICT_CLEAN,
                                                     select_checkpoints)
@@ -137,3 +138,64 @@ def test_the_val_split_family_records_no_training_condition(models) -> None:
     selection = select_checkpoints(models["limn"], policy=INCLUDE_FLAGGED_CONDITIONS)
     assert selection.checkpoint_ids == ("base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee")
     assert selection.bundle_id == "base_iter0_all_categories"
+
+def test_a_verified_mapping_keeps_its_source_state_separate(models) -> None:
+    """A verified mapping and a verified URL are different facts and must not be transposed.
+
+    ENCODER's FashionIQ filename and mapping are established by its official README, but its direct
+    file URL is unresolved. That pairing (verified mapping, unresolved URL) must stay legal, because
+    the operator can still obtain the file from the author's Drive folder and the registry says so.
+    """
+    variant = models["encoder"]["checkpoint_variants"][0]
+    assert variant["checkpoint_mapping_status"] == "VERIFIED_METADATA"
+    assert variant["status"] == "URL_UNRESOLVED"
+    assert variant["download_url"] is None
+
+def test_an_unverified_mapping_is_refused_even_when_the_bytes_are_in_hand(models) -> None:
+    """Provenance is not obtainability: an unverified mapping must not be selected as clean.
+
+    PAIR ships two checkpoints and the upstream repository does not establish which is the FashionIQ
+    benchmark variant. Having downloaded them changes nothing, so selection must still refuse them
+    rather than evaluate one as if the mapping were known.
+    """
+    selection = select_checkpoints(models["pair"], policy=STRICT_CLEAN)
+    assert selection.blocked
+    assert selection.strict_clean_checkpoint_available is False
+    assert all("UNVERIFIED" in option for option in selection.evidence["available"])
+
+def test_a_transposed_mapping_and_source_state_is_rejected(tmp_path) -> None:
+    """The registry validator must catch the two fields swapped.
+
+    This is the defect that made ENCODER unresolvable: ``checkpoint_mapping_status`` accepted
+    ``URL_UNRESOLVED`` as a legal value, so an entry with the fields transposed loaded cleanly and
+    the model was silently blocked. Each field now has its own vocabulary, and the two must agree on
+    whether the mapping is verified.
+    """
+    from workbench.backend.registry import load_registry
+
+    good = load_registry()["models"][0]["checkpoint_variants"][0]
+
+    def registry_with(**variant_overrides):
+        variant = dict(good)
+        variant.update(variant_overrides)
+        return {"schema_version": 1, "protocols": {},
+                "models": [{"model_id": "transposed", "native_protocol": None, "supported_protocols": [],
+                            "source_available": False, "checkpoint_variants": [variant]}]}
+
+    # (a) The exact ENCODER transposition: the source value in the mapping field is no longer a
+    # legal mapping state, so it cannot be spelled this way at all.
+    path = tmp_path / "a.yaml"
+    path.write_text(yaml.safe_dump(registry_with(checkpoint_mapping_status="URL_UNRESOLVED",
+                                                 status="VERIFIED_METADATA")), encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_registry(path)
+
+    # (b) Both values are individually legal but describe contradictory facts: the source is
+    # unverified while the mapping claims to be verified. Only the coherence rule can catch this.
+    path = tmp_path / "b.yaml"
+    path.write_text(yaml.safe_dump(registry_with(status="CHECKPOINT_MAPPING_UNVERIFIED",
+                                                 checkpoint_mapping_status="VERIFIED_METADATA")),
+                    encoding="utf-8")
+    with pytest.raises(ValueError) as failure:
+        load_registry(path)
+    assert "disagree" in str(failure.value)

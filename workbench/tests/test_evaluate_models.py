@@ -297,7 +297,6 @@ def test_encoder_requires_native_layout_before_openclip(monkeypatch, tmp_path: P
     # The layout check reports every missing requirement it finds, and the image-extension rule
     # is one of them; assert on membership rather than on an exact list, so adding a genuine
     # requirement does not silently pass.
-    assert "checkpoint mapping unresolved" in reasons
     assert f"FashionIQ fashioniq_ilearn_resized requirement missing: {dataset_root / 'captions'}" in reasons
     assert f"ENCODER evaluator import missing: {source / 'datasets1.py'}" in reasons
     assert f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}" in reasons
@@ -319,10 +318,7 @@ def test_encoder_reports_actual_missing_layout_path(monkeypatch, tmp_path: Path)
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
     assert plan is None
-    assert reasons == [
-        f"FashionIQ fashioniq_ilearn_resized requirement missing: {missing}",
-        "checkpoint mapping unresolved",
-    ]
+    assert reasons == [f"FashionIQ fashioniq_ilearn_resized requirement missing: {missing}"]
 
 
 def test_encoder_complete_layout_still_blocks_missing_evaluator_import(monkeypatch, tmp_path: Path) -> None:
@@ -336,10 +332,7 @@ def test_encoder_complete_layout_still_blocks_missing_evaluator_import(monkeypat
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
-    assert reasons == [
-        f"ENCODER evaluator import missing: {source / 'datasets1.py'}",
-        "checkpoint mapping unresolved",
-    ]
+    assert reasons == [f"ENCODER evaluator import missing: {source / 'datasets1.py'}"]
 
 def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
@@ -353,13 +346,16 @@ def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, t
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
     assert plan is None
-    assert reasons == [
-        f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}",
-        "checkpoint mapping unresolved",
-    ]
+    assert reasons == [f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}"]
 
 
-def test_encoder_complete_local_prerequisites_still_block_unresolved_mapping(monkeypatch, tmp_path: Path) -> None:
+def test_encoder_complete_local_prerequisites_yield_a_plan(monkeypatch, tmp_path: Path) -> None:
+    """A verified mapping must not be blocked as if it were unresolved.
+
+    ENCODER's registry entry once carried its two state fields transposed, so a complete local
+    installation still produced "checkpoint mapping unresolved" and no plan. With the entry
+    corrected, every prerequisite satisfied must yield a plan rather than a blocker.
+    """
     module = load_module()
     model = records()["encoder"]
     source, _, _ = prepare_source(monkeypatch, module, tmp_path, model)
@@ -370,8 +366,11 @@ def test_encoder_complete_local_prerequisites_still_block_unresolved_mapping(mon
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
-    assert plan is None
-    assert reasons == ["checkpoint mapping unresolved"]
+    assert reasons == []
+    assert plan is not None
+    assert plan.model_id == "encoder"
+    assert plan.checkpoint_id == "fashioniq"
+
 def test_encoder_command_preserves_upstream_trailing_root_separator(tmp_path: Path) -> None:
     from workbench.backend.adapters.models import EncoderAdapter
     from workbench.backend.adapters.base import EvalRequest
