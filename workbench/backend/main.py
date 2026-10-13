@@ -4,7 +4,7 @@ import csv
 import io
 import json
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 import uuid
 from pathlib import Path
 
@@ -123,7 +123,7 @@ def annotations(query_id: str | None = None, protocol_id: str | None = None):
 def save_annotation(payload: AnnotationInput):
     if invalid := sorted(set(payload.labels) - set(LABELS)):
         raise HTTPException(400, {"error": "invalid_annotation_labels", "message": "Unknown annotation labels.", "details": {"labels": invalid}})
-    record = Annotation(**payload.model_dump(), updated_at=datetime.now(UTC)).model_dump(mode="json")
+    record = Annotation(**payload.model_dump(), updated_at=datetime.now(timezone.utc)).model_dump(mode="json")
     records = [item for item in read_json(ANNOTATIONS_PATH) if (item["query_id"], item["protocol_id"]) != (payload.query_id, payload.protocol_id)] + [record]
     write_json(ANNOTATIONS_PATH, records)
     return record
@@ -152,7 +152,7 @@ def save_cohort(payload: CohortInput):
     unknown = sorted(set(payload.query_ids) - set(maps[payload.run_ids[0]]))
     if unknown:
         raise WorkbenchError("query_alignment_mismatch", "Cohort contains query IDs outside selected run universe.", {"unknown_query_ids": unknown[:20], "unknown_query_count": len(unknown)})
-    record = SavedCohort(**payload.model_dump(), created_at=datetime.now(UTC)).model_dump(mode="json")
+    record = SavedCohort(**payload.model_dump(), created_at=datetime.now(timezone.utc)).model_dump(mode="json")
     records = [item for item in read_json(COHORTS_PATH) if item["cohort_id"] != payload.cohort_id] + [record]
     write_json(COHORTS_PATH, records)
     return record
@@ -222,7 +222,7 @@ def queue_job(payload: JobInput):
     # The queue runs the *audited orchestrator*, not the adapter command directly. Going
     # straight to the model's evaluator bypassed the invocation ledger, so a result produced
     # through the API left no audit entry and could not be distinguished from an unrun one.
-    run_id = f"{datetime.now(UTC):%Y%m%dT%H%M%S%fZ}_{uuid.uuid4().hex[:8]}"
+    run_id = f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%fZ}_{uuid.uuid4().hex[:8]}"
     argv = [sys.executable, str(SCRIPTS_DIR / "evaluate_models.py"),
             "--model", plan.model_id, "--checkpoint", plan.checkpoint_id,
             "--protocol", plan.protocol, "--dataset-root", str(plan.dataset_root),

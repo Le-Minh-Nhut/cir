@@ -236,3 +236,85 @@ def test_configuration_digest_includes_checkpoint_policy_and_overrides(tmp_path:
     # Changing overrides changes experiment identity
     assert digest_clean != digest_override
     assert digest_flagged != digest_override
+
+
+def _budget_config(tmp_path: Path, *, max_bytes: int, rows: list[dict], registry_models: list[dict],
+                   network: bool = True, large: bool = True):
+    """A config whose download budget is enforced against a given plan row set."""
+    dirs = {name: tmp_path / name for name in ("dataset", "artifacts", "checkpoints", "results", "third_party")}
+    for directory in dirs.values():
+        directory.mkdir(exist_ok=True)
+    registry_path = tmp_path / "registry.yaml"
+    registry_path.write_text("fake registry", encoding="utf-8")
+    config = {
+        "schema_version": 1,
+        "selected_models": [row["model_id"] for row in rows],
+        "paths": {"registry": str(registry_path), "dataset_root": str(dirs["dataset"]),
+                  "artifacts": str(dirs["artifacts"]), "checkpoints": str(dirs["checkpoints"]),
+                  "results": str(dirs["results"]), "third_party": str(dirs["third_party"])},
+        "budgets": {"max_download_bytes": max_bytes, "max_models": 20, "top_k": 10},
+        "permissions": {**{key: False for key in autopilot.PERMISSIONS},
+                        "allow_network": network, "allow_large_downloads": large},
+    }
+    path = tmp_path / "autopilot.yaml"
+    path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    return autopilot.load_config(path, registry={"models": registry_models})
+
+
+def _variant(checkpoint_id: str, size: int, url: str = "https://example.invalid/ckpt.pt") -> dict:
+    return {"checkpoint_id": checkpoint_id, "download_url": url, "expected_size_bytes": size,
+            "filename": f"{checkpoint_id}.pt"}
+
+
+def test_the_download_budget_charges_only_the_selected_checkpoints(tmp_path: Path) -> None:
+    """A model with several variants must cost the budget exactly what this run selected.
+
+    Charging the first registry variant (or every bundle member) refused runs that would have
+    downloaded almost nothing, and mis-reported the reason as a budget violation.
+    """
+    model = {
+        "model_id": "multi",
+        "checkpoint_variants": [_variant("small", 100), _variant("huge", 10_000_000)],
+        "checkpoint_bundles": [],
+    }
+    rows = [{"model_id": "multi", "status": "NOT_RUN", "checkpoint_ids": ["small"], "blockers": []}]
+    config = _budget_config(tmp_path, max_bytes=1000, rows=rows, registry_models=[model])
+    autopilot._enforce_download_budget(config, rows)
+    assert rows[0]["status"] == "NOT_RUN", rows[0]
+
+    rows[0]["checkpoint_ids"] = ["huge"]
+    autopilot._enforce_download_budget(config, rows)
+    assert rows[0]["status"] == "BLOCKED_CHECKPOINT"
+    assert "exceeded" in rows[0]["blockers"][0]
+
+
+def test_the_download_budget_expands_a_selected_bundle_to_its_members(tmp_path: Path) -> None:
+    """Selecting a bundle means downloading its members, so the budget must count them."""
+    model = {
+        "model_id": "bundled",
+        "checkpoint_variants": [_variant("a", 400), _variant("b", 400), _variant("other", 10_000_000)],
+        "checkpoint_bundles": [{"bundle_id": "bundle-x", "required_checkpoint_ids": ["a", "b"],
+                                "structure": "per_category", "mapping_status": "VERIFIED", "notes": ""}],
+    }
+    rows = [{"model_id": "bundled", "status": "NOT_RUN", "checkpoint_ids": ["bundle-x"], "blockers": []}]
+    config = _budget_config(tmp_path, max_bytes=1000, rows=rows, registry_models=[model])
+    autopilot._enforce_download_budget(config, rows)
+    assert rows[0]["status"] == "NOT_RUN", rows[0]
+
+    # The unrelated third variant is not part of the selected bundle and must not be charged.
+    rows[0]["checkpoint_ids"] = ["bundle-x"]
+    tight = _budget_config(tmp_path, max_bytes=700, rows=rows, registry_models=[model])
+    autopilot._enforce_download_budget(tight, rows)
+    assert rows[0]["status"] == "BLOCKED_CHECKPOINT"
+
+
+def test_an_unknown_selected_checkpoint_size_blocks_rather_than_guessing(tmp_path: Path) -> None:
+    model = {"model_id": "unknown-size",
+             "checkpoint_variants": [{"checkpoint_id": "x", "download_url": "https://example.invalid/x.pt",
+                                      "expected_size_bytes": None, "filename": "x.pt"}],
+             "checkpoint_bundles": []}
+    rows = [{"model_id": "unknown-size", "status": "NOT_RUN", "checkpoint_ids": ["x"], "blockers": []}]
+    config = _budget_config(tmp_path, max_bytes=10_000, rows=rows, registry_models=[model])
+    autopilot._enforce_download_budget(config, rows)
+    assert rows[0]["status"] == "BLOCKED_CHECKPOINT"
+    assert "unknown" in rows[0]["blockers"][0]

@@ -80,7 +80,7 @@ def test_scenario_b_shared_conda_environment_deduplication(tmp_path: Path, monke
     # 2. Controlled fake package manager installation
     install_count = 0
 
-    def mock_provision(g, by_id, specs, artifacts_root, third_party_root, allowed, solver_cmd):
+    def mock_provision(g, by_id, specs, artifacts_root, third_party_root, allowed, solver_cmd, network_allowed=True):
         nonlocal install_count
         install_count += 1
         prefix = Path(g["conda_env_path"])
@@ -147,7 +147,7 @@ def test_scenario_c_group_split_preserves_existing_environment_and_sets_statuses
     # Simulate combined failure -> bounded split -> good succeeds alone, bad fails alone
     attempts = []
 
-    def mock_provision(g, by_id, specs, artifacts_root, third_party_root, allowed, solver_cmd):
+    def mock_provision(g, by_id, specs, artifacts_root, third_party_root, allowed, solver_cmd, network_allowed=True):
         members = list(g["members"])
         attempts.append(members)
         if "bad-model" in members and "good-model" in members:

@@ -7,7 +7,7 @@ import json
 import os
 import sys
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -195,7 +195,11 @@ def _environment_plan(models: list[dict[str, Any]], *, dry_run: bool,
 
 def _artifact_paths(config: AutopilotConfig) -> dict[str, Path]:
     artifacts, reports = config.paths["artifacts"], config.paths["artifacts"] / "reports"
-    return {"plan": artifacts / "autopilot_execution_plan.json", "pipeline_state": artifacts / "autopilot_pipeline_state.json",
+    return {"plan": artifacts / "autopilot_execution_plan.json",
+            # Sources are acquired before the main stage list exists, so their stages need their own
+            # state file rather than sharing one that has not been read yet.
+            "source_acquisition_state": artifacts / "source_acquisition_state.json",
+            "pipeline_state": artifacts / "autopilot_pipeline_state.json",
             "summary_json": reports / "autopilot_summary.json", "summary_md": reports / "autopilot_summary.md",
             "csv": reports / "autopilot_results.csv", "blockers": reports / "blockers.json",
             "manifest": reports / "run_manifest.json"}
@@ -216,7 +220,62 @@ def _workbench_config(config: AutopilotConfig) -> WorkbenchConfig:
                    WORKBENCH_THIRD_PARTY_ROOT=config.paths["third_party"])
 
 
+def _acquire_sources(config: AutopilotConfig, *, resume: bool) -> dict[str, Any]:
+    """Fetch each selected model's pinned checkout that is not already present.
+
+    Only a *missing* checkout is acquired here; an existing one is left to the DAG's sync stage,
+    which knows how to verify a pin and when to refuse a dirty repository. A missing checkout with
+    no network authorization is recorded, not retried, because its absence changes what the
+    environment plan can be derived from.
+    """
+    from workbench.scripts import sync_upstreams
+    from workbench.scripts import pipeline
+
+    by_id = {model["model_id"]: model for model in config.registry["models"]}
+    stages = []
+    blocked: list[dict[str, Any]] = []
+    for mid in config.selected_model_ids:
+        model = by_id[mid]
+        if not model.get("source_available"):
+            continue
+        try:
+            destination = sync_upstreams.destination_for(Path(config.paths["third_party"]), model)
+        except (OSError, ValueError):
+            continue  # an unsafe source path is the sync stage's finding to report
+        if destination.is_dir():
+            continue
+        if not config.permissions["allow_network"]:
+            blocked.append({"model_id": mid,
+                            "reason": "pinned source absent and allow_network is not authorized"})
+            continue
+        stages.append(pipeline.run_stage(
+            "source-acquisition",
+            pipeline.command("sync_upstreams.py", "--model", mid,
+                             "--output-root", str(config.paths["third_party"])),
+            model_id=mid,
+            output_paths=(destination,),
+            receipt=True,
+            required_capabilities={"allow_network"},
+        ))
+    if stages:
+        pipeline.run_stages(
+            stages, continue_on_error=True, resume=resume,
+            state_path=_artifact_paths(config)["source_acquisition_state"],
+            apply=True,
+            authorized_capabilities={name for name, value in config.permissions.items() if value},
+            config=_workbench_config(config), mode="all",
+        )
+    return {"stage_count": len(stages), "blocked": blocked}
+
+
 def _enforce_download_budget(config: AutopilotConfig, rows: list[dict[str, Any]]) -> None:
+    """Reject a run whose selected downloads do not fit the byte budget, before any download.
+
+    The byte cost is the cost of exactly what this run selected: `checkpoint_ids` on the row is the
+    authoritative selection the downloader and the evaluator receive. Reading the registry directly
+    here — the first variant, or every bundle member — charged the operator for weights the run
+    never fetches, and could refuse a run that would have downloaded almost nothing.
+    """
     from workbench.backend.registry import (
         auxiliary_assets_for_model, auxiliary_destination, checkpoint_is_present,
         checkpoint_path, sha256_file,
@@ -228,15 +287,23 @@ def _enforce_download_budget(config: AutopilotConfig, rows: list[dict[str, Any]]
         if row["status"] != "NOT_RUN":
             continue
         model = models[row["model_id"]]
-        bundles = model.get("checkpoint_bundles") or []
-        if bundles:
-            required_ids = set()
-            for b in bundles:
-                required_ids.update(b.get("required_checkpoint_ids", []))
-            selected_variants = [v for v in model.get("checkpoint_variants", []) if v.get("checkpoint_id") in required_ids]
-        else:
-            variants = model.get("checkpoint_variants", [])
-            selected_variants = variants[:1] if variants else []
+        selected = list(row.get("checkpoint_ids") or [])
+        by_checkpoint_id = {v.get("checkpoint_id"): v for v in model.get("checkpoint_variants", [])}
+        # A bundle id names a set of members: the downloader fetches the members, so the budget
+        # must too. Any selected id not present as a variant is a bundle the downloader expands.
+        selected_variants = []
+        for checkpoint_id in selected:
+            variant = by_checkpoint_id.get(checkpoint_id)
+            if variant is not None:
+                selected_variants.append(variant)
+                continue
+            bundle = next((b for b in (model.get("checkpoint_bundles") or [])
+                           if b.get("bundle_id") == checkpoint_id), None)
+            if bundle is None:
+                continue
+            selected_variants.extend(
+                by_checkpoint_id[member] for member in bundle.get("required_checkpoint_ids", [])
+                if member in by_checkpoint_id)
 
         required, unknown = 0, False
         unknown_reason = None
@@ -316,7 +383,7 @@ def resolved_plan(config: AutopilotConfig, *, dry_run: bool = False) -> dict[str
             rows.append({"model_id": mid, "status": "NOT_RUN", "blockers": [], "metrics": None,
                          "checkpoint_ids": list(selection.checkpoint_ids),
                          "checkpoint_selection": selection.as_dict()})
-    plan = {"schema_version": 1, "generated_at": datetime.now(UTC).isoformat(),
+    plan = {"schema_version": 1, "generated_at": datetime.now(timezone.utc).isoformat(),
             "configuration_digest": _configuration_digest(config), "selected_models": list(config.selected_model_ids),
             "execution_started": False, "solver_verified": environment_plan["solver_verified"],
             "checkpoint_policy": config.checkpoint_policy,
@@ -357,7 +424,8 @@ def _execute(config: AutopilotConfig, plan: dict[str, Any], *, resume: bool, for
 
             provisioned = provision_environment_plan(
                 models, plan["environment_plan"], artifacts_root=config.paths["artifacts"],
-                allowed=True, third_party_root=config.paths["third_party"])
+                allowed=True, third_party_root=config.paths["third_party"],
+                network_allowed=bool(config.permissions["allow_network"]))
             if isinstance(provisioned, dict):
                 # `provision_environment_plan` returns the assignment document, which embeds the
                 # provisioned plan under "plan"; that embedded plan is the one whose groups carry
@@ -883,7 +951,7 @@ def _write_reports(config: AutopilotConfig, plan: dict[str, Any], rows: list[dic
         outcome, code = "PARTIAL", 2
     else:
         outcome, code = "WORKFLOW_FAILURE", 1
-    generated = datetime.now(UTC).isoformat()
+    generated = datetime.now(timezone.utc).isoformat()
     records = execution.get("stages", {})
     val_stage = records.get("validation-index") or next(
         (item for item in records.values() if isinstance(item, dict) and item.get("name") == "validation-index"), None
@@ -1012,6 +1080,13 @@ def run(config_path: Path, *, apply: bool, resume: bool, force_models: list[str]
     if unknown:
         raise ValueError(f"--force-model must be selected in config: {', '.join(unknown)}")
     paths = _artifact_paths(config)
+    # Acquire the pinned sources before the environment plan is derived. A model's real constraints
+    # come from the acquired checkout's requirements.txt, so planning first would plan every
+    # environment from the registry's coarse declaration, install it, and only then discover the
+    # source's actual pins. This runs the same sync script the DAG uses, so the later sync stage
+    # sees a clean, correctly pinned checkout and verifies instead of re-cloning.
+    if apply and config.permissions["allow_env_install"]:
+        _acquire_sources(config, resume=resume)
     previous = None
     if paths["plan"].exists():
         previous = json.loads(paths["plan"].read_text(encoding="utf-8"))

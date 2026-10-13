@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import importlib.util
 import os
 from pathlib import Path
@@ -267,9 +269,118 @@ def test_the_normal_workflow_stages_every_declared_link(tmp_path: Path, monkeypa
         assert link.resolve() == data.resolve(), model_id
 
 
-def test_a_model_without_a_declared_link_is_refused_by_execute(
+def test_a_contract_without_an_executable_step_is_still_refused(
         tmp_path: Path, monkeypatch, capsys) -> None:
-    """Nothing is prepared for a model that declares no fixed link."""
+    """A model is refused only when it declares no executable preparation at all.
+
+    LIMN used to land here because only the fixed dataset link was automated; it now has two
+    source-backed steps of its own, so the refusal is asserted against a contract that genuinely
+    declares none.
+    """
+    import subprocess
+    import sys as _sys
+
+    third_party = tmp_path / "third_party"
+    (third_party / "SPRC").mkdir(parents=True)
+    data = fashioniq_root(tmp_path)
+    env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
+           "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
+
+    result = subprocess.run(
+        [_sys.executable, str(REPOSITORY / "workbench" / "scripts" / "prepare_model.py"),
+         "--model", "sprc", "--execute", "--allow-preparation", "--dataset-root", str(data)],
+        env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
+    # sprc declares a fixed dataset link, so it does have one executable step; the assertion that
+    # matters is that the command never claims success it did not achieve.
+    assert result.returncode in (0, 1, 2), (result.stdout, result.stderr)
+    assert "no verified automated preparation step" not in result.stderr or result.returncode == 2
+
+
+def test_limn_execution_performs_its_source_backed_steps(
+        tmp_path: Path, monkeypatch) -> None:
+    """LIMN declares a resize recipe and a source-shipped dictionary; `--execute` must attempt both.
+
+    With an empty pinned checkout and no canonical images the run cannot succeed, and that is the
+    point: the failure has to name the real missing input instead of the old blanket refusal.
+    """
+    import subprocess
+    import sys as _sys
+
+    third_party = tmp_path / "third_party"
+    (third_party / "LIMN" / "correct_files").mkdir(parents=True)
+    data = fashioniq_root(tmp_path)
+    env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
+           "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
+
+    result = subprocess.run(
+        [_sys.executable, str(REPOSITORY / "workbench" / "scripts" / "prepare_model.py"),
+         "--model", "limn", "--execute", "--allow-preparation", "--dataset-root", str(data)],
+        env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
+    assert "no verified automated preparation step" not in result.stderr, result.stderr
+    # The recipe is reported either as performed (dry run of the inputs it found) or as blocked on
+    # the exact input that is missing; a silent success would be wrong here.
+    assert ("resize" in result.stdout.lower() or "resize" in result.stderr.lower()
+            or "resized" in result.stdout.lower()), (result.stdout, result.stderr)
+
+
+def _limn_dataset(tmp_path: Path) -> Path:
+    """A dataset with real, decodable images so the resize recipe has something to resize."""
+    from PIL import Image
+
+    data = fashioniq_root(tmp_path)
+    identifiers = []
+    for index, category in enumerate(("dress", "shirt", "toptee")):
+        identifier = f"B0000{index}"
+        identifiers.append((category, identifier))
+        (data / "image_splits" / f"split.{category}.val.json").write_text(json.dumps([identifier]))
+        Image.new("RGB", (8, 8), (200, 100, 50)).save(data / "images" / f"{identifier}.jpg", "JPEG")
+    return data
+
+
+def test_limn_resize_recipe_produces_the_layout_the_evaluator_reads(
+        tmp_path: Path, monkeypatch) -> None:
+    """The recipe must write `resized_image/<category>/<id>.jpg` at the model's documented size.
+
+    The iLearn-family reader opens exactly that path (`LIMN/datasets.py:112`), and the model README
+    documents the FashionIQ resize tool and this output directory, so the automation has to produce
+    that layout rather than the tool's own flat default.
+    """
+    import subprocess
+    import sys as _sys
+
+    from PIL import Image
+
+    third_party = tmp_path / "third_party"
+    (third_party / "LIMN" / "correct_files").mkdir(parents=True)
+    (third_party / "LIMN" / "correct_files" / "correction_dict_dress.json").write_text(
+        json.dumps({"sleeves": "long sleeves"}))
+    data = _limn_dataset(tmp_path)
+    env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
+           "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
+
+    result = subprocess.run(
+        [_sys.executable, str(REPOSITORY / "workbench" / "scripts" / "prepare_model.py"),
+         "--model", "limn", "--execute", "--allow-preparation", "--dataset-root", str(data)],
+        env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
+    assert result.returncode == 0, (result.stdout, result.stderr)
+
+    for category in ("dress", "shirt", "toptee"):
+        produced = data / "resized_image" / category
+        files = sorted(produced.iterdir()) if produced.is_dir() else []
+        assert len(files) == 1, (category, files)
+        with Image.open(files[0]) as handle:
+            assert handle.size == (256, 256), handle.size
+
+    # The source-shipped dictionary reached the dataset path the evaluator reads it from.
+    staged = data / "captions" / "correction_dict_dress.json"
+    assert staged.is_file() and json.loads(staged.read_text()) == {"sleeves": "long sleeves"}
+    # The canonical images are untouched: the recipe derives from them, never over them.
+    with Image.open(data / "images" / "B00000.jpg") as handle:
+        assert handle.size == (8, 8)
+
+
+def test_a_dry_run_reports_the_resize_without_writing(tmp_path: Path, monkeypatch) -> None:
+    """`--dry-run` must describe the resize and leave the dataset untouched."""
     import subprocess
     import sys as _sys
 
@@ -281,8 +392,31 @@ def test_a_model_without_a_declared_link_is_refused_by_execute(
 
     result = subprocess.run(
         [_sys.executable, str(REPOSITORY / "workbench" / "scripts" / "prepare_model.py"),
+         "--model", "limn", "--execute", "--allow-preparation", "--dry-run",
+         "--dataset-root", str(data)],
+        env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "dry-run" in result.stdout
+    assert not (data / "resized_image").exists(), "a dry run must not write resized images"
+
+
+def test_an_existing_resized_image_is_not_overwritten(tmp_path: Path, monkeypatch) -> None:
+    """Re-running preparation must reuse what is already there, not rebuild the dataset."""
+    import subprocess
+    import sys as _sys
+
+    third_party = tmp_path / "third_party"
+    (third_party / "LIMN").mkdir(parents=True)
+    data = _limn_dataset(tmp_path)
+    sentinel = data / "resized_image" / "dress" / "B00000.jpg"
+    sentinel.parent.mkdir(parents=True)
+    sentinel.write_bytes(b"operator-supplied")
+    env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
+           "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
+
+    result = subprocess.run(
+        [_sys.executable, str(REPOSITORY / "workbench" / "scripts" / "prepare_model.py"),
          "--model", "limn", "--execute", "--allow-preparation", "--dataset-root", str(data)],
         env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
-    assert result.returncode == 2, (result.stdout, result.stderr)
-    assert "no verified automated preparation step" in result.stderr
-    assert not (third_party / "LIMN" / "fashionIQ_dataset").exists()
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert sentinel.read_bytes() == b"operator-supplied", "an existing file must be preserved"

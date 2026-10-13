@@ -60,6 +60,14 @@ def print_status(s: dict) -> None:
         print(f"  notes: {s['notes']}")
 
 
+#: Marker used by a preparation contract to say "copy this file out of the pinned checkout".
+BUNDLED_ASSET_GENERATOR = "pinned_source_file"
+#: Directory inside a pinned checkout that ships such files.
+BUNDLED_ASSET_DIRECTORY = "correct_files"
+#: Marker used by a preparation contract for the per-category image resize.
+RESIZE_GENERATOR = "fashioniq_resize_images"
+
+
 def _fixed_link(config, model_id: str, dry_run: bool, check_only: bool) -> bool:
     """Stage the model's declared fixed dataset link through the shared helper.
 
@@ -77,6 +85,139 @@ def _fixed_link(config, model_id: str, dry_run: bool, check_only: bool) -> bool:
     print(f"[RUN] {model_id} dataset-link preparation: {' '.join(argv)}")
     result = subprocess.run(argv)
     return result.returncode == 0
+
+
+def _stage_source_assets(config, model: dict, contract: dict, *, dry_run: bool) -> bool:
+    """Install assets the pinned source ships but the evaluator reads from the dataset root.
+
+    Some evaluators read a correction dictionary from `<dataset>/captions/` while the author ships
+    it inside the repository under `correct_files/`. The file, its path and its consumer are all
+    source-backed, so this is a copy the workbench can make; it is never a substitution, and a
+    destination that already holds different bytes is reported rather than overwritten.
+    """
+    import shutil
+
+    from workbench.backend.registry import load_registry as _load_registry
+
+    model_id = model["model_id"]
+    source = config.WORKBENCH_THIRD_PARTY_ROOT / (model.get("source_dir") or "")
+    if not source.is_dir():
+        return True  # the source is the sync stage's responsibility, not preparation's
+
+    staged = 0
+    for artifact in contract.get("generated_artifacts", []):
+        if artifact.get("generator") != BUNDLED_ASSET_GENERATOR:
+            continue
+        for relative in artifact["paths"]:
+            destination = config.FASHIONIQ_ROOT / relative
+            shipped = source / BUNDLED_ASSET_DIRECTORY / Path(relative).name
+            if not shipped.is_file():
+                continue
+            if destination.is_file():
+                if destination.read_bytes() == shipped.read_bytes():
+                    continue
+                print(f"[BLOCKED] {model_id}: {destination} exists with different contents than the "
+                      f"pinned {shipped}; refusing to overwrite", file=sys.stderr)
+                return False
+            if dry_run:
+                print(f"[OK] dry-run: would copy {shipped} -> {destination}")
+                continue
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(shipped, destination)
+            print(f"[OK] {model_id}: staged {destination} from the pinned source")
+            staged += 1
+    if staged:
+        print(f"[OK] {model_id}: {staged} source-shipped asset(s) staged")
+    return True
+
+
+def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[bool, str]:
+    """Materialize the declared, source-documented per-category resized image set.
+
+    The pinned evaluator reads `resized_image/<category>/<id>.jpg` (`LIMN/datasets.py:112`), while
+    the documented tool — the FashionIQ `start_kit/resize_images.py` the model's own README points
+    at — writes a flat directory at its documented default size. The transform is therefore applied
+    here with the same documented size and the output laid out the way the evaluator reads it, and
+    the canonical images are only read, never rewritten. Every generated file is a resized copy of
+    a canonical image that the model's own split file lists, so the set is checkable.
+    """
+    recipe = next((a for a in contract.get("generated_artifacts", [])
+                   if a.get("kind") == "generated_repo_artifact" and a.get("generator") == RESIZE_GENERATOR),
+                  None)
+    if recipe is None:
+        return True, "no declared resize recipe"
+
+    parameters = recipe.get("parameters") or {}
+    size = parameters.get("image_size")
+    if not isinstance(size, int) or size <= 0:
+        return False, "resize recipe declares no usable image_size"
+    source_recipe = parameters.get("source_script")
+    if not source_recipe:
+        # Without a documented tool there is no source-backed recipe, only a guess.
+        return False, "resize recipe names no source script"
+
+    from workbench.backend.fashioniq_layout import CATEGORIES
+    import json as _json
+
+    images_root = config.FASHIONIQ_ROOT / "images"
+    splits_root = config.FASHIONIQ_ROOT / "image_splits"
+    if not images_root.is_dir():
+        return False, f"canonical images directory missing: {images_root}"
+
+    try:
+        from PIL import Image
+    except ImportError:
+        return False, "PIL is not available in the workbench interpreter, so the resize cannot run"
+
+    # The evaluator decides the output layout, and the contracts differ: the iLearn-family readers
+    # open `resized_image/<category>/<id>.jpg`, DCNet opens a flat `resized_images/<id>.jpg`
+    # (`data_loader/CE_dataset.py:22,72`). Both are declared in the contract's `paths`.
+    layout = parameters.get("layout")
+    if layout not in ("per_category", "flat"):
+        return False, f"resize recipe declares no usable layout: {layout!r}"
+    extension = parameters.get("extension") or ".jpg"
+
+    written, missing = 0, []
+    for category in CATEGORIES:
+        split_file = splits_root / f"split.{category}.val.json"
+        if not split_file.is_file():
+            missing.append(str(split_file))
+            continue
+        try:
+            identifiers = _json.loads(split_file.read_text(encoding="utf-8"))
+        except (_json.JSONDecodeError, OSError) as error:
+            return False, f"cannot read split {split_file}: {error}"
+        output_dir = (config.FASHIONIQ_ROOT / ("resized_images" if layout == "flat" else "resized_image")
+                      / (category if layout == "per_category" else ""))
+        if dry_run:
+            print(f"[OK] dry-run: {model['model_id']} would resize {len(identifiers)} {category} image(s) "
+                  f"to {size}px into {output_dir}")
+            continue
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for identifier in identifiers:
+            source_image = images_root / f"{identifier}{extension}"
+            if not source_image.is_file():
+                # The canonical distribution ships .jpg; a source that reads another extension is
+                # covered by the same recipe because the split names the identifier, not the file.
+                alternate = images_root / f"{identifier}.jpg"
+                source_image = alternate if alternate.is_file() else source_image
+            if not source_image.is_file():
+                missing.append(str(source_image))
+                continue
+            destination = output_dir / f"{identifier}.jpg"
+            if destination.is_file():
+                continue
+            with Image.open(source_image) as handle:
+                handle.convert("RGB").resize((size, size), Image.LANCZOS).save(destination, "JPEG")
+            written += 1
+    if dry_run:
+        return True, "dry-run"
+    if missing and written == 0:
+        return False, (f"resize input missing: {missing[0]}"
+                       + (f" (and {len(missing) - 1} more)" if len(missing) > 1 else ""))
+    if missing:
+        return False, f"resize completed {written} file(s) but {len(missing)} declared input(s) are missing"
+    return True, f"resized {written} image(s) at {size}px per {source_recipe}"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -127,13 +268,33 @@ def main(argv: list[str] | None = None) -> int:
     print_status(s)
 
     if args.execute:
+        performed: list[str] = []
+        ok = True
         if model.get("canonical_dataset_link"):
-            ok = _fixed_link(config, model["model_id"], args.dry_run, check_only=False)
-            return 0 if ok else 1
-        print(f"[BLOCKED] {model['model_id']}: no verified automated preparation step; manual preparation required.",
-              file=sys.stderr)
-        print(f"  policy={s['automation_policy']} notes={s['notes']}", file=sys.stderr)
-        return 2
+            ok = _fixed_link(config, model["model_id"], args.dry_run, check_only=False) and ok
+            performed.append("dataset-link")
+        contract = preparation_contract_for_model(model)
+        if contract:
+            ok = _stage_source_assets(config, model, contract, dry_run=args.dry_run) and ok
+            if any(a.get("generator") == BUNDLED_ASSET_GENERATOR for a in contract.get("generated_artifacts", [])):
+                performed.append("source-shipped-assets")
+            resized = any(a.get("generator") == RESIZE_GENERATOR
+                          for a in contract.get("generated_artifacts", []))
+            if resized:
+                recipe_ok, reason = _run_resize(config, model, contract, dry_run=args.dry_run)
+                performed.append(f"resize({reason})")
+                # A declared recipe that cannot run is reported exactly, and it only fails the step
+                # when the recipe was expected to be executable: a contract that names a generator
+                # absent from the pinned source is a documented blocker, not a silent success.
+                if not recipe_ok:
+                    print(f"[BLOCKED] {model['model_id']}: {reason}", file=sys.stderr)
+                    ok = False
+        if not performed:
+            print(f"[BLOCKED] {model['model_id']}: no verified automated preparation step; manual preparation required.",
+                  file=sys.stderr)
+            print(f"  policy={s['automation_policy']} notes={s['notes']}", file=sys.stderr)
+            return 2
+        return 0 if ok else 1
 
     if model.get("canonical_dataset_link") and not args.dry_run:
         # A read-only status run still reports whether the declared link is correct, without

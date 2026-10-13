@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -1433,7 +1433,7 @@ def _remember(model: dict[str, Any], require_cuda: bool, report: EnvironmentRepo
     report.contract_digest = _environment_contract_digest(model)
     report.environment_fingerprint = _interpreter_fingerprint(
         report.interpreter, report.contract_digest, report.prefix)
-    report.verified_at = datetime.now(UTC).isoformat()
+    report.verified_at = datetime.now(timezone.utc).isoformat()
     _VERIFIED_ENVIRONMENTS[_cache_key(model, require_cuda)] = report
 
 
@@ -1745,7 +1745,7 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
         "interpreter_fingerprint": report.environment_fingerprint,
         "dependency_fingerprint": report.contract_digest,
         "probe_source": "override" if override is not None else "interpreter",
-        "probed_at": datetime.now(UTC).isoformat(),
+        "probed_at": datetime.now(timezone.utc).isoformat(),
         # A capability is bound to this host, driver and device visibility. It is evidence, not
         # proof against a hostile environment, and it expires whenever any of that identity
         # changes — the key changes with it, so a stale record is simply not found.

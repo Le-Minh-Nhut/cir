@@ -16,7 +16,7 @@ import sys
 import threading
 import uuid
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 import os
 import platform
 from pathlib import Path
@@ -293,7 +293,7 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     Returns ``(return_code, log_directory, environment)``. The environment carries
     the run identity the evaluator is expected to stamp onto any completion proof.
     """
-    directory = log_dir(config, plan, datetime.now(UTC), run_id)
+    directory = log_dir(config, plan, datetime.now(timezone.utc), run_id)
     environment = {
         "orchestrator_python": sys.version,
         "orchestrator_executable": sys.executable,
@@ -742,7 +742,7 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
         # The run directory embeds both the checkpoint that was evaluated and the
         # invocation identity, so a copied or renamed proof cannot be re-pointed at a
         # different run or a different checkpoint.
-        expected_directory = log_dir(config, plan, datetime.now(UTC), run_id) if config is not None else None
+        expected_directory = log_dir(config, plan, datetime.now(timezone.utc), run_id) if config is not None else None
         expected_name = expected_directory.name if expected_directory is not None else f"{plan.checkpoint_id}__{run_id}"
         if run_dir.name != expected_name:
             raise EvaluationOutputError(
@@ -824,7 +824,7 @@ def expected_run_identity(config: WorkbenchConfig, plan: EvaluationPlan, run_id:
     """The identity every completion proof must carry for this invocation."""
     return {
         "run_id": run_id,
-        "run_directory": str(log_dir(config, plan, datetime.now(UTC), run_id)),
+        "run_directory": str(log_dir(config, plan, datetime.now(timezone.utc), run_id)),
         "report": str(run_report_path(config, plan, run_id)),
         "proof": str(completion_proof_path(config, plan, run_id)),
     }
@@ -1104,7 +1104,7 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
 
 
 def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = None) -> int:
-    started = datetime.now(UTC)
+    started = datetime.now(timezone.utc)
     run_id = validate_run_id(run_id) if run_id else make_run_id(plan, started)
     root = artifact_root(config)
     reports = reports_root(config)
@@ -1166,7 +1166,7 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "environment": environment,
         "environment_digest": hashlib.sha256(environment_json.encode()).hexdigest(),
         "started_at": started.isoformat(),
-        "finished_at": datetime.now(UTC).isoformat(),
+        "finished_at": datetime.now(timezone.utc).isoformat(),
         "return_code": code,
         "dataset_root": str(plan.dataset_root),
     }
@@ -1260,7 +1260,7 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "report_digest": sha256_file(run_report),
         "evidence_digest": evidence_digest,
         "run_directory": str(directory),
-        "recorded_at": datetime.now(UTC).isoformat(),
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
     })
     if invocation_status == "INVOCATION_NO_OBSERVABLE_OUTPUT":
         print("[BLOCKED] official command exited 0 but produced no observable evaluation "
@@ -1271,7 +1271,7 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
             "report": str(run_report),
             "return_code": code,
             "completion_status": "NO_OBSERVABLE_OUTPUT",
-            "updated_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         })
         return code
 
@@ -1307,9 +1307,9 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "stdout_log": "stdout.log",
         "stderr_log": "stderr.log",
         "run_directory": str(directory),
-        "run_id_expected_directory": str(log_dir(config, plan, datetime.now(UTC), run_id)),
+        "run_id_expected_directory": str(log_dir(config, plan, datetime.now(timezone.utc), run_id)),
         "invocation_identity": expected_run_identity(config, plan, run_id),
-        "completed_at": datetime.now(UTC).isoformat(),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
     }
     try:
         with proof_path.open("x", encoding="utf-8") as handle:
@@ -1561,7 +1561,7 @@ def main(argv: list[str] | None = None) -> int:
             for reason in reasons: print(f"{'[SKIP]' if reason.startswith('SKIPPED:') else '[BLOCKED]'} {reason}")
             failed = failed or any(not reason.startswith("SKIPPED:") for reason in reasons)
             continue
-        planned_logs = log_dir(config, plan, datetime.now(UTC))
+        planned_logs = log_dir(config, plan, datetime.now(timezone.utc))
         print(f"[OK] protocol: {protocol}")
         print(f"[RUN] cwd: {plan.cwd}")
         print(f"[RUN] command: {shlex.join(plan.command)}")
@@ -1603,7 +1603,7 @@ def main(argv: list[str] | None = None) -> int:
         if run_id and len(items) > 1:
             run_id = f"{run_id}_{model['model_id']}_{checkpoint['checkpoint_id']}"
         if not run_id:
-            run_id = make_run_id(plan, datetime.now(UTC))
+            run_id = make_run_id(plan, datetime.now(timezone.utc))
         try:
             code = execute(plan, config, run_id=run_id)
         except RuntimeError as error:

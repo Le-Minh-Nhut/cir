@@ -8,6 +8,7 @@ never inferred from pairwise compatibility. Solver checks are dry-run only.
 from __future__ import annotations
 
 import ast
+import contextlib
 import hashlib
 import json
 import os
@@ -115,6 +116,42 @@ def _mark_workbench_managed(prefix: Path, environment_id: str) -> None:
         "environment_id": environment_id,
     }
     marker.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+@contextlib.contextmanager
+def _environment_lock(directory: Path, environment_id: str):
+    """Serialize provisioning of one environment across processes.
+
+    Two concurrent runs that planned the same group would otherwise both write into the same
+    prefix: one renames a half-installed tree while the other is still populating it. The lock is
+    advisory and held for the whole create/install/verify sequence, never for reuse.
+    # ponytail: one lock per environment_id, not per prefix; sufficient here because a group is the
+    # unit of provisioning and a split derives a new id.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    lock_path = directory / f".provision-{environment_id}.lock"
+    handle = lock_path.open("a+")
+    try:
+        try:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        except ImportError:
+            pass
+        handle.seek(0)
+        handle.truncate()
+        handle.write(f"{os.getpid()}\n")
+        handle.flush()
+        yield
+    finally:
+        try:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        except ImportError:
+            pass
+        handle.close()
+
 
 _SOLVERS = ("conda", "mamba", "micromamba")
 _UNKNOWN = {"", "UNKNOWN", "NONE", "NULL"}
@@ -1123,6 +1160,7 @@ def _provision_group(
     third_party_root: Path | None,
     allowed: bool,
     solver_cmd: str | None,
+    network_allowed: bool = True,
 ) -> tuple[bool, str]:
     interpreter = Path(group["interpreter"])
     prefix = Path(group["conda_env_path"])
@@ -1152,22 +1190,56 @@ def _provision_group(
         group["runtime_verification_status"] = "SOLVER_UNAVAILABLE"
         return False, "No conda/mamba/micromamba solver available to create environment"
 
+    # Installing means the package manager must fetch packages. `allow_env_install` authorizes
+    # writing an environment, not reaching the network, and conda/pip open a connection even when a
+    # local cache happens to satisfy the request. Refuse rather than silently egress.
+    if not network_allowed:
+        group["installation_status"] = "FAILED"
+        group["runtime_verification_status"] = "NOT_CONFIGURED"
+        group["state"] = "BLOCKED_AUTHORIZATION_REQUIRED"
+        group["evidence"].append("installation refused: allow_network is not authorized")
+        return False, "environment installation requires network authorization (allow_network)"
+
+    # Build at the final, content-derived prefix directly. A conda prefix is not relocatable once
+    # created: the interpreter records its own prefix, console scripts get that absolute path in
+    # their shebang, and conda-meta holds absolute paths for every installed package. Creating at
+    # `.staging-...` and renaming only worked because nothing had checked a shebang yet, which is
+    # why the rename was followed by a verification that could no longer detect a stale path.
+    #
+    # An occupied prefix is never overwritten and never deleted: the previous successful
+    # environment may be the only working one on the machine. A replacement is built beside it
+    # under a new name and published only after it verifies.
     target_prefix = prefix
     if target_prefix.exists():
         idx = 1
         while (prefix.parent / f"{prefix.name}-{idx}").exists():
             idx += 1
         target_prefix = prefix.parent / f"{prefix.name}-{idx}"
+        group["evidence"].append(
+            f"existing prefix left untouched: {prefix}; replacement built at {target_prefix}")
 
     prefix.parent.mkdir(parents=True, exist_ok=True)
-    while True:
-        staging_prefix = prefix.parent / f".staging-{group['environment_id']}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
-        try:
-            staging_prefix.mkdir()
-            break
-        except FileExistsError:
-            continue
-    staging_interp = staging_prefix / ("python.exe" if os.name == "nt" else "bin/python")
+    with _environment_lock(prefix.parent, group["environment_id"]):
+        staging_prefix = target_prefix
+        staging_interp = staging_prefix / ("python.exe" if os.name == "nt" else "bin/python")
+        return _install_at_prefix(group, by_id, specs, staging_prefix, staging_interp, target_prefix,
+                                  artifacts_root, third_party_root, solver_cmd,
+                                  network_allowed=network_allowed)
+
+
+def _install_at_prefix(
+    group: dict,
+    by_id: dict[str, dict],
+    specs: dict[str, dict],
+    staging_prefix: Path,
+    staging_interp: Path,
+    target_prefix: Path,
+    artifacts_root: Path,
+    third_party_root: Path | None,
+    solver_cmd: str,
+    network_allowed: bool = True,
+    ) -> tuple[bool, str]:
+    """Create and verify the environment at its own final path, then mark it managed."""
 
     conda_specs = []
     py_terms = group["constraints"].get("python", [])
@@ -1244,6 +1316,8 @@ def _provision_group(
             group["evidence"].append(f"pip install error: {err}")
             return False, f"pip install exited {pip_proc.returncode}: {err}"
 
+    # Verified where it was created, so the checks below see the paths the environment will
+    # actually use: a console-script shebang, an entrypoint execution, the model imports.
     staging_group = dict(group)
     staging_group["conda_env_path"] = str(staging_prefix)
     staging_group["interpreter"] = str(staging_interp)
@@ -1257,17 +1331,60 @@ def _provision_group(
         group["evidence"].append(f"Verification failed: {reason}")
         return False, reason
 
-    staging_prefix.rename(target_prefix)
+    console_ok, console_reason = _verify_console_scripts(staging_prefix, staging_interp)
+    group["evidence"].append(f"console-script check: {console_reason}")
+    if not console_ok:
+        shutil.rmtree(staging_prefix, ignore_errors=True)
+        group["installation_status"] = "FAILED"
+        group["runtime_verification_status"] = "CONSOLE_SCRIPT_STALE"
+        group["state"] = "FAILED"
+        return False, console_reason
+
+    # Nothing is published as ready until every check above passed at this exact path.
     _mark_workbench_managed(target_prefix, group["environment_id"])
-    final_interp = target_prefix / ("python.exe" if os.name == "nt" else "bin/python")
     group["conda_env_path"] = str(target_prefix)
-    group["interpreter"] = str(final_interp)
+    group["interpreter"] = str(staging_interp)
     group["installation_status"] = "INSTALLED"
     group["state"] = "RUNTIME_VERIFIED"
     group["runtime_verification_status"] = "READY"
     group["evidence"].append("INSTALLED: conda and pip package installation succeeded")
     group["evidence"].append("RUNTIME_VERIFIED: pip check, exact versions, and member evaluator imports verified")
     return True, "Provisioning succeeded"
+
+
+def _verify_console_scripts(prefix: Path, interpreter: Path) -> tuple[bool, str]:
+    """A console script must point at the interpreter that lives in this prefix.
+
+    The shebang is written at install time and contains an absolute path. A prefix that was
+    created elsewhere and moved still has a valid-looking `bin/` directory, so this is the check
+    that distinguishes a real environment from a relocated one.
+    """
+    bin_dir = prefix / ("Scripts" if os.name == "nt" else "bin")
+    if not bin_dir.is_dir():
+        return True, "no bin directory to inspect"
+    target = str(interpreter.resolve())
+    inspected = 0
+    for script in sorted(bin_dir.iterdir()):
+        if script.is_dir() or script.name in {"python", "python3"} or script.suffix == ".exe":
+            continue
+        try:
+            if not os.access(script, os.R_OK) or script.stat().st_size == 0:
+                continue
+            head = script.open("rb").readline()
+        except OSError:
+            continue
+        if not head.startswith(b"#!"):
+            continue
+        inspected += 1
+        shebang = head[2:].decode("utf-8", "replace").strip().split()[0] if head[2:].strip() else ""
+        if not shebang:
+            continue
+        try:
+            if str(Path(shebang).resolve()) != target:
+                return False, f"console script {script.name} points at {shebang}, not {interpreter}"
+        except OSError:
+            return False, f"console script {script.name} points at an unresolvable {shebang}"
+    return True, f"{inspected} console-script shebang(s) point at this prefix"
 
 
 def _provision_all_groups(
@@ -1278,6 +1395,7 @@ def _provision_all_groups(
     third_party_root: Path | None,
     allowed: bool,
     solver_cmd: str | None,
+    network_allowed: bool = True,
 ) -> list[dict]:
     queue = list(initial_groups)
     completed = []
@@ -1285,13 +1403,19 @@ def _provision_all_groups(
     while queue:
         group = queue.pop(0)
         attempts = group.get("_attempts", 0)
-        ok, reason = _provision_group(group, by_id, specs, artifacts_root, third_party_root, allowed, solver_cmd)
+        ok, reason = _provision_group(group, by_id, specs, artifacts_root, third_party_root, allowed,
+                                      solver_cmd, network_allowed=network_allowed)
         if ok or not allowed or len(group["members"]) <= 1 or attempts >= 2:
-            if not ok and allowed:
+            if not ok and allowed and group.get("state") != "BLOCKED_AUTHORIZATION_REQUIRED":
+                # A refusal that already recorded a precise state (for example a missing network
+                # authorization) keeps it; flattening it to FAILED loses the reason the operator
+                # needs in order to grant the right permission.
                 group["installation_status"] = "FAILED"
                 group["state"] = "FAILED"
                 group["runtime_verification_status"] = "FAILED"
                 group["unresolved"].append(f"provisioning failed: {reason}")
+            elif not ok and group.get("state") == "BLOCKED_AUTHORIZATION_REQUIRED":
+                group["unresolved"].append(f"provisioning refused: {reason}")
             completed.append(group)
             continue
 
@@ -1354,6 +1478,7 @@ def provision_environment_plan(
     allowed: bool = False,
     environ: dict[str, str] | None = None,
     third_party_root: Path | str | None = None,
+    network_allowed: bool = True,
 ) -> dict:
     """Authoritatively provision environments for a planned model set."""
     if artifacts_root is None:
@@ -1368,11 +1493,13 @@ def provision_environment_plan(
 
     groups = plan.get("groups", [])
     provisioned_groups = _provision_all_groups(
-        groups, by_id, specs, artifacts_root, resolved_third_party, allowed, solver_cmd
+        groups, by_id, specs, artifacts_root, resolved_third_party, allowed, solver_cmd,
+        network_allowed=network_allowed,
     )
     plan["groups"] = provisioned_groups
     plan["interpreter_mapping"] = {
         mid: (None if _is_staging_path(group.get("interpreter")) or _is_staging_path(group.get("conda_env_path"))
+              or group.get("state") == "BLOCKED_AUTHORIZATION_REQUIRED"
               else group.get("interpreter"))
         for group in provisioned_groups for mid in group["members"]
     }

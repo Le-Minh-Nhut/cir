@@ -10,7 +10,7 @@ import shutil
 import sys
 import urllib.error
 import urllib.request
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -224,7 +224,7 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError(f"sha256 mismatch for {destination}: expected {expected}, got {digest}")
         os.replace(partial, destination)
         manifest = [entry for entry in manifest if not (entry["model_id"] == model["model_id"] and entry["checkpoint_id"] == checkpoint["checkpoint_id"])]
-        manifest.append({"model_id": model["model_id"], "checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_url": checkpoint["download_url"], "downloaded_sha256": digest, "size_bytes": destination.stat().st_size, "downloaded_at": datetime.now(UTC).isoformat(), "official_hash_available": expected is not None, "official_hash_match": digest == expected if expected else None})
+        manifest.append({"model_id": model["model_id"], "checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_url": checkpoint["download_url"], "downloaded_sha256": digest, "size_bytes": destination.stat().st_size, "downloaded_at": datetime.now(timezone.utc).isoformat(), "official_hash_available": expected is not None, "official_hash_match": digest == expected if expected else None})
         save_manifest(manifest_path, manifest)
         print(f"DOWNLOADED {destination}: {destination.stat().st_size} bytes sha256={digest}\n")
     return int(failed)

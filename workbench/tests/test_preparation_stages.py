@@ -28,13 +28,6 @@ def test_preparation_stages_follow_declared_links_without_duplicate_writers(
     stages = pipeline.all_stages(args, config)
     preparations = {stage.model_id: stage for stage in stages if stage.name == "preparation"}
     assert len(preparations) == len(models), "pipeline must retain per-model preparation status"
-    assert len([stage for stage in preparations.values() if stage.output_paths]) == len(
-        {model["source_dir"] + "/" + model["canonical_dataset_link"] for model in declaring})
-    assert {stage.model_id for stage in preparations.values() if stage.output_paths} == {
-        next(model["model_id"] for model in declaring
-             if model["source_dir"] + "/" + model["canonical_dataset_link"] == path)
-        for path in {model["source_dir"] + "/" + model["canonical_dataset_link"] for model in declaring}
-    }
 
     for model in declaring:
         stage = preparations[model["model_id"]]
@@ -43,12 +36,25 @@ def test_preparation_stages_follow_declared_links_without_duplicate_writers(
         assert len(matching_writers) == 1, f"{expected} must have one writer"
         owner = matching_writers[0]
         if stage.model_id == owner.model_id:
-            assert stage.output_paths == (expected,)
+            assert expected in stage.output_paths
             assert "--execute" in stage.commands[0] and "--allow-preparation" in stage.commands[0]
         else:
-            assert stage.output_paths == ()
+            assert expected not in stage.output_paths
             assert f"preparation:{owner.model_id}" in stage.dependencies
             assert "--execute" not in stage.commands[0]
+
+    # A model that declares no link but does declare a generable artifact must still be prepared:
+    # gating preparation on the link alone left LIMN's resize and dictionary unperformed.
+    from workbench.backend.registry import preparation_contract_for_model
+    artifact_only = [model for model in models
+                     if not model.get("canonical_dataset_link")
+                     and any(a.get("generator") in ("pinned_source_file", "fashioniq_resize_images")
+                             for a in (preparation_contract_for_model(model) or {}).get("generated_artifacts", []))]
+    assert artifact_only, "registry should declare at least one artifact-only preparation contract"
+    for model in artifact_only:
+        stage = preparations[model["model_id"]]
+        assert stage.output_paths, f"{model['model_id']} must declare its produced paths"
+        assert "--execute" in stage.commands[0] and "--allow-preparation" in stage.commands[0]
 
     clip_models = [model for model in declaring if model["source_dir"] == "CLIP4Cir"]
     assert len(clip_models) == 2
@@ -62,13 +68,11 @@ def test_preparation_status_stages_are_read_only_without_apply_authorization(tmp
     stages = pipeline.all_stages(args, _config(tmp_path))
     preparations = [stage for stage in stages if stage.name == "preparation"]
 
-    declaring = [model for model in models if model.get("canonical_dataset_link")]
     assert len(preparations) == len(models)
+    # Without --apply nothing may be written: no capability is claimed and no execution is planned,
+    # whatever a model's contract declares.
     assert all(not stage.required_capabilities for stage in preparations)
     assert all("--execute" not in stage.commands[0] for stage in preparations)
-    writers = [stage for stage in preparations if stage.output_paths]
-    assert len(writers) == len({model["source_dir"] + "/" + model["canonical_dataset_link"]
-                                for model in declaring})
 
 
 def test_an_explicit_selection_scopes_the_planned_stages() -> None:

@@ -1,0 +1,487 @@
+schema_version: 1
+cluster: classic
+models:
+  - model_id: combiner_rn50x4_noft
+    source_dir: CLIP4Cir
+    upstream_commit: dfed9f748a8a4d05abf613164e06d59b22dbdf13
+    eval_entrypoint: src/validate.py
+    eval_command_evidence: "src/validate.py:263-356 and README.md:258-269 — python src/validate.py --dataset fashionIQ --combining-function combiner --combiner-path <combiner_path> --projection-dim 2560 --hidden-dim 5120 --clip-model-name RN50x4 --target-ratio 1.25 --transform targetpad"
+    assets:
+      - logical_asset_id: clip_rn50x4_backbone
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: src/validate.py
+        upstream_line: 279
+        upstream_function: main
+        expected_relative_path: ~/.cache/clip/RN50x4.pt
+        expected_format: pt
+        expected_structure: PyTorch TorchScript archive containing OpenAI CLIP RN50x4 visual and transformer state dict
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: https://openaipublic.azureedge.net/clip/models/7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd/RN50x4.pt
+        official_version_or_revision: RN50x4
+        expected_sha256: 7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: Valid PyTorch model checkpoint loadable by clip.load('RN50x4') matching expected SHA-256
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: clip.load downloads from Azure CDN to ~/.cache/clip/RN50x4.pt on first run if not present; frozen for the noft baseline
+      - logical_asset_id: clip4cir_fashioniq_link
+        asset_role: dataset_symlink
+        required_for_evaluation: true
+        upstream_source_file: src/data_utils.py
+        upstream_line: 11
+        upstream_function: null
+        expected_relative_path: fashionIQ_dataset
+        expected_format: directory
+        expected_structure: Directory or symlink at <checkout>/fashionIQ_dataset containing captions/, image_splits/, and images/ with .jpg files
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies:
+          - captions/cap.dress.val.json
+          - captions/cap.shirt.val.json
+          - captions/cap.toptee.val.json
+          - image_splits/split.dress.val.json
+          - image_splits/split.shirt.val.json
+          - image_splits/split.toptee.val.json
+          - images/*.jpg
+        output_validation_contract: Directory at <checkout>/fashionIQ_dataset with subdirectories captions, image_splits, and images populated with .jpg files
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: src/data_utils.py:11 defines base_path as repository root and hardcodes base_path / 'fashionIQ_dataset' in lines 140, 146, 176; evaluator CLI has no dataset-root flag
+    evaluation_data_flow: "src/validate.py:main initializes frozen OpenAI CLIP RN50x4 via clip.load (src/validate.py:279) and loads the trained Combiner network state dict from --combiner-path under key 'Combiner' (src/validate.py:306-307). For each category (shirt, dress, toptee), fashioniq_val_retrieval reads validation annotations, split files, and JPEG images from <checkout>/fashionIQ_dataset (src/data_utils.py:11-176). Gallery features are extracted across the full split order using TargetPad(1.25, 288) (src/utils.py:extract_index_features); queries concatenate relative captions into 'cap0 and cap1' format (src/validate.py:88-93), tokenize with clip.tokenize, and fuse image and text embeddings via Combiner (src/validate.py:105-107). R@10 and R@50 are computed against the full gallery without reference exclusion (src/validate.py:44-57) and macro-averaged (src/validate.py:353-354)."
+    unresolved:
+      - "Author Google Drive folder https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing does not document which file maps to the RN50x4 noft Combiner checkpoint, nor does it publish a checksum."
+
+  - model_id: clip4cir_rn50x4_fullft
+    source_dir: CLIP4Cir
+    upstream_commit: dfed9f748a8a4d05abf613164e06d59b22dbdf13
+    eval_entrypoint: src/validate.py
+    eval_command_evidence: "src/validate.py:263-356 and README.md:258-269 — python src/validate.py --dataset fashionIQ --combining-function combiner --combiner-path <combiner_path> --clip-model-path <clip_path> --projection-dim 2560 --hidden-dim 5120 --clip-model-name RN50x4 --target-ratio 1.25 --transform targetpad"
+    assets:
+      - logical_asset_id: clip_rn50x4_backbone
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: src/validate.py
+        upstream_line: 279
+        upstream_function: main
+        expected_relative_path: ~/.cache/clip/RN50x4.pt
+        expected_format: pt
+        expected_structure: PyTorch TorchScript archive containing OpenAI CLIP RN50x4 visual and transformer state dict
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: https://openaipublic.azureedge.net/clip/models/7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd/RN50x4.pt
+        official_version_or_revision: RN50x4
+        expected_sha256: 7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: Valid PyTorch model checkpoint loadable by clip.load('RN50x4') matching expected SHA-256
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: Even when fine-tuned weights are provided via --clip-model-path, base RN50x4 weights are loaded first at line 279 before overlaying state_dict['CLIP'] at line 286
+      - logical_asset_id: clip4cir_fashioniq_link
+        asset_role: dataset_symlink
+        required_for_evaluation: true
+        upstream_source_file: src/data_utils.py
+        upstream_line: 11
+        upstream_function: null
+        expected_relative_path: fashionIQ_dataset
+        expected_format: directory
+        expected_structure: Directory or symlink at <checkout>/fashionIQ_dataset containing captions/, image_splits/, and images/ with .jpg files
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies:
+          - captions/cap.dress.val.json
+          - captions/cap.shirt.val.json
+          - captions/cap.toptee.val.json
+          - image_splits/split.dress.val.json
+          - image_splits/split.shirt.val.json
+          - image_splits/split.toptee.val.json
+          - images/*.jpg
+        output_validation_contract: Directory at <checkout>/fashionIQ_dataset with subdirectories captions, image_splits, and images populated with .jpg files
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: Same hardcoded base_path / 'fashionIQ_dataset' path as combiner_rn50x4_noft; no CLI flag exists to override
+    evaluation_data_flow: "src/validate.py:main instantiates the base OpenAI CLIP RN50x4 architecture via clip.load (src/validate.py:279), then overlays task-oriented fine-tuned CLIP encoder weights from --clip-model-path under key 'CLIP' (src/validate.py:285-286), and separately loads the Combiner model weights from --combiner-path under key 'Combiner' (src/validate.py:306-307). For each category (shirt, dress, toptee), fashioniq_val_retrieval reads captions, splits, and .jpg images from <checkout>/fashionIQ_dataset (src/data_utils.py:11-176). Gallery index features are computed using fine-tuned visual encoder with TargetPad(1.25, 288) (src/utils.py:extract_index_features); queries concatenate relative captions into 'cap0 and cap1' format (src/validate.py:88-93), encode with fine-tuned text encoder, and combine with cached reference image features using Combiner (src/validate.py:105-107). Metrics R@10 and R@50 are evaluated against full gallery (reference eligible) and macro-averaged (src/validate.py:44-57,353-354)."
+    unresolved:
+      - "Author Google Drive folder https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing does not identify which fine-tuned CLIP state pairs with which Combiner state for the RN50x4 fullft run, requiring bundle-level pairing verification."
+
+  - model_id: clvc_net
+    source_dir: CLVCNet
+    upstream_commit: bd9b6889489806cb60676597880f91d918b279cb
+    eval_entrypoint: test.py
+    eval_command_evidence: "test.py:6 and train.py:259 — test.test(args, local_model, global_model, dataset, args.dataset); README.md:70 cites 'python test.py' but test.py defines test(...) with no CLI parser"
+    assets:
+      - logical_asset_id: torchvision_resnet50_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: model.py
+        upstream_line: 72
+        upstream_function: img_backbone.__init__
+        expected_relative_path: ~/.cache/torch/checkpoints/resnet50-19c8e357.pth
+        expected_format: pth
+        expected_structure: PyTorch state dict containing torchvision ResNet-50 weights
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: https://download.pytorch.org/models/resnet50-19c8e357.pth
+        official_version_or_revision: 19c8e357
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: Valid PyTorch state dict matching torchvision resnet50 architecture with SHA-256 starting with 19c8e357
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: resnet.py:12 hardcodes model URL; model.py:72 invokes resnet.resnet50(pretrained=True) when constructing img_backbone
+      - logical_asset_id: clvc_resized_images
+        asset_role: resized_images
+        required_for_evaluation: true
+        upstream_source_file: datasets.py
+        upstream_line: 195
+        upstream_function: FashionIQ.get_img
+        expected_relative_path: resized_image/{category}/{id}.jpg
+        expected_format: directory
+        expected_structure: Subdirectories dress/, shirt/, toptee/ containing category-local resized .jpg files
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: "README.md:28 references XiaoxiaoGuo/fashion-iq start_kit resize_images.py, but no resize script is bundled inside the CLVCNet repository"
+        raw_input_dependencies:
+          - images/*.jpg
+        output_validation_contract: Directories <fashioniq_path>/resized_image/{dress,shirt,toptee} must exist and contain .jpg images for all split IDs
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: datasets.py:157 defines self.image_dir = self.path + 'resized_image' using string concatenation, requiring self.path to end with a trailing slash; line 195 hardcodes .jpg extension
+      - logical_asset_id: clvc_category_checkpoint_bundle
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: train.py
+        upstream_line: 274
+        upstream_function: train_and_evaluate
+        expected_relative_path: "{dress,shirt,toptee}/{local_model.pt,global_model.pt}"
+        expected_format: pt
+        expected_structure: Six whole-model PyTorch serialization files (dress/local_model.pt, dress/global_model.pt, shirt/local_model.pt, shirt/global_model.pt, toptee/local_model.pt, toptee/global_model.pt)
+        classification: OFFICIAL_PUBLIC_DOWNLOAD
+        official_download_url: https://drive.google.com/file/d/159rBhWyhkLN7sXAi8iyW_ljzFNLJinKa/view?usp=sharing
+        official_version_or_revision: CLVCNET.zip
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: Six whole-model files loadable by torch.load covering local and global models for all three categories
+        acquisition_status: UNVERIFIED
+        current_blocker: Author Google Drive archive member structure and mapping to the six per-category model slots has not been verified
+        notes: CLVC-Net trains and evaluates a separate pair of whole models (local_model.pt and global_model.pt) for each FashionIQ category; evaluating all three categories requires all six models
+      - logical_asset_id: clvc_simplevocab_fallback
+        asset_role: vocab
+        required_for_evaluation: false
+        upstream_source_file: text_model.py
+        upstream_line: 66
+        upstream_function: TextLSTMModel.__init__
+        expected_relative_path: simplevocab.json
+        expected_format: json
+        expected_structure: JSON dictionary containing keys word2id and wordcount
+        classification: SOURCE_EVIDENCE_MISSING
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: JSON file with word2id and wordcount keys
+        acquisition_status: BLOCKED
+        current_blocker: File simplevocab.json is not bundled with source and has no download link; only read if TextLSTMModel is initialized without texts
+        notes: OPTIONAL_NOT_REQUIRED_FOR_EVALUATION when loading whole pickled models because SimpleVocab is embedded inside the serialized model object; fails if model is instantiated fresh with texts_to_build_vocab=None
+    evaluation_data_flow: "CLVCNet/test.py:test evaluates a single category dataset given instantiated local_model and global_model (test.py:6). datasets.py:FashionIQ reads validation annotations from captions/cap.{category}.val.json, splits from image_splits/split.{category}.val.json, and category-local resized images from <fashioniq_path>/resized_image/{category}/{id}.jpg (datasets.py:157-195). Relative captions are formatted as '<BOS> {cap0} <AND> {cap1} <EOS>' (datasets.py:174) and encoded with SimpleVocab and TextLSTMModel (text_model.py:23-45). In test.py:88-120, local and global feature representations from compose_img_text and extract_img_feature are concatenated along the feature dimension for both queries and targets. The evaluation gallery is constructed as an ordered pair-union of reference and target candidate IDs (datasets.py:243-257), reference candidate similarity is masked to -10e10 before ranking (test.py:135), and Recall@1, 10, 50 are computed per category (test.py:142-148)."
+    unresolved:
+      - "CLVCNet/test.py does not define an executable CLI or __main__ block; standalone evaluation requires an external replay wrapper or running through train.py."
+      - "The author Google Drive archive CLVCNET.zip (https://drive.google.com/file/d/159rBhWyhkLN7sXAi8iyW_ljzFNLJinKa/view?usp=sharing) member layout and category mapping remain unverified."
+      - "datasets.py:157 relies on string concatenation self.path + 'resized_image', requiring self.path to end with a trailing slash to avoid malformed paths."
+
+  - model_id: dcnet
+    source_dir: DCNet
+    upstream_commit: 68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb
+    eval_entrypoint: test.py
+    eval_command_evidence: "test.py:96-117 and README.md:62 — python test.py --resume logdir/fashioniq_dcnet/"
+    assets:
+      - logical_asset_id: dcnet_glove_val_pkls
+        asset_role: caption_source
+        required_for_evaluation: true
+        upstream_source_file: data_loader/CE_dataset.py
+        upstream_line: 34
+        upstream_function: CE.__init__
+        expected_relative_path: captions/cap.{category}.glove.val.pkl
+        expected_format: pkl
+        expected_structure: Python pickle containing list of dicts with candidate, target, captions, and 300-d float numpy array wv
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: preprocess/process_cap.py
+        generation_parameters: "Requires spaCy en_vectors_web_lg and NLTK punkt tokenizer"
+        raw_input_dependencies:
+          - captions/cap.dress.train.json
+          - captions/cap.shirt.train.json
+          - captions/cap.toptee.train.json
+          - captions/cap.dress.val.json
+          - captions/cap.shirt.val.json
+          - captions/cap.toptee.val.json
+        output_validation_contract: Pickle files for dress, shirt, toptee each containing list of query dicts with 'wv' numpy array of shape (N_words, 300)
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "CRITICAL NONDETERMINISM: preprocess/process_cap.py:31 assigns random vectors for OOV words exceeding frequency 2 using unseeded np.random.normal(0, 0.3, (300,)); regenerating without author-pinned PKLs results in unseeded variation"
+      - logical_asset_id: dcnet_resized_images
+        asset_role: resized_images
+        required_for_evaluation: true
+        upstream_source_file: data_loader/CE_dataset.py
+        upstream_line: 22
+        upstream_function: CE.__init__
+        expected_relative_path: resized_images/{id}.jpg
+        expected_format: directory
+        expected_structure: Flat directory containing 256x256 resized .jpg images for all FashionIQ image IDs
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: preprocess/resize_img.py
+        generation_parameters: "image_size = [256, 256], PIL Image.ANTIALIAS, 6 CPUs"
+        raw_input_dependencies:
+          - images/*.jpg
+        output_validation_contract: Flat directory <data_dir>/resized_images containing 256x256 .jpg files matching all IDs in validation splits
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: CE_dataset.py:22 sets self.image_dir = os.path.join(data_dir, 'resized_images') and line 72 looks up candidate_id + '.jpg' in that flat directory (no category subdirectories)
+      - logical_asset_id: torchvision_resnet50_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: model/model.py
+        upstream_line: 283
+        upstream_function: CENet.__init__
+        expected_relative_path: ~/.cache/torch/checkpoints/resnet50-19c8e357.pth
+        expected_format: pth
+        expected_structure: PyTorch state dict containing torchvision ResNet-50 weights
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: https://download.pytorch.org/models/resnet50-19c8e357.pth
+        official_version_or_revision: 19c8e357
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: Valid PyTorch state dict matching torchvision resnet50 architecture with SHA-256 starting with 19c8e357
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: model/model.py:283 calls models.resnet50(pretrained=True) when backbone=='resnet' during CENet model instantiation in test.py:44 before checkpoint weights are overlaid by _resume_checkpoint
+      - logical_asset_id: dcnet_checkpoint_run_dir
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: test.py
+        upstream_line: 98
+        upstream_function: main
+        expected_relative_path: logdir/fashioniq_dcnet/
+        expected_format: directory
+        expected_structure: Run directory containing config.json and trained_model.pth
+        classification: OFFICIAL_PUBLIC_DOWNLOAD
+        official_download_url: https://drive.google.com/drive/folders/1wgygqF095Di67EaHaGOXbwh3wEzk9izB?usp=sharing
+        official_version_or_revision: fashioniq_dcnet
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: Directory containing valid config.json loadable by ConfigParser and trained_model.pth loadable by TrainerJoint._resume_checkpoint
+        acquisition_status: UNVERIFIED
+        current_blocker: Author Google Drive run directory contents and checkpoint hashes have not been audited or verified
+        notes: test.py requires --resume pointing to a directory with config.json (parse_config.py:20) and trained_model.pth (base_trainer.py:193)
+      - logical_asset_id: spacy_en_vectors_web_lg
+        asset_role: tokenizer
+        required_for_evaluation: false
+        upstream_source_file: preprocess/process_cap.py
+        upstream_line: 9
+        upstream_function: null
+        expected_relative_path: null
+        expected_format: directory
+        expected_structure: spaCy model package en_vectors_web_lg containing 300-d GloVe vectors
+        classification: OPTIONAL_NOT_REQUIRED_FOR_EVALUATION
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: python -m spacy download en_vectors_web_lg
+        raw_input_dependencies: []
+        output_validation_contract: Installed spaCy package en_vectors_web_lg loadable via spacy.load('en_vectors_web_lg')
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: Only required if regenerating GloVe PKLs via preprocess/process_cap.py; evaluation reads generated PKLs directly
+      - logical_asset_id: nltk_punkt_tokenizer
+        asset_role: tokenizer
+        required_for_evaluation: false
+        upstream_source_file: preprocess/process_cap.py
+        upstream_line: 22
+        upstream_function: null
+        expected_relative_path: null
+        expected_format: directory
+        expected_structure: NLTK tokenizers/punkt tokenizer data
+        classification: OPTIONAL_NOT_REQUIRED_FOR_EVALUATION
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: python -m nltk.downloader punkt
+        raw_input_dependencies: []
+        output_validation_contract: punkt resource accessible to nltk.tokenize.word_tokenize
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: Only required if regenerating GloVe PKLs via preprocess/process_cap.py; evaluation reads generated PKLs directly
+    evaluation_data_flow: "DCNet/test.py loads configuration from --resume/config.json (parse_config.py:20) and restores model state from --resume/trained_model.pth (base_trainer.py:193). ExpertDataLoader initializes CE_dataset.py:CE instances for dress, shirt, toptee, loading precomputed 300-d GloVe vectors from captions/cap.{category}.glove.val.pkl (CE_dataset.py:34) and 256x256 images from flat directory <data_dir>/resized_images/{id}.jpg (CE_dataset.py:22,72). The validation gallery is loaded from image_splits/split.{category}.val.json in full split order (CE_dataset.py:27). In trainer/trainer_joint.py:TrainerJoint._valid_epoch, queries are composed through composition (TIRG) and correction branches, reference candidates are masked in both branches before log-softmax fusion (F.log_softmax(score_comp) + F.log_softmax(score_corr)), and descending ranks yield Recall@10, 50 per category and macro average (trainer_joint.py:80-140)."
+    unresolved:
+      - "preprocess/process_cap.py:31 samples unseeded np.random.normal(0, 0.3, (300,)) for out-of-vocabulary words exceeding frequency 2, creating non-deterministic word vectors on regeneration."
+      - "The author Google Drive run directory at https://drive.google.com/drive/folders/1wgygqF095Di67EaHaGOXbwh3wEzk9izB?usp=sharing has unverified file hashes and configuration compatibility."
+
+  - model_id: sprc
+    source_dir: SPRC
+    upstream_commit: 2935a5397732260d1db6fa577e5926f963e36f0f
+    eval_entrypoint: src/blip_validate.py
+    eval_command_evidence: "src/blip_validate.py:141-155 and README.md:108-112 — python src/blip_validate.py --dataset FashionIQ --blip-model-name blip2_cir_align_prompt --backbone pretrain --model-path <model_path> (default blip-model-name blip2_cir_rerank_learn is unregistered in LAVIS)"
+    assets:
+      - logical_asset_id: lavis_blip2_base_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: src/lavis/configs/models/blip2/blip2_pretrain.yaml
+        upstream_line: 10
+        upstream_function: load_from_pretrained
+        expected_relative_path: ~/.cache/lavis/blip2_pretrained.pth
+        expected_format: pth
+        expected_structure: PyTorch checkpoint dictionary containing key 'model' with BLIP-2 EVA-CLIP-g and Q-Former weights
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth
+        official_version_or_revision: pretrain
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: PyTorch state dict with key 'model' loadable by Blip2Base.load_from_pretrained
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: Loaded during load_model_and_preprocess(name=..., model_type='pretrain') in src/blip_validate.py:45; downloads automatically from Google Cloud Storage if not locally cached
+      - logical_asset_id: hf_bert_base_uncased_tokenizer
+        asset_role: tokenizer
+        required_for_evaluation: true
+        upstream_source_file: src/lavis/models/blip2_models/blip2.py
+        upstream_line: 32
+        upstream_function: Blip2Base.init_tokenizer
+        expected_relative_path: ~/.cache/huggingface/hub/models--bert-base-uncased/
+        expected_format: directory
+        expected_structure: Hugging Face tokenizer cache containing vocab.txt and tokenizer.json for bert-base-uncased
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: https://huggingface.co/bert-base-uncased
+        official_version_or_revision: main
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: Hugging Face BertTokenizer loadable via BertTokenizer.from_pretrained('bert-base-uncased')
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: Required by Q-Former text tokenizer initialization; adds special token [DEC] at src/lavis/models/blip2_models/blip2.py:33
+      - logical_asset_id: sprc_fashioniq_link
+        asset_role: dataset_symlink
+        required_for_evaluation: true
+        upstream_source_file: src/data_utils.py
+        upstream_line: 12
+        upstream_function: null
+        expected_relative_path: fashionIQ_dataset
+        expected_format: directory
+        expected_structure: Directory or symlink at <checkout>/fashionIQ_dataset containing captions/, image_splits/, and images/ with .png files
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies:
+          - captions/cap.dress.val.json
+          - captions/cap.shirt.val.json
+          - captions/cap.toptee.val.json
+          - image_splits/split.dress.val.json
+          - image_splits/split.shirt.val.json
+          - image_splits/split.toptee.val.json
+          - images/*.png
+        output_validation_contract: Directory at <checkout>/fashionIQ_dataset with subdirectories captions, image_splits, and images populated with .png files
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: src/data_utils.py:12 fixes base_path to checkout root and reads base_path / 'fashionIQ_dataset' in lines 149, 155, 185; no CLI argument exists to configure the dataset root path
+      - logical_asset_id: sprc_fashioniq_png_images
+        asset_role: resized_images
+        required_for_evaluation: true
+        upstream_source_file: src/data_utils.py
+        upstream_line: 185
+        upstream_function: FashionIQDataset.__getitem__
+        expected_relative_path: fashionIQ_dataset/images/{id}.png
+        expected_format: directory
+        expected_structure: Directory containing flat .png image files for all FashionIQ images
+        classification: OPERATOR_PROVIDED
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies:
+          - images/*.jpg
+        output_validation_contract: All FashionIQ validation gallery and query images must exist as .png files under fashionIQ_dataset/images/
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "CRITICAL EXTENSION MISMATCH: src/data_utils.py:185 explicitly hardcodes image_path = base_path / 'fashionIQ_dataset' / 'images' / f'{image_name}.png'; canonical dataset provides .jpg, causing FileNotFoundError unless .png files exist"
+      - logical_asset_id: sprc_fiq_checkpoint
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: src/blip_validate.py
+        upstream_line: 48
+        upstream_function: clip_finetune_fiq
+        expected_relative_path: checkpoints/sprc_fiq.pt
+        expected_format: pt
+        expected_structure: PyTorch state dict dictionary keyed by model class name (e.g. checkpoint[blip_model.__class__.__name__])
+        classification: OFFICIAL_PUBLIC_DOWNLOAD
+        official_download_url: https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj
+        official_version_or_revision: sprc_fiq.pt
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: PyTorch file loadable via torch.load with dictionary containing key matching blip_model.__class__.__name__
+        acquisition_status: UNVERIFIED
+        current_blocker: OneDrive link has not been audited or verified for key structure, and blip_validate.py:49 uses strict=False which silently ignores missing or unexpected keys
+        notes: README.md:124 provides OneDrive link; evaluator extracts checkpoint[blip_model.__class__.__name__] with strict=False
+    evaluation_data_flow: "src/blip_validate.py:main calls clip_finetune_fiq (src/blip_validate.py:26,155), which initializes BLIP-2 with Q-Former and EVA-CLIP-g visual encoder via load_model_and_preprocess (src/blip_validate.py:45), downloading base weights blip2_pretrained.pth and bert-base-uncased tokenizer. The checkpoint is loaded from --model-path via checkpoint[blip_model.__class__.__name__] with strict=False (src/blip_validate.py:48-50). Validation datasets for dress, toptee, shirt are loaded from hardcoded <checkout>/fashionIQ_dataset reading captions, splits, and images/{id}.png with TargetPad(1.25, 224) (src/data_utils.py:12-185). Gallery features are extracted using extract_index_blip_features (src/utils.py); query captions are concatenated with strip('.?, ').capitalize() for caption 0 and strip('.?, ') for caption 1 joined with ' and ' without correction dictionary, then processed by LAVIS BlipCaptionProcessor.pre_caption (src/validate_blip.py:180-184). Retrieval ranking evaluates target similarity across full validation gallery without reference exclusion, computing R@10, R@50 per category and macro average (src/validate_blip.py:43-57, src/blip_validate.py:88-96)."
+    unresolved:
+      - "CLI argument --blip-model-name defaults to blip2_cir_rerank_learn at src/blip_validate.py:144, but no model with that name is registered in LAVIS registry, raising KeyError unless overridden at CLI."
+      - "src/data_utils.py:185 hardcodes .png image extension, while canonical FashionIQ provides .jpg; images must be converted or symlinked with .png."
+      - "Checkpoint loading in src/blip_validate.py:49 executes strict=False on checkpoint[blip_model.__class__.__name__], which masks missing or mismatched layer keys if the checkpoint does not match the chosen architecture."
+      - "In src/lavis/models/blip2_models/blip2_qformer_cir_rerank.py:Blip2QformerCirRerank.inference, reference_embeds is accepted but never used in similarity computation (similarity is text-to-gallery), creating a model-level departure from reference-conditioned CIR."

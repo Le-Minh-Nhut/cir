@@ -11,7 +11,7 @@ import stat
 import subprocess
 import sys
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -541,7 +541,7 @@ def write_stage_receipt(config: WorkbenchConfig, stage: Stage, *, return_code: i
         "model_id": stage.model_id,
         "commands": [list(c) for c in stage.commands],
         "return_code": return_code,
-        "completed_at": datetime.now(UTC).isoformat(),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
         "kind": "stage_completion_receipt",
     }
     temp = path.with_suffix(f".tmp.{os.getpid()}")
@@ -742,7 +742,7 @@ def new_run_id() -> str:
     """Invocation identity shared by the master and the evaluator it launches."""
     import uuid
 
-    return f"{datetime.now(UTC):%Y%m%dT%H%M%S%fZ}_{uuid.uuid4().hex[:8]}"
+    return f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S%fZ}_{uuid.uuid4().hex[:8]}"
 
 
 def command(script: str, *arguments: str | Path) -> list[str]:
@@ -943,7 +943,7 @@ def write_preparation_recipe(model_dict: dict, config: WorkbenchConfig) -> Path:
         "model_id": model_dict["model_id"],
         "recipe_digest": preparation_recipe_digest(model_dict),
         "upstream_commit_sha": model_dict.get("upstream_commit_sha"),
-        "recorded_at": datetime.now(UTC).isoformat(),
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
     }
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     temporary.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -1476,22 +1476,37 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             except (OSError, RuntimeError):
                 is_link_valid = False
         prep_cmd = ["--model", mid, "--dataset-root", str(target_root)]
-        will_prepare = bool(prep_link) and prep_owner == mid and not is_link_valid and getattr(args, "allow_preparation", False) and getattr(args, "apply", False)
+        # Preparation owns two kinds of work: the fixed dataset link a pinned evaluator derives for
+        # itself, and the artifacts a preparation contract declares as generable (a source-shipped
+        # dictionary, a documented resize). Gating it on the link alone meant a model like LIMN,
+        # which declares no link but does declare a resize and a dictionary, never had its
+        # preparation attempted at all.
+        from workbench.backend.registry import preparation_contract_for_model
+        prep_contract = preparation_contract_for_model(m)
+        executable_artifacts = [a for a in (prep_contract or {}).get("generated_artifacts", [])
+                                if a.get("generator") in ("pinned_source_file", "fashioniq_resize_images")]
+        prep_artifacts = tuple(
+            config.FASHIONIQ_ROOT / relative
+            for a in executable_artifacts for relative in a["paths"]
+        )
+        link_is_owed = bool(prep_link) and prep_owner == mid and not is_link_valid
+        will_prepare = (link_is_owed or bool(executable_artifacts)) and getattr(args, "allow_preparation", False) and getattr(args, "apply", False)
         if will_prepare:
             prep_cmd.extend(["--execute", "--allow-preparation"])
         prep_deps = ["dataset", sync_dep]
         if prep_owner and prep_owner != mid:
             prep_deps.append(f"preparation:{prep_owner}")
-        # A model whose declared dataset link is missing cannot be prepared without authorization,
+        # A model whose declared preparation is still owed cannot be prepared without authorization,
         # so an `--apply` run that lacks it is refused as unauthorized rather than allowed to reach
         # the read-only verify step, exit nonzero, and surface as an unexplained stage failure.
-        needs_preparation = bool(prep_link) and prep_owner == mid and not is_link_valid and getattr(args, "apply", False)
+        needs_preparation = (link_is_owed or bool(executable_artifacts)) and getattr(args, "apply", False)
+        prep_outputs = (prep_link,) if prep_link and prep_owner == mid else prep_artifacts
         stages.append(run_stage(
             "preparation",
             command("prepare_model.py", *prep_cmd),
             model_id=mid,
             dependencies=tuple(prep_deps),
-            output_paths=(prep_link,) if prep_link and prep_owner == mid else (),
+            output_paths=tuple(prep_outputs),
             required_capabilities=({"allow_preparation"} if needs_preparation else frozenset()),
         ))
 
@@ -1587,7 +1602,12 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             receipt=True,
         ))
 
-        preflight_deps = (sync_dep, f"checkpoint:{mid}", f"preparation:{mid}", f"environment:{mid}", f"gpu-verification:{mid}")
+        # The auxiliary assets are declared inputs of this model's official evaluation, so they
+        # have to be resolved before the preflight can judge readiness. Without the edge the
+        # preflight ran before the assets had been fetched or verified, and a model whose captions
+        # were about to arrive was reported blocked while its evaluation was already scheduled.
+        preflight_deps = (sync_dep, f"checkpoint:{mid}", f"preparation:{mid}", f"environment:{mid}",
+                          f"gpu-verification:{mid}", f"auxiliary-assets:{mid}")
         preflight_args = ["--scope", "real", "--dataset-root", str(dataset_root(args, config)),
                           "--model", mid]
         if getattr(args, "verify_gpu", False):
@@ -1765,7 +1785,7 @@ def run_stages(
             report_path.parent.mkdir(parents=True, exist_ok=True)
             workflow_report = {
                 "mode": mode,
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "success": not failed,
                 "status": "SUCCESS" if not failed else ("PARTIAL" if any(s.get("status") == "COMPLETE" for s in stage_records.values()) else "FAILED"),
                 "stages": stage_records,
@@ -1835,7 +1855,7 @@ def run_stages(
                         "model_id": stage.model_id,
                         "status": "SKIPPED_DEPENDENCY",
                         "fingerprint": None,
-                        "finished_at": datetime.now(UTC).isoformat(),
+                        "finished_at": datetime.now(timezone.utc).isoformat(),
                         "return_code": 125,
                     }
                     save_pipeline_state(state, state_path)
@@ -1859,7 +1879,7 @@ def run_stages(
                         "model_id": stage.model_id,
                         "status": "BLOCKED_AUTHORIZATION_REQUIRED",
                         "fingerprint": None,
-                        "finished_at": datetime.now(UTC).isoformat(),
+                        "finished_at": datetime.now(timezone.utc).isoformat(),
                         "return_code": 126,
                     }
                     if not dry_run:
@@ -1921,7 +1941,7 @@ def run_stages(
                     "input_fingerprint_evidence": fingerprint_info,
                     "resume_refused_reason": resume_block_reason,
                     "run_id": stage.run_id,
-                    "started_at": datetime.now(UTC).isoformat(),
+                    "started_at": datetime.now(timezone.utc).isoformat(),
                 }
                 save_pipeline_state(state, state_path)
 
@@ -1944,7 +1964,7 @@ def run_stages(
                     print(f"  [BLOCKED] {stage.name} exited with status {status}", file=sys.stderr)
                     stage_records[skey].update({
                         "status": "FAILED",
-                        "finished_at": datetime.now(UTC).isoformat(),
+                        "finished_at": datetime.now(timezone.utc).isoformat(),
                         "return_code": status,
                     })
                     save_pipeline_state(state, state_path)
@@ -1961,7 +1981,7 @@ def run_stages(
                     print(f"  [BLOCKED] {stage.name}: declared outputs missing or invalid after exit 0", file=sys.stderr)
                     stage_records[skey].update({
                         "status": "FAILED",
-                        "finished_at": datetime.now(UTC).isoformat(),
+                        "finished_at": datetime.now(timezone.utc).isoformat(),
                         "return_code": 0,
                         "failure_reason": "output_contract_not_satisfied",
                     })
@@ -1985,7 +2005,7 @@ def run_stages(
                 failed_stages.add(dependency_key(stage))
                 stage_records[skey].update({
                     "status": "FAILED",
-                    "finished_at": datetime.now(UTC).isoformat(),
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
                     "return_code": 0,
                     "failure_reason": "output_contract_not_satisfied",
                 })
@@ -2005,7 +2025,7 @@ def run_stages(
                     _, _, evidence_detail = stage.evidence(stage_records.get(skey))
                 stage_records[skey].update({
                     "status": "COMPLETE",
-                    "finished_at": datetime.now(UTC).isoformat(),
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
                     "return_code": 0,
                     "run_id": stage.run_id,
                     "evidence": evidence_detail,

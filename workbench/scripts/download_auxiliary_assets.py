@@ -10,7 +10,7 @@ import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -125,7 +125,7 @@ def record_download(entries: list[dict], asset: Asset) -> list[dict]:
             "source_revision": asset.source_revision,
             "downloaded_sha256": digest,
             "size_bytes": asset.destination.stat().st_size,
-            "downloaded_at": datetime.now(UTC).isoformat(),
+            "downloaded_at": datetime.now(timezone.utc).isoformat(),
             "official_hash_available": asset.expected_sha256 is not None,
             "official_sha256": asset.expected_sha256,
         }

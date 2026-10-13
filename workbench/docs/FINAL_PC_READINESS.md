@@ -1,4 +1,4 @@
-# Final PC readiness — Release B (GPU host)
+# Final PC readiness -- Release B (GPU host)
 
 Everything below is the software state at the commit named here. Real checkpoint inference, real
 FashionIQ evaluation, numerical parity with the papers and real CUDA capability belong to the GPU
@@ -33,15 +33,25 @@ document is a diagnostic.
 | Disk | checkpoints dominate: see the budget section. Artifacts, checkpoints, results and upstream clones each live under their own configured root. |
 | Network | needed only for acquisition. A verified local source/checkpoint/auxiliary asset is reused with no network permission. |
 
-Before a long run, export a stable ledger key from your secret manager:
+Before the first run, create the ledger signing key **once** and keep it:
 
 ```bash
-export WORKBENCH_LEDGER_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+mkdir -p ~/.config/cir && umask 077
+python -c "import secrets,pathlib;pathlib.Path.home().joinpath('.config/cir/workbench_ledger_key').write_text(secrets.token_hex(32))"
 ```
 
-Keep it outside the repo, the config, and the artifacts. It signs completion evidence; changing or
-losing it makes existing evidence unverifiable. Evaluator and package-manager children do not
-receive it.
+Then export the *same* key in every shell that runs the workbench:
+
+```bash
+export WORKBENCH_LEDGER_KEY="$(cat ~/.config/cir/workbench_ledger_key)"
+```
+
+Keep it outside the repo, the config, and the artifacts. It signs completion evidence, and the
+evidence chain is only as trustworthy as that key: **do not regenerate it per shell**, because a new
+key makes every earlier run's evidence unverifiable. Evaluator and package-manager children do not
+receive it. Leaving the variable unset is also safe -- a `0600` key file is created under the
+repository root on first use and reused thereafter -- but a secret store is preferable on a shared
+machine. An empty key, or a missing key while a ledger already exists, fails closed.
 
 ## 3. Configuration
 
@@ -52,13 +62,13 @@ Copy `workbench/configs/pc_autopilot.example.yaml` and edit. Required keys: `sch
 `paths.dataset_root` is the FashionIQ root itself (the directory containing `captions/`,
 `image_splits/`, `images/`), not `images/`. `paths.artifacts` owns run state, reports, the evidence
 ledger, completion proofs, GPU capability records and the derived index; keep it on persistent
-storage. `paths.third_party` is where pinned upstream checkouts live — the planner reads each
+storage. `paths.third_party` is where pinned upstream checkouts live -- the planner reads each
 model's requirements from there, so it must be the same root the sync stage populates.
 
 Two ready-made profiles are provided:
 
-- `workbench/configs/pc_autopilot.pilot_csmcir.yaml` — one model, the shortest verified path.
-- `workbench/configs/pc_autopilot.all_available.yaml` — every eligible model, with the flagged
+- `workbench/configs/pc_autopilot.pilot_csmcir.yaml` -- one model, the shortest verified path.
+- `workbench/configs/pc_autopilot.all_available.yaml` -- every eligible model, with the flagged
   checkpoint policy so the noise-trained cohort is explicit rather than silently excluded.
 
 ## 4. Permissions
@@ -102,7 +112,7 @@ group** under the artifacts root, recording four distinct states:
 Only `RUNTIME_VERIFIED` permits evaluation. Installation is conda-resolvable packages first, then
 pip-only packages, then `pip check` and the version/import checks. A group that fails is split, only
 the affected members, within a bounded number of attempts; valid groups are preserved and an
-existing environment is never deleted — a replacement is built in a staging prefix and committed
+existing environment is never deleted -- a replacement is built in a staging prefix and committed
 atomically only after it verifies. An environment the workbench did not create is never removed.
 
 The authoritative assignment is `<paths.artifacts>/environment_assignment.json`. Inspect it, plus
@@ -143,7 +153,7 @@ blocker spelled out.
 
 ## 9. First GPU pilot
 
-`workbench/configs/pc_autopilot.pilot_csmcir.yaml` — CSMCIR under `strict_clean`: the only model with
+`workbench/configs/pc_autopilot.pilot_csmcir.yaml` -- CSMCIR under `strict_clean`: the only model with
 a recorded clean checkpoint, a pinned command and a resolved dataset path. Its one open prerequisite
 is the `COT_ours2/fashioniq` captions; if those are absent the model reports `BLOCKED_CHECKPOINT`
 or the corresponding asset blocker rather than running.
@@ -184,7 +194,7 @@ Progress: watch the stage lines on stdout; a run is safe to leave and inspect la
 Rerun the same command with `--resume`. Verified stages are reused; an input that changed reruns its
 dependents only. Preserve the selected models, the artifact roots, the GPU visibility and the ledger
 key across retries. Do not delete the ledger, proofs, reports or checkpoints to force a retry, and do
-not edit local data to satisfy a gate — a blocker that comes from an unresolved upstream fact is
+not edit local data to satisfy a gate -- a blocker that comes from an unresolved upstream fact is
 resolved with authoritative evidence or left blocked.
 
 A failed model does not affect unrelated models; a failed global index does not change a successful
@@ -197,5 +207,5 @@ capability the stage declared.
 - No Recall value in any report is a reproduction of a published number.
 - No real CUDA capability has been recorded on this host.
 - Per-query ranking export is not implemented; evaluation is aggregate only.
-- The reference for `strict_clean` is evaluation noise 0% — a checkpoint's *training* condition is
+- The reference for `strict_clean` is evaluation noise 0% -- a checkpoint's *training* condition is
   reported separately and is never conflated with it.

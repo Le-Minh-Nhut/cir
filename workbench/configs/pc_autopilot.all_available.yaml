@@ -16,7 +16,15 @@
 #
 # Copy to a private path outside the repository, replace the `paths` values, and export the key:
 #
-#   export WORKBENCH_LEDGER_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+# Create the ledger signing key ONCE, keep it, and reuse it for every run of this workbench:
+# the key signs the evidence ledger, so a new key each shell makes every earlier run unverifiable.
+#   umask 077 && python -c "import secrets,pathlib; pathlib.Path.home().joinpath('.config/cir/workbench_ledger_key').write_text(secrets.token_hex(32))" \
+#     && mkdir -p ~/.config/cir
+# Then, in each shell that runs the workbench:
+#   export WORKBENCH_LEDGER_KEY="$(cat ~/.config/cir/workbench_ledger_key)"
+# Omitting the variable entirely is also safe: a 0600 key file is created under the repository
+# root on first use and reused thereafter. An empty key, or a missing key with an existing
+# ledger, fails closed.
 #   ./workbench/run.sh autopilot --config <this file> --apply --resume
 #
 # Environment creation is authorized here because this profile is intended to run unattended on the

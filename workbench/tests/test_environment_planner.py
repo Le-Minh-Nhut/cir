@@ -523,7 +523,7 @@ def test_bounded_split_and_retry(tmp_path, monkeypatch):
     plan = planner.plan_environments([m_good, m_bad], solver=accepted, artifacts_root=tmp_path)
     assert len(plan["groups"]) == 1
 
-    def mock_provision(group, by_id, specs, artifacts_root, third_party_root, allowed, solver_cmd):
+    def mock_provision(group, by_id, specs, artifacts_root, third_party_root, allowed, solver_cmd, network_allowed=True):
         if "bad-model" in group["members"] and "good-model" in group["members"]:
             group["verification_details"] = {"evaluator_imports": {"bad-model": {"returncode": 1}}}
             return False, "bad-model evaluator import failed"
@@ -722,9 +722,10 @@ def test_p0_04_safe_replacement_and_atomic_commit(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "run", mock_subp_run)
 
     def failing_verify(staging_group, *args, **kwargs):
-        staging_prefix = Path(staging_group["conda_env_path"])
-        assert staging_prefix.name.startswith(f".staging-{env_id}-")
-        assert not (staging_prefix / planner.MARKER_FILENAME).exists()
+        # The environment is created at its own final path and verified there; nothing is
+        # relocated, so the path under verification is the path that was installed.
+        assert Path(staging_group["conda_env_path"]).name.startswith(env_id)
+        assert not (Path(staging_group["conda_env_path"]) / planner.MARKER_FILENAME).exists()
         return False, "verification failed intentionally", {}
 
     monkeypatch.setattr(planner, "_verify_group_interpreter", failing_verify)
@@ -738,6 +739,7 @@ def test_p0_04_safe_replacement_and_atomic_commit(tmp_path, monkeypatch):
 
     # 2. Now run real safe replacement logic where replacement succeeds to a NEW prefix
     def mock_verify_group(staging_group, *a, **k):
+        # Not yet managed: the marker is only written once the environment passed verification.
         assert not (Path(staging_group["conda_env_path"]) / planner.MARKER_FILENAME).exists()
         return True, "verification passed", {}
 
@@ -748,7 +750,7 @@ def test_p0_04_safe_replacement_and_atomic_commit(tmp_path, monkeypatch):
 
     plan["interpreter_mapping"]["safe-replace-model"] = str(
         tmp_path / "environments" / "cir-stale-mapping" / "bin" / "python")
-    # Mock subprocess.run to create the staging interpreter file so rename succeeds
+    # The installer writes the interpreter into the prefix it was given.
     def mock_subp_run(argv, *a, **k):
         if "create" in argv and "--prefix" in argv:
             p = Path(argv[argv.index("--prefix") + 1])
@@ -764,7 +766,7 @@ def test_p0_04_safe_replacement_and_atomic_commit(tmp_path, monkeypatch):
     new_group = success_assign["groups"][0]
     assert new_group["state"] == "RUNTIME_VERIFIED"
     new_prefix = Path(new_group["conda_env_path"])
-    # Shows successful replacement goes to a NEW prefix
+    # A successful replacement goes to a NEW prefix; the occupied one is never rebuilt in place
     assert new_prefix != existing_prefix
     assert new_prefix.name.startswith(f"{env_id}-")
     # Existing prefix with sentinel file still intact
@@ -799,6 +801,120 @@ def test_p0_05_package_manager_env_strips_credentials(monkeypatch):
     res = subprocess.run([sys.executable, "-c", probe_code], env=child_env, capture_output=True, text=True)
     assert res.returncode == 0
 
+
+
+def test_installation_is_refused_without_network_authorization(tmp_path, monkeypatch):
+    """`allow_env_install` authorizes writing an environment, not reaching the network.
+
+    conda and pip contact an index to resolve, so an install without network authorization would
+    silently egress. The provisioner must refuse and say why instead.
+    """
+    m = model("offline-model", python="3.11", env_var="OFFLINE_MODEL_PYTHON")
+    plan = planner.plan_environments([m], solver=accepted, artifacts_root=tmp_path)
+    monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
+    launched: list[list[str]] = []
+    monkeypatch.setattr(subprocess, "run", lambda argv, *a, **k: launched.append(argv) or SimpleNamespace(returncode=0, stdout="", stderr=""))
+
+    result = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True,
+                                                network_allowed=False)
+    group = result["groups"][0]
+    assert group["state"] == "BLOCKED_AUTHORIZATION_REQUIRED"
+    assert launched == [], "no package manager may run without network authorization"
+    assert "allow_network" in " ".join(group["evidence"])
+    # The planned interpreter is still recorded (the plan knows where the environment would live),
+    # but nothing verified it and nothing was installed, so the state says so.
+    assert group["installation_status"] == "FAILED"
+    assert group["runtime_verification_status"] == "NOT_CONFIGURED"
+    assert result["models"]["offline-model"]["runtime_verification_status"] == "NOT_CONFIGURED"
+
+
+def test_environment_is_created_directly_at_its_final_prefix(tmp_path, monkeypatch):
+    """The conda prefix a model will execute from must be the prefix it was installed into.
+
+    A conda prefix embeds its own absolute path in the interpreter, in every console-script
+    shebang, and in conda-meta. Installing somewhere else and renaming produced an environment
+    whose scripts pointed at a directory that no longer existed, and the verification that
+    followed the rename could not see it. So the installer must be handed the final path.
+    """
+    m = model("final-prefix-model", python="3.11", env_var="FINAL_PREFIX_MODEL_PYTHON")
+    plan = planner.plan_environments([m], solver=accepted, artifacts_root=tmp_path)
+    group = plan["groups"][0]
+    expected_prefix = tmp_path / "environments" / group["environment_id"]
+
+    monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
+    monkeypatch.setattr(planner, "_verify_group_interpreter", lambda *a, **k: (True, "ok", {}))
+    seen: list[Path] = []
+
+    def recording_run(argv, *a, **k):
+        if "create" in argv and "--prefix" in argv:
+            prefix = Path(argv[argv.index("--prefix") + 1])
+            seen.append(prefix)
+            interp = prefix / "bin" / "python"
+            interp.parent.mkdir(parents=True, exist_ok=True)
+            interp.touch()
+            os.chmod(interp, 0o755)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", recording_run)
+    result = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True)
+
+    assert seen == [expected_prefix], f"conda was told to install at {seen}"
+    assert not any(".staging-" in part for part in expected_prefix.parts)
+    assert Path(result["groups"][0]["conda_env_path"]) == expected_prefix
+    assert Path(result["groups"][0]["interpreter"]) == expected_prefix / "bin" / "python"
+    assert result["groups"][0]["state"] == "RUNTIME_VERIFIED"
+
+
+def test_a_stale_console_script_shebang_fails_verification(tmp_path):
+    """Verification must notice a console script that points outside its own prefix."""
+    prefix = tmp_path / "env"
+    (prefix / "bin").mkdir(parents=True)
+    interpreter = prefix / "bin" / "python"
+    interpreter.touch()
+    os.chmod(interpreter, 0o755)
+    elsewhere = tmp_path / "other" / "bin" / "python"
+    elsewhere.parent.mkdir(parents=True)
+    elsewhere.touch()
+    script = prefix / "bin" / "some-tool"
+    script.write_text(f"#!{elsewhere}\nprint('hi')\n", encoding="utf-8")
+    os.chmod(script, 0o755)
+
+    ok, reason = planner._verify_console_scripts(prefix, interpreter)
+    assert ok is False
+    assert "points at" in reason
+
+    # A tool whose shebang names this prefix's own interpreter passes.
+    script.write_text(f"#!{interpreter}\nprint('hi')\n", encoding="utf-8")
+    ok2, _ = planner._verify_console_scripts(prefix, interpreter)
+    assert ok2 is True
+
+
+def test_concurrent_provisioning_of_one_environment_is_serialized(tmp_path):
+    """Two provisioners racing on one environment_id must not interleave their installs."""
+    first = tmp_path / "environments"
+    second = tmp_path / "environments"
+    order: list[str] = []
+
+    with planner._environment_lock(first, "cir-deadbeef"):
+        # A second acquisition of the same lock cannot proceed until the first is released;
+        # observe that by re-entering from a subprocess that must wait.
+        probe = subprocess.Popen(
+            [sys.executable, "-c",
+             "import sys; sys.path.insert(0, %r);"
+             "from pathlib import Path;"
+             "from workbench.backend import environment_planner as p;"
+             "\nwith p._environment_lock(Path(%r), 'cir-deadbeef'):\n"
+             "    print('acquired')" % (str(Path(__file__).resolve().parents[2]), str(second))],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            out, _ = probe.communicate(timeout=2)
+            order.append("child-acquired-within-2s")
+        except subprocess.TimeoutExpired:
+            probe.kill()
+            probe.wait()
+            order.append("child-waited")
+    assert order == ["child-waited"], "the lock did not exclude a second provisioner"
+    assert (first / ".provision-cir-deadbeef.lock").is_file()
 
 def test_interrupted_staging_prefix_is_never_adopted(tmp_path, monkeypatch):
     from workbench.scripts import manage_environment

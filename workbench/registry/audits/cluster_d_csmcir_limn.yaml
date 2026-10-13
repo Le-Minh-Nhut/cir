@@ -1,0 +1,369 @@
+schema_version: 1
+cluster: csmcir_limn
+models:
+  - model_id: csmcir
+    source_dir: CSMCIR
+    upstream_commit: 774f94e2076ff17ea91703a6239d2a08f0e1a44e
+    eval_entrypoint: src/validate_blip_csmcir.py
+    eval_command_evidence: "src/validate_blip_csmcir.py:515 — blip_validate_fashioniq(args.blip_model_name, args.blip_model_path, args.transform, args.target_ratio); invoked as: python src/validate_blip_csmcir.py --dataset fashionIQ --blip-model-name blip2_cir_align_prompt_csmcir --blip-model-path <checkpoint_path>"
+    assets:
+      - logical_asset_id: csmcir_qwen_captions
+        asset_role: caption_source
+        required_for_evaluation: true
+        upstream_source_file: src/data_utils_csmcir.py
+        upstream_line: 408
+        upstream_function: FashionIQDataset.__init__
+        expected_relative_path: fashionIQ_dataset/qwen_captions/{category}_cot_val.json
+        expected_format: json
+        expected_structure: "JSON object mapping image ID to dict containing 'Final_Caption' string"
+        classification: OFFICIAL_PUBLIC_DOWNLOAD
+        official_download_url: https://huggingface.co/peng12138/CSMCIR/resolve/cf0c19bb346266c295b4b5772ebf03bd1c4f0467/fashioniq_qwen_captions/qwen_captions/{category}_cot_val.json
+        official_version_or_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON file loadable as dict; keys contain validation image IDs for category (dress, shirt, toptee); each value has key 'Final_Caption'"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "README.md line 89 points to https://huggingface.co/peng12138/CSMCIR. Pinned revision cf0c19bb346266c295b4b5772ebf03bd1c4f0467 contains fashioniq_qwen_captions/qwen_captions/{dress,shirt,toptee}_cot_val.json. Required at dataset init time; missing file raises FileNotFoundError."
+      - logical_asset_id: csmcir_cot_ours2_captions
+        asset_role: caption_source
+        required_for_evaluation: true
+        upstream_source_file: src/utils_csmcir.py
+        upstream_line: 100
+        upstream_function: extract_index_blip_caption_features
+        expected_relative_path: COT_ours2/fashioniq/{category}_cot_val.json
+        expected_format: json
+        expected_structure: "JSON object mapping image ID to dict containing 'Final_Caption' string"
+        classification: SOURCE_EVIDENCE_MISSING
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "JSON dict containing validation gallery target image IDs with key 'Final_Caption'"
+        acquisition_status: BLOCKED
+        current_blocker: "Author did not publish COT_ours2/ to GitHub or HuggingFace repo; no public download URL or checksum exists"
+        notes: "Directly opened at src/utils_csmcir.py:100-103 inside extract_index_blip_caption_features, which is called at src/validate_blip_csmcir.py:612 during official validation gallery feature extraction. Missing file crashes evaluation with FileNotFoundError."
+      - logical_asset_id: csmcir_checkpoint_fashioniq
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: src/validate_blip_csmcir.py
+        upstream_line: 570
+        upstream_function: blip_validate_fashioniq
+        expected_relative_path: fashioniq_tuned_clip_best.pt
+        expected_format: pt
+        expected_structure: "PyTorch checkpoint dict containing key 'Blip2QformerCirAlignPromptCSMCIR' with fine-tuned state_dict"
+        classification: OFFICIAL_PUBLIC_DOWNLOAD
+        official_download_url: https://huggingface.co/peng12138/CSMCIR/resolve/main/fashioniq_tuned_clip_best.pt
+        official_version_or_revision: main
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch checkpoint dict contains key matching blip_model.__class__.__name__"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Single checkpoint evaluated across all three FashionIQ categories (dress, toptee, shirt)."
+      - logical_asset_id: csmcir_blip2_base_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: src/lavis/configs/models/blip2/blip2_pretrain.yaml
+        upstream_line: 10
+        upstream_function: Blip2QformerCirAlignPromptCSMCIR.from_config
+        expected_relative_path: ~/.cache/lavis/blip2_pretrained.pth
+        expected_format: pth
+        expected_structure: "PyTorch state_dict for BLIP-2 stage-1 pretrained model"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch state_dict loadable by LAVIS Blip2QformerCirAlignPromptCSMCIR"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Loaded by model.load_checkpoint_from_config(cfg) in src/lavis/models/base_model.py:102 during load_model_and_preprocess before the fine-tuned checkpoint is applied."
+      - logical_asset_id: csmcir_eva_vit_g_weights
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: src/lavis/models/eva_vit.py
+        upstream_line: 442
+        upstream_function: create_eva_vit_g
+        expected_relative_path: ~/.cache/torch/hub/checkpoints/eva_vit_g.pth
+        expected_format: pth
+        expected_structure: "PyTorch state_dict for EVA-CLIP-g visual transformer backbone"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch state_dict compatible with EVA-CLIP-g VisionTransformer"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Downloaded automatically on first call to create_eva_vit_g via LAVIS download_cached_file."
+      - logical_asset_id: csmcir_bert_tokenizer
+        asset_role: tokenizer
+        required_for_evaluation: true
+        upstream_source_file: src/lavis/models/blip2_models/blip2.py
+        upstream_line: 32
+        upstream_function: Blip2Base.init_tokenizer
+        expected_relative_path: bert-base-uncased
+        expected_format: directory
+        expected_structure: "HuggingFace BertTokenizer files (vocab.txt, tokenizer_config.json)"
+        classification: EXTERNAL_PRETRAINED_ASSET
+        official_download_url: https://huggingface.co/bert-base-uncased
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "BertTokenizer.from_pretrained('bert-base-uncased') loads successfully"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Initialized by Blip2Base.init_tokenizer via HuggingFace transformers."
+      - logical_asset_id: csmcir_keywords_in_mods
+        asset_role: vocab
+        required_for_evaluation: false
+        upstream_source_file: src/data_utils_csmcir.py
+        upstream_line: 216
+        upstream_function: FashionIQDataset_imageedit.__init__
+        expected_relative_path: fashionIQ_dataset/captions/keywords_in_mods_{category}.json
+        expected_format: json
+        expected_structure: "JSON dictionary mapping keyword tokens"
+        classification: OPTIONAL_NOT_REQUIRED_FOR_EVALUATION
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: null
+        acquisition_status: UNVERIFIED
+        current_blocker: null
+        notes: "Only referenced in dead class FashionIQDataset_imageedit (src/data_utils_csmcir.py:216). Active evaluation path uses FashionIQDataset (line 363) which does not read keywords_in_mods."
+      - logical_asset_id: csmcir_bert_captions
+        asset_role: caption_source
+        required_for_evaluation: false
+        upstream_source_file: src/data_utils_csmcir.py
+        upstream_line: 223
+        upstream_function: FashionIQDataset_imageedit.__init__
+        expected_relative_path: COT_ours2/bert_captions/fashioniq/cap.{category}.{split}.json
+        expected_format: json
+        expected_structure: "JSON list of triplet dictionaries"
+        classification: OPTIONAL_NOT_REQUIRED_FOR_EVALUATION
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: null
+        acquisition_status: UNVERIFIED
+        current_blocker: null
+        notes: "Only referenced in dead class FashionIQDataset_imageedit (src/data_utils_csmcir.py:223). Not called in evaluation."
+    evaluation_data_flow: "src/validate_blip_csmcir.py:main() (line 515) calls blip_validate_fashioniq(), which initializes Blip2QformerCirAlignPromptCSMCIR with pretrained LAVIS base weights and BertTokenizer (src/lavis/models/blip2_models/blip2.py:32), then loads the fine-tuned checkpoint (line 570). It iterates over dress, toptee, shirt, instantiating FashionIQDataset in relative and classic modes (lines 596, 598); FashionIQDataset.__init__ (src/data_utils_csmcir.py:405, 408, 419) reads canonical captions/cap.{category}.val.json, image_splits/split.{category}.val.json, and qwen_captions/{category}_cot_val.json, while __getitem__ (line 468) reads flat images as .png. At line 612, extract_index_blip_caption_features (src/utils_csmcir.py:100-103) reads COT_ours2/fashioniq/{category}_cot_val.json to compute gallery index representations, after which generate_fiq_val_predictions (lines 177-199) computes query distances via blip_model.inference()."
+    unresolved:
+      - "COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json is required by extract_index_blip_caption_features (src/utils_csmcir.py:100-103), but is absent from upstream GitHub and HuggingFace repositories; acquisition source is unverified."
+      - "Image loading in FashionIQDataset.__getitem__ (src/data_utils_csmcir.py:468) hardcodes the .png extension, whereas standard FashionIQ distribution provides .jpg files."
+      - "base_path in src/data_utils_csmcir.py:16 and src/utils_csmcir.py:18 resolves to <checkout_root> (workbench/third_party/CSMCIR), so fashionIQ_dataset must be a symlink or directory at the checkout root, and COT_ours2 must be placed at <checkout_root>/COT_ours2/."
+
+  - model_id: limn
+    source_dir: LIMN
+    upstream_commit: 7d7bc9b116f594a65ac22457491edf28a88d3c3e
+    eval_entrypoint: LIMN/test.py
+    eval_command_evidence: "LIMN/train.py:231 — t = test.test(args, model, dataset_list[_id], _name[1]); official test function is test.py:23 test(params, model, testset, category); invoked via workbench wrapper workbench/replay/limn.py:142 — native_test.test(SimpleNamespace(local_rank=0, batch_size=32), model, dataset, category)"
+    assets:
+      - logical_asset_id: limn_checkpoint_dress
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: LIMN/train.py
+        upstream_line: 263
+        upstream_function: train_and_evaluate
+        expected_relative_path: checkpoint/0_dress_best_model.pt
+        expected_format: pt
+        expected_structure: "Whole-model PyTorch pickled object of class model.LIMN"
+        classification: OFFICIAL_PUBLIC_DOWNLOAD
+        official_download_url: https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_dress_best_model.pt
+        official_version_or_revision: 30560ad575a56c39cc39047d1a474269338c77c0
+        expected_sha256: 96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c
+        expected_size_bytes: 1792010157
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch whole-model file deserializing to model.LIMN with SHA-256 matching 96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Category-specific whole-model checkpoint for dress. Saved via torch.save(model, ...) at train.py:263."
+      - logical_asset_id: limn_checkpoint_shirt
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: LIMN/train.py
+        upstream_line: 263
+        upstream_function: train_and_evaluate
+        expected_relative_path: checkpoint/0_shirt_best_model.pt
+        expected_format: pt
+        expected_structure: "Whole-model PyTorch pickled object of class model.LIMN"
+        classification: OFFICIAL_PUBLIC_DOWNLOAD
+        official_download_url: https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_shirt_best_model.pt
+        official_version_or_revision: 30560ad575a56c39cc39047d1a474269338c77c0
+        expected_sha256: 9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74
+        expected_size_bytes: 1792010157
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch whole-model file deserializing to model.LIMN with SHA-256 matching 9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Category-specific whole-model checkpoint for shirt. Saved via torch.save(model, ...) at train.py:263."
+      - logical_asset_id: limn_checkpoint_toptee
+        asset_role: backbone_weights
+        required_for_evaluation: true
+        upstream_source_file: LIMN/train.py
+        upstream_line: 263
+        upstream_function: train_and_evaluate
+        expected_relative_path: checkpoint/0_toptee_best_model.pt
+        expected_format: pt
+        expected_structure: "Whole-model PyTorch pickled object of class model.LIMN"
+        classification: OFFICIAL_PUBLIC_DOWNLOAD
+        official_download_url: https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_toptee_best_model.pt
+        official_version_or_revision: 30560ad575a56c39cc39047d1a474269338c77c0
+        expected_sha256: 79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2
+        expected_size_bytes: 1792010157
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "PyTorch whole-model file deserializing to model.LIMN with SHA-256 matching 79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Category-specific whole-model checkpoint for toptee. Saved via torch.save(model, ...) at train.py:263."
+      - logical_asset_id: limn_resized_images
+        asset_role: resized_images
+        required_for_evaluation: true
+        upstream_source_file: LIMN/datasets.py
+        upstream_line: 44
+        upstream_function: FashionIQ.__init__
+        expected_relative_path: resized_image/{category}/{id}.jpg
+        expected_format: directory
+        expected_structure: "Directory structure resized_image/<category>/ containing category-separated JPEG images"
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: start_kit/resize_images.py
+        generation_parameters: null
+        raw_input_dependencies:
+          - images/{id}.jpg
+        output_validation_contract: "All validation split image IDs exist under resized_image/<category>/ as .jpg"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "LIMN/datasets.py:44 concatenates self.path + 'resized_image', requiring a trailing slash on self.path. LIMN/datasets.py:121 loads {self.image_dir}/{category}/{id}.jpg."
+      - logical_asset_id: limn_correction_dictionaries
+        asset_role: correction_dict
+        required_for_evaluation: true
+        upstream_source_file: LIMN/datasets.py
+        upstream_line: 70
+        upstream_function: FashionIQ.train_init_process
+        expected_relative_path: captions/correction_dict_{category}.json
+        expected_format: json
+        expected_structure: "JSON mapping of misspelled words to corrections"
+        classification: BUNDLED_WITH_SOURCE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: "Files exist in dataset captions/ directory matching pinned correct_files/correction_dict_{dress,shirt,toptee}.json"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Shipped in pinned repo under correct_files/. Must be placed at <dataset_root>/captions/correction_dict_{category}.json (read at datasets.py:70 and 141)."
+      - logical_asset_id: limn_train_data_cache
+        asset_role: annotation
+        required_for_evaluation: true
+        upstream_source_file: LIMN/datasets.py
+        upstream_line: 49
+        upstream_function: FashionIQ.__init__
+        expected_relative_path: "{category}_train_data.json"
+        expected_format: json
+        expected_structure: "JSON list of dicts with target, candidate, and concatenated captions"
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: LIMN/datasets.py
+        generation_parameters: "FashionIQ.train_init_process()"
+        raw_input_dependencies:
+          - captions/cap.{category}.train.json
+          - captions/correction_dict_{category}.json
+        output_validation_contract: "JSON list of dicts with keys target, candidate, captions"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Unconditionally read or generated during FashionIQ.__init__ (lines 49-56). If absent from dataset root, train_init_process generates it, which requires captions/cap.{category}.train.json."
+      - logical_asset_id: limn_test_queries_targets_cache
+        asset_role: annotation
+        required_for_evaluation: true
+        upstream_source_file: LIMN/datasets.py
+        upstream_line: 58
+        upstream_function: FashionIQ.__init__
+        expected_relative_path: test_queries_{category}.pkl and test_targets_{category}.pkl
+        expected_format: pkl
+        expected_structure: "Pickled list of query dicts and target dicts pre-extracted with transform"
+        classification: SOURCE_REGENERABLE
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: LIMN/datasets.py
+        generation_parameters: "FashionIQ.get_test_data()"
+        raw_input_dependencies:
+          - image_splits/split.{category}.val.json
+          - captions/cap.{category}.val.json
+          - captions/correction_dict_{category}.json
+          - resized_image/{category}/{id}.jpg
+        output_validation_contract: "Pickled lists matching validation query count and validation unique targets"
+        acquisition_status: AVAILABLE
+        current_blocker: null
+        notes: "Read at lines 58-65 if present; if missing, get_test_data() generates both and saves them to disk."
+      - logical_asset_id: limn_openclip_pretrained_weights
+        asset_role: backbone_weights
+        required_for_evaluation: false
+        upstream_source_file: LIMN/model.py
+        upstream_line: 15
+        upstream_function: LIMN.__init__
+        expected_relative_path: "[CLIP path]/laionCLIP-ViT-L-14-DataComp.XL-s13B-b90K/open_clip_pytorch_model.bin"
+        expected_format: bin
+        expected_structure: "OpenCLIP ViT-L-14 pretrained weights binary"
+        classification: OPTIONAL_NOT_REQUIRED_FOR_EVALUATION
+        official_download_url: null
+        official_version_or_revision: null
+        expected_sha256: null
+        expected_size_bytes: null
+        generation_script: null
+        generation_parameters: null
+        raw_input_dependencies: []
+        output_validation_contract: null
+        acquisition_status: UNVERIFIED
+        current_blocker: null
+        notes: "Placeholder string in model.py:15 and train.py:78. Whole-model checkpoint deserialization bypasses __init__ and loads pre-trained backbone directly."
+    evaluation_data_flow: "LIMN evaluation uses category-specific whole-model checkpoints (0_{category}_best_model.pt) trained independently for dress, shirt, toptee (LIMN/train.py:263) and deserialized via PyTorch. FashionIQ dataset initialization (LIMN/datasets.py:38-65) checks for {category}_train_data.json and test_queries_{category}.pkl/test_targets_{category}.pkl caches at dataset root (which must end with a trailing slash for line 44 self.image_dir = self.path + 'resized_image'); if caches are absent, it generates them from split.{category}.val.json, cap.{category}.val.json, cap.{category}.train.json, bundled correction_dict_{category}.json, and pre-resized category images resized_image/{category}/{id}.jpg. The evaluation function test() (LIMN/test.py:23-97) extracts query and candidate image representations, normalizes features, masks source reference images from candidate pools (line 82), and computes rank recalls at 1, 10, and 50."
+    unresolved:
+      - "Upstream LIMN has no standalone eval CLI script (test.py defines test() with no __main__ block; evaluation is called in train.py:231), requiring a wrapper harness such as workbench/replay/limn.py."
+      - "LIMN/datasets.py:44 concatenates self.path + 'resized_image' without os.path.join, strictly requiring self.path to end with a trailing slash '/'."
+      - "FashionIQ.__init__ (LIMN/datasets.py:49-56) unconditionally checks and generates {category}_train_data.json even during evaluation, creating a prerequisite on captions/cap.{category}.train.json when the cache is absent."

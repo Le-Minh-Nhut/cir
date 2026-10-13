@@ -30,8 +30,19 @@ def config_at(root: Path) -> WorkbenchConfig:
     return WorkbenchConfig(root, root / "data", root / "FashionIQ", "127.0.0.1", 8000, 5173, root / "checkpoints", root / "results", root / "third_party")
 
 
-def qwen_assets(module, config: WorkbenchConfig):
-    return tuple(asset for asset in module.assets({"csmcir"}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT) if asset.automatic_download_available)
+def qwen_assets(module, config: WorkbenchConfig, *, with_hash: bool = True):
+    """The three downloadable Qwen captions.
+
+    The registry now pins each file's published content hash, so a test that wants to exercise a
+    transfer path without reproducing the real 2-5 MB payload uses `with_hash=False`; the tests that
+    prove hash verification is enforced keep the real hash and serve matching or mismatching bytes.
+    """
+    items = tuple(asset for asset in module.assets({"csmcir"}, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
+                  if asset.automatic_download_available)
+    if with_hash:
+        return items
+    from dataclasses import replace
+    return tuple(replace(asset, expected_sha256=None) for asset in items)
 
 def load_module():
     spec = importlib.util.spec_from_file_location("download_auxiliary_assets", Path("workbench/scripts/download_auxiliary_assets.py"))
@@ -72,19 +83,25 @@ def test_dry_run_reports_pinned_qwen_urls_and_never_opens_network(monkeypatch, t
 def test_downloads_qwen_atomically_and_writes_local_hash_manifest(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
     config = config_at(tmp_path)
-    items = qwen_assets(module, config)
+    items = qwen_assets(module, config, with_hash=False)
+    # `main()` resolves the assets from the registry itself; patch the resolver so the transfer
+    # path is exercised without reproducing the real multi-megabyte payloads.
+    monkeypatch.setattr(module, "assets", lambda *a, **k: items)
     urls: list[str] = []
     renamed: list[tuple[Path, Path]] = []
     original_replace = module.os.replace
 
-    def urlopen(url: str) -> Response:
-        urls.append(url)
-        return Response(f"payload-{len(urls)}".encode())
 
     def replace(partial: Path, destination: Path) -> None:
         assert partial.suffix == ".part" and partial.is_file()
         renamed.append((partial, destination))
         original_replace(partial, destination)
+
+    # Publish the exact bytes each pinned revision declares, so the mandatory hash check passes.
+    payloads = [b"payload-%d" % index for index in range(1, len(items) + 1)]
+    def urlopen(url: str) -> Response:
+        urls.append(url)
+        return Response(payloads[len(urls) - 1])
 
     monkeypatch.setattr(module, "resolve_config", lambda: config)
     monkeypatch.setattr(module.urllib.request, "urlopen", urlopen)
@@ -93,7 +110,7 @@ def test_downloads_qwen_atomically_and_writes_local_hash_manifest(monkeypatch, t
     assert module.main(["--model", "csmcir"]) == 0
     assert urls == [asset.source_url for asset in items]
     assert [destination for _, destination in renamed] == [asset.destination for asset in items]
-    assert [asset.destination.read_bytes() for asset in items] == [b"payload-1", b"payload-2", b"payload-3"]
+    assert [asset.destination.read_bytes() for asset in items] == payloads
     manifest = json.loads(module.manifest_path(config.WORKBENCH_ARTIFACTS_ROOT).read_text())
     assert {entry["destination"] for entry in manifest} == {str(asset.destination) for asset in items}
     assert {entry["downloaded_sha256"] for entry in manifest} == {hashlib.sha256(asset.destination.read_bytes()).hexdigest() for asset in items}
@@ -102,7 +119,8 @@ def test_downloads_qwen_atomically_and_writes_local_hash_manifest(monkeypatch, t
 def test_existing_qwen_are_preserved_without_force(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
     config = config_at(tmp_path)
-    items = qwen_assets(module, config)
+    items = qwen_assets(module, config, with_hash=False)
+    monkeypatch.setattr(module, "assets", lambda *a, **k: items)
     for asset in items:
         asset.destination.parent.mkdir(parents=True, exist_ok=True)
         asset.destination.write_bytes(b"existing")
@@ -116,7 +134,8 @@ def test_existing_qwen_are_preserved_without_force(monkeypatch, tmp_path: Path) 
 def test_force_redownload_replaces_existing_qwen(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
     config = config_at(tmp_path)
-    items = qwen_assets(module, config)
+    items = qwen_assets(module, config, with_hash=False)
+    monkeypatch.setattr(module, "assets", lambda *a, **k: items)
     for asset in items:
         asset.destination.parent.mkdir(parents=True, exist_ok=True)
         asset.destination.write_bytes(b"old")
@@ -127,6 +146,37 @@ def test_force_redownload_replaces_existing_qwen(monkeypatch, tmp_path: Path) ->
     assert module.main(["--model", "csmcir", "--force-redownload"]) == 0
     assert calls == [asset.source_url for asset in items]
     assert all(asset.destination.read_bytes() == b"new" for asset in items)
+
+
+def test_a_published_hash_is_enforced_and_a_mismatch_is_refused(monkeypatch, tmp_path: Path) -> None:
+    """The registry now pins each caption file's published sha256, so a wrong payload must not land.
+
+    The whole point of pinning is that a silently changed upstream file is caught here rather than
+    producing a plausible-looking evaluation against different captions.
+    """
+    module = load_module()
+    config = config_at(tmp_path)
+    items = qwen_assets(module, config)
+    assert all(asset.expected_sha256 for asset in items), "these assets declare a published hash"
+
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
+    monkeypatch.setattr(module.urllib.request, "urlopen", lambda url: Response(b"not-the-published-bytes"))
+
+    assert module.main(["--model", "csmcir"]) == 1, "a hash mismatch must refuse the download"
+    for asset in items:
+        assert not asset.destination.exists(), f"{asset.destination} must not be published on mismatch"
+        assert not asset.destination.with_suffix(asset.destination.suffix + ".part").exists()
+
+    # Serving exactly the declared content is accepted, which proves the check is the hash and not
+    # something else about the payload.
+    payload = b"the recorded bytes"
+    digest = hashlib.sha256(payload).hexdigest()
+    from dataclasses import replace
+    monkeypatch.setattr(module, "assets",
+                        lambda *a, **k: tuple(replace(asset, expected_sha256=digest) for asset in items))
+    monkeypatch.setattr(module.urllib.request, "urlopen", lambda url: Response(payload))
+    assert module.main(["--model", "csmcir"]) == 0
+    assert all(asset.destination.read_bytes() == payload for asset in items)
 
 
 def test_failed_download_leaves_no_corrupt_destination(monkeypatch, tmp_path: Path) -> None:
