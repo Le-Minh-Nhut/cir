@@ -53,7 +53,7 @@ def test_configured_artifact_root_contains_evaluation_and_index(tmp_path, monkey
 
     assert em.execute(plan, config, run_id=run_id) == 0
 
-    run_directory = em.log_dir(config, plan, em.datetime.now(em.UTC), run_id)
+    run_directory = em.log_dir(config, plan, em.datetime.now(em.timezone.utc), run_id)
     ledger = em.evidence_ledger_path(config)
     proof = em.completion_proof_path(config, plan, run_id)
     assert run_directory.is_dir()

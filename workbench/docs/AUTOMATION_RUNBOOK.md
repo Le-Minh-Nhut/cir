@@ -248,7 +248,10 @@ rewrite a run can recompute it. The entries are therefore HMAC-signed with a key
 outside the artifact tree:
 
 - `WORKBENCH_LEDGER_KEY` from the operator's secret store (recommended), or
-- `<CIR_REPO_ROOT>/.workbench_ledger_key`, created mode `0600` on first use.
+- `$XDG_CONFIG_HOME/cir/workbench_ledger_key` (default `~/.config/cir/`), created mode
+  `0600` inside a `0700` directory on first use. It is deliberately *not* kept under the
+  repository root, which is forwarded to the official evaluator child. A key already present at
+  the old `<CIR_REPO_ROOT>/.workbench_ledger_key` location is still honoured.
 
 Key handling **fails closed**: an empty operator key, an unreadable or empty key file, or a
 missing key while a ledger already exists all raise `LedgerKeyError`. A key is never silently

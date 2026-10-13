@@ -496,7 +496,7 @@ def test_mut_i_shared_run_directory_across_checkpoints_is_detected(tmp_path, mon
         """
         import datetime as _dt
 
-        now = _dt.datetime.now(_dt.UTC)
+        now = _dt.datetime.now(_dt.timezone.utc)
         first = module.log_dir(config, make_plan("fashioniq"), now, shared)
         second = module.log_dir(config, make_plan("fiq_n05"), now, shared)
         return first != second

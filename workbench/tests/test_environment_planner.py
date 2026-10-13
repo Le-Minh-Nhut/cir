@@ -509,7 +509,7 @@ def test_idempotent_environment_reuse(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: calls.append(a) or SimpleNamespace(returncode=0, stdout="", stderr=""))
 
-    assignment = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True)
+    assignment = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True, network_allowed=True)
     group = assignment["groups"][0]
     assert group["installation_status"] == "REUSED"
     assert group["state"] == "RUNTIME_VERIFIED"
@@ -536,7 +536,7 @@ def test_bounded_split_and_retry(tmp_path, monkeypatch):
         return False, "bad-model persistently fails"
 
     monkeypatch.setattr(planner, "_provision_group", mock_provision)
-    assignment = planner.provision_environment_plan([m_good, m_bad], plan, artifacts_root=tmp_path, allowed=True)
+    assignment = planner.provision_environment_plan([m_good, m_bad], plan, artifacts_root=tmp_path, allowed=True, network_allowed=True)
 
     good_group = next(g for g in assignment["groups"] if "good-model" in g["members"])
     bad_group = next(g for g in assignment["groups"] if "bad-model" in g["members"])
@@ -582,6 +582,57 @@ def test_manage_environment_respects_shared_group(tmp_path, monkeypatch):
 
 
 @pytest.mark.skipif(shutil.which("conda") is None, reason="conda binary not available on PATH")
+
+@pytest.mark.skipif(shutil.which("conda") is None, reason="conda binary not available on PATH")
+def test_a_renamed_conda_prefix_is_detected_as_stale(tmp_path):
+    """REAL conda: a prefix that has been moved must fail verification.
+
+    `conda create --prefix` writes absolute shebangs into every console script. Moving the directory
+    leaves those pointing at the old location, which is why building at a staging path and renaming
+    was wrong: this is the check that catches it, exercised against a real conda prefix rather than a
+    hand-written shebang.
+    """
+    import subprocess as _subprocess
+
+    original = tmp_path / "env"
+    result = _subprocess.run(
+        ["conda", "create", "--prefix", str(original), "--override-channels",
+         "-c", "conda-forge", "python=3.11", "packaging", "--yes", "-q"],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        pytest.skip(f"conda could not create a probe environment: {result.stderr.strip()[-200:]}")
+
+    interpreter = original / "bin" / "python"
+    assert planner._verify_console_scripts(original, interpreter)[0] is True
+
+    moved = tmp_path / "env-moved"
+    original.rename(moved)
+    moved_interpreter = moved / "bin" / "python"
+    ok, reason = planner._verify_console_scripts(moved, moved_interpreter)
+    assert ok is False, "a relocated prefix must not verify"
+    assert "not a python of this environment" in reason
+
+
+@pytest.mark.skipif(shutil.which("conda") is None, reason="conda binary not available on PATH")
+def test_a_real_conda_prefix_shell_helpers_are_not_rejected(tmp_path):
+    """REAL conda: `#!/bin/sh` helpers are normal and must not fail verification."""
+    import subprocess as _subprocess
+
+    prefix = tmp_path / "env"
+    result = _subprocess.run(
+        ["conda", "create", "--prefix", str(prefix), "--override-channels",
+         "-c", "conda-forge", "python=3.11", "bzip2", "xz", "packaging", "--yes", "-q"],
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        pytest.skip(f"conda could not create a probe environment: {result.stderr.strip()[-200:]}")
+
+    shell_helpers = [p for p in (prefix / "bin").iterdir()
+                     if p.is_file() and p.open("rb").readline().startswith(b"#!/bin/sh")]
+    assert shell_helpers, "a conda prefix is expected to ship shell helpers"
+    ok, reason = planner._verify_console_scripts(prefix, prefix / "bin" / "python")
+    assert ok is True, reason
+
+
 def test_real_conda_cold_start_shared_environment_and_reuse(tmp_path, monkeypatch):
     # REAL package-manager test: real conda cold-start shared environment and reuse.
     # These stand-in models have no adapter, so the evaluator-import trace cannot resolve an entry
@@ -617,7 +668,7 @@ def test_real_conda_cold_start_shared_environment_and_reuse(tmp_path, monkeypatc
     assert group["state"] == "SOLVER_COMPATIBLE"
 
     assignment = planner.provision_environment_plan(
-        [m1, m2], plan, artifacts_root=artifacts_dir, allowed=True
+        [m1, m2], plan, artifacts_root=artifacts_dir, allowed=True, network_allowed=True
     )
     prov_group = assignment["groups"][0]
     assert prov_group["state"] == "RUNTIME_VERIFIED"
@@ -636,7 +687,7 @@ def test_real_conda_cold_start_shared_environment_and_reuse(tmp_path, monkeypatc
     assert "yaml packaging" in probe_res.stdout
 
     rerun_assignment = planner.provision_environment_plan(
-        [m1, m2], plan, artifacts_root=artifacts_dir, allowed=True
+        [m1, m2], plan, artifacts_root=artifacts_dir, allowed=True, network_allowed=True
     )
     rerun_group = rerun_assignment["groups"][0]
     assert rerun_group["installation_status"] == "REUSED"
@@ -729,7 +780,7 @@ def test_p0_04_safe_replacement_and_atomic_commit(tmp_path, monkeypatch):
         return False, "verification failed intentionally", {}
 
     monkeypatch.setattr(planner, "_verify_group_interpreter", failing_verify)
-    fail_assign = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True)
+    fail_assign = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True, network_allowed=True)
 
     # Sentinel file must still exist and no invalid assignment published
     assert sentinel.is_file()
@@ -762,7 +813,7 @@ def test_p0_04_safe_replacement_and_atomic_commit(tmp_path, monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", mock_subp_run)
 
-    success_assign = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True)
+    success_assign = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True, network_allowed=True)
     new_group = success_assign["groups"][0]
     assert new_group["state"] == "RUNTIME_VERIFIED"
     new_prefix = Path(new_group["conda_env_path"])
@@ -856,7 +907,7 @@ def test_environment_is_created_directly_at_its_final_prefix(tmp_path, monkeypat
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", recording_run)
-    result = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True)
+    result = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True, network_allowed=True)
 
     assert seen == [expected_prefix], f"conda was told to install at {seen}"
     assert not any(".staging-" in part for part in expected_prefix.parts)
@@ -943,7 +994,7 @@ def test_interrupted_staging_prefix_is_never_adopted(tmp_path, monkeypatch):
 
     ok, reason = planner._provision_group(
         group, {"staged-model": item}, {"staged-model": planner.model_constraints(item)},
-        tmp_path, None, True, "conda")
+        tmp_path, None, True, "conda", network_allowed=True)
     assert not ok and "interrupted staging" in reason.lower()
     assert group["state"] == "FAILED"
     assert sentinel.read_text(encoding="utf-8") == "left by interrupted provisioning"
@@ -1001,7 +1052,8 @@ def test_real_provisioning_children_withhold_ledger_key(tmp_path, monkeypatch):
         return actual_run(argv, *args, **kwargs)
     monkeypatch.setattr(subprocess, "run", provisioner_run)
     assignment = planner.provision_environment_plan(
-        [item], plan, artifacts_root=tmp_path, allowed=True, third_party_root=tmp_path / "third_party")
+        [item], plan, artifacts_root=tmp_path, allowed=True, network_allowed=True,
+        third_party_root=tmp_path / "third_party")
 
     group = assignment["groups"][0]
     assert group["state"] == "RUNTIME_VERIFIED", group

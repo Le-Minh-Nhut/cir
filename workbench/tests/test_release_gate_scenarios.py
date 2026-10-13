@@ -96,7 +96,7 @@ def test_scenario_b_shared_conda_environment_deduplication(tmp_path: Path, monke
 
     monkeypatch.setattr(planner, "_provision_group", mock_provision)
 
-    assignment = planner.provision_environment_plan([m1, m2], plan, artifacts_root=tmp_path, allowed=True)
+    assignment = planner.provision_environment_plan([m1, m2], plan, artifacts_root=tmp_path, allowed=True, network_allowed=True)
 
     # 3. Exactly ONE installation performed
     assert install_count == 1, f"expected exactly 1 installation, got {install_count}"
@@ -171,7 +171,7 @@ def test_scenario_c_group_split_preserves_existing_environment_and_sets_statuses
 
     monkeypatch.setattr(planner, "_provision_group", mock_provision)
 
-    assignment = planner.provision_environment_plan([m_good, m_bad], plan, artifacts_root=tmp_path, allowed=True)
+    assignment = planner.provision_environment_plan([m_good, m_bad], plan, artifacts_root=tmp_path, allowed=True, network_allowed=True)
 
     # 1. Bounded split occurred: combined attempted first, then individual splits
     assert ["good-model", "bad-model"] in attempts or ["bad-model", "good-model"] in attempts
@@ -191,8 +191,9 @@ def test_scenario_c_group_split_preserves_existing_environment_and_sets_statuses
     assert assignment["models"]["good-model"]["interpreter"] is not None
     assert Path(assignment["models"]["good-model"]["interpreter"]).is_file()
     assert assignment["models"]["good-model"]["environment_id"] != assignment["models"]["bad-model"]["environment_id"]
-    bad_interp = Path(assignment["models"]["bad-model"]["interpreter"])
-    assert not bad_interp.is_file(), "failed model must not have an installed interpreter published"
+    # A failed group's prefix is removed, so there is no interpreter to publish: the value must be
+    # None rather than the path of an environment that no longer exists.
+    assert assignment["models"]["bad-model"]["interpreter"] is None, assignment["models"]["bad-model"]
     # 4. Existing environment was NOT deleted
     assert sentinel.is_file(), "sentinel file in existing environment must not be deleted on failure"
     assert sentinel.read_text() == "must-survive-failures"
@@ -420,7 +421,7 @@ def test_scenario_j_interruption_recovery_and_artifact_integrity(tmp_path: Path)
     # Simulate keyboard interrupt during solver run
     with patch("subprocess.run", side_effect=KeyboardInterrupt("user interrupt")):
         with pytest.raises(KeyboardInterrupt):
-            planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True)
+            planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True, network_allowed=True)
 
     # Sentinel environment remains intact
     assert sentinel_file.is_file(), "interrupted creation must not delete existing environments"

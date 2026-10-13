@@ -472,9 +472,13 @@ def test_cold_start_runs_top_level_command_without_prior_environments(cold_workb
         assert proof_data.get("completion_status") == "COMPLETED"
         assert proof_data.get("return_code") == 0
 
-        # Metric extraction status verified (unfabricated: AGGREGATE_PARSER_UNAVAILABLE for unparsed models)
-        assert by_id[mid].get("missing_metrics_reason") in (None, "AGGREGATE_PARSER_UNAVAILABLE")
-        assert by_id[mid].get("metrics") in (None, {}), "models without dedicated parser do not fabricate metrics"
+        # These fixture models are declared `synthetic_source: true`, so their own declared
+        # aggregate is the evidence and it is labelled as synthetic rather than as a verified
+        # official parse. Nothing is fabricated: the numbers come from the evaluator's stdout.
+        assert by_id[mid]["evaluation_kind"] == "SYNTHETIC", by_id[mid]
+        assert by_id[mid].get("metrics"), "a declared synthetic aggregate must be reported"
+        assert by_id[mid]["metrics"]["extraction_status"] == "EXTRACTED_SYNTHETIC"
+        assert isinstance(by_id[mid]["metrics"]["observed_metrics"]["r10"], float)
 
     # 3. Scenario G: Failure isolation - truthful statuses and separate global index status
     assert by_id["delta"]["status"].startswith("BLOCKED"), by_id["delta"]

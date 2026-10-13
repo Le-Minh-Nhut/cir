@@ -1164,27 +1164,38 @@ def test_key03_unreadable_key_file_fails_closed(env, monkeypatch):
 
 
 def test_key04_fallback_is_private_random_and_not_predictable(env, monkeypatch):
+    """The fallback key is random, mode 0600, and outside the repository.
+
+    It lives in the operator's private config directory rather than the repository root, because the
+    repository root is forwarded to the official evaluator child and a key kept there would be
+    readable by the code the ledger is meant to be independent of. Per the new location the digest
+    is stable for the same operator even when the repository path differs.
+    """
     import stat
 
     monkeypatch.delenv("WORKBENCH_LEDGER_KEY")
+    config_home = env["tmp"] / "xdg-config"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     key = em.ledger_hmac_key(env["config"])
-    path = env["repo"] / ".workbench_ledger_key"
+    path = config_home / "cir" / "workbench_ledger_key"
     assert len(key) == 32
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
-    other = env["tmp"] / "other-repo"
-    other.mkdir()
-    assert em.ledger_hmac_key(type("Config", (), {"CIR_REPO_ROOT": other})()) != key
+    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+    assert not (env["repo"] / ".workbench_ledger_key").exists(), "the key must not sit in the repository"
+    assert em.ledger_hmac_key(env["config"]) == key, "the fallback must be stable for reuse"
 
 
 def test_key09_existing_ledger_never_acquires_a_new_fallback_key(env, monkeypatch):
     em.append_evidence_entry(env["config"], {"run_id": "old-ledger-entry"})
     ledger_path = em.evidence_ledger_path(env["config"])
     original = ledger_path.read_bytes()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(env["tmp"] / "xdg-config"))
     monkeypatch.delenv("WORKBENCH_LEDGER_KEY")
     with pytest.raises(em.LedgerKeyError, match="missing"):
         em.ledger_hmac_key(env["config"])
     assert ledger_path.read_bytes() == original
     assert not (env["repo"] / ".workbench_ledger_key").exists()
+    assert not (env["tmp"] / "xdg-config" / "cir" / "workbench_ledger_key").exists()
 
 
 def test_key10_wrong_key_rejects_verification(env, monkeypatch):
@@ -1390,7 +1401,7 @@ def test_exit01_native_zero_without_current_valid_proof_is_cli_failure(env, monk
 def test_exit02_native_return_code_is_preserved_in_metadata(env):
     invocation = plan(env, reporting_script(env["tmp"], exit_code=11))
     assert em.execute(invocation, env["config"], run_id="native-code-run") == 11
-    directory = em.log_dir(env["config"], invocation, em.datetime.now(em.UTC), "native-code-run")
+    directory = em.log_dir(env["config"], invocation, em.datetime.now(em.timezone.utc), "native-code-run")
     metadata = json.loads((directory / "command.json").read_text())
     report = json.loads((directory / "aggregate_report.json").read_text())
     ledger = em.read_evidence_ledger(env["config"])

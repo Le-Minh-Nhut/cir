@@ -60,11 +60,15 @@ if os.environ.get("SYNTHETIC_FAIL"):
     sys.stderr.write("synthetic evaluator failed\\n")
     sys.exit(3)
 print("evaluating")
+# The declared synthetic schema, recorded in the registry for models with no published output format.
 print(json.dumps({
-    "dress_recall_at10": 60.0, "dress_recall_at50": 80.0,
-    "shirt_recall_at10": 55.0, "shirt_recall_at50": 75.0,
-    "toptee_recall_at10": 50.0, "toptee_recall_at50": 70.0,
-    "average_recall_at10": 55.0, "average_recall_at50": 75.0, "average_recall": 65.0,
+    "model_id": "synthetic",
+    "aggregate": {"macro_r10": 55.0, "macro_r50": 75.0, "macro_mean": 65.0, "complete": True},
+    "categories": [
+        {"category": "dress", "r10": 60.0, "r50": 80.0},
+        {"category": "shirt", "r10": 55.0, "r50": 75.0},
+        {"category": "toptee", "r10": 50.0, "r50": 70.0},
+    ],
 }))
 '''
 

@@ -633,8 +633,11 @@ def _resolve_evaluation_metrics(
             proof_path = matches[0]
 
     if proof_path is None or not proof_path.is_file():
+        # Returning no error here let a model with no completion proof on disk stay COMPLETED in the
+        # final report, because `_classify` only demotes on a truthy error. A missing proof is the
+        # strongest possible statement that the run did not complete.
         base_fields["missing_metrics_reason"] = "completion proof missing"
-        return base_fields, None
+        return base_fields, "completion proof missing"
 
     base_fields["completion_proof"] = str(proof_path)
 
@@ -817,6 +820,7 @@ def _resolve_evaluation_metrics(
             else "no aggregate recall values extracted"
         )
         base_fields["metrics"] = None
+        extraction_error = base_fields["missing_metrics_reason"]
         base_fields["dress_r10"] = None
         base_fields["dress_r50"] = None
         base_fields["shirt_r10"] = None
@@ -826,7 +830,11 @@ def _resolve_evaluation_metrics(
         base_fields["macro_r10"] = None
         base_fields["macro_r50"] = None
         base_fields["measured_difference"] = None
-        base_fields["evaluation_kind"] = "NOT_RUN"
+        # Same rule as a missing proof: a run that produced no recall values at all is not a
+        # completed evaluation, so the caller must be able to demote it. A synthetic run whose
+        # report carries its own aggregate still has metrics and is handled above.
+        base_fields["evaluation_kind"] = "NOT_RUN" if not is_synthetic else "SYNTHETIC"
+        return base_fields, extraction_error if cat_metrics is None and obs_metrics is None else None
 
     return base_fields, None
 
@@ -874,7 +882,10 @@ def _classify(plan: dict[str, Any], execution: dict[str, Any], config: Autopilot
                 break
             if status == "NOT_RUN":
                 evals = [item for item in related if item.get("name") == "evaluation"]
-                if execution.get("exit_code") == 0 or evals and all(item.get("status") == "COMPLETE" for item in evals):
+                # An evaluation stage must have actually run and completed. A whole-run exit code of
+                # 0 says nothing about this model: with `continue_on_error` the pipeline exits 0 while
+                # a model was never evaluated, and the old `or` promoted it to COMPLETED.
+                if evals and all(item.get("status") == "COMPLETE" for item in evals):
                     status = "COMPLETED_WITH_LIMITATIONS" if not plan["solver_verified"] else "COMPLETED"
                 else:
                     reasons.extend(_preflight(models[model_id], config))
@@ -1085,8 +1096,30 @@ def run(config_path: Path, *, apply: bool, resume: bool, force_models: list[str]
     # environment from the registry's coarse declaration, install it, and only then discover the
     # source's actual pins. This runs the same sync script the DAG uses, so the later sync stage
     # sees a clean, correctly pinned checkout and verifies instead of re-cloning.
-    if apply and config.permissions["allow_env_install"]:
-        _acquire_sources(config, resume=resume)
+    #
+    # A checkout is needed whenever any stage will read the source, so this is not gated on the
+    # install capability: a run that only evaluates still needs the pinned evaluator present, and a
+    # model whose source cannot be acquired must be reported rather than planned around.
+    acquisition = {"stage_count": 0, "blocked": []}
+    if apply:
+        acquisition = _acquire_sources(config, resume=resume)
+
+    previous = None
+    if paths["plan"].exists():
+        previous = json.loads(paths["plan"].read_text(encoding="utf-8"))
+        if previous.get("execution_started") and previous.get("selected_models") != list(config.selected_model_ids):
+            raise ValueError("refusing to change selected_models after autopilot execution started")
+    plan = resolved_plan(config, dry_run=mode == "dry-run")
+    if acquisition["blocked"]:
+        # A source that could not be acquired offline changes what the environment plan can be
+        # derived from, so it is surfaced as a blocker on the affected models instead of being
+        # silently planned from the registry's coarse fallback.
+        blocked_ids = {item["model_id"]: item["reason"] for item in acquisition["blocked"]}
+        for row in plan["models"]:
+            if row["model_id"] in blocked_ids and row["status"] == "NOT_RUN":
+                row.update(status="BLOCKED_SOURCE",
+                           blockers=[f"pinned source not acquired: {blocked_ids[row['model_id']]}"])
+    plan["source_acquisition"] = acquisition
     previous = None
     if paths["plan"].exists():
         previous = json.loads(paths["plan"].read_text(encoding="utf-8"))

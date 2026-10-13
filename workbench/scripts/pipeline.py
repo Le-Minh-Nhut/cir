@@ -1454,7 +1454,10 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         will_create_env = bool(m.get("environment_required")) and getattr(args, "allow_env_install", False) and getattr(args, "apply", False)
         env_cmd = ["--model", mid]
         if will_create_env:
-            env_cmd.extend(["--create", "--allow-env-install"])
+            # `required_capabilities` below already names `allow_network`, and the runner refuses to
+            # execute a stage whose capability is not authorized. Passing the flag here is therefore
+            # safe: reaching the command at all proves the capability was granted.
+            env_cmd.extend(["--create", "--allow-env-install", "--allow-network"])
         stages.append(run_stage(
             "environment",
             command("manage_environment.py", *env_cmd),
@@ -1482,15 +1485,24 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         # which declares no link but does declare a resize and a dictionary, never had its
         # preparation attempted at all.
         from workbench.backend.registry import preparation_contract_for_model
+        from workbench.scripts import prepare_model
         prep_contract = preparation_contract_for_model(m)
         executable_artifacts = [a for a in (prep_contract or {}).get("generated_artifacts", [])
                                 if a.get("generator") in ("pinned_source_file", "fashioniq_resize_images")]
-        prep_artifacts = tuple(
-            config.FASHIONIQ_ROOT / relative
-            for a in executable_artifacts for relative in a["paths"]
-        )
+        # A resize is complete only when its receipt exists, so the receipt -- not the directory --
+        # is what the stage declares. Otherwise an interrupted run leaves a partially filled
+        # directory, the directory check passes on any child file, and the stage resumes as done.
+        prep_artifacts: list[Path] = []
+        for artifact in executable_artifacts:
+            if artifact.get("generator") == "fashioniq_resize_images":
+                layout = (artifact.get("parameters") or {}).get("layout")
+                if layout:
+                    prep_artifacts.append(prepare_model.resize_receipt_path(config, layout))
+            else:
+                prep_artifacts.extend(config.FASHIONIQ_ROOT / relative for relative in artifact["paths"])
+        owed_artifacts = tuple(p for p in prep_artifacts if not p.is_file())
         link_is_owed = bool(prep_link) and prep_owner == mid and not is_link_valid
-        will_prepare = (link_is_owed or bool(executable_artifacts)) and getattr(args, "allow_preparation", False) and getattr(args, "apply", False)
+        will_prepare = (link_is_owed or bool(owed_artifacts)) and getattr(args, "allow_preparation", False) and getattr(args, "apply", False)
         if will_prepare:
             prep_cmd.extend(["--execute", "--allow-preparation"])
         prep_deps = ["dataset", sync_dep]
@@ -1499,8 +1511,8 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         # A model whose declared preparation is still owed cannot be prepared without authorization,
         # so an `--apply` run that lacks it is refused as unauthorized rather than allowed to reach
         # the read-only verify step, exit nonzero, and surface as an unexplained stage failure.
-        needs_preparation = (link_is_owed or bool(executable_artifacts)) and getattr(args, "apply", False)
-        prep_outputs = (prep_link,) if prep_link and prep_owner == mid else prep_artifacts
+        needs_preparation = (link_is_owed or bool(owed_artifacts)) and getattr(args, "apply", False)
+        prep_outputs = (prep_link,) if prep_link and prep_owner == mid else tuple(prep_artifacts)
         stages.append(run_stage(
             "preparation",
             command("prepare_model.py", *prep_cmd),

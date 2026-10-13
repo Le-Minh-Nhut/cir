@@ -58,9 +58,19 @@ def test_prepare_model_execute_requires_authorization() -> None:
         prep_mod.main(["--model", "csmcir", "--execute"])
 
 
-def test_prepare_model_non_csmcir_automated_execution_blocked(capsys: pytest.CaptureFixture[str]) -> None:
+def test_prepare_model_executes_only_declared_recipe_steps(capsys: pytest.CaptureFixture[str]) -> None:
+    """`--execute` runs the steps a contract declares and reports the ones it cannot.
+
+    DCNet declares a resize it can perform and a GloVe pickle generation it must not attempt (the
+    author's generator samples unseeded vectors, so regenerating produces a different artifact).
+    """
     prep_mod = load_script("prepare_model")
     rc = prep_mod.main(["--model", "dcnet", "--execute", "--allow-preparation", "--dry-run"])
-    assert rc == 2
-    err = capsys.readouterr().err
-    assert "no verified automated preparation step" in err
+    captured = capsys.readouterr()
+    combined = captured.out + captured.err
+    # Not the old blanket refusal: DCNet has a real declared step now.
+    assert "no verified automated preparation step" not in captured.err
+    # This host has no canonical dataset, so the resize cannot be performed and the command must say
+    # exactly that rather than claim success.
+    assert rc == 1, (captured.out, captured.err)
+    assert "canonical images directory missing" in combined or "dry-run" in combined, combined

@@ -111,7 +111,7 @@ Autopilot has no CPU, RAM, VRAM, runtime, or concurrency budget fields. Apply th
 
 Before a real run, provide a stable high-entropy `WORKBENCH_LEDGER_KEY` via PC secret manager or process environment. Keep it outside repository, config, artifacts, logs, and model environments. Reuse the same key for later verification; changing or losing it makes existing HMAC evidence unverifiable. Evaluator child processes do not receive the key.
 
-Without an environment key, a documented fallback creates `.workbench_ledger_key` under `CIR_REPO_ROOT` with mode `0600`. Prefer external secret storage on shared or backed-up PCs. An empty key or existing ledger without its key fails closed. See [AUTOMATION_RUNBOOK.md](AUTOMATION_RUNBOOK.md) for trust boundaries.
+Without an environment key, a documented fallback creates `workbench_ledger_key` under `$XDG_CONFIG_HOME/cir/` (default `~/.config/cir/`) with mode `0600` in a `0700` directory -- outside the repository, because the repository root is visible to the official evaluator child. Prefer external secret storage on shared or backed-up PCs. An empty key or existing ledger without its key fails closed. See [AUTOMATION_RUNBOOK.md](AUTOMATION_RUNBOOK.md) for trust boundaries.
 
 ## 9. Environment grouping and provisioning
 

@@ -352,8 +352,11 @@ def test_limn_resize_recipe_produces_the_layout_the_evaluator_reads(
 
     third_party = tmp_path / "third_party"
     (third_party / "LIMN" / "correct_files").mkdir(parents=True)
-    (third_party / "LIMN" / "correct_files" / "correction_dict_dress.json").write_text(
-        json.dumps({"sleeves": "long sleeves"}))
+    # The contract declares all three dictionaries, and the pinned checkout does ship all three, so
+    # the fixture supplies all three: a partial checkout is now a reported blocker, not a pass.
+    for category in ("dress", "shirt", "toptee"):
+        (third_party / "LIMN" / "correct_files" / f"correction_dict_{category}.json").write_text(
+            json.dumps({"sleeves": "long sleeves"}))
     data = _limn_dataset(tmp_path)
     env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
            "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
@@ -385,7 +388,9 @@ def test_a_dry_run_reports_the_resize_without_writing(tmp_path: Path, monkeypatc
     import sys as _sys
 
     third_party = tmp_path / "third_party"
-    (third_party / "LIMN").mkdir(parents=True)
+    (third_party / "LIMN" / "correct_files").mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        (third_party / "LIMN" / "correct_files" / f"correction_dict_{category}.json").write_text("{}")
     data = fashioniq_root(tmp_path)
     env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
            "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
@@ -406,7 +411,9 @@ def test_an_existing_resized_image_is_not_overwritten(tmp_path: Path, monkeypatc
     import sys as _sys
 
     third_party = tmp_path / "third_party"
-    (third_party / "LIMN").mkdir(parents=True)
+    (third_party / "LIMN" / "correct_files").mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        (third_party / "LIMN" / "correct_files" / f"correction_dict_{category}.json").write_text("{}")
     data = _limn_dataset(tmp_path)
     sentinel = data / "resized_image" / "dress" / "B00000.jpg"
     sentinel.parent.mkdir(parents=True)

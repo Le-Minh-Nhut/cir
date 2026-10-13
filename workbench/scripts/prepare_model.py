@@ -7,6 +7,7 @@ to run only the one verified automated CSMCIR dataset link step. All other prepa
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -66,6 +67,13 @@ BUNDLED_ASSET_GENERATOR = "pinned_source_file"
 BUNDLED_ASSET_DIRECTORY = "correct_files"
 #: Marker used by a preparation contract for the per-category image resize.
 RESIZE_GENERATOR = "fashioniq_resize_images"
+#: Name of the receipt a completed resize leaves behind; the pipeline validates it as the output.
+RESIZE_RECEIPT_NAME = ".workbench_resize_receipt.json"
+
+
+def resize_receipt_path(config, layout: str) -> Path:
+    """Where a completed resize records its coverage. Only a fully covered run writes one."""
+    return config.FASHIONIQ_ROOT / ("resized_images" if layout == "flat" else "resized_image") / RESIZE_RECEIPT_NAME
 
 
 def _fixed_link(config, model_id: str, dry_run: bool, check_only: bool) -> bool:
@@ -105,13 +113,19 @@ def _stage_source_assets(config, model: dict, contract: dict, *, dry_run: bool) 
         return True  # the source is the sync stage's responsibility, not preparation's
 
     staged = 0
+    staged, absent = 0, []
     for artifact in contract.get("generated_artifacts", []):
         if artifact.get("generator") != BUNDLED_ASSET_GENERATOR:
             continue
+        # The directory a repository keeps its bundled assets in is a fact about that repository,
+        # so the contract names it: LIMN ships `correct_files/`, TGCIR ships `correction_dict/`.
+        # Assuming one of them made the other silently stage nothing and still report success.
+        directory = artifact.get("source_directory") or BUNDLED_ASSET_DIRECTORY
         for relative in artifact["paths"]:
             destination = config.FASHIONIQ_ROOT / relative
-            shipped = source / BUNDLED_ASSET_DIRECTORY / Path(relative).name
+            shipped = source / directory / Path(relative).name
             if not shipped.is_file():
+                absent.append(str(shipped))
                 continue
             if destination.is_file():
                 if destination.read_bytes() == shipped.read_bytes():
@@ -126,6 +140,12 @@ def _stage_source_assets(config, model: dict, contract: dict, *, dry_run: bool) 
             shutil.copy2(shipped, destination)
             print(f"[OK] {model_id}: staged {destination} from the pinned source")
             staged += 1
+    # A declared bundled asset that the pinned checkout does not actually contain is reported: the
+    # contract says the file exists, so its absence is a fact about the checkout, not a success.
+    if absent:
+        print(f"[BLOCKED] {model_id}: declared source-shipped asset(s) not present in the pinned "
+              f"checkout: {', '.join(absent)}", file=sys.stderr)
+        return False
     if staged:
         print(f"[OK] {model_id}: {staged} source-shipped asset(s) staged")
     return True
@@ -157,7 +177,6 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
         return False, "resize recipe names no source script"
 
     from workbench.backend.fashioniq_layout import CATEGORIES
-    import json as _json
 
     images_root = config.FASHIONIQ_ROOT / "images"
     splits_root = config.FASHIONIQ_ROOT / "image_splits"
@@ -178,15 +197,25 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
     extension = parameters.get("extension") or ".jpg"
 
     written, missing = 0, []
+    coverage: dict[str, dict[str, int]] = {}
     for category in CATEGORIES:
         split_file = splits_root / f"split.{category}.val.json"
         if not split_file.is_file():
             missing.append(str(split_file))
             continue
         try:
-            identifiers = _json.loads(split_file.read_text(encoding="utf-8"))
-        except (_json.JSONDecodeError, OSError) as error:
+            identifiers = json.loads(split_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as error:
             return False, f"cannot read split {split_file}: {error}"
+        if not isinstance(identifiers, list):
+            return False, f"split {split_file} is not a list of image identifiers"
+        for identifier in identifiers:
+            # The identifier names a file, so it has to stay one. A separator or a traversal
+            # component would escape the output directory, and a non-string is a corrupt split;
+            # the canonical split files contain neither.
+            if (not isinstance(identifier, str) or not identifier
+                    or "/" in identifier or "\\" in identifier or identifier in (".", "..")):
+                return False, f"split {split_file} contains an unusable image identifier: {identifier!r}"
         output_dir = (config.FASHIONIQ_ROOT / ("resized_images" if layout == "flat" else "resized_image")
                       / (category if layout == "per_category" else ""))
         if dry_run:
@@ -210,6 +239,8 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
             with Image.open(source_image) as handle:
                 handle.convert("RGB").resize((size, size), Image.LANCZOS).save(destination, "JPEG")
             written += 1
+        coverage[category] = {"expected": len(identifiers),
+                              "present": sum(1 for i in identifiers if (output_dir / f"{i}.jpg").is_file())}
     if dry_run:
         return True, "dry-run"
     if missing and written == 0:
@@ -217,6 +248,21 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
                        + (f" (and {len(missing) - 1} more)" if len(missing) > 1 else ""))
     if missing:
         return False, f"resize completed {written} file(s) but {len(missing)} declared input(s) are missing"
+
+    # A receipt written only after full coverage. The pipeline treats it as the stage's output, so an
+    # interrupted run leaves no receipt and the stage reruns instead of resuming on a partial tree.
+    receipt = resize_receipt_path(config, layout)
+    receipt.parent.mkdir(parents=True, exist_ok=True)
+    receipt.write_text(json.dumps({
+        "kind": "workbench_resize_receipt",
+        "model_id": model["model_id"],
+        "layout": layout,
+        "image_size": size,
+        "extension": extension,
+        "source_script": source_recipe,
+        "categories": {category: coverage[category] for category in coverage},
+        "written_now": written,
+    }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return True, f"resized {written} image(s) at {size}px per {source_recipe}"
 
 

@@ -31,7 +31,8 @@ contracts:
       image_size: 256
       source_script: start_kit/resize_images.py
       source_script_url: https://github.com/XiaoxiaoGuo/fashion-iq/blob/master/start_kit/resize_images.py
-      source_evidence: the model README documents this script and this output path
+      source_evidence: CLVCNet README:28 points at the FashionIQ start_kit resize tool but bundles no copy of it; the evaluator reads resized_image/<category>/. The step is applied by the workbench at the
+        tool's documented 256px default and reported as a workbench-applied recipe, not as a run of an in-repo script.
       layout: per_category
       extension: .jpg
   external_assets:
@@ -191,6 +192,7 @@ contracts:
     - captions/correction_dict_toptee.json
     generator: pinned_source_file
     cwd: null
+    source_directory: correction_dict
   external_assets:
   - name: OpenAI CLIP ViT-B/16 weights/cache
     kind: external_pretrained_asset
@@ -276,6 +278,7 @@ contracts:
     - captions/correction_dict_toptee.json
     generator: pinned_source_file
     cwd: null
+    source_directory: correct_files
   external_assets: []
   deterministic_status: UNKNOWN
   automation_policy: MANUAL_REQUIRED

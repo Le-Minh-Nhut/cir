@@ -135,7 +135,11 @@ def test_index_failure_does_not_contaminate_model_execution_status(tmp_path):
     result = autopilot._write_reports(config, plan, rows, blockers, execution, planned=False)
 
     row_map = {r["model_id"]: r for r in rows}
-    assert row_map["succ"]["status"] == "COMPLETED"
+    # The stage says COMPLETE, but no completion proof exists on disk for run `r1`: a stage record is
+    # not evidence, so the model must not be reported as a completed evaluation.
+    assert row_map["succ"]["status"] == "FAILED_OUTPUT_VALIDATION"
+    assert row_map["succ"]["missing_metrics_reason"] == "completion proof missing"
+    assert row_map["succ"]["macro_r10"] is None
     assert row_map["fail"]["status"] == "FAILED_EVALUATION"
     assert row_map["block"]["status"] == "BLOCKED_ENVIRONMENT"
     assert result["summary"]["global_index_status"] in ("PARTIAL", "NOT_APPLICABLE", "COMPLETED")

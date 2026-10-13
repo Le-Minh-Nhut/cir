@@ -177,7 +177,7 @@ def test_an_existing_run_directory_is_refused_before_the_evaluator_starts(
                              WORKBENCH_THIRD_PARTY_ROOT=tmp_path / "third_party")
 
     run_id = "collision-run"
-    directory = em.log_dir(config, plan, em.datetime.now(em.UTC), run_id)
+    directory = em.log_dir(config, plan, em.datetime.now(em.timezone.utc), run_id)
     directory.mkdir(parents=True)
     evidence = directory / "command.json"
     evidence.write_text('{"owner": "previous invocation"}\n')

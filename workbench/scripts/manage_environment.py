@@ -181,7 +181,7 @@ def print_status(s: dict) -> None:
         print(f"  documented: python={s['documented_python']} pytorch={s['documented_pytorch']} cuda={s['documented_cuda']}")
 
 
-def create_env(model: dict, s: dict, dry_run: bool, config=None) -> bool:
+def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed: bool = False) -> bool:
     model_id = model["model_id"]
     if config is None:
         config = resolve_config()
@@ -219,6 +219,7 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None) -> bool:
             plan,
             artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT,
             allowed=True,
+            network_allowed=network_allowed,
         )
         m_info = (assignment.get("models") or {}).get(model_id) or {}
         g_for_model = next((g for g in assignment.get("groups", []) if model_id in g.get("members", [])), None)
@@ -253,6 +254,10 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None) -> bool:
             print(f"[BLOCKED] {model_id}: no conda/mamba found; required for {spec}", file=sys.stderr)
             return False
         env_name = f"workbench-{model_id}"
+        if not network_allowed:
+            print(f"[BLOCKED] {model_id}: conda env create requires network authorization "
+                  f"(--allow-network)", file=sys.stderr)
+            return False
         argv = [conda_cmd, "env", "create", "--name", env_name, "--file", spec, "--yes"]
         print(f"[RUN] {model_id}: {' '.join(argv)}")
         if dry_run:
@@ -283,6 +288,10 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None) -> bool:
     if not is_isolated:
         print(f"[BLOCKED] {model_id}: refusing installation into unsafe target interpreter: {iso_msg}", file=sys.stderr)
         return False
+    if not network_allowed:
+        print(f"[BLOCKED] {model_id}: pip install requires network authorization (--allow-network)",
+              file=sys.stderr)
+        return False
     argv = [str(interpreter), "-m", "pip", "install", "-r", spec]
     print(f"[RUN] {model_id}: {' '.join(argv)}")
     if dry_run:
@@ -304,13 +313,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--create", action="store_true", help="create environment from source-backed spec")
     parser.add_argument("--allow-env-install", action="store_true",
                         help="authorize package installation; required with --create")
+    parser.add_argument("--allow-network", action="store_true",
+                        help="authorize the package manager to reach its index; required to install")
     parser.add_argument("--dry-run", action="store_true", help="show planned operations without changes")
     parser.add_argument("--json", action="store_true", help="emit machine-readable status")
     args = parser.parse_args(argv)
 
     if args.create and not args.allow_env_install:
         parser.error("--create requires --allow-env-install (explicit authorization)")
-
     config = resolve_config()
     registry = load_registry()
     models = registry["models"]
@@ -338,7 +348,7 @@ def main(argv: list[str] | None = None) -> int:
     print_status(s)
 
     if args.create:
-        ok = create_env(model, s, args.dry_run, config=config)
+        ok = create_env(model, s, args.dry_run, config=config, network_allowed=args.allow_network)
         return 0 if ok else 1
 
     return 0 if s["ready"] else 1

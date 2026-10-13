@@ -36,7 +36,7 @@ document is a diagnostic.
 Before the first run, create the ledger signing key **once** and keep it:
 
 ```bash
-mkdir -p ~/.config/cir && umask 077
+umask 077 && mkdir -p ~/.config/cir
 python -c "import secrets,pathlib;pathlib.Path.home().joinpath('.config/cir/workbench_ledger_key').write_text(secrets.token_hex(32))"
 ```
 
@@ -50,7 +50,7 @@ Keep it outside the repo, the config, and the artifacts. It signs completion evi
 evidence chain is only as trustworthy as that key: **do not regenerate it per shell**, because a new
 key makes every earlier run's evidence unverifiable. Evaluator and package-manager children do not
 receive it. Leaving the variable unset is also safe -- a `0600` key file is created under the
-repository root on first use and reused thereafter -- but a secret store is preferable on a shared
+private config directory (`~/.config/cir/`) on first use and reused thereafter -- but a secret store is preferable on a shared
 machine. An empty key, or a missing key while a ledger already exists, fails closed.
 
 ## 3. Configuration

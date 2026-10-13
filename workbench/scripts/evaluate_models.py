@@ -54,6 +54,62 @@ class EvaluationPlan:
     artifact_type: str = "single_file"
     directory_members: list[dict[str, Any]] | None = None
     checkpoint_sha256: str | None = None
+    #: True only when the registry declares the model's source as synthetic. A synthetic evaluator
+    #: has no published output format, so its own declared aggregate is the evidence and the report
+    #: records that this was the case.
+    synthetic_source: bool = False
+def _synthetic_aggregate(stdout_text: str) -> dict[str, dict[str, float]] | None:
+    """Read the aggregate a registry-declared synthetic evaluator prints.
+
+    The declared schema is one JSON object:
+
+        {"aggregate": {"macro_r10": .., "macro_r50": .., "macro_mean": ..},
+         "categories": [{"category": "dress", "r10": .., "r50": ..}, ...]}
+
+    It is the contract for models the registry marks `synthetic_source: true`, which have no
+    published output format to parse. Returns None when the object is absent or incomplete, so a
+    synthetic run that printed nothing usable is still reported as having no metrics.
+    """
+    for line in reversed(stdout_text.splitlines()):
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        aggregate = payload.get("aggregate")
+        categories = payload.get("categories")
+        if not isinstance(aggregate, dict) or not isinstance(categories, list):
+            continue
+        emitted = {}
+        for item in categories:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("category")
+            if name not in ("dress", "shirt", "toptee"):
+                continue
+            if item.get("r10") is None or item.get("r50") is None:
+                continue
+            emitted[name] = {"r10": float(item["r10"]), "r50": float(item["r50"])}
+        if set(emitted) != {"dress", "shirt", "toptee"}:
+            continue
+        if aggregate.get("macro_r10") is None or aggregate.get("macro_r50") is None:
+            continue
+        return {
+            "observed": {
+                "r10": float(aggregate["macro_r10"]),
+                "r50": float(aggregate["macro_r50"]),
+                "mean": float(aggregate.get("macro_mean",
+                                            (aggregate["macro_r10"] + aggregate["macro_r50"]) / 2)),
+            },
+            "categories": emitted,
+        }
+    return None
+
+
 def command_is_audited(adapter_type: type[OfficialScriptAdapter]) -> bool:
     return getattr(adapter_type, "command", None) is not OfficialScriptAdapter.command
 
@@ -197,6 +253,7 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
         artifact_type=artifact_type,
         directory_members=directory_members,
         checkpoint_sha256=checkpoint_digest,
+        synthetic_source=bool(model.get("synthetic_source")),
     ), []
 
 
@@ -909,11 +966,26 @@ def ledger_hmac_key(config: WorkbenchConfig) -> bytes:
             return key
         raise LedgerKeyError("WORKBENCH_LEDGER_KEY is set but empty")
 
+    # The fallback key lives in the operator's private config directory, not in the repository: the
+    # repository root is forwarded to the official evaluator child, so a key kept there is readable
+    # by the very code the ledger is meant to be independent of. A key already present at the old
+    # repository-root location is still honoured, so an existing ledger stays verifiable.
     repo_root = Path(getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2]))
-    key_path = repo_root / ".workbench_ledger_key"
-    key_lock_path = repo_root / ".workbench_ledger_key.lock"
+    legacy_key_path = repo_root / ".workbench_ledger_key"
+    if legacy_key_path.is_file():
+        key_path = legacy_key_path
+        key_lock_path = repo_root / ".workbench_ledger_key.lock"
+    else:
+        config_home = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+        private_dir = config_home / "cir"
+        key_path = private_dir / "workbench_ledger_key"
+        key_lock_path = private_dir / "workbench_ledger_key.lock"
     try:
-        key_path.parent.mkdir(parents=True, exist_ok=True)
+        key_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        try:
+            os.chmod(key_path.parent, 0o700)
+        except OSError:
+            pass
         lock_fd = os.open(key_lock_path, os.O_CREAT | os.O_RDWR, 0o600)
         with os.fdopen(lock_fd, "r+b") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
@@ -1191,6 +1263,20 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         code,
         paper_metrics=plan.paper_metrics,
     )
+    # A model the registry marks as synthetic has no published output format, so its evaluator's own
+    # JSON aggregate is the evidence. This is an explicit registry declaration, not a guess from the
+    # model id, and it is recorded in the report so a reader can tell the two apart.
+    synthetic = bool(getattr(plan, "synthetic_source", False))
+    if synthetic and code == 0 and extraction.category_metrics is None and extraction.observed_metrics is None:
+        declared = _synthetic_aggregate(stdout_content)
+        if declared is not None:
+            extraction = replace(
+                extraction,
+                extraction_status="EXTRACTED_SYNTHETIC",
+                parser_id=extraction.parser_id or "synthetic_declared_aggregate",
+                observed_metrics=declared["observed"],
+                category_metrics=declared["categories"],
+            )
 
     paper = plan.paper_metrics or {}
     report = {
@@ -1216,6 +1302,7 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "paper_sanity_metrics": paper,
         "parity_status": extraction.parity_status,
         "metric_source": extraction.metric_source,
+        "is_synthetic": synthetic,
         "command_json": "command.json",
         "stdout_log": "stdout.log",
         "stderr_log": "stderr.log",

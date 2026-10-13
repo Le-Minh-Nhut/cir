@@ -245,7 +245,7 @@ def test_scenario_e_duplicate_run_id_never_overwrites_a_run(master, monkeypatch)
                              command=[sys.executable, "-c", "print('x')"],
                              pin="a" * 40, actual_source_commit="a" * 40)
     run_id = "scenario-e-run"
-    directory = em.log_dir(config, plan, em.datetime.now(em.UTC), run_id)
+    directory = em.log_dir(config, plan, em.datetime.now(em.timezone.utc), run_id)
     directory.mkdir(parents=True)
     existing = {path.name: path.read_bytes()
                 for path in directory.iterdir() if path.is_file()}
