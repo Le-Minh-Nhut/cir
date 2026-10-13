@@ -893,6 +893,9 @@ def plan_environments(models: list[dict], *, solver=None,
                  "python": _display(constraints["python"]),
                  "packages": group_packages,
                  "cuda_runtime": _display(constraints["cuda"]), "conda_env_path": str(env_path),
+                 # The path the environment will occupy once installed. It is a plan, and the
+                 # provisioner uses it both to install and to recognize an environment already
+                 # present there; a group that ends up unverified is cleared after provisioning.
                  "interpreter": str(env_path / ("python.exe" if os.name == "nt" else "bin/python")),
                  "lock_digest": _environment_digest(members, constraints),
                  "evidence": constraints["evidence"] + [
@@ -913,9 +916,16 @@ def plan_environments(models: list[dict], *, solver=None,
             group["conda_env_path"] = str(Path(reused).parent.parent)
             group["runtime_evidence"] = f"verified configured interpreter: {reused}"
         elif draft["reuse"]:
+            group["interpreter"] = draft["reuse"]
+            group["conda_env_path"] = str(Path(draft["reuse"]).parent.parent)
             group["runtime_evidence"] = f"verified configured interpreter: {draft['reuse']}"
-        if installation == "REUSED" and verification == "READY":
+        if installation in ("REUSED", "NOT_REQUIRED") and verification == "READY":
             state = "RUNTIME_VERIFIED"
+            if not group.get("interpreter"):
+                # Every RUNTIME_VERIFIED group must carry the interpreter it verified, or the
+                # assignment publishes None and the evaluator reports its environment unconfigured.
+                group["interpreter"] = str(Path(group["conda_env_path"]) /
+                                           ("python.exe" if os.name == "nt" else "bin/python"))
         elif draft["solver_verification_status"] in ("VERIFIED", "CACHED_VERIFIED"):
             state = "SOLVER_COMPATIBLE"
         else:
@@ -953,9 +963,27 @@ def apply_interpreter_mapping(models: list[dict], plan: dict,
         for mid in group["members"]:
             model = by_id.get(mid)
             variable = (model.get("environment") or {}).get("python_env_var") if model else None
-            interpreter = environ.get(variable) if variable and environ.get(variable) else group.get("interpreter")
-            mapping[mid] = (None if _is_staging_path(group.get("conda_env_path")) or _is_staging_path(interpreter)
-                            else interpreter)
+            configured = environ.get(variable) if variable and environ.get(variable) else None
+            if configured:
+                # An operator-supplied interpreter is honored, but a staging prefix never is: it is
+                # the residue of an interrupted install and must not be adopted as an environment.
+                mapping[mid] = None if _is_staging_path(configured) else configured
+                continue
+            interpreter = group.get("interpreter")
+            if interpreter is None:
+                mapping[mid] = None
+                continue
+            if _is_staging_path(group.get("conda_env_path")) or _is_staging_path(interpreter):
+                mapping[mid] = None
+                continue
+            # A planned path is only usable if an environment is really there. A group that failed
+            # had its prefix cleaned up, and handing that path to the evaluator presented a
+            # nonexistent interpreter as the environment; a group whose environment is already
+            # installed at the planned path is exactly the reuse case and stays usable.
+            if group.get("state") == "RUNTIME_VERIFIED" or Path(interpreter).is_file():
+                mapping[mid] = interpreter
+            else:
+                mapping[mid] = None
     return mapping
 
 
@@ -993,7 +1021,8 @@ def _verify_group_interpreter(
     specs: dict[str, dict],
     third_party_root: Path | None = None,
 ) -> tuple[bool, str, dict]:
-    interpreter = Path(group["interpreter"])
+    raw = group.get("interpreter")
+    interpreter = Path(raw)
     if not interpreter.is_file() or not os.access(interpreter, os.X_OK):
         return False, f"Interpreter {interpreter} is missing or not executable", {}
 
@@ -1166,6 +1195,8 @@ def _provision_group(
     solver_cmd: str | None,
     network_allowed: bool,
 ) -> tuple[bool, str]:
+    # `interpreter` is None until verification proves it; the path to install into is the planned
+    # one, which is exactly what provisioning is about to create.
     interpreter = Path(group["interpreter"])
     prefix = Path(group["conda_env_path"])
     if _is_staging_path(prefix) or _is_staging_path(interpreter):
@@ -1174,7 +1205,16 @@ def _provision_group(
         group["state"] = "FAILED"
         return False, "Interrupted staging prefixes cannot be adopted as environments"
 
-    if interpreter.is_file() and os.access(interpreter, os.X_OK) and not prefix.name.startswith(".staging-"):
+    # Reuse is a claim that this prefix is ours. Either the workbench recorded it as managed, or the
+    # operator explicitly pointed a model at it through its environment variable; an unmarked prefix
+    # that merely lives at the planned path might be the operator's own environment.
+    operator_supplied = any(
+        (by_id[mid].get("environment") or {}).get("python_env_var")
+        and os.environ.get((by_id[mid].get("environment") or {}).get("python_env_var"))
+        and Path(os.environ[(by_id[mid].get("environment") or {})["python_env_var"]]).resolve() == interpreter.resolve()
+        for mid in group["members"] if mid in by_id)
+    marked = _is_workbench_managed(prefix, group["environment_id"])
+    if (marked or operator_supplied) and interpreter.is_file() and os.access(interpreter, os.X_OK) and not prefix.name.startswith(".staging-"):
         ok, reason, details = _verify_group_interpreter(group, by_id, specs, third_party_root)
         if ok:
             console_ok, console_reason = _verify_console_scripts(prefix, interpreter)
@@ -1230,7 +1270,11 @@ def _provision_group(
             # Someone else may have installed it while we waited for the lock: reuse it if it now
             # verifies, rather than building a duplicate beside it.
             existing_interp = target_prefix / ("python.exe" if os.name == "nt" else "bin/python")
-            if existing_interp.is_file() and os.access(existing_interp, os.X_OK):
+            # Only adopt a prefix this workbench created and recorded. Adoption is a claim that the
+            # environment is ours to reuse; without the marker it might be an operator's own
+            # environment that merely happens to satisfy the probes.
+            adoptable = _is_workbench_managed(target_prefix, group["environment_id"])
+            if adoptable and existing_interp.is_file() and os.access(existing_interp, os.X_OK):
                 probe = dict(group)
                 probe["conda_env_path"] = str(target_prefix)
                 probe["interpreter"] = str(existing_interp)
@@ -1543,6 +1587,17 @@ def load_environment_assignment(path: Path | str) -> dict:
         return json.load(handle)
 
 
+def _clear_unverified_group_interpreter(group: dict) -> None:
+    """Never leave a usable-looking interpreter on a group that is not RUNTIME_VERIFIED.
+
+    Consumers read `group["interpreter"]` directly (the interpreter mapping, the model assignment,
+    the report), so a failed group whose prefix was cleaned up must publish None rather than a path
+    that no longer resolves.
+    """
+    if group.get("state") != "RUNTIME_VERIFIED":
+        group["interpreter"] = None
+
+
 def provision_environment_plan(
     models: list[dict],
     plan: dict,
@@ -1569,6 +1624,8 @@ def provision_environment_plan(
         groups, by_id, specs, artifacts_root, resolved_third_party, allowed, solver_cmd,
         network_allowed=network_allowed,
     )
+    for _group in provisioned_groups:
+        _clear_unverified_group_interpreter(_group)
     plan["groups"] = provisioned_groups
     # Only a group that is actually RUNTIME_VERIFIED publishes an interpreter. A failed group's
     # prefix has been removed, so publishing its path handed every later stage a nonexistent

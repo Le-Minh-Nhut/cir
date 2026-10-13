@@ -121,10 +121,20 @@ def resize_is_complete(config, model: dict, contract: dict) -> bool | None:
     if not isinstance(categories, dict) or not categories:
         return False
     base = config.FASHIONIQ_ROOT / ("resized_images" if layout == "flat" else "resized_image")
+    if layout == "flat":
+        # Every category writes into the one directory, so the honest check is the total the receipt
+        # recorded, not a per-category count of a shared pool. Counting the pool per category let a
+        # dataset with one category missing still look complete.
+        if not base.is_dir():
+            return False
+        expected_total = sum(int(counts.get("present") or 0) for counts in categories.values()
+                             if isinstance(counts, dict))
+        present_total = len([p for p in base.iterdir() if p.is_file() and p.suffix == ".jpg"])
+        return present_total >= expected_total
     for category, counts in categories.items():
         if not isinstance(counts, dict) or counts.get("expected") != counts.get("present"):
             return False
-        target = base / (category if layout == "per_category" else "")
+        target = base / category
         if not target.is_dir():
             return False
         present = len([p for p in target.iterdir() if p.is_file() and p.suffix == ".jpg"])
@@ -296,8 +306,9 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
             with Image.open(source_image) as handle:
                 handle.convert("RGB").resize((size, size), Image.LANCZOS).save(destination, "JPEG")
             written += 1
-        coverage[category] = {"expected": len(identifiers),
-                              "present": sum(1 for i in identifiers if (output_dir / f"{i}.jpg").is_file())}
+        present_ids = sorted(i for i in identifiers if (output_dir / f"{i}.jpg").is_file())
+        coverage[category] = {"expected": len(identifiers), "present": len(present_ids),
+                              "ids": present_ids}
     if dry_run:
         return True, "dry-run"
     if missing and written == 0:

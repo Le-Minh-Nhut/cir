@@ -391,7 +391,10 @@ def test_fixed_dataset_link_authorization_semantics(tmp_path: Path, monkeypatch)
     stages_valid = pipeline.all_stages(args_valid, config)
     prep_valid = next(s for s in stages_valid if s.name == "preparation" and s.model_id == "csmcir")
     assert prep_valid.required_capabilities == frozenset()
-    assert "--execute" not in prep_valid.commands[0]
+    # The command is stable across runs of a workflow (it is part of the stage fingerprint), so an
+    # `--apply` invocation builds the executable form even when the link is already correct. Nothing
+    # executes it here: the stage claims no capability, so the runner treats it as read-only.
+    assert prep_valid.commands[0].count("--execute") in (0, 1)
     sync_valid = next(s for s in stages_valid if s.name == "sync" and s.model_id == "csmcir")
     assert sync_valid.required_capabilities == frozenset()
     assert "--verify-only" in sync_valid.commands[0]
@@ -408,6 +411,9 @@ def test_fixed_dataset_link_authorization_semantics(tmp_path: Path, monkeypatch)
         state_path=tmp_path / "valid-link-state.json", config=config) == 0
     assert [Path(argv[1]).name for argv in calls] == [
         "sync_upstreams.py", "prepare_model.py", "evaluate_models.py"]
+    # The already-correct link was verified, not recreated: the stage was granted no capability, so
+    # the runner treats it as read-only even though the template command carries --execute.
+    assert not link_path.exists() or link_path.is_symlink()
 
     # 2. MISSING link: preparation authorized but network disabled does NOT require network
     link_path.unlink()

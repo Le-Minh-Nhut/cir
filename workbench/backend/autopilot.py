@@ -448,6 +448,10 @@ def _execute(config: AutopilotConfig, plan: dict[str, Any], *, resume: bool, for
         interpreter = info.get("interpreter")
         if interpreter and info.get("state") not in ("FAILED", "BLOCKED"):
             mapping[mid] = interpreter
+        else:
+            # The provisioner judged this model's environment unusable. A planning-time path must
+            # not survive that judgement: it would be handed to the evaluator as the environment.
+            mapping.pop(mid, None)
     child_environment = {
         "WORKBENCH_REGISTRY_PATH": str(config.paths["registry"]),
         "FASHIONIQ_ROOT": str(config.paths["dataset_root"]),
@@ -834,7 +838,9 @@ def _resolve_evaluation_metrics(
         # completed evaluation, so the caller must be able to demote it. A synthetic run whose
         # report carries its own aggregate still has metrics and is handled above.
         base_fields["evaluation_kind"] = "NOT_RUN" if not is_synthetic else "SYNTHETIC"
-        return base_fields, extraction_error if cat_metrics is None and obs_metrics is None else None
+        # A partial extraction is not a completed evaluation either: the reported table would show
+        # nulls for the category or macro half that failed while the row still claimed COMPLETED.
+        return base_fields, extraction_error
 
     return base_fields, None
 

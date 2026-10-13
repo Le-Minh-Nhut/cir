@@ -972,13 +972,22 @@ def ledger_hmac_key(config: WorkbenchConfig) -> bytes:
     # repository-root location is still honoured, so an existing ledger stays verifiable.
     repo_root = Path(getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2]))
     legacy_key_path = repo_root / ".workbench_ledger_key"
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+    private_key_path = config_home / "cir" / "workbench_ledger_key"
+    if legacy_key_path.is_file() and private_key_path.is_file():
+        # Two key files is a state that cannot be resolved by preference: whichever this function
+        # picked would be the wrong one for a ledger signed with the other, and the operator would
+        # see only an unverifiable ledger. Fail closed and say exactly what to do.
+        raise LedgerKeyError(
+            "two ledger keys exist "
+            f"({legacy_key_path} and {private_key_path}); keep one and remove the other, or set "
+            "WORKBENCH_LEDGER_KEY explicitly to choose")
     if legacy_key_path.is_file():
         key_path = legacy_key_path
         key_lock_path = repo_root / ".workbench_ledger_key.lock"
     else:
-        config_home = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
         private_dir = config_home / "cir"
-        key_path = private_dir / "workbench_ledger_key"
+        key_path = private_key_path
         key_lock_path = private_dir / "workbench_ledger_key.lock"
     try:
         key_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)

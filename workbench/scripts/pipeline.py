@@ -1454,9 +1454,10 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         will_create_env = bool(m.get("environment_required")) and getattr(args, "allow_env_install", False) and getattr(args, "apply", False)
         env_cmd = ["--model", mid]
         if will_create_env:
-            # `required_capabilities` below already names `allow_network`, and the runner refuses to
-            # execute a stage whose capability is not authorized. Passing the flag here is therefore
-            # safe: reaching the command at all proves the capability was granted.
+            # `required_capabilities` below names `allow_network`, so the runner refuses to execute
+            # this command unless the capability was granted: passing the flag unconditionally is
+            # safe, and keeping the command identical between runs is what lets a resume reuse the
+            # stage instead of rerunning it after a permission change.
             env_cmd.extend(["--create", "--allow-env-install", "--allow-network"])
         stages.append(run_stage(
             "environment",
@@ -1492,14 +1493,19 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
         # A resize is complete only when its receipt exists, so the receipt -- not the directory --
         # is what the stage declares. Otherwise an interrupted run leaves a partially filled
         # directory, the directory check passes on any child file, and the stage resumes as done.
+        # Anchored to `target_root`, the dataset the preparation command is actually given: a CLI
+        # `--dataset-root` override would otherwise make the stage look for its outputs under the
+        # configured root, fail permanently, and break resume.
+        prep_dataset_root = target_root
         prep_artifacts: list[Path] = []
         for artifact in executable_artifacts:
             if artifact.get("generator") == "fashioniq_resize_images":
                 layout = (artifact.get("parameters") or {}).get("layout")
                 if layout:
-                    prep_artifacts.append(prepare_model.resize_receipt_path(config, layout))
+                    prep_artifacts.append(prepare_model.resize_receipt_path(
+                        replace(config, FASHIONIQ_ROOT=prep_dataset_root), layout))
             else:
-                prep_artifacts.extend(config.FASHIONIQ_ROOT / relative for relative in artifact["paths"])
+                prep_artifacts.extend(prep_dataset_root / relative for relative in artifact["paths"])
         owed_artifacts = tuple(p for p in prep_artifacts if not p.is_file())
         if not owed_artifacts and prep_contract:
             # A receipt can outlive the files it promised, so a declared resize is only satisfied
@@ -1508,16 +1514,27 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             if prepare_model.resize_is_complete(config, m, prep_contract) is False:
                 owed_artifacts = prep_artifacts
         link_is_owed = bool(prep_link) and prep_owner == mid and not is_link_valid
-        will_prepare = (link_is_owed or bool(owed_artifacts)) and getattr(args, "allow_preparation", False) and getattr(args, "apply", False)
-        if will_prepare:
+
+        # The command is built from the DECLARATION, never from whether work happens to be owed: the
+        # command string is part of the stage fingerprint, so a command that gained `--execute` on
+        # the second run invalidated its own stage and every dependent, rerunning the whole
+        # evaluation instead of resuming it. Whether to execute is the per-run authorization
+        # decision, and the runner already skips a completed stage whose fingerprint matches.
+        declares_preparation = bool(prep_link) and prep_owner == mid or bool(executable_artifacts)
+        # `--apply` is a property of the invocation, constant across a workflow's runs, whereas
+        # whether work is owed changes as soon as the first run produces it. Keying the command on
+        # `--apply` therefore gives the identical string on every run, which is what resume needs;
+        # `--execute` on a read-only invocation would still be refused by the runner for lacking the
+        # capability, but a plan run must not claim to execute anything at all.
+        if declares_preparation and getattr(args, "apply", False):
             prep_cmd.extend(["--execute", "--allow-preparation"])
         prep_deps = ["dataset", sync_dep]
         if prep_owner and prep_owner != mid:
             prep_deps.append(f"preparation:{prep_owner}")
-        # A model whose declared preparation is still owed cannot be prepared without authorization,
-        # so an `--apply` run that lacks it is refused as unauthorized rather than allowed to reach
-        # the read-only verify step, exit nonzero, and surface as an unexplained stage failure.
-        needs_preparation = (link_is_owed or bool(owed_artifacts)) and getattr(args, "apply", False)
+        # A model whose declared preparation is owed cannot be prepared without authorization, so an
+        # `--apply` run that lacks it is refused as unauthorized rather than allowed to reach the
+        # read-only verify step, exit nonzero, and surface as an unexplained stage failure.
+        needs_preparation = declares_preparation and (link_is_owed or bool(owed_artifacts)) and getattr(args, "apply", False)
         prep_outputs = (prep_link,) if prep_link and prep_owner == mid else tuple(prep_artifacts)
         stages.append(run_stage(
             "preparation",

@@ -179,9 +179,11 @@ def test_member_import_failure_does_not_mark_group_ready(monkeypatch, tmp_path):
 
 
 def test_system_python_is_never_a_planned_environment_target():
+    """Planning records a target prefix, never the interpreter running the workbench."""
     result = planner.plan_environments([model("isolated-target")], solver=accepted)
-    assert result["groups"][0]["interpreter"] != sys.executable
-    assert "/artifacts/environments/" in result["groups"][0]["interpreter"]
+    group = result["groups"][0]
+    assert group["interpreter"] != sys.executable
+    assert "/artifacts/environments/" in group["interpreter"]
 
 
 def test_source_requirements_and_registry_declarations_are_read_from_real_checkouts():
@@ -495,6 +497,12 @@ def test_four_states_distinctly_recorded(tmp_path, monkeypatch):
 
 
 def test_idempotent_environment_reuse(tmp_path, monkeypatch):
+    """An environment this workbench created is reused without reinstalling.
+
+    Reuse requires that the prefix is ours: either the managed marker the provisioner writes, or an
+    operator pointing the model at it through its environment variable. The fixture records the
+    marker, which is what a real prior run leaves behind.
+    """
     m = model("reuse-test", python="3.11", packages=["pyyaml==6.0"])
     fake_interp = tmp_path / "env" / "bin" / "python"
     fake_interp.parent.mkdir(parents=True)
@@ -504,6 +512,7 @@ def test_idempotent_environment_reuse(tmp_path, monkeypatch):
     plan = planner.plan_environments([m], solver=accepted, artifacts_root=tmp_path)
     plan["groups"][0]["interpreter"] = str(fake_interp)
     plan["groups"][0]["conda_env_path"] = str(fake_interp.parent.parent)
+    planner._mark_workbench_managed(fake_interp.parent.parent, plan["groups"][0]["environment_id"])
 
     monkeypatch.setattr(planner, "_verify_group_interpreter", lambda *a, **k: (True, "OK", {}))
     calls = []
@@ -514,6 +523,35 @@ def test_idempotent_environment_reuse(tmp_path, monkeypatch):
     assert group["installation_status"] == "REUSED"
     assert group["state"] == "RUNTIME_VERIFIED"
     assert len(calls) == 0
+
+
+
+def test_an_unmarked_environment_is_not_silently_claimed(tmp_path, monkeypatch):
+    """A prefix at the planned path that this workbench never created is not reused as its own.
+
+    Without this, an operator's unrelated environment sitting at the planned path could be adopted,
+    verified against another model's requirements and recorded as this model's environment.
+    """
+    m = model("foreign-test", python="3.11", packages=["pyyaml==6.0"])
+    fake_interp = tmp_path / "env" / "bin" / "python"
+    fake_interp.parent.mkdir(parents=True)
+    fake_interp.touch()
+    os.chmod(fake_interp, 0o755)
+
+    plan = planner.plan_environments([m], solver=accepted, artifacts_root=tmp_path)
+    plan["groups"][0]["interpreter"] = str(fake_interp)
+    plan["groups"][0]["conda_env_path"] = str(fake_interp.parent.parent)
+    monkeypatch.setattr(planner, "_verify_group_interpreter", lambda *a, **k: (True, "OK", {}))
+    calls = []
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: calls.append(a) or SimpleNamespace(returncode=0, stdout="", stderr=""))
+    monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
+
+    assignment = planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True,
+                                                    network_allowed=True)
+    group = assignment["groups"][0]
+    # It installed its own environment instead of adopting the unmarked one.
+    assert calls, "an unmarked prefix must not satisfy reuse"
+    assert group["installation_status"] != "REUSED"
 
 
 def test_bounded_split_and_retry(tmp_path, monkeypatch):
@@ -814,6 +852,10 @@ def test_p0_04_safe_replacement_and_atomic_commit(tmp_path, monkeypatch):
     monkeypatch.undo()  # restore _provision_group
     monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
     monkeypatch.setattr(planner, "_verify_group_interpreter", mock_verify_group)
+    # A retry starts from a freshly resolved plan: the failed attempt cleared the group's
+    # interpreter (nothing was installed), so the test re-establishes the planned path exactly as a
+    # new plan would.
+    group["interpreter"] = str(existing_prefix / "bin" / "python")
 
     plan["interpreter_mapping"]["safe-replace-model"] = str(
         tmp_path / "environments" / "cir-stale-mapping" / "bin" / "python")

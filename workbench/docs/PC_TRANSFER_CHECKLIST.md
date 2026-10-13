@@ -66,15 +66,37 @@ umask 077 && mkdir -p ~/.config/cir
 python -c "import secrets,pathlib;pathlib.Path.home().joinpath('.config/cir/workbench_ledger_key').write_text(secrets.token_hex(32))"
 export WORKBENCH_LEDGER_KEY="$(cat ~/.config/cir/workbench_ledger_key)"
 
-cp workbench/configs/pc_autopilot.pilot_csmcir.yaml /path/outside/repo/pc.yaml
+cp workbench/configs/pc_autopilot.all_available.yaml /path/outside/repo/pc.yaml
 $EDITOR /path/outside/repo/pc.yaml     # set paths.dataset_root and the artifact roots
+```
 
+Then autopilot acquires the pinned sources, plans and provisions the environments, prepares the
+dataset-derived artifacts, obtains the obtainable assets, verifies checkpoints and the GPU, and runs
+every eligible evaluator. Rerun the same command with `--resume` after any interruption:
+
+```bash
 ./workbench/run.sh autopilot --config /path/outside/repo/pc.yaml --apply --resume
 ```
 
-Autopilot then acquires the pinned sources, plans and provision the environments, prepares the
-dataset-derived artifacts, obtains the obtainable assets, verifies checkpoints and the GPU, and runs
-every eligible evaluator. Rerun the same command with `--resume` after any interruption.
+### Permissions decide how much autopilot may do
+
+Start from `pc_autopilot.all_available.yaml`, whose `permissions` block already authorizes the whole
+first run. `pc_autopilot.pilot_csmcir.yaml` is the narrower profile: it ships with
+`allow_env_install: false` on purpose, because installing research code should be a deliberate act
+after the requirements have been reviewed. A PC with no environments yet therefore cannot use that
+profile unchanged -- set `allow_env_install: true` first, or stay on the all-available config.
+
+| Permission | What it authorizes |
+|---|---|
+| `allow_env_install` | creating the conda environments |
+| `allow_network` | reaching an index or a download source |
+| `allow_large_downloads` | fetching checkpoints |
+| `allow_preparation` | writing dataset-derived artifacts (resized images, staged dictionaries) |
+| `allow_gpu_eval` | running the GPU capability probe |
+| `allow_index_write` | rebuilding the results index |
+
+Every stage that needs a permission it was not granted reports `BLOCKED_AUTHORIZATION_REQUIRED` and
+names the missing capability, so a partial run tells you exactly what to add.
 
 ## Reading the outcome
 
@@ -84,7 +106,7 @@ every eligible evaluator. Rerun the same command with `--resume` after any inter
 | `<artifacts>/reports/blockers.json` | machine-readable blocker detail, with the reason for each |
 | `<artifacts>/reports/run_manifest.json` | config digest, outcome, pipeline exit code |
 | `<artifacts>/environment_assignment.json` | the interpreter each model will execute with |
-| `<artifacts>/pipeline_state.json` | stage state, including why a stage was reused |
+| `<artifacts>/autopilot_pipeline_state.json` | stage state, including why a stage was reused |
 
 Exit `0` is full success, `2` is partial (some models completed, others blocked or failed), `1` is a
 workflow failure. A blocked model is not an engineering failure: it is a missing external resource,
