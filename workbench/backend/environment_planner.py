@@ -118,6 +118,10 @@ def _mark_workbench_managed(prefix: Path, environment_id: str) -> None:
     marker.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+#: A real interpreter entry point: `python`, `python3`, `python3.11`, `python39`.
+_INTERPRETER_NAME = re.compile(r"python\d*(\.\d+)*$")
+
+
 @contextlib.contextmanager
 def _environment_lock(directory: Path, environment_id: str):
     """Serialize provisioning of one environment across processes.
@@ -1397,11 +1401,15 @@ def _verify_console_scripts(prefix: Path, interpreter: Path) -> tuple[bool, str]
     # executables exist here, resolved. A console script may name any of them.
     acceptable: set[str] = set()
     for candidate in sorted(bin_dir.glob("python*")):
-        if candidate.is_file() and candidate.name.startswith("python"):
-            try:
-                acceptable.add(str(candidate.resolve()))
-            except OSError:
-                continue
+        # A real interpreter, not a helper that merely starts with "python": `python3-config` is a
+        # shell script, and admitting it would let a shebang naming a stale `python3-config` pass
+        # the very check this function performs.
+        if not candidate.is_file() or _INTERPRETER_NAME.fullmatch(candidate.name) is None:
+            continue
+        try:
+            acceptable.add(str(candidate.resolve()))
+        except OSError:
+            continue
     if not acceptable:
         try:
             acceptable.add(str(interpreter.resolve()))

@@ -382,6 +382,51 @@ def test_limn_resize_recipe_produces_the_layout_the_evaluator_reads(
         assert handle.size == (8, 8)
 
 
+
+def test_a_receipt_without_its_images_is_not_treated_as_prepared(tmp_path, monkeypatch) -> None:
+    """The receipt is proof of coverage, so deleting the images must invalidate it.
+
+    Otherwise a resumed run would skip preparation over a dataset whose resized set had been
+    emptied, and the evaluation would fail later on a missing input instead of here.
+    """
+    import subprocess
+    import sys as _sys
+    from dataclasses import replace as _replace
+
+    from workbench.backend.operator_config import resolve_config
+    from workbench.scripts import prepare_model
+
+    third_party = tmp_path / "third_party"
+    (third_party / "LIMN" / "correct_files").mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        (third_party / "LIMN" / "correct_files" / f"correction_dict_{category}.json").write_text("{}")
+    data = _limn_dataset(tmp_path)
+    env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
+           "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
+    result = subprocess.run(
+        [_sys.executable, str(REPOSITORY / "workbench" / "scripts" / "prepare_model.py"),
+         "--model", "limn", "--execute", "--allow-preparation", "--dataset-root", str(data)],
+        env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
+    assert result.returncode == 0, (result.stdout, result.stderr)
+
+    config = _replace(resolve_config(), FASHIONIQ_ROOT=data,
+                      WORKBENCH_THIRD_PARTY_ROOT=third_party)
+    from workbench.backend.registry import load_registry
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "limn")
+    contract = prepare_model.preparation_contract_for_model(model)
+    assert prepare_model.resize_is_complete(config, model, contract) is True
+
+    # Empty one category: the receipt now overstates what is on disk.
+    for image in (data / "resized_image" / "shirt").iterdir():
+        image.unlink()
+    assert prepare_model.resize_is_complete(config, model, contract) is False
+
+    # A model that declares no resize answers None rather than a misleading True.
+    other = next(m for m in load_registry()["models"] if m["model_id"] == "sprc")
+    assert prepare_model.resize_is_complete(config, other,
+                                            prepare_model.preparation_contract_for_model(other)) is None
+
+
 def test_a_dry_run_reports_the_resize_without_writing(tmp_path: Path, monkeypatch) -> None:
     """`--dry-run` must describe the resize and leave the dataset untouched."""
     import subprocess

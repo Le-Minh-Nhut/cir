@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -74,6 +75,62 @@ RESIZE_RECEIPT_NAME = ".workbench_resize_receipt.json"
 def resize_receipt_path(config, layout: str) -> Path:
     """Where a completed resize records its coverage. Only a fully covered run writes one."""
     return config.FASHIONIQ_ROOT / ("resized_images" if layout == "flat" else "resized_image") / RESIZE_RECEIPT_NAME
+
+
+def write_resize_receipt(receipt: Path, *, model_id: str, layout: str, image_size: int,
+                         extension: str, source_script: str, coverage: dict, written: int) -> None:
+    """Write the coverage receipt atomically, so a crash never leaves a half-written one."""
+    receipt.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "kind": "workbench_resize_receipt",
+        "model_id": model_id,
+        "layout": layout,
+        "image_size": image_size,
+        "extension": extension,
+        "source_script": source_script,
+        "categories": coverage,
+        "written_now": written,
+    }
+    temporary = receipt.with_name(f".{receipt.name}.{os.getpid()}.tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temporary, receipt)
+
+
+def resize_is_complete(config, model: dict, contract: dict) -> bool | None:
+    """Whether the declared resize is finished, judged from its receipt and the files it names.
+
+    Returns None when the model declares no resize. A receipt alone is not enough: the files it
+    promises may have been removed afterwards, which is exactly the case a resume would otherwise
+    skip over.
+    """
+    recipe = next((a for a in contract.get("generated_artifacts", [])
+                   if a.get("generator") == RESIZE_GENERATOR), None)
+    if recipe is None:
+        return None
+    layout = (recipe.get("parameters") or {}).get("layout")
+    if layout not in ("per_category", "flat"):
+        return False
+    receipt = resize_receipt_path(config, layout)
+    if not receipt.is_file():
+        return False
+    try:
+        declared = json.loads(receipt.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    categories = declared.get("categories")
+    if not isinstance(categories, dict) or not categories:
+        return False
+    base = config.FASHIONIQ_ROOT / ("resized_images" if layout == "flat" else "resized_image")
+    for category, counts in categories.items():
+        if not isinstance(counts, dict) or counts.get("expected") != counts.get("present"):
+            return False
+        target = base / (category if layout == "per_category" else "")
+        if not target.is_dir():
+            return False
+        present = len([p for p in target.iterdir() if p.is_file() and p.suffix == ".jpg"])
+        if present < int(counts.get("present") or 0):
+            return False
+    return True
 
 
 def _fixed_link(config, model_id: str, dry_run: bool, check_only: bool) -> bool:
@@ -252,17 +309,9 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
     # A receipt written only after full coverage. The pipeline treats it as the stage's output, so an
     # interrupted run leaves no receipt and the stage reruns instead of resuming on a partial tree.
     receipt = resize_receipt_path(config, layout)
-    receipt.parent.mkdir(parents=True, exist_ok=True)
-    receipt.write_text(json.dumps({
-        "kind": "workbench_resize_receipt",
-        "model_id": model["model_id"],
-        "layout": layout,
-        "image_size": size,
-        "extension": extension,
-        "source_script": source_recipe,
-        "categories": {category: coverage[category] for category in coverage},
-        "written_now": written,
-    }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_resize_receipt(receipt, model_id=model["model_id"], layout=layout, image_size=size,
+                         extension=extension, source_script=source_recipe, coverage=coverage,
+                         written=written)
     return True, f"resized {written} image(s) at {size}px per {source_recipe}"
 
 

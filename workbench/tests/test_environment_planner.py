@@ -584,6 +584,22 @@ def test_manage_environment_respects_shared_group(tmp_path, monkeypatch):
 @pytest.mark.skipif(shutil.which("conda") is None, reason="conda binary not available on PATH")
 
 @pytest.mark.skipif(shutil.which("conda") is None, reason="conda binary not available on PATH")
+
+def test_only_real_interpreters_count_as_prefix_pythons():
+    """A python-named helper must not be usable as an alibi for a stale shebang.
+
+    `python3-config` shares the `python` prefix but is a shell script; admitting it into the set of
+    acceptable interpreters would let a script naming a stale `python3-config` pass the check.
+    """
+    assert planner._INTERPRETER_NAME.fullmatch("python")
+    assert planner._INTERPRETER_NAME.fullmatch("python3")
+    assert planner._INTERPRETER_NAME.fullmatch("python3.11")
+    assert planner._INTERPRETER_NAME.fullmatch("python39")
+    assert planner._INTERPRETER_NAME.fullmatch("python3-config") is None
+    assert planner._INTERPRETER_NAME.fullmatch("python3.11-config") is None
+    assert planner._INTERPRETER_NAME.fullmatch("python-config") is None
+
+
 def test_a_renamed_conda_prefix_is_detected_as_stale(tmp_path):
     """REAL conda: a prefix that has been moved must fail verification.
 

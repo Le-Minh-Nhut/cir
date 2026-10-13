@@ -1501,6 +1501,12 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             else:
                 prep_artifacts.extend(config.FASHIONIQ_ROOT / relative for relative in artifact["paths"])
         owed_artifacts = tuple(p for p in prep_artifacts if not p.is_file())
+        if not owed_artifacts and prep_contract:
+            # A receipt can outlive the files it promised, so a declared resize is only satisfied
+            # when its receipt AND the images it recorded are still present. Without this a resumed
+            # run would skip preparation over a dataset whose resized set had been emptied.
+            if prepare_model.resize_is_complete(config, m, prep_contract) is False:
+                owed_artifacts = prep_artifacts
         link_is_owed = bool(prep_link) and prep_owner == mid and not is_link_valid
         will_prepare = (link_is_owed or bool(owed_artifacts)) and getattr(args, "allow_preparation", False) and getattr(args, "apply", False)
         if will_prepare:
