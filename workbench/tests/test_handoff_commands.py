@@ -109,9 +109,28 @@ def _parse_real_parser(script: str, argv: list[str], monkeypatch) -> argparse.Na
     return parsed.value.namespace
 
 
+def _worst_case_capabilities(node: ast.AST) -> set[str]:
+    """Every capability the expression can require, not only the one branch taken at import time.
+
+    A literal set is its own answer. A computed value (for example the evaluation stage, which needs
+    preparation authority only when the model's dataset link still has to be created) is resolved by
+    calling the real function with the case that requires the most, so the audit cannot pass a
+    command that would be refused in the other branch.
+    """
+    try:
+        return set(ast.literal_eval(node))
+    except (ValueError, SyntaxError):
+        pass
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_evaluation_capabilities":
+        from workbench.scripts import pipeline as pipeline_module
+
+        return set(pipeline_module._evaluation_capabilities(None, _fixture_config()))
+    raise AssertionError(f"cannot determine declared capabilities from {ast.dump(node)[:120]}")
+
+
 def _declared_stage_capabilities(name: str) -> set[str]:
     tree = ast.parse((SCRIPT_DIR / "pipeline.py").read_text(encoding="utf-8"))
-    required = set()
+    required: set[str] = set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name) or node.func.id != "run_stage":
             continue
@@ -119,7 +138,7 @@ def _declared_stage_capabilities(name: str) -> set[str]:
             continue
         keyword = next((item for item in node.keywords if item.arg == "required_capabilities"), None)
         if keyword:
-            required.update(ast.literal_eval(keyword.value))
+            required.update(_worst_case_capabilities(keyword.value))
     return required
 
 
