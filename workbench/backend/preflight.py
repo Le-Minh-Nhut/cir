@@ -14,8 +14,8 @@ def model_requirements(model: dict, config: Any, *, dataset_root: Path | None = 
         validate_auxiliary_asset,
     )
 
-    root = dataset_root or config.FASHIONIQ_ROOT
-    canonical_root = config.FASHIONIQ_ROOT
+    root = Path(dataset_root) if dataset_root else config.FASHIONIQ_ROOT
+    canonical_root = root
     source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"] if model.get("source_dir") else None
     contract = preparation_contract_for_model(model)
     raw = preparation_paths(contract, root, "raw_inputs") if contract else fashioniq_required_paths(model, root)

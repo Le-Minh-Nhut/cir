@@ -69,3 +69,44 @@ def test_doctor_prepare_and_runtime_share_dataset_and_model_blockers(monkeypatch
             assert model.get("preparation_id") is None
         if model_id == "csmcir":
             assert model["canonical_dataset_link"]
+
+
+def test_preflight_explicit_dataset_root_honours_canonical_link_and_auxiliary_assets(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "csmcir")
+    source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
+    source.mkdir(parents=True)
+
+    explicit_root = tmp_path / "explicit_fashioniq"
+    explicit_root.mkdir()
+
+    link = source / model["canonical_dataset_link"]
+    link.symlink_to(explicit_root, target_is_directory=True)
+
+    reqs = doctor.model_requirements(model, config, dataset_root=explicit_root)
+    link_blocks = [b for b in reqs["blocks"] if "canonical dataset link" in b]
+    assert not link_blocks, f"canonical link resolving to explicit root must not block: {link_blocks}"
+
+    qwen_assets = [a for a in reqs["evidence"]["auxiliary_assets"] if a["name"] == "Qwen captions"]
+    assert qwen_assets
+    for asset in qwen_assets:
+        assert asset["path"].startswith(str(explicit_root))
+
+    qwen_blocks = [b for b in reqs["blocks"] if "Qwen captions" in b]
+    assert qwen_blocks
+    for block in qwen_blocks:
+        assert str(explicit_root) in block
+
+    checkpoint = model["checkpoint_variants"][0]
+    evaluator_reasons = evaluate_models.blockers(
+        model, checkpoint, model.get("native_protocol"), explicit_root, config
+    )[3]
+    assert not any("canonical dataset link" in b for b in evaluator_reasons)
+
+    link.unlink()
+    wrong_root = tmp_path / "wrong_fashioniq"
+    wrong_root.mkdir()
+    link.symlink_to(wrong_root, target_is_directory=True)
+
+    reqs_wrong = doctor.model_requirements(model, config, dataset_root=explicit_root)
+    assert f"canonical dataset link resolves to {wrong_root}, expected {explicit_root}" in reqs_wrong["blocks"]

@@ -191,3 +191,19 @@ def test_real_scope_reports_missing_fashioniq_base(monkeypatch, tmp_path: Path) 
 
     assert checks["fashioniq"]["status"] == "BLOCKED"
     assert checks["fashioniq"]["evidence"]["missing"][:3] == [str(tmp_path / "FashionIQ" / part) for part in ("captions", "image_splits", "images")]
+
+
+def test_doctor_preflight_honours_explicit_dataset_root(tmp_path: Path) -> None:
+    doctor = load_doctor()
+    model = next(model for model in load_registry()["models"] if model["model_id"] == "csmcir")
+    settings = config(tmp_path)
+    override_root = tmp_path / "custom_fashioniq"
+    override_root.mkdir()
+    source = settings.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR"
+    source.mkdir(parents=True)
+    (source / "fashionIQ_dataset").symlink_to(override_root, target_is_directory=True)
+
+    reqs = doctor.model_requirements(model, settings, dataset_root=override_root)
+    assert not any("canonical dataset link" in b for b in reqs["blocks"])
+    missing_qwen = str(override_root / "qwen_captions" / "dress_cot_val.json")
+    assert f"CSMCIR Qwen captions missing: {missing_qwen}" in reqs["blocks"]
