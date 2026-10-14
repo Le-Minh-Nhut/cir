@@ -597,6 +597,19 @@ def source_runtime_artifacts(model: dict[str, Any]) -> list[dict[str, Any]]:
                 "path": link,
                 "expects": "FASHIONIQ_ROOT",
             })
+    # A model whose pinned source cannot run as published may declare one approved patch. The
+    # declaration carries the exact base and derived digests, so the checkout is accepted only while
+    # it holds that one approved delta, and any other modification still blocks.
+    for patch in model.get("approved_source_patches") or []:
+        artifacts.append({
+            "kind": "approved_source_patch",
+            "path": patch["path"],
+            "base_sha256": patch.get("base_sha256"),
+            "derived_sha256": patch.get("derived_sha256"),
+            "patch_file": patch.get("patch_file"),
+            "patch_sha256": patch.get("patch_sha256"),
+            "reason": patch.get("reason"),
+        })
     return artifacts
 
 

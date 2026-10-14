@@ -5,7 +5,7 @@
 #
 # `reported_metrics` are values the paper prints. `derived_metrics` are values the workbench
 # computes from printed ones and carry their formula; they are never attributed to the authors.
-registry_version: extract-f450c863c216
+registry_version: extract-242197305d90
 references:
 - reference_id: airknow_fiq_0pct
   model_id: airknow
@@ -817,6 +817,67 @@ references:
   reference_status: VERIFIED
   verification_method: HTML table grid parse by the extractor, re-derived independently by the implementer
     from the same URL, then cross-checked arithmetically against the printed Average and AVG cells.
+  review_status: CONFIRMED
+- reference_id: csmcir_fiq_val_ours_vitg
+  model_id: csmcir
+  paper_id: csmcir_acl26
+  paper_title: 'CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval'
+  method_name: CSMCIR
+  method_variant: main method (Table 1 row `CSMCIR(Ours)`, ViT-G); the identical row is the full-model
+    row `+Lcos` of Table 5 and `Full` of Table 6
+  backbone: 'BLIP-2 Q-Former with frozen EVA-CLIP ViT-G; camera-ready p.4417: ''Following (Xu et al.,
+    2024), we adopt ViT-G as the image encoder, which remained frozen throughout training''. Pinned code
+    confirms: src/lavis/models/blip2_models/blip2_qformer_cir_align_prompt_csmcir.py:41 maps model_type
+    ''pretrain'' -> configs/models/blip2/blip2_pretrain.yaml (BLIP2 blip2_pretrained.pth + ViT-g) and
+    :541 defaults vit_model=''eva_clip_g'''
+  checkpoint_id: fashioniq
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: VERIFIED
+  dataset: fashioniq
+  dataset_version: 'FashionIQ validation set (Table 1 caption: ''Quantitative comparison on the Fashion-IQ
+    validation set'')'
+  split: val
+  gallery_protocol: fashioniq_original_split
+  reference_excluded: false
+  evaluation_noise_pct: 0
+  preprocessing_id: TargetPad target_ratio=1.25 at 224x224 (pinned src/validate_blip_csmcir.py:506-507
+    argparse defaults --transform targetpad --target-ratio 1.25, :534/:580 targetpad_transform(target_ratio,
+    input_dim), :528/:574 input_dim=224; adapter passes no override, workbench/backend/adapters/models.py:28-33)
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target is in the top K (paper section 5 / Table
+    1, K = 10 and 50); pinned code src/validate_blip_csmcir.py:41-53 implements it as distances = 1 -
+    pred_sim, argsort, one-hit-per-query assert, labels[:, :10] and labels[:, :50] over len(labels)
+  aggregation_method: Unweighted macro over the three FashionIQ categories (dress/shirt/toptee), then
+    Avg. = mean of that R@10 and that R@50; pinned code src/validate_blip_csmcir.py:620-628 has exactly
+    f'average_recall_at10'=mean(...), f'average_recall_at50'=mean(...), f'average_recall'=(mean(r50)+mean(r10))/2
+  reported_metrics:
+    mean: 67.17
+    r10: 57.07
+    r50: 77.27
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 52.45
+      r50: 74.81
+    shirt:
+      r10: 57.7
+      r50: 75.76
+    toptee:
+      r10: 61.14
+      r50: 80.98
+  metric_provenance:
+    paper_column: 'Average block: R@10 | R@50 | Avg. (paper column order is Dress | Shirt | Toptee | Average)'
+    paper_page: 6
+    paper_row: CSMCIR(Ours)
+    paper_table: Table 1
+    source_excerpt_or_description: 'Row text: `CSMCIR(Ours) 52.45 74.81 57.70 75.76 61.14 80.98 57.07
+      77.27 67.17`. Caption: ''Table 1: Quantitative comparison on the Fashion-IQ validation set. Overall
+      1st/2nd in bold/underline.'''
+  reference_status: VERIFIED
+  verification_method: 'Three routes agreeing. (1) ACL Anthology camera-ready PDF, `pdftotext -layout`,
+    line 397. (2) same PDF rendered `pdftoppm -png -r 140 -f 6 -l 6` and read visually (printed page 4416).
+    (3) arXiv v3: HTML table cell extraction (regex over <td>) and PDF `pdftotext -layout` line 396. Plus
+    an author-side route: the published training-log CSV.'
   review_status: CONFIRMED
 - reference_id: habit_aaai26_table1_fiq_n00
   model_id: habit
@@ -1816,65 +1877,4 @@ references:
   verification_method: Two independent routes plus a third. (1) `pdftotext -layout /tmp/sprc_iclr.pdf`
     -> line 407. (2) rendered page image `pdftoppm -png -r 140 -f 6 -l 6` read visually -> same row. (3)
     arXiv HTML v1 (a different artifact) also contains 54.92/64.85. Cross-check by arithmetic in python3.
-  review_status: CONFIRMED
-- reference_id: csmcir_fiq_val_ours_vitg
-  model_id: csmcir
-  paper_id: sprc
-  paper_title: Sentence-level Prompts Benefit Composed Image Retrieval
-  method_name: CSMCIR
-  method_variant: main method (Table 1 row `CSMCIR(Ours)`, ViT-G); the identical row is the full-model
-    row `+Lcos` of Table 5 and `Full` of Table 6
-  backbone: 'BLIP-2 Q-Former with frozen EVA-CLIP ViT-G; camera-ready p.4417: ''Following (Xu et al.,
-    2024), we adopt ViT-G as the image encoder, which remained frozen throughout training''. Pinned code
-    confirms: src/lavis/models/blip2_models/blip2_qformer_cir_align_prompt_csmcir.py:41 maps model_type
-    ''pretrain'' -> configs/models/blip2/blip2_pretrain.yaml (BLIP2 blip2_pretrained.pth + ViT-g) and
-    :541 defaults vit_model=''eva_clip_g'''
-  checkpoint_id: fashioniq
-  checkpoint_training_noise_pct: 0
-  checkpoint_mapping_status: VERIFIED
-  dataset: fashioniq
-  dataset_version: 'FashionIQ validation set (Table 1 caption: ''Quantitative comparison on the Fashion-IQ
-    validation set'')'
-  split: val
-  gallery_protocol: fashioniq_original_split
-  reference_excluded: false
-  evaluation_noise_pct: 0
-  preprocessing_id: TargetPad target_ratio=1.25 at 224x224 (pinned src/validate_blip_csmcir.py:506-507
-    argparse defaults --transform targetpad --target-ratio 1.25, :534/:580 targetpad_transform(target_ratio,
-    input_dim), :528/:574 input_dim=224; adapter passes no override, workbench/backend/adapters/models.py:28-33)
-  augmentation_policy: null
-  metric_definition: Recall@K = fraction of queries whose target is in the top K (paper section 5 / Table
-    1, K = 10 and 50); pinned code src/validate_blip_csmcir.py:41-53 implements it as distances = 1 -
-    pred_sim, argsort, one-hit-per-query assert, labels[:, :10] and labels[:, :50] over len(labels)
-  aggregation_method: Unweighted macro over the three FashionIQ categories (dress/shirt/toptee), then
-    Avg. = mean of that R@10 and that R@50; pinned code src/validate_blip_csmcir.py:620-628 has exactly
-    f'average_recall_at10'=mean(...), f'average_recall_at50'=mean(...), f'average_recall'=(mean(r50)+mean(r10))/2
-  reported_metrics:
-    mean: 67.17
-    r10: 57.07
-    r50: 77.27
-  derived_metrics: []
-  category_metrics:
-    dress:
-      r10: 52.45
-      r50: 74.81
-    shirt:
-      r10: 57.7
-      r50: 75.76
-    toptee:
-      r10: 61.14
-      r50: 80.98
-  metric_provenance:
-    paper_column: 'Average block: R@10 | R@50 | Avg. (paper column order is Dress | Shirt | Toptee | Average)'
-    paper_page: 6
-    paper_row: CSMCIR(Ours)
-    paper_table: Table 1
-    source_excerpt_or_description: 'Row text: `CSMCIR(Ours) 52.45 74.81 57.70 75.76 61.14 80.98 57.07
-      77.27 67.17`. Caption: ''Table 1: Quantitative comparison on the Fashion-IQ validation set. Overall
-      1st/2nd in bold/underline.'''
-  reference_status: VERIFIED
-  verification_method: 'Three routes agreeing. (1) ACL Anthology camera-ready PDF, `pdftotext -layout`,
-    line 397. (2) same PDF rendered `pdftoppm -png -r 140 -f 6 -l 6` and read visually (printed page 4416).
-    (3) arXiv v3: HTML table cell extraction (regex over <td>) and PDF `pdftotext -layout` line 396. Plus
-    an author-side route: the published training-log CSV.'
   review_status: CONFIRMED

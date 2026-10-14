@@ -43,6 +43,16 @@ def model_requirements(
                       for problem in image_extension_problems(root, extension, model.get("fashioniq_layout"))]
     blocks.extend(f"FashionIQ image extension requirement: {problem}" for problem in image_problems)
 
+    # A checkout repaired by an approved patch is an approved variant, not official parity: the run
+    # executed code the authors did not publish. Say so where a reader already looks for variant notes.
+    if model.get("source_blocker"):
+        repair = approved_patch_state(model, source)
+        if repair is not None and repair["applied"]:
+            note = (f"source repaired by the approved patch {repair['patch_file']} "
+                    f"(sha256={repair['patch_sha256']}); the published-source blocker no longer applies "
+                    f"and the run is an approved compatibility variant, not official parity")
+            notes.append(note)
+
     auxiliary = []
     for asset in auxiliary_assets_for_model(model["model_id"]):
         path = auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, canonical_root)
@@ -108,6 +118,47 @@ def model_requirements(
                          "dataset_link": link_evidence}}
 
 
+def approved_patch_state(model: dict, source: Path | None) -> dict[str, Any] | None:
+    """Whether a model's declared approved patch is applied to the checkout at *source*.
+
+    Returns `None` when the model declares no approved patch. Otherwise `applied` says whether the
+    checkout's file carries the recorded post-patch digest, and `detail` explains a checkout that is
+    neither the published original nor the approved variant.
+    """
+    patches = model.get("approved_source_patches") or []
+    if not patches:
+        return None
+    if source is None or not source.is_dir():
+        return {"applied": False, "patch_file": None, "patch_sha256": None,
+                "detail": "the source checkout is not present, so no patch state can be observed"}
+
+    from workbench.backend.registry import sha256_file
+
+    for patch in patches:
+        target = source / patch["path"]
+        if not target.is_file():
+            return {"applied": False, "patch_file": patch.get("patch_file"),
+                    "patch_sha256": patch.get("patch_sha256"),
+                    "detail": f"the target file is missing: {target}"}
+        digest = sha256_file(target)
+        if digest == patch.get("derived_sha256"):
+            return {"applied": True, "patch_file": patch.get("patch_file"),
+                    "patch_sha256": patch.get("patch_sha256"),
+                    "detail": f"{patch['path']} matches the recorded post-patch digest"}
+        if digest == patch.get("base_sha256"):
+            return {"applied": False, "patch_file": patch.get("patch_file"),
+                    "patch_sha256": patch.get("patch_sha256"),
+                    "detail": (f"{patch['path']} is the unmodified published file; apply "
+                               f"{patch.get('patch_file')} to a derived checkout of the pinned "
+                               f"revision and register that checkout as the model source")}
+        return {"applied": False, "patch_file": patch.get("patch_file"),
+                "patch_sha256": patch.get("patch_sha256"),
+                "detail": (f"{patch['path']} matches neither the published file nor the approved "
+                           f"variant (sha256={digest[:16]}...); an unexpected modification is not "
+                           f"covered by the approved patch")}
+    return None
+
+
 def preflight_blockers(
     model: dict,
     config: Any,
@@ -138,9 +189,19 @@ def preflight_blockers(
     # fix. Reporting it first matters: for CSMCIR the caption and checkpoint blockers are real but
     # downstream of a package that cannot even be imported, and an operator reading only the first
     # line would go looking for captions instead of at the source.
+    #
+    # The blocker is a statement about the *published* source, so it is reported only while the
+    # checkout is in that state. When the model declares an approved patch and the checkout holds
+    # exactly that delta, the blocker is satisfied: a repaired checkout must not be blocked by a claim
+    # about its unrepaired original. `model_requirements` reports the repair as a warning so the
+    # variant stays visible; this list carries blockers only.
     declared_source_blocker = model.get("source_blocker")
     if declared_source_blocker:
-        blockers.insert(0, f"source cannot run: {declared_source_blocker}")
+        repair = approved_patch_state(model, source)
+        if repair is None:
+            blockers.insert(0, f"source cannot run: {declared_source_blocker}")
+        elif not repair["applied"]:
+            blockers.insert(0, f"source cannot run: {declared_source_blocker}; {repair['detail']}")
     if not audited:
         blockers.append(f"command not runnable: {model.get('command_status') or 'COMMAND_UNAUDITED'}")
     elif source is not None and getattr(adapter, "script", None) and not (source / adapter.script).is_file():

@@ -49,7 +49,9 @@ def test_legacy_registry_protocols_and_blockers_are_explicit() -> None:
         assert models[model_id]["native_protocol"] == "fashioniq_val_split"
     for model_id in ("combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "sprc"):
         assert models[model_id]["native_protocol"] == "fashioniq_original_split"
-    assert models["sprc"]["reported_r10"] is None
+    # The paper prints R@10 54.92 in its average block even though its own per-category values
+    # average 54.72; the registry records what the paper prints and keeps the discrepancy visible.
+    assert models["sprc"]["reported_r10"] == 54.92
     assert "discrepancy" in models["sprc"]["reported_score_note"]
     assert all(checkpoint["checkpoint_mapping_status"] != "VERIFIED_METADATA" for model_id in ("clvc_net", "dcnet", "combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "tgcir", "sprc") for checkpoint in models[model_id]["checkpoint_variants"])
     assert models["tgcir"]["reported_mean"] is None

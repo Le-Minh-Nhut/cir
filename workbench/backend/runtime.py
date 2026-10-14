@@ -1983,6 +1983,30 @@ def _verify_declared_artifact(source: Path, path: str, declaration: dict[str, An
         return None
     if not candidate_resolved.is_relative_to(resolved_source):
         return "escapes the source checkout"
+    if declaration["kind"] == "approved_source_patch":
+        # An upstream defect may make the pinned source unusable (CSMCIR's 98 unguarded imports of
+        # modules the public revision does not contain). The workbench cannot fix that in place, and
+        # it will not: the patch is applied to a derived copy, and this declaration is what makes that
+        # copy an approved variant rather than an unauthorized source change.
+        #
+        # Approval is exact. The base file and the derived file must both hash to what the registry
+        # recorded, so any other edit -- to this file or to a sibling -- is not covered by the patch
+        # and still blocks.
+        if candidate.is_symlink():
+            return "approved patch target must be a regular file"
+        if not candidate.is_file():
+            return "approved patch target is missing"
+        from workbench.backend.registry import sha256_file
+
+        digest = sha256_file(candidate)
+        expected = declaration.get("derived_sha256")
+        if expected and digest != expected:
+            return ("modified source in an approved-patch checkout: the file does not match the "
+                    "recorded post-patch digest")
+        base = declaration.get("base_sha256")
+        if base and digest == base:
+            return "the approved patch has not been applied"
+        return None
     if declaration["kind"] == "declared_auxiliary_asset":
         # Auxiliary assets are declared *files*; a symlink there is not authorized.
         if candidate.is_symlink():

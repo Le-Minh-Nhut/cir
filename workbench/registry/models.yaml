@@ -61,7 +61,19 @@ models:
     # before the line that registers the class this evaluator asks for, so the entrypoint fails during
     # import. See workbench/patches/csmcir.md. Reported by preflight ahead of the caption blockers,
     # which are real but downstream of this.
-    source_blocker: "pinned lavis.models package cannot be imported (98 unguarded imports of absent modules); see workbench/patches/csmcir.md"
+    # The pinned public revision cannot import its own evaluator: `src/lavis/models/__init__.py` runs 98
+    # unguarded imports of modules the revision does not contain, before the line that registers the
+    # class this model needs. One approved patch repairs exactly that, and the declaration below is
+    # what makes a patched checkout an approved variant instead of an unauthorized source change.
+    # Preflight reports the unpatched state as a blocker and accepts only the recorded derived digest.
+    approved_source_patches:
+      - path: src/lavis/models/__init__.py
+        patch_file: workbench/patches/csmcir_models_init_compat.patch
+        patch_sha256: 0e703584a7ecb5df3781574c2516fd406745c414491b6aa487fbb3e76532b9bd
+        base_sha256: 9d8c914b551a7de614e062f9a241f44626fd591a31a0ccf1cc79f0ae23c9db01
+        derived_sha256: aa68fe5e20bcda5e17d978799deb8ec0ff4636e5b3b2a6ef637ce5e385b0c818
+        reason: "98 unguarded imports of modules absent from the pinned public revision prevent the package from importing, so the shipped CSMCIR class is never registered"
+    source_blocker: "pinned lavis.models package cannot be imported as published (98 unguarded imports of absent modules sit before the registration); an approved patch is declared in approved_source_patches and removes only that blocker"
     notes: Official Hugging Face model repository; checkpoint has an author-published size and sha256 (Hugging Face LFS oid).
     checkpoint_variants:
       - checkpoint_id: fashioniq
@@ -800,7 +812,7 @@ models:
     literature_split_label: original
     native_protocol: fashioniq_original_split
     supported_protocols: [fashioniq_original_split]
-    reported_r10: null
+    reported_r10: 54.92
     reported_r50: 74.97
     reported_mean: 64.85
     reported_score_note: Paper Table 1 prints R@10 54.92 while printed per-category values average 54.72; unresolved primary-source discrepancy.

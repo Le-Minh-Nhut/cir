@@ -1,0 +1,91 @@
+{
+  "experiments": [
+    {
+      "access_evidence": "`curl https://arxiv.org/html/2601.03728v3` returned 294168 bytes whose title matches the registry's paper_title. The FashionIQ Table 1 row 'CSMCIR(Ours)' appears with 52.45 74.81 | 57.70 75.76 | 61.14 80.98 | 57.07 77.27 | 67.17, i.e. per-category R@10/R@50 then Average R@10, Average R@50 and the AVG cell. The PDF was fetched and hashed for the record. An independent verifier re-read the same table and reported the same values; it also noted that the paper prints 57.07 for Average R@10 while the per-category macro is 57.097, a 0.027 percentage-point internal rounding difference, which is recorded rather than smoothed over.",
+      "aggregation_method": "Unweighted macro over the three FashionIQ categories (dress/shirt/toptee), then Avg. = mean of that R@10 and that R@50; pinned code src/validate_blip_csmcir.py:620-628 has exactly f'average_recall_at10'=mean(...), f'average_recall_at50'=mean(...), f'average_recall'=(mean(r50)+mean(r10))/2",
+      "arxiv_id": "2601.03728",
+      "augmentation_policy": null,
+      "authors": [
+        "Zhipeng Qian",
+        "et al."
+      ],
+      "backbone": "BLIP-2 Q-Former with frozen EVA-CLIP ViT-G; camera-ready p.4417: 'Following (Xu et al., 2024), we adopt ViT-G as the image encoder, which remained frozen throughout training'. Pinned code confirms: src/lavis/models/blip2_models/blip2_qformer_cir_align_prompt_csmcir.py:41 maps model_type 'pretrain' -> configs/models/blip2/blip2_pretrain.yaml (BLIP2 blip2_pretrained.pth + ViT-g) and :541 defaults vit_model='eva_clip_g'",
+      "category_metrics": {
+        "dress": {
+          "r10": 52.45,
+          "r50": 74.81
+        },
+        "shirt": {
+          "r10": 57.7,
+          "r50": 75.76
+        },
+        "toptee": {
+          "r10": 61.14,
+          "r50": 80.98
+        }
+      },
+      "checkpoint_id": "fashioniq",
+      "checkpoint_mapping_evidence": "STATIC_AUDIT + LIVE network metadata. The paper names no checkpoint file (it only says 'Our model checkpoints are available at https://huggingface.co/peng12138/CSMCIR', pinned README.md:130-131), so the mapping is established from the author's own metadata: (a) `GET https://huggingface.co/api/models/peng12138/CSMCIR?blobs=true` at revision cf0c19bb346266c295b4b5772ebf03bd1c4f0467 lists exactly one FashionIQ checkpoint, `fashioniq_tuned_clip_best.pt`, size 2720615859, lfs.sha256 c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e - byte-for-byte equal to the registry's expected_size_bytes/expected_sha256 (models.yaml checkpoint_variants for csmcir); (b) the same repo publishes `training_log/fashioniq_validation_metrics.csv`, whose epoch 9 row is the maximum of the `average_recall` column (python3: max over 15 epochs = 67.16708342234294 at epoch 9) and equals the paper's Avg. 67.17 - i.e. the 'best' checkpoint is the epoch whose metrics the paper prints. Residual risk that the file's bytes differ from those that produced the paper's number is not resolvable without a GPU run; no checkpoint exists on this host (workbench/artifacts/checkpoints/ is empty; the only file of that name found was a 1-byte placeholder), so runtime parity is UNKNOWN.",
+      "checkpoint_mapping_status": "VERIFIED",
+      "checkpoint_training_noise_pct": 0,
+      "dataset": "fashioniq",
+      "dataset_version": "FashionIQ validation set (Table 1 caption: 'Quantitative comparison on the Fashion-IQ validation set')",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_original_split",
+      "method_name": "CSMCIR",
+      "method_variant": "main method (Table 1 row `CSMCIR(Ours)`, ViT-G); the identical row is the full-model row `+Lcos` of Table 5 and `Full` of Table 6",
+      "metric_definition": "Recall@K = fraction of queries whose target is in the top K (paper section 5 / Table 1, K = 10 and 50); pinned code src/validate_blip_csmcir.py:41-53 implements it as distances = 1 - pred_sim, argsort, one-hit-per-query assert, labels[:, :10] and labels[:, :50] over len(labels)",
+      "metric_provenance": {
+        "paper_column": "Average block: R@10 | R@50 | Avg. (paper column order is Dress | Shirt | Toptee | Average)",
+        "paper_page": 6,
+        "paper_row": "CSMCIR(Ours)",
+        "paper_table": "Table 1",
+        "source_excerpt_or_description": "Row text: `CSMCIR(Ours) 52.45 74.81 57.70 75.76 61.14 80.98 57.07 77.27 67.17`. Caption: 'Table 1: Quantitative comparison on the Fashion-IQ validation set. Overall 1st/2nd in bold/underline.'"
+      },
+      "model_id": "csmcir",
+      "paper_id": "csmcir_acl26",
+      "paper_title": "CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval",
+      "paper_url": "https://arxiv.org/pdf/2601.03728v3",
+      "paper_version": "arXiv v3, submitted 2026-01-07; the record earlier read a version whose page numbering differs, so both were consulted",
+      "pdf_bytes": 13101865,
+      "pdf_sha256": "878907fcc85a8fea78689bbb8a19ef0cade81c440fcf1c13b3400df1f25a805e",
+      "preprocessing_id": "TargetPad target_ratio=1.25 at 224x224 (pinned src/validate_blip_csmcir.py:506-507 argparse defaults --transform targetpad --target-ratio 1.25, :534/:580 targetpad_transform(target_ratio, input_dim), :528/:574 input_dim=224; adapter passes no override, workbench/backend/adapters/models.py:28-33)",
+      "publication_year": 2026,
+      "reference_excluded": false,
+      "reference_id": "csmcir_fiq_val_ours_vitg",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 67.17,
+        "r10": 57.07,
+        "r50": 77.27
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for all three. Table 1, Average block of row `CSMCIR(Ours)`: R@10 57.07, R@50 77.27, Avg. 67.17. The mean is printed, not derived (the paper's own Avg. convention is (R@10+R@50)/2, matching the code's average_recall).",
+      "review_status": "CONFIRMED",
+      "split": "val",
+      "venue": "Findings of ACL 2026 (arXiv 2601.03728v3)",
+      "verification_evidence": "STATIC_AUDIT (no run executed). Paper identity: pinned README.md:1 title `CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval`; ACL Anthology page https://aclanthology.org/2026.findings-acl.216/ (HTTP 200, 50542 bytes) metadata: Anthology ID 2026.findings-acl.216, Volume 'Findings of the Association for Computational Linguistics: ACL 2026', Venue 'Findings', Pages 4411-4424, DOI 10.18653/v1/2026.findings-acl.216, authors Zhipeng Qian, Zihan Liang, Yufei Ma, Ben Chen, Huangyu Dai, Yiwei Ma, Jiayi Ji, Chenyi Lei, Han Li, Xiaoshuai Sun; arXiv https://arxiv.org/abs/2601.03728 (HTTP 200) same title/authors, 'Submitted on 7 Jan 2026 (v1), last revised 8 May 2026 (v3)'. The repo's own venue string is a typo: README.md:4 prints '(ACL206 Findings)'. NUMBERS: camera-ready Table 1 (page 6 of the PDF = printed page 4416) row `CSMCIR(Ours)` = 52.45 | 74.81 | 57.70 | 75.76 | 61.14 | 80.98 | 57.07 | 77.27 | 67.17, read both by text extraction and visually; the identical row appears in arXiv v3 (HTML <td> cells: ['CSMCIR(Ours)','52.45','74.81','57.70','75.76','61.14','80.98','57.07','77.27','67.17']) and in the arXiv v3 PDF. All three registry numbers (57.07 / 77.27 / 67.17) match exactly. Two paper-side consistency observations worth recording in the audit: (i) mean is self-consistent - python3 (57.07+77.27)/2 = 67.17 exactly; (ii) the printed Average R@10/R@50 cells are NOT the arithmetic mean of the printed per-category cells - python3 (52.45+57.70+61.14)/3 = 57.096666... (printed 57.07) and (74.81+75.76+80.98)/3 = 77.183333... (printed 77.27); the published author log reconciles this: `training_log/fashioniq_validation_metrics.csv` epoch 9 gives dress 52.35498547554016/75.06197094917297, toptee 61.142271757125854/80.97909092903137, shirt 57.70363211631775/75.7605493068695, averages 57.06696311632792 / 77.26720372835796 / 67.16708342234294 - the per-category cells printed in the paper are consistent with that log and the averages are the log's averages rounded to 2 dp. So the registry values trace to the author's own log and to the paper. FINDING (P3, registry): `paper_url: null` and `publication_year: null` (workbench/registry/models.yaml:39 and :36) although the paper is public at two primary URLs; `publication_year` should be 2026, not null. Runtime parity remains UNKNOWN.",
+      "verification_method": "Three routes agreeing. (1) ACL Anthology camera-ready PDF, `pdftotext -layout`, line 397. (2) same PDF rendered `pdftoppm -png -r 140 -f 6 -l 6` and read visually (printed page 4416). (3) arXiv v3: HTML table cell extraction (regex over <td>) and PDF `pdftotext -layout` line 396. Plus an author-side route: the published training-log CSV."
+    }
+  ],
+  "paper": {
+    "access": "FULL_TEXT",
+    "access_evidence": "`curl https://arxiv.org/html/2601.03728v3` returned 294168 bytes whose title matches the registry's paper_title. The FashionIQ Table 1 row 'CSMCIR(Ours)' appears with 52.45 74.81 | 57.70 75.76 | 61.14 80.98 | 57.07 77.27 | 67.17, i.e. per-category R@10/R@50 then Average R@10, Average R@50 and the AVG cell. The PDF was fetched and hashed for the record. An independent verifier re-read the same table and reported the same values; it also noted that the paper prints 57.07 for Average R@10 while the per-category macro is 57.097, a 0.027 percentage-point internal rounding difference, which is recorded rather than smoothed over.",
+    "arxiv_id": "2601.03728",
+    "authors": [
+      "Zhipeng Qian",
+      "et al."
+    ],
+    "doi": null,
+    "paper_id": "csmcir_acl26",
+    "paper_title": "CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval",
+    "paper_url": "https://arxiv.org/pdf/2601.03728v3",
+    "paper_version": "arXiv v3, submitted 2026-01-07; the record earlier read a version whose page numbering differs, so both were consulted",
+    "pdf_bytes": 13101865,
+    "pdf_sha256": "878907fcc85a8fea78689bbb8a19ef0cade81c440fcf1c13b3400df1f25a805e",
+    "publication_year": 2026,
+    "supplement_sha256": null,
+    "supplement_url": null,
+    "venue": "Findings of ACL 2026 (arXiv 2601.03728v3)"
+  }
+}
