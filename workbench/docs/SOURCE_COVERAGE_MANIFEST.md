@@ -1,59 +1,141 @@
 # Production source coverage manifest
 
-Generated from the frozen revision `9d35861bdcc18183015e1aba02052ffd4c8f99f0`. Every production Python file under `workbench/` and
-`src/` is listed with its content digest at that revision, so a reviewer can confirm the reviewed
-bytes are the shipped bytes.
+Regenerated against the working tree of `research/cir-failure-workbench` (post final-audit round),
+superseding the frozen-revision manifest of `9d35861bdcc18183015e1aba02052ffd4c8f99f0`. Every
+production Python file under `workbench/` and `src/` is listed with its content digest, so a
+reviewer can confirm the reviewed bytes are the shipped bytes once the branch is committed.
 
-The CSMCIR blocker is additionally pinned by `workbench/tests/test_csmcir_source_blocker.py`, which
-reads the pinned checkout and fails if that source, or the registered model name, changes.
+`workbench/third_party/` checkouts are excluded (they are pinned by `upstream_commit_sha` in the
+registry and verified by `source_clean_and_pinned` at runtime, not by this manifest). Test files
+are listed with `TESTED_PATH` status; production files carry `FULLY_REVIEWED` or
+`REVIEWED_REACHABLE_PATHS` as in the previous manifest generation. YAML registries and frontend
+TypeScript are digested in the commit itself.
 
 | File | Subsystem | Lines | sha256[:16] | Status |
 |---|---|---|---|---|
-| `src/evaluation/__init__.py` | legacy evaluation | 0 | `e3b0c44298fc1c14` | REVIEWED_REACHABLE_PATHS |
-| `src/evaluation/cirr.py` | legacy evaluation | 203 | `77992a19b3fcce83` | REVIEWED_REACHABLE_PATHS |
+| `src/cache/features.py` | legacy evaluation | 186 | `5df907e14c7f5a00` | REVIEWED_REACHABLE_PATHS |
+| `src/cache/__init__.py` | legacy evaluation | 0 | `e3b0c44298fc1c14` | REVIEWED_REACHABLE_PATHS |
+| `src/datasets/cirr.py` | legacy evaluation | 254 | `9a2f7f00933f8056` | REVIEWED_REACHABLE_PATHS |
+| `src/datasets/common.py` | legacy evaluation | 92 | `9155cce5422c13d0` | REVIEWED_REACHABLE_PATHS |
+| `src/datasets/fashioniq.py` | legacy evaluation | 336 | `9b3594add3aeb8cc` | REVIEWED_REACHABLE_PATHS |
+| `src/datasets/__init__.py` | legacy evaluation | 0 | `e3b0c44298fc1c14` | REVIEWED_REACHABLE_PATHS |
 | `src/evaluation/cirr_encoder.py` | legacy evaluation | 368 | `7d67a0ccf30c0954` | REVIEWED_REACHABLE_PATHS |
-| `src/evaluation/fashioniq.py` | legacy evaluation | 328 | `49f4b048ca2904ca` | REVIEWED_REACHABLE_PATHS |
+| `src/evaluation/cirr.py` | legacy evaluation | 203 | `77992a19b3fcce83` | REVIEWED_REACHABLE_PATHS |
 | `src/evaluation/fashioniq_encoder.py` | legacy evaluation | 149 | `f8ba120dbbe77f22` | REVIEWED_REACHABLE_PATHS |
-| `workbench/backend/__init__.py` | backend | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
-| `workbench/backend/adapters/__init__.py` | adapters | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
-| `workbench/backend/adapters/base.py` | adapters | 43 | `e704de37bfe83e3c` | FULLY_REVIEWED |
-| `workbench/backend/adapters/models.py` | adapters | 195 | `daec03077f860305` | FULLY_REVIEWED |
+| `src/evaluation/fashioniq.py` | legacy evaluation | 344 | `e7884e71a7a74ded` | REVIEWED_REACHABLE_PATHS |
+| `src/evaluation/__init__.py` | legacy evaluation | 0 | `e3b0c44298fc1c14` | REVIEWED_REACHABLE_PATHS |
+| `workbench/backend/adapters/base.py` | backend | 43 | `e704de37bfe83e3c` | FULLY_REVIEWED |
+| `workbench/backend/adapters/__init__.py` | backend | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
+| `workbench/backend/adapters/models.py` | backend | 197 | `5814f5607a874cf6` | FULLY_REVIEWED |
 | `workbench/backend/analysis.py` | backend | 93 | `041b09a0a9380eca` | FULLY_REVIEWED |
-| `workbench/backend/autopilot.py` | backend | 1199 | `9281a61629a271ad` | FULLY_REVIEWED |
+| `workbench/backend/autopilot.py` | backend | 1210 | `00ca87a6be1500fc` | FULLY_REVIEWED |
+| `workbench/backend/benchmark_references.py` | backend | 191 | `5e90c06b8b4d269b` | FULLY_REVIEWED |
 | `workbench/backend/checkpoint_selection.py` | backend | 263 | `92dc74a507d23497` | FULLY_REVIEWED |
 | `workbench/backend/environment_planner.py` | backend | 1812 | `0af73cf9d07cc946` | FULLY_REVIEWED |
 | `workbench/backend/errors.py` | backend | 14 | `d1d038737778b3e1` | FULLY_REVIEWED |
 | `workbench/backend/fashioniq_layout.py` | backend | 140 | `4e8d3b77ec7dca49` | FULLY_REVIEWED |
 | `workbench/backend/index.py` | backend | 110 | `6c72f8b8f7b95d6f` | FULLY_REVIEWED |
+| `workbench/backend/__init__.py` | backend | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
 | `workbench/backend/jobs.py` | backend | 333 | `cd3d1d066c615a4b` | FULLY_REVIEWED |
-| `workbench/backend/main.py` | backend | 272 | `7c9911751484fb68` | FULLY_REVIEWED |
-| `workbench/backend/metrics_extraction.py` | backend | 320 | `e45524a2239f9429` | FULLY_REVIEWED |
+| `workbench/backend/main.py` | backend | 324 | `59c1ecbc0a38ad7d` | FULLY_REVIEWED |
+| `workbench/backend/metrics_extraction.py` | backend | 411 | `5295bea9a91a6a7e` | FULLY_REVIEWED |
 | `workbench/backend/operator_config.py` | backend | 108 | `46585f87a66db836` | FULLY_REVIEWED |
-| `workbench/backend/preflight.py` | backend | 138 | `3a65c2f3995378a6` | FULLY_REVIEWED |
-| `workbench/backend/registry.py` | backend | 670 | `f9346ea50b65b061` | FULLY_REVIEWED |
-| `workbench/backend/runtime.py` | backend | 2113 | `62e8775914affe8b` | FULLY_REVIEWED |
+| `workbench/backend/paper_gate.py` | backend | 388 | `e3099bd3564dc903` | FULLY_REVIEWED |
+| `workbench/backend/preflight.py` | backend | 216 | `4ce00334cde37025` | FULLY_REVIEWED |
+| `workbench/backend/registry.py` | backend | 739 | `ec5e9b13e6f884de` | FULLY_REVIEWED |
+| `workbench/backend/runtime.py` | backend | 2155 | `a4f1423fd7d6fee0` | FULLY_REVIEWED |
 | `workbench/backend/schemas/__init__.py` | backend | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
 | `workbench/backend/schemas/results.py` | backend | 127 | `c145a75b38651da8` | FULLY_REVIEWED |
 | `workbench/backend/storage.py` | backend | 204 | `392aee56f29e1138` | FULLY_REVIEWED |
+| `workbench/__init__.py` | workbench | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
+| `workbench/replay/common.py` | replay | 108 | `4372af3f3fdacfb2` | FULLY_REVIEWED |
 | `workbench/replay/__init__.py` | replay | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
-| `workbench/replay/common.py` | replay | 100 | `b3c427496ef47809` | FULLY_REVIEWED |
 | `workbench/replay/limn.py` | replay | 216 | `161c74038e447e0c` | FULLY_REVIEWED |
 | `workbench/replay/tgcir.py` | replay | 95 | `8c75201fc83268ed` | FULLY_REVIEWED |
 | `workbench/scripts/autopilot.py` | scripts | 12 | `6cce50aa2774bb11` | FULLY_REVIEWED |
+| `workbench/scripts/build_paper_registry.py` | scripts | 222 | `09ba3d911ffb059d` | FULLY_REVIEWED |
 | `workbench/scripts/clean_generated.py` | scripts | 104 | `6fa2ca32f607a64d` | FULLY_REVIEWED |
 | `workbench/scripts/doctor.py` | scripts | 318 | `76587b4a67387f0d` | FULLY_REVIEWED |
-| `workbench/scripts/download_auxiliary_assets.py` | scripts | 273 | `5d53390b04debf6a` | FULLY_REVIEWED |
-| `workbench/scripts/download_checkpoints.py` | scripts | 258 | `cccd0df0eee91913` | FULLY_REVIEWED |
-| `workbench/scripts/evaluate_models.py` | scripts | 1739 | `80a9ffae0f3c7f2c` | FULLY_REVIEWED |
+| `workbench/scripts/download_auxiliary_assets.py` | scripts | 448 | `a3a09ae058a71b4c` | FULLY_REVIEWED |
+| `workbench/scripts/download_checkpoints.py` | scripts | 266 | `d0471991776a6622` | FULLY_REVIEWED |
+| `workbench/scripts/evaluate_models.py` | scripts | 1843 | `d37c920fba78441a` | FULLY_REVIEWED |
 | `workbench/scripts/load_mock_results.py` | scripts | 31 | `a03be7c4e947b7cb` | FULLY_REVIEWED |
 | `workbench/scripts/manage_environment.py` | scripts | 358 | `2492d3780eb65231` | FULLY_REVIEWED |
-| `workbench/scripts/pipeline.py` | scripts | 2317 | `8465b352edd23553` | FULLY_REVIEWED |
+| `workbench/scripts/pc_readiness.py` | scripts | 351 | `bebafa0bbe8e5e2c` | FULLY_REVIEWED |
+| `workbench/scripts/pipeline.py` | scripts | 2340 | `aef3ca1b35f1bef5` | FULLY_REVIEWED |
 | `workbench/scripts/plan_environments.py` | scripts | 14 | `4de84777f64e07a3` | FULLY_REVIEWED |
 | `workbench/scripts/prepare_dataset.py` | scripts | 133 | `e695e333ffa78f69` | FULLY_REVIEWED |
-| `workbench/scripts/prepare_model.py` | scripts | 618 | `3db4915ea544f7bb` | FULLY_REVIEWED |
+| `workbench/scripts/prepare_model.py` | scripts | 730 | `f657463147ac74e1` | FULLY_REVIEWED |
 | `workbench/scripts/readiness_matrix.py` | scripts | 215 | `3523b123609401e8` | FULLY_REVIEWED |
 | `workbench/scripts/rebuild_index.py` | scripts | 35 | `b512573520fa4729` | FULLY_REVIEWED |
 | `workbench/scripts/run_eval.py` | scripts | 29 | `8fbae131d3db035f` | FULLY_REVIEWED |
+| `workbench/scripts/save_audit_payload.py` | scripts | 84 | `670be54f2f5ec59e` | FULLY_REVIEWED |
+| `workbench/scripts/save_paper_payload.py` | scripts | 91 | `7c4f4f56c3846c72` | FULLY_REVIEWED |
 | `workbench/scripts/serve_workbench.py` | scripts | 166 | `8a3990343272a510` | FULLY_REVIEWED |
 | `workbench/scripts/sync_upstreams.py` | scripts | 203 | `7327515b0026e6cd` | FULLY_REVIEWED |
 | `workbench/scripts/validate_results.py` | scripts | 75 | `dc092e114354a474` | FULLY_REVIEWED |
+| `workbench/tests/_core_fixture.py` | tests | 34 | `fde5b566067422d8` | TESTED_PATH |
+| `workbench/tests/mock_data.py` | tests | 27 | `5a561676d08f48ff` | TESTED_PATH |
+| `workbench/tests/test_adversarial_environment.py` | tests | 222 | `369f25fcc8e8c63a` | TESTED_PATH |
+| `workbench/tests/test_adversarial_metrics.py` | tests | 193 | `9b19da22f0e77ee8` | TESTED_PATH |
+| `workbench/tests/test_adversarial_orchestration.py` | tests | 164 | `152d0e23f0e21f9b` | TESTED_PATH |
+| `workbench/tests/test_adversarial_resume.py` | tests | 121 | `e30a6e0aa38fb82a` | TESTED_PATH |
+| `workbench/tests/test_approved_source_patch.py` | tests | 189 | `0d321db140b3592e` | TESTED_PATH |
+| `workbench/tests/test_artifact_hashing.py` | tests | 135 | `0d1a5a2c607ff83c` | TESTED_PATH |
+| `workbench/tests/test_artifact_root_configuration.py` | tests | 89 | `16f390a8bcd949d9` | TESTED_PATH |
+| `workbench/tests/test_authorization_policy.py` | tests | 112 | `3aaea5f35468eb30` | TESTED_PATH |
+| `workbench/tests/test_autopilot_cold_start.py` | tests | 1012 | `42abb95f4a3ad63e` | TESTED_PATH |
+| `workbench/tests/test_autopilot_config.py` | tests | 358 | `834f0dc42fe97336` | TESTED_PATH |
+| `workbench/tests/test_autopilot_e2e.py` | tests | 512 | `d98eba6a75b9fa76` | TESTED_PATH |
+| `workbench/tests/test_autopilot_report.py` | tests | 624 | `e389c4d46b421700` | TESTED_PATH |
+| `workbench/tests/test_backend_config_roots.py` | tests | 77 | `3ee11f197431b618` | TESTED_PATH |
+| `workbench/tests/test_bundle_selection.py` | tests | 27 | `9a8632d497cd3d3d` | TESTED_PATH |
+| `workbench/tests/test_checkpoint_download_publication.py` | tests | 302 | `5e5e1338a7993e31` | TESTED_PATH |
+| `workbench/tests/test_checkpoint_selection.py` | tests | 201 | `7822ea1c000c0e27` | TESTED_PATH |
+| `workbench/tests/test_concurrency_ownership.py` | tests | 116 | `3ca2b254cccbc742` | TESTED_PATH |
+| `workbench/tests/test_credential_boundary.py` | tests | 157 | `665c3a345a25977e` | TESTED_PATH |
+| `workbench/tests/test_csmcir_source_blocker.py` | tests | 83 | `0f6a435ad019f6fc` | TESTED_PATH |
+| `workbench/tests/test_doctor.py` | tests | 209 | `dfa6a4dfbb3b98d9` | TESTED_PATH |
+| `workbench/tests/test_download_auxiliary_assets.py` | tests | 942 | `b97c8c7db725744e` | TESTED_PATH |
+| `workbench/tests/test_environment_planner.py` | tests | 1367 | `aad0349e909ca8eb` | TESTED_PATH |
+| `workbench/tests/test_evaluate_models.py` | tests | 472 | `3b96e5df6828cbb0` | TESTED_PATH |
+| `workbench/tests/test_execution_graph_and_dependencies.py` | tests | 332 | `eb4795a9a4a197ab` | TESTED_PATH |
+| `workbench/tests/test_execution_identity.py` | tests | 205 | `5357fb239d524f33` | TESTED_PATH |
+| `workbench/tests/test_gpu_capability_host_identity.py` | tests | 90 | `4966da5252022d4a` | TESTED_PATH |
+| `workbench/tests/test_handoff_commands.py` | tests | 205 | `855c29b0ba42f90f` | TESTED_PATH |
+| `workbench/tests/test_http_api_layer.py` | tests | 243 | `de0c2805b872c14d` | TESTED_PATH |
+| `workbench/tests/test_mutation_effectiveness.py` | tests | 260 | `12c8be71ba57df8c` | TESTED_PATH |
+| `workbench/tests/test_only_synthetic.py` | tests | 35 | `ef6baae79b3b9202` | TESTED_PATH |
+| `workbench/tests/test_operator_config.py` | tests | 44 | `bb7b6d227620607c` | TESTED_PATH |
+| `workbench/tests/test_operator_contracts.py` | tests | 123 | `bba7595350bcadf6` | TESTED_PATH |
+| `workbench/tests/test_operator_runtime.py` | tests | 133 | `ea76255be8ac942d` | TESTED_PATH |
+| `workbench/tests/test_operator_sync.py` | tests | 192 | `68f9bae17c68c734` | TESTED_PATH |
+| `workbench/tests/test_paper_gate.py` | tests | 545 | `0cd825b5f154bb0d` | TESTED_PATH |
+| `workbench/tests/test_pc_readiness.py` | tests | 137 | `fc842bd18399a344` | TESTED_PATH |
+| `workbench/tests/test_phase1_acceptance_scenarios.py` | tests | 443 | `ff7de18d14201236` | TESTED_PATH |
+| `workbench/tests/test_phase1_integration_contracts.py` | tests | 451 | `b6eb9a5c2725a9a8` | TESTED_PATH |
+| `workbench/tests/test_pipeline.py` | tests | 780 | `8d6a91429e5ba861` | TESTED_PATH |
+| `workbench/tests/test_preflight_consistency.py` | tests | 139 | `e6f6ce4fc99b6987` | TESTED_PATH |
+| `workbench/tests/test_preparation_stages.py` | tests | 598 | `cb16960ffdebba7e` | TESTED_PATH |
+| `workbench/tests/test_prepare_dataset.py` | tests | 924 | `31a1e3c664aa4286` | TESTED_PATH |
+| `workbench/tests/test_process_group_cancellation.py` | tests | 207 | `46029686305c53c1` | TESTED_PATH |
+| `workbench/tests/test_production_stage_resume_invalidation.py` | tests | 132 | `fd34c0631aec16d9` | TESTED_PATH |
+| `workbench/tests/test_protocols.py` | tests | 148 | `b0d8448853d64f30` | TESTED_PATH |
+| `workbench/tests/test_release_blocker_cuda_readiness.py` | tests | 866 | `336cb74e4b7d8cc9` | TESTED_PATH |
+| `workbench/tests/test_release_blocker_evaluation_output.py` | tests | 1652 | `fae8a7a630c527ed` | TESTED_PATH |
+| `workbench/tests/test_release_blocker_interpreter.py` | tests | 1214 | `0982d97817474edb` | TESTED_PATH |
+| `workbench/tests/test_release_blocker_master_e2e.py` | tests | 584 | `b76292cc814247f6` | TESTED_PATH |
+| `workbench/tests/test_release_blocker_mutations.py` | tests | 698 | `5e30946bdbcb81fd` | TESTED_PATH |
+| `workbench/tests/test_release_blocker_production_stage_fingerprint.py` | tests | 310 | `5730500eb86a2297` | TESTED_PATH |
+| `workbench/tests/test_release_blocker_source_integrity.py` | tests | 384 | `43fcb5f5397b9848` | TESTED_PATH |
+| `workbench/tests/test_release_gate_scenarios.py` | tests | 516 | `82258136787cb679` | TESTED_PATH |
+| `workbench/tests/test_replay.py` | tests | 336 | `d28d101a8afe41a3` | TESTED_PATH |
+| `workbench/tests/test_result_operations.py` | tests | 64 | `bfcd543689b5aa44` | TESTED_PATH |
+| `workbench/tests/test_scenario_failure_isolation.py` | tests | 43 | `5a8ab08f252b18b2` | TESTED_PATH |
+| `workbench/tests/test_scientific_input_identity.py` | tests | 403 | `5c245134db0ac946` | TESTED_PATH |
+| `workbench/tests/test_standalone_operator_commands.py` | tests | 79 | `74f21ce33f156aca` | TESTED_PATH |
+| `workbench/tests/test_strict_acceptance_matrix.py` | tests | 287 | `96f66ad1db2b58cd` | TESTED_PATH |
+| `workbench/tests/test_synthetic_reproduction_e2e.py` | tests | 281 | `19a3bbc8d25ecd19` | TESTED_PATH |
+| `workbench/tests/test_true_master_e2e.py` | tests | 333 | `ae71a10f4ac1febc` | TESTED_PATH |
+| `workbench/tests/test_workbench.py` | tests | 292 | `e3bfec939fcdd9b2` | TESTED_PATH |
+| `workbench/tests/test_workflow_report_termination.py` | tests | 58 | `80e06c2ee0e1baaf` | TESTED_PATH |

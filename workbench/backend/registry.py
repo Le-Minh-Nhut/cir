@@ -85,19 +85,23 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
                 raise ValueError(f"non-clean evaluation policy for {model['model_id']}")
             if checkpoint["checkpoint_mapping_status"] not in mapping_statuses:
                 raise ValueError(f"unknown checkpoint mapping state for {model['model_id']}")
-            # The two fields must agree on whether the mapping is established. Only one source
-            # state means "we do not know which benchmark variant this is"; every other state
-            # records a fact about obtainability, which is independent of the mapping. This is what
-            # catches the transposition: a mapping field claiming verification while the source
-            # field says the mapping is unresolved. A variant that records no source state is not
-            # making a claim about the mapping, so there is nothing to contradict.
+            # One direction only: a source state that says the mapping is unresolved must not
+            # coexist with a mapping field claiming verification (the transposition). The
+            # converse is deliberately NOT enforced: an obtainability fact such as
+            # URL_UNRESOLVED says nothing about which benchmark variant the asset is, so an
+            # unresolved source with an UNVERIFIED mapping is honest, not contradictory.
             source_state = checkpoint.get("status")
             if source_state is not None:
                 if source_state not in source_statuses:
                     raise ValueError(f"unknown checkpoint source state {source_state!r} for "
                                      f"{model['model_id']}")
-                mapping_unverified = source_state == "CHECKPOINT_MAPPING_UNVERIFIED"
-                if mapping_unverified != (checkpoint["checkpoint_mapping_status"] == "UNVERIFIED"):
+                # One direction only: a source state that says the mapping is unresolved must not
+                # coexist with a mapping field claiming verification (the transposition). The
+                # converse is deliberately NOT enforced: an obtainability fact such as
+                # URL_UNRESOLVED says nothing about which benchmark variant the asset is, so an
+                # unresolved source with an UNVERIFIED mapping is honest, not contradictory.
+                if source_state == "CHECKPOINT_MAPPING_UNVERIFIED" and \
+                        checkpoint["checkpoint_mapping_status"] != "UNVERIFIED":
                     raise ValueError(
                         f"checkpoint source state {source_state!r} and mapping state "
                         f"{checkpoint['checkpoint_mapping_status']!r} disagree for {model['model_id']}")

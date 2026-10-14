@@ -407,7 +407,9 @@ def test_the_report_helper_selects_by_condition_not_by_headline_value():
     clean = Namespace(model_id="habit", protocol="fashioniq_full_gallery_ref_excluded",
                       checkpoint_id="fiq_n00", checkpoint_training_noise_pct=0)
     verdict = _benchmark_gate_verdict(clean, Extraction(), 0)
-    assert verdict["status"] == gate.PASS_WITHIN_5_PERCENT
+    # The habit row publishes per-category metrics and the extraction carries none, so the pass is
+    # explicitly incomplete rather than a plain aggregate-only pass.
+    assert verdict["status"] == gate.PASS_WITH_UNCHECKED_CATEGORIES
     assert verdict["reference_evidence"]["reference_id"] == "habit_aaai26_table1_fiq_n00"
 
     noisy = Namespace(model_id="habit", protocol="fashioniq_full_gallery_ref_excluded",
@@ -462,3 +464,86 @@ def test_no_committed_row_states_no_condition_at_all():
                          "dataset": record.get("dataset"),
                      }.get(field) is not None)
         assert stated > 0, record["reference_id"]
+
+# ---------------------------------------------------------------- per-category metrics
+
+def run_with_categories(metrics, categories, ref=None, **kwargs):
+    return gate.evaluate_gate(ref or reference(), metrics,
+                              run_meta=dict(META), real_execution=True,
+                              reproduced_category_metrics=categories, **kwargs)
+
+def test_a_deviating_category_fails_even_when_the_aggregate_passes():
+    # Scenario E: the aggregate hides a broken category. Paper dress R@10 is 50.00; the run's dress
+    # is 42.00 (16 percent off), while every aggregate metric is exact.
+    ref = reference(**{"category_metrics": {"dress": {"r10": 50.00, "r50": 70.00}}})
+    verdict = run_with_categories(
+        {"r10": 57.07, "r50": 77.27, "mean": 67.17},
+        {"dress": {"r10": 42.00, "r50": 70.00}},
+        ref)
+    assert verdict.status == gate.ALERT_METRIC_DEVIATION
+    dress = next(c for c in verdict.comparisons if c.metric == "dress_r10")
+    assert not dress.within_tolerance
+    assert dress.direction == "lower"
+    assert dress.relative_error_pct == pytest.approx(16.0)
+
+def test_categories_compare_only_where_both_sides_publish():
+    # The paper prints a dress row; the run observed no categories. Nothing is compared against a
+    # number that was never observed, and the pass is explicitly incomplete: the status names the
+    # published-but-unchecked categories instead of claiming a full reproduction check.
+    ref = reference(**{"category_metrics": {"dress": {"r10": 50.00, "r50": 70.00}}})
+    verdict = run_with_categories({"r10": 57.07, "r50": 77.27, "mean": 67.17}, None, ref)
+    assert verdict.status == gate.PASS_WITH_UNCHECKED_CATEGORIES
+    assert verdict.passed is True
+    assert "dress_r10" in verdict.detail and "not compared" in verdict.detail
+
+def test_a_run_category_with_no_paper_counterpart_is_not_compared():
+    # An observed category cannot be judged against a row that never printed one.
+    ref = reference(**{"category_metrics": None})
+    verdict = run_with_categories(
+        {"r10": 57.07, "r50": 77.27, "mean": 67.17},
+        {"dress": {"r10": 10.00, "r50": 10.00}},
+        ref)
+    assert verdict.status == gate.PASS_WITHIN_5_PERCENT
+    assert not any(c.metric == "dress_r10" for c in verdict.comparisons)
+
+def test_matching_categories_keep_the_pass():
+    ref = reference(**{"category_metrics": {
+        "dress": {"r10": 52.45, "r50": 74.81},
+        "shirt": {"r10": 57.70, "r50": 75.76},
+        "toptee": {"r10": 61.14, "r50": 80.98},
+    }})
+    verdict = run_with_categories(
+        {"r10": 57.10, "r50": 77.25, "mean": 67.15},
+        {"dress": {"r10": 52.44, "r50": 74.80},
+         "shirt": {"r10": 57.69, "r50": 75.77},
+         "toptee": {"r10": 61.15, "r50": 80.97}},
+        ref)
+    assert verdict.status == gate.PASS_WITHIN_5_PERCENT
+
+# ---------------------------------------------------------------- the threshold helper
+
+def test_deviations_helper_reflags_recorded_comparisons():
+    ref = reference(**{"category_metrics": {"dress": {"r10": 50.00, "r50": 70.00}}})
+    verdict = run_with_categories(
+        {"r10": 57.07, "r50": 77.27, "mean": 67.17},
+        {"dress": {"r10": 48.50, "r50": 70.00}},  # dress_r10 is 3 percent off: inside the gate
+        ref)
+    assert verdict.status == gate.PASS_WITHIN_5_PERCENT
+    flag = gate.deviations(verdict.comparisons, 2.0)
+    assert flag["deviates"] and flag["worst_metric"] == "dress_r10"
+    loose = gate.deviations(verdict.comparisons, 10.0)
+    assert not loose["deviates"] and loose["worst_metric"] is None
+
+# ---------------------------------------------------------------- parity now follows the gate rule
+
+def test_parity_uses_relative_error_not_absolute_tolerance():
+    # 57.07 vs 60.00 is 2.93pp apart: the legacy check (`abs(diff) > 0.05` with values already in
+    # percent units) called that a pass, but it is 5.1 percent relative -- a FAIL under the canonical
+    # rule. And 57.07 vs 57.20 (0.13pp) stays a pass: 0.23 percent relative.
+    from workbench.backend.metrics_extraction import _check_parity
+    assert _check_parity({"r10": 60.00, "r50": 77.27, "mean": 67.17},
+                         {"r10": 57.07, "r50": 77.27, "mean": 67.17}) == "PARITY_MISMATCH"
+    assert _check_parity({"r10": 57.20, "r50": 77.27, "mean": 67.17},
+                         {"r10": 57.07, "r50": 77.27, "mean": 67.17}) == "PARITY_VERIFIED"
+    assert _check_parity({"r10": 57.07, "r50": 77.27},  # paper missing mean
+                         {"r10": 57.07, "r50": 77.27, "mean": 67.17}) == "PARITY_NOT_EVALUATED"

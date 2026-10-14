@@ -55,6 +55,7 @@ BLOCKER_KINDS = (
     ("canonical dataset link", BLOCKED_DATASET),
     ("captions", BLOCKED_EXTERNAL_ASSET),
     ("asset", BLOCKED_EXTERNAL_ASSET),
+    ("unverified", BLOCKED_EXTERNAL_ASSET),
     ("missing", BLOCKED_EXTERNAL_ASSET),
 )
 

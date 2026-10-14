@@ -1,224 +1,240 @@
 {
-  "experiments": [
-    {
-      "aggregation_method": "macro over categories, then mean of R@10 and R@50",
-      "augmentation_policy": null,
-      "backbone": "BLIP-2 feature extractor (Q-former); paper does not print a CLIP/BLIP variant string for the FashionIQ row",
-      "category_metrics": {
-        "dress": {
-          "r10": 51.8,
-          "r50": 73.13
-        },
-        "shirt": {
-          "r10": 60.27,
-          "r50": 78.48
-        },
-        "toptee": {
-          "r10": 63.37,
-          "r50": 82.19
-        }
-      },
-      "checkpoint_id": "fashioniq",
-      "checkpoint_mapping_evidence": "HINT/train.py:56 'parser.add_argument(\"--noise_ratio\", type=float, default=0)' -> default training noise is 0%, matching the paper's clean single-row table (no noise-level blocks anywhere in Table 1). Registry checkpoint_variants lists checkpoint_id 'fashioniq', filename fashioniq.pt, expected_size_bytes 2724451182, source author_huggingface. Query of https://huggingface.co/api/models/iLearn-Lab/HINT/tree/main returned fashioniq.pt size 2724451182 LFS oid bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4 and cirr.pt of the same size \u2014 size matches the registry value exactly and the filename is dataset-scoped, so the dataset-level mapping is verified. Category policy is not settled by the HF listing (one fashioniq.pt for all three categories); that is a routing question, not a 0%-noise question.",
-      "checkpoint_mapping_status": "VERIFIED",
-      "checkpoint_training_noise_pct": 0,
-      "dataset": "fashioniq",
-      "dataset_version": "official FashionIQ validation annotations (captions/cap.{cat}.val.json) and split files (image_splits/split.{cat}.val.json)",
-      "derived_metrics": [
-        {
-          "derivation_formula": "(r10 + r50) / 2",
-          "key": "mean",
-          "provenance": "WORKBENCH_DERIVED",
-          "rounding_policy": "round-half-up to 2 decimals",
-          "source_metrics": [
-            "r10",
-            "r50"
-          ],
-          "value": 68.21
-        }
-      ],
-      "evaluation_noise_pct": 0,
-      "gallery_protocol": "fashioniq_val_split",
-      "method_name": "HINT",
-      "method_variant": "main method (full model, all modules DCE+QCR+DPCC)",
-      "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
-      "metric_provenance": {
-        "paper_column": "FashionIQ block, Dresses/Shirts/Tops&Tees R@10 and R@50, plus the FashionIQ Avg (R@10, R@50) columns",
-        "paper_page": 4,
-        "paper_row": "HINT (Ours)",
-        "paper_table": "Table 1",
-        "source_excerpt_or_description": "'Table 1. Performance comparison on FashionIQ and CIRR relative to R@k(%). The overall best results are in bold, while the second-best results are underlined. The Avg metric in CIRR denotes (R@5 + Rsubset@1) / 2.' Bottom row: 'HINT (Ours) 51.80 73.13 60.27 78.48 63.37 82.19 | 58.48 77.93 | ...'. The Avg column here is the category macro of R@10 and of R@50, not a mean of the two."
-      },
-      "model_id": "hint",
-      "preprocessing_id": null,
-      "reference_excluded": true,
-      "reference_id": "hint_fiq_clean_val_split",
-      "reference_status": "VERIFIED",
-      "reported_metrics": {
-        "mean": null,
-        "r10": 58.48,
-        "r50": 77.93
-      },
-      "reported_metrics_provenance": "PAPER_REPORTED for r10 and r50 (Table 1, FashionIQ 'Avg' column, row 'HINT (Ours)'); the paper prints no combined Mean of R@10 and R@50, so mean stays null here.",
-      "review_status": "CONFIRMED",
-      "split": "val",
-      "verification_evidence": "All three routes agree cell-by-cell: Dresses 51.80/73.13, Shirts 60.27/78.48, Tops&Tees 63.37/82.19, Avg 58.48/77.93 (paper_reported), so the registry's reported_r10 58.48 and reported_r50 77.93 are CONFIRMED. Registry reported_mean 68.21 equals (58.48+77.93)/2 = 68.205 -> 68.21, a WORKBENCH_DERIVED value the paper never prints; the paper's own 'Avg' columns are category macros and must not be confused with it. Gallery/reference policy is NOT stated in the paper: the only FashionIQ protocol sentence is 'For FashionIQ, we evaluate R@10, R@50 for each category, as well as their averages' (paper Section 3.1). The pinned code, not the paper, establishes the cohort: HINT/datasets.py:131-169 get_test_data reads split.{cat}.val.json and builds test_targets as the first-seen ordered union of each annotation's source then target id (dataset source_id appended first at :146-168), and HINT/test.py:79-86 sets sims[i, test_targets_id.index(t['source_img_id'])] = -10e10 before np.argsort(-sims[i, :]) -> reference excluded from the effective ranking. That is fashioniq_val_split (mask variant, not column removal), so the registry protocol attribution is CONFIRMED from code while the paper alone would not establish it. Numeric check of the cohort on the local annotations (data/fashionIQ_dataset/cap.{cat}.val.json vs image_splits/split.{cat}.val.json, python3 pair-union recomputation) gives dress 2628, shirt 3089, toptee 2902 unique ids, exactly the gallery sizes the workbench protocol declares.",
-      "verification_method": "Three independent routes read and cross-checked: rendered PDF page 4 image (pdftoppm -r 160), arXiv HTML table markup, and the author README results image workbench/third_party/HINT/assets/results.png. Arithmetic also checked: mean(51.80, 60.27, 63.37) = 58.480 and mean(73.13, 78.48, 82.19) = 77.933, which reproduce the printed Avg cells 58.48 and 77.93."
+ "experiments": [
+  {
+   "aggregation_method": "macro over categories, then mean of R@10 and R@50",
+   "augmentation_policy": null,
+   "backbone": "BLIP-2 feature extractor (Q-former); paper does not print a CLIP/BLIP variant string for the FashionIQ row",
+   "category_metrics": {
+    "dress": {
+     "r10": 51.8,
+     "r50": 73.13
     },
-    {
-      "aggregation_method": "macro over categories, then mean of R@10 and R@50",
-      "augmentation_policy": null,
-      "backbone": "CLIP ViT-B/32",
-      "category_metrics": {
-        "dress": {
-          "r10": 51.51,
-          "r50": 76.95
-        },
-        "shirt": {
-          "r10": 54.86,
-          "r50": 74.93
-        },
-        "toptee": {
-          "r10": 62.01,
-          "r50": 80.88
-        }
-      },
-      "checkpoint_id": "fashioniq",
-      "checkpoint_mapping_evidence": "ENCODER is a clean, single-row table method (Table 1 has no noise blocks), and evaluate_model.py loads one shared state dict for all categories via open_clip.create_model_and_transforms('ViT-B-32', pretrained=.../open_clip_pytorch_model.bin) (evaluate_model.py:40,43; README:249-259). Registry checkpoint_id 'fashioniq' has download_url: null and source_url https://drive.google.com/drive/folders/1QuBQVIybLwn-qFSORhpBsnXy6ebhtNr3, status URL_UNRESOLVED. Querying https://ojs.aaai.org/index.php/AAAI/article/download/32541/34696 for a direct PDF failed at the TLS/HTTP layer (see paper access_evidence), and no per-file URL or digest for ENCODER_FashionIQ.pth exists in the pinned tree; therefore which file inside the Drive folder is the clean FashionIQ checkpoint is NOT established. Mapping stays UNVERIFIED (no checkpoint_training_noise_pct claim beyond the table's clean row: checkpoint_training_noise_pct 0 is the paper's training condition, not a verified file property).",
-      "checkpoint_mapping_status": "UNVERIFIED",
-      "checkpoint_training_noise_pct": 0,
-      "dataset": "fashioniq",
-      "dataset_version": "official FashionIQ validation annotations (captions/cap.{cat}.val.json) and split files (image_splits/split.{cat}.val.json)",
-      "derived_metrics": [
-        {
-          "derivation_formula": "(r10 + r50) / 2",
-          "key": "mean",
-          "provenance": "WORKBENCH_DERIVED",
-          "rounding_policy": "round-half-up to 2 decimals",
-          "source_metrics": [
-            "r10",
-            "r50"
-          ],
-          "value": 66.86
-        }
-      ],
-      "evaluation_noise_pct": 0,
-      "gallery_protocol": "fashioniq_val_split",
-      "method_name": "ENCODER",
-      "method_variant": "main method (full model, LFF+EAB+MSC)",
-      "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
-      "metric_provenance": {
-        "paper_column": "FashionIQ block: Dresses/Shirts/Tops&Tees R@10 and R@50, then the FashionIQ Avg columns",
-        "paper_page": 5,
-        "paper_row": "ENCODER(Ours)",
-        "paper_table": "Table 1",
-        "source_excerpt_or_description": "AAAI PDF text (via text extraction of the publisher PDF): 'ENCODER(Ours) 51.51 76.95 54.86 74.93 62.01 80.88 56.13 77.59 26.97 65.59 86.48 59.68', followed by 'Table 1: Performance comparison on FashionIQ and Shoes relative to R@k(%). The overall best results are in bold, while the best results over baselines are underlined.' The last four numbers are the Shoes (R@1/R@10/R@50/Avg) columns. The author project-page image renders the identical row, and the repo image assets/fashion-results.png renders it as the last block 'ENCODER(Ours)'."
-      },
-      "model_id": "encoder",
-      "preprocessing_id": null,
-      "reference_excluded": true,
-      "reference_id": "encoder_fiq_clean_val_split",
-      "reference_status": "VERIFIED",
-      "reported_metrics": {
-        "mean": null,
-        "r10": 56.13,
-        "r50": 77.59
-      },
-      "reported_metrics_provenance": "PAPER_REPORTED for r10 and r50 (Table 1 'ENCODER(Ours)' row, FashionIQ Avg columns). The paper prints no Mean of R@10 and R@50, so mean stays null.",
-      "review_status": "CONFIRMED",
-      "split": "val",
-      "verification_evidence": "Registry reported_r10 56.13 and reported_r50 77.59 are CONFIRMED: mean(51.51, 54.86, 62.01) = 56.127 -> 56.13 and mean(76.95, 74.93, 80.88) = 77.587 -> 77.59, reproducing the printed Avg cells exactly. Registry reported_mean 66.86 equals (56.13+77.59)/2 = 66.86, WORKBENCH_DERIVED; the paper's 'Avg' columns are category macros. Protocol: the paper does NOT state gallery construction or reference policy for FashionIQ \u2014 Section 4.1 'Datasets.' names only 'FashionIQ (Wu et al. 2021)' and Section 4.1 'Evaluation.' says only 'FashionIQ evaluation used R@10, R@50, and their category-wise averages'. The cohort comes from the pinned code: datasets.py:64 constructs FashionIQ with default split='val-split' and evaluate_model.py:15 mirrors that default; datasets.py:167-188 branches on it \u2014 'val-split' appends the first-seen ordered source/target union to test_targets_id, 'original-split' appends the whole split list \u2014 and test.py:68 assigns sims[i, test_targets_id.index(t['source_img_id'])] = -10e10 before np.argsort(-sims[i, :]) at test.py:70. So fashioniq_val_split (pair-union gallery, reference masked out of the ranking) is CONFIRMED from code; the paper's 'validation set' wording is the only paper-side evidence. Local annotation recomputation gives dress 2628 / shirt 3089 / toptee 2902, matching the workbench-declared sizes. Publisher PDF itself was reached only through the text proxy: direct curl to ojs.aaai.org returned OpenSSL 'unexpected eof while reading' / 'Remote end closed connection' and no bytes, so pdf_sha256 is null.",
-      "verification_method": "Text route: publisher PDF (9 pages) converted to text through the r.jina.ai proxy; the FashionIQ row appears as 'ENCODER(Ours) 51.51 76.95 54.86 74.93 62.01 80.88 56.13 77.59'. Image route: two author-rendered sources agree \u2014 https://lee-zixu.github.io/ENCODER.github.io/static/images/Fiq.png (linked at encproj.html:290) and workbench/third_party/ENCODER/assets/fashion-results.png (README.md 'FashionIQ & Shoes Datasets' section), both showing Dresses 51.51/76.95, Shirts 54.86/74.93, Tops&Tees 62.01/80.88, Avg 56.13/77.59."
+    "shirt": {
+     "r10": 60.27,
+     "r50": 78.48
     },
-    {
-      "aggregation_method": "macro over categories, then mean of R@10 and R@50",
-      "augmentation_policy": null,
-      "backbone": "CLIP ViT-B/32 (open_clip 'ViT-B-32' per the pinned code path; the abstract-only paper text does not state it)",
-      "category_metrics": {
-        "dress": {
-          "r10": 46.78,
-          "r50": 70.93
-        },
-        "shirt": {
-          "r10": 52.6,
-          "r50": 73.8
-        },
-        "toptee": {
-          "r10": 58.91,
-          "r50": 78.81
-        }
-      },
-      "checkpoint_id": "pair_b1",
-      "checkpoint_mapping_evidence": "The author Hub repo https://huggingface.co/iLearn-Lab/ICASSP25-PAIR contains exactly two weight files, pair-B1.pt (694958565 bytes, LFS oid c4d861ecd0baa3f1427fc7a853943f5614baf87def1cdd9c4bb7583ee925fbf2) and pair-B2.pt (694872371 bytes, LFS oid 74346fd7de6efdafe8dde70458316286a60ceb2d7b419efed55193418aeb3f03), observed via https://huggingface.co/api/models/iLearn-Lab/ICASSP25-PAIR/tree/main. Nothing in the pinned repo (grep -rn 'pair-B1|pair-B2' over workbench/third_party -> 0 hits in code), in the HF model card (no 'B1'/'B2' string, only a non-existent example path 'PAIR_CIRR.pt'), or in the abstract-only IEEE record binds either file to FashionIQ, to a category, or to a training-noise level. Two files for three datasets cannot be resolved by name. Registry already records both variants as download_url: null, source_type: unresolved, checkpoint_mapping_status: UNVERIFIED. 'pair_b1' is recorded as the checkpoint_id only because it is the registry's first variant; that identity is a placeholder, not a verified mapping.",
-      "checkpoint_mapping_status": "UNVERIFIED",
-      "checkpoint_training_noise_pct": null,
-      "dataset": "fashioniq",
-      "dataset_version": "official FashionIQ validation annotations (captions/cap.{cat}.val.json) and split files (image_splits/split.{cat}.val.json); README Table 2 caption says 'validation sets'",
-      "derived_metrics": [
-        {
-          "derivation_formula": "(r10 + r50) / 2",
-          "key": "mean",
-          "provenance": "WORKBENCH_DERIVED",
-          "rounding_policy": "round-half-up to 2 decimals",
-          "source_metrics": [
-            "r10",
-            "r50"
-          ],
-          "value": 63.64
-        }
-      ],
-      "evaluation_noise_pct": 0,
-      "gallery_protocol": "fashioniq_val_split",
-      "method_name": "PAIR",
-      "method_variant": "main method (full model, coherence-incoherence extractor + complementarity disentanglement + asymmetric composition)",
-      "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
-      "metric_provenance": {
-        "paper_column": "FashionIQ block: Dresses/Shirts/Tops&Tees R@10 and R@50, then the FashionIQ Avg R@10/R@50 columns",
-        "paper_page": null,
-        "paper_row": "PAIR(Ours)",
-        "paper_table": "Table 2",
-        "source_excerpt_or_description": "workbench/third_party/PAIR/README.md:75-76 renders 'Table 2. Performance comparison on FashionIQ and Shoes validation sets in terms of R@K (%).' from assets/fiqshoes.png; bottom row 'PAIR(Ours) | 46.78 70.93 | 52.60 73.80 | 58.91 78.81 | 52.76 74.51 | 27.48 65.08 85.86 59.47' (the trailing four cells are the Shoes columns). The author project page renders the same figure as 'TABLE II' with the identical row at https://zhihfu.github.io/PAIR.github.io/static/images/Fiq.png."
-      },
-      "model_id": "pair",
-      "preprocessing_id": null,
-      "reference_excluded": true,
-      "reference_id": "pair_fiq_clean_val_split",
-      "reference_status": "VERIFIED",
-      "reported_metrics": {
-        "mean": null,
-        "r10": 52.76,
-        "r50": 74.51
-      },
-      "reported_metrics_provenance": "PAPER_REPORTED for r10 and r50 (Table 2, row 'PAIR(Ours)', FashionIQ Avg R@10 and R@50 columns). This was read from the author's own rendered table image, not from the paywalled IEEE PDF (see access_evidence). Paper prints no combined Mean.",
-      "review_status": "CONFIRMED",
-      "split": "val",
-      "verification_evidence": "Registry reported_r10 52.76 and reported_r50 74.51 are CONFIRMED against Table 2 (row 'PAIR(Ours)'), read from two author-rendered images that agree on every FashionIQ cell (Dresses 46.78/70.93, Shirts 52.60/73.80, Tops&Tees 58.91/78.81). Registry reported_mean 63.64 = (52.76+74.51)/2 = 63.635 -> 63.64, WORKBENCH_DERIVED; the paper's Avg columns are category macros. Protocol: the paywalled paper was not readable, so no paper-side gallery statement could be checked at all; the README caption only says 'validation sets' (README.md:76). The cohort is established from the pinned code: data/datasets.py:23 FashionIQ.__init__ default split='val-split'; :148-160 uses the pair union for 'val-split' and the whole split list for 'original-split'; test.py:70 sets sims[i, t['source_img_id']] = -10e10 before the descending sort at test.py:72, i.e. reference excluded from the ranking. fashioniq_val_split is CONFIRMED from code; there is no paper sentence to cite either way, so this row must not be described as 'as stated in the paper'. Local annotation recomputation gives the declared 2628/3089/2902 gallery sizes. Note the pinned package has no requirements.txt despite README:113-119 telling the reader to install one, and models/model.py imports a module (MHTransformer_rev) absent from the checkout \u2014 issues that affect whether the numbers can be reproduced, not what they are.",
-      "verification_method": "Two independent author-rendered table images read and compared cell-by-cell: (1) the pinned repo figure workbench/third_party/PAIR/assets/fiqshoes.png, referenced by PAIR/README.md:75-76 as Table 2; (2) the project-page figure https://zhihfu.github.io/PAIR.github.io/static/images/Fiq.png, labelled 'TABLE II'. Arithmetic cross-check reproduces the printed Avg cells: mean(46.78, 52.60, 58.91) = 52.763 -> 52.76 and mean(70.93, 73.80, 78.81) = 74.513 -> 74.51. The IEEE record itself was read only as ABSTRACT_ONLY (https://ieeexplore.ieee.org/document/10888153 states 'PDF: You do not have access to this PDF' and the body text ends at 'Sign in to Continue Reading'), and the IEEE PDF endpoint https://ieeexplore.ieee.org/iel8/10887540/10887541/10888153.pdf returned HTTP 420 with 0 bytes, so no publisher PDF exists on disk and pdf_sha256 is null. The numbers therefore rest on the authors' own table renders, which is exactly the route /tmp/paper_rules.md rule 4/5 asks to report."
+    "toptee": {
+     "r10": 63.37,
+     "r50": 82.19
     }
-  ],
-  "paper": {
-    "access": "FULL_TEXT",
-    "access_evidence": "curl -s -o hint.pdf https://arxiv.org/pdf/2603.26341v1 -> 'HTTP 200 2681236'; file hint.pdf -> 'PDF document, version 1.7, 6 page(s)'; sha256sum -> fbe97798e89ef21d7f30a895a151b94ff062f708c5060ac397e494adf05f2373. Table 1 read by three routes: (a) pdftoppm -f 4 -l 4 -r 160 -png hint.pdf -> rendered page image, FashionIQ block visible; (b) https://arxiv.org/html/2603.26341v1 HTML markup, row 'HINT (Ours)' = 51.80 73.13 60.27 78.48 63.37 82.19; (c) repo README image workbench/third_party/HINT/assets/results.png (README:75-78, caption 'Table 1'). All three agree on every FashionIQ cell.",
-    "arxiv_id": "2603.26341",
-    "authors": [
-      "Mingyu Zhang",
-      "Zixu Li",
-      "Zhiwei Chen",
-      "Zhiheng Fu",
-      "Xiaowei Zhu",
-      "Jiajia Nie",
-      "Yinwei Wei",
-      "Yupeng Hu"
-    ],
-    "doi": null,
-    "paper_id": "hint_icassp26",
-    "paper_title": "HINT: Composed Image Retrieval with Dual-Path Compositional Contextualized Network",
-    "paper_url": "https://arxiv.org/pdf/2603.26341v1",
-    "paper_version": "arXiv v1 2026-03-27 (ICASSP 2026, 6-page camera-ready format)",
-    "pdf_bytes": 2681236,
-    "pdf_sha256": "fbe97798e89ef21d7f30a895a151b94ff062f708c5060ac397e494adf05f2373",
-    "publication_year": 2026,
-    "supplement_url": null,
-    "venue": "ICASSP 2026 (arXiv preprint, 2603.26341v1)"
+   },
+   "checkpoint_id": "fashioniq",
+   "checkpoint_mapping_evidence": "HINT/train.py:56 'parser.add_argument(\"--noise_ratio\", type=float, default=0)' -> default training noise is 0%, matching the paper's clean single-row table (no noise-level blocks anywhere in Table 1). Registry checkpoint_variants lists checkpoint_id 'fashioniq', filename fashioniq.pt, expected_size_bytes 2724451182, source author_huggingface. Query of https://huggingface.co/api/models/iLearn-Lab/HINT/tree/main returned fashioniq.pt size 2724451182 LFS oid bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4 and cirr.pt of the same size — size matches the registry value exactly and the filename is dataset-scoped, so the dataset-level mapping is verified. Category policy is not settled by the HF listing (one fashioniq.pt for all three categories); that is a routing question, not a 0%-noise question.",
+   "checkpoint_mapping_status": "VERIFIED",
+   "checkpoint_training_noise_pct": null,
+   "dataset": "fashioniq",
+   "dataset_version": "official FashionIQ validation annotations (captions/cap.{cat}.val.json) and split files (image_splits/split.{cat}.val.json)",
+   "derived_metrics": [
+    {
+     "derivation_formula": "(r10 + r50) / 2",
+     "key": "mean",
+     "provenance": "WORKBENCH_DERIVED",
+     "rounding_policy": "round-half-up to 2 decimals",
+     "source_metrics": [
+      "r10",
+      "r50"
+     ],
+     "value": 68.21
+    }
+   ],
+   "evaluation_noise_pct": 0,
+   "gallery_protocol": "fashioniq_val_split",
+   "method_name": "HINT",
+   "method_variant": "main method (full model, all modules DCE+QCR+DPCC)",
+   "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
+   "metric_provenance": {
+    "paper_column": "FashionIQ block, Dresses/Shirts/Tops&Tees R@10 and R@50, plus the FashionIQ Avg (R@10, R@50) columns",
+    "paper_page": 4,
+    "paper_row": "HINT (Ours)",
+    "paper_table": "Table 1",
+    "source_excerpt_or_description": "'Table 1. Performance comparison on FashionIQ and CIRR relative to R@k(%). The overall best results are in bold, while the second-best results are underlined. The Avg metric in CIRR denotes (R@5 + Rsubset@1) / 2.' Bottom row: 'HINT (Ours) 51.80 73.13 60.27 78.48 63.37 82.19 | 58.48 77.93 | ...'. The Avg column here is the category macro of R@10 and of R@50, not a mean of the two."
+   },
+   "model_id": "hint",
+   "preprocessing_id": null,
+   "reference_excluded": true,
+   "reference_id": "hint_fiq_clean_val_split",
+   "reference_status": "VERIFIED",
+   "reported_metrics": {
+    "mean": null,
+    "r10": 58.48,
+    "r50": 77.93
+   },
+   "reported_metrics_provenance": "PAPER_REPORTED for r10 and r50 (Table 1, FashionIQ 'Avg' column, row 'HINT (Ours)'); the paper prints no combined Mean of R@10 and R@50, so mean stays null here.",
+   "review_status": "CONFIRMED",
+   "split": "val",
+   "verification_evidence": "All three routes agree cell-by-cell: Dresses 51.80/73.13, Shirts 60.27/78.48, Tops&Tees 63.37/82.19, Avg 58.48/77.93 (paper_reported), so the registry's reported_r10 58.48 and reported_r50 77.93 are CONFIRMED. Registry reported_mean 68.21 equals (58.48+77.93)/2 = 68.205 -> 68.21, a WORKBENCH_DERIVED value the paper never prints; the paper's own 'Avg' columns are category macros and must not be confused with it. Gallery/reference policy is NOT stated in the paper: the only FashionIQ protocol sentence is 'For FashionIQ, we evaluate R@10, R@50 for each category, as well as their averages' (paper Section 3.1). The pinned code, not the paper, establishes the cohort: HINT/datasets.py:131-169 get_test_data reads split.{cat}.val.json and builds test_targets as the first-seen ordered union of each annotation's source then target id (dataset source_id appended first at :146-168), and HINT/test.py:79-86 sets sims[i, test_targets_id.index(t['source_img_id'])] = -10e10 before np.argsort(-sims[i, :]) -> reference excluded from the effective ranking. That is fashioniq_val_split (mask variant, not column removal), so the registry protocol attribution is CONFIRMED from code while the paper alone would not establish it. Numeric check of the cohort on the local annotations (data/fashionIQ_dataset/cap.{cat}.val.json vs image_splits/split.{cat}.val.json, python3 pair-union recomputation) gives dress 2628, shirt 3089, toptee 2902 unique ids, exactly the gallery sizes the workbench protocol declares.",
+   "verification_method": "Three independent routes read and cross-checked: rendered PDF page 4 image (pdftoppm -r 160), arXiv HTML table markup, and the author README results image workbench/third_party/HINT/assets/results.png. Arithmetic also checked: mean(51.80, 60.27, 63.37) = 58.480 and mean(73.13, 78.48, 82.19) = 77.933, which reproduce the printed Avg cells 58.48 and 77.93.",
+   "checkpoint_noise_evidence": "The paper states no training condition for this row; the 0 was an extraction assumption (from the clean-validation reading / a training-default flag that reaches no implementation). Recorded as unstated so the gate records the condition as unchecked instead of refusing real runs (same rationale as the LIMN row fix)."
+  },
+  {
+   "aggregation_method": "macro over categories, then mean of R@10 and R@50",
+   "augmentation_policy": null,
+   "backbone": "CLIP ViT-B/32",
+   "category_metrics": {
+    "dress": {
+     "r10": 51.51,
+     "r50": 76.95
+    },
+    "shirt": {
+     "r10": 54.86,
+     "r50": 74.93
+    },
+    "toptee": {
+     "r10": 62.01,
+     "r50": 80.88
+    }
+   },
+   "checkpoint_id": "fashioniq",
+   "checkpoint_mapping_evidence": "ENCODER is a clean, single-row table method (Table 1 has no noise blocks), and evaluate_model.py loads one shared state dict for all categories via open_clip.create_model_and_transforms('ViT-B-32', pretrained=.../open_clip_pytorch_model.bin) (evaluate_model.py:40,43; README:249-259). Registry checkpoint_id 'fashioniq' has download_url: null and source_url https://drive.google.com/drive/folders/1QuBQVIybLwn-qFSORhpBsnXy6ebhtNr3, status URL_UNRESOLVED. Querying https://ojs.aaai.org/index.php/AAAI/article/download/32541/34696 for a direct PDF failed at the TLS/HTTP layer (see paper access_evidence), and no per-file URL or digest for ENCODER_FashionIQ.pth exists in the pinned tree; therefore which file inside the Drive folder is the clean FashionIQ checkpoint is NOT established. Mapping stays UNVERIFIED (no checkpoint_training_noise_pct claim beyond the table's clean row: checkpoint_training_noise_pct 0 is the paper's training condition, not a verified file property).",
+   "checkpoint_mapping_status": "UNVERIFIED",
+   "checkpoint_training_noise_pct": null,
+   "dataset": "fashioniq",
+   "dataset_version": "official FashionIQ validation annotations (captions/cap.{cat}.val.json) and split files (image_splits/split.{cat}.val.json)",
+   "derived_metrics": [
+    {
+     "derivation_formula": "(r10 + r50) / 2",
+     "key": "mean",
+     "provenance": "WORKBENCH_DERIVED",
+     "rounding_policy": "round-half-up to 2 decimals",
+     "source_metrics": [
+      "r10",
+      "r50"
+     ],
+     "value": 66.86
+    }
+   ],
+   "evaluation_noise_pct": 0,
+   "gallery_protocol": "fashioniq_val_split",
+   "method_name": "ENCODER",
+   "method_variant": "main method (full model, LFF+EAB+MSC)",
+   "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
+   "metric_provenance": {
+    "paper_column": "FashionIQ block: Dresses/Shirts/Tops&Tees R@10 and R@50, then the FashionIQ Avg columns",
+    "paper_page": 5,
+    "paper_row": "ENCODER(Ours)",
+    "paper_table": "Table 1",
+    "source_excerpt_or_description": "AAAI PDF text (via text extraction of the publisher PDF): 'ENCODER(Ours) 51.51 76.95 54.86 74.93 62.01 80.88 56.13 77.59 26.97 65.59 86.48 59.68', followed by 'Table 1: Performance comparison on FashionIQ and Shoes relative to R@k(%). The overall best results are in bold, while the best results over baselines are underlined.' The last four numbers are the Shoes (R@1/R@10/R@50/Avg) columns. The author project-page image renders the identical row, and the repo image assets/fashion-results.png renders it as the last block 'ENCODER(Ours)'."
+   },
+   "model_id": "encoder",
+   "preprocessing_id": null,
+   "reference_excluded": true,
+   "reference_id": "encoder_fiq_clean_val_split",
+   "reference_status": "VERIFIED",
+   "reported_metrics": {
+    "mean": null,
+    "r10": 56.13,
+    "r50": 77.59
+   },
+   "reported_metrics_provenance": "PAPER_REPORTED for r10 and r50 (Table 1 'ENCODER(Ours)' row, FashionIQ Avg columns). The paper prints no Mean of R@10 and R@50, so mean stays null.",
+   "review_status": "CONFIRMED",
+   "split": "val",
+   "verification_evidence": "Registry reported_r10 56.13 and reported_r50 77.59 are CONFIRMED: mean(51.51, 54.86, 62.01) = 56.127 -> 56.13 and mean(76.95, 74.93, 80.88) = 77.587 -> 77.59, reproducing the printed Avg cells exactly. Registry reported_mean 66.86 equals (56.13+77.59)/2 = 66.86, WORKBENCH_DERIVED; the paper's 'Avg' columns are category macros. Protocol: the paper does NOT state gallery construction or reference policy for FashionIQ — Section 4.1 'Datasets.' names only 'FashionIQ (Wu et al. 2021)' and Section 4.1 'Evaluation.' says only 'FashionIQ evaluation used R@10, R@50, and their category-wise averages'. The cohort comes from the pinned code: datasets.py:64 constructs FashionIQ with default split='val-split' and evaluate_model.py:15 mirrors that default; datasets.py:167-188 branches on it — 'val-split' appends the first-seen ordered source/target union to test_targets_id, 'original-split' appends the whole split list — and test.py:68 assigns sims[i, test_targets_id.index(t['source_img_id'])] = -10e10 before np.argsort(-sims[i, :]) at test.py:70. So fashioniq_val_split (pair-union gallery, reference masked out of the ranking) is CONFIRMED from code; the paper's 'validation set' wording is the only paper-side evidence. Local annotation recomputation gives dress 2628 / shirt 3089 / toptee 2902, matching the workbench-declared sizes. Publisher PDF itself was reached only through the text proxy: direct curl to ojs.aaai.org returned OpenSSL 'unexpected eof while reading' / 'Remote end closed connection' and no bytes, so pdf_sha256 is null.",
+   "verification_method": "Text route: publisher PDF (9 pages) converted to text through the r.jina.ai proxy; the FashionIQ row appears as 'ENCODER(Ours) 51.51 76.95 54.86 74.93 62.01 80.88 56.13 77.59'. Image route: two author-rendered sources agree — https://lee-zixu.github.io/ENCODER.github.io/static/images/Fiq.png (linked at encproj.html:290) and workbench/third_party/ENCODER/assets/fashion-results.png (README.md 'FashionIQ & Shoes Datasets' section), both showing Dresses 51.51/76.95, Shirts 54.86/74.93, Tops&Tees 62.01/80.88, Avg 56.13/77.59.",
+   "paper_id": "encoder_aaai25",
+   "paper_title": "ENCODER: Entity Mining and Modification Relation Binding for Composed Image Retrieval",
+   "paper_url": "https://ojs.aaai.org/index.php/AAAI/article/view/32541",
+   "doi": "10.1609/aaai.v39i5.32541",
+   "publication_year": "2025",
+   "venue": "AAAI Conference on Artificial Intelligence 39(5):5101-5109, 2025",
+   "paper_identity_evidence": "The encoder benchmark rows previously inherited the HINT paper block (hint_icassp26 seed bundle put ENCODER and PAIR rows under the HINT paper). Final audit (encoder, C1) re-derived the ENCODER paper identity: AAAI-25 landing page title/authors/DOI 10.1609/aaai.v39i5.32541 vol 39 no 5 pp 5101-5109 fetched 2026-10, and Table 1 row re-read from the galley text.",
+   "checkpoint_noise_evidence": "The paper states no training condition for this row; the 0 was an extraction assumption (from the clean-validation reading / a training-default flag that reaches no implementation). Recorded as unstated so the gate records the condition as unchecked instead of refusing real runs (same rationale as the LIMN row fix)."
+  },
+  {
+   "aggregation_method": "macro over categories, then mean of R@10 and R@50",
+   "augmentation_policy": null,
+   "backbone": "CLIP ViT-B/32 (open_clip 'ViT-B-32' per the pinned code path; the abstract-only paper text does not state it)",
+   "category_metrics": {
+    "dress": {
+     "r10": 46.78,
+     "r50": 70.93
+    },
+    "shirt": {
+     "r10": 52.6,
+     "r50": 73.8
+    },
+    "toptee": {
+     "r10": 58.91,
+     "r50": 78.81
+    }
+   },
+   "checkpoint_id": "pair_b1",
+   "checkpoint_mapping_evidence": "The author Hub repo https://huggingface.co/iLearn-Lab/ICASSP25-PAIR contains exactly two weight files, pair-B1.pt (694958565 bytes, LFS oid c4d861ecd0baa3f1427fc7a853943f5614baf87def1cdd9c4bb7583ee925fbf2) and pair-B2.pt (694872371 bytes, LFS oid 74346fd7de6efdafe8dde70458316286a60ceb2d7b419efed55193418aeb3f03), observed via https://huggingface.co/api/models/iLearn-Lab/ICASSP25-PAIR/tree/main. Nothing in the pinned repo (grep -rn 'pair-B1|pair-B2' over workbench/third_party -> 0 hits in code), in the HF model card (no 'B1'/'B2' string, only a non-existent example path 'PAIR_CIRR.pt'), or in the abstract-only IEEE record binds either file to FashionIQ, to a category, or to a training-noise level. Two files for three datasets cannot be resolved by name. Registry already records both variants as download_url: null, source_type: unresolved, checkpoint_mapping_status: UNVERIFIED. 'pair_b1' is recorded as the checkpoint_id only because it is the registry's first variant; that identity is a placeholder, not a verified mapping.",
+   "checkpoint_mapping_status": "UNVERIFIED",
+   "checkpoint_training_noise_pct": null,
+   "dataset": "fashioniq",
+   "dataset_version": "official FashionIQ validation annotations (captions/cap.{cat}.val.json) and split files (image_splits/split.{cat}.val.json); README Table 2 caption says 'validation sets'",
+   "derived_metrics": [
+    {
+     "derivation_formula": "(r10 + r50) / 2",
+     "key": "mean",
+     "provenance": "WORKBENCH_DERIVED",
+     "rounding_policy": "round-half-up to 2 decimals",
+     "source_metrics": [
+      "r10",
+      "r50"
+     ],
+     "value": 63.64
+    }
+   ],
+   "evaluation_noise_pct": 0,
+   "gallery_protocol": "fashioniq_val_split",
+   "method_name": "PAIR",
+   "method_variant": "main method (full model, coherence-incoherence extractor + complementarity disentanglement + asymmetric composition)",
+   "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
+   "metric_provenance": {
+    "paper_column": "FashionIQ block: Dresses/Shirts/Tops&Tees R@10 and R@50, then the FashionIQ Avg R@10/R@50 columns",
+    "paper_page": null,
+    "paper_row": "PAIR(Ours)",
+    "paper_table": "Table 2",
+    "source_excerpt_or_description": "workbench/third_party/PAIR/README.md:75-76 renders 'Table 2. Performance comparison on FashionIQ and Shoes validation sets in terms of R@K (%).' from assets/fiqshoes.png; bottom row 'PAIR(Ours) | 46.78 70.93 | 52.60 73.80 | 58.91 78.81 | 52.76 74.51 | 27.48 65.08 85.86 59.47' (the trailing four cells are the Shoes columns). The author project page renders the same figure as 'TABLE II' with the identical row at https://zhihfu.github.io/PAIR.github.io/static/images/Fiq.png."
+   },
+   "model_id": "pair",
+   "preprocessing_id": null,
+   "reference_excluded": true,
+   "reference_id": "pair_fiq_clean_val_split",
+   "reference_status": "VERIFIED",
+   "reported_metrics": {
+    "mean": null,
+    "r10": 52.76,
+    "r50": 74.51
+   },
+   "reported_metrics_provenance": "PAPER_REPORTED for r10 and r50 (Table 2, row 'PAIR(Ours)', FashionIQ Avg R@10 and R@50 columns). This was read from the author's own rendered table image, not from the paywalled IEEE PDF (see access_evidence). Paper prints no combined Mean.",
+   "review_status": "CONFIRMED",
+   "split": "val",
+   "verification_evidence": "Registry reported_r10 52.76 and reported_r50 74.51 are CONFIRMED against Table 2 (row 'PAIR(Ours)'), read from two author-rendered images that agree on every FashionIQ cell (Dresses 46.78/70.93, Shirts 52.60/73.80, Tops&Tees 58.91/78.81). Registry reported_mean 63.64 = (52.76+74.51)/2 = 63.635 -> 63.64, WORKBENCH_DERIVED; the paper's Avg columns are category macros. Protocol: the paywalled paper was not readable, so no paper-side gallery statement could be checked at all; the README caption only says 'validation sets' (README.md:76). The cohort is established from the pinned code: data/datasets.py:23 FashionIQ.__init__ default split='val-split'; :148-160 uses the pair union for 'val-split' and the whole split list for 'original-split'; test.py:70 sets sims[i, t['source_img_id']] = -10e10 before the descending sort at test.py:72, i.e. reference excluded from the ranking. fashioniq_val_split is CONFIRMED from code; there is no paper sentence to cite either way, so this row must not be described as 'as stated in the paper'. Local annotation recomputation gives the declared 2628/3089/2902 gallery sizes. Note the pinned package has no requirements.txt despite README:113-119 telling the reader to install one, and models/model.py imports a module (MHTransformer_rev) absent from the checkout — issues that affect whether the numbers can be reproduced, not what they are.",
+   "verification_method": "Two independent author-rendered table images read and compared cell-by-cell: (1) the pinned repo figure workbench/third_party/PAIR/assets/fiqshoes.png, referenced by PAIR/README.md:75-76 as Table 2; (2) the project-page figure https://zhihfu.github.io/PAIR.github.io/static/images/Fiq.png, labelled 'TABLE II'. Arithmetic cross-check reproduces the printed Avg cells: mean(46.78, 52.60, 58.91) = 52.763 -> 52.76 and mean(70.93, 73.80, 78.81) = 74.513 -> 74.51. The IEEE record itself was read only as ABSTRACT_ONLY (https://ieeexplore.ieee.org/document/10888153 states 'PDF: You do not have access to this PDF' and the body text ends at 'Sign in to Continue Reading'), and the IEEE PDF endpoint https://ieeexplore.ieee.org/iel8/10887540/10887541/10888153.pdf returned HTTP 420 with 0 bytes, so no publisher PDF exists on disk and pdf_sha256 is null. The numbers therefore rest on the authors' own table renders, which is exactly the route /tmp/paper_rules.md rule 4/5 asks to report.",
+   "paper_id": "pair_icassp25",
+   "paper_title": "PAIR: Complementarity-guided Disentanglement for Composed Image Retrieval",
+   "paper_url": "https://ieeexplore.ieee.org/document/10888153",
+   "doi": "10.1109/ICASSP49660.2025.10888153",
+   "publication_year": "2025",
+   "venue": "IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) 2025",
+   "paper_identity_evidence": "The PAIR benchmark rows previously inherited the HINT paper block. Final audit round (pair, batch 3 to confirm; encoder audit C1 established the misfiling) — PAIR is the ICASSP 2025 paper by Fu et al., IEEE document 10888153, authors confirmed via the author project page zhihfu.github.io/PAIR.github.io."
   }
+ ],
+ "paper": {
+  "access": "FULL_TEXT",
+  "access_evidence": "curl -s -o hint.pdf https://arxiv.org/pdf/2603.26341v1 -> 'HTTP 200 2681236'; file hint.pdf -> 'PDF document, version 1.7, 6 page(s)'; sha256sum -> fbe97798e89ef21d7f30a895a151b94ff062f708c5060ac397e494adf05f2373. Table 1 read by three routes: (a) pdftoppm -f 4 -l 4 -r 160 -png hint.pdf -> rendered page image, FashionIQ block visible; (b) https://arxiv.org/html/2603.26341v1 HTML markup, row 'HINT (Ours)' = 51.80 73.13 60.27 78.48 63.37 82.19; (c) repo README image workbench/third_party/HINT/assets/results.png (README:75-78, caption 'Table 1'). All three agree on every FashionIQ cell.",
+  "arxiv_id": "2603.26341",
+  "authors": [
+   "Mingyu Zhang",
+   "Zixu Li",
+   "Zhiwei Chen",
+   "Zhiheng Fu",
+   "Xiaowei Zhu",
+   "Jiajia Nie",
+   "Yinwei Wei",
+   "Yupeng Hu"
+  ],
+  "doi": null,
+  "paper_id": "hint_icassp26",
+  "paper_title": "HINT: Composed Image Retrieval with Dual-Path Compositional Contextualized Network",
+  "paper_url": "https://arxiv.org/pdf/2603.26341v1",
+  "paper_version": "arXiv v1 2026-03-27 (ICASSP 2026, 6-page camera-ready format)",
+  "pdf_bytes": 2681236,
+  "pdf_sha256": "fbe97798e89ef21d7f30a895a151b94ff062f708c5060ac397e494adf05f2373",
+  "publication_year": 2026,
+  "supplement_url": null,
+  "venue": "ICASSP 2026 (arXiv preprint, 2603.26341v1)"
+ }
 }

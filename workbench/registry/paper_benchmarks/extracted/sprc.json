@@ -1,186 +1,186 @@
 {
-  "checklist": [
-    {
-      "evidence": "YES. ICLR 2024 camera-ready, Table 1, page 6, row `Ours (SPRC)`, Average R@10 column = 54.92 (pdftotext -layout line 407; rendered page 6 image confirms). Duplicated at appendix Table 5 line 1099 (`Ours+BLIP-2 (Full.)`), Table 7 gamma=0.8 line 1140, Table 9 length-32 line 1164. Independent artifact: https://arxiv.org/html/2310.05473v1 (HTTP 200) contains '54.92'.",
-      "id": "SPRC-1",
-      "question": "Does the paper print an R@10 for SPRC?",
-      "recommended_action": "Registry defect (recording failure, not paper omission): set reported_r10: 54.92 at workbench/registry/models.yaml:803. Also note that the paper's Average R@10 cell is 0.20pp above the mean of its own per-category R@10 cells (54.7233 vs 54.92), so the report must state which of the two 54.92 is compared against.",
-      "severity": "P1",
-      "verdict": "VERIFIED"
-    },
-    {
-      "evidence": "PRINTED. Table 1's Average block has an explicit `Avg.` column and the row reads 64.85; the caption defines it ('where Avg. indicates the average results across all the metrics in the three different classes'). Values 64.85 and 54.92 co-occur in one row in all of Table 1, Table 5, Table 7 (gamma 0.8), Table 9 (length 32) and in the prose at line 437 ('SPRC2: 64.85').",
-      "id": "SPRC-2",
-      "question": "Does the paper print the mean, or is 64.85 derived?",
-      "recommended_action": "Keep reported_mean: 64.85 as PAPER_REPORTED. Do NOT move it to derived_metrics: 64.85 = (54.72 + 74.97)/2 (mean of recomputed per-category means) and is NOT (54.92+74.97)/2 = 64.945, so a workbench formula over the *printed* R@10 is not what produced the paper's number.",
-      "severity": "NONE",
-      "verdict": "VERIFIED"
-    },
-    {
-      "evidence": "reported_r50 74.97 (models.yaml:804) = paper Average R@50. reported_mean 64.85 (:805) = paper Avg. Per-category average R@50 recomputes to 74.9666 -> 74.97, so this pair is internally consistent.",
-      "id": "SPRC-3",
-      "question": "Do the registry's r50/mean match the paper row?",
-      "recommended_action": "None for these two values.",
-      "severity": "NONE",
-      "verdict": "VERIFIED"
-    },
-    {
-      "evidence": "No - the paper prints 54.92 and the registry's own reported_score_note (models.yaml:806) quotes it. The null is a recording failure whose downstream effect is a comparator hole: with r10 absent the paper row only supplies r50/mean.",
-      "id": "SPRC-4",
-      "question": "Is the registry's R@10 null a paper omission?",
-      "recommended_action": "Record 54.92 and keep the discrepancy note; verify the gate then actually consumes R@10 for this model.",
-      "severity": "P1",
-      "verdict": "VARIANT"
-    },
-    {
-      "evidence": "README.md:124 publishes sprc_fiq.pt at the OneDrive URL the registry stores (models.yaml:823-824); live `curl -I` -> 301 to onedrive.live.com (login wall), no size, no digest. README.md:130-131 Todo says rerank code/weights were never published; src/blip_validate.py:144 default names `blip2_cir_rerank_learn`, a class the pinned repo does not register; :49 loads non-strict from `checkpoint[blip_model.__class__.__name__]`. Second published file sprc_fiq_vitl.pt (README.md:128, Google Drive) is not registered.",
-      "id": "SPRC-5",
-      "question": "Checkpoint for the SPRC row",
-      "recommended_action": "Keep checkpoint_mapping_status UNVERIFIED; resolve the top-level key of sprc_fiq.pt from the bytes when an operator can fetch them, and decide which of the two published files the ViT-G row used.",
-      "severity": "P1",
-      "verdict": "UNVERIFIED"
-    },
-    {
-      "evidence": "Pinned README.md:1 title; pinned README.md:4 venue string '(ACL206 Findings)' is a typo. Primary: https://aclanthology.org/2026.findings-acl.216/ (curl -sS -L -> HTTP 200, 50542 bytes) gives title 'CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval', authors Zhipeng Qian, Zihan Liang, Yufei Ma, Ben Chen, Huangyu Dai, Yiwei Ma, Jiayi Ji, Chenyi Lei, Han Li, Xiaoshuai Sun, Volume 'Findings of the Association for Computational Linguistics: ACL 2026', Venue 'Findings', Month July, Year 2026, Pages 4411-4424, DOI 10.18653/v1/2026.findings-acl.216, PDF https://aclanthology.org/2026.findings-acl.216.pdf. Secondary: https://arxiv.org/abs/2601.03728 (HTTP 200, 44572 bytes) same title and authors, 'Submitted on 7 Jan 2026 (v1), last revised 8 May 2026 (this version, v3)', Subjects cs.CV; cs.AI.",
-      "id": "CSMCIR-1",
-      "question": "Paper identity: title, authors, venue from a primary source",
-      "recommended_action": "None. Note the ACL PDF exists and was read: sha256 e449ceb24d9aa6bca29282dafc60c6727e259265d6c2b7cedd960d54613a8c9b, 13033967 bytes.",
-      "severity": "NONE",
-      "verdict": "VERIFIED"
-    },
-    {
-      "evidence": "Table 1 row `CSMCIR(Ours)`, Average block = 57.07 | 77.27 | 67.17. Read three ways: ACL camera-ready PDF `pdftotext -layout` line 397 and rendered page 6 of /tmp/csmcir_acl.pdf (printed page 4416); arXiv v3 HTML <td> cells after the row label [52.45, 74.81, 57.70, 75.76, 61.14, 80.98, 57.07, 77.27, 67.17]; arXiv v3 PDF `pdftotext -layout` line 396. Registry models.yaml:54-56 carries exactly these three.",
-      "id": "CSMCIR-2",
-      "question": "Registry R@10 / R@50 / mean vs the paper",
-      "recommended_action": "None for the metric values.",
-      "severity": "NONE",
-      "verdict": "VERIFIED"
-    },
-    {
-      "evidence": "Printed in the paper column order Dress | Shirt | Toptee: dress R@10 52.45 / R@50 74.81; shirt 57.70 / 75.76; toptee 61.14 / 80.98 (camera-ready p.4416 and arXiv v3). python3 cross-check: (57.07+77.27)/2 = 67.17 exactly matches the printed Avg.",
-      "id": "CSMCIR-3",
-      "question": "Per-category values if printed",
-      "recommended_action": "Optional: record the per-category values in the workbench so a per-category comparison can be attempted. Be aware the printed Average cells are not the mean of the printed per-category cells ((52.45+57.70+61.14)/3 = 57.0967 vs printed 57.07; (74.81+75.76+80.98)/3 = 77.1833 vs printed 77.27) - the author's log reconciles it (epoch 9 of training_log/fashioniq_validation_metrics.csv: 57.06696 / 77.26720 / 67.16708).",
-      "severity": "NONE",
-      "verdict": "VERIFIED"
-    },
-    {
-      "evidence": "models.yaml:39 `paper_url: null` and :36 `publication_year: null` although https://aclanthology.org/2026.findings-acl.216/ and https://arxiv.org/abs/2601.03728 are both live primary sources (HTTP 200, contents as above).",
-      "id": "CSMCIR-4",
-      "question": "Registry paper_url null",
-      "recommended_action": "Populate paper_url (ACL Anthology; arXiv as secondary) and publication_year: 2026.",
-      "severity": "P3",
-      "verdict": "VARIANT"
-    },
-    {
-      "evidence": "HF API at revision cf0c19bb346266c295b4b5772ebf03bd1c4f0467 lists exactly one FashionIQ checkpoint: fashioniq_tuned_clip_best.pt, size 2720615859, lfs.sha256 c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e - equal to the registry expected_size_bytes/expected_sha256. The repo's training_log/fashioniq_validation_metrics.csv epoch 9 is the argmax of average_recall (67.16708342234294) and equals the paper's 67.17. No checkpoint bytes exist on this host (workbench/artifacts/checkpoints/ empty; a 1-byte placeholder only).",
-      "id": "CSMCIR-5",
-      "question": "Checkpoint mapping for the CSMCIR row",
-      "recommended_action": "Keep the metadata mapping; the remaining claim ('these bytes reproduce 57.07/77.27/67.17') is UNKNOWN until a GPU run loads the verified bytes.",
-      "severity": "P1",
-      "verdict": "VERIFIED"
-    },
-    {
-      "evidence": "`git -C workbench/third_party/SPRC rev-parse HEAD` -> 2935a5397732260d1db6fa577e5926f963e36f0f = models.yaml:794. `git -C workbench/third_party/CSMCIR rev-parse HEAD` -> 774f94e2076ff17ea91703a6239d2a08f0e1a44e = registry:42. Both as recorded.",
-      "id": "X-1",
-      "question": "Source pins",
-      "recommended_action": "None.",
-      "severity": "NONE",
-      "verdict": "VERIFIED"
-    },
-    {
-      "evidence": "No inference was executed and none is possible here: the only result artifacts are mocks (workbench/artifacts/results/fashioniq_original_split/mock/mock_sprc-sprc_fiq.json and mock_csmcir-fiq_a.json); no checkpoint bytes exist locally for either model, the SPRC OneDrive URL is login-walled, and the CSMCIR evaluator additionally cannot import the pinned lavis.models package (98 unguarded imports of uncommitted modules before the registration the evaluator needs).",
-      "id": "X-2",
-      "question": "Runtime verification",
-      "recommended_action": "Every claim in this record is STATIC_AUDIT. No RUNTIME_VERIFIED statement is made.",
-      "severity": "NONE",
-      "verdict": "NOT_RUN"
-    }
-  ],
-  "execution_trace": [
-    "sprc: paper fetch -> curl proceedings.iclr.cc camera-ready PDF -> HTTP 200, 5641958 bytes, sha256 2c250ddb... -> pdftotext -layout (Table 1 at line 378, row at 407) -> pdftoppm page 6 -> visual read agrees -> arXiv HTML v1 (HTTP 200) agrees -> appendix Tables 5/7/9 agree -> arithmetic cross-check in python3 exposes the Average-R@10 cell discrepancy -> pinned README.md:124 OneDrive URL: curl -I -> 301 login wall, no digest -> registry reported_r10 null confirmed as a recording failure.",
-    "csmcir: README.md:1 + arXiv abs + ACL Anthology page -> identity confirmed (title, 10 authors, Findings of ACL 2026, DOI 10.18653/v1/2026.findings-acl.216, pp. 4411-4424) -> ACL camera-ready PDF (sha e449ceb2..., 13033967 B) pdftotext line 397 + rendered page 6 -> arXiv v3 HTML <td> cells + arXiv v3 PDF (sha 878907fc..., 13101865 B) line 396 -> all three routes agree on 52.45/74.81/57.70/75.76/61.14/80.98/57.07/77.27/67.17 -> FIT = the registry's three numbers -> HF API confirms one FashionIQ checkpoint with matching size/LFS sha256 -> author training log epoch 9 reproduces the same averages -> pinned source lines re-read for aggregation (validate_blip_csmcir.py:620-628), transform (:506-507, :534/:580) and backbone (blip2_pretrain.yaml + :541 eva_clip_g).",
-    "Both models: nothing executed on GPU, no checkpoint bytes loaded; all conclusions are STATIC_AUDIT with live network metadata."
-  ],
-  "experiments": [
-    {
-      "aggregation_method": "Per-category Recall@10 and Recall@50 on dress/shirt/toptee; 'Average' column is the unweighted macro mean over the three categories, and 'Avg.' is the mean of that R@10 and that R@50",
-      "augmentation_policy": null,
-      "backbone": "BLIP-2 pretrained model with ViT-G (paper text line 363: 'encoders are initialized from the BLIP-2 pretrained model with ViT-G'); pinned code default `--backbone pretrain` = ViT-g (SPRC/src/blip_validate.py:145)",
-      "category_metrics": {
-        "dress": {
-          "r10": 49.18,
-          "r50": 72.43
-        },
-        "shirt": {
-          "r10": 55.64,
-          "r50": 73.89
-        },
-        "toptee": {
-          "r10": 59.35,
-          "r50": 78.58
-        }
-      },
-      "checkpoint_id": "sprc_fiq_unresolved",
-      "checkpoint_mapping_evidence": "STATIC_AUDIT. Registry variant sprc_fiq_unresolved (workbench/registry/models.yaml:819-830) names `sprc_fiq.pt` via source_url https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj, which is exactly the URL printed at pinned README.md:124. LIVE OBSERVED: `curl -I` on that URL -> `301` to onedrive.live.com (login-walled), and no bytes, size or digest could be obtained, so no sha256 exists for this row. Pinned README.md:130-131 '### Todo / code and pre-trained weights for rerank model' says the rerank weights were never published, while the evaluator's argparse default `--blip-model-name blip2_cir_rerank_learn` (src/blip_validate.py:144) names a class the pinned repo does not register. The mapping from the published file to the Table 1 row therefore cannot be established (P1).",
-      "checkpoint_mapping_status": "UNVERIFIED",
-      "checkpoint_training_noise_pct": null,
-      "dataset": "fashioniq",
-      "dataset_version": "FashionIQ validation split (paper text line 409: 'the ground-truth labels for the test set of this dataset have not been publicly disclosed, we adopt the results on the validation set'); the paper never names the candidate/gallery set",
-      "derived_metrics": [],
-      "evaluation_noise_pct": 0,
-      "gallery_protocol": "fashioniq_original_split",
-      "method_name": "SPRC",
-      "method_variant": "main method, Vision-and-Language branch (Table 1 row `Ours (SPRC)`; identical numbers to Appendix Table 5 row `Ours+BLIP-2 (Full.)`, gamma=0.8 row of Table 7 and prompt-length-32 row of Table 9)",
-      "metric_definition": "Recall@K = percentage of queries whose true target is ranked within the top K candidates (paper lines 369-370 region); K = 10 and 50 for FashionIQ",
-      "metric_provenance": {
-        "paper_column": "Average block: R@10 | R@50 | Avg.",
-        "paper_page": 6,
-        "paper_row": "Ours (SPRC)",
-        "paper_table": "Table 1 (duplicated as Appendix Table 5, and as the gamma=0.8 row of Table 7 and the length-32 row of Table 9)",
-        "source_excerpt_or_description": "Row text: `Ours (SPRC) 49.18 72.43 55.64 73.89 59.35 78.58 54.92 74.97 64.85`. Caption: 'Table 1: Quantitative comparison across competing methods on the Fashion-IQ validation set, where Avg. indicates the average results across all the metrics in the three different classes.'"
-      },
-      "model_id": "sprc",
-      "preprocessing_id": "TargetPad target_ratio=1.25 at 224x224 (paper line 364-365 'We resize the input image size to 224 x 224 and with a padding ratio of 1.25'); pinned code src/blip_validate.py:52-53 targetpad_transform(1.25, 224) -> Resize(BICUBIC)/CenterCrop/ToTensor/CLIP Normalize (src/data_utils.py:49-102)",
-      "reference_excluded": false,
-      "reference_id": "sprc_fiq_val_ours_vitg",
-      "reference_status": "VERIFIED",
-      "reported_metrics": {
-        "mean": 64.85,
-        "r10": 54.92,
-        "r50": 74.97
-      },
-      "reported_metrics_provenance": "PAPER_REPORTED for all three values. Table 1 'Average' block prints R@10=54.92, R@50=74.97, Avg.=64.85 in the `Ours (SPRC)` row. The mean is NOT a workbench derivation: the paper prints an explicit 'Avg.' column (caption: 'where Avg. indicates the average results across all the metrics in the three different classes').",
-      "review_status": "CONFIRMED",
-      "split": "val",
-      "verification_evidence": "STATIC_AUDIT (no GPU, no checkpoint bytes; nothing was executed). FINDING 1 (P1, registry recording failure, NOT a paper omission): the paper DOES print an R@10 for SPRC. ICLR camera-ready Table 1, page 6, row `Ours (SPRC)`, Average R@10 column = 54.92. The registry stores `reported_r10: null` (workbench/registry/models.yaml:803) while its own `reported_score_note` (:806) quotes 54.92, i.e. the value was seen and then not recorded. FINDING 2 (P1, gate hole): with r10 null the comparator sees only r50/mean, so any produced R@10 passes; this is a live comparator-input defect, not merely a documentation gap. FINDING 3 (P2, unresolved arithmetic, now characterised exactly): printed averages are NOT the mean of the printed per-category values. python3: (49.18+55.64+59.35)/3 = 54.723333...  (printed 54.92, delta +0.197pp); (72.43+73.89+78.58)/3 = 74.966666...  (printed 74.97, consistent); (54.92+74.97)/2 = 64.945 (printed 64.85); (54.72+74.97)/2 = 64.845 -> 64.85. So the printed Avg. 64.85 is the mean of the *recomputed* per-category pair (54.72, 74.97) while the printed Average R@10 cell says 54.92. The per-category R@10 cells (49.18/55.64/59.35) are otherwise identical across Table 1, Table 5, Table 7 and Table 9, so the inconsistency is confined to the Average R@10 cell. FINDING 4: the registry's 64.85 is legitimately PAPER_REPORTED; it must not be reclassified as derived. FINDING 5: the paper never states a candidate-set construction, so `fashioniq_original_split` remains a code-derived reading of `native_protocol`, and the code's evaluator does not actually use the reference image as query context (src/validate_blip.py:198 passes reference features that blip2_qformer_cir_rerank.py:381 consumes only for `.device`). Runtime parity of any checkpoint is UNKNOWN.",
-      "verification_method": "Two independent routes plus a third. (1) `pdftotext -layout /tmp/sprc_iclr.pdf` -> line 407. (2) rendered page image `pdftoppm -png -r 140 -f 6 -l 6` read visually -> same row. (3) arXiv HTML v1 (a different artifact) also contains 54.92/64.85. Cross-check by arithmetic in python3."
-    }
-  ],
-  "final_verdict": "VERIFIED (paper-side metric records), with runtime parity UNKNOWN. SPRC: the paper prints R@10 54.92, R@50 74.97 and Avg. 64.85 for the FashionIQ validation set, so 64.85 is genuinely PAPER_REPORTED and the registry's `reported_r10: null` is a recording failure, not a paper omission (P1); the paper's own Average R@10 cell is internally inconsistent with its per-category cells by 0.20pp (P2). CSMCIR: identity is 'CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval', Zhipeng Qian et al., Findings of ACL 2026, pp. 4411-4424 (ACL Anthology https://aclanthology.org/2026.findings-acl.216/, DOI 10.18653/v1/2026.findings-acl.216; arXiv https://arxiv.org/abs/2601.03728 v3), and Table 1's CSMCIR(Ours) row gives 52.45/74.81 (dress), 57.70/75.76 (shirt), 61.14/80.98 (toptee), 57.07/77.27/67.17 averaged - all three registry values VERIFIED, and the registry's null paper_url/publication_year are fixable P3 defects. Neither model can be reproduced on this host and none was run: no checkpoint bytes for either, the SPRC checkpoint URL is login-walled and its class mapping unprovable, and the CSMCIR evaluator cannot import the pinned lavis.models package.",
-  "paper": {
-    "access": "FULL_TEXT",
-    "access_evidence": "STATIC_AUDIT. `curl -sS -L -o /tmp/sprc_iclr.pdf -w '%{http_code} %{size_download}' https://proceedings.iclr.cc/paper_files/paper/2024/file/8204f54f6cd8f0db1765a274e94ceaac-Paper-Conference.pdf` -> `200 5641958`; `sha256sum` -> 2c250ddb9d0251e21fdad6a2a9400f1d0f688e8427be3f536e9a8404f5409a3b. Route A (text): `pdftotext -layout` -> Table 1 block at line 378 (caption) and row `Ours (SPRC)` at line 407. Route B (rendered image): `pdftoppm -png -r 140 -f 6 -l 6` -> /tmp/sprc_p-06.png, read visually; the row reads `Ours (SPRC) | 49.18 72.43 | 55.64 73.89 | 59.35 78.58 | 54.92 74.97 | 64.85`. Route C (author HTML, different version): `https://arxiv.org/html/2310.05473v1` -> HTTP 200, 357226 bytes; contains '54.92' 4x and '64.85' 7x. Appendix duplicates: Table 5 `Ours+BLIP-2 (Full.)` at text line 1099 and the gamma sweep Table 7 row gamma=0.8 at line 1140 and prompt-length Table 9 row 32 at line 1164 each carry the same six numbers.",
-    "arxiv_id": "2310.05473",
-    "authors": [
-      "Yang Bai",
-      "Xinxing Xu",
-      "Yong Liu",
-      "Salman Khan",
-      "Fahad Khan",
-      "Wangmeng Zuo",
-      "Rick Siow Mong Goh",
-      "Chun-Mei Feng"
-    ],
-    "doi": null,
-    "paper_id": "sprc",
-    "paper_title": "Sentence-level Prompts Benefit Composed Image Retrieval",
-    "paper_url": "https://proceedings.iclr.cc/paper_files/paper/2024/file/8204f54f6cd8f0db1765a274e94ceaac-Paper-Conference.pdf",
-    "paper_version": "ICLR 2024 camera-ready (header on every page: 'Published as a conference paper at ICLR 2024'); arXiv v1 2023-10-09 is the only arXiv HTML rendering (v2/v3/v4 return HTTP 404)",
-    "pdf_bytes": 5641958,
-    "pdf_sha256": "2c250ddb9d0251e21fdad6a2a9400f1d0f688e8427be3f536e9a8404f5409a3b",
-    "publication_year": 2024,
-    "supplement_url": null,
-    "venue": "ICLR 2024 (conference paper; repo README line 2 calls it Spotlight)"
+ "checklist": [
+  {
+   "evidence": "YES. ICLR 2024 camera-ready, Table 1, page 6, row `Ours (SPRC)`, Average R@10 column = 54.92 (pdftotext -layout line 407; rendered page 6 image confirms). Duplicated at appendix Table 5 line 1099 (`Ours+BLIP-2 (Full.)`), Table 7 gamma=0.8 line 1140, Table 9 length-32 line 1164. Independent artifact: https://arxiv.org/html/2310.05473v1 (HTTP 200) contains '54.92'.",
+   "id": "SPRC-1",
+   "question": "Does the paper print an R@10 for SPRC?",
+   "recommended_action": "Registry defect (recording failure, not paper omission): set reported_r10: 54.92 at workbench/registry/models.yaml:803. Also note that the paper's Average R@10 cell is 0.20pp above the mean of its own per-category R@10 cells (54.7233 vs 54.92), so the report must state which of the two 54.92 is compared against.",
+   "severity": "P1",
+   "verdict": "VERIFIED"
+  },
+  {
+   "evidence": "PRINTED. Table 1's Average block has an explicit `Avg.` column and the row reads 64.85; the caption defines it ('where Avg. indicates the average results across all the metrics in the three different classes'). Values 64.85 and 54.92 co-occur in one row in all of Table 1, Table 5, Table 7 (gamma 0.8), Table 9 (length 32) and in the prose at line 437 ('SPRC2: 64.85').",
+   "id": "SPRC-2",
+   "question": "Does the paper print the mean, or is 64.85 derived?",
+   "recommended_action": "Keep reported_mean: 64.85 as PAPER_REPORTED. Do NOT move it to derived_metrics: 64.85 = (54.72 + 74.97)/2 (mean of recomputed per-category means) and is NOT (54.92+74.97)/2 = 64.945, so a workbench formula over the *printed* R@10 is not what produced the paper's number.",
+   "severity": "NONE",
+   "verdict": "VERIFIED"
+  },
+  {
+   "evidence": "reported_r50 74.97 (models.yaml:804) = paper Average R@50. reported_mean 64.85 (:805) = paper Avg. Per-category average R@50 recomputes to 74.9666 -> 74.97, so this pair is internally consistent.",
+   "id": "SPRC-3",
+   "question": "Do the registry's r50/mean match the paper row?",
+   "recommended_action": "None for these two values.",
+   "severity": "NONE",
+   "verdict": "VERIFIED"
+  },
+  {
+   "evidence": "No - the paper prints 54.92 and the registry's own reported_score_note (models.yaml:806) quotes it. The null is a recording failure whose downstream effect is a comparator hole: with r10 absent the paper row only supplies r50/mean.",
+   "id": "SPRC-4",
+   "question": "Is the registry's R@10 null a paper omission?",
+   "recommended_action": "Record 54.92 and keep the discrepancy note; verify the gate then actually consumes R@10 for this model.",
+   "severity": "P1",
+   "verdict": "VARIANT"
+  },
+  {
+   "evidence": "README.md:124 publishes sprc_fiq.pt at the OneDrive URL the registry stores (models.yaml:823-824); live `curl -I` -> 301 to onedrive.live.com (login wall), no size, no digest. README.md:130-131 Todo says rerank code/weights were never published; src/blip_validate.py:144 default names `blip2_cir_rerank_learn`, a class the pinned repo does not register; :49 loads non-strict from `checkpoint[blip_model.__class__.__name__]`. Second published file sprc_fiq_vitl.pt (README.md:128, Google Drive) is not registered.",
+   "id": "SPRC-5",
+   "question": "Checkpoint for the SPRC row",
+   "recommended_action": "Keep checkpoint_mapping_status UNVERIFIED; resolve the top-level key of sprc_fiq.pt from the bytes when an operator can fetch them, and decide which of the two published files the ViT-G row used.",
+   "severity": "P1",
+   "verdict": "UNVERIFIED"
+  },
+  {
+   "evidence": "Pinned README.md:1 title; pinned README.md:4 venue string '(ACL206 Findings)' is a typo. Primary: https://aclanthology.org/2026.findings-acl.216/ (curl -sS -L -> HTTP 200, 50542 bytes) gives title 'CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval', authors Zhipeng Qian, Zihan Liang, Yufei Ma, Ben Chen, Huangyu Dai, Yiwei Ma, Jiayi Ji, Chenyi Lei, Han Li, Xiaoshuai Sun, Volume 'Findings of the Association for Computational Linguistics: ACL 2026', Venue 'Findings', Month July, Year 2026, Pages 4411-4424, DOI 10.18653/v1/2026.findings-acl.216, PDF https://aclanthology.org/2026.findings-acl.216.pdf. Secondary: https://arxiv.org/abs/2601.03728 (HTTP 200, 44572 bytes) same title and authors, 'Submitted on 7 Jan 2026 (v1), last revised 8 May 2026 (this version, v3)', Subjects cs.CV; cs.AI.",
+   "id": "CSMCIR-1",
+   "question": "Paper identity: title, authors, venue from a primary source",
+   "recommended_action": "None. Note the ACL PDF exists and was read: sha256 e449ceb24d9aa6bca29282dafc60c6727e259265d6c2b7cedd960d54613a8c9b, 13033967 bytes.",
+   "severity": "NONE",
+   "verdict": "VERIFIED"
+  },
+  {
+   "evidence": "Table 1 row `CSMCIR(Ours)`, Average block = 57.07 | 77.27 | 67.17. Read three ways: ACL camera-ready PDF `pdftotext -layout` line 397 and rendered page 6 of /tmp/csmcir_acl.pdf (printed page 4416); arXiv v3 HTML <td> cells after the row label [52.45, 74.81, 57.70, 75.76, 61.14, 80.98, 57.07, 77.27, 67.17]; arXiv v3 PDF `pdftotext -layout` line 396. Registry models.yaml:54-56 carries exactly these three.",
+   "id": "CSMCIR-2",
+   "question": "Registry R@10 / R@50 / mean vs the paper",
+   "recommended_action": "None for the metric values.",
+   "severity": "NONE",
+   "verdict": "VERIFIED"
+  },
+  {
+   "evidence": "Printed in the paper column order Dress | Shirt | Toptee: dress R@10 52.45 / R@50 74.81; shirt 57.70 / 75.76; toptee 61.14 / 80.98 (camera-ready p.4416 and arXiv v3). python3 cross-check: (57.07+77.27)/2 = 67.17 exactly matches the printed Avg.",
+   "id": "CSMCIR-3",
+   "question": "Per-category values if printed",
+   "recommended_action": "Optional: record the per-category values in the workbench so a per-category comparison can be attempted. Be aware the printed Average cells are not the mean of the printed per-category cells ((52.45+57.70+61.14)/3 = 57.0967 vs printed 57.07; (74.81+75.76+80.98)/3 = 77.1833 vs printed 77.27) - the author's log reconciles it (epoch 9 of training_log/fashioniq_validation_metrics.csv: 57.06696 / 77.26720 / 67.16708).",
+   "severity": "NONE",
+   "verdict": "VERIFIED"
+  },
+  {
+   "evidence": "models.yaml:39 `paper_url: null` and :36 `publication_year: null` although https://aclanthology.org/2026.findings-acl.216/ and https://arxiv.org/abs/2601.03728 are both live primary sources (HTTP 200, contents as above).",
+   "id": "CSMCIR-4",
+   "question": "Registry paper_url null",
+   "recommended_action": "Populate paper_url (ACL Anthology; arXiv as secondary) and publication_year: 2026.",
+   "severity": "P3",
+   "verdict": "VARIANT"
+  },
+  {
+   "evidence": "HF API at revision cf0c19bb346266c295b4b5772ebf03bd1c4f0467 lists exactly one FashionIQ checkpoint: fashioniq_tuned_clip_best.pt, size 2720615859, lfs.sha256 c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e - equal to the registry expected_size_bytes/expected_sha256. The repo's training_log/fashioniq_validation_metrics.csv epoch 9 is the argmax of average_recall (67.16708342234294) and equals the paper's 67.17. No checkpoint bytes exist on this host (workbench/artifacts/checkpoints/ empty; a 1-byte placeholder only).",
+   "id": "CSMCIR-5",
+   "question": "Checkpoint mapping for the CSMCIR row",
+   "recommended_action": "Keep the metadata mapping; the remaining claim ('these bytes reproduce 57.07/77.27/67.17') is UNKNOWN until a GPU run loads the verified bytes.",
+   "severity": "P1",
+   "verdict": "VERIFIED"
+  },
+  {
+   "evidence": "`git -C workbench/third_party/SPRC rev-parse HEAD` -> 2935a5397732260d1db6fa577e5926f963e36f0f = models.yaml:794. `git -C workbench/third_party/CSMCIR rev-parse HEAD` -> 774f94e2076ff17ea91703a6239d2a08f0e1a44e = registry:42. Both as recorded.",
+   "id": "X-1",
+   "question": "Source pins",
+   "recommended_action": "None.",
+   "severity": "NONE",
+   "verdict": "VERIFIED"
+  },
+  {
+   "evidence": "No inference was executed and none is possible here: the only result artifacts are mocks (workbench/artifacts/results/fashioniq_original_split/mock/mock_sprc-sprc_fiq.json and mock_csmcir-fiq_a.json); no checkpoint bytes exist locally for either model, the SPRC OneDrive URL is login-walled, and the CSMCIR evaluator additionally cannot import the pinned lavis.models package (98 unguarded imports of uncommitted modules before the registration the evaluator needs).",
+   "id": "X-2",
+   "question": "Runtime verification",
+   "recommended_action": "Every claim in this record is STATIC_AUDIT. No RUNTIME_VERIFIED statement is made.",
+   "severity": "NONE",
+   "verdict": "NOT_RUN"
   }
+ ],
+ "execution_trace": [
+  "sprc: paper fetch -> curl proceedings.iclr.cc camera-ready PDF -> HTTP 200, 5641958 bytes, sha256 2c250ddb... -> pdftotext -layout (Table 1 at line 378, row at 407) -> pdftoppm page 6 -> visual read agrees -> arXiv HTML v1 (HTTP 200) agrees -> appendix Tables 5/7/9 agree -> arithmetic cross-check in python3 exposes the Average-R@10 cell discrepancy -> pinned README.md:124 OneDrive URL: curl -I -> 301 login wall, no digest -> registry reported_r10 null confirmed as a recording failure.",
+  "csmcir: README.md:1 + arXiv abs + ACL Anthology page -> identity confirmed (title, 10 authors, Findings of ACL 2026, DOI 10.18653/v1/2026.findings-acl.216, pp. 4411-4424) -> ACL camera-ready PDF (sha e449ceb2..., 13033967 B) pdftotext line 397 + rendered page 6 -> arXiv v3 HTML <td> cells + arXiv v3 PDF (sha 878907fc..., 13101865 B) line 396 -> all three routes agree on 52.45/74.81/57.70/75.76/61.14/80.98/57.07/77.27/67.17 -> FIT = the registry's three numbers -> HF API confirms one FashionIQ checkpoint with matching size/LFS sha256 -> author training log epoch 9 reproduces the same averages -> pinned source lines re-read for aggregation (validate_blip_csmcir.py:620-628), transform (:506-507, :534/:580) and backbone (blip2_pretrain.yaml + :541 eva_clip_g).",
+  "Both models: nothing executed on GPU, no checkpoint bytes loaded; all conclusions are STATIC_AUDIT with live network metadata."
+ ],
+ "experiments": [
+  {
+   "aggregation_method": "Per-category Recall@10 and Recall@50 on dress/shirt/toptee; 'Average' column is the unweighted macro mean over the three categories, and 'Avg.' is the mean of that R@10 and that R@50",
+   "augmentation_policy": null,
+   "backbone": "BLIP-2 pretrained model with ViT-G (paper text line 363: 'encoders are initialized from the BLIP-2 pretrained model with ViT-G'); pinned code default `--backbone pretrain` = ViT-g (SPRC/src/blip_validate.py:145)",
+   "category_metrics": {
+    "dress": {
+     "r10": 49.18,
+     "r50": 72.43
+    },
+    "shirt": {
+     "r10": 55.64,
+     "r50": 73.89
+    },
+    "toptee": {
+     "r10": 59.35,
+     "r50": 78.58
+    }
+   },
+   "checkpoint_id": "sprc_fiq_unresolved",
+   "checkpoint_mapping_evidence": "STATIC_AUDIT. Registry variant sprc_fiq_unresolved (workbench/registry/models.yaml:819-830) names `sprc_fiq.pt` via source_url https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj, which is exactly the URL printed at pinned README.md:124. LIVE OBSERVED: `curl -I` on that URL -> `301` to onedrive.live.com (login-walled), and no bytes, size or digest could be obtained, so no sha256 exists for this row. Pinned README.md:130-131 '### Todo / code and pre-trained weights for rerank model' says the rerank weights were never published, while the evaluator's argparse default `--blip-model-name blip2_cir_rerank_learn` (src/blip_validate.py:144) names a class the pinned repo does not register. The mapping from the published file to the Table 1 row therefore cannot be established (P1).",
+   "checkpoint_mapping_status": "UNVERIFIED",
+   "checkpoint_training_noise_pct": null,
+   "dataset": "fashioniq",
+   "dataset_version": "FashionIQ validation split (paper text line 409: 'the ground-truth labels for the test set of this dataset have not been publicly disclosed, we adopt the results on the validation set'); the paper never names the candidate/gallery set",
+   "derived_metrics": [],
+   "evaluation_noise_pct": 0,
+   "gallery_protocol": "fashioniq_original_split",
+   "method_name": "SPRC",
+   "method_variant": "main method, Vision-and-Language branch (Table 1 row `Ours (SPRC)`; identical numbers to Appendix Table 5 row `Ours+BLIP-2 (Full.)`, gamma=0.8 row of Table 7 and prompt-length-32 row of Table 9)",
+   "metric_definition": "Recall@K = percentage of queries whose true target is ranked within the top K candidates (paper lines 369-370 region); K = 10 and 50 for FashionIQ",
+   "metric_provenance": {
+    "paper_column": "Average block: R@10 | R@50 | Avg.",
+    "paper_page": 6,
+    "paper_row": "Ours (SPRC)",
+    "paper_table": "Table 1 (duplicated as Appendix Table 5, and as the gamma=0.8 row of Table 7 and the length-32 row of Table 9)",
+    "source_excerpt_or_description": "Row text: `Ours (SPRC) 49.18 72.43 55.64 73.89 59.35 78.58 54.92 74.97 64.85`. Caption: 'Table 1: Quantitative comparison across competing methods on the Fashion-IQ validation set, where Avg. indicates the average results across all the metrics in the three different classes.' ATTRIBUTION CONFLICT (final audit C8): the camera-ready prose at sprc_iclr.txt:435-437 ties the same 64.85 average to SPRC2, the two-stage re-ranked variant, while Table 1 prints the identical six numbers in the `Ours (SPRC)` row; arXiv v1 and the camera-ready were not reconciled by the authors. A reproducing checkpoint can claim the Table 1 row, not the SPRC2 prose attribution."
+   },
+   "model_id": "sprc",
+   "preprocessing_id": "TargetPad target_ratio=1.25 at 224x224 (paper line 364-365 'We resize the input image size to 224 x 224 and with a padding ratio of 1.25'); pinned code src/blip_validate.py:52-53 targetpad_transform(1.25, 224) -> Resize(BICUBIC)/CenterCrop/ToTensor/CLIP Normalize (src/data_utils.py:49-102)",
+   "reference_excluded": false,
+   "reference_id": "sprc_fiq_val_ours_vitg",
+   "reference_status": "VERIFIED",
+   "reported_metrics": {
+    "mean": 64.85,
+    "r10": 54.92,
+    "r50": 74.97
+   },
+   "reported_metrics_provenance": "PAPER_REPORTED for all three values. Table 1 'Average' block prints R@10=54.92, R@50=74.97, Avg.=64.85 in the `Ours (SPRC)` row. The mean is NOT a workbench derivation: the paper prints an explicit 'Avg.' column (caption: 'where Avg. indicates the average results across all the metrics in the three different classes').",
+   "review_status": "CONFIRMED",
+   "split": "val",
+   "verification_evidence": "STATIC_AUDIT (no GPU, no checkpoint bytes; nothing was executed). FINDING 1 (P1, registry recording failure, NOT a paper omission): the paper DOES print an R@10 for SPRC. ICLR camera-ready Table 1, page 6, row `Ours (SPRC)`, Average R@10 column = 54.92. The registry stores `reported_r10: null` (workbench/registry/models.yaml:803) while its own `reported_score_note` (:806) quotes 54.92, i.e. the value was seen and then not recorded. FINDING 2 (P1, gate hole): with r10 null the comparator sees only r50/mean, so any produced R@10 passes; this is a live comparator-input defect, not merely a documentation gap. FINDING 3 (P2, unresolved arithmetic, now characterised exactly): printed averages are NOT the mean of the printed per-category values. python3: (49.18+55.64+59.35)/3 = 54.723333...  (printed 54.92, delta +0.197pp); (72.43+73.89+78.58)/3 = 74.966666...  (printed 74.97, consistent); (54.92+74.97)/2 = 64.945 (printed 64.85); (54.72+74.97)/2 = 64.845 -> 64.85. So the printed Avg. 64.85 is the mean of the *recomputed* per-category pair (54.72, 74.97) while the printed Average R@10 cell says 54.92. The per-category R@10 cells (49.18/55.64/59.35) are otherwise identical across Table 1, Table 5, Table 7 and Table 9, so the inconsistency is confined to the Average R@10 cell. FINDING 4: the registry's 64.85 is legitimately PAPER_REPORTED; it must not be reclassified as derived. FINDING 5: the paper never states a candidate-set construction, so `fashioniq_original_split` remains a code-derived reading of `native_protocol`, and the code's evaluator does not actually use the reference image as query context (src/validate_blip.py:198 passes reference features that blip2_qformer_cir_rerank.py:381 consumes only for `.device`). Runtime parity of any checkpoint is UNKNOWN.",
+   "verification_method": "Two independent routes plus a third. (1) `pdftotext -layout /tmp/sprc_iclr.pdf` -> line 407. (2) rendered page image `pdftoppm -png -r 140 -f 6 -l 6` read visually -> same row. (3) arXiv HTML v1 (a different artifact) also contains 54.92/64.85. Cross-check by arithmetic in python3."
+  }
+ ],
+ "final_verdict": "VERIFIED (paper-side metric records), with runtime parity UNKNOWN. SPRC: the paper prints R@10 54.92, R@50 74.97 and Avg. 64.85 for the FashionIQ validation set, so 64.85 is genuinely PAPER_REPORTED and the registry's `reported_r10: null` is a recording failure, not a paper omission (P1); the paper's own Average R@10 cell is internally inconsistent with its per-category cells by 0.20pp (P2). CSMCIR: identity is 'CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval', Zhipeng Qian et al., Findings of ACL 2026, pp. 4411-4424 (ACL Anthology https://aclanthology.org/2026.findings-acl.216/, DOI 10.18653/v1/2026.findings-acl.216; arXiv https://arxiv.org/abs/2601.03728 v3), and Table 1's CSMCIR(Ours) row gives 52.45/74.81 (dress), 57.70/75.76 (shirt), 61.14/80.98 (toptee), 57.07/77.27/67.17 averaged - all three registry values VERIFIED, and the registry's null paper_url/publication_year are fixable P3 defects. Neither model can be reproduced on this host and none was run: no checkpoint bytes for either, the SPRC checkpoint URL is login-walled and its class mapping unprovable, and the CSMCIR evaluator cannot import the pinned lavis.models package.",
+ "paper": {
+  "access": "FULL_TEXT",
+  "access_evidence": "STATIC_AUDIT. `curl -sS -L -o /tmp/sprc_iclr.pdf -w '%{http_code} %{size_download}' https://proceedings.iclr.cc/paper_files/paper/2024/file/8204f54f6cd8f0db1765a274e94ceaac-Paper-Conference.pdf` -> `200 5641958`; `sha256sum` -> 2c250ddb9d0251e21fdad6a2a9400f1d0f688e8427be3f536e9a8404f5409a3b. Route A (text): `pdftotext -layout` -> Table 1 block at line 378 (caption) and row `Ours (SPRC)` at line 407. Route B (rendered image): `pdftoppm -png -r 140 -f 6 -l 6` -> /tmp/sprc_p-06.png, read visually; the row reads `Ours (SPRC) | 49.18 72.43 | 55.64 73.89 | 59.35 78.58 | 54.92 74.97 | 64.85`. Route C (author HTML, different version): `https://arxiv.org/html/2310.05473v1` -> HTTP 200, 357226 bytes; contains '54.92' 4x and '64.85' 7x. Appendix duplicates: Table 5 `Ours+BLIP-2 (Full.)` at text line 1099 and the gamma sweep Table 7 row gamma=0.8 at line 1140 and prompt-length Table 9 row 32 at line 1164 each carry the same six numbers.",
+  "arxiv_id": "2310.05473",
+  "authors": [
+   "Yang Bai",
+   "Xinxing Xu",
+   "Yong Liu",
+   "Salman Khan",
+   "Fahad Khan",
+   "Wangmeng Zuo",
+   "Rick Siow Mong Goh",
+   "Chun-Mei Feng"
+  ],
+  "doi": null,
+  "paper_id": "sprc",
+  "paper_title": "Sentence-level Prompts Benefit Composed Image Retrieval",
+  "paper_url": "https://proceedings.iclr.cc/paper_files/paper/2024/file/8204f54f6cd8f0db1765a274e94ceaac-Paper-Conference.pdf",
+  "paper_version": "ICLR 2024 camera-ready (header on every page: 'Published as a conference paper at ICLR 2024'); arXiv v1 2023-10-09 is the only arXiv HTML rendering (v2/v3/v4 return HTTP 404)",
+  "pdf_bytes": 5641958,
+  "pdf_sha256": "2c250ddb9d0251e21fdad6a2a9400f1d0f688e8427be3f536e9a8404f5409a3b",
+  "publication_year": 2024,
+  "supplement_url": null,
+  "venue": "ICLR 2024 (conference paper; repo README line 2 calls it Spotlight)"
+ }
 }

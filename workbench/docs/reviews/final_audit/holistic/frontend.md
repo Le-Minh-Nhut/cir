@@ -1,0 +1,19 @@
+# Frontend/integration review
+
+## Findings
+
+- **HIGH — Synthetic evaluator output can reach the warning labels as if it were an experiment.** The evaluator passes `data_kind="experiment"` to the gate with `real_execution=True` unconditionally (`workbench/scripts/evaluate_models.py:158-168`), while synthetic output is separately supported and recorded as `is_synthetic` (`workbench/scripts/evaluate_models.py:1382-1395,1428-1429`). The API accepts reports based on `artifact_type` only and projects their gate/provenance fields without filtering or exposing `is_synthetic` (`workbench/backend/main.py:82-104,106-120,122-132`). The frontend renders warnings from `/api/benchmark-runs` rows (`workbench/frontend/App.tsx:20,30`). Thus synthetic evaluator metrics can drive benchmark-deviation warnings in UI. No synthetic registry entry was found in current `workbench/registry/models.yaml`, but code path exists; report reachability depends on a synthetic report being present.
+
+- **MEDIUM — Slider controls displayed deviation labels, not backend gate verdict.** Slider and number input update `thresholdPct` (`workbench/frontend/App.tsx:14,27`); value persists locally (`workbench/frontend/App.tsx:20`). `warningLabels` re-flags recorded `relative_error_pct` values against that threshold (`workbench/frontend/gate.ts:31-36,45-58`), and `App` renders its results (`workbench/frontend/App.tsx:30`). It does not send threshold to backend or recompute `benchmark_gate.status`/`passed`; backend gate verdict is computed at fixed `TOLERANCE_PCT = 5.0` (`workbench/backend/paper_gate.py:26-27,169-200`). Slider works as UI warning threshold, not as a control over authoritative gate outcome.
+
+- **LOW — Mock runs are reachable in UI, but visibly identified rather than silently substituted.** `/api/runs` reads indexed run metadata (`workbench/backend/main.py:78-80`; `workbench/backend/storage.py:30-40`); frontend keeps both `mock` and `experiment` runs, shows mock counts/banner, and badges each run’s `data_kind` (`workbench/frontend/App.tsx:18,26-30`). This is an explicit development-data path, not a mock fallback. Gate warnings use separate aggregate-report API fields, not fabricated frontend placeholder values (`workbench/frontend/App.tsx:20,30`).
+
+## Integration checks
+
+- **Warning-label data source:** `CAPTION THAY THẾ` is keyed to backend `variant_provenance.caption_alias_staged` (`workbench/frontend/gate.ts:45-50`); evaluator derives it from staged caption-alias evidence (`workbench/scripts/evaluate_models.py:243-272`). `LỆCH PAPER` uses recorded `benchmark_gate.comparisons[].relative_error_pct` and metric name (`workbench/frontend/gate.ts:31-36,50-58`), populated in backend gate verdict (`workbench/backend/paper_gate.py:99-116,129-138`). Both use payload fields, not hard-coded example numbers; synthetic-report exposure above limits “real data” assurance.
+- **Payload types:** Frontend gate fields and `BenchmarkRun` match the API projection’s keys and nullable IDs (`workbench/frontend/gate.ts:6-29`; `workbench/backend/main.py:106-127`). `MetricComparison` fields align with backend serializer (`workbench/frontend/gate_types.ts:1-12`; `workbench/backend/paper_gate.py:99-116`). Nested `benchmark_gate`/`variant_provenance` are typed as generic records and gate comparisons cast to `GateVerdict` (`workbench/frontend/gate.ts:6-22,50`), so TypeScript does not statically validate nested response shape.
+- **Build:** `npx tsc --noEmit` passed. `npx vite build --outDir /tmp/cir-workbench-frontend-build` passed (production Vite build; output kept outside repository).
+
+## Overall verdict: **UNSOUND**
+
+Warnings are field-driven and slider changes their presentation threshold, but backend gate verdict remains fixed. More importantly, synthetic evaluator reports can enter the same aggregate endpoint and warning path as real experiment reports without an `is_synthetic` filter or UI-visible distinction.

@@ -28,6 +28,38 @@ TOLERANCE_PCT = 5.0
 
 METRIC_KEYS = ("r10", "r50", "mean")
 
+#: Per-category FashionIQ metrics, when the paper publishes them and the run observes them. The
+#: aggregate cannot carry a broken category: a strong Shirt result must not conceal a Dress
+#: deviation through averaging. A metric is compared only when BOTH sides state it; a paper value
+#: with no observed counterpart is reported as unchecked, never as a match.
+CATEGORY_KEYS = tuple(f"{category}_{metric}"
+                      for category in ("dress", "shirt", "toptee")
+                      for metric in ("r10", "r50"))
+ALL_METRIC_KEYS = METRIC_KEYS + CATEGORY_KEYS
+
+
+def category_key(category: str, metric: str) -> str:
+    return f"{category}_{metric}"
+
+
+def deviations(metrics: list[MetricComparison], threshold_pct: float) -> dict[str, Any]:
+    """Re-evaluate recorded comparisons against a user-selected threshold, without rerunning anything.
+
+    The gate's own verdict is an audit record with the fixed rule; this is the presentation layer
+    that lets an operator move the threshold and see labels change. Same arithmetic, same edge
+    policy, one implementation -- the frontend never recomputes a percentage.
+    """
+    flagged = [c for c in metrics
+               if c.relative_error_pct is not None and c.relative_error_pct > threshold_pct]
+    return {
+        "threshold_pct": threshold_pct,
+        "deviating": [c.to_dict() for c in flagged],
+        "deviates": bool(flagged),
+        "max_relative_error_pct": max((c.relative_error_pct for c in flagged), default=None),
+        "worst_metric": max(flagged, key=lambda c: c.relative_error_pct or 0.0).metric
+        if flagged else None,
+    }
+
 #: Declared scale of a metric set. The gate never infers the scale from the value: `1.0` is ambiguous
 #: between "1 percent" and "100 percent", so the parser that produced the numbers declares which
 #: convention it used. An unknown declaration raises rather than being absorbed silently.
@@ -52,6 +84,10 @@ VARIANT_KEYS = ("caption_alias_staged", "declared_variant")
 
 PASS_WITHIN_5_PERCENT = "PASS_WITHIN_5_PERCENT"
 PASS_WITHIN_5_PERCENT_VARIANT = "PASS_WITHIN_5_PERCENT_VARIANT"
+# An explicitly incomplete pass: every comparable metric agreed, but the paper published category
+# metrics the run never observed, so the aggregate carried no per-category confirmation. A consumer
+# that treats any PASS_* as a full reproduction check is wrong; this status says so.
+PASS_WITH_UNCHECKED_CATEGORIES = "PASS_WITH_UNCHECKED_CATEGORIES"
 ALERT_METRIC_DEVIATION = "ALERT_METRIC_DEVIATION"
 BLOCKED_PROTOCOL_MISMATCH = "BLOCKED_PROTOCOL_MISMATCH"
 BLOCKED_CHECKPOINT_MISMATCH = "BLOCKED_CHECKPOINT_MISMATCH"
@@ -74,9 +110,14 @@ class MetricComparison:
     within_tolerance: bool | None
     paper_provenance: str = benchmarks.PROVENANCE_UNAVAILABLE
     note: str = ""
+    direction: str = "equal"  # "higher" | "lower" | "equal": reproduced vs published
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        # A published zero has no meaningful signed difference, so it stays a raw delta.
+        payload["signed_delta_pp"] = (None if self.reproduced is None or self.paper is None
+                                      else self.reproduced - self.paper)
+        return payload
 
 
 @dataclass(frozen=True)
@@ -137,19 +178,22 @@ def compare_metric(
     A zero published value has no meaningful relative error, so equality is the only defensible test
     there and the relative field stays `None` rather than being divided by zero.
     """
+    direction = "equal"
     if paper is None:
         return MetricComparison(metric, None, reproduced, None, None, None, paper_provenance,
-                                "no published value for this metric")
+                                "no published value for this metric", direction)
     paper_value = normalize_scale(paper, scale)
     if not _is_number(reproduced):
         return MetricComparison(metric, paper_value, None, None, None, False, paper_provenance,
-                                "no usable reproduced value")
+                                "no usable reproduced value", direction)
     reproduced_value = normalize_scale(reproduced, scale)
+    direction = ("higher" if reproduced_value > paper_value
+                 else "lower" if reproduced_value < paper_value else "equal")
 
     if paper_value == 0.0:
         ok = reproduced_value == 0.0
         return MetricComparison(metric, 0.0, reproduced_value, abs(reproduced_value), None, ok,
-                                paper_provenance, "zero baseline: exact equality required")
+                                paper_provenance, "zero baseline: exact equality required", direction)
 
     absolute = abs(reproduced_value - paper_value)
     relative = absolute / abs(paper_value) * 100.0
@@ -157,7 +201,8 @@ def compare_metric(
     # makes `57.07 * 0.95` land a few ulps off, so a relative epsilon far below any measurement
     # precision absorbs that without admitting a real 5.01 percent deviation.
     return MetricComparison(metric, paper_value, reproduced_value, absolute, relative,
-                            relative <= tolerance_pct * (1 + 1e-12), paper_provenance)
+                            relative <= tolerance_pct * (1 + 1e-12), paper_provenance,
+                            direction=direction)
 
 
 def _failure_note(comparison: MetricComparison) -> str:
@@ -241,6 +286,7 @@ def evaluate_gate(
     evaluation_completed: bool = True,
     metric_scale: str = SCALE_PERCENTAGE,
     tolerance_pct: float = TOLERANCE_PCT,
+    reproduced_category_metrics: dict[str, dict[str, float | None]] | None = None,
 ) -> GateVerdict:
     """Decide a run's reproduction status against a committed benchmark reference.
 
@@ -300,6 +346,25 @@ def evaluate_gate(
                        paper_provenance=reference.metric_provenance(key))
         for key in METRIC_KEYS
     ]
+    # Per-category metrics: compared only where both sides publish them, so a paper's category table
+    # cannot be evaded by a strong average and an observed category cannot be judged against a row
+    # that never printed one.
+    categories = reproduced_category_metrics if isinstance(reproduced_category_metrics, dict) else {}
+    paper_categories = reference.payload.get("category_metrics") or {}
+    category_unchecked: list[str] = []
+    for key in CATEGORY_KEYS:
+        category, _, metric = key.partition("_")
+        paper_value = (paper_categories.get(category) or {}).get(metric)
+        if paper_value is None:
+            continue
+        observed = (categories.get(category) or {}).get(metric)
+        if observed is None:
+            category_unchecked.append(key)
+            continue
+        comparisons.append(
+            compare_metric(key, paper_value, observed,
+                           scale=metric_scale, tolerance_pct=tolerance_pct,
+                           paper_provenance=benchmarks.PAPER_REPORTED))
     comparable = [c for c in comparisons if c.within_tolerance is not None]
     if not comparable:
         return GateVerdict(METRIC_REFERENCE_UNVERIFIED, False, False, comparisons,
@@ -318,6 +383,14 @@ def evaluate_gate(
         detail += f"; {', '.join(missing)} had no value on either side and was not compared"
     if unchecked:
         detail += f"; {len(unchecked)} condition(s) the reference does not state were not checked"
+    if category_unchecked:
+        detail += (f"; category metrics {', '.join(category_unchecked)} are published by the paper "
+                   f"but the run observed none, so they were not compared")
+    if category_unchecked:
+        # The paper publishes category measurements the run did not produce. The comparable
+        # aggregate agreed, but calling this an unqualified pass would let a strong average stand
+        # in for the per-category check the paper's own table invites; the status names the gap.
+        status = PASS_WITH_UNCHECKED_CATEGORIES
     # A passing verdict lists no blockers. Unchecked conditions belong in `detail` and in the
     # reference evidence, where a reader looks for caveats; putting refusals in a `blockers` list on a
     # `passed=True` verdict makes every consumer mishandle the result.

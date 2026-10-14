@@ -49,7 +49,7 @@ contracts:
     expected_local_location: null
     location_env_var: WORKBENCH_CLVC_RESNET50_WEIGHTS
     cache_root_env_var: TORCH_HOME
-    cache_path_suffix: checkpoints/resnet50-19c8e357.pth
+    cache_path_suffix: hub/checkpoints/resnet50-19c8e357.pth
     expected_sha256_prefix: 19c8e357
     source: https://download.pytorch.org/models/resnet50-19c8e357.pth
     optional: false
@@ -128,7 +128,7 @@ contracts:
     expected_local_location: null
     location_env_var: WORKBENCH_DCNET_RESNET50_WEIGHTS
     cache_root_env_var: TORCH_HOME
-    cache_path_suffix: checkpoints/resnet50-19c8e357.pth
+    cache_path_suffix: hub/checkpoints/resnet50-19c8e357.pth
     expected_sha256_prefix: 19c8e357
     source: https://download.pytorch.org/models/resnet50-19c8e357.pth
     optional: false
@@ -298,3 +298,41 @@ contracts:
   deterministic_status: UNKNOWN
   automation_policy: MANUAL_REQUIRED
   notes: Source caches train_data.json and test_queries/test_targets PKLs are not provenance-validated. Base iteration 0 only; the workbench wrapper invokes pinned native test().
+
+- preparation_id: pair_fashioniq
+  source_family: PAIR
+  raw_inputs:
+  - name: FashionIQ train and validation captions and split files
+    kind: raw_benchmark
+    scope: fashioniq_root
+    paths:
+    - captions/cap.dress.train.json
+    - captions/cap.shirt.train.json
+    - captions/cap.toptee.train.json
+    - captions/cap.dress.val.json
+    - captions/cap.shirt.val.json
+    - captions/cap.toptee.val.json
+    - image_splits/split.dress.val.json
+    - image_splits/split.shirt.val.json
+    - image_splits/split.toptee.val.json
+  generated_artifacts:
+  - name: category-local resized JPEG images
+    kind: generated_repo_artifact
+    scope: fashioniq_root
+    paths:
+    - resized_image/dress
+    - resized_image/shirt
+    - resized_image/toptee
+    generator: fashioniq_resize_images
+    cwd: null
+    parameters:
+      image_size: 256
+      source_script: start_kit/resize_images.py
+      source_script_url: https://github.com/XiaoxiaoGuo/fashion-iq/blob/master/start_kit/resize_images.py
+      source_evidence: operator-chosen — the PAIR README documents no resize; the recipe matches the fashioniq_ilearn_resized layout the pinned evaluator reads
+      layout: per_category
+      extension: .jpg
+  external_assets: []
+  deterministic_status: DETERMINISTIC_AT_EVALUATION
+  automation_policy: MANUAL_REQUIRED
+  notes: The PAIR README documents no resize step; this contract makes the declared manual_ilearn_resized contract effective instead of inert (final audit C6). The caption correction dictionaries the pinned data/datasets.py requires are operator-supplied and unverified; they are deliberately NOT declared as generated artifacts because no pinned source directory provides them.

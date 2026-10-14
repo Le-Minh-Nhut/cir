@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import asdict, dataclass
 from typing import Any
+
+from workbench.backend import paper_gate
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,13 @@ def _check_parity(
 ) -> str:
     """Compare observed metrics against a paper row, refusing to judge a partial row.
 
+    DEPRECATED as an acceptance decision: this once used an absolute `0.05` tolerance, which is a
+    different rule from the canonical five-percent *relative* error the benchmark gate enforces, and
+    two contradictory PASS/FAIL meanings for one run is exactly the ambiguity that breaks audits.
+    The verdict that matters is the gate's (`benchmark_gate` in the report); this field now applies
+    the same canonical relative-error arithmetic so it can never contradict the gate, and it is kept
+    only as a display annotation for older consumers.
+
     A row that publishes R@50 but not R@10 (SPRC's registered row is exactly that) cannot be
     "verified": the missing metric would be silently exempt, so a run whose R@10 is nonsense would
     still report PARITY_VERIFIED. An absent paper value is an unverified reference for that metric,
@@ -44,13 +54,12 @@ def _check_parity(
         o_val = observed.get(k)
         if o_val is None:
             return "PARITY_NOT_EVALUATED"
-        if abs(float(o_val) - float(p_val)) > tolerance:
+        comparison = paper_gate.compare_metric(k, float(p_val), float(o_val))
+        if comparison.relative_error_pct is None or not comparison.within_tolerance:
             return "PARITY_MISMATCH"
         compared += 1
     return "PARITY_VERIFIED" if compared > 0 else "PARITY_NOT_EVALUATED"
 
-
-import math
 
 def _is_valid_recall(val: Any) -> bool:
     if isinstance(val, bool):
@@ -175,6 +184,8 @@ def parse_limn_output(stdout_text: str, paper_metrics: dict[str, float | None] |
         )
 
     if abs(float(decl_r10) - computed_r10_macro) > 0.05 or abs(float(decl_r50) - computed_r50_macro) > 0.05 or abs(float(decl_mean) - computed_mean) > 0.05:
+        # Internal consistency only (declared aggregate vs the run's own categories), not a paper
+        # comparison; see the same note in parse_csmcir_output.
         return MetricExtractionResult(
             extraction_status="EVALUATION_COMPLETED_METRICS_UNPARSED",
             parser_id="limn_structured_json",
@@ -262,6 +273,9 @@ def parse_csmcir_output(stdout_text: str, paper_metrics: dict[str, float | None]
         exp_mean = (exp10 + exp50) / 2.0
 
         if abs(float(avg10) - exp10) > 0.05 or abs(float(avg50) - exp50) > 0.05 or abs(float(avg_mean) - exp_mean) > 0.05:
+            # Internal consistency only: the evaluator's own average against the categories it just
+            # printed, from the same run. This is not a paper comparison and does not use the gate's
+            # relative rule; a discrepancy here means the parser misread the output.
             raise ValueError("inconsistent declared macro mean")
 
         observed = {
@@ -292,6 +306,80 @@ def parse_csmcir_output(stdout_text: str, paper_metrics: dict[str, float | None]
             raw_output=json_obj,
         )
 
+def parse_combiner_output(stdout_text: str, paper_metrics: dict[str, float | None] | None = None) -> MetricExtractionResult:
+    """Parse the `name = value` recall lines CLIP4Cir's src/validate.py prints for FashionIQ.
+
+    The evaluator prints six per-category lines (shirt, dress, toptee x recall@10/50) and two
+    unweighted averages; values are percentages. The declared averages are validated against the
+    categories the same run printed (internal consistency only — the gate owns the paper
+    comparison).
+    """
+    unparsed = MetricExtractionResult(
+        extraction_status="EVALUATION_COMPLETED_METRICS_UNPARSED",
+        parser_id="clip4cir_stdout_recalls",
+        parser_version=1,
+        observed_metrics=None,
+        category_metrics=None,
+        parity_status="PARITY_NOT_EVALUATED",
+        metric_source="stdout",
+    )
+    values: dict[str, float] = {}
+    for match in re.finditer(r"^\s*([a-z_]+_recallat\d+)\s*=\s*([-+0-9.eE]+)\s*$", stdout_text, re.MULTILINE):
+        key = match.group(1)
+        if key in values:
+            # A repeated line that disagrees with the first is ambiguous output; the evaluator
+            # prints each recall exactly once, so any repetition is misread or tampered output.
+            return unparsed
+        try:
+            values[key] = float(match.group(2))
+        except ValueError:
+            return unparsed
+    averages: dict[str, float] = {}
+    for m in re.finditer(r"^\s*average recall(\d+)\s*=\s*([-+0-9.eE]+)\s*$", stdout_text, re.MULTILINE):
+        if m.group(1) in averages:
+            return unparsed
+        try:
+            averages[m.group(1)] = float(m.group(2))
+        except ValueError:
+            return unparsed
+    try:
+        cat_metrics: dict[str, dict[str, float | None]] = {}
+        for cat in ("dress", "shirt", "toptee"):
+            v10 = values[f"{cat}_recallat10"]
+            v50 = values[f"{cat}_recallat50"]
+            if not (_is_valid_recall(v10) and _is_valid_recall(v50)):
+                raise ValueError(f"invalid recall value in {cat}")
+            cat_metrics[cat] = {"r10": float(v10), "r50": float(v50)}
+        avg10 = averages["10"]
+        avg50 = averages["50"]
+        if not (_is_valid_recall(avg10) and _is_valid_recall(avg50)):
+            raise ValueError("invalid average recall values")
+        exp10 = sum(cat_metrics[c]["r10"] for c in ("dress", "shirt", "toptee")) / 3.0
+        exp50 = sum(cat_metrics[c]["r50"] for c in ("dress", "shirt", "toptee")) / 3.0
+        if abs(avg10 - exp10) > 0.05 or abs(avg50 - exp50) > 0.05:
+            # Internal consistency only: the evaluator's own average against the categories it just
+            # printed, from the same run. This is not a paper comparison and does not use the gate's
+            # relative rule; a discrepancy here means the parser misread the output.
+            raise ValueError("inconsistent declared average")
+        observed = {
+            "r10": round(float(avg10), 4),
+            "r50": round(float(avg50), 4),
+            "mean": round((float(avg10) + float(avg50)) / 2.0, 4),
+        }
+        parity = _check_parity(observed, paper_metrics)
+        return MetricExtractionResult(
+            extraction_status="EXTRACTED_VERIFIED",
+            parser_id="clip4cir_stdout_recalls",
+            parser_version=1,
+            observed_metrics=observed,
+            category_metrics=cat_metrics,
+            parity_status=parity,
+            metric_source="stdout",
+            raw_output={"averages": {"recall10": avg10, "recall50": avg50}},
+        )
+    except (KeyError, ValueError):
+        return unparsed
+
 def extract_aggregate_metrics(
     model_id: str,
     stdout_text: str,
@@ -314,6 +402,12 @@ def extract_aggregate_metrics(
     if model_id == "limn":
         return parse_limn_output(stdout_text, paper_metrics)
     if model_id == "csmcir":
+        return parse_csmcir_output(stdout_text, paper_metrics)
+    if model_id in ("combiner_rn50x4_noft", "clip4cir_rn50x4_fullft"):
+        return parse_combiner_output(stdout_text, paper_metrics)
+    if model_id == "sprc":
+        # blip_validate.py:88-98 prints the same JSON key set as CSMCIR's evaluator; the csmcir
+        # parser's macro-validation matches the same keys, so the shape is reused, not assumed.
         return parse_csmcir_output(stdout_text, paper_metrics)
 
     # Models with unaudited / unverified source output format

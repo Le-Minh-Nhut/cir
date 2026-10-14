@@ -85,6 +85,11 @@ BUNDLED_ASSET_GENERATOR = "pinned_source_file"
 BUNDLED_ASSET_DIRECTORY = "correct_files"
 #: Marker used by a preparation contract for the per-category image resize.
 RESIZE_GENERATOR = "fashioniq_resize_images"
+#: The PIL resampling kernel the workbench-applied resize uses. The FashionIQ start_kit tool also
+#: resizes with `Image.ANTIALIAS`, which modern PIL maps to LANCZOS, so the kernels agree; the
+#: comment originally claimed nearest-neighbour, which was false. Recorded here so a kernel change
+#: invalidates receipts.
+RESAMPLING = "LANCZOS"
 #: Name of the receipt a completed resize leaves behind; the pipeline validates it as the output.
 RESIZE_RECEIPT_NAME = ".workbench_resize_receipt.json"
 
@@ -133,6 +138,10 @@ def write_resize_receipt(receipt: Path, *, model_id: str, layout: str, image_siz
         "recipe_identity": recipe_identity,
         "categories": coverage,
         "written_now": written,
+        # The resampling kernel is a constant of the workbench code, not a registry parameter, so
+        # the recipe digest cannot see it. Recorded explicitly: if the code ever resizes with a
+        # different filter, old receipts stop matching and every derived file is regenerated.
+        "resampling": RESAMPLING,
     }
     temporary = receipt.with_name(f".{receipt.name}.{os.getpid()}.tmp")
     temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -177,6 +186,10 @@ def resize_is_complete(config, model: dict, contract: dict) -> bool | None:
     if declared.get("image_size") != recipe_size:
         return False
     if declared.get("extension") != recipe_ext:
+        return False
+    # The kernel is a constant of this module; a receipt that names a different filter was not
+    # produced by this code and must not be trusted.
+    if declared.get("resampling") != RESAMPLING:
         return False
 
     categories = declared.get("categories")
@@ -243,8 +256,13 @@ def resize_is_complete(config, model: dict, contract: dict) -> bool | None:
             if not source_digests.get(str_id):
                 return False
             source_image = images_root / f"{str_id}{recipe_ext}"
-            if not source_image.is_file():
-                alternate = images_root / f"{str_id}.jpg"
+            # The receipt records the extension the generator actually read (the canonical
+            # distribution may be .png while the recipe writes .jpg). Validating against a guessed
+            # `.jpg` fallback made every completion check fail on a .png canonical tree, forcing a
+            # full regenerate on each resume.
+            recorded_suffix = (counts.get("source_extensions") or {}).get(str_id)
+            if not source_image.is_file() and recorded_suffix:
+                alternate = images_root / f"{str_id}{recorded_suffix}"
                 source_image = alternate if alternate.is_file() else source_image
             if not source_image.is_file():
                 return False
@@ -399,6 +417,11 @@ def _derived_is_bound_to_source(
     if not isinstance(previous, dict):
         return False
     if previous.get("image_size") != size or previous.get("extension") != extension:
+        return False
+    # A file produced with a different resampling kernel is a different derived artifact, even
+    # though its source bytes match. Receipts written before the kernel was recorded carry no
+    # claim at all, so they cannot prove reuse either.
+    if previous.get("resampling") != RESAMPLING:
         return False
     categories = previous.get("categories")
     if not isinstance(categories, dict):
@@ -568,7 +591,7 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
             temp_file = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
             try:
                 with Image.open(source_image) as handle:
-                    handle.convert("RGB").resize((size, size), Image.LANCZOS).save(temp_file, format=save_format)
+                    handle.convert("RGB").resize((size, size), getattr(Image, RESAMPLING)).save(temp_file, format=save_format)
                 os.replace(temp_file, destination)
             finally:
                 if temp_file.exists():

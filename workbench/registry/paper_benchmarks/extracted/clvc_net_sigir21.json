@@ -1,92 +1,92 @@
 {
-  "experiments": [
-    {
-      "aggregation_method": "per-category R@10/R@50 columns, then the printed average columns for R@10 and R@50",
-      "augmentation_policy": null,
-      "backbone": "ResNet-50 visual encoder with a CLIP-based textual branch (paper \u00a73); the paper prints no CLIP variant string for this row",
-      "category_metrics": {
-        "dress": {
-          "r10": 29.85,
-          "r50": 56.47
-        },
-        "shirt": {
-          "r10": 28.75,
-          "r50": 54.76
-        },
-        "toptee": {
-          "r10": 33.5,
-          "r50": 64.0
-        }
-      },
-      "checkpoint_id": "author_drive_unresolved",
-      "checkpoint_mapping_evidence": "The registry names a Google Drive FILE (source_url .../file/d/159rBhWyhkLN7sXAi8iyW_ljzFNLJinKa) and no digest, and the paper reports a single clean FashionIQ comparison. Nothing observed ties the published archive to this row, so the mapping stays unverified.",
-      "checkpoint_mapping_status": "UNVERIFIED",
-      "checkpoint_training_noise_pct": null,
-      "dataset": "fashioniq",
-      "dataset_version": "official FashionIQ validation split, three categories (dress, shirt, toptee)",
-      "derived_metrics": [
-        {
-          "derivation_formula": "(30.70 + 58.41) / 2",
-          "key": "mean",
-          "provenance": "WORKBENCH_DERIVED",
-          "rounding_policy": "round-half-up to 2 decimals",
-          "source_metrics": [
-            "r10",
-            "r50"
-          ],
-          "value": 44.56
-        }
-      ],
-      "evaluation_noise_pct": 0,
-      "gallery_protocol": "fashioniq_val_split",
-      "method_name": "CLVC-Net",
-      "method_variant": "main method (Table 1 row CLVC-Net); Table 3 repeats the same FashionIQ average as an ablation baseline",
-      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
-      "metric_provenance": {
-        "paper_column": "FashionIQ block: Dress/Shirt/Toptee R@10 and R@50, then the average R@10 and R@50 columns",
-        "paper_page": 5,
-        "paper_row": "CLVC-Net",
-        "paper_table": "Table 1",
-        "source_excerpt_or_description": "'Table 1: Performance comparison on FashionIQ and Shoes.' The CLVC-Net row reads 29.85 56.47 28.75 54.76 33.50 64.00 30.70 58.41 for FashionIQ. Table 3 repeats 30.70 / 58.41 as the FashionIQ average."
-      },
-      "model_id": "clvc_net",
-      "preprocessing_id": null,
-      "reference_excluded": true,
-      "reference_id": "clvc_net_sigir21_fiq_table1",
-      "reference_status": "VERIFIED",
-      "reported_metrics": {
-        "mean": null,
-        "r10": 30.7,
-        "r50": 58.41
-      },
-      "reported_metrics_provenance": "PAPER_REPORTED for r10 and r50 (Table 1 average columns 30.70 and 58.41). The paper prints no combined mean of the two averages, so mean stays null rather than being invented.",
-      "review_status": "CONFIRMED",
-      "split": "val",
-      "verification_evidence": "(29.85 + 28.75 + 33.50) / 3 = 30.70 and (56.47 + 54.76 + 64.00) / 3 = 58.41, matching the printed average columns exactly, which confirms both the values and the category alignment.",
-      "verification_method": "Independent verifier pass plus an implementer pass, both from the same author-hosted bytes: `pdftotext -layout` of the table, and the row's per-category values checked against the printed average columns."
+ "experiments": [
+  {
+   "aggregation_method": "per-category R@10/R@50 columns, then the printed average columns for R@10 and R@50",
+   "augmentation_policy": null,
+   "backbone": "ResNet-50 visual encoder with a two-LSTM textual branch (paper §3.2.1; the paper text contains no \"CLIP\" occurrence, and the pinned source composes text through two LSTMs — model.py:119-122,191-194). The previous string asserted a CLIP-based textual branch, which neither the paper nor the source supports.",
+   "category_metrics": {
+    "dress": {
+     "r10": 29.85,
+     "r50": 56.47
+    },
+    "shirt": {
+     "r10": 28.75,
+     "r50": 54.76
+    },
+    "toptee": {
+     "r10": 33.5,
+     "r50": 64.0
     }
-  ],
-  "paper": {
-    "access": "FULL_TEXT",
-    "access_evidence": "An earlier extraction reported the paper paywalled. That was wrong: the first author's group page (xuemengsong.github.io) links 'SIGIR_CTI-IR.pdf', and `curl -sL` returns HTTP 200, 2859422 bytes, sha256 4c452584...f88, with a PDF title/author block matching the paper. `pdftotext -layout` shows Table 1 (FashionIQ and Shoes) with the CLVC-Net row '29.85 56.47 28.75 54.76 33.50 64.00 30.70 58.41 17.64 54.39 79.47'. Independently re-derived by the verifier and by the implementer from the same bytes.",
-    "arxiv_id": null,
-    "authors": [
-      "Haokun Wen",
-      "Xuemeng Song",
-      "Xin Yang",
-      "Yibing Zhan",
-      "Liqiang Nie"
-    ],
-    "doi": "10.1145/3404835.3462967",
-    "paper_id": "clvc_net_sigir21",
-    "paper_title": "Comprehensive Linguistic-Visual Composition Network for Image Retrieval",
-    "paper_url": "https://xuemengsong.github.io/SIGIR_CTI-IR.pdf",
-    "paper_version": "SIGIR 2021 camera-ready; author-hosted copy of the ACM version",
-    "pdf_bytes": 2859422,
-    "pdf_sha256": "4c452584eae4576c0e7b5dfbdd4356dd779c577ef258a7b9fef5086eb135af88",
-    "publication_year": 2021,
-    "supplement_sha256": null,
-    "supplement_url": null,
-    "venue": "SIGIR 2021"
+   },
+   "checkpoint_id": "author_drive_unresolved",
+   "checkpoint_mapping_evidence": "The registry names a Google Drive FILE (source_url .../file/d/159rBhWyhkLN7sXAi8iyW_ljzFNLJinKa) and no digest, and the paper reports a single clean FashionIQ comparison. Nothing observed ties the published archive to this row, so the mapping stays unverified.",
+   "checkpoint_mapping_status": "UNVERIFIED",
+   "checkpoint_training_noise_pct": null,
+   "dataset": "fashioniq",
+   "dataset_version": "official FashionIQ validation split, three categories (dress, shirt, toptee)",
+   "derived_metrics": [
+    {
+     "derivation_formula": "(30.70 + 58.41) / 2",
+     "key": "mean",
+     "provenance": "WORKBENCH_DERIVED",
+     "rounding_policy": "round-half-up to 2 decimals",
+     "source_metrics": [
+      "r10",
+      "r50"
+     ],
+     "value": 44.56
+    }
+   ],
+   "evaluation_noise_pct": 0,
+   "gallery_protocol": "fashioniq_val_split",
+   "method_name": "CLVC-Net",
+   "method_variant": "main method (Table 1 row CLVC-Net); Table 3 repeats the same FashionIQ average as an ablation baseline",
+   "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
+   "metric_provenance": {
+    "paper_column": "FashionIQ block: Dress/Shirt/Toptee R@10 and R@50, then the average R@10 and R@50 columns",
+    "paper_page": 5,
+    "paper_row": "CLVC-Net",
+    "paper_table": "Table 1",
+    "source_excerpt_or_description": "'Table 1: Performance comparison on FashionIQ and Shoes.' The CLVC-Net row reads 29.85 56.47 28.75 54.76 33.50 64.00 30.70 58.41 for FashionIQ. Table 3 repeats 30.70 / 58.41 as the FashionIQ average."
+   },
+   "model_id": "clvc_net",
+   "preprocessing_id": null,
+   "reference_excluded": true,
+   "reference_id": "clvc_net_sigir21_fiq_table1",
+   "reference_status": "VERIFIED",
+   "reported_metrics": {
+    "mean": null,
+    "r10": 30.7,
+    "r50": 58.41
+   },
+   "reported_metrics_provenance": "PAPER_REPORTED for r10 and r50 (Table 1 average columns 30.70 and 58.41). The paper prints no combined mean of the two averages, so mean stays null rather than being invented.",
+   "review_status": "CONFIRMED",
+   "split": "val",
+   "verification_evidence": "(29.85 + 28.75 + 33.50) / 3 = 30.70 and (56.47 + 54.76 + 64.00) / 3 = 58.41, matching the printed average columns exactly, which confirms both the values and the category alignment.",
+   "verification_method": "Independent verifier pass plus an implementer pass, both from the same author-hosted bytes: `pdftotext -layout` of the table, and the row's per-category values checked against the printed average columns."
   }
+ ],
+ "paper": {
+  "access": "FULL_TEXT",
+  "access_evidence": "An earlier extraction reported the paper paywalled. That was wrong: the first author's group page (xuemengsong.github.io) links 'SIGIR_CTI-IR.pdf', and `curl -sL` returns HTTP 200, 2859422 bytes, sha256 4c452584...f88, with a PDF title/author block matching the paper. `pdftotext -layout` shows Table 1 (FashionIQ and Shoes) with the CLVC-Net row '29.85 56.47 28.75 54.76 33.50 64.00 30.70 58.41 17.64 54.39 79.47'. Independently re-derived by the verifier and by the implementer from the same bytes.",
+  "arxiv_id": null,
+  "authors": [
+   "Haokun Wen",
+   "Xuemeng Song",
+   "Xin Yang",
+   "Yibing Zhan",
+   "Liqiang Nie"
+  ],
+  "doi": "10.1145/3404835.3462967",
+  "paper_id": "clvc_net_sigir21",
+  "paper_title": "Comprehensive Linguistic-Visual Composition Network for Image Retrieval",
+  "paper_url": "https://xuemengsong.github.io/SIGIR_CTI-IR.pdf",
+  "paper_version": "SIGIR 2021 camera-ready; author-hosted copy of the ACM version",
+  "pdf_bytes": 2859422,
+  "pdf_sha256": "4c452584eae4576c0e7b5dfbdd4356dd779c577ef258a7b9fef5086eb135af88",
+  "publication_year": 2021,
+  "supplement_sha256": null,
+  "supplement_url": null,
+  "venue": "SIGIR 2021"
+ }
 }

@@ -36,7 +36,7 @@ models:
     publication_year: null
     preparation_contract: manual_standard
     paper_title: "CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval"
-    paper_url: null
+    paper_url: https://arxiv.org/abs/2601.03728
     upstream_repo_url: https://github.com/qzp2018/CSMCIR
     upstream_default_branch: main
     upstream_commit_sha: 774f94e2076ff17ea91703a6239d2a08f0e1a44e
@@ -159,7 +159,11 @@ models:
     preparation_contract: manual_ilearn_resized
     paper_title: "ConeSep: Cone-based Robust Noise-Unlearning Compositional Network for Composed Image Retrieval"
     paper_url: https://arxiv.org/abs/2604.20358
-    upstream_repo_url: https://github.com/iLearn-Lab/CVPR26-ConeSep
+    upstream_repo_url: https://github.com/Lee-zixu/ConeSep
+    # provenance: the paper's HTML names github.com/Lee-zixu/ConeSep and the pinned SHA bd4bf62 is
+    # that repo's main HEAD; the lab mirror iLearn-Lab/CVPR26-ConeSep serves the identical SHA
+    # (ls-remote verified both). Existing checkouts cloned from the mirror keep working: the pin
+    # is content-addressed and both hosts serve the same object.
     upstream_default_branch: main
     upstream_commit_sha: bd4bf629ebe68045c1a54dcc61e4a3ea65f8759b
     source_available: true
@@ -270,8 +274,8 @@ models:
         source_type: author_huggingface
         checkpoint_training_noise_pct: 20
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
+        expected_size_bytes: 2730715930
+        expected_sha256: 814d2d0ceb29ef910f37562e8bea8a76cf38aa546fbc2102e495df687c276b03
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
       - checkpoint_id: fiq_n05
@@ -280,8 +284,8 @@ models:
         source_type: author_huggingface
         checkpoint_training_noise_pct: 50
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
+        expected_size_bytes: 2730715930
+        expected_sha256: 8a0d3bd27cf46d8334f9596404d89ebf803da0fa65236d89815bb3929b9a4216
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
       - checkpoint_id: fiq_n08
@@ -290,8 +294,8 @@ models:
         source_type: author_huggingface
         checkpoint_training_noise_pct: 80
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
+        expected_size_bytes: 2730715930
+        expected_sha256: 763885de6907bca4f017b336ed7ec3740cb9305c5adb6a135da45c158ddb9717
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: intent
@@ -333,8 +337,8 @@ models:
         source_type: author_huggingface
         checkpoint_training_noise_pct: 20
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
+        expected_size_bytes: 2722478522
+        expected_sha256: 2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
       - checkpoint_id: fiq_n05
@@ -343,8 +347,8 @@ models:
         source_type: author_huggingface
         checkpoint_training_noise_pct: 50
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
+        expected_size_bytes: 2722478522
+        expected_sha256: 2d59ae002ecbf645a52c7e93bf8afd914e3061e2304413b97a0bf15ca43e39a9
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
       - checkpoint_id: fiq_n08
@@ -353,8 +357,8 @@ models:
         source_type: author_huggingface
         checkpoint_training_noise_pct: 80
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
+        expected_size_bytes: 2722478522
+        expected_sha256: 671bb217d3fdf32e6133fcb98eef4e80ebf831b5a203493c54507ef3c23b5cd2
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: hint
@@ -393,10 +397,15 @@ models:
         filename: fashioniq.pt
         download_url: https://huggingface.co/iLearn-Lab/HINT/resolve/main/fashioniq.pt
         source_type: author_huggingface
-        checkpoint_training_noise_pct: 0
+        # The paper states no training condition and the Hub card states none; the 0 was inherited
+        # from train.py:56's default flag, which reaches no implementation in the pinned tree.
+        # Recorded as unstated so the gate reports the condition as unchecked (see the LIMN row).
+        checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
         expected_size_bytes: 2724451182
-        expected_sha256: null
+        # LFS sha256 published by the author Hub repo (api/models/iLearn-Lab/HINT?blobs=true), so a
+        # download can finally be verified byte-for-byte.
+        expected_sha256: bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4
         status: URL_VERIFIED
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: encoder
@@ -435,7 +444,10 @@ models:
     reported_r50: 77.59
     reported_mean: 66.86
     reproduction_status: NOT_RUN
-    strict_clean_checkpoint_available: true
+    # The runtime computes this field (checkpoint_selection.select_checkpoints) and returns False:
+    # the variant has no author-linked download URL and no local artifact, so no obtainable
+    # checkpoint exists. The old `true` was a pre-download wish that contradicted the computation.
+    strict_clean_checkpoint_available: false
     notes: Official README links public Google Drive folder; direct file URL and SHA remain unverified.
     checkpoint_variants:
       - checkpoint_id: fashioniq
@@ -443,12 +455,21 @@ models:
         download_url: null
         source_url: https://drive.google.com/drive/folders/1QuBQVIybLwn-qFSORhpBsnXy6ebhtNr3
         source_type: author_google_drive
-        checkpoint_training_noise_pct: 0
+        # The paper states no training condition (AAAI-25 paper, Table 1 has no noise blocks); the 0
+        # was an extraction assumption. Recorded as unstated so the gate reports the condition as
+        # unchecked (see the LIMN row).
+        checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
         expected_size_bytes: null
         expected_sha256: null
+        # The seed bundle calls the mapping UNVERIFIED and nothing observed since contradicts that:
+        # there is no author-linked direct URL, no expected size or hash, and no local artifact
+        # tying a Drive file to the paper's FashionIQ result. Local availability, even if complete,
+        # cannot establish which benchmark variant the bytes are; mapping stays UNVERIFIED until an
+        # author-linked artifact or metadata binds the file (final audit C4 + holistic science
+        # review concur).
         status: URL_UNRESOLVED
-        checkpoint_mapping_status: VERIFIED_METADATA
+        checkpoint_mapping_status: UNVERIFIED
   - model_id: pair
     environment:
       python_env_var: WORKBENCH_PAIR_PYTHON
@@ -462,6 +483,7 @@ models:
     research_generation: recent
     publication_year: 2025
     preparation_contract: manual_ilearn_resized
+    preparation_id: pair_fashioniq
     paper_title: "PAIR: Complementarity-guided Disentanglement for Composed Image Retrieval"
     paper_url: https://ieeexplore.ieee.org/document/10888153
     upstream_repo_url: https://github.com/iLearn-Lab/ICASSP25-PAIR
@@ -478,26 +500,34 @@ models:
     reported_r50: 74.51
     reported_mean: 63.64
     reproduction_status: BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED
-    strict_clean_checkpoint_available: null
-    notes: Existing audit found pair-B1.pt and pair-B2.pt; official FashionIQ mapping and source URL are not verified.
+    # Final audit: no executable path exists (test.py has no __main__/argparse and the trainer's
+    # __main__ never reaches evaluation), so the command cannot be audited to runnable.
+    command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+    strict_clean_checkpoint_available: false
+    notes: Existing audit found pair-B1.pt and pair-B2.pt; official FashionIQ mapping is not verified.
     checkpoint_variants:
       - checkpoint_id: pair_b1
         filename: pair-B1.pt
-        download_url: null
-        source_type: unresolved
+        # Hub-served (x-linked-size 694958565, oid c4d861ec…fbf2, final-audit observed) but no
+        # card, README or release note binds either blob to FashionIQ, a category or a training
+        # condition — obtainability is real, identity is not.
+        download_url: https://huggingface.co/ZhihengFu/PAIR/resolve/main/pair-B1.pt
+        source_type: author_huggingface
         checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
-        expected_size_bytes: null
+        expected_size_bytes: 694958565
+        # Full digest unverified: the Hub LFS oid gives the sha256 prefix c4d861ec only.
         expected_sha256: null
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
       - checkpoint_id: pair_b2
         filename: pair-B2.pt
-        download_url: null
-        source_type: unresolved
+        download_url: https://huggingface.co/ZhihengFu/PAIR/resolve/main/pair-B2.pt
+        source_type: author_huggingface
         checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
-        expected_size_bytes: null
+        expected_size_bytes: 694872371
+        # Full digest unverified: the Hub LFS oid gives the sha256 prefix 74346fd7 only.
         expected_sha256: null
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
@@ -534,9 +564,13 @@ models:
     literature_split_label: val
     native_protocol: fashioniq_val_split
     supported_protocols: [fashioniq_val_split]
-    reported_r10: null
-    reported_r50: null
-    reported_mean: null
+    # Sanity row transcribed from the verified benchmark row clvc_net_sigir21_fiq_table1
+    # (papers.yaml; pdf digest reproduced from the author-hosted camera-ready). r10/r50 are
+    # paper-stated; the mean is WORKBENCH_DERIVED (the paper prints per-category values only).
+    # Feeds the legacy parity display; the gate compares against the committed benchmark row.
+    reported_r10: 30.7
+    reported_r50: 58.41
+    reported_mean: 44.56
     reproduction_status: BLOCKED_CHECKPOINT_MAPPING
     command_status: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
     environment:
@@ -588,9 +622,11 @@ models:
     literature_split_label: original
     native_protocol: fashioniq_full_gallery_ref_excluded
     supported_protocols: [fashioniq_full_gallery_ref_excluded]
-    reported_r10: null
-    reported_r50: null
-    reported_mean: null
+    # Sanity row: the paper prints only the category-level mean (40.83). r10/r50 exist only as
+    # WORKBENCH_DERIVED aggregates in the committed row, so they stay null here — a "reported_"
+    # field must not carry a derived value. Feeds the legacy parity display; the gate compares
+    # against the committed benchmark row dcnet_fashioniq_val_table1.
+    reported_mean: 40.83
     reproduction_status: BLOCKED_CHECKPOINT_MAPPING
     command_status: COMMAND_AUDITED
     environment:
@@ -665,9 +701,14 @@ models:
         filename: rn50x4-noft-unresolved.pt
         artifact_type: file
         download_url: null
+        # The Drive folder documents the release structure and names exactly the FashionIQ noft file
+        # `FashionIQ/RN50x4_noft/fiq_comb_RN50x4_noft.pt` (folder README; final audit C-4); no checksum
+        # is published, so the bytes stay unmapped until one exists.
         source_url: https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing
         source_type: author_google_drive
-        checkpoint_training_noise_pct: null
+        # Noft configuration is noise-free by construction (frozen encoders; the committed noft rows
+        # assert checkpoint_training_noise_pct: 0). Recorded so gate selection can match.
+        checkpoint_training_noise_pct: 0
         evaluation_noise_pct: 0
         expected_size_bytes: null
         expected_sha256: null
@@ -702,9 +743,13 @@ models:
     literature_split_label: original
     native_protocol: fashioniq_original_split
     supported_protocols: [fashioniq_original_split]
-    reported_r10: null
-    reported_r50: null
-    reported_mean: null
+    # Sanity row transcribed from the verified benchmark row clip4cir_rn50x4_fullft_fiq_tab9
+    # (Table 9, arXiv v1; reproduced three independent ways by the final audit). The mean is
+    # WORKBENCH_DERIVED (the paper prints r10/r50 only); r10/r50 are paper-stated. Feeds the
+    # legacy parity display; the gate compares against the committed benchmark row.
+    reported_r10: 43.78
+    reported_r50: 66.93
+    reported_mean: 55.36
     reproduction_status: BLOCKED_CHECKPOINT_BUNDLE
     environment:
       python_env_var: WORKBENCH_CLIP4CIR_PYTHON
@@ -724,7 +769,10 @@ models:
         download_url: null
         source_url: https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing
         source_type: author_google_drive
-        checkpoint_training_noise_pct: null
+        # Paper §4.1: task-oriented fine-tuning with no noise injection; the committed row asserts
+        # a clean condition. Recording 0 makes the gate comparable; the checkpoint itself remains
+        # unmapped and refused until the Drive pair is identified.
+        checkpoint_training_noise_pct: 0
         evaluation_noise_pct: 0
         expected_size_bytes: null
         expected_sha256: null
@@ -770,6 +818,9 @@ models:
       # UNKNOWN meant "the README declares no version", which is not "no GPU is needed" — the
       # GPU-verification gate then never fired for a CUDA-hard evaluator.
       cuda: '11.0'
+      # `clip==0.2.0` on PyPI is silent1mezzo/clip (a clipboard CLI), not OpenAI CLIP; openai/CLIP
+      # publishes no tags (final audit P2). Recorded as-is because the pinned README pins nothing;
+      # this entry is a KNOWN-WRONG pin that a future operator must replace with a git revision.
       packages: [clip==0.2.0, numpy==1.22.3, pandas==1.4.2, Pillow]
     strict_clean_checkpoint_available: null
     notes: Native annotation endpoint-union/reference-excluded evaluator verified. Pinned test.py has no CLI/checkpoint replay; TG-CIR.zip FashionIQ member mapping and hash remain unresolved.
@@ -825,9 +876,11 @@ models:
       pytorch: '2.0.1'
       torchvision: '0.15.2'
       cuda: UNKNOWN
-      packages: [transformers==4.36.2, timm==0.9.12, spacy==3.7.2, lavis]
+      # `lavis` is vendored at src/lavis, not a pip distribution; `salesforce-lavis` is what the
+      # sibling models pin and what an operator would install if the vendored copy were bypassed.
+      packages: [transformers==4.36.2, timm==0.9.12, spacy==3.7.2, salesforce-lavis==1.0.2]
     strict_clean_checkpoint_available: null
-    notes: Native full-gallery evaluator uses blip2_cir_rerank_learn with pretrain backbone; checkpoint class-key mapping remains unverified and loads non-strictly.
+    notes: The evaluator's argparse default `--blip-model-name blip2_cir_rerank_learn` names a class the pinned repo does not register (only an argparse default; no @registry.register_model); the checkpoint class-key mapping remains unverified and loads non-strictly.
     checkpoint_variants:
       - checkpoint_id: sprc_fiq_unresolved
         filename: sprc_fiq.pt
@@ -863,9 +916,13 @@ models:
     literature_split_label: val
     native_protocol: fashioniq_val_split
     supported_protocols: [fashioniq_val_split]
-    reported_r10: null
-    reported_r50: null
-    reported_mean: null
+    # Sanity row transcribed from the verified benchmark row limn_fashioniq_base_iter0_table1
+    # (papers.yaml). The mean is WORKBENCH_DERIVED (the paper prints r10/r50 per category only);
+    # r10/r50 are paper-stated aggregates. Feeds the legacy parity display; the gate compares
+    # against the committed benchmark row.
+    reported_r10: 55.91
+    reported_r50: 77.82
+    reported_mean: 66.87
     reproduction_status: BLOCKED_RUNTIME_PREREQUISITES
     command_status: REPLAY_COMMAND_IMPLEMENTED
     environment:

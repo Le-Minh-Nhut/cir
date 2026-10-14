@@ -769,7 +769,10 @@ def _resolve_evaluation_metrics(
     stdout_text = stdout_file.read_text(encoding="utf-8") if stdout_file.is_file() else ""
     stderr_text = stderr_file.read_text(encoding="utf-8") if stderr_file.is_file() else ""
 
-    paper_metrics = model.get("paper_metrics") or report_payload.get("paper_sanity_metrics") or {}
+    # `models.yaml` has no `paper_metrics` key (that was a dead lookup); the registry's transcribed
+    # sanity row lives in `reported_r10/r50/mean`, the same construction evaluate_models.py uses.
+    paper_metrics = ({k.removeprefix("reported_"): model.get(k) for k in ("reported_r10", "reported_r50", "reported_mean")}
+                     or report_payload.get("paper_sanity_metrics") or {})
     extraction = extract_aggregate_metrics(
         model_id,
         stdout_text,
@@ -838,6 +841,11 @@ def _resolve_evaluation_metrics(
             "category_metrics": cat_metrics,
             "paper_metrics": {"r10": paper_r10, "r50": paper_r50, "mean": paper_mean},
             "measured_difference": measured_diff,
+            # The canonical gate verdict the evaluator recorded, verbatim. It is an audit label on a
+            # completed run, not a stage outcome: a metric deviation must not demote the row's
+            # status here -- that conflation is what turned honest deviations into fake failures.
+            "benchmark_gate": report_payload.get("benchmark_gate") or {},
+            "variant_provenance": report_payload.get("variant_provenance") or {},
         }
         base_fields["missing_metrics_reason"] = None
     else:
@@ -946,12 +954,15 @@ def _classify(plan: dict[str, Any], execution: dict[str, Any], config: Autopilot
             eval_info["per_query_export_available"] = False
         val_idx_complete = records.get("validation-index", {}).get("status") == "COMPLETE"
         index_available = bool(val_idx_complete and eval_info.get("per_query_export_available"))
+        gate_payload = (eval_info.get("metrics") or {}).get("benchmark_gate") or {}
         row = {
             **eval_info,
             "model_id": model_id,
             "status": status,
             "blockers": reasons,
             "missing_permissions": missing,
+            "benchmark_gate": gate_payload,
+            "variant_provenance": (eval_info.get("metrics") or {}).get("variant_provenance") or {},
             "has_aggregate_results": bool(eval_info.get("macro_r10") is not None or eval_info.get("metrics") is not None),
             "has_per_query_results": bool(eval_info.get("per_query_export_available")),
             "index_available": index_available,

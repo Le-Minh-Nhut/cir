@@ -1,300 +1,300 @@
 {
-  "experiments": [
-    {
-      "aggregation_method": "macro over the three categories (equal-weight mean of Dress/Shirt/Toptee), then AVG. = arithmetic mean of macro R@10 and macro R@50",
-      "augmentation_policy": null,
-      "backbone": "BLIP-2 (LAVIS); paper: 'We adopt BLIP-2 as Air-Know's backbone and train it on a single 32GB NVIDIA v100 GPU for 10 epochs'",
-      "category_metrics": {
-        "dress": {
-          "r10": 51.03,
-          "r50": 73.08
-        },
-        "shirt": {
-          "r10": 56.76,
-          "r50": 75.05
-        },
-        "toptee": {
-          "r10": 59.47,
-          "r50": 79.02
-        }
-      },
-      "checkpoint_id": null,
-      "checkpoint_mapping_evidence": "read https://huggingface.co/api/models/iLearn-Lab/CVPR26-Air-Know/tree/main?recursive=true returned exactly 3 files: .gitattributes, README.md, airknow_fiq_0.5.pt, airknow_fiq_0.8.pt. No 0% file, no 20% file. curl -sI -L .../resolve/main/airknow_fiq_0.5.pt -> HTTP/2 200, x-linked-size 2724056638, x-linked-etag \"f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6\"; airknow_fiq_0.8.pt -> x-linked-etag \"756fc0bdc43d9e0f0cae13c8a02b0279f64e62092ce465c1e60bda45e179c54e\". The Hub README says only 'trained and evaluated on standard CIR datasets under various simulated noise ratios (e.g., 0.0, 0.2, 0.5, 0.8)' and the upstream repo README names no .pt file at all (grep -rn -E '\\.pt\\b' third_party/AirKnow/README.md -> no match; only a training --model_dir example at :208). No clean checkpoint is published; this row is not comparable to any obtainable weight, and no loader for these files exists in the pinned tree (grep -rn 'torch.load|load_state_dict' train_BLIP2.py test_BLIP2.py -> no match; --restore_file declared at train_BLIP2.py:67 and never read; utils.py:128 load_checkpoint exists but has no callsite).",
-      "checkpoint_mapping_status": "NO_CHECKPOINT",
-      "checkpoint_training_noise_pct": 0,
-      "dataset": "fashioniq",
-      "dataset_version": "official FashionIQ validation split, 77,684 images / 30,134 annotated triplets (paper Appendix A)",
-      "derived_metrics": [
-        {
-          "derivation_formula": "(55.75 + 75.72) / 2",
-          "key": "mean_from_avg_columns",
-          "provenance": "WORKBENCH_DERIVED",
-          "rounding_policy": "round-half-even/truncation to 2 decimals; 65.735 -> 65.73 (observed)",
-          "source_metrics": [
-            "r10",
-            "r50"
-          ],
-          "value": 65.73
-        }
-      ],
-      "evaluation_noise_pct": 0,
-      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
-      "method_name": "Air-Know",
-      "method_variant": "main method, clean condition (0% training noise)",
-      "metric_definition": "Recall@K = fraction of queries whose target is in the top K; paper: 'For FashionIQ, we report the performance of R@10, 50 across its three categories: Dress, Shirt, and Top&Tee'",
-      "metric_provenance": {
-        "paper_column": "FashionIQ 0% noise block, Dress/Shirt/Toptee R@10 R@50 and Average R@10/R@50/AVG.",
-        "paper_page": 6,
-        "paper_row": "Air-Know (Ours)",
-        "paper_table": "Table 1",
-        "source_excerpt_or_description": "Caption: 'Table 1: Performance comparison on the FashionIQ validation set in terms of R@K(%). The best and second-best results are highlighted in bold and underline, respectively.' Columns: Noise | Methods | Dress R@10 R@50 | Shirt R@10 R@50 | Toptee R@10 R@50 | Average R@10 R@50 AVG. The 0% block spans SPRC, QuRe, TME, HABIT, INTENT, then 'Air-Know (Ours) 51.03 73.08 56.76 75.05 59.47 79.02 55.75 75.72 65.73'."
-      },
-      "model_id": "airknow",
-      "preprocessing_id": null,
-      "reference_excluded": true,
-      "reference_id": "airknow_fiq_0pct",
-      "reference_status": "VERIFIED",
-      "reported_metrics": {
-        "mean": 65.73,
-        "r10": 55.75,
-        "r50": 75.72
-      },
-      "reported_metrics_provenance": "PAPER_REPORTED for all three: Table 1 row 'Air-Know (Ours)', 0% noise block, Average column, prints R@10 55.75, R@50 75.72, AVG. 65.73",
-      "review_status": "CONFIRMED",
-      "split": "val",
-      "verification_evidence": "PDF page 6 image reads: 'Air-Know (Ours) | 51.03 | 73.08 | 56.76 | 75.05 | 59.47 | 79.02 | 55.75 | 75.72 | 65.73' in the 0% block. HTML cell dump row index 7 of the table: '[Air-Know (Ours)] [51.03] [73.08] [56.76] [75.05] [59.47] [79.02] [55.75] [75.72] [65.73]' under a '0%|^6' rowspan cell. assets/results-fiq.png 0% row (highlighted, sixth row of the block) reads the same nine values. The registry (workbench/registry/models.yaml:107-109) records 55.75/75.72/65.74: r10 and r50 match the paper exactly; mean is 65.74 where the paper prints 65.73 (and (55.75+75.72)/2 = 65.735). P2 registry defect, not a paper defect. GALLERY CAVEAT: neither paper nor either README states the gallery construction, the reference policy, or the candidate universe. The protocol id is a workbench inference from third_party/AirKnow/datasets.py:31 (self.split = 'original-split', hardcoded, __init__ at :29 takes only path/transform/noise_ratio) and datasets.py:218-224 (elif self.split == 'original-split': for id, image_name in enumerate(images) -> every index of split.{cat}.val.json in file order), plus the reference mask at test_BLIP2.py:147-151 before argsort at :154. The paper itself establishes none of this. The val-split pair-union branch at datasets.py:206-217 is unreachable dead code. Local split files confirm the cohort size: dress 3817 unique, shirt 6346 unique, toptee 5373 unique images in data/fashionIQ_dataset/image_splits/split.{cat}.val.json.",
-      "verification_method": "Five independent routes, all agreeing cell-for-cell: (1) HTML <td> parse with rowspan/colspan on https://arxiv.org/html/2604.19386v1; (2) independent python3 html.parser parse of the same HTML; (3) pdftotext -layout of the downloaded PDF; (4) pdftoppm -f 6 -l 6 -r 200 -png render of page 6 read visually as an image; (5) the author's own results image workbench/third_party/AirKnow/assets/results-fiq.png read as an image. Routes 1/2/3/4 are the paper; route 5 is an independent author artefact. v1 vs v2 HTML Table 1 compared and identical. Arithmetic re-executed: (51.03+56.76+59.47)/3 = 55.7533 -> 55.75; (73.08+75.05+79.02)/3 = 75.7167 -> 75.72; (55.75+75.72)/2 = 65.735 -> printed 65.73."
+ "experiments": [
+  {
+   "aggregation_method": "macro over the three categories (equal-weight mean of Dress/Shirt/Toptee), then AVG. = arithmetic mean of macro R@10 and macro R@50",
+   "augmentation_policy": null,
+   "backbone": "BLIP-2 (LAVIS); paper: 'We adopt BLIP-2 as Air-Know's backbone and train it on a single 32GB NVIDIA v100 GPU for 10 epochs'",
+   "category_metrics": {
+    "dress": {
+     "r10": 51.03,
+     "r50": 73.08
     },
-    {
-      "aggregation_method": "macro over the three categories, then AVG. = mean of macro R@10 and macro R@50",
-      "augmentation_policy": null,
-      "backbone": "BLIP-2 (LAVIS)",
-      "category_metrics": {
-        "dress": {
-          "r10": 50.22,
-          "r50": 73.48
-        },
-        "shirt": {
-          "r10": 56.38,
-          "r50": 74.73
-        },
-        "toptee": {
-          "r10": 58.95,
-          "r50": 78.94
-        }
-      },
-      "checkpoint_id": null,
-      "checkpoint_mapping_evidence": "No 20% file exists on the author Hub: read https://huggingface.co/api/models/iLearn-Lab/CVPR26-Air-Know/tree/main?recursive=true lists exactly .gitattributes, README.md, airknow_fiq_0.5.pt, airknow_fiq_0.8.pt. The Hub README and the upstream README mention '0.0, 0.2, 0.5, 0.8' as trainable noise_ratio options but publish only the 0.5 and 0.8 weights. I also enumerated the whole org: curl -s 'https://huggingface.co/api/models?author=iLearn-Lab&limit=200' -> 43 repos; the only CIR siblings are iLearn-Lab/CVPR26-Air-Know, iLearn-Lab/CVPR26-ConeSep, iLearn-Lab/SIGIR24-FTI4CIR. No hidden 20% Air-Know repository.",
-      "checkpoint_mapping_status": "NO_CHECKPOINT",
-      "checkpoint_training_noise_pct": 20,
-      "dataset": "fashioniq",
-      "dataset_version": "official FashionIQ validation split",
-      "derived_metrics": [
-        {
-          "derivation_formula": "(73.48 + 74.73 + 78.94) / 3",
-          "key": "macro_r50_from_categories",
-          "provenance": "WORKBENCH_DERIVED",
-          "rounding_policy": "round to 2 decimals",
-          "source_metrics": [
-            "dress_r50",
-            "shirt_r50",
-            "toptee_r50"
-          ],
-          "value": 75.72
-        },
-        {
-          "derivation_formula": "(55.18 + 75.71) / 2 = 65.445 -> 65.45",
-          "key": "mean_from_avg_columns",
-          "provenance": "WORKBENCH_DERIVED",
-          "rounding_policy": "round-half-up to 2 decimals",
-          "source_metrics": [
-            "r10",
-            "r50"
-          ],
-          "value": 65.45
-        }
-      ],
-      "evaluation_noise_pct": 0,
-      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
-      "method_name": "Air-Know",
-      "method_variant": "main method, 20% training noise",
-      "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
-      "metric_provenance": {
-        "paper_column": "FashionIQ 20% noise block, Average column and AVG.",
-        "paper_page": 6,
-        "paper_row": "Air-Know (Ours)",
-        "paper_table": "Table 1",
-        "source_excerpt_or_description": "Table 1 caption as above; 20% block lists SPRC 56.33, TME 63.97, HABIT 64.38, INTENT 64.36, then 'Air-Know (Ours) 50.22 73.48 56.38 74.73 58.95 78.94 55.18 75.71 65.45'."
-      },
-      "model_id": "airknow",
-      "preprocessing_id": null,
-      "reference_excluded": true,
-      "reference_id": "airknow_fiq_20pct",
-      "reference_status": "VERIFIED",
-      "reported_metrics": {
-        "mean": 65.45,
-        "r10": 55.18,
-        "r50": 75.71
-      },
-      "reported_metrics_provenance": "PAPER_REPORTED for all three (Table 1, 20% block, 'Air-Know (Ours)', Average column and AVG.)",
-      "review_status": "PARTIAL",
-      "split": "val",
-      "verification_evidence": "PDF page 6 image and assets/results-fiq.png both read 'Air-Know (Ours) 50.22 73.48 56.38 74.73 58.95 78.94 55.18 75.71 65.45' in the 20% block. Note the paper's own internal inconsistency: the printed Average R@50 of 75.71 is 0.01 below the recomputed (73.48+74.73+78.94)/3 = 75.7167, and AVG. 65.45 is 0.01 above (55.18+75.71)/2 = 65.445 \u2014 the paper rounds the Average column from unrounded category data while AVG. rounds from the printed Average column. The printed values are the authority; recorded verbatim. GALLERY CAVEAT as in the 0% row: the paper states no gallery construction or reference policy; protocol id inferred from datasets.py:31,218-224 and test_BLIP2.py:147-151,154.",
-      "verification_method": "Same five routes as the 0% row (HTML regex cell parse, independent html.parser parse, pdftotext -layout, rendered PDF page 6 image, author results-fiq.png image). Arithmetic re-executed."
+    "shirt": {
+     "r10": 56.76,
+     "r50": 75.05
     },
-    {
-      "aggregation_method": "macro over the three categories, then AVG. = mean of macro R@10 and macro R@50",
-      "augmentation_policy": null,
-      "backbone": "BLIP-2 (LAVIS)",
-      "category_metrics": {
-        "dress": {
-          "r10": 47.9,
-          "r50": 71.09
-        },
-        "shirt": {
-          "r10": 53.95,
-          "r50": 73.09
-        },
-        "toptee": {
-          "r10": 57.71,
-          "r50": 77.94
-        }
-      },
-      "checkpoint_id": "fiq_n05",
-      "checkpoint_mapping_evidence": "Filename encodes the training condition: airknow_fiq_0.5.pt ('fiq' = FashionIQ, 0.5 = 50% noise), published at https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.5.pt. Observed via read https://huggingface.co/api/models/iLearn-Lab/CVPR26-Air-Know/tree/main?recursive=true: size 2724056638, lfs oid f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6; HEAD via curl -I -L -> HTTP/2 200 with matching x-linked-size and x-linked-etag. The registry variant fiq_n05 (models.yaml:114-123) carries this filename, this URL and checkpoint_training_noise_pct 50. CAVEAT (P2): the Hub card never states a training noise level or even a dataset; the mapping rests on the filename plus the registry metadata, and on the paper row being present at exactly 50%. Also, no code path in the pinned tree can load this file (no torch.load/load_state_dict in train_BLIP2.py or test_BLIP2.py; --restore_file at train_BLIP2.py:67 is never read), so the mapping is a name-level, not a load-level, verification.",
-      "checkpoint_mapping_status": "VERIFIED",
-      "checkpoint_training_noise_pct": 50,
-      "dataset": "fashioniq",
-      "dataset_version": "official FashionIQ validation split",
-      "derived_metrics": [
-        {
-          "derivation_formula": "(53.19 + 74.04) / 2 = 63.615 -> 63.62 (paper prints 63.61)",
-          "key": "mean_from_avg_columns",
-          "provenance": "WORKBENCH_DERIVED",
-          "rounding_policy": "round-half-up to 2 decimals",
-          "source_metrics": [
-            "r10",
-            "r50"
-          ],
-          "value": 63.62
-        }
-      ],
-      "evaluation_noise_pct": 0,
-      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
-      "method_name": "Air-Know",
-      "method_variant": "main method, 50% training noise",
-      "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
-      "metric_provenance": {
-        "paper_column": "FashionIQ 50% noise block, Average column and AVG.",
-        "paper_page": 6,
-        "paper_row": "Air-Know (Ours)",
-        "paper_table": "Table 1",
-        "source_excerpt_or_description": "50% block: SPRC 51.12, TME 61.86, HABIT 62.80, INTENT 62.92, then 'Air-Know (Ours) 47.90 71.09 53.95 73.09 57.71 77.94 53.19 74.04 63.61'."
-      },
-      "model_id": "airknow",
-      "preprocessing_id": null,
-      "reference_excluded": true,
-      "reference_id": "airknow_fiq_50pct",
-      "reference_status": "VERIFIED",
-      "reported_metrics": {
-        "mean": 63.61,
-        "r10": 53.19,
-        "r50": 74.04
-      },
-      "reported_metrics_provenance": "PAPER_REPORTED for all three (Table 1, 50% block, 'Air-Know (Ours)', Average column and AVG.)",
-      "review_status": "CONFIRMED",
-      "split": "val",
-      "verification_evidence": "PDF page 6 image and assets/results-fiq.png both read 'Air-Know (Ours) 47.90 71.09 53.95 73.09 57.71 77.94 53.19 74.04 63.61' in the 50% block. Minor paper-internal rounding drift: (53.19+74.04)/2 = 63.615, printed 63.61. Registry fiq_n05 has expected_size_bytes null and expected_sha256 null (models.yaml:120-121) even though the Hub exposes 2724056638 and an etag \u2014 size/hash not bound. GALLERY CAVEAT as in the 0% row.",
-      "verification_method": "Same five routes as the 0% row. Arithmetic re-executed."
-    },
-    {
-      "aggregation_method": "macro over the three categories, then AVG. = mean of macro R@10 and macro R@50",
-      "augmentation_policy": null,
-      "backbone": "BLIP-2 (LAVIS)",
-      "category_metrics": {
-        "dress": {
-          "r10": 42.52,
-          "r50": 66.03
-        },
-        "shirt": {
-          "r10": 51.31,
-          "r50": 70.26
-        },
-        "toptee": {
-          "r10": 53.86,
-          "r50": 74.41
-        }
-      },
-      "checkpoint_id": "fiq_n08",
-      "checkpoint_mapping_evidence": "Filename condition: airknow_fiq_0.8.pt published at https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.8.pt, listed with size 2724056638 and lfs oid 756fc0bdc43d9e0f0cae13c8a02b0279f64e62092ce465c1e60bda45e179c54e (read https://huggingface.co/api/models/iLearn-Lab/CVPR26-Air-Know/tree/main?recursive=true); curl -I -L returns HTTP/2 200 with matching x-linked-size/x-linked-etag. Registry variant fiq_n08 (models.yaml:124-133) carries this name, URL and 80%. Same P2 caveats as fiq_n05: condition rests on filename + registry metadata + the paper printing a 80% row, and no loader exists in the pinned tree.",
-      "checkpoint_mapping_status": "VERIFIED",
-      "checkpoint_training_noise_pct": 80,
-      "dataset": "fashioniq",
-      "dataset_version": "official FashionIQ validation split",
-      "derived_metrics": [
-        {
-          "derivation_formula": "(49.23 + 70.23) / 2 = 59.73",
-          "key": "mean_from_avg_columns",
-          "provenance": "WORKBENCH_DERIVED",
-          "rounding_policy": "round-half-up to 2 decimals",
-          "source_metrics": [
-            "r10",
-            "r50"
-          ],
-          "value": 59.73
-        }
-      ],
-      "evaluation_noise_pct": 0,
-      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
-      "method_name": "Air-Know",
-      "method_variant": "main method, 80% training noise",
-      "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
-      "metric_provenance": {
-        "paper_column": "FashionIQ 80% noise block, Average column and AVG.",
-        "paper_page": 6,
-        "paper_row": "Air-Know (Ours)",
-        "paper_table": "Table 1",
-        "source_excerpt_or_description": "80% block: SPRC 43.77, TME 57.63, HABIT 58.94, INTENT 59.07, then 'Air-Know (Ours) 42.52 66.03 51.31 70.26 53.86 74.41 49.23 70.23 59.73'."
-      },
-      "model_id": "airknow",
-      "preprocessing_id": null,
-      "reference_excluded": true,
-      "reference_id": "airknow_fiq_80pct",
-      "reference_status": "VERIFIED",
-      "reported_metrics": {
-        "mean": 59.73,
-        "r10": 49.23,
-        "r50": 70.23
-      },
-      "reported_metrics_provenance": "PAPER_REPORTED for all three (Table 1, 80% block, 'Air-Know (Ours)', Average column and AVG.)",
-      "review_status": "CONFIRMED",
-      "split": "val",
-      "verification_evidence": "PDF page 6 image and assets/results-fiq.png both read 'Air-Know (Ours) 42.52 66.03 51.31 70.26 53.86 74.41 49.23 70.23 59.73' in the 80% block. This row is also quoted independently in the paper's own efficiency table (HTML table index 27 / Appendix E Table 4: 'Air-Know(Ours) ... 65.45 80.40' is the 20% FashionIQ/CIRR pair, not this row) \u2014 no extra route for 80%. GALLERY CAVEAT as in the 0% row.",
-      "verification_method": "Same five routes as the 0% row. Arithmetic re-executed."
+    "toptee": {
+     "r10": 59.47,
+     "r50": 79.02
     }
-  ],
-  "paper": {
-    "access": "FULL_TEXT",
-    "access_evidence": "curl -sL -o airknow.pdf https://arxiv.org/pdf/2604.19386v1 (19383803 bytes, sha256 eec0c49a\u2026); curl -sL -o airknow.html https://arxiv.org/html/2604.19386v1; curl -sL https://arxiv.org/html/2604.19386v2 (identical Table 1). Three read routes on Table 1: (a) HTML cell parse via regex on <td>/<tr> with rowspan/colspan, (b) independent HTML parse via python3 html.parser, (c) pdftotext -layout airknow_pdf.txt lines 381-403, (d) pdftoppm -f 6 -l 6 -r 200 -png airknow.pdf rendered page 6 read as an image, (e) author repo image workbench/third_party/AirKnow/assets/results-fiq.png read as an image. All five routes agree on every Air-Know cell.",
-    "arxiv_id": "2604.19386",
-    "authors": [
-      "Zhiheng Fu",
-      "Yupeng Hu",
-      "Qianyun Yang",
-      "Shiqi Zhang",
-      "Zhiwei Chen",
-      "Zixu Li"
-    ],
-    "doi": null,
-    "paper_id": "airknow",
-    "paper_title": "Air-Know: Arbiter-Calibrated Knowledge-Internalizing Robust Network for Composed Image Retrieval",
-    "paper_url": "https://arxiv.org/html/2604.19386v1",
-    "paper_version": "arXiv v2 2026-04-22 (v1 published 2026-04-21); v1 and v2 FashionIQ Table 1 cells are byte-identical in HTML",
-    "pdf_bytes": 19383803,
-    "pdf_sha256": "eec0c49ae3815d5736269d79debc69e25e996f57e585944ca444cb4c9d6221fc",
-    "publication_year": 2026,
-    "research_note": "read https://arxiv.org/abs/2604.19386 -> HTTP 200; title and six authors match. NOTE: registry upstream_repo_url https://github.com/iLearn-Lab/CVPR26-Air-Know and the paper's own affiliation link https://github.com/ZhihFu/Air-Know are NOT established as the same upstream by anything I observed: read https://api.github.com/repos/ZhihFu/Air-Know -> null (not resolvable), read https://api.github.com/repos/iLearn-Lab/CVPR26-Air-Know -> full_name iLearn-Lab/CVPR26-Air-Know, default_branch main, pushed_at 2026-09-28T06:40:56Z. The repo README links ZnihFu/Air-Know, and the paper prints ZhihFu/Air-Know; the audit doc in workbench/docs/reviews/models/airknow.md asserts them identical. I could not confirm that. UNVERIFIED, P3.",
-    "supplement_url": null,
-    "venue": "CVPR 2026 (arXiv preprint; README states 'Accepted by CVPR 2026')"
+   },
+   "checkpoint_id": null,
+   "checkpoint_mapping_evidence": "read https://huggingface.co/api/models/iLearn-Lab/CVPR26-Air-Know/tree/main?recursive=true returned exactly 3 files: .gitattributes, README.md, airknow_fiq_0.5.pt, airknow_fiq_0.8.pt. No 0% file, no 20% file. curl -sI -L .../resolve/main/airknow_fiq_0.5.pt -> HTTP/2 200, x-linked-size 2724056638, x-linked-etag \"f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6\"; airknow_fiq_0.8.pt -> x-linked-etag \"756fc0bdc43d9e0f0cae13c8a02b0279f64e62092ce465c1e60bda45e179c54e\". The Hub README says only 'trained and evaluated on standard CIR datasets under various simulated noise ratios (e.g., 0.0, 0.2, 0.5, 0.8)' and the upstream repo README names no .pt file at all (grep -rn -E '\\.pt\\b' third_party/AirKnow/README.md -> no match; only a training --model_dir example at :208). No clean checkpoint is published; this row is not comparable to any obtainable weight, and no loader for these files exists in the pinned tree (grep -rn 'torch.load|load_state_dict' train_BLIP2.py test_BLIP2.py -> no match; --restore_file declared at train_BLIP2.py:67 and never read; utils.py:128 load_checkpoint exists but has no callsite).",
+   "checkpoint_mapping_status": "NO_CHECKPOINT",
+   "checkpoint_training_noise_pct": 0,
+   "dataset": "fashioniq",
+   "dataset_version": "official FashionIQ validation split, 77,684 images / 30,134 annotated triplets (paper Appendix A)",
+   "derived_metrics": [
+    {
+     "derivation_formula": "(55.75 + 75.72) / 2",
+     "key": "mean_from_avg_columns",
+     "provenance": "WORKBENCH_DERIVED",
+     "rounding_policy": "round-half-even/truncation to 2 decimals; 65.735 -> 65.73 (observed)",
+     "source_metrics": [
+      "r10",
+      "r50"
+     ],
+     "value": 65.73
+    }
+   ],
+   "evaluation_noise_pct": 0,
+   "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+   "method_name": "Air-Know",
+   "method_variant": "main method, clean condition (0% training noise)",
+   "metric_definition": "Recall@K = fraction of queries whose target is in the top K; paper: 'For FashionIQ, we report the performance of R@10, 50 across its three categories: Dress, Shirt, and Top&Tee'",
+   "metric_provenance": {
+    "paper_column": "FashionIQ 0% noise block, Dress/Shirt/Toptee R@10 R@50 and Average R@10/R@50/AVG.",
+    "paper_page": 6,
+    "paper_row": "Air-Know (Ours)",
+    "paper_table": "Table 1",
+    "source_excerpt_or_description": "Caption: 'Table 1: Performance comparison on the FashionIQ validation set in terms of R@K(%). The best and second-best results are highlighted in bold and underline, respectively.' Columns: Noise | Methods | Dress R@10 R@50 | Shirt R@10 R@50 | Toptee R@10 R@50 | Average R@10 R@50 AVG. The 0% block spans SPRC, QuRe, TME, HABIT, INTENT, then 'Air-Know (Ours) 51.03 73.08 56.76 75.05 59.47 79.02 55.75 75.72 65.73'."
+   },
+   "model_id": "airknow",
+   "preprocessing_id": null,
+   "reference_excluded": true,
+   "reference_id": "airknow_fiq_0pct",
+   "reference_status": "VERIFIED",
+   "reported_metrics": {
+    "mean": 65.73,
+    "r10": 55.75,
+    "r50": 75.72
+   },
+   "reported_metrics_provenance": "PAPER_REPORTED for all three: Table 1 row 'Air-Know (Ours)', 0% noise block, Average column, prints R@10 55.75, R@50 75.72, AVG. 65.73",
+   "review_status": "CONFIRMED",
+   "split": "val",
+   "verification_evidence": "PDF page 6 image reads: 'Air-Know (Ours) | 51.03 | 73.08 | 56.76 | 75.05 | 59.47 | 79.02 | 55.75 | 75.72 | 65.73' in the 0% block. HTML cell dump row index 7 of the table: '[Air-Know (Ours)] [51.03] [73.08] [56.76] [75.05] [59.47] [79.02] [55.75] [75.72] [65.73]' under a '0%|^6' rowspan cell. assets/results-fiq.png 0% row (highlighted, sixth row of the block) reads the same nine values. The registry (workbench/registry/models.yaml:107-109) records 55.75/75.72/65.74: r10 and r50 match the paper exactly; mean is 65.74 where the paper prints 65.73 (and (55.75+75.72)/2 = 65.735). P2 registry defect, not a paper defect. GALLERY CAVEAT: neither paper nor either README states the gallery construction, the reference policy, or the candidate universe. The protocol id is a workbench inference from third_party/AirKnow/datasets.py:31 (self.split = 'original-split', hardcoded, __init__ at :29 takes only path/transform/noise_ratio) and datasets.py:218-224 (elif self.split == 'original-split': for id, image_name in enumerate(images) -> every index of split.{cat}.val.json in file order), plus the reference mask at test_BLIP2.py:147-151 before argsort at :154. The paper itself establishes none of this. The val-split pair-union branch at datasets.py:206-217 is unreachable dead code. Local split files confirm the cohort size: dress 3817 unique, shirt 6346 unique, toptee 5373 unique images in data/fashionIQ_dataset/image_splits/split.{cat}.val.json.",
+   "verification_method": "Five independent routes, all agreeing cell-for-cell: (1) HTML <td> parse with rowspan/colspan on https://arxiv.org/html/2604.19386v1; (2) independent python3 html.parser parse of the same HTML; (3) pdftotext -layout of the downloaded PDF; (4) pdftoppm -f 6 -l 6 -r 200 -png render of page 6 read visually as an image; (5) the author's own results image workbench/third_party/AirKnow/assets/results-fiq.png read as an image. Routes 1/2/3/4 are the paper; route 5 is an independent author artefact. v1 vs v2 HTML Table 1 compared and identical. Arithmetic re-executed: (51.03+56.76+59.47)/3 = 55.7533 -> 55.75; (73.08+75.05+79.02)/3 = 75.7167 -> 75.72; (55.75+75.72)/2 = 65.735; round-half-up to two decimals gives 65.74, but the paper prints 65.73. The printed value is transcribed as PAPER_REPORTED; the paper's own AVG. rounding/precision convention is not half-up at two decimals here, and that discrepancy is recorded rather than reconciled."
+  },
+  {
+   "aggregation_method": "macro over the three categories, then AVG. = mean of macro R@10 and macro R@50",
+   "augmentation_policy": null,
+   "backbone": "BLIP-2 (LAVIS)",
+   "category_metrics": {
+    "dress": {
+     "r10": 50.22,
+     "r50": 73.48
+    },
+    "shirt": {
+     "r10": 56.38,
+     "r50": 74.73
+    },
+    "toptee": {
+     "r10": 58.95,
+     "r50": 78.94
+    }
+   },
+   "checkpoint_id": null,
+   "checkpoint_mapping_evidence": "No 20% file exists on the author Hub: read https://huggingface.co/api/models/iLearn-Lab/CVPR26-Air-Know/tree/main?recursive=true lists exactly .gitattributes, README.md, airknow_fiq_0.5.pt, airknow_fiq_0.8.pt. The Hub README and the upstream README mention '0.0, 0.2, 0.5, 0.8' as trainable noise_ratio options but publish only the 0.5 and 0.8 weights. I also enumerated the whole org: curl -s 'https://huggingface.co/api/models?author=iLearn-Lab&limit=200' -> 43 repos; the only CIR siblings are iLearn-Lab/CVPR26-Air-Know, iLearn-Lab/CVPR26-ConeSep, iLearn-Lab/SIGIR24-FTI4CIR. No hidden 20% Air-Know repository.",
+   "checkpoint_mapping_status": "NO_CHECKPOINT",
+   "checkpoint_training_noise_pct": 20,
+   "dataset": "fashioniq",
+   "dataset_version": "official FashionIQ validation split",
+   "derived_metrics": [
+    {
+     "derivation_formula": "(73.48 + 74.73 + 78.94) / 3",
+     "key": "macro_r50_from_categories",
+     "provenance": "WORKBENCH_DERIVED",
+     "rounding_policy": "round to 2 decimals",
+     "source_metrics": [
+      "dress_r50",
+      "shirt_r50",
+      "toptee_r50"
+     ],
+     "value": 75.72
+    },
+    {
+     "derivation_formula": "(55.18 + 75.71) / 2 = 65.445 -> 65.45",
+     "key": "mean_from_avg_columns",
+     "provenance": "WORKBENCH_DERIVED",
+     "rounding_policy": "round-half-up to 2 decimals",
+     "source_metrics": [
+      "r10",
+      "r50"
+     ],
+     "value": 65.45
+    }
+   ],
+   "evaluation_noise_pct": 0,
+   "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+   "method_name": "Air-Know",
+   "method_variant": "main method, 20% training noise",
+   "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
+   "metric_provenance": {
+    "paper_column": "FashionIQ 20% noise block, Average column and AVG.",
+    "paper_page": 6,
+    "paper_row": "Air-Know (Ours)",
+    "paper_table": "Table 1",
+    "source_excerpt_or_description": "Table 1 caption as above; 20% block lists SPRC 56.33, TME 63.97, HABIT 64.38, INTENT 64.36, then 'Air-Know (Ours) 50.22 73.48 56.38 74.73 58.95 78.94 55.18 75.71 65.45'."
+   },
+   "model_id": "airknow",
+   "preprocessing_id": null,
+   "reference_excluded": true,
+   "reference_id": "airknow_fiq_20pct",
+   "reference_status": "VERIFIED",
+   "reported_metrics": {
+    "mean": 65.45,
+    "r10": 55.18,
+    "r50": 75.71
+   },
+   "reported_metrics_provenance": "PAPER_REPORTED for all three (Table 1, 20% block, 'Air-Know (Ours)', Average column and AVG.)",
+   "review_status": "PARTIAL",
+   "split": "val",
+   "verification_evidence": "PDF page 6 image and assets/results-fiq.png both read 'Air-Know (Ours) 50.22 73.48 56.38 74.73 58.95 78.94 55.18 75.71 65.45' in the 20% block. Note the paper's own internal inconsistency: the printed Average R@50 of 75.71 is 0.01 below the recomputed (73.48+74.73+78.94)/3 = 75.7167, and AVG. 65.45 is 0.01 above (55.18+75.71)/2 = 65.445 — the paper rounds the Average column from unrounded category data while AVG. rounds from the printed Average column. The printed values are the authority; recorded verbatim. GALLERY CAVEAT as in the 0% row: the paper states no gallery construction or reference policy; protocol id inferred from datasets.py:31,218-224 and test_BLIP2.py:147-151,154.",
+   "verification_method": "Same five routes as the 0% row (HTML regex cell parse, independent html.parser parse, pdftotext -layout, rendered PDF page 6 image, author results-fiq.png image). Arithmetic re-executed."
+  },
+  {
+   "aggregation_method": "macro over the three categories, then AVG. = mean of macro R@10 and macro R@50",
+   "augmentation_policy": null,
+   "backbone": "BLIP-2 (LAVIS)",
+   "category_metrics": {
+    "dress": {
+     "r10": 47.9,
+     "r50": 71.09
+    },
+    "shirt": {
+     "r10": 53.95,
+     "r50": 73.09
+    },
+    "toptee": {
+     "r10": 57.71,
+     "r50": 77.94
+    }
+   },
+   "checkpoint_id": "fiq_n05",
+   "checkpoint_mapping_evidence": "Filename encodes the training condition: airknow_fiq_0.5.pt ('fiq' = FashionIQ, 0.5 = 50% noise), published at https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.5.pt. Observed via read https://huggingface.co/api/models/iLearn-Lab/CVPR26-Air-Know/tree/main?recursive=true: size 2724056638, lfs oid f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6; HEAD via curl -I -L -> HTTP/2 200 with matching x-linked-size and x-linked-etag. The registry variant fiq_n05 (models.yaml:114-123) carries this filename, this URL and checkpoint_training_noise_pct 50. CAVEAT (P2): the Hub card never states a training noise level or even a dataset; the mapping rests on the filename plus the registry metadata, and on the paper row being present at exactly 50%. Also, no code path in the pinned tree can load this file (no torch.load/load_state_dict in train_BLIP2.py or test_BLIP2.py; --restore_file at train_BLIP2.py:67 is never read), so the mapping is a name-level, not a load-level, verification.",
+   "checkpoint_mapping_status": "VERIFIED",
+   "checkpoint_training_noise_pct": 50,
+   "dataset": "fashioniq",
+   "dataset_version": "official FashionIQ validation split",
+   "derived_metrics": [
+    {
+     "derivation_formula": "(53.19 + 74.04) / 2 = 63.615 -> 63.62 (paper prints 63.61)",
+     "key": "mean_from_avg_columns",
+     "provenance": "WORKBENCH_DERIVED",
+     "rounding_policy": "round-half-up to 2 decimals",
+     "source_metrics": [
+      "r10",
+      "r50"
+     ],
+     "value": 63.62
+    }
+   ],
+   "evaluation_noise_pct": 0,
+   "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+   "method_name": "Air-Know",
+   "method_variant": "main method, 50% training noise",
+   "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
+   "metric_provenance": {
+    "paper_column": "FashionIQ 50% noise block, Average column and AVG.",
+    "paper_page": 6,
+    "paper_row": "Air-Know (Ours)",
+    "paper_table": "Table 1",
+    "source_excerpt_or_description": "50% block: SPRC 51.12, TME 61.86, HABIT 62.80, INTENT 62.92, then 'Air-Know (Ours) 47.90 71.09 53.95 73.09 57.71 77.94 53.19 74.04 63.61'."
+   },
+   "model_id": "airknow",
+   "preprocessing_id": null,
+   "reference_excluded": true,
+   "reference_id": "airknow_fiq_50pct",
+   "reference_status": "VERIFIED",
+   "reported_metrics": {
+    "mean": 63.61,
+    "r10": 53.19,
+    "r50": 74.04
+   },
+   "reported_metrics_provenance": "PAPER_REPORTED for all three (Table 1, 50% block, 'Air-Know (Ours)', Average column and AVG.)",
+   "review_status": "CONFIRMED",
+   "split": "val",
+   "verification_evidence": "PDF page 6 image and assets/results-fiq.png both read 'Air-Know (Ours) 47.90 71.09 53.95 73.09 57.71 77.94 53.19 74.04 63.61' in the 50% block. Minor paper-internal rounding drift: (53.19+74.04)/2 = 63.615, printed 63.61. Registry fiq_n05 has expected_size_bytes null and expected_sha256 null (models.yaml:120-121) even though the Hub exposes 2724056638 and an etag — size/hash not bound. GALLERY CAVEAT as in the 0% row.",
+   "verification_method": "Same five routes as the 0% row. Arithmetic re-executed."
+  },
+  {
+   "aggregation_method": "macro over the three categories, then AVG. = mean of macro R@10 and macro R@50",
+   "augmentation_policy": null,
+   "backbone": "BLIP-2 (LAVIS)",
+   "category_metrics": {
+    "dress": {
+     "r10": 42.52,
+     "r50": 66.03
+    },
+    "shirt": {
+     "r10": 51.31,
+     "r50": 70.26
+    },
+    "toptee": {
+     "r10": 53.86,
+     "r50": 74.41
+    }
+   },
+   "checkpoint_id": "fiq_n08",
+   "checkpoint_mapping_evidence": "Filename condition: airknow_fiq_0.8.pt published at https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.8.pt, listed with size 2724056638 and lfs oid 756fc0bdc43d9e0f0cae13c8a02b0279f64e62092ce465c1e60bda45e179c54e (read https://huggingface.co/api/models/iLearn-Lab/CVPR26-Air-Know/tree/main?recursive=true); curl -I -L returns HTTP/2 200 with matching x-linked-size/x-linked-etag. Registry variant fiq_n08 (models.yaml:124-133) carries this name, URL and 80%. Same P2 caveats as fiq_n05: condition rests on filename + registry metadata + the paper printing a 80% row, and no loader exists in the pinned tree.",
+   "checkpoint_mapping_status": "VERIFIED",
+   "checkpoint_training_noise_pct": 80,
+   "dataset": "fashioniq",
+   "dataset_version": "official FashionIQ validation split",
+   "derived_metrics": [
+    {
+     "derivation_formula": "(49.23 + 70.23) / 2 = 59.73",
+     "key": "mean_from_avg_columns",
+     "provenance": "WORKBENCH_DERIVED",
+     "rounding_policy": "round-half-up to 2 decimals",
+     "source_metrics": [
+      "r10",
+      "r50"
+     ],
+     "value": 59.73
+    }
+   ],
+   "evaluation_noise_pct": 0,
+   "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+   "method_name": "Air-Know",
+   "method_variant": "main method, 80% training noise",
+   "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
+   "metric_provenance": {
+    "paper_column": "FashionIQ 80% noise block, Average column and AVG.",
+    "paper_page": 6,
+    "paper_row": "Air-Know (Ours)",
+    "paper_table": "Table 1",
+    "source_excerpt_or_description": "80% block: SPRC 43.77, TME 57.63, HABIT 58.94, INTENT 59.07, then 'Air-Know (Ours) 42.52 66.03 51.31 70.26 53.86 74.41 49.23 70.23 59.73'."
+   },
+   "model_id": "airknow",
+   "preprocessing_id": null,
+   "reference_excluded": true,
+   "reference_id": "airknow_fiq_80pct",
+   "reference_status": "VERIFIED",
+   "reported_metrics": {
+    "mean": 59.73,
+    "r10": 49.23,
+    "r50": 70.23
+   },
+   "reported_metrics_provenance": "PAPER_REPORTED for all three (Table 1, 80% block, 'Air-Know (Ours)', Average column and AVG.)",
+   "review_status": "CONFIRMED",
+   "split": "val",
+   "verification_evidence": "PDF page 6 image and assets/results-fiq.png both read 'Air-Know (Ours) 42.52 66.03 51.31 70.26 53.86 74.41 49.23 70.23 59.73' in the 80% block. This row is also quoted independently in the paper's own efficiency table (HTML table index 27 / Appendix E Table 4: 'Air-Know(Ours) ... 65.45 80.40' is the 20% FashionIQ/CIRR pair, not this row) — no extra route for 80%. GALLERY CAVEAT as in the 0% row.",
+   "verification_method": "Same five routes as the 0% row. Arithmetic re-executed."
   }
+ ],
+ "paper": {
+  "access": "FULL_TEXT",
+  "access_evidence": "curl -sL -o airknow.pdf https://arxiv.org/pdf/2604.19386v1 (19383803 bytes, sha256 eec0c49a…); curl -sL -o airknow.html https://arxiv.org/html/2604.19386v1; curl -sL https://arxiv.org/html/2604.19386v2 (identical Table 1). Three read routes on Table 1: (a) HTML cell parse via regex on <td>/<tr> with rowspan/colspan, (b) independent HTML parse via python3 html.parser, (c) pdftotext -layout airknow_pdf.txt lines 381-403, (d) pdftoppm -f 6 -l 6 -r 200 -png airknow.pdf rendered page 6 read as an image, (e) author repo image workbench/third_party/AirKnow/assets/results-fiq.png read as an image. All five routes agree on every Air-Know cell.",
+  "arxiv_id": "2604.19386",
+  "authors": [
+   "Zhiheng Fu",
+   "Yupeng Hu",
+   "Qianyun Yang",
+   "Shiqi Zhang",
+   "Zhiwei Chen",
+   "Zixu Li"
+  ],
+  "doi": null,
+  "paper_id": "airknow",
+  "paper_title": "Air-Know: Arbiter-Calibrated Knowledge-Internalizing Robust Network for Composed Image Retrieval",
+  "paper_url": "https://arxiv.org/html/2604.19386v1",
+  "paper_version": "arXiv v2 2026-04-22 (v1 published 2026-04-21); v1 and v2 FashionIQ Table 1 cells are byte-identical in HTML",
+  "pdf_bytes": 19383803,
+  "pdf_sha256": "eec0c49ae3815d5736269d79debc69e25e996f57e585944ca444cb4c9d6221fc",
+  "publication_year": 2026,
+  "research_note": "read https://arxiv.org/abs/2604.19386 -> HTTP 200; title and six authors match. NOTE: registry upstream_repo_url https://github.com/iLearn-Lab/CVPR26-Air-Know and the paper's own affiliation link https://github.com/ZhihFu/Air-Know are NOT established as the same upstream by anything I observed: read https://api.github.com/repos/ZhihFu/Air-Know -> null (not resolvable), read https://api.github.com/repos/iLearn-Lab/CVPR26-Air-Know -> full_name iLearn-Lab/CVPR26-Air-Know, default_branch main, pushed_at 2026-09-28T06:40:56Z. The repo README links ZnihFu/Air-Know, and the paper prints ZhihFu/Air-Know; the audit doc in workbench/docs/reviews/models/airknow.md asserts them identical. I could not confirm that. UNVERIFIED, P3.",
+  "supplement_url": null,
+  "venue": "CVPR 2026 (arXiv preprint; README states 'Accepted by CVPR 2026')"
+ }
 }

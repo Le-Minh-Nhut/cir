@@ -79,6 +79,61 @@ def models():
 def runs(protocol_id: str | None = None):
     return list_runs(protocol_id)
 
+def _aggregate_reports() -> list[dict]:
+    """Read every official aggregate report the evaluator has written, ignoring malformed files.
+
+    These reports live outside the DuckDB index by design: the index holds per-query `ResultRun`
+    records, while an aggregate report can exist for a run whose per-query export was not saved.
+    Reading them at request time keeps the API in sync with new evaluator output without a
+    re-index.
+    """
+    from workbench.scripts.evaluate_models import reports_root
+
+    config = resolve_config()
+    if not reports_root(config).is_dir():
+        return []
+    reports = []
+    for path in sorted(reports_root(config).glob("*_aggregate.json")):
+        try:
+            report = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if report.get("artifact_type") != "official_aggregate_evaluation_report":
+            continue
+        reports.append(report)
+    return reports
+
+def _gate_fields(report: dict) -> dict:
+    """The small, frontend-facing projection of an aggregate report.
+
+    Only what the two warning labels and the threshold slider need. The gate verdict is kept
+    whole -- recorded comparisons included -- so the slider can re-flag them without a second
+    request; the frontend never recomputes a percentage.
+    """
+    return {
+        "benchmark_gate": report.get("benchmark_gate") or {},
+        "parity_status": report.get("parity_status"),
+        "variant_provenance": report.get("variant_provenance") or {},
+        "category_metrics": report.get("category_metrics"),
+        "observed_metrics": report.get("observed_metrics"),
+        "execution_status": report.get("execution_status"),
+        # A registry-declared synthetic-output model has no published output format; its numbers
+        # are evidence of a different kind and the UI must be able to say so.
+        "is_synthetic": bool(report.get("is_synthetic")),
+    }
+
+@app.get("/api/benchmark-runs")
+def benchmark_runs():
+    """Aggregate-report runs, including runs with no per-query export in the index."""
+    return [{"run_id": report["run_id"], "model_id": report.get("model_id"),
+             "checkpoint_id": report.get("checkpoint_id"), "protocol_id": report.get("protocol_id"),
+             **_gate_fields(report)} for report in _aggregate_reports()]
+
+@app.get("/api/runs/gate")
+def run_gates():
+    """Gate fields keyed by run_id, for joining onto `/api/runs` records that have a report."""
+    return {report["run_id"]: _gate_fields(report) for report in _aggregate_reports()}
+
 
 @app.get("/api/queries")
 def queries(run_id: str, query_id: str | None = None, category: str | None = None, failed_at: int | None = None, min_rank: int | None = None, max_rank: int | None = None, order: str = "worst", limit: int = 50, offset: int = 0):

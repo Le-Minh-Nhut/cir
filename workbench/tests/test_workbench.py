@@ -217,9 +217,9 @@ def test_downloader_lists_and_skips_unresolved_without_network(tmp_path: Path) -
     bulk = subprocess.run([sys.executable, "workbench/scripts/download_checkpoints.py", "--all", "--dry-run", "--output-root", str(tmp_path)], text=True, capture_output=True, check=True)
     assert "SKIPPED: unresolved checkpoint mapping (pair / pair_b1)" in bulk.stdout
     assert "SKIPPED: unresolved checkpoint mapping (pair / pair_b2)" in bulk.stdout
-    # ENCODER's mapping IS verified upstream; what it lacks is a direct official file URL, so the
-    # obstacle reported must be the URL, not the mapping.
-    assert "SKIPPED: direct official download URL unavailable (encoder / fashioniq)" in bulk.stdout
+    # ENCODER's mapping is honestly UNVERIFIED: no author-linked artifact binds the Drive file to
+    # the paper's variant, so the mapping is the obstacle, exactly as for pair.
+    assert "SKIPPED: unresolved checkpoint mapping (encoder / fashioniq)" in bulk.stdout
     assert not list(tmp_path.rglob("*.pt"))
 
 

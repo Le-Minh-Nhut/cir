@@ -126,14 +126,18 @@ preflight accepts a checkout only while it holds exactly that delta:
 ```bash
 # Build the derived checkout the overlay describes. The pinned tree stays untouched.
 git -C workbench/third_party/CSMCIR checkout --detach 774f94e2076ff17ea91703a6239d2a08f0e1a44e
-cp -a workbench/third_party/CSMCIR /path/to/csmcir-variant
-patch -p1 --directory /path/to/csmcir-variant -i workbench/patches/csmcir_models_init_compat.patch
+cp -a workbench/third_party/CSMCIR /path/to/variant-root/CSMCIR
+patch -p1 --directory /path/to/variant-root/CSMCIR -i workbench/patches/csmcir_models_init_compat.patch
 ```
 
-Point the config's `third_party` at the directory holding that corrected checkout. The run is then a
-**declared compatibility variant**, never official parity: it executed code the authors did not
-publish, and `pc_readiness.py` reports it as `READY_WITH_DECLARED_VARIANT` for that reason. Any other
-edit inside the checkout still blocks, and an unpatched checkout reports the original source defect.
+Point the config's `third_party` at the **parent directory** holding that corrected checkout, not at
+the checkout itself: the registry declares `source_dir: CSMCIR`, and every resolver computes
+`<third_party>/<source_dir>`. Pointing `third_party` directly at the checkout makes the workbench
+look for `<checkout>/CSMCIR`, which does not exist, and the run blocks on a missing source. The run
+is then a **declared compatibility variant**, never official parity: it executed code the authors
+did not publish, and `pc_readiness.py` reports it as `READY_WITH_DECLARED_VARIANT` for that reason.
+Any other edit inside the checkout still blocks, and an unpatched checkout reports the original
+source defect.
 
 CSMCIR also needs `COT_ours2/fashioniq` captions that the author never published. The published Qwen
 captions are source-compatible (same names, exact gallery-id coverage, the same `Final_Caption` field

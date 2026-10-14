@@ -109,7 +109,7 @@ def test_all_legacy_external_assets_are_machine_readable_and_fail_closed() -> No
     for contract in load_preparation_contracts().values():
         for asset in contract["external_assets"]:
             assert {"name", "kind", "state", "required_for_evaluation", "required_for_preparation", "expected_local_location", "source", "optional", "notes"} <= asset.keys()
-        if contract["preparation_id"] == "limn_fashioniq":
+        if contract["preparation_id"] in {"limn_fashioniq", "pair_fashioniq"}:
             assert not contract["external_assets"]
         else:
             assert any(asset["required_for_evaluation"] for asset in contract["external_assets"])

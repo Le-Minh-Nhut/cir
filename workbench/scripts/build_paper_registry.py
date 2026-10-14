@@ -86,8 +86,18 @@ def _explode(record: dict) -> list[dict]:
 
 
 def build_record(paper: dict, experiment: dict) -> dict:
-    record = {key: (paper.get(key) if key.startswith("paper_") else experiment.get(key))
-              for key in RUNTIME_FIELDS}
+    # A seed bundle can file rows from more than one paper under one paper block (a HINT bundle that
+    # also carries the ENCODER and PAIR rows). An experiment that states its own `paper_*` identity
+    # overrides the block; the paper-block fallback below only fills what the experiment leaves
+    # unstated.
+    record = {}
+    for key in RUNTIME_FIELDS:
+        if key.startswith("paper_") and experiment.get(key) is not None:
+            record[key] = experiment[key]
+        elif key.startswith("paper_"):
+            record[key] = paper.get(key)
+        else:
+            record[key] = experiment.get(key)
     if "paper_title" not in record or not record["paper_title"]:
         record["paper_title"] = paper.get("paper_title")
     record["reference_status"] = _normalise_status(record.get("reference_status"), record)

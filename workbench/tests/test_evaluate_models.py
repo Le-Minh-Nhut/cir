@@ -356,7 +356,9 @@ def test_encoder_reports_actual_missing_layout_path(monkeypatch, tmp_path: Path)
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
     assert plan is None
-    assert reasons == [f"FashionIQ fashioniq_ilearn_resized requirement missing: {missing}"]
+    # The mapping is honestly UNVERIFIED, so the unresolved mapping blocks alongside the layout gap.
+    assert reasons == [f"FashionIQ fashioniq_ilearn_resized requirement missing: {missing}",
+                       "checkpoint mapping unresolved"]
 
 
 def test_encoder_complete_layout_still_blocks_missing_evaluator_import(monkeypatch, tmp_path: Path) -> None:
@@ -370,7 +372,8 @@ def test_encoder_complete_layout_still_blocks_missing_evaluator_import(monkeypat
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
-    assert reasons == [f"ENCODER evaluator import missing: {source / 'datasets1.py'}"]
+    assert reasons == [f"ENCODER evaluator import missing: {source / 'datasets1.py'}",
+                       "checkpoint mapping unresolved"]
 
 def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
@@ -384,15 +387,16 @@ def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, t
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
     assert plan is None
-    assert reasons == [f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}"]
+    assert reasons == [f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}",
+                       "checkpoint mapping unresolved"]
 
 
-def test_encoder_complete_local_prerequisites_yield_a_plan(monkeypatch, tmp_path: Path) -> None:
-    """A verified mapping must not be blocked as if it were unresolved.
+def test_encoder_complete_local_prerequisites_still_block_on_unverified_mapping(monkeypatch, tmp_path: Path) -> None:
+    """Provenance is not obtainability: a complete local install cannot certify the mapping.
 
-    ENCODER's registry entry once carried its two state fields transposed, so a complete local
-    installation still produced "checkpoint mapping unresolved" and no plan. With the entry
-    corrected, every prerequisite satisfied must yield a plan rather than a blocker.
+    Every filesystem prerequisite satisfied still leaves the ENCODER mapping UNVERIFIED, because
+    nothing author-linked binds the local file to the paper's FashionIQ variant -- the same
+    fail-closed rule PAIR is judged by.
     """
     module = load_module()
     model = records()["encoder"]
@@ -404,10 +408,8 @@ def test_encoder_complete_local_prerequisites_yield_a_plan(monkeypatch, tmp_path
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
-    assert reasons == []
-    assert plan is not None
-    assert plan.model_id == "encoder"
-    assert plan.checkpoint_id == "fashioniq"
+    assert plan is None
+    assert reasons == ["checkpoint mapping unresolved"]
 
 def test_encoder_command_preserves_upstream_trailing_root_separator(tmp_path: Path) -> None:
     from workbench.backend.adapters.models import EncoderAdapter

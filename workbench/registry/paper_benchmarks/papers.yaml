@@ -5,7 +5,7 @@
 #
 # `reported_metrics` are values the paper prints. `derived_metrics` are values the workbench
 # computes from printed ones and carry their formula; they are never attributed to the authors.
-registry_version: extract-251fa9c32998
+registry_version: extract-79c32139b606
 references:
 - reference_id: airknow_fiq_0pct
   model_id: airknow
@@ -64,7 +64,10 @@ references:
     render of page 6 read visually as an image; (5) the author''s own results image workbench/third_party/AirKnow/assets/results-fiq.png
     read as an image. Routes 1/2/3/4 are the paper; route 5 is an independent author artefact. v1 vs v2
     HTML Table 1 compared and identical. Arithmetic re-executed: (51.03+56.76+59.47)/3 = 55.7533 -> 55.75;
-    (73.08+75.05+79.02)/3 = 75.7167 -> 75.72; (55.75+75.72)/2 = 65.735 -> printed 65.73.'
+    (73.08+75.05+79.02)/3 = 75.7167 -> 75.72; (55.75+75.72)/2 = 65.735; round-half-up to two decimals
+    gives 65.74, but the paper prints 65.73. The printed value is transcribed as PAPER_REPORTED; the paper''s
+    own AVG. rounding/precision convention is not half-up at two decimals here, and that discrepancy is
+    recorded rather than reconciled.'
   review_status: CONFIRMED
 - reference_id: airknow_fiq_20pct
   model_id: airknow
@@ -534,8 +537,9 @@ references:
   method_name: CLVC-Net
   method_variant: main method (Table 1 row CLVC-Net); Table 3 repeats the same FashionIQ average as an
     ablation baseline
-  backbone: ResNet-50 visual encoder with a CLIP-based textual branch (paper §3); the paper prints no
-    CLIP variant string for this row
+  backbone: ResNet-50 visual encoder with a two-LSTM textual branch (paper §3.2.1; the paper text contains
+    no "CLIP" occurrence, and the pinned source composes text through two LSTMs — model.py:119-122,191-194).
+    The previous string asserted a CLIP-based textual branch, which neither the paper nor the source supports.
   checkpoint_id: author_drive_unresolved
   checkpoint_training_noise_pct: null
   checkpoint_mapping_status: UNVERIFIED
@@ -1044,7 +1048,7 @@ references:
   backbone: BLIP-2 feature extractor (Q-former); paper does not print a CLIP/BLIP variant string for the
     FashionIQ row
   checkpoint_id: fashioniq
-  checkpoint_training_noise_pct: 0
+  checkpoint_training_noise_pct: null
   checkpoint_mapping_status: VERIFIED
   dataset: fashioniq
   dataset_version: official FashionIQ validation annotations (captions/cap.{cat}.val.json) and split files
@@ -1099,13 +1103,13 @@ references:
   review_status: CONFIRMED
 - reference_id: encoder_fiq_clean_val_split
   model_id: encoder
-  paper_id: hint_icassp26
-  paper_title: 'HINT: Composed Image Retrieval with Dual-Path Compositional Contextualized Network'
+  paper_id: encoder_aaai25
+  paper_title: 'ENCODER: Entity Mining and Modification Relation Binding for Composed Image Retrieval'
   method_name: ENCODER
   method_variant: main method (full model, LFF+EAB+MSC)
   backbone: CLIP ViT-B/32
   checkpoint_id: fashioniq
-  checkpoint_training_noise_pct: 0
+  checkpoint_training_noise_pct: null
   checkpoint_mapping_status: UNVERIFIED
   dataset: fashioniq
   dataset_version: official FashionIQ validation annotations (captions/cap.{cat}.val.json) and split files
@@ -1162,8 +1166,8 @@ references:
   review_status: CONFIRMED
 - reference_id: pair_fiq_clean_val_split
   model_id: pair
-  paper_id: hint_icassp26
-  paper_title: 'HINT: Composed Image Retrieval with Dual-Path Compositional Contextualized Network'
+  paper_id: pair_icassp25
+  paper_title: 'PAIR: Complementarity-guided Disentanglement for Composed Image Retrieval'
   method_name: PAIR
   method_variant: main method (full model, coherence-incoherence extractor + complementarity disentanglement
     + asymmetric composition)
@@ -1524,7 +1528,7 @@ references:
   backbone: 'CLIP ViT-B/16 (paper: ''TG-CIR utilizes pre-trained CLIP (Radford et al., 2021) (ViT-B/16
     version) as the backbone'')'
   checkpoint_id: tgcir_archive_unresolved
-  checkpoint_training_noise_pct: 0
+  checkpoint_training_noise_pct: null
   checkpoint_mapping_status: UNVERIFIED
   dataset: fashioniq
   dataset_version: official FashionIQ three-category release (dress/shirt/toptee) with the author's spell-corrected
@@ -1593,7 +1597,7 @@ references:
   backbone: 'CLIP ViT-L/14 (paper: ''LIMN utilizes pre-trained CLIP (Radford et al., 2021) (ViT-L/14 version)
     as the backbone. The feature dimension D is set to 768'')'
   checkpoint_id: base_iter0_all_categories
-  checkpoint_training_noise_pct: 0
+  checkpoint_training_noise_pct: null
   checkpoint_mapping_status: VERIFIED
   dataset: fashioniq
   dataset_version: official three-category release, per-category runs; the paper states 'we treated them
@@ -1664,7 +1668,7 @@ references:
     is the query encoder in BLIP-2, the text encoder is the text encoder in BLIP-2. The vision encoder
     is the frozen ViT-g/14 from EVA-CLIP'', batch size 128, N=32 query tokens)'
   checkpoint_id: null
-  checkpoint_training_noise_pct: 0
+  checkpoint_training_noise_pct: null
   checkpoint_mapping_status: NO_CHECKPOINT
   dataset: fashioniq
   dataset_version: FashionIQ validation split, official three categories (dress, shirt, toptee); paper
@@ -1729,7 +1733,7 @@ references:
     to it
   backbone: BLIP2
   checkpoint_id: null
-  checkpoint_training_noise_pct: 0
+  checkpoint_training_noise_pct: null
   checkpoint_mapping_status: NO_CHECKPOINT
   dataset: fashioniq
   dataset_version: FashionIQ validation split, three categories
@@ -1821,7 +1825,11 @@ references:
       length-32 row of Table 9)
     source_excerpt_or_description: 'Row text: `Ours (SPRC) 49.18 72.43 55.64 73.89 59.35 78.58 54.92 74.97
       64.85`. Caption: ''Table 1: Quantitative comparison across competing methods on the Fashion-IQ validation
-      set, where Avg. indicates the average results across all the metrics in the three different classes.'''
+      set, where Avg. indicates the average results across all the metrics in the three different classes.''
+      ATTRIBUTION CONFLICT (final audit C8): the camera-ready prose at sprc_iclr.txt:435-437 ties the
+      same 64.85 average to SPRC2, the two-stage re-ranked variant, while Table 1 prints the identical
+      six numbers in the `Ours (SPRC)` row; arXiv v1 and the camera-ready were not reconciled by the authors.
+      A reproducing checkpoint can claim the Table 1 row, not the SPRC2 prose attribution.'
   reference_status: VERIFIED
   verification_method: Two independent routes plus a third. (1) `pdftotext -layout /tmp/sprc_iclr.pdf`
     -> line 407. (2) rendered page image `pdftoppm -png -r 140 -f 6 -l 6` read visually -> same row. (3)

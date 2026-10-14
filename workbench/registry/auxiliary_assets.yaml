@@ -174,6 +174,11 @@ assets:
   cache_root_fixed: ~/.cache/clip
   cache_root_env_var: XDG_CACHE_HOME
   automatic_download_available: true
+  # The digest is OpenAI's own URL-convention hash of the RN50x4 weights; upstream CLIP
+  # self-verifies against it. expected_size_bytes is the content-length the CDN served (final
+  # audit M-6, HEAD observed); the bytes were not downloaded, so VERIFIED covers URL + published
+  # digest, not a hash of bytes on disk.
+  expected_size_bytes: 421854225
   expected_sha256: 7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd
   provenance_status: VERIFIED
 - model_id: clip4cir_rn50x4_fullft
@@ -191,6 +196,9 @@ assets:
   cache_root_fixed: ~/.cache/clip
   cache_root_env_var: XDG_CACHE_HOME
   automatic_download_available: true
+  # Same CDN object as the combiner noft entry: digest is OpenAI's URL-convention hash, size is
+  # the HEAD-observed content-length (final audit M-6).
+  expected_size_bytes: 421854225
   expected_sha256: 7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd
   provenance_status: VERIFIED
 - model_id: sprc
@@ -204,6 +212,8 @@ assets:
   destination_path: lavis/blip2_pretrained.pth
   cache_root_env_var: XDG_CACHE_HOME
   automatic_download_available: true
+  # content-length the storage host serves (final audit C-5; HEAD observed). No published digest.
+  expected_size_bytes: 746998955
   expected_sha256: null
   provenance_status: UNVERIFIED
 - model_id: sprc
@@ -217,6 +227,8 @@ assets:
   destination_path: hub/checkpoints/eva_vit_g.pth
   cache_root_env_var: TORCH_HOME
   automatic_download_available: true
+  # content-length the storage host serves (final audit C-5; HEAD observed). No published digest.
+  expected_size_bytes: 2025249237
   expected_sha256: null
   provenance_status: UNVERIFIED
 - model_id: csmcir
@@ -230,6 +242,8 @@ assets:
   destination_path: lavis/blip2_pretrained.pth
   cache_root_env_var: XDG_CACHE_HOME
   automatic_download_available: true
+  # content-length the storage host serves (final audit C-5; HEAD observed). No published digest.
+  expected_size_bytes: 746998955
   expected_sha256: null
   provenance_status: UNVERIFIED
 - model_id: csmcir
@@ -243,6 +257,8 @@ assets:
   destination_path: hub/checkpoints/eva_vit_g.pth
   cache_root_env_var: TORCH_HOME
   automatic_download_available: true
+  # content-length the storage host serves (final audit C-5; HEAD observed). No published digest.
+  expected_size_bytes: 2025249237
   expected_sha256: null
   provenance_status: UNVERIFIED
 - model_id: csmcir

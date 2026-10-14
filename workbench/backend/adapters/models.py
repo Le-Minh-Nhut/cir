@@ -99,9 +99,11 @@ class CLIP4CirFullftAdapter(OfficialScriptAdapter):
     script = "src/validate.py"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        bundle_dir = checkpoint.parent
-        combiner_path = bundle_dir / "combiner_state.pt"
-        clip_path = bundle_dir / "clip_state.pt"
+        # A bundle_placeholder path IS the bundle directory (registry.checkpoint_missing_paths
+        # resolves members under it); the previous `checkpoint.parent` disagreed with that and
+        # pointed the evaluator at sibling files that the integrity check never validates.
+        combiner_path = checkpoint / "combiner_state.pt"
+        clip_path = checkpoint / "clip_state.pt"
         return [_runtime.python_executable(self.model), str(source / self.script), "--dataset", "fashionIQ",
                 "--combining-function", "combiner", "--combiner-path", str(combiner_path),
                 "--clip-model-path", str(clip_path),

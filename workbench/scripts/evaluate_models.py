@@ -32,7 +32,7 @@ from workbench.backend.registry import (
     checkpoint_path, load_registry, sha256_file,
 )
 from workbench.backend import runtime
-from workbench.backend.preflight import preflight_blockers
+from workbench.backend.preflight import approved_patch_state, model_requirements, preflight_blockers
 from workbench.backend.runtime import runtime_plan_blockers
 
 
@@ -61,6 +61,11 @@ class EvaluationPlan:
     #: has no published output format, so its own declared aggregate is the evidence and the report
     #: records that this was the case.
     synthetic_source: bool = False
+    #: Declared-variant provenance for this run, from the shared preflight: the staged caption alias
+    #: evidence and the approved source-patch note. Carried into the report and into the gate's
+    #: `run_meta`, so `SUBSTITUTED_CAPTION` is derived from what the run actually used rather than
+    #: inferred from the model id. `None`-free dict is always present for a real plan.
+    variant_provenance: dict[str, Any] | None = None
 def _synthetic_aggregate(stdout_text: str) -> dict[str, dict[str, float]] | None:
     """Read the aggregate a registry-declared synthetic evaluator prints.
 
@@ -128,6 +133,7 @@ def _benchmark_gate_verdict(plan, extraction, return_code: int) -> dict[str, Any
     from workbench.backend import paper_gate
 
     observed = extraction.observed_metrics if isinstance(extraction.observed_metrics, dict) else None
+    variant = getattr(plan, "variant_provenance", None) or {}
     run_meta = {
         "protocol_id": plan.protocol,
         "checkpoint_id": plan.checkpoint_id,
@@ -135,6 +141,10 @@ def _benchmark_gate_verdict(plan, extraction, return_code: int) -> dict[str, Any
         "evaluation_noise_pct": 0,
         "split": "val",
         "dataset": "fashioniq",
+        # Declared-variant facts, from the run's own preflight evidence. The gate reads these to
+        # label a passing comparison as a variant, never to wave one through.
+        "caption_alias_staged": bool(variant.get("caption_alias_staged")),
+        "declared_variant": bool(variant.get("approved_source_patch")),
     }
     try:
         reference, reason = benchmarks.select_reference(
@@ -156,6 +166,7 @@ def _benchmark_gate_verdict(plan, extraction, return_code: int) -> dict[str, Any
         # like "not attempted yet".
         real_execution=True,
         evaluation_completed=return_code == 0,
+        reproduced_category_metrics=getattr(extraction, "category_metrics", None),
     )
     payload = verdict.to_dict()
     payload["selection_reason"] = reason
@@ -227,6 +238,39 @@ def list_candidates(items: Iterable[tuple[dict, dict]]) -> None:
         adapter_type = ADAPTERS.get(model["model_id"])
         readiness = "audited" if adapter_type and command_is_audited(adapter_type) else "not audited"
         print(f"[OK] {model['model_id']} / {checkpoint['checkpoint_id']}: protocol={model['native_protocol'] or 'unavailable'} command={readiness}")
+
+
+def _variant_provenance(model: dict, config: WorkbenchConfig) -> dict[str, Any]:
+    """What this run substitutes or repairs, from the preflight's own evidence.
+
+    Only declared facts count: a caption alias recorded in the download manifest whose bytes match
+    the published stand-in, and an applied approved source patch. Inferring "CSMCIR therefore uses
+    the alias" from the model id is exactly what this refuses to do — a run that never staged the
+    alias gets no `SUBSTITUTED_CAPTION` label.
+    """
+    requirements = model_requirements(model, config)
+    warnings = list(requirements.get("warnings") or [])
+    caption_aliases: list[dict[str, Any]] = []
+    for asset in requirements["evidence"].get("auxiliary_assets") or []:
+        alias = asset.get("caption_alias")
+        if alias:
+            caption_aliases.append({
+                "asset_family": asset.get("name") or asset.get("family"),
+                "path": asset.get("path"),
+                **alias,
+            })
+    source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"] if model.get("source_dir") else None
+    patch = approved_patch_state(model, source)
+    approved_patch = None
+    if patch is not None and patch.get("applied"):
+        approved_patch = {key: patch[key] for key in
+                          ("patch_file", "patch_sha256", "applied") if key in patch}
+    return {
+        "caption_aliases": caption_aliases,
+        "caption_alias_staged": bool(caption_aliases),
+        "approved_source_patch": approved_patch,
+        "warnings": warnings,
+    }
 
 
 def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | None, config: WorkbenchConfig) -> tuple[Path, Path, str | None, list[str]]:
@@ -310,6 +354,7 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
         checkpoint_sha256=checkpoint_digest,
         checkpoint_training_noise_pct=checkpoint.get("checkpoint_training_noise_pct"),
         synthetic_source=bool(model.get("synthetic_source")),
+        variant_provenance=_variant_provenance(model, config),
     ), []
 
 
@@ -1379,6 +1424,7 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         # checkpoint condition.
         "benchmark_gate": gate_verdict,
         "benchmark_reference": (gate_verdict or {}).get("reference_evidence"),
+        "variant_provenance": getattr(plan, "variant_provenance", None) or {},
         "metric_source": extraction.metric_source,
         "is_synthetic": synthetic,
         "command_json": "command.json",

@@ -157,3 +157,46 @@ def test_failed_return_code_marked_failed():
     r = mx.extract_aggregate_metrics("limn", _limn(), "", 3)
     assert r.extraction_status == "EVALUATION_FAILED"
     assert r.observed_metrics is None
+
+# CLIP4Cir combiner/noft stdout parser (final audit combiner C-3): `name = value` recall lines
+def _clip4cir(dress=39.46, shirt=44.41, toptee=47.48, d50=64.55, s50=65.26, t50=70.98, declared=None):
+    avg10 = declared[0] if declared else (dress + shirt + toptee) / 3
+    avg50 = declared[1] if declared else (d50 + s50 + t50) / 3
+    return (f"shirt_recallat10 = {shirt}\nshirt_recallat50 = {s50}\n"
+            f"dress_recallat10 = {dress}\ndress_recallat50 = {d50}\n"
+            f"toptee_recallat10 = {toptee}\ntoptee_recallat50 = {t50}\n"
+            f"average recall10 = {avg10}\naverage recall50 = {avg50}\n")
+
+def test_combiner_consistent_output_accepted():
+    r = mx.parse_combiner_output(_clip4cir())
+    assert r.extraction_status == "EXTRACTED_VERIFIED"
+    assert r.observed_metrics["r10"] == 43.7833
+    assert r.category_metrics["shirt"] == {"r10": 44.41, "r50": 65.26}
+
+def test_combiner_inconsistent_average_rejected():
+    r = mx.parse_combiner_output(_clip4cir(declared=(99.0, 66.93)))
+    assert r.observed_metrics is None
+
+def test_combiner_incomplete_output_rejected():
+    r = mx.parse_combiner_output(_clip4cir().replace("toptee_recallat50 = 70.98\n", ""))
+    assert r.observed_metrics is None
+
+def test_combiner_duplicate_line_rejected():
+    r = mx.parse_combiner_output(_clip4cir() + "shirt_recallat50 = 99.99\n")
+    assert r.observed_metrics is None
+
+def test_combiner_malformed_average_rejected():
+    out = _clip4cir().replace("average recall50 = 66.93", "average recall50 = 1e")
+    r = mx.parse_combiner_output(out)
+    assert r.observed_metrics is None
+
+def test_combiner_malformed_output_never_accepted():
+    for bad in ("", "random log line", "shirt_recallat10 = abc"):
+        assert mx.parse_combiner_output(bad).observed_metrics is None
+
+def test_combiner_dispatch_routed():
+    r = mx.extract_aggregate_metrics("combiner_rn50x4_noft", _clip4cir(), "", 0)
+    assert r.extraction_status == "EXTRACTED_VERIFIED"
+    # clip4cir fullft shares the evaluator output shape
+    r2 = mx.extract_aggregate_metrics("clip4cir_rn50x4_fullft", _clip4cir(), "", 0)
+    assert r2.extraction_status == "EXTRACTED_VERIFIED"

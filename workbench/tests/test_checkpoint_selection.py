@@ -139,15 +139,16 @@ def test_the_val_split_family_records_no_training_condition(models) -> None:
     assert selection.checkpoint_ids == ("base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee")
     assert selection.bundle_id == "base_iter0_all_categories"
 
-def test_a_verified_mapping_keeps_its_source_state_separate(models) -> None:
-    """A verified mapping and a verified URL are different facts and must not be transposed.
+def test_an_unresolved_url_keeps_its_mapping_state_separate(models) -> None:
+    """An obtainability fact and a knowledge fact are different fields and must not be transposed.
 
-    ENCODER's FashionIQ filename and mapping are established by its official README, but its direct
-    file URL is unresolved. That pairing (verified mapping, unresolved URL) must stay legal, because
-    the operator can still obtain the file from the author's Drive folder and the registry says so.
+    ENCODER's direct file URL is unresolved (author Drive folder only), and nothing observed binds a
+    Drive file to the paper's FashionIQ variant, so the mapping is honestly UNVERIFIED. That pairing
+    (unresolved URL, unverified mapping) must stay legal: the URL fact says nothing about the
+    mapping, and the registry documents exactly that separation.
     """
     variant = models["encoder"]["checkpoint_variants"][0]
-    assert variant["checkpoint_mapping_status"] == "VERIFIED_METADATA"
+    assert variant["checkpoint_mapping_status"] == "UNVERIFIED"
     assert variant["status"] == "URL_UNRESOLVED"
     assert variant["download_url"] is None
 
@@ -168,8 +169,8 @@ def test_a_transposed_mapping_and_source_state_is_rejected(tmp_path) -> None:
 
     This is the defect that made ENCODER unresolvable: ``checkpoint_mapping_status`` accepted
     ``URL_UNRESOLVED`` as a legal value, so an entry with the fields transposed loaded cleanly and
-    the model was silently blocked. Each field now has its own vocabulary, and the two must agree on
-    whether the mapping is verified.
+    the model was silently blocked. Each field now has its own vocabulary, and a source state that
+    says the mapping is unresolved must not coexist with a mapping field claiming verification.
     """
     from workbench.backend.registry import load_registry
 

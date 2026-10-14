@@ -207,3 +207,37 @@ def test_an_unknown_route_is_404(api) -> None:
     """The routing layer is really in play: an unregistered path does not reach a handler."""
     status, _, _ = asgi_request(api.app, "GET", "/api/not-a-route")
     assert status == 404
+
+# ------------------------------------------------------------------------- aggregate reports
+
+def test_benchmark_runs_endpoint_lists_aggregate_reports_only(api, tmp_path) -> None:
+    """`/api/benchmark-runs` serves aggregate reports, including runs with no per-query export."""
+    reports = tmp_path / "repo" / "workbench" / "artifacts" / "reports"
+    reports.mkdir(parents=True)
+    good = {
+        "artifact_type": "official_aggregate_evaluation_report",
+        "run_id": "run-1", "model_id": "synthetic_model", "checkpoint_id": "ckpt",
+        "protocol_id": "fashioniq_original_split",
+        "benchmark_gate": {"status": "PASS_WITHIN_5_PERCENT", "passed": True},
+        "variant_provenance": {"caption_alias_staged": True},
+    }
+    (reports / "synthetic_model_ckpt_run-1_aggregate.json").write_text(json.dumps(good))
+    (reports / "broken_aggregate.json").write_text("{not json")
+    (reports / "wrong_type_aggregate.json").write_text(json.dumps({"artifact_type": "something_else"}))
+    status, _, body = asgi_request(api.app, "GET", "/api/benchmark-runs")
+    assert status == 200
+    payload = json.loads(body)
+    assert len(payload) == 1 and payload[0]["run_id"] == "run-1"
+    assert payload[0]["benchmark_gate"]["passed"] is True
+    assert payload[0]["variant_provenance"]["caption_alias_staged"] is True
+
+def test_run_gates_endpoint_keys_by_run_id(api, tmp_path) -> None:
+    reports = tmp_path / "repo" / "workbench" / "artifacts" / "reports"
+    reports.mkdir(parents=True)
+    (reports / "m_c_r_aggregate.json").write_text(json.dumps({
+        "artifact_type": "official_aggregate_evaluation_report", "run_id": "r1",
+        "parity_status": "PARITY_VERIFIED"}))
+    status, _, body = asgi_request(api.app, "GET", "/api/runs/gate")
+    assert status == 200
+    payload = json.loads(body)
+    assert payload["r1"]["parity_status"] == "PARITY_VERIFIED"
