@@ -366,3 +366,47 @@ def test_selecting_a_reference_requires_the_condition_to_match():
     assert absent is None and "no verified reference" in why
     unknown, why = benchmarks.select_reference("no_such_model")
     assert unknown is None and "no committed paper reference" in why
+
+
+# ---------------------------------------------------------------- report integration
+
+def test_the_report_helper_selects_by_condition_not_by_headline_value():
+    """`_benchmark_gate_verdict` must judge a noisy checkpoint against its own noise row.
+
+    Comparing HABIT's 0%-noise numbers against the 50%-noise reference is the mistake this guards: the
+    two rows differ by about 5.4 percent, which is close enough to look like a good reproduction if the
+    wrong reference is picked.
+    """
+    from argparse import Namespace
+
+    from workbench.scripts.evaluate_models import _benchmark_gate_verdict
+
+    class Extraction:
+        observed_metrics = {"r10": 55.38, "r50": 75.20, "mean": 65.29}
+
+    clean = Namespace(model_id="habit", protocol="fashioniq_full_gallery_ref_excluded",
+                      checkpoint_id="fiq_n00", checkpoint_training_noise_pct=0)
+    verdict = _benchmark_gate_verdict(clean, Extraction(), 0)
+    assert verdict["status"] == gate.PASS_WITHIN_5_PERCENT
+    assert verdict["reference_evidence"]["reference_id"] == "habit_aaai26_table1_fiq_n00"
+
+    noisy = Namespace(model_id="habit", protocol="fashioniq_full_gallery_ref_excluded",
+                      checkpoint_id="fiq_n05", checkpoint_training_noise_pct=50)
+    verdict = _benchmark_gate_verdict(noisy, Extraction(), 0)
+    assert verdict["status"] == gate.ALERT_METRIC_DEVIATION, verdict
+    assert verdict["reference_evidence"]["reference_id"] == "habit_aaai26_table1_fiq_n50"
+
+
+def test_the_report_helper_reports_a_failed_run_as_not_a_metric_verdict():
+    from argparse import Namespace
+
+    from workbench.scripts.evaluate_models import _benchmark_gate_verdict
+
+    class Extraction:
+        observed_metrics = None
+
+    plan = Namespace(model_id="csmcir", protocol="fashioniq_original_split",
+                     checkpoint_id="fashioniq", checkpoint_training_noise_pct=0)
+    verdict = _benchmark_gate_verdict(plan, Extraction(), 1)
+    assert verdict["status"] == gate.FAILED_EVALUATION
+    assert not verdict["passed"]

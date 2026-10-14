@@ -54,6 +54,9 @@ class EvaluationPlan:
     artifact_type: str = "single_file"
     directory_members: list[dict[str, Any]] | None = None
     checkpoint_sha256: str | None = None
+    #: The training-noise condition of the checkpoint this plan will evaluate, from the registry. The
+    #: benchmark reference is selected by condition, so a 0%-noise row cannot judge a noisy weight.
+    checkpoint_training_noise_pct: int | None = None
     #: True only when the registry declares the model's source as synthetic. A synthetic evaluator
     #: has no published output format, so its own declared aggregate is the evidence and the report
     #: records that this was the case.
@@ -112,6 +115,53 @@ def _synthetic_aggregate(stdout_text: str) -> dict[str, dict[str, float]] | None
 
 def command_is_audited(adapter_type: type[OfficialScriptAdapter]) -> bool:
     return getattr(adapter_type, "command", None) is not OfficialScriptAdapter.command
+
+def _benchmark_gate_verdict(plan, extraction, return_code: int) -> dict[str, Any] | None:
+    """Judge the run against the committed paper benchmark reference.
+
+    The reference is selected by *condition* -- the checkpoint's training noise, the protocol the run
+    used -- so a 0%-noise paper row can never be the reference for a noise-trained checkpoint. When no
+    committed row describes this run, the verdict says so rather than falling back on the registry's
+    transcribed headline numbers, which are a sanity reference and not a benchmark.
+    """
+    from workbench.backend import benchmark_references as benchmarks
+    from workbench.backend import paper_gate
+
+    observed = extraction.observed_metrics if isinstance(extraction.observed_metrics, dict) else None
+    run_meta = {
+        "protocol_id": plan.protocol,
+        "checkpoint_id": plan.checkpoint_id,
+        "checkpoint_training_noise_pct": plan.checkpoint_training_noise_pct,
+        "evaluation_noise_pct": 0,
+        "split": "val",
+        "dataset": "fashioniq",
+    }
+    try:
+        reference, reason = benchmarks.select_reference(
+            plan.model_id,
+            checkpoint_training_noise_pct=plan.checkpoint_training_noise_pct,
+            protocol_id=plan.protocol,
+        )
+    except (FileNotFoundError, ValueError):
+        reference, reason = None, "the benchmark registry could not be read"
+
+    verdict = paper_gate.evaluate_gate(
+        reference,
+        observed,
+        run_meta=run_meta,
+        data_kind="experiment",
+        # The report is only reached after an invocation was actually made, so the run is real by
+        # construction; whether it *completed* is what the exit code says. Collapsing the two would
+        # report a crashed evaluation as `NOT_RUN`, which hides a failure behind a state that reads
+        # like "not attempted yet".
+        real_execution=True,
+        evaluation_completed=return_code == 0,
+    )
+    payload = verdict.to_dict()
+    payload["selection_reason"] = reason
+    if reference is None:
+        payload["selection_reason"] = reason
+    return payload
 
 
 def pinned_revision(source: Path) -> str | None:
@@ -258,6 +308,7 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
         artifact_type=artifact_type,
         directory_members=directory_members,
         checkpoint_sha256=checkpoint_digest,
+        checkpoint_training_noise_pct=checkpoint.get("checkpoint_training_noise_pct"),
         synthetic_source=bool(model.get("synthetic_source")),
     ), []
 
@@ -1299,6 +1350,7 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
             )
 
     paper = plan.paper_metrics or {}
+    gate_verdict = _benchmark_gate_verdict(plan, extraction, code)
     report = {
         "artifact_type": "official_aggregate_evaluation_report",
         "schema_version": 1,
@@ -1321,6 +1373,12 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "category_metrics": extraction.category_metrics,
         "paper_sanity_metrics": paper,
         "parity_status": extraction.parity_status,
+        # The canonical acceptance verdict. `paper_sanity_metrics` above is the registry's transcribed
+        # row, kept only as a sanity reference; the gate judges the run against the committed paper
+        # benchmark reference, which records what the paper actually printed and under which
+        # checkpoint condition.
+        "benchmark_gate": gate_verdict,
+        "benchmark_reference": (gate_verdict or {}).get("reference_evidence"),
         "metric_source": extraction.metric_source,
         "is_synthetic": synthetic,
         "command_json": "command.json",

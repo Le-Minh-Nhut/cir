@@ -1,0 +1,240 @@
+{
+  "experiments": [
+    {
+      "aggregation_method": "per-category R@10/R@50, then the printed Average R@10 and R@50 columns, then the printed AVG cell",
+      "augmentation_policy": null,
+      "backbone": "BLIP-2 Q-Former composition; the paper prints no backbone string in this table",
+      "category_metrics": {
+        "dress": {
+          "r10": 50.96,
+          "r50": 73.02
+        },
+        "shirt": {
+          "r10": 56.98,
+          "r50": 75.22
+        },
+        "toptee": {
+          "r10": 58.8,
+          "r50": 79.4
+        }
+      },
+      "checkpoint_id": null,
+      "checkpoint_mapping_evidence": "No 0% noise checkpoint is published. The author Hub lists only the 20/50/80% files, so this row, which is the one the registry's reported metrics transcribe, has no obtainable weight.",
+      "checkpoint_mapping_status": "NO_CHECKPOINT",
+      "checkpoint_training_noise_pct": 0,
+      "dataset": "fashioniq",
+      "dataset_version": "official FashionIQ validation split, three categories (dress, shirt, toptee)",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "ConeSep",
+      "method_variant": "main method, 0% training-noise block of Table 1",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
+      "metric_provenance": {
+        "paper_column": "FashionIQ block: Dress/Shirt/Toptee R@10 and R@50, then Average R@10, Average R@50, AVG",
+        "paper_page": null,
+        "paper_row": "ConeSep (Ours) in the 0% noise block",
+        "paper_table": "Table 1",
+        "source_excerpt_or_description": "'Noise | Methods | Dress | Shirt | Toptee | Average' with four noise blocks; the 0% block's ConeSep row is the one transcribed."
+      },
+      "model_id": "conesep",
+      "preprocessing_id": null,
+      "reference_excluded": true,
+      "reference_id": "conesep_fiq_n00",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 65.73,
+        "r10": 55.58,
+        "r50": 75.88
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for all three: Table 1 prints the per-category cells, the Average R@10 and R@50 columns, and the AVG cell.",
+      "review_status": "CONFIRMED",
+      "split": "val",
+      "verification_evidence": "macro R@10 = (50.96 + 56.98 + 58.8)/3 = 55.58; macro R@50 = 75.88; (Average R@10 + Average R@50)/2 = 65.73. Every printed cell is reproduced by the arithmetic, which confirms the values and the category alignment.",
+      "verification_method": "HTML table grid parse by the extractor, re-derived independently by the implementer from the same URL, then cross-checked arithmetically against the printed Average and AVG cells."
+    },
+    {
+      "aggregation_method": "per-category R@10/R@50, then the printed Average R@10 and R@50 columns, then the printed AVG cell",
+      "augmentation_policy": null,
+      "backbone": "BLIP-2 Q-Former composition; the paper prints no backbone string in this table",
+      "category_metrics": {
+        "dress": {
+          "r10": 50.23,
+          "r50": 72.19
+        },
+        "shirt": {
+          "r10": 56.28,
+          "r50": 74.45
+        },
+        "toptee": {
+          "r10": 58.29,
+          "r50": 78.38
+        }
+      },
+      "checkpoint_id": "fiq_n20",
+      "checkpoint_mapping_evidence": "The registry names checkpoint fiq_n20 with checkpoint_training_noise_pct 20 and the author Hub publishes a ConeSep-FIQ file for that condition. The mapping rests on Hub filenames and metadata only: no payload was inspected, so byte-level identity with the weights behind this row is not established.",
+      "checkpoint_mapping_status": "VERIFIED_METADATA",
+      "checkpoint_training_noise_pct": 20,
+      "dataset": "fashioniq",
+      "dataset_version": "official FashionIQ validation split, three categories (dress, shirt, toptee)",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "ConeSep",
+      "method_variant": "main method, 20% training-noise block of Table 1",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
+      "metric_provenance": {
+        "paper_column": "FashionIQ block: Dress/Shirt/Toptee R@10 and R@50, then Average R@10, Average R@50, AVG",
+        "paper_page": null,
+        "paper_row": "ConeSep (Ours) in the 20% noise block",
+        "paper_table": "Table 1",
+        "source_excerpt_or_description": "'Noise | Methods | Dress | Shirt | Toptee | Average' with four noise blocks; the 20% block's ConeSep row is the one transcribed."
+      },
+      "model_id": "conesep",
+      "preprocessing_id": null,
+      "reference_excluded": true,
+      "reference_id": "conesep_fiq_n20",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 64.97,
+        "r10": 54.93,
+        "r50": 75.01
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for all three: Table 1 prints the per-category cells, the Average R@10 and R@50 columns, and the AVG cell.",
+      "review_status": "CONFIRMED",
+      "split": "val",
+      "verification_evidence": "macro R@10 = (50.23 + 56.28 + 58.29)/3 = 54.93; macro R@50 = 75.01; (Average R@10 + Average R@50)/2 = 64.97. Every printed cell is reproduced by the arithmetic, which confirms the values and the category alignment.",
+      "verification_method": "HTML table grid parse by the extractor, re-derived independently by the implementer from the same URL, then cross-checked arithmetically against the printed Average and AVG cells."
+    },
+    {
+      "aggregation_method": "per-category R@10/R@50, then the printed Average R@10 and R@50 columns, then the printed AVG cell",
+      "augmentation_policy": null,
+      "backbone": "BLIP-2 Q-Former composition; the paper prints no backbone string in this table",
+      "category_metrics": {
+        "dress": {
+          "r10": 48.39,
+          "r50": 71.34
+        },
+        "shirt": {
+          "r10": 54.56,
+          "r50": 73.25
+        },
+        "toptee": {
+          "r10": 57.22,
+          "r50": 77.87
+        }
+      },
+      "checkpoint_id": "fiq_n50",
+      "checkpoint_mapping_evidence": "The registry names checkpoint fiq_n50 with checkpoint_training_noise_pct 50 and the author Hub publishes a ConeSep-FIQ file for that condition. The mapping rests on Hub filenames and metadata only: no payload was inspected, so byte-level identity with the weights behind this row is not established.",
+      "checkpoint_mapping_status": "VERIFIED_METADATA",
+      "checkpoint_training_noise_pct": 50,
+      "dataset": "fashioniq",
+      "dataset_version": "official FashionIQ validation split, three categories (dress, shirt, toptee)",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "ConeSep",
+      "method_variant": "main method, 50% training-noise block of Table 1",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
+      "metric_provenance": {
+        "paper_column": "FashionIQ block: Dress/Shirt/Toptee R@10 and R@50, then Average R@10, Average R@50, AVG",
+        "paper_page": null,
+        "paper_row": "ConeSep (Ours) in the 50% noise block",
+        "paper_table": "Table 1",
+        "source_excerpt_or_description": "'Noise | Methods | Dress | Shirt | Toptee | Average' with four noise blocks; the 50% block's ConeSep row is the one transcribed."
+      },
+      "model_id": "conesep",
+      "preprocessing_id": null,
+      "reference_excluded": true,
+      "reference_id": "conesep_fiq_n50",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 63.77,
+        "r10": 53.39,
+        "r50": 74.15
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for all three: Table 1 prints the per-category cells, the Average R@10 and R@50 columns, and the AVG cell.",
+      "review_status": "CONFIRMED",
+      "split": "val",
+      "verification_evidence": "macro R@10 = (48.39 + 54.56 + 57.22)/3 = 53.39; macro R@50 = 74.15; (Average R@10 + Average R@50)/2 = 63.77. Every printed cell is reproduced by the arithmetic, which confirms the values and the category alignment.",
+      "verification_method": "HTML table grid parse by the extractor, re-derived independently by the implementer from the same URL, then cross-checked arithmetically against the printed Average and AVG cells."
+    },
+    {
+      "aggregation_method": "per-category R@10/R@50, then the printed Average R@10 and R@50 columns, then the printed AVG cell",
+      "augmentation_policy": null,
+      "backbone": "BLIP-2 Q-Former composition; the paper prints no backbone string in this table",
+      "category_metrics": {
+        "dress": {
+          "r10": 43.33,
+          "r50": 66.01
+        },
+        "shirt": {
+          "r10": 51.23,
+          "r50": 70.35
+        },
+        "toptee": {
+          "r10": 53.19,
+          "r50": 74.55
+        }
+      },
+      "checkpoint_id": "fiq_n80",
+      "checkpoint_mapping_evidence": "The registry names checkpoint fiq_n80 with checkpoint_training_noise_pct 80 and the author Hub publishes a ConeSep-FIQ file for that condition. The mapping rests on Hub filenames and metadata only: no payload was inspected, so byte-level identity with the weights behind this row is not established.",
+      "checkpoint_mapping_status": "VERIFIED_METADATA",
+      "checkpoint_training_noise_pct": 80,
+      "dataset": "fashioniq",
+      "dataset_version": "official FashionIQ validation split, three categories (dress, shirt, toptee)",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "ConeSep",
+      "method_variant": "main method, 80% training-noise block of Table 1",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
+      "metric_provenance": {
+        "paper_column": "FashionIQ block: Dress/Shirt/Toptee R@10 and R@50, then Average R@10, Average R@50, AVG",
+        "paper_page": null,
+        "paper_row": "ConeSep (Ours) in the 80% noise block",
+        "paper_table": "Table 1",
+        "source_excerpt_or_description": "'Noise | Methods | Dress | Shirt | Toptee | Average' with four noise blocks; the 80% block's ConeSep row is the one transcribed."
+      },
+      "model_id": "conesep",
+      "preprocessing_id": null,
+      "reference_excluded": true,
+      "reference_id": "conesep_fiq_n80",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 59.77,
+        "r10": 49.25,
+        "r50": 70.3
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for all three: Table 1 prints the per-category cells, the Average R@10 and R@50 columns, and the AVG cell.",
+      "review_status": "CONFIRMED",
+      "split": "val",
+      "verification_evidence": "macro R@10 = (43.33 + 51.23 + 53.19)/3 = 49.25; macro R@50 = 70.3; (Average R@10 + Average R@50)/2 = 59.77. Every printed cell is reproduced by the arithmetic, which confirms the values and the category alignment.",
+      "verification_method": "HTML table grid parse by the extractor, re-derived independently by the implementer from the same URL, then cross-checked arithmetically against the printed Average and AVG cells."
+    }
+  ],
+  "paper": {
+    "access": "FULL_TEXT",
+    "access_evidence": "`curl https://arxiv.org/html/2604.20358v1` returned 614026 bytes of machine-readable HTML. An independent <tr>/<td> grid parse recovers Table 1 completely: header 'Noise | Methods | Dress | Shirt | Toptee | Average' and four noise blocks (0%, 20%, 50%, 80%), each with a 'ConeSep (Ours)' row carrying six per-category cells plus three Average cells. The upstream repo renders the same table at workbench/third_party/ConeSep/assets/results-fiq.png.",
+    "arxiv_id": "2604.20358",
+    "authors": [
+      "Zixu Li",
+      "Yupeng Hu",
+      "Zhiwei Chen",
+      "Mingyu Zhang",
+      "Zhiheng Fu",
+      "Liqiang Nie"
+    ],
+    "doi": null,
+    "paper_id": "conesep_cvpr26",
+    "paper_title": "ConeSep: Cone-based Robust Noise-Unlearning Compositional Network for Composed Image Retrieval",
+    "paper_url": "https://arxiv.org/html/2604.20358v1",
+    "paper_version": "arXiv v1 2026-04-22",
+    "pdf_bytes": null,
+    "pdf_sha256": null,
+    "publication_year": 2026,
+    "supplement_sha256": null,
+    "supplement_url": null,
+    "venue": "CVPR 2026 (arXiv preprint 2604.20358v1)"
+  }
+}

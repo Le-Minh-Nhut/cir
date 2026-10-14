@@ -1,0 +1,404 @@
+{
+  "checks": [
+    {
+      "claimed": {
+        "mean": 65.73,
+        "r10": 55.75,
+        "r50": 75.72
+      },
+      "discrepancy": null,
+      "evidence": "Four independent routes, all agreeing cell-for-cell. (1) arXiv HTML v1 `curl -sSL -o /tmp/ak.html https://arxiv.org/html/2604.19386v1` (200, 591409 B); own rowspan/colspan HTMLParser grid dump of the 13th <table> (id S3.T1, Table 1): row 7 = Air-Know (Ours) | 51.03 73.08 | 56.76 75.05 | 59.47 79.02 | 55.75 75.72 65.73, reached under the '0%|^6' rowspan block-start row 2. (2) arXiv HTML v2 `curl -sSL -o /tmp/akv2.html https://arxiv.org/html/2604.19386v2` -> same row byte-identical (row 7). (3) PDF: `curl -sSL -o /tmp/ak.pdf https://arxiv.org/pdf/2604.19386v1` -> 19383803 B, sha256 eec0c49ae3815d5736269d79debc69e25e996f57e585944ca444cb4c9d6221fc (matches the record's pdf_sha256 and pdf_bytes exactly); `pdftotext -layout` line 392 reads 'Air-Know (Ours) 51.03 73.08 56.76 75.05 59.47 79.02 55.75 75.72 65.73'; Table 1 caption verified on PDF page 6 only (`for i in 1..27: pdftotext -f $i -l $i | grep -q 'Table 1.'` -> page 6), matching the record's paper_page 6. (4) author asset workbench/third_party/AirKnow/assets/results-fiq.png read as an image: 0% block, highlighted last row, same nine cells plus identical neighbour rows (SPRC 49.18/72.43/55.64/73.89/59.35/78.58/54.92/74.97/64.85; QuRe 46.80...; TME 49.73...; HABIT 49.99...; INTENT 50.32...). REGISTRY-MEAN QUESTION (assignment-specific): the record's claim is CORRECT. workbench/registry/models.yaml:107-109 records reported_r10 55.75, reported_r50 75.72, reported_mean 65.74. The paper prints 65.73 in that same Average/AVG. cell in all four routes (HTML cell, PDF text, PDF page-6 image, author PNG). Own decimal arithmetic: (51.03+56.76+59.47)/3 = 55.753333 -> printed 55.75; (73.08+75.05+79.02)/3 = 75.716667 -> printed 75.72; (55.75+75.72)/2 = 65.735; the paper prints 65.73, i.e. truncation (neither ROUND_HALF_UP 65.74 nor ROUND_HALF_EVEN 65.74). So registry 65.74 is a workbench transcription defect of 0.01, not a paper value. STATIC_AUDIT (no runtime executed).",
+      "observed_in_source": {
+        "categories": {
+          "dress": [
+            51.03,
+            73.08
+          ],
+          "shirt": [
+            56.76,
+            75.05
+          ],
+          "toptee": [
+            59.47,
+            79.02
+          ]
+        },
+        "mean": 65.73,
+        "r10": 55.75,
+        "r50": 75.72
+      },
+      "provenance_error": "Minor: the record double-lists the Mean - as reported_metrics.mean=65.73 (correct, PAPER_REPORTED) AND as derived_metrics[0] value 65.73 with rounding_policy 'round-half-even/truncation to 2 decimals; 65.735 -> 65.73 (observed)'. 65.735 -> 65.73 is NOT ROUND_HALF_EVEN (that gives 65.74); it is truncation/drop. The policy string is self-contradictory. Duplication + wrong rounding label, P3.",
+      "reference_id": "airknow_fiq_0pct",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "mean": 65.45,
+        "r10": 55.18,
+        "r50": 75.71
+      },
+      "discrepancy": "Record-internal: derived value 75.72 vs paper-printed (and record-reported) Average R@50 75.71 for the same row; the derivation is unnecessary because the paper prints the Average column.",
+      "evidence": "The numbers and the noise block are right; the record's own derived_metrics entry for this row is wrong. HTML grid row 12 sits under the 20% rowspan row 8: Air-Know (Ours) | 50.22 73.48 | 56.38 74.73 | 58.95 78.94 | 55.18 75.71 65.45 - table 1, page 6; PDF `pdftotext -layout /tmp/ak.pdf` line 397 identical; author PNG (assets/results-fiq.png) 20% block, highlighted last row, identical. Own arithmetic: macro R@10 = (50.22+56.38+58.95)/3 = 55.183333 -> 55.18 = printed; macro R@50 = (73.48+74.73+78.94)/3 = 75.716667 -> 75.72 ROUND_HALF_UP, but the paper PRINTS 75.71 in the Average R@50 cell. Mean of the two printed cells = (55.18+75.71)/2 = 65.445 -> 65.45 = printed; mean of the unrounded macros = 65.450 -> 65.45. So the record's derived_metrics[0] {key: macro_r50_from_categories, formula (73.48+74.73+78.94)/3, value 75.72} contradicts the same record's reported_metrics.r50 = 75.71 (which is the printed value) by 0.01. STATIC_AUDIT.",
+      "observed_in_source": {
+        "categories": {
+          "dress": [
+            50.22,
+            73.48
+          ],
+          "shirt": [
+            56.38,
+            74.73
+          ],
+          "toptee": [
+            58.95,
+            78.94
+          ]
+        },
+        "mean": 65.45,
+        "r10": 55.18,
+        "r50": 75.71
+      },
+      "provenance_error": "Yes, P3: derived_metrics[0] 'macro_r50_from_categories' is a WORKBENCH_DERIVED value that disagrees with the PAPER_REPORTED r50 in the same record; and derived_metrics[1] repeats reported_metrics.mean (65.45) as derived.",
+      "reference_id": "airknow_fiq_20pct",
+      "verdict": "PARTIAL"
+    },
+    {
+      "claimed": {
+        "mean": 63.61,
+        "r10": 53.19,
+        "r50": 74.04
+      },
+      "discrepancy": null,
+      "evidence": "HTML grid row 17 (50% rowspan row 13): Air-Know (Ours) | 47.90 71.09 | 53.95 73.09 | 57.71 77.94 | 53.19 74.04 63.61; PDF pdftotext line 402 identical; author PNG 50% block identical. Own arithmetic: macro R@10 = (47.90+53.95+57.71)/3 = 53.186667 -> 53.19 = printed (+0.0033); macro R@50 = 74.040000 -> 74.04 = printed; mean of printed cells = 63.615 -> ROUND_HALF_UP 63.62, paper prints 63.61 (truncation); mean of unrounded macros = 63.613333 -> 63.61 = printed. The record labels 63.61 as PAPER_REPORTED and explicitly records the derived 63.62 with the mismatch spelled out - honest. Checkpoint: Hub listing `curl -sSL 'https://huggingface.co/api/models/iLearn-Lab/CVPR26-Air-Know?blobs=true'` returns exactly .gitattributes, README.md, airknow_fiq_0.5.pt (2724056638 B), airknow_fiq_0.8.pt (2724056638 B); `curl -sS -I -L .../resolve/main/airknow_fiq_0.5.pt` -> HTTP/2 302 with x-linked-size 2724056638 and x-linked-etag \"f4d25ed9e532f2ee3671f6edadb1048e73113246ec056b413bde75dfe3f79bc6\" - byte-identical to the record's strings. checkpoint_mapping_status VERIFIED is therefore supportable, but see asymmetry note on fiq_n08 in the summary. STATIC_AUDIT.",
+      "observed_in_source": {
+        "categories": {
+          "dress": [
+            47.9,
+            71.09
+          ],
+          "shirt": [
+            53.95,
+            73.09
+          ],
+          "toptee": [
+            57.71,
+            77.94
+          ]
+        },
+        "mean": 63.61,
+        "r10": 53.19,
+        "r50": 74.04
+      },
+      "provenance_error": null,
+      "reference_id": "airknow_fiq_50pct",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "mean": 59.73,
+        "r10": 49.23,
+        "r50": 70.23
+      },
+      "discrepancy": null,
+      "evidence": "HTML grid row 22 (80% rowspan row 18): Air-Know (Ours) | 42.52 66.03 | 51.31 70.26 | 53.86 74.41 | 49.23 70.23 59.73; PDF pdftotext line 407 identical; author PNG 80% block identical. Own arithmetic: macro R@10 = 49.230000 -> 49.23 = printed; macro R@50 = (66.03+70.26+74.41)/3 = 70.233333 -> 70.23 = printed; mean of printed = 59.730 -> 59.73 = printed; mean of unrounded macros = 59.731667 -> 59.73 = printed (delta only in 3rd decimal). Checkpoint: Hub listing confirms airknow_fiq_0.8.pt (2724056638 B); HEAD -> HTTP/2 302/200 with x-linked-etag \"756fc0bdc43d9e0f0cae13c8a02b0279f64e62092ce465c1e60bda45e179c54e\" - matches the record. No 0%/20% Air-Know weights on the Hub (org-wide `curl 'https://huggingface.co/api/models?author=iLearn-Lab&limit=200'` -> 43 repos; only CVPR26-Air-Know, CVPR26-ConeSep, SIGIR24-FTI4CIR are CIR), so NO_CHECKPOINT for the 0%/20% rows is accurate. STATIC_AUDIT.",
+      "observed_in_source": {
+        "categories": {
+          "dress": [
+            42.52,
+            66.03
+          ],
+          "shirt": [
+            51.31,
+            70.26
+          ],
+          "toptee": [
+            53.86,
+            74.41
+          ]
+        },
+        "mean": 59.73,
+        "r10": 49.23,
+        "r50": 70.23
+      },
+      "provenance_error": null,
+      "reference_id": "airknow_fiq_80pct",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "mean": 65.29,
+        "r10": 55.38,
+        "r50": 75.2
+      },
+      "discrepancy": null,
+      "evidence": "ArXiv HTML `curl -sSL -o /tmp/habit.html https://arxiv.org/html/2604.18037v1` (200, 421624 B); grid dump of the 5th <table> (id S3.T1) row 8 = HABIT (Ours) | 49.99 72.38 | 56.62 74.68 | 59.51 78.53 | 55.38 75.20 65.29, under the 0% rowspan row 2. PDF `curl -sSL -o /tmp/habit.pdf https://arxiv.org/pdf/2604.18037v1` -> 10916769 B, sha256 d1f1dd36c2565621e3ca8c6098f48961dc0d2b54cab6e4ed9547b7e6c034ba1e (matches record); `pdftotext -layout` line 375 identical; caption 'Table 1:' is on page 5 only, matching the record's paper_page 5; rendered page 5 image read visually shows the same 0/20/50/80 blocks. Author asset workbench/third_party/HABIT/assets/results-fiq.png read as an image: 0% block, last row, same nine cells. Own arithmetic: macro R@10 = (49.99+56.62+59.51)/3 = 55.373333 -> 2dp ROUND_HALF_UP 55.37, but the table PRINTS 55.38 (delta +0.0067) - documented by the record; macro R@50 = 75.196667 -> 75.20 = printed; mean of the two printed cells = 65.290 = printed AVG 65.29; mean of the unrounded macros = 65.285 -> 65.29 = printed. All three reported_metrics are genuinely printed in the Average block, so PAPER_REPORTED is correct and empty derived_metrics is correct. Registry workbench/registry/models.yaml:248-250 = 55.38/75.20/65.29, matching the table. Backbone note: the record says D is not stated and Q=32; verified - 'The learnable query number Q = 32' (habit.txt:438) and grep for 256/embedding-dimension in the PDF text returns no D value. preprocessing_id targetpad_transform(1.25,224) cited to data_utils.py:92-106 and train.py:94-106 is exactly what those lines contain. STATIC_AUDIT.",
+      "observed_in_source": {
+        "categories": {
+          "dress": [
+            49.99,
+            72.38
+          ],
+          "shirt": [
+            56.62,
+            74.68
+          ],
+          "toptee": [
+            59.51,
+            78.53
+          ]
+        },
+        "mean": 65.29,
+        "r10": 55.38,
+        "r50": 75.2
+      },
+      "provenance_error": null,
+      "reference_id": "habit_aaai26_table1_fiq_n00",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "mean": 64.38,
+        "r10": 54.48,
+        "r50": 74.28
+      },
+      "discrepancy": null,
+      "evidence": "HTML grid row 15 under the 20% rowspan row 9: HABIT (Ours) | 49.63 71.34 | 55.67 73.19 | 58.14 78.32 | 54.48 74.28 64.38. PDF pdftotext line 383 identical; author PNG 20% block identical. Noise-block placement checked by neighbouring rows (SSN 22.61/45.56..., CALA 29.05/51.36..., SPRC 39.81/62.22..., RCL 47.05/70.65..., RDE 44.62/68.91..., TME 49.03/70.35...) - the 20% block, not 0% or 50%. Own arithmetic: macro R@10 = 54.480000 -> 54.48 = printed; macro R@50 = 74.283333 -> 74.28 = printed; mean of printed = 64.380 = printed; mean of unrounded macros = 64.381667 -> 64.38 = printed. Checkpoint: Hub README downloaded verbatim (`curl -sSL https://huggingface.co/iLearn-Lab/AAAI26-HABIT/raw/main/README.md`) prints 'fiq/HABIT-FIQ_N0.2.pt (Trained on FashionIQ with 20% noise)' and '$N \\in \\{0.2, 0.5, 0.8\\}'; Hub blobs listing shows fiq/HABIT-FIQ_N0.2.pt at 2730715930 B - the record's size is right. checkpoint_mapping_status VERIFIED is justified here (author's own per-file statement), unlike INTENT. STATIC_AUDIT.",
+      "observed_in_source": {
+        "categories": {
+          "dress": [
+            49.63,
+            71.34
+          ],
+          "shirt": [
+            55.67,
+            73.19
+          ],
+          "toptee": [
+            58.14,
+            78.32
+          ]
+        },
+        "mean": 64.38,
+        "r10": 54.48,
+        "r50": 74.28
+      },
+      "provenance_error": null,
+      "reference_id": "habit_aaai26_table1_fiq_n20",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "mean": 62.8,
+        "r10": 52.52,
+        "r50": 73.09
+      },
+      "discrepancy": null,
+      "evidence": "HTML grid row 22 under the 50% rowspan row 16: HABIT (Ours) | 47.33 69.71 | 53.72 72.55 | 56.51 77.00 | 52.52 73.09 62.80. PDF pdftotext line 391 identical; author PNG 50% block identical. Own arithmetic: macro R@10 = 52.520000 -> 52.52 = printed; macro R@50 = 73.086667 -> 73.09 = printed; mean of printed cells = 62.805 -> ROUND_HALF_UP 62.81 while paper prints 62.80 (truncation); mean of unrounded macros = 62.803333 -> 62.80 = printed. Record keeps the printed 62.80 as PAPER_REPORTED, which is right. Checkpoint fiq_n05 = fiq/HABIT-FIQ_N0.5.pt, 2730715930 B, Hub README '(Trained on FashionIQ with 50% noise)'. STATIC_AUDIT.",
+      "observed_in_source": {
+        "categories": {
+          "dress": [
+            47.33,
+            69.71
+          ],
+          "shirt": [
+            53.72,
+            72.55
+          ],
+          "toptee": [
+            56.51,
+            77
+          ]
+        },
+        "mean": 62.8,
+        "r10": 52.52,
+        "r50": 73.09
+      },
+      "provenance_error": null,
+      "reference_id": "habit_aaai26_table1_fiq_n50",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "mean": 58.94,
+        "r10": 48.36,
+        "r50": 69.53
+      },
+      "discrepancy": null,
+      "evidence": "HTML grid row 29 under the 80% rowspan row 23: HABIT (Ours) | 42.04 65.20 | 50.12 69.77 | 52.92 73.61 | 48.36 69.53 58.94. PDF pdftotext line 399 identical; author PNG 80% block identical. Block identity cross-checked against the neighbouring SPRC 28.41/50.77/36.21/54.37/35.90/59.06 and TME 41.45/64.35/47.30/68.20/51.25/73.23 - both the 80% values, not 50%. Own arithmetic: macro R@10 = 48.360000 -> 48.36 = printed; macro R@50 = 69.526667 -> 69.53 = printed; mean of printed = 58.945 -> 58.95 ROUND_HALF_UP vs printed 58.94 (truncation); mean of unrounded macros = 58.943333 -> 58.94 = printed. Checkpoint fiq_n08 = fiq/HABIT-FIQ_N0.8.pt, 2730715930 B, Hub README '(Trained on FashionIQ with 80% noise)'. STATIC_AUDIT.",
+      "observed_in_source": {
+        "categories": {
+          "dress": [
+            42.04,
+            65.2
+          ],
+          "shirt": [
+            50.12,
+            69.77
+          ],
+          "toptee": [
+            52.92,
+            73.61
+          ]
+        },
+        "mean": 58.94,
+        "r10": 48.36,
+        "r50": 69.53
+      },
+      "provenance_error": null,
+      "reference_id": "habit_aaai26_table1_fiq_n80",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "mean": 65.24,
+        "r10": 55.31,
+        "r50": 75.16
+      },
+      "discrepancy": "None in the record. Source-internal: printed AVG. 65.24 equals the mean of the printed Average cells but not the mean of the unrounded category macros (65.23).",
+      "evidence": "ArXiv HTML `curl -sSL -o /tmp/intent.html https://arxiv.org/html/2604.18051v1` (200, 427632 B); the FashionIQ table is the 8th <table> (id S3.T2, caption line 1125 'Table 2: Performance comparison on the FashionIQ validation set'), row 8 = INTENT (Ours) | 50.32 72.10 | 56.32 74.93 | 59.28 78.45 | 55.31 75.16 65.24, under the 0% rowspan row 2 - i.e. really Table 2's 0% block, not the CIRR table. PDF `curl -sSL -o /tmp/intent.pdf https://arxiv.org/pdf/2604.18051v1` -> 9279156 B, sha256 06e606654a1c0c801b91baf16d934d1da1e3246016cead3d89dab51bb28daa69 (matches record); 'Table 2:' occurs on page 6 only, matching paper_page 6; `pdftotext -layout` line 399 identical; rendered page 6 image read visually shows all four blocks. Author asset workbench/third_party/INTENT/figs/fiq.png read as an image: 0% block, last row, same nine cells. Own arithmetic: macro R@10 = (50.32+56.32+59.28)/3 = 55.306667 -> 55.31 = printed; macro R@50 = 75.160000 -> 75.16 = printed; mean of the two printed cells = 65.235 -> 65.24 = printed; mean of the UNROUNDED macros = 65.233333 -> 65.23, 0.01 BELOW the printed 65.24. The record documents exactly this. Registry workbench/registry/models.yaml:311-313 = 55.31/75.16/65.24, matching the table. STATIC_AUDIT.",
+      "observed_in_source": {
+        "categories": {
+          "dress": [
+            50.32,
+            72.1
+          ],
+          "shirt": [
+            56.32,
+            74.93
+          ],
+          "toptee": [
+            59.28,
+            78.45
+          ]
+        },
+        "mean": 65.24,
+        "r10": 55.31,
+        "r50": 75.16
+      },
+      "provenance_error": null,
+      "reference_id": "intent_aaai26_table2_fiq_n00",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "mean": 64.36,
+        "r10": 54.22,
+        "r50": 74.49
+      },
+      "discrepancy": null,
+      "evidence": "HTML grid row 15 under the 20% rowspan row 9 (neighbours SSN 22.61..., CALA 29.05..., SPRC 39.81..., RCL 47.05..., RDE 44.62..., TME 49.03 70.35... = the 20% block): INTENT (Ours) | 49.32 71.43 | 55.32 73.57 | 58.01 78.46 | 54.22 74.49 64.36. PDF pdftotext line 407 identical; rendered page 6 visual identical; author fig png identical. Prose corroboration reproduced: 'INTENT surpasses TME by 0.39% on Avg' under sigma=20% (intent.txt:449 area) and TME 20% AVG. = 63.97, 64.36-63.97 = 0.39 - the record's corroboration claim checks out. Own arithmetic: macro R@10 = 54.216667 -> 54.22 = printed; macro R@50 = 74.486667 -> 74.49 = printed; mean of printed cells = 64.355 -> 64.36 = printed; mean of unrounded macros = 64.351667 -> 64.35, 0.01 below printed. Checkpoint: Hub blobs listing `curl -sSL 'https://huggingface.co/api/models/iLearn-Lab/AAAI26-INTENT?blobs=true'` = .gitattributes, README.md, intent_cirr_0.2.pt, intent_fiq_0.2.pt, intent_fiq_0.5.pt, intent_fiq_0.8.pt (each 2722478522 B); the Hub README (116 lines, fetched verbatim) contains no per-file noise table, only 'under various noise ratios' and a generic 'best_model.pth' example; `https://api.github.com/repos/iLearn-Lab/AAAI26-INTENT/releases` -> [] (0 releases). So checkpoint_mapping_status UNVERIFIED for fiq_n02 is the honest call. STATIC_AUDIT.",
+      "observed_in_source": {
+        "categories": {
+          "dress": [
+            49.32,
+            71.43
+          ],
+          "shirt": [
+            55.32,
+            73.57
+          ],
+          "toptee": [
+            58.01,
+            78.46
+          ]
+        },
+        "mean": 64.36,
+        "r10": 54.22,
+        "r50": 74.49
+      },
+      "provenance_error": null,
+      "reference_id": "intent_aaai26_table2_fiq_n20",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "mean": 62.92,
+        "r10": 52.52,
+        "r50": 73.32
+      },
+      "discrepancy": null,
+      "evidence": "HTML grid row 22 under the 50% rowspan row 16: INTENT (Ours) | 47.99 71.24 | 52.78 72.48 | 56.79 76.23 | 52.52 73.32 62.92. PDF pdftotext line 415 identical; rendered page 6 visual identical; author fig png identical. Own arithmetic: macro R@10 = 52.520000 -> 52.52 = printed; macro R@50 = 73.316667 -> 73.32 = printed; mean of printed cells = 62.920 = printed; mean of unrounded macros = 62.918333 -> 62.92 = printed. Blob intent_fiq_0.5.pt exists (2722478522 B) but no per-file noise statement in the Hub README -> record's UNVERIFIED is correct. STATIC_AUDIT.",
+      "observed_in_source": {
+        "categories": {
+          "dress": [
+            47.99,
+            71.24
+          ],
+          "shirt": [
+            52.78,
+            72.48
+          ],
+          "toptee": [
+            56.79,
+            76.23
+          ]
+        },
+        "mean": 62.92,
+        "r10": 52.52,
+        "r50": 73.32
+      },
+      "provenance_error": null,
+      "reference_id": "intent_aaai26_table2_fiq_n50",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "mean": 59.07,
+        "r10": 48.51,
+        "r50": 69.63
+      },
+      "discrepancy": null,
+      "evidence": "HTML grid row 29 under the 80% rowspan row 23 (neighbours SPRC 28.41/50.77..., RCL 38.82/60.54..., TME 41.45/64.35..., HABIT 42.04/65.20... = the 80% block): INTENT (Ours) | 42.07 65.58 | 50.38 69.41 | 53.09 73.91 | 48.51 69.63 59.07. PDF pdftotext line 423 identical; rendered page 6 visual identical; author fig png identical. Own arithmetic: macro R@10 = 48.513333 -> 48.51 = printed; macro R@50 = 69.633333 -> 69.63 = printed; mean of printed = 59.070 = printed; mean of unrounded macros = 59.073333 -> 59.07 = printed. Blob intent_fiq_0.8.pt exists (2722478522 B); no per-file noise table -> UNVERIFIED correct. STATIC_AUDIT.",
+      "observed_in_source": {
+        "categories": {
+          "dress": [
+            42.07,
+            65.58
+          ],
+          "shirt": [
+            50.38,
+            69.41
+          ],
+          "toptee": [
+            53.09,
+            73.91
+          ]
+        },
+        "mean": 59.07,
+        "r10": 48.51,
+        "r50": 69.63
+      },
+      "provenance_error": null,
+      "reference_id": "intent_aaai26_table2_fiq_n80",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "records_present": 0
+      },
+      "discrepancy": null,
+      "evidence": "No ConeSep record exists in workbench/registry/paper_benchmarks/extracted/ - `ls` shows airknow.json, clip4cir_tomm2023.json, habit_aaai26.json, hint_icassp26.json, intent_aaai26.json, legacy_cir_fashioniq_bundle.json, ptha_mtst_scaleup_mtst.json, sprc.json; a JSON sweep of all files under paper_benchmarks/ for the strings 'ConeSep'/'conesep' hits only a passing mention inside airknow.json:87 (org enumeration). So there is nothing here to refute or confirm as a record; the assignment's 'conesep-related rows if present' resolves to NOT PRESENT. What does exist is the registry entry: workbench/registry/models.yaml:160-162 records reported_r10 55.58, reported_r50 75.88, reported_mean 65.73. I independently re-derived those against the primary source: `curl -sSL -o /tmp/conesep.html https://arxiv.org/html/2604.20358v1` (200, 618257 B) grid dump of the 9th <table> (id S3.T1) row 8 = ConeSep (Ours) | 50.96 73.02 | 56.98 75.22 | 58.80 79.40 | 55.58 75.88 65.73 (0% block); `curl -sSL -o /tmp/conesep.pdf https://arxiv.org/pdf/2604.20358v1` -> 11254791 B, sha256 93a10b1ae848cddb495227acec056d21f6b0f130d1686fee16a205e2d55f040a, `pdftotext -layout` line 387 identical, caption 'Table 1. Performance comparison on the FashionIQ validation set' at line 376; author asset workbench/third_party/ConeSep/assets/results-fiq.png read as an image shows the same nine cells in the 0% block (and 20% 50.23/72.19/56.28/74.45/58.29/78.38/54.93/75.01/64.97, 50% 48.39/71.34/54.56/73.25/57.22/77.87/53.39/74.15/63.77, 80% 43.33/66.01/51.23/70.35/53.19/74.55/49.25/70.30/59.77). Own arithmetic: macro R@10 = (50.96+56.98+58.80)/3 = 55.580000 = printed; macro R@50 = (73.02+75.22+79.40)/3 = 75.880000 = printed; mean = 65.730000 = printed 65.73 exactly - ConeSep's table is internally exact, unlike Air-Know's. Registry also lists only 20/50/80% weights; Hub blobs listing `curl -sSL 'https://huggingface.co/api/models/iLearn-Lab/CVPR26-ConeSep?blobs=true'` = .gitattributes, README.md, fiq/ConeSep-FIQ-N0.2.pt, fiq/ConeSep-FIQ-N0.5.pt, fiq/ConeSep-FIQ_N0.8.pt (2721428966 B each; note the inconsistent N0.8 underscore spelling is faithfully copied into models.yaml:188). So no clean checkpoint - matching the registry's NO_CLEAN_CHECKPOINT. STATIC_AUDIT.",
+      "observed_in_source": {
+        "paper_0pct_row": [
+          50.96,
+          73.02,
+          56.98,
+          75.22,
+          58.8,
+          79.4,
+          55.58,
+          75.88,
+          65.73
+        ],
+        "registry_mean": 65.73,
+        "registry_r10": 55.58,
+        "registry_r50": 75.88
+      },
+      "provenance_error": null,
+      "reference_id": "conesep (no benchmark record present)",
+      "verdict": "CONFIRMED (for the registry transcription); UNVERIFIABLE at the extracted-record layer because no ConeSep record exists"
+    }
+  ],
+  "summary": "12 records audited (4 Air-Know, 4 HABIT, 4 INTENT), each re-derived from scratch through four independent routes: my own rowspan/colspan-aware HTML grid parse of the arXiv v1 HTML (plus v2 for Air-Know), pdftotext -layout of the PDF I downloaded and hashed myself, the rendered table-page image, and the author's own results PNG in workbench/third_party (HABIT assets/results-fiq.png, INTENT figs/fiq.png and AirKnow assets/results-fiq.png all re-read as images). Every one of the 108 extracted cells matches the primary source digit-for-digit, and every row really does sit in the noise block the record names - I checked block identity by the surrounding competitor rows (e.g. SPRC 49.18/55.64/59.35 at 0% vs 39.81/48.58/50.48 at 20%), which is the failure mode the assignment flagged. 11 of 12 records are CONFIRMED; the one blemish is airknow_fiq_20pct, PARTIAL, because its derived_metrics entry 'macro_r50_from_categories' = 75.72 contradicts the paper's own printed Average R@50 = 75.71 that the same record reports as PAPER_REPORTED. On the assignment's specific question: the Air-Know record is right and the registry is wrong - workbench/registry/models.yaml:109 carries reported_mean 65.74, while the paper prints 65.73 in Table 1's 0% AVG. cell by all four routes; (55.75+75.72)/2 = 65.735 and the paper truncates to 65.73, so the registry's 65.74 is the ROUND_HALF_UP answer to a question the paper answered by truncation. Reader must not trust: (a) registry reported_mean 65.74 for airknow (P2 transcription defect - fix to 65.73); (b) airknow.json's derived_metrics rounding_policy label 'round-half-even/truncation' (P3, self-contradictory - ROUND_HALF_EVEN on 65.735 yields 65.74) and the redundant re-derivation of means and Average cells the papers already print; (c) the asymmetry in checkpoint_mapping_status - HABIT's VERIFIED rests on the author's explicit per-file Hub statements ('Trained on FashionIQ with 20% noise'), INTENT's UNVERIFIED is honest because its Hub README has no per-file table, but Air-Know's fiq_n05/fiq_n08 VERIFIED rests only on the filename '0.5'/'0.8' plus the Hub README's generic noise list, the same evidence class that INTENT's record declined to call VERIFIED (P3 consistency defect). Nothing beyond rounding-ridge arithmetic failed: the three 'printed mean != mean of unrounded macros' cases (HABIT 0% +0.005, INTENT 0% and 20% -0.0067) are paper-internal and the records disclose them rather than smoothing them. All findings are STATIC_AUDIT; no checkpoint was downloaded, no GPU inference was run, and the questions of whether these numbers reproduce and whether the papers' unstated gallery/reference protocol equals the workbench's fashioniq_full_gallery_ref_excluded remain NOT_RUN/UNKNOWN - the papers establish no gallery construction, and the records correctly say so in verification_evidence while supplying the code-derived best reading.",
+  "verifier": "independent adversarial audit of airknow.json (4 rows), habit_aaai26.json (4 rows), intent_aaai26.json (4 rows); ConeSep presence check against workbench/registry/paper_benchmarks/extracted/"
+}

@@ -5,7 +5,7 @@
 #
 # `reported_metrics` are values the paper prints. `derived_metrics` are values the workbench
 # computes from printed ones and carry their formula; they are never attributed to the authors.
-registry_version: extract-734c1618745e
+registry_version: extract-f450c863c216
 references:
 - reference_id: airknow_fiq_0pct
   model_id: airknow
@@ -625,6 +625,198 @@ references:
   verification_method: 'Independent verifier pass plus an implementer pass, both from the same author-hosted
     bytes: `pdftotext -layout` of the table, and the row''s per-category values checked against the printed
     average columns.'
+  review_status: CONFIRMED
+- reference_id: conesep_fiq_n00
+  model_id: conesep
+  paper_id: conesep_cvpr26
+  paper_title: 'ConeSep: Cone-based Robust Noise-Unlearning Compositional Network for Composed Image Retrieval'
+  method_name: ConeSep
+  method_variant: main method, 0% training-noise block of Table 1
+  backbone: BLIP-2 Q-Former composition; the paper prints no backbone string in this table
+  checkpoint_id: null
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: NO_CHECKPOINT
+  dataset: fashioniq
+  dataset_version: official FashionIQ validation split, three categories (dress, shirt, toptee)
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K
+  aggregation_method: per-category R@10/R@50, then the printed Average R@10 and R@50 columns, then the
+    printed AVG cell
+  reported_metrics:
+    mean: 65.73
+    r10: 55.58
+    r50: 75.88
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 50.96
+      r50: 73.02
+    shirt:
+      r10: 56.98
+      r50: 75.22
+    toptee:
+      r10: 58.8
+      r50: 79.4
+  metric_provenance:
+    paper_column: 'FashionIQ block: Dress/Shirt/Toptee R@10 and R@50, then Average R@10, Average R@50,
+      AVG'
+    paper_page: null
+    paper_row: ConeSep (Ours) in the 0% noise block
+    paper_table: Table 1
+    source_excerpt_or_description: '''Noise | Methods | Dress | Shirt | Toptee | Average'' with four noise
+      blocks; the 0% block''s ConeSep row is the one transcribed.'
+  reference_status: VERIFIED
+  verification_method: HTML table grid parse by the extractor, re-derived independently by the implementer
+    from the same URL, then cross-checked arithmetically against the printed Average and AVG cells.
+  review_status: CONFIRMED
+- reference_id: conesep_fiq_n20
+  model_id: conesep
+  paper_id: conesep_cvpr26
+  paper_title: 'ConeSep: Cone-based Robust Noise-Unlearning Compositional Network for Composed Image Retrieval'
+  method_name: ConeSep
+  method_variant: main method, 20% training-noise block of Table 1
+  backbone: BLIP-2 Q-Former composition; the paper prints no backbone string in this table
+  checkpoint_id: fiq_n20
+  checkpoint_training_noise_pct: 20
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ validation split, three categories (dress, shirt, toptee)
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K
+  aggregation_method: per-category R@10/R@50, then the printed Average R@10 and R@50 columns, then the
+    printed AVG cell
+  reported_metrics:
+    mean: 64.97
+    r10: 54.93
+    r50: 75.01
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 50.23
+      r50: 72.19
+    shirt:
+      r10: 56.28
+      r50: 74.45
+    toptee:
+      r10: 58.29
+      r50: 78.38
+  metric_provenance:
+    paper_column: 'FashionIQ block: Dress/Shirt/Toptee R@10 and R@50, then Average R@10, Average R@50,
+      AVG'
+    paper_page: null
+    paper_row: ConeSep (Ours) in the 20% noise block
+    paper_table: Table 1
+    source_excerpt_or_description: '''Noise | Methods | Dress | Shirt | Toptee | Average'' with four noise
+      blocks; the 20% block''s ConeSep row is the one transcribed.'
+  reference_status: VERIFIED
+  verification_method: HTML table grid parse by the extractor, re-derived independently by the implementer
+    from the same URL, then cross-checked arithmetically against the printed Average and AVG cells.
+  review_status: CONFIRMED
+- reference_id: conesep_fiq_n50
+  model_id: conesep
+  paper_id: conesep_cvpr26
+  paper_title: 'ConeSep: Cone-based Robust Noise-Unlearning Compositional Network for Composed Image Retrieval'
+  method_name: ConeSep
+  method_variant: main method, 50% training-noise block of Table 1
+  backbone: BLIP-2 Q-Former composition; the paper prints no backbone string in this table
+  checkpoint_id: fiq_n50
+  checkpoint_training_noise_pct: 50
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ validation split, three categories (dress, shirt, toptee)
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K
+  aggregation_method: per-category R@10/R@50, then the printed Average R@10 and R@50 columns, then the
+    printed AVG cell
+  reported_metrics:
+    mean: 63.77
+    r10: 53.39
+    r50: 74.15
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 48.39
+      r50: 71.34
+    shirt:
+      r10: 54.56
+      r50: 73.25
+    toptee:
+      r10: 57.22
+      r50: 77.87
+  metric_provenance:
+    paper_column: 'FashionIQ block: Dress/Shirt/Toptee R@10 and R@50, then Average R@10, Average R@50,
+      AVG'
+    paper_page: null
+    paper_row: ConeSep (Ours) in the 50% noise block
+    paper_table: Table 1
+    source_excerpt_or_description: '''Noise | Methods | Dress | Shirt | Toptee | Average'' with four noise
+      blocks; the 50% block''s ConeSep row is the one transcribed.'
+  reference_status: VERIFIED
+  verification_method: HTML table grid parse by the extractor, re-derived independently by the implementer
+    from the same URL, then cross-checked arithmetically against the printed Average and AVG cells.
+  review_status: CONFIRMED
+- reference_id: conesep_fiq_n80
+  model_id: conesep
+  paper_id: conesep_cvpr26
+  paper_title: 'ConeSep: Cone-based Robust Noise-Unlearning Compositional Network for Composed Image Retrieval'
+  method_name: ConeSep
+  method_variant: main method, 80% training-noise block of Table 1
+  backbone: BLIP-2 Q-Former composition; the paper prints no backbone string in this table
+  checkpoint_id: fiq_n80
+  checkpoint_training_noise_pct: 80
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ validation split, three categories (dress, shirt, toptee)
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K
+  aggregation_method: per-category R@10/R@50, then the printed Average R@10 and R@50 columns, then the
+    printed AVG cell
+  reported_metrics:
+    mean: 59.77
+    r10: 49.25
+    r50: 70.3
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 43.33
+      r50: 66.01
+    shirt:
+      r10: 51.23
+      r50: 70.35
+    toptee:
+      r10: 53.19
+      r50: 74.55
+  metric_provenance:
+    paper_column: 'FashionIQ block: Dress/Shirt/Toptee R@10 and R@50, then Average R@10, Average R@50,
+      AVG'
+    paper_page: null
+    paper_row: ConeSep (Ours) in the 80% noise block
+    paper_table: Table 1
+    source_excerpt_or_description: '''Noise | Methods | Dress | Shirt | Toptee | Average'' with four noise
+      blocks; the 80% block''s ConeSep row is the one transcribed.'
+  reference_status: VERIFIED
+  verification_method: HTML table grid parse by the extractor, re-derived independently by the implementer
+    from the same URL, then cross-checked arithmetically against the printed Average and AVG cells.
   review_status: CONFIRMED
 - reference_id: habit_aaai26_table1_fiq_n00
   model_id: habit

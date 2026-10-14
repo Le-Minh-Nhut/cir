@@ -106,7 +106,7 @@ models:
     supported_protocols: [fashioniq_full_gallery_ref_excluded]
     reported_r10: 55.75
     reported_r50: 75.72
-    reported_mean: 65.74
+    reported_mean: 65.73
     reproduction_status: NOT_RUN
     strict_clean_checkpoint_available: false
     notes: Official Hub lists only FashionIQ 50% and 80% noise-trained weights; clean evaluation remains 0%.
