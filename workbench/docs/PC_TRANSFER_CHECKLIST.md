@@ -2,6 +2,10 @@
 
 What to copy, what to rebuild, and what only exists on the GPU host.
 
+For the first experiment itself, see [FIRST_GPU_EXPERIMENT.md](FIRST_GPU_EXPERIMENT.md): the one
+command to run, why the pilot is LIMN rather than CSMCIR, and the two facts to state when reporting
+its numbers.
+
 ## Copy these (portable)
 
 | Item | Why it is portable |

@@ -127,13 +127,21 @@ _DOWNLOAD_CEILING = 8 * 1024 * 1024 * 1024
 
 
 def _write_response(response, partial: Path, mode: str, limit: int) -> None:
-    """Stream to `partial`, refusing to write more than `limit` bytes.
+    """Stream to `partial`, refusing to write more than `limit` bytes IN TOTAL.
 
     The registry records a checkpoint's exact size. Enforcing it while the bytes arrive means an
     oversized response (a changed upstream file, a redirect to an error page, a hostile mirror) is
     rejected with a clean error instead of being written to disk and only then compared.
+
+    `mode == "ab"` is a resume, so the bytes already on disk count toward the limit. Budgeting only
+    the newly received chunks let a resumed transfer finish above the declared size: the earlier
+    attempt's bytes were invisible, so a response could add a full `limit` on top of them.
     """
-    written = 0
+    written = partial.stat().st_size if mode == "ab" and partial.exists() else 0
+    if written > limit:
+        raise RuntimeError(
+            f"resumed file already exceeds the declared size limit of {limit} bytes: {partial}"
+        )
     with partial.open(mode) as output:
         while True:
             chunk = response.read(1024 * 1024)

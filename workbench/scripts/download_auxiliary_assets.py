@@ -197,12 +197,15 @@ def main(argv: list[str] | None = None) -> int:
             if asset.required:
                 failed |= not verify(asset, fashioniq_root=config.FASHIONIQ_ROOT)
         return int(failed)
-    # An asset that exists but is corrupt must be re-acquired, not skipped. The previous selection
-    # only looked at whether the file was present, so a truncated or tampered file that no longer
-    # matched its published SHA256 stayed on disk and kept blocking every later preflight — the
-    # operator had to notice and pass --force-redownload by hand. Only assets whose bytes the
-    # workbench itself published are replaced automatically; an operator-supplied file with
-    # unverified provenance is never touched, because those bytes may be the operator's own.
+    # Deciding whether a file may be replaced needs evidence of WHO put it there, and the download
+    # manifest is that evidence: it only ever records a file the workbench itself fetched. Inferring
+    # ownership from the registry's `provenance_status` was wrong in both directions — it replaced an
+    # operator's own file whenever the registry happened to call the asset VERIFIED, and it kept a
+    # corrupt managed file forever whenever the upstream provenance was not VERIFIED. Operator-owned
+    # files are never touched.
+    manifest = load_manifest(manifest_path(config.WORKBENCH_ARTIFACTS_ROOT))
+    recorded_digest = {entry["destination"]: entry.get("downloaded_sha256") for entry in manifest}
+
     def _needs_replacement(asset) -> bool:
         if args.force_redownload:
             return True
@@ -210,18 +213,22 @@ def main(argv: list[str] | None = None) -> int:
             return True
         if asset.destination.stat().st_size == 0:
             return True
-        if asset.provenance_status != "VERIFIED":
-            return False
-        recorded = asset.expected_sha256 or getattr(asset, "expected_sha256_prefix", None)
-        if not recorded:
+        # Not in the manifest means the workbench did not download it: it is the operator's file.
+        if str(asset.destination) not in recorded_digest:
             return False
         try:
             digest = sha256_file(asset.destination)
         except OSError:
             return False
+        # A managed file is replaced when it no longer matches what the workbench recorded, or the
+        # published hash the registry declares. Either mismatch means the bytes on disk are not the
+        # bytes that were verified at acquisition.
+        if digest != recorded_digest[str(asset.destination)]:
+            return True
         if asset.expected_sha256:
             return digest != asset.expected_sha256
-        return not digest.startswith(getattr(asset, "expected_sha256_prefix"))
+        prefix = getattr(asset, "expected_sha256_prefix", None)
+        return bool(prefix) and not digest.startswith(prefix)
 
     selected = tuple(asset for asset in downloadable if _needs_replacement(asset))
     repaired = tuple(asset for asset in selected if asset.destination.is_file())
@@ -234,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{asset.family}: BLOCKED — required asset has no verified automatic acquisition source")
         print("DRY RUN: no network request and no filesystem mutation.")
         return 0
-    entries = load_manifest(manifest_path(config.WORKBENCH_ARTIFACTS_ROOT))
+    entries = manifest
     for asset in selected:
         assert asset.source_url is not None
         partial = asset.destination.with_suffix(asset.destination.suffix + ".part")

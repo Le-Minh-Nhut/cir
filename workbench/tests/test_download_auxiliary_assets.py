@@ -181,10 +181,9 @@ def test_a_published_hash_is_enforced_and_a_mismatch_is_refused(monkeypatch, tmp
 def test_a_corrupt_workbench_download_is_repaired_without_force(monkeypatch, tmp_path: Path) -> None:
     """ISSUE D: a present-but-corrupt workbench-managed asset must be re-acquired, not skipped.
 
-    Selection used to look only at whether the file existed, so a truncated or tampered caption file
-    stayed on disk and kept blocking preflight until the operator worked out that
-    --force-redownload was needed. A file whose published bytes the workbench itself recorded is
-    repaired automatically; an operator-supplied file with unverified provenance is never touched.
+    Ownership comes from the download manifest, which only ever records a file the workbench itself
+    fetched. The recorded digest is what makes corruption detectable: the file on disk no longer
+    matches what was verified at acquisition.
     """
     from dataclasses import replace
 
@@ -198,10 +197,19 @@ def test_a_corrupt_workbench_download_is_repaired_without_force(monkeypatch, tmp
                         lambda *a, **k: tuple(replace(asset, expected_sha256=digest) for asset in items))
     monkeypatch.setattr(module, "resolve_config", lambda: config)
 
-    # Every destination exists but holds the wrong bytes, i.e. exactly the corrupt case.
+    # The workbench downloaded these, so the manifest records them and their verified digest; the
+    # bytes on disk are then corrupted, which is exactly the case that must be repaired.
+    manifest = module.manifest_path(config.WORKBENCH_ARTIFACTS_ROOT)
     for asset in items:
         asset.destination.parent.mkdir(parents=True, exist_ok=True)
         asset.destination.write_bytes(b"corrupt truncated content")
+    module.save_manifest(manifest, [
+        {"destination": str(asset.destination), "downloaded_sha256": digest,
+         "model_id": "csmcir", "asset_family": "Qwen captions",
+         "filename": asset.destination.name, "source_url": asset.source_url,
+         "source_revision": None, "size_bytes": len(good), "downloaded_at": "2026-01-01T00:00:00Z",
+         "official_hash_available": True, "official_sha256": digest}
+        for asset in items])
 
     calls: list[str] = []
     monkeypatch.setattr(module.urllib.request, "urlopen",
@@ -216,26 +224,71 @@ def test_a_corrupt_workbench_download_is_repaired_without_force(monkeypatch, tmp
     assert module.main(["--model", "csmcir"]) == 0
     assert calls == [], "an intact asset must not be re-downloaded"
 
-def test_an_operator_supplied_asset_is_never_replaced(monkeypatch, tmp_path: Path) -> None:
-    """An unverified-provenance file may be the operator's own bytes, so it is never overwritten."""
+def test_a_managed_download_is_repaired_even_without_a_published_hash(monkeypatch, tmp_path: Path) -> None:
+    """AUX-2: a managed download stays managed even when the author published no hash.
+
+    Tying repairability to the registry's `provenance_status` meant a corrupt file the workbench
+    itself downloaded was kept forever whenever the upstream provenance was not VERIFIED — the
+    operator had to notice and pass --force-redownload. The manifest digest is enough.
+    """
     from dataclasses import replace
 
     module = load_module()
     config = config_at(tmp_path)
     items = qwen_assets(module, config, with_hash=False)
+    good = b"verified managed bytes"
+    digest = hashlib.sha256(good).hexdigest()
+    # No published hash, and unverified upstream provenance: exactly the old blind spot.
     monkeypatch.setattr(module, "assets",
-                        lambda *a, **k: tuple(replace(asset, expected_sha256="0" * 64,
+                        lambda *a, **k: tuple(replace(asset, expected_sha256=None,
                                                       provenance_status="UNVERIFIED") for asset in items))
     monkeypatch.setattr(module, "resolve_config", lambda: config)
     for asset in items:
         asset.destination.parent.mkdir(parents=True, exist_ok=True)
-        asset.destination.write_bytes(b"operator bytes that will not match any hash")
+        asset.destination.write_bytes(b"corrupt")
+    module.save_manifest(module.manifest_path(config.WORKBENCH_ARTIFACTS_ROOT), [
+        {"destination": str(asset.destination), "downloaded_sha256": digest,
+         "model_id": "csmcir", "asset_family": "Qwen captions",
+         "filename": asset.destination.name, "source_url": asset.source_url,
+         "source_revision": None, "size_bytes": len(good), "downloaded_at": "2026-01-01T00:00:00Z",
+         "official_hash_available": False, "official_sha256": None}
+        for asset in items])
+
+    calls: list[str] = []
+    monkeypatch.setattr(module.urllib.request, "urlopen",
+                        lambda url: (calls.append(url), Response(good))[1])
+    assert module.main(["--model", "csmcir"]) == 0
+    assert calls == [asset.source_url for asset in items], "a corrupt managed file must be re-fetched"
+    assert all(asset.destination.read_bytes() == good for asset in items)
+
+def test_an_operator_supplied_asset_is_never_replaced(monkeypatch, tmp_path: Path) -> None:
+    """AUX-1: a file the workbench never downloaded is the operator's, whatever the registry says.
+
+    Ownership is decided by the manifest, not by `provenance_status`: an asset the registry calls
+    VERIFIED but which has no manifest record was placed by the operator, so its bytes must survive
+    even when they differ from every hash the registry declares.
+    """
+    from dataclasses import replace
+
+    module = load_module()
+    config = config_at(tmp_path)
+    items = qwen_assets(module, config, with_hash=False)
+    operator_bytes = b"operator bytes that will not match any hash"
+    monkeypatch.setattr(module, "assets",
+                        lambda *a, **k: tuple(replace(asset, expected_sha256="0" * 64,
+                                                      provenance_status="VERIFIED") for asset in items))
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
+    for asset in items:
+        asset.destination.parent.mkdir(parents=True, exist_ok=True)
+        asset.destination.write_bytes(operator_bytes)
+    # No manifest: the workbench never fetched these.
+    assert not module.manifest_path(config.WORKBENCH_ARTIFACTS_ROOT).exists()
     monkeypatch.setattr(module.urllib.request, "urlopen",
                         lambda _: (_ for _ in ()).throw(AssertionError("network used")))
 
     assert module.main(["--model", "csmcir"]) == 0
-    assert all(asset.destination.read_bytes() == b"operator bytes that will not match any hash"
-               for asset in items)
+    assert all(asset.destination.read_bytes() == operator_bytes for asset in items), \
+        "an operator's file must never be replaced without explicit force"
 
 
 def test_failed_download_leaves_no_corrupt_destination(monkeypatch, tmp_path: Path) -> None:
