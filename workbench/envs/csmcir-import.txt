@@ -1,0 +1,27 @@
+Imported in this environment: `import lavis.models` succeeds and
+`blip2_cir_align_prompt_csmcir` is registered. This proves the patch removes only the import
+blocker; it does NOT prove the evaluator runs, the checkpoint loads, or any metric is reproduced.
+
+torch==2.14.1+cpu
+torchvision==0.29.1+cpu
+transformers==4.36.2
+omegaconf==2.3.0
+iopath==0.1.10
+timm==0.9.12
+fairscale==0.4.13
+einops==0.7.0
+pandas==2.2.0
+tqdm==4.70.1
+ftfy==6.3.1
+webdataset==0.2.86
+decord==0.6.0
+opencv-python-headless==4.11.0.86
+sentencepiece==0.2.2
+scikit-image==0.26.0
+spacy==3.7.2
+pycocoevalcap==1.2
+
+The upstream README pins Python 3.9 / Torch 2.0.1 / torchvision 0.15.2. This environment uses newer
+CPU builds because it exists only to exercise the import graph; a real evaluation must be built from
+the upstream `requirements.txt` on the GPU host. Cross-checking the import graph against 2.0.1 is
+still outstanding.

@@ -592,8 +592,16 @@ def _alias_fixture(tmp_path: Path, monkeypatch) -> tuple:
 
     The published Qwen caption is written into the dataset root with the digest the registry
     declares, so alias staging has a real file to copy.
+
+    The published files are 2-5 MB with thousands of records, so the fixture substitutes a
+    three-record body and restates the asset's declared content contract and alias digest to match
+    it. That contract lives in the registry, which both the downloader and preflight re-read on every
+    call, so the fixture patches the loader they share rather than a copy — otherwise preflight would
+    load the real 2.8 MB digest and reject the fixture's bytes, and the tests would be exercising a
+    registry state no run ever sees.
     """
     from dataclasses import replace
+    from workbench.backend import registry as registry_module
     from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination
     from workbench.backend.operator_config import resolve_config
 
@@ -604,18 +612,36 @@ def _alias_fixture(tmp_path: Path, monkeypatch) -> tuple:
         WORKBENCH_ARTIFACTS_ROOT=tmp_path / "artifacts",
     )
     (config.FASHIONIQ_ROOT / "qwen_captions").mkdir(parents=True)
+    (config.FASHIONIQ_ROOT / "image_splits").mkdir(parents=True, exist_ok=True)
+    body = json.dumps({f"ID{i}": {"Final_Caption": f"caption {i}"} for i in range(3)}).encode()
+    digest = hashlib.sha256(body).hexdigest()
+    fixture_ids = [f"ID{i}" for i in range(3)]
+
+    patched = []
     for asset in auxiliary_assets_for_model("csmcir"):
-        if asset["family"] != "Qwen captions":
-            continue
-        published = asset["expected_sha256"]
-        body = json.dumps({f"ID{i}": {"Final_Caption": f"caption {i}"} for i in range(3)}).encode()
-        assert published  # the fixture relies on a real declared digest
-        (config.FASHIONIQ_ROOT / "qwen_captions" / Path(asset["destination_path"]).name).write_bytes(body)
-    # Pin the alias digest to the fixture body so the copy verifies.
-    cot = [a for a in auxiliary_assets_for_model("csmcir") if a["family"] == "COT_ours2 captions"]
-    for asset in cot:
-        dest = auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
-        asset["caption_alias_from"]["expected_sha256"] = hashlib.sha256(body).hexdigest()
+        asset = dict(asset)
+        if asset["family"] == "Qwen captions":
+            assert asset["expected_sha256"]  # the fixture relies on a real declared digest
+            asset["expected_sha256"] = digest
+            asset["expected_size_bytes"] = len(body)
+            (config.FASHIONIQ_ROOT / "qwen_captions" / Path(asset["destination_path"]).name).write_bytes(body)
+        elif asset["family"] == "COT_ours2 captions":
+            category = Path(asset["destination_path"]).name.split("_")[0]
+            id_source = f"image_splits/split.{category}.val.json"
+            (config.FASHIONIQ_ROOT / id_source).write_text(json.dumps(fixture_ids))
+            asset["content_contract"] = {
+                "record_key_fields": ["Final_Caption"],
+                "expected_record_count": 3,
+                "key_kind": "fashioniq_image_id",
+                "id_source": id_source,
+            }
+            asset["caption_alias_from"] = dict(
+                asset["caption_alias_from"], expected_sha256=digest, expected_size_bytes=len(body),
+            )
+        patched.append(asset)
+
+    monkeypatch.setattr(registry_module, "load_auxiliary_assets", lambda *a, **k: patched)
+    cot = [asset for asset in patched if asset["family"] == "COT_ours2 captions"]
     return config, cot
 
 
@@ -684,24 +710,42 @@ def test_preflight_accepts_a_manifest_recorded_alias_but_not_a_stray_file(tmp_pa
     asset = cot[0]
     destination = auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_bytes(b'{"ID0": {"Final_Caption": "operator own"}}')
+    published = (config.FASHIONIQ_ROOT / "qwen_captions"
+                 / Path(asset["caption_alias_from"]["source_path"]).name).read_bytes()
 
     model = next(m for m in load_registry()["models"] if m["model_id"] == "csmcir")
     cfg = WorkbenchConfig(
         config.FASHIONIQ_ROOT, config.FASHIONIQ_ROOT, config.FASHIONIQ_ROOT,
         "127.0.0.1", 8000, 5173, tmp_path / "ckpt", tmp_path / "results",
         config.WORKBENCH_THIRD_PARTY_ROOT, config.WORKBENCH_ARTIFACTS_ROOT)
-    stray = model_requirements(model, cfg)
-    assert any(str(destination) in block for block in stray["blocks"]), stray["blocks"]
-    assert not stray["warnings"] or all("alias" not in w for w in stray["warnings"])
-
-    # Now record it the way the staging path does, with the bytes on disk.
-    digest = hashlib.sha256(destination.read_bytes()).hexdigest()
     manifest = config.WORKBENCH_ARTIFACTS_ROOT / "auxiliary" / "download_manifest.json"
     manifest.parent.mkdir(parents=True, exist_ok=True)
+
+    # A stray operator file, not in the manifest: it stays a blocker.
+    destination.write_bytes(b'{"ID0": {"Final_Caption": "operator own"}}')
+    stray = model_requirements(model, cfg)
+    assert any(str(destination) in block or "no verified automatic acquisition" in block
+               for block in stray["blocks"]), stray["blocks"]
+    assert not stray["warnings"] or all("alias" not in w for w in stray["warnings"])
+
+    # A manifest entry whose bytes are not the published file is still a blocker.
+    destination.write_text(json.dumps({f"ID{i}": {"Final_Caption": f"not published {i}"} for i in range(3)}),
+                           encoding="utf-8")
     manifest.write_text(json.dumps([{
         "destination": str(destination),
-        "downloaded_sha256": digest,
+        "downloaded_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
+        "staged_as": "SOURCE_COMPATIBLE_CAPTION_ALIAS",
+        "source_revision": asset["caption_alias_from"]["source_revision"],
+        "alias_source_path": asset["caption_alias_from"]["source_path"],
+    }]))
+    forged = model_requirements(model, cfg)
+    assert any(str(destination) in block for block in forged["blocks"]), forged["blocks"]
+
+    # Recorded the way the staging path does, with the published bytes on disk: accepted, as a variant.
+    destination.write_bytes(published)
+    manifest.write_text(json.dumps([{
+        "destination": str(destination),
+        "downloaded_sha256": hashlib.sha256(published).hexdigest(),
         "staged_as": "SOURCE_COMPATIBLE_CAPTION_ALIAS",
         "source_revision": asset["caption_alias_from"]["source_revision"],
         "alias_source_path": asset["caption_alias_from"]["source_path"],
@@ -710,6 +754,162 @@ def test_preflight_accepts_a_manifest_recorded_alias_but_not_a_stray_file(tmp_pa
     assert not any(str(destination) in block for block in accepted["blocks"]), accepted["blocks"]
     summary = [w for w in accepted["warnings"] if "source-compatible caption alias" in w]
     assert len(summary) == 1, accepted["warnings"]
+
+
+def test_caption_alias_refuses_to_overwrite_an_operator_owned_file(tmp_path: Path, monkeypatch) -> None:
+    """Asking for an alias does not authorize destroying data someone else put there.
+
+    Ownership is decided by the download manifest, not by the filename: a file the manifest does not
+    attribute to this destination is the operator's, and staging must refuse rather than replace it.
+    """
+    module = load_module()
+    config, cot = _alias_fixture(tmp_path, monkeypatch)
+    asset = cot[0]
+    destination = module.auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    operator_bytes = b'{"OPERATOR": {"Final_Caption": "hand-made, do not touch"}}'
+    destination.write_bytes(operator_bytes)
+
+    staged = module.Asset(
+        asset["model_id"], asset["family"], Path(asset["destination_path"]).name, destination,
+        True, False, None, None, None, asset["provenance_status"], None, None, None,
+        asset["caption_alias_from"])
+    ok, message = module.stage_caption_alias(staged, fashioniq_root=config.FASHIONIQ_ROOT, managed={})
+    assert not ok
+    assert "operator-owned" in message
+    assert destination.read_bytes() == operator_bytes, "the operator's file must survive the refusal"
+
+
+def test_caption_alias_may_replace_a_file_the_manifest_attributes_to_it(tmp_path: Path, monkeypatch) -> None:
+    """A file the workbench itself staged is fair game, so the alias stays idempotent."""
+    module = load_module()
+    config, cot = _alias_fixture(tmp_path, monkeypatch)
+    asset = cot[0]
+    destination = module.auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(b'{"STALE": {"Final_Caption": "an older managed copy"}}')
+
+    staged = module.Asset(
+        asset["model_id"], asset["family"], Path(asset["destination_path"]).name, destination,
+        True, False, None, None, None, asset["provenance_status"], None, None, None,
+        asset["caption_alias_from"])
+    ok, message = module.stage_caption_alias(
+        staged, fashioniq_root=config.FASHIONIQ_ROOT, managed={str(destination): "whatever-was-recorded"})
+    assert ok, message
+    assert b"STALE" not in destination.read_bytes()
+
+
+def test_caption_alias_refuses_a_destination_symlink(tmp_path: Path, monkeypatch) -> None:
+    """A symlink at the destination is never followed, and its target stays untouched."""
+    module = load_module()
+    config, cot = _alias_fixture(tmp_path, monkeypatch)
+    asset = cot[0]
+    destination = module.auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    elsewhere = tmp_path / "elsewhere.json"
+    elsewhere.write_bytes(b'{"ELSEWHERE": {"Final_Caption": "do not follow me"}}')
+    destination.symlink_to(elsewhere)
+
+    staged = module.Asset(
+        asset["model_id"], asset["family"], Path(asset["destination_path"]).name, destination,
+        True, False, None, None, None, asset["provenance_status"], None, None, None,
+        asset["caption_alias_from"])
+    ok, message = module.stage_caption_alias(
+        staged, fashioniq_root=config.FASHIONIQ_ROOT, managed={str(destination): "managed"})
+    assert not ok
+    assert "symlink" in message
+    assert destination.is_symlink()
+    assert elsewhere.read_bytes() == b'{"ELSEWHERE": {"Final_Caption": "do not follow me"}}'
+
+
+def test_caption_alias_rejects_a_stand_in_that_cannot_serve_as_the_asset(tmp_path: Path, monkeypatch) -> None:
+    """A published file that cannot cover the declared split is refused even though its digest is right."""
+    module = load_module()
+    config, cot = _alias_fixture(tmp_path, monkeypatch)
+    asset = cot[0]
+    alias = dict(asset["caption_alias_from"])
+    published = config.FASHIONIQ_ROOT / "qwen_captions" / Path(alias["source_path"]).name
+    # Valid JSON, correct digest, but no Final_Caption anywhere: the evaluator would read nothing.
+    body = json.dumps({f"ID{i}": {"Core_Essence": "no final caption"} for i in range(3)}).encode()
+    published.write_bytes(body)
+    alias["expected_sha256"] = hashlib.sha256(body).hexdigest()
+
+    staged = module.Asset(
+        asset["model_id"], asset["family"], Path(asset["destination_path"]).name,
+        module.auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT),
+        True, False, None, None, None, asset["provenance_status"], None, None, None, alias)
+    ok, message = module.stage_caption_alias(staged, fashioniq_root=config.FASHIONIQ_ROOT)
+    assert not ok
+    assert "unusable here" in message
+    assert not staged.destination.exists()
+
+
+def test_preflight_refuses_a_forged_manifest_that_matches_its_own_bytes(tmp_path: Path, monkeypatch) -> None:
+    """A hand-written manifest cannot relabel arbitrary bytes as a variant.
+
+    The manifest proves the workbench wrote the bytes; it cannot prove they are the published file.
+    Only the registry's declared published digest can, so a file whose digest merely matches a
+    self-consistent manifest entry is still a blocker.
+    """
+    from workbench.backend.registry import auxiliary_destination, caption_alias_evidence
+
+    module = load_module()
+    config, cot = _alias_fixture(tmp_path, monkeypatch)
+    asset = cot[0]
+    destination = auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(b'{"FORGED": {"Final_Caption": "attacker-chosen bytes"}}')
+    forged = hashlib.sha256(destination.read_bytes()).hexdigest()
+
+    manifest = config.WORKBENCH_ARTIFACTS_ROOT / "auxiliary" / "download_manifest.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(json.dumps([{
+        "destination": str(destination), "downloaded_sha256": forged,
+        "staged_as": "SOURCE_COMPATIBLE_CAPTION_ALIAS",
+        "alias_source_path": asset["caption_alias_from"]["source_path"],
+        "source_revision": asset["caption_alias_from"]["source_revision"],
+    }]))
+
+    assert caption_alias_evidence(asset, destination, config) is None
+
+
+def test_preflight_accepts_a_manifest_alias_whose_bytes_are_the_published_file(tmp_path: Path, monkeypatch) -> None:
+    """The honest path still works: manifest record plus the registered published digest."""
+    from workbench.backend.registry import auxiliary_destination, caption_alias_evidence
+
+    module = load_module()
+    config, cot = _alias_fixture(tmp_path, monkeypatch)
+    asset = cot[0]
+    published_digest = asset["caption_alias_from"]["expected_sha256"]
+    destination = auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    published_bytes = (config.FASHIONIQ_ROOT / "qwen_captions"
+                       / Path(asset["caption_alias_from"]["source_path"]).name).read_bytes()
+    real = hashlib.sha256(published_bytes).hexdigest()
+    assert real == published_digest
+    destination.write_bytes(published_bytes)
+    manifest = config.WORKBENCH_ARTIFACTS_ROOT / "auxiliary" / "download_manifest.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    # Bytes that are not the published file: refused.
+    destination.write_text(json.dumps({f"ID{i}": {"Final_Caption": f"different caption {i}"} for i in range(3)}),
+                           encoding="utf-8")
+    different = hashlib.sha256(destination.read_bytes()).hexdigest()
+    manifest.write_text(json.dumps([{
+        "destination": str(destination), "downloaded_sha256": different,
+        "staged_as": "SOURCE_COMPATIBLE_CAPTION_ALIAS",
+    }]))
+    assert different != published_digest
+    assert caption_alias_evidence(asset, destination, config) is None
+    # Bytes that are: accepted, and tied to the published digest.
+    destination.write_bytes(published_bytes)
+    manifest.write_text(json.dumps([{
+        "destination": str(destination), "downloaded_sha256": real,
+        "staged_as": "SOURCE_COMPATIBLE_CAPTION_ALIAS",
+    }]))
+    evidence = caption_alias_evidence(asset, destination, config)
+    assert evidence is not None
+    assert evidence["published_sha256"] == published_digest
+    assert evidence["equivalence"] == "SOURCE_COMPATIBLE_EQUIVALENCE_UNKNOWN"
 
 
 def test_preflight_rejects_a_manifest_alias_whose_bytes_changed(tmp_path: Path, monkeypatch) -> None:

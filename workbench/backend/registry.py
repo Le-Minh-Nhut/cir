@@ -541,11 +541,20 @@ def caption_alias_evidence(asset: dict[str, Any], path: Path, config: Any) -> di
             return None
         if not recorded or actual != recorded:
             return None
+        # The manifest only proves the workbench wrote these bytes; it cannot prove they are the
+        # published stand-in, because a manifest is a local file and a run could have written one.
+        # The registry declares the published digest, so requiring the staged bytes to equal it ties
+        # the file on disk to the published source rather than to a claim about it. Without this a
+        # hand-written manifest could relabel arbitrary bytes as a variant.
+        expected = alias.get("expected_sha256")
+        if not expected or actual != expected:
+            return None
         return {
             "staged_as": entry["staged_as"],
             "alias_source_path": entry.get("alias_source_path") or alias.get("source_path"),
             "source_revision": entry.get("source_revision") or alias.get("source_revision"),
             "staged_sha256": actual,
+            "published_sha256": expected,
             "equivalence": "SOURCE_COMPATIBLE_EQUIVALENCE_UNKNOWN",
         }
     return None

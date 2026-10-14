@@ -134,7 +134,39 @@ def alias_source_url(alias: dict[str, Any], source_repo: str) -> str | None:
         return None
     return f"{source_repo}/resolve/{alias['source_revision']}/{source_path}"
 
-def stage_caption_alias(asset: Asset, *, fashioniq_root: Path | None = None) -> tuple[bool, str]:
+def alias_content_problems(asset: Asset, staged: Path, *, fashioniq_root: Path | None) -> list[str]:
+    """Reject a published stand-in whose content cannot serve as the declared asset.
+
+    The digest proves the bytes are the published file; it does not prove the published file is
+    usable here. These are the properties the pinned evaluator actually depends on: a JSON object
+    keyed by FashionIQ image id, exactly covering the declared split, with a non-empty Final_Caption
+    for every id — the field every executing consumer reads.
+    """
+    from workbench.backend.registry import validate_auxiliary_asset
+
+    alias = asset.caption_alias_from or {}
+    res = validate_auxiliary_asset(
+        {
+            "destination": str(staged),
+            "expected_sha256": alias.get("expected_sha256"),
+            "expected_size_bytes": alias.get("expected_size_bytes"),
+            "content_contract": asset.content_contract,
+            "provenance_status": "VERIFIED",
+        },
+        staged,
+        fashioniq_root=fashioniq_root,
+    )
+    problems = list(res.issues)
+    if not res.ok:
+        return problems or [f"{staged}: content did not satisfy the declared contract"]
+    data = json.loads(staged.read_text(encoding="utf-8"))
+    blank = [key for key, value in data.items() if not str(value.get("Final_Caption", "")).strip()]
+    if blank:
+        problems.append(f"{staged}: {len(blank)} records have an empty Final_Caption (e.g. {blank[0]})")
+    return problems
+
+def stage_caption_alias(asset: Asset, *, fashioniq_root: Path | None = None,
+                        managed: dict[str, Any] | None = None) -> tuple[bool, str]:
     """Copy the published stand-in to the unattainable asset's destination.
 
     A copy, never a symlink: the runtime treats a symlink at a declared auxiliary asset as an
@@ -142,6 +174,11 @@ def stage_caption_alias(asset: Asset, *, fashioniq_root: Path | None = None) -> 
     evaluator's `base_path` resolves it. The copy is verified against the alias's published digest
     before it replaces anything, and the destination's own registry hash is deliberately NOT
     satisfied — the staged bytes are a variant, and the caller keeps reporting them as one.
+
+    Ownership comes from the download manifest, never from the filename or the registry: a file the
+    manifest does not attribute to this destination is the operator's, and staging refuses to touch
+    it. Asking for `--stage-caption-aliases` authorizes creating a variant the workbench manages; it
+    does not authorize destroying data someone else put there.
     """
     alias = asset.caption_alias_from
     if not alias:
@@ -159,15 +196,24 @@ def stage_caption_alias(asset: Asset, *, fashioniq_root: Path | None = None) -> 
     digest = sha256_file(staged)
     if alias.get("expected_sha256") and digest != alias["expected_sha256"]:
         return False, f"{asset.destination}: staged caption {staged} is not the declared published file (sha256={digest})"
+    content_problems = alias_content_problems(asset, staged, fashioniq_root=fashioniq_root)
+    if content_problems:
+        return False, f"{asset.destination}: published caption is unusable here: {content_problems[0]}"
     if asset.destination.is_symlink():
         return False, f"{asset.destination}: a symlink is never written as a declared auxiliary asset"
+    if asset.destination.exists() and str(asset.destination) not in (managed or {}):
+        return False, (f"{asset.destination}: refusing to overwrite an operator-owned file (not recorded in the "
+                       f"download manifest); move it aside to stage the alias")
     asset.destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = asset.destination.with_suffix(asset.destination.suffix + ".alias.part")
-    shutil.copyfile(staged, temporary)
-    if sha256_file(temporary) != digest:
+    try:
+        shutil.copyfile(staged, temporary)
+        if sha256_file(temporary) != digest:
+            raise RuntimeError("alias copy did not reproduce the published bytes")
+        os.replace(temporary, asset.destination)
+    except Exception:
         temporary.unlink(missing_ok=True)
-        return False, f"{asset.destination}: alias copy did not reproduce {staged} byte-for-byte"
-    os.replace(temporary, asset.destination)
+        raise
     return True, f"ALIASED {asset.destination} <- {staged} sha256={digest}"
 
 def record_alias(entries: list[dict], asset: Asset) -> list[dict]:
@@ -367,15 +413,34 @@ def main(argv: list[str] | None = None) -> int:
     if not selected:
         print("verified auxiliary downloads: complete")
     if args.stage_caption_aliases:
+        alias_failed = False
         for asset in aliasable:
-            ok, message = stage_caption_alias(asset, fashioniq_root=config.FASHIONIQ_ROOT)
+            try:
+                ok, message = stage_caption_alias(
+                    asset, fashioniq_root=config.FASHIONIQ_ROOT, managed=recorded_digest
+                )
+            except Exception as error:
+                print(f"BLOCKED: {asset.destination}: {error}", file=sys.stderr)
+                alias_failed = True
+                continue
             print(message)
             if ok:
                 entries = record_alias(entries, asset)
                 save_manifest(manifest_path(config.WORKBENCH_ARTIFACTS_ROOT), entries)
+            else:
+                # A refusal is a failed staging operation, not a warning: the caller asked for a
+                # variant and did not get one, so the run must not report success.
+                print(f"BLOCKED: {message}", file=sys.stderr)
+                alias_failed = True
+        if alias_failed:
+            return 1
     for asset in unavailable:
         if not asset.destination.is_file():
             print(f"BLOCKED: required {asset.family} has no verified automatic acquisition source: {asset.destination}")
+    # A required asset that is still absent after staging is an unresolved requirement, and the
+    # caller must see it as failure rather than as a completed run.
+    if any(asset.required and not asset.destination.is_file() for asset in unavailable):
+        return 1
     return 0
 
 
