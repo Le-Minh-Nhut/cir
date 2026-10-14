@@ -7,11 +7,26 @@ keeps non-ASCII characters intact, which `unicode_escape` would mangle.
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
-SESSION = Path("/home/heheboiz/.omp/agent/sessions/-data-cir/2026-10-13T13-09-01-288Z_01a13561-72e8-70cb-a614-83b9e812b501")
-DEST = Path("/home/heheboiz/data/cir/workbench/docs/reviews/models")
+#: The harness writes each subagent's payload next to its session log. The session root is not stable
+#: across machines, so it comes from the environment with the local default first; both are searched.
+SESSION_CANDIDATES = [
+    Path(os.environ["OMP_SESSION_DIR"]) if os.environ.get("OMP_SESSION_DIR") else None,
+    Path.home() / ".omp/agent/sessions/-data-cir",
+]
+DEST = Path(__file__).resolve().parents[2] / "workbench/docs/reviews/models"
+
+
+def _session_dir() -> Path | None:
+    for candidate in SESSION_CANDIDATES:
+        if candidate and candidate.is_dir():
+            sessions = sorted(p for p in candidate.iterdir() if p.is_dir())
+            if sessions:
+                return sessions[-1]
+    return None
 
 ESCAPES = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\", "/": "/"}
 
@@ -42,8 +57,15 @@ def extract(path: Path) -> str:
 
 
 def main(argv: list[str]) -> int:
+    session = _session_dir()
     for arg in argv:
-        src = Path(arg) if Path(arg).is_file() else SESSION / f"{arg}.md"
+        if Path(arg).is_file():
+            src = Path(arg)
+        elif session is not None:
+            src = session / f"{arg}.md"
+        else:
+            print(f"{arg}: no session directory found; pass the payload path directly")
+            continue
         if not src.is_file():
             print(f"MISSING {src}")
             continue

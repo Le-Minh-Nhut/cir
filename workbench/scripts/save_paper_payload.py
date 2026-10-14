@@ -7,16 +7,34 @@ without escaping embedded newlines, so it is decoded by hand rather than with `j
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
-SESSION = Path("/home/heheboiz/.omp/agent/sessions/-data-cir/2026-10-13T13-09-01-288Z_01a13561-72e8-70cb-a614-83b9e812b501")
-CACHE = Path("/home/heheboiz/data/cir/workbench/registry/paper_benchmarks/extracted")
+#: The harness writes each subagent's payload next to its session log, and the session root differs per
+#: machine, so it is discovered rather than hardcoded.
+SESSION_CANDIDATES = [
+    Path(os.environ["OMP_SESSION_DIR"]) if os.environ.get("OMP_SESSION_DIR") else None,
+    Path.home() / ".omp/agent/sessions/-data-cir",
+]
+CACHE = Path(__file__).resolve().parents[2] / "workbench/registry/paper_benchmarks/extracted"
+
+
+def _session_dir() -> Path | None:
+    for candidate in SESSION_CANDIDATES:
+        if candidate and candidate.is_dir():
+            sessions = sorted(p for p in candidate.iterdir() if p.is_dir())
+            if sessions:
+                return sessions[-1]
+    return None
 
 
 def load_payload(agent: str):
+    session = _session_dir()
+    if session is None:
+        return None
     for suffix in (".json", ".md"):
-        path = SESSION / f"{agent}{suffix}"
+        path = session / f"{agent}{suffix}"
         if not path.is_file():
             continue
         raw = path.read_text(encoding="utf-8", errors="surrogateescape").strip()
