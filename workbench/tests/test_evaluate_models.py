@@ -57,6 +57,10 @@ def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Pa
     # the very check that exists to catch a substituted file. `main()` loads its own registry, so the
     # declaration is rewritten on every load rather than mutated on the dict this helper was handed.
     payload = b"checkpoint"
+    # This fixture builds a synthetic checkout, so a defect the registry declares about the real
+    # pinned source does not exist here. Clearing it lets these tests exercise the command path they
+    # are actually about. Done unconditionally: not every model declares a checkpoint hash.
+    model.pop("source_blocker", None)
     if checkpoint.get("expected_sha256") or checkpoint.get("expected_size_bytes"):
         digest = hashlib.sha256(payload).hexdigest()
         original_loader = registry.load_registry
@@ -66,6 +70,10 @@ def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Pa
             for candidate in loaded["models"]:
                 if candidate["model_id"] != model["model_id"]:
                     continue
+                # This fixture builds a synthetic checkout, so a defect the registry declares about
+                # the real pinned source does not exist here. Clearing it lets these tests exercise
+                # the command path they are actually about.
+                candidate.pop("source_blocker", None)
                 for variant in candidate.get("checkpoint_variants", []):
                     if variant.get("expected_sha256") or variant.get("expected_size_bytes"):
                         variant["expected_sha256"] = digest
