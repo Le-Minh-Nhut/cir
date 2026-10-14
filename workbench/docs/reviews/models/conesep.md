@@ -436,3 +436,25 @@ paper/README/config
 ---
 
 **FINAL VERDICT: BLOCKED** — the registry's static facts for `conesep` check out against the pinned tree (pin, protocol, `strict_clean=false`, paper-metric transcription), but there is no runnable path to any number: the pinned tree has no standalone evaluator or checkpoint loader, the workbench adapter raises `NotImplementedError`, the registered dataset layout is absent locally, and the published row is the 0%-noise row for which no checkpoint exists.
+
+---
+
+## REFRESH (this engagement)
+
+Appended after the work that landed on top of this audit. Earlier findings above are left as
+written; where one has been superseded, the superseding fact is stated here.
+
+- **Static benchmark reference.** 4 committed row(s):
+
+  - `conesep_fiq_n00` — status `VERIFIED`, 0% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 55.58, 'r50': 75.88, 'mean': 65.73}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `conesep_fiq_n20` — status `VERIFIED`, 20% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 54.93, 'r50': 75.01, 'mean': 64.97}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `conesep_fiq_n50` — status `VERIFIED`, 50% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 53.39, 'r50': 74.15, 'mean': 63.77}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `conesep_fiq_n80` — status `VERIFIED`, 80% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 49.25, 'r50': 70.3, 'mean': 59.77}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+
+- **Readiness now:** `BLOCKED_SOURCE` — source cannot run: no runnable evaluation path is registered for this model: the pinned evaluator is a callable with no CLI or checkpoint loader, the adapter deliberately declines to build a command, and the required correction dictionaries and resized images have no published source; the paper row is the 0%-noise row and no 0% checkpoint is published (see workbench/docs/reviews/models for the model's audit). An earlier note in this registry claimed a tensor-shape failure in the similarity computation; that claim was WRONG and is withdrawn - np.matmul broadcasts and the ranking matrix has the shape the indexing expects
+
+- **Reference per registered checkpoint condition:**
+
+  - `fiq_n02` (noise 20): `conesep_fiq_n20` status `VERIFIED` — exact condition match
+  - `fiq_n05` (noise 50): `conesep_fiq_n50` status `VERIFIED` — exact condition match
+  - `fiq_n08` (noise 80): `conesep_fiq_n80` status `VERIFIED` — exact condition match

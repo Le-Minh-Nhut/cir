@@ -384,3 +384,20 @@ The pinned commit is exact, the protocol cohort is correctly assigned and indepe
 ---
 
 FINAL VERDICT: VARIANT — the pin, cohort assignment and paper numbers are correct and independently re-derived, but the registered path has no runnable evaluation command (upstream or workbench), no source loader for the registered FashionIQ checkpoint, a source training entry point that crashes on its own dataset constructor, and mandatory correction dictionaries whose bytes are unpublished, so nothing was reproduced and the registered metadata alone is what stands.
+
+---
+
+## REFRESH (this engagement)
+
+Appended after the work that landed on top of this audit. Earlier findings above are left as
+written; where one has been superseded, the superseding fact is stated here.
+
+- **Static benchmark reference.** 1 committed row(s):
+
+  - `hint_fiq_clean_val_split` — status `VERIFIED`, 0% training noise, protocol `fashioniq_val_split`, values `{'r10': 58.48, 'r50': 77.93, 'mean': 68.21}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
+
+- **Readiness now:** `BLOCKED_IMPLEMENTATION` — command not runnable: COMMAND_UNAUDITED
+
+- **Reference per registered checkpoint condition:**
+
+  - `fashioniq` (noise 0): `hint_fiq_clean_val_split` status `VERIFIED` — exact condition match

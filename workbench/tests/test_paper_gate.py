@@ -273,14 +273,34 @@ def test_an_unknown_run_field_blocks_rather_than_matching():
 
 
 def test_a_condition_the_reference_does_not_state_is_reported_not_assumed():
-    # A paper that never says which protocol it used cannot silently match whichever one is claimed:
-    # the unstated field is reported so a reader sees what was not checked, and the comparison still
-    # proceeds on the conditions both sides do state.
+    # A paper that never says which protocol it used cannot silently match whichever one is claimed.
+    # The comparison proceeds on the conditions both sides state, and the unchecked ones are surfaced
+    # in the detail and in the reference evidence -- not in `blockers`, because a passing verdict must
+    # not carry refusal text that a consumer would mishandle.
     ref = reference(gallery_protocol=None)
     verdict = run(dict(PAPER), ref)
-    assert verdict.status in (gate.PASS_WITHIN_5_PERCENT, gate.FAILED_OUTPUT_VALIDATION)
-    assert any("not stated by the reference" in blocker for blocker in verdict.blockers)
+    assert verdict.status == gate.PASS_WITHIN_5_PERCENT
+    assert verdict.blockers == []
+    assert "not checked" in verdict.detail
     assert verdict.comparisons, "the stated conditions still permit a comparison"
+
+
+def test_a_reference_that_states_no_condition_cannot_certify_a_run():
+    """A row that describes no experiment is refused, however close the numbers look.
+
+    Treating every unstated field as "not checked" made a blank row pass any run, including one on a
+    different protocol, dataset and split. A reference has to constrain something to be evidence.
+    """
+    blank = reference({"r10": 55.0, "r50": 75.0, "mean": 65.0}, reference_id="blank",
+                      gallery_protocol=None, checkpoint_id=None, checkpoint_training_noise_pct=None,
+                      evaluation_noise_pct=None, split=None, dataset=None)
+    run_meta = {"protocol_id": "fashioniq_val_split", "checkpoint_id": "other",
+                "checkpoint_training_noise_pct": 99, "evaluation_noise_pct": 42,
+                "split": "test", "dataset": "cirr"}
+    verdict = gate.evaluate_gate(blank, {"r10": 55.0, "r50": 75.0, "mean": 65.0},
+                                 run_meta=run_meta, real_execution=True)
+    assert verdict.status == gate.BLOCKED_REFERENCE_INCOMPLETE
+    assert not verdict.passed
 
 
 # ---------------------------------------------------------------- variants and evidence
@@ -410,3 +430,35 @@ def test_the_report_helper_reports_a_failed_run_as_not_a_metric_verdict():
     verdict = _benchmark_gate_verdict(plan, Extraction(), 1)
     assert verdict["status"] == gate.FAILED_EVALUATION
     assert not verdict["passed"]
+
+
+def test_a_derived_entry_is_never_a_second_copy_of_a_printed_value():
+    """Extractors name derivations after the arithmetic; the registry must name them after the metric.
+
+    A derived copy of a printed value is unreachable (the reported value wins in `value_for`), and
+    where the two disagree it asserts arithmetic the paper contradicts. Air-Know's 20% row had exactly
+    that: a derived 75.72 against the paper's printed 75.71.
+    """
+    for record in benchmarks.load_registry()["references"]:
+        reported = record.get("reported_metrics") or {}
+        for item in record.get("derived_metrics") or []:
+            assert item["key"] in gate.METRIC_KEYS, (record["reference_id"], item["key"])
+            assert reported.get(item["key"]) is None, (
+                f"{record['reference_id']}: {item['key']} is derived while the paper prints it")
+
+
+def test_no_committed_row_states_no_condition_at_all():
+    """A row that constrains nothing could pass any run, so the gate refuses it. Keep the registry clean."""
+    from workbench.backend import paper_gate as gate_module
+
+    for record in benchmarks.load_registry()["references"]:
+        stated = sum(1 for field in gate_module.COMPARABILITY_FIELDS
+                     if {
+                         "protocol_id": record.get("gallery_protocol"),
+                         "checkpoint_id": record.get("checkpoint_id"),
+                         "checkpoint_training_noise_pct": record.get("checkpoint_training_noise_pct"),
+                         "evaluation_noise_pct": record.get("evaluation_noise_pct"),
+                         "split": record.get("split"),
+                         "dataset": record.get("dataset"),
+                     }.get(field) is not None)
+        assert stated > 0, record["reference_id"]

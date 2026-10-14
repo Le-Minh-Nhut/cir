@@ -158,3 +158,20 @@ CHECKLIST (55) —
 55. Audit itself mutated repo state — NO — `git status --porcelain` shows only other agents' concurrent work (`workbench/docs/reviews/models/*`, `workbench/registry/models.yaml`, `workbench/backend/registry.py`, `paper_gate.py`, `test_paper_gate.py`; mtimes 19:29-19:44 vs my probes at 19:44+ and no dcnet-related path in the diff); `/tmp/dcnet_probe` holds all probe output — NONE — none.
 
 FINAL VERDICT: **BLOCKED** — the pinned source genuinely implements a full-gallery, reference-masked, dual-branch evaluator and the workbench's command/resume/contract reading of it is accurate, but no author run directory exists (folder-only URL, no hash), the GloVe val PKLs are absent and their generator is unseeded and cannot even read the workbench dataset root, and the declared resize recipe is un-runnable against the PNG-only shipped images (observed `resize input missing … (and 15535 more)`); with `reported_*` all null there is nothing to compare even after those are fixed.
+
+---
+
+## REFRESH (this engagement)
+
+Appended after the work that landed on top of this audit. Earlier findings above are left as
+written; where one has been superseded, the superseding fact is stated here.
+
+- **Static benchmark reference.** 1 committed row(s):
+
+  - `dcnet_fashioniq_val_table1` — status `VERIFIED`, None% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 27.78, 'r50': 53.89, 'mean': 40.83}`, provenance `{'r10': 'WORKBENCH_DERIVED', 'r50': 'WORKBENCH_DERIVED', 'mean': 'PAPER_REPORTED'}`
+
+- **Readiness now:** `BLOCKED_ENVIRONMENT` — execution environment not verified: WORKBENCH_DCNET_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_DCNET_PYTHON not set)
+
+- **Reference per registered checkpoint condition:**
+
+  - `fashioniq_run_directory` (noise None): `dcnet_fashioniq_val_table1` status `VERIFIED` — exact condition match

@@ -276,3 +276,25 @@ Format: `N. question — verdict — evidence — severity — action`.
 **BLOCKED.** The registry metadata for `habit` is largely truthful and the pinned source's protocol (full ordered validation gallery, reference masked at `-10e10` before `np.argsort`, R@1/10/50) matches `fashioniq_full_gallery_ref_excluded`, and the reported 55.38 / 75.20 / 65.29 reproduce from the paper's own 0%-noise row with the mean identity holding exactly — but reproduction is impossible as registered: the upstream Hub publishes only 20/50/80%-noise weights with **no clean 0% checkpoint**, the workbench adapter has **no audited command** (`command not runnable: COMMAND_UNAUDITED`; pinned `test.py` has no `__main__`/`argparse` and is a training subroutine), the dataset contract is unsatisfied locally (`resized_image/` and the unprovenanced `correction_dict_*.json` all missing), and the only paper-comparable checkpoint does not exist.
 
 `FINAL VERDICT: BLOCKED`
+
+---
+
+## REFRESH (this engagement)
+
+Appended after the work that landed on top of this audit. Earlier findings above are left as
+written; where one has been superseded, the superseding fact is stated here.
+
+- **Static benchmark reference.** 4 committed row(s):
+
+  - `habit_aaai26_table1_fiq_n00` — status `VERIFIED`, 0% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 55.38, 'r50': 75.2, 'mean': 65.29}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `habit_aaai26_table1_fiq_n20` — status `VERIFIED`, 20% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 54.48, 'r50': 74.28, 'mean': 64.38}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `habit_aaai26_table1_fiq_n50` — status `VERIFIED`, 50% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 52.52, 'r50': 73.09, 'mean': 62.8}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `habit_aaai26_table1_fiq_n80` — status `VERIFIED`, 80% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 48.36, 'r50': 69.53, 'mean': 58.94}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+
+- **Readiness now:** `BLOCKED_IMPLEMENTATION` — command not runnable: COMMAND_UNAUDITED
+
+- **Reference per registered checkpoint condition:**
+
+  - `fiq_n02` (noise 20): `habit_aaai26_table1_fiq_n20` status `VERIFIED` — exact condition match
+  - `fiq_n05` (noise 50): `habit_aaai26_table1_fiq_n50` status `VERIFIED` — exact condition match
+  - `fiq_n08` (noise 80): `habit_aaai26_table1_fiq_n80` status `VERIFIED` — exact condition match

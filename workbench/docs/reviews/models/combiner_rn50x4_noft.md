@@ -331,3 +331,22 @@ Each item: `N. question — verdict — evidence — severity — action`.
 ---
 
 FINAL VERDICT: **BLOCKED** — the registry's static facts for `combiner_rn50x4_noft` are correct where they can be checked (pin equal to the checkout and clean, `fashioniq_original_split` with an eligible reference confirmed inside `validate.py` against its own CIRR contrast, no augmentation at evaluation, the exact TargetPad/CLIP pipeline, and the no-`--clip-model-path` noft CLI shape), and the noft-vs-fullft mapping is genuinely verified from the author's own release metadata rather than assumed; but nothing can run: the canonical root holds 74381 `.png` where the evaluator opens `.jpg` (with a silent `None`-skip path that would corrupt the ranking rather than raise), the hard-coded `<checkout>/fashionIQ_dataset` link is absent, the RN50x4 cache and the model interpreter do not exist on this host, the checkpoint is a folder URL with no file name, size or digest, and no metric parser exists for the evaluator's stdout — so no number can be produced, and the companion P1 finding is that CLIP4Cir's reference-eligible FashionIQ numbers are not cohort-comparable with the reference-excluded baselines they are tabulated against in their own paper.
+
+---
+
+## REFRESH (this engagement)
+
+Appended after the work that landed on top of this audit. Earlier findings above are left as
+written; where one has been superseded, the superseding fact is stated here.
+
+- **Static benchmark reference.** 3 committed row(s):
+
+  - `clip4cir_rn50x4_noft_fiq_absent_in_paper` — status `UNVERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': None, 'r50': None, 'mean': None}`, provenance `{'r10': 'UNAVAILABLE', 'r50': 'UNAVAILABLE', 'mean': 'UNAVAILABLE'}`
+  - `combiner_rn50x4_noft__clip4cir_rn50x4_fiq_gallery_protocol` — status `UNVERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': None, 'r50': None, 'mean': None}`, provenance `{'r10': 'UNAVAILABLE', 'r50': 'UNAVAILABLE', 'mean': 'UNAVAILABLE'}`
+  - `combiner_rn50x4_noft__clip4cir_paper_note_backbone_inventory_and_version` — status `UNVERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': None, 'r50': None, 'mean': None}`, provenance `{'r10': 'UNAVAILABLE', 'r50': 'UNAVAILABLE', 'mean': 'UNAVAILABLE'}`
+
+- **Readiness now:** `BLOCKED_ENVIRONMENT` — execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)
+
+- **Reference per registered checkpoint condition:**
+
+  - `rn50x4_noft_unresolved` (noise None): `None` status `None` — combiner_rn50x4_noft has references but none is verified: ['UNVERIFIED']

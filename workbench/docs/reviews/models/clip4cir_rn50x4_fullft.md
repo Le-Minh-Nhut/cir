@@ -353,3 +353,22 @@ That row is the two-stage fine-tuned model (Table 1 shows the best FashionIQ con
 ---
 
 FINAL VERDICT: **BLOCKED** — the commit pin, the two-artefact requirement and the reference-eligible protocol are all confirmed against the pinned code, but the checkpoint pair is unnamed/unhashed, the base RN50x4 cache and the hard-coded `<checkout>/fashionIQ_dataset` link are absent, the canonical root holds `.png` where the evaluator opens `.jpg`, and the registry and adapter disagree about where a staged bundle lives — so nothing can be run and no metric can be produced.
+
+---
+
+## REFRESH (this engagement)
+
+Appended after the work that landed on top of this audit. Earlier findings above are left as
+written; where one has been superseded, the superseding fact is stated here.
+
+- **Static benchmark reference.** 3 committed row(s):
+
+  - `clip4cir_rn50x4_fullft_fiq_tab9` — status `VERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': 43.78, 'r50': 66.93, 'mean': 55.36}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
+  - `clip4cir_rn50x4_fullft__clip4cir_rn50x4_fiq_gallery_protocol` — status `UNVERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': None, 'r50': None, 'mean': None}`, provenance `{'r10': 'UNAVAILABLE', 'r50': 'UNAVAILABLE', 'mean': 'UNAVAILABLE'}`
+  - `clip4cir_rn50x4_fullft__clip4cir_paper_note_backbone_inventory_and_version` — status `UNVERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': None, 'r50': None, 'mean': None}`, provenance `{'r10': 'UNAVAILABLE', 'r50': 'UNAVAILABLE', 'mean': 'UNAVAILABLE'}`
+
+- **Readiness now:** `BLOCKED_ENVIRONMENT` — execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)
+
+- **Reference per registered checkpoint condition:**
+
+  - `rn50x4_fullft_unresolved` (noise None): `clip4cir_rn50x4_fullft_fiq_tab9` status `VERIFIED` — exact condition match

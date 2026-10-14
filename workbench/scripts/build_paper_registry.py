@@ -107,12 +107,49 @@ def build_record(paper: dict, experiment: dict) -> dict:
             # comparator has nothing to check there. Every derived value must state its formula, so a
             # value that appears without one is a bookkeeping error rather than a paper's number.
             continue
+    cleaned = []
     for item in derived:
         if not item.get("derivation_formula"):
             raise ValueError(f"{record['reference_id']}: derived {item.get('key')} has no formula")
         if item.get("provenance") != "WORKBENCH_DERIVED":
             raise ValueError(f"{record['reference_id']}: derived {item.get('key')} must be WORKBENCH_DERIVED")
+        # Extractors name a derived entry after how it was computed (`mean_from_avg_columns`,
+        # `macro_r50_from_categories`) rather than after the metric it produces. Normalise that here,
+        # so the comparator can look up a metric by name and so a derived copy of a PRINTED value is
+        # recognisable as unreachable dead data -- `value_for` reads the reported value first, and where
+        # the two disagree the derived arithmetic contradicts the paper it came from.
+        metric = _metric_for_derived(item)
+        if metric is None:
+            continue
+        if reported.get(metric) is not None:
+            continue
+        item["key"] = metric
+        cleaned.append(item)
+    record["derived_metrics"] = cleaned
     return record
+
+
+#: How a derived entry's own key maps to the metric it stands for. Anything not listed here is not a
+#: metric the comparator reads, so it is dropped rather than committed as if it were one.
+DERIVED_KEY_TO_METRIC = {
+    "mean": "mean",
+    "mean_from_avg_columns": "mean",
+    "macro_mean_from_categories": "mean",
+    "r10": "r10",
+    "macro_r10_from_categories": "r10",
+    "r50": "r50",
+    "macro_r50_from_categories": "r50",
+}
+
+
+def _metric_for_derived(item: dict) -> str | None:
+    key = str(item.get("key") or "")
+    if key in DERIVED_KEY_TO_METRIC:
+        return DERIVED_KEY_TO_METRIC[key]
+    for metric in ("r10", "r50", "mean"):
+        if metric in key:
+            return metric
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:

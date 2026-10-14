@@ -135,3 +135,55 @@ def test_the_blocker_is_reported_only_while_the_checkout_is_unrepaired(monkeypat
                     str(REPO / _declared()["patch_file"])], check=True, capture_output=True)
     repaired = blockers_for_checkout()
     assert not any("source cannot run" in b and "lavis" in b for b in repaired), repaired
+
+
+def test_a_patched_checkout_is_not_reported_as_a_dirty_source(tmp_path, monkeypatch):
+    """Applying the approved patch must not make the checkout read as an unauthorized modification.
+
+    This is the workflow the documentation gives an operator, and it did not work: the patch target is
+    a tracked edit, and the classifier sent every tracked edit straight to `tracked` without consulting
+    the declared-artifact allowlist, so the approved variant was reported dirty.
+
+    The fixture holds only the file the patch touches. A full copy would also carry the staged caption
+    aliases, whose verification needs an artifacts-root manifest this test does not build, and that is
+    a different subject.
+    """
+    import hashlib
+    import subprocess
+    from dataclasses import replace
+
+    from workbench.backend import runtime
+
+    patch = _declared()
+    target = tmp_path / "CSMCIR"
+    (target / Path(patch["path"]).parent).mkdir(parents=True)
+    shutil.copyfile(REPO / "workbench/third_party/CSMCIR" / patch["path"], target / patch["path"])
+    # A git checkout is what the classifier reads, so the fixture must be one.
+    subprocess.run(["git", "init", "-q"], cwd=target, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=target, check=True)
+    subprocess.run(["git", "-c", "user.email=t@t.invalid", "-c", "user.name=T",
+                    "commit", "-qm", "pin"], cwd=target, check=True)
+
+    monkeypatch.setattr("workbench.backend.operator_config.resolve_config",
+                        lambda: replace(resolve_config(), WORKBENCH_THIRD_PARTY_ROOT=tmp_path))
+
+    before = runtime.source_status(target)
+    assert runtime._source_dirty(target) is False, before
+    assert runtime._approved_source_artifacts(target) != {}, "the allowlist must match this checkout"
+
+    result = subprocess.run(["patch", "-p1", "--directory", str(target), "-i",
+                             str(REPO / patch["patch_file"])], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert hashlib.sha256((target / patch["path"]).read_bytes()).hexdigest() == patch["derived_sha256"]
+
+    after = runtime.source_status(target)
+    assert after["tracked"] == [], after
+    assert patch["path"] in after["approved"], after
+    assert runtime._source_dirty(target) is False, after
+
+    # A different file in the same checkout is still an unauthorized change.
+    other = target / "src/another_module.py"
+    other.write_text("x = 1\n")
+    third = runtime.source_status(target)
+    assert "src/another_module.py" in third["unauthorized"], third
+    assert runtime._source_dirty(target) is True, third

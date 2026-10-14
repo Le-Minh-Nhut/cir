@@ -180,6 +180,23 @@ def _reference_expected(reference: benchmarks.BenchmarkReference) -> dict[str, A
     }
 
 
+STATE_FIELD = "checkpoint_training_noise_pct"
+
+BLOCKED_REFERENCE_INCOMPLETE = "BLOCKED_REFERENCE_INCOMPLETE"
+
+
+def _reference_constraint_count(reference: benchmarks.BenchmarkReference) -> int:
+    """How many comparability conditions the reference actually states.
+
+    A row that states none of them cannot describe any particular experiment, so comparing against it
+    would certify whatever run happened to be nearby. Counting is on the *stated* conditions, not on
+    the metric values: a paper that prints numbers but never says which protocol produced them is not
+    evidence about a run under any protocol.
+    """
+    expected = _reference_expected(reference)
+    return sum(1 for key in COMPARABILITY_FIELDS if expected.get(key) is not None)
+
+
 def _comparability_blockers(reference: benchmarks.BenchmarkReference,
                             run_meta: dict[str, Any]) -> list[str]:
     expected = _reference_expected(reference)
@@ -265,6 +282,14 @@ def evaluate_gate(
     blockers = _comparability_blockers(reference, run_meta or {})
     hard = [b for b in blockers if "not stated by the reference" not in b]
     unchecked = [b for b in blockers if "not stated by the reference" in b]
+    # A reference that states none of the conditions describes no particular experiment, so it cannot
+    # certify one. This is refused rather than noted: a row whose protocol, checkpoint, dataset and
+    # split are all unknown would otherwise pass any run whose numbers happened to land nearby, which
+    # is the opposite of what this gate is for.
+    if _reference_constraint_count(reference) == 0:
+        return GateVerdict(BLOCKED_REFERENCE_INCOMPLETE, False, False, [], blockers,
+                           f"reference {reference.reference_id} states none of the conditions a run is "
+                           f"compared on, so it cannot certify any experiment")
     if hard:
         return GateVerdict(_blocked_status(blockers), False, False, [], blockers,
                            "the reference and the run do not describe one experiment")
@@ -285,7 +310,7 @@ def evaluate_gate(
     evidence = reference.as_evidence()
     if failed:
         return GateVerdict(ALERT_METRIC_DEVIATION, False, variant, comparisons,
-                           [_failure_note(c) for c in failed] + unchecked,
+                           [_failure_note(c) for c in failed], 
                            "at least one comparable metric exceeds the tolerance", evidence)
     status = PASS_WITHIN_5_PERCENT_VARIANT if variant else PASS_WITHIN_5_PERCENT
     detail = "every comparable metric is within 5 percent relative error"
@@ -293,4 +318,7 @@ def evaluate_gate(
         detail += f"; {', '.join(missing)} had no value on either side and was not compared"
     if unchecked:
         detail += f"; {len(unchecked)} condition(s) the reference does not state were not checked"
-    return GateVerdict(status, True, variant, comparisons, unchecked, detail, evidence)
+    # A passing verdict lists no blockers. Unchecked conditions belong in `detail` and in the
+    # reference evidence, where a reader looks for caveats; putting refusals in a `blockers` list on a
+    # `passed=True` verdict makes every consumer mishandle the result.
+    return GateVerdict(status, True, variant, comparisons, [], detail, evidence)

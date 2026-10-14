@@ -146,3 +146,21 @@ BLOCKED — the pinned PAIR evaluator has no executable entrypoint and its model
 
 FINAL VERDICT: BLOCKED — the pinned PAIR tree has no executable evaluator (`test.py` is a callable with no caller; `train.py` stops at setup) and its model module cannot be imported (`import MHTransformer_rev`, absent from tree and filesystem), the required open_clip binary is unregistered, and neither `pair-B1.pt` nor `pair-B2.pt` can be mapped to the FashionIQ row by any source, README, config, release note or filename — the two variants correctly remain registered as unresolved, and the only verified numbers (R@10 52.76 / R@50 74.51) are the author's own figure read statically, with 63.64 a workbench-derived mean.
 ",
+
+---
+
+## REFRESH (this engagement)
+
+Appended after the work that landed on top of this audit. Earlier findings above are left as
+written; where one has been superseded, the superseding fact is stated here.
+
+- **Static benchmark reference.** 1 committed row(s):
+
+  - `pair_fiq_clean_val_split` — status `VERIFIED`, None% training noise, protocol `fashioniq_val_split`, values `{'r10': 52.76, 'r50': 74.51, 'mean': 63.64}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
+
+- **Readiness now:** `BLOCKED_IMPLEMENTATION` — command not runnable: COMMAND_UNAUDITED
+
+- **Reference per registered checkpoint condition:**
+
+  - `pair_b1` (noise None): `pair_fiq_clean_val_split` status `VERIFIED` — exact condition match
+  - `pair_b2` (noise None): `pair_fiq_clean_val_split` status `VERIFIED` — exact condition match

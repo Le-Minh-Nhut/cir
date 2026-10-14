@@ -5,7 +5,7 @@
 #
 # `reported_metrics` are values the paper prints. `derived_metrics` are values the workbench
 # computes from printed ones and carry their formula; they are never attributed to the authors.
-registry_version: extract-242197305d90
+registry_version: extract-251fa9c32998
 references:
 - reference_id: airknow_fiq_0pct
   model_id: airknow
@@ -36,15 +36,7 @@ references:
     mean: 65.73
     r10: 55.75
     r50: 75.72
-  derived_metrics:
-  - derivation_formula: (55.75 + 75.72) / 2
-    key: mean_from_avg_columns
-    provenance: WORKBENCH_DERIVED
-    rounding_policy: round-half-even/truncation to 2 decimals; 65.735 -> 65.73 (observed)
-    source_metrics:
-    - r10
-    - r50
-    value: 65.73
+  derived_metrics: []
   category_metrics:
     dress:
       r10: 51.03
@@ -99,24 +91,7 @@ references:
     mean: 65.45
     r10: 55.18
     r50: 75.71
-  derived_metrics:
-  - derivation_formula: (73.48 + 74.73 + 78.94) / 3
-    key: macro_r50_from_categories
-    provenance: WORKBENCH_DERIVED
-    rounding_policy: round to 2 decimals
-    source_metrics:
-    - dress_r50
-    - shirt_r50
-    - toptee_r50
-    value: 75.72
-  - derivation_formula: (55.18 + 75.71) / 2 = 65.445 -> 65.45
-    key: mean_from_avg_columns
-    provenance: WORKBENCH_DERIVED
-    rounding_policy: round-half-up to 2 decimals
-    source_metrics:
-    - r10
-    - r50
-    value: 65.45
+  derived_metrics: []
   category_metrics:
     dress:
       r10: 50.22
@@ -137,7 +112,7 @@ references:
   reference_status: VERIFIED
   verification_method: Same five routes as the 0% row (HTML regex cell parse, independent html.parser
     parse, pdftotext -layout, rendered PDF page 6 image, author results-fiq.png image). Arithmetic re-executed.
-  review_status: CONFIRMED
+  review_status: PARTIAL
 - reference_id: airknow_fiq_50pct
   model_id: airknow
   paper_id: airknow
@@ -163,15 +138,7 @@ references:
     mean: 63.61
     r10: 53.19
     r50: 74.04
-  derived_metrics:
-  - derivation_formula: (53.19 + 74.04) / 2 = 63.615 -> 63.62 (paper prints 63.61)
-    key: mean_from_avg_columns
-    provenance: WORKBENCH_DERIVED
-    rounding_policy: round-half-up to 2 decimals
-    source_metrics:
-    - r10
-    - r50
-    value: 63.62
+  derived_metrics: []
   category_metrics:
     dress:
       r10: 47.9
@@ -217,15 +184,7 @@ references:
     mean: 59.73
     r10: 49.23
     r50: 70.23
-  derived_metrics:
-  - derivation_formula: (49.23 + 70.23) / 2 = 59.73
-    key: mean_from_avg_columns
-    provenance: WORKBENCH_DERIVED
-    rounding_policy: round-half-up to 2 decimals
-    source_metrics:
-    - r10
-    - r50
-    value: 59.73
+  derived_metrics: []
   category_metrics:
     dress:
       r10: 42.52
@@ -1528,16 +1487,6 @@ references:
     - category_metrics.shirt.r50
     - category_metrics.toptee.r50
     value: 53.89
-  - derivation_formula: (mean_r10 + mean_r50) / 2 = (27.78 + 53.89) / 2
-    key: mean_check
-    note: Reproduces the paper's own printed Avg 40.83, which confirms the paper's Avg is exactly the
-      unweighted mean of its six printed cells; it does NOT make the macro R@10/R@50 paper-reported values.
-    provenance: WORKBENCH_DERIVED
-    rounding_policy: round-half-up to 2 decimals -> 40.83
-    source_metrics:
-    - r10
-    - r50
-    value: 40.8333
   category_metrics:
     dress:
       r10: 28.95

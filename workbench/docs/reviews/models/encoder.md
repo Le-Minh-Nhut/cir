@@ -129,3 +129,20 @@ BLOCKED — the pinned evaluator cannot be imported (`import datasets1`, absent 
 55. End-to-end acceptance: source -> checkpoint -> metric — NOT_RUN — import fails (`evaluate_model.py:7`), binary absent, checkpoint unresolved, GPU-only — P0 — unblock only after all four prerequisites are author-provenanced.
 
 FINAL VERDICT: BLOCKED — the pinned ENCODER evaluator is unimportable (`datasets1` absent from the tree and the filesystem) and unrunnable (`open_clip_pytorch_model.bin` absent, checkpoint URL/hash unresolved, CUDA-mandatory), so nothing was reproduced; the only verified numbers (56.13/77.59) are the paper figure's own FashionIQ Avg row, read statically.
+
+---
+
+## REFRESH (this engagement)
+
+Appended after the work that landed on top of this audit. Earlier findings above are left as
+written; where one has been superseded, the superseding fact is stated here.
+
+- **Static benchmark reference.** 1 committed row(s):
+
+  - `encoder_fiq_clean_val_split` — status `VERIFIED`, 0% training noise, protocol `fashioniq_val_split`, values `{'r10': 56.13, 'r50': 77.59, 'mean': 66.86}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
+
+- **Readiness now:** `BLOCKED_DATASET` — FashionIQ fashioniq_ilearn_resized requirement missing: /home/heheboiz/data/cir/data/fashionIQ_dataset/resized_image
+
+- **Reference per registered checkpoint condition:**
+
+  - `fashioniq` (noise 0): `encoder_fiq_clean_val_split` status `VERIFIED` — exact condition match

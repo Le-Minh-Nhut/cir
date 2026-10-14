@@ -137,7 +137,7 @@
         "r50": 75.71
       },
       "reported_metrics_provenance": "PAPER_REPORTED for all three (Table 1, 20% block, 'Air-Know (Ours)', Average column and AVG.)",
-      "review_status": "CONFIRMED",
+      "review_status": "PARTIAL",
       "split": "val",
       "verification_evidence": "PDF page 6 image and assets/results-fiq.png both read 'Air-Know (Ours) 50.22 73.48 56.38 74.73 58.95 78.94 55.18 75.71 65.45' in the 20% block. Note the paper's own internal inconsistency: the printed Average R@50 of 75.71 is 0.01 below the recomputed (73.48+74.73+78.94)/3 = 75.7167, and AVG. 65.45 is 0.01 above (55.18+75.71)/2 = 65.445 \u2014 the paper rounds the Average column from unrounded category data while AVG. rounds from the printed Average column. The printed values are the authority; recorded verbatim. GALLERY CAVEAT as in the 0% row: the paper states no gallery construction or reference policy; protocol id inferred from datasets.py:31,218-224 and test_BLIP2.py:147-151,154.",
       "verification_method": "Same five routes as the 0% row (HTML regex cell parse, independent html.parser parse, pdftotext -layout, rendered PDF page 6 image, author results-fiq.png image). Arithmetic re-executed."

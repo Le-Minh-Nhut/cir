@@ -62,6 +62,21 @@ Full per-model detail, with the source line that reads each path, is in
 
 ## First run on the PC
 
+Start with the read-only readiness check. It writes nothing, downloads nothing and runs no evaluator;
+it tells you which models can proceed and what, precisely, stops the rest:
+
+```bash
+python workbench/scripts/pc_readiness.py                 # human-readable
+python workbench/scripts/pc_readiness.py --json          # machine-readable
+python workbench/scripts/pc_readiness.py --model limn    # one model
+```
+
+Each model is classified as one of `READY_FOR_FULL_EVALUATION`, `READY_FOR_GPU_SMOKE`,
+`READY_WITH_DECLARED_VARIANT`, `BLOCKED_EXTERNAL_ASSET`, `BLOCKED_DATASET`, `BLOCKED_SOURCE`,
+`BLOCKED_IMPLEMENTATION`, `BLOCKED_ENVIRONMENT` or `PC_GPU_VALIDATION_PENDING`. The last one means
+every reported prerequisite is satisfied but no usable CUDA device was visible, so preparation
+readiness is reported separately from runtime verification and never conflated with it.
+
 ```bash
 git clone <repo> && cd cir
 git checkout <the frozen commit>
@@ -101,11 +116,37 @@ the PC, and `allow_network`, `allow_large_downloads`, `allow_preparation`, `allo
 author publishes no training-condition label for these weights -- so report the run as "training
 condition not published by the author", not as a clean checkpoint.
 
-`pc_autopilot.pilot_csmcir.yaml` is retained for reference only. CSMCIR cannot run from its pinned
-source as published: the module registry it imports executes 98 unguarded imports for files the
-author never committed, before the line that registers the class it needs, so the entrypoint fails
-during import. It also needs `COT_ours2/fashioniq` captions that the author never published. See
-`workbench/patches/csmcir.md`.
+`pc_autopilot.pilot_csmcir.yaml` is the CSMCIR variant profile. CSMCIR cannot run from its pinned
+source as published: the module registry it imports executes 98 unguarded imports for files the author
+never committed, before the line that registers the class it needs, so the entrypoint fails during
+import. The registry therefore declares **one approved patch**
+(`workbench/patches/csmcir_models_init_compat.patch`) with its base and derived file digests, and
+preflight accepts a checkout only while it holds exactly that delta:
+
+```bash
+# Build the derived checkout the overlay describes. The pinned tree stays untouched.
+git -C workbench/third_party/CSMCIR checkout --detach 774f94e2076ff17ea91703a6239d2a08f0e1a44e
+cp -a workbench/third_party/CSMCIR /path/to/csmcir-variant
+patch -p1 --directory /path/to/csmcir-variant -i workbench/patches/csmcir_models_init_compat.patch
+```
+
+Point the config's `third_party` at the directory holding that corrected checkout. The run is then a
+**declared compatibility variant**, never official parity: it executed code the authors did not
+publish, and `pc_readiness.py` reports it as `READY_WITH_DECLARED_VARIANT` for that reason. Any other
+edit inside the checkout still blocks, and an unpatched checkout reports the original source defect.
+
+CSMCIR also needs `COT_ours2/fashioniq` captions that the author never published. The published Qwen
+captions are source-compatible (same names, exact gallery-id coverage, the same `Final_Caption` field
+every executing consumer reads), so staging them at that path is available as an opt-in:
+
+```bash
+python workbench/scripts/pipeline.py real --model csmcir \
+    --download-auxiliary-assets --stage-caption-aliases
+```
+
+The alias is recorded in the download manifest and reported in preflight as a warning, so the run is
+labelled a variant. Byte identity with the authors' own COT files remains unknown; see
+`workbench/docs/COT_OURS2_AUDIT.md`.
 
 | Permission | What it authorizes |
 |---|---|
@@ -120,6 +161,28 @@ Every stage that needs a permission it was not granted reports `BLOCKED_AUTHORIZ
 names the missing capability, so a partial run tells you exactly what to add.
 
 ## Reading the outcome
+
+Every evaluation report now carries a `benchmark_gate` block, and the reference it was judged against
+under `benchmark_reference`. The verdict is computed by `workbench/backend/paper_gate.py` from the
+committed rows in `workbench/registry/paper_benchmarks/papers.yaml`; no model is consulted at runtime.
+
+```bash
+# The verdict for one run:
+python -c "import json,sys; r=json.load(open(sys.argv[1])); print(json.dumps(r['benchmark_gate'], indent=2))" \
+    <artifacts>/results/<protocol>/<model>/<checkpoint>.json
+```
+
+| Verdict | Meaning |
+|---|---|
+| `PASS_WITHIN_5_PERCENT` | every comparable metric is within 5 percent relative error of the published row |
+| `PASS_WITHIN_5_PERCENT_VARIANT` | the same, but a declared stand-in was used (staged caption alias, approved source patch) |
+| `ALERT_METRIC_DEVIATION` | at least one comparable metric exceeds 5 percent; the block names which and by how much |
+| `BLOCKED_PROTOCOL_MISMATCH` / `BLOCKED_CHECKPOINT_MISMATCH` | the reference and the run do not describe one experiment |
+| `METRIC_REFERENCE_UNVERIFIED` | no committed row describes this run, or the row is not verified |
+| `NOT_RUN` / `FAILED_EVALUATION` / `FAILED_OUTPUT_VALIDATION` | nothing was compared, and why |
+
+A pass is never inferred from the registry's transcribed `reported_*` triplet: that field remains in
+the report as `paper_sanity_metrics`, a sanity reference only.
 
 | File | What it tells you |
 |---|---|

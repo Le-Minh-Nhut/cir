@@ -333,3 +333,24 @@ paper/README/config -> source dataset -> preprocessing -> official evaluator
 ---
 
 **FINAL VERDICT: BLOCKED** — the registry's static facts for `airknow` check out against the pinned tree (pin, protocol, full split with the reference masked before `argsort`, `strict_clean=false`, two exact paper-metric transcriptions, and a genuinely clean evaluation path), but no runnable path to any number exists: AirKnow alone is missing the two modules its `lavis/models/__init__.py:33-34` imports (the siblings ship the same imports and the files), the registered script has no `__main__`, no checkpoint loader exists, the adapter raises `NotImplementedError`, the registered dataset layout is absent locally, and the paper row a comparison would target is the 0 %-noise row for which the author publishes no checkpoint.",
+
+---
+
+## REFRESH (this engagement)
+
+Appended after the work that landed on top of this audit. Earlier findings above are left as
+written; where one has been superseded, the superseding fact is stated here.
+
+- **Static benchmark reference.** 4 committed row(s):
+
+  - `airknow_fiq_0pct` — status `VERIFIED`, 0% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 55.75, 'r50': 75.72, 'mean': 65.73}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `airknow_fiq_20pct` — status `VERIFIED`, 20% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 55.18, 'r50': 75.71, 'mean': 65.45}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `airknow_fiq_50pct` — status `VERIFIED`, 50% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 53.19, 'r50': 74.04, 'mean': 63.61}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `airknow_fiq_80pct` — status `VERIFIED`, 80% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 49.23, 'r50': 70.23, 'mean': 59.73}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+
+- **Readiness now:** `BLOCKED_SOURCE` — source cannot run: no runnable evaluation path is registered for this model: the pinned evaluator is a callable with no CLI or checkpoint loader, the adapter deliberately declines to build a command, and the required correction dictionaries and resized images have no published source; the paper row is the 0%-noise row and no 0% checkpoint is published (see workbench/docs/reviews/models for the model's audit). An earlier note in this registry claimed a tensor-shape failure in the similarity computation; that claim was WRONG and is withdrawn - np.matmul broadcasts and the ranking matrix has the shape the indexing expects
+
+- **Reference per registered checkpoint condition:**
+
+  - `fiq_n05` (noise 50): `airknow_fiq_50pct` status `VERIFIED` — exact condition match
+  - `fiq_n08` (noise 80): `airknow_fiq_80pct` status `VERIFIED` — exact condition match

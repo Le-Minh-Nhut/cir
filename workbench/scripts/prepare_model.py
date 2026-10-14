@@ -523,6 +523,7 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
             continue
         output_dir.mkdir(parents=True, exist_ok=True)
         category_source_digests: dict[str, str] = {}
+        category_source_extensions: dict[str, str] = {}
         for identifier in identifiers:
             source_image = _canonical_image_path(images_root, identifier, extension)
             if source_image is None:
@@ -533,6 +534,11 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
             # old copy in place (the destination still had the right size and format), the receipt
             # still validated, and a resume silently scored stale pixels.
             category_source_digests[identifier] = hashlib.sha256(source_image.read_bytes()).hexdigest()
+            # The canonical extension is recorded too. It is not always the derived extension: on the
+            # canonical FashionIQ distribution the files are `<id>.png` while the iLearn readers open
+            # `<id>.jpg` under `resized_image/`, which is a different tree from `images/`. Recording
+            # which file was read makes that difference auditable instead of implied.
+            category_source_extensions[identifier] = source_image.suffix
             destination = output_dir / f"{identifier}{extension}"
             # DATA-02: Refuse to write a resized image whose destination equals its source path
             # or targets the canonical raw images directory.
@@ -599,6 +605,7 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
             "sizes": category_sizes,
             "images": category_images,
             "source_digests": category_source_digests,
+            "source_extensions": category_source_extensions,
         }
     if dry_run:
         return True, "dry-run"

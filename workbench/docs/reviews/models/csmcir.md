@@ -302,3 +302,22 @@ Each item: `N. question — verdict — evidence — severity — action`.
 ---
 
 FINAL VERDICT: BLOCKED — the pinned package cannot import (98 unguarded imports of absent modules ahead of the registration, independently reconfirmed), the gallery caption input the evaluator requires was never published, and no checkpoint or GPU run exists, so motion is impossible while the registry, protocol, gallery, metric maths and reported numbers are all faithful to the source.
+
+---
+
+## REFRESH (this engagement)
+
+Appended after the work that landed on top of this audit. Earlier findings above are left as
+written; where one has been superseded, the superseding fact is stated here.
+
+- **Static benchmark reference.** 1 committed row(s):
+
+  - `csmcir_fiq_val_ours_vitg` — status `VERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': 57.07, 'r50': 77.27, 'mean': 67.17}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+
+- **Readiness now:** `BLOCKED_SOURCE` — source cannot run: pinned lavis.models package cannot be imported as published (98 unguarded imports of absent modules sit before the registration); an approved patch is declared in approved_source_patches and removes only that blocker; src/lavis/models/__init__.py is the unmodified published file; apply workbench/patches/csmcir_models_init_compat.patch to a derived checkout of the pinned revision and register that checkout as the model source
+
+- **Reference per registered checkpoint condition:**
+
+  - `fashioniq` (noise 0): `csmcir_fiq_val_ours_vitg` status `VERIFIED` — exact condition match
+
+- **Approved source patch:** applied=`False` — src/lavis/models/__init__.py is the unmodified published file; apply workbench/patches/csmcir_models_init_compat.patch to a derived checkout of the pinned revision and register that checkout as the model source

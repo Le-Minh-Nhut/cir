@@ -1882,10 +1882,18 @@ def source_status(source: Path) -> dict[str, list[str]] | None:
             # SPRC 160), and Python removes stale caches just by being run against them. Treating that
             # as a source change would refuse every checkout the moment it is imported.
             continue
-        # Anything else that differs from the pin is a real divergence, whatever its extension. A
-        # *modified* committed .pyc is the dangerous case the old rule missed: CPython imports a
-        # cache whose header matches the source, so a tampered .pyc changes the code that runs while
-        # the .py on disk stays byte-identical to the pin.
+        # A tracked edit is normally a real divergence, and a *modified* committed .pyc is the
+        # dangerous case: CPython imports a cache whose header matches the source, so a tampered .pyc
+        # changes the code that runs while the .py stays byte-identical to the pin. But an approved
+        # source patch is *also* a tracked edit -- that is what applying a patch does. It reaches the
+        # same allowlist every other declared artifact uses, so a declared patch whose derived digest
+        # matches is recorded as approved, and anything else is tracked.
+        declaration = _declared_artifact_for(path, approved)
+        if declaration is not None:
+            verdict = _verify_declared_artifact(source, path, declaration)
+            entries["approved" if verdict is None else "invalid"].append(
+                path if verdict is None else f"{path}: {verdict}")
+            continue
         entries["tracked"].append(path)
     for path in other_paths:
         if is_bytecode(path):

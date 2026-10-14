@@ -278,3 +278,20 @@ Each item: `N. question short form — verdict — evidence — severity — act
 ---
 
 FINAL VERDICT: **BLOCKED** — the source, protocol, gallery, reference policy, transform and metric maths are all faithful and the pin is exact, but the registered entrypoint cannot import (missing `clip`; vendored-LAVIS/transformers mismatch), no command constructor exists, the checkpoint is absent with a 403 URL and an unprovable class/backbone mapping (the default names a class the pinned repo does not register, and the repo's Todo says the rerank weights were never published), the two declared asset paths here hold decoy bytes that pass the workbench's only asset check, and the partial paper row (published R@10 54.92 stored as null) makes the gate blind to any R@10 result — so reproduction is not merely unperformed, the reachable path is closed.
+
+---
+
+## REFRESH (this engagement)
+
+Appended after the work that landed on top of this audit. Earlier findings above are left as
+written; where one has been superseded, the superseding fact is stated here.
+
+- **Static benchmark reference.** 1 committed row(s):
+
+  - `sprc_fiq_val_ours_vitg` — status `VERIFIED`, None% training noise, protocol `fashioniq_original_split`, values `{'r10': 54.92, 'r50': 74.97, 'mean': 64.85}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+
+- **Readiness now:** `BLOCKED_IMPLEMENTATION` — command not runnable: COMMAND_BLOCKED_MODEL_MAPPING
+
+- **Reference per registered checkpoint condition:**
+
+  - `sprc_fiq_unresolved` (noise None): `sprc_fiq_val_ours_vitg` status `VERIFIED` — exact condition match

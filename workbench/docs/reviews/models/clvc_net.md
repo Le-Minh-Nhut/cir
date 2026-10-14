@@ -314,3 +314,20 @@ execution environment not verified: WORKBENCH_CLVC_PYTHON=None [UNCONFIGURED/UNC
 55. No runtime claim was made without observation — VERIFIED — zero RUNTIME_VERIFIED claims; every runtime statement is either an observed read-only command output or explicitly labelled STATIC_AUDIT — NONE — none.
 
 FINAL VERDICT: BLOCKED — the pin, paper identity, cohort, gallery rule, metric formula and preparation contract all check out against the pinned source, but nothing on the registered path can execute (no CLI, deliberately unimplemented adapter command, placeholder checkpoint with an uninspected author archive, contradictory/absent ResNet-50 asset, missing resized images, no metric parser) and no verified paper row exists, so the gate can only ever return `METRIC_REFERENCE_UNVERIFIED`; nothing was reproduced and nothing was run.
+
+---
+
+## REFRESH (this engagement)
+
+Appended after the work that landed on top of this audit. Earlier findings above are left as
+written; where one has been superseded, the superseding fact is stated here.
+
+- **Static benchmark reference.** 1 committed row(s):
+
+  - `clvc_net_sigir21_fiq_table1` — status `VERIFIED`, None% training noise, protocol `fashioniq_val_split`, values `{'r10': 30.7, 'r50': 58.41, 'mean': 44.56}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
+
+- **Readiness now:** `BLOCKED_IMPLEMENTATION` — command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+
+- **Reference per registered checkpoint condition:**
+
+  - `author_drive_unresolved` (noise None): `clvc_net_sigir21_fiq_table1` status `VERIFIED` — exact condition match
