@@ -334,19 +334,26 @@ FINAL VERDICT: **BLOCKED** — the registry's static facts for `combiner_rn50x4_
 
 ---
 
+---
+
 ## REFRESH (this engagement)
 
-Appended after the work that landed on top of this audit. Earlier findings above are left as
-written; where one has been superseded, the superseding fact is stated here.
+Appended after the work that landed on top of this audit. Earlier findings above are left
+as written; where one has been superseded, the superseding fact is stated here.
 
 - **Static benchmark reference.** 3 committed row(s):
 
-  - `clip4cir_rn50x4_noft_fiq_absent_in_paper` — status `UNVERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': None, 'r50': None, 'mean': None}`, provenance `{'r10': 'UNAVAILABLE', 'r50': 'UNAVAILABLE', 'mean': 'UNAVAILABLE'}`
-  - `combiner_rn50x4_noft__clip4cir_rn50x4_fiq_gallery_protocol` — status `UNVERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': None, 'r50': None, 'mean': None}`, provenance `{'r10': 'UNAVAILABLE', 'r50': 'UNAVAILABLE', 'mean': 'UNAVAILABLE'}`
-  - `combiner_rn50x4_noft__clip4cir_paper_note_backbone_inventory_and_version` — status `UNVERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': None, 'r50': None, 'mean': None}`, provenance `{'r10': 'UNAVAILABLE', 'r50': 'UNAVAILABLE', 'mean': 'UNAVAILABLE'}`
+  - `clip4cir_rn50x4_noft_fiq_absent_in_paper` — `UNVERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': None, 'r50': None, 'mean': None}`, provenance `{'r10': 'UNAVAILABLE', 'r50': 'UNAVAILABLE', 'mean': 'UNAVAILABLE'}`
+  - `combiner_rn50x4_noft__clip4cir_rn50x4_fiq_gallery_protocol` — `UNVERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': None, 'r50': None, 'mean': None}`, provenance `{'r10': 'UNAVAILABLE', 'r50': 'UNAVAILABLE', 'mean': 'UNAVAILABLE'}`
+  - `combiner_rn50x4_noft__clip4cir_paper_note_backbone_inventory_and_version` — `UNVERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': None, 'r50': None, 'mean': None}`, provenance `{'r10': 'UNAVAILABLE', 'r50': 'UNAVAILABLE', 'mean': 'UNAVAILABLE'}`
 
-- **Readiness now:** `BLOCKED_ENVIRONMENT` — execution environment not verified: WORKBENCH_CLIP4CIR_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_CLIP4CIR_PYTHON not set)
+- **Readiness now:** `BLOCKED_SOURCE` — upstream source unavailable
 
 - **Reference per registered checkpoint condition:**
 
-  - `rn50x4_noft_unresolved` (noise None): `None` status `None` — combiner_rn50x4_noft has references but none is verified: ['UNVERIFIED']
+  - `rn50x4_noft_unresolved` (noise None): `None` `None` — combiner_rn50x4_noft has references but none is verified: ['UNVERIFIED']
+
+- **Gate:** the run's verdict comes from `workbench/backend/paper_gate.py` against the
+  committed row above, reported in the run JSON under `benchmark_gate`. A row that states no
+  condition is refused (`BLOCKED_REFERENCE_INCOMPLETE`); a metric the paper never printed is
+  compared only if the registry derives it, and then it is labelled `WORKBENCH_DERIVED`.

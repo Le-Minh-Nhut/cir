@@ -149,18 +149,25 @@ FINAL VERDICT: BLOCKED — the pinned PAIR tree has no executable evaluator (`te
 
 ---
 
+---
+
 ## REFRESH (this engagement)
 
-Appended after the work that landed on top of this audit. Earlier findings above are left as
-written; where one has been superseded, the superseding fact is stated here.
+Appended after the work that landed on top of this audit. Earlier findings above are left
+as written; where one has been superseded, the superseding fact is stated here.
 
 - **Static benchmark reference.** 1 committed row(s):
 
-  - `pair_fiq_clean_val_split` — status `VERIFIED`, None% training noise, protocol `fashioniq_val_split`, values `{'r10': 52.76, 'r50': 74.51, 'mean': 63.64}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
+  - `pair_fiq_clean_val_split` — `VERIFIED`, None% training noise, protocol `fashioniq_val_split`, values `{'r10': 52.76, 'r50': 74.51, 'mean': 63.64}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
 
-- **Readiness now:** `BLOCKED_IMPLEMENTATION` — command not runnable: COMMAND_UNAUDITED
+- **Readiness now:** `BLOCKED_SOURCE` — upstream source unavailable
 
 - **Reference per registered checkpoint condition:**
 
-  - `pair_b1` (noise None): `pair_fiq_clean_val_split` status `VERIFIED` — exact condition match
-  - `pair_b2` (noise None): `pair_fiq_clean_val_split` status `VERIFIED` — exact condition match
+  - `pair_b1` (noise None): `pair_fiq_clean_val_split` `VERIFIED` — exact condition match
+  - `pair_b2` (noise None): `pair_fiq_clean_val_split` `VERIFIED` — exact condition match
+
+- **Gate:** the run's verdict comes from `workbench/backend/paper_gate.py` against the
+  committed row above, reported in the run JSON under `benchmark_gate`. A row that states no
+  condition is refused (`BLOCKED_REFERENCE_INCOMPLETE`); a metric the paper never printed is
+  compared only if the registry derives it, and then it is labelled `WORKBENCH_DERIVED`.

@@ -387,17 +387,24 @@ FINAL VERDICT: VARIANT — the pin, cohort assignment and paper numbers are corr
 
 ---
 
+---
+
 ## REFRESH (this engagement)
 
-Appended after the work that landed on top of this audit. Earlier findings above are left as
-written; where one has been superseded, the superseding fact is stated here.
+Appended after the work that landed on top of this audit. Earlier findings above are left
+as written; where one has been superseded, the superseding fact is stated here.
 
 - **Static benchmark reference.** 1 committed row(s):
 
-  - `hint_fiq_clean_val_split` — status `VERIFIED`, 0% training noise, protocol `fashioniq_val_split`, values `{'r10': 58.48, 'r50': 77.93, 'mean': 68.21}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
+  - `hint_fiq_clean_val_split` — `VERIFIED`, 0% training noise, protocol `fashioniq_val_split`, values `{'r10': 58.48, 'r50': 77.93, 'mean': 68.21}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
 
-- **Readiness now:** `BLOCKED_IMPLEMENTATION` — command not runnable: COMMAND_UNAUDITED
+- **Readiness now:** `BLOCKED_SOURCE` — upstream source unavailable
 
 - **Reference per registered checkpoint condition:**
 
-  - `fashioniq` (noise 0): `hint_fiq_clean_val_split` status `VERIFIED` — exact condition match
+  - `fashioniq` (noise 0): `hint_fiq_clean_val_split` `VERIFIED` — exact condition match
+
+- **Gate:** the run's verdict comes from `workbench/backend/paper_gate.py` against the
+  committed row above, reported in the run JSON under `benchmark_gate`. A row that states no
+  condition is refused (`BLOCKED_REFERENCE_INCOMPLETE`); a metric the paper never printed is
+  compared only if the registry derives it, and then it is labelled `WORKBENCH_DERIVED`.

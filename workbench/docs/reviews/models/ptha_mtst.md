@@ -295,18 +295,25 @@ Arrows 4-8 are BLOCKED. Nothing below arrow 3 is RUNTIME_VERIFIED. Every claim i
 
 ---
 
+---
+
 ## REFRESH (this engagement)
 
-Appended after the work that landed on top of this audit. Earlier findings above are left as
-written; where one has been superseded, the superseding fact is stated here.
+Appended after the work that landed on top of this audit. Earlier findings above are left
+as written; where one has been superseded, the superseding fact is stated here.
 
 - **Static benchmark reference.** 2 committed row(s):
 
-  - `ptha_mtst_fiq_table3_fashiqmtst_blip2` — status `VERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': 54.99, 'r50': 76.28, 'mean': 65.64}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
-  - `ptha_mtst_fiq_no_pretrain_table3` — status `VERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': 54.33, 'r50': 75.24, 'mean': 64.79}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `ptha_mtst_fiq_table3_fashiqmtst_blip2` — `VERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': 54.99, 'r50': 76.28, 'mean': 65.64}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `ptha_mtst_fiq_no_pretrain_table3` — `VERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': 54.33, 'r50': 75.24, 'mean': 64.79}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
 
 - **Readiness now:** `BLOCKED_SOURCE` — source cannot run: author repository https://github.com/zyinan99/MTST_PTHA exists and is reachable (README title matches the paper, commits authored by the paper's first author Yinan Zhou, HEAD 6a02ee4763fc2260b6abfb18be78853facb91d86 at 2025-02-09) but is not synced, pinned or audited here, and no FashionIQ fine-tuned checkpoint is verified; the earlier 'no source exists' note was incomplete
 
 - **Reference per registered checkpoint condition:**
 
-  - `None` (noise None): `None` status `None` — more than one verified reference matches this run: ['ptha_mtst_fiq_no_pretrain_table3', 'ptha_mtst_fiq_table3_fashiqmtst_blip2']
+  - `None` (noise None): `None` `None` — more than one verified reference matches this run: ['ptha_mtst_fiq_no_pretrain_table3', 'ptha_mtst_fiq_table3_fashiqmtst_blip2']
+
+- **Gate:** the run's verdict comes from `workbench/backend/paper_gate.py` against the
+  committed row above, reported in the run JSON under `benchmark_gate`. A row that states no
+  condition is refused (`BLOCKED_REFERENCE_INCOMPLETE`); a metric the paper never printed is
+  compared only if the registry derives it, and then it is labelled `WORKBENCH_DERIVED`.

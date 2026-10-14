@@ -439,22 +439,29 @@ paper/README/config
 
 ---
 
+---
+
 ## REFRESH (this engagement)
 
-Appended after the work that landed on top of this audit. Earlier findings above are left as
-written; where one has been superseded, the superseding fact is stated here.
+Appended after the work that landed on top of this audit. Earlier findings above are left
+as written; where one has been superseded, the superseding fact is stated here.
 
 - **Static benchmark reference.** 4 committed row(s):
 
-  - `conesep_fiq_n00` — status `VERIFIED`, 0% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 55.58, 'r50': 75.88, 'mean': 65.73}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
-  - `conesep_fiq_n20` — status `VERIFIED`, 20% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 54.93, 'r50': 75.01, 'mean': 64.97}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
-  - `conesep_fiq_n50` — status `VERIFIED`, 50% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 53.39, 'r50': 74.15, 'mean': 63.77}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
-  - `conesep_fiq_n80` — status `VERIFIED`, 80% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 49.25, 'r50': 70.3, 'mean': 59.77}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `conesep_fiq_n00` — `VERIFIED`, 0% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 55.58, 'r50': 75.88, 'mean': 65.73}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `conesep_fiq_n20` — `VERIFIED`, 20% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 54.93, 'r50': 75.01, 'mean': 64.97}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `conesep_fiq_n50` — `VERIFIED`, 50% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 53.39, 'r50': 74.15, 'mean': 63.77}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `conesep_fiq_n80` — `VERIFIED`, 80% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 49.25, 'r50': 70.3, 'mean': 59.77}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
 
 - **Readiness now:** `BLOCKED_SOURCE` — source cannot run: no runnable evaluation path is registered for this model: the pinned evaluator is a callable with no CLI or checkpoint loader, the adapter deliberately declines to build a command, and the required correction dictionaries and resized images have no published source; the paper row is the 0%-noise row and no 0% checkpoint is published (see workbench/docs/reviews/models for the model's audit). An earlier note in this registry claimed a tensor-shape failure in the similarity computation; that claim was WRONG and is withdrawn - np.matmul broadcasts and the ranking matrix has the shape the indexing expects
 
 - **Reference per registered checkpoint condition:**
 
-  - `fiq_n02` (noise 20): `conesep_fiq_n20` status `VERIFIED` — exact condition match
-  - `fiq_n05` (noise 50): `conesep_fiq_n50` status `VERIFIED` — exact condition match
-  - `fiq_n08` (noise 80): `conesep_fiq_n80` status `VERIFIED` — exact condition match
+  - `fiq_n02` (noise 20): `conesep_fiq_n20` `VERIFIED` — exact condition match
+  - `fiq_n05` (noise 50): `conesep_fiq_n50` `VERIFIED` — exact condition match
+  - `fiq_n08` (noise 80): `conesep_fiq_n80` `VERIFIED` — exact condition match
+
+- **Gate:** the run's verdict comes from `workbench/backend/paper_gate.py` against the
+  committed row above, reported in the run JSON under `benchmark_gate`. A row that states no
+  condition is refused (`BLOCKED_REFERENCE_INCOMPLETE`); a metric the paper never printed is
+  compared only if the registry derives it, and then it is labelled `WORKBENCH_DERIVED`.

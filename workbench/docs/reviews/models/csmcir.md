@@ -305,19 +305,26 @@ FINAL VERDICT: BLOCKED — the pinned package cannot import (98 unguarded import
 
 ---
 
+---
+
 ## REFRESH (this engagement)
 
-Appended after the work that landed on top of this audit. Earlier findings above are left as
-written; where one has been superseded, the superseding fact is stated here.
+Appended after the work that landed on top of this audit. Earlier findings above are left
+as written; where one has been superseded, the superseding fact is stated here.
 
 - **Static benchmark reference.** 1 committed row(s):
 
-  - `csmcir_fiq_val_ours_vitg` — status `VERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': 57.07, 'r50': 77.27, 'mean': 67.17}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `csmcir_fiq_val_ours_vitg` — `VERIFIED`, 0% training noise, protocol `fashioniq_original_split`, values `{'r10': 57.07, 'r50': 77.27, 'mean': 67.17}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
 
-- **Readiness now:** `BLOCKED_SOURCE` — source cannot run: pinned lavis.models package cannot be imported as published (98 unguarded imports of absent modules sit before the registration); an approved patch is declared in approved_source_patches and removes only that blocker; src/lavis/models/__init__.py is the unmodified published file; apply workbench/patches/csmcir_models_init_compat.patch to a derived checkout of the pinned revision and register that checkout as the model source
+- **Readiness now:** `BLOCKED_SOURCE` — source checkout is dirty: src/data_utils_csmcir.py
 
 - **Reference per registered checkpoint condition:**
 
-  - `fashioniq` (noise 0): `csmcir_fiq_val_ours_vitg` status `VERIFIED` — exact condition match
+  - `fashioniq` (noise 0): `csmcir_fiq_val_ours_vitg` `VERIFIED` — exact condition match
 
-- **Approved source patch:** applied=`False` — src/lavis/models/__init__.py is the unmodified published file; apply workbench/patches/csmcir_models_init_compat.patch to a derived checkout of the pinned revision and register that checkout as the model source
+- **Approved source patch:** applied=`True` — src/lavis/models/__init__.py matches the recorded post-patch digest
+
+- **Gate:** the run's verdict comes from `workbench/backend/paper_gate.py` against the
+  committed row above, reported in the run JSON under `benchmark_gate`. A row that states no
+  condition is refused (`BLOCKED_REFERENCE_INCOMPLETE`); a metric the paper never printed is
+  compared only if the registry derives it, and then it is labelled `WORKBENCH_DERIVED`.

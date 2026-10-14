@@ -8,17 +8,37 @@ per-model audits are in `workbench/docs/reviews/models/`.
 
 | Prerequisite | State | Evidence |
 |---|---|---|
-| GPU inference | **not possible** | `nvidia-smi` reports an RTX 3050 Laptop with 4 GiB, but every environment on this host has a CPU-only torch build: the workbench venv is `torch 2.14.0+cpu`, and the pinned import env is `2.14.1+cpu`. No CUDA-enabled torch is installed. |
-| Model checkpoints | **none staged** | `workbench/artifacts/checkpoints/` holds only `.gitkeep`. The one file named `fashioniq_tuned_clip_best.pt` found on the host is a **1-byte** placeholder under `/tmp`. |
-| Model environments | **none provisioned** | `workbench/artifacts/environments/` does not exist; the single assignment record (`environment_assignment.json`) names one conda path that was never created (`cir-221b49811b9b38d0`). `workbench/envs/` contains only `README.md` and `csmcir-import.txt`. |
-| BLIP-2 / EVA-ViT-g / BERT backbone caches | **corrupt** | `~/.cache/lavis/blip2_pretrained.pth` is **22 bytes** containing the text `qwen`; `~/.cache/torch/hub/checkpoints/eva_vit_g.pth` is **4 bytes** containing `corrupt nonempty bytes`. Both are placeholders that a loader would either reject or load as garbage. `convnext_base` and `resnet18` in the same directory are real sizes (338 MiB / 44.7 MiB), so the corruption is specific to the files this task's models need. |
-| Disk headroom | **4.9 GiB free of 173 GiB (98 % used)** | `df -h /`. The CSMCIR checkpoint alone is 2.7 GB and the LIMN bundle is 5.4 GB, so staging checkpoints for even one model is not currently possible without reclaiming space. |
+| GPU inference | **not possible** | `nvidia-smi` reports an RTX 3050 Laptop with 4 GiB (compute 8.6), but every environment on this host has a CPU-only torch build: the workbench venv is `torch 2.14.0+cpu`. `torch.cuda.is_available()` is `False`. |
+| Model checkpoints | **none staged** | `workbench/artifacts/checkpoints/` holds only `.gitkeep`. |
+| Model environments | **none provisioned** | `workbench/artifacts/environments/` does not exist; the single assignment record (`environment_assignment.json`) names one conda path that was never created. |
+| BLIP-2 / EVA-ViT-g backbone caches | **corrupt** | `~/.cache/lavis/blip2_pretrained.pth` is **22 bytes** containing the text `qwen`; `~/.cache/torch/hub/checkpoints/eva_vit_g.pth` is **4 bytes** containing `corrupt nonempty bytes`. Both are placeholders a loader would reject or load as garbage. `convnext_base` and `resnet18` in the same directory are real sizes, so the corruption is specific to the files these models need. |
+| Disk headroom | **15 GiB free of 173 GiB** | `df -h /`, after the `uv` package cache was cleared. The CSMCIR checkpoint alone is 2.7 GB and the LIMN bundle is 5.4 GB, so staging one model's checkpoints is now possible and staging all of them is not. |
 
 Consequence: **every model is `NOT_RUN` and no metric in this repository is a reproduced metric.**
-The numbers in the registry are paper values, entered as paper values, and the gate treats them as
-the reference to be reproduced, never as the result.
+The numbers in the registry are paper values, entered as paper values, and the gate treats them as the
+reference to be reproduced, never as the result.
+
+The target machine is an RTX 5070 Ti (16 GB, sm_120). Blackwell needs a torch build whose arch list
+includes `sm_120`; a CUDA 12.x wheel without it raises at the first kernel launch rather than at
+import. `python workbench/scripts/pc_readiness.py` reports the device, the torch build and its arch
+list, and labels every otherwise-ready model `PC_GPU_VALIDATION_PENDING` until a real run exists.
 
 ## P0 — would invalidate a scientific result
+
+### B0b. The approved-patch overlay did not work on its own documented workflow (FIXED)
+
+The registry declares one approved patch for CSMCIR and the runtime verifies it, but applying that
+patch produces a *tracked* edit, and the provenance classifier sent every tracked edit straight to
+`tracked` without consulting its declared-artifact allowlist. The exact file the registry had just
+approved was therefore reported as an unauthorized source change, and the model landed below its
+unpatched classification.
+
+Confirmed on the documented recipe before the fix: `source_status` -> `tracked:
+['src/lavis/models/__init__.py']`, `approved: []`, `source_clean_and_pinned` -> `(False, ...)`.
+
+A tracked path now reaches the same allowlist every other declared artifact uses. A declared patch
+whose derived digest matches is recorded as approved; a modified committed `.pyc`, and any tracked edit
+with no declaration, are still reported as source changes.
 
 ### B0. A committed bytecode cache could change the evaluated code (FIXED)
 

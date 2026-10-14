@@ -220,19 +220,26 @@ FINAL VERDICT: BLOCKED
 
 ---
 
+---
+
 ## REFRESH (this engagement)
 
-Appended after the work that landed on top of this audit. Earlier findings above are left as
-written; where one has been superseded, the superseding fact is stated here.
+Appended after the work that landed on top of this audit. Earlier findings above are left
+as written; where one has been superseded, the superseding fact is stated here.
 
 - **Static benchmark reference.** 1 committed row(s):
 
-  - `limn_fashioniq_base_iter0_table1` — status `VERIFIED`, 0% training noise, protocol `fashioniq_val_split`, values `{'r10': 55.91, 'r50': 77.82, 'mean': 66.87}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
+  - `limn_fashioniq_base_iter0_table1` — `VERIFIED`, 0% training noise, protocol `fashioniq_val_split`, values `{'r10': 55.91, 'r50': 77.82, 'mean': 66.87}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
 
-- **Readiness now:** `BLOCKED_ENVIRONMENT` — execution environment not verified: WORKBENCH_LIMN_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_LIMN_PYTHON not set)
+- **Readiness now:** `BLOCKED_SOURCE` — upstream source unavailable
 
 - **Reference per registered checkpoint condition:**
 
-  - `base_iter0_dress` (noise None): `limn_fashioniq_base_iter0_table1` status `VERIFIED` — exact condition match
-  - `base_iter0_shirt` (noise None): `limn_fashioniq_base_iter0_table1` status `VERIFIED` — exact condition match
-  - `base_iter0_toptee` (noise None): `limn_fashioniq_base_iter0_table1` status `VERIFIED` — exact condition match
+  - `base_iter0_dress` (noise None): `limn_fashioniq_base_iter0_table1` `VERIFIED` — exact condition match
+  - `base_iter0_shirt` (noise None): `limn_fashioniq_base_iter0_table1` `VERIFIED` — exact condition match
+  - `base_iter0_toptee` (noise None): `limn_fashioniq_base_iter0_table1` `VERIFIED` — exact condition match
+
+- **Gate:** the run's verdict comes from `workbench/backend/paper_gate.py` against the
+  committed row above, reported in the run JSON under `benchmark_gate`. A row that states no
+  condition is refused (`BLOCKED_REFERENCE_INCOMPLETE`); a metric the paper never printed is
+  compared only if the registry derives it, and then it is labelled `WORKBENCH_DERIVED`.

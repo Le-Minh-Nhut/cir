@@ -281,17 +281,24 @@ FINAL VERDICT: **BLOCKED** — the source, protocol, gallery, reference policy, 
 
 ---
 
+---
+
 ## REFRESH (this engagement)
 
-Appended after the work that landed on top of this audit. Earlier findings above are left as
-written; where one has been superseded, the superseding fact is stated here.
+Appended after the work that landed on top of this audit. Earlier findings above are left
+as written; where one has been superseded, the superseding fact is stated here.
 
 - **Static benchmark reference.** 1 committed row(s):
 
-  - `sprc_fiq_val_ours_vitg` — status `VERIFIED`, None% training noise, protocol `fashioniq_original_split`, values `{'r10': 54.92, 'r50': 74.97, 'mean': 64.85}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `sprc_fiq_val_ours_vitg` — `VERIFIED`, None% training noise, protocol `fashioniq_original_split`, values `{'r10': 54.92, 'r50': 74.97, 'mean': 64.85}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
 
-- **Readiness now:** `BLOCKED_IMPLEMENTATION` — command not runnable: COMMAND_BLOCKED_MODEL_MAPPING
+- **Readiness now:** `BLOCKED_SOURCE` — upstream source unavailable
 
 - **Reference per registered checkpoint condition:**
 
-  - `sprc_fiq_unresolved` (noise None): `sprc_fiq_val_ours_vitg` status `VERIFIED` — exact condition match
+  - `sprc_fiq_unresolved` (noise None): `sprc_fiq_val_ours_vitg` `VERIFIED` — exact condition match
+
+- **Gate:** the run's verdict comes from `workbench/backend/paper_gate.py` against the
+  committed row above, reported in the run JSON under `benchmark_gate`. A row that states no
+  condition is refused (`BLOCKED_REFERENCE_INCOMPLETE`); a metric the paper never printed is
+  compared only if the registry derives it, and then it is labelled `WORKBENCH_DERIVED`.

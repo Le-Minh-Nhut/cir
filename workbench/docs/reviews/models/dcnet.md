@@ -161,17 +161,24 @@ FINAL VERDICT: **BLOCKED** — the pinned source genuinely implements a full-gal
 
 ---
 
+---
+
 ## REFRESH (this engagement)
 
-Appended after the work that landed on top of this audit. Earlier findings above are left as
-written; where one has been superseded, the superseding fact is stated here.
+Appended after the work that landed on top of this audit. Earlier findings above are left
+as written; where one has been superseded, the superseding fact is stated here.
 
 - **Static benchmark reference.** 1 committed row(s):
 
-  - `dcnet_fashioniq_val_table1` — status `VERIFIED`, None% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 27.78, 'r50': 53.89, 'mean': 40.83}`, provenance `{'r10': 'WORKBENCH_DERIVED', 'r50': 'WORKBENCH_DERIVED', 'mean': 'PAPER_REPORTED'}`
+  - `dcnet_fashioniq_val_table1` — `VERIFIED`, None% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 27.78, 'r50': 53.89, 'mean': 40.83}`, provenance `{'r10': 'WORKBENCH_DERIVED', 'r50': 'WORKBENCH_DERIVED', 'mean': 'PAPER_REPORTED'}`
 
-- **Readiness now:** `BLOCKED_ENVIRONMENT` — execution environment not verified: WORKBENCH_DCNET_PYTHON=None [UNCONFIGURED/UNCONFIGURED] (WORKBENCH_DCNET_PYTHON not set)
+- **Readiness now:** `BLOCKED_SOURCE` — upstream source unavailable
 
 - **Reference per registered checkpoint condition:**
 
-  - `fashioniq_run_directory` (noise None): `dcnet_fashioniq_val_table1` status `VERIFIED` — exact condition match
+  - `fashioniq_run_directory` (noise None): `dcnet_fashioniq_val_table1` `VERIFIED` — exact condition match
+
+- **Gate:** the run's verdict comes from `workbench/backend/paper_gate.py` against the
+  committed row above, reported in the run JSON under `benchmark_gate`. A row that states no
+  condition is refused (`BLOCKED_REFERENCE_INCOMPLETE`); a metric the paper never printed is
+  compared only if the registry derives it, and then it is labelled `WORKBENCH_DERIVED`.

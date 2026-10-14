@@ -279,22 +279,29 @@ Format: `N. question — verdict — evidence — severity — action`.
 
 ---
 
+---
+
 ## REFRESH (this engagement)
 
-Appended after the work that landed on top of this audit. Earlier findings above are left as
-written; where one has been superseded, the superseding fact is stated here.
+Appended after the work that landed on top of this audit. Earlier findings above are left
+as written; where one has been superseded, the superseding fact is stated here.
 
 - **Static benchmark reference.** 4 committed row(s):
 
-  - `habit_aaai26_table1_fiq_n00` — status `VERIFIED`, 0% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 55.38, 'r50': 75.2, 'mean': 65.29}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
-  - `habit_aaai26_table1_fiq_n20` — status `VERIFIED`, 20% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 54.48, 'r50': 74.28, 'mean': 64.38}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
-  - `habit_aaai26_table1_fiq_n50` — status `VERIFIED`, 50% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 52.52, 'r50': 73.09, 'mean': 62.8}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
-  - `habit_aaai26_table1_fiq_n80` — status `VERIFIED`, 80% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 48.36, 'r50': 69.53, 'mean': 58.94}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `habit_aaai26_table1_fiq_n00` — `VERIFIED`, 0% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 55.38, 'r50': 75.2, 'mean': 65.29}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `habit_aaai26_table1_fiq_n20` — `VERIFIED`, 20% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 54.48, 'r50': 74.28, 'mean': 64.38}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `habit_aaai26_table1_fiq_n50` — `VERIFIED`, 50% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 52.52, 'r50': 73.09, 'mean': 62.8}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
+  - `habit_aaai26_table1_fiq_n80` — `VERIFIED`, 80% training noise, protocol `fashioniq_full_gallery_ref_excluded`, values `{'r10': 48.36, 'r50': 69.53, 'mean': 58.94}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'PAPER_REPORTED'}`
 
-- **Readiness now:** `BLOCKED_IMPLEMENTATION` — command not runnable: COMMAND_UNAUDITED
+- **Readiness now:** `BLOCKED_SOURCE` — upstream source unavailable
 
 - **Reference per registered checkpoint condition:**
 
-  - `fiq_n02` (noise 20): `habit_aaai26_table1_fiq_n20` status `VERIFIED` — exact condition match
-  - `fiq_n05` (noise 50): `habit_aaai26_table1_fiq_n50` status `VERIFIED` — exact condition match
-  - `fiq_n08` (noise 80): `habit_aaai26_table1_fiq_n80` status `VERIFIED` — exact condition match
+  - `fiq_n02` (noise 20): `habit_aaai26_table1_fiq_n20` `VERIFIED` — exact condition match
+  - `fiq_n05` (noise 50): `habit_aaai26_table1_fiq_n50` `VERIFIED` — exact condition match
+  - `fiq_n08` (noise 80): `habit_aaai26_table1_fiq_n80` `VERIFIED` — exact condition match
+
+- **Gate:** the run's verdict comes from `workbench/backend/paper_gate.py` against the
+  committed row above, reported in the run JSON under `benchmark_gate`. A row that states no
+  condition is refused (`BLOCKED_REFERENCE_INCOMPLETE`); a metric the paper never printed is
+  compared only if the registry derives it, and then it is labelled `WORKBENCH_DERIVED`.

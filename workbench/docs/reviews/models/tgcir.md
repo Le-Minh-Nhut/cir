@@ -584,17 +584,24 @@ against the code and the paper.
 
 ---
 
+---
+
 ## REFRESH (this engagement)
 
-Appended after the work that landed on top of this audit. Earlier findings above are left as
-written; where one has been superseded, the superseding fact is stated here.
+Appended after the work that landed on top of this audit. Earlier findings above are left
+as written; where one has been superseded, the superseding fact is stated here.
 
 - **Static benchmark reference.** 1 committed row(s):
 
-  - `tgcir_fashioniq_val_table1` — status `VERIFIED`, 0% training noise, protocol `fashioniq_val_split`, values `{'r10': 51.32, 'r50': 73.09, 'mean': 62.205}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
+  - `tgcir_fashioniq_val_table1` — `VERIFIED`, 0% training noise, protocol `fashioniq_val_split`, values `{'r10': 51.32, 'r50': 73.09, 'mean': 62.205}`, provenance `{'r10': 'PAPER_REPORTED', 'r50': 'PAPER_REPORTED', 'mean': 'WORKBENCH_DERIVED'}`
 
-- **Readiness now:** `BLOCKED_IMPLEMENTATION` — command not runnable: COMMAND_BLOCKED_SOURCE_ENTRYPOINT
+- **Readiness now:** `BLOCKED_SOURCE` — upstream source unavailable
 
 - **Reference per registered checkpoint condition:**
 
-  - `tgcir_archive_unresolved` (noise None): `tgcir_fashioniq_val_table1` status `VERIFIED` — exact condition match
+  - `tgcir_archive_unresolved` (noise None): `tgcir_fashioniq_val_table1` `VERIFIED` — exact condition match
+
+- **Gate:** the run's verdict comes from `workbench/backend/paper_gate.py` against the
+  committed row above, reported in the run JSON under `benchmark_gate`. A row that states no
+  condition is refused (`BLOCKED_REFERENCE_INCOMPLETE`); a metric the paper never printed is
+  compared only if the registry derives it, and then it is labelled `WORKBENCH_DERIVED`.
