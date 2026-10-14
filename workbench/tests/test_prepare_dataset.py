@@ -471,8 +471,14 @@ def test_a_dry_run_reports_the_resize_without_writing(tmp_path: Path, monkeypatc
     assert not (data / "resized_image").exists(), "a dry run must not write resized images"
 
 
-def test_an_existing_resized_image_is_not_overwritten(tmp_path: Path, monkeypatch) -> None:
-    """Re-running preparation must reuse what is already there, not rebuild the dataset."""
+def test_an_unattributed_resized_image_is_regenerated_not_trusted(tmp_path: Path, monkeypatch) -> None:
+    """A destination file with no receipt evidence is regenerated from the canonical source.
+
+    This used to assert that any pre-existing file was preserved, which treated a right-sized JPEG
+    as provenance. The preparation contract requires the opposite: reuse needs evidence that the
+    file came from the current canonical bytes and this recipe, and without it the workbench
+    regenerates deterministically. The canonical images are still read-only either way.
+    """
     import subprocess
     import sys as _sys
 
@@ -486,6 +492,7 @@ def test_an_existing_resized_image_is_not_overwritten(tmp_path: Path, monkeypatc
     sentinel.parent.mkdir(parents=True)
     _PILImage.new("RGB", (256, 256), (42, 42, 42)).save(sentinel, "JPEG")
     sentinel_bytes = sentinel.read_bytes()
+    canonical_before = (data / "images" / "B00000.jpg").read_bytes()
     env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
            "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
 
@@ -494,7 +501,11 @@ def test_an_existing_resized_image_is_not_overwritten(tmp_path: Path, monkeypatc
          "--model", "limn", "--execute", "--allow-preparation", "--dataset-root", str(data)],
         env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
     assert result.returncode == 0, (result.stdout, result.stderr)
-    assert sentinel.read_bytes() == sentinel_bytes, "an existing file must be preserved"
+    assert sentinel.read_bytes() != sentinel_bytes, "an unattributed derived file must be regenerated"
+    with _PILImage.open(sentinel) as handle:
+        assert handle.size == (256, 256) and handle.format == "JPEG"
+    # The canonical source is never written: the derived file is the only thing that changes.
+    assert (data / "images" / "B00000.jpg").read_bytes() == canonical_before
 
 
 def test_resize_receipt_invalidated_when_image_bytes_or_contract_change(tmp_path: Path) -> None:
@@ -803,3 +814,111 @@ def test_destination_with_wrong_format_is_regenerated_rather_than_skipped(tmp_pa
         handle.load()
 
     assert prepare_model.resize_is_complete(config, model, contract) is True
+
+
+def _png_limn_dataset(tmp_path: Path) -> Path:
+    """A PNG-only canonical dataset, as the real FashionIQ distribution is.
+
+    The split files name an image *identifier*; the canonical files on this distribution are
+    `<id>.png` while the pinned evaluators read `<id>.jpg`. A resize that only looks for the derived
+    extension therefore finds nothing at all, which is what used to happen here.
+    """
+    from PIL import Image
+
+    data = fashioniq_root(tmp_path)
+    for index, category in enumerate(("dress", "shirt", "toptee")):
+        identifier = f"B0000{index}"
+        (data / "image_splits" / f"split.{category}.val.json").write_text(json.dumps([identifier]))
+        Image.new("RGB", (8, 8), (10, 20, 30)).save(data / "images" / f"{identifier}.png", "PNG")
+    return data
+
+
+def test_resize_reads_png_canonical_images(tmp_path: Path, monkeypatch) -> None:
+    """A PNG-only canonical dataset must produce the JPEG layout the evaluator reads.
+
+    This is the defect that would have blocked LIMN on the target machine: the canonical files are
+    `.png`, and the old lookup tried only `<id>.jpg` twice, so every input was reported missing.
+    """
+    import sys as _sys
+    import subprocess
+
+    from PIL import Image
+
+    third_party = tmp_path / "third_party"
+    (third_party / "LIMN" / "correct_files").mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        (third_party / "LIMN" / "correct_files" / f"correction_dict_{category}.json").write_text(
+            json.dumps({"sleeves": "long sleeves"}))
+    data = _png_limn_dataset(tmp_path)
+    env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
+           "WORKBENCH_THIRD_PARTY_ROOT": str(third_party), "PYTHONPATH": str(REPOSITORY)}
+
+    result = subprocess.run(
+        [_sys.executable, str(REPOSITORY / "workbench" / "scripts" / "prepare_model.py"),
+         "--model", "limn", "--execute", "--allow-preparation", "--dataset-root", str(data)],
+        env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
+    assert result.returncode == 0, (result.stdout, result.stderr)
+
+    for category in ("dress", "shirt", "toptee"):
+        produced = sorted((data / "resized_image" / category).iterdir())
+        assert len(produced) == 1, (category, produced)
+        assert produced[0].suffix == ".jpg", produced[0]
+        with Image.open(produced[0]) as handle:
+            assert handle.format == "JPEG" and handle.size == (256, 256), (handle.format, handle.size)
+    # The canonical PNGs are read, never rewritten or renamed.
+    canonical = sorted((data / "images").iterdir())
+    assert all(p.suffix == ".png" for p in canonical), canonical
+
+
+def test_a_right_sized_derived_image_is_reused_only_with_evidence(
+        tmp_path: Path, monkeypatch) -> None:
+    """Size and format are not provenance: a stale or edited JPEG must be regenerated.
+
+    The old reuse rule accepted any file at the destination whose dimensions and format matched, so
+    a derived image edited after generation was kept, and the fresh receipt then recorded the edited
+    bytes -- certifying a file that was never produced by the recipe.
+    """
+    from dataclasses import replace
+
+    from PIL import Image
+
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.registry import load_registry, preparation_contract_for_model
+    from workbench.scripts import prepare_model
+
+    data = _png_limn_dataset(tmp_path)
+    third_party = tmp_path / "third_party"
+    (third_party / "LIMN" / "correct_files").mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        (third_party / "LIMN" / "correct_files" / f"correction_dict_{category}.json").write_text(
+            json.dumps({"sleeves": "long sleeves"}))
+    config = replace(resolve_config(), FASHIONIQ_ROOT=data,
+                     WORKBENCH_THIRD_PARTY_ROOT=third_party,
+                     WORKBENCH_ARTIFACTS_ROOT=tmp_path / "artifacts")
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "limn")
+    contract = preparation_contract_for_model(model)
+
+    ok, reason = prepare_model._run_resize(config, model, contract, dry_run=False)
+    assert ok, reason
+
+    # An unchanged re-run reuses the existing derived files: nothing is rewritten.
+    ok, reason = prepare_model._run_resize(config, model, contract, dry_run=False)
+    assert ok, reason
+    assert "resized 0 image(s)" in reason, reason
+
+    target_dir = data / "resized_image" / "dress"
+    target = sorted(target_dir.iterdir())[0]
+    Image.new("RGB", (256, 256), (255, 0, 0)).save(target, "JPEG")
+    tampered = hashlib.sha256(target.read_bytes()).hexdigest()
+    ok, reason = prepare_model._run_resize(config, model, contract, dry_run=False)
+    assert ok, reason
+    assert hashlib.sha256(target.read_bytes()).hexdigest() != tampered, "edited derived image must be regenerated"
+
+    # A changed canonical source invalidates the derived file even though it still looks valid.
+    identifier = json.loads((data / "image_splits" / "split.dress.val.json").read_text())[0]
+    source = data / "images" / f"{identifier}.png"
+    before = hashlib.sha256(target.read_bytes()).hexdigest()
+    Image.new("RGB", (9, 9), (1, 2, 3)).save(source, "PNG")
+    ok, reason = prepare_model._run_resize(config, model, contract, dry_run=False)
+    assert ok, reason
+    assert hashlib.sha256(target.read_bytes()).hexdigest() != before, "changed source must regenerate"

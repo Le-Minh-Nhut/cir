@@ -1,0 +1,210 @@
+{
+  "experiments": [
+    {
+      "aggregation_method": "R@10 and R@50 reported per category (Shirt, Dress, Toptee) and then an unweighted macro mean over the three categories for the 'Average' columns. The paper prints Average R@10 and Average R@50 as two separate numbers and does NOT print a single scalar mean of those two.",
+      "augmentation_policy": null,
+      "backbone": "RN-50x4 (CLIP; paper prints 'RN-50x4', input 288x288, d=640)",
+      "category_metrics": {
+        "dress": {
+          "r10": 39.46,
+          "r50": 64.55
+        },
+        "shirt": {
+          "r10": 44.41,
+          "r50": 65.26
+        },
+        "toptee": {
+          "r10": 47.48,
+          "r50": 70.98
+        }
+      },
+      "checkpoint_id": "rn50x4_fullft_unresolved",
+      "checkpoint_mapping_evidence": "This paper row is CLEAN (0% injected noise) and the registry variant is likewise 0%/0% (models.yaml:715-716), so no noise mismatch exists. Variant-level pairing is well supported by the author's own release metadata, read live (OBSERVED, unauthenticated): `curl -sL -A 'Mozilla/5.0' 'https://drive.google.com/embeddedfolderview?id=1fnGeZQA4XMfEERo-qDCosJXILl1UdQ_l'` -> RN50_fullft, RN50_imageft, RN50_noft, RN50_textft, RN50x4_fullft (folder id 1BPE33_XSm33Min0OaGW2Sl9rcddZ-WF-), RN50x4_noft; listing RN50x4_fullft -> EXACTLY two files, `fiq_clip_RN50x4_fullft.pt` (id 1cQS8vFhNBpZOhyDNe15STz00wMvYEQEb, observed size 713874695 bytes) and `fiq_comb_RN50x4_fullft.pt` (id 1MxFkozS7RJy5VOoDBC2gJkoYqB4jD5tB, observed size 236017921 bytes). The folder README (id 1G7kZo7paiaRd3mif9_saERyhPevRCM88, fetched) lists item 6 as 'RN50x4-based trained Combiner on fine-tuned image and text encoder - work under review (Best RN50x4-based model)', i.e. this paper's RN-50x4 two-stage model, and documents `clip_state_dict['CLIP']` + `combiner_state_dict['Combiner']` with PROJECTION_DIM 2560 / HIDDEN_DIM 5120 for RN50x4. Two artifacts are genuinely required by the pinned evaluator: `src/validate.py:279` (clip.load), `:283-287` (overlay of state_dict['CLIP']), `:304-309` (separate Combiner file, key 'Combiner'). STILL UNVERIFIED because no digest and no size is recorded in the registry (models.yaml:712-718 expected_size_bytes/expected_sha256 = null) and I did not download or hash ~950 MB of weights (assignment forbids downloads of that size), so byte identity between the published row and the published files is not established.",
+      "checkpoint_mapping_status": "UNVERIFIED",
+      "checkpoint_training_noise_pct": 0,
+      "dataset": "fashioniq",
+      "dataset_version": "FashionIQ as released by Wu et al. (CVPR 2021); 77,684 images; the paper uses the dataset's own train/validation/test split (\u00a74.2.1). Local canonical root: dress 3817 gallery / 2017 triplets, shirt 6346 / 2038, toptee 5373 / 1961 = 15,536 images and 6,016 triplets, vs the paper's printed 15,537 / 6,017 (off-by-one, unresolved).",
+      "derived_metrics": [
+        {
+          "derivation_formula": "(r10 + r50) / 2 = (43.78 + 66.93) / 2 = 55.355",
+          "key": "mean",
+          "provenance": "WORKBENCH_DERIVED",
+          "rounding_policy": "round-half-up to 2 decimals",
+          "source_metrics": [
+            "r10",
+            "r50"
+          ],
+          "value": 55.36
+        }
+      ],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_original_split",
+      "method_name": "Ours (paper's row label; registry method_name 'CLIP4Cir RN50x4 fullft')",
+      "method_variant": "Two-stage proposed method, fully fine-tuned: stage 1 task-oriented CLIP fine-tuning updating BOTH image and text encoders (IFT=yes, TFT=yes), stage 2 Combiner network trained on top of the frozen fine-tuned encoders. This is the paper's headline RN-50x4 configuration (\u00a74.3 'we achieve the best results on both datasets when we fine-tune both encoders') and the ONLY RN-50x4 FashionIQ row in the paper.",
+      "metric_definition": "Recall@K = fraction of queries whose single correct target image is retrieved within the top K ranked gallery images. \u00a74.2.1: 'for each triplet, there is only a positive index image. Hence, each query has R@K zero or one.'",
+      "metric_provenance": {
+        "paper_column": "FashionIQ validation comparison table, columns in order: Method | Encoder Visual | Encoder Textual | Shirt R@10 | Shirt R@50 | Dress R@10 | Dress R@50 | Toptee R@10 | Toptee R@50 | Average R@10 | Average R@50. I read the Shirt/Dress/Toptee R@10 and R@50 blocks and the Average R@10/R@50 block. This is the FashionIQ half of the page only; Table 10 (CIRR test) sits below it on the same page and was NOT read into this experiment.",
+        "paper_page": 16,
+        "paper_row": "Ours | RN-50x4 | Transformer (last row of Table 9, immediately after 'Ours | RN-50 | Transformer')",
+        "paper_table": "Table 9",
+        "source_excerpt_or_description": "Table 9 caption: 'Comparison between our method and current state-of-the-art models on the Fashion-IQ validation set. We highlight the best scores in bold and underline the second-best scores. The upper section of the table presents methods that are not directly comparable to our proposed approach, as they either do not utilize a pre-trained textual encoder or do not update its weights. \"RN\" stands for ResNet.' The row reads: `Ours  RN-50x4  Transformer  44.41  65.26  39.46  64.55  47.48  70.98  43.78  66.93`. Page note: the PDF's 16th physical page carries the printed page number 16 (physical page 1 is the unnumbered ACM title page), so paper_page=16 is unambiguous."
+      },
+      "model_id": "clip4cir_rn50x4_fullft",
+      "preprocessing_id": "targetpad: aspect-ratio-preserving zero-pad to a target ratio of 1.25 applied only when the image's aspect ratio exceeds 1.25, then resize + centre crop to the encoder input (288 for RN-50x4), CLIP normalisation. Paper \u00a73.3 + Algorithm 1 + \u00a74.1 'We set the target ratio in the preprocessing pipeline to 1.25'; repo src/data_utils.py:82-96 (targetpad_transform), src/validate.py:289-291.",
+      "reference_excluded": false,
+      "reference_id": "clip4cir_rn50x4_fullft_fiq_tab9",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": null,
+        "r10": 43.78,
+        "r50": 66.93
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for r10=43.78 and r50=66.93 (the Average R@10 and Average R@50 cells of the RN-50x4 row of Table 9). mean is null because the paper prints no scalar mean; \u00a74.2.1 defines the metric only as 'the average recall at rank K (Recall@K), namely Recall@10 (R@10) and Recall@50 (R@50)'.",
+      "review_status": "CONFIRMED",
+      "split": "val",
+      "verification_evidence": "OBSERVED, three routes identical: shirt 44.41/65.26, dress 39.46/64.55, toptee 47.48/70.98, average 43.78/66.93. Independent checks I ran: (a) internal consistency - unweighted mean of 44.41, 39.46, 47.48 = 43.7833, matching the printed Average R@10 43.78; mean of 65.26, 64.55, 70.98 = 66.93 exactly; (b) control row - the RN-50 row above it (39.87/60.84, 37.67/63.16, 44.88/68.59, avg 40.80/64.20) is reproduced identically by all three routes, so my pipeline does not transpose columns. SEVERITIES/ACTIONS: P0 - the registry stores reported_r10/r50/mean = null (models.yaml:693-695) for a model whose paper row IS printed; record 43.78 / 66.93 plus the per-category values. P2 - keep reported_mean null, since the paper prints no scalar mean; the 55.36 belongs in derived_metrics as WORKBENCH_DERIVED. P1 - this row's declared native_protocol is fashioniq_original_split (models.yaml:691-692) while Table 9 juxtaposes it against the reference-MASKED DCNet row; see experiment clip4cir_rn50x4_fiq_gallery_protocol.",
+      "verification_method": "Three independent routes agreeing cell-for-cell. (1) `pdftotext -layout /tmp/clip4cir.pdf`, line 800: 'Ours RN-50x4 Transformer 44.41 65.26 39.46 64.55 47.48 70.98 43.78 66.93'. (2) Visual read of the rendered page 16 (`pdftoppm -png -r 120 -f 16 -l 16`), /tmp/p16-16.png; the bolded row reads 44.41 / 65.26 / 39.46 / 64.55 / 47.48 / 70.98 / 43.78 / 66.93 with the 'Encoder | Shirt | Dress | Toptee | Average' grouping intact. (3) Machine parse of arXiv HTML table index 9, last <tr>: ['Ours','RN-50x4','Transformer','44.41','65.26','39.46','64.55','47.48','70.98','43.78','66.93']; header row of the same table parsed to confirm six R@10/R@50 pairs in Shirt, Dress, Toptee, Average order - no column shift, and no mixing with Table 10 (CIRR) below it."
+    },
+    {
+      "aggregation_method": "Per-category R@10/R@50 then unweighted macro over Shirt, Dress, Toptee, carried over only as a placeholder for a configuration this paper does not report.",
+      "augmentation_policy": null,
+      "backbone": "RN-50x4 (CLIP; image and text encoders FROZEN, only the Combiner trained)",
+      "category_metrics": {},
+      "checkpoint_id": "rn50x4_noft_unresolved",
+      "checkpoint_mapping_evidence": "Registry declares UNVERIFIED with download_url: null and no size/digest (models.yaml:651-663). I independently confirmed the variant EXISTS and is uniquely identifiable: Drive folder FashionIQ/RN50x4_noft (id 1OHmPOU9VYxDynoCyDfCIY8ijTsSltxuL) contains exactly one file, `fiq_comb_RN50x4_noft.pt` (id 1Hb3lp3Vk0tSpAcMoq8KG5tFsw-jymryi, observed size 236017921 bytes, equal to the fullft Combiner size - consistent with both being Combiner-only state dicts for the same d=640 backbone with PROJECTION_DIM 2560 / HIDDEN_DIM 5120). NOT established: any digest, and any byte-level tie to a published result row. The pinned evaluator's noft semantics are the OMISSION of --clip-model-path (src/validate.py:283-287 applies the CLIP overlay only when that flag is set), which the workbench adapter does for this model.",
+      "checkpoint_mapping_status": "UNVERIFIED",
+      "checkpoint_training_noise_pct": 0,
+      "dataset": "fashioniq",
+      "dataset_version": "FashionIQ validation split as used by the CLIP4Cir evaluator. NOT REPORTED by this paper in this configuration; recorded so a future runtime comparison inherits the correct default protocol. Local canonical root: dress 3817/2017, shirt 6346/2038, toptee 5373/1961.",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_original_split",
+      "method_name": "Combiner RN50x4 noft (registry method_name). NOT REPORTED by this paper.",
+      "method_variant": "The Combiner-only variant trained on out-of-the-box (frozen) CLIP features, i.e. the paper's stage-2 Combiner with NO stage-1 task-oriented CLIP fine-tuning. The configuration exists as an author release but has NO FashionIQ result row in this paper. Release evidence: the Drive folder README (id 1G7kZo7paiaRd3mif9_saERyhPevRCM88, fetched) lists item 2 as 'RN50x4-based Combiner trained on out-of-the-box CLIP features - CVPR22 Demo paper', and the Drive tree has a dedicated FashionIQ/RN50x4_noft folder holding exactly one file.",
+      "metric_definition": "Recall@K = fraction of queries whose single correct target image is retrieved within the top K ranked gallery images - the definition \u00a74.2.1 states for FashionIQ generally; the paper applies it only to its fine-tuned rows.",
+      "metric_provenance": {
+        "paper_column": "n/a - no such column exists in this paper",
+        "paper_page": null,
+        "paper_row": "n/a - no such row exists in this paper",
+        "paper_table": "n/a",
+        "source_excerpt_or_description": "Complete results-table inventory of arXiv 2308.11485v1, obtained by parsing every <table> element of the arXiv HTML (11 elements = the 10 numbered tables plus the loss equation) and dumping each table's header and rows: Table 1 = FashionIQ val, CF x IFT x TFT grid, RN-50 ONLY. Table 2 = CIRR val, same grid, RN-50 only. Table 3 = FashionIQ Combiner-architecture ablation, RN-50 only. Table 4 = CIRR Combiner ablation. Table 5 = FashionIQ two-stage vs end-to-end, RN-50 only. Table 6 = CIRR equivalent. Table 7 = FashionIQ preprocess comparison (CF x Standard/Square/Proposed), RN-50 only. Table 8 = CIRR preprocess. Table 9 = FashionIQ val SotA (the only RN-50x4 FashionIQ row in the paper: 44.41/65.26, 39.46/64.55, 47.48/70.98, avg 43.78/66.93). Table 10 = CIRR TEST SotA (RN-50x4: K=1 44.82, K=5 77.04, K=10 86.65, K=50 97.90, Rsubset 73.16/88.84/95.59). No ViT backbone, no RN50x16 backbone, no frozen-encoder RN-50x4 FashionIQ row. The noft-like FashionIQ configurations that DO exist are RN-50 only: Table 1 CF=Combiner/IFT=no/TFT=no -> 31.85/52.50, 27.22/50.62, 33.81/57.57, avg 30.96/53.56; and Table 7 CF=Combiner/Preprocess=Standard -> 39.40/61.33, 35.25/60.44, 43.95/67.72, avg 39.53/63.16. Neither belongs to this registry entry."
+      },
+      "model_id": "combiner_rn50x4_noft",
+      "preprocessing_id": "targetpad, target ratio 1.25 (the pipeline the paper describes; the noft release README confirms TARGET_RATIO 1.25 for all its pretrained models)",
+      "reference_excluded": false,
+      "reference_id": "clip4cir_rn50x4_noft_fiq_absent_in_paper",
+      "reference_status": "UNVERIFIED",
+      "reported_metrics": {
+        "mean": null,
+        "r10": null,
+        "r50": null
+      },
+      "reported_metrics_provenance": "NOT_PAPER_REPORTED - deliberately null. Evidence the paper has no such row: (1) `grep -n -i 'noft' /tmp/clip4cir.txt` -> empty; (2) `grep -n -i 'out-of-the-box' /tmp/clip4cir.txt` -> hits only in prose at lines 517-522 plus the frozen-encoder statements at lines 349, 465-466, 474, never a result row; (3) `grep -n 'RN50x4' /tmp/clip4cir.txt` -> lines 419, 464, 474, 800, 818 only, and only lines 800 and 818 are results, both fully fine-tuned; (4) the full HTML table inventory in metric_provenance. Per the hard rules these stay null rather than being filled from any other paper.",
+      "review_status": "PENDING",
+      "split": "val",
+      "verification_evidence": "OBSERVED negative result, stated as a finding: the registry's nulls (models.yaml:636-638) are CORRECT for the cited paper, and the assignment's premise that this paper reports a noft RN50x4 FashionIQ row is FALSE. A candidate row exists in an author source this paper does not cite, observed live: CVPR 2022 demo paper, Table 1, 'Proposed approach' = 36.36/58.00, 31.63/56.67, 38.19/62.42, average 35.39/59.03 (FashionIQ val); its \u00a73.2 states the CLIP encoders were kept frozen, and the Drive folder README attributes release item 2 to exactly that paper, so it is genuinely the noft configuration. My arithmetic on those cells (my arithmetic, not a paper value): per-category means 33.995 / 57.335 / 50.305, macro 47.212. I did not use it as this paper's reference. SEVERITIES: P2 - the registry is incomplete rather than wrong; action: either register the CVPR22 row under its own citation or state explicitly in the model notes that the cited paper contains no FashionIQ result for this configuration. P1 - the checkpoint byte-identity blocker is real (no digest, no direct URL in the registry, no size recorded) even though the file is now identified by name and observed size 236017921 bytes. P3 - `checkpoint_training_noise_pct: null` (models.yaml:658) is honest but this variant is clean by construction; 0 with a note would be more informative.",
+      "verification_method": "Exhaustive text search plus complete table inventory, routes agreeing. (1) Greps over the pdftotext output for 'x16', 'vit', 'noft', 'out-of-the-box', 'RN50x4' (results quoted above and in metric_provenance). (2) Every <table> element of https://arxiv.org/html/2308.11485v1 parsed and dumped row-by-row. (3) Rendered page reads of printed pages 11, 15, 16. All agree: 10 results tables, RN-50 for every ablation grid (\u00a74.3, \u00a74.4, \u00a74.5 each state it explicitly), RN-50x4 only in the two SotA tables."
+    },
+    {
+      "aggregation_method": "n/a - protocol fact",
+      "augmentation_policy": null,
+      "backbone": "n/a",
+      "category_metrics": {},
+      "checkpoint_id": null,
+      "checkpoint_mapping_evidence": "Not applicable: this record is a protocol determination, not a metric row, and deliberately carries no checkpoint.",
+      "checkpoint_mapping_status": "NO_CHECKPOINT",
+      "checkpoint_training_noise_pct": 0,
+      "dataset": "fashioniq",
+      "dataset_version": "FashionIQ validation split (the paper's own val split: \u00a74.2.1 'All results are on the validation set since, at the time of writing, test set ground-truth labels have not been released yet')",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_original_split",
+      "method_name": "FashionIQ gallery-protocol determination (applies to BOTH registry entries)",
+      "method_variant": "Protocol fact, not a metric row: whether the reference image remains in the candidate gallery. Carries no reported metrics; exists so the workbench's fashioniq_original_split declaration can be accepted or rejected on evidence.",
+      "metric_definition": "Recall@K over the full per-category validation gallery with the reference image eligible (see verification_evidence).",
+      "metric_provenance": {
+        "paper_column": "n/a",
+        "paper_page": 5,
+        "paper_row": "n/a",
+        "paper_table": "n/a - the paper has no table describing gallery construction",
+        "source_excerpt_or_description": "The paper NEVER states whether the reference image is removed from the candidate gallery. Relevant passages: \u00a73, printed page 5 - 'At inference time, given a query (I_q, T_q), we utilize the fine-tuned CLIP encoders and the trained Combiner network to generate the combined features. Subsequently, following the standard image-to-image retrieval approach, we compute the cosine distances between the combined features and the database of index image features. The results are then sorted based on their similarity.' \u00a74.2.1, printed page 10 - 'We follow the standard experimental setting as in [29, 31]. We employ the average recall at rank K (Recall@K), namely Recall@10 (R@10) and Recall@50 (R@50). Note that for each triplet, there is only a positive index image. Hence, each query has R@K zero or one. All results are on the validation set...' \u00a74.1, printed page 9 - 'During retrieval, we normalize both the combined and index set features to have a unit L2-norm.' No sentence anywhere in the paper uses removal/masking/exclusion language for the reference; `grep -n -i 'gallery\\|candidate\\|exclud\\|database\\|index set' /tmp/clip4cir.txt` returns only the passages quoted plus 'database' in the intro."
+      },
+      "model_id": "combiner_rn50x4_noft | clip4cir_rn50x4_fullft",
+      "preprocessing_id": null,
+      "reference_excluded": false,
+      "reference_id": "clip4cir_rn50x4_fiq_gallery_protocol",
+      "reference_status": "VARIANT",
+      "reported_metrics": {
+        "mean": null,
+        "r10": null,
+        "r50": null
+      },
+      "reported_metrics_provenance": "NOT_APPLICABLE - this record asserts no metric value; it records how the gallery is built.",
+      "review_status": "CONFIRMED",
+      "split": "val",
+      "verification_evidence": "VERDICT ON THE REGISTRY CLAIM: `fashioniq_original_split` (reference REMAINS eligible) is CORRECT for BOTH entries, as a description of the code that produced the paper's numbers. STATIC_AUDIT, workbench/third_party/CLIP4Cir/src/validate.py at commit dfed9f748a8a4d05abf613164e06d59b22dbdf13 (verified equal to the registry pin): (1) the FashionIQ metric path never removes the reference - `:44` distances = 1 - predicted_features @ index_features.T; `:45` torch.argsort(distances, dim=-1) ascending; `:46` sorted_index_names = np.array(index_names)[sorted_indices]; `:49-50` labels compare against target_names over the FULL `len(index_names)`; `:51` asserts exactly one hit per query. No mask, no removal, no -inf/-10e10, `len(index_names)` never decremented. (2) The internal contrast in the SAME file is the strongest evidence that this is deliberate: the CIRR path DOES remove the reference - `:163-166` reference_mask = torch.tensor(sorted_index_names != np.repeat(np.array(reference_names), len(index_names)).reshape(...)), then `sorted_index_names = sorted_index_names[reference_mask].reshape(..., shape[1] - 1)`, with labels using `len(index_names) - 1` at `:168-169`. The author wrote a reference-removal path for CIRR and did not apply it to FashionIQ. (3) The gallery is the complete per-category split file in source order with no dedup: `src/data_utils.py:144-147` self.image_names.extend(json.load(f)) over split.{dress_type}.{split}.json; classic-mode dataset built at `src/validate.py:127`, features extracted at `:128`, iterated with shuffle=False. (4) The reference is not merely eligible, it is the query source taken from that same gallery: `src/validate.py:80` name_to_feat = dict(zip(index_names, index_features)) and `:101-104` retrieves reference_image_features from name_to_feat. OBSERVED local gallery contents (read-only): dress 3817 ids / 2017 triplets, shirt 6346 / 2038, toptee 5373 / 1961. SEPARATE P1 BLOCKER noticed while checking this: all 74381 images in data/fashionIQ_dataset/images are `.png` (`ls data/fashionIQ_dataset/images | sed 's/.*\\.//' | sort | uniq -c` -> 74381 png, 0 jpg) while the evaluator opens `.jpg` (src/data_utils.py:158,161,170,176), and workbench/third_party/CLIP4Cir/fashionIQ_dataset does not exist; this evaluator could not run against the staged root as-is. That is a data-contract blocker, not a protocol claim. ADDITIONAL COMPARABILITY FINDING (P1): DCNet (Kim et al. 2021), the baseline whose setting the paper claims to follow ('We follow the standard experimental setting as in [29, 31]'), DOES mask the reference - workbench/third_party/DCNet/trainer/trainer_joint.py:217-218 sets score_matrix_comp[ei, id2targetidx[elem['candidate']]] = -10e10 and the same for score_matrix_corr. CLIP4Cir therefore juxtaposes its reference-eligible rows against a reference-masked baseline row in Table 9: a paper-level apples-to-oranges comparison. That does NOT license flipping the workbench's declaration, because the workbench describes what CLIP4Cir's code does and its docs (docs/FASHIONIQ_PROTOCOL_PARITY.md:20-24, docs/PROTOCOL_AUDIT.md:64-66) refuse cross-protocol aggregation. ACTION: keep fashioniq_original_split and add a note that this cohort is NOT interchangeable with the reference-excluded cohorts used by DCNet and by the iLearn-family models in this registry.",
+      "verification_method": "Two routes. (a) Exhaustive text search of the paper for any gallery/reference-policy statement (findings above: silent). (b) Direct reading of the pinned evaluator that produces the paper's own \u00a74.7 numbers, workbench/third_party/CLIP4Cir/src/validate.py at commit dfed9f748a8a4d05abf613164e06d59b22dbdf13. Route (b) is decisive because the paper's Table 9 is the output of this script's CLI."
+    },
+    {
+      "aggregation_method": "n/a",
+      "augmentation_policy": null,
+      "backbone": "RN-50 (224x224, d=1024) and RN-50x4 (288x288, d=640) ONLY",
+      "category_metrics": {},
+      "checkpoint_id": null,
+      "checkpoint_mapping_evidence": "Not applicable - non-metric record.",
+      "checkpoint_mapping_status": "NO_CHECKPOINT",
+      "checkpoint_training_noise_pct": 0,
+      "dataset": "fashioniq",
+      "dataset_version": "FashionIQ 77,684 images; paper prints val = 15,537 images / 6,017 triplets; local canonical root has 15,536 / 6,016 (off-by-one, unresolved; affects every FashionIQ model in this workbench, not CLIP4Cir specifically)",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_original_split",
+      "method_name": "Paper-level note: backbone inventory, noft/fullft vocabulary, and version coverage",
+      "method_variant": "Non-metric record capturing (a) which backbones actually appear, (b) that the paper's own vocabulary is 'out-of-the-box' rather than 'noft', (c) that no TOMM camera-ready was obtainable, and (d) the dataset count discrepancy.",
+      "metric_definition": "n/a",
+      "metric_provenance": {
+        "paper_column": "n/a",
+        "paper_page": 8,
+        "paper_row": "n/a",
+        "paper_table": "\u00a74.1 (printed page 8), \u00a74.2.1 (printed page 10), Table 9 (printed page 16)",
+        "source_excerpt_or_description": "\u00a74.1: 'We perform the experiments using two CLIP models of different sizes. The smallest one relies on a modified ResNet-50 (RN-50) architecture. It takes input images of 224 x 224, and the size of its embedding space is d = 1024. The biggest one, denoted as RN-50x4, follows the EfficientNet-style model scaling and uses approximately 4x the computation of RN-50. It takes input images of 288 x 288, and the size of its embedding space is d = 640.' \u00a74.1: 'we set the batch size to 512 for fine-tuning the RN-50-based CLIP model and 192 for fine-tuning the RN-50x4-based model ... During the training of the Combiner network ... We set the batch size to 4096 when using both backbones. We used the PyTorch library throughout the experiments. We set the target ratio in the preprocessing pipeline to 1.25.' \u00a74.2.1: 'FashionIQ is composed of 77,684 fashion images ... Among the 46,609 training images, there are 18,000 training triplets ... The validation and test sets consist of 15,537 and 15,538 images, respectively, with 6,017 and 6,119 triplets.'"
+      },
+      "model_id": "combiner_rn50x4_noft | clip4cir_rn50x4_fullft",
+      "preprocessing_id": null,
+      "reference_excluded": false,
+      "reference_id": "clip4cir_paper_note_backbone_inventory_and_version",
+      "reference_status": "UNKNOWN",
+      "reported_metrics": {
+        "mean": null,
+        "r10": null,
+        "r50": null
+      },
+      "reported_metrics_provenance": "NOT_APPLICABLE",
+      "review_status": "PENDING",
+      "split": "val",
+      "verification_evidence": "(a) BACKBONE INVENTORY - the assignment's premise is corrected by evidence: `grep -n -i 'x16\\|vit-b\\|vit b' /tmp/clip4cir.txt` -> no results-table hits; \u00a74.1 names only RN-50 and RN-50x4. There is NO RN50x16 row, NO ViT-B/32 row, and NO frozen-encoder RN-50x4 FashionIQ row in this paper. (b) VOCABULARY - 'noft' and 'fullft' are the author's release-folder names, not the paper's words: the paper says 'out-of-the-box CLIP features' (lines 517-522) and 'We keep both CLIP encoders frozen while we only update the weights of the Combiner network' (\u00a73.2, line 349), while the Drive tree uses RN50x4_noft / RN50x4_fullft and the Drive README says 'trained Combiner on fine-tuned image and text encoder'. (c) VERSION COVERAGE - the TOMM camera-ready was NOT read: `curl -sSL 'https://dl.acm.org/doi/full/10.1145/3617597'` -> HTTP 403 Cloudflare 'Just a moment...'; the green-OA repository copy OpenAlex lists (`https://u-pad.unimc.it/bitstream/11393/317970/1/compressed_manuscript.pdf`) -> HTTP 403 anonymously and HTTP 403 again with browser UA + Accept + Referer; Semantic Scholar's openAccessPdf for DOI 10.1145/3617597 points back to the arXiv PDF only (status GREEN). Any camera-ready-only content - e.g. an added RN50x16 or ViT-B/32 row, which is the shape the assignment assumed - can therefore be neither confirmed nor ruled out by me: UNKNOWN, and it is the sole reason this record is UNKNOWN rather than VERIFIED for the paper as a versioned artifact. Verifiable claim, scoped: arXiv v1 (sha256 497c59216d606e92fd4eae9c57ed3cd76f180c5c6d161159b03be6a0a4996d1e) has the content described here. ACTION: fetch the ACM/AAM camera-ready from a host that can reach dl.acm.org or u-pad.unimc.it, re-compare Table 9's RN-50x4 row, and clear or confirm this UNKNOWN. (d) DATASET COUNT - paper prints val 15,537 images / 6,017 triplets; local root has 15,536 / 6,016, and FashionIQ's own CVPR21 paper also prints 5,374 for toptee val against the local 5,373. Pre-existing across all FashionIQ models; not a CLIP4Cir defect. SEVERITY: P1 for (c); P3 for (d).",
+      "verification_method": "Full-text grep over the extracted PDF, a complete parse-and-dump of all table elements in the arXiv HTML, plus hand-checks for a camera-ready (Crossref for the DOI/publication metadata, OpenAlex for OA locations, direct fetches of dl.acm.org and the u-pad repository copy, Semantic Scholar for the author-linked OA PDF)."
+    }
+  ],
+  "paper": {
+    "access": "FULL_TEXT",
+    "access_evidence": "Command: `curl -sL -o /tmp/clip4cir.pdf https://arxiv.org/pdf/2308.11485` -> 18490782 bytes, `file` = 'PDF document, version 1.5', `pdfinfo` = 23 pages, Title = 'Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features'. Read by three routes: `pdftotext -layout` (1268 lines); `pdftoppm -png -r 120 -f 16 -l 16 clip4cir.pdf p16` then visual read of the rendered page (Table 9 and Table 10 both visible and legible); and a regex cell-by-cell parse of the `<table>` elements in `curl -sL https://arxiv.org/html/2308.11485v1` (337 KB, 11 table elements). Crawn checks: `curl -sL https://arxiv.org/abs/2308.11485` -> 'Submitted on 22 Aug 2023', submission history lists only [v1], no later revision; `curl -sS https://api.crossref.org/works/10.1145/3617597` -> title exact match, container-title 'ACM Transactions on Multimedia Computing, Communications, and Applications', the four authors, published-print 2024-03-31. FAILED fetches, reported as failures: `https://dl.acm.org/doi/full/10.1145/3617597` -> HTTP 403 Cloudflare ('Just a moment...'); the green-OA copy OpenAlex lists (`https://u-pad.unimc.it/bitstream/11393/317970/1/compressed_manuscript.pdf`) -> HTTP 403 anonymously and HTTP 403 again with browser User-Agent + Accept + Referer on https://hdl.handle.net/11393/317970. The TOMM camera-ready was therefore NOT read. TWO PREMISE CORRECTIONS TO THE ASSIGNMENT, each with evidence: (1) the paper reports NO RN50x16 and NO ViT-B/32 rows - `grep -n -i 'x16\\|vit-b\\|vit b' /tmp/clip4cir.txt` returns no results-table hits, and \u00a74.1 (printed page 8) names only RN-50 (224x224, d=1024) and RN-50x4 (288x288, d=640): 'We perform the experiments using two CLIP models of different sizes.' (2) the paper reports NO CLEAN/frozen-encoder RN-50x4 FashionIQ row - the token 'noft' never occurs (`grep -n -i noft /tmp/clip4cir.txt` -> empty) and the only two RN-50x4 rows in the whole paper are the two 'Ours' rows of Table 9 (FashionIQ val) and Table 10 (CIRR test), both fully fine-tuned. Also read as a cross-reference only (NOT as this paper's numbers): Baldrati et al., CVPR 2022 demo paper, 'Effective Conditioned and Composed Image Retrieval Combining CLIP-Based Features', openaccess.thecvf.com/content/CVPR2022/papers/Baldrati_Effective_Conditioned_and_Composed_Image_Retrieval_Combining_CLIP-Based_Features_CVPR_2022_paper.pdf, sha256 1b2e37afc3c823c24293adafd930a0bea74d4d72aea4f1de8c96ecce0d807953.",
+    "arxiv_id": "2308.11485",
+    "authors": [
+      "Alberto Baldrati",
+      "Marco Bertini",
+      "Tiberio Uricchio",
+      "Alberto Del Bimbo"
+    ],
+    "doi": "10.1145/3617597",
+    "paper_id": "clip4cir_tomm2023",
+    "paper_title": "Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features",
+    "paper_url": "https://arxiv.org/pdf/2308.11485 (text + rendered page) and https://arxiv.org/html/2308.11485v1 (machine-readable tables); cross-checked against https://ar5iv.labs.arxiv.org/html/2308.11485",
+    "paper_version": "arXiv v1, submitted 2023-08-22 (abs page lists [v1] only); PDF CreationDate 2023-08-23. The ACM TOMM published version (DOI 10.1145/3617597) could NOT be fetched (403), so every number below is a v1 number and any camera-ready-only content is UNKNOWN.",
+    "pdf_bytes": 18490782,
+    "pdf_sha256": "497c59216d606e92fd4eae9c57ed3cd76f180c5c6d161159b03be6a0a4996d1e",
+    "publication_year": 2023,
+    "supplement_url": null,
+    "venue": "ACM Transactions on Multimedia Computing, Communications, and Applications (TOMM) 2023; arXiv preprint cs.CV"
+  }
+}

@@ -1,0 +1,1630 @@
+# Paper benchmark references, built offline by
+# `workbench/scripts/build_paper_registry.py` from the extracted payloads under `extracted/`.
+# The runtime reads this file read-only. A correction means a new registry_version, not an
+# edit in place: an existing run records the version and digest it was judged against.
+#
+# `reported_metrics` are values the paper prints. `derived_metrics` are values the workbench
+# computes from printed ones and carry their formula; they are never attributed to the authors.
+registry_version: extract-310385ffc1c6
+references:
+- reference_id: airknow_fiq_0pct
+  model_id: airknow
+  paper_id: airknow
+  paper_title: 'Air-Know: Arbiter-Calibrated Knowledge-Internalizing Robust Network for Composed Image
+    Retrieval'
+  method_name: Air-Know
+  method_variant: main method, clean condition (0% training noise)
+  backbone: 'BLIP-2 (LAVIS); paper: ''We adopt BLIP-2 as Air-Know''s backbone and train it on a single
+    32GB NVIDIA v100 GPU for 10 epochs'''
+  checkpoint_id: null
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: NO_CHECKPOINT
+  dataset: fashioniq
+  dataset_version: official FashionIQ validation split, 77,684 images / 30,134 annotated triplets (paper
+    Appendix A)
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: 'Recall@K = fraction of queries whose target is in the top K; paper: ''For FashionIQ,
+    we report the performance of R@10, 50 across its three categories: Dress, Shirt, and Top&Tee'''
+  aggregation_method: macro over the three categories (equal-weight mean of Dress/Shirt/Toptee), then
+    AVG. = arithmetic mean of macro R@10 and macro R@50
+  reported_metrics:
+    mean: 65.73
+    r10: 55.75
+    r50: 75.72
+  derived_metrics:
+  - derivation_formula: (55.75 + 75.72) / 2
+    key: mean_from_avg_columns
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-even/truncation to 2 decimals; 65.735 -> 65.73 (observed)
+    source_metrics:
+    - r10
+    - r50
+    value: 65.73
+  category_metrics:
+    dress:
+      r10: 51.03
+      r50: 73.08
+    shirt:
+      r10: 56.76
+      r50: 75.05
+    toptee:
+      r10: 59.47
+      r50: 79.02
+  metric_provenance:
+    paper_column: FashionIQ 0% noise block, Dress/Shirt/Toptee R@10 R@50 and Average R@10/R@50/AVG.
+    paper_page: 6
+    paper_row: Air-Know (Ours)
+    paper_table: Table 1
+    source_excerpt_or_description: 'Caption: ''Table 1: Performance comparison on the FashionIQ validation
+      set in terms of R@K(%). The best and second-best results are highlighted in bold and underline,
+      respectively.'' Columns: Noise | Methods | Dress R@10 R@50 | Shirt R@10 R@50 | Toptee R@10 R@50
+      | Average R@10 R@50 AVG. The 0% block spans SPRC, QuRe, TME, HABIT, INTENT, then ''Air-Know (Ours)
+      51.03 73.08 56.76 75.05 59.47 79.02 55.75 75.72 65.73''.'
+  reference_status: VERIFIED
+  verification_method: 'Five independent routes, all agreeing cell-for-cell: (1) HTML <td> parse with
+    rowspan/colspan on https://arxiv.org/html/2604.19386v1; (2) independent python3 html.parser parse
+    of the same HTML; (3) pdftotext -layout of the downloaded PDF; (4) pdftoppm -f 6 -l 6 -r 200 -png
+    render of page 6 read visually as an image; (5) the author''s own results image workbench/third_party/AirKnow/assets/results-fiq.png
+    read as an image. Routes 1/2/3/4 are the paper; route 5 is an independent author artefact. v1 vs v2
+    HTML Table 1 compared and identical. Arithmetic re-executed: (51.03+56.76+59.47)/3 = 55.7533 -> 55.75;
+    (73.08+75.05+79.02)/3 = 75.7167 -> 75.72; (55.75+75.72)/2 = 65.735 -> printed 65.73.'
+  review_status: CONFIRMED
+- reference_id: airknow_fiq_20pct
+  model_id: airknow
+  paper_id: airknow
+  paper_title: 'Air-Know: Arbiter-Calibrated Knowledge-Internalizing Robust Network for Composed Image
+    Retrieval'
+  method_name: Air-Know
+  method_variant: main method, 20% training noise
+  backbone: BLIP-2 (LAVIS)
+  checkpoint_id: null
+  checkpoint_training_noise_pct: 20
+  checkpoint_mapping_status: NO_CHECKPOINT
+  dataset: fashioniq
+  dataset_version: official FashionIQ validation split
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target is in the top K
+  aggregation_method: macro over the three categories, then AVG. = mean of macro R@10 and macro R@50
+  reported_metrics:
+    mean: 65.45
+    r10: 55.18
+    r50: 75.71
+  derived_metrics:
+  - derivation_formula: (73.48 + 74.73 + 78.94) / 3
+    key: macro_r50_from_categories
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round to 2 decimals
+    source_metrics:
+    - dress_r50
+    - shirt_r50
+    - toptee_r50
+    value: 75.72
+  - derivation_formula: (55.18 + 75.71) / 2 = 65.445 -> 65.45
+    key: mean_from_avg_columns
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-up to 2 decimals
+    source_metrics:
+    - r10
+    - r50
+    value: 65.45
+  category_metrics:
+    dress:
+      r10: 50.22
+      r50: 73.48
+    shirt:
+      r10: 56.38
+      r50: 74.73
+    toptee:
+      r10: 58.95
+      r50: 78.94
+  metric_provenance:
+    paper_column: FashionIQ 20% noise block, Average column and AVG.
+    paper_page: 6
+    paper_row: Air-Know (Ours)
+    paper_table: Table 1
+    source_excerpt_or_description: Table 1 caption as above; 20% block lists SPRC 56.33, TME 63.97, HABIT
+      64.38, INTENT 64.36, then 'Air-Know (Ours) 50.22 73.48 56.38 74.73 58.95 78.94 55.18 75.71 65.45'.
+  reference_status: VERIFIED
+  verification_method: Same five routes as the 0% row (HTML regex cell parse, independent html.parser
+    parse, pdftotext -layout, rendered PDF page 6 image, author results-fiq.png image). Arithmetic re-executed.
+  review_status: CONFIRMED
+- reference_id: airknow_fiq_50pct
+  model_id: airknow
+  paper_id: airknow
+  paper_title: 'Air-Know: Arbiter-Calibrated Knowledge-Internalizing Robust Network for Composed Image
+    Retrieval'
+  method_name: Air-Know
+  method_variant: main method, 50% training noise
+  backbone: BLIP-2 (LAVIS)
+  checkpoint_id: fiq_n05
+  checkpoint_training_noise_pct: 50
+  checkpoint_mapping_status: VERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ validation split
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target is in the top K
+  aggregation_method: macro over the three categories, then AVG. = mean of macro R@10 and macro R@50
+  reported_metrics:
+    mean: 63.61
+    r10: 53.19
+    r50: 74.04
+  derived_metrics:
+  - derivation_formula: (53.19 + 74.04) / 2 = 63.615 -> 63.62 (paper prints 63.61)
+    key: mean_from_avg_columns
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-up to 2 decimals
+    source_metrics:
+    - r10
+    - r50
+    value: 63.62
+  category_metrics:
+    dress:
+      r10: 47.9
+      r50: 71.09
+    shirt:
+      r10: 53.95
+      r50: 73.09
+    toptee:
+      r10: 57.71
+      r50: 77.94
+  metric_provenance:
+    paper_column: FashionIQ 50% noise block, Average column and AVG.
+    paper_page: 6
+    paper_row: Air-Know (Ours)
+    paper_table: Table 1
+    source_excerpt_or_description: '50% block: SPRC 51.12, TME 61.86, HABIT 62.80, INTENT 62.92, then
+      ''Air-Know (Ours) 47.90 71.09 53.95 73.09 57.71 77.94 53.19 74.04 63.61''.'
+  reference_status: VERIFIED
+  verification_method: Same five routes as the 0% row. Arithmetic re-executed.
+  review_status: CONFIRMED
+- reference_id: airknow_fiq_80pct
+  model_id: airknow
+  paper_id: airknow
+  paper_title: 'Air-Know: Arbiter-Calibrated Knowledge-Internalizing Robust Network for Composed Image
+    Retrieval'
+  method_name: Air-Know
+  method_variant: main method, 80% training noise
+  backbone: BLIP-2 (LAVIS)
+  checkpoint_id: fiq_n08
+  checkpoint_training_noise_pct: 80
+  checkpoint_mapping_status: VERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ validation split
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target is in the top K
+  aggregation_method: macro over the three categories, then AVG. = mean of macro R@10 and macro R@50
+  reported_metrics:
+    mean: 59.73
+    r10: 49.23
+    r50: 70.23
+  derived_metrics:
+  - derivation_formula: (49.23 + 70.23) / 2 = 59.73
+    key: mean_from_avg_columns
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-up to 2 decimals
+    source_metrics:
+    - r10
+    - r50
+    value: 59.73
+  category_metrics:
+    dress:
+      r10: 42.52
+      r50: 66.03
+    shirt:
+      r10: 51.31
+      r50: 70.26
+    toptee:
+      r10: 53.86
+      r50: 74.41
+  metric_provenance:
+    paper_column: FashionIQ 80% noise block, Average column and AVG.
+    paper_page: 6
+    paper_row: Air-Know (Ours)
+    paper_table: Table 1
+    source_excerpt_or_description: '80% block: SPRC 43.77, TME 57.63, HABIT 58.94, INTENT 59.07, then
+      ''Air-Know (Ours) 42.52 66.03 51.31 70.26 53.86 74.41 49.23 70.23 59.73''.'
+  reference_status: VERIFIED
+  verification_method: Same five routes as the 0% row. Arithmetic re-executed.
+  review_status: CONFIRMED
+- reference_id: clip4cir_rn50x4_fullft_fiq_tab9
+  model_id: clip4cir_rn50x4_fullft
+  paper_id: clip4cir_tomm2023
+  paper_title: Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features
+  method_name: Ours (paper's row label; registry method_name 'CLIP4Cir RN50x4 fullft')
+  method_variant: 'Two-stage proposed method, fully fine-tuned: stage 1 task-oriented CLIP fine-tuning
+    updating BOTH image and text encoders (IFT=yes, TFT=yes), stage 2 Combiner network trained on top
+    of the frozen fine-tuned encoders. This is the paper''s headline RN-50x4 configuration (§4.3 ''we
+    achieve the best results on both datasets when we fine-tune both encoders'') and the ONLY RN-50x4
+    FashionIQ row in the paper.'
+  backbone: RN-50x4 (CLIP; paper prints 'RN-50x4', input 288x288, d=640)
+  checkpoint_id: rn50x4_fullft_unresolved
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: 'FashionIQ as released by Wu et al. (CVPR 2021); 77,684 images; the paper uses the
+    dataset''s own train/validation/test split (§4.2.1). Local canonical root: dress 3817 gallery / 2017
+    triplets, shirt 6346 / 2038, toptee 5373 / 1961 = 15,536 images and 6,016 triplets, vs the paper''s
+    printed 15,537 / 6,017 (off-by-one, unresolved).'
+  split: val
+  gallery_protocol: fashioniq_original_split
+  reference_excluded: false
+  evaluation_noise_pct: 0
+  preprocessing_id: 'targetpad: aspect-ratio-preserving zero-pad to a target ratio of 1.25 applied only
+    when the image''s aspect ratio exceeds 1.25, then resize + centre crop to the encoder input (288 for
+    RN-50x4), CLIP normalisation. Paper §3.3 + Algorithm 1 + §4.1 ''We set the target ratio in the preprocessing
+    pipeline to 1.25''; repo src/data_utils.py:82-96 (targetpad_transform), src/validate.py:289-291.'
+  augmentation_policy: null
+  metric_definition: 'Recall@K = fraction of queries whose single correct target image is retrieved within
+    the top K ranked gallery images. §4.2.1: ''for each triplet, there is only a positive index image.
+    Hence, each query has R@K zero or one.'''
+  aggregation_method: R@10 and R@50 reported per category (Shirt, Dress, Toptee) and then an unweighted
+    macro mean over the three categories for the 'Average' columns. The paper prints Average R@10 and
+    Average R@50 as two separate numbers and does NOT print a single scalar mean of those two.
+  reported_metrics:
+    mean: null
+    r10: 43.78
+    r50: 66.93
+  derived_metrics:
+  - derivation_formula: (r10 + r50) / 2 = (43.78 + 66.93) / 2 = 55.355
+    key: mean
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-up to 2 decimals
+    source_metrics:
+    - r10
+    - r50
+    value: 55.36
+  category_metrics:
+    dress:
+      r10: 39.46
+      r50: 64.55
+    shirt:
+      r10: 44.41
+      r50: 65.26
+    toptee:
+      r10: 47.48
+      r50: 70.98
+  metric_provenance:
+    paper_column: 'FashionIQ validation comparison table, columns in order: Method | Encoder Visual |
+      Encoder Textual | Shirt R@10 | Shirt R@50 | Dress R@10 | Dress R@50 | Toptee R@10 | Toptee R@50
+      | Average R@10 | Average R@50. I read the Shirt/Dress/Toptee R@10 and R@50 blocks and the Average
+      R@10/R@50 block. This is the FashionIQ half of the page only; Table 10 (CIRR test) sits below it
+      on the same page and was NOT read into this experiment.'
+    paper_page: 16
+    paper_row: Ours | RN-50x4 | Transformer (last row of Table 9, immediately after 'Ours | RN-50 | Transformer')
+    paper_table: Table 9
+    source_excerpt_or_description: 'Table 9 caption: ''Comparison between our method and current state-of-the-art
+      models on the Fashion-IQ validation set. We highlight the best scores in bold and underline the
+      second-best scores. The upper section of the table presents methods that are not directly comparable
+      to our proposed approach, as they either do not utilize a pre-trained textual encoder or do not
+      update its weights. "RN" stands for ResNet.'' The row reads: `Ours  RN-50x4  Transformer  44.41  65.26  39.46  64.55  47.48  70.98  43.78  66.93`.
+      Page note: the PDF''s 16th physical page carries the printed page number 16 (physical page 1 is
+      the unnumbered ACM title page), so paper_page=16 is unambiguous.'
+  reference_status: VERIFIED
+  verification_method: 'Three independent routes agreeing cell-for-cell. (1) `pdftotext -layout /tmp/clip4cir.pdf`,
+    line 800: ''Ours RN-50x4 Transformer 44.41 65.26 39.46 64.55 47.48 70.98 43.78 66.93''. (2) Visual
+    read of the rendered page 16 (`pdftoppm -png -r 120 -f 16 -l 16`), /tmp/p16-16.png; the bolded row
+    reads 44.41 / 65.26 / 39.46 / 64.55 / 47.48 / 70.98 / 43.78 / 66.93 with the ''Encoder | Shirt | Dress
+    | Toptee | Average'' grouping intact. (3) Machine parse of arXiv HTML table index 9, last <tr>: [''Ours'',''RN-50x4'',''Transformer'',''44.41'',''65.26'',''39.46'',''64.55'',''47.48'',''70.98'',''43.78'',''66.93''];
+    header row of the same table parsed to confirm six R@10/R@50 pairs in Shirt, Dress, Toptee, Average
+    order - no column shift, and no mixing with Table 10 (CIRR) below it.'
+  review_status: CONFIRMED
+- reference_id: clip4cir_rn50x4_noft_fiq_absent_in_paper
+  model_id: combiner_rn50x4_noft
+  paper_id: clip4cir_tomm2023
+  paper_title: Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features
+  method_name: Combiner RN50x4 noft (registry method_name). NOT REPORTED by this paper.
+  method_variant: 'The Combiner-only variant trained on out-of-the-box (frozen) CLIP features, i.e. the
+    paper''s stage-2 Combiner with NO stage-1 task-oriented CLIP fine-tuning. The configuration exists
+    as an author release but has NO FashionIQ result row in this paper. Release evidence: the Drive folder
+    README (id 1G7kZo7paiaRd3mif9_saERyhPevRCM88, fetched) lists item 2 as ''RN50x4-based Combiner trained
+    on out-of-the-box CLIP features - CVPR22 Demo paper'', and the Drive tree has a dedicated FashionIQ/RN50x4_noft
+    folder holding exactly one file.'
+  backbone: RN-50x4 (CLIP; image and text encoders FROZEN, only the Combiner trained)
+  checkpoint_id: rn50x4_noft_unresolved
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: 'FashionIQ validation split as used by the CLIP4Cir evaluator. NOT REPORTED by this
+    paper in this configuration; recorded so a future runtime comparison inherits the correct default
+    protocol. Local canonical root: dress 3817/2017, shirt 6346/2038, toptee 5373/1961.'
+  split: val
+  gallery_protocol: fashioniq_original_split
+  reference_excluded: false
+  evaluation_noise_pct: 0
+  preprocessing_id: targetpad, target ratio 1.25 (the pipeline the paper describes; the noft release README
+    confirms TARGET_RATIO 1.25 for all its pretrained models)
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose single correct target image is retrieved within
+    the top K ranked gallery images - the definition §4.2.1 states for FashionIQ generally; the paper
+    applies it only to its fine-tuned rows.
+  aggregation_method: Per-category R@10/R@50 then unweighted macro over Shirt, Dress, Toptee, carried
+    over only as a placeholder for a configuration this paper does not report.
+  reported_metrics:
+    mean: null
+    r10: null
+    r50: null
+  derived_metrics: []
+  category_metrics: {}
+  metric_provenance:
+    paper_column: n/a - no such column exists in this paper
+    paper_page: null
+    paper_row: n/a - no such row exists in this paper
+    paper_table: n/a
+    source_excerpt_or_description: 'Complete results-table inventory of arXiv 2308.11485v1, obtained by
+      parsing every <table> element of the arXiv HTML (11 elements = the 10 numbered tables plus the loss
+      equation) and dumping each table''s header and rows: Table 1 = FashionIQ val, CF x IFT x TFT grid,
+      RN-50 ONLY. Table 2 = CIRR val, same grid, RN-50 only. Table 3 = FashionIQ Combiner-architecture
+      ablation, RN-50 only. Table 4 = CIRR Combiner ablation. Table 5 = FashionIQ two-stage vs end-to-end,
+      RN-50 only. Table 6 = CIRR equivalent. Table 7 = FashionIQ preprocess comparison (CF x Standard/Square/Proposed),
+      RN-50 only. Table 8 = CIRR preprocess. Table 9 = FashionIQ val SotA (the only RN-50x4 FashionIQ
+      row in the paper: 44.41/65.26, 39.46/64.55, 47.48/70.98, avg 43.78/66.93). Table 10 = CIRR TEST
+      SotA (RN-50x4: K=1 44.82, K=5 77.04, K=10 86.65, K=50 97.90, Rsubset 73.16/88.84/95.59). No ViT
+      backbone, no RN50x16 backbone, no frozen-encoder RN-50x4 FashionIQ row. The noft-like FashionIQ
+      configurations that DO exist are RN-50 only: Table 1 CF=Combiner/IFT=no/TFT=no -> 31.85/52.50, 27.22/50.62,
+      33.81/57.57, avg 30.96/53.56; and Table 7 CF=Combiner/Preprocess=Standard -> 39.40/61.33, 35.25/60.44,
+      43.95/67.72, avg 39.53/63.16. Neither belongs to this registry entry.'
+  reference_status: UNVERIFIED
+  verification_method: 'Exhaustive text search plus complete table inventory, routes agreeing. (1) Greps
+    over the pdftotext output for ''x16'', ''vit'', ''noft'', ''out-of-the-box'', ''RN50x4'' (results
+    quoted above and in metric_provenance). (2) Every <table> element of https://arxiv.org/html/2308.11485v1
+    parsed and dumped row-by-row. (3) Rendered page reads of printed pages 11, 15, 16. All agree: 10 results
+    tables, RN-50 for every ablation grid (§4.3, §4.4, §4.5 each state it explicitly), RN-50x4 only in
+    the two SotA tables.'
+  review_status: PENDING
+- reference_id: combiner_rn50x4_noft__clip4cir_rn50x4_fiq_gallery_protocol
+  model_id: combiner_rn50x4_noft
+  paper_id: clip4cir_tomm2023
+  paper_title: Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features
+  method_name: FashionIQ gallery-protocol determination (applies to BOTH registry entries)
+  method_variant: 'Protocol fact, not a metric row: whether the reference image remains in the candidate
+    gallery. Carries no reported metrics; exists so the workbench''s fashioniq_original_split declaration
+    can be accepted or rejected on evidence.'
+  backbone: n/a
+  checkpoint_id: null
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: NO_CHECKPOINT
+  dataset: fashioniq
+  dataset_version: 'FashionIQ validation split (the paper''s own val split: §4.2.1 ''All results are on
+    the validation set since, at the time of writing, test set ground-truth labels have not been released
+    yet'')'
+  split: val
+  gallery_protocol: fashioniq_original_split
+  reference_excluded: false
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K over the full per-category validation gallery with the reference image eligible
+    (see verification_evidence).
+  aggregation_method: n/a - protocol fact
+  reported_metrics: &id001
+    mean: null
+    r10: null
+    r50: null
+  derived_metrics: &id002 []
+  category_metrics: &id003 {}
+  metric_provenance: &id004
+    paper_column: n/a
+    paper_page: 5
+    paper_row: n/a
+    paper_table: n/a - the paper has no table describing gallery construction
+    source_excerpt_or_description: 'The paper NEVER states whether the reference image is removed from
+      the candidate gallery. Relevant passages: §3, printed page 5 - ''At inference time, given a query
+      (I_q, T_q), we utilize the fine-tuned CLIP encoders and the trained Combiner network to generate
+      the combined features. Subsequently, following the standard image-to-image retrieval approach, we
+      compute the cosine distances between the combined features and the database of index image features.
+      The results are then sorted based on their similarity.'' §4.2.1, printed page 10 - ''We follow the
+      standard experimental setting as in [29, 31]. We employ the average recall at rank K (Recall@K),
+      namely Recall@10 (R@10) and Recall@50 (R@50). Note that for each triplet, there is only a positive
+      index image. Hence, each query has R@K zero or one. All results are on the validation set...'' §4.1,
+      printed page 9 - ''During retrieval, we normalize both the combined and index set features to have
+      a unit L2-norm.'' No sentence anywhere in the paper uses removal/masking/exclusion language for
+      the reference; `grep -n -i ''gallery\|candidate\|exclud\|database\|index set'' /tmp/clip4cir.txt`
+      returns only the passages quoted plus ''database'' in the intro.'
+  reference_status: UNVERIFIED
+  verification_method: 'Two routes. (a) Exhaustive text search of the paper for any gallery/reference-policy
+    statement (findings above: silent). (b) Direct reading of the pinned evaluator that produces the paper''s
+    own §4.7 numbers, workbench/third_party/CLIP4Cir/src/validate.py at commit dfed9f748a8a4d05abf613164e06d59b22dbdf13.
+    Route (b) is decisive because the paper''s Table 9 is the output of this script''s CLI.'
+  review_status: CONFIRMED
+- reference_id: clip4cir_rn50x4_fullft__clip4cir_rn50x4_fiq_gallery_protocol
+  model_id: clip4cir_rn50x4_fullft
+  paper_id: clip4cir_tomm2023
+  paper_title: Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features
+  method_name: FashionIQ gallery-protocol determination (applies to BOTH registry entries)
+  method_variant: 'Protocol fact, not a metric row: whether the reference image remains in the candidate
+    gallery. Carries no reported metrics; exists so the workbench''s fashioniq_original_split declaration
+    can be accepted or rejected on evidence.'
+  backbone: n/a
+  checkpoint_id: null
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: NO_CHECKPOINT
+  dataset: fashioniq
+  dataset_version: 'FashionIQ validation split (the paper''s own val split: §4.2.1 ''All results are on
+    the validation set since, at the time of writing, test set ground-truth labels have not been released
+    yet'')'
+  split: val
+  gallery_protocol: fashioniq_original_split
+  reference_excluded: false
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K over the full per-category validation gallery with the reference image eligible
+    (see verification_evidence).
+  aggregation_method: n/a - protocol fact
+  reported_metrics: *id001
+  derived_metrics: *id002
+  category_metrics: *id003
+  metric_provenance: *id004
+  reference_status: UNVERIFIED
+  verification_method: 'Two routes. (a) Exhaustive text search of the paper for any gallery/reference-policy
+    statement (findings above: silent). (b) Direct reading of the pinned evaluator that produces the paper''s
+    own §4.7 numbers, workbench/third_party/CLIP4Cir/src/validate.py at commit dfed9f748a8a4d05abf613164e06d59b22dbdf13.
+    Route (b) is decisive because the paper''s Table 9 is the output of this script''s CLI.'
+  review_status: CONFIRMED
+- reference_id: combiner_rn50x4_noft__clip4cir_paper_note_backbone_inventory_and_version
+  model_id: combiner_rn50x4_noft
+  paper_id: clip4cir_tomm2023
+  paper_title: Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features
+  method_name: 'Paper-level note: backbone inventory, noft/fullft vocabulary, and version coverage'
+  method_variant: Non-metric record capturing (a) which backbones actually appear, (b) that the paper's
+    own vocabulary is 'out-of-the-box' rather than 'noft', (c) that no TOMM camera-ready was obtainable,
+    and (d) the dataset count discrepancy.
+  backbone: RN-50 (224x224, d=1024) and RN-50x4 (288x288, d=640) ONLY
+  checkpoint_id: null
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: NO_CHECKPOINT
+  dataset: fashioniq
+  dataset_version: FashionIQ 77,684 images; paper prints val = 15,537 images / 6,017 triplets; local canonical
+    root has 15,536 / 6,016 (off-by-one, unresolved; affects every FashionIQ model in this workbench,
+    not CLIP4Cir specifically)
+  split: val
+  gallery_protocol: fashioniq_original_split
+  reference_excluded: false
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: n/a
+  aggregation_method: n/a
+  reported_metrics: &id005
+    mean: null
+    r10: null
+    r50: null
+  derived_metrics: &id006 []
+  category_metrics: &id007 {}
+  metric_provenance: &id008
+    paper_column: n/a
+    paper_page: 8
+    paper_row: n/a
+    paper_table: §4.1 (printed page 8), §4.2.1 (printed page 10), Table 9 (printed page 16)
+    source_excerpt_or_description: '§4.1: ''We perform the experiments using two CLIP models of different
+      sizes. The smallest one relies on a modified ResNet-50 (RN-50) architecture. It takes input images
+      of 224 x 224, and the size of its embedding space is d = 1024. The biggest one, denoted as RN-50x4,
+      follows the EfficientNet-style model scaling and uses approximately 4x the computation of RN-50.
+      It takes input images of 288 x 288, and the size of its embedding space is d = 640.'' §4.1: ''we
+      set the batch size to 512 for fine-tuning the RN-50-based CLIP model and 192 for fine-tuning the
+      RN-50x4-based model ... During the training of the Combiner network ... We set the batch size to
+      4096 when using both backbones. We used the PyTorch library throughout the experiments. We set the
+      target ratio in the preprocessing pipeline to 1.25.'' §4.2.1: ''FashionIQ is composed of 77,684
+      fashion images ... Among the 46,609 training images, there are 18,000 training triplets ... The
+      validation and test sets consist of 15,537 and 15,538 images, respectively, with 6,017 and 6,119
+      triplets.'''
+  reference_status: UNVERIFIED
+  verification_method: Full-text grep over the extracted PDF, a complete parse-and-dump of all table elements
+    in the arXiv HTML, plus hand-checks for a camera-ready (Crossref for the DOI/publication metadata,
+    OpenAlex for OA locations, direct fetches of dl.acm.org and the u-pad repository copy, Semantic Scholar
+    for the author-linked OA PDF).
+  review_status: PENDING
+- reference_id: clip4cir_rn50x4_fullft__clip4cir_paper_note_backbone_inventory_and_version
+  model_id: clip4cir_rn50x4_fullft
+  paper_id: clip4cir_tomm2023
+  paper_title: Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features
+  method_name: 'Paper-level note: backbone inventory, noft/fullft vocabulary, and version coverage'
+  method_variant: Non-metric record capturing (a) which backbones actually appear, (b) that the paper's
+    own vocabulary is 'out-of-the-box' rather than 'noft', (c) that no TOMM camera-ready was obtainable,
+    and (d) the dataset count discrepancy.
+  backbone: RN-50 (224x224, d=1024) and RN-50x4 (288x288, d=640) ONLY
+  checkpoint_id: null
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: NO_CHECKPOINT
+  dataset: fashioniq
+  dataset_version: FashionIQ 77,684 images; paper prints val = 15,537 images / 6,017 triplets; local canonical
+    root has 15,536 / 6,016 (off-by-one, unresolved; affects every FashionIQ model in this workbench,
+    not CLIP4Cir specifically)
+  split: val
+  gallery_protocol: fashioniq_original_split
+  reference_excluded: false
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: n/a
+  aggregation_method: n/a
+  reported_metrics: *id005
+  derived_metrics: *id006
+  category_metrics: *id007
+  metric_provenance: *id008
+  reference_status: UNVERIFIED
+  verification_method: Full-text grep over the extracted PDF, a complete parse-and-dump of all table elements
+    in the arXiv HTML, plus hand-checks for a camera-ready (Crossref for the DOI/publication metadata,
+    OpenAlex for OA locations, direct fetches of dl.acm.org and the u-pad repository copy, Semantic Scholar
+    for the author-linked OA PDF).
+  review_status: PENDING
+- reference_id: habit_aaai26_table1_fiq_n00
+  model_id: habit
+  paper_id: habit_aaai26
+  paper_title: 'HABIT: Chrono-Synergia Robust Progressive Learning Framework for Composed Image Retrieval'
+  method_name: HABIT (Ours)
+  method_variant: main method, 0%-noise training block (fully supervised)
+  backbone: BLIP-2 Q-Former composition; paper states learnable query number Q=32 (Implementation Details);
+    the embedding dimension D is not stated
+  checkpoint_id: null
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: NO_CHECKPOINT
+  dataset: fashioniq
+  dataset_version: official FashionIQ val annotations (cap.<cat>.val.json) scored against the full validation
+    image list of image_splits/split.<cat>.val.json in file order; the paper prints no benchmark revision
+    or gallery size
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: targetpad_transform(1.25, 224) (data_utils.py:92-106, selected in train.py:94-106);
+    the paper does not state the transform
+  augmentation_policy: null
+  metric_definition: 'Recall@K = fraction of queries whose target image is in the top K (paper Section
+    4.1: ''We adopt Recall@K (R@K) as the primary metric ... For FashionIQ, we report the R@{10, 50} for
+    each category (Dresses, Shirts, Tops&Tees)'')'
+  aggregation_method: per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee;
+    AVG. = (Average R@10 + Average R@50) / 2
+  reported_metrics:
+    mean: 65.29
+    r10: 55.38
+    r50: 75.2
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 49.99
+      r50: 72.38
+    shirt:
+      r10: 56.62
+      r50: 74.68
+    toptee:
+      r10: 59.51
+      r50: 78.53
+  metric_provenance:
+    paper_column: FashionIQ 0% block - Dress R@10/R@50, Shirt R@10/R@50, Toptee R@10/R@50, Average R@10,
+      Average R@50, AVG.
+    paper_page: 5
+    paper_row: HABIT (Ours), 0% block
+    paper_table: Table 1
+    source_excerpt_or_description: 'Row as printed: ''HABIT (Ours) 49.99 72.38 56.62 74.68 59.51 78.53
+      55.38 75.20 65.29''. Caption: ''Table 1: Performance comparison on FashionIQ in terms of R@K (%).
+      The best result under each noise ratio is highlighted in bold, while the second-best result is underlined.'''
+  reference_status: VERIFIED
+  verification_method: 'Four independent routes agreeing digit-for-digit: (1) arXiv HTML table (machine-readable);
+    (2) `pdftotext -layout -f 5 -l 5 habit.pdf` -> ''HABIT (Ours) 49.99 72.38 56.62 74.68 59.51 78.53
+    55.38 75.20 65.29''; (3) rendered PDF page 5 image (`pdftoppm -r 150 -f 5 -l 5`) read visually, same
+    values; (4) author-rendered workbench/third_party/HABIT/assets/results-fiq.png, same values. Arithmetic
+    recomputed with Python Decimal ROUND_HALF_UP.'
+  review_status: PENDING
+- reference_id: habit_aaai26_table1_fiq_n20
+  model_id: habit
+  paper_id: habit_aaai26
+  paper_title: 'HABIT: Chrono-Synergia Robust Progressive Learning Framework for Composed Image Retrieval'
+  method_name: HABIT (Ours)
+  method_variant: main method, 20%-noise training block
+  backbone: BLIP-2 Q-Former composition; Q=32 per the paper, D not stated
+  checkpoint_id: fiq_n02
+  checkpoint_training_noise_pct: 20
+  checkpoint_mapping_status: VERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ val annotations; paper prints no benchmark revision
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: targetpad_transform(1.25, 224) (data_utils.py:92-106)
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K
+  aggregation_method: per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee;
+    AVG. = (Average R@10 + Average R@50) / 2
+  reported_metrics:
+    mean: 64.38
+    r10: 54.48
+    r50: 74.28
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 49.63
+      r50: 71.34
+    shirt:
+      r10: 55.67
+      r50: 73.19
+    toptee:
+      r10: 58.14
+      r50: 78.32
+  metric_provenance:
+    paper_column: FashionIQ 20% block - per-category R@10/R@50, Average R@10, Average R@50, AVG.
+    paper_page: 5
+    paper_row: HABIT (Ours), 20% block
+    paper_table: Table 1
+    source_excerpt_or_description: 'Row as printed: ''HABIT (Ours) 49.63 71.34 55.67 73.19 58.14 78.32
+      54.48 74.28 64.38'''
+  reference_status: VERIFIED
+  verification_method: Same four routes as the 0% row (arXiv HTML, pdftotext -layout page 5, rendered
+    page-5 image, author results-fiq.png); all agree.
+  review_status: PENDING
+- reference_id: habit_aaai26_table1_fiq_n50
+  model_id: habit
+  paper_id: habit_aaai26
+  paper_title: 'HABIT: Chrono-Synergia Robust Progressive Learning Framework for Composed Image Retrieval'
+  method_name: HABIT (Ours)
+  method_variant: main method, 50%-noise training block
+  backbone: BLIP-2 Q-Former composition; Q=32 per the paper, D not stated
+  checkpoint_id: fiq_n05
+  checkpoint_training_noise_pct: 50
+  checkpoint_mapping_status: VERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ val annotations; paper prints no benchmark revision
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: targetpad_transform(1.25, 224) (data_utils.py:92-106)
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K
+  aggregation_method: per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee;
+    AVG. = (Average R@10 + Average R@50) / 2
+  reported_metrics:
+    mean: 62.8
+    r10: 52.52
+    r50: 73.09
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 47.33
+      r50: 69.71
+    shirt:
+      r10: 53.72
+      r50: 72.55
+    toptee:
+      r10: 56.51
+      r50: 77
+  metric_provenance:
+    paper_column: FashionIQ 50% block - per-category R@10/R@50, Average R@10, Average R@50, AVG.
+    paper_page: 5
+    paper_row: HABIT (Ours), 50% block
+    paper_table: Table 1
+    source_excerpt_or_description: 'Row as printed: ''HABIT (Ours) 47.33 69.71 53.72 72.55 56.51 77.00
+      52.52 73.09 62.80'''
+  reference_status: VERIFIED
+  verification_method: Same four routes as the 0% row; all agree to the digit.
+  review_status: PENDING
+- reference_id: habit_aaai26_table1_fiq_n80
+  model_id: habit
+  paper_id: habit_aaai26
+  paper_title: 'HABIT: Chrono-Synergia Robust Progressive Learning Framework for Composed Image Retrieval'
+  method_name: HABIT (Ours)
+  method_variant: main method, 80%-noise training block
+  backbone: BLIP-2 Q-Former composition; Q=32 per the paper, D not stated
+  checkpoint_id: fiq_n08
+  checkpoint_training_noise_pct: 80
+  checkpoint_mapping_status: VERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ val annotations; paper prints no benchmark revision
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: targetpad_transform(1.25, 224) (data_utils.py:92-106)
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K
+  aggregation_method: per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee;
+    AVG. = (Average R@10 + Average R@50) / 2
+  reported_metrics:
+    mean: 58.94
+    r10: 48.36
+    r50: 69.53
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 42.04
+      r50: 65.2
+    shirt:
+      r10: 50.12
+      r50: 69.77
+    toptee:
+      r10: 52.92
+      r50: 73.61
+  metric_provenance:
+    paper_column: FashionIQ 80% block - per-category R@10/R@50, Average R@10, Average R@50, AVG.
+    paper_page: 5
+    paper_row: HABIT (Ours), 80% block
+    paper_table: Table 1
+    source_excerpt_or_description: 'Row as printed: ''HABIT (Ours) 42.04 65.20 50.12 69.77 52.92 73.61
+      48.36 69.53 58.94'''
+  reference_status: VERIFIED
+  verification_method: Same four routes as the 0% row; all agree to the digit.
+  review_status: PENDING
+- reference_id: hint_fiq_clean_val_split
+  model_id: hint
+  paper_id: hint_icassp26
+  paper_title: 'HINT: Composed Image Retrieval with Dual-Path Compositional Contextualized Network'
+  method_name: HINT
+  method_variant: main method (full model, all modules DCE+QCR+DPCC)
+  backbone: BLIP-2 feature extractor (Q-former); paper does not print a CLIP/BLIP variant string for the
+    FashionIQ row
+  checkpoint_id: fashioniq
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: VERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ validation annotations (captions/cap.{cat}.val.json) and split files
+    (image_splits/split.{cat}.val.json)
+  split: val
+  gallery_protocol: fashioniq_val_split
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target is in the top K
+  aggregation_method: macro over categories, then mean of R@10 and R@50
+  reported_metrics:
+    mean: null
+    r10: 58.48
+    r50: 77.93
+  derived_metrics:
+  - derivation_formula: (r10 + r50) / 2
+    key: mean
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-up to 2 decimals
+    source_metrics:
+    - r10
+    - r50
+    value: 68.21
+  category_metrics:
+    dress:
+      r10: 51.8
+      r50: 73.13
+    shirt:
+      r10: 60.27
+      r50: 78.48
+    toptee:
+      r10: 63.37
+      r50: 82.19
+  metric_provenance:
+    paper_column: FashionIQ block, Dresses/Shirts/Tops&Tees R@10 and R@50, plus the FashionIQ Avg (R@10,
+      R@50) columns
+    paper_page: 4
+    paper_row: HINT (Ours)
+    paper_table: Table 1
+    source_excerpt_or_description: '''Table 1. Performance comparison on FashionIQ and CIRR relative to
+      R@k(%). The overall best results are in bold, while the second-best results are underlined. The
+      Avg metric in CIRR denotes (R@5 + Rsubset@1) / 2.'' Bottom row: ''HINT (Ours) 51.80 73.13 60.27
+      78.48 63.37 82.19 | 58.48 77.93 | ...''. The Avg column here is the category macro of R@10 and of
+      R@50, not a mean of the two.'
+  reference_status: VERIFIED
+  verification_method: 'Three independent routes read and cross-checked: rendered PDF page 4 image (pdftoppm
+    -r 160), arXiv HTML table markup, and the author README results image workbench/third_party/HINT/assets/results.png.
+    Arithmetic also checked: mean(51.80, 60.27, 63.37) = 58.480 and mean(73.13, 78.48, 82.19) = 77.933,
+    which reproduce the printed Avg cells 58.48 and 77.93.'
+  review_status: CONFIRMED
+- reference_id: encoder_fiq_clean_val_split
+  model_id: encoder
+  paper_id: hint_icassp26
+  paper_title: 'HINT: Composed Image Retrieval with Dual-Path Compositional Contextualized Network'
+  method_name: ENCODER
+  method_variant: main method (full model, LFF+EAB+MSC)
+  backbone: CLIP ViT-B/32
+  checkpoint_id: fashioniq
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ validation annotations (captions/cap.{cat}.val.json) and split files
+    (image_splits/split.{cat}.val.json)
+  split: val
+  gallery_protocol: fashioniq_val_split
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target is in the top K
+  aggregation_method: macro over categories, then mean of R@10 and R@50
+  reported_metrics:
+    mean: null
+    r10: 56.13
+    r50: 77.59
+  derived_metrics:
+  - derivation_formula: (r10 + r50) / 2
+    key: mean
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-up to 2 decimals
+    source_metrics:
+    - r10
+    - r50
+    value: 66.86
+  category_metrics:
+    dress:
+      r10: 51.51
+      r50: 76.95
+    shirt:
+      r10: 54.86
+      r50: 74.93
+    toptee:
+      r10: 62.01
+      r50: 80.88
+  metric_provenance:
+    paper_column: 'FashionIQ block: Dresses/Shirts/Tops&Tees R@10 and R@50, then the FashionIQ Avg columns'
+    paper_page: 5
+    paper_row: ENCODER(Ours)
+    paper_table: Table 1
+    source_excerpt_or_description: 'AAAI PDF text (via text extraction of the publisher PDF): ''ENCODER(Ours)
+      51.51 76.95 54.86 74.93 62.01 80.88 56.13 77.59 26.97 65.59 86.48 59.68'', followed by ''Table 1:
+      Performance comparison on FashionIQ and Shoes relative to R@k(%). The overall best results are in
+      bold, while the best results over baselines are underlined.'' The last four numbers are the Shoes
+      (R@1/R@10/R@50/Avg) columns. The author project-page image renders the identical row, and the repo
+      image assets/fashion-results.png renders it as the last block ''ENCODER(Ours)''.'
+  reference_status: VERIFIED
+  verification_method: 'Text route: publisher PDF (9 pages) converted to text through the r.jina.ai proxy;
+    the FashionIQ row appears as ''ENCODER(Ours) 51.51 76.95 54.86 74.93 62.01 80.88 56.13 77.59''. Image
+    route: two author-rendered sources agree — https://lee-zixu.github.io/ENCODER.github.io/static/images/Fiq.png
+    (linked at encproj.html:290) and workbench/third_party/ENCODER/assets/fashion-results.png (README.md
+    ''FashionIQ & Shoes Datasets'' section), both showing Dresses 51.51/76.95, Shirts 54.86/74.93, Tops&Tees
+    62.01/80.88, Avg 56.13/77.59.'
+  review_status: CONFIRMED
+- reference_id: pair_fiq_clean_val_split
+  model_id: pair
+  paper_id: hint_icassp26
+  paper_title: 'HINT: Composed Image Retrieval with Dual-Path Compositional Contextualized Network'
+  method_name: PAIR
+  method_variant: main method (full model, coherence-incoherence extractor + complementarity disentanglement
+    + asymmetric composition)
+  backbone: CLIP ViT-B/32 (open_clip 'ViT-B-32' per the pinned code path; the abstract-only paper text
+    does not state it)
+  checkpoint_id: pair_b1
+  checkpoint_training_noise_pct: null
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ validation annotations (captions/cap.{cat}.val.json) and split files
+    (image_splits/split.{cat}.val.json); README Table 2 caption says 'validation sets'
+  split: val
+  gallery_protocol: fashioniq_val_split
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target is in the top K
+  aggregation_method: macro over categories, then mean of R@10 and R@50
+  reported_metrics:
+    mean: null
+    r10: 52.76
+    r50: 74.51
+  derived_metrics:
+  - derivation_formula: (r10 + r50) / 2
+    key: mean
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-up to 2 decimals
+    source_metrics:
+    - r10
+    - r50
+    value: 63.64
+  category_metrics:
+    dress:
+      r10: 46.78
+      r50: 70.93
+    shirt:
+      r10: 52.6
+      r50: 73.8
+    toptee:
+      r10: 58.91
+      r50: 78.81
+  metric_provenance:
+    paper_column: 'FashionIQ block: Dresses/Shirts/Tops&Tees R@10 and R@50, then the FashionIQ Avg R@10/R@50
+      columns'
+    paper_page: null
+    paper_row: PAIR(Ours)
+    paper_table: Table 2
+    source_excerpt_or_description: workbench/third_party/PAIR/README.md:75-76 renders 'Table 2. Performance
+      comparison on FashionIQ and Shoes validation sets in terms of R@K (%).' from assets/fiqshoes.png;
+      bottom row 'PAIR(Ours) | 46.78 70.93 | 52.60 73.80 | 58.91 78.81 | 52.76 74.51 | 27.48 65.08 85.86
+      59.47' (the trailing four cells are the Shoes columns). The author project page renders the same
+      figure as 'TABLE II' with the identical row at https://zhihfu.github.io/PAIR.github.io/static/images/Fiq.png.
+  reference_status: VERIFIED
+  verification_method: 'Two independent author-rendered table images read and compared cell-by-cell: (1)
+    the pinned repo figure workbench/third_party/PAIR/assets/fiqshoes.png, referenced by PAIR/README.md:75-76
+    as Table 2; (2) the project-page figure https://zhihfu.github.io/PAIR.github.io/static/images/Fiq.png,
+    labelled ''TABLE II''. Arithmetic cross-check reproduces the printed Avg cells: mean(46.78, 52.60,
+    58.91) = 52.763 -> 52.76 and mean(70.93, 73.80, 78.81) = 74.513 -> 74.51. The IEEE record itself was
+    read only as ABSTRACT_ONLY (https://ieeexplore.ieee.org/document/10888153 states ''PDF: You do not
+    have access to this PDF'' and the body text ends at ''Sign in to Continue Reading''), and the IEEE
+    PDF endpoint https://ieeexplore.ieee.org/iel8/10887540/10887541/10888153.pdf returned HTTP 420 with
+    0 bytes, so no publisher PDF exists on disk and pdf_sha256 is null. The numbers therefore rest on
+    the authors'' own table renders, which is exactly the route /tmp/paper_rules.md rule 4/5 asks to report.'
+  review_status: CONFIRMED
+- reference_id: intent_aaai26_table2_fiq_n00
+  model_id: intent
+  paper_id: intent_aaai26
+  paper_title: 'INTENT: Invariance and Discrimination-aware Noise Mitigation for Robust Composed Image
+    Retrieval'
+  method_name: INTENT (Ours)
+  method_variant: main method, 0%-noise training block (fully supervised)
+  backbone: BLIP-2 backbone with Q-Former composition; paper states Q=32 learnable queries and embedding
+    dimension D=256 (Implementation Details)
+  checkpoint_id: null
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: NO_CHECKPOINT
+  dataset: fashioniq
+  dataset_version: FashionIQ val annotations (cap.<cat>.val.json) scored against the full validation image
+    list (image_splits/split.<cat>.val.json, split='original-split' default); the paper prints no gallery
+    size or revision
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: 'Recall@K = fraction of queries whose target image is in the top K (paper Section
+    4.1: ''Recall@K (short for R@K) to measure whether the target image is retrieved within top-K candidates
+    ... for FashionIQ, we report for each of three categories at K=10, 50'')'
+  aggregation_method: per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee;
+    AVG. = (Average R@10 + Average R@50) / 2
+  reported_metrics:
+    mean: 65.24
+    r10: 55.31
+    r50: 75.16
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 50.32
+      r50: 72.1
+    shirt:
+      r10: 56.32
+      r50: 74.93
+    toptee:
+      r10: 59.28
+      r50: 78.45
+  metric_provenance:
+    paper_column: FashionIQ validation 0% block - per-category R@10/R@50, Average R@10, Average R@50,
+      AVG.
+    paper_page: 6
+    paper_row: INTENT (Ours), 0% block
+    paper_table: Table 2
+    source_excerpt_or_description: 'Row as printed: ''INTENT (Ours) 50.32 72.10 56.32 74.93 59.28 78.45
+      55.31 75.16 65.24''. Caption: ''Table 2: Performance comparison on the FashionIQ validation set
+      in terms of R@K(%). The best and second-best results are highlighted in bold and underline, respectively.'''
+  reference_status: VERIFIED
+  verification_method: 'Four independent routes agreeing digit-for-digit: arXiv HTML Table 2; `pdftotext
+    -layout -f 6 -l 6 intent.pdf -` -> ''INTENT (Ours) 50.32 72.10 56.32 74.93 59.28 78.45 55.31 75.16
+    65.24''; rendered PDF page 6 read visually; author workbench/third_party/INTENT/figs/fiq.png. Arithmetic
+    recomputed with Python Decimal ROUND_HALF_UP.'
+  review_status: PENDING
+- reference_id: intent_aaai26_table2_fiq_n20
+  model_id: intent
+  paper_id: intent_aaai26
+  paper_title: 'INTENT: Invariance and Discrimination-aware Noise Mitigation for Robust Composed Image
+    Retrieval'
+  method_name: INTENT (Ours)
+  method_variant: main method, 20%-noise training block
+  backbone: BLIP-2 backbone with Q-Former composition; Q=32, D=256 per the paper
+  checkpoint_id: fiq_n02
+  checkpoint_training_noise_pct: 20
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: FashionIQ val annotations scored against the full validation image list (split='original-split'
+    default); paper prints no gallery size
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K
+  aggregation_method: per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee;
+    AVG. = (Average R@10 + Average R@50) / 2
+  reported_metrics:
+    mean: 64.36
+    r10: 54.22
+    r50: 74.49
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 49.32
+      r50: 71.43
+    shirt:
+      r10: 55.32
+      r50: 73.57
+    toptee:
+      r10: 58.01
+      r50: 78.46
+  metric_provenance:
+    paper_column: FashionIQ validation 20% block - per-category R@10/R@50, Average R@10, Average R@50,
+      AVG.
+    paper_page: 6
+    paper_row: INTENT (Ours), 20% block
+    paper_table: Table 2
+    source_excerpt_or_description: 'Row as printed: ''INTENT (Ours) 49.32 71.43 55.32 73.57 58.01 78.46
+      54.22 74.49 64.36''. The paper''s Section 4.2 says of this row: ''on FashionIQ dataset, when noise
+      ratio sigma = 20%, INTENT surpasses TME by 0.39% on Avg'' - TME''s 20% AVG. cell is 63.97, and 64.36
+      - 63.97 = 0.39, so the prose corroborates the AVG. column.'
+  reference_status: VERIFIED
+  verification_method: Same four routes as the 0% row; all agree.
+  review_status: PENDING
+- reference_id: intent_aaai26_table2_fiq_n50
+  model_id: intent
+  paper_id: intent_aaai26
+  paper_title: 'INTENT: Invariance and Discrimination-aware Noise Mitigation for Robust Composed Image
+    Retrieval'
+  method_name: INTENT (Ours)
+  method_variant: main method, 50%-noise training block
+  backbone: BLIP-2 backbone with Q-Former composition; Q=32, D=256 per the paper
+  checkpoint_id: fiq_n05
+  checkpoint_training_noise_pct: 50
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: FashionIQ val annotations scored against the full validation image list (split='original-split'
+    default); paper prints no gallery size
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K
+  aggregation_method: per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee;
+    AVG. = (Average R@10 + Average R@50) / 2
+  reported_metrics:
+    mean: 62.92
+    r10: 52.52
+    r50: 73.32
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 47.99
+      r50: 71.24
+    shirt:
+      r10: 52.78
+      r50: 72.48
+    toptee:
+      r10: 56.79
+      r50: 76.23
+  metric_provenance:
+    paper_column: FashionIQ validation 50% block - per-category R@10/R@50, Average R@10, Average R@50,
+      AVG.
+    paper_page: 6
+    paper_row: INTENT (Ours), 50% block
+    paper_table: Table 2
+    source_excerpt_or_description: 'Row as printed: ''INTENT (Ours) 47.99 71.24 52.78 72.48 56.79 76.23
+      52.52 73.32 62.92'''
+  reference_status: VERIFIED
+  verification_method: Same four routes as the 0% row; all agree.
+  review_status: PENDING
+- reference_id: intent_aaai26_table2_fiq_n80
+  model_id: intent
+  paper_id: intent_aaai26
+  paper_title: 'INTENT: Invariance and Discrimination-aware Noise Mitigation for Robust Composed Image
+    Retrieval'
+  method_name: INTENT (Ours)
+  method_variant: main method, 80%-noise training block
+  backbone: BLIP-2 backbone with Q-Former composition; Q=32, D=256 per the paper
+  checkpoint_id: fiq_n08
+  checkpoint_training_noise_pct: 80
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: FashionIQ val annotations scored against the full validation image list (split='original-split'
+    default); paper prints no gallery size
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K
+  aggregation_method: per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee;
+    AVG. = (Average R@10 + Average R@50) / 2
+  reported_metrics:
+    mean: 59.07
+    r10: 48.51
+    r50: 69.63
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 42.07
+      r50: 65.58
+    shirt:
+      r10: 50.38
+      r50: 69.41
+    toptee:
+      r10: 53.09
+      r50: 73.91
+  metric_provenance:
+    paper_column: FashionIQ validation 80% block - per-category R@10/R@50, Average R@10, Average R@50,
+      AVG.
+    paper_page: 6
+    paper_row: INTENT (Ours), 80% block
+    paper_table: Table 2
+    source_excerpt_or_description: 'Row as printed: ''INTENT (Ours) 42.07 65.58 50.38 69.41 53.09 73.91
+      48.51 69.63 59.07'''
+  reference_status: VERIFIED
+  verification_method: Same four routes as the 0% row; all agree.
+  review_status: PENDING
+- reference_id: dcnet_fashioniq_val_table1
+  model_id: dcnet
+  paper_id: legacy_cir_fashioniq_bundle
+  paper_title: 'Bundle: CLVC-Net (SIGIR''21), DCNet (AAAI''21), TG-CIR (MM''23), LIMN (TPAMI''24) - FashionIQ
+    reference extraction'
+  method_name: DCNet
+  method_variant: main method, joint training of Composition and Correction Networks (both experts); retrieval
+    score s = s_r + s_c
+  backbone: 'ResNet-50 pretrained on ImageNet (paper: ''we select ResNet50 (He et al. 2016) pretrained
+    on ImageNet as our backbone encoder'')'
+  checkpoint_id: fashioniq_run_directory
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ release, validation annotations (cap.{dress,shirt,toptee}.val.json)
+    with image_splits/split.{dress,shirt,toptee}.val.json; paper cites Fashion-IQ (Guo et al. 2019) with
+    30,134 triplets over 77,683 images in three categories
+  split: val
+  gallery_protocol: fashioniq_full_gallery_ref_excluded
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: dcnet_resize_256_square_flat_jpg__eval_centercrop_224_imagenet_norm
+  augmentation_policy: 'training only: random cropping and horizontal flipping (paper, Section 4 Implementation);
+    evaluation applies CenterCrop(224) -> ToTensor -> ImageNet Normalize with no randomization (data_loader/data_loaders.py:66-70)'
+  metric_definition: Recall@K = fraction of queries whose target is in the top K
+  aggregation_method: The printed category cells are per-category R@10/R@50; the paper's Avg column is
+    the mean of the six printed cells. The workbench's macro R@10/R@50 (equal-weight mean over the three
+    categories) is derived here and printed nowhere as such; the paper's printed Avg equals the rounding
+    of (macro_R@10 + macro_R@50)/2.
+  reported_metrics:
+    mean: 40.83
+    r10: null
+    r50: null
+  derived_metrics:
+  - derivation_formula: mean(28.95, 23.95, 30.44)
+    key: r10
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-up to 2 decimals (raw value 27.78 exactly)
+    source_metrics:
+    - category_metrics.dress.r10
+    - category_metrics.shirt.r10
+    - category_metrics.toptee.r10
+    value: 27.78
+  - derivation_formula: mean(56.07, 47.30, 58.29)
+    key: r50
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-up to 2 decimals (raw value 53.8867)
+    source_metrics:
+    - category_metrics.dress.r50
+    - category_metrics.shirt.r50
+    - category_metrics.toptee.r50
+    value: 53.89
+  - derivation_formula: (mean_r10 + mean_r50) / 2 = (27.78 + 53.89) / 2
+    key: mean_check
+    note: Reproduces the paper's own printed Avg 40.83, which confirms the paper's Avg is exactly the
+      unweighted mean of its six printed cells; it does NOT make the macro R@10/R@50 paper-reported values.
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-up to 2 decimals -> 40.83
+    source_metrics:
+    - r10
+    - r50
+    value: 40.8333
+  category_metrics:
+    dress:
+      r10: 28.95
+      r50: 56.07
+    shirt:
+      r10: 23.95
+      r50: 47.3
+    toptee:
+      r10: 30.44
+      r50: 58.29
+  metric_provenance:
+    paper_column: Fashion-IQ validation set; Dress/Shirt/Toptee R@10,R@50 and the 'Total Avg' column
+    paper_page: 5
+    paper_row: DCNet
+    paper_table: Table 1
+    source_excerpt_or_description: 'Caption: ''Table 1: Comparison between our DCNet and baselines on
+      the Fashion-IQ validation set. (dagger) denotes the results cited from (Chen, Gong, and Bazzani
+      2020).'' The DCNet row reads 28.95 56.07 | 23.95 47.30 | 30.44 58.29 | 40.83. The row is the last
+      row of the table and is not a competitor''s row; the challenge table (Table 2) is a different, single-number
+      metric (AvgR@(10,50), Ours 0.52) and was not used.'
+  reference_status: VERIFIED
+  verification_method: 'Two independent routes that agree: (a) text extraction, pdftotext -layout of the
+    pinned PDF -> the DCNet row''s twelve numbers; (b) visual reading of the page-5 image rendered with
+    pdftoppm -png -r 200 -f 5 -l 5, where the table is fully legible. Both routes give 28.95/56.07, 23.95/47.30,
+    30.44/58.29, Avg 40.83.'
+  review_status: CONFIRMED
+- reference_id: tgcir_fashioniq_val_table1
+  model_id: tgcir
+  paper_id: legacy_cir_fashioniq_bundle
+  paper_title: 'Bundle: CLVC-Net (SIGIR''21), DCNet (AAAI''21), TG-CIR (MM''23), LIMN (TPAMI''24) - FashionIQ
+    reference extraction'
+  method_name: TG-CIR
+  method_variant: main method (target-query relationship-guided composition with target-free student branch
+    at test time, target similarity distribution-guided metric learning)
+  backbone: 'CLIP ViT-B/16 (paper: ''TG-CIR utilizes pre-trained CLIP (Radford et al., 2021) (ViT-B/16
+    version) as the backbone'')'
+  checkpoint_id: tgcir_archive_unresolved
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ three-category release (dress/shirt/toptee) with the author's spell-corrected
+    modification texts (correction_dict_{dress,shirt,toptee}.json shipped in the pinned repo under correction_dict/)
+  split: val
+  gallery_protocol: fashioniq_val_split
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: clip_vitb16_eval_preprocess_resize224_bicubic_centercrop224_clip_norm
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target is in the top K
+  aggregation_method: macro over categories, then mean of R@10 and R@50 (paper prints only the R@10 and
+    R@50 macro cells; the mean is not printed)
+  reported_metrics:
+    mean: null
+    r10: 51.32
+    r50: 73.09
+  derived_metrics:
+  - derivation_formula: (r10 + r50) / 2 = (51.32 + 73.09) / 2
+    key: mean
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: exact to 3 decimals (62.205); round-half-up to 2 decimals would give 62.21 (62.205
+      is exactly representable and the workbench's own note quotes 62.205)
+    source_metrics:
+    - r10
+    - r50
+    value: 62.205
+  category_metrics:
+    dress:
+      r10: 45.22
+      r50: 69.66
+    shirt:
+      r10: 52.6
+      r50: 72.52
+    toptee:
+      r10: 56.14
+      r50: 77.1
+  metric_provenance:
+    paper_column: FashionIQ, Avg block, R@10 and R@50 (Dresses/Shirts/Tops&Tees blocks are per-category)
+    paper_page: 7
+    paper_row: TG-CIR
+    paper_table: Table 1
+    source_excerpt_or_description: 'Caption: ''Table 1: Performance comparison on FashionIQ and Shoes
+      with respect to R@k(%). The best results are in boldface, while the second-best results are underlined.
+      The missing results of some methods are because they did not report their results on the Shoes dataset.
+      The last row indicates the performance improvements by TG-CIR over the best baseline.'' The TG-CIR
+      row reads 45.22 69.66 | 52.60 72.52 | 56.14 77.10 | 51.32 73.09 | [Shoes] 25.89 63.20 85.07 58.05.
+      The evaluation section states: ''For FashionIQ, we followed the evaluation metric used in the companion
+      challenge (Guo et al., 2019), namely, R@10 and R@50 for each of the three categories.'' No mean
+      is printed anywhere for FashionIQ.'
+  reference_status: VERIFIED
+  verification_method: 'Three routes that agree: (a) the arXiv HTML v1 table, machine-readable; (b) pdftotext
+    -layout -f 7 -l 7 of the downloaded PDF; (c) visual reading of the page-7 and page-8 renders (page
+    8 ablation Table 3 repeats TG-CIR at 51.32/73.09 for FashionIQ-Avg). Arithmetic check: (45.22+52.60+56.14)/3
+    = 51.3199... -> 51.32 and (69.66+72.52+77.10)/3 = 73.0933... -> 73.09, so the Avg column is the rounded
+    macro of the three per-category cells and is a genuine macro statistic, not a per-category value.'
+  review_status: CONFIRMED
+- reference_id: limn_fashioniq_base_iter0_table1
+  model_id: limn
+  paper_id: legacy_cir_fashioniq_bundle
+  paper_title: 'Bundle: CLVC-Net (SIGIR''21), DCNet (AAAI''21), TG-CIR (MM''23), LIMN (TPAMI''24) - FashionIQ
+    reference extraction'
+  method_name: LIMN
+  method_variant: base LIMN without the iterative dual self-training paradigm (iteration 0); the LIMN+
+    row in the same table is a different registered-or-not system and is NOT this row
+  backbone: 'CLIP ViT-L/14 (paper: ''LIMN utilizes pre-trained CLIP (Radford et al., 2021) (ViT-L/14 version)
+    as the backbone. The feature dimension D is set to 768'')'
+  checkpoint_id: base_iter0_all_categories
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: VERIFIED
+  dataset: fashioniq
+  dataset_version: official three-category release, per-category runs; the paper states 'we treated them
+    as three separate datasets. Following [8], [11], [19], ~46K images and ~15K images are used for training
+    and testing, respectively. Finally, there are 18K triplets for training and ~6K for testing'
+  split: val
+  gallery_protocol: fashioniq_val_split
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: open_clip_ViT-L-14_eval_transform_resize224_bicubic_centercrop224_on_256px_source_images
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target is in the top K
+  aggregation_method: macro over categories, then mean of R@10 and R@50 (paper prints the R@10 and R@50
+    macro cells under 'Avg'; it prints no mean)
+  reported_metrics:
+    mean: null
+    r10: 55.91
+    r50: 77.82
+  derived_metrics:
+  - derivation_formula: (r10 + r50) / 2 = (55.91 + 77.82) / 2 = 66.865
+    key: mean
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-up to 2 decimals
+    source_metrics:
+    - r10
+    - r50
+    value: 66.87
+  category_metrics:
+    dress:
+      r10: 50.72
+      r50: 74.52
+    shirt:
+      r10: 56.08
+      r50: 77.09
+    toptee:
+      r10: 60.94
+      r50: 81.85
+  metric_provenance:
+    paper_column: FashionIQ, 'Avg' block, R@10 and R@50 (Dresses/Shirts/Tops&Tees blocks are per-category)
+    paper_page: 8
+    paper_row: LIMN
+    paper_table: Table I
+    source_excerpt_or_description: 'Caption: ''Performance comparison on FashionIQ and Shoes with respect
+      to R@k(%). The best results over baselines are underlined, while the overall best results are in
+      boldface. ... The penultimate row quantifies the absolute performance improvements of LIMN+ over
+      LIMN. The last row indicates the performance improvements by LIMN+ over the best baseline. The results
+      of the proposed method are marked with a gray background.'' The LIMN row reads Dress 50.72/74.52,
+      Shirt 56.08/77.09, Tops&Tees 60.94/81.85, Avg 55.91/77.82 (then Shoes 68.20/87.45/77.83). The next
+      row, LIMN+ 57.43/78.60 Avg, is a different system and was not used. Ablation Table IV repeats LIMN
+      at FashionIQ-Avg 55.91/77.82.'
+  reference_status: VERIFIED
+  verification_method: 'Three routes: (a) pdftotext -layout of arXiv 2305.09979v2 page 8 -> the LIMN row''s
+    numbers; (b) visual reading of the page-8 render (pdftoppm -png -r 150 -f 8 -l 8), identical; (c)
+    independent author artifact - the evaluation logs shipped alongside the exact registered checkpoint
+    revision, whose macro recomputation matches the published cells to rounding. Arithmetic check: (50.72+56.08+60.94)/3
+    = 55.9133 -> 55.91 and (74.52+77.09+81.85)/3 = 77.82, so the paper''s Avg is the rounded macro of
+    the three categories. Version check: arXiv v1 publishes a completely different campaign (LIMN 36.30/62.20
+    Avg over FashionIQ/Shoes/Birds-to-Words) and must not be cited.'
+  review_status: CONFIRMED
+- reference_id: ptha_mtst_fiq_table3_fashiqmtst_blip2
+  model_id: ptha_mtst
+  paper_id: ptha_mtst_scaleup_mtst
+  paper_title: Scale Up Composed Image Retrieval Learning via Modification Text Generation
+  method_name: PTHA
+  method_variant: PTHA (Ours) pretrained with FashionIQ_MTST (row label 'PTHA (Ours)', Pretraining Data
+    column 'FashionIQMTST'); this is the row that corresponds to the registry's 54.99 / 76.28 / 65.64
+  backbone: 'BLIP2 (baseline column value ''BLIP2'' in Table III; paper body: ''The multimodal encoder
+    is the query encoder in BLIP-2, the text encoder is the text encoder in BLIP-2. The vision encoder
+    is the frozen ViT-g/14 from EVA-CLIP'', batch size 128, N=32 query tokens)'
+  checkpoint_id: null
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: NO_CHECKPOINT
+  dataset: fashioniq
+  dataset_version: FashionIQ validation split, official three categories (dress, shirt, toptee); paper
+    states only 'R@10 and R@50 on the val set in three categories' (implementation/evaluation paragraph,
+    PDF p.6, paper.txt:391) and gives no further split or gallery detail
+  split: val
+  gallery_protocol: fashioniq_original_split
+  reference_excluded: false
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K of the ranked gallery;
+    here K in {10, 50}
+  aggregation_method: unweighted macro mean over the three categories (dress, shirt, toptee) for each
+    of R@10 and R@50; the paper's 'Avg.' column is (mean R@10 + mean R@50)/2
+  reported_metrics:
+    mean: 65.64
+    r10: 54.99
+    r50: 76.28
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 50.77
+      r50: 73.78
+    shirt:
+      r10: 55.91
+      r50: 75.36
+    toptee:
+      r10: 58.28
+      r50: 79.7
+  metric_provenance:
+    paper_column: Dress R@10/R@50, Shirt R@10/R@50, Toptee R@10/R@50, Average R@10/R@50, Avg.
+    paper_page: 7
+    paper_row: PTHA (Ours) | BLIP2 | FashionIQMTST
+    paper_table: Table III
+    source_excerpt_or_description: 'TABLE III: Comparison on FashionIQ validation set. "Avg." means (Recall@10
+      + Recall@50)/2. * indicates that the method deploys extra re-ranking strategy. Columns: Method |
+      baseline | Pretraining Data | Dress R@10 R@50 | Shirt R@10 R@50 | Toptee R@10 R@50 | Average R@10
+      R@50 | Avg. The final data row is ''PTHA (Ours) BLIP2 FashionIQMTST 50.77 73.78 55.91 75.36 58.28
+      79.70 54.99 76.28 65.64''. The immediately preceding row is a different condition and must not be
+      confused with it: ''PTHA (Ours) BLIP2 - 49.54 72.81 55.50 73.97 57.96 78.96 54.33 75.24 64.79''.'
+  reference_status: VERIFIED
+  verification_method: 'Two independent routes that agree, plus an arithmetic check. (1) HTML route: curl
+    https://arxiv.org/html/2504.05316v1 (HTML 200, 303805 B), parsed the 12th <table> on the page row-by-row
+    with a Python regex/HTML unescape script; every cell of the last row read 50.77 | 73.78 | 55.91 |
+    75.36 | 58.28 | 79.70 | 54.99 | 76.28 | 65.64. (2) PDF route: pdftotext -layout paper.pdf paper.txt,
+    the same row at lines 465-466 of paper.txt with identical values and column alignment. (3) Visual
+    route: pdftoppm -f 7 -l 7 -r 160 -png paper.pdf then read page7-07.png as an image; the Table III
+    last row visibly reads PTHA (Ours) / BLIP2 / FashionIQ_MTST / 50.77 73.78 / 55.91 75.36 / 58.28 79.70
+    / 54.99 76.28 / 65.64, with ''FashionIQMTST'' in subscript shading. All three routes agree on every
+    digit. (4) Arithmetic: category macro means recomputed as (50.77+55.91+58.28)/3 = 54.9867 -> 54.99
+    and (73.78+75.36+79.70)/3 = 76.28; (54.99+76.28)/2 = 65.635 -> 65.64, matching the printed Average
+    and Avg. columns, so the printed averages are internally consistent and are not a per-category value.'
+  review_status: CONFIRMED
+- reference_id: ptha_mtst_fiq_no_pretrain_table3
+  model_id: ptha_mtst
+  paper_id: ptha_mtst_scaleup_mtst
+  paper_title: Scale Up Composed Image Retrieval Learning via Modification Text Generation
+  method_name: PTHA
+  method_variant: PTHA (Ours) WITHOUT FashionIQ_MTST pretraining (row 'PTHA (Ours)', Pretraining Data
+    column '-'); recorded only to document the control row so a comparator cannot bind the registry numbers
+    to it
+  backbone: BLIP2
+  checkpoint_id: null
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: NO_CHECKPOINT
+  dataset: fashioniq
+  dataset_version: FashionIQ validation split, three categories
+  split: val
+  gallery_protocol: fashioniq_original_split
+  reference_excluded: false
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K
+  aggregation_method: macro over categories, then mean of R@10 and R@50
+  reported_metrics:
+    mean: 64.79
+    r10: 54.33
+    r50: 75.24
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 49.54
+      r50: 72.81
+    shirt:
+      r10: 55.5
+      r50: 73.97
+    toptee:
+      r10: 57.96
+      r50: 78.96
+  metric_provenance:
+    paper_column: Dress/Shirt/Toptee R@10 R@50, Average R@10 R@50, Avg.
+    paper_page: 7
+    paper_row: PTHA (Ours) | BLIP2 | -
+    paper_table: Table III
+    source_excerpt_or_description: '''PTHA (Ours) BLIP2 - 49.54 72.81 55.50 73.97 57.96 78.96 54.33 75.24
+      64.79'' - the second-to-last data row of Table III, i.e. the same network without the paper''s FashionIQ_MTST
+      pretraining.'
+  reference_status: VERIFIED
+  verification_method: Same three routes as the pretrained row (HTML table parse, pdftotext -layout, rendered
+    page-7 image); all agree on 49.54 / 72.81 / 55.50 / 73.97 / 57.96 / 78.96 / 54.33 / 75.24 / 64.79.
+  review_status: CONFIRMED
+- reference_id: sprc_fiq_val_ours_vitg
+  model_id: sprc
+  paper_id: sprc
+  paper_title: Sentence-level Prompts Benefit Composed Image Retrieval
+  method_name: SPRC
+  method_variant: main method, Vision-and-Language branch (Table 1 row `Ours (SPRC)`; identical numbers
+    to Appendix Table 5 row `Ours+BLIP-2 (Full.)`, gamma=0.8 row of Table 7 and prompt-length-32 row of
+    Table 9)
+  backbone: 'BLIP-2 pretrained model with ViT-G (paper text line 363: ''encoders are initialized from
+    the BLIP-2 pretrained model with ViT-G''); pinned code default `--backbone pretrain` = ViT-g (SPRC/src/blip_validate.py:145)'
+  checkpoint_id: sprc_fiq_unresolved
+  checkpoint_training_noise_pct: null
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: 'FashionIQ validation split (paper text line 409: ''the ground-truth labels for the
+    test set of this dataset have not been publicly disclosed, we adopt the results on the validation
+    set''); the paper never names the candidate/gallery set'
+  split: val
+  gallery_protocol: fashioniq_original_split
+  reference_excluded: false
+  evaluation_noise_pct: 0
+  preprocessing_id: TargetPad target_ratio=1.25 at 224x224 (paper line 364-365 'We resize the input image
+    size to 224 x 224 and with a padding ratio of 1.25'); pinned code src/blip_validate.py:52-53 targetpad_transform(1.25,
+    224) -> Resize(BICUBIC)/CenterCrop/ToTensor/CLIP Normalize (src/data_utils.py:49-102)
+  augmentation_policy: null
+  metric_definition: Recall@K = percentage of queries whose true target is ranked within the top K candidates
+    (paper lines 369-370 region); K = 10 and 50 for FashionIQ
+  aggregation_method: Per-category Recall@10 and Recall@50 on dress/shirt/toptee; 'Average' column is
+    the unweighted macro mean over the three categories, and 'Avg.' is the mean of that R@10 and that
+    R@50
+  reported_metrics:
+    mean: 64.85
+    r10: 54.92
+    r50: 74.97
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 49.18
+      r50: 72.43
+    shirt:
+      r10: 55.64
+      r50: 73.89
+    toptee:
+      r10: 59.35
+      r50: 78.58
+  metric_provenance:
+    paper_column: 'Average block: R@10 | R@50 | Avg.'
+    paper_page: 6
+    paper_row: Ours (SPRC)
+    paper_table: Table 1 (duplicated as Appendix Table 5, and as the gamma=0.8 row of Table 7 and the
+      length-32 row of Table 9)
+    source_excerpt_or_description: 'Row text: `Ours (SPRC) 49.18 72.43 55.64 73.89 59.35 78.58 54.92 74.97
+      64.85`. Caption: ''Table 1: Quantitative comparison across competing methods on the Fashion-IQ validation
+      set, where Avg. indicates the average results across all the metrics in the three different classes.'''
+  reference_status: VERIFIED
+  verification_method: Two independent routes plus a third. (1) `pdftotext -layout /tmp/sprc_iclr.pdf`
+    -> line 407. (2) rendered page image `pdftoppm -png -r 140 -f 6 -l 6` read visually -> same row. (3)
+    arXiv HTML v1 (a different artifact) also contains 54.92/64.85. Cross-check by arithmetic in python3.
+  review_status: CONFIRMED
+- reference_id: csmcir_fiq_val_ours_vitg
+  model_id: csmcir
+  paper_id: sprc
+  paper_title: Sentence-level Prompts Benefit Composed Image Retrieval
+  method_name: CSMCIR
+  method_variant: main method (Table 1 row `CSMCIR(Ours)`, ViT-G); the identical row is the full-model
+    row `+Lcos` of Table 5 and `Full` of Table 6
+  backbone: 'BLIP-2 Q-Former with frozen EVA-CLIP ViT-G; camera-ready p.4417: ''Following (Xu et al.,
+    2024), we adopt ViT-G as the image encoder, which remained frozen throughout training''. Pinned code
+    confirms: src/lavis/models/blip2_models/blip2_qformer_cir_align_prompt_csmcir.py:41 maps model_type
+    ''pretrain'' -> configs/models/blip2/blip2_pretrain.yaml (BLIP2 blip2_pretrained.pth + ViT-g) and
+    :541 defaults vit_model=''eva_clip_g'''
+  checkpoint_id: fashioniq
+  checkpoint_training_noise_pct: 0
+  checkpoint_mapping_status: VERIFIED
+  dataset: fashioniq
+  dataset_version: 'FashionIQ validation set (Table 1 caption: ''Quantitative comparison on the Fashion-IQ
+    validation set'')'
+  split: val
+  gallery_protocol: fashioniq_original_split
+  reference_excluded: false
+  evaluation_noise_pct: 0
+  preprocessing_id: TargetPad target_ratio=1.25 at 224x224 (pinned src/validate_blip_csmcir.py:506-507
+    argparse defaults --transform targetpad --target-ratio 1.25, :534/:580 targetpad_transform(target_ratio,
+    input_dim), :528/:574 input_dim=224; adapter passes no override, workbench/backend/adapters/models.py:28-33)
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target is in the top K (paper section 5 / Table
+    1, K = 10 and 50); pinned code src/validate_blip_csmcir.py:41-53 implements it as distances = 1 -
+    pred_sim, argsort, one-hit-per-query assert, labels[:, :10] and labels[:, :50] over len(labels)
+  aggregation_method: Unweighted macro over the three FashionIQ categories (dress/shirt/toptee), then
+    Avg. = mean of that R@10 and that R@50; pinned code src/validate_blip_csmcir.py:620-628 has exactly
+    f'average_recall_at10'=mean(...), f'average_recall_at50'=mean(...), f'average_recall'=(mean(r50)+mean(r10))/2
+  reported_metrics:
+    mean: 67.17
+    r10: 57.07
+    r50: 77.27
+  derived_metrics: []
+  category_metrics:
+    dress:
+      r10: 52.45
+      r50: 74.81
+    shirt:
+      r10: 57.7
+      r50: 75.76
+    toptee:
+      r10: 61.14
+      r50: 80.98
+  metric_provenance:
+    paper_column: 'Average block: R@10 | R@50 | Avg. (paper column order is Dress | Shirt | Toptee | Average)'
+    paper_page: 6
+    paper_row: CSMCIR(Ours)
+    paper_table: Table 1
+    source_excerpt_or_description: 'Row text: `CSMCIR(Ours) 52.45 74.81 57.70 75.76 61.14 80.98 57.07
+      77.27 67.17`. Caption: ''Table 1: Quantitative comparison on the Fashion-IQ validation set. Overall
+      1st/2nd in bold/underline.'''
+  reference_status: VERIFIED
+  verification_method: 'Three routes agreeing. (1) ACL Anthology camera-ready PDF, `pdftotext -layout`,
+    line 397. (2) same PDF rendered `pdftoppm -png -r 140 -f 6 -l 6` and read visually (printed page 4416).
+    (3) arXiv v3: HTML table cell extraction (regex over <td>) and PDF `pdftotext -layout` line 396. Plus
+    an author-side route: the published training-log CSV.'
+  review_status: CONFIRMED

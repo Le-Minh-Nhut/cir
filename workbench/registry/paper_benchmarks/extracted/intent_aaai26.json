@@ -1,0 +1,240 @@
+{
+  "experiments": [
+    {
+      "aggregation_method": "per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee; AVG. = (Average R@10 + Average R@50) / 2",
+      "augmentation_policy": null,
+      "backbone": "BLIP-2 backbone with Q-Former composition; paper states Q=32 learnable queries and embedding dimension D=256 (Implementation Details)",
+      "category_metrics": {
+        "dress": {
+          "r10": 50.32,
+          "r50": 72.1
+        },
+        "shirt": {
+          "r10": 56.32,
+          "r50": 74.93
+        },
+        "toptee": {
+          "r10": 59.28,
+          "r50": 78.45
+        }
+      },
+      "checkpoint_id": null,
+      "checkpoint_mapping_evidence": "STATIC_AUDIT. `curl -sL https://huggingface.co/api/models/iLearn-Lab/AAAI26-INTENT?blobs=true` returned exactly .gitattributes, README.md, intent_cirr_0.2.pt, intent_fiq_0.2.pt, intent_fiq_0.5.pt, intent_fiq_0.8.pt (each 2722478522 B) and NO 0%-noise file; the Hub README says the weights were trained 'under various noise ratios' and instructs downloading 'the checkpoint files (e.g., best_model.pth)' without publishing a per-file noise table. `curl -sL https://api.github.com/repos/iLearn-Lab/AAAI26-INTENT/releases` returned 0 releases. Registry workbench/registry/models.yaml:316 states 'Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights'. So the 0% row is printed but has no published weights.",
+      "checkpoint_mapping_status": "NO_CHECKPOINT",
+      "checkpoint_training_noise_pct": 0,
+      "dataset": "fashioniq",
+      "dataset_version": "FashionIQ val annotations (cap.<cat>.val.json) scored against the full validation image list (image_splits/split.<cat>.val.json, split='original-split' default); the paper prints no gallery size or revision",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "INTENT (Ours)",
+      "method_variant": "main method, 0%-noise training block (fully supervised)",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K (paper Section 4.1: 'Recall@K (short for R@K) to measure whether the target image is retrieved within top-K candidates ... for FashionIQ, we report for each of three categories at K=10, 50')",
+      "metric_provenance": {
+        "paper_column": "FashionIQ validation 0% block - per-category R@10/R@50, Average R@10, Average R@50, AVG.",
+        "paper_page": 6,
+        "paper_row": "INTENT (Ours), 0% block",
+        "paper_table": "Table 2",
+        "source_excerpt_or_description": "Row as printed: 'INTENT (Ours) 50.32 72.10 56.32 74.93 59.28 78.45 55.31 75.16 65.24'. Caption: 'Table 2: Performance comparison on the FashionIQ validation set in terms of R@K(%). The best and second-best results are highlighted in bold and underline, respectively.'"
+      },
+      "model_id": "intent",
+      "preprocessing_id": null,
+      "reference_excluded": true,
+      "reference_id": "intent_aaai26_table2_fiq_n00",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 65.24,
+        "r10": 55.31,
+        "r50": 75.16
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for r10 (Average R@10), r50 (Average R@50) and mean (AVG.) - all printed in the Average block",
+      "review_status": "PENDING",
+      "split": "val",
+      "verification_evidence": "STATIC_AUDIT. Recomputation: macro R@10 = (50.32+56.32+59.28)/3 = 55.306667 -> 55.31 = printed; macro R@50 = (72.10+74.93+78.45)/3 = 75.160000 -> 75.16 = printed. Mean: (printed 55.31 + printed 75.16)/2 = 65.235 -> 65.24 = printed AVG.; but (unrounded macros 55.306667 + 75.160000)/2 = 65.233333 -> 65.23, which is 0.01 BELOW the printed AVG. 65.24. So the printed Mean equals the mean of the two PRINTED Average cells and does not equal the mean of the unrounded category macros. Registry records 55.31 / 75.16 / 65.24 (workbench/registry/models.yaml:311-313), matching the table. Protocol caveat: the paper states 'FashionIQ validation set' but never describes the gallery construction or reference policy; the pinned evaluator defaults to split='original-split' (workbench/third_party/INTENT/datasets.py:26) which enumerates the full validation image list (datasets.py:203-211), and masks the reference before ranking (test.py:150 sets sims[i, ...index(source_img_id)] = -10e10 before np.argsort at test.py:154). This is the best-supported reading, not something the paper states.",
+      "verification_method": "Four independent routes agreeing digit-for-digit: arXiv HTML Table 2; `pdftotext -layout -f 6 -l 6 intent.pdf -` -> 'INTENT (Ours) 50.32 72.10 56.32 74.93 59.28 78.45 55.31 75.16 65.24'; rendered PDF page 6 read visually; author workbench/third_party/INTENT/figs/fiq.png. Arithmetic recomputed with Python Decimal ROUND_HALF_UP."
+    },
+    {
+      "aggregation_method": "per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee; AVG. = (Average R@10 + Average R@50) / 2",
+      "augmentation_policy": null,
+      "backbone": "BLIP-2 backbone with Q-Former composition; Q=32, D=256 per the paper",
+      "category_metrics": {
+        "dress": {
+          "r10": 49.32,
+          "r50": 71.43
+        },
+        "shirt": {
+          "r10": 55.32,
+          "r50": 73.57
+        },
+        "toptee": {
+          "r10": 58.01,
+          "r50": 78.46
+        }
+      },
+      "checkpoint_id": "fiq_n02",
+      "checkpoint_mapping_evidence": "STATIC_AUDIT. `curl -sL https://huggingface.co/api/models/iLearn-Lab/AAAI26-INTENT?blobs=true` shows intent_fiq_0.2.pt at 2722478522 B, so a file with that name exists in the author repo, and registry workbench/registry/models.yaml:318-327 maps it to 20% training noise. But unlike the HABIT Hub README, the INTENT Hub README publishes no per-file noise table (it says only 'under various noise ratios' and illustrates the download with a generic 'best_model.pth'), so this mapping rests on the filename convention alone and I did not download or inspect the 2.72 GB blob. Mapping therefore recorded as UNVERIFIED rather than VERIFIED.",
+      "checkpoint_mapping_status": "UNVERIFIED",
+      "checkpoint_training_noise_pct": 20,
+      "dataset": "fashioniq",
+      "dataset_version": "FashionIQ val annotations scored against the full validation image list (split='original-split' default); paper prints no gallery size",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "INTENT (Ours)",
+      "method_variant": "main method, 20%-noise training block",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
+      "metric_provenance": {
+        "paper_column": "FashionIQ validation 20% block - per-category R@10/R@50, Average R@10, Average R@50, AVG.",
+        "paper_page": 6,
+        "paper_row": "INTENT (Ours), 20% block",
+        "paper_table": "Table 2",
+        "source_excerpt_or_description": "Row as printed: 'INTENT (Ours) 49.32 71.43 55.32 73.57 58.01 78.46 54.22 74.49 64.36'. The paper's Section 4.2 says of this row: 'on FashionIQ dataset, when noise ratio sigma = 20%, INTENT surpasses TME by 0.39% on Avg' - TME's 20% AVG. cell is 63.97, and 64.36 - 63.97 = 0.39, so the prose corroborates the AVG. column."
+      },
+      "model_id": "intent",
+      "preprocessing_id": null,
+      "reference_excluded": true,
+      "reference_id": "intent_aaai26_table2_fiq_n20",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 64.36,
+        "r10": 54.22,
+        "r50": 74.49
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for r10, r50 and mean (Average block of the 20% row)",
+      "review_status": "PENDING",
+      "split": "val",
+      "verification_evidence": "STATIC_AUDIT. Recomputation: macro R@10 = (49.32+55.32+58.01)/3 = 54.216667 -> 54.22 = printed; macro R@50 = (71.43+73.57+78.46)/3 = 74.486667 -> 74.49 = printed; (macro10+macro50)/2 = 64.351667 -> 64.35, whereas the printed AVG. is 64.36 and (printed 54.22 + 74.49)/2 = 64.355 -> 64.36. Same 0.01 pattern as the 0% row: the printed Mean tracks the printed rounded Average cells, not the unrounded macros. Note this row is also the one the registry's reported_mean was NOT taken from - the registry records only the 0% row.",
+      "verification_method": "Same four routes as the 0% row; all agree."
+    },
+    {
+      "aggregation_method": "per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee; AVG. = (Average R@10 + Average R@50) / 2",
+      "augmentation_policy": null,
+      "backbone": "BLIP-2 backbone with Q-Former composition; Q=32, D=256 per the paper",
+      "category_metrics": {
+        "dress": {
+          "r10": 47.99,
+          "r50": 71.24
+        },
+        "shirt": {
+          "r10": 52.78,
+          "r50": 72.48
+        },
+        "toptee": {
+          "r10": 56.79,
+          "r50": 76.23
+        }
+      },
+      "checkpoint_id": "fiq_n05",
+      "checkpoint_mapping_evidence": "STATIC_AUDIT. intent_fiq_0.5.pt exists on the author Hub at 2722478522 B (HF API listing); registry workbench/registry/models.yaml:328-337 maps it to 50% training noise. The INTENT Hub README gives no per-file noise table, so the mapping is filename-convention-based only and the blob was not downloaded. Recorded UNVERIFIED.",
+      "checkpoint_mapping_status": "UNVERIFIED",
+      "checkpoint_training_noise_pct": 50,
+      "dataset": "fashioniq",
+      "dataset_version": "FashionIQ val annotations scored against the full validation image list (split='original-split' default); paper prints no gallery size",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "INTENT (Ours)",
+      "method_variant": "main method, 50%-noise training block",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
+      "metric_provenance": {
+        "paper_column": "FashionIQ validation 50% block - per-category R@10/R@50, Average R@10, Average R@50, AVG.",
+        "paper_page": 6,
+        "paper_row": "INTENT (Ours), 50% block",
+        "paper_table": "Table 2",
+        "source_excerpt_or_description": "Row as printed: 'INTENT (Ours) 47.99 71.24 52.78 72.48 56.79 76.23 52.52 73.32 62.92'"
+      },
+      "model_id": "intent",
+      "preprocessing_id": null,
+      "reference_excluded": true,
+      "reference_id": "intent_aaai26_table2_fiq_n50",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 62.92,
+        "r10": 52.52,
+        "r50": 73.32
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for r10, r50 and mean (Average block of the 50% row)",
+      "review_status": "PENDING",
+      "split": "val",
+      "verification_evidence": "STATIC_AUDIT. Recomputation: macro R@10 = (47.99+52.78+56.79)/3 = 52.52 exactly = printed; macro R@50 = (71.24+72.48+76.23)/3 = 73.316667 -> 73.32 = printed; (macro10+macro50)/2 = 62.918333 -> 62.92 = printed AVG. and (printed 52.52 + 73.32)/2 = 62.92 = printed AVG. Consistent at this level.",
+      "verification_method": "Same four routes as the 0% row; all agree."
+    },
+    {
+      "aggregation_method": "per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee; AVG. = (Average R@10 + Average R@50) / 2",
+      "augmentation_policy": null,
+      "backbone": "BLIP-2 backbone with Q-Former composition; Q=32, D=256 per the paper",
+      "category_metrics": {
+        "dress": {
+          "r10": 42.07,
+          "r50": 65.58
+        },
+        "shirt": {
+          "r10": 50.38,
+          "r50": 69.41
+        },
+        "toptee": {
+          "r10": 53.09,
+          "r50": 73.91
+        }
+      },
+      "checkpoint_id": "fiq_n08",
+      "checkpoint_mapping_evidence": "STATIC_AUDIT. intent_fiq_0.8.pt exists on the author Hub at 2722478522 B (HF API listing); registry workbench/registry/models.yaml:338-347 maps it to 80% training noise. No per-file noise table in the INTENT Hub README, blob not downloaded, so the mapping is filename-convention-based only. Recorded UNVERIFIED.",
+      "checkpoint_mapping_status": "UNVERIFIED",
+      "checkpoint_training_noise_pct": 80,
+      "dataset": "fashioniq",
+      "dataset_version": "FashionIQ val annotations scored against the full validation image list (split='original-split' default); paper prints no gallery size",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "INTENT (Ours)",
+      "method_variant": "main method, 80%-noise training block",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
+      "metric_provenance": {
+        "paper_column": "FashionIQ validation 80% block - per-category R@10/R@50, Average R@10, Average R@50, AVG.",
+        "paper_page": 6,
+        "paper_row": "INTENT (Ours), 80% block",
+        "paper_table": "Table 2",
+        "source_excerpt_or_description": "Row as printed: 'INTENT (Ours) 42.07 65.58 50.38 69.41 53.09 73.91 48.51 69.63 59.07'"
+      },
+      "model_id": "intent",
+      "preprocessing_id": null,
+      "reference_excluded": true,
+      "reference_id": "intent_aaai26_table2_fiq_n80",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 59.07,
+        "r10": 48.51,
+        "r50": 69.63
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for r10, r50 and mean (Average block of the 80% row)",
+      "review_status": "PENDING",
+      "split": "val",
+      "verification_evidence": "STATIC_AUDIT. Recomputation: macro R@10 = (42.07+50.38+53.09)/3 = 48.513333 -> 48.51 = printed; macro R@50 = (65.58+69.41+73.91)/3 = 69.633333 -> 69.63 = printed; (macro10+macro50)/2 = 59.073333 -> 59.07 = printed AVG. and (printed 48.51 + 69.63)/2 = 59.07 = printed AVG. Consistent at this level.",
+      "verification_method": "Same four routes as the 0% row; all agree."
+    }
+  ],
+  "paper": {
+    "access": "FULL_TEXT",
+    "access_evidence": "STATIC_AUDIT. Route A (arXiv HTML): `read https://arxiv.org/html/2604.18051v1` returned the full paper; its Table 2 is the FashionIQ table with an 'INTENT (Ours)' row at 0/20/50/80%. Route B (PDF): `curl -sL -o /tmp/intent.pdf https://arxiv.org/pdf/2604.18051v1` -> 9279156 bytes, sha256 06e606654a1c0c801b91baf16d934d1da1e3246016cead3d89dab51bb28daa69, `pdfinfo` 16 pages; `pdftotext -layout -f 6 -l 6` and `pdftoppm -r 150 -f 6 -l 6 -png` (page 6 = Table 2) both give the same rows. Route C (author-rendered image): `read workbench/third_party/INTENT/figs/fiq.png` (1914x1160) shows the identical table. OJS DID NOT WORK: `read https://ojs.aaai.org/index.php/AAAI/article/view/39181` and `curl` of the OJS landing/download URLs both failed with 'Failed to connect to ojs.aaai.org port 443'; the AAAI proceedings PDF https://ojs.aaai.org/index.php/AAAI/article/download/39181/43142 (URL reported by OpenAlex, and the one returned by web_search) was NOT retrieved. DOI verified independently via `read https://api.openalex.org/works/doi:10.1609%2Faaai.v40i25.39181?...` -> title/publication_year match.",
+    "arxiv_id": "2604.18051",
+    "authors": [
+      "Zhiwei Chen",
+      "Yupeng Hu",
+      "Zhiheng Fu",
+      "Zixu Li",
+      "Jiale Huang",
+      "Qinlei Huang",
+      "Yinwei Wei"
+    ],
+    "doi": "10.1609/aaai.v40i25.39181",
+    "paper_id": "intent_aaai26",
+    "paper_title": "INTENT: Invariance and Discrimination-aware Noise Mitigation for Robust Composed Image Retrieval",
+    "paper_url": "https://arxiv.org/pdf/2604.18051v1",
+    "paper_version": "arXiv v1 2026-04-20 (HTML + PDF of the same manuscript)",
+    "pdf_bytes": 9279156,
+    "pdf_sha256": "06e606654a1c0c801b91baf16d934d1da1e3246016cead3d89dab51bb28daa69",
+    "publication_year": 2026,
+    "supplement_url": null,
+    "venue": "AAAI-26 (Proceedings of the AAAI Conference on Artificial Intelligence, Vol. 40 No. 25)"
+  }
+}

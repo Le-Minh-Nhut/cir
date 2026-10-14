@@ -350,6 +350,90 @@ def _stage_source_assets(config, model: dict, contract: dict, *, dry_run: bool) 
     return True
 
 
+#: Canonical image extensions the workbench will read as a resize source. The split files name an
+#: image *identifier*, not a filename: on this dataset the files are `<id>.png` while the pinned
+#: evaluators read `<id>.jpg`, so the source extension and the derived extension are different
+#: properties. Trying only the derived extension (or only `.jpg`) finds nothing on a PNG dataset.
+CANONICAL_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".PNG", ".JPG", ".JPEG")
+
+
+def _canonical_image_path(images_root: Path, identifier: str, derived_extension: str) -> Path | None:
+    """The canonical file the identifier names, or None when it does not exist.
+
+    Derived extension first, because a canonical JPEG distribution should be found without scanning,
+    then the declared canonical extensions. The returned file is the one actually read, so its bytes
+    are what the receipt binds.
+    """
+    ordered = [derived_extension, *CANONICAL_IMAGE_EXTENSIONS]
+    seen: set[str] = set()
+    for extension in ordered:
+        if extension in seen:
+            continue
+        seen.add(extension)
+        candidate = images_root / f"{identifier}{extension}"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _derived_is_bound_to_source(
+    previous: dict | None,
+    category: str,
+    identifier: str,
+    source_digest: str,
+    size: int,
+    extension: str,
+    derived_digest: str | None = None,
+) -> bool:
+    """Whether a receipt proves an existing derived file came from these exact canonical bytes.
+
+    The evidence required is the conjunction the receipt already records: this identifier's canonical
+    source digest, its derived digest, the image size and the recipe extension. A missing or
+    mismatching value means the file cannot be attributed to the current source and the recipe, so it
+    is regenerated instead of reused.
+
+    The derived digest matters as much as the source one. Without it a file that was edited after it
+    was generated still looked reusable, and the run then wrote a fresh receipt recording the edited
+    bytes -- laundering a tampered artifact into a certified one.
+    """
+    if not isinstance(previous, dict):
+        return False
+    if previous.get("image_size") != size or previous.get("extension") != extension:
+        return False
+    categories = previous.get("categories")
+    if not isinstance(categories, dict):
+        return False
+    counts = categories.get(category)
+    if not isinstance(counts, dict):
+        return False
+    if counts.get("image_size") != size or counts.get("extension") != extension:
+        return False
+    digests = counts.get("digests") or {}
+    source_digests = counts.get("source_digests") or {}
+    if not isinstance(digests, dict) or not isinstance(source_digests, dict):
+        return False
+    recorded = digests.get(identifier)
+    if not recorded or source_digests.get(identifier) != source_digest:
+        return False
+    if derived_digest is None:
+        return False
+    return recorded == derived_digest
+
+
+def _load_previous_receipt(config, layout: str, *, model_id: str) -> dict | None:
+    """The receipt this model's previous run wrote, when it belongs to this model and layout."""
+    path = resize_receipt_path(config, layout)
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(payload, dict) or payload.get("model_id") != model_id:
+        return None
+    return payload
+
+
 def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[bool, str]:
     """Materialize the declared, source-documented per-category resized image set.
 
@@ -412,6 +496,7 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
 
     written, missing = 0, []
     coverage: dict[str, dict] = {}
+    previous_receipt = _load_previous_receipt(config, layout, model_id=model["model_id"]) if not dry_run else None
     for category in CATEGORIES:
         split_file = splits_root / f"split.{category}.val.json"
         if not split_file.is_file():
@@ -439,14 +524,9 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
         output_dir.mkdir(parents=True, exist_ok=True)
         category_source_digests: dict[str, str] = {}
         for identifier in identifiers:
-            source_image = images_root / f"{identifier}{extension}"
-            if not source_image.is_file():
-                # The canonical distribution ships .jpg; a source that reads another extension is
-                # covered by the same recipe because the split names the identifier, not the file.
-                alternate = images_root / f"{identifier}.jpg"
-                source_image = alternate if alternate.is_file() else source_image
-            if not source_image.is_file():
-                missing.append(str(source_image))
+            source_image = _canonical_image_path(images_root, identifier, extension)
+            if source_image is None:
+                missing.append(str(images_root / f"{identifier}<image>"))
                 continue
             # Bind each derived image to the canonical bytes it was made from. Without this the
             # receipt proved only that *a* resize had happened: editing a canonical image left the
@@ -466,12 +546,19 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
             save_format = Image.registered_extensions().get(extension.lower(), "JPEG")
             if destination.is_file():
                 try:
-                    with Image.open(destination) as existing:
-                        if existing.size == (size, size) and existing.format == save_format:
-                            existing.load()
-                            continue
-                except Exception:
-                    pass
+                    on_disk = hashlib.sha256(destination.read_bytes()).hexdigest()
+                except OSError:
+                    on_disk = None
+                if _derived_is_bound_to_source(
+                        previous_receipt, category, identifier, category_source_digests[identifier],
+                        size, extension, on_disk):
+                    # Reuse is allowed only with evidence: the previous receipt records the canonical
+                    # bytes that produced this file, the recipe that produced it, and the file's own
+                    # digest. Size and format alone are not evidence -- a 256px JPEG can be stale,
+                    # generated by a different recipe, or edited afterwards, and recording the
+                    # *current* source digest next to those pixels would make the new receipt assert
+                    # a provenance the file does not have.
+                    continue
             temp_file = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
             try:
                 with Image.open(source_image) as handle:

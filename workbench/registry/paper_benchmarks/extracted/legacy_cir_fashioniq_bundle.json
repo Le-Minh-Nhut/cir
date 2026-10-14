@@ -1,0 +1,505 @@
+{
+  "experiments": [
+    {
+      "aggregation_method": "The printed category cells are per-category R@10/R@50; the paper's Avg column is the mean of the six printed cells. The workbench's macro R@10/R@50 (equal-weight mean over the three categories) is derived here and printed nowhere as such; the paper's printed Avg equals the rounding of (macro_R@10 + macro_R@50)/2.",
+      "augmentation_policy": "training only: random cropping and horizontal flipping (paper, Section 4 Implementation); evaluation applies CenterCrop(224) -> ToTensor -> ImageNet Normalize with no randomization (data_loader/data_loaders.py:66-70)",
+      "backbone": "ResNet-50 pretrained on ImageNet (paper: 'we select ResNet50 (He et al. 2016) pretrained on ImageNet as our backbone encoder')",
+      "category_metrics": {
+        "dress": {
+          "r10": 28.95,
+          "r50": 56.07
+        },
+        "shirt": {
+          "r10": 23.95,
+          "r50": 47.3
+        },
+        "toptee": {
+          "r10": 30.44,
+          "r50": 58.29
+        }
+      },
+      "checkpoint_id": "fashioniq_run_directory",
+      "checkpoint_mapping_evidence": "Table 1 is the paper's clean validation comparison, so the row corresponds to a 0%-noise training condition. The registry's only artifact is the author Google Drive folder https://drive.google.com/drive/folders/1wgygqF095Di67EaHaGOXbwh3wEzk9izB (models.yaml:586-596) recorded as a run directory requiring config.json + trained_model.pth with checkpoint_mapping_status: UNVERIFIED, status CHECKPOINT_MAPPING_UNVERIFIED, download_url null, no size and no digest. Nothing in the pinned repo binds a published file to Table 1 (train.py:263-equivalent save sites are torch.save of the whole model into the run dir; registry checkpoint_serialization: run_directory, models.yaml:559). Mapping is therefore unverified and must not be claimed.",
+      "checkpoint_mapping_status": "UNVERIFIED",
+      "checkpoint_training_noise_pct": 0,
+      "dataset": "fashioniq",
+      "dataset_version": "official FashionIQ release, validation annotations (cap.{dress,shirt,toptee}.val.json) with image_splits/split.{dress,shirt,toptee}.val.json; paper cites Fashion-IQ (Guo et al. 2019) with 30,134 triplets over 77,683 images in three categories",
+      "derived_metrics": [
+        {
+          "derivation_formula": "mean(28.95, 23.95, 30.44)",
+          "key": "r10",
+          "provenance": "WORKBENCH_DERIVED",
+          "rounding_policy": "round-half-up to 2 decimals (raw value 27.78 exactly)",
+          "source_metrics": [
+            "category_metrics.dress.r10",
+            "category_metrics.shirt.r10",
+            "category_metrics.toptee.r10"
+          ],
+          "value": 27.78
+        },
+        {
+          "derivation_formula": "mean(56.07, 47.30, 58.29)",
+          "key": "r50",
+          "provenance": "WORKBENCH_DERIVED",
+          "rounding_policy": "round-half-up to 2 decimals (raw value 53.8867)",
+          "source_metrics": [
+            "category_metrics.dress.r50",
+            "category_metrics.shirt.r50",
+            "category_metrics.toptee.r50"
+          ],
+          "value": 53.89
+        },
+        {
+          "derivation_formula": "(mean_r10 + mean_r50) / 2 = (27.78 + 53.89) / 2",
+          "key": "mean_check",
+          "note": "Reproduces the paper's own printed Avg 40.83, which confirms the paper's Avg is exactly the unweighted mean of its six printed cells; it does NOT make the macro R@10/R@50 paper-reported values.",
+          "provenance": "WORKBENCH_DERIVED",
+          "rounding_policy": "round-half-up to 2 decimals -> 40.83",
+          "source_metrics": [
+            "r10",
+            "r50"
+          ],
+          "value": 40.8333
+        }
+      ],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "DCNet",
+      "method_variant": "main method, joint training of Composition and Correction Networks (both experts); retrieval score s = s_r + s_c",
+      "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
+      "metric_provenance": {
+        "paper_column": "Fashion-IQ validation set; Dress/Shirt/Toptee R@10,R@50 and the 'Total Avg' column",
+        "paper_page": 5,
+        "paper_row": "DCNet",
+        "paper_table": "Table 1",
+        "source_excerpt_or_description": "Caption: 'Table 1: Comparison between our DCNet and baselines on the Fashion-IQ validation set. (dagger) denotes the results cited from (Chen, Gong, and Bazzani 2020).' The DCNet row reads 28.95 56.07 | 23.95 47.30 | 30.44 58.29 | 40.83. The row is the last row of the table and is not a competitor's row; the challenge table (Table 2) is a different, single-number metric (AvgR@(10,50), Ours 0.52) and was not used."
+      },
+      "model_id": "dcnet",
+      "preprocessing_id": "dcnet_resize_256_square_flat_jpg__eval_centercrop_224_imagenet_norm",
+      "reference_excluded": true,
+      "reference_id": "dcnet_fashioniq_val_table1",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 40.83,
+        "r10": null,
+        "r50": null
+      },
+      "reported_metrics_provenance": "mean: PAPER_REPORTED (the paper prints 40.83 in the Total/Avg column of Table 1). r10 and r50 are left null because the paper prints no macro R@10 or macro R@50 - only per-category cells (see category_metrics).",
+      "review_status": "CONFIRMED",
+      "split": "val",
+      "verification_evidence": "pdftoppm render of page 5 shows the DCNet row bold/underlined as the best baseline: Dress 28.95 56.07, Shirt 23.95 47.30, Toptee 30.44 58.29, Total Avg 40.83. Arithmetic check performed in this audit: (28.95+23.95+30.44)/3 = 27.78 and (56.07+47.30+58.29)/3 = 53.8867 -> (27.78+53.89)/2 = 40.8333 -> 40.83, matching the printed Avg. The paper does NOT state its gallery construction or reference policy anywhere (grep for 'gallery'/'candidate'/'excluded' over the extracted text finds no protocol statement), so gallery_protocol and reference_excluded: true are read from the pinned evaluator (trainer/trainer_joint.py:216-218 mask, CE_dataset.py:26-27 full val split), not from the paper.",
+      "verification_method": "Two independent routes that agree: (a) text extraction, pdftotext -layout of the pinned PDF -> the DCNet row's twelve numbers; (b) visual reading of the page-5 image rendered with pdftoppm -png -r 200 -f 5 -l 5, where the table is fully legible. Both routes give 28.95/56.07, 23.95/47.30, 30.44/58.29, Avg 40.83."
+    },
+    {
+      "aggregation_method": "macro over categories, then mean of R@10 and R@50 (paper prints only the R@10 and R@50 macro cells; the mean is not printed)",
+      "augmentation_policy": null,
+      "backbone": "CLIP ViT-B/16 (paper: 'TG-CIR utilizes pre-trained CLIP (Radford et al., 2021) (ViT-B/16 version) as the backbone')",
+      "category_metrics": {
+        "dress": {
+          "r10": 45.22,
+          "r50": 69.66
+        },
+        "shirt": {
+          "r10": 52.6,
+          "r50": 72.52
+        },
+        "toptee": {
+          "r10": 56.14,
+          "r50": 77.1
+        }
+      },
+      "checkpoint_id": "tgcir_archive_unresolved",
+      "checkpoint_mapping_evidence": "Table 1 is the clean comparison, so the row's training condition is 0% noise. The registry's only variant is checkpoint_id tgcir_archive_unresolved, filename tgcir-fashioniq-unresolved.pt, download_url null, source_url https://drive.google.com/file/d/1OdZTtJqy-RTpYXBaq5ThmH3IBnGvYCyi/view (TG-CIR.zip, models.yaml:764-775), expected_size_bytes null, expected_sha256 null, status CHECKPOINT_MAPPING_UNVERIFIED. The pinned evaluator has no checkpoint loader at all (TGCIR/test.py defines test(params, model, testset, category) and is only called from train.py:200), so no file-to-row binding can be established from source.",
+      "checkpoint_mapping_status": "UNVERIFIED",
+      "checkpoint_training_noise_pct": 0,
+      "dataset": "fashioniq",
+      "dataset_version": "official FashionIQ three-category release (dress/shirt/toptee) with the author's spell-corrected modification texts (correction_dict_{dress,shirt,toptee}.json shipped in the pinned repo under correction_dict/)",
+      "derived_metrics": [
+        {
+          "derivation_formula": "(r10 + r50) / 2 = (51.32 + 73.09) / 2",
+          "key": "mean",
+          "provenance": "WORKBENCH_DERIVED",
+          "rounding_policy": "exact to 3 decimals (62.205); round-half-up to 2 decimals would give 62.21 (62.205 is exactly representable and the workbench's own note quotes 62.205)",
+          "source_metrics": [
+            "r10",
+            "r50"
+          ],
+          "value": 62.205
+        }
+      ],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_val_split",
+      "method_name": "TG-CIR",
+      "method_variant": "main method (target-query relationship-guided composition with target-free student branch at test time, target similarity distribution-guided metric learning)",
+      "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
+      "metric_provenance": {
+        "paper_column": "FashionIQ, Avg block, R@10 and R@50 (Dresses/Shirts/Tops&Tees blocks are per-category)",
+        "paper_page": 7,
+        "paper_row": "TG-CIR",
+        "paper_table": "Table 1",
+        "source_excerpt_or_description": "Caption: 'Table 1: Performance comparison on FashionIQ and Shoes with respect to R@k(%). The best results are in boldface, while the second-best results are underlined. The missing results of some methods are because they did not report their results on the Shoes dataset. The last row indicates the performance improvements by TG-CIR over the best baseline.' The TG-CIR row reads 45.22 69.66 | 52.60 72.52 | 56.14 77.10 | 51.32 73.09 | [Shoes] 25.89 63.20 85.07 58.05. The evaluation section states: 'For FashionIQ, we followed the evaluation metric used in the companion challenge (Guo et al., 2019), namely, R@10 and R@50 for each of the three categories.' No mean is printed anywhere for FashionIQ."
+      },
+      "model_id": "tgcir",
+      "preprocessing_id": "clip_vitb16_eval_preprocess_resize224_bicubic_centercrop224_clip_norm",
+      "reference_excluded": true,
+      "reference_id": "tgcir_fashioniq_val_table1",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": null,
+        "r10": 51.32,
+        "r50": 73.09
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for r10 and r50 (the paper's FashionIQ-Avg cells). mean left null because the paper prints no mean for FashionIQ: its Avg block has exactly two columns, R@10 and R@50.",
+      "review_status": "CONFIRMED",
+      "split": "val",
+      "verification_evidence": "Rendered Table 1 (page 7) shows the TG-CIR row as the final row, bold: Dresses 45.22/69.66, Shirts 52.60/72.52, Tops&Tees 56.14/77.10, Avg 51.32/73.09. Rendered Table 3 (page 8) shows 'TG-CIR 51.32 73.09' under the header 'FashionIQ-Avg | R@10 R@50'. No cell in either table is a mean; the header offers only R@10 and R@50. Registry models.yaml:744-746 records exactly 51.32/73.09/null and the note at :747 ('62.205 is derivable but not presented as a reproduced metric') is accurate. The paper does not state a gallery construction or reference policy; gallery_protocol and reference_excluded are read from the pinned evaluator (TGCIR/test.py:66-67 mask, TGCIR/datasets.py:127-159 pair-union gallery).",
+      "verification_method": "Three routes that agree: (a) the arXiv HTML v1 table, machine-readable; (b) pdftotext -layout -f 7 -l 7 of the downloaded PDF; (c) visual reading of the page-7 and page-8 renders (page 8 ablation Table 3 repeats TG-CIR at 51.32/73.09 for FashionIQ-Avg). Arithmetic check: (45.22+52.60+56.14)/3 = 51.3199... -> 51.32 and (69.66+72.52+77.10)/3 = 73.0933... -> 73.09, so the Avg column is the rounded macro of the three per-category cells and is a genuine macro statistic, not a per-category value."
+    },
+    {
+      "aggregation_method": "macro over categories, then mean of R@10 and R@50 (paper prints the R@10 and R@50 macro cells under 'Avg'; it prints no mean)",
+      "augmentation_policy": null,
+      "backbone": "CLIP ViT-L/14 (paper: 'LIMN utilizes pre-trained CLIP (Radford et al., 2021) (ViT-L/14 version) as the backbone. The feature dimension D is set to 768')",
+      "category_metrics": {
+        "dress": {
+          "r10": 50.72,
+          "r50": 74.52
+        },
+        "shirt": {
+          "r10": 56.08,
+          "r50": 77.09
+        },
+        "toptee": {
+          "r10": 60.94,
+          "r50": 81.85
+        }
+      },
+      "checkpoint_id": "base_iter0_all_categories",
+      "checkpoint_mapping_evidence": "Three-way binding, all observed in this audit: (1) the pinned trainer saves one whole model per category at iteration i, LIMN/train.py:263 torch.save(model, f\"{args.i}_{_name[1]}_best_model.pt\") with --i default 0, and LIMN+/train.py:293 uses args.augment_iteration instead (default 1) - so the '0_' prefix is a LIMN-only, iteration-0 artifact; (2) the registry's three checkpoint_ids base_iter0_{dress,shirt,toptee} (models.yaml:870-896) carry filenames 0_{dress,shirt,toptee}_best_model.pt whose Hugging Face LFS oids equal the registered expected_sha256 values (curl of the Hub tree API at revision 30560ad575a56c39cc39047d1a474269338c77c0 returns oid 96a335d4.../9260c7f7.../79f663a1... = models.yaml:876/885/894, each size 1792010157); (3) the same Hub revision ships the author's own evaluation logs dress_0_metrics_best.json, shirt_0_metrics_best.json, toptee_0_metrics_best.json (fetched here) whose hyperparameters (prefix_num 8, head 8, layer 2, norm 1.0, temperature 0.1) match the README's base LIMN FashionIQ commands (README.md:81-83) and whose recalls reproduce the published Table I row (macro R@10 55.9139 vs published 55.91; macro R@50 77.8160 vs published 77.82). The LIMN+ logs (dress_2/shirt_2/toptee_2) carry interval/p_origin/p_aug and correspond to the LIMN+ row instead.",
+      "checkpoint_mapping_status": "VERIFIED",
+      "checkpoint_training_noise_pct": 0,
+      "dataset": "fashioniq",
+      "dataset_version": "official three-category release, per-category runs; the paper states 'we treated them as three separate datasets. Following [8], [11], [19], ~46K images and ~15K images are used for training and testing, respectively. Finally, there are 18K triplets for training and ~6K for testing'",
+      "derived_metrics": [
+        {
+          "derivation_formula": "(r10 + r50) / 2 = (55.91 + 77.82) / 2 = 66.865",
+          "key": "mean",
+          "provenance": "WORKBENCH_DERIVED",
+          "rounding_policy": "round-half-up to 2 decimals",
+          "source_metrics": [
+            "r10",
+            "r50"
+          ],
+          "value": 66.87
+        }
+      ],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_val_split",
+      "method_name": "LIMN",
+      "method_variant": "base LIMN without the iterative dual self-training paradigm (iteration 0); the LIMN+ row in the same table is a different registered-or-not system and is NOT this row",
+      "metric_definition": "Recall@K = fraction of queries whose target is in the top K",
+      "metric_provenance": {
+        "paper_column": "FashionIQ, 'Avg' block, R@10 and R@50 (Dresses/Shirts/Tops&Tees blocks are per-category)",
+        "paper_page": 8,
+        "paper_row": "LIMN",
+        "paper_table": "Table I",
+        "source_excerpt_or_description": "Caption: 'Performance comparison on FashionIQ and Shoes with respect to R@k(%). The best results over baselines are underlined, while the overall best results are in boldface. ... The penultimate row quantifies the absolute performance improvements of LIMN+ over LIMN. The last row indicates the performance improvements by LIMN+ over the best baseline. The results of the proposed method are marked with a gray background.' The LIMN row reads Dress 50.72/74.52, Shirt 56.08/77.09, Tops&Tees 60.94/81.85, Avg 55.91/77.82 (then Shoes 68.20/87.45/77.83). The next row, LIMN+ 57.43/78.60 Avg, is a different system and was not used. Ablation Table IV repeats LIMN at FashionIQ-Avg 55.91/77.82."
+      },
+      "model_id": "limn",
+      "preprocessing_id": "open_clip_ViT-L-14_eval_transform_resize224_bicubic_centercrop224_on_256px_source_images",
+      "reference_excluded": true,
+      "reference_id": "limn_fashioniq_base_iter0_table1",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": null,
+        "r10": 55.91,
+        "r50": 77.82
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for r10 and r50 (the paper's FashionIQ 'Avg' R@10 and R@50 cells). mean left null: the paper prints no mean for FashionIQ, in Table I or in the ablation Table IV - both offer only R@10 and R@50.",
+      "review_status": "CONFIRMED",
+      "split": "val",
+      "verification_evidence": "Rendered Table I shows the LIMN row in a gray band: 50.72 74.52 | 56.08 77.09 | 60.94 81.85 | 55.91 77.82. Fetched author logs for the same Hub revision: dress_0 r10 50.71888943976202 / r50 74.5166088249876; shirt_0 r10 56.084396467124634 / r50 77.08537782139352; toptee_0 r10 60.938296787353394 / r50 81.84599694033656 -> macro R@10 55.9139, R@50 77.8160 -> mean 66.8649, matching the published 55.91/77.82 and this row's derived mean 66.87. The paper does not state its gallery construction or reference policy; gallery_protocol and reference_excluded are read from the pinned evaluator (LIMN/test.py:80-85 mask, LIMN/datasets.py:158-169 pair-union gallery). Registry models.yaml:854-856 leaves all three reported_* fields null - that is an omission for r10/r50 (the paper prints them) and correct for the mean (the paper does not).",
+      "verification_method": "Three routes: (a) pdftotext -layout of arXiv 2305.09979v2 page 8 -> the LIMN row's numbers; (b) visual reading of the page-8 render (pdftoppm -png -r 150 -f 8 -l 8), identical; (c) independent author artifact - the evaluation logs shipped alongside the exact registered checkpoint revision, whose macro recomputation matches the published cells to rounding. Arithmetic check: (50.72+56.08+60.94)/3 = 55.9133 -> 55.91 and (74.52+77.09+81.85)/3 = 77.82, so the paper's Avg is the rounded macro of the three categories. Version check: arXiv v1 publishes a completely different campaign (LIMN 36.30/62.20 Avg over FashionIQ/Shoes/Birds-to-Words) and must not be cited."
+    }
+  ],
+  "paper": {
+    "access": "FULL_TEXT",
+    "access_evidence": "Three of four papers were read in full and their numbers verified twice (text extraction of the PDF plus a rendered page image). CLVC-Net was NOT obtainable: see papers[0].access. Route evidence: (a) curl -sS https://api.openalex.org/works/W3154902219 -> best_oa_location: null, locations[0].is_oa false, pdf_url null; (b) curl -sS 'https://api.unpaywall.org/v2/10.1145/3404835.3462967?email=omp.audit@example.org' -> {\"is_oa\": false, \"oa_status\": \"closed\", \"oa_locations\": []}; (c) curl -sS https://api.semanticscholar.org/graph/v1/paper/DOI:10.1145/3404835.3462967?fields=openAccessPdf -> {\"openAccessPdf\":{\"url\":\"\",\"status\":\"CLOSED\"}}; (d) curl -sSL https://dl.acm.org/doi/pdf/10.1145/3404835.3462967 -> HTTP 403, Cloudflare interstitial page ('Just a moment...'); (e) wayback availability API for that PDF URL -> {\"archived_snapshots\":{}}.",
+    "arxiv_id": "2309.01366 (TG-CIR); 2305.09979 (LIMN); null for CLVC-Net and DCNet",
+    "authors": [
+      "Haokun Wen",
+      "Xuemeng Song",
+      "Xin Yang",
+      "Yibing Zhan",
+      "Liqiang Nie",
+      "Jongseok Kim",
+      "Youngjae Yu",
+      "Hoeseong Kim",
+      "Gunhee Kim",
+      "Xian Zhang",
+      "Yinwei Wei",
+      "Jianhua Yin",
+      "Jianlong Wu",
+      "Weili Guan"
+    ],
+    "doi": "10.1145/3404835.3462967 (CLVC-Net); 10.1145/3581783.3611817 (TG-CIR); 10.1109/TPAMI.2023.3346434 (LIMN); DCNet has no registry DOI",
+    "execution_trace": [
+      "1. read /tmp/paper_rules.md (schema + 8 hard rules) and workbench/registry/models.yaml (clvc_net 492-555, dcnet 556-583, tgcir 721-775, limn 831-902).",
+      "2. DCNet: sha256sum + stat on workbench/third_party/DCNet/DCNet_Kim2021.pdf -> 1a87a96185ab1d5a057512a72504b128adc2fd589b5dc0e0ebe8856f559e8ad4 / 1764944 bytes; read the PDF whole; pdftoppm -r 200 -f 5 and read the page image; grep -n -iE 'gallery|candidate|exclud' -> protocol silence in the paper text.",
+      "3. DCNet code: workbench/third_party/DCNet/trainer/trainer_joint.py:216-218 (-10e10 mask, both branches) and :228/:232/:240 (topk k=50); data_loader/CE_dataset.py:22,26-27,72 (flat resized_images, full val split file, .jpg); data_loader/data_loaders.py:24-29 vs :66-70 (train vs eval transforms); preprocess/resize_img.py:9-11,69 (ANTIALIAS, 256x256).",
+      "4. TG-CIR: read https://arxiv.org/html/2309.01366v1 (Table 1 flattened; 'For FashionIQ, we followed the evaluation metric used in the companion challenge (Guo et al., 2019), namely, R@10 and R@50 for each of the three categories'; backbone 'ViT-B/16'); curl -sSL https://arxiv.org/pdf/2309.01366v1 (sha256 57d0df85..., 1658418 bytes); pdftotext -layout -f 7 -> TG-CIR row 45.22 69.66 | 52.60 72.52 | 56.14 77.10 | 51.32 73.09; rendered and visually read pages 7 and 8.",
+      "5. TG-CIR arithmetic: (45.22+52.60+56.14)/3 = 51.3199... and (69.66+72.52+77.10)/3 = 73.0933... -> the Avg column is the rounded macro of the three categories, and the printed Avg block has exactly two columns (no mean).",
+      "6. TG-CIR code (gallery/preprocessing, for the workbench's per-model data prep questions): TGCIR/datasets.py:127-159, TGCIR/test.py:66-67, TGCIR/train.py:56,88,93,96-98.",
+      "7. LIMN: located the OA route via Semantic Scholar externalIds (ArXiv 2305.09979, openAccessPdf https://arxiv.org/pdf/2305.09979, status GREEN) - the workbench registry cites only the paywalled DOI and its audit recorded the table as UNKNOWN; both arXiv versions were downloaded (v1 sha256 3ffd9d3c..., 2874828 bytes; v2 sha256 46f51926..., 2213167 bytes) and identified as different campaigns.",
+      "8. LIMN Table I verified by text extraction and by reading the rendered page-8 image; per-category and Avg cells agree exactly.",
+      "9. LIMN checkpoint/metric coupling: curl of https://huggingface.co/api/models/iLearn-Lab/TPAMI24-LIMN/tree/30560ad575a56c39cc39047d1a474269338c77c0?recursive=true lists 0_dress/shirt/toptee_best_model.pt with LFS oids equal to models.yaml:876/885/894, plus the author's own dress_0/shirt_0/toptee_0_metrics_best.json; fetched those three logs (R@10 50.71888943976202 / 56.084396467124634 / 60.938296787353394; R@50 74.5166088249876 / 77.08537782139352 / 81.84599694033656) -> macro R@10 55.9139, R@50 77.8160, matching the published 55.91/77.82.",
+      "10. LIMN v2 hyperparameters from the log files (prefix_num 8, head 8, layer 2, norm 1.0, temperature 0.1) match README LIMN base commands (README.md:81-83), distinguishing the registered base iteration-0 checkpoints from LIMN+ (LIMN+/train.py:44,276,293 use augment_iteration; LIMN/train.py:263 uses args.i, default 0).",
+      "11. CLVC-Net: exhausted every open route (OpenAlex, Unpaywall, Semantic Scholar, direct ACM curl -> 403 Cloudflare, Wayback availability/CDX, CORE -> 429, scholar.archive.org, fatcat -> timeout, multiple web searches); none produced the paper or a table. Confirmed from the pinned repo that FashionIQ IS the evaluated dataset in code, so the absence of a row in experiments[] is an access failure, not a claim that the table does not exist.",
+      "12. CLVC-Net secondary citations recorded (not used as paper-reported): TG-CIR Table 1, LIMN Table I and the arXiv:2502.18495v1 survey Table 5 all print CLVC-Net as 29.85/56.47, 28.75/54.76, 33.50/64.00, Avg 30.70/58.41; registry line 524-527 leaves all three fields null, so nothing in the workbench contradicts or confirms them."
+    ],
+    "fashioniq_row_found_per_paper": {
+      "clvc_net": "NOT_ESTABLISHED (paper unreadable)",
+      "dcnet": true,
+      "limn": true,
+      "tgcir": true
+    },
+    "model_verdicts": {
+      "clvc_net": {
+        "finding": "Cannot be established from the primary source. The paper is paywalled and has no green/bronze OA copy (see access_evidence). It is NOT a pre-FashionIQ paper: SIGIR 2021 post-dates the FashionIQ dataset, and the pinned repo's own trainer targets FashionIQ - workbench/third_party/CLVCNet/train.py:70-96 loads a FashionIQ dataset for --dataset fashioniq, datasets.py:168 opens cap.{name}.{split}.json, datasets.py:170 opens split.{name}.val.json, and datasets.py:195 reads resized_image/<cat>/<id>.jpg; README.md:26-49 gives three per-category FashionIQ runs. No FashionIQ row was therefore entered in experiments[] for clvc_net, per the assignment's instruction not to invent one.",
+        "image_resolution_and_transform": "Train: Resize(256) -> RandomCrop(224) -> RandomHorizontalFlip -> ToTensor -> ImageNet Normalize (train.py:78-84). Eval: Resize(256) -> CenterCrop(224) -> ToTensor -> ImageNet Normalize (train.py:90-96). No transform in test.py. Images are pre-resized externally per README.md:28 (XiaoxiaoGuo start_kit resize_images.py); the pinned tree bundles no resize script (ls workbench/third_party/CLVCNet -> 8 .py + README.md only).",
+        "question": "Does the paper report a FashionIQ row at all?",
+        "reference_exclusion": "Pinned code sets reference_excluded TRUE by masking, not removal: workbench/third_party/CLVCNet/test.py:135 writes sims[i, test_targets_id.index(t['source_img_id'])] = -10e10 before np.argsort at :138; gallery is the source-order pair union built at datasets.py:242-257 with the constructor default gallery_all=False (datasets.py:153). The paper was not available to confirm it states this. Registry native_protocol: fashioniq_val_split (models.yaml:523) is consistent with the code.",
+        "secondary_evidence_not_used_as_paper_reported": [
+          {
+            "source": "TG-CIR, arXiv:2309.01366v1, Table 1 (row label 'CLVC-Net [35] (SIGIR'21)')",
+            "values": {
+              "avg": [
+                30.7,
+                58.41
+              ],
+              "dress": [
+                29.85,
+                56.47
+              ],
+              "shirt": [
+                28.75,
+                54.76
+              ],
+              "toptee": [
+                33.5,
+                64
+              ]
+            }
+          },
+          {
+            "source": "LIMN, arXiv:2305.09979v2, Table I (row label 'CLVC-Net [11]')",
+            "values": {
+              "avg": [
+                30.7,
+                58.41
+              ],
+              "dress": [
+                29.85,
+                56.47
+              ],
+              "shirt": [
+                28.75,
+                54.76
+              ],
+              "toptee": [
+                33.5,
+                64
+              ]
+            }
+          },
+          {
+            "source": "A Comprehensive Survey on Composed Image Retrieval, arXiv:2502.18495v1, Table 5 (row label \"CLVC-Net [164] (SIGIR'21)\")",
+            "values": {
+              "avg": [
+                30.7,
+                58.41
+              ],
+              "dress": [
+                29.85,
+                56.47
+              ],
+              "shirt": [
+                28.75,
+                54.76
+              ],
+              "toptee": [
+                33.5,
+                64
+              ]
+            }
+          },
+          {
+            "note": "Three independent secondary tables agree exactly, which is strong circumstantial evidence that the CLVC-Net paper prints 29.85/56.47, 28.75/54.76, 33.50/64.00 with Avg 30.70/58.41. This was deliberately NOT written into reported_metrics: nobody in this audit opened the CLVC-Net PDF, and rule 1 forbids attributing a number to a source not read. It is recorded here as a lead for a human with ACM DL access, not as a paper-reported value.",
+            "recommended_action": "Obtain the SIGIR 2021 camera-ready (institutional ACM DL, or the authors) and read its results table, then enter a row with reference_status VERIFIED and checkpoint_mapping_status NO_CHECKPOINT (registry has only author_drive_unresolved, models.yaml:544-555)."
+          }
+        ],
+        "severity": "P1",
+        "verdict": "BLOCKED"
+      },
+      "dcnet": {
+        "finding": "FashionIQ validation, R@10/R@50 per category plus the paper's own Avg column; all values independently verified by two routes.",
+        "image_resolution_and_transform": "Upstream preprocessing (preprocess/resize_img.py:69 image_size = [256, 256]; :9-11 image.resize(size, Image.ANTIALIAS) then img.save(output_file, img.format)) writes 256x256 square, non-aspect-preserving, flat resized_images/*.jpg. Paper states only 'We also employ random cropping and horizontal flipping for image augmentation' (dcnet.txt:278) and gives no resolution. Eval transform is deterministic: CenterCrop(224) -> ToTensor -> ImageNet Normalize (data_loader/data_loaders.py:66-70); the train branch uses RandomCrop(224) + RandomHorizontalFlip (data_loaders.py:24-29). No augmentation reaches evaluation.",
+        "question": "What does the paper report for FashionIQ?",
+        "reference_exclusion": "TRUE by masking, not removal - but this is a CODE fact, not a paper statement. The paper text contains no occurrence of 'gallery', 'candidate' or 'excluded' (grep -n -iE 'gallery|candidate|exclud' /tmp/audit/dcnet.txt -> matches only at line 85 ('image database (i.e. It in I)'), a prose phrase, not a protocol statement). It states only Recall@10/Recall@50 (dcnet.txt:247-248). Pinned code: workbench/third_party/DCNet/trainer/trainer_joint.py:216-218 sets score_matrix_comp[ei, id2targetidx[elem['candidate']]] = -10e10 and the same for score_matrix_corr, per query, before score.topk(..., k=50, sorted=True) at :228/:232/:240; gallery is the whole ordered split.{category}.val.json (data_loader/CE_dataset.py:26-27), so this is full-gallery-with-mask, i.e. the workbench's fashioniq_full_gallery_ref_excluded (models.yaml:577). Registry literature_split_label: original (models.yaml:576) is an inference from code, not from the paper - flag it as such.",
+        "severity": "NONE",
+        "verdict": "VERIFIED"
+      },
+      "limn": {
+        "finding": "FashionIQ Avg R@10 55.91 / R@50 77.82 for LIMN, plus per-category values and the LIMN+ row 57.43/78.60. This row was verified TWICE against the paper (PDF text extraction and the rendered page-8 image agree exactly) AND cross-checked against the author's own published evaluation logs for the exact registered iteration-0 checkpoints. The paper prints no mean; registry reported_mean: null is CORRECT.",
+        "image_resolution_and_transform": "Paper: 'LIMN utilizes pre-trained CLIP (ViT-L/14 version) as the backbone' and 'The feature dimension D is set to 768' (arXiv v2 p.7); no resolution stated. Code: the transform comes from open_clip (LIMN/datasets.py:117 self.transform[0] for query/train, :125 self.transform[1] for eval), i.e. open_clip ViT-L-14's image_size 224 with the eval branch Resize(224, BICUBIC) + CenterCrop(224), while repo images are pre-resized to 256x256 by the linked start_kit script (README.md:51). No augmentation reaches an evaluated image.",
+        "question": "What does the LIMN paper report for FashionIQ, base LIMN (not LIMN+)?",
+        "reference_exclusion": "TRUE by masking - code fact, paper silent. LIMN/test.py:80-85 writes sims[i, test_targets_id.index(t['source_img_id'])] = -10e10 before np.argsort(-sims[i, :])[:50]; gallery is the first-seen reference-then-target union built at LIMN/datasets.py:158-169. Registry native_protocol: fashioniq_val_split (models.yaml:852) matches the code. The paper says nothing about the gallery ('we treated them as three separate datasets', arXiv v2 p.7).",
+        "severity": "NONE",
+        "verdict": "VERIFIED"
+      },
+      "tgcir": {
+        "finding": "Both values confirmed as the paper's FashionIQ-Avg R@10 / R@50 cells. The paper prints NO mean for FashionIQ: its Avg block has only two columns, R@10 and R@50. The registry's reported_mean: null (models.yaml:746) and reported_score_note (models.yaml:747) are CORRECT, not an omission.",
+        "image_resolution_and_transform": "Paper states no resolution and no transform. Code: clip, preprocess = clip.load(args.img_encoder, device='cuda', jit=False) with --img_encoder default 'ViT-B/16' (TGCIR/train.py:56, :88), then img_transform = preprocess (train.py:93) passed into datasets.FashionIQ (train.py:96-98) - i.e. the OpenAI CLIP ViT-B/16 eval preprocess (Resize to 224 short side with BICUBIC, CenterCrop 224, RGB, ToTensor, CLIP mean/std). No augmentation exists on the FashionIQ eval path (TGCIR/datasets.py:351 Resize((256,256)) is the CIRR class; train.py:51 --crop_size 224 is unused at eval).",
+        "question": "Are 51.32 / 73.09 the paper's FashionIQ values, and does the paper genuinely omit a mean?",
+        "reference_exclusion": "TRUE by masking - again a code fact, not a paper statement. The paper says only 'we followed the evaluation metric used in the companion challenge (Guo et al., 2019), namely, R@10 and R@50 for each of the three categories' (arXiv v1, Section 4.1.3). Pinned code: TGCIR/test.py:66-67 sets sims[i, test_targets_id.index(t['source_img_id'])] = -10e10 before ranking; gallery is the first-seen reference-then-target union over split.{cat}.val.json (TGCIR/datasets.py:127-159). Registry native_protocol: fashioniq_val_split (models.yaml:742) matches the code.",
+        "severity": "NONE",
+        "verdict": "VERIFIED"
+      }
+    },
+    "paper_id": "legacy_cir_fashioniq_bundle",
+    "paper_title": "Bundle: CLVC-Net (SIGIR'21), DCNet (AAAI'21), TG-CIR (MM'23), LIMN (TPAMI'24) - FashionIQ reference extraction",
+    "paper_url": "https://doi.org/10.1145/3404835.3462967 ; https://github.com/ozmig77/dcnet/blob/68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb/DCNet_Kim2021.pdf ; https://arxiv.org/pdf/2309.01366v1 ; https://arxiv.org/pdf/2305.09979v2",
+    "paper_version": "Per-paper; see papers[].",
+    "papers": [
+      {
+        "access": "UNAVAILABLE",
+        "access_evidence": "Every open route was tried and failed, with outputs quoted in paper.access_evidence: OpenAlex W3154902219 best_oa_location null; Unpaywall is_oa false / oa_status closed / oa_locations []; Semantic Scholar openAccessPdf url '' status CLOSED; direct curl of the ACM PDF -> HTTP 403 Cloudflare 'Just a moment...'; Wayback availability -> no snapshots; CORE API -> HTTP 429; scholar.archive.org query -> 470-byte stub, no hits; api.fatcat.wiki unreachable (curl exit 28, connection timeout after 135 s); Bing/Google web searches surfaced no CLVC-Net table (only narrative descriptions such as the 2025 multi-hop survey PMC12402485 and the CIR survey's reference-list entry). No table cell was read from this paper, so no clvc_net row appears in experiments[].",
+        "arxiv_id": null,
+        "authors": [
+          "Haokun Wen",
+          "Xuemeng Song",
+          "Xin Yang",
+          "Yibing Zhan",
+          "Liqiang Nie"
+        ],
+        "doi": "10.1145/3404835.3462967",
+        "fashioniq_row_found": false,
+        "fashioniq_row_found_caveat": "NOT_ESTABLISHED rather than affirmatively absent: the paper could not be opened. The repository proves the WORK was evaluated on FashionIQ (train.py:70-96, datasets.py:168-170/195, README.md:26-49), so a FashionIQ table very likely exists in the paper.",
+        "paper_id": "clvc_net_sigir21",
+        "paper_title": "Comprehensive Linguistic-Visual Composition Network for Image Retrieval",
+        "paper_url": "https://doi.org/10.1145/3404835.3462967 (landing page only; PDF behind HTTP 403/Cloudflare)",
+        "paper_version": "SIGIR 2021 camera-ready (ACM DL); no arXiv preprint exists (arXiv author listing for Wen, https://arxiv.org/a/wen_h_1, does not carry it)",
+        "pdf_bytes": null,
+        "pdf_sha256": null,
+        "publication_year": 2021,
+        "reference_status": "UNVERIFIED",
+        "review_status": "PENDING",
+        "supplement_url": null,
+        "venue": "ACM SIGIR 2021 (Proceedings of the 44th International ACM SIGIR Conference on Research and Development in Information Retrieval)"
+      },
+      {
+        "access": "FULL_TEXT",
+        "access_evidence": "Read the pinned PDF directly (read tool on workbench/third_party/DCNet/DCNet_Kim2021.pdf; sha256sum -> 1a87a96185ab1d5a057512a72504b128adc2fd589b5dc0e0ebe8856f559e8ad4, stat -c %s -> 1764944). Second route: pdftoppm -png -r 200 -f 5 -l 5 DCNet_Kim2021.pdf and read the rendered page image; Table 1 is legible and agrees with the extracted text. Third route: pdftotext -layout -> /tmp/audit/dcnet.txt.",
+        "arxiv_id": null,
+        "authors": [
+          "Jongseok Kim",
+          "Youngjae Yu",
+          "Hoeseong Kim",
+          "Gunhee Kim"
+        ],
+        "doi": null,
+        "paper_id": "dcnet_aaai21",
+        "paper_title": "Dual Compositional Learning in Interactive Image Retrieval",
+        "paper_url": "https://github.com/ozmig77/dcnet/blob/68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb/DCNet_Kim2021.pdf",
+        "paper_version": "AAAI 2021 camera-ready, as shipped inside the pinned author repo (workbench/third_party/DCNet/DCNet_Kim2021.pdf, same blob as upstream commit 68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb)",
+        "pdf_bytes": 1764944,
+        "pdf_sha256": "1a87a96185ab1d5a057512a72504b128adc2fd589b5dc0e0ebe8856f559e8ad4",
+        "publication_year": 2021,
+        "reference_status": "VERIFIED",
+        "review_status": "CONFIRMED",
+        "supplement_url": null,
+        "venue": "AAAI 2021 (Proceedings of the AAAI Conference on Artificial Intelligence)"
+      },
+      {
+        "access": "FULL_TEXT",
+        "access_evidence": "Route 1 (HTML): read https://arxiv.org/html/2309.01366v1 - Table 1 header flattens to Dresses[R@10,R@50] Shirts[R@10,R@50] Tops&[R@10,R@50] Avg[R@10,R@50]. Route 2 (PDF text): curl -sSL -o tgcir.pdf https://arxiv.org/pdf/2309.01366v1 (sha256 57d0df85..., 1658418 bytes); pdftotext -layout -f 7 -l 7 gives: 'TG-CIR 45.22 69.66 52.60 72.52 56.14 77.10 51.32 73.09 25.89 63.20 85.07 58.05'. Route 3 (render): pdftoppm -png -r 150 -f 7 -l 7 and read the page image - Avg block is R@10 51.32 / R@50 73.09, bold, two columns only. Also rendered page 8 and read ablation Table 3: TG-CIR 51.32 73.09 (FashionIQ-Avg), confirming the main-table Avg cells are the values reused in the ablation.",
+        "arxiv_id": "2309.01366",
+        "authors": [
+          "Haokun Wen",
+          "Xian Zhang",
+          "Xuemeng Song",
+          "Yinwei Wei",
+          "Liqiang Nie"
+        ],
+        "doi": "10.1145/3581783.3611817",
+        "paper_id": "tgcir_mm23",
+        "paper_title": "Target-Guided Composed Image Retrieval",
+        "paper_url": "https://arxiv.org/html/2309.01366v1 (machine-readable) and https://arxiv.org/pdf/2309.01366v1 (PDF, sha256 below)",
+        "paper_version": "arXiv v1, 2023-09-04 (content identical to the ACM MM camera-ready: the HTML carries the MM '23 conference string, DOI 10.1145/3581783.3611817 and ISBN 979-8-4007-0108-5/23/10)",
+        "pdf_bytes": 1658418,
+        "pdf_sha256": "57d0df854314691607fb396ca923f29137f2e12afdf35ae02f9fdf6e2ac4affc",
+        "publication_year": 2023,
+        "reference_status": "VERIFIED",
+        "review_status": "CONFIRMED",
+        "supplement_url": null,
+        "venue": "ACM Multimedia 2023 (MM '23, Proceedings of the 31st ACM International Conference on Multimedia, Ottawa, Canada)"
+      },
+      {
+        "access": "FULL_TEXT",
+        "access_evidence": "Route 1 (PDF text): curl -sSL -o limn_v2.pdf https://arxiv.org/pdf/2305.09979v2 (sha256 46f51926..., 2213167 bytes); pdftotext -layout -f 8 -l 8 reproduces Table I including 'LIMN 50.72 74.52 56.08 77.09 60.94 81.85 55.91 77.82 68.20 87.45 77.83'. Route 2 (render): pdftoppm -png -r 150 -f 8 -l 8 and read the page image - identical values. Route 3 (independent author artifact): the checkpoint revision's own evaluation logs on the Hub (see the experiment row's checkpoint_mapping_evidence) reproduce the same macro within rounding. v1 was also downloaded and read for contrast: sha256 3ffd9d3cb5e6748e9a67472fdd280e74ab34436b66dc7884ec2de8e37aab2eea, 2874828 bytes; its Table 1 reports LIMN as 36.30/62.20 Avg and its venue list is 'Shoes and Birds-to-Words', i.e. a DIFFERENT experimental campaign. Anyone citing 'the LIMN paper' must pin v2.",
+        "arxiv_id": "2305.09979",
+        "authors": [
+          "Haokun Wen",
+          "Xuemeng Song",
+          "Jianhua Yin",
+          "Jianlong Wu",
+          "Weili Guan",
+          "Liqiang Nie"
+        ],
+        "doi": "10.1109/TPAMI.2023.3346434",
+        "paper_id": "limn_tpami24",
+        "paper_title": "Self-Training Boosted Multi-Factor Matching Network for Composed Image Retrieval",
+        "paper_url": "https://arxiv.org/pdf/2305.09979v2",
+        "paper_version": "arXiv v2 = IEEE TPAMI accepted version (running head 'IEEE TRANSACTIONS ON PATTERN ANALYSIS AND MACHINE INTELLIGENCE, VOL. 16, NO. 5, MAY 2024'); arXiv v1 (2023-05-17) is an earlier 'submitted to the IEEE' draft with different numbers and is NOT the version the registry cites",
+        "pdf_bytes": 2213167,
+        "pdf_sha256": "46f5192628b009dbaabf8fb6f8226c44323dd49148f17a48662e679fe28ca933",
+        "publication_year": 2024,
+        "reference_status": "VERIFIED",
+        "review_status": "CONFIRMED",
+        "supplement_url": null,
+        "venue": "IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI), vol. 46, no. 5, pp. 3665-3678, May 2024 (volume/pages from the author README bibtex; the arXiv v2 running head itself prints 'VOL. 16, NO. 5, MAY 2024', which disagrees with vol. 46 and is noted as an observed author-side typesetting discrepancy, not resolved here)"
+      }
+    ],
+    "pdf_bytes": null,
+    "pdf_sha256": null,
+    "publication_year": 2024,
+    "recommended_actions": [
+      {
+        "action": "Keep reported_* null. Obtain the SIGIR 2021 camera-ready through an institutional ACM DL session and read its FashionIQ table before entering any number. Three independent secondary tables agree on 29.85/56.47, 28.75/54.76, 33.50/64.00 (Avg 30.70/58.41) - transcribe against the primary source, do not paste the secondary values.",
+        "severity": "P1",
+        "target": "registry clvc_net (models.yaml:524-527)"
+      },
+      {
+        "action": "Enter the verified Table 1 row: reported_r10 27.78 and reported_r50 53.89 are WORKBENCH_DERIVED macro means of the printed category cells, and reported_mean 40.83 is PAPER_REPORTED (the paper's own Avg column). Do not record 40.83 as a derived value, and do not record a macro R@10/R@50 as printed - the paper prints only per-category cells and one Avg.",
+        "severity": "P2",
+        "target": "registry dcnet (models.yaml:579-581)"
+      },
+      {
+        "action": "No change to the values: 51.32 / 73.09 are VERIFIED as the paper's FashionIQ-Avg cells and reported_mean: null is CORRECT (the paper's Avg block has only R@10 and R@50 columns). If a mean is ever required for comparison it must be carried in derived_metrics as (r10+r50)/2 = 62.205 with provenance WORKBENCH_DERIVED, exactly as the existing reported_score_note implies.",
+        "severity": "NONE",
+        "target": "registry tgcir (models.yaml:744-747)"
+      },
+      {
+        "action": "Populate reported_r10 55.91 and reported_r50 77.82 for LIMN base, and record the mean as WORKBENCH_DERIVED 66.87 ((55.91+77.82)/2) - the paper prints no mean. Do NOT use the LIMN+ row (57.43/78.60) or the arXiv v1 row (36.30/62.20): v1 is a different campaign and LIMN+ is a different registered system.",
+        "severity": "P2",
+        "target": "registry limn (models.yaml:854-855)"
+      },
+      {
+        "action": "dcnet's literature_split_label: original (models.yaml:576) and clvc/tgcir/limn's val labels are all inferred from pinned code, never from a paper sentence: none of the four papers states a gallery construction or a reference policy. Annotate the labels as code-derived inferences rather than literature facts.",
+        "severity": "P2",
+        "target": "workbench/registry/models.yaml literature labels"
+      }
+    ],
+    "supplement_url": null,
+    "venue": "Bundle of four venues: SIGIR 2021, AAAI 2021, ACM MM 2023, IEEE TPAMI 2024 (see papers[] for per-paper values)"
+  }
+}

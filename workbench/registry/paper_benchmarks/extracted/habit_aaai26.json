@@ -1,0 +1,240 @@
+{
+  "experiments": [
+    {
+      "aggregation_method": "per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee; AVG. = (Average R@10 + Average R@50) / 2",
+      "augmentation_policy": null,
+      "backbone": "BLIP-2 Q-Former composition; paper states learnable query number Q=32 (Implementation Details); the embedding dimension D is not stated",
+      "category_metrics": {
+        "dress": {
+          "r10": 49.99,
+          "r50": 72.38
+        },
+        "shirt": {
+          "r10": 56.62,
+          "r50": 74.68
+        },
+        "toptee": {
+          "r10": 59.51,
+          "r50": 78.53
+        }
+      },
+      "checkpoint_id": null,
+      "checkpoint_mapping_evidence": "STATIC_AUDIT. The author Hub lists only noisy weights: `curl -sL https://huggingface.co/api/models/iLearn-Lab/AAAI26-HABIT?blobs=true` returned exactly .gitattributes, README.md, cirr/HABIT-CIRR-N0.{2,5,8}.pt, fiq/HABIT-FIQ_N0.{2,5,8}.pt (each 2730715930 B for fiq) and NO N0.0 file; the Hub README states 'The models were trained on the FashionIQ and CIRR datasets under varying simulated noise ratios (N in {0.2, 0.5, 0.8})'. The upstream repo README documents --noise_ratio 0.0 as an evaluated setting ('default options evaluated are 0.0, 0.2, 0.5, 0.8', workbench/third_party/HABIT/README.md:206) and its own note at README.md:72 says the 0% block is the fully-supervised setting. github.com/iLearn-Lab/AAAI26-HABIT releases API returned 0 releases. So the 0% row has published per-category numbers but no published weights.",
+      "checkpoint_mapping_status": "NO_CHECKPOINT",
+      "checkpoint_training_noise_pct": 0,
+      "dataset": "fashioniq",
+      "dataset_version": "official FashionIQ val annotations (cap.<cat>.val.json) scored against the full validation image list of image_splits/split.<cat>.val.json in file order; the paper prints no benchmark revision or gallery size",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "HABIT (Ours)",
+      "method_variant": "main method, 0%-noise training block (fully supervised)",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K (paper Section 4.1: 'We adopt Recall@K (R@K) as the primary metric ... For FashionIQ, we report the R@{10, 50} for each category (Dresses, Shirts, Tops&Tees)')",
+      "metric_provenance": {
+        "paper_column": "FashionIQ 0% block - Dress R@10/R@50, Shirt R@10/R@50, Toptee R@10/R@50, Average R@10, Average R@50, AVG.",
+        "paper_page": 5,
+        "paper_row": "HABIT (Ours), 0% block",
+        "paper_table": "Table 1",
+        "source_excerpt_or_description": "Row as printed: 'HABIT (Ours) 49.99 72.38 56.62 74.68 59.51 78.53 55.38 75.20 65.29'. Caption: 'Table 1: Performance comparison on FashionIQ in terms of R@K (%). The best result under each noise ratio is highlighted in bold, while the second-best result is underlined.'"
+      },
+      "model_id": "habit",
+      "preprocessing_id": "targetpad_transform(1.25, 224) (data_utils.py:92-106, selected in train.py:94-106); the paper does not state the transform",
+      "reference_excluded": true,
+      "reference_id": "habit_aaai26_table1_fiq_n00",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 65.29,
+        "r10": 55.38,
+        "r50": 75.2
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for r10 (Average R@10), r50 (Average R@50) and mean (AVG.) - all three are printed in the paper's Average block, so none is workbench-derived",
+      "review_status": "PENDING",
+      "split": "val",
+      "verification_evidence": "STATIC_AUDIT. Recomputation: macro R@10 = (49.99+56.62+59.51)/3 = 55.373333 -> 55.37 at 2dp, but the table PRINTS 55.38 (delta +0.0067). macro R@50 = (72.38+74.68+78.53)/3 = 75.196667 -> 75.20 = printed. Mean check both ways: (printed 55.38 + printed 75.20)/2 = 65.29 = printed AVG.; (unrounded macros 55.373333 + 75.196667)/2 = 65.285 -> 65.29 (ROUND_HALF_UP) = printed AVG. So the printed Mean equals (Average R@10 + Average R@50)/2, but the printed Average R@10 is 0.01 higher than the 2dp macro of its own printed categories. Protocol caveat: the paper never states the gallery construction or reference policy; the pinned evaluator defaults to split='original-split' (workbench/third_party/HABIT/datasets.py:28), which enumerates the whole validation image list (datasets.py:205-211), and masks the reference before ranking (test.py:151 sets sims[i, index(source_img_id)] = -10e10, ranking at test.py:154/168), which is what the workbench protocol id fashioniq_full_gallery_ref_excluded encodes. This is the best-supported reading, not something the paper establishes.",
+      "verification_method": "Four independent routes agreeing digit-for-digit: (1) arXiv HTML table (machine-readable); (2) `pdftotext -layout -f 5 -l 5 habit.pdf` -> 'HABIT (Ours) 49.99 72.38 56.62 74.68 59.51 78.53 55.38 75.20 65.29'; (3) rendered PDF page 5 image (`pdftoppm -r 150 -f 5 -l 5`) read visually, same values; (4) author-rendered workbench/third_party/HABIT/assets/results-fiq.png, same values. Arithmetic recomputed with Python Decimal ROUND_HALF_UP."
+    },
+    {
+      "aggregation_method": "per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee; AVG. = (Average R@10 + Average R@50) / 2",
+      "augmentation_policy": null,
+      "backbone": "BLIP-2 Q-Former composition; Q=32 per the paper, D not stated",
+      "category_metrics": {
+        "dress": {
+          "r10": 49.63,
+          "r50": 71.34
+        },
+        "shirt": {
+          "r10": 55.67,
+          "r50": 73.19
+        },
+        "toptee": {
+          "r10": 58.14,
+          "r50": 78.32
+        }
+      },
+      "checkpoint_id": "fiq_n02",
+      "checkpoint_mapping_evidence": "STATIC_AUDIT. The author Hub README lists per-file noise explicitly: 'fiq/HABIT-FIQ_N0.2.pt (Trained on FashionIQ with 20% noise)'; `curl -sL https://huggingface.co/api/models/iLearn-Lab/AAAI26-HABIT?blobs=true` confirms fiq/HABIT-FIQ_N0.2.pt exists at 2730715930 B. Registry workbench/registry/models.yaml:255-263 records the same filename, URL and checkpoint_training_noise_pct: 20. The 2.73 GB blob bytes were NOT downloaded or inspected, so the mapping rests on the author's own per-file statement plus the filename convention.",
+      "checkpoint_mapping_status": "VERIFIED",
+      "checkpoint_training_noise_pct": 20,
+      "dataset": "fashioniq",
+      "dataset_version": "official FashionIQ val annotations; paper prints no benchmark revision",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "HABIT (Ours)",
+      "method_variant": "main method, 20%-noise training block",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
+      "metric_provenance": {
+        "paper_column": "FashionIQ 20% block - per-category R@10/R@50, Average R@10, Average R@50, AVG.",
+        "paper_page": 5,
+        "paper_row": "HABIT (Ours), 20% block",
+        "paper_table": "Table 1",
+        "source_excerpt_or_description": "Row as printed: 'HABIT (Ours) 49.63 71.34 55.67 73.19 58.14 78.32 54.48 74.28 64.38'"
+      },
+      "model_id": "habit",
+      "preprocessing_id": "targetpad_transform(1.25, 224) (data_utils.py:92-106)",
+      "reference_excluded": true,
+      "reference_id": "habit_aaai26_table1_fiq_n20",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 64.38,
+        "r10": 54.48,
+        "r50": 74.28
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for r10, r50 and mean (Average block of the 20% row)",
+      "review_status": "PENDING",
+      "split": "val",
+      "verification_evidence": "STATIC_AUDIT. Recomputation: macro R@10 = (49.63+55.67+58.14)/3 = 54.48 exactly = printed; macro R@50 = (71.34+73.19+78.32)/3 = 74.283333 -> 74.28 = printed; (54.48+74.28)/2 = 64.38 = printed AVG. and (54.480000+74.283333)/2 = 64.381667 -> 64.38 = printed AVG. No discrepancy at this level. Noise training is simulated on training triplets only (paper Section 3.1/4.1; code path datasets.shuffle() is train-only), so the evaluation noise for this row is 0%.",
+      "verification_method": "Same four routes as the 0% row (arXiv HTML, pdftotext -layout page 5, rendered page-5 image, author results-fiq.png); all agree."
+    },
+    {
+      "aggregation_method": "per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee; AVG. = (Average R@10 + Average R@50) / 2",
+      "augmentation_policy": null,
+      "backbone": "BLIP-2 Q-Former composition; Q=32 per the paper, D not stated",
+      "category_metrics": {
+        "dress": {
+          "r10": 47.33,
+          "r50": 69.71
+        },
+        "shirt": {
+          "r10": 53.72,
+          "r50": 72.55
+        },
+        "toptee": {
+          "r10": 56.51,
+          "r50": 77
+        }
+      },
+      "checkpoint_id": "fiq_n05",
+      "checkpoint_mapping_evidence": "STATIC_AUDIT. Hub README lists 'fiq/HABIT-FIQ_N0.5.pt (Trained on FashionIQ with 50% noise)'; HF API listing confirms the path at 2730715930 B; registry workbench/registry/models.yaml:265-273 records the same mapping. Blob bytes not inspected.",
+      "checkpoint_mapping_status": "VERIFIED",
+      "checkpoint_training_noise_pct": 50,
+      "dataset": "fashioniq",
+      "dataset_version": "official FashionIQ val annotations; paper prints no benchmark revision",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "HABIT (Ours)",
+      "method_variant": "main method, 50%-noise training block",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
+      "metric_provenance": {
+        "paper_column": "FashionIQ 50% block - per-category R@10/R@50, Average R@10, Average R@50, AVG.",
+        "paper_page": 5,
+        "paper_row": "HABIT (Ours), 50% block",
+        "paper_table": "Table 1",
+        "source_excerpt_or_description": "Row as printed: 'HABIT (Ours) 47.33 69.71 53.72 72.55 56.51 77.00 52.52 73.09 62.80'"
+      },
+      "model_id": "habit",
+      "preprocessing_id": "targetpad_transform(1.25, 224) (data_utils.py:92-106)",
+      "reference_excluded": true,
+      "reference_id": "habit_aaai26_table1_fiq_n50",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 62.8,
+        "r10": 52.52,
+        "r50": 73.09
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for r10, r50 and mean (Average block of the 50% row)",
+      "review_status": "PENDING",
+      "split": "val",
+      "verification_evidence": "STATIC_AUDIT. Recomputation: macro R@10 = (47.33+53.72+56.51)/3 = 52.52 exactly = printed; macro R@50 = (69.71+72.55+77.00)/3 = 73.086667 -> 73.09 = printed; (macro10+macro50)/2 = 62.803333 -> 62.80 = printed AVG., whereas the mean of the two PRINTED Average cells is (52.52+73.09)/2 = 62.805 -> 62.81, i.e. 0.01 above the printed AVG. 62.80. Reported here (the paper's Mean equals the mean of its unrounded macros, not of its printed rounded Average cells).",
+      "verification_method": "Same four routes as the 0% row; all agree to the digit."
+    },
+    {
+      "aggregation_method": "per-category R@10/R@50; Average column = unweighted mean over dress, shirt, toptee; AVG. = (Average R@10 + Average R@50) / 2",
+      "augmentation_policy": null,
+      "backbone": "BLIP-2 Q-Former composition; Q=32 per the paper, D not stated",
+      "category_metrics": {
+        "dress": {
+          "r10": 42.04,
+          "r50": 65.2
+        },
+        "shirt": {
+          "r10": 50.12,
+          "r50": 69.77
+        },
+        "toptee": {
+          "r10": 52.92,
+          "r50": 73.61
+        }
+      },
+      "checkpoint_id": "fiq_n08",
+      "checkpoint_mapping_evidence": "STATIC_AUDIT. Hub README lists 'fiq/HABIT-FIQ_N0.8.pt (Trained on FashionIQ with 80% noise)'; HF API listing confirms the path at 2730715930 B; registry workbench/registry/models.yaml:275-283 records the same mapping. Blob bytes not inspected.",
+      "checkpoint_mapping_status": "VERIFIED",
+      "checkpoint_training_noise_pct": 80,
+      "dataset": "fashioniq",
+      "dataset_version": "official FashionIQ val annotations; paper prints no benchmark revision",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": "fashioniq_full_gallery_ref_excluded",
+      "method_name": "HABIT (Ours)",
+      "method_variant": "main method, 80%-noise training block",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
+      "metric_provenance": {
+        "paper_column": "FashionIQ 80% block - per-category R@10/R@50, Average R@10, Average R@50, AVG.",
+        "paper_page": 5,
+        "paper_row": "HABIT (Ours), 80% block",
+        "paper_table": "Table 1",
+        "source_excerpt_or_description": "Row as printed: 'HABIT (Ours) 42.04 65.20 50.12 69.77 52.92 73.61 48.36 69.53 58.94'"
+      },
+      "model_id": "habit",
+      "preprocessing_id": "targetpad_transform(1.25, 224) (data_utils.py:92-106)",
+      "reference_excluded": true,
+      "reference_id": "habit_aaai26_table1_fiq_n80",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 58.94,
+        "r10": 48.36,
+        "r50": 69.53
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for r10, r50 and mean (Average block of the 80% row)",
+      "review_status": "PENDING",
+      "split": "val",
+      "verification_evidence": "STATIC_AUDIT. Recomputation: macro R@10 = (42.04+50.12+52.92)/3 = 48.36 exactly = printed; macro R@50 = (65.20+69.77+73.61)/3 = 69.526667 -> 69.53 = printed; (macro10+macro50)/2 = 58.943333 -> 58.94 = printed AVG., whereas the mean of the PRINTED Average cells is (48.36+69.53)/2 = 58.945 -> 58.95, 0.01 above the printed AVG. 58.94. Same rounding pattern as the 50% row.",
+      "verification_method": "Same four routes as the 0% row; all agree to the digit."
+    }
+  ],
+  "paper": {
+    "access": "FULL_TEXT",
+    "access_evidence": "STATIC_AUDIT. Route A (arXiv HTML): `read https://arxiv.org/html/2604.18037v1` returned the full paper; Table 1 is machine-readable in the HTML with a 'HABIT (Ours)' row at 0/20/50/80% reading 55.38 / 54.48 / 52.52 / 48.36 (Average R@10) and 75.20 / 74.28 / 73.09 / 69.53 (Average R@50). Route B (PDF): `curl -sL -o /tmp/habit.pdf https://arxiv.org/pdf/2604.18037v1` -> 10916769 bytes, sha256 d1f1dd36c2565621e3ca8c6098f48961dc0d2b54cab6e4ed9547b7e6c034ba1e, `pdfinfo` 16 pages; `pdftotext -layout` and `pdftoppm -r 150 -f 5 -l 5 -png` (page 5 = Table 1) both reproduce the same 4 rows. Route C (author-rendered image): `read workbench/third_party/HABIT/assets/results-fiq.png` (1950x1180) shows the identical table, identical to the last digit. OJS DID NOT WORK: `read https://ojs.aaai.org/index.php/AAAI/article/view/37608` -> 'Failed to fetch URL'; `curl -sS -m 25 https://ojs.aaai.org/...` -> 'curl: (7) Failed to connect to ojs.aaai.org port 443'; the AAAI proceedings PDF at https://ojs.aaai.org/index.php/AAAI/article/download/37608/41570 (URL reported by OpenAlex) was therefore NOT retrieved. DOI existence checked independently via `read https://api.openalex.org/works/doi:10.1609%2Faaai.v40i8.37608?...` -> title/publication_year match.",
+    "arxiv_id": "2604.18037",
+    "authors": [
+      "Zixu Li",
+      "Yupeng Hu",
+      "Zhiwei Chen",
+      "Shiqi Zhang",
+      "Qinlei Huang",
+      "Zhiheng Fu",
+      "Yinwei Wei"
+    ],
+    "doi": "10.1609/aaai.v40i8.37608",
+    "paper_id": "habit_aaai26",
+    "paper_title": "HABIT: Chrono-Synergia Robust Progressive Learning Framework for Composed Image Retrieval",
+    "paper_url": "https://arxiv.org/pdf/2604.18037v1",
+    "paper_version": "arXiv v1 2026-04-20 (HTML + PDF of the same manuscript)",
+    "pdf_bytes": 10916769,
+    "pdf_sha256": "d1f1dd36c2565621e3ca8c6098f48961dc0d2b54cab6e4ed9547b7e6c034ba1e",
+    "publication_year": 2026,
+    "supplement_url": null,
+    "venue": "AAAI-26 (Proceedings of the AAAI Conference on Artificial Intelligence, Vol. 40 No. 8)"
+  }
+}
