@@ -56,7 +56,13 @@ models:
     reported_mean: 67.17
     reproduction_status: NOT_RUN
     strict_clean_checkpoint_available: true
-    notes: Official Hugging Face model repository; no official checkpoint SHA published.
+    # The pinned package cannot be imported, so no local preparation can make this model run.
+    # `lavis/models/__init__.py` executes 98 unguarded imports for modules the author never committed,
+    # before the line that registers the class this evaluator asks for, so the entrypoint fails during
+    # import. See workbench/patches/csmcir.md. Reported by preflight ahead of the caption blockers,
+    # which are real but downstream of this.
+    source_blocker: "pinned lavis.models package cannot be imported (98 unguarded imports of absent modules); see workbench/patches/csmcir.md"
+    notes: Official Hugging Face model repository; checkpoint has an author-published size and sha256 (Hugging Face LFS oid).
     checkpoint_variants:
       - checkpoint_id: fashioniq
         filename: fashioniq_tuned_clip_best.pt

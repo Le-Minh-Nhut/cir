@@ -117,6 +117,13 @@ def preflight_blockers(
     command = getattr(adapter, "command", None) if adapter is not None else None
     audited = (command is not None and command is not OfficialScriptAdapter.command and
                model.get("command_status") in {None, "COMMAND_AUDITED", "REPLAY_COMMAND_IMPLEMENTED"})
+    # A model may declare a defect in its upstream source that no amount of local preparation can
+    # fix. Reporting it first matters: for CSMCIR the caption and checkpoint blockers are real but
+    # downstream of a package that cannot even be imported, and an operator reading only the first
+    # line would go looking for captions instead of at the source.
+    declared_source_blocker = model.get("source_blocker")
+    if declared_source_blocker:
+        blockers.insert(0, f"source cannot run: {declared_source_blocker}")
     if not audited:
         blockers.append(f"command not runnable: {model.get('command_status') or 'COMMAND_UNAUDITED'}")
     elif source is not None and getattr(adapter, "script", None) and not (source / adapter.script).is_file():

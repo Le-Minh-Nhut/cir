@@ -164,10 +164,13 @@ def render(document: dict) -> str:
     for row in document["models"]:
         pin = (row["upstream_commit_sha"] or "none")[:12]
         selected = ", ".join(row["checkpoint_ids"]) or "—"
-        blocked = "; ".join(row["blockers"])[:150]
+        # No truncation: a model with several blockers used to hide all but the first, so the most
+        # fundamental reason a model cannot run (for CSMCIR, that its pinned source cannot import)
+        # could be invisible behind an incidental one further down the list.
+        blocked = "; ".join(row["blockers"]) or "—"
         lines.append(f"| `{row['model_id']}` | {row['native_protocol'] or '—'} | {pin} | "
                      f"{row['environment_id'] or '—'} | {row['environment_state'] or '—'} | {selected} | "
-                     f"{'READY' if row['readiness']['EVALUATOR_READY'] else 'BLOCKED'} | {blocked or '—'} |")
+                     f"{'READY' if row['readiness']['EVALUATOR_READY'] else 'BLOCKED'} | {blocked} |")
     lines.append("")
     return "\n".join(lines)
 
