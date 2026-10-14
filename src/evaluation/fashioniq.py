@@ -82,13 +82,25 @@ def evaluate_fashioniq_recall(
     target_ids: Sequence[str],
     gallery_ids: Sequence[str],
     reference_ids: Sequence[str] | None = None,
+    *,
+    reference_excluded: bool | None = None,
 ) -> dict[str, float]:
     """Recall@10/@50 for a FashionIQ cohort.
 
-    ``reference_ids`` is required by protocols that exclude the reference from the gallery and
-    must be None for protocols that leave it eligible, so a caller cannot silently evaluate an
-    exclusion protocol as if it were a plain one (or the reverse).
+    The reference policy is the protocol's, so pass it: ``reference_excluded`` must agree with
+    whether ``reference_ids`` was supplied. Without that argument the function can only switch on
+    ``reference_ids is None``, which means a caller that forgets the references silently evaluates an
+    exclusion protocol as a reference-eligible one. The workbench's own entry point always passes
+    both, so this guard protects the next caller rather than fixing a present defect.
     """
+    if reference_excluded is not None:
+        supplied = reference_ids is not None
+        if supplied != reference_excluded:
+            raise ValueError(
+                "reference policy and reference ids disagree: "
+                f"reference_excluded={reference_excluded} with reference_ids "
+                f"{'supplied' if supplied else 'omitted'}"
+            )
     if reference_ids is None:
         return {
             "recall_at_10": recall_at_k(
@@ -212,12 +224,15 @@ def evaluate_fashioniq_category(
     target_ids: Sequence[str],
     gallery_ids: Sequence[str],
     reference_ids: Sequence[str] | None = None,
+    *,
+    reference_excluded: bool | None = None,
 ) -> dict[str, float]:
     return evaluate_fashioniq_recall(
         scores=scores,
         target_ids=target_ids,
         gallery_ids=gallery_ids,
         reference_ids=reference_ids,
+        reference_excluded=reference_excluded,
     )
 
 def macro_average_fashioniq(category_results: dict[str, dict[str, float]]) -> dict[str, float]:
@@ -311,6 +326,7 @@ def evaluate_fashioniq(
             target_ids=target_ids,
             gallery_ids=gallery_ids,
             reference_ids=reference_ids if resolved.reference_excluded else None,
+            reference_excluded=resolved.reference_excluded,
         )
 
     average = macro_average_fashioniq(category_results)

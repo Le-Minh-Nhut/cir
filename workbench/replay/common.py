@@ -62,7 +62,15 @@ def source_checkout_status(source_root: Path, expected_commit: str) -> tuple[boo
                                capture_output=True, text=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return False, None, "source is not a readable Git checkout"
-    if dirty:
+    # `__pycache__`/`*.pyc` are the unavoidable product of running Python and never change evaluator
+    # semantics, so they are not a source change. This matches `runtime._source_dirty`; a raw
+    # `git status` check would refuse a perfectly pinned checkout merely because someone imported it,
+    # which is exactly what happened to LIMN before this agreed with the runtime.
+    from workbench.backend.runtime import _path_of, is_bytecode
+
+    relevant = [line for line in dirty.splitlines()
+                if line.strip() and not is_bytecode(_path_of(line))]
+    if relevant:
         return False, head, "source checkout is dirty"
     if head != expected_commit:
         return False, head, f"source pin mismatch: expected {expected_commit}, found {head}"

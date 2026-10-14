@@ -27,18 +27,26 @@ def _check_parity(
     paper: dict[str, float | None] | None,
     tolerance: float = 0.05,
 ) -> str:
+    """Compare observed metrics against a paper row, refusing to judge a partial row.
+
+    A row that publishes R@50 but not R@10 (SPRC's registered row is exactly that) cannot be
+    "verified": the missing metric would be silently exempt, so a run whose R@10 is nonsense would
+    still report PARITY_VERIFIED. An absent paper value is an unverified reference for that metric,
+    not an automatic pass.
+    """
     if not observed or not paper:
         return "PARITY_NOT_EVALUATED"
     compared = 0
     for k in ("r10", "r50", "mean"):
         p_val = paper.get(k)
-        if p_val is not None:
-            o_val = observed.get(k)
-            if o_val is None:
-                return "PARITY_NOT_EVALUATED"
-            if abs(float(o_val) - float(p_val)) > tolerance:
-                return "PARITY_MISMATCH"
-            compared += 1
+        if p_val is None:
+            return "PARITY_NOT_EVALUATED"
+        o_val = observed.get(k)
+        if o_val is None:
+            return "PARITY_NOT_EVALUATED"
+        if abs(float(o_val) - float(p_val)) > tolerance:
+            return "PARITY_MISMATCH"
+        compared += 1
     return "PARITY_VERIFIED" if compared > 0 else "PARITY_NOT_EVALUATED"
 
 

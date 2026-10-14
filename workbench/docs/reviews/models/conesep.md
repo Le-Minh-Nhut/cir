@@ -1,4 +1,25 @@
-s stated base commit. `git -C /home/heheboiz/data/cir status --porcelain` reports ` M workbench/backend/registry.py`, ` M workbench/scripts/download_auxiliary_assets.py`, `?? workbench/backend/paper_gate.py`, `?? workbench/tests/test_paper_gate.py`, `?? workbench/patches/csmcir_models_init_compat.patch` — but **not** `models.yaml`. The `conesep` block read above is therefore the committed content at `d9431fe9632b67a329771cc06567487b591afb4b`. All registry line numbers in this audit were re-derived by printing the file (`awk 'NR>=133 && NR<=195'`).
+# conesep
+
+**STATIC_AUDIT throughout. No dataset, checkpoint, environment, GPU run, or Recall computation was executed for this model.** Every runtime/parity claim below is derived from pinned source text or filesystem/HTTP inspection, and is labelled. Nothing in this audit was RUNTIME_VERIFIED.
+
+---
+
+## MODEL ID
+
+`conesep` (ConeSep).
+
+- Registry entry: `workbench/registry/models.yaml:133-194` (`- model_id: conesep`).
+- `method_name: ConeSep` (`workbench/registry/models.yaml:142`).
+- `source_dir: ConeSep` (`:152`), `source_available: true` (`:151`).
+
+## PAPER TITLE
+
+`ConeSep: Cone-based Robust Noise-Unlearning Compositional Network for Composed Image Retrieval` (`workbench/registry/models.yaml:146`).
+
+- `paper_url: https://arxiv.org/abs/2604.20358` (`:147`) — **resolves**. `read https://arxiv.org/abs/2604.20358` returned HTTP 200 with title "ConeSep: Cone-based Robust Noise-Unlearning Compositional Network for Composed Image Retrieval", authors Zixu Li, Yupeng Hu, Zhiwei Chen, Mingyu Zhang, Zhiheng Fu, Liqiang Nie, submitted 2026-04-22. Same author list as the pinned README (`third_party/ConeSep/README.md:8-13`).
+- Paper table (Table 1) text independently fetched from `https://arxiv.org/html/2604.20358v1`.
+
+> **Note on registry provenance:** `workbench/registry/models.yaml` is a *modified* working-tree file relative to the audit's stated base commit. `git -C /home/heheboiz/data/cir status --porcelain` reports ` M workbench/backend/registry.py`, ` M workbench/scripts/download_auxiliary_assets.py`, `?? workbench/backend/paper_gate.py`, `?? workbench/tests/test_paper_gate.py`, `?? workbench/patches/csmcir_models_init_compat.patch` — but **not** `models.yaml`. The `conesep` block read above is therefore the committed content at `d9431fe9632b67a329771cc06567487b591afb4b`. All registry line numbers in this audit were re-derived by printing the file (`awk 'NR>=133 && NR<=195'`).
 
 ## PINNED SOURCE COMMIT
 
@@ -151,7 +172,119 @@ def concat_text(self, captions, correction_dict):
 ```
 Applied to validation captions at `datasets.py:175`. So: lowercase → **all** ASCII `string.punctuation` → spaces → whitespace tokenize → exact per-token dictionary substitution → rejoin with spaces → `cap1 + " and " + cap2` in source order. **Confirmed.**
 
-[…113ln elided…]
+**Stage 2 — LAVIS eval processor**, applied at `test.py:35` `mods = [txt_processors["eval"](caption) for caption in mods]`. That processor is `BlipCaptionProcessor` (`lavis/processors/blip_processors.py:28-47`, registered as `blip_caption`), whose `pre_caption` (`:49-59`) lowercases and replaces only the regex class `[.!\"()*#:;~]` with spaces, collapses whitespace, strips, and truncates to `max_words=50` (`:30/:45`). This is a **narrower** punctuation set than stage 1's `string.punctuation`, so stage 2 is not a no-op on already-corrected text (it matters for anything stage 1 left, e.g. `,` `-` `/`). Both stages are run; the doc claim that these are two distinct normalizations is correct.
+
+**Tokenizer**: `ConeSep.py:133` `self.tokenizer = self.init_tokenizer()` → `lavis/models/blip2_models/blip2.py:31-34`:
+```python
+tokenizer = BertTokenizer.from_pretrained("/root/bert-base-uncased", truncation_side=truncation_side)
+tokenizer.add_special_tokens({"bos_token": "[DEC]"})
+```
+Also `blip2.py:48` and `:55` hardcode `/root/bert-base-uncased` for the Q-Former config and weights. `ConeSep.py:469-475` tokenizes with `padding="max_length"`, `truncation=True`, `max_length=self.max_txt_len` (default `32`, `ConeSep.py:128`; `from_config` reads it at `:556`). **P2:** three absolute host paths, no env var, no fallback — the environment is not portable as written.
+
+**Images**: `train.py:85-100` hardcodes `transform = "targetpad"`, `input_dim = 224`, `target_ratio = 1.25` and passes it as the dataset transform (`:110-113`); validation images go through the same transform via `get_test_img` (`datasets.py:146-154`). `data_utils.py:92-106` is `TargetPad(1.25, 224) → Resize(224, BICUBIC) → CenterCrop(224) → _convert_image_to_rgb → ToTensor → Normalize((0.48145466,0.4578275,0.40821073),(0.26862954,0.26130258,0.27577711))`. `TargetPad.__call__` (`data_utils.py:64-73`) pads only when `actual_ratio >= target_ratio`. **Confirmed** for `targetpad_transform(1.25,224)`, bicubic, center crop, CLIP normalization.
+
+**Registry does not pin preprocessing.** `grep -c conesep workbench/registry/preparation_contracts.yaml` → `0`. `preparation_contract: manual_ilearn_resized` (`models.yaml:145`) is a label, validated only as a known enum value (`workbench/backend/registry.py:73`); `prepare_dataset.py:required_layout()` implements only the standard layout, and with no contract row `preflight.model_requirements` falls through to `fashioniq_required_paths(model, root)` (i.e. the `fashioniq_ilearn_resized` layout) — which is why the observed blocker text is layout-shaped. Transform recipe, tokenizer, BERT path, LAVIS weights and dictionary contents are **all outside the registry**. **P2.**
+
+## AUGMENTATION CONTRACT
+
+There is no image augmentation. The only stochastic element is the **training-time noise injection**, `FashionIQ.shuffle()` (`datasets.py:62-89`):
+```python
+if self.noise_ratio == 0: ... return
+num_samples = len(self.fashioniq_data)
+shuffle_indices = random.sample(range(num_samples), int(self.noise_ratio * num_samples))
+... three partition indices -> independently shuffled candidate / captions / target field values
+```
+Called only from the training loader (`train.py:109` for `fashioniq`, `:117` for `cirr`); `grep -rn "shuffle" third_party/ConeSep/test.py` → **no match**. `test.py:10` calls `model.eval()` and the whole body is under `torch.no_grad()` (`:20`). So:
+
+- The registry's uniform `evaluation_noise_pct: 0` (`models.yaml:170,180,190`) is **correct as an evaluation-time statement**: the evaluator performs no noise operation and does not touch training records.
+- The training condition is *not* augmentation or test-time noise; it is baked into the published weights. The registry's split of `checkpoint_training_noise_pct` (provenance) vs `evaluation_noise_pct: 0` (protocol) is the right modelling. This matches `docs/PROTOCOL_AUDIT.md:3`.
+- Note the partition is 1/3 candidate, 1/3 captions, 1/3 target — the effective triplet corruption is a union, not `noise_ratio` of fully-corrupted triplets, and `random.sample` is unseeded (no `--seed` used in `load_dataset`; `--seed` at `train.py` exists but is not applied to this RNG). Reproducing a specific published checkpoint from scratch is therefore **not deterministic from the pinned code** (P3; irrelevant to evaluating an already-published checkpoint).
+
+## GALLERY CONTRACT
+
+- Candidate universe = every image in `image_splits/split.{cat}.val.json`, in file order (`datasets.py:201-206`). Counted on the real local files:
+  ```
+  dress  val split images 3817 unique 3817 val queries 2017 ids in captions 2628 ids subset of split? True
+  shirt  val split images 6346 unique 6346 val queries 2038 ids in captions 3089 ids subset of split? True
+  toptee val split images 5373 unique 5373 val queries 1961 ids in captions 2902 ids subset of split? True
+  ```
+  (`python3` over `/home/heheboiz/data/cir/data/fashionIQ_dataset/image_splits/split.{cat}.val.json` and `captions/cap.{cat}.val.json`.) So `len(test_targets)` per category = 3817 / 6346 / 5373, gallery IDs are unique, and every reference/target is inside the gallery. These counts are **FashionIQ-split facts**, independent of the resized-image layout, and they confirm the full-split gallery is the whole val split rather than a pair union.
+- Reference-only exclusion, per query, via the `-10e10` mask (`test.py:68`). The mask **precedes** the sort (`test.py:71`), which is the defining property of `fashioniq_full_gallery_ref_excluded` in `workbench/registry/models.yaml:12-15` and `docs/FASHIONIQ_PROTOCOL_PARITY.md:9-14`.
+- **Workbench expression.** `src/evaluation/fashioniq.py:159-169` `FASHIONIQ_PROTOCOLS` contains `fashioniq_full_gallery_ref_excluded` with `gallery="full_split", reference_excluded=True`; `:192-206` `build_fashioniq_gallery` routes `full_split` to `build_original_gallery`, "the whole validation split in its declared order ... Reference exclusion is a per-query property applied at recall time, not a change to the candidate universe". `:35-77` `recall_at_k_reference_excluded` **removes** the reference column (`ranking = ranking[ranking != reference_column]`) rather than masking. `:80-105` `evaluate_fashioniq_recall` makes `reference_ids` mandatory-or-forbidden per protocol. So the workbench has a semantically matching, differently-implemented cohort. The doc's honest "equivalent for top-k iff every other score clears the mask" caveat (`docs/FASHIONIQ_PROTOCOL_PARITY.md:27-33`) is correct in principle. I probed the mathematical equivalence in `/tmp` on synthetic scores (normal range and adversarially skewed to `-20e9`, which drives the reference *below* the sentinel): hits and the top-3 rankings were identical in both regimes. **No counterexample found; the equivalence is not proven for arbitrary inputs, but the sentinel is unreachable for unit-norm model outputs.**
+- **Gap (P1, wiring):** `grep -rn "evaluate_fashioniq_recall|build_fashioniq_gallery|macro_average_fashioniq" --include=*.py src/ workbench/ tests/` finds callsites **only in tests** (`tests/unit/test_fashioniq_dispatch.py:203-216`, `tests/unit/test_fashioniq_protocols.py`) plus the definition at `src/evaluation/fashioniq.py:168` (`evaluate_fashioniq` wrapper). **No production adapter, replay module, or pipeline stage invokes it for `conesep`.** `workbench/replay/` contains only `limn.py` and `tgcir.py`. `grep -rn conesep workbench/replay/` → empty. The `fashioniq_full_gallery_ref_excluded` machinery is built and tested but **unreachable from any registered `conesep` run**.
+
+## METRIC CONTRACT
+
+**Source.** `test.py:76-82` computes `R@1`, `R@10`, `R@50` per **category** and returns `[('dress_r1', ...), ('dress_r10', ...), ...]`. There is **no macro aggregation anywhere in the pinned source** — not in `test.py`, not in `train.py`. `train.py:216-218` uses only the category scores for checkpoint selection:
+```python
+t = test.test(args, model, trainset, category, txt_processors)
+current_score = current_score + t[1][1]
+```
+`t[1][1]` is `dress_r10`, so best-checkpoint selection maximises **summed category R@10**, not the published `AVG.` column. **Confirmed** (matches `docs/audits/PHASE2_SOURCES_D.md:76`). A run of the pinned evaluator emits category R@1/R@10/R@50 and the sum-of-R@10 selection score; it does **not** emit the paper's average row.
+
+**Paper.** Table 1 text extracted from `https://arxiv.org/html/2604.20358v1`: header `Noise Methods Dress Shirt Toptee Average R@10 R@50 R@10 R@50 R@10 R@50 R@10 R@50 AVG.`; the metric sentence reads "For FashionIQ, we follow its standard metrics [90], reporting R@10 and R@50 for each of the three categories (Dresses, Shirts, Tops&Tees)". `AVG.` = the mean of average R@10 and average R@50, consistent with the workbench formula.
+
+**Workbench.** `src/evaluation/fashioniq.py:223-243` `macro_average_fashioniq` = equal-weight mean of per-category `recall_at_10` and `recall_at_50`, `"mean_recall": (recall_at_10 + recall_at_50) / 2`. `workbench/backend/metrics_extraction.py:152` `computed_mean = (computed_r10_macro + computed_r50_macro) / 2.0`, with a 0.05 tolerance (`:169`). `workbench/backend/metrics_extraction.py:24-40` `_check_parity` compares `r10`, `r50`, `mean` at `tolerance=0.05` **absolute**; `workbench/backend/paper_gate.py:11` sets `TOLERANCE_PCT = 5.0` **relative**. Two different tolerance regimes exist in the workbench for the same three metrics (P3, documentation/consistency, not a `conesep` defect).
+
+## SOURCE-TO-WORKBENCH PARITY
+
+Claimed: `docs/SOURCE_TO_WORKBENCH_PARITY_MATRIX.md:28` → protocol `EQUIVALENT_WITH_EVIDENCE`, preparation `EXTERNAL_ASSET_REQUIRED`, caption `EQUIVALENT_WITH_EVIDENCE`, image `EQUIVALENT_WITH_EVIDENCE`, evaluator command `NOT IMPLEMENTED`, overall `INCOMPLETE_IMPLEMENTATION`. The matrix's own header (`:11-16`) states "No model is EXACT_MATCH" and that `EQUIVALENT_WITH_EVIDENCE` "never [means] that a score was reproduced".
+
+My independent checks, component by component:
+
+| Component | Verdict | Evidence |
+|---|---|---|
+| Protocol semantics | **SUPPORTED** | `datasets.py:28,201-206`; `test.py:63-82`; workbench `src/evaluation/fashioniq.py:159-169,192-206`; test-only callsites |
+| Caption stage | **SUPPORTED (partial)** | Source two-stage normalize+compose confirmed (`datasets.py:108-117`, `test.py:35`, `blip_processors.py:49-59`). Cross-method *value* equality is **unverified**: the workbench's own `src/datasets/fashioniq.py:normalize_fashioniq_caption/compose_fashioniq_caption` were not shown to produce identical strings to `correct_text/concat_text` for any real caption, and the correction dictionaries are unprovenanced. |
+| Image stage | **SUPPORTED (partial)** | `targetpad_transform(1.25,224)` confirmed in source (`train.py:85-100`, `data_utils.py:92-106`); the *staged* `resized_image/{cat}/*.jpg` are produced by no pinned script and their resize recipe is unrecorded. |
+| Preparation contract | **EXTERNAL_ASSET_REQUIRED — confirmed** | `preparation_contracts.yaml` has no `conesep` row; `auxiliary_assets.yaml` has no `conesep` row; `/root/bert-base-uncased`, LAVIS `blip2_pretrained.pth` (`blip2_pretrain.yaml:10`), correction dictionaries and cache PKLs are all outside the registry |
+| Evaluator command | **NOT IMPLEMENTED — confirmed** | `workbench/backend/adapters/models.py:59-61` `ConeSepAdapter` sets only `model_id`/`script = "test.py"`; the inherited `OfficialScriptAdapter.command` (`:24-25`) raises. Executed: `ADAPTERS['conesep'].command('s','c',None,None)` → `NotImplementedError: upstream evaluation command requires audit before execution` |
+| Overall | **INCOMPLETE_IMPLEMENTATION — confirmed** | Same, plus no `test.py` CLI and no checkpoint loader |
+
+## RUNTIME STATUS
+
+- `reproduction_status: NOT_RUN` (`workbench/registry/models.yaml:161`). **Consistent with everything observed.**
+- `WORKBENCH_CONESEP_PYTHON` is `UNSET` in this shell (`echo ${WORKBENCH_CONESEP_PYTHON:-UNSET}` → `UNSET`).
+- Checkpoint root `workbench/artifacts/checkpoints/` contains only `.gitkeep` — **zero checkpoints on disk for any model**.
+- `select_checkpoints` → BLOCKED under both policies (quoted above).
+- `model_requirements` → 8 blocker lines (quoted above).
+- Adapter → `NotImplementedError` (quoted above).
+- Pinned-tree import probe: `python3 -B -c "from lavis.models.blip2_models.ConeSep import ConeSep"` with the ConeSep tree on `sys.path` → `ModuleNotFoundError: No module named 'omegaconf'` (the basil venv lacks LAVIS's deps; `blip2_models/ConeSep.py` pulls `from lavis.models.base_model import ...` → `omegaconf`). **This is a dependency-absence fact, not a source defect.** The import of `ConeSep` itself is registered (`lavis/models/__init__.py:41` `from lavis.models.blip2_models.ConeSep import ConeSep`, `:78` in `__all__`; `@registry.register_model("ConeSep")` at `ConeSep.py:544`), so `train.py:132-134 load_model_and_preprocess(name="ConeSep", model_type="pretrain")` resolves to this class. That probe wrote nothing: the `__pycache__` files present are dated `2026-10-08 21:17`, six days before this audit (`date` → `2026-10-14 19:52`), and `PYTHONDONTWRITEBYTECODE=1 python3 -B` was used.
+
+**No GPU evaluation was attempted.** Per the assignment, none is possible here.
+
+## PAPER-METRIC STATUS
+
+Independently checked from two directions.
+
+**(a) Registry vs. upstream README image.** `third_party/ConeSep/assets/results-fiq.png` was rendered and read. The `0%` noise block, `ConeSep (Ours)` row, `Average` column reads **R@10 55.58, R@50 75.88, AVG. 65.73**. The same row's category cells read Dress 50.96 / 73.02, Shirt 56.98 / 75.22, Toptee 58.80 / 79.40.
+
+**(b) Registry vs. the paper.** Pinned source and paper agree: paper Table 1 row `ConeSep (Ours) 50.96 73.02 56.98 75.22 58.80 79.40 55.58 75.88 65.73` (extracted from `arxiv.org/html/2604.20358v1`), identical to the README image row. The other three `ConeSep (Ours)` rows in Table 1 are the 20/50/80% conditions: `50.23 72.19 56.28 74.45 58.29 78.38 54.93 75.01 64.97`, `48.39 71.34 54.56 73.25 57.22 77.87 53.39 74.15 63.77`, `43.33 66.01 51.23 70.35 53.19 74.55 49.25 70.30 59.77`.
+
+**Arithmetic (executed in `/tmp`):**
+```
+(55.58+75.88)/2            = 65.72999999999999   -> 65.73  MATCH
+(50.96+56.98+58.80)/3      = 55.580000000000005  -> 55.58  MATCH (Average R@10)
+(73.02+75.22+79.40)/3      = 75.88000000000001   -> 75.88  MATCH (Average R@50)
+(55.58+75.88)/2            = 65.73               -> 65.73  MATCH (AVG.)
+```
+So **`reported_mean` = (r10+r50)/2 exactly**, and the category cells are mutually consistent with the average row. Registry `reported_r10: 55.58` (`:158`), `reported_r50: 75.88` (`:159`), `reported_mean: 65.73` (`:160`) are all **CORRECT transcriptions**.
+
+**BUT: the pinned row is the CLEAN (0%-noise) row, and no clean checkpoint exists.** Every registered checkpoint is 20/50/80%-noise-trained (`models.yaml:169,179,189`), so the maximum attainable comparison is against `64.97` / `63.77` / `59.77`, not `65.73`. `strict_clean_checkpoint_available: false` (`:162`) correctly encodes this, and `paper_gate.COMPARABILITY_FIELDS` (`workbench/backend/paper_gate.py:34-43`) includes `checkpoint_training_noise_pct`, so the gate would refuse the comparison. **The registry should additionally label the 55.58/75.88/65.73 row as `0% training noise` explicitly, because as written a reader can pair "evaluation_noise_pct: 0" with "reported 65.73" and conclude the noisy checkpoints target that row.** (P1, labelling.)
+
+**Status: paper-metric transcription VERIFIED; paper-metric *reproduction* NOT_RUN and not currently reachable.**
+
+## CRITICAL FINDINGS
+
+**CF-1 (P1) — No runnable evaluation path for the registered checkpoints.** Three independent blockers, each sufficient:
+1. No standalone FashionIQ evaluator. `third_party/ConeSep/test.py` has no `__main__`/`ArgumentParser`; `test()` is reachable only from `train.py:216` inside `train_and_evaluate()`, which constructs a fresh model via `create_model_and_optimizer()` (`train.py:131-140`) — it never loads a checkpoint.
+2. No checkpoint loader. `train.py:76-78` declares `--restore_file` with help text "weights to reload before training" and **nothing ever reads it**: `grep -rn "load_checkpoint|restore_file" third_party/ConeSep/{train.py,test.py,cirr_sub.py}` → only the `argparse` line at `train.py:76`. `utils.py:130-141 load_checkpoint()` exists, requires `checkpoint['state_dict']`, and is called from **nowhere** in `train.py`/`test.py`. `cirr_sub.py:124 torch.load(...)` is CIRR-submission-only and is not wired to FashionIQ. So there is **no code path in the pinned tree that can evaluate `ConeSep-FIQ-N0.2/N0.5/N0.8.pt` on FashionIQ**.
+3. Workbench adapter not implemented. `workbench/backend/adapters/models.py:59-61`; observed `NotImplementedError`.
+`docs/audits/cluster_b_ilearn.yaml:268-274` lists the first two as unresolved; I confirm both from source, and add (3) as an executed observation. Also note `workbench/patches/` contains no `conesep` patch (`ls` showed `csmcir.md` / `csmcir_models_init_compat.patch` only) — no workaround has been written.
+
+**CF-2 (P1) — The registered paper row is the 0%-noise row and no 0% checkpoint is published.** See PAPER-METRIC STATUS and CHECKPOINT IDENTITY. `strict_clean_checkpoint_available: false` is correct, but the row-to-checkpoint pairing must be labelled before any comparison. Evaluating `fiq_n02/05/08` and reporting `65.73` as the reference would be a wrong-row comparison (real targets 64.97 / 63.77 / 59.77).
+
+**CF-3 (P1) — The protocol machinery exists but is unreachable for `conesep`.** The evaluator was implemented this pass (`src/evaluation/fashioniq.py:35-77,159-206,223-243`) and unit-tested, but has **no production callsite** (`grep` across `src/`, `workbench/`, `tests/` → tests only; `workbench/replay/` covers `limn`/`tgcir` only). Combined with CF-1, nothing in the workbench can produce a `conesep` FashionIQ number.
 
 **CF-4 (P2) — Dataset contract has an unchecked, unversioned cache and unprovenanced correction dictionaries.** `datasets.py:35-58` (staleness) and `datasets.py:96,170` + absent registry rows (dictionary provenance). Both change captions/gallery without failing any preflight check.
 
@@ -303,6 +436,3 @@ paper/README/config
 ---
 
 **FINAL VERDICT: BLOCKED** — the registry's static facts for `conesep` check out against the pinned tree (pin, protocol, `strict_clean=false`, paper-metric transcription), but there is no runnable path to any number: the pinned tree has no standalone evaluator or checkpoint loader, the workbench adapter raises `NotImplementedError`, the registered dataset layout is absent locally, and the published row is the 0%-noise row for which no checkpoint exists.
-
-
-[Showing lines 1-174 and 288-439 of 439; 113 middle lines (17.5KB) elided. Read artifact://11511 for full output]

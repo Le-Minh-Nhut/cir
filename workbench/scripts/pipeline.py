@@ -532,8 +532,15 @@ def stage_receipt_path(config: WorkbenchConfig, stage: Stage) -> Path:
     return _artifacts_root(config) / "receipts" / f"{key}.json"
 
 
-def write_stage_receipt(config: WorkbenchConfig, stage: Stage, *, return_code: int) -> Path:
-    """Durable completion proof for a provisioning stage that produces no artifact file."""
+def write_stage_receipt(config: WorkbenchConfig, stage: Stage, *, return_code: int,
+                        fingerprint: str | None = None) -> Path:
+    """Durable completion proof for a provisioning stage that produces no artifact file.
+
+    The receipt records the input fingerprint that produced it. Without it, the path — a pure
+    function of the stage key — would let a receipt from an earlier, different invocation satisfy
+    output validation for a later one, so a stage could be finalized `COMPLETE` on the strength of a
+    run whose inputs no longer apply.
+    """
     path = stage_receipt_path(config, stage)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -541,6 +548,7 @@ def write_stage_receipt(config: WorkbenchConfig, stage: Stage, *, return_code: i
         "model_id": stage.model_id,
         "commands": [list(c) for c in stage.commands],
         "return_code": return_code,
+        "input_fingerprint": fingerprint,
         "completed_at": datetime.now(timezone.utc).isoformat(),
         "kind": "stage_completion_receipt",
     }
@@ -606,7 +614,15 @@ def validate_stage_outputs(stage: Stage, recorded: dict[str, str] | None = None,
             payload = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             return False
-        return payload.get("stage_id") == stage_key(stage) and payload.get("return_code") == 0
+        if payload.get("stage_id") != stage_key(stage) or payload.get("return_code") != 0:
+            return False
+        # A receipt is only evidence for the invocation that wrote it. A record without a
+        # fingerprint (or one recorded before this field existed) cannot be tied to the inputs at
+        # hand, so it is not trusted; the stage simply runs again.
+        recorded_fingerprint = (record or {}).get("fingerprint")
+        if recorded_fingerprint is None:
+            return False
+        return payload.get("input_fingerprint") == recorded_fingerprint
 
     if not stage.output_paths:
         # Read-only stages may be skipped on fingerprint alone. A side-effecting stage
@@ -2181,7 +2197,8 @@ def run_stages(
             # Provisioning stages that produce no artifact file get a durable receipt
             # as their completion proof (validated on later resumes).
             if not stage_planning and stage.receipt and not stage.output_paths:
-                write_stage_receipt(cfg, stage, return_code=0)
+                write_stage_receipt(cfg, stage, return_code=0,
+                                    fingerprint=stage_records.get(skey, {}).get("fingerprint"))
 
             # Output proof for multi-command stages.
             if not stage_planning and not validate_stage_outputs(stage, config=cfg, record=stage_records.get(skey)):

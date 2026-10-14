@@ -1,4 +1,29 @@
-Update README.md'`.
+# csmcir
+
+Independent adversarial, READ-ONLY audit. Nothing under `/home/heheboiz/data/cir` was written; scratch only in `/tmp`. Every claim is `STATIC_AUDIT` unless marked `OBSERVED` (a command I ran and its output) or `RUNTIME_VERIFIED` (an evaluator execution — **none exists for this model**: no GPU environment, no real checkpoint on disk).
+
+---
+
+## MODEL ID
+
+`csmcir` / method_name `CSMCIR`.
+- Registry: `workbench/registry/models.yaml` (model_id: csmcir).
+- Adapter: `workbench/backend/adapters/models.py:28-33` — `CSMCIRAdapter`, `script = "src/validate_blip_csmcir.py"`.
+- `source_dir: CSMCIR`, `source_available: true`.
+
+## PAPER TITLE
+
+`CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval`.
+- Registry field `paper_url: null` (no URL), `publication_year: null`.
+- OBSERVED: pinned `README.md:1-4` states the same title and claims "**(ACL206 Findings)**" (literal typo in the repo for ACL 2026 Findings).
+- OBSERVED (network): `https://arxiv.org/abs/2601.03728` resolves to that exact title, authors Zhipeng Qian et al., submitted 2026-01-07, v3 2026-05-08; `web_search` also returns ACL Anthology `2026.findings-acl.216` ("Findings of the ACL 2026, pages 4411-4424").
+- Registry records no paper URL although the paper is public → **P3**, `paper_url` should be `https://arxiv.org/abs/2601.03728` plus the ACL Anthology link.
+
+## PINNED SOURCE COMMIT
+
+- Registry: `upstream_commit_sha: 774f94e2076ff17ea91703a6239d2a08f0e1a44e`.
+- OBSERVED: `git -C workbench/third_party/CSMCIR rev-parse HEAD` → `774f94e2076ff17ea91703a6239d2a08f0e1a44e`. **Match.**
+- OBSERVED (network): `api.github.com/repos/qzp2018/CSMCIR/commits/774f94e2...` → sha confirmed, committer date `2026-04-27T08:30:50Z`, message `'Update README.md'`.
 - OBSERVED: `source_clean_and_pinned(model, src)` from `workbench/backend/runtime.py:2013` returns `(True, '774f94e2...', None)`; `source_status` → `{tracked: 0, unauthorized: 0, approved: 6, invalid: 0}`. The 6 approved entries are declared runtime artifacts (`source_runtime_artifacts`, `registry.py:563`): the three staged `COT_ours2/fashioniq/*_cot_val.json` plus the `fashionIQ_dataset` link expectation. Checkout is pinned and not dirty.
 
 ## CHECKPOINT IDENTITY

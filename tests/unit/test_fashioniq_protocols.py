@@ -296,3 +296,33 @@ def test_every_model_with_an_extension_requirement_has_a_known_layout() -> None:
         if not model.get("fashioniq_image_extensions"):
             continue
         assert model.get("fashioniq_layout") in _LAYOUT_IMAGE_DIRECTORY, model["model_id"]
+
+
+def test_the_reference_policy_argument_is_enforced() -> None:
+    """The policy argument must reject a mismatch, or a forgotten reference is silent.
+
+    `evaluate_fashioniq_recall` can only switch on whether references were supplied, so without this
+    guard an exclusion cohort evaluated with no references would be scored as a reference-eligible
+    one. The argument exists so that mistake raises instead of quietly changing the ranking rule.
+    """
+    from evaluation.fashioniq import evaluate_fashioniq_recall
+
+    gallery = ["ref"] + [f"mid{i}" for i in range(60)] + ["target"]
+    targets = ["target"]
+    scores = torch.arange(float(len(gallery))).unsqueeze(0)
+
+    # Consistent call: excluded policy with references.
+    excluded = evaluate_fashioniq_recall(scores, targets, gallery, reference_ids=["ref"],
+                                         reference_excluded=True)
+    assert excluded["recall_at_10"] in (0.0, 100.0)
+
+    # Consistent call: eligible policy without references.
+    eligible = evaluate_fashioniq_recall(scores, targets, gallery, reference_excluded=False)
+    assert eligible["recall_at_10"] in (0.0, 100.0)
+
+    # Inconsistent calls must raise rather than silently change the rule.
+    with pytest.raises(ValueError, match="reference policy"):
+        evaluate_fashioniq_recall(scores, targets, gallery, reference_excluded=True)
+    with pytest.raises(ValueError, match="reference policy"):
+        evaluate_fashioniq_recall(scores, targets, gallery, reference_ids=["ref"],
+                                  reference_excluded=False)

@@ -90,21 +90,40 @@ def test_scale_convention_is_normalised_before_comparison():
 
 
 def test_exactly_one_is_read_as_one_percent_not_one_hundred():
-    verdict = gate.evaluate_gate({"r10": 50.0}, {"r10": 1.0}, paper_meta=META, run_meta=dict(META),
-                                 real_execution=True)
+    # A complete paper row so the run reaches comparison; R@10 is the metric under test.
+    paper = {"r10": 50.0, "r50": 50.0, "mean": 50.0}
+    verdict = gate.evaluate_gate(paper, {"r10": 1.0, "r50": 50.0, "mean": 50.0},
+                                 paper_meta=META, run_meta=dict(META), real_execution=True)
     comparison = verdict.comparisons[0]
     assert comparison.reproduced == 1.0
     assert comparison.within_tolerance is False
 
 
 def test_zero_paper_metric_requires_exact_equality():
-    identical = gate.evaluate_gate({"r10": 0.0}, {"r10": 0.0}, paper_meta=META, run_meta=dict(META),
-                                   real_execution=True)
+    # A complete paper row whose R@10 is zero: the relative rule has no meaning there, so equality is
+    # the only defensible test. The other two metrics are present so the row is not partial.
+    paper = {"r10": 0.0, "r50": 75.0, "mean": 65.0}
+    identical = gate.evaluate_gate(paper, {"r10": 0.0, "r50": 75.0, "mean": 65.0},
+                                   paper_meta=META, run_meta=dict(META), real_execution=True)
     assert identical.status == gate.PASS_WITHIN_5_PERCENT
     assert identical.comparisons[0].relative_error_pct is None
-    different = gate.evaluate_gate({"r10": 0.0}, {"r10": 0.5}, paper_meta=META, run_meta=dict(META),
-                                   real_execution=True)
+    different = gate.evaluate_gate(paper, {"r10": 0.5, "r50": 75.0, "mean": 65.0},
+                                   paper_meta=META, run_meta=dict(META), real_execution=True)
     assert different.status == gate.ALERT_METRIC_DEVIATION
+
+
+def test_partial_paper_row_is_unverified_not_a_pass():
+    """SPRC's registered row publishes R@50 and mean but no R@10.
+
+    A missing paper metric must not become an automatic exemption: the run cannot be called verified
+    when one of the three published metrics has nothing to compare against.
+    """
+    partial = {"r10": None, "r50": 74.97, "mean": 64.85}
+    for r10 in (0.0, 5.0, 54.92, 500.0):
+        verdict = gate.evaluate_gate(partial, {"r10": r10, "r50": 74.97, "mean": 64.85},
+                                     paper_meta=META, run_meta=dict(META), real_execution=True)
+        assert verdict.status == gate.METRIC_REFERENCE_UNVERIFIED, (r10, verdict.status)
+        assert not verdict.passed
 
 
 def test_missing_reproduced_metric_fails_rather_than_passing():

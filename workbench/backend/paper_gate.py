@@ -174,9 +174,13 @@ def evaluate_gate(
     if not real_execution:
         return GateVerdict(NOT_RUN, False, False, [], ["no genuine execution recorded"],
                            "the gate compares real runs only")
-    if not paper_metrics or all(paper_metrics.get(k) is None for k in METRIC_KEYS):
+    if not paper_metrics or any(paper_metrics.get(k) is None for k in METRIC_KEYS):
+        # A partial row cannot pin a reproduction: the missing metric would be exempt from every
+        # check, so a run with nonsense there would still pass. An absent paper value is an
+        # unverified reference, not an automatic pass.
+        missing = [k for k in METRIC_KEYS if (paper_metrics or {}).get(k) is None]
         return GateVerdict(METRIC_REFERENCE_UNVERIFIED, False, False, [],
-                           ["no verified paper metric for this experiment"],
+                           [f"paper row does not publish {', '.join(missing) or 'any metric'}"],
                            "without a comparable published number there is nothing to reproduce")
     if not reproduced_metrics:
         return GateVerdict(NOT_RUN, False, False, [], ["no reproduced metrics"], "the evaluator produced no metrics")

@@ -79,6 +79,7 @@ models:
         status: URL_VERIFIED
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: airknow
+    source_blocker: "no runnable evaluation path is registered for this model: the pinned evaluator is a callable with no CLI or checkpoint loader, the adapter deliberately declines to build a command, and the required correction dictionaries and resized images have no published source; the paper row is the 0%-noise row and no 0% checkpoint is published (see workbench/docs/reviews/models for the model's audit). An earlier note in this registry claimed a tensor-shape failure in the similarity computation; that claim was WRONG and is withdrawn - np.matmul broadcasts and the ranking matrix has the shape the indexing expects"
     environment:
       python_env_var: WORKBENCH_AIRKNOW_PYTHON
       confidence: VERIFIED_README
@@ -131,6 +132,7 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: conesep
+    source_blocker: "no runnable evaluation path is registered for this model: the pinned evaluator is a callable with no CLI or checkpoint loader, the adapter deliberately declines to build a command, and the required correction dictionaries and resized images have no published source; the paper row is the 0%-noise row and no 0% checkpoint is published (see workbench/docs/reviews/models for the model's audit). An earlier note in this registry claimed a tensor-shape failure in the similarity computation; that claim was WRONG and is withdrawn - np.matmul broadcasts and the ranking matrix has the shape the indexing expects"
     environment:
       python_env_var: WORKBENCH_CONESEP_PYTHON
       confidence: VERIFIED_README
@@ -199,11 +201,16 @@ models:
     preparation_contract: unavailable
     paper_title: Scale Up Composed Image Retrieval Learning via Modification Text Generation
     paper_url: https://arxiv.org/abs/2504.05316
-    upstream_repo_url: null
-    upstream_default_branch: null
+    # Independence review (workbench/docs/reviews/models/ptha_mtst.md) refuted the earlier "no source"
+    # conclusion: an author repository exists. It is recorded as evidence, not registered as a source_dir
+    # or a commit pin, because registering it would claim a checkout the workbench has not synced, audited
+    # or verified. Sync and audit it before promoting it to `source_dir`.
+    upstream_repo_url: https://github.com/zyinan99/MTST_PTHA
+    upstream_default_branch: main
     upstream_commit_sha: null
     source_available: false
     source_dir: null
+    source_blocker: "author repository https://github.com/zyinan99/MTST_PTHA exists and is reachable (README title matches the paper, commits authored by the paper's first author Yinan Zhou, HEAD 6a02ee4763fc2260b6abfb18be78853facb91d86 at 2025-02-09) but is not synced, pinned or audited here, and no FashionIQ fine-tuned checkpoint is verified; the earlier 'no source exists' note was incomplete"
     native_protocol: null
     supported_protocols: []
     reported_r10: 54.99
@@ -276,6 +283,7 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: intent
+    source_blocker: "no runnable evaluation path is registered for this model: the pinned evaluator is a callable with no CLI or checkpoint loader, the adapter deliberately declines to build a command, and the required correction dictionaries and resized images have no published source; the paper row is the 0%-noise row and no 0% checkpoint is published (see workbench/docs/reviews/models for the model's audit). An earlier note in this registry claimed a tensor-shape failure in the similarity computation; that claim was WRONG and is withdrawn - np.matmul broadcasts and the ranking matrix has the shape the indexing expects"
     environment:
       python_env_var: WORKBENCH_INTENT_PYTHON
       confidence: VERIFIED_README

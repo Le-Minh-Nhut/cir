@@ -224,7 +224,7 @@ def test_provisioning_stage_requires_receipt(tmp_path: Path, monkeypatch):
                            required_capabilities=frozenset({"allow_env_install"}), receipt=True)
 
     # No receipt yet -> not valid.
-    assert pipeline.validate_stage_outputs(stage, config=cfg) is False
+    assert pipeline.validate_stage_outputs(stage, config=cfg, record={"fingerprint": "FP"}) is False
 
     launched: list[list[str]] = []
     monkeypatch.setattr(pipeline, "run_command", lambda argv: launched.append(argv) or 0)
@@ -233,11 +233,17 @@ def test_provisioning_stage_requires_receipt(tmp_path: Path, monkeypatch):
                                authorized_capabilities={"allow_env_install"},
                                config=cfg, state_path=state) == 0
     assert launched == [["/env"]]
-    # Receipt now exists and validates.
-    assert pipeline.validate_stage_outputs(stage, config=cfg) is True
+    # Receipt now exists and validates for the invocation that wrote it.
+    written = __import__("json").loads(state.read_text())["stages"]["environment:m"]
+    assert pipeline.validate_stage_outputs(stage, config=cfg, record=written) is True
+    # A different invocation's fingerprint does not, and neither does a missing one.
+    assert pipeline.validate_stage_outputs(stage, config=cfg, record={"fingerprint": "OTHER"}) is False
+    assert pipeline.validate_stage_outputs(stage, config=cfg, record={}) is False
     receipt = pipeline.stage_receipt_path(cfg, stage)
     import json as _json
-    assert _json.loads(receipt.read_text())["stage_id"] == "environment:m"
+    payload = _json.loads(receipt.read_text())
+    assert payload["stage_id"] == "environment:m"
+    assert payload["input_fingerprint"] == written["fingerprint"]
 
 
 # 9. Persistent index writes require explicit authorization

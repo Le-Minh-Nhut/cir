@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import inspect
+from pathlib import Path
 
 import pytest
 
@@ -295,3 +296,41 @@ def test_checkpoint_serialization_metadata():
     models = registry_models()
     assert models["limn"].get("checkpoint_serialization") == "whole_model"
     assert models["dcnet"].get("checkpoint_serialization") == "run_directory"
+
+def test_replay_and_runtime_agree_that_bytecode_is_not_a_source_change(tmp_path: Path):
+    """A pinned checkout someone merely imported must not read as dirty.
+
+    `runtime._source_dirty` excludes `__pycache__`/`*.pyc`; the replay path used raw `git status` and
+    refused the LIMN checkout for that reason alone. Both must answer the same question the same way,
+    otherwise a checkout is runnable through one entry point and blocked through another.
+    """
+    import subprocess
+
+    from workbench.backend.runtime import source_clean_and_pinned
+    from workbench.replay.common import source_checkout_status
+
+    repo = tmp_path / "checkout"
+    repo.mkdir()
+    env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
+    import os
+
+    run_env = {**os.environ, **env}
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    (repo / "src.py").write_text("x = 1\n")
+    subprocess.run(["git", "add", "src.py"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=repo, check=True, env=run_env)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True,
+                          capture_output=True, text=True).stdout.strip()
+
+    clean_ok, _, _ = source_checkout_status(repo, head)
+    assert clean_ok, "a clean pinned checkout must pass"
+
+    (repo / "__pycache__").mkdir()
+    (repo / "__pycache__" / "src.cpython-313.pyc").write_bytes(b"\x00")
+    bytecode_ok, _, reason = source_checkout_status(repo, head)
+    assert bytecode_ok, f"bytecode alone must not dirty the checkout: {reason}"
+
+    (repo / "src.py").write_text("x = 2\n")
+    edited_ok, _, reason = source_checkout_status(repo, head)
+    assert not edited_ok and "dirty" in (reason or ""), "a real source edit must still be refused"
