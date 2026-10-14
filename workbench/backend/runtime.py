@@ -1999,13 +1999,15 @@ def _verify_declared_artifact(source: Path, path: str, declaration: dict[str, An
         from workbench.backend.registry import sha256_file
 
         digest = sha256_file(candidate)
-        expected = declaration.get("derived_sha256")
-        if expected and digest != expected:
-            return ("modified source in an approved-patch checkout: the file does not match the "
-                    "recorded post-patch digest")
         base = declaration.get("base_sha256")
+        expected = declaration.get("derived_sha256")
+        # Order matters for the message an operator reads: the published file is "not yet patched",
+        # which is a different instruction from "someone edited this beyond the approved delta".
         if base and digest == base:
             return "the approved patch has not been applied"
+        if expected and digest != expected:
+            return ("modified source in an approved-patch checkout: the file matches neither the "
+                    "published base nor the recorded post-patch digest")
         return None
     if declaration["kind"] == "declared_auxiliary_asset":
         # Auxiliary assets are declared *files*; a symlink there is not authorized.
