@@ -14,7 +14,7 @@ One command, after the configuration file exists:
 
 ```bash
 ./workbench/run.sh autopilot \
-    --config workbench/configs/pc_autopilot.pilot_csmcir.yaml \
+    --config workbench/configs/pc_autopilot.pilot_limn.yaml \
     --apply \
     --resume
 ```
@@ -71,7 +71,9 @@ directory**, so a config copied out of the repository must use absolute paths fo
 
 Two ready-made profiles are provided:
 
-- `workbench/configs/pc_autopilot.pilot_csmcir.yaml` -- one model, the shortest verified path.
+- `workbench/configs/pc_autopilot.pilot_limn.yaml` -- one model, the first GPU pilot (LIMN).
+- `workbench/configs/pc_autopilot.pilot_csmcir.yaml` -- CSMCIR, retained for reference; blocked at the
+  source until `workbench/patches/csmcir.md` is applied by hand.
 - `workbench/configs/pc_autopilot.all_available.yaml` -- every eligible model, with the flagged
   checkpoint policy so the noise-trained cohort is explicit rather than silently excluded.
 
@@ -157,23 +159,34 @@ blocker spelled out.
 
 ## 9. First GPU pilot
 
-`workbench/configs/pc_autopilot.pilot_csmcir.yaml` -- CSMCIR under `strict_clean`: the only model with
-a recorded clean checkpoint, a pinned command and a resolved dataset path. The pilot config sets
-`allow_env_install: true` to cold-start and provision the missing conda environment directly on the PC,
-with `allow_network`, `allow_large_downloads`, `allow_preparation`, `allow_gpu_eval`, and `allow_index_write`
-all enabled.
+`workbench/configs/pc_autopilot.pilot_limn.yaml` -- LIMN base iteration 0 under
+`include_flagged_conditions`. Selected on evidence, not on an older report:
 
-Honest expectations: CSMCIR requires its checkpoint (author-published and downloadable) AND the
-`COT_ours2/fashioniq` captions (no author download source published). The Qwen captions and checkpoint
-are downloadable, but until the operator manually supplies `COT_ours2/fashioniq/`, the pilot reports
-the `COT_ours2` asset blocker rather than evaluating.
+- **LIMN is runnable.** Three category checkpoints, each with a published size and a sha256 that this
+  workbench verified against the author repository's own Hugging Face LFS pointer metadata:
+  `0_dress_best_model.pt` `96a335d4...`, `0_shirt_best_model.pt` `9260c7f7...`,
+  `0_toptee_best_model.pt` `79f663a1...` (1,792,010,157 bytes each). Its resized images are generated
+  by the workbench from the canonical images with the documented FashionIQ resize recipe, its
+  correction dictionaries ship in the pinned checkout and are staged rather than re-derived, and its
+  evaluator runs through a reviewable native replay (`workbench/replay/limn.py`).
+- **CSMCIR is blocked at the source.** Its registered entrypoint imports `lavis.models`, whose
+  `__init__` executes 98 unguarded imports (lines 44-151) for modules the author never committed,
+  *before* the line that registers the class CSMCIR needs (line 152). The package raises
+  `ModuleNotFoundError` during import, and the model name would never resolve even if that were
+  bypassed. Reproduced against the public pinned revision; `workbench/patches/csmcir.md` records the
+  fix and its verification. CSMCIR also needs `COT_ours2/fashioniq/{category}_cot_val.json`, which is
+  genuinely required (it drives gallery features through
+  `extract_index_blip_caption_features`) and which the author never published.
 
-LIMN is the next candidate and needs `include_flagged_conditions` (its checkpoints record no
-training condition) plus three category checkpoints (~5.01 GiB total), resized images prepared,
-and correction dictionaries. It is not less blocked than CSMCIR and is not selected by default.
+`include_flagged_conditions` is **required** for LIMN: the author publishes no training-condition
+label for these weights, so the registry records the condition as unpublished and `strict_clean`
+would refuse every variant. Any number from this run must be labelled "training condition not
+published by the author" -- it is not a verified 0%-training-noise checkpoint. LIMN also calls
+`.cuda()` unconditionally (`LIMN/test.py:39`), so a working CUDA device is required; the run reports
+`BLOCKED_GPU` rather than silently falling back to CPU.
 
 ```bash
-./workbench/run.sh autopilot --config workbench/configs/pc_autopilot.pilot_csmcir.yaml --apply --resume
+./workbench/run.sh autopilot --config workbench/configs/pc_autopilot.pilot_limn.yaml --apply --resume
 ```
 
 ## 10. What a run produces

@@ -60,6 +60,92 @@ Official validation is fixed-root/cwd-sensitive and has no ordinary dataset-root
 
 ENCODER's audited command uses `val-split` and requires a FashionIQ checkpoint plus upstream-root `open_clip_pytorch_model.bin`. `evaluate_model.py` calls `open_clip.create_model_and_transforms('ViT-B-32', pretrained='./open_clip_pytorch_model.bin')`; checkpoint alone is insufficient. Its evaluator imports `datasets1`, but this file is absent from pinned source. Workbench blocks execution until the author-provenanced dependency is present. The official Google Drive folder is recorded, but a direct FashionIQ checkpoint file URL, official checkpoint hash, and local artifact remain unresolved. Do not invent/download-substitute any of these assets during no-install workbench operation.
 
+## CSMCIR: the evaluator cannot import (supersedes the caption blockers as the first failure)
+
+Pinned `CSMCIR@774f94e2076ff17ea91703a6239d2a08f0e1a44e` cannot load its own model package.
+`src/validate_blip_csmcir.py:12` does `from lavis.models import load_model_and_preprocess`, and
+`src/lavis/models/__init__.py` then executes **98 unguarded** `from … import …` statements at lines
+44-151, every one naming a module that is absent from the repository:
+
+```
+$ python3 -c "...import re; count lines whose target .py is missing..."
+98 lines, 44 .. 151
+```
+
+None of lines 44-151 is inside a `try`, so the first missing module raises `ModuleNotFoundError` and
+the import of the entrypoint fails. The class CSMCIR actually needs *is* present and *is* registered
+(`blip2_qformer_cir_align_prompt_csmcir.py:27`,
+`@registry.register_model("blip2_cir_align_prompt_csmcir")`) and *is* imported at line 152 — but 152
+runs after the 98 failures, so the registration never happens and
+`load_model_and_preprocess(name="blip2_cir_align_prompt_csmcir")` cannot resolve either. Confirmed
+against the public revision: the same lines are present and the module returns HTTP 404. The
+one-line fix and its verification are recorded in `workbench/patches/csmcir.md`, and are deliberately
+not applied automatically, because editing the model package would change which classes LAVIS
+registers.
+
+So CSMCIR is `BLOCKED_SOURCE_UNIMPORTABLE`. The Qwen and `COT_ours2` requirements below are real but
+strictly downstream of this.
+
+## CSMCIR checkpoint hash: author-published after all
+
+The row above records `expected_sha256: null` on the grounds that upstream publishes no hash. For the
+checkpoint that is not quite right: Hugging Face stores large files through Git-LFS and publishes the
+content SHA-256 as the pointer `oid`. That convention was verified empirically before being relied on
+— downloading one 14,431,718-byte blob from this same repository and confirming its
+`sha256sum` equals the `lfs.oid` reported by the API. The checkpoint therefore has an authoritative
+hash, now recorded in the registry:
+
+| File | Bytes | SHA-256 (author LFS oid) |
+| --- | --- | --- |
+| `fashioniq_tuned_clip_best.pt` | 2720615859 | `c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e` |
+
+The Qwen caption files are *not* LFS objects (their `oid` is a 40-hex Git blob id, not a SHA-256), so
+their registry digests remain locally computed evidence, as the provenance policy states.
+
+## GPU requirements: `cuda: UNKNOWN` must not read as "no GPU needed"
+
+`cuda: UNKNOWN` in the registry means *the upstream README declares no version*. It was being read by
+`runtime._requires_gpu` as *no GPU is required*, which suppressed the GPU-verification gate for
+evaluators that call `.cuda()` unconditionally. Three were affected and now declare a version:
+
+| Model | Evidence | Was | Now |
+| --- | --- | --- | --- |
+| ENCODER | `evaluate_model.py:64` `Encoder_model.cuda()`, no `is_available()` | UNKNOWN | 12.6 |
+| CLVC-Net | `test.py:28,47` `.cuda()` per batch, no guard | UNKNOWN | 10.2 |
+| TG-CIR | `test.py:31,47` `.cuda()` per batch, no guard | UNKNOWN | 11.0 |
+
+The remaining `UNKNOWN` entries (CSMCIR, DCNet, Combiner, CLIP4Cir, SPRC) were re-checked the same
+way and genuinely guard on `torch.cuda.is_available()`, so `UNKNOWN` is correct for them.
+
+## iLearn correction dictionaries: confirmed required, confirmed unpublished
+
+The section above already records that seven iLearn-family sources open
+`captions/correction_dict_{dress,shirt,toptee}.json` and that the dictionaries are not tracked in the
+inspected trees. That conclusion was re-verified at runtime: for any `FashionIQDataset`, the
+FashionIQ branch of `extract_index_blip_caption_features` reads the dictionary before it touches a
+single image, so the file is required by the *query* path, not only by training. The canonical
+FashionIQ distribution does not contain these files and no iLearn repository publishes them
+(`iLearn-Lab/ICASSP26-HINT`, `AAAI26-HABIT`, `AAAI25-ENCODER` trees contain none producing them).
+They remain `EXTERNAL_AUTHOR_ASSET_BLOCKED` with **UNVERIFIED** provenance. This blocks none of them
+today, because each is already `command not runnable` — none of the five iLearn evaluators
+(`test_BLIP2.py`, `test.py` ×4) has an `ArgumentParser` or a `__main__`, so no adapter can invoke them
+with arguments and each correctly reports the blocker instead of a false ready.
+
+## Pinned-repo dependency method
+
+An asset is required only when a **reachable call path from the registered entrypoint** opens it at
+runtime. A filename occurring anywhere in the tree — a class never instantiated
+(`FashionIQDataset_imageedit`), a commented-out branch, a training-only script, an abandoned
+experiment — does not make it required. Conversely, a file the active evaluator opens but the
+registry does not check is a false negative and equally release-blocking. The audit files under
+`workbench/registry/assets/` and `workbench/registry/audits/` are **documentation**; only
+`workbench/registry/auxiliary_assets.yaml` drives preflight, download and fingerprinting, and it
+currently declares 14 assets. The false positives catalogued in those audit files (iLearn-generated
+test PKLs, `datasets1`, `MHTransformer_rev`, DCNet's raw GloVe and `dict.attr.json`) therefore do not
+reach production; they are recorded here so they are not re-imported later.
+
+
+
 ## Provenance policy
 
 Registry endpoints are official/author-linked only. `expected_sha256` stays `null` unless upstream publishes a hash. A locally computed hash belongs only in ignored `artifacts/checkpoints/download_manifest.json`; it does not upgrade registry provenance. Paper scores are sanity references, never local reproductions. All listed runs remain `NOT_RUN` or blocked until verified evidence changes.

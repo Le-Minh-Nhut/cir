@@ -87,15 +87,21 @@ command with `--resume` after any interruption:
 
 ### Permissions decide how much autopilot may do
 
-Start from `pc_autopilot.pilot_csmcir.yaml` for a focused single-model first run, or
+Start from `pc_autopilot.pilot_limn.yaml` for a focused single-model first run, or
 `pc_autopilot.all_available.yaml` to run every eligible model with flagged conditions explicit.
 
-`pc_autopilot.pilot_csmcir.yaml` is the first-GPU-pilot profile: it sets `allow_env_install: true` so the pilot
-can cold-start and provision its missing conda environment directly on the PC, with `allow_network`,
-`allow_large_downloads`, `allow_preparation`, `allow_gpu_eval`, and `allow_index_write` all enabled.
-Because CSMCIR requires both its downloadable checkpoint and external `COT_ours2` captions (which lack an
-author download source), running this pilot cold-start will report the `COT_ours2` asset blocker rather than
-produce Recall until the operator supplies that file.
+`pc_autopilot.pilot_limn.yaml` is the first-GPU-pilot profile: LIMN base iteration 0, with
+`allow_env_install: true` so the pilot can cold-start and provision its conda environment directly on
+the PC, and `allow_network`, `allow_large_downloads`, `allow_preparation`, `allow_gpu_eval` and
+`allow_index_write` all enabled. It sets `checkpoint_policy: include_flagged_conditions` because the
+author publishes no training-condition label for these weights -- so report the run as "training
+condition not published by the author", not as a clean checkpoint.
+
+`pc_autopilot.pilot_csmcir.yaml` is retained for reference only. CSMCIR cannot run from its pinned
+source as published: the module registry it imports executes 98 unguarded imports for files the
+author never committed, before the line that registers the class it needs, so the entrypoint fails
+during import. It also needs `COT_ours2/fashioniq` captions that the author never published. See
+`workbench/patches/csmcir.md`.
 
 | Permission | What it authorizes |
 |---|---|

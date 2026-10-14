@@ -1,23 +1,27 @@
-# First GPU pilot: CSMCIR under the strict clean checkpoint policy.
+# CSMCIR under the strict clean checkpoint policy -- retained for reference, NOT the first pilot.
 #
-# CSMCIR is the shortest verified path to an official evaluation: one checkpoint with a recorded
-# clean (0% training-noise) condition, a verified download URL, a pinned command and a resolved
-# dataset path through its own fixed `fashionIQ_dataset` link.
+# Superseded: use `pc_autopilot.pilot_limn.yaml` for the first GPU experiment.
 #
-# Honest status: CSMCIR needs its checkpoint (author-published and downloadable) AND the
-# COT_ours2 captions (no author source published). The Qwen captions and checkpoint are downloadable,
-# but because the author never published COT_ours2/fashioniq, the pilot is expected to report the
-# COT asset blocker rather than produce Recall until the operator manually supplies that file.
+# CSMCIR cannot run from its pinned source as published. Its registered entrypoint
+# (src/validate_blip_csmcir.py) imports lavis.models, whose __init__ executes 98 unguarded imports at
+# lines 44-151 for modules the author never committed, before the line that registers
+# Blip2QformerCirAlignPromptCSMCIR (line 152). The package raises ModuleNotFoundError during import,
+# and because the failing lines precede the registration, the model name would never resolve even if
+# the import were bypassed. Reproduced against the public revision at
+# 774f94e2076ff17ea91703a6239d2a08f0e1a44e; see workbench/patches/csmcir.md for the one-line fix and
+# the verification to run after applying it.
 #
-# LIMN comparison: LIMN is the next candidate, but a LIMN-based pilot is not less blocked as a first run:
-# three category checkpoints must be downloaded (~5.01 GiB total), its resized images must be prepared
-# (fashioniq_ilearn_resized_training), category correction dictionaries must be supplied, and it requires
-# checkpoint_policy: include_flagged_conditions (its checkpoints record no training condition). LIMN is
-# therefore not genuinely less blocked than CSMCIR and is not selected by default.
+# Independently of that, CSMCIR's official FashionIQ path needs COT_ours2/fashioniq/{category}_cot_val.json.
+# That requirement is real and was re-verified from the pinned source: blip_validate_fashioniq calls
+# extract_index_blip_caption_features (src/validate_blip_csmcir.py:618), which reads those files
+# unconditionally for any FashionIQDataset (src/utils_csmcir.py:100) and feeds them into
+# blip_model.extract_target_caption_features, so they drive the gallery features that decide
+# Recall@10/@50. The author publishes qwen_captions but not COT_ours2, on either the GitHub or the
+# Hugging Face repository, so that file must come from the operator. See the note below on how the
+# two caption families differ.
 #
 # When copied outside the repository, every entry under `paths` that is not absolute is resolved
-# relative to this config file's own directory, so all six `paths` keys (`registry`, `dataset_root`,
-# `artifacts`, `checkpoints`, `results`, `third_party`) must be set to absolute paths.
+# relative to this config file's own directory, so all six `paths` keys must be absolute.
 #
 # Create the ledger signing key ONCE, keep it, and reuse it for every run of this workbench:
 # the key signs the evidence ledger, so a new key each shell makes every earlier run unverifiable.
