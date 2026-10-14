@@ -64,8 +64,12 @@ models:
         source_type: author_huggingface
         checkpoint_training_noise_pct: 0
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
+        # Taken from the author Hugging Face repository's own LFS pointer metadata for this file at
+        # revision cf0c19bb346266c295b4b5772ebf03bd1c4f0467. Hugging Face stores large files via
+        # Git-LFS and publishes the content SHA-256 as the pointer `oid`; the convention was verified
+        # empirically against a 14 MB blob from this same repository before being relied on here.
+        expected_sha256: c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e
+        expected_size_bytes: 2720615859
         status: URL_VERIFIED
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: airknow
@@ -376,7 +380,12 @@ models:
       python: '3.9'
       pytorch: '1.13.1'
       torchvision: '0.14.1'
-      cuda: UNKNOWN
+      # `evaluate_model.py:64` moves the model with `Encoder_model.cuda()` unconditionally and never
+      # consults `torch.cuda.is_available()`, so this evaluator cannot run on a CPU-only host.
+      # Recording UNKNOWN here meant "the version is not declared in the README", which is not the
+      # same as "no GPU is needed" — the GPU-verification gate then never fired for a CUDA-hard
+      # evaluator. The version is the iLearn family's pinned one.
+      cuda: '12.6'
       packages: []
     category_model_policy: shared
     checkpoint_serialization: state_dict
@@ -510,7 +519,11 @@ models:
       python: '3.7.6'
       pytorch: '1.6.0'
       torchvision: UNKNOWN
-      cuda: UNKNOWN
+      # `test.py:28` and `:47` call `.cuda()` on every batch without consulting
+      # `torch.cuda.is_available()`, so this evaluator cannot run on a CPU-only host. The upstream
+      # README states no CUDA version, and recording UNKNOWN conflated "version not declared" with
+      # "no GPU needed", which suppressed the GPU-verification gate for a CUDA-hard evaluator.
+      cuda: '10.2'
       packages: [torchvision]
     strict_clean_checkpoint_available: null
     notes: Native pair-union and reference exclusion verified. Pinned test.py has no CLI/model loader; author Drive CLVCNET.zip member/category mapping is unresolved. Evaluation requires torchvision ResNet-50 ImageNet weights through an unpinned Torch cache.
@@ -726,7 +739,11 @@ models:
       python: UNKNOWN
       pytorch: '1.7.0'
       torchvision: '0.8.0'
-      cuda: UNKNOWN
+      # `test.py:31` and `:47` call `.cuda()` on every batch without consulting
+      # `torch.cuda.is_available()`, so this evaluator cannot run on a CPU-only host. Recording
+      # UNKNOWN meant "the README declares no version", which is not "no GPU is needed" — the
+      # GPU-verification gate then never fired for a CUDA-hard evaluator.
+      cuda: '11.0'
       packages: [clip==0.2.0, numpy==1.22.3, pandas==1.4.2, Pillow]
     strict_clean_checkpoint_available: null
     notes: Native annotation endpoint-union/reference-excluded evaluator verified. Pinned test.py has no CLI/checkpoint replay; TG-CIR.zip FashionIQ member mapping and hash remain unresolved.

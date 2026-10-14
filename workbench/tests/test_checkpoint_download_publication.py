@@ -25,7 +25,7 @@ def _run(module, tmp_path: Path, checkpoint: dict, payload: bytes, monkeypatch) 
     monkeypatch.setattr(module, "resolve_config", lambda: SimpleNamespace(
         WORKBENCH_CHECKPOINT_ROOT=destination_root))
 
-    def fake_download(url, partial: Path) -> None:
+    def fake_download(url, partial: Path, limit=None) -> None:
         partial.write_bytes(payload)
 
     monkeypatch.setattr(module, "download", fake_download)
@@ -42,6 +42,40 @@ CHECKPOINT = {"checkpoint_id": "only", "filename": "weights.pt",
 
 BODY = b"good"
 
+
+def test_the_declared_size_is_passed_as_the_streaming_limit(tmp_path: Path, monkeypatch) -> None:
+    """ISSUE A: a declared size must bound the transfer, not just be checked after it.
+
+    Checking the size only after the body landed meant a runaway or wrong response was written to
+    disk in full before being rejected. The declared size now bounds the write, so the check is a
+    property of the transfer and not a post-mortem.
+    """
+    module = _module()
+    seen: list[object] = []
+    checkpoint = dict(CHECKPOINT, expected_sha256=None)
+    destination_root = tmp_path / "checkpoints"
+    model = {"model_id": "synthetic", "method_name": "Synthetic", "source_dir": None}
+    monkeypatch.setattr(module, "resolve_config",
+                        lambda: SimpleNamespace(WORKBENCH_CHECKPOINT_ROOT=destination_root))
+
+    def capturing_download(url, partial: Path, limit=None) -> None:
+        seen.append(limit)
+        partial.write_bytes(BODY)
+
+    monkeypatch.setattr(module, "download", capturing_download)
+    monkeypatch.setattr(module, "selected", lambda args, models: [(model, checkpoint)])
+    monkeypatch.setattr(module, "load_registry", lambda: {"models": [model]})
+    assert module.main(["--model", "synthetic", "--output-root", str(destination_root)]) == 0
+    assert seen == [4], "the registry's declared size must reach the downloader"
+
+    # With no declared size the safety ceiling still applies, so an unlimited transfer is never
+    # requested even for a checkpoint whose size the author never published.
+    seen.clear()
+    unbounded = {k: v for k, v in checkpoint.items() if k != "expected_size_bytes"}
+    monkeypatch.setattr(module, "selected", lambda args, models: [(model, unbounded)])
+    assert module.main(["--model", "synthetic", "--output-root", str(destination_root),
+                        "--force-redownload"]) == 0
+    assert seen and seen[0] == module._DOWNLOAD_CEILING
 
 def test_a_hash_mismatch_leaves_no_published_file(tmp_path: Path, monkeypatch) -> None:
     """The failure must not leave a destination the next run refuses to replace."""
@@ -86,7 +120,7 @@ def test_failed_force_redownload_preserves_existing_checkpoint(tmp_path: Path, m
     monkeypatch.setattr(module, "selected", lambda args, models: [(model, checkpoint)])
     monkeypatch.setattr(module, "load_registry", lambda: {"models": [model]})
 
-    def failed_download(url, partial: Path) -> None:
+    def failed_download(url, partial: Path, limit=None) -> None:
         raise OSError("network unavailable")
 
     monkeypatch.setattr(module, "download", failed_download)
@@ -110,7 +144,7 @@ def test_invalid_partial_does_not_block_recovery(tmp_path: Path, monkeypatch) ->
     monkeypatch.setattr(module, "selected", lambda args, models: [(model, current)])
     checkpoint = dict(CHECKPOINT, expected_sha256=hashlib.sha256(BODY).hexdigest())
     current = dict(checkpoint, expected_sha256="1" * 64)
-    monkeypatch.setattr(module, "download", lambda url, partial: partial.write_bytes(BODY))
+    monkeypatch.setattr(module, "download", lambda url, partial, limit=None: partial.write_bytes(BODY))
 
     with pytest.raises(RuntimeError, match="sha256 mismatch"):
         module.main(["--model", "synthetic", "--output-root", str(destination_root)])
@@ -189,7 +223,7 @@ def test_limn_three_category_checkpoints_selected_and_verified(tmp_path: Path, m
     # Synthetic local files pass sha256 check
     orig_sha = module.sha256_file
     monkeypatch.setattr(module, "sha256_file", lambda p: expected_map.get(Path(p).name, orig_sha(p)))
-    monkeypatch.setattr(module, "download", lambda url, partial: pytest.fail("network download attempted"))
+    monkeypatch.setattr(module, "download", lambda url, partial, limit=None: pytest.fail("network download attempted"))
 
     cmd = ["--model", "limn", "--output-root", str(output_root),
            "--checkpoint", "base_iter0_dress",

@@ -567,6 +567,20 @@ def test_resize_receipt_invalidated_when_image_bytes_or_contract_change(tmp_path
             artifact["parameters"]["image_size"] = 512
     assert prepare_model.resize_is_complete(config, model, tampered_contract) is False
 
+    # 6. DATA-01/ISSUE C: change the CANONICAL source image while leaving the derived image exactly
+    #    as it was. The derived file still has the right bytes, size and format, so a receipt that
+    #    only covered the derived side would keep validating and a resume would score stale pixels.
+    source_image = data / "images" / "B00001.jpg"
+    assert source_image.is_file(), source_image
+    source_bytes = source_image.read_bytes()
+    Image.new("RGB", (512, 512), (200, 30, 40)).save(source_image, "JPEG")
+    assert prepare_model.resize_is_complete(config, model, contract) is False
+
+    # Restoring the canonical bytes makes the same derived image valid again, which proves the
+    # binding is to the source content and not to a timestamp or a one-way latch.
+    source_image.write_bytes(source_bytes)
+    assert prepare_model.resize_is_complete(config, model, contract) is True
+
 
 def test_older_receipt_without_digests_does_not_validate(tmp_path: Path) -> None:
     """Older receipts without digests must NOT validate as complete."""

@@ -178,6 +178,65 @@ def test_a_published_hash_is_enforced_and_a_mismatch_is_refused(monkeypatch, tmp
     assert module.main(["--model", "csmcir"]) == 0
     assert all(asset.destination.read_bytes() == payload for asset in items)
 
+def test_a_corrupt_workbench_download_is_repaired_without_force(monkeypatch, tmp_path: Path) -> None:
+    """ISSUE D: a present-but-corrupt workbench-managed asset must be re-acquired, not skipped.
+
+    Selection used to look only at whether the file existed, so a truncated or tampered caption file
+    stayed on disk and kept blocking preflight until the operator worked out that
+    --force-redownload was needed. A file whose published bytes the workbench itself recorded is
+    repaired automatically; an operator-supplied file with unverified provenance is never touched.
+    """
+    from dataclasses import replace
+
+    module = load_module()
+    config = config_at(tmp_path)
+    items = qwen_assets(module, config, with_hash=False)
+
+    good = b"the correct caption bytes"
+    digest = hashlib.sha256(good).hexdigest()
+    monkeypatch.setattr(module, "assets",
+                        lambda *a, **k: tuple(replace(asset, expected_sha256=digest) for asset in items))
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
+
+    # Every destination exists but holds the wrong bytes, i.e. exactly the corrupt case.
+    for asset in items:
+        asset.destination.parent.mkdir(parents=True, exist_ok=True)
+        asset.destination.write_bytes(b"corrupt truncated content")
+
+    calls: list[str] = []
+    monkeypatch.setattr(module.urllib.request, "urlopen",
+                        lambda url: (calls.append(url), Response(good))[1])
+
+    assert module.main(["--model", "csmcir"]) == 0, "a corrupt managed asset must be repaired"
+    assert calls == [asset.source_url for asset in items], "each corrupt asset is re-fetched"
+    assert all(asset.destination.read_bytes() == good for asset in items)
+
+    # An intact asset is left alone: no second round of network traffic.
+    calls.clear()
+    assert module.main(["--model", "csmcir"]) == 0
+    assert calls == [], "an intact asset must not be re-downloaded"
+
+def test_an_operator_supplied_asset_is_never_replaced(monkeypatch, tmp_path: Path) -> None:
+    """An unverified-provenance file may be the operator's own bytes, so it is never overwritten."""
+    from dataclasses import replace
+
+    module = load_module()
+    config = config_at(tmp_path)
+    items = qwen_assets(module, config, with_hash=False)
+    monkeypatch.setattr(module, "assets",
+                        lambda *a, **k: tuple(replace(asset, expected_sha256="0" * 64,
+                                                      provenance_status="UNVERIFIED") for asset in items))
+    monkeypatch.setattr(module, "resolve_config", lambda: config)
+    for asset in items:
+        asset.destination.parent.mkdir(parents=True, exist_ok=True)
+        asset.destination.write_bytes(b"operator bytes that will not match any hash")
+    monkeypatch.setattr(module.urllib.request, "urlopen",
+                        lambda _: (_ for _ in ()).throw(AssertionError("network used")))
+
+    assert module.main(["--model", "csmcir"]) == 0
+    assert all(asset.destination.read_bytes() == b"operator bytes that will not match any hash"
+               for asset in items)
+
 
 def test_failed_download_leaves_no_corrupt_destination(monkeypatch, tmp_path: Path) -> None:
     module = load_module()

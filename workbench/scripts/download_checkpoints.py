@@ -120,9 +120,32 @@ def verify(model: dict, checkpoint: dict, destination: Path) -> bool:
     print(f"{destination}: {size} bytes sha256={digest} {status}")
     return hash_valid and provenance_valid
 
-def _write_response(response, partial: Path, mode: str) -> None:
+#: Upper bound on any single download. When the registry declares an expected size it is the bound;
+#: otherwise this ceiling still stops a runaway or hostile response from filling the disk. It is a
+#: safety net, not a contract — a declared size is the authoritative check below.
+_DOWNLOAD_CEILING = 8 * 1024 * 1024 * 1024
+
+
+def _write_response(response, partial: Path, mode: str, limit: int) -> None:
+    """Stream to `partial`, refusing to write more than `limit` bytes.
+
+    The registry records a checkpoint's exact size. Enforcing it while the bytes arrive means an
+    oversized response (a changed upstream file, a redirect to an error page, a hostile mirror) is
+    rejected with a clean error instead of being written to disk and only then compared.
+    """
+    written = 0
     with partial.open(mode) as output:
-        shutil.copyfileobj(response, output, length=1024 * 1024)
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                return
+            written += len(chunk)
+            if written > limit:
+                raise RuntimeError(
+                    f"response exceeded the declared size limit of {limit} bytes; "
+                    f"refusing to continue writing {partial}"
+                )
+            output.write(chunk)
 
 
 def _valid_content_range(value: str | None, offset: int) -> bool:
@@ -130,7 +153,7 @@ def _valid_content_range(value: str | None, offset: int) -> bool:
     return match is not None and int(match.group(1) or match.group(2)) == offset
 
 
-def download(url: str, partial: Path) -> None:
+def download(url: str, partial: Path, limit: int = _DOWNLOAD_CEILING) -> None:
     offset = partial.stat().st_size if partial.exists() else 0
     request = urllib.request.Request(url)
     if offset:
@@ -140,15 +163,15 @@ def download(url: str, partial: Path) -> None:
     except urllib.error.HTTPError as error:
         if error.code == 416 and offset:
             partial.unlink(missing_ok=True)
-            return download(url, partial)
+            return download(url, partial, limit)
         raise
     with response:
         status = response.getcode()
         if offset and status == 206 and _valid_content_range(response.headers.get("Content-Range"), offset):
-            _write_response(response, partial, "ab")
+            _write_response(response, partial, "ab", limit)
             return
         if status == 200:
-            _write_response(response, partial, "wb")
+            _write_response(response, partial, "wb", limit)
             return
         if offset and status == 206:
             raise RuntimeError(f"server returned incompatible Content-Range for resume: {response.headers.get('Content-Range')!r}")
@@ -207,7 +230,9 @@ def main(argv: list[str] | None = None) -> int:
         partial = destination.with_suffix(destination.suffix + ".part")
         if args.force_redownload:
             partial.unlink(missing_ok=True)
-        download(checkpoint["download_url"], partial)
+        declared_size = checkpoint.get("expected_size_bytes")
+        limit = declared_size if type(declared_size) is int and declared_size > 0 else _DOWNLOAD_CEILING
+        download(checkpoint["download_url"], partial, limit)
         # Verify the bytes while they are still a temporary file. Publishing first and checking
         # afterwards left a corrupt `destination` on disk, which then blocked recovery: the next
         # invocation saw an existing file and refused to overwrite it without --force-redownload.

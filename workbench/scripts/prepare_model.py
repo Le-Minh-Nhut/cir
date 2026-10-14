@@ -197,6 +197,7 @@ def resize_is_complete(config, model: dict, contract: dict) -> bool | None:
     if not base.is_dir():
         return False
     splits_root = config.FASHIONIQ_ROOT / "image_splits"
+    images_root = config.FASHIONIQ_ROOT / "images"
 
     for category, counts in categories.items():
         if not isinstance(counts, dict) or counts.get("expected") != counts.get("present"):
@@ -228,10 +229,29 @@ def resize_is_complete(config, model: dict, contract: dict) -> bool | None:
                 return False
         if not digests:
             return False
+        # The derived images are only valid for the canonical bytes they were made from. A receipt
+        # without source digests cannot prove that, so it is treated as incomplete: an older resize
+        # from before this binding existed has to be regenerated rather than silently trusted.
+        source_digests = counts.get("source_digests")
+        if not isinstance(source_digests, dict) or not source_digests:
+            return False
         for identifier in ids:
             str_id = str(identifier)
             expected_hash = digests.get(str_id)
             if not expected_hash:
+                return False
+            if not source_digests.get(str_id):
+                return False
+            source_image = images_root / f"{str_id}{recipe_ext}"
+            if not source_image.is_file():
+                alternate = images_root / f"{str_id}.jpg"
+                source_image = alternate if alternate.is_file() else source_image
+            if not source_image.is_file():
+                return False
+            try:
+                if hashlib.sha256(source_image.read_bytes()).hexdigest() != source_digests[str_id]:
+                    return False
+            except OSError:
                 return False
             target = target_dir / f"{str_id}{recipe_ext}"
             if not target.is_file():
@@ -417,6 +437,7 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
                   f"to {size}px into {output_dir}")
             continue
         output_dir.mkdir(parents=True, exist_ok=True)
+        category_source_digests: dict[str, str] = {}
         for identifier in identifiers:
             source_image = images_root / f"{identifier}{extension}"
             if not source_image.is_file():
@@ -427,6 +448,11 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
             if not source_image.is_file():
                 missing.append(str(source_image))
                 continue
+            # Bind each derived image to the canonical bytes it was made from. Without this the
+            # receipt proved only that *a* resize had happened: editing a canonical image left the
+            # old copy in place (the destination still had the right size and format), the receipt
+            # still validated, and a resume silently scored stale pixels.
+            category_source_digests[identifier] = hashlib.sha256(source_image.read_bytes()).hexdigest()
             destination = output_dir / f"{identifier}{extension}"
             # DATA-02: Refuse to write a resized image whose destination equals its source path
             # or targets the canonical raw images directory.
@@ -485,6 +511,7 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
             "digests": category_digests,
             "sizes": category_sizes,
             "images": category_images,
+            "source_digests": category_source_digests,
         }
     if dry_run:
         return True, "dry-run"

@@ -117,13 +117,31 @@ def verify(asset: Asset, *, fashioniq_root: Path | None = None) -> bool:
     return res.ok
 
 
-def download(url: str, partial: Path) -> None:
+#: Upper bound on any single download. When the registry declares an expected size it is the bound;
+#: otherwise this ceiling still stops a runaway or hostile response from filling the disk. A declared
+#: size is the authoritative check; this is the backstop for assets whose size the author never
+#: published.
+_DOWNLOAD_CEILING = 8 * 1024 * 1024 * 1024
+
+
+def download(url: str, partial: Path, limit: int = _DOWNLOAD_CEILING) -> None:
     try:
         with urllib.request.urlopen(url) as response, partial.open("wb") as output:
             status = response.getcode()
             if status != 200:
                 raise RuntimeError(f"unexpected HTTP status {status} for auxiliary asset download")
-            shutil.copyfileobj(response, output, length=1024 * 1024)
+            written = 0
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > limit:
+                    raise RuntimeError(
+                        f"response exceeded the size limit of {limit} bytes; "
+                        f"refusing to continue writing {partial}"
+                    )
+                output.write(chunk)
     except urllib.error.HTTPError as error:
         raise RuntimeError(f"HTTP {error.code} downloading {url}: {error.reason}") from error
     except urllib.error.URLError as error:
@@ -179,10 +197,38 @@ def main(argv: list[str] | None = None) -> int:
             if asset.required:
                 failed |= not verify(asset, fashioniq_root=config.FASHIONIQ_ROOT)
         return int(failed)
-    selected = tuple(asset for asset in downloadable if args.force_redownload or not asset.destination.is_file())
+    # An asset that exists but is corrupt must be re-acquired, not skipped. The previous selection
+    # only looked at whether the file was present, so a truncated or tampered file that no longer
+    # matched its published SHA256 stayed on disk and kept blocking every later preflight — the
+    # operator had to notice and pass --force-redownload by hand. Only assets whose bytes the
+    # workbench itself published are replaced automatically; an operator-supplied file with
+    # unverified provenance is never touched, because those bytes may be the operator's own.
+    def _needs_replacement(asset) -> bool:
+        if args.force_redownload:
+            return True
+        if not asset.destination.is_file():
+            return True
+        if asset.destination.stat().st_size == 0:
+            return True
+        if asset.provenance_status != "VERIFIED":
+            return False
+        recorded = asset.expected_sha256 or getattr(asset, "expected_sha256_prefix", None)
+        if not recorded:
+            return False
+        try:
+            digest = sha256_file(asset.destination)
+        except OSError:
+            return False
+        if asset.expected_sha256:
+            return digest != asset.expected_sha256
+        return not digest.startswith(getattr(asset, "expected_sha256_prefix"))
+
+    selected = tuple(asset for asset in downloadable if _needs_replacement(asset))
+    repaired = tuple(asset for asset in selected if asset.destination.is_file())
     if args.dry_run:
         for asset in selected:
-            print(f"DRY RUN: download {asset.source_url} -> {asset.destination}")
+            action = "REPLACE corrupt" if asset in repaired else "download"
+            print(f"DRY RUN: {action} {asset.source_url} -> {asset.destination}")
         for asset in unavailable:
             if not asset.destination.is_file():
                 print(f"{asset.family}: BLOCKED — required asset has no verified automatic acquisition source")
@@ -195,7 +241,8 @@ def main(argv: list[str] | None = None) -> int:
         asset.destination.parent.mkdir(parents=True, exist_ok=True)
         partial.unlink(missing_ok=True)
         try:
-            download(asset.source_url, partial)
+            limit = asset.expected_size_bytes if type(asset.expected_size_bytes) is int and asset.expected_size_bytes > 0 else _DOWNLOAD_CEILING
+            download(asset.source_url, partial, limit)
             if partial.stat().st_size == 0:
                 raise RuntimeError("downloaded auxiliary asset is empty")
             digest = sha256_file(partial)
