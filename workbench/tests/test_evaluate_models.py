@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import sys
@@ -7,6 +8,7 @@ from pathlib import Path
 
 
 from workbench.backend.operator_config import WorkbenchConfig
+from workbench.backend import registry
 from workbench.backend.registry import load_registry
 
 
@@ -50,7 +52,35 @@ def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Pa
     checkpoint = model["checkpoint_variants"][0]
     checkpoint_file = settings.WORKBENCH_CHECKPOINT_ROOT / model["model_id"] / checkpoint["filename"]
     checkpoint_file.parent.mkdir(parents=True)
-    checkpoint_file.write_bytes(b"checkpoint")
+    # A registry entry may now record the author's published size and sha256 (CSMCIR does, taken from
+    # the author's Hugging Face LFS metadata). A fixture writing arbitrary bytes would be refused by
+    # the very check that exists to catch a substituted file. `main()` loads its own registry, so the
+    # declaration is rewritten on every load rather than mutated on the dict this helper was handed.
+    payload = b"checkpoint"
+    if checkpoint.get("expected_sha256") or checkpoint.get("expected_size_bytes"):
+        digest = hashlib.sha256(payload).hexdigest()
+        original_loader = registry.load_registry
+
+        def loader_with_fixture_declarations():
+            loaded = original_loader()
+            for candidate in loaded["models"]:
+                if candidate["model_id"] != model["model_id"]:
+                    continue
+                for variant in candidate.get("checkpoint_variants", []):
+                    if variant.get("expected_sha256") or variant.get("expected_size_bytes"):
+                        variant["expected_sha256"] = digest
+                        variant["expected_size_bytes"] = len(payload)
+            return loaded
+
+        monkeypatch.setattr(registry, "load_registry", loader_with_fixture_declarations)
+        # `evaluate_models` binds the name at import time (`from ... import load_registry`), so
+        # patching only the registry module would not reach the call inside `main()`.
+        monkeypatch.setattr(module, "load_registry", loader_with_fixture_declarations, raising=False)
+        # The caller holds this model dict and passes its variant straight into `guarded_plan`, which
+        # does not re-read the registry. Keep that object consistent with the stub bytes too.
+        checkpoint["expected_sha256"] = digest
+        checkpoint["expected_size_bytes"] = len(payload)
+    checkpoint_file.write_bytes(payload)
     monkeypatch.setattr(module, "resolve_config", lambda: settings)
     monkeypatch.setattr(module, "pinned_revision", lambda _: model["upstream_commit_sha"])
     import workbench.backend.runtime as runtime

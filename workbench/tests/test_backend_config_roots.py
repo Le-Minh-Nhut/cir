@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import sys
@@ -28,7 +29,14 @@ def test_backend_uses_current_configured_roots(monkeypatch, tmp_path: Path) -> N
     checkpoint = model["checkpoint_variants"][0]
     checkpoint_path = checkpoints / model["model_id"] / checkpoint["filename"]
     checkpoint_path.parent.mkdir(parents=True)
-    checkpoint_path.write_bytes(b"checkpoint")
+    # The registry records this checkpoint's published sha256 and size, so a stub of arbitrary bytes
+    # is refused by the check that exists to catch a substituted file. Give the stub content that
+    # matches its own declaration, which keeps the fixture honest about what it is standing in for.
+    payload = b"checkpoint"
+    checkpoint_path.write_bytes(payload)
+    if checkpoint.get("expected_sha256") or checkpoint.get("expected_size_bytes"):
+        checkpoint["expected_sha256"] = hashlib.sha256(payload).hexdigest()
+        checkpoint["expected_size_bytes"] = len(payload)
     source = third_party / model["source_dir"]
     source.mkdir(parents=True)
     (results / "nested").mkdir(parents=True)
@@ -39,7 +47,9 @@ def test_backend_uses_current_configured_roots(monkeypatch, tmp_path: Path) -> N
     image.write_bytes(b"image")
 
     availability = checkpoint_availability(model, checkpoint)
-    command = CSMCIRAdapter().build_command(
+    # The adapter re-reads the registry for its model record, so hand it the fixture's view: the
+    # declaration was rewritten above to describe the stub bytes, and a second load would not see it.
+    command = CSMCIRAdapter({"models": [model]}).build_command(
         EvalRequest("csmcir", checkpoint["checkpoint_id"], "fashioniq_original_split", fashioniq, tmp_path / "output.json")
     )
 
