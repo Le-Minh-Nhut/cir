@@ -1238,6 +1238,8 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
     selected_auxiliary_models = [args.model] if args.model in auxiliary_model_ids() else ([] if args.model else sorted(auxiliary_model_ids()))
     if args.download_auxiliary_assets and selected_auxiliary_models:
         auxiliary_args = ["--model", selected_auxiliary_models[0]] if args.model else ["--all"]
+        if getattr(args, "stage_caption_aliases", False):
+            auxiliary_args.append("--stage-caption-aliases")
         auxiliary = run_stage("auxiliary-assets", command("download_auxiliary_assets.py", *auxiliary_args), model_id=args.model, receipt=True, required_capabilities={"allow_network", "allow_large_downloads"})
     elif args.download_auxiliary_assets:
         auxiliary = Stage("auxiliary-assets", skipped="selected model has no registered auxiliary assets")
@@ -2230,6 +2232,10 @@ def parser_for() -> argparse.ArgumentParser:
     parser.add_argument("--sync-sources", action="store_true", help="sync selected official source repositories")
     parser.add_argument("--download-checkpoints", action="store_true", help="download selected registry checkpoints")
     parser.add_argument("--download-auxiliary-assets", action="store_true", help="obtain selected model auxiliary evaluation assets")
+    parser.add_argument("--stage-caption-aliases", action="store_true",
+                        help="with --download-auxiliary-assets, stage a published source-compatible caption at a "
+                             "registered asset whose own source was never published (CSMCIR COT_ours2). The run is "
+                             "then a labelled variant, not official parity: workbench/docs/COT_OURS2_AUDIT.md")
     parser.add_argument("--evaluate", action="store_true", help="run guarded official reproduction commands")
     parser.add_argument("--rebuild-index", action="store_true", help="validate and rebuild the derived result index")
     parser.add_argument("--serve", action="store_true", help="serve after pipeline stages")

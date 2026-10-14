@@ -585,3 +585,158 @@ def test_clvc_net_auxiliary_resnet50_resolves_to_user_cache_path(monkeypatch, tm
     assert Path(preflight_asset["path"]) == expected
     assert Path(preflight_asset["path"]) == resolved
     assert not Path(preflight_asset["path"]).is_relative_to(source_root)
+
+
+def _alias_fixture(tmp_path: Path, monkeypatch) -> tuple:
+    """A config whose third-party root, dataset root and artifacts root are all throwaway.
+
+    The published Qwen caption is written into the dataset root with the digest the registry
+    declares, so alias staging has a real file to copy.
+    """
+    from dataclasses import replace
+    from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination
+    from workbench.backend.operator_config import resolve_config
+
+    config = replace(
+        resolve_config(),
+        WORKBENCH_THIRD_PARTY_ROOT=tmp_path / "third_party",
+        FASHIONIQ_ROOT=tmp_path / "FashionIQ",
+        WORKBENCH_ARTIFACTS_ROOT=tmp_path / "artifacts",
+    )
+    (config.FASHIONIQ_ROOT / "qwen_captions").mkdir(parents=True)
+    for asset in auxiliary_assets_for_model("csmcir"):
+        if asset["family"] != "Qwen captions":
+            continue
+        published = asset["expected_sha256"]
+        body = json.dumps({f"ID{i}": {"Final_Caption": f"caption {i}"} for i in range(3)}).encode()
+        assert published  # the fixture relies on a real declared digest
+        (config.FASHIONIQ_ROOT / "qwen_captions" / Path(asset["destination_path"]).name).write_bytes(body)
+    # Pin the alias digest to the fixture body so the copy verifies.
+    cot = [a for a in auxiliary_assets_for_model("csmcir") if a["family"] == "COT_ours2 captions"]
+    for asset in cot:
+        dest = auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
+        asset["caption_alias_from"]["expected_sha256"] = hashlib.sha256(body).hexdigest()
+    return config, cot
+
+
+def test_caption_alias_stages_a_copy_never_a_symlink(tmp_path: Path, monkeypatch) -> None:
+    """The alias must be a real file inside the checkout: the runtime rejects a symlink there."""
+    module = load_module()
+    config, cot = _alias_fixture(tmp_path, monkeypatch)
+
+    for asset in cot:
+        staged = module.Asset(
+            asset["model_id"], asset["family"], Path(asset["destination_path"]).name,
+            module.auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT),
+            True, asset["automatic_download_available"], None, None, None,
+            asset["provenance_status"], None, None, asset.get("content_contract"),
+            asset["caption_alias_from"],
+        )
+        ok, message = module.stage_caption_alias(staged, fashioniq_root=config.FASHIONIQ_ROOT)
+        assert ok, message
+        assert staged.destination.is_file()
+        assert not staged.destination.is_symlink()
+        assert staged.destination.is_relative_to(config.WORKBENCH_THIRD_PARTY_ROOT)
+
+
+def test_caption_alias_refuses_a_verified_asset(tmp_path: Path, monkeypatch) -> None:
+    """A checksum-verified asset is never replaced by an alias."""
+    module = load_module()
+    config, cot = _alias_fixture(tmp_path, monkeypatch)
+    asset = dict(cot[0])
+    asset["provenance_status"] = "VERIFIED"
+    staged = module.Asset(
+        asset["model_id"], asset["family"], Path(asset["destination_path"]).name,
+        module.auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT),
+        True, False, None, None, None, "VERIFIED", None, None, None, asset["caption_alias_from"])
+    ok, message = module.stage_caption_alias(staged, fashioniq_root=config.FASHIONIQ_ROOT)
+    assert not ok
+    assert "checksum-verified" in message
+    assert not staged.destination.exists()
+
+
+def test_caption_alias_refuses_bytes_that_are_not_the_published_file(tmp_path: Path, monkeypatch) -> None:
+    """If the staged Qwen caption is not the declared published file, nothing is written."""
+    module = load_module()
+    config, cot = _alias_fixture(tmp_path, monkeypatch)
+    asset = cot[0]
+    published = config.FASHIONIQ_ROOT / "qwen_captions" / Path(asset["caption_alias_from"]["source_path"]).name
+    published.write_bytes(b'{"X": {"Final_Caption": "not the published file"}}')
+    staged = module.Asset(
+        asset["model_id"], asset["family"], Path(asset["destination_path"]).name,
+        module.auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT),
+        True, False, None, None, None, asset["provenance_status"], None, None, None,
+        asset["caption_alias_from"])
+    ok, message = module.stage_caption_alias(staged, fashioniq_root=config.FASHIONIQ_ROOT)
+    assert not ok
+    assert "not the declared published file" in message
+    assert not staged.destination.exists()
+
+
+def test_preflight_accepts_a_manifest_recorded_alias_but_not_a_stray_file(tmp_path: Path, monkeypatch) -> None:
+    """Only bytes the workbench staged as an alias are accepted; anything else stays a blocker."""
+    from workbench.backend.operator_config import resolve_config
+    from workbench.backend.preflight import model_requirements
+    from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, load_registry
+
+    module = load_module()
+    config, cot = _alias_fixture(tmp_path, monkeypatch)
+    asset = cot[0]
+    destination = auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(b'{"ID0": {"Final_Caption": "operator own"}}')
+
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "csmcir")
+    cfg = WorkbenchConfig(
+        config.FASHIONIQ_ROOT, config.FASHIONIQ_ROOT, config.FASHIONIQ_ROOT,
+        "127.0.0.1", 8000, 5173, tmp_path / "ckpt", tmp_path / "results",
+        config.WORKBENCH_THIRD_PARTY_ROOT, config.WORKBENCH_ARTIFACTS_ROOT)
+    stray = model_requirements(model, cfg)
+    assert any(str(destination) in block for block in stray["blocks"]), stray["blocks"]
+    assert not stray["warnings"] or all("alias" not in w for w in stray["warnings"])
+
+    # Now record it the way the staging path does, with the bytes on disk.
+    digest = hashlib.sha256(destination.read_bytes()).hexdigest()
+    manifest = config.WORKBENCH_ARTIFACTS_ROOT / "auxiliary" / "download_manifest.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(json.dumps([{
+        "destination": str(destination),
+        "downloaded_sha256": digest,
+        "staged_as": "SOURCE_COMPATIBLE_CAPTION_ALIAS",
+        "source_revision": asset["caption_alias_from"]["source_revision"],
+        "alias_source_path": asset["caption_alias_from"]["source_path"],
+    }]))
+    accepted = model_requirements(model, cfg)
+    assert not any(str(destination) in block for block in accepted["blocks"]), accepted["blocks"]
+    summary = [w for w in accepted["warnings"] if "source-compatible caption alias" in w]
+    assert len(summary) == 1, accepted["warnings"]
+
+
+def test_preflight_rejects_a_manifest_alias_whose_bytes_changed(tmp_path: Path, monkeypatch) -> None:
+    """A managed alias that was edited afterwards stops being a variant and blocks again."""
+    from workbench.backend.preflight import model_requirements
+    from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, load_registry
+
+    config, cot = _alias_fixture(tmp_path, monkeypatch)
+    asset = cot[0]
+    destination = auxiliary_destination(asset, config.WORKBENCH_THIRD_PARTY_ROOT, config.FASHIONIQ_ROOT)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(b'{"ID0": {"Final_Caption": "as staged"}}')
+    good = hashlib.sha256(destination.read_bytes()).hexdigest()
+    destination.write_bytes(b'{"ID0": {"Final_Caption": "edited afterwards"}}')
+
+    manifest = config.WORKBENCH_ARTIFACTS_ROOT / "auxiliary" / "download_manifest.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(json.dumps([{
+        "destination": str(destination), "downloaded_sha256": good,
+        "staged_as": "SOURCE_COMPATIBLE_CAPTION_ALIAS",
+    }]))
+
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "csmcir")
+    cfg = WorkbenchConfig(
+        config.FASHIONIQ_ROOT, config.FASHIONIQ_ROOT, config.FASHIONIQ_ROOT,
+        "127.0.0.1", 8000, 5173, tmp_path / "ckpt", tmp_path / "results",
+        config.WORKBENCH_THIRD_PARTY_ROOT, config.WORKBENCH_ARTIFACTS_ROOT)
+    reqs = model_requirements(model, cfg)
+    assert any("COT_ours2 captions" in block for block in reqs["blocks"]), reqs["blocks"]
+    assert not any("source-compatible caption alias" in w for w in reqs["warnings"])

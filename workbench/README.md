@@ -80,7 +80,7 @@ Mock results are development fixtures and must never be presented as experimenta
 
 `registry/preparation_contracts.yaml` is declarative. DCNet requires author-generated GloVe validation PKLs and unresolved ResNet-50 weights; do not regenerate PKLs with unseeded OOV vectors. CLVC-Net, TG-CIR, and LIMN have independent resized-image contracts. Required assets with unknown local location fail closed. Legacy pretrained assets remain local and require provenance checks. See [docs/LEGACY_REPRODUCTION_RUNBOOK.md](docs/LEGACY_REPRODUCTION_RUNBOOK.md).
 
-For CSMCIR, standard FashionIQ and author-provided Qwen captions are separate from required `COT_ours2/fashioniq` captions. The authorized Autopilot auxiliary stage can download registry-declared Qwen assets; exact COT author acquisition source remains unverified. Never invent or substitute files. Aggregate-only evaluation is not a per-query export.
+For CSMCIR, standard FashionIQ and author-provided Qwen captions are separate from required `COT_ours2/fashioniq` captions. The authorized Autopilot auxiliary stage can download registry-declared Qwen assets; the COT author acquisition source remains unverified, so the model stays blocked by default. Because the published Qwen caption for a category and split is source-compatible with what the COT path reads — same basename, exact gallery-id coverage, the `Final_Caption` every executing consumer uses — an explicitly opted-in run may stage it as a labelled variant (`--download-auxiliary-assets --stage-caption-aliases`). That is `SOURCE_COMPATIBLE_EQUIVALENCE_UNKNOWN`, never official parity; see `workbench/docs/COT_OURS2_AUDIT.md`. Never invent or substitute files silently. Aggregate-only evaluation is not a per-query export.
 
 ## Results and analysis
 

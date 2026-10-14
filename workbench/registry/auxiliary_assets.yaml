@@ -72,6 +72,13 @@ assets:
 - model_id: csmcir
   family: COT_ours2 captions
   required_for: official_evaluation
+  # SOURCE_COMPATIBLE_EQUIVALENCE_UNKNOWN (workbench/docs/COT_OURS2_AUDIT.md).
+  # The author never published `COT_ours2/fashioniq/*`, and no copy is reachable, so the strict
+  # requirement stays UNVERIFIED and csmcir stays blocked by default. The published Qwen caption of
+  # the same category and split is a source-compatible stand-in: it is the file the author ships, its
+  # gallery-id coverage is exact against the declared split, and it carries the `Final_Caption` every
+  # executing consumer reads. `caption_alias_from` names that published asset so an explicitly
+  # opted-in run can stage it at this path, labelled as a variant rather than as official parity.
   source_type: none
   source_repo: null
   source_revision: null
@@ -80,6 +87,11 @@ assets:
   destination_path: COT_ours2/fashioniq/dress_cot_val.json
   automatic_download_available: false
   provenance_status: UNVERIFIED
+  caption_alias_from:
+    source_path: fashioniq_qwen_captions/qwen_captions/dress_cot_val.json
+    source_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
+    expected_sha256: b7129bafc56ed7f33ea5175e565358b042b5ef9263af002758564579ebb5b6a6
+    expected_size_bytes: 2817386
   expected_sha256: null
   content_contract:
     record_key_fields:
@@ -98,6 +110,11 @@ assets:
   destination_path: COT_ours2/fashioniq/shirt_cot_val.json
   automatic_download_available: false
   provenance_status: UNVERIFIED
+  caption_alias_from:
+    source_path: fashioniq_qwen_captions/qwen_captions/shirt_cot_val.json
+    source_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
+    expected_sha256: bbe6f689dfe0c5fcc897979f90877fcaa2c4c8d3dc405cb64f1507fc78452cc9
+    expected_size_bytes: 5015979
   expected_sha256: null
   content_contract:
     record_key_fields:
@@ -116,6 +133,11 @@ assets:
   destination_path: COT_ours2/fashioniq/toptee_cot_val.json
   automatic_download_available: false
   provenance_status: UNVERIFIED
+  caption_alias_from:
+    source_path: fashioniq_qwen_captions/qwen_captions/toptee_cot_val.json
+    source_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
+    expected_sha256: acdacc3d8d0565e645324ddd838cb288f1bc69434635d83ece127b93dacac1cc
+    expected_size_bytes: 3929303
   expected_sha256: null
   content_contract:
     record_key_fields:

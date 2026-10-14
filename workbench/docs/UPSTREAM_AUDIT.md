@@ -50,7 +50,17 @@ Pinned local `CSMCIR@774f94e2076ff17ea91703a6239d2a08f0e1a44e` dispatches `valid
 
 ## CSMCIR auxiliary asset audit
 
-**COT source: NOT FOUND.** Pinned author [repository tree](https://api.github.com/repos/qzp2018/CSMCIR/git/trees/774f94e2076ff17ea91703a6239d2a08f0e1a44e?recursive=1), exact-path GitHub history requests, releases/tags, README, and author-linked [Hugging Face revision tree](https://huggingface.co/api/models/peng12138/CSMCIR/tree/cf0c19bb346266c295b4b5772ebf03bd1c4f0467?recursive=true&expand=false) were checked. None contains `COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json`; exact GitHub paths return 404 and path-history requests return `[]`. No automatic COT URL is registered. Final preflight reports `BLOCKED: required COT_ours2 captions have no verified automatic acquisition source` until files are manually placed with known provenance.
+**COT source: NOT FOUND.** Pinned author [repository tree](https://api.github.com/repos/qzp2018/CSMCIR/git/trees/774f94e2076ff17ea91703a6239d2a08f0e1a44e?recursive=1), exact-path GitHub history requests, releases/tags, README, and author-linked [Hugging Face revision tree](https://huggingface.co/api/models/peng12138/CSMCIR/tree/cf0c19bb346266c295b4b5772ebf03bd1c4f0467?recursive=true&expand=false) were checked. None contains `COT_ours2/fashioniq/{dress,shirt,toptee}_cot_val.json`; exact GitHub paths return 404 and path-history requests return `[]`. No automatic COT URL is registered. Final preflight reports `BLOCKED: required COT_ours2 captions have no verified automatic acquisition source` until files are placed, either by the operator or by the opt-in alias below.
+
+**COT is source-compatible with the published Qwen captions — equivalence unproven.**
+`workbench/docs/COT_OURS2_AUDIT.md` establishes, by running the pinned loaders, that the published
+Qwen validation captions satisfy both executing consumers: the dataset's `qwen_captions` read and the
+gallery extractor's `COT_ours2/fashioniq` read (exact gallery-id set equality, 3817 / 6346 / 5373, and
+every caption reaching `extract_target_caption_features` equal to the published `Final_Caption`). It
+also shows no reachable copy of the author's own COT files and no evidence that identifies them with
+the published bytes, so the verdict is `SOURCE_COMPATIBLE_EQUIVALENCE_UNKNOWN`. An explicitly opted-in
+run may stage the published file at the COT destination, labelled as a variant, never as official
+parity; the strict requirement and the default blocker are unchanged.
 
 **Qwen source: verified immutable revision.** Pinned upstream [README](https://raw.githubusercontent.com/qzp2018/CSMCIR/774f94e2076ff17ea91703a6239d2a08f0e1a44e/README.md) directs Qwen captions to `https://huggingface.co/peng12138/CSMCIR`. Immutable author revision `cf0c19bb346266c295b4b5772ebf03bd1c4f0467` contains `fashioniq_qwen_captions/qwen_captions/{dress,shirt,toptee}_cot_val.json`. Registry URLs use `/resolve/cf0c19bb346266c295b4b5772ebf03bd1c4f0467/`; upstream publishes no file SHA-256, so local manifest hashes remain local evidence only.
 

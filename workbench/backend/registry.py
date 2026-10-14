@@ -511,6 +511,45 @@ def validate_auxiliary_asset(
 def auxiliary_model_ids() -> set[str]:
     return {asset["model_id"] for asset in load_auxiliary_assets()}
 
+def caption_alias_evidence(asset: dict[str, Any], path: Path, config: Any) -> dict[str, Any] | None:
+    """Describe a staged caption alias, or None when the file there is not one.
+
+    The download manifest is the evidence of what the workbench itself wrote; a file at an
+    unverified asset's destination counts as a deliberate alias only when the manifest records it as
+    one AND the bytes still match what was staged. Anything else is someone else's file and stays a
+    blocker, so an operator's own COT captions are never silently reclassified as a variant.
+    """
+    alias = asset.get("caption_alias_from")
+    if not alias:
+        return None
+    manifest = Path(getattr(config, "WORKBENCH_ARTIFACTS_ROOT", "")) / "auxiliary" / "download_manifest.json"
+    try:
+        entries = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    for entry in entries if isinstance(entries, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("destination") != str(path):
+            continue
+        if entry.get("staged_as") != "SOURCE_COMPATIBLE_CAPTION_ALIAS":
+            return None
+        recorded = entry.get("downloaded_sha256")
+        try:
+            actual = sha256_file(path)
+        except OSError:
+            return None
+        if not recorded or actual != recorded:
+            return None
+        return {
+            "staged_as": entry["staged_as"],
+            "alias_source_path": entry.get("alias_source_path") or alias.get("source_path"),
+            "source_revision": entry.get("source_revision") or alias.get("source_revision"),
+            "staged_sha256": actual,
+            "equivalence": "SOURCE_COMPATIBLE_EQUIVALENCE_UNKNOWN",
+        }
+    return None
+
 
 def source_runtime_artifacts(model: dict[str, Any]) -> list[dict[str, Any]]:
     """Paths *inside a model's source checkout* the workbench legitimately creates.

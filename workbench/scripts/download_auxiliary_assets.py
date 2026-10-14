@@ -36,6 +36,11 @@ class Asset:
     expected_sha256_prefix: str | None = None
     expected_size_bytes: int | None = None
     content_contract: dict[str, Any] | None = None
+    #: A published asset that can stand in for an unattainable one — only for an asset whose
+    #: `provenance_status` is not VERIFIED and which declares it in the registry (CSMCIR's
+    #: COT_ours2 captions point at the author's Qwen captions). Absent means the asset has no
+    #: compatible stand-in and stays strictly unattainable.
+    caption_alias_from: dict[str, Any] | None = None
 
 
 def assets(model_ids: set[str], third_party_root: Path, fashioniq_root: Path) -> tuple[Asset, ...]:
@@ -54,6 +59,7 @@ def assets(model_ids: set[str], third_party_root: Path, fashioniq_root: Path) ->
             asset.get("expected_sha256_prefix"),
             asset.get("expected_size_bytes"),
             asset.get("content_contract"),
+            asset.get("caption_alias_from"),
         )
         for model_id in model_ids
         for asset in auxiliary_assets_for_model(model_id)
@@ -115,6 +121,81 @@ def verify(asset: Asset, *, fashioniq_root: Path | None = None) -> bool:
         ):
             print(issue)
     return res.ok
+
+#: Alias staging is opt-in. The registry names an alias source only for an asset with no verified
+#: provenance (CSMCIR's COT_ours2 captions), and even then the run must ask for it: see
+#: `workbench/docs/COT_OURS2_AUDIT.md` for why the published stand-in is source-compatible but not
+#: proven identical to the file the authors evaluated with.
+CAPTION_ALIAS_FLAG = "--stage-caption-aliases"
+
+def alias_source_url(alias: dict[str, Any], source_repo: str) -> str | None:
+    source_path = alias.get("source_path")
+    if not source_path:
+        return None
+    return f"{source_repo}/resolve/{alias['source_revision']}/{source_path}"
+
+def stage_caption_alias(asset: Asset, *, fashioniq_root: Path | None = None) -> tuple[bool, str]:
+    """Copy the published stand-in to the unattainable asset's destination.
+
+    A copy, never a symlink: the runtime treats a symlink at a declared auxiliary asset as an
+    unauthorized source change, and the file must live inside the model's checkout so the pinned
+    evaluator's `base_path` resolves it. The copy is verified against the alias's published digest
+    before it replaces anything, and the destination's own registry hash is deliberately NOT
+    satisfied — the staged bytes are a variant, and the caller keeps reporting them as one.
+    """
+    alias = asset.caption_alias_from
+    if not alias:
+        return False, f"{asset.destination}: no caption alias is declared for this asset"
+    if asset.provenance_status == "VERIFIED":
+        return False, f"{asset.destination}: refusing to alias a checksum-verified asset"
+    source_path = alias.get("source_path")
+    if not source_path or fashioniq_root is None:
+        return False, f"{asset.destination}: alias has no resolvable published source"
+    # The published stand-in is the Qwen file the downloader already stages, so the source is the
+    # staged Qwen caption, not a second download of the same bytes.
+    staged = fashioniq_root / "qwen_captions" / Path(source_path).name
+    if not staged.is_file():
+        return False, f"{asset.destination}: the published caption is not staged yet: {staged}"
+    digest = sha256_file(staged)
+    if alias.get("expected_sha256") and digest != alias["expected_sha256"]:
+        return False, f"{asset.destination}: staged caption {staged} is not the declared published file (sha256={digest})"
+    if asset.destination.is_symlink():
+        return False, f"{asset.destination}: a symlink is never written as a declared auxiliary asset"
+    asset.destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = asset.destination.with_suffix(asset.destination.suffix + ".alias.part")
+    shutil.copyfile(staged, temporary)
+    if sha256_file(temporary) != digest:
+        temporary.unlink(missing_ok=True)
+        return False, f"{asset.destination}: alias copy did not reproduce {staged} byte-for-byte"
+    os.replace(temporary, asset.destination)
+    return True, f"ALIASED {asset.destination} <- {staged} sha256={digest}"
+
+def record_alias(entries: list[dict], asset: Asset) -> list[dict]:
+    """Record an alias as workbench-managed, so a corrupt variant is repaired and resume sees it."""
+    alias = asset.caption_alias_from or {}
+    digest = sha256_file(asset.destination)
+    remaining = [entry for entry in entries if entry["destination"] != str(asset.destination)]
+    remaining.append(
+        {
+            "model_id": asset.model_id,
+            "asset_family": asset.family,
+            "filename": asset.filename,
+            "destination": str(asset.destination),
+            "source_url": alias_source_url(alias, "https://huggingface.co/peng12138/CSMCIR"),
+            "source_revision": alias.get("source_revision"),
+            "downloaded_sha256": digest,
+            "size_bytes": asset.destination.stat().st_size,
+            "downloaded_at": datetime.now(timezone.utc).isoformat(),
+            "official_hash_available": False,
+            "official_sha256": None,
+            # The distinction that keeps this honest: these bytes came from a source-compatible
+            # stand-in, not from an artifact the registry can vouch for.
+            "staged_as": "SOURCE_COMPATIBLE_CAPTION_ALIAS",
+            "alias_source_path": alias.get("source_path"),
+            "alias_source_sha256": alias.get("expected_sha256"),
+        }
+    )
+    return remaining
 
 
 #: Upper bound on any single download. When the registry declares an expected size it is the bound;
@@ -178,6 +259,13 @@ def parser_for() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true", help="show exact URLs and destinations without changes")
     parser.add_argument("--verify-only", action="store_true", help="verify all required local auxiliary assets without network")
     parser.add_argument("--force-redownload", action="store_true", help="replace verified-download destinations atomically")
+    parser.add_argument(
+        CAPTION_ALIAS_FLAG,
+        action="store_true",
+        help="stage a published, source-compatible caption at a registered asset's destination when that "
+             "asset has no verified source (CSMCIR COT_ours2). Opt-in: the result is a labelled variant, "
+             "not official parity. See workbench/docs/COT_OURS2_AUDIT.md",
+    )
     return parser
 
 
@@ -197,6 +285,14 @@ def main(argv: list[str] | None = None) -> int:
             if asset.required:
                 failed |= not verify(asset, fashioniq_root=config.FASHIONIQ_ROOT)
         return int(failed)
+    aliasable = tuple(asset for asset in items if asset.caption_alias_from and asset.required)
+    if args.dry_run and args.stage_caption_aliases:
+        for asset in aliasable:
+            staged = config.FASHIONIQ_ROOT / "qwen_captions" / Path(asset.caption_alias_from["source_path"]).name
+            print(f"DRY RUN: caption alias {asset.destination} <- {staged} "
+                  f"(published sha256={asset.caption_alias_from.get('expected_sha256')}, "
+                  f"currently {'staged' if staged.is_file() else 'not staged'})")
+        print("DRY RUN: no filesystem mutation.")
     # Deciding whether a file may be replaced needs evidence of WHO put it there, and the download
     # manifest is that evidence: it only ever records a file the workbench itself fetched. Inferring
     # ownership from the registry's `provenance_status` was wrong in both directions — it replaced an
@@ -270,6 +366,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"DOWNLOADED {asset.destination}: sha256={sha256_file(asset.destination)} ({hash_status})")
     if not selected:
         print("verified auxiliary downloads: complete")
+    if args.stage_caption_aliases:
+        for asset in aliasable:
+            ok, message = stage_caption_alias(asset, fashioniq_root=config.FASHIONIQ_ROOT)
+            print(message)
+            if ok:
+                entries = record_alias(entries, asset)
+                save_manifest(manifest_path(config.WORKBENCH_ARTIFACTS_ROOT), entries)
     for asset in unavailable:
         if not asset.destination.is_file():
             print(f"BLOCKED: required {asset.family} has no verified automatic acquisition source: {asset.destination}")

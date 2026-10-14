@@ -15,7 +15,8 @@ def model_requirements(
     """Resolve data, preparation, external asset, and fixed-link requirements."""
     from workbench.backend.fashioniq_layout import image_extension_problems, missing_paths
     from workbench.backend.registry import (
-        auxiliary_assets_for_model, auxiliary_destination, external_asset_statuses,
+        auxiliary_assets_for_model, auxiliary_destination, caption_alias_evidence,
+        external_asset_statuses,
         fashioniq_required_paths, preparation_contract_for_model, preparation_paths,
         validate_auxiliary_asset,
     )
@@ -29,6 +30,9 @@ def model_requirements(
     paths = list(dict.fromkeys((*raw, *generated)))
     raw_missing, generated_missing = missing_paths(raw), missing_paths(generated)
     blocks: list[str] = []
+    # Non-blocking statements the caller may surface: today only a deliberately staged caption alias,
+    # which allows a run to proceed while keeping the variant visible.
+    notes: list[str] = []
     layout = model.get("fashioniq_layout") or "FashionIQ"
     if contract:
         blocks.extend(f"raw benchmark input missing: {path}" for path in raw_missing)
@@ -53,7 +57,19 @@ def model_requirements(
                 blocks.append("required COT_ours2 captions have no verified automatic acquisition source")
         elif not res.ok:
             if res.status == "OPERATOR_SUPPLIED_UNVERIFIED":
-                blocks.append(f"{prefix}{asset['family']} unverified: {path} (operator-supplied unverified provenance)")
+                # An unverified asset that the workbench itself staged from a declared alias is a
+                # deliberate, labelled variant, not a stray file: the run asked for it and the
+                # manifest records which published bytes went in. It is accepted so the variant can
+                # be evaluated, and reported as a variant so no result is mistaken for official
+                # parity. Anything else at that path is still a blocker.
+                alias = caption_alias_evidence(asset, path, config)
+                if alias is not None:
+                    auxiliary[-1]["caption_alias"] = alias
+                    notes.append(f"{prefix}{asset['family']} staged as a source-compatible caption alias: "
+                                 f"{alias['alias_source_path']}@{alias['source_revision']} "
+                                 f"sha256={alias['staged_sha256']} — not official parity")
+                else:
+                    blocks.append(f"{prefix}{asset['family']} unverified: {path} (operator-supplied unverified provenance)")
             else:
                 for issue in res.issues:
                     blocks.append(f"{prefix}{asset['family']} invalid: {issue}")
@@ -84,7 +100,8 @@ def model_requirements(
     blocks.extend(f"external runtime asset {messages[item['status']]}: {item['name']}" +
                   (f" ({item['path']})" if item["path"] else "")
                   for item in asset_statuses if item["status"] != "VERIFIED_LOCAL_ASSET")
-    return {"paths": list(dict.fromkeys(paths)), "blocks": list(dict.fromkeys(blocks)), "warnings": [],
+    return {"paths": list(dict.fromkeys(paths)), "blocks": list(dict.fromkeys(blocks)),
+            "warnings": list(dict.fromkeys(notes)),
             "evidence": {"raw_inputs_missing": [str(path) for path in raw_missing],
                          "generated_artifacts_missing": [str(path) for path in generated_missing],
                          "image_extension_problems": image_problems, "auxiliary_assets": auxiliary,
