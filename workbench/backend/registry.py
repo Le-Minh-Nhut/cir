@@ -337,6 +337,14 @@ def auxiliary_assets_for_model(model_id: str) -> list[dict[str, Any]]:
 
 def auxiliary_destination(asset: dict[str, Any], third_party_root: Path, fashioniq_root: Path) -> Path:
     if asset["destination_scope"] == "user_cache":
+        # Some consumers hard-code their cache directory instead of honouring an environment
+        # variable, and the registry has to match the CONSUMER, not a convention. OpenAI's CLIP does
+        # exactly this: `clip.load` uses `download_root or os.path.expanduser("~/.cache/clip")` and
+        # never reads XDG_CACHE_HOME, so staging RN50x4 under an operator's XDG_CACHE_HOME put the
+        # weights where the evaluator would not look and left it downloading them itself.
+        fixed = asset.get("cache_root_fixed")
+        if fixed:
+            return Path(fixed).expanduser() / asset["destination_path"]
         env_var = asset["cache_root_env_var"]
         root = Path(os.environ[env_var]).expanduser() if os.environ.get(env_var) else Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser()
         if env_var in {"TORCH_HOME", "HF_HOME"} and not os.environ.get(env_var):

@@ -145,7 +145,11 @@ assets:
   source_revision: null
   source_path: null
   destination_scope: user_cache
-  destination_path: clip/RN50x4.pt
+  destination_path: RN50x4.pt
+  # OpenAI's CLIP does NOT read XDG_CACHE_HOME: `clip.load` resolves its cache as
+  # `download_root or os.path.expanduser("~/.cache/clip")` (openai/CLIP clip/clip.py:120). The
+  # registry must match the consumer, so this root is fixed rather than environment-driven.
+  cache_root_fixed: ~/.cache/clip
   cache_root_env_var: XDG_CACHE_HOME
   automatic_download_available: true
   expected_sha256: 7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd
@@ -158,7 +162,11 @@ assets:
   source_revision: null
   source_path: null
   destination_scope: user_cache
-  destination_path: clip/RN50x4.pt
+  destination_path: RN50x4.pt
+  # OpenAI's CLIP does NOT read XDG_CACHE_HOME: `clip.load` resolves its cache as
+  # `download_root or os.path.expanduser("~/.cache/clip")` (openai/CLIP clip/clip.py:120). The
+  # registry must match the consumer, so this root is fixed rather than environment-driven.
+  cache_root_fixed: ~/.cache/clip
   cache_root_env_var: XDG_CACHE_HOME
   automatic_download_available: true
   expected_sha256: 7e526bd135e493cef0776de27d5f42653e6b4c8bf9e0f653bb11773263205fdd

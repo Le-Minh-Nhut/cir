@@ -291,6 +291,31 @@ def test_an_operator_supplied_asset_is_never_replaced(monkeypatch, tmp_path: Pat
         "an operator's file must never be replaced without explicit force"
 
 
+def test_openai_clip_weights_ignore_xdg_cache_home(monkeypatch, tmp_path: Path) -> None:
+    """FA-05: the staged location must match the CONSUMER, not a convention.
+
+    OpenAI's CLIP resolves its cache as `download_root or os.path.expanduser("~/.cache/clip")` and
+    never reads XDG_CACHE_HOME (openai/CLIP `clip/clip.py:120`). Treating RN50x4 as an
+    environment-driven cache staged it outside the operator's real cache whenever XDG_CACHE_HOME was
+    set, so the evaluator would not find the weights and would fetch them itself.
+    """
+    from pathlib import Path as _Path
+
+    from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination
+
+    # A commandeer XDG_CACHE_HOME must not move these weights.
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "somewhere-else"))
+    source_root = tmp_path / "source"
+    fashioniq_root = tmp_path / "fashioniq"
+
+    for model_id in ("combiner_rn50x4_noft", "clip4cir_rn50x4_fullft"):
+        asset = next(item for item in auxiliary_assets_for_model(model_id)
+                     if "RN50x4" in item["family"])
+        resolved = auxiliary_destination(asset, source_root, fashioniq_root)
+        assert resolved == _Path("~/.cache/clip/RN50x4.pt").expanduser(), (
+            f"{model_id}: RN50x4 must land in OpenAI CLIP's own cache")
+        assert not resolved.is_relative_to(tmp_path / "somewhere-else")
+
 def test_failed_download_leaves_no_corrupt_destination(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
     config = config_at(tmp_path)

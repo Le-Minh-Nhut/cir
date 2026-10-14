@@ -86,6 +86,45 @@ registers.
 So CSMCIR is `BLOCKED_SOURCE_UNIMPORTABLE`. The Qwen and `COT_ours2` requirements below are real but
 strictly downstream of this.
 
+## LAVIS-hosted evaluators: the cache root is hard-coded to an author machine path
+
+Every LAVIS-based checkout in the registry — CSMCIR, SPRC, and the five iLearn models — vendors a
+`lavis/configs/default.yaml` whose `cache_root` is an absolute path on the author's cluster, not a
+user cache:
+
+| Model | `cache_root` in the pinned `lavis/configs/default.yaml` |
+| --- | --- |
+| CSMCIR | `/raid/temp/home/.cache/lavis` |
+| SPRC | `/raid/temp/home/.cache/lavis` |
+| HABIT | `/export/home/.cache/lavis` |
+| AirKnow | `/export/home/.cache/lavis` |
+| ConeSep | `/export/home/.cache/lavis` |
+| INTENT | `/export/home/.cache/lavis` |
+| HINT | `/export/home/.cache/lavis` |
+
+LAVIS resolves it through `registry.get_path("cache_root")` (`src/lavis/common/utils.py:47,
+datasets/builders/base_dataset_builder.py:108`), which reads the config file, **not** an environment
+variable. So the location the workbench records for LAVIS weights (`~/.cache/lavis`, from the
+registry's `user_cache` scope) is not where these evaluators look, and on a fresh host they would
+attempt to download into a path that usually does not exist.
+
+Two consequences, both real:
+
+1. On a host where `/raid/temp/home` or `/export/home` does not exist, the LAVIS download fails, and
+   the failure surfaces as a download error deep inside the evaluator rather than as a missing asset.
+2. Where it does exist, the evaluator writes there instead of the memory not tracked by the
+   workbench's provenance records.
+
+The honest handling is the same as for the other source defects: report it rather than patch it.
+Editing `lavis/configs/default.yaml` modifies the official implementation and would change where the
+evaluator's weights come from, so it is left as an operator step. The fix is one line — set
+`cache_root` to the path the registry records — and being a config file rather than code, it is a
+far smaller deviation than the CSMCIR import defect.
+
+CSMCIR and SPRC are already blocked for other reasons, so this only changes what an operator must do
+for a model that would otherwise run. It is recorded here so that the first iLearn-family experiment
+does not spend its debugging time on a download landing in the wrong directory.
+
 ## CSMCIR checkpoint hash: author-published after all
 
 The row above records `expected_sha256: null` on the grounds that upstream publishes no hash. For the

@@ -85,3 +85,18 @@ The five iLearn models (Air-Know, ConeSep, HABIT, INTENT, HINT) and PAIR have pi
 neither an `ArgumentParser` nor a `__main__`, so nothing can pass them arguments; each reports
 `command not runnable`. They would additionally need `captions/correction_dict_{dress,shirt,toptee}.json`,
 which the canonical distribution does not ship and no iLearn repository publishes.
+
+## One edit to make before running any LAVIS-based model
+
+Every LAVIS checkout in the registry vendors a `lavis/configs/default.yaml` whose `cache_root` is an
+absolute path on the author's cluster — `/raid/temp/home/.cache/lavis` for CSMCIR and SPRC,
+`/export/home/.cache/lavis` for Air-Know, ConeSep, HABIT, INTENT and HINT. LAVIS reads that value
+from the config file, not from the environment, so the weights the workbench stages under
+`~/.cache/lavis` are not where the evaluator looks, and on a host without those directories the
+download fails from inside the evaluator.
+
+Before running an iLearn-family or SPRC model, set `cache_root` in that model's
+`lavis/configs/default.yaml` to the path the registry records for its weights. It is a config value,
+not code, and it is the difference between a download landing in the right place and a confusing
+failure at run time. `workbench/docs/UPSTREAM_AUDIT.md` records the exact per-model values.
+
