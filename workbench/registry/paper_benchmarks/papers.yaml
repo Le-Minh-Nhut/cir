@@ -5,7 +5,7 @@
 #
 # `reported_metrics` are values the paper prints. `derived_metrics` are values the workbench
 # computes from printed ones and carry their formula; they are never attributed to the authors.
-registry_version: extract-310385ffc1c6
+registry_version: extract-734c1618745e
 references:
 - reference_id: airknow_fiq_0pct
   model_id: airknow
@@ -568,6 +568,64 @@ references:
     OpenAlex for OA locations, direct fetches of dl.acm.org and the u-pad repository copy, Semantic Scholar
     for the author-linked OA PDF).
   review_status: PENDING
+- reference_id: clvc_net_sigir21_fiq_table1
+  model_id: clvc_net
+  paper_id: clvc_net_sigir21
+  paper_title: Comprehensive Linguistic-Visual Composition Network for Image Retrieval
+  method_name: CLVC-Net
+  method_variant: main method (Table 1 row CLVC-Net); Table 3 repeats the same FashionIQ average as an
+    ablation baseline
+  backbone: ResNet-50 visual encoder with a CLIP-based textual branch (paper §3); the paper prints no
+    CLIP variant string for this row
+  checkpoint_id: author_drive_unresolved
+  checkpoint_training_noise_pct: null
+  checkpoint_mapping_status: UNVERIFIED
+  dataset: fashioniq
+  dataset_version: official FashionIQ validation split, three categories (dress, shirt, toptee)
+  split: val
+  gallery_protocol: fashioniq_val_split
+  reference_excluded: true
+  evaluation_noise_pct: 0
+  preprocessing_id: null
+  augmentation_policy: null
+  metric_definition: Recall@K = fraction of queries whose target image is in the top K
+  aggregation_method: per-category R@10/R@50 columns, then the printed average columns for R@10 and R@50
+  reported_metrics:
+    mean: null
+    r10: 30.7
+    r50: 58.41
+  derived_metrics:
+  - derivation_formula: (30.70 + 58.41) / 2
+    key: mean
+    provenance: WORKBENCH_DERIVED
+    rounding_policy: round-half-up to 2 decimals
+    source_metrics:
+    - r10
+    - r50
+    value: 44.56
+  category_metrics:
+    dress:
+      r10: 29.85
+      r50: 56.47
+    shirt:
+      r10: 28.75
+      r50: 54.76
+    toptee:
+      r10: 33.5
+      r50: 64.0
+  metric_provenance:
+    paper_column: 'FashionIQ block: Dress/Shirt/Toptee R@10 and R@50, then the average R@10 and R@50 columns'
+    paper_page: 5
+    paper_row: CLVC-Net
+    paper_table: Table 1
+    source_excerpt_or_description: '''Table 1: Performance comparison on FashionIQ and Shoes.'' The CLVC-Net
+      row reads 29.85 56.47 28.75 54.76 33.50 64.00 30.70 58.41 for FashionIQ. Table 3 repeats 30.70 /
+      58.41 as the FashionIQ average.'
+  reference_status: VERIFIED
+  verification_method: 'Independent verifier pass plus an implementer pass, both from the same author-hosted
+    bytes: `pdftotext -layout` of the table, and the row''s per-category values checked against the printed
+    average columns.'
+  review_status: CONFIRMED
 - reference_id: habit_aaai26_table1_fiq_n00
   model_id: habit
   paper_id: habit_aaai26
@@ -1176,7 +1234,7 @@ references:
   backbone: 'ResNet-50 pretrained on ImageNet (paper: ''we select ResNet50 (He et al. 2016) pretrained
     on ImageNet as our backbone encoder'')'
   checkpoint_id: fashioniq_run_directory
-  checkpoint_training_noise_pct: 0
+  checkpoint_training_noise_pct: null
   checkpoint_mapping_status: UNVERIFIED
   dataset: fashioniq
   dataset_version: official FashionIQ release, validation annotations (cap.{dress,shirt,toptee}.val.json)

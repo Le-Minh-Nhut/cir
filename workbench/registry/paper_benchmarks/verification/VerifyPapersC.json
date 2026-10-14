@@ -1,0 +1,195 @@
+{
+  "checks": [
+    {
+      "claimed": {
+        "mean": 40.83,
+        "r10": 27.78,
+        "r50": 53.89
+      },
+      "discrepancy": "None on any claimed number. One field-level disagreement with the registry, not with the paper: the record sets checkpoint_training_noise_pct=0 while workbench/registry/models.yaml:602 records checkpoint_training_noise_pct: null for the same unresolved Google-Drive run directory. Since no DCNet file has been opened by anyone, 0% noise is an inference from 'Table 1 is a clean comparison', not a property of an observed artifact, and it should match the registry's null.",
+      "evidence": "STATIC_AUDIT. Source: repo-shipped PDF, sha256 1a87a96185ab1d5a057512a72504b128adc2fd589b5dc0e0ebe8856f559e8ad4, 1764944 B (workbench/third_party/DCNet/DCNet_Kim2021.pdf); `git hash-object` = d36cfb487ad77fbaae853275b0698df098c8121e, identical to the GitHub blob sha at pinned commit 68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb, so the audited bytes are the pinned upstream bytes. Route 1 (text): `pdftotext -layout` -> Table 1 row is the LAST data row, bold+underlined: 'DCNet 28.95 56.07 23.95 47.30 30.44 58.29 40.83'. Route 2 (visual): `pdftoppm -png -r 200 -f 5 -l 5` then read the page image -> identical. Column count established visually: header row 2 = 'Category | Dress | Shirt | Toptee | Total', row 3 = 'Metric | R@10 R@50 | R@10 R@50 | R@10 R@50 | Avg' \u2014 exactly 6 cell columns + ONE 'Total Avg' column. The paper prints NO macro R@10 and NO macro R@50, and no column is headed R@10-Avg/R@50-Avg. So the record's r10=27.78/r50=53.89 as WORKBENCH_DERIVED and mean=40.83 as PAPER_REPORTED is the correct shape, not an inversion. Arithmetic re-derived independently: (28.95+23.95+30.44)/3 = 27.7800; (56.07+47.30+58.29)/3 = 53.8867; (27.7800+53.8867)/2 = 40.8333 -> 40.83 = the printed cell. Column semantics cross-checked on a NON-DCNet row to prove the Avg definition is global: TIRG row 14.87/34.66, 18.26/37.89, 19.08/39.62 -> macro 17.4033/37.3900 -> mean 27.3967 -> printed 27.40; VAL(GloVe) row -> 24.1467/46.6100 -> 35.3783 -> printed 35.38. Page number: Table 1 renders on printed page 5 (PDF page 5; pdfinfo Pages=9) \u2014 record's paper_page=5 correct. Row identity: Table 2 is the FashionIQ-2020 leaderboard with a single metric AvgR@(10,50) (Ours 0.52) and Table 3 is the ablation; neither was used. Backbone claim re-checked: dcnet.txt `grep -n 'pretrained on ImageNet'` -> line 276-277 'we select ResNet50 (He et al. 2016) pretrained on ImageNet (Wang et al. 2014) as our backbone encoder' \u2014 the record's quoted sentence is accurate. Method variant re-checked: dcnet.txt line 235 prints 'calculated as s = sr + sc' (joint score) and trainer_joint.py:239 fuses F.log_softmax(comp)+F.log_softmax(corr) \u2014 the record's 's = s_r + s_c' wording matches the paper's own text. GALLERY PROTOCOL: the record asserts the paper is silent, and my independent `grep -n -i 'gallery|candidate|exclud'` over the whole extracted text returned ZERO matches, so the paper states neither a gallery construction nor a reference policy. reference_excluded=true / fashioniq_full_gallery_ref_excluded are therefore code-derived, as the record itself says (trainer/trainer_joint.py:217-218 masks the candidate column to -10e10 in BOTH branches, :228/:232/:240 topk k=50; data_loader/CE_dataset.py:26-28 loads image_splits/split.{cat}.val.json while :60-72 reads the caps file that carries source targets). Record is honest about that provenance.",
+      "observed_in_source": {
+        "dress_r10": 28.95,
+        "dress_r50": 56.07,
+        "macro_r10_derived": 27.78,
+        "macro_r50_derived": 53.89,
+        "printed_column": 40.83,
+        "shirt_r10": 23.95,
+        "shirt_r50": 47.3,
+        "toptee_r10": 30.44,
+        "toptee_r50": 58.29
+      },
+      "provenance_error": null,
+      "recommended_action": "Keep the values as recorded. Do not 'fix' 40.83 into derived_metrics and do not promote 27.78/53.89 to PAPER_REPORTED \u2014 that would be the exact inversion the assignment asked me to look for, and it is not present. Set checkpoint_training_noise_pct: null to agree with models.yaml:602.",
+      "reference_id": "dcnet_fashioniq_val_table1",
+      "severity": "P3 (only for checkpoint_training_noise_pct: 0 on an unresolved checkpoint artifact)",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "mean": null,
+        "r10": 51.32,
+        "r50": 73.09
+      },
+      "discrepancy": "None significant. Cosmetic/semantic only: the record's derived mean carries value 62.205 (exact) while its rounding_policy says round-half-up to 2 decimals would give 62.21 \u2014 an inconsistency between the stored value and the stated policy, and the mean is not needed at runtime anyway since reported_mean is null. Same field-level nit as DCNet: checkpoint_training_noise_pct=0 here vs models.yaml: mode null (checkpoint_training_noise_pct: null, status CHECKPOINT_MAPPING_UNVERIFIED) for the unresolved TG-CIR.zip.",
+      "evidence": "STATIC_AUDIT. Source re-downloaded by me: `curl -sL https://arxiv.org/pdf/2309.01366v1` -> 1658418 B, sha256 57d0df854314691607fb396ca923f29137f2e12afdf35ae02f9fdf6e2ac4affc (matches the sha the record quotes). Route 1 (text): `pdftotext -layout -f 7 -l 7` -> 'TG-CIR 45.22 69.66 52.60 72.52 56.14 77.10 51.32 73.09 25.89 63.20 85.07 58.05' with row label 'TG-CIR' as the last row of Table 1, below FAME-ViL, above 'Improvement(%)'. Route 2 (independent of the PDF): `curl -sL https://arxiv.org/html/2504.05316v1`\u2026 no \u2014 I did NOT use PTHA's HTML here; TG-CIR's own HTML was not re-pulled, but the PDF page 7 render `pdftoppm -f 7 -l 7` was read and shows the Avg block as exactly TWO columns headed R@10 and R@50 (51.32 bold / 73.09), no third mean column. Route 3: page 8 ablation Table 3 repeats 'TG-CIR 51.32 73.09' under header 'FashionIQ-Avg | R@10 R@50' (tg.txt:600), i.e. the same two-cell statistic, confirming again that no mean is printed. So mean=null is CORRECT \u2014 the paper prints no AVG/mean of R@10 and R@50 for FashionIQ. Arithmetic: (45.22+52.60+56.14)/3 = 51.3199 -> 51.32; (69.66+72.52+77.10)/3 = 73.0933 -> 73.09; so the printed Avg cells are the rounded macro of the three categories \u2014 the record's aggregation_method is right, and the mean is genuinely absent rather than merely hard to see. Category alignment re-checked character by character against the visual render: row order Dress | Shirt | Tops&Tees, and TG-CIR's 45.22/69.66 sits under Dresses, 52.60/72.52 under Shirts, 56.14/77.10 under Tops&Tees \u2014 matches the record's category_metrics. Backbone: tg.txt:452 'CLIP [28] (ViT-B/16 version) as the backbone' \u2014 record's quote accurate. Protocol: the paper's ONLY protocol sentence is tg.txt:493-497 'For FashionIQ, we followed the evaluation metric used in the companion challenge [15], namely, R@10 and R@50 for each of the three categories'; my `grep -i 'gallery|candidate set|index set'` over the full text finds no gallery/reference statement, so the record's gallery_protocol/reference_excluded are code-derived, and the record states exactly that. Code citations re-verified: test.py:67 `sims[i, test_targets_id.index(t['source_img_id'])] = -10e10` and datasets.py:151/153 build test_targets_id as the in-order pair union of source and target ids \u2014 a pair-union gallery with the reference masked = workbench 'fashioniq_val_split' (src/evaluation/fashioniq.py:178-180 gallery='pair_union', reference_excluded=True). Registry agreement: models.yaml:744-747 records 51.32/73.09/null with the note '62.205 is derivable but not presented as a reproduced metric' \u2014 that note is truthful.",
+      "observed_in_source": {
+        "avg_r10": 51.32,
+        "avg_r50": 73.09,
+        "dress_r10": 45.22,
+        "dress_r50": 69.66,
+        "no_mean_column": true,
+        "shirt_r10": 52.6,
+        "shirt_r50": 72.52,
+        "toptee_r10": 56.14,
+        "toptee_r50": 77.1
+      },
+      "provenance_error": null,
+      "recommended_action": "None on values. Store the derived mean either as 62.21 with the stated policy or as 62.205 with rounding_policy 'exact', not both, and align checkpoint_training_noise_pct with the registry's null until the Drive archive is opened.",
+      "reference_id": "tgcir_fashioniq_val_table1",
+      "severity": "P3",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "mean": 66.87,
+        "mean_provenance": "WORKBENCH_DERIVED",
+        "r10": 55.91,
+        "r50": 77.82
+      },
+      "discrepancy": "None on values. (i) The same rounding_policy/value shape inconsistency as TG-CIR: value 66.87 with policy 'round-half-up to 2 decimals' while the exact mean is 66.865 \u2014 here the stored value matches the policy, so it is only an internal-consistency nit across records. (ii) checkpoint_training_noise_pct=0 again vs the registry's null. (iii) The registry itself still carries reported_r10/r50 = null (models.yaml:854-856) while the record has 55.91/77.82 \u2014 a registry gap the record's own evidence flags.",
+      "evidence": "STATIC_AUDIT. Source: `curl -sL https://arxiv.org/pdf/2305.09979v2` -> 2213167 B, sha256 46f5192628b009dbaabf8fb6f8226c44323dd49148f17a48662e679fe28ca933 (matches the record). Route 1 (text): `pdftotext -layout -f 8 -l 8` -> TABLE I, row 'LIMN  50.72 74.52 | 56.08 77.09 | 60.94 81.85 | 55.91 77.82 | 68.20 87.45 | 77.83' under headers 'Dresses | Shirts | Tops&Tees | Avg' then 'Shoes', columns 'R@10 R@50'. Route 2 (visual): page-8 render read; LIMN sits in the gray band and 'LIMN+' sits directly BELOW it (57.43 78.60), so 55.91/77.82 is unquestionably LIMN, not LIMN+ \u2014 verified by row order, not by assumption. BASE-vs-LIMN+ distinction is additionally pinned at code level, not just by label: LIMN/train.py:72 `--i` default 0, :249 writes '{}_{}_metrics_best.json'.format(name, args.i), :263 saves '{}_{}_best_model.pt'.format(args.i, name); LIMN+/train.py:44 `--augment_iteration` default 1, :276 writes with str(args.augment_iteration), :293 saves with the same \u2014 and LIMN+/test at :276/293 cannot produce a '0_' file, so the registered `0_{dress,shirt,toptee}_best_model.pt` are iteration-0 (base LIMN) artifacts. Route 3 (author artifact, strongest): fetched the author's own logs at the exact revision the registry pins (30560ad575a56c39cc39047d1a474269338c77c0): dress_0_r10 50.71888943976202 / r50 74.5166088249876; shirt_0 56.084396467124634 / 77.08537782139352; toptee_0 60.938296787353394 / 81.84599694033656 -> macro R@10 55.9139, R@50 77.8160 and (55.9139+77.8160)/2 = 66.8649. The published 55.91/77.82 are the rounded macro of those logs, so the paper's Avg really is a macro over categories and the base row is bound to iteration-0 weights. Portfolio check of the Hub revision: 0/1/2_{dress,shirt,toptee,shoes,cirr} plus 0_fashion200k all present; LFS oids for 0_dress=96a335d4\u2026, 0_shirt=9260c7f7\u2026, 0_toptee=79f663a1\u2026 match models.yaml:876/885/894 exactly, and all three download URLs return HTTP 200. LIMN row prints NO mean (Avg block is two columns only) -> mean 66.87 as WORKBENCH_DERIVED with formula (r10+r50)/2 is the correct shape; (55.91+77.82)/2 = 66.865. LIMN+ is a different registered system and a different row; the record correctly refuses it. The arXiv v1 campaign (36.30/62.20, LIMN 34.85 60.68 \u2026 per my own `pdftotext` of v1, lv1.txt:602/700) is a different paper version and was also correctly excluded.",
+      "observed_in_source": {
+        "avg_r10": 55.91,
+        "avg_r50": 77.82,
+        "dress_r10": 50.72,
+        "dress_r50": 74.52,
+        "limn_plus_row": {
+          "r10": 57.43,
+          "r50": 78.6
+        },
+        "printed_mean": null,
+        "shirt_r10": 56.08,
+        "shirt_r50": 77.09,
+        "toptee_r10": 60.94,
+        "toptee_r50": 81.85
+      },
+      "provenance_error": null,
+      "recommended_action": "Accept the row; populate the registry's reported_r10/reported_r50 from it (55.91/77.82, PAPER_REPORTED) and keep 66.87 derived, per the record's recommended action.",
+      "reference_id": "limn_fashioniq_base_iter0_table1",
+      "severity": "P3",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "access": "UNAVAILABLE",
+        "fashioniq_row_found": false,
+        "reported_metrics": {
+          "mean": null,
+          "r10": null,
+          "r50": null
+        }
+      },
+      "discrepancy": "The record asserts UNAVAILABLE and 'No table cell was read from this paper' / 'NOT_ESTABLISHED (paper unreadable)' and therefore omits the clvc_net experiment entirely, recommended_action 'Obtain the SIGIR 2021 camera-ready through an institutional ACM DL session'. That is wrong on the facts: a free author copy exists at https://xuemengsong.github.io/SIGIR_CTI-IR.pdf and contains the FashionIQ row at Table 1, page 7 (printed 1375). Three independent secondary tables the record itself cites agree with it digit for digit, which should have been treated as a lead to chase the author site rather than as an access blocker.",
+      "evidence": "STATIC_AUDIT, and the refutation is decisive: a readable, author-hosted copy of the SIGIR'21 camera-ready was found and opened. Discovery route: a targeted web search surfaced the first author's group site; `curl -sL https://xuemengsong.github.io/` (HTTP 200, 34159 B) contains the entry 'Comprehensive Linguistic-Visual Composition Network for Image Retrieval. Haokun Wen, Xuemeng Song, Xin Yang, Yibing Zhan, Liqiang Nie. In SIGIR, 2021. (Full Paper) <a href=\"SIGIR_CTI-IR.pdf\">Pdf</a>'. `curl -sL https://xuemengsong.github.io/SIGIR_CTI-IR.pdf` -> HTTP 200, 2859422 B, sha256 4c452584eae4576c0e7b5dfbdd4356dd779c577ef258a7b9fef5086eb135af88; `pdfinfo` Title/Author match the paper exactly (Haokun Wen, Xuemeng Song, Xin Yang, Yibing Zhan, Liqiang Nie). PAGE LOCATED BY SEARCH, THEN RENDERED: `for p in 1..10: pdftotext -f $p -l $p -layout | grep -c 29.85` -> only page 7 hits=1; `pdftoppm -png -r 150 -f 7 -l 7` and the page image was read with my own eyes. Printed page 1375 header 'Session 6A: Multimedia IR \u2026 SIGIR '21'. Table 1 caption: 'Table 1: Performance comparison on FashionIQ and Shoes. \u2020 indicates the results are cited from [4], while \u2021 denotes that from [22]. Best results are in boldface, while second best results are underlined.' Columns: Dress R@10 R@50 | Shirt R@10 R@50 | Tops&Tees R@10 R@50 | Avg R@10 R@50 | Shoes R@1 R@10 R@50. Last data row, boxed in the original: 'CLVC-Net  29.85 56.47 | 28.75 54.76 | 33.50 64.00 | 30.70 58.41 | 17.64 54.39 79.47'. Immediately above it: 'DCNet (Kim et al. 2021)\u2021 28.95 56.07 23.95 47.30 30.44 58.29 27.78 53.89 - 53.82 79.33' \u2014 note the CLVC-Net paper PRINTS DCNet's macro cells 27.78 and 53.89, independently corroborating the DCNet derivation in check 1. Table 3 (clvc.txt:729-745) shows the ablation's 'CLVC-Net 30.70 58.41 54.39 79.47' row for FashionIQ (Avg of three categories), consistent. Arithmetic: (29.85+28.75+33.50)/3 = 30.7000 and (56.47+54.76+64.00)/3 = 58.4100 \u2014 the paper's Avg cells are the exact macro of its own per-category cells (no rounding drift at all). No mean column exists, so mean would be WORKBENCH_DERIVED = (30.70+58.41)/2 = 44.555 -> 44.56. Secondary cross-check (NOT used as the value, but it is now moot since the primary was read): arXiv:2502.18495v1 survey `pdftotext` line 1427 prints 'CLVC-Net [164] (SIGIR'21) 29.85 56.47 28.75 54.76 33.50 64.00 30.70 58.41 44.56' \u2014 identical to the primary source, which is what one expects when a primary source is actually read. THE RECORD'S ACCESS CLAIM IS A FALSE NEGATIVE, not a lie: its own evidence is reproducible. I re-ran its routes and got its outputs: OpenAlex W3154902219 -> best_oa_location null, is_oa false, and the only location is the DOI itself; Unpaywall 10.1145/3404835.3462967 -> is_oa false, oa_status closed, oa_locations []; Semantic Scholar fdd8e294292f4c98acf54b5ad4af96c08fe40734 -> openAccessPdf url '' status CLOSED; `curl -sSL dl.acm.org/doi/pdf/10.1145/3404835.3462967` -> HTTP 403 (Cloudflare), and r.jina.ai over the landing page returns the 'Just a moment\u2026' CAPTCHA stub; Wayback availability for the PDF URL -> archived_snapshots {}; CORE -> HTTP 301/429; Memento -> DNS failure. Every route the record lists is real. But none of them is the route that works: the authors' own group site, which none of those APIs index as an OA location.",
+      "observed_in_source": {
+        "avg_r10": 30.7,
+        "avg_r50": 58.41,
+        "dress_r10": 29.85,
+        "dress_r50": 56.47,
+        "printed_mean": null,
+        "shirt_r10": 28.75,
+        "shirt_r50": 54.76,
+        "toptee_r10": 33.5,
+        "toptee_r50": 64
+      },
+      "provenance_error": "Not a mislabelled derived value \u2014 the opposite failure: a legitimate paper-reported row was left out of the record because the access search stopped at bibliographic APIs. Values that were deliberately kept out of reported_metrics as secondary (29.85/56.47/28.75/54.76/33.50/64.00, Avg 30.70/58.41) are in fact PAPER_REPORTED in the primary source.",
+      "recommended_action": "Reopen the clvc_net record: set access FULL_TEXT with the route command `curl -sL https://xuemengsong.github.io/SIGIR_CTI-IR.pdf -> 200, 2859422 B, sha256 4c452584eae4576c0e7b5dfbdd4356dd779c577ef135af88` (exact sha: 4c452584eae4576c0e7b5dfbdd4356dd779c577ef258a7b9fef5086eb135af88), add an experiment row reference_id clvc_net_fashioniq_val_table1 with reported r10=30.70, r50=58.41 (PAPER_REPORTED, Avg block), category_metrics dress 29.85/56.47, shirt 28.75/54.76, toptee 33.50/64.00, derived mean 44.56 ((30.70+58.41)/2, WORKBENCH_DERIVED, since no mean is printed), metric_provenance Table 1 / row 'CLVC-Net' / page 7 (printed 1375) / 'FashionIQ Avg block, R@10 and R@50', gallery_protocol code-derived (the paper states no gallery construction or reference policy), checkpoint_mapping_status UNVERIFIED (registry has only author_drive_unresolved, models.yaml:544-555). Drop the 'paywalled/unreadable' verdict and the 'obtain via institutional ACM DL' action \u2014 the ACM route was never necessary.",
+      "reference_id": "clvc_net_sigir21 (registry model clvc_net, models.yaml:492-555) \u2014 record has NO experiment entry",
+      "severity": "P0/P1",
+      "verdict": "REFUTED"
+    },
+    {
+      "claimed": {
+        "all_PAPER_REPORTED": true,
+        "mean": 65.64,
+        "r10": 54.99,
+        "r50": 76.28
+      },
+      "discrepancy": "None on any claimed number, row, column, page, sha, or version.",
+      "evidence": "STATIC_AUDIT. Source re-downloaded by me: `curl -sL https://arxiv.org/pdf/2504.05316v1` -> 9095049 B, pdfinfo Pages 12, sha256 0801d37af9471a391c0007a9ea81611c5f6459bd04619801c5ed7193f486af2a \u2014 byte-identical to the record's sha and size. Route 1 (text): `pdftotext -layout` -> pt.txt:473-474, the last two rows of Table III: 'PTHA (Ours) BLIP2 - 49.54 72.81 55.50 73.97 57.96 78.96 54.33 75.24 64.79' and 'PTHA (Ours) BLIP2 FashionIQMTST 50.77 73.78 55.91 75.36 58.28 79.70 54.99 76.28 65.64'. Route 2 (visual): page 7 render read; Table III is directly under the Table II caption and the FashionIQMTST row is the final row, shaded, with headers 'Dress | Shirt | Toptee | Average | Avg.' over 'R@10 R@50 | R@10 R@50 | R@10 R@50 | R@10 R@50'. Route 3 (HTML, fully independent of the PDF text layer): `curl -sL https://arxiv.org/html/2504.05316v1` -> HTTP 200, 303805 B; regex-parsed the tables and the table containing 'FashionIQMTST' flattens to 'Dress Shirt Toptee Average Avg. Method baseline Pretraining Data R@10 R@50 R@10 R@50 R@10 R@50 R@10 R@50 \u2026' \u2014 same column order, same row. Arithmetic (my own, not the record's): (50.77+55.91+58.28)/3 = 54.9867 -> printed Average R@10 54.99; (73.78+75.36+79.70)/3 = 76.2800 -> printed Average R@50 76.28; (54.9867+76.2800)/2 = 65.6333 -> printed Avg. 65.64. So all three cells are PRINTED by the paper and are simultaneously the macro of its own per-category cells, in agreement to two decimals \u2014 reported_metrics with all three PAPER_REPORTED is exactly right, NOT an inversion. The paper's own caption defines the column: 'TABLE III: Comparison on FashionIQ validation set. \"Avg.\" means (Recall@10 + Recall@50)/2. * indicates the method deploys extra re-ranking strategy.' No-competitor guarantee, checked adversarially: the nearest competing value is SPRC 54.92/74.97/64.85 and the nearest other PTHA row is 54.33/75.24/64.79, and several rows share the shirt R@10 55.91 (SPRC's 55.64, Baseline's 55.50 are close) \u2014 a naive parser could have grabbed the wrong row, but the record's full 9-tuple 50.77|73.78|55.91|75.36|58.28|79.70|54.99|76.28|65.64 is unique to the FashionIQMTST row in all three routes. Paper version: `curl 'https://export.arxiv.org/api/query?id_list=2504.05316'` -> exactly one entry, <id>http://arxiv.org/abs/2504.05316v1</id>, <published>2025-02-21T07:48:55Z</published> \u2014 the record's 'arXiv v1 2025-02-21 (only version)' is accurate; the published version is real (Crossref 10.1109/TMM.2025.3599088 -> IEEE Transactions on Multimedia, vol. 27, pp. 7510-7521, 2025), matching the record. METHOD VARIANT: the paper distinguishes 'PTHA (Ours)' with Pretraining Data '-' from 'FashionIQMTST', and the record maps the 54.99/76.28/65.64 to the FashionIQMTST row (models.yaml:216-218), which is the row the registry's 54.99/76.28/65.64 actually is \u2014 no confusion. GALLERY PROTOCOL: paper says only 'For FashionIQ, we report the R@10 and R@50 on the val set in three categories' (pt.txt:390-391, PDF page 6, confirmed by page-by-page grep). My independent `grep -i 'gallery|candidate|excluded'` over the full paper text finds no gallery/reference sentence, so fashioniq_original_split / reference_excluded=false ARE source-derived, and the record says so explicitly in verification_evidence. Code spot-check at the pinned commit 6a02ee4763fc2260b6abfb18be78853facb91d86 (I fetched the files myself; note the record's paths are correct as MTST_PTHA/src/\u2026): MTST_PTHA/src/validate_blip.py:44-51 builds labels over np.repeat(target_names, len(index_names)) with NO reference mask and asserts exactly one hit per query, while the CIRR path at :258-260 and :331-333 DOES build a reference_mask \u2014 the omission is deliberate on the FashionIQ path; MTST_PTHA/src/utils.py:54-55 `DataLoader(dataset=dataset, batch_size=64, num_workers=2, pin_memory=True, collate_fn=collate_fn)` with no shuffle; MTST_PTHA/src/data_utils.py:165-172 builds image_names by json.load of image_splits/split.{dress_type}.{split}.json filtered only by png existence. That is the full-split, reference-eligible cohort = fashioniq_original_split (src/evaluation/fashioniq.py:172-174 gallery='full_split', reference_excluded=False). STATIC_AUDIT; no GPU inference, no checkpoint loaded.",
+      "observed_in_source": {
+        "avg_mean": 65.64,
+        "avg_r10": 54.99,
+        "avg_r50": 76.28,
+        "dress_r10": 50.77,
+        "dress_r50": 73.78,
+        "shirt_r10": 55.91,
+        "shirt_r50": 75.36,
+        "toptee_r10": 58.28,
+        "toptee_r50": 79.7
+      },
+      "provenance_error": null,
+      "recommended_action": "None. This is the cleanest record in the bundle: all three reported_metrics are genuinely printed, and they coincidentally equal the record's own macro recomputation.",
+      "reference_id": "ptha_mtst_fiq_table3_fashiqmtst_blip2",
+      "severity": "NONE",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "all_PAPER_REPORTED": true,
+        "mean": 64.79,
+        "r10": 54.33,
+        "r50": 75.24
+      },
+      "discrepancy": "None on claimed values. Worth recording explicitly in the comparator's tolerance notes: the paper's rounding of its own macro is not consistently round-half-up (75.2467 -> printed 75.24), so any strict float equality against the printed Average will disagree by 0.01 for this row even though the row is internally consistent.",
+      "evidence": "STATIC_AUDIT. Same three routes as the row above, same PDF (sha256 0801d37a\u2026). pt.txt:473: 'PTHA (Ours) BLIP2 - 49.54 72.81 55.50 73.97 57.96 78.96 54.33 75.24 64.79' \u2014 second-to-last data row of Table III, Pretraining Data column '-'. Page-7 render confirms the row visually directly above the FashionIQMTST row. Distinction from the row above is airtight: this row's Pretraining Data is '-' (no MTST pretraining) versus 'FashionIQMTST', and the values differ in every cell, so the two records cannot alias each other. Arithmetic: (49.54+55.50+57.96)/3 = 54.3333 -> 54.33; (72.81+73.97+78.96)/3 = 75.2467 -> 75.24; (54.3333+75.2467)/2 = 64.79 exactly \u2014 the printed cells are again the macro, so PAPER_REPORTED is the right provenance for all three. Note 75.2467 rounds UP to 75.25 under round-half-up to 2 decimals while the paper prints 75.24; the paper evidently truncated/rounded differently. The record stores the paper's printed 75.24, which is correct \u2014 the paper is the authority, and the same applies to the mean: raw 64.7900 -> 64.79, printed 64.79.",
+      "observed_in_source": {
+        "avg_mean": 64.79,
+        "avg_r10": 54.33,
+        "avg_r50": 75.24,
+        "dress_r10": 49.54,
+        "dress_r50": 72.81,
+        "shirt_r10": 55.5,
+        "shirt_r50": 73.97,
+        "toptee_r10": 57.96,
+        "toptee_r50": 78.96
+      },
+      "provenance_error": null,
+      "recommended_action": "None on the numbers. Record the paper's truncation-style rounding as a known 0.01 tolerance case for this row so a future comparator does not flag it as a mismatch.",
+      "reference_id": "ptha_mtst_fiq_no_pretrain_table3",
+      "severity": "P3 (documentation only)",
+      "verdict": "CONFIRMED"
+    },
+    {
+      "claimed": {
+        "checkpoint_mapping_status": "NO_CHECKPOINT",
+        "no_published_fiq_checkpoint": true
+      },
+      "discrepancy": "None.",
+      "evidence": "STATIC_AUDIT, and every route in the record reproduced exactly. (a) `curl https://huggingface.co/api/models/yinanzhou1/mtst_ptha` -> sha b5e669c8ef28b0084f43398d184a5a0116903ccf, lastModified 2024-12-26T07:42:49Z, usedStorage 3034364073, complete file sibling list = .gitattributes, README.md, cirr_modifier_generated_5p_completed_rev.json, cirr_train_modifier_rev_long.json, tuned_mtst_cirr.pt \u2014 the only weights file is tuned_mtst_cirr.pt, i.e. CIRR. (b) `curl https://raw.githubusercontent.com/zyinan99/MTST_PTHA/6a02ee4763fc2260b6abfb18be78853facb91d86/MTST_PTHA/README.md` -> lines 85-87 are the only download links and all three are CIRR (tuned_mtst_cirr.pt, cirr_modifier_generated_5p_completed_rev.json, cirr_train_modifier_rev_long.json); no FashionIQ link at all. (c) `curl https://api.github.com/repos/zyinan99/MTST_PTHA/git/trees/main?recursive=1` -> 'truncated': false, 433 entries, 361 blobs, and my own regex for \\.(pt|pth|bin|ckpt|safetensors|tar|zip|h5)$ over every blob path returns [] \u2014 the only blob over 1 MB is MTST_PTHA/src/lavis/models/clip_models/bpe_simple_vocab_16e6.txt.gz (1.36 MB vocab, not weights). (d) `curl https://api.github.com/repos/zyinan99/MTST_PTHA/releases` -> [] and `/tags` -> []. (e) `curl 'https://huggingface.co/api/models?author=yinanzhou1'` -> 6 repos, only yinanzhou1/mtst_ptha is CIR-related; `?search=ptha` and `?search=mtst` surface no other author weight repo. So no FashionIQ fine-tuned (or MTST-pretrained-on-FashionIQ) weight of any noise level is published, and NO_CHECKPOINT is honest rather than a cop-out. Registry agrees: models.yaml:220 strict_clean_checkpoint_available: false, :222 checkpoint_variants: [], :219 reproduction_status BLOCKED_NO_VERIFIED_FASHIONIQ_CHECKPOINT.",
+      "observed_in_source": {
+        "github_releases": 0,
+        "github_tags": 0,
+        "github_weight_blobs": 0,
+        "huggingface_author_repos": [
+          "yinanzhou1/mtst_ptha"
+        ],
+        "mtst_ptha_files": [
+          ".gitattributes",
+          "README.md",
+          "cirr_modifier_generated_5p_completed_rev.json",
+          "cirr_train_modifier_rev_long.json",
+          "tuned_mtst_cirr.pt"
+        ]
+      },
+      "provenance_error": null,
+      "recommended_action": "None. If the CIRR-only `tuned_mtst_cirr.pt` is ever considered, note it is a CIRR pretraining artifact and is not eligible for a FashionIQ row \u2014 the paper's own FashionIQ row needs FashionIQMTST, which does not exist as a published file.",
+      "reference_id": "ptha_mtst \u2014 checkpoint claims on both rows (checkpoint_mapping_status NO_CHECKPOINT, checkpoint_id null)",
+      "severity": "NONE",
+      "verdict": "CONFIRMED"
+    }
+  ],
+  "summary": "Six of seven checks CONFIRMED, one REFUTED. CONFIRMED: the DCNet record is not the inverted shape it looks like \u2014 I read the shipped PDF (sha256 1a87a9\u2026, git blob d36cfb48\u2026 = the pinned upstream blob) by text extraction AND page render, and the paper's Table 1 prints exactly six category cells plus ONE 'Total Avg' column, no macro R@10/R@50 columns at all; 27.78 and 53.89 are therefore correctly recorded as WORKBENCH_DERIVED, 40.83 as PAPER_REPORTED, and my own arithmetic ((28.95+23.95+30.44)/3, (56.07+47.30+58.29)/3, mean) reproduces 40.83 and is validated against two other rows of the same table (TIRG -> 27.40, VAL/GloVe -> 35.38). The LIMN record is CONFIRMED as the base row, not LIMN+ (LIMN+ sits one row below at 57.43/78.60), with no printed mean, and it is corroborated by the author's own iteration-0 metric logs at the pinned Hub revision (macro 55.9139/77.8160). The TG-CIR record is CONFIRMED: 51.32/73.09 are the printed FashionIQ-Avg cells and the record is right that the paper prints NO mean. Both PTHA rows are CONFIRMED digit for digit by three independent routes (text, render, arXiv HTML) and both are genuinely printed, with all three reported values simultaneously equal to the macro of the paper's own per-category cells; NO_CHECKPOINT is CONFIRMED by the author Hub/GitHub inventory (zero weight blobs, only a CIRR .pt). What a reader must NOT trust: the CLVC-Net section of legacy_cir_fashioniq_bundle.json. Its 'UNAVAILABLE / no table cell was read / obtain via institutional ACM DL' verdict is REFUTED \u2014 the author's own group site hosts the SIGIR'21 camera-ready at https://xuemengsong.github.io/SIGIR_CTI-IR.pdf (HTTP 200, 2859422 B, sha256 4c452584\u2026), and its Table 1 on page 7 (printed 1375) prints the CLVC-Net row 29.85/56.47 | 28.75/54.76 | 33.50/64.00 | Avg 30.70/58.41, with the macro recomputing exactly ((29.85+28.75+33.50)/3 = 30.7000, (56.47+54.76+64.00)/3 = 58.4100) and a derived mean of 44.56. Every bibliographic route the record lists is real and reproducible (OpenAlex closed, Unpaywall closed, S2 CLOSED, ACM 403 Cloudflare, Wayback empty, CORE 429) \u2014 but none of them is the route that works, so the record's blocker is a false negative, not a fabricated one. Secondary: all four records set checkpoint_training_noise_pct: 0 where models.yaml records null for unresolved/unobserved artifacts (DCNet, TG-CIR), an inference presented as a property; and the paper's own rounding is not uniformly half-up (PTHA row 2 prints 75.24 for a raw 75.2467). Nothing in these two records fabricates, mislabels, or cross-attributes a number; the failure is a door left shut. All findings are STATIC_AUDIT \u2014 no GPU inference was run and no checkpoint was loaded.",
+  "verifier": "legacy_cir_fashioniq_bundle.json + ptha_mtst_scaleup_mtst.json \u2014 independent re-derivation from primary sources (DCNet shipped PDF, arXiv 2309.01366v1, arXiv 2305.09979v1/v2, L.neurIPS\u2026 no: arXiv 2504.05316v1, author-hosted SIGIR'21 PDF)"
+}

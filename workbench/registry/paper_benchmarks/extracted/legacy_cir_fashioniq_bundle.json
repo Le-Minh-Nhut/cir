@@ -19,9 +19,9 @@
         }
       },
       "checkpoint_id": "fashioniq_run_directory",
-      "checkpoint_mapping_evidence": "Table 1 is the paper's clean validation comparison, so the row corresponds to a 0%-noise training condition. The registry's only artifact is the author Google Drive folder https://drive.google.com/drive/folders/1wgygqF095Di67EaHaGOXbwh3wEzk9izB (models.yaml:586-596) recorded as a run directory requiring config.json + trained_model.pth with checkpoint_mapping_status: UNVERIFIED, status CHECKPOINT_MAPPING_UNVERIFIED, download_url null, no size and no digest. Nothing in the pinned repo binds a published file to Table 1 (train.py:263-equivalent save sites are torch.save of the whole model into the run dir; registry checkpoint_serialization: run_directory, models.yaml:559). Mapping is therefore unverified and must not be claimed.",
+      "checkpoint_mapping_evidence": "Table 1 is the paper's clean validation comparison, so the row corresponds to a 0%-noise training condition. The registry's only artifact is the author Google Drive folder https://drive.google.com/drive/folders/1wgygqF095Di67EaHaGOXbwh3wEzk9izB (models.yaml:586-596) recorded as a run directory requiring config.json + trained_model.pth with checkpoint_mapping_status: UNVERIFIED, status CHECKPOINT_MAPPING_UNVERIFIED, download_url null, no size and no digest. Nothing in the pinned repo binds a published file to Table 1 (train.py:263-equivalent save sites are torch.save of the whole model into the run dir; registry checkpoint_serialization: run_directory, models.yaml:559). Mapping is therefore unverified and must not be claimed. [verifier correction: the registry records checkpoint_training_noise_pct: null for this unresolved Google-Drive run directory; 0% is an inference from the table being a clean comparison, not a property of any observed artifact, so it must not be asserted]",
       "checkpoint_mapping_status": "UNVERIFIED",
-      "checkpoint_training_noise_pct": 0,
+      "checkpoint_training_noise_pct": null,
       "dataset": "fashioniq",
       "dataset_version": "official FashionIQ release, validation annotations (cap.{dress,shirt,toptee}.val.json) with image_splits/split.{dress,shirt,toptee}.val.json; paper cites Fashion-IQ (Guo et al. 2019) with 30,134 triplets over 77,683 images in three categories",
       "derived_metrics": [
