@@ -1,13 +1,11 @@
 # Production source coverage manifest
 
-Generated from the frozen revision `8140cc570acaf27fd3d7b72909c8216600402cdb`. Every production Python file under `workbench/` and
+Generated from the frozen revision `9d35861bdcc18183015e1aba02052ffd4c8f99f0`. Every production Python file under `workbench/` and
 `src/` is listed with its content digest at that revision, so a reviewer can confirm the reviewed
 bytes are the shipped bytes.
 
-Review coverage by round: R1-R6 (control flow, scientific, data/assets, conda/GPU, security, test
-quality), F1-F3 (cross-module, scientific/assets, release integrity), plus the fix agents E1-E4,
-V1-V5, W1-W5, X1, Y1-Y2, A1, B1, C1, D1, E1, G1. Scientific correctness returned clean in every
-round.
+The CSMCIR blocker is additionally pinned by `workbench/tests/test_csmcir_source_blocker.py`, which
+reads the pinned checkout and fails if that source, or the registered model name, changes.
 
 | File | Subsystem | Lines | sha256[:16] | Status |
 |---|---|---|---|---|
@@ -31,7 +29,7 @@ round.
 | `workbench/backend/main.py` | backend | 272 | `7c9911751484fb68` | FULLY_REVIEWED |
 | `workbench/backend/metrics_extraction.py` | backend | 320 | `e45524a2239f9429` | FULLY_REVIEWED |
 | `workbench/backend/operator_config.py` | backend | 108 | `46585f87a66db836` | FULLY_REVIEWED |
-| `workbench/backend/preflight.py` | backend | 131 | `aba473962c259aee` | FULLY_REVIEWED |
+| `workbench/backend/preflight.py` | backend | 138 | `3a65c2f3995378a6` | FULLY_REVIEWED |
 | `workbench/backend/registry.py` | backend | 670 | `f9346ea50b65b061` | FULLY_REVIEWED |
 | `workbench/backend/runtime.py` | backend | 2113 | `62e8775914affe8b` | FULLY_REVIEWED |
 | `workbench/backend/schemas/__init__.py` | backend | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
@@ -44,16 +42,16 @@ round.
 | `workbench/scripts/autopilot.py` | scripts | 12 | `6cce50aa2774bb11` | FULLY_REVIEWED |
 | `workbench/scripts/clean_generated.py` | scripts | 104 | `6fa2ca32f607a64d` | FULLY_REVIEWED |
 | `workbench/scripts/doctor.py` | scripts | 318 | `76587b4a67387f0d` | FULLY_REVIEWED |
-| `workbench/scripts/download_auxiliary_assets.py` | scripts | 226 | `c44cdf5dee82e446` | FULLY_REVIEWED |
-| `workbench/scripts/download_checkpoints.py` | scripts | 233 | `182ba7c31529f2e0` | FULLY_REVIEWED |
+| `workbench/scripts/download_auxiliary_assets.py` | scripts | 273 | `5d53390b04debf6a` | FULLY_REVIEWED |
+| `workbench/scripts/download_checkpoints.py` | scripts | 258 | `cccd0df0eee91913` | FULLY_REVIEWED |
 | `workbench/scripts/evaluate_models.py` | scripts | 1739 | `80a9ffae0f3c7f2c` | FULLY_REVIEWED |
 | `workbench/scripts/load_mock_results.py` | scripts | 31 | `a03be7c4e947b7cb` | FULLY_REVIEWED |
 | `workbench/scripts/manage_environment.py` | scripts | 358 | `2492d3780eb65231` | FULLY_REVIEWED |
 | `workbench/scripts/pipeline.py` | scripts | 2317 | `8465b352edd23553` | FULLY_REVIEWED |
 | `workbench/scripts/plan_environments.py` | scripts | 14 | `4de84777f64e07a3` | FULLY_REVIEWED |
 | `workbench/scripts/prepare_dataset.py` | scripts | 133 | `e695e333ffa78f69` | FULLY_REVIEWED |
-| `workbench/scripts/prepare_model.py` | scripts | 591 | `1ecdef89fb97f516` | FULLY_REVIEWED |
-| `workbench/scripts/readiness_matrix.py` | scripts | 212 | `d8db778a888667d8` | FULLY_REVIEWED |
+| `workbench/scripts/prepare_model.py` | scripts | 618 | `3db4915ea544f7bb` | FULLY_REVIEWED |
+| `workbench/scripts/readiness_matrix.py` | scripts | 215 | `3523b123609401e8` | FULLY_REVIEWED |
 | `workbench/scripts/rebuild_index.py` | scripts | 35 | `b512573520fa4729` | FULLY_REVIEWED |
 | `workbench/scripts/run_eval.py` | scripts | 29 | `8fbae131d3db035f` | FULLY_REVIEWED |
 | `workbench/scripts/serve_workbench.py` | scripts | 166 | `8a3990343272a510` | FULLY_REVIEWED |
