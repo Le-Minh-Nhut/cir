@@ -25,6 +25,7 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from workbench.backend import runtime
+from workbench.backend.errors import WorkbenchError
 
 WORKBENCH_ROOT = Path(__file__).resolve().parents[1]
 # A solve against conda-forge/pytorch/defaults takes seconds even for a single
@@ -182,6 +183,10 @@ _TORCHVISION_PAIRS = {
     ("2.3.0", "0.18.0"), ("2.3.1", "0.18.1"), ("2.4.0", "0.19.0"),
     ("2.4.1", "0.19.1"), ("2.5.0", "0.20.0"), ("2.5.1", "0.20.1"),
     ("2.6.0", "0.21.0"),
+    # Modern pairings (torch 2.7+ ships CUDA 12.6/12.8 builds; torchvision keeps the
+    # minor-2 offset). Required so an adapted Blackwell profile passes the pairing check.
+    ("2.7.0", "0.22.0"), ("2.7.1", "0.22.1"),
+    ("2.8.0", "0.23.0"), ("2.9.0", "0.24.0"), ("2.9.1", "0.24.1"),
 }
 
 
@@ -361,8 +366,34 @@ def _add_package(packages: dict[str, str], ranges: dict[str, str], name: str, sp
 
 
 def model_constraints(model: dict, third_party_root: Path | None = None) -> dict:
-    """Extract evaluator imports and their source-backed version evidence."""
-    env = model.get("environment") or {}
+    """Extract evaluator imports and their source-backed version evidence.
+
+    The environment block is consumed through the canonical resolved contract: when the operator
+    selected a declared runtime adaptation (e.g. sm_120 for Blackwell), the adapted constraints
+    replace the historical pins here, so installer, verifier and evaluator all plan and check
+    the same dependency set.
+    """
+    try:
+        env = runtime.resolved_runtime_environment(model)
+        adaptation = runtime.runtime_adaptation(model)
+    except WorkbenchError as error:
+        # A profile this model never declared keeps its historical contract instead of failing
+        # on someone else's adaptation — UNLESS the model itself declares an adapted_runtime the
+        # selection fails to match, which is an operator error and must refuse loudly.
+        if (model.get("environment") or {}).get("adapted_runtime"):
+            raise
+        detail = getattr(error, "details", None) or {}
+        if detail.get("declared"):
+            raise
+        env = dict(model.get("environment") or {})
+        adaptation = None
+    except Exception:
+        # Any other resolution failure keeps the historical contract rather than blocking
+        # unrelated provisioning on non-adaptation plumbing errors.
+        env = dict(model.get("environment") or {})
+        adaptation = None
+    if adaptation:
+        env = {**env, "_adapted_runtime": str(adaptation.get("target_compute_capability"))}
     requirements = _requirements_path(model, third_party_root)
     packages: dict[str, str] = {}
     ranges: dict[str, str] = {}
@@ -437,6 +468,30 @@ def model_constraints(model: dict, third_party_root: Path | None = None) -> dict
                 else:
                     torchvision = packages.pop(package, ranges.pop(package, "UNKNOWN"))
                 ranges.pop(package, None)
+    # The resolved contract wins over source-file pins: an adapted profile replaces the
+    # historical torch/torchvision pins (including ones from requirements.txt) and drops the
+    # corresponding package entries so the adapted range is the only constraint installed.
+    if env.get("_adapted_runtime"):
+        for adapted_key, spec_key in (("pytorch", "torch"), ("torchvision", "torchvision")):
+            if env.get(adapted_key):
+                if spec_key == "torch":
+                    torch = str(env[adapted_key])
+                else:
+                    torchvision = str(env[adapted_key])
+                packages.pop(spec_key, None)
+                ranges.pop(spec_key, None)
+        import re as _re
+        for declaration in env.get("packages") or []:
+            name = _re.split(r"[<>=!~]", str(declaration), maxsplit=1)[0].strip()
+            key = runtime.normalize_distribution_name(name)
+            matched = [n for n in set(packages) | set(ranges)
+                       if runtime.normalize_distribution_name(n) == key]
+            for n in matched:
+                packages.pop(n, None)
+                ranges.pop(n, None)
+            parsed = _parse_requirement(str(declaration))
+            if parsed:
+                _add_package(packages, ranges, parsed[0], "UNKNOWN" if parsed[1] == "*" else parsed[1])
     python, cuda = str(env.get("python") or "UNKNOWN"), str(env.get("cuda") or "UNKNOWN")
     if env.get("confidence"):
         evidence.append(f"registry environment declaration ({env['confidence']})")
@@ -445,10 +500,18 @@ def model_constraints(model: dict, third_party_root: Path | None = None) -> dict
             evidence.append(f"registry environment {key}={value}")
     if not requirements and not env:
         evidence.append("no pinned requirements.txt or registry environment declaration")
-    return {"python": python, "torch": torch, "torchvision": torchvision, "cuda": cuda,
+    if env.get("_adapted_runtime"):
+        evidence.append(f"adapted runtime selected: {env['_adapted_runtime']} "
+                        f"(historical pins replaced by the declared adapted_runtime block)")
+    spec = {"python": python, "torch": torch, "torchvision": torchvision, "cuda": cuda,
             "packages": packages, "ranges": ranges, "pip_only": sorted(pip_only),
             "confidence": str(env.get("confidence") or ("VERIFIED_REQUIREMENTS" if requirements else "UNKNOWN")),
             "evidence": evidence}
+    if env.get("_adapted_runtime"):
+        spec["runtime_adaptation"] = env["_adapted_runtime"]
+        if env.get("pip_index_url"):
+            spec["pip_index_url"] = str(env["pip_index_url"])
+    return spec
 
 
 def _terms(value: str, field: str = "") -> list[tuple[str, str]]:
@@ -504,10 +567,16 @@ def _has_solution(terms: list[tuple[str, str]]) -> bool:
 
 def _constraints(specs: list[dict]) -> tuple[dict | None, str | None]:
     combined: dict[str, Any] = {"python": [], "torch": [], "torchvision": [], "cuda": [],
-                                "packages": {}, "ranges": {}, "pip_only": [], "evidence": []}
+                                "packages": {}, "ranges": {}, "pip_only": [], "evidence": [],
+                                "pip_index_url": None}
     for spec in specs:
         combined["evidence"].extend(spec["evidence"])
         combined["pip_only"].extend(spec.get("pip_only", []))
+        index = spec.get("pip_index_url")
+        if index:
+            if combined["pip_index_url"] and combined["pip_index_url"] != index:
+                return None, "pip wheel indexes conflict across models"
+            combined["pip_index_url"] = index
         for field in ("python", "torch", "torchvision", "cuda"):
             if not _unknown(spec[field]):
                 combined[field].extend(_terms(spec[field], field))
@@ -726,19 +795,15 @@ def _display(terms: list[tuple[str, str]]) -> str | None:
 
 
 def _runtime_model(model: dict, spec: dict) -> dict:
+    """The model as the runtime verifier should see it: the canonical resolved contract.
+
+    Hand-rebuilding the package list here duplicated unversioned entries (a package in
+    both `packages` and `ranges`) and lost the version floor on range-only declarations,
+    so the verifier checked an unversioned name against a pinned reality. The resolved
+    contract is the same source the installer and the evaluator use, so all three agree.
+    """
     result = dict(model)
-    env = dict(model.get("environment") or {})
-    env["packages"] = [f"{name}=={version}" if version not in ("UNKNOWN", "*") else name
-                       for name, version in spec["packages"].items()]
-    env["packages"].extend(name for name in spec["ranges"])
-    if not _unknown(spec["torch"]):
-        env["pytorch"] = spec["torch"]
-    elif "pytorch" not in (model.get("environment") or {}):
-        env.pop("pytorch", None)
-    if not _unknown(spec["torchvision"]):
-        env["torchvision"] = spec["torchvision"]
-    elif "torchvision" not in (model.get("environment") or {}):
-        env.pop("torchvision", None)
+    env = dict(runtime.resolved_runtime_environment(model))
     if not _unknown(spec["python"]):
         env["python"] = spec["python"]
     result["environment"] = env
@@ -910,7 +975,14 @@ def plan_environments(models: list[dict], *, solver=None,
         group_packages.update({"torch": _display(constraints["torch"]) or "*",
                                "torchvision": _display(constraints["torchvision"]) or "*",
                                "cuda-version": _display(constraints["cuda"]) or "*"})
+        # An adapted group is planned against the declared adaptation, not the authors'
+        # historical pins: the group says so, so readiness output cannot be read as an
+        # exact-reproduction claim. A single shared adaptation is asserted; mixed
+        # adaptations cannot happen because the grouping constraint unions reject them.
+        adaptations = sorted({specs[mid]["runtime_adaptation"] for mid in members
+                              if specs[mid].get("runtime_adaptation")})
         group = {"environment_id": environment_id, "members": members,
+                 "runtime_adaptation": adaptations[0] if len(adaptations) == 1 else None,
                  "python": _display(constraints["python"]),
                  "packages": group_packages,
                  "cuda_runtime": _display(constraints["cuda"]), "conda_env_path": str(env_path),
@@ -1231,6 +1303,11 @@ def _build_group_dict(
     group_packages.update({"torch": _display(constraints["torch"]) or "*",
                            "torchvision": _display(constraints["torchvision"]) or "*",
                            "cuda-version": _display(constraints["cuda"]) or "*"})
+    # An adapted group is planned against the declared adaptation, not the authors'
+    # historical pins: the group says so, so readiness output cannot be read as an
+    # exact-reproduction claim.
+    adaptations = sorted({specs[mid]["runtime_adaptation"] for mid in members
+                          if specs.get(mid, {}).get("runtime_adaptation")})
     return {
         "environment_id": environment_id,
         "members": members,
@@ -1239,6 +1316,7 @@ def _build_group_dict(
         "cuda_runtime": _display(constraints["cuda"]),
         "conda_env_path": str(env_path),
         "interpreter": str(env_path / ("python.exe" if os.name == "nt" else "bin/python")),
+        "runtime_adaptation": adaptations[0] if len(adaptations) == 1 else None,
         "lock_digest": _environment_digest(members, constraints),
         "evidence": list(constraints["evidence"]),
         "split_reasons": [],
@@ -1422,6 +1500,13 @@ def _install_at_prefix(
     pip_specs = _pip_specs_for_group(group, by_id)
     if pip_specs:
         pip_argv = [str(staging_interp), "-m", "pip", "install", *pip_specs]
+        # An adapted profile installs its torch build from the registry-declared wheel index
+        # (the PyPI default build lacks the target arch list, e.g. sm_120). EXTRA index, not a
+        # replacement: the same pip line installs regular-PyPI packages (open-clip-torch), which
+        # the pytorch wheel index does not host.
+        index = group["constraints"].get("pip_index_url")
+        if index:
+            pip_argv += ["--extra-index-url", str(index)]
         group["evidence"].append(f"pip install: {' '.join(pip_argv)}")
         try:
             pip_proc = subprocess.run(pip_argv, env=_package_manager_env(), capture_output=True, text=True, check=False, timeout=SOLVER_TIMEOUT_SECONDS)

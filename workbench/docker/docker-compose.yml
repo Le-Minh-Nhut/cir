@@ -15,6 +15,11 @@ services:
       context: ../..
       dockerfile: workbench/docker/Dockerfile
     container_name: cir-workbench
+    # Run as the invoking operator's uid/gid (default 1000:1000) so files the container
+    # writes into host bind mounts (artifacts, checkpoints, results) are owned by the
+    # operator, not by root. Override with WORKBENCH_UID/WORKBENCH_GID in .env when the
+    # invoking account differs.
+    user: "${WORKBENCH_UID:-1000}:${WORKBENCH_GID:-1000}"
     ports:
       - "${WORKBENCH_BACKEND_PORT:-8000}:8000"
       - "${WORKBENCH_FRONTEND_PORT:-5173}:5173"
@@ -28,6 +33,11 @@ services:
       WORKBENCH_BACKEND_URL: "http://127.0.0.1:8000"
       # WORKBENCH_RUNTIME_ADAPTATION: pass through from .env (empty by default).
       WORKBENCH_RUNTIME_ADAPTATION: "${WORKBENCH_RUNTIME_ADAPTATION:-}"
+      # The evidence-ledger HMAC key lives under the operator config home. The container runs
+      # as a non-root uid with no writable home directory, so point XDG_CONFIG_HOME at the
+      # artifacts bind mount: key creation and the ledger key lock need a writable parent,
+      # and a key under the artifacts mount is on the same volume the ledger itself lives on.
+      XDG_CONFIG_HOME: /artifacts/config
     volumes:
       # DATA-02 three-way dataset separation, expressed as mounts:
       # - canonical raw `images/` and `image_splits/` are READ-ONLY submounts: preparation and

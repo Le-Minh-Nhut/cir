@@ -83,6 +83,14 @@ def _child_environment(job: Job) -> dict[str, str]:
     return child_env
 
 
+class DuplicateJobError(RuntimeError):
+    """An identical model+checkpoint+protocol job is already queued or running."""
+
+    def __init__(self, job_id: str, status: str):
+        super().__init__(f"{job_id} ({status})")
+        self.job_id = job_id
+        self.status = status
+
 class SingleGpuQueue:
     """Runs one preflighted upstream evaluator at a time."""
 
@@ -97,10 +105,20 @@ class SingleGpuQueue:
         self._worker = Thread(target=self._work, daemon=True)
         self._worker.start()
 
-    def enqueue(self, model_id: str, checkpoint_id: str, protocol_id: str, command: list[str], cwd: Path, log_directory: Path, provenance: dict[str, object]) -> dict:
+    def enqueue(self, model_id: str, checkpoint_id: str, protocol_id: str, command: list[str], cwd: Path, log_directory: Path, provenance: dict[str, object], *, refuse_duplicate: bool = False) -> dict:
         with self._condition:
+            if refuse_duplicate:
+                # The duplicate check is atomic with the append: a handler that checks first
+                # and enqueues later races a concurrent enqueue past the check (TOCTOU).
+                for existing in self._jobs:
+                    if (existing.status in {"queued", "preparing", "running"}
+                            and existing.model_id == model_id
+                            and existing.checkpoint_id == checkpoint_id
+                            and existing.protocol_id == protocol_id):
+                        raise DuplicateJobError(existing.job_id, existing.status)
             job = Job(str(uuid4()), model_id, checkpoint_id, protocol_id, command, str(cwd), str(log_directory), provenance)
             self._jobs.append(job)
+            self._persist(job)
             self._condition.notify()
             return asdict(job)
 
@@ -124,6 +142,7 @@ class SingleGpuQueue:
             if job.status in {"queued", "preparing"}:
                 job.status = "cancelled"
                 job.completed_at = now()
+                self._persist(job)
                 return asdict(job)
             if job.status != "running":
                 raise ValueError(f"cannot cancel {job.status} job")
@@ -146,6 +165,29 @@ class SingleGpuQueue:
                              "[WARN] a process in this job's group survived cancellation\n")
             return asdict(live) if live is not None else {"job_id": job_id, "status": "cancelled"}
 
+    def adopt_recovered(self, record: dict) -> None:
+        """Load a startup-recovered record into the in-memory queue as a terminal job.
+
+        The record's state on disk is already truthful (`failed`); this only makes it
+        visible through the status API after a restart.
+        """
+        job = Job(
+            record.get("job_id") or str(uuid4()),
+            str(record.get("model_id")), str(record.get("checkpoint_id")),
+            str(record.get("protocol_id")), [], "",
+            str(record.get("log_directory") or ""),
+            {}, status=str(record.get("status") or "failed"),
+            created_at=str(record.get("created_at") or now()),
+            started_at=record.get("started_at"),
+            completed_at=record.get("completed_at"),
+            return_code=record.get("return_code"),
+            error=record.get("error"),
+        )
+        with self._condition:
+            if any(existing.job_id == job.job_id for existing in self._jobs):
+                return
+            self._jobs.append(job)
+
     def _next_job(self) -> Job:
         with self._condition:
             while not any(job.status == "queued" for job in self._jobs):
@@ -153,6 +195,7 @@ class SingleGpuQueue:
             job = next(job for job in self._jobs if job.status == "queued")
             job.status = "preparing"
             job.started_at = now()
+            self._persist(job)
             return job
 
     @staticmethod
@@ -239,6 +282,57 @@ class SingleGpuQueue:
         value = (getattr(job, field) + line)[-12000:]
         setattr(job, field, value)
 
+    @staticmethod
+    def _persist(job: "Job") -> None:
+        """Write a status snapshot next to the queue's dispatch record.
+
+        The queue lives in RAM; a container restart would otherwise make every job vanish
+        from the status API while its evaluator artifacts still exist — or worse, leave a
+        `running` job that no process backs. Callers hold the queue lock.
+        """
+        try:
+            directory = Path(job.log_directory)
+            # A queued job has no log directory yet: the worker creates it only when the job
+            # is dispatched. Persist anyway — a restart must still recover queued jobs.
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / "queue_state.json").write_text(
+                    json.dumps({key: getattr(job, key) for key in (
+                        "job_id", "model_id", "checkpoint_id", "protocol_id", "status",
+                        "started_at", "completed_at", "return_code", "error")}, indent=2) + "\n",
+                    encoding="utf-8")
+        except OSError:
+            # Persistence is best-effort bookkeeping; the dispatch record on disk remains
+            # the durable trace even when this snapshot write fails.
+            pass
+
+    @classmethod
+    def recover_interrupted(cls, roots: list[Path]) -> list[dict]:
+        """Mark jobs recorded as queued/preparing/running when the process died as failed.
+
+        Called once at backend startup: a `running` status after a restart is never true —
+        no process backs it — so the record becomes an honest `failed` with the reason.
+        Returns the recovered records for logging.
+        """
+        recovered: list[dict] = []
+        for root in roots:
+            if not root.is_dir():
+                continue
+            for state_path in sorted(root.glob("*/queue_state.json")):
+                try:
+                    record = json.loads(state_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                if record.get("status") in ("queued", "preparing", "running"):
+                    record["status"] = "failed"
+                    record["error"] = "workbench restarted while the job was in flight"
+                    record["completed_at"] = datetime.now(timezone.utc).isoformat()
+                    recovered.append(record)
+                    try:
+                        state_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+                    except OSError:
+                        pass
+        return recovered
+
     def _work(self) -> None:
         while True:
             job = self._next_job()
@@ -247,7 +341,7 @@ class SingleGpuQueue:
                     continue
             directory = Path(job.log_directory)
             try:
-                directory.mkdir(parents=True, exist_ok=False)
+                directory.mkdir(parents=True, exist_ok=True)
                 # Readiness is re-checked here, immediately before dispatch: a job may sit in
                 # the queue while the environment changes (the GPU capability is invalidated
                 # by an interpreter or dependency change), and a stale check in the request
@@ -262,6 +356,7 @@ class SingleGpuQueue:
                             if job.status != "cancelled":
                                 job.status = "blocked"
                                 self._append(job, "stderr_tail", f"[BLOCKED] {error}\n")
+                                self._persist(job)
                         continue
                 # Queue bookkeeping lives under `queue_jobs/<job_id>/` and the run's
                 # scientific artifacts under `logs/<model>__<checkpoint>__<run_id>/`. They are
@@ -292,6 +387,7 @@ class SingleGpuQueue:
                                                    env=_child_environment(job),
                                                    start_new_session=True)
                         job.status = "running"
+                        self._persist(job)
                         self._processes[job.job_id] = process
                         # Capture the group now: once the leader exits, `getpgid` on its pid
                         # fails and the evaluator it started would become unreachable.
@@ -322,6 +418,7 @@ class SingleGpuQueue:
                     if job.status != "cancelled" and job.job_id not in self._cancelling:
                         job.status = "completed" if code == 0 else "failed"
                     job.completed_at = now()
+                    self._persist(job)
                 metadata.update(finished_at=job.completed_at, return_code=code)
                 (directory / "queue_command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
             except Exception as error:
@@ -331,3 +428,4 @@ class SingleGpuQueue:
                     if job.status != "cancelled" and job.job_id not in self._cancelling:
                         job.status = "failed"
                     job.completed_at = now()
+                    self._persist(job)

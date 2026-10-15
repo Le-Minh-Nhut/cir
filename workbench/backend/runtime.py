@@ -1,6 +1,7 @@
 """Environment verification with explicit readiness tiers and source-backed probing."""
 from __future__ import annotations
 
+from packaging.requirements import InvalidRequirement, Requirement
 import hashlib
 import json
 import os
@@ -752,8 +753,18 @@ def _required_packages(model: dict[str, Any]) -> dict[str, str | None]:
     for pkg in env.get("packages") or []:
         if not isinstance(pkg, str):
             continue
-        name, _, version = pkg.partition("==")
-        required.setdefault(name, declared_requirement(name, version or None))
+        # A package entry may carry an inline requirement spec (`open_clip_torch>=2.24,<2.27`);
+        # split it so the map is keyed by the canonical distribution name and the version
+        # constraint survives as the expected value.
+        try:
+            req = Requirement(pkg)
+        except InvalidRequirement:
+            # An unusable constraint is reported as unverified, not missing: fall back to the
+            # bare-name split so the key matches the installed distribution name.
+            name, _, version = pkg.partition("==")
+            required.setdefault(name, declared_requirement(name, version or None))
+            continue
+        required.setdefault(req.name, declared_requirement(req.name, str(req.specifier) or None))
     return required
 
 #: Operator-selected runtime adaptation. Set to the registry's `adapted_runtime`
@@ -762,11 +773,15 @@ def _required_packages(model: dict[str, Any]) -> dict[str, str | None]:
 #: adaptation exactly — this never relaxes a requirement the registry did not write down.
 ADAPTATION_ENV = "WORKBENCH_RUNTIME_ADAPTATION"
 
-def runtime_adaptation(model: dict[str, Any]) -> dict[str, Any] | None:
+def runtime_adaptation(model: dict[str, Any], *, undeclared_is_error: bool = True) -> dict[str, Any] | None:
     """The declared adapted runtime for the operator-selected adaptation target, or None.
 
     Historical pins remain the contract unless the operator explicitly selects an adaptation the
-    registry declares. Any other ADAPTATION_ENV value is refused rather than silently ignored.
+    registry declares. Any other ADAPTATION_ENV value is refused rather than silently ignored —
+    except for models that declare no adaptation at all, which keep their historical contract
+    (pass ``undeclared_is_error=False``): a process-global adaptation selection must not break
+    unrelated models, but a model that DECLARES an adaptation must never silently verify
+    against a different, unknown target.
     """
     requested = os.environ.get(ADAPTATION_ENV, "").strip()
     if not requested:
@@ -776,12 +791,55 @@ def runtime_adaptation(model: dict[str, Any]) -> dict[str, Any] | None:
     declared = (model.get("environment") or {}).get("adapted_runtime") or {}
     target = str(declared.get("target_compute_capability") or "").strip()
     if requested != target:
+        if not target and not undeclared_is_error:
+            return None
         raise WorkbenchError(
             "UNKNOWN_RUNTIME_ADAPTATION",
             f"unknown {ADAPTATION_ENV}={requested!r} for model "
             f"{model.get('model_id', '<unnamed>')!r}: declared adaptation is {target or 'none'}",
             {"model_id": model.get("model_id"), "requested": requested, "declared": target or None})
     return declared
+
+def resolved_runtime_environment(model: dict[str, Any]) -> dict[str, Any]:
+    """The environment block with the operator-selected adaptation applied, or the historical one.
+
+    This is THE canonical resolved runtime contract: the environment planner, solver, installer,
+    assignment and provenance all consume it, so the installer can never plan a different
+    dependency set from the one the verifier validates. The adaptation applies only when the
+    registry declares a matching `adapted_runtime.target_compute_capability`; any other model is
+    returned exactly as declared (historical pins stay the default contract).
+    """
+    env = dict(model.get("environment") or {})
+    adapted = runtime_adaptation(model)
+    if not adapted:
+        return env
+    resolved = {**env}
+    for source, target in (("pytorch", "pytorch"), ("torchvision", "torchvision"),
+                           ("cuda", "cuda"), ("python", "python")):
+        if source in adapted:
+            resolved[target] = adapted[source]
+    declared = list(resolved.get("packages") or [])
+    adapted_names = set()
+    for pkg in adapted.get("packages") or []:
+        declaration = str(pkg)
+        name = re.split(r"[<>=!~]", declaration, maxsplit=1)[0].strip()
+        adapted_names.add(_package_key(name))
+        declared = [d for d in declared
+                    if _package_key(str(d).split("==")[0].split(">=")[0].strip()) != _package_key(name)]
+        declared.append(declaration)
+    resolved["packages"] = declared
+    # The wheel index that ships the CUDA build matching the adapted CUDA version (e.g. the
+    # cu128 index for sm_120): without it `pip install torch>=2.7` resolves the default PyPI
+    # build, whose arch list lacks sm_120, and the mismatch only surfaces at the first kernel.
+    for key in ("pip_index_url",):
+        if adapted.get(key):
+            resolved[key] = adapted[key]
+    return resolved
+
+
+def _package_key(name: str) -> str:
+    return re.sub(r"[-_]+", "-", name.strip().lower())
+
 
 def _adapted_packages(model: dict[str, Any], adapted: dict[str, Any]) -> dict[str, str | None]:
     """Same shape as _required_packages, from the adapted block's range constraints."""
@@ -1213,7 +1271,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     # Dependency verification. The inventory is read from disk by the orchestrator
     # itself: no code belonging to the environment runs, so the environment cannot
     # report packages, versions, or modules that it does not actually have.
-    adaptation = runtime_adaptation(model)
+    adaptation = runtime_adaptation(model, undeclared_is_error=False)
     required = _adapted_packages(model, adaptation) if adaptation else _required_packages(model)
     imports = _required_imports(model)
     if required or imports:
@@ -1369,7 +1427,7 @@ def _environment_contract_digest(model: dict[str, Any]) -> str:
         "environment_required": bool(model.get("environment_required")),
         # The selected adaptation changes which constraints verify the environment, so two
         # contracts (historical vs adapted) must never share a cache entry.
-        "adapted_runtime": runtime_adaptation(model),
+        "adapted_runtime": runtime_adaptation(model, undeclared_is_error=False),
     }
     return hashlib.sha256(json.dumps(relevant, sort_keys=True).encode("utf-8")).hexdigest()
 

@@ -25,7 +25,11 @@ models:
       python: '3.9'
       pytorch: '2.0.1'
       torchvision: '0.15.2'
-      cuda: UNKNOWN
+      # The pinned evaluator hard-requires CUDA: utils_csmcir.py selects the cuda device whenever
+      # torch sees one and blip_validate.py calls torch.cuda.empty_cache() (which raises without
+      # CUDA). torch==2.0.1 from PyPI bundles the CUDA 11.7 runtime wheels, so 11.7 is the
+      # declared requirement; an adapted sm_120 profile can override it per-model.
+      cuda: '11.7'
       packages: []
     # The pinned evaluator derives its data root from `__file__` and opens
     # `<checkout>/fashionIQ_dataset`; the canonical root is staged there by the authorized
@@ -943,7 +947,10 @@ models:
         pytorch: '>=2.7,<3'
         torchvision: '>=0.22,<1'
         cuda: '12.8'
-        packages: [open_clip_torch>=2.24]
+        packages: ['open_clip_torch>=2.24,<2.27']
+        # The PyPI default torch build does not include sm_120 kernels; the adapted profile must
+        # install from the CUDA 12.8 wheel index explicitly.
+        pip_index_url: https://download.pytorch.org/whl/cu128
     strict_clean_checkpoint_available: null
     notes: Base LIMN iteration 0 only. Author README and pinned train.py bind iteration-0 filenames to independently run dress, shirt, and toptee categories; author Hub LFS metadata supplies hashes. Workbench replay calls pinned native test.py:test(); full runtime remains unverified.
     checkpoint_variants:

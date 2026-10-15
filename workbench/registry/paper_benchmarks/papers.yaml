@@ -644,7 +644,7 @@ references:
   method_name: ConeSep
   method_variant: main method, 20% training-noise block of Table 1
   backbone: BLIP-2 Q-Former composition; the paper prints no backbone string in this table
-  checkpoint_id: fiq_n20
+  checkpoint_id: fiq_n02
   checkpoint_training_noise_pct: 20
   checkpoint_mapping_status: UNVERIFIED
   dataset: fashioniq
@@ -692,7 +692,7 @@ references:
   method_name: ConeSep
   method_variant: main method, 50% training-noise block of Table 1
   backbone: BLIP-2 Q-Former composition; the paper prints no backbone string in this table
-  checkpoint_id: fiq_n50
+  checkpoint_id: fiq_n05
   checkpoint_training_noise_pct: 50
   checkpoint_mapping_status: UNVERIFIED
   dataset: fashioniq
@@ -740,7 +740,7 @@ references:
   method_name: ConeSep
   method_variant: main method, 80% training-noise block of Table 1
   backbone: BLIP-2 Q-Former composition; the paper prints no backbone string in this table
-  checkpoint_id: fiq_n80
+  checkpoint_id: fiq_n08
   checkpoint_training_noise_pct: 80
   checkpoint_mapping_status: UNVERIFIED
   dataset: fashioniq

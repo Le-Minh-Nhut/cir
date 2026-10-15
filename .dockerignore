@@ -18,8 +18,10 @@ workbench/frontend/node_modules
 workbench/frontend/dist
 workbench/frontend/*.tsbuildinfo
 
-# Local secrets and scratch.
+# Local secrets and scratch. The negations below keep the checked-in EXAMPLES out of the
+# ignore so they ship with the repo — the real .env files (operator secrets, host paths)
+# must never enter the image; they are bind-mounted or read by compose at run time.
 workbench/config/workbench.env
-*.env
+**/.env
 !workbench/config/workbench.env.example
 !workbench/docker/.env.example

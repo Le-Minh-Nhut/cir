@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import csv
 import io
 import json
@@ -17,7 +19,7 @@ from workbench.backend.analysis import analysis_rows_from_maps, failure_jaccard_
 from workbench.backend import runtime
 from workbench.backend.errors import WorkbenchError
 from workbench.backend.index import rebuild_index
-from workbench.backend.jobs import SingleGpuQueue
+from workbench.backend.jobs import DuplicateJobError, SingleGpuQueue
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.registry import checkpoint_availability, load_registry, sha256_file
 from workbench.backend.schemas.results import Annotation, SavedCohort
@@ -32,6 +34,31 @@ LABELS = ["preservation_failure", "under_edit", "over_edit", "partial_edit", "wr
 app = FastAPI(title="CIR Failure Analysis Workbench")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"], allow_methods=["*"], allow_headers=["*"])
 JOBS = SingleGpuQueue()
+
+def _recover_interrupted_jobs() -> None:
+    """A restart must never resurrect a phantom `running` job: records persisted by a
+    previous process that died mid-flight become truthful `failed` entries at startup."""
+    try:
+        recovered = SingleGpuQueue.recover_interrupted(
+            [resolve_config().WORKBENCH_ARTIFACTS_ROOT / "queue_jobs"])
+        for record in recovered:
+            logging.getLogger("workbench").warning(
+                "recovered interrupted job %s (%s) as failed",
+                record.get("job_id"), record.get("model_id"))
+            # Surface the recovered record through the status API: an operator who missed
+            # the startup log must still see the failed job in /api/jobs instead of an
+            # empty queue.
+            JOBS.adopt_recovered(record)
+    except Exception:
+        # Recovery must never block startup; the on-disk records stay available for
+        # inspection.
+        pass
+
+@app.on_event("startup")
+def _startup() -> None:
+    # Resolved when the server actually starts, not at import: a test importing this module
+    # with a different artifacts root must not key recovery to the import-time root.
+    _recover_interrupted_jobs()
 
 
 def _job_launch_guard(job: object) -> None:
@@ -56,7 +83,10 @@ JOBS.launch_guard = _job_launch_guard
 
 @app.exception_handler(WorkbenchError)
 async def workbench_error(_: Request, error: WorkbenchError) -> JSONResponse:
-    return JSONResponse(status_code=400, content=error.payload())
+    # A missing serving index is the server's own state, not a bad request: 503 tells the
+    # operator to rebuild, while 400 would blame the caller. Operator-input errors stay 400.
+    status = 503 if error.code == "index_unavailable" else 400
+    return JSONResponse(status_code=status, content=error.payload())
 
 
 def read_json(path: Path) -> list[dict]:
@@ -108,6 +138,17 @@ def _aggregate_reports() -> list[dict]:
     config = resolve_config()
     if not reports_root(config).is_dir():
         return []
+    # A report is evidence only when the out-of-band ledger corroborates it. Any parseable JSON
+    # in this directory could have been written by anyone with filesystem access; without the
+    # ledger cross-check a forged report would be served as `passed=True`. A report whose
+    # digest, identity fields, or completion status disagree with the ledger — or that has no
+    # ledger entry at all — is isolated, never served.
+    from workbench.scripts.evaluate_models import read_evidence_ledger, sha256_file
+    ledger = read_evidence_ledger(config)
+    # Key the ledger by report digest, not run_id: two files claiming the same run_id must
+    # each find the entry whose bytes they match, and a copied report must not inherit a
+    # different run's corroboration.
+    ledger_by_digest = {item.get("report_digest"): item for item in ledger or []}
     reports = []
     for path in sorted(reports_root(config).glob("*_aggregate.json")):
         try:
@@ -117,6 +158,32 @@ def _aggregate_reports() -> list[dict]:
         if not isinstance(report, dict) or report.get("artifact_type") != "official_aggregate_evaluation_report":
             continue
         if not _aggregate_report_is_well_formed(report, path):
+            continue
+        witness = ledger_by_digest.get(sha256_file(path))
+        # A copied report must not inherit another run's corroboration: the witness entry's
+        # identity fields must match the file's own claims.
+        if witness is not None and witness.get("run_id") != report.get("run_id"):
+            witness = None
+        if witness is None:
+            print(f"workbench: skipping aggregate report {path}: no evidence-ledger entry for its run", file=sys.stderr)
+            continue
+        corroborated = (
+            witness.get("report_digest") == sha256_file(path)
+            and str(witness.get("model_id")) == str(report.get("model_id"))
+            and str(witness.get("checkpoint_id")) == str(report.get("checkpoint_id"))
+            and str(witness.get("protocol_id")) == str(report.get("protocol_id"))
+            # The ledger records how the run ended; only a run the evaluator child completed
+            # successfully corroborates the report it wrote.
+            and witness.get("return_code") == 0
+            and witness.get("invocation_status") == "INVOCATION_COMPLETED"
+        )
+        if not corroborated:
+            print(f"workbench: skipping aggregate report {path}: disagrees with its evidence-ledger entry", file=sys.stderr)
+            continue
+        if any(existing.get("run_id") == report.get("run_id") for existing in reports):
+            # A second file claiming the same run_id is a copy: the endpoints index by
+            # run_id, so serving both would present one run twice.
+            print(f"workbench: skipping aggregate report {path}: duplicate run_id", file=sys.stderr)
             continue
         reports.append(report)
     return reports
@@ -325,6 +392,16 @@ def queue_job(payload: JobInput):
         raise HTTPException(404, {"error": "checkpoint_not_found", "message": "Checkpoint is not registered for model.", "details": {"model_id": payload.model_id, "checkpoint_id": payload.checkpoint_id}})
     config = resolve_config()
     dataset_root = config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "fashionIQ_dataset" if payload.model_id == "csmcir" else config.FASHIONIQ_ROOT
+    # One identical evaluation at a time: an identical model+checkpoint+protocol job already
+    # queued or in flight would duplicate expensive GPU work and double-book the single GPU
+    # slot. Finished jobs do not block re-running.
+    for existing in JOBS.list():
+        if (existing.get("status") in {"queued", "preparing", "running"}
+                and existing.get("model_id") == payload.model_id
+                and existing.get("checkpoint_id") == payload.checkpoint_id
+                and existing.get("protocol_id") == payload.protocol_id):
+            raise HTTPException(409, {"error": "duplicate_job", "message": "An identical job is already queued or running.",
+                                      "details": {"job_id": existing["job_id"], "status": existing["status"]}})
     plan, blockers = guarded_plan(model, checkpoint, payload.protocol_id, dataset_root, payload.top_k, config)
     if plan is None:
         raise HTTPException(409, {"error": "evaluation_blocked", "message": "Official evaluation is not ready.", "details": {"blockers": blockers}})

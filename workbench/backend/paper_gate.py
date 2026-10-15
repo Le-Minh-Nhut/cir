@@ -309,6 +309,12 @@ def evaluate_gate(
     verdict that only says "not a pass" sends an operator nowhere.
     """
     if data_kind is not None and data_kind != "experiment":
+        if data_kind == "synthetic":
+            # A registry-declared synthetic evaluator is a pipeline self-test, not a mock
+            # placeholder: name it as what it is so an operator is not sent hunting for a
+            # mocking bug.
+            return GateVerdict(NOT_RUN, False, False, [], ["data_kind='synthetic' is a pipeline self-test, not an experiment"],
+                               "synthetic-data runs validate the pipeline and never compare against paper results")
         return GateVerdict(NOT_RUN, False, False, [], [f"data_kind={data_kind!r} is not a real experiment"],
                            "a mock or placeholder result is never evidence about reproduction")
     if not real_execution:
@@ -397,6 +403,15 @@ def evaluate_gate(
     variant = any((run_meta or {}).get(key) for key in VARIANT_KEYS)
     mapping_verified = (run_meta or {}).get("checkpoint_mapping_verified") is True
     evidence = reference.as_evidence()
+    # The reference's own record caps the identity claim: when the paper registry could not
+    # establish that the paper row maps to this checkpoint asset, the gate must not certify a
+    # stronger verdict than the reference itself supports.
+    reference_mapping = evidence.get("checkpoint_mapping_status")
+    # `NO_CHECKPOINT`/absent means the row does not claim a checkpoint asset at all, so the
+    # run's own mapping evidence stands; any recorded mapping claim other than a verified
+    # one caps the verdict at the reference's own state.
+    if reference_mapping and reference_mapping not in ("VERIFIED_METADATA", "NO_CHECKPOINT"):
+        mapping_verified = False
     if failed:
         return GateVerdict(ALERT_METRIC_DEVIATION, False, variant, comparisons,
                            [_failure_note(c) for c in failed],
@@ -429,6 +444,24 @@ def evaluate_gate(
         # Mapping status wins precedence when both hold: identity uncertainty is the stronger
         # caveat, and the coverage gap stays visible in `detail`.
         status = PASS_WITH_UNCHECKED_CATEGORIES if mapping_verified else PASS_METRICS_ONLY_MAPPING_UNVERIFIED
+    if not paper_categories:
+        # A reference that publishes no category table leaves the per-category check to the
+        # run's own coverage. If the run observed every protocol category, the check the
+        # aggregate cannot provide was performed on complete per-category evidence; the
+        # reference's silence is a provenance fact, not a coverage gap. If the run itself
+        # observed fewer categories, the aggregate cannot be certified as a full
+        # reproduction, and the coverage gap is named.
+        observed_all = all(
+            (categories.get(category) or {}).get(metric) is not None
+            for category, metric in
+            ((key.partition("_")[0], key.rpartition("_")[2]) for key in CATEGORY_KEYS))
+        if not observed_all:
+            status = PASS_WITH_UNCHECKED_CATEGORIES if mapping_verified else PASS_METRICS_ONLY_MAPPING_UNVERIFIED
+            detail += ("; the reference publishes no category table, so per-category agreement "
+                       "is unchecked")
+        else:
+            detail += ("; the reference publishes no category table, so per-category agreement "
+                       "was checked against the run's complete per-category evidence")
     if status != PASS_WITHIN_5_PERCENT and status != PASS_WITHIN_5_PERCENT_VARIANT:
         # Incomplete coverage (no observed categories) or an unverified checkpoint mapping: the
         # numbers stay on the verdict for inspection, but neither is full reproduction

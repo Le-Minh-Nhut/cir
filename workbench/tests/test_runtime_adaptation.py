@@ -31,7 +31,7 @@ def test_selected_adaptation_returns_declared_block(limn_model, monkeypatch):
     assert adapted["target_compute_capability"] == "sm_120"
     adapted_packages = runtime._adapted_packages(limn_model, adapted)
     assert adapted_packages["torch"] == ">=2.7,<3"
-    assert adapted_packages["open_clip_torch"] == ">=2.24"
+    assert adapted_packages["open_clip_torch"] == ">=2.24,<2.27"
 
 
 def test_undeclared_adaptation_is_refused(limn_model, monkeypatch):
@@ -78,4 +78,4 @@ def test_limn_validate_environment_accepts_both_contracts(monkeypatch):
     adapted = limn.validate_environment()
     # The adapted contract must not report the historical mismatches; open_clip_torch >=2.24
     # is genuinely absent from this environment and remains the only honest blocker.
-    assert adapted == ["LIMN environment package missing: open_clip_torch >=2.24"]
+    assert adapted == ["LIMN environment package missing: open_clip_torch >=2.24,<2.27"]

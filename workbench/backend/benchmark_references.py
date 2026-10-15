@@ -90,6 +90,10 @@ class BenchmarkReference:
             "registry_file": str(REFERENCES_FILE),
             "registry_digest": self.source_digest,
             "reference_status": self.reference_status,
+            # The reference's own record of how confidently its paper row maps to the
+            # checkpoint asset: the gate must not certify identity more strongly than the
+            # reference itself claims.
+            "checkpoint_mapping_status": self.payload.get("checkpoint_mapping_status"),
             "reported_metrics": self.reported_metrics,
             "derived_metrics": self.payload.get("derived_metrics") or [],
             "metric_provenance": self.provenance_for_all(),

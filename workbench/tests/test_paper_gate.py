@@ -42,6 +42,14 @@ def reference(paper=None, status=benchmarks.REFERENCE_VERIFIED, **overrides):
         "split": META["split"],
         "dataset": META["dataset"],
         "reported_metrics": dict(paper if paper is not None else PAPER),
+        # Real committed FashionIQ references all publish the full category table; the
+        # fixture must too, or every aggregate-only pass is demoted to
+        # PASS_WITH_UNCHECKED_CATEGORIES by the gate's coverage rule.
+        "category_metrics": {
+            "dress": {"r10": PAPER["r10"], "r50": PAPER["r50"]},
+            "shirt": {"r10": PAPER["r10"], "r50": PAPER["r50"]},
+            "toptee": {"r10": PAPER["r10"], "r50": PAPER["r50"]},
+        },
         "derived_metrics": [],
         "reference_status": status,
         **overrides,
@@ -49,7 +57,17 @@ def reference(paper=None, status=benchmarks.REFERENCE_VERIFIED, **overrides):
     return benchmarks.BenchmarkReference("test_row", "testmodel", "p", "T", payload, "digest", "v1")
 
 
+_FULL_CATEGORIES = {
+    "dress": {"r10": PAPER["r10"], "r50": PAPER["r50"]},
+    "shirt": {"r10": PAPER["r10"], "r50": PAPER["r50"]},
+    "toptee": {"r10": PAPER["r10"], "r50": PAPER["r50"]},
+}
+
 def run(metrics, ref=None, meta=None, **kwargs):
+    # A run that reaches the gate normally observes its categories (the evaluator's parsers
+    # always produce them); tests that exercise absent coverage pass
+    # `reproduced_category_metrics=None` explicitly.
+    kwargs.setdefault("reproduced_category_metrics", dict(_FULL_CATEGORIES))
     return gate.evaluate_gate(ref or reference(), metrics,
                               run_meta=meta or dict(META), real_execution=True, **kwargs)
 
@@ -64,7 +82,8 @@ def test_exact_agreement_passes():
 
 def test_one_percent_error_passes():
     metrics = {key: value * 1.01 for key, value in PAPER.items()}
-    verdict = run(metrics)
+    categories = {cat: {m: v * 1.01 for m, v in row.items()} for cat, row in _FULL_CATEGORIES.items()}
+    verdict = run(metrics, reproduced_category_metrics=categories)
     assert verdict.status == gate.PASS_WITHIN_5_PERCENT
     for comparison in verdict.comparisons:
         assert comparison.relative_error_pct == pytest.approx(1.0, abs=1e-9)
@@ -79,7 +98,8 @@ def test_just_inside_the_boundary_passes():
 
 def test_exactly_at_the_boundary_passes():
     metrics = {key: value * 0.95 for key, value in PAPER.items()}
-    verdict = run(metrics)
+    categories = {cat: {m: v * 0.95 for m, v in row.items()} for cat, row in _FULL_CATEGORIES.items()}
+    verdict = run(metrics, reproduced_category_metrics=categories)
     assert verdict.status == gate.PASS_WITHIN_5_PERCENT
     for comparison in verdict.comparisons:
         assert comparison.relative_error_pct == pytest.approx(5.0, abs=1e-9)
@@ -560,13 +580,14 @@ def test_categories_compare_only_where_both_sides_publish():
     assert "dress_r10" in verdict.detail and "not compared" in verdict.detail
 
 def test_a_run_category_with_no_paper_counterpart_is_not_compared():
-    # An observed category cannot be judged against a row that never printed one.
+    # An observed category cannot be judged against a row that never printed one; the row
+    # itself publishes no table, so the coverage gap is named and no category is compared.
     ref = reference(**{"category_metrics": None})
     verdict = run_with_categories(
         {"r10": 57.07, "r50": 77.27, "mean": 67.17},
         {"dress": {"r10": 10.00, "r50": 10.00}},
         ref)
-    assert verdict.status == gate.PASS_WITHIN_5_PERCENT
+    assert verdict.status == gate.PASS_WITH_UNCHECKED_CATEGORIES
     assert not any(c.metric == "dress_r10" for c in verdict.comparisons)
 
 def test_matching_categories_keep_the_pass():

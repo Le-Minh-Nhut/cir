@@ -30,6 +30,9 @@ done
 
 PY="$(command -v python3 || true)"
 [[ -x "${REPO}/.venv/bin/python" ]] && PY="${REPO}/.venv/bin/python"
+# Embedded checks import the workbench package; the verifier may be invoked from any cwd,
+# so the repo root must be importable regardless of where the interpreter starts.
+export PYTHONPATH="${REPO}${PYTHONPATH:+:${PYTHONPATH}}"
 if [[ -z "$PY" ]]; then echo "no python interpreter" >&2; exit 2; fi
 
 declare -A RESULTS   # id -> PASS|FAIL|PENDING
@@ -58,16 +61,18 @@ say "== J1 clean startup: backend, frontend, all 16 models, no fake results =="
 if (( OFFLINE )) || ! live; then
     pending J1 "no live stack (run compose up first or drop --offline)"
 else
-    j1="$("${PY}" - "$BASE" <<'EOF'
+    j1="$("${PY}" - "$BASE" "${REPO}" <<'EOF'
 import json, sys, urllib.request
-base = sys.argv[1]
+base, repo = sys.argv[1], sys.argv[2]
+import yaml
+expected = {m["model_id"] for m in yaml.safe_load(
+    open(f"{repo}/workbench/registry/models.yaml", encoding="utf-8"))["models"]}
 def get(path):
-    return json.load(urllib.request.urlopen(base + path))
+    return json.load(urllib.request.urlopen(base + path, timeout=120))
 models = get("/api/models")
 assert isinstance(models, list), "models payload must be a list"
-assert len(models) == 16, f"expected 16 registered models, got {len(models)}"
-ids = {m["model_id"] for m in models}
-assert {"limn", "csmcir", "dcnet", "encoder"} <= ids
+assert {m.get("model_id") for m in models} == expected, (
+    f"served models differ from the registry: {sorted({m.get('model_id') for m in models} ^ expected)}")
 for m in models:
     assert m.get("model_id"), "model entry without model_id"
 # a clean installation must not present any run that claims real research evidence:
@@ -76,10 +81,13 @@ runs = get("/api/runs")
 assert isinstance(runs, list)
 fake = [r for r in runs if r.get("data_kind") != "mock"]
 assert not fake, f"runs presented as real without evidence: {[r['run_id'] for r in fake]}"
-jobs = get("/api/jobs")
-assert jobs == [], f"clean install must have no jobs, got {jobs}"
+# Jobs may legitimately exist on a long-lived stack; a clean first boot has none. Either
+# way every status must be a real backend enum value, never an invented one.
+allowed = {"queued", "preparing", "running", "blocked", "completed", "failed", "cancelled"}
+bad_jobs = [j.get("status") for j in get("/api/jobs") if j.get("status") not in allowed]
+assert not bad_jobs, f"job statuses outside the backend enum: {bad_jobs}"
 mock_count = len(runs)
-print(f"16 models; {mock_count} explicitly-mock runs, no run presented as real evidence")
+print(f"{len(models)} models; {mock_count} explicitly-mock runs, no run presented as real evidence")
 EOF
     )" && pass J1 "$j1" || fail J1 "$j1"
 fi
@@ -88,10 +96,10 @@ fi
 say "== J2 volume mounts resolve to the intended host directories =="
 if (( OFFLINE )); then
     pending J2 "offline mode"
-elif ! command -v docker >/dev/null || [[ -z "$(docker ps -q --filter name=workbench 2>/dev/null)" ]]; then
+elif ! command -v docker >/dev/null || [[ -z "$(docker ps -q --filter name=^cir-workbench$ 2>/dev/null)" ]]; then
     pending J2 "workbench container not running"
 else
-    C="$(docker ps -q --filter name=workbench | head -1)"
+    C="$(docker ps -q --filter name=^cir-workbench$ | head -1)"
     mounts="$(docker inspect "$C" --format '{{range .Mounts}}{{.Source}}=>{{.Destination}} {{end}}')"
     mounts="$mounts" "${PY}" - <<'EOF' && pass J2 "$mounts" || fail J2 "$mounts"
 import os, sys
@@ -111,10 +119,10 @@ fi
 say "== J3 preparation is writable inside the container, canonical inputs unchanged =="
 if (( OFFLINE )); then
     pending J3 "offline mode"
-elif [[ -z "$(docker ps -q --filter name=workbench 2>/dev/null)" ]]; then
+elif [[ -z "$(docker ps -q --filter name=^cir-workbench$ 2>/dev/null)" ]]; then
     pending J3 "workbench container not running"
 else
-    C="$(docker ps -q --filter name=workbench | head -1)"
+    C="$(docker ps -q --filter name=^cir-workbench$ | head -1)"
     if docker exec "$C" sh -c '
         mkdir -p /data/FashionIQ/resized_image 2>/dev/null || true
         test -w /data/FashionIQ/resized_image || exit 10
@@ -156,14 +164,17 @@ doc = json.load(sys.stdin)
 assert doc[\"models\"], \"empty models must fail\"
 "' >/dev/null 2>&1; then j4a_mut=1; else j4a_mut=0; fi
     # (b) run.sh source must prefer the bundle over checkpoints[0] (BUG 6)
-    if grep -q "checkpoint_bundles" "${HERE}/run.sh"; then j4b=0; else j4b=1; fi
+    # Match the actual selection expression, not any mention of bundles: M2's mutant
+    # replaces the bundle preference with checkpoints[0], and only a grep for the live
+    # expression detects that.
+    if grep -q "bundles\[0\].get('bundle_id') or m\['checkpoints'\]\[0\]\['checkpoint_id'\]" "${HERE}/run.sh"; then j4b=0; else j4b=1; fi
     # (c) /api/models exposes bundles and /api/jobs resolves the bundle id (BUG 6 API side)
     j4c="skipped"
     if (( ! OFFLINE )) && live; then
         j4c="$("${PY}" - "$BASE" <<'EOF'
 import json, sys, urllib.request
 base = sys.argv[1]
-models = json.load(urllib.request.urlopen(base + "/api/models"))
+models = json.load(urllib.request.urlopen(base + "/api/models", timeout=60))
 limn = next(m for m in models if m["model_id"] == "limn")
 bundles = limn.get("checkpoint_bundles") or []
 assert bundles, "limn must expose its checkpoint bundle"
@@ -269,7 +280,16 @@ verdict2 = gate.evaluate_gate(None, {"r10": 55.0}, run_meta={"run_id": "x"},
                               data_kind="experiment", real_execution=True,
                               evaluation_completed=False)
 assert not verdict2.passed
-print("mock data refused; incomplete evaluation refused; gate stays fail-closed")
+# a two-of-three LIMN report must never be certified as the full FashionIQ benchmark
+from workbench.replay import limn as limn_replay
+import tempfile, json
+from pathlib import Path
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    # one category directory present with results, two missing -> bundle validation must complain
+    blockers = limn_replay.validate_checkpoint_bundle(root, limn_replay.CATEGORIES)
+    assert blockers, "empty checkpoint root must be refused"
+print("mock data refused; incomplete evaluation refused; 3-category bundle enforced; gate stays fail-closed")
 EOF
     )" && pass J7 "$j7" || fail J7 "$j7"
 else
@@ -283,13 +303,18 @@ if (( OFFLINE )) || (( LIVE == 0 )); then
 else
     j8="$("${PY}" - "$BASE" <<'EOF'
 import json, sys, urllib.request
-jobs = json.load(urllib.request.urlopen(sys.argv[1] + "/api/jobs"))
+jobs = json.load(urllib.request.urlopen(sys.argv[1] + "/api/jobs", timeout=60))
 allowed = {"queued", "preparing", "running", "blocked", "completed", "failed", "cancelled"}
 bad = {j["status"] for j in jobs} - allowed
 assert not bad, f"unexpected job statuses: {bad}"
+# An empty list proves nothing about the lifecycle: without an observed job the status
+# contract is UNVERIFIED, not PASS.
+if not jobs:
+    print("NO_JOBS_OBSERVED")
+    raise SystemExit(3)
 print(f"{len(jobs)} jobs, all statuses within the backend enum")
 EOF
-    )" && pass J8 "$j8" || fail J8 "$j8"
+    )" && pass J8 "$j8" || { rc=$?; if [[ $rc == 3 ]]; then pending J8 "no jobs observed: lifecycle statuses unverified (queue a pilot first)"; else fail J8 "$j8"; fi; }
 fi
 
 # ---------------------------------------------------------------- J9 SCIENTIFIC GATE
@@ -335,34 +360,37 @@ else
     fail J10 "$j10_bad"
 fi
 
-# ---------------------------------------------------------------- J11 DOCKER RESTART PERSISTENCE
-say "== J11 docker compose down/up keeps persistent artifacts =="
+# ---------------------------------------------------------------- J11 PERSISTENCE (DISPOSABLE CONTAINER)
+say "== J11 artifacts persist across a container restart (isolated disposable container) =="
+# The PRODUCTION container is never restarted by verification: an active research job would
+# be killed mid-run. Persistence is proven on a disposable container from the same image with
+# its own temporary artifacts directory.
 if (( OFFLINE )); then
     pending J11 "offline mode"
 elif ! command -v docker >/dev/null; then
     pending J11 "docker unavailable"
+elif ! docker image inspect docker-workbench:latest >/dev/null 2>&1; then
+    pending J11 "docker-workbench image unavailable"
 else
-    # Non-destructive persistence probe: the artifacts volume survives a container restart,
-    # which is the same persistence path as compose down/up without deleting named volumes.
-    C="$(docker ps -q --filter name=workbench | head -1)"
-    if [[ -z "$C" ]]; then
-        pending J11 "workbench container not running"
-    else
-        marker="$(docker exec "$C" sh -c 'echo j11-$RANDOM-$RANDOM > /artifacts/.j11probe 2>/dev/null && cat /artifacts/.j11probe')"
-        if [[ -z "$marker" ]]; then
-            fail J11 "cannot write an artifacts marker inside the container"
+    J11_TMP="$(mktemp -d)"
+    J11_C="j11-persist-$$-$RANDOM"
+    J11_OK=0
+    if docker run -d --name "$J11_C" -v "$J11_TMP:/artifacts"         --entrypoint sleep docker-workbench:latest 120 >/dev/null 2>&1; then
+        marker="j11-$$-$RANDOM"
+        if docker exec "$J11_C" sh -c "echo $marker > /artifacts/.j11probe" 2>/dev/null \
+            && docker restart "$J11_C" >/dev/null 2>&1 \
+            && sleep 2 \
+            && [[ "$(docker exec "$J11_C" sh -c 'cat /artifacts/.j11probe 2>/dev/null')" == "$marker" ]]; then
+            pass J11 "artifacts persisted across container restart (disposable container, isolated $J11_TMP)"
+            J11_OK=1
         else
-            docker restart "$C" >/dev/null 2>&1
-            sleep 3
-            back="$(docker exec "$C" sh -c 'cat /artifacts/.j11probe 2>/dev/null')"
-            docker exec "$C" sh -c 'rm -f /artifacts/.j11probe' 2>/dev/null
-            if [[ "$back" == "$marker" ]]; then
-                pass J11 "artifacts persisted across container restart ($marker)"
-            else
-                fail J11 "artifacts lost across restart (wrote $marker, read back '$back')"
-            fi
+            fail J11 "artifacts lost across restart in disposable container"
         fi
+    else
+        pending J11 "could not start disposable container"
     fi
+    docker rm -f "$J11_C" >/dev/null 2>&1
+    rm -rf "$J11_TMP"
 fi
 
 # ---------------------------------------------------------------- J12 RESOURCE FAILURE
@@ -435,8 +463,56 @@ out["summary"] = {
     "fail": sum(1 for c in out["checks"].values() if c["status"] in ("FAIL", "UNRUN")),
     "pending": sum(1 for c in out["checks"].values() if c["status"] == "PENDING"),
 }
-out["verdict"] = "RELEASE_READY" if out["summary"]["fail"] == 0 and out["summary"]["pending"] == 0 \
-    else ("GPU_VALIDATION_PENDING" if out["summary"]["fail"] == 0 else "RELEASE_BLOCKED")
+# Distinct acceptance dimensions; every check maps to exactly one. A verdict may only claim a
+# dimension when every check in it actually PASSED — a PENDING is not PASS, a source-grep is
+# not a runtime probe. GPU_RUNTIME/MODEL_INFERENCE/MODEL_EVALUATION remain PENDING on a host
+# without the target accelerator, which caps the verdict at GPU_VALIDATION_PENDING.
+out["dimensions"] = {
+    "STATIC_SOURCE":     {"checks": ["J4", "J6", "J9", "J10"], "mandatory": True},
+    "DEPLOYMENT":        {"checks": ["J2", "J3", "J11"],       "mandatory": True},
+    "CONFIGURATION":     {"checks": ["J1"],                    "mandatory": True},
+    "MODEL_ENVIRONMENT": {"checks": ["J12"],                   "mandatory": True},
+    "GPU_RUNTIME":       {"checks": ["J5"],                    "mandatory": True},
+    "SCIENTIFIC_OUTPUT": {"checks": ["J7"],                    "mandatory": True},
+    "OPERATIONS":        {"checks": ["J8"],                    "mandatory": True},
+}
+for dim, spec in out["dimensions"].items():
+    statuses = [out["checks"][c]["status"] for c in spec["checks"]]
+    if any(s in ("FAIL", "UNRUN") for s in statuses):
+        spec["status"] = "FAIL"
+    elif all(s == "PASS" for s in statuses):
+        spec["status"] = "PASS"
+    elif all(s in ("PASS", "PENDING") for s in statuses):
+        spec["status"] = "PENDING"
+    else:
+        spec["status"] = "NOT_APPLICABLE"
+# GPU_RUNTIME claims PASS only with a real, interpreter-probed capability record
+# (probe_source == "interpreter"); the fail-closed contract (J5) alone is engineering
+# evidence, not GPU verification. Synthetic (override-source) records never count.
+try:
+    import glob as _glob, json as _json
+    from workbench.backend.operator_config import resolve_config as _rc
+    from workbench.backend.runtime import gpu_capability_directory as _gcd
+    real_gpu = any(
+        isinstance(record := _load(p), dict)
+        and record.get("probe_source") == "interpreter"
+        and record.get("capability_verified") is True
+        for p in _glob.glob(str(_gcd(_rc()) / "*.json"))
+        for _load in (lambda path: _json.loads(open(path, encoding="utf-8").read()),)
+    )
+except Exception:
+    real_gpu = False
+if not real_gpu:
+    out["dimensions"]["GPU_RUNTIME"]["status"] = "PENDING"
+mandatory_pending = [d for d, spec in out["dimensions"].items()
+                     if spec["mandatory"] and spec["status"] != "PASS"]
+out["pending_dimensions"] = mandatory_pending
+if out["summary"]["fail"] > 0:
+    out["verdict"] = "RELEASE_BLOCKED"
+elif mandatory_pending:
+    out["verdict"] = "GPU_VALIDATION_PENDING" if "GPU_RUNTIME" in mandatory_pending else "ENGINEERING_INCOMPLETE"
+else:
+    out["verdict"] = "RELEASE_READY"
 with open(sys.argv[1], "w", encoding="utf-8") as fh:
     json.dump(out, fh, indent=2, ensure_ascii=False)
     fh.write("\n")

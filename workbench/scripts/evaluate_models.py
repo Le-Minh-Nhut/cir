@@ -178,7 +178,11 @@ def _benchmark_gate_verdict(plan, extraction, return_code: int) -> dict[str, Any
         reference,
         observed,
         run_meta=run_meta,
-        data_kind="experiment",
+        # A registry-declared synthetic source has no published paper row to reproduce: feeding
+        # the gate `data_kind="experiment"` would let its numbers mint a PASS against whichever
+        # reference happened to select, so a synthetic run is judged as what it is — not a real
+        # experiment — and never certifies reproduction.
+        data_kind="synthetic" if bool(getattr(plan, "synthetic_source", False)) else "experiment",
         # The report is only reached after an invocation was actually made, so the run is real by
         # construction; whether it *completed* is what the exit code says. Collapsing the two would
         # report a crashed evaluation as `NOT_RUN`, which hides a failure behind a state that reads
@@ -430,8 +434,12 @@ def make_run_id(plan: EvaluationPlan, timestamp: datetime) -> str:
 #: is withheld: it is model code, and a research script has no business reading the operator's
 #: tokens, cloud credentials or ledger key. An authenticated download belongs in an explicit
 #: acquisition step, not in the evaluation.
+# HOME is deliberately NOT forwarded: the ledger HMAC key lives under the operator's
+# config home (derived from HOME), and the untrusted evaluator child must never be able to
+# read it. Everything the child needs from HOME it gets explicitly: TORCH_HOME, HF_HOME,
+# TRANSFORMERS_CACHE, XDG_CACHE_HOME are on this list.
 _EVALUATOR_ENV_ALLOWLIST = (
-    "PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR",
+    "PATH", "USER", "LOGNAME", "SHELL", "TMPDIR",
     "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ",
     # CUDA/GPU visibility: which devices the run may use is a deliberate operator decision.
     "CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES", "NVIDIA_DRIVER_CAPABILITIES",
@@ -440,6 +448,10 @@ _EVALUATOR_ENV_ALLOWLIST = (
     # Where models and datasets live, so the evaluator can find its inputs.
     "CIR_REPO_ROOT", "CIR_DATA_ROOT", "FASHIONIQ_ROOT",
     "WORKBENCH_CHECKPOINT_ROOT", "WORKBENCH_RESULTS_ROOT", "WORKBENCH_THIRD_PARTY_ROOT",
+    # The operator-selected runtime profile (e.g. sm_120): the model's own official command
+    # validates the same dependency contract the orchestrator planned. A profile name, not a
+    # secret; secrets stay excluded by the deny prefixes below.
+    "WORKBENCH_RUNTIME_ADAPTATION",
     "TORCH_HOME", "HF_HOME", "TRANSFORMERS_CACHE", "XDG_CACHE_HOME",
 )
 
@@ -1483,6 +1495,12 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "environment": environment,
         "model_interpreter": plan.command[0] if plan.command else sys.executable,
         "environment_digest": metadata["environment_digest"],
+        # The adaptation the run executed under, named on the report itself (not only in
+        # variant_provenance): a reader of the environment block must not mistake an
+        # adapted stack for the authors' historical one.
+        "runtime_adaptation": (getattr(plan, "variant_provenance", None) or {}).get(
+            "adapted_runtime", {}).get("runtime_adaptation") if isinstance(
+            (getattr(plan, "variant_provenance", None) or {}).get("adapted_runtime"), dict) else None,
         "evidence_digest": evidence_digest,
         "return_code": code,
     }

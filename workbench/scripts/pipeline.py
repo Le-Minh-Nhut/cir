@@ -2337,4 +2337,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except WorkflowLockError as error:
+        # A held lock is an operator situation, not a crash: one line, nonzero exit, no traceback.
+        print(f"[BLOCKED] {error}", file=sys.stderr)
+        raise SystemExit(3) from None

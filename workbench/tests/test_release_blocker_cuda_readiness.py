@@ -372,7 +372,8 @@ def test_the_api_queue_cannot_start_an_unverified_gpu_evaluation(workspace, monk
 
     started: list[object] = []
     monkeypatch.setattr(module, "JOBS",
-                        type("Q", (), {"enqueue": lambda self, *a, **k: started.append(a) or {"id": "x"}})())
+                        type("Q", (), {"enqueue": lambda self, *a, **k: started.append(a) or {"id": "x"},
+                                       "list": lambda self: []})())
 
     checkpoint = {"checkpoint_id": "ckpt", "filename": "f.pt",
                   "checkpoint_mapping_status": "VERIFIED_METADATA"}
@@ -835,7 +836,8 @@ def test_the_api_queues_the_audited_orchestrator_not_the_raw_evaluator(workspace
 
     queued: list[tuple] = []
     monkeypatch.setattr(module, "JOBS", type("Q", (), {
-        "enqueue": lambda self, *a, **k: queued.append(a) or {"job_id": "x"}})())
+        "enqueue": lambda self, *a, **k: queued.append(a) or {"job_id": "x"},
+        "list": lambda self: []})())
 
     checkpoint = {"checkpoint_id": "ckpt", "filename": "f.pt",
                   "checkpoint_mapping_status": "VERIFIED_METADATA"}

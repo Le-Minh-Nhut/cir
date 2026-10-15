@@ -233,6 +233,11 @@ def main(argv: list[str] | None = None) -> int:
     }
     serialized = json.dumps(output, indent=2) + "\n"
     if args.output:
+        # A single-category diagnostic must never be parked where the backend serves official
+        # aggregate reports from: the file is not an official report even though it is JSON.
+        if args.output.parent.resolve().name == "reports":
+            print("[BLOCKED] --output must not target the official reports directory", file=sys.stderr)
+            return 1
         try:
             with args.output.open("x", encoding="utf-8") as handle:
                 handle.write(serialized)

@@ -38,7 +38,7 @@ container có thể sửa dữ liệu benchmark gốc.
 - Backend API: `http://127.0.0.1:8000` (`/api/models`, `/api/runs`, …)
 - Frontend: `http://127.0.0.1:5173` (proxy `/api` về backend cùng container)
 
-Lần chạy đầu, `/api/runs` trả về 400 `index_unavailable` cho tới khi DuckDB index được
+Lần chạy đầu, `/api/runs` trả về 503 `index_unavailable` cho tới khi DuckDB index được
 rebuild — UI hiển thị lỗi này trung thực; các endpoint khác vẫn hoạt động.
 
 ## 3. Bật GPU (Blackwell)

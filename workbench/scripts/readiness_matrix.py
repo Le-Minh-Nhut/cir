@@ -42,6 +42,7 @@ def _environment_rows(config: WorkbenchConfig, models: list[dict]) -> dict[str, 
                 "runtime_verification_status": group.get("runtime_verification_status"),
                 "conda_env_path": group.get("conda_env_path"),
                 "interpreter": group.get("interpreter"),
+                "runtime_adaptation": group.get("runtime_adaptation"),
                 "split_reasons": list(group.get("split_reasons") or []),
             }
     for item in plan.get("blocked", []):
@@ -120,6 +121,10 @@ def matrix(config: WorkbenchConfig, *, policy: str = "strict_clean",
             "upstream_commit_sha": model.get("upstream_commit_sha"),
             "environment_id": env.get("environment_id"),
             "environment_state": env.get("state"),
+            # A planned ADAPTED runtime means RUNTIME_VERIFIED refers to the adapted
+            # contract, not the authors' historical environment. Recorded here so the
+            # readiness label cannot be read as an exact-reproduction claim.
+            "environment_adapted": bool(env.get("runtime_adaptation")),
             "interpreter": env.get("interpreter"),
             "checkpoint_ids": selection.get("checkpoint_ids") or [],
             "checkpoint_policy_status": selection.get("status"),

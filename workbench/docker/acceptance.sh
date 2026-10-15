@@ -6,7 +6,7 @@
 #   workbench/docker/acceptance.sh [BASE_URL]     # default http://127.0.0.1:8000
 #
 # Groups (each prints PASS/FAIL and exits nonzero on the first FAIL):
-#   A first-boot honesty        models 200; runs 400 index_unavailable until index exists
+#   A first-boot honesty        models 200; runs 503 index_unavailable until index exists
 #   B independent loading       no Promise.all bundles the four startup endpoints (source check)
 #   C one configuration         served backend reports its own config roots via /api endpoints
 #   D checkpoint semantics      pc_readiness --config reports selected_checkpoints for the pilot
@@ -36,7 +36,7 @@ check() { # name expected actual
 say() { printf '%s\n' "$*"; }
 skip() { say "  SKIP $1"; SKIPPED+=("$1"); }
 
-code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+code() { curl -s --max-time 30 -o /dev/null -w '%{http_code}' "$@"; }
 live() { [[ "$(code "${BASE}/api/models")" != "000" ]]; }
 
 say "== A first-boot honesty =="
@@ -46,8 +46,8 @@ if live; then
     check "cohorts"       200 "$(code "${BASE}/api/cohorts")"
     check "benchmark-runs" 200 "$(code "${BASE}/api/benchmark-runs")"
     runs_code="$(code "${BASE}/api/runs")"
-    if [[ "$runs_code" == "200" || "$runs_code" == "400" ]]; then
-        say "  PASS runs endpoint answers honestly (index built: 200, first boot: 400)"
+    if [[ "$runs_code" == "200" || "$runs_code" == "503" ]]; then
+        say "  PASS runs endpoint answers honestly (index built: 200, first boot: 503 index_unavailable)"
     else
         say "  FAIL runs endpoint gave $runs_code"; FAILED+=("A-runs")
     fi
@@ -57,18 +57,37 @@ fi
 
 say "== B independent loading (no Promise.all over the four startup endpoints) =="
 if [[ -f "${REPO}/workbench/frontend/App.tsx" ]]; then
-    # Each startup fetch must be its own .then/.catch chain: grep per endpoint for a fetch that is
-    # NOT directly followed by a Promise.all wrapper on the same line.
-    bad=0
-    for endpoint in models cohorts jobs runs; do
-        if grep -q "Promise.all\[[^]]*api<[^>]*>(\"/api/${endpoint}\"" "${REPO}/workbench/frontend/App.tsx"; then
-            bad=1
-        fi
-    done
-    if (( bad )); then
-        say "  FAIL a startup endpoint is still bundled in a Promise.all"; FAILED+=("B-parallel")
-    else
+    # Structural check, not a line regex: Promise.all can wrap the endpoint call across lines
+    # or through template literals that a same-line grep never sees. The four startup
+    # endpoints must each load on its own .then/.catch chain.
+    OUT="$("${REPO}/.venv/bin/python" - "${REPO}/workbench/frontend/App.tsx" <<'EOF'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+# Balance-scan each Promise.all(...) block (nested parens included), then look for the
+# startup endpoints inside it, across line breaks, quotes and template literals.
+bundled = set()
+for m in re.finditer(r"Promise\.all", text):
+    i = m.end(); depth = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "(": depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0: break
+        i += 1
+    block = text[m.end():i]
+    for ep in ("models", "cohorts", "jobs", "runs"):
+        if re.search(rf"/api/{ep}\b", block) or re.search(rf"/api/\$\{{[^}}]*{ep}[^}}]*\}}", block):
+            bundled.add(ep)
+print("BUNDLED:" + ",".join(sorted(bundled)) if bundled else "OK")
+EOF
+)"
+    if echo "${OUT}" | grep -q "^BUNDLED:"; then
+        say "  FAIL startup endpoints bundled in Promise.all: ${OUT#BUNDLED:}"; FAILED+=("B-parallel")
+    elif echo "${OUT}" | grep -q "^OK"; then
         say "  PASS each startup endpoint loads independently"
+    else
+        say "  FAIL B check could not run: ${OUT}"; FAILED+=("B-parallel")
     fi
 else
     skip "B (App.tsx not present)"
@@ -79,7 +98,7 @@ if live; then
     "$PY" - "$BASE" <<'EOF' || FAILED+=("G-status")
 import json, sys, urllib.request
 statuses = set()
-for job in json.load(urllib.request.urlopen(sys.argv[1] + "/api/jobs")):
+for job in json.load(urllib.request.urlopen(sys.argv[1] + "/api/jobs", timeout=30)):
     statuses.add(job["status"])
 allowed = {"queued","preparing","running","blocked","completed","failed","cancelled"}
 bad = statuses - allowed
@@ -109,12 +128,30 @@ fi
 
 say "== C one configuration (served backend env matches its own /api view) =="
 if live; then
-    "$PY" - "$BASE" <<'EOF' || FAILED+=("C-config")
+    OUT="$("${REPO}/.venv/bin/python" - "$BASE" "${REPO}" <<'EOF'
 import json, sys, urllib.request
-models = json.load(urllib.request.urlopen(sys.argv[1] + "/api/models"))
-assert isinstance(models, list) and models, "models payload must be a non-empty list"
-print(f"  PASS served backend reports {len(models)} registered models from its own config")
+base, repo = sys.argv[1], sys.argv[2]
+served = json.load(urllib.request.urlopen(base + "/api/models", timeout=120))
+assert isinstance(served, list) and served, "models payload must be a non-empty list"
+# Identity, not count: the served set must equal the registry the repository ships, with
+# each model's native protocol and declared environment intact — a backend started against
+# a different registry would otherwise look healthy on count alone.
+import yaml
+registry = yaml.safe_load(open(f"{repo}/workbench/registry/models.yaml", encoding="utf-8"))
+declared = {m["model_id"]: m for m in registry["models"]}
+served_ids = {m["model_id"] for m in served}
+assert served_ids == set(declared), f"served models differ from registry: {sorted(served_ids ^ set(declared))}"
+for m in served:
+    assert m.get("native_protocol"), f"{m['model_id']}: native_protocol missing"
+    assert m.get("environment", {}).get("python_env_var"), f"{m['model_id']}: environment declaration missing"
+print(f"OK {len(served)} models, ids/protocols/environments match the registry")
 EOF
+)"
+    if echo "${OUT}" | grep -q "^OK"; then
+        say "  PASS ${OUT#OK }"
+    else
+        say "  FAIL configuration mismatch: ${OUT}"; FAILED+=("C-config")
+    fi
 else
     skip "C live check (no server)"
 fi

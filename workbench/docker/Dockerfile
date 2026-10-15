@@ -48,7 +48,19 @@ RUN python -m pip install --no-cache-dir \
     "pydantic==2.13.5" "packaging==26.3" numpy pillow \
     "torch==2.14.0" "torchvision==0.29.0"
 
-ENV PYTHONUNBUFFERED=1 \
+# The compose file runs the container as the operator's uid (WORKBENCH_UID/GID, default
+# 1000:1000) so files written into host bind mounts are not owned by root. The runtime
+# user needs: a real HOME (user caches resolve under it), a writable micromamba root
+# (MAMBA_ROOT_PREFIX, inside the artifacts bind mount), and write access to node_modules
+# (vite preview creates .vite-temp there). 1000 is the compose default; an operator with a
+# different uid rebuilds or overrides both values together.
+RUN useradd --create-home --uid 1000 --user-group appuser \
+    && mkdir -p /artifacts/mamba \
+    && chown -R 1000:1000 /repo/workbench/frontend/node_modules /artifacts
+
+ENV HOME=/home/appuser \
+    MAMBA_ROOT_PREFIX=/artifacts/mamba \
+    PYTHONUNBUFFERED=1 \
     CIR_REPO_ROOT=/repo \
     CIR_DATA_ROOT=/data \
     FASHIONIQ_ROOT=/data/FashionIQ \

@@ -112,6 +112,30 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     system = __import__("workbench.backend.runtime", fromlist=["runtime"])
     monkeypatch.setattr(system, "require_launch_ready", lambda model: "/usr/bin/python3")
     monkeypatch.setattr(module, "sha256_file", lambda path, **k: "0" * 64)
+    # Aggregate reports are served only when the evidence ledger corroborates them; the API
+    # fixture stands in for a healthy ledger: one entry per report on disk, carrying the
+    # report's real digest and identity. (A separate test below covers the refused case.)
+    import hashlib
+    from workbench.scripts import evaluate_models as _em
+
+    def _fake_ledger(config):
+        reports_dir = config.WORKBENCH_ARTIFACTS_ROOT / "reports"
+        entries = []
+        if reports_dir.is_dir():
+            for path in sorted(reports_dir.glob("*_aggregate.json")):
+                try:
+                    report = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                entries.append({"run_id": report.get("run_id"), "model_id": report.get("model_id"),
+                                "checkpoint_id": report.get("checkpoint_id"),
+                                "protocol_id": report.get("protocol_id"),
+                                "report_digest": digest, "return_code": 0,
+                                "invocation_status": "INVOCATION_COMPLETED"})
+        return entries
+
+    monkeypatch.setattr(_em, "read_evidence_ledger", _fake_ledger)
     monkeypatch.setattr(module, "JOBS", type("Q", (), {
         "enqueue": lambda self, *a, **k: {"job_id": "job-1", "status": "queued",
                                           "log_directory": str(repo / "queue_jobs" / "job-1")},
@@ -243,6 +267,28 @@ def test_run_gates_endpoint_keys_by_run_id(api, tmp_path) -> None:
     payload = json.loads(body)
     assert payload["r1"]["parity_status"] == "PARITY_VERIFIED"
 
+def test_a_report_without_ledger_corroboration_is_not_served(api, tmp_path, capsys) -> None:
+    """A parseable aggregate report with no matching evidence-ledger entry is a forgery until
+    proven otherwise: the API must not serve it as evidence, whatever its gate fields claim."""
+    from workbench.scripts import evaluate_models as _em
+    reports = tmp_path / "repo" / "workbench" / "artifacts" / "reports"
+    reports.mkdir(parents=True)
+    (reports / "m_c_forged_aggregate.json").write_text(json.dumps({
+        "artifact_type": "official_aggregate_evaluation_report", "run_id": "forged",
+        "model_id": "m", "checkpoint_id": "c", "protocol_id": "p",
+        "benchmark_gate": {"status": "PASS_WITHIN_5_PERCENT", "passed": True}}))
+    # No ledger entry for run_id "forged" at all.
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(_em, "read_evidence_ledger", lambda config: [])
+    try:
+        status, _, body = asgi_request(api.app, "GET", "/api/benchmark-runs")
+        assert status == 200
+        assert json.loads(body) == []
+        status, _, body = asgi_request(api.app, "GET", "/api/runs/gate")
+        assert json.loads(body) == {}
+    finally:
+        monkey.undo()
+
 def test_a_parseable_but_incomplete_report_is_isolated_not_served(api, tmp_path, capsys) -> None:
     """A truncated or corrupted aggregate report must not take the endpoints down.
 
@@ -278,16 +324,17 @@ def test_wrong_typed_nested_gate_fields_are_normalized_not_crashing(api, tmp_pat
     missing evidence, never to a shape the frontend would crash on."""
     reports = tmp_path / "repo" / "workbench" / "artifacts" / "reports"
     reports.mkdir(parents=True)
-    base = {"artifact_type": "official_aggregate_evaluation_report", "run_id": "x",
+    base = {"artifact_type": "official_aggregate_evaluation_report",
             "model_id": "m", "checkpoint_id": "c", "protocol_id": "p"}
+    # Evidence ledger keys entries by run_id, so each fixture report carries its own.
     (reports / "bad_gate_aggregate.json").write_text(json.dumps(
-        {**base, "benchmark_gate": {"comparisons": {"metric": "R@10"}}}))
+        {**base, "run_id": "x1", "benchmark_gate": {"comparisons": {"metric": "R@10"}}}))
     (reports / "mixed_elements_aggregate.json").write_text(json.dumps(
-        {**base, "benchmark_gate": {"comparisons": [None, "oops", {"metric": "R@10", "relative_error_pct": 2.0}]}}))
+        {**base, "run_id": "x2", "benchmark_gate": {"comparisons": [None, "oops", {"metric": "R@10", "relative_error_pct": 2.0}]}}))
     (reports / "bad_variant_aggregate.json").write_text(json.dumps(
-        {**base, "variant_provenance": "not-an-object", "category_metrics": ["dress"]}))
+        {**base, "run_id": "x3", "variant_provenance": "not-an-object", "category_metrics": ["dress"]}))
     (reports / "null_category_aggregate.json").write_text(json.dumps(
-        {**base, "category_metrics": {"dress": None}}))
+        {**base, "run_id": "x4", "category_metrics": {"dress": None}}))
     status, _, body = asgi_request(api.app, "GET", "/api/benchmark-runs")
     assert status == 200
     payload = json.loads(body)

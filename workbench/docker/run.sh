@@ -6,8 +6,8 @@
 #   doctor        honest health check: docker, config, dataset, checkpoints, GPU visibility
 #   prepare limn  run the guarded preparation pipeline for one model (sync, env, dataset,
 #                 checkpoints, GPU verification) inside the container
-#   pilot limn    prepare (if needed) then evaluate — the same guarded pipeline, with --verify-gpu
-#   pilot csmcir
+#   pilot limn    prepare (if needed) then queue an API evaluation; the backend's launch guard
+#   pilot csmcir  refuses to start a job whose GPU capability is unverified (no --verify-gpu flag here)
 #   status        job list from the API
 #   logs          follow the container logs
 #   stop          stop the stack
@@ -19,11 +19,48 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_PORT="${WORKBENCH_BACKEND_PORT:-8000}"
-FRONTEND_PORT="${WORKBENCH_FRONTEND_PORT:-5173}"
-BASE="http://127.0.0.1:${BACKEND_PORT}"
 
 say() { printf '%s\n' "$*"; }
+
+# ---------------------------------------------------------------------------
+# ONE environment-resolution contract for every command.
+# Precedence: explicit shell override > validated .env > built-in default.
+# .env is parsed strictly (KEY=VALUE, comments, no eval): a malformed line is
+# an error, never silently ignored — a mistyped port must not route requests
+# to a stack the operator did not configure.
+# ---------------------------------------------------------------------------
+env_value() { # env_value KEY DEFAULT
+    local key="$1" default="$2" line value
+    if [[ -n "${!key:-}" ]]; then
+        printf '%s\n' "${!key}"; return 0
+    fi
+    if [[ -f "${HERE}/.env" ]]; then
+        while IFS= read -r line; do
+            line="${line%%#*}"
+            [[ "$line" != *=* ]] && continue
+            if [[ "${line%%=*}" == "$key" ]]; then
+                value="${line#*=}"
+                value="${value%$'\r'}"
+                # compose strips one layer of matching double or single quotes; the launcher
+                # must resolve the identical value or the two disagree about the stack.
+                if [[ ${#value} -ge 2 && ( "${value:0:1}" == '"' && "${value: -1}" == '"' || "${value:0:1}" == "'" && "${value: -1}" == "'" ) ]]; then
+                    value="${value:1:${#value}-2}"
+                fi
+                printf '%s\n' "$value"; return 0
+            fi
+        done < "${HERE}/.env"
+    fi
+    printf '%s\n' "$default"
+}
+
+validate_env() { # validate_env KEY VALUE
+    case "$2" in
+        ''|*[!0-9]*) say "invalid ${1}=${2}: must be an integer port"; exit 2;;
+    esac
+    if (( $2 < 1 || $2 > 65535 )); then
+        say "invalid ${1}=${2}: port out of range"; exit 2
+    fi
+}
 
 need_env() {
     if [[ ! -f "${HERE}/.env" ]]; then
@@ -32,8 +69,16 @@ need_env() {
     fi
 }
 
+BACKEND_PORT="$(env_value WORKBENCH_BACKEND_PORT 8000)"
+FRONTEND_PORT="$(env_value WORKBENCH_FRONTEND_PORT 5173)"
+validate_env WORKBENCH_BACKEND_PORT "$BACKEND_PORT"
+validate_env WORKBENCH_FRONTEND_PORT "$FRONTEND_PORT"
+ENABLE_GPU="$(env_value WORKBENCH_ENABLE_GPU 0)"
+case "$ENABLE_GPU" in 0|1) ;; *) say "invalid WORKBENCH_ENABLE_GPU=${ENABLE_GPU}: must be 0 or 1"; exit 2;; esac
+BASE="http://127.0.0.1:${BACKEND_PORT}"
+
 COMPOSE_FILES=(-f "${HERE}/docker-compose.yml")
-if [[ "${WORKBENCH_ENABLE_GPU:-0}" == "1" ]]; then
+if [[ "$ENABLE_GPU" == "1" ]]; then
     COMPOSE_FILES+=(-f "${HERE}/docker-compose.gpu.yml")
 fi
 compose() { docker compose "${COMPOSE_FILES[@]}" --env-file "${HERE}/.env" "$@"; }
@@ -50,7 +95,7 @@ cmd_stop() { compose down; }
 cmd_logs() { compose logs -f; }
 
 cmd_status() {
-    curl -fsS "${BASE}/api/jobs" | python3 -m json.tool
+    curl -fsS --max-time 30 "${BASE}/api/jobs" | python3 -m json.tool
 }
 
 cmd_doctor() {
@@ -60,48 +105,93 @@ cmd_doctor() {
     compose ps
     say "== API =="
     for endpoint in models runs jobs benchmark-runs cohorts; do
-        code="$(curl -s -o /dev/null -w '%{http_code}' "${BASE}/api/${endpoint}" || true)"
+        code="$(curl -s --max-time 120 -o /dev/null -w '%{http_code}' "${BASE}/api/${endpoint}" || true)"
         say "  /api/${endpoint}: ${code}"
     done
-    say "== GPU visibility (honest) =="
-    if docker compose -f "${HERE}/docker-compose.yml" --env-file "${HERE}/.env" \
-        run --rm --quiet workbench python -c "
+    say "== GPU verification (resolved configuration) =="
+    if [[ "$ENABLE_GPU" != "1" ]]; then
+        say "WORKBENCH_ENABLE_GPU is not 1: the GPU compose override is not part of this stack"
+        say "GPU validation: PENDING — set WORKBENCH_ENABLE_GPU=1 (shell or .env) and re-run"
+        return 3
+    fi
+    say "compose override in effect: docker-compose.gpu.yml"
+    local probe_code=0 probe
+    if C="$(docker ps -q --filter name=^cir-workbench$ | head -1)" && [[ -n "$C" ]]; then
+        # Probe the ACTUAL running container: a throwaway compose-run container describes a
+        # different configuration than the one serving the API.
+        probe="$(docker exec "$C" python -c '
 import json, subprocess
+result = {"nvidia_smi": None, "torch_cuda": None, "cuda_tensor": None, "error": None}
 try:
-    out = subprocess.check_output(['nvidia-smi', '--query-gpu=name,compute_cap', '--format=csv,noheader'], text=True)
-    print('nvidia-smi:', out.strip())
+    out = subprocess.check_output(["nvidia-smi", "--query-gpu=name,compute_cap", "--format=csv,noheader"], text=True)
+    result["nvidia_smi"] = out.strip()
 except Exception as error:
-    print('nvidia-smi unavailable inside container:', error)
-    print('GPU validation: PENDING — install nvidia-container-toolkit on the host, then start')
-    print('with WORKBENCH_ENABLE_GPU=1 ./run.sh up (docker-compose.gpu.yml), and re-run doctor.')
-"; then
+    result["error"] = f"nvidia-smi: {error}"
+try:
+    import torch
+    result["torch_cuda"] = torch.cuda.is_available()
+    if torch.cuda.is_available():
+        x = torch.randn(8, 8, device="cuda")
+        result["cuda_tensor"] = bool((x @ x).sum().isfinite().item())
+        result["compute_capability"] = ".".join(map(str, torch.cuda.get_device_capability(0)))
+        result["device_name"] = torch.cuda.get_device_name(0)
+except Exception as error:
+    result["error"] = f"torch: {error}"
+print(json.dumps(result))
+' 2>&1)" || probe_code=1
+    else
+        # Nothing running: probe through the same resolved configuration other commands use.
+        if probe="$(compose run --rm --quiet workbench python -c '
+import json, subprocess
+result = {"nvidia_smi": None, "torch_cuda": None, "cuda_tensor": None, "error": None}
+try:
+    out = subprocess.check_output(["nvidia-smi", "--query-gpu=name,compute_cap", "--format=csv,noheader"], text=True)
+    result["nvidia_smi"] = out.strip()
+except Exception as error:
+    result["error"] = f"nvidia-smi: {error}"
+try:
+    import torch
+    result["torch_cuda"] = torch.cuda.is_available()
+    if torch.cuda.is_available():
+        x = torch.randn(8, 8, device="cuda")
+        result["cuda_tensor"] = bool((x @ x).sum().isfinite().item())
+        result["compute_capability"] = ".".join(map(str, torch.cuda.get_device_capability(0)))
+        result["device_name"] = torch.cuda.get_device_name(0)
+except Exception as error:
+    result["error"] = f"torch: {error}"
+print(json.dumps(result))
+' 2>&1)"; then probe_code=0; else probe_code=1; fi
+    fi
+    python3 - "$probe" <<'PYDOC' || probe_code=1
+import json, sys
+try:
+    data = json.loads(sys.argv[1].strip().splitlines()[-1])
+except Exception:
+    print("gpu probe produced no parseable result"); sys.exit(1)
+print("nvidia-smi:", data.get("nvidia_smi") or "unavailable")
+print("torch.cuda.is_available():", data.get("torch_cuda"))
+if data.get("torch_cuda"):
+    print("CUDA tensor op:", "OK" if data.get("cuda_tensor") else "FAILED",
+          "| compute capability:", data.get("compute_capability"), "| device:", data.get("device_name"))
+if data.get("error"):
+    print("probe error:", data["error"])
+if not (data.get("torch_cuda") and data.get("cuda_tensor")):
+    print("GPU validation: PENDING — install nvidia-container-toolkit on the host, then start")
+    print("the stack with the GPU override (WORKBENCH_ENABLE_GPU=1 ./run.sh up) and re-run doctor.")
+    sys.exit(1)
+print("GPU validation: VERIFIED (CUDA tensor executed)")
+PYDOC
+    if (( probe_code == 0 )); then
         say "gpu probe finished (see above)"
     else
-        say "gpu probe could not run"
+        say "gpu probe could not verify CUDA execution (exit $probe_code)"
+        return "$probe_code"
     fi
 }
 
 # Read one JSON document from the API and extract a field with a real parser. The response is
 # piped into python on stdin, so a malformed or empty response is an explicit error, never a
 # silent empty variable.
-api_field() { # api_path python_expr
-    local response
-    if ! response="$(curl -fsS "${BASE}/$1")"; then
-        say "API request failed: ${BASE}/$1"; return 1
-    fi
-    printf '%s' "$response" | python3 -c "
-import json, sys
-try:
-    doc = json.load(sys.stdin)
-except json.JSONDecodeError as error:
-    sys.exit(f'malformed JSON from $1: {error}')
-result = ($2)
-if not result:
-    sys.exit(f'$1: field not found')
-print(result[0] if isinstance(result, list) else result)
-"
-}
-
 cmd_prepare() {
     local model="${1:-}"
     case "${model}" in
@@ -112,7 +202,7 @@ cmd_prepare() {
     say "preparing ${model} through the guarded pipeline (sync, environment, dataset, checkpoints, GPU)…"
     compose exec -T workbench python workbench/scripts/pipeline.py setup \
         --model "${model}" \
-        --dataset-root "${WORKBENCH_DATASET_ROOT:-/data/FashionIQ}" \
+        --dataset-root "$(env_value WORKBENCH_DATASET_ROOT /data/FashionIQ)" \
         --sync-sources --download-checkpoints --apply \
         --allow-network --allow-large-downloads --allow-env-install --allow-preparation \
         --allow-gpu-eval --allow-index-write --resume
@@ -125,23 +215,42 @@ cmd_pilot() {
         *) say "usage: run.sh pilot <limn|csmcir>"; return 2;;
     esac
     need_env
+    # One /api/models fetch for both selections: the registry build is the slow part and the
+    # endpoint re-serves it per call, so two calls double the latency for no information.
     # protocol_id must be the model's own native protocol (limn: fashioniq_val_split,
     # csmcir: fashioniq_original_split) or the guarded plan rejects it with 409.
-    local protocol checkpoint
-    local protocol_expr='[m["native_protocol"] for m in doc if m["model_id"]=="'"${model}"'"]'
-    protocol="$(api_field "api/models" "${protocol_expr}")" || return 1
     # The registered bundle is the correct selection: LIMN's complete macro result needs all
     # three per-category checkpoints (dress, shirt, toptee) as one declared bundle. Picking the
     # first variant would silently reduce the benchmark to one category.
-    local bundle_expr='[(m.get("checkpoint_bundles") or [{}])[0].get("bundle_id") or m["checkpoints"][0]["checkpoint_id"] for m in doc if m["model_id"]=="'"${model}"'"]'
-    checkpoint="$(api_field "api/models" "${bundle_expr}")" || return 1
+    local response
+    if ! response="$(curl -fsS --max-time 120 "${BASE}/api/models")"; then
+        say "API request failed: ${BASE}/api/models"; return 1
+    fi
+    local protocol checkpoint
+    read -r protocol checkpoint <<<"$(printf '%s' "${response}" | python3 -c "
+import json, sys
+try:
+    doc = json.load(sys.stdin)
+except json.JSONDecodeError as error:
+    sys.exit(f'malformed JSON from api/models: {error}')
+matches = [m for m in doc if m.get('model_id') == '${model}']
+if not matches:
+    sys.exit(f'api/models: model ${model} not found')
+m = matches[0]
+protocol = m['native_protocol']
+bundles = m.get('checkpoint_bundles') or [{}]
+checkpoint = bundles[0].get('bundle_id') or m['checkpoints'][0]['checkpoint_id']
+print(protocol, checkpoint)
+")" || return 1
+    # A failed parse leaves both empty while `read` still succeeds on the empty line.
+    [[ -n "${protocol}" && -n "${checkpoint}" ]] || return 1
     say "model=${model} checkpoint=${checkpoint} protocol=${protocol}"
     # Preparation first: a fresh installation must not depend on undocumented manual steps.
     cmd_prepare "${model}" || { say "preparation for ${model} did not complete — see the pipeline output above"; return 1; }
     say "queueing official evaluation through the API; the backend's guarded plan refuses"
     say "anything that has not passed preflight, and the queue will not start an unverified GPU run."
     local response
-    if ! response="$(curl -fsS -X POST "${BASE}/api/jobs" -H 'Content-Type: application/json' \
+    if ! response="$(curl -fsS --max-time 60 -X POST "${BASE}/api/jobs" -H 'Content-Type: application/json' \
         -d "{\"model_id\":\"${model}\",\"checkpoint_id\":\"${checkpoint}\",\"protocol_id\":\"${protocol}\",\"top_k\":200}" 2>&1)"; then
         say "${response}"
         say "run 'run.sh up' first, check 'run.sh doctor', then retry; see PC_DOCKER_QUICKSTART.md"

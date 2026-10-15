@@ -70,6 +70,11 @@ class RunMetadata(BaseModel):
     instrumentation_patch_sha256: str | None = None
     command_digest: str | None = None
     environment_digest: str | None = None
+    #: The declared runtime adaptation the run executed under (e.g. ``sm_120``), from the
+    #: registry's ``adapted_runtime`` block. ``None`` means the historical environment ran
+    #: unchanged. Present so an adapted run is never exported as if it were an exact
+    #: reproduction; the variant labelling elsewhere keys off this value.
+    runtime_adaptation: str | None = None
     timestamp: datetime
     data_kind: Literal["experiment", "mock"] = "experiment"
     reported_paper_metrics: ReportedMetrics = Field(default_factory=ReportedMetrics)
