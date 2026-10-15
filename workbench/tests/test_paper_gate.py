@@ -187,6 +187,24 @@ def test_a_missing_reproduced_metric_fails():
     verdict = run({"r10": 57.07, "r50": None, "mean": 67.17})
     assert verdict.status == gate.ALERT_METRIC_DEVIATION
     assert not verdict.passed
+    # The missing metric is reported as missing evidence, never as a paper deviation: only a
+    # comparable measured number can carry a relative error.
+    missing = next(c for c in verdict.comparisons if c.metric == "r50")
+    assert missing.reproduced is None
+    assert missing.relative_error_pct is None
+    assert missing.within_tolerance is False
+    assert "no usable reproduced value" in (missing.note or "")
+
+def test_a_missing_metric_never_becomes_a_paper_deviation_label():
+    # The frontend reflag (and the backend deviations helper) may only flag numbers. A recorded
+    # None relative error must stay out of every deviation flag at any threshold.
+    verdict = run({"r10": 57.07, "r50": None, "mean": 67.17})
+    for threshold in (0.0, 5.0, 100.0):
+        flag = gate.deviations(verdict.comparisons, threshold)
+        # r50 (missing evidence) is never the flagged worst metric: no relative error was recorded.
+        if flag["deviates"]:
+            assert flag["worst_metric"] != "r50"
+            assert flag["max_relative_error_pct"] is not None
 
 
 def test_missing_metrics_on_both_sides_are_reported_not_compared():
