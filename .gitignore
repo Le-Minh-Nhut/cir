@@ -246,3 +246,6 @@ __marimo__/
 .streamlit/secrets.toml
 workbench/artifacts/*.jsonl
 .workbench_ledger_key
+
+# release verifier default report (use --report to redirect)
+workbench/docker/release_verify_report.json

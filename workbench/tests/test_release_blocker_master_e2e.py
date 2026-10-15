@@ -561,12 +561,15 @@ def test_e2e14_verified_gpu_capability_permits_the_authorized_synthetic_path(mas
     logs = master["ws"] / "workbench" / "artifacts" / "logs"
     before = len(list(logs.iterdir())) if logs.is_dir() else 0
     reproduce = ["reproduce" if part == "all" else part for part in master["command"]]
-    # The operator authorizes GPU capability consumption. It deliberately does NOT pass
-    # --verify-gpu here: this run exercises the production contract that a valid recorded
-    # capability is enough to launch, whereas --verify-gpu would ask the *synthetic evaluator's*
-    # interpreter for a real probe.
+    # The operator authorizes GPU capability consumption. The recorded capability carries
+    # `probe_source: override` (the synthetic test seam), so consuming it requires the same
+    # test-only switch that produced it — a production launch gate accepts only
+    # interpreter-probed evidence, and this run must not silently become an exception. It
+    # deliberately does NOT pass --verify-gpu: this run exercises the production contract that
+    # a valid recorded capability is enough to launch, whereas --verify-gpu would ask the
+    # *synthetic evaluator's* interpreter for a real probe.
     result = subprocess.run([*reproduce, "--report", str(report_path)],
-                            env=env, capture_output=True, text=True)
+                            env=probe_env, capture_output=True, text=True)
 
     output = result.stdout + result.stderr
     assert result.returncode == 0, output

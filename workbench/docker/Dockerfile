@@ -24,8 +24,13 @@ WORKDIR /repo
 COPY --from=frontend /usr/local /usr/local
 
 # git is required: provenance checks read the repository's own commit state.
+# micromamba is the static conda solver the environment planner provisions model
+# environments with; without it every GPU-model environment install fails with
+# "No conda/mamba/micromamba solver available".
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git curl \
+    && apt-get install -y --no-install-recommends git curl bzip2 \
+    && curl -fsSL "https://micro.mamba.pm/api/micromamba/linux-64/latest" | tar -xvj -C /opt bin/micromamba \
+    && ln -s /opt/bin/micromamba /usr/local/bin/micromamba \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md ./

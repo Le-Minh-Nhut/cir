@@ -96,6 +96,9 @@ PASS_WITH_UNCHECKED_CATEGORIES = "PASS_WITH_UNCHECKED_CATEGORIES"
 # consumer that needs certified identity reads this status, not `passed`.
 PASS_METRICS_ONLY_MAPPING_UNVERIFIED = "PASS_METRICS_ONLY_MAPPING_UNVERIFIED"
 ALERT_METRIC_DEVIATION = "ALERT_METRIC_DEVIATION"
+# The paper published values the run did not observe. This is an evidence-coverage state, not a
+# numerical judgment: no relative error was computed, so it must never carry the deviation label.
+INCOMPLETE_METRIC_EVIDENCE = "INCOMPLETE_METRIC_EVIDENCE"
 BLOCKED_PROTOCOL_MISMATCH = "BLOCKED_PROTOCOL_MISMATCH"
 BLOCKED_CHECKPOINT_MISMATCH = "BLOCKED_CHECKPOINT_MISMATCH"
 BLOCKED_DATA_PROVENANCE = "BLOCKED_DATA_PROVENANCE"
@@ -190,8 +193,13 @@ def compare_metric(
         return MetricComparison(metric, None, reproduced, None, None, None, paper_provenance,
                                 "no published value for this metric", direction)
     paper_value = normalize_scale(paper, scale)
-    if not _is_number(reproduced):
+    if reproduced is not None and not _is_number(reproduced):
+        # A value was recorded but is not a usable number (NaN/inf). That is malformed evaluator
+        # output — an invalid observation, not missing evidence and not a measured deviation.
         return MetricComparison(metric, paper_value, None, None, None, False, paper_provenance,
+                                "reproduced value is not a finite number", direction)
+    if not _is_number(reproduced):
+        return MetricComparison(metric, paper_value, None, None, None, None, paper_provenance,
                                 "no usable reproduced value", direction)
     reproduced_value = normalize_scale(reproduced, scale)
     direction = ("higher" if reproduced_value > paper_value
@@ -381,14 +389,23 @@ def evaluate_gate(
         return GateVerdict(METRIC_REFERENCE_UNVERIFIED, False, False, comparisons,
                            ["no metric had both a published value and a reproduced value"],
                            "nothing was actually compared")
-    failed = [c for c in comparable if not c.within_tolerance]
+    failed = [c for c in comparable if c.within_tolerance is False]
+    # A missing reproduced value is an evidence-coverage gap, not a measured deviation: only two
+    # real numbers can produce a relative error, so a None never counts as "differs from paper".
+    missing_observed = [c for c in comparisons if c.within_tolerance is None
+                        and c.paper is not None and c.reproduced is None]
     variant = any((run_meta or {}).get(key) for key in VARIANT_KEYS)
     mapping_verified = (run_meta or {}).get("checkpoint_mapping_verified") is True
     evidence = reference.as_evidence()
     if failed:
         return GateVerdict(ALERT_METRIC_DEVIATION, False, variant, comparisons,
-                           [_failure_note(c) for c in failed], 
+                           [_failure_note(c) for c in failed],
                            "at least one comparable metric exceeds the tolerance", evidence)
+    if missing_observed:
+        return GateVerdict(INCOMPLETE_METRIC_EVIDENCE, False, variant, comparisons,
+                           [_failure_note(c) for c in missing_observed],
+                           "the paper publishes metric(s) this run did not observe; "
+                           "missing evidence is not a deviation", evidence)
     status = PASS_WITHIN_5_PERCENT_VARIANT if variant else PASS_WITHIN_5_PERCENT
     if not mapping_verified:
         # Numerical comparability and certified official identity are separate claims. With an

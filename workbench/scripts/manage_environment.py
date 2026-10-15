@@ -214,9 +214,15 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
                 plan = None
         if plan is None:
             plan = plan_environments(group_models, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
+        # Provision ONLY the group(s) the requested model belongs to. The plan file may carry
+        # groups for every registered model; installing all of them on a single-model request
+        # pulls gigabytes of unrelated packages the operator never asked for.
+        wanted = {m["model_id"] for m in group_models}
+        scoped = {**plan, "groups": [g for g in plan.get("groups", [])
+                                     if wanted & set(g.get("members", []))]}
         assignment = provision_environment_plan(
-            registry["models"] if registry.get("models") else group_models,
-            plan,
+            group_models,
+            scoped,
             artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT,
             allowed=True,
             network_allowed=network_allowed,
@@ -243,6 +249,69 @@ def create_env(model: dict, s: dict, dry_run: bool, config=None, network_allowed
     if not s["source_synced"]:
         print(f"[BLOCKED] {model_id}: source not synced — sync first with sync_upstreams.py", file=sys.stderr)
         return False
+    # An operator-preset interpreter (WORKBENCH_*_PYTHON set) must still go through the
+    # isolation check in the venv branch below; the planner route is only for fresh installs
+    # with no preset interpreter.
+    preset_interpreter = s.get("env_var") and os.environ.get(s["env_var"])
+    if not preset_interpreter:
+            # No shared assignment yet: route through the environment planner, which derives the
+        # group from the model's own spec, provisions it under the workbench artifacts root, and
+        # records the assignment. The direct venv/conda branches below remain for operators who
+        # configure WORKBENCH_*_PYTHON themselves; a fresh Docker pilot has no preset interpreter,
+        # so without this routing every fresh `prepare` would stop here asking for a variable.
+        # Dry-run stays read-only: report what the planner WOULD form without provisioning.
+        if dry_run:
+            from workbench.backend.environment_planner import plan_environments
+            from workbench.backend.registry import load_registry
+            registry = load_registry()
+            planned = plan_environments(
+                [next(m for m in registry["models"] if m["model_id"] == model_id)],
+                artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
+            groups = planned.get("groups") or []
+            if groups:
+                print(f"[OK] dry-run: would provision or reuse group {groups[0]['environment_id']}")
+                return True
+            print(f"[BLOCKED] {model_id}: planner could not form an environment group "
+                  f"({(planned.get('blocked') or [{}])[0].get('reason', 'no reason recorded')})",
+                  file=sys.stderr)
+            return False
+        from workbench.backend.environment_planner import plan_environments, provision_environment_plan
+        from workbench.backend.registry import load_registry
+        registry = load_registry()
+        group_models = [next((m for m in registry["models"] if m["model_id"] == model_id), model)]
+        plan = plan_environments(group_models, artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT)
+        wanted = {model_id}
+        scoped = {**plan, "groups": [g for g in plan.get("groups", [])
+                                     if wanted & set(g.get("members", []))]}
+        if not scoped["groups"]:
+            # The planner refused to form a group for this model; fall through to the manual
+            # interpreter branches below so the operator sees the same guidance as before.
+            pass
+        else:
+            assignment = provision_environment_plan(
+                group_models,
+                scoped,
+                artifacts_root=config.WORKBENCH_ARTIFACTS_ROOT,
+                allowed=True,
+                network_allowed=network_allowed,
+            )
+            m_info = (assignment.get("models") or {}).get(model_id) or {}
+            g_for_model = next((g for g in assignment.get("groups", []) if model_id in g.get("members", [])), None)
+            if (
+                m_info.get("state") in ("FAILED", "BLOCKED")
+                or m_info.get("installation_status") in ("FAILED", "BLOCKED")
+                or (g_for_model and g_for_model.get("installation_status") in ("FAILED", "BLOCKED"))
+                or (g_for_model and g_for_model.get("runtime_verification_status") not in ("READY", "NOT_REQUIRED"))
+            ):
+                print(f"[FAILED] {model_id}: planner provisioning failed for group "
+                      f"{(g_for_model or {}).get('environment_id')}", file=sys.stderr)
+                return False
+            assigned_interp = m_info.get("interpreter") or (g_for_model.get("interpreter") if g_for_model else None)
+            if not assigned_interp or not Path(assigned_interp).is_file() or not os.access(assigned_interp, os.X_OK):
+                print(f"[FAILED] {model_id}: interpreter missing or not executable: {assigned_interp}", file=sys.stderr)
+                return False
+            print(f"[OK] {model_id}: environment provisioned; interpreter {assigned_interp}")
+            return True
     spec = s["env_spec_path"]
     spec_type = s["env_spec_type"]
     if not spec:

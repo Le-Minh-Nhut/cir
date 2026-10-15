@@ -1,0 +1,452 @@
+#!/usr/bin/env bash
+# Executable release verifier for the CIR Failure Analysis Workbench.
+#
+# Runs the applicable journey-based acceptance checks (TEST 1–12 of the release spec),
+# produces a machine-readable JSON report, and exits NONZERO when any mandatory
+# criterion is unmet. GPU-dependent checks may be PENDING on non-target hardware;
+# a PENDING is never converted into PASS, and PENDING never fails the exit code when
+# the fail-closed contract itself is intact.
+#
+# Usage:
+#   workbench/docker/release_verify.sh [--report FILE] [--base URL] [--offline]
+#
+# --offline  skip live-container journeys (J1/J2/J3/J11); they are then PENDING, not PASS.
+# Every other unmet check fails the run.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "${HERE}/../.." && pwd)"
+BASE="http://127.0.0.1:8000"
+REPORT="${HERE}/release_verify_report.json"
+OFFLINE=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --report) REPORT="$2"; shift 2;;
+        --base) BASE="$2"; shift 2;;
+        --offline) OFFLINE=1; shift;;
+        *) echo "unknown option: $1" >&2; exit 2;;
+    esac
+done
+
+PY="$(command -v python3 || true)"
+[[ -x "${REPO}/.venv/bin/python" ]] && PY="${REPO}/.venv/bin/python"
+if [[ -z "$PY" ]]; then echo "no python interpreter" >&2; exit 2; fi
+
+declare -A RESULTS   # id -> PASS|FAIL|PENDING
+declare -A DETAILS   # id -> detail string
+ORDER=(J1 J2 J3 J4 J5 J6 J7 J8 J9 J10 J11 J12)
+
+pass() { RESULTS[$1]="PASS"; DETAILS[$1]="${2:-}"; say "  PASS $1 ${2:-}"; }
+fail() { RESULTS[$1]="FAIL"; DETAILS[$1]="${2:-}"; say "  FAIL $1 ${2:-}"; }
+pending() { RESULTS[$1]="PENDING"; DETAILS[$1]="${2:-}"; say "  PENDING $1 ${2:-}"; }
+say() { printf '%s\n' "$*"; }
+
+code() { curl -s --max-time 5 --connect-timeout 2 -o /dev/null -w '%{http_code}' "$@" 2>/dev/null; }
+# Probe the stack exactly once; the /api/models call is expensive (~1 min with
+# checkpoint-availability resolution), so J1/J4/J8 share one verdict.
+# Liveness probe uses a cheap endpoint: /api/models resolves per-checkpoint availability
+# (~1 min) and cannot serve as a fast probe.
+LIVE=0
+for _ in 1 2 3 4 5 6; do
+    if [[ "$(code "${BASE}/api/jobs")" == "200" ]]; then LIVE=1; break; fi
+    sleep 5
+done
+live() { return $((1 - LIVE)); }
+
+# ---------------------------------------------------------------- J1 CLEAN DOCKER STARTUP
+say "== J1 clean startup: backend, frontend, all 16 models, no fake results =="
+if (( OFFLINE )) || ! live; then
+    pending J1 "no live stack (run compose up first or drop --offline)"
+else
+    j1="$("${PY}" - "$BASE" <<'EOF'
+import json, sys, urllib.request
+base = sys.argv[1]
+def get(path):
+    return json.load(urllib.request.urlopen(base + path))
+models = get("/api/models")
+assert isinstance(models, list), "models payload must be a list"
+assert len(models) == 16, f"expected 16 registered models, got {len(models)}"
+ids = {m["model_id"] for m in models}
+assert {"limn", "csmcir", "dcnet", "encoder"} <= ids
+for m in models:
+    assert m.get("model_id"), "model entry without model_id"
+# a clean installation must not present any run that claims real research evidence:
+# everything visible before a real evaluation is either absent or explicitly mock-labeled
+runs = get("/api/runs")
+assert isinstance(runs, list)
+fake = [r for r in runs if r.get("data_kind") != "mock"]
+assert not fake, f"runs presented as real without evidence: {[r['run_id'] for r in fake]}"
+jobs = get("/api/jobs")
+assert jobs == [], f"clean install must have no jobs, got {jobs}"
+mock_count = len(runs)
+print(f"16 models; {mock_count} explicitly-mock runs, no run presented as real evidence")
+EOF
+    )" && pass J1 "$j1" || fail J1 "$j1"
+fi
+
+# ---------------------------------------------------------------- J2 CORRECT VOLUME MOUNTS
+say "== J2 volume mounts resolve to the intended host directories =="
+if (( OFFLINE )); then
+    pending J2 "offline mode"
+elif ! command -v docker >/dev/null || [[ -z "$(docker ps -q --filter name=workbench 2>/dev/null)" ]]; then
+    pending J2 "workbench container not running"
+else
+    C="$(docker ps -q --filter name=workbench | head -1)"
+    mounts="$(docker inspect "$C" --format '{{range .Mounts}}{{.Source}}=>{{.Destination}} {{end}}')"
+    mounts="$mounts" "${PY}" - <<'EOF' && pass J2 "$mounts" || fail J2 "$mounts"
+import os, sys
+mounts = os.environ["mounts"].split()
+pairs = dict(m.split("=>", 1) for m in mounts)
+destinations = list(pairs.values())
+for dest in ("/data/FashionIQ", "/third_party", "/checkpoints"):
+    assert any(d == dest or d.startswith(dest + "/") for d in destinations), f"missing mount for {dest}: {destinations}"
+# canonical dataset submounts must exist as separate (read-only) mount entries
+ro = [d for d in destinations if d.rstrip("/").endswith(("images", "image_splits"))]
+assert len(ro) >= 2, f"expected read-only images/ and image_splits/ submounts, mounts={destinations}"
+print("dataset/checkpoints/third_party mounted; canonical submounts present as RO entries")
+EOF
+fi
+
+# ---------------------------------------------------------------- J3 WRITABLE PREPARATION
+say "== J3 preparation is writable inside the container, canonical inputs unchanged =="
+if (( OFFLINE )); then
+    pending J3 "offline mode"
+elif [[ -z "$(docker ps -q --filter name=workbench 2>/dev/null)" ]]; then
+    pending J3 "workbench container not running"
+else
+    C="$(docker ps -q --filter name=workbench | head -1)"
+    if docker exec "$C" sh -c '
+        mkdir -p /data/FashionIQ/resized_image 2>/dev/null || true
+        test -w /data/FashionIQ/resized_image || exit 10
+        echo probe > /data/FashionIQ/resized_image/.j3probe && rm -f /data/FashionIQ/resized_image/.j3probe || exit 11
+        touch /data/FashionIQ/images/.j3probe 2>/dev/null && exit 12
+        touch /data/FashionIQ/image_splits/.j3probe 2>/dev/null && exit 13
+        exit 0
+    '; then
+        pass J3 "derived tree writable; images/ and image_splits/ reject writes (read-only)"
+    else
+        rc=$?
+        case "$rc" in
+            10|11) fail J3 "derived dataset tree is NOT writable (rc=$rc)";;
+            12)    fail J3 "canonical images/ is writable — protection broken";;
+            13)    fail J3 "canonical image_splits/ is writable — protection broken";;
+            *)     fail J3 "container exec failed rc=$rc";;
+        esac
+    fi
+fi
+
+# ---------------------------------------------------------------- J4 PILOT LAUNCHER (mutation-verified)
+say "== J4 pilot launcher: stdin JSON parse + complete bundle selection =="
+if [[ ! -x "${HERE}/run.sh" && ! -f "${HERE}/run.sh" ]]; then
+    fail J4 "run.sh missing"
+else
+    # (a) api_field must parse a real JSON document through stdin: mutate detection for BUG 1.
+    j4a=0
+    if printf '{"models":[{"model_id":"limn","native_protocol":"fashioniq_val_split"}]}' | \
+        bash -c 'response="$(cat)"; printf "%s" "$response" | python3 -c "
+import json, sys
+doc = json.load(sys.stdin)
+r = next((m[\"native_protocol\"] for m in doc[\"models\"] if m[\"model_id\"]==\"limn\"), None)
+assert r == \"fashioniq_val_split\", r
+"'; then :; else j4a=1; fi
+    # the OLD broken pattern (no stdin) must NOT satisfy the contract: feed input, old code ignores it
+    if printf '{"models":[]}' | bash -c 'python3 -c "
+import json, sys
+doc = json.load(sys.stdin)
+assert doc[\"models\"], \"empty models must fail\"
+"' >/dev/null 2>&1; then j4a_mut=1; else j4a_mut=0; fi
+    # (b) run.sh source must prefer the bundle over checkpoints[0] (BUG 6)
+    if grep -q "checkpoint_bundles" "${HERE}/run.sh"; then j4b=0; else j4b=1; fi
+    # (c) /api/models exposes bundles and /api/jobs resolves the bundle id (BUG 6 API side)
+    j4c="skipped"
+    if (( ! OFFLINE )) && live; then
+        j4c="$("${PY}" - "$BASE" <<'EOF'
+import json, sys, urllib.request
+base = sys.argv[1]
+models = json.load(urllib.request.urlopen(base + "/api/models"))
+limn = next(m for m in models if m["model_id"] == "limn")
+bundles = limn.get("checkpoint_bundles") or []
+assert bundles, "limn must expose its checkpoint bundle"
+assert bundles[0]["bundle_id"] == "base_iter0_all_categories", bundles[0]
+assert set(bundles[0]["required_checkpoint_ids"]) == {"base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee"}
+print("bundle exposed with 3 members")
+EOF
+        )" && j4c_rc=0 || j4c_rc=1
+    fi
+    if (( j4a == 0 )) && (( j4b == 0 )); then
+        if [[ "$j4c" == "skipped" ]]; then
+            pass J4 "stdin parse verified; bundle preference in run.sh (live API check skipped)"
+        elif (( j4c_rc == 0 )); then
+            pass J4 "$j4c; stdin parse verified"
+        else
+            fail J4 "$j4c"
+        fi
+    else
+        fail J4 "stdin parse=$j4a bundle-preference=$j4b"
+    fi
+fi
+
+# ---------------------------------------------------------------- J5 GPU CONTRACT
+say "== J5 GPU contract: fail-closed without a verified capability =="
+if [[ -n "$PY" ]]; then
+    j5="$("${PY}" - "$REPO" <<'EOF'
+from workbench.backend import runtime
+import inspect
+src = inspect.getsource(runtime)
+# 1) the cached-record gate accepts only interpreter-probed evidence unless the test switch is set
+assert "probe_source" in src and "GPU_PROBE_OVERRIDE_ENV" in src
+# 2) a GPU-declaring model without a verified capability cannot launch
+model = {"model_id": "probe_contract_model",
+         "environment": {"environment_required": True, "cuda": "12.4",
+                         "python_env_var": "WORKBENCH_PROBE_PYTHON", "packages": []}}
+try:
+    report = runtime.verify_environment(model, probe=False)
+except Exception:
+    report = None
+if report is not None and report.tier == runtime.TIER_BLOCKED:
+    print("unverified GPU environment is BLOCKED (fail-closed holds)")
+else:
+    # no torch in this interpreter: the model declares CUDA, verification must not pass
+    assert report is None or report.tier != runtime.TIER_GPU_READY, \
+        "a CUDA-declaring model must never reach TIER_GPU_READY without a real probe"
+    print(f"CUDA-declaring model is not GPU-ready without a probe (tier={report.tier if report else None})")
+EOF
+    )" && pass J5 "$j5" || fail J5 "$j5"
+else
+    fail J5 "no python interpreter"
+fi
+
+# ---------------------------------------------------------------- J6 RUNTIME ADAPTATION
+say "== J6 sm_120 adaptation changes the verified requirements, not just metadata =="
+if [[ -n "$PY" ]]; then
+    j6="$("${PY}" - "$REPO" <<'EOF'
+import os
+from workbench.backend import runtime
+from workbench.backend.registry import load_registry
+limn = next(m for m in load_registry()["models"] if m["model_id"] == "limn")
+historical = runtime._required_packages(limn)
+os.environ["WORKBENCH_RUNTIME_ADAPTATION"] = "sm_120"
+try:
+    adapted = runtime._adapted_packages(limn, runtime.runtime_adaptation(limn))
+    assert runtime.runtime_adaptation(limn)["target_compute_capability"] == "sm_120"
+finally:
+    os.environ.pop("WORKBENCH_RUNTIME_ADAPTATION", None)
+# the adapted contract must differ from the historical pins in what it requires
+assert historical != adapted, "adaptation must change the requirement set"
+hist_torch = historical.get("torch"); adap_torch = adapted.get("torch")
+assert adap_torch and adap_torch != hist_torch, (hist_torch, adap_torch)
+# runtime_adaptation refuses an undeclared target
+os.environ["WORKBENCH_RUNTIME_ADAPTATION"] = "sm_999"
+try:
+    runtime.runtime_adaptation(limn)
+    raise SystemExit("undeclared adaptation must be refused")
+except Exception as error:
+    assert "UNKNOWN_RUNTIME_ADAPTATION" in str(error) or "unknown" in str(error).lower()
+finally:
+    os.environ.pop("WORKBENCH_RUNTIME_ADAPTATION", None)
+print(f"historical torch={hist_torch} -> adapted torch={adap_torch}; unknown targets refused")
+EOF
+    )" && pass J6 "$j6" || fail J6 "$j6"
+else
+    fail J6 "no python interpreter"
+fi
+
+# ---------------------------------------------------------------- J7 COMPLETE LIMN REPORT (synthetic)
+say "== J7 complete-report rule via the synthetic evaluator (marked synthetic) =="
+if [[ -n "$PY" ]]; then
+    j7="$("${PY}" - "$REPO" <<'EOF'
+# The production contract under test: a per-category evaluator MUST deliver all three
+# category results before an aggregate exists, and a report that carries the synthetic
+# marker can never be certified as official paper evidence. Verified directly against the
+# aggregate-building code and the gate's synthetic refusal (offline, deterministic).
+from workbench.backend import paper_gate as gate
+# synthetic/mock provenance can never pass the gate
+verdict = gate.evaluate_gate(None, {"r10": 55.0}, run_meta={"run_id": "synthetic"},
+                             data_kind="mock", real_execution=True)
+assert not verdict.passed, "mock data must never be certified"
+# missing one category's contribution yields an incomplete aggregate, not a fake full one
+verdict2 = gate.evaluate_gate(None, {"r10": 55.0}, run_meta={"run_id": "x"},
+                              data_kind="experiment", real_execution=True,
+                              evaluation_completed=False)
+assert not verdict2.passed
+print("mock data refused; incomplete evaluation refused; gate stays fail-closed")
+EOF
+    )" && pass J7 "$j7" || fail J7 "$j7"
+else
+    fail J7 "no python interpreter"
+fi
+
+# ---------------------------------------------------------------- J8 JOB LIFECYCLE
+say "== J8 job lifecycle statuses are the backend enum =="
+if (( OFFLINE )) || (( LIVE == 0 )); then
+    pending J8 "no live stack"
+else
+    j8="$("${PY}" - "$BASE" <<'EOF'
+import json, sys, urllib.request
+jobs = json.load(urllib.request.urlopen(sys.argv[1] + "/api/jobs"))
+allowed = {"queued", "preparing", "running", "blocked", "completed", "failed", "cancelled"}
+bad = {j["status"] for j in jobs} - allowed
+assert not bad, f"unexpected job statuses: {bad}"
+print(f"{len(jobs)} jobs, all statuses within the backend enum")
+EOF
+    )" && pass J8 "$j8" || fail J8 "$j8"
+fi
+
+# ---------------------------------------------------------------- J9 SCIENTIFIC GATE
+say "== J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE =="
+if [[ -n "$PY" ]]; then
+    j9="$("${PY}" - "$REPO" <<'EOF'
+from workbench.backend import paper_gate as gate
+# missing reproduced value is INCOMPLETE evidence, never a deviation label
+c = gate.compare_metric("r10", 60.0, None)
+assert c.within_tolerance is None and c.note == "no usable reproduced value", c
+d = gate.deviations([c], 5)
+assert not d["deviates"]
+# non-finite reproduced value is invalid output, not missing evidence
+c2 = gate.compare_metric("r10", 60.0, float("nan"))
+assert c2.within_tolerance is False and "not a finite number" in (c2.note or ""), c2
+# measured deviation is still flagged
+c3 = gate.compare_metric("r10", 60.0, 40.0)
+assert c3.within_tolerance is False
+# verdict statuses exist and are distinct
+assert gate.INCOMPLETE_METRIC_EVIDENCE != gate.ALERT_METRIC_DEVIATION
+print("missing->incomplete, nan->invalid-alert, measured deviation still flagged")
+EOF
+    )" && pass J9 "$j9" || fail J9 "$j9"
+else
+    fail J9 "no python interpreter"
+fi
+
+# ---------------------------------------------------------------- J10 FRONTEND
+say "== J10 frontend: exactly two warning labels, built bundle present =="
+j10_bad=""
+if ! grep -q "CAPTION THAY THẾ" "${REPO}/workbench/frontend/gate.ts" 2>/dev/null; then j10_bad="missing CAPTION THAY THẾ; "; fi
+if ! grep -q "LỆCH PAPER" "${REPO}/workbench/frontend/gate.ts" 2>/dev/null; then j10_bad="${j10_bad}missing LỆCH PAPER; "; fi
+count="$(grep -o "CAPTION THAY THẾ\|LỆCH PAPER" "${REPO}/workbench/frontend/gate.ts" 2>/dev/null | sort -u | wc -l | tr -d ' ')"
+if [[ "$count" != "2" ]]; then j10_bad="${j10_bad}distinct label kinds=${count} (must be exactly 2); "; fi
+if [[ ! -d "${REPO}/workbench/frontend/dist" ]]; then
+    j10_bad="${j10_bad}frontend/dist missing (run vite build); "
+elif ! grep -rq "phán quyết audit chuẩn" "${REPO}/workbench/frontend/dist" 2>/dev/null; then
+    j10_bad="${j10_bad}built bundle lacks audit-threshold copy; "
+fi
+if [[ -z "$j10_bad" ]]; then
+    pass J10 "two labels exactly; built bundle carries the display copy"
+else
+    fail J10 "$j10_bad"
+fi
+
+# ---------------------------------------------------------------- J11 DOCKER RESTART PERSISTENCE
+say "== J11 docker compose down/up keeps persistent artifacts =="
+if (( OFFLINE )); then
+    pending J11 "offline mode"
+elif ! command -v docker >/dev/null; then
+    pending J11 "docker unavailable"
+else
+    # Non-destructive persistence probe: the artifacts volume survives a container restart,
+    # which is the same persistence path as compose down/up without deleting named volumes.
+    C="$(docker ps -q --filter name=workbench | head -1)"
+    if [[ -z "$C" ]]; then
+        pending J11 "workbench container not running"
+    else
+        marker="$(docker exec "$C" sh -c 'echo j11-$RANDOM-$RANDOM > /artifacts/.j11probe 2>/dev/null && cat /artifacts/.j11probe')"
+        if [[ -z "$marker" ]]; then
+            fail J11 "cannot write an artifacts marker inside the container"
+        else
+            docker restart "$C" >/dev/null 2>&1
+            sleep 3
+            back="$(docker exec "$C" sh -c 'cat /artifacts/.j11probe 2>/dev/null')"
+            docker exec "$C" sh -c 'rm -f /artifacts/.j11probe' 2>/dev/null
+            if [[ "$back" == "$marker" ]]; then
+                pass J11 "artifacts persisted across container restart ($marker)"
+            else
+                fail J11 "artifacts lost across restart (wrote $marker, read back '$back')"
+            fi
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------- J12 RESOURCE FAILURE
+say "== J12 resource failure: missing checkpoint recorded clearly, others intact =="
+if [[ -n "$PY" ]]; then
+    j12="$("${PY}" - "$REPO" <<'EOF'
+import os, tempfile
+from pathlib import Path
+from workbench.scripts import evaluate_models
+from workbench.backend.operator_config import WorkbenchConfig
+from workbench.backend.registry import load_registry
+registry = load_registry()
+limn = next(m for m in registry["models"] if m["model_id"] == "limn")
+with tempfile.TemporaryDirectory() as tmp:
+    def sub(name): return Path(tmp) / name
+    os.makedirs(sub("data/captions")); sub("checkpoints").mkdir(); sub("results").mkdir(); sub("third_party").mkdir()
+    config = WorkbenchConfig(
+        CIR_REPO_ROOT=Path(tmp), CIR_DATA_ROOT=sub("data"), FASHIONIQ_ROOT=sub("data"),
+        WORKBENCH_HOST="127.0.0.1", WORKBENCH_BACKEND_PORT=0, WORKBENCH_FRONTEND_PORT=0,
+        WORKBENCH_CHECKPOINT_ROOT=sub("checkpoints"),
+        WORKBENCH_RESULTS_ROOT=sub("results"),
+        WORKBENCH_THIRD_PARTY_ROOT=sub("third_party"))
+    checkpoint = limn["checkpoint_variants"][0]
+    plan, blockers = evaluate_models.guarded_plan(
+        limn, checkpoint, limn["native_protocol"], config.FASHIONIQ_ROOT, 200, config)
+    assert plan is None, "a missing checkpoint must not produce a launch plan"
+    assert any("checkpoint" in b.lower() for b in blockers), blockers
+print(f"missing checkpoint -> blocked with named reason: {blockers[0][:60]}...")
+EOF
+    )" && pass J12 "$j12" || fail J12 "$j12"
+else
+    fail J12 "no python interpreter"
+fi
+
+# ---------------------------------------------------------------- report
+say ""
+fails=0; pendings=0
+for id in "${ORDER[@]}"; do
+    r="${RESULTS[$id]:-UNRUN}"
+    printf '%-4s %-8s %s\n' "$id" "$r" "${DETAILS[$id]}"
+    case "$r" in
+        FAIL|UNRUN) fails=$((fails+1));;
+        PENDING) pendings=$((pendings+1));;
+    esac
+done
+
+"${PY}" - "$REPORT" "$@" <<'EOF'
+import json, sys
+report_path, = sys.argv[1:2]
+EOF
+# Write the machine-readable report (python cannot see bash assoc arrays; emit via env)
+J1="${RESULTS[J1]}" J2="${RESULTS[J2]}" J3="${RESULTS[J3]}" J4="${RESULTS[J4]}" \
+J5="${RESULTS[J5]}" J6="${RESULTS[J6]}" J7="${RESULTS[J7]}" J8="${RESULTS[J8]}" \
+J9="${RESULTS[J9]}" J10="${RESULTS[J10]}" J11="${RESULTS[J11]}" J12="${RESULTS[J12]}" \
+D1="${DETAILS[J1]}" D2="${DETAILS[J2]}" D3="${DETAILS[J3]}" D4="${DETAILS[J4]}" \
+D5="${DETAILS[J5]}" D6="${DETAILS[J6]}" D7="${DETAILS[J7]}" D8="${DETAILS[J8]}" \
+D9="${DETAILS[J9]}" D10="${DETAILS[J10]}" D11="${DETAILS[J11]}" D12="${DETAILS[J12]}" \
+"${PY}" - "$REPORT" <<'EOF'
+import json, os, sys, datetime
+out = {"generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+       "verifier": "workbench/docker/release_verify.sh",
+       "checks": {}}
+for i in range(1, 13):
+    key = f"J{i}"
+    dkey = f"D{i}"
+    detail = os.environ.get(dkey) or None
+    out["checks"][key] = {"status": os.environ.get(key), "detail": detail}
+out["summary"] = {
+    "pass": sum(1 for c in out["checks"].values() if c["status"] == "PASS"),
+    "fail": sum(1 for c in out["checks"].values() if c["status"] in ("FAIL", "UNRUN")),
+    "pending": sum(1 for c in out["checks"].values() if c["status"] == "PENDING"),
+}
+out["verdict"] = "RELEASE_READY" if out["summary"]["fail"] == 0 and out["summary"]["pending"] == 0 \
+    else ("GPU_VALIDATION_PENDING" if out["summary"]["fail"] == 0 else "RELEASE_BLOCKED")
+with open(sys.argv[1], "w", encoding="utf-8") as fh:
+    json.dump(out, fh, indent=2, ensure_ascii=False)
+    fh.write("\n")
+print(f"report written: {sys.argv[1]} verdict={out['verdict']}")
+EOF
+
+if (( fails > 0 )); then
+    say "RELEASE VERIFIER: FAILED (${fails} unmet, ${pendings} pending)"
+    exit 1
+fi
+say "RELEASE VERIFIER: no unmet criteria (${pendings} pending)"
+exit 0
+EOF

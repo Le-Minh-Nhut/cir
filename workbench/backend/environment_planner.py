@@ -557,7 +557,8 @@ def _conda_constraints(constraints: dict) -> dict:
     """Keep only constraints conda's configured channels can resolve."""
     pip_only = set(constraints.get("pip_only", ())) | _NON_CONDA_PACKAGES
     for name in set(constraints["packages"]) | set(constraints["ranges"]):
-        terms = constraints["packages"].get(name, []) + constraints["ranges"].get(name, [])
+        value = constraints["packages"].get(name, []) or constraints["ranges"].get(name, [])
+        terms = _terms(" ".join(f"{op}{val}" for op, val in value), name)
         if any(op in ("==", "===") and version in _NON_CONDA_PACKAGE_PINS.get(name, ())
                for op, version in terms):
             pip_only.add(name)
@@ -577,6 +578,10 @@ def _solver_solve(command: str, constraints: dict) -> tuple[bool, str]:
         if name in _NON_CONDA_PACKAGES:
             continue
         terms = constraints["packages"].get(name, []) + constraints["ranges"].get(name, [])
+        # Bare (unpinned) names stay in the solve: real packages (scipy, pyyaml) resolve to the
+        # current version, and a name conda cannot resolve (e.g. a phantom import-only name)
+        # must fail here too — the installer sees the identical spec, so plan and installer
+        # must not disagree.
         specs.extend([name] if not terms else
                      [f"{name}{'=' if op in ('==', '===') else op}{value}" for op, value in terms])
     with tempfile.TemporaryDirectory(prefix="workbench-env-solve-") as temp:
@@ -1025,10 +1030,12 @@ def _conda_specs_for_group(group: dict) -> list[str]:
     for name in sorted(set(conda_constraints["packages"]) | set(conda_constraints["ranges"])):
         terms = conda_constraints["packages"].get(name, []) + conda_constraints["ranges"].get(name, [])
         if not terms:
+            # Unpinned declared package: conda resolves the current version; pip verification
+            # accepts it via the declared-name set.
             conda_specs.append(name)
-        else:
-            for op, val in terms:
-                conda_specs.append(f"{name}{'=' if op in ('==', '===') else op}{val}")
+            continue
+        for op, val in terms:
+            conda_specs.append(f"{name}{'=' if op in ('==', '===') else op}{val}")
     return conda_specs
 
 
@@ -1131,6 +1138,13 @@ def _verify_group_interpreter(
             continue
         cand = [k for k, v in _IMPORT_DISTRIBUTIONS.items() if pkg in v]
         mod = cand[0] if cand else pkg.replace("-", "_")
+        # Distribution names are not always import names: `pillow` is imported as `PIL`,
+        # `opencv-python` as `cv2`, `scikit-learn` as `sklearn` (import-probe aliases must be
+        # valid import targets, unlike the lowercase distribution-lookup keys above).
+        mod = {"pil": "PIL", "pillow": "PIL", "opencv-python": "cv2", "scikit-learn": "sklearn",
+               "scikit-image": "skimage", "python-dateutil": "dateutil",
+               "beautifulsoup4": "bs4", "pymupdf": "fitz", "attrs": "attr",
+               "pyyaml": "yaml", "opencv-python-headless": "cv2"}.get(mod, mod)
         probe_modules.append(mod)
 
     if probe_modules:

@@ -185,14 +185,14 @@ def test_a_negative_recall_never_passes():
 
 def test_a_missing_reproduced_metric_fails():
     verdict = run({"r10": 57.07, "r50": None, "mean": 67.17})
-    assert verdict.status == gate.ALERT_METRIC_DEVIATION
+    assert verdict.status == gate.INCOMPLETE_METRIC_EVIDENCE
     assert not verdict.passed
     # The missing metric is reported as missing evidence, never as a paper deviation: only a
     # comparable measured number can carry a relative error.
     missing = next(c for c in verdict.comparisons if c.metric == "r50")
     assert missing.reproduced is None
     assert missing.relative_error_pct is None
-    assert missing.within_tolerance is False
+    assert missing.within_tolerance is None
     assert "no usable reproduced value" in (missing.note or "")
 
 def test_a_missing_metric_never_becomes_a_paper_deviation_label():
@@ -630,3 +630,32 @@ def test_no_metrics_at_all_still_fails_output_validation():
     ref = reference(**{"category_metrics": {"dress": {"r10": 50.00, "r50": 70.00}}})
     verdict = run_with_categories({}, None, ref)
     assert verdict.status == gate.FAILED_OUTPUT_VALIDATION
+
+
+def test_partial_missing_evidence_never_carries_the_deviation_label():
+    # One genuinely measured deviation among two missing observations: the measured deviation is
+    # still flagged with its real relative error, but a missing observation must not add a second
+    # "failure" to the note list — missing is an evidence gap, not a numerical difference.
+    verdict = run({"r10": 45.0, "r50": None, "mean": None})
+    assert verdict.status == gate.ALERT_METRIC_DEVIATION
+    r10 = next(c for c in verdict.comparisons if c.metric == "r10")
+    assert r10.relative_error_pct is not None and r10.within_tolerance is False
+    missing = [c for c in verdict.comparisons if c.within_tolerance is None]
+    assert {c.metric for c in missing} == {"r50", "mean"}
+
+
+def test_only_missing_observations_are_incomplete_not_deviation():
+    verdict = run({"r10": 57.07, "r50": None, "mean": 67.17})
+    assert verdict.status == gate.INCOMPLETE_METRIC_EVIDENCE
+    assert not verdict.passed
+    assert "not a deviation" in verdict.detail
+    # The measured comparisons that did exist stay on the verdict for inspection.
+    assert any(c.metric == "r10" and c.within_tolerance for c in verdict.comparisons)
+
+
+def test_a_non_finite_observation_is_invalid_output_not_missing_evidence():
+    verdict = run({"r10": float("nan"), "r50": 77.27, "mean": 67.17})
+    assert verdict.status == gate.ALERT_METRIC_DEVIATION
+    r10 = next(c for c in verdict.comparisons if c.metric == "r10")
+    assert "not a finite number" in (r10.note or "")
+    assert r10.reproduced is None

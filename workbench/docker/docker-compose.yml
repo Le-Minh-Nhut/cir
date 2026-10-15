@@ -1,10 +1,14 @@
 # CIR Failure Analysis Workbench — single-service deployment.
 # One container serves backend (uvicorn) + built frontend (vite preview proxy).
 #
-# GPU evaluation on Blackwell (RTX 5070 Ti, sm_120): enable the `deploy.resources` block after
-# nvidia-container-toolkit is installed on the host. Docker's GPU passthrough is environmental —
-# the workbench never fakes a GPU result; if the container cannot see the device, runs stay
-# GPU_VERIFICATION_PENDING and say so.
+# GPU evaluation on Blackwell (RTX 5070 Ti, sm_120): start with WORKBENCH_ENABLE_GPU=1 so
+# run.sh adds the docker-compose.gpu.yml override after nvidia-container-toolkit is installed.
+# Docker's GPU passthrough is environmental — the workbench never fakes a GPU result; if the
+# container cannot see the device, guarded runs stay blocked and say so (fail closed).
+#
+# Volume conventions (see .env.example): HOST_* values are resolved FROM THIS DIRECTORY
+# (workbench/docker), so the checked-in defaults use ../.. to reach the repository root.
+# Override any of them with an absolute path in .env.
 services:
   workbench:
     build:
@@ -22,26 +26,23 @@ services:
       # frontend proxy target can never drift apart.
       WORKBENCH_BACKEND_PORT: "8000"
       WORKBENCH_BACKEND_URL: "http://127.0.0.1:8000"
-      # Host-side port remapping stays host-side; the frontend inside the container talks
-      # to the backend over loopback, never through the published port.
       # WORKBENCH_RUNTIME_ADAPTATION: pass through from .env (empty by default).
       WORKBENCH_RUNTIME_ADAPTATION: "${WORKBENCH_RUNTIME_ADAPTATION:-}"
     volumes:
-      # Read-only research inputs.
-      - ${HOST_FASHIONIQ_ROOT:-../data/FashionIQ}:/data/FashionIQ:ro
-      # Model source checkouts, synced by sync_upstreams on the host.
-      - ${HOST_WORKBENCH_THIRD_PARTY_ROOT:-../workbench/third_party}:/third_party
+      # DATA-02 three-way dataset separation, expressed as mounts:
+      # - canonical raw `images/` and `image_splits/` are READ-ONLY submounts: preparation and
+      #   evaluation physically cannot overwrite, delete or replace the benchmark inputs.
+      # - the dataset root itself is writable so declared derived artifacts (resized images,
+      #   staged correction dictionaries, native evaluator caches) can be generated beside the
+      #   canonical files without ever touching them.
+      - ${HOST_FASHIONIQ_ROOT:?set HOST_FASHIONIQ_ROOT in .env}:/data/FashionIQ
+      - ${HOST_FASHIONIQ_ROOT:?set HOST_FASHIONIQ_ROOT in .env}/images:/data/FashionIQ/images:ro
+      - ${HOST_FASHIONIQ_ROOT:?set HOST_FASHIONIQ_ROOT in .env}/image_splits:/data/FashionIQ/image_splits:ro
+      # Model source checkouts, synced by the pipeline inside the container.
+      - ${HOST_WORKBENCH_THIRD_PARTY_ROOT:?set HOST_WORKBENCH_THIRD_PARTY_ROOT in .env}:/third_party
       # Downloaded weights (large; keep on a real disk, not a named volume by default).
-      - ${HOST_WORKBENCH_CHECKPOINT_ROOT:-../workbench/artifacts/checkpoints}:/checkpoints
+      - ${HOST_WORKBENCH_CHECKPOINT_ROOT:?set HOST_WORKBENCH_CHECKPOINT_ROOT in .env}:/checkpoints
       # Everything the workbench itself writes: index, runs, reports.
-      - ${HOST_WORKBENCH_ARTIFACTS_ROOT:-../workbench/artifacts}:/artifacts
-      - ${HOST_WORKBENCH_RESULTS_ROOT:-../workbench/artifacts/results}:/results
-    # Uncomment after nvidia-container-toolkit is installed on the host:
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+      - ${HOST_WORKBENCH_ARTIFACTS_ROOT:?set HOST_WORKBENCH_ARTIFACTS_ROOT in .env}:/artifacts
+      - ${HOST_WORKBENCH_RESULTS_ROOT:?set HOST_WORKBENCH_RESULTS_ROOT in .env}:/results
     restart: unless-stopped

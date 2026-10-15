@@ -49,6 +49,10 @@ def test_verify_only_never_calls_network(monkeypatch: pytest.MonkeyPatch, tmp_pa
 
     def fake_run(command, **kwargs):
         calls.append(tuple(command))
+        # The safe.directory registration is a local config write, not network access.
+        if command[:3] == ["git", "config", "--global"] and command[3] == "--add" \
+                and command[4] == "safe.directory":
+            return type("Result", (), {"returncode": 0, "stdout": ""})()
         if command[-2:] == ["rev-parse", "HEAD"]:
             return type("Result", (), {"returncode": 0, "stdout": "b" * 40})()
         # `local_state` classifies the checkout with the shared porcelain queries the

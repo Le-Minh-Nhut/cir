@@ -17,6 +17,14 @@ from workbench.backend.registry import load_registry
 
 
 def git_output(destination: Path, *command: str) -> str | None:
+    # A mounted host checkout is owned by the host user, not the container user; without this
+    # safe.directory exception git refuses every operation ("dubious ownership") and the sync
+    # stage reports a healthy checkout as "not a git repository". The path, not a wildcard,
+    # so the exception cannot leak beyond this checkout.
+    subprocess.run(
+        ["git", "config", "--global", "--add", "safe.directory", str(destination)],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
     result = subprocess.run(
         ["git", *command], cwd=destination, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
     )

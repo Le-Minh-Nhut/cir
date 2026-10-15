@@ -72,7 +72,23 @@ def write_json(path: Path, payload: list[dict]) -> None:
 
 @app.get("/api/models")
 def models():
-    return [{**model, "checkpoints": [checkpoint_availability(model, item) for item in model["checkpoint_variants"]]} for model in load_registry()["models"]]
+    registry = load_registry()
+    out = []
+    for model in registry["models"]:
+        entry = {**model, "checkpoints": [checkpoint_availability(model, item) for item in model["checkpoint_variants"]]}
+        # Bundles are first-class selections (LIMN needs all three category checkpoints for one
+        # complete macro result), so a launcher or the UI must be able to see and pick them.
+        bundles = model.get("checkpoint_bundles") or []
+        if bundles:
+            by_id = {c["checkpoint_id"]: c for c in model["checkpoint_variants"]}
+            entry["checkpoint_bundles"] = [
+                {**bundle,
+                 "members": [checkpoint_availability(model, by_id[member])
+                             for member in bundle.get("required_checkpoint_ids", []) if member in by_id]}
+                for bundle in bundles
+            ]
+        out.append(entry)
+    return out
 
 
 @app.get("/api/runs")
@@ -292,6 +308,19 @@ def queue_job(payload: JobInput):
     if model is None:
         raise HTTPException(404, {"error": "model_not_found", "message": "Model is not registered.", "details": {"model_id": payload.model_id}})
     checkpoint = next((item for item in model["checkpoint_variants"] if item["checkpoint_id"] == payload.checkpoint_id), None)
+    if checkpoint is None:
+        # A declared bundle names a set of member checkpoints (LIMN's three category models);
+        # selecting it is the *complete* benchmark, so the queue resolves it to the bundle
+        # anchor instead of refusing a legitimate selection.
+        bundle = next((b for b in model.get("checkpoint_bundles", [])
+                       if b["bundle_id"] == payload.checkpoint_id), None)
+        if bundle is not None:
+            anchor_id = bundle["required_checkpoint_ids"][0]
+            checkpoint = next((item for item in model["checkpoint_variants"]
+                               if item["checkpoint_id"] == anchor_id), None)
+            if checkpoint is not None:
+                checkpoint = {**checkpoint, "checkpoint_id": bundle["bundle_id"],
+                              "bundle_id": bundle["bundle_id"]}
     if checkpoint is None:
         raise HTTPException(404, {"error": "checkpoint_not_found", "message": "Checkpoint is not registered for model.", "details": {"model_id": payload.model_id, "checkpoint_id": payload.checkpoint_id}})
     config = resolve_config()

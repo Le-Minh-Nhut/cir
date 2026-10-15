@@ -1128,6 +1128,28 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
                                  reason="no environment variable declared")
     configured = os.environ.get(variable)
     if not configured:
+        # Fall back to the persisted provisioning assignment: after `environment` provisioning
+        # recorded a RUNTIME_VERIFIED interpreter, subprocesses that were not launched with the
+        # autopilot's child environment (pipeline gpu-verification, doctor probes) would
+        # otherwise see the model as UNCONFIGURED even though a verified interpreter exists.
+        try:
+            from workbench.backend.environment_planner import load_environment_assignment
+            from workbench.backend.operator_config import resolve_config
+            assignment_path = resolve_config().WORKBENCH_ARTIFACTS_ROOT / "environment_assignment.json"
+            if assignment_path.is_file():
+                persisted = (load_environment_assignment(assignment_path).get("models") or {}).get(model_id) or {}
+                interp = str(persisted.get("interpreter") or "")
+                # Only adopt an interpreter this operator's own artifacts root created: another
+                # root's assignment (different install/host) must not silently become this
+                # environment's interpreter.
+                if (persisted.get("state") == "RUNTIME_VERIFIED" and interp
+                        and Path(interp).is_absolute()
+                        and Path(interp).resolve().is_relative_to(
+                            Path(resolve_config().WORKBENCH_ARTIFACTS_ROOT).resolve())):
+                    configured = interp
+        except Exception:
+            configured = None
+    if not configured:
         return EnvironmentReport(model_id, variable, None, TIER_UNCONFIGURED, "UNCONFIGURED",
                                  reason=f"{variable} not set")
 

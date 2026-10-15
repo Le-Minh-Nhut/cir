@@ -1,0 +1,14 @@
+# GPU override — include only after nvidia-container-toolkit is installed on the host:
+#   WORKBENCH_ENABLE_GPU=1 ./run.sh up
+# It requests all NVIDIA GPUs; without the toolkit on the host, docker fails the container
+# start instead of silently running CPU-only, which is the fail-closed behaviour the
+# GPU-required evaluation path depends on.
+services:
+  workbench:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
