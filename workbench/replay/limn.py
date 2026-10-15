@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.metadata
+import re
 import json
 import sys
 from argparse import ArgumentParser
@@ -73,17 +74,52 @@ def validate_dataset(dataset_root: Path, categories: tuple[str, ...] = CATEGORIE
     return blockers
 
 
+def _registry_adapted_runtime() -> dict:
+    """The model's declared adapted_runtime block, straight from the registry (single source)."""
+    from workbench.backend.registry import load_registry
+
+    model = next((m for m in load_registry()["models"] if m["model_id"] == "limn"), {})
+    return (model.get("environment") or {}).get("adapted_runtime") or {}
+
 def validate_environment() -> list[str]:
-    versions = {"torch": "1.12.1", "torchvision": "0.13.1", "open_clip_torch": "2.20.0"}
+    """Verify the historical pins, or — when the operator selected the registry's declared
+    adaptation — the adapted runtime constraints instead. The two are separate contracts; an
+    adapted run is provenance-marked downstream and never labeled an exact reproduction."""
+    from packaging.specifiers import InvalidSpecifier, SpecifierSet
+    from packaging.version import InvalidVersion, Version
+
+    from workbench.backend.runtime import runtime_adaptation
+
+    try:
+        adaptation = runtime_adaptation({"model_id": "limn", "environment": {
+            "adapted_runtime": _registry_adapted_runtime()}})
+    except Exception:
+        adaptation = None
+    if adaptation:
+        constraints = {
+            "torch": str(adaptation.get("pytorch") or ""),
+            "torchvision": str(adaptation.get("torchvision") or ""),
+        }
+        for declaration in adaptation.get("packages") or []:
+            declaration = str(declaration)
+            name = re.split(r"[<>=!~]", declaration, maxsplit=1)[0].strip()
+            constraints.setdefault(name, declaration[len(name):].strip() or name)
+    else:
+        constraints = {"torch": "==1.12.1", "torchvision": "==0.13.1",
+                       "open_clip_torch": "==2.20.0"}
     blockers = []
-    for package, expected in versions.items():
+    for package, constraint in constraints.items():
         try:
             actual = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
-            blockers.append(f"LIMN environment package missing: {package}=={expected}")
-        else:
-            if actual != expected:
-                blockers.append(f"LIMN environment version mismatch: expected {package}=={expected}, found {actual}")
+            blockers.append(f"LIMN environment package missing: {package} {constraint}")
+            continue
+        try:
+            if not SpecifierSet(constraint).contains(Version(actual), prereleases=True):
+                blockers.append(f"LIMN environment version mismatch: expected {package} "
+                                f"{constraint}, found {actual}")
+        except (InvalidSpecifier, InvalidVersion):
+            blockers.append(f"LIMN environment constraint unusable: {package} {constraint}")
     if not blockers:
         import torch
         if not torch.cuda.is_available():

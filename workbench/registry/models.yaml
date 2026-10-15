@@ -933,6 +933,17 @@ models:
       torchvision: '0.13.1'
       cuda: '12.4'
       packages: [open_clip_torch==2.20.0]
+      # Historical pins above do not ship sm_120 (Blackwell) kernels, so on an RTX 5070 Ti the
+      # operator may provision an ADAPTED runtime instead. Declaring it here makes the adaptation
+      # explicit and auditable; a run under an adapted runtime is recorded as
+      # runtime_adaptation=sm_120_blackwell in variant_provenance and is never labeled an exact
+      # paper reproduction. The historical pins stay the default contract.
+      adapted_runtime:
+        target_compute_capability: sm_120
+        pytorch: '>=2.7,<3'
+        torchvision: '>=0.22,<1'
+        cuda: '12.8'
+        packages: [open_clip_torch>=2.24]
     strict_clean_checkpoint_available: null
     notes: Base LIMN iteration 0 only. Author README and pinned train.py bind iteration-0 filenames to independently run dress, shirt, and toptee categories; author Hub LFS metadata supplies hashes. Workbench replay calls pinned native test.py:test(); full runtime remains unverified.
     checkpoint_variants:

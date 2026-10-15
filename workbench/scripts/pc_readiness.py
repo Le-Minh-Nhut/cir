@@ -154,6 +154,7 @@ def environment_section(config: WorkbenchConfig, models: list[dict]) -> dict:
             "cuda": (model.get("environment") or {}).get("cuda"),
             "env_var": (model.get("environment") or {}).get("python_env_var"),
             "declared": bool(model.get("environment_required")),
+            "adapted_runtime": (model.get("environment") or {}).get("adapted_runtime"),
             "blockers": environment_blockers(model),
         }
     return {"per_model": declared}
@@ -186,7 +187,12 @@ def gpu_section() -> dict:
     return section
 
 
-def model_section(model: dict, config: WorkbenchConfig) -> dict:
+def model_section(model: dict, config: WorkbenchConfig,
+                  selection: "object | None" = None) -> dict:
+    """One model's readiness. `selection` is a checkpoint_selection.CheckpointSelection resolved
+    with the operator's policy/overrides: when given, per-variant blockers are only merged for the
+    checkpoints the autopilot run will actually use, so the headline state cannot be dragged down
+    by a variant no configuration selected."""
     model_id = model["model_id"]
     requirements = model_requirements(model, config)
     blockers = preflight_blockers(model, config)
@@ -196,8 +202,11 @@ def model_section(model: dict, config: WorkbenchConfig) -> dict:
     # A model may register several checkpoints under different training conditions, and the reference
     # has to match each one. Reporting a single pick would hide the case this whole registry exists for:
     # a paper row with no comparable weight, and a weight with no matching row.
+    selected_ids = set(selection.checkpoint_ids) if selection is not None else None
     references = []
     for variant in model.get("checkpoint_variants") or []:
+        if selected_ids is not None and variant.get("checkpoint_id") not in selected_ids:
+            continue
         # Readiness is judged per checkpoint, not per model: presence, hash, bundle completeness and
         # mapping status differ between the weights a paper published. The report keeps one blockers
         # list per variant so "check individual checkpoint" stays possible.
@@ -245,12 +254,13 @@ def model_section(model: dict, config: WorkbenchConfig) -> dict:
     # Host CUDA availability (the `gpu` section's nvidia-smi / host torch) is not evidence that a
     # *model* can use the GPU: each model runs its own interpreter with its own torch build. A model
     # that declares a CUDA requirement stays pending until its own capability probe recorded
-    # GPU_RUNTIME_READY, regardless of what the host's torch sees.
+    # GPU_RUNTIME_READY, regardless of what the host's torch sees. A declared source variant does
+    # not change that: a patched checkout is still GPU-unverified until the probe runs.
     report = verify_environment(model, probe=True)
     environment_tier = report.tier
     gpu_required = _requires_gpu(model)
     gpu_verified = environment_tier == TIER_GPU_READY
-    if state in (READY_FOR_FULL_EVALUATION, READY_FOR_GPU_SMOKE) and gpu_required and not gpu_verified:
+    if state in (READY_FOR_FULL_EVALUATION, READY_FOR_GPU_SMOKE, READY_WITH_DECLARED_VARIANT) and gpu_required and not gpu_verified:
         state, reason = PC_GPU_VALIDATION_PENDING, (
             "the model declares a CUDA requirement and its interpreter has not recorded a verified "
             "GPU capability; run verify_gpu_runtime() on the GPU host")
@@ -266,6 +276,11 @@ def model_section(model: dict, config: WorkbenchConfig) -> dict:
         "environment_tier": environment_tier,
         "gpu_required": gpu_required,
         "gpu_verified": gpu_verified,
+        "selected_checkpoints": (
+            {"policy": selection.policy, "checkpoint_ids": list(selection.checkpoint_ids),
+             "status": selection.status, "reason_code": selection.reason_code,
+             "policy_overridden": selection.policy_overridden}
+            if selection is not None else None),
         "benchmark_references": references,
         "auxiliary_assets": [
             {"name": a.get("name"), "path": a.get("path"), "status": a.get("status")}
@@ -274,7 +289,8 @@ def model_section(model: dict, config: WorkbenchConfig) -> dict:
     }
 
 
-def document(config: WorkbenchConfig, models: list[dict]) -> dict:
+def document(config: WorkbenchConfig, models: list[dict],
+             selections: dict[str, "object"] | None = None) -> dict:
     sections: dict = {
         "read_only": True,
         "repository": repository_section(),
@@ -291,7 +307,8 @@ def document(config: WorkbenchConfig, models: list[dict]) -> dict:
         },
         "environment": environment_section(config, models),
     }
-    models_section = {m["model_id"]: model_section(m, config) for m in models}
+    models_section = {m["model_id"]: model_section(
+        m, config, (selections or {}).get(str(m["model_id"]))) for m in models}
     # GPU readiness is per-model: `model_section` already downgraded every CUDA-declaring model
     # whose own interpreter has not recorded a verified capability. The host's torch answer is
     # reported in the `gpu` section and never re-classifies a model.
@@ -358,6 +375,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", type=Path, default=None,
                         help="autopilot profile YAML; its paths define the configuration to check, "
                              "so this report describes exactly what the autopilot run will see")
+    parser.add_argument("--checkpoint-policy", default=None,
+                        help="override the profile's checkpoint_policy (strict_clean | "
+                             "include_flagged_conditions)")
     args = parser.parse_args(argv)
 
     if args.config is not None:
@@ -386,7 +406,21 @@ def main(argv: list[str] | None = None) -> int:
         if missing:
             parser.error(f"unknown model id(s): {sorted(missing)}")
 
-    report = document(config, models)
+    # With a profile, the report must reflect the checkpoints the autopilot run would actually
+    # select: per-variant readiness is merged only for selected checkpoints.
+    selections = None
+    if autopilot_config is not None:
+        from workbench.backend.checkpoint_selection import select_for_models
+        policy = args.checkpoint_policy or autopilot_config.checkpoint_policy
+        try:
+            selections = select_for_models(
+                models, policy=policy, requested=autopilot_config.checkpoint_overrides,
+                checkpoint_root=config.WORKBENCH_CHECKPOINT_ROOT)
+        except ValueError as error:
+            print(f"pc_readiness: {error}", file=sys.stderr)
+            return 1
+
+    report = document(config, models, selections)
     print(json.dumps(report, indent=2, sort_keys=True) if args.json else render(report))
     return 0
 

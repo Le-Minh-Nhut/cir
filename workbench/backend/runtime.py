@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -55,6 +56,9 @@ class EnvironmentReport:
     contract_digest: str | None = None
     environment_fingerprint: str | None = None
     verified_at: str | None = None
+    #: Provenance of the verified contract: None for the historical pins, or the registry's
+    #: `adapted_runtime.target_compute_capability` when an operator-selected adaptation applied.
+    runtime_adaptation: str | None = None
 
 _PROBE_ENV_DENY_PREFIXES = (
     "WORKBENCH_LEDGER_KEY", "WORKBENCH_SECRET_",
@@ -752,6 +756,49 @@ def _required_packages(model: dict[str, Any]) -> dict[str, str | None]:
         required.setdefault(name, declared_requirement(name, version or None))
     return required
 
+#: Operator-selected runtime adaptation. Set to the registry's `adapted_runtime`
+#: `target_compute_capability` (e.g. ``sm_120_blackwell``) to verify a model against its declared
+#: adapted package constraints instead of the historical pins. The value must match a declared
+#: adaptation exactly — this never relaxes a requirement the registry did not write down.
+ADAPTATION_ENV = "WORKBENCH_RUNTIME_ADAPTATION"
+
+def runtime_adaptation(model: dict[str, Any]) -> dict[str, Any] | None:
+    """The declared adapted runtime for the operator-selected adaptation target, or None.
+
+    Historical pins remain the contract unless the operator explicitly selects an adaptation the
+    registry declares. Any other ADAPTATION_ENV value is refused rather than silently ignored.
+    """
+    requested = os.environ.get(ADAPTATION_ENV, "").strip()
+    if not requested:
+        return None
+    from workbench.backend.errors import WorkbenchError
+
+    declared = (model.get("environment") or {}).get("adapted_runtime") or {}
+    target = str(declared.get("target_compute_capability") or "").strip()
+    if requested != target:
+        raise WorkbenchError(
+            "UNKNOWN_RUNTIME_ADAPTATION",
+            f"unknown {ADAPTATION_ENV}={requested!r} for model "
+            f"{model.get('model_id', '<unnamed>')!r}: declared adaptation is {target or 'none'}",
+            {"model_id": model.get("model_id"), "requested": requested, "declared": target or None})
+    return declared
+
+def _adapted_packages(model: dict[str, Any], adapted: dict[str, Any]) -> dict[str, str | None]:
+    """Same shape as _required_packages, from the adapted block's range constraints."""
+    required: dict[str, str | None] = {}
+    if "pytorch" in adapted:
+        required["torch"] = declared_requirement("torch", adapted.get("pytorch"))
+    if "torchvision" in adapted:
+        required["torchvision"] = declared_requirement("torchvision", adapted.get("torchvision"))
+    for pkg in adapted.get("packages") or []:
+        if not isinstance(pkg, str):
+            continue
+        # Split the distribution name off at the first constraint operator character.
+        name = re.split(r"[<>=!~]", pkg, maxsplit=1)[0].strip()
+        constraint = pkg[len(name):].strip() or None
+        required.setdefault(name, constraint)
+    return required
+
 def version_satisfies(constraint: str, installed: str | None) -> bool | None:
     """Semantic version check. Returns None when the constraint cannot be interpreted."""
     from packaging.specifiers import InvalidSpecifier, SpecifierSet
@@ -1132,7 +1179,8 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     # Dependency verification. The inventory is read from disk by the orchestrator
     # itself: no code belonging to the environment runs, so the environment cannot
     # report packages, versions, or modules that it does not actually have.
-    required = _required_packages(model)
+    adaptation = runtime_adaptation(model)
+    required = _adapted_packages(model, adaptation) if adaptation else _required_packages(model)
     imports = _required_imports(model)
     if required or imports:
         report.packages, installed_modules, unconfirmed = inspect_environment_distributions(
@@ -1186,6 +1234,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         report.status = "DEPENDENCIES_OK"
     else:
         imports = []
+    report.runtime_adaptation = str(adaptation.get("target_compute_capability")) if adaptation else None
 
     # Declared importable modules are checked against the same on-disk inventory: a
     # top-level module name must correspond to something the environment installs.
@@ -1284,6 +1333,9 @@ def _environment_contract_digest(model: dict[str, Any]) -> str:
         "required_imports": list(env.get("required_imports") or []),
         "interpreter_sha256": env.get("interpreter_sha256"),
         "environment_required": bool(model.get("environment_required")),
+        # The selected adaptation changes which constraints verify the environment, so two
+        # contracts (historical vs adapted) must never share a cache entry.
+        "adapted_runtime": runtime_adaptation(model),
     }
     return hashlib.sha256(json.dumps(relevant, sort_keys=True).encode("utf-8")).hexdigest()
 
@@ -1530,6 +1582,7 @@ out = {
     "torch_cuda_version": None,
     "device_name": None,
     "compute_capability": None,
+    "torch_arch_list": [],
     "allocated_tensor": False,
     "computed": False,
     "torch_module_file": None,
@@ -1588,6 +1641,12 @@ if out["cuda_available"]:
         out["device_name"] = torch.cuda.get_device_name(index)
         major, minor = torch.cuda.get_device_capability(index)
         out["compute_capability"] = f"{major}.{minor}"
+        # Which GPU architectures this torch build compiled kernels for: an adaptation claim
+        # (e.g. sm_120 on Blackwell) is only credible if the target arch is in this list.
+        try:
+            out["torch_arch_list"] = list(torch.cuda.get_arch_list())
+        except Exception:
+            out["torch_arch_list"] = []
         # A one-element tensor is enough to prove the device is usable.
         device = torch.device("cuda", index)
         tensor = torch.ones(1, device=device)
@@ -1754,9 +1813,27 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
     capability = bool(result.get("cuda_available") and result.get("allocated_tensor")
                       and result.get("computed") and result.get("torch_has_compiled_core")
                       and core_loadable and torch_digest)
+    # An operator-selected adaptation makes a specific compute capability part of the contract:
+    # torch must actually ship kernels for it (arch list) and the probed device must be one
+    # (device capability). Without this check a cu128-less build could pass a generic CUDA probe
+    # and then raise at the first real kernel launch.
+    adaptation_target = report.runtime_adaptation
+    if capability and adaptation_target:
+        target = adaptation_target.replace("sm_", "").replace("_blackwell", "")
+        arch_list = [str(a).lower() for a in result.get("torch_arch_list") or []]
+        device_cap = str(result.get("compute_capability") or "").replace(".", "")
+        if target not in arch_list:
+            capability = False
+            result["adaptation_mismatch"] = (
+                f"adapted runtime targets {adaptation_target} but torch arch list lacks it: {arch_list}")
+        elif device_cap and device_cap != target:
+            capability = False
+            result["adaptation_mismatch"] = (
+                f"adapted runtime targets {adaptation_target} but the probed device is sm_{device_cap}")
     payload = {
         **result,
         "capability_verified": capability,
+        "runtime_adaptation": adaptation_target,
         "interpreter": str(interpreter),
         "interpreter_fingerprint": report.environment_fingerprint,
         "dependency_fingerprint": report.contract_digest,

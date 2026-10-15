@@ -272,10 +272,31 @@ def _variant_provenance(model: dict, config: WorkbenchConfig) -> dict[str, Any]:
     if patch is not None and patch.get("applied"):
         approved_patch = {key: patch[key] for key in
                           ("patch_file", "patch_sha256", "applied") if key in patch}
+    from workbench.backend.runtime import runtime_adaptation
+
+    try:
+        adaptation = runtime_adaptation(model)
+    except Exception:
+        adaptation = None
+    adapted_profile = None
+    if adaptation:
+        adapted_profile = {
+            "runtime_adaptation": str(adaptation.get("target_compute_capability")),
+            # The declared constraints this run actually verified against. A run under an
+            # adapted runtime is recorded as adapted evidence and must never be presented as
+            # an exact reproduction of the authors' historical environment.
+            "pytorch": adaptation.get("pytorch"),
+            "torchvision": adaptation.get("torchvision"),
+            "cuda": adaptation.get("cuda"),
+            "packages": list(adaptation.get("packages") or []),
+            "note": "ADAPTED_RUNTIME: modern package stack for the target GPU; not the "
+                    "authors' historical environment, not an exact reproduction claim",
+        }
     return {
         "caption_aliases": caption_aliases,
         "caption_alias_staged": bool(caption_aliases),
         "approved_source_patch": approved_patch,
+        "adapted_runtime": adapted_profile,
         "warnings": warnings,
     }
 
