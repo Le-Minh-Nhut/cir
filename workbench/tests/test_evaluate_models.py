@@ -291,6 +291,9 @@ def test_csmcir_dry_run_constructs_official_command(monkeypatch, tmp_path: Path,
     assert reasons == []
     assert plan is not None
     assert plan.cwd == source / "src"
+    # The registry pins csmcir's checkpoint-to-paper mapping as VERIFIED_METADATA; the plan
+    # must carry that fact, because the paper gate certifies a pass only when it is true.
+    assert plan.checkpoint_mapping_verified is True
     # CSMCIR requires no isolated environment, so it runs in the workbench interpreter;
     # the command must name that interpreter, never a bare "python".
     assert plan.command[0] == sys.executable
@@ -299,6 +302,43 @@ def test_csmcir_dry_run_constructs_official_command(monkeypatch, tmp_path: Path,
     assert "[RUN] command:" in output
     assert "[PLAN] first-use downloads:" in output
     assert "dry-run cannot verify acquisition or evaluator success" in output
+
+def test_the_plan_carries_the_registry_mapping_verdict_not_a_hardcoded_true(monkeypatch, tmp_path: Path) -> None:
+    """The plan-level mapping flag must mirror the registry, in both directions.
+
+    An unverified mapping reaching the paper gate as verified would let the gate certify
+    `PASS_WITHIN_5_PERCENT` for a run whose checkpoint-to-paper identity nobody established.
+    """
+    module = load_module()
+    model = records()["csmcir"]
+    source, checkpoint_file, settings = prepare_source(monkeypatch, module, tmp_path, model)
+    settings.FASHIONIQ_ROOT.mkdir()
+    dataset_root = source / "fashionIQ_dataset"
+    dataset_root.symlink_to(settings.FASHIONIQ_ROOT, target_is_directory=True)
+    prepare_standard_layout(settings.FASHIONIQ_ROOT)
+    for path in (source / "COT_ours2" / "fashioniq", dataset_root / "qwen_captions"):
+        path.mkdir(parents=True)
+    prepare_csmcir_caption_assets(monkeypatch, source, dataset_root)
+    script = source / "src" / "validate_blip_csmcir.py"
+    script.parent.mkdir()
+    script.write_text("")
+    import workbench.backend.adapters.models as adapters
+    monkeypatch.setattr(adapters, "checkpoint_path", lambda *_: checkpoint_file)
+
+    unverified = {**model, "checkpoint_variants": [
+        {**model["checkpoint_variants"][0], "checkpoint_mapping_status": "UNVERIFIED"}]}
+    # Dry run drops the first-use LAVIS downloads. `runtime_plan_blockers` would refuse the
+    # unverified mapping outright — that is the runtime guard, not the flag under test — so the
+    # plan-level wiring is isolated by stubbing the runtime blockers and keeping everything else.
+    import workbench.backend.runtime as runtime
+    monkeypatch.setattr(runtime, "runtime_plan_blockers", lambda *a, **k: [])
+    # evaluate_models binds the name directly (`from ... import`), so patch there too.
+    monkeypatch.setattr(module, "runtime_plan_blockers", lambda *a, **k: [])
+    plan, reasons = module.guarded_plan(unverified, unverified["checkpoint_variants"][0],
+                                        unverified["native_protocol"], dataset_root, 200,
+                                        settings, dry_run=True)
+    assert plan is not None, reasons
+    assert plan.checkpoint_mapping_verified is False
 
 
 def test_csmcir_main_accepts_link_and_explicit_canonical_root(monkeypatch, tmp_path: Path) -> None:

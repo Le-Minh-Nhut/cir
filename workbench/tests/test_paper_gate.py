@@ -25,6 +25,9 @@ META = {
     "evaluation_noise_pct": 0,
     "split": "val",
     "dataset": "fashioniq",
+    # The test fixture describes a checkpoint whose mapping IS verified; a run whose mapping is
+    # unverified is covered by its own test below.
+    "checkpoint_mapping_verified": True,
 }
 
 
@@ -317,6 +320,41 @@ def test_a_variant_that_deviates_is_an_alert_not_a_variant_pass():
     assert verdict.status == gate.ALERT_METRIC_DEVIATION
     assert not verdict.passed
 
+def test_mapping_unverified_and_category_gap_together_report_the_mapping_status():
+    """When both caveats hold, the status names the stronger one (identity), detail names both."""
+    ref = reference(**{"category_metrics": {"dress": {"r10": 50.00, "r50": 70.00}}})
+    verdict = gate.evaluate_gate(
+        ref, {"r10": 57.07, "r50": 77.27, "mean": 67.17},
+        run_meta={**META, "checkpoint_mapping_verified": False}, real_execution=True,
+        reproduced_category_metrics=None)
+    assert verdict.status == gate.PASS_METRICS_ONLY_MAPPING_UNVERIFIED
+    assert verdict.passed is False
+    assert "UNVERIFIED" in verdict.detail
+    assert "were not compared" in verdict.detail
+
+def test_an_unverified_checkpoint_mapping_is_metrics_only_not_certified():
+    """Numerical comparability and official identity are separate claims.
+
+    With an UNVERIFIED mapping the gate does not know which upstream asset produced the numbers, so
+    a metric match cannot certify an official reproduction: the status names the gap and `passed`
+    stays False even though every comparable metric agrees.
+    """
+    verdict = run(dict(PAPER), meta={**META, "checkpoint_mapping_verified": False})
+    assert verdict.status == gate.PASS_METRICS_ONLY_MAPPING_UNVERIFIED
+    assert verdict.passed is False
+    assert verdict.variant is False
+    assert "UNVERIFIED" in verdict.detail
+    # The comparisons stay on the verdict so the numbers remain inspectable.
+    assert any(c.metric == "r10" and c.within_tolerance for c in verdict.comparisons)
+
+def test_variant_and_deviation_together_stay_an_alert():
+    """A declared variant whose numbers deviate is an alert, not a labelled pass."""
+    verdict = run({key: value * 1.2 for key, value in PAPER.items()},
+                  meta={**META, "caption_alias_staged": True, "declared_variant": True})
+    assert verdict.status == gate.ALERT_METRIC_DEVIATION
+    assert not verdict.passed
+    assert verdict.variant
+
 
 def test_a_pass_records_the_reference_evidence():
     verdict = run(dict(PAPER))
@@ -405,15 +443,18 @@ def test_the_report_helper_selects_by_condition_not_by_headline_value():
         observed_metrics = {"r10": 55.38, "r50": 75.20, "mean": 65.29}
 
     clean = Namespace(model_id="habit", protocol="fashioniq_full_gallery_ref_excluded",
-                      checkpoint_id="fiq_n00", checkpoint_training_noise_pct=0)
+                      checkpoint_id="fiq_n00", checkpoint_training_noise_pct=0,
+                      checkpoint_mapping_verified=True)
     verdict = _benchmark_gate_verdict(clean, Extraction(), 0)
     # The habit row publishes per-category metrics and the extraction carries none, so the pass is
     # explicitly incomplete rather than a plain aggregate-only pass.
     assert verdict["status"] == gate.PASS_WITH_UNCHECKED_CATEGORIES
+    assert verdict["passed"] is False
     assert verdict["reference_evidence"]["reference_id"] == "habit_aaai26_table1_fiq_n00"
 
     noisy = Namespace(model_id="habit", protocol="fashioniq_full_gallery_ref_excluded",
-                      checkpoint_id="fiq_n05", checkpoint_training_noise_pct=50)
+                      checkpoint_id="fiq_n05", checkpoint_training_noise_pct=50,
+                      checkpoint_mapping_verified=True)
     verdict = _benchmark_gate_verdict(noisy, Extraction(), 0)
     assert verdict["status"] == gate.ALERT_METRIC_DEVIATION, verdict
     assert verdict["reference_evidence"]["reference_id"] == "habit_aaai26_table1_fiq_n50"
@@ -428,7 +469,8 @@ def test_the_report_helper_reports_a_failed_run_as_not_a_metric_verdict():
         observed_metrics = None
 
     plan = Namespace(model_id="csmcir", protocol="fashioniq_original_split",
-                     checkpoint_id="fashioniq", checkpoint_training_noise_pct=0)
+                     checkpoint_id="fashioniq", checkpoint_training_noise_pct=0,
+                     checkpoint_mapping_verified=True)
     verdict = _benchmark_gate_verdict(plan, Extraction(), 1)
     assert verdict["status"] == gate.FAILED_EVALUATION
     assert not verdict["passed"]
@@ -493,7 +535,10 @@ def test_categories_compare_only_where_both_sides_publish():
     ref = reference(**{"category_metrics": {"dress": {"r10": 50.00, "r50": 70.00}}})
     verdict = run_with_categories({"r10": 57.07, "r50": 77.27, "mean": 67.17}, None, ref)
     assert verdict.status == gate.PASS_WITH_UNCHECKED_CATEGORIES
-    assert verdict.passed is True
+    # Incomplete category coverage is not full reproduction verification.
+    assert verdict.passed is False
+    # The metric comparisons stay on the verdict so the incomplete result remains inspectable.
+    assert any(c.metric == "r10" and c.within_tolerance for c in verdict.comparisons)
     assert "dress_r10" in verdict.detail and "not compared" in verdict.detail
 
 def test_a_run_category_with_no_paper_counterpart_is_not_compared():

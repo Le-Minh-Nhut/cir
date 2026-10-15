@@ -402,13 +402,16 @@ def _derived_is_bound_to_source(
     size: int,
     extension: str,
     derived_digest: str | None = None,
+    recipe_digest: str | None = None,
+    recipe_identity: dict | None = None,
 ) -> bool:
     """Whether a receipt proves an existing derived file came from these exact canonical bytes.
 
     The evidence required is the conjunction the receipt already records: this identifier's canonical
-    source digest, its derived digest, the image size and the recipe extension. A missing or
-    mismatching value means the file cannot be attributed to the current source and the recipe, so it
-    is regenerated instead of reused.
+    source digest, its derived digest, the image size, the recipe extension, the resampling kernel,
+    and the full recipe identity (digest + identity block). A missing or mismatching value means the
+    file cannot be attributed to the current source and recipe, so it is regenerated instead of
+    reused.
 
     The derived digest matters as much as the source one. Without it a file that was edited after it
     was generated still looked reusable, and the run then wrote a fresh receipt recording the edited
@@ -423,6 +426,14 @@ def _derived_is_bound_to_source(
     # claim at all, so they cannot prove reuse either.
     if previous.get("resampling") != RESAMPLING:
         return False
+    # Full recipe identity, not just a few fields of it: the receipt must record the same recipe
+    # digest the current contract derives, the same layout, and the same recipe identity block.
+    # A receipt that disagrees on any of these describes a different generator run, and reuse
+    # would certify pixels the current recipe did not produce.
+    if previous.get("recipe_digest") != recipe_digest:
+        return False
+    if previous.get("recipe_identity") != recipe_identity:
+        return False
     categories = previous.get("categories")
     if not isinstance(categories, dict):
         return False
@@ -430,6 +441,12 @@ def _derived_is_bound_to_source(
     if not isinstance(counts, dict):
         return False
     if counts.get("image_size") != size or counts.get("extension") != extension:
+        return False
+    # The per-category coverage must agree with the receipt's own recipe: a counts block recorded
+    # under a different layout or digest describes files the current recipe did not produce.
+    if counts.get("layout") != (recipe_identity or {}).get("layout"):
+        return False
+    if counts.get("recipe_digest") != recipe_digest:
         return False
     digests = counts.get("digests") or {}
     source_digests = counts.get("source_digests") or {}
@@ -580,7 +597,8 @@ def _run_resize(config, model: dict, contract: dict, *, dry_run: bool) -> tuple[
                     on_disk = None
                 if _derived_is_bound_to_source(
                         previous_receipt, category, identifier, category_source_digests[identifier],
-                        size, extension, on_disk):
+                        size, extension, on_disk,
+                        recipe_digest=recipe_parameters_digest, recipe_identity=recipe_identity):
                     # Reuse is allowed only with evidence: the previous receipt records the canonical
                     # bytes that produced this file, the recipe that produced it, and the file's own
                     # digest. Size and format alone are not evidence -- a 256px JPEG can be stale,

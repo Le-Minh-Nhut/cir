@@ -21,6 +21,8 @@ import json
 import sys
 from pathlib import Path
 
+import yaml
+
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
@@ -28,6 +30,7 @@ from workbench.backend import benchmark_references
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
 from workbench.backend.preflight import approved_patch_state, model_requirements, preflight_blockers
 from workbench.backend.registry import load_registry
+from workbench.backend.runtime import _requires_gpu, runtime_plan_blockers, TIER_GPU_READY, verify_environment
 
 #: Classification, most-specific first. A model is described by the first state whose condition holds.
 READY_FOR_FULL_EVALUATION = "READY_FOR_FULL_EVALUATION"
@@ -55,6 +58,10 @@ BLOCKER_KINDS = (
     ("canonical dataset link", BLOCKED_DATASET),
     ("captions", BLOCKED_EXTERNAL_ASSET),
     ("asset", BLOCKED_EXTERNAL_ASSET),
+    ("checkpoint mapping unresolved", BLOCKED_EXTERNAL_ASSET),
+    ("official checkpoint hash mismatch", BLOCKED_EXTERNAL_ASSET),
+    ("checkpoint bundle incomplete", BLOCKED_EXTERNAL_ASSET),
+    ("checkpoint missing", BLOCKED_EXTERNAL_ASSET),
     ("unverified", BLOCKED_EXTERNAL_ASSET),
     ("missing", BLOCKED_EXTERNAL_ASSET),
 )
@@ -191,6 +198,14 @@ def model_section(model: dict, config: WorkbenchConfig) -> dict:
     # a paper row with no comparable weight, and a weight with no matching row.
     references = []
     for variant in model.get("checkpoint_variants") or []:
+        # Readiness is judged per checkpoint, not per model: presence, hash, bundle completeness and
+        # mapping status differ between the weights a paper published. The report keeps one blockers
+        # list per variant so "check individual checkpoint" stays possible.
+        variant_blockers = runtime_plan_blockers(model, variant, config)
+        blockers = list(dict.fromkeys(blockers + variant_blockers))
+        # The merged list is the honest one: a model whose data is fine but whose checkpoints are
+        # absent is not READY, so the headline state is reclassified from the merged list.
+        state, reason = classify(blockers)
         try:
             reference, selection_reason = benchmark_references.select_reference(
                 model_id,
@@ -206,6 +221,7 @@ def model_section(model: dict, config: WorkbenchConfig) -> dict:
             "reference_id": reference.reference_id if reference else None,
             "reference_status": reference.reference_status if reference else None,
             "reason": selection_reason,
+            "blockers": variant_blockers,
         })
     if not references:
         try:
@@ -226,6 +242,18 @@ def model_section(model: dict, config: WorkbenchConfig) -> dict:
         if state in (READY_FOR_FULL_EVALUATION, READY_FOR_GPU_SMOKE):
             state, reason = READY_WITH_DECLARED_VARIANT, (
                 f"approved source patch applied: {patch['patch_file']}")
+    # Host CUDA availability (the `gpu` section's nvidia-smi / host torch) is not evidence that a
+    # *model* can use the GPU: each model runs its own interpreter with its own torch build. A model
+    # that declares a CUDA requirement stays pending until its own capability probe recorded
+    # GPU_RUNTIME_READY, regardless of what the host's torch sees.
+    report = verify_environment(model, probe=True)
+    environment_tier = report.tier
+    gpu_required = _requires_gpu(model)
+    gpu_verified = environment_tier == TIER_GPU_READY
+    if state in (READY_FOR_FULL_EVALUATION, READY_FOR_GPU_SMOKE) and gpu_required and not gpu_verified:
+        state, reason = PC_GPU_VALIDATION_PENDING, (
+            "the model declares a CUDA requirement and its interpreter has not recorded a verified "
+            "GPU capability; run verify_gpu_runtime() on the GPU host")
     return {
         "model_id": model_id,
         "state": state,
@@ -235,6 +263,9 @@ def model_section(model: dict, config: WorkbenchConfig) -> dict:
         "native_protocol": model.get("native_protocol"),
         "source_dir": model.get("source_dir"),
         "approved_patch": patch,
+        "environment_tier": environment_tier,
+        "gpu_required": gpu_required,
+        "gpu_verified": gpu_verified,
         "benchmark_references": references,
         "auxiliary_assets": [
             {"name": a.get("name"), "path": a.get("path"), "status": a.get("status")}
@@ -261,17 +292,9 @@ def document(config: WorkbenchConfig, models: list[dict]) -> dict:
         "environment": environment_section(config, models),
     }
     models_section = {m["model_id"]: model_section(m, config) for m in models}
-
-    # A model with no blocker still cannot be called ready without a GPU check, so `READY_*` states are
-    # downgraded when this host cannot run the evaluator at all.
-    gpu = sections["gpu"]
-    if not gpu.get("cuda_available"):
-        for entry in models_section.values():
-            if entry["state"] in (READY_FOR_FULL_EVALUATION, READY_FOR_GPU_SMOKE):
-                entry["preparation_state"] = entry["state"]
-                entry["state"] = PC_GPU_VALIDATION_PENDING
-                entry["reason"] = ("all reported prerequisites are satisfied, but no CUDA device is "
-                                   "available on this host, so the run itself is unverified")
+    # GPU readiness is per-model: `model_section` already downgraded every CUDA-declaring model
+    # whose own interpreter has not recorded a verified capability. The host's torch answer is
+    # reported in the `gpu` section and never re-classifies a model.
     sections["models"] = models_section
     sections["summary"] = _summary(models_section)
     return sections
@@ -315,6 +338,11 @@ def render(document: dict) -> str:
     for model_id, entry in sorted(document["models"].items()):
         lines.append(f"  {model_id:26} {entry['state']}")
         lines.append(f"      {entry['reason'][:150]}")
+        for reference in entry.get("benchmark_references") or []:
+            if reference.get("blockers"):
+                lines.append(f"      checkpoint {reference['checkpoint_id']}:")
+                for blocker in reference["blockers"]:
+                    lines.append(f"        - {blocker[:150]}")
     lines.append("")
     lines.append(f"summary: {json.dumps(document['summary']['by_state'])}")
     return "\n".join(lines)
@@ -327,14 +355,30 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="emit the machine-readable report")
     parser.add_argument("--dataset-root", type=Path, default=None,
                         help="canonical FashionIQ root, overriding the resolved configuration")
+    parser.add_argument("--config", type=Path, default=None,
+                        help="autopilot profile YAML; its paths define the configuration to check, "
+                             "so this report describes exactly what the autopilot run will see")
     args = parser.parse_args(argv)
 
-    config = resolve_config()
+    if args.config is not None:
+        from workbench.backend.autopilot import _workbench_config, load_config
+        try:
+            autopilot_config = load_config(args.config)
+        except (OSError, ValueError, yaml.YAMLError) as error:
+            print(f"pc_readiness: {error}", file=sys.stderr)
+            return 1
+        config = _workbench_config(autopilot_config)
+    else:
+        config = resolve_config()
+        autopilot_config = None
     if args.dataset_root is not None:
         from dataclasses import replace
         config = replace(config, FASHIONIQ_ROOT=args.dataset_root.resolve())
 
-    models = load_registry()["models"]
+    # With --config the report must describe the autopilot run it names, so the profile's own
+    # registry (and therefore its model selection universe) is what gets checked.
+    models = (autopilot_config.registry["models"] if autopilot_config is not None
+              else load_registry()["models"])
     if args.model:
         wanted = set(args.model)
         models = [m for m in models if m["model_id"] in wanted]

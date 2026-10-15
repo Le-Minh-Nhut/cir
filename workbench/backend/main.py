@@ -98,24 +98,58 @@ def _aggregate_reports() -> list[dict]:
             report = json.loads(path.read_text())
         except (OSError, json.JSONDecodeError):
             continue
-        if report.get("artifact_type") != "official_aggregate_evaluation_report":
+        if not isinstance(report, dict) or report.get("artifact_type") != "official_aggregate_evaluation_report":
+            continue
+        if not _aggregate_report_is_well_formed(report, path):
             continue
         reports.append(report)
     return reports
+
+#: Fields every aggregate report must carry for the API and the frontend to be meaningful. A file
+#: that parses as JSON but lacks these was truncated or corrupted after writing; serving it would
+#: crash the endpoints that index by `run_id`, so it is isolated instead.
+_AGGREGATE_REQUIRED_FIELDS = ("run_id", "model_id", "checkpoint_id", "protocol_id")
+
+def _aggregate_report_is_well_formed(report: dict, path: Path) -> bool:
+    def reject(problem: str) -> bool:
+        print(f"workbench: skipping malformed aggregate report {path}: {problem}", file=sys.stderr)
+        return False
+    missing = [key for key in _AGGREGATE_REQUIRED_FIELDS
+               if not isinstance(report.get(key), str) or not report.get(key)]
+    if missing:
+        return reject(f"missing {missing}")
+    gate = report.get("benchmark_gate")
+    if gate is not None and not isinstance(gate, dict):
+        return reject("benchmark_gate is not an object")
+    return True
 
 def _gate_fields(report: dict) -> dict:
     """The small, frontend-facing projection of an aggregate report.
 
     Only what the two warning labels and the threshold slider need. The gate verdict is kept
     whole -- recorded comparisons included -- so the slider can re-flag them without a second
-    request; the frontend never recomputes a percentage.
+    request; the frontend never recomputes a percentage. Every shape the frontend dereferences
+    is normalized here, so a truncated report degrades to missing evidence instead of blanking
+    the UI (the app has no error boundary).
     """
+    gate = report.get("benchmark_gate")
+    gate = gate if isinstance(gate, dict) else {}
+    comparisons = gate.get("comparisons")
+    gate = {**gate, "comparisons": [c for c in comparisons or [] if isinstance(c, dict)]
+            if isinstance(comparisons, list) else []}
     return {
-        "benchmark_gate": report.get("benchmark_gate") or {},
+        "benchmark_gate": gate,
         "parity_status": report.get("parity_status"),
-        "variant_provenance": report.get("variant_provenance") or {},
-        "category_metrics": report.get("category_metrics"),
-        "observed_metrics": report.get("observed_metrics"),
+        "variant_provenance": (report.get("variant_provenance")
+                               if isinstance(report.get("variant_provenance"), dict) else {}),
+        # The frontend iterates these with Object.entries, once at the top level and once per
+        # category value; a truncated report degrades to null instead of a crashing shape.
+        "category_metrics": (report.get("category_metrics")
+                             if isinstance(report.get("category_metrics"), dict)
+                             and all(isinstance(v, dict) for v in report["category_metrics"].values())
+                             else None),
+        "observed_metrics": (report.get("observed_metrics")
+                             if isinstance(report.get("observed_metrics"), dict) else None),
         "execution_status": report.get("execution_status"),
         # A registry-declared synthetic-output model has no published output format; its numbers
         # are evidence of a different kind and the UI must be able to say so.

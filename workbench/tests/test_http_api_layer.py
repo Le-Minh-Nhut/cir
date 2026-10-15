@@ -236,8 +236,69 @@ def test_run_gates_endpoint_keys_by_run_id(api, tmp_path) -> None:
     reports.mkdir(parents=True)
     (reports / "m_c_r_aggregate.json").write_text(json.dumps({
         "artifact_type": "official_aggregate_evaluation_report", "run_id": "r1",
+        "model_id": "m", "checkpoint_id": "c", "protocol_id": "p",
         "parity_status": "PARITY_VERIFIED"}))
     status, _, body = asgi_request(api.app, "GET", "/api/runs/gate")
     assert status == 200
     payload = json.loads(body)
     assert payload["r1"]["parity_status"] == "PARITY_VERIFIED"
+
+def test_a_parseable_but_incomplete_report_is_isolated_not_served(api, tmp_path, capsys) -> None:
+    """A truncated or corrupted aggregate report must not take the endpoints down.
+
+    The file parses as JSON and carries the right artifact_type, but the fields the endpoints
+    index by are gone. It is skipped (with a reason on stderr) and every other report still loads.
+    """
+    reports = tmp_path / "repo" / "workbench" / "artifacts" / "reports"
+    reports.mkdir(parents=True)
+    good = {"artifact_type": "official_aggregate_evaluation_report", "run_id": "good",
+            "model_id": "m", "checkpoint_id": "c", "protocol_id": "p"}
+    bad_cases = [
+        {"artifact_type": "official_aggregate_evaluation_report"},                       # everything gone
+        {"artifact_type": "official_aggregate_evaluation_report", "run_id": 7},          # wrong type
+        {"artifact_type": "official_aggregate_evaluation_report", "run_id": "x",
+         "model_id": "m", "checkpoint_id": "c", "protocol_id": "p",
+         "benchmark_gate": "not-an-object"},                                             # gate wrong type
+    ]
+    for index, case in enumerate(bad_cases):
+        (reports / f"bad{index}_aggregate.json").write_text(json.dumps(case))
+    (reports / "good_aggregate.json").write_text(json.dumps(good))
+    status, _, body = asgi_request(api.app, "GET", "/api/benchmark-runs")
+    assert status == 200
+    payload = json.loads(body)
+    assert [row["run_id"] for row in payload] == ["good"]
+    status, _, body = asgi_request(api.app, "GET", "/api/runs/gate")
+    assert status == 200 and list(json.loads(body)) == ["good"]
+    stderr = capsys.readouterr().err
+    assert "bad0_aggregate.json" in stderr and "missing" in stderr
+
+def test_wrong_typed_nested_gate_fields_are_normalized_not_crashing(api, tmp_path, capsys) -> None:
+    """The frontend dereferences benchmark_gate.comparisons as a list of objects and iterates the
+    metric maps with Object.entries. A truncated report carrying the wrong shapes must degrade to
+    missing evidence, never to a shape the frontend would crash on."""
+    reports = tmp_path / "repo" / "workbench" / "artifacts" / "reports"
+    reports.mkdir(parents=True)
+    base = {"artifact_type": "official_aggregate_evaluation_report", "run_id": "x",
+            "model_id": "m", "checkpoint_id": "c", "protocol_id": "p"}
+    (reports / "bad_gate_aggregate.json").write_text(json.dumps(
+        {**base, "benchmark_gate": {"comparisons": {"metric": "R@10"}}}))
+    (reports / "mixed_elements_aggregate.json").write_text(json.dumps(
+        {**base, "benchmark_gate": {"comparisons": [None, "oops", {"metric": "R@10", "relative_error_pct": 2.0}]}}))
+    (reports / "bad_variant_aggregate.json").write_text(json.dumps(
+        {**base, "variant_provenance": "not-an-object", "category_metrics": ["dress"]}))
+    (reports / "null_category_aggregate.json").write_text(json.dumps(
+        {**base, "category_metrics": {"dress": None}}))
+    status, _, body = asgi_request(api.app, "GET", "/api/benchmark-runs")
+    assert status == 200
+    payload = json.loads(body)
+    assert any(row["benchmark_gate"]["comparisons"] == [] for row in payload)
+    assert any(row["benchmark_gate"]["comparisons"] == [{"metric": "R@10", "relative_error_pct": 2.0}]
+               for row in payload)
+    for row in payload:
+        assert isinstance(row["benchmark_gate"]["comparisons"], list)
+        assert all(isinstance(c, dict) for c in row["benchmark_gate"]["comparisons"])
+        assert isinstance(row["variant_provenance"], dict)
+        # A category map whose values are not objects degrades to null: the frontend iterates
+        # the values with Object.entries and would crash on null.
+        if row["category_metrics"] is not None:
+            assert all(isinstance(v, dict) for v in row["category_metrics"].values())

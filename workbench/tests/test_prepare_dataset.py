@@ -593,6 +593,52 @@ def test_resize_receipt_invalidated_when_image_bytes_or_contract_change(tmp_path
     assert prepare_model.resize_is_complete(config, model, contract) is True
 
 
+def test_reuse_refuses_a_receipt_from_a_different_recipe(tmp_path: Path) -> None:
+    """Reuse evidence is the full recipe identity, not a subset of its fields.
+
+    A receipt recorded under a different recipe digest (or with a different layout inside the
+    per-category counts) must not let the current run adopt its files: the binding has to cover
+    every parameter the current recipe derives, or regeneration writes fresh evidence instead.
+    """
+    from workbench.scripts.prepare_model import _derived_is_bound_to_source, RESAMPLING
+
+    def receipt(recipe_digest, counts_layout="per_category", recipe_identity=None):
+        return {
+            "image_size": 256, "extension": ".jpg", "resampling": RESAMPLING,
+            "recipe_digest": recipe_digest,
+            "recipe_identity": recipe_identity or {"image_size": 256, "extension": ".jpg",
+                                                   "layout": "per_category", "recipe_digest": recipe_digest},
+            "categories": {"dress": {"image_size": 256, "extension": ".jpg",
+                                     "layout": counts_layout, "recipe_digest": recipe_digest,
+                                     "digests": {"img1": "d" * 64},
+                                     "source_digests": {"img1": "s" * 64}}},
+        }
+
+    good_digest = "a" * 64
+    good_identity = {"image_size": 256, "extension": ".jpg", "layout": "per_category",
+                     "recipe_digest": good_digest}
+    args = ("dress", "img1", "s" * 64, 256, ".jpg", "d" * 64)
+
+    # Matching full recipe identity reuses.
+    assert _derived_is_bound_to_source(receipt(good_digest), *args,
+                                       recipe_digest=good_digest, recipe_identity=good_identity)
+    # A different recipe digest is a different generator run: regenerate.
+    assert not _derived_is_bound_to_source(receipt("b" * 64), *args,
+                                           recipe_digest=good_digest, recipe_identity=good_identity)
+    # A receipt with no recipe digest at all carries no claim: regenerate.
+    legacy = receipt(good_digest)
+    legacy.pop("recipe_digest")
+    legacy["categories"]["dress"].pop("recipe_digest")
+    assert not _derived_is_bound_to_source(legacy, *args,
+                                           recipe_digest=good_digest, recipe_identity=good_identity)
+    # A counts block recorded under another layout cannot be adopted by this layout.
+    assert not _derived_is_bound_to_source(receipt(good_digest, counts_layout="flat"), *args,
+                                           recipe_digest=good_digest, recipe_identity=good_identity)
+    # A recipe identity block that disagrees is refused.
+    assert not _derived_is_bound_to_source(receipt(good_digest), *args,
+                                           recipe_digest=good_digest,
+                                           recipe_identity={**good_identity, "extension": ".png"})
+
 def test_older_receipt_without_digests_does_not_validate(tmp_path: Path) -> None:
     """Older receipts without digests must NOT validate as complete."""
     from dataclasses import replace as _replace

@@ -29,8 +29,10 @@ preparing anything, and again after each step, to see the classification move.
 
 ## Classification of the 16 registered models
 
-States are from `pc_readiness.py`. `PC_GPU_VALIDATION_PENDING` means preparation is complete but no
-usable CUDA device was visible, so the run itself is unverified — it is never reported as ready.
+States are from `pc_readiness.py`. `PC_GPU_VALIDATION_PENDING` means preparation is complete but the
+model's own interpreter has not recorded a verified GPU capability (a CUDA-declaring model stays
+pending until `verify_gpu_runtime()` has run for it on the GPU host) — it is never reported as ready.
+Each registered checkpoint also carries its own blocker list (presence, hash, bundle, mapping).
 
 | Model | State on the preparation host | What would change it |
 |---|---|---|
@@ -47,6 +49,11 @@ usable CUDA device was visible, so the run itself is unverified — it is never 
 | `tgcir` | `BLOCKED_IMPLEMENTATION` | no source replay CLI; the archive's FashionIQ member is unidentified |
 | `sprc` | `BLOCKED_IMPLEMENTATION` | the `sprc_fiq.pt` backbone mapping |
 | `ptha_mtst` | `BLOCKED_SOURCE` | the author repository exists but is unsynced, and no FashionIQ checkpoint or corpus is published |
+
+The states above were re-verified against `pc_readiness.py` after round 2 merged the
+per-checkpoint blockers (presence, hash, bundle, mapping) into the model classification: the
+table matches the tool's output on the preparation host at regeneration time, and the per-checkpoint
+blocker lists live in the `--json` report.
 
 ## What the preparation host could and could not establish
 

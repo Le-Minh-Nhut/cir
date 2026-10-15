@@ -3,6 +3,15 @@ import type { MetricComparison } from "./gate_types";
 export const DEFAULT_THRESHOLD_PCT = 5.0;
 export const thresholdStorageKey = "cir-workbench.thresholdPct";
 
+/** Read the stored deviation threshold. `Number(null)` is 0, so a raw cast silently turned a first
+ *  visit (no saved value) into a 0% threshold -- every deviation flagged. A missing entry falls back
+ *  to the default; an unparsable or out-of-range value does too. */
+export function readThresholdPct(storage: Pick<Storage, "getItem"> = localStorage): number {
+  const raw = storage.getItem(thresholdStorageKey);
+  const saved = raw === null || raw.trim() === "" ? NaN : Number(raw);
+  return Number.isFinite(saved) && saved >= 0 && saved <= 20 ? saved : DEFAULT_THRESHOLD_PCT;
+}
+
 export type RunGate = {
   benchmark_gate?: Record<string, unknown> | null;
   parity_status?: string | null;

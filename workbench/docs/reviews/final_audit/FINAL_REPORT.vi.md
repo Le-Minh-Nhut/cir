@@ -110,7 +110,25 @@ Full suite run cuối (toàn bộ thay đổi của vòng này, gồm 5 test enc
 897 (run trước) + 2 test parser mới; 4 warnings đều là DeprecationWarning từ
 `runtime.py` metadata (đã tồn tại từ trước vòng này).
 
+## 5b. Vòng 2 (sửa 10 defect + phản hồi 3 reviewer độc lập): kết quả suite
+
+Full suite sau vòng sửa 10 defect: **907 passed, 4 warnings, 0 failed** (19m06s).
+Suite 907 = 899 (vòng 1) + 8 test hồi quy mới (isolation báo cáo malformed,
+mapping-unverified metrics-only, recipe-digest reuse, per-checkpoint blockers,
+`--config` pc_readiness, GPU-pending per-model).
+
+Full suite sau khi đóng hết phản hồi của ba reviewer độc lập (wiring test cho
+`checkpoint_mapping_verified`, chuẩn hoá `category_metrics` lồng nhau, truthiness
+`is True`, manifest regen theo splitlines): **910 passed, 4 warnings, 0 failed**
+(19m51s). Suite 910 = 907 + 3 test mới (mutation-guard wiring mapping 2 hướng,
+`{"dress": null}` category normalization).
+
 ## 6. Phạm vi thay đổi
 
-30 modified + 3 untracked (16 audit reports, CONSOLIDATION, AUDIT_TRACKER,
+Vòng 1: 30 modified + 3 untracked (16 audit reports, CONSOLIDATION, AUDIT_TRACKER,
 3 holistic reports, manifest regenerated, gate.ts, gate_types.ts).
+Vòng 2: 18 modified (paper_gate.py, main.py, evaluate_models.py, prepare_model.py,
+pc_readiness.py, App.tsx, gate.ts, style.css, AUTOPILOT_GUIDE.md,
+PC_TRANSFER_CHECKLIST.md, PC_RELEASE_READINESS.md, FINAL_REPORT.vi.md,
+SOURCE_COVERAGE_MANIFEST.md regenerated, 5 test files) — manifest regen theo
+splitlines (126 rows, 0 mismatch machine check).

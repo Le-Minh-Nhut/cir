@@ -86,8 +86,15 @@ PASS_WITHIN_5_PERCENT = "PASS_WITHIN_5_PERCENT"
 PASS_WITHIN_5_PERCENT_VARIANT = "PASS_WITHIN_5_PERCENT_VARIANT"
 # An explicitly incomplete pass: every comparable metric agreed, but the paper published category
 # metrics the run never observed, so the aggregate carried no per-category confirmation. A consumer
-# that treats any PASS_* as a full reproduction check is wrong; this status says so.
+# that treats any PASS_* as a full reproduction check is wrong; this status says so -- and
+# `passed` is False, so no consumer can mistake incomplete metric coverage for a verified
+# reproduction.
 PASS_WITH_UNCHECKED_CATEGORIES = "PASS_WITH_UNCHECKED_CATEGORIES"
+# Numerical comparability held, but the run's checkpoint mapping is UNVERIFIED: nobody established
+# which upstream asset these numbers came from, so the match cannot certify an *official*
+# reproduction of the paper's experiment. The comparisons stay on the verdict for inspection; a
+# consumer that needs certified identity reads this status, not `passed`.
+PASS_METRICS_ONLY_MAPPING_UNVERIFIED = "PASS_METRICS_ONLY_MAPPING_UNVERIFIED"
 ALERT_METRIC_DEVIATION = "ALERT_METRIC_DEVIATION"
 BLOCKED_PROTOCOL_MISMATCH = "BLOCKED_PROTOCOL_MISMATCH"
 BLOCKED_CHECKPOINT_MISMATCH = "BLOCKED_CHECKPOINT_MISMATCH"
@@ -372,13 +379,21 @@ def evaluate_gate(
                            "nothing was actually compared")
     failed = [c for c in comparable if not c.within_tolerance]
     variant = any((run_meta or {}).get(key) for key in VARIANT_KEYS)
+    mapping_verified = (run_meta or {}).get("checkpoint_mapping_verified") is True
     evidence = reference.as_evidence()
     if failed:
         return GateVerdict(ALERT_METRIC_DEVIATION, False, variant, comparisons,
                            [_failure_note(c) for c in failed], 
                            "at least one comparable metric exceeds the tolerance", evidence)
     status = PASS_WITHIN_5_PERCENT_VARIANT if variant else PASS_WITHIN_5_PERCENT
+    if not mapping_verified:
+        # Numerical comparability and certified official identity are separate claims. With an
+        # unverified mapping the numbers can be compared, but the run cannot be certified as an
+        # official reproduction of the paper's experiment: the asset behind the numbers is unknown.
+        status = PASS_METRICS_ONLY_MAPPING_UNVERIFIED
     detail = "every comparable metric is within 5 percent relative error"
+    if not mapping_verified:
+        detail += "; checkpoint mapping is UNVERIFIED, so this is a metric comparison, not a certified official reproduction"
     if missing:
         detail += f"; {', '.join(missing)} had no value on either side and was not compared"
     if unchecked:
@@ -390,7 +405,14 @@ def evaluate_gate(
         # The paper publishes category measurements the run did not produce. The comparable
         # aggregate agreed, but calling this an unqualified pass would let a strong average stand
         # in for the per-category check the paper's own table invites; the status names the gap.
-        status = PASS_WITH_UNCHECKED_CATEGORIES
+        # Mapping status wins precedence when both hold: identity uncertainty is the stronger
+        # caveat, and the coverage gap stays visible in `detail`.
+        status = PASS_WITH_UNCHECKED_CATEGORIES if mapping_verified else PASS_METRICS_ONLY_MAPPING_UNVERIFIED
+    if status != PASS_WITHIN_5_PERCENT and status != PASS_WITHIN_5_PERCENT_VARIANT:
+        # Incomplete coverage (no observed categories) or an unverified checkpoint mapping: the
+        # numbers stay on the verdict for inspection, but neither is full reproduction
+        # verification, so `passed` is False for both.
+        return GateVerdict(status, False, variant, comparisons, [], detail, evidence)
     # A passing verdict lists no blockers. Unchecked conditions belong in `detail` and in the
     # reference evidence, where a reader looks for caveats; putting refusals in a `blockers` list on a
     # `passed=True` verdict makes every consumer mishandle the result.

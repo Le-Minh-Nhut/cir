@@ -66,6 +66,9 @@ class EvaluationPlan:
     #: `run_meta`, so `SUBSTITUTED_CAPTION` is derived from what the run actually used rather than
     #: inferred from the model id. `None`-free dict is always present for a real plan.
     variant_provenance: dict[str, Any] | None = None
+    #: Whether the registry verified WHICH upstream asset this checkpoint is. Numerical comparability
+    #: and this identity fact are separate claims; the gate records the distinction.
+    checkpoint_mapping_verified: bool = False
 def _synthetic_aggregate(stdout_text: str) -> dict[str, dict[str, float]] | None:
     """Read the aggregate a registry-declared synthetic evaluator prints.
 
@@ -145,6 +148,10 @@ def _benchmark_gate_verdict(plan, extraction, return_code: int) -> dict[str, Any
         # label a passing comparison as a variant, never to wave one through.
         "caption_alias_staged": bool(variant.get("caption_alias_staged")),
         "declared_variant": bool(variant.get("approved_source_patch")),
+        # Identity evidence, distinct from numerical comparability: an unverified mapping means the
+        # gate does not know WHICH upstream asset produced these numbers, so a metric match cannot
+        # certify an official reproduction of the paper's experiment.
+        "checkpoint_mapping_verified": plan.checkpoint_mapping_verified,
     }
     try:
         reference, reason = benchmarks.select_reference(
@@ -353,6 +360,7 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
         directory_members=directory_members,
         checkpoint_sha256=checkpoint_digest,
         checkpoint_training_noise_pct=checkpoint.get("checkpoint_training_noise_pct"),
+        checkpoint_mapping_verified=checkpoint.get("checkpoint_mapping_status") == "VERIFIED_METADATA",
         synthetic_source=bool(model.get("synthetic_source")),
         variant_provenance=_variant_provenance(model, config),
     ), []

@@ -69,13 +69,17 @@ it tells you which models can proceed and what, precisely, stops the rest:
 python workbench/scripts/pc_readiness.py                 # human-readable
 python workbench/scripts/pc_readiness.py --json          # machine-readable
 python workbench/scripts/pc_readiness.py --model limn    # one model
+python workbench/scripts/pc_readiness.py --config PATH   # use an autopilot profile's paths
 ```
 
 Each model is classified as one of `READY_FOR_FULL_EVALUATION`, `READY_FOR_GPU_SMOKE`,
 `READY_WITH_DECLARED_VARIANT`, `BLOCKED_EXTERNAL_ASSET`, `BLOCKED_DATASET`, `BLOCKED_SOURCE`,
 `BLOCKED_IMPLEMENTATION`, `BLOCKED_ENVIRONMENT` or `PC_GPU_VALIDATION_PENDING`. The last one means
-every reported prerequisite is satisfied but no usable CUDA device was visible, so preparation
-readiness is reported separately from runtime verification and never conflated with it.
+every reported prerequisite is satisfied but the model's own interpreter has not recorded a verified
+GPU capability (a model that declares a CUDA requirement stays pending until `verify_gpu_runtime()`
+has run for it on the GPU host); the host's `nvidia-smi`/torch answer is reported separately and
+never substituted for the model's own verification. Each registered checkpoint also carries its own
+blocker list (presence, hash, bundle, mapping), so "check individual checkpoint" stays possible.
 
 ```bash
 git clone <repo> && cd cir
@@ -178,8 +182,10 @@ python -c "import json,sys; r=json.load(open(sys.argv[1])); print(json.dumps(r['
 
 | Verdict | Meaning |
 |---|---|
-| `PASS_WITHIN_5_PERCENT` | every comparable metric is within 5 percent relative error of the published row |
+| `PASS_WITHIN_5_PERCENT` | every comparable metric is within 5 percent relative error of the published row, and the checkpoint-to-paper mapping was verified (`VERIFIED_METADATA`) — a certified pass |
 | `PASS_WITHIN_5_PERCENT_VARIANT` | the same, but a declared stand-in was used (staged caption alias, approved source patch) |
+| `PASS_METRICS_ONLY_MAPPING_UNVERIFIED` | the numbers are within tolerance, but the checkpoint-to-paper mapping was never verified, or the run compared none of the paper's categories — **not a certified pass** (`passed: false`); the numbers remain inspectable |
+| `PASS_WITH_UNCHECKED_CATEGORIES` | the run left paper-published categories unobserved, so they were never compared — **not a certified pass** (`passed: false`); the untouched categories are named in `detail` |
 | `ALERT_METRIC_DEVIATION` | at least one comparable metric exceeds 5 percent; the block names which and by how much |
 | `BLOCKED_PROTOCOL_MISMATCH` / `BLOCKED_CHECKPOINT_MISMATCH` | the reference and the run do not describe one experiment |
 | `METRIC_REFERENCE_UNVERIFIED` | no committed row describes this run, or the row is not verified |

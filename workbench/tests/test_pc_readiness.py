@@ -121,6 +121,86 @@ def test_a_dirty_checkout_is_reported_as_a_source_problem(tmp_path, monkeypatch)
     assert any("dirty" in blocker for blocker in entry["blockers"]), entry["blockers"]
 
 
+def test_each_checkpoint_reports_its_own_blockers(tmp_path):
+    """Readiness must be judged per checkpoint, not per model.
+
+    With an empty checkpoint root every registered variant must show its own `checkpoint missing`
+    blocker, and those blockers must also appear in the model's aggregate list -- the preflight list
+    alone never looked at checkpoint files, so a model whose data was fine read as further along than
+    it was.
+    """
+    from dataclasses import replace
+    from pathlib import Path as _Path
+
+    config = replace(resolve_config(), WORKBENCH_CHECKPOINT_ROOT=_Path(tmp_path) / "empty-ckpt")
+    (_config_root := config.WORKBENCH_CHECKPOINT_ROOT).mkdir(parents=True, exist_ok=True)
+    entry = pcr.model_section(_model("limn"), config)
+    per_variant = {r["checkpoint_id"]: r["blockers"] for r in entry["benchmark_references"]}
+    assert per_variant, entry
+    for checkpoint_id, blockers in per_variant.items():
+        assert any(f"checkpoint missing" in b for b in blockers), (checkpoint_id, blockers)
+    assert any("checkpoint missing" in b for b in entry["blockers"])
+
+def test_the_gpu_pending_state_asks_about_the_model_not_the_host(monkeypatch):
+    """A CUDA-declaring model must be GPU-pending because *its* interpreter is unverified.
+
+    The host's torch can report `cuda_available` truthfully without the model's own interpreter
+    having proven anything; and conversely a CPU-only host torch must not by itself downgrade a
+    model whose capability was never probed. The old blanket rule used the host's answer for
+    everyone; this test pins the per-model rule.
+    """
+    from dataclasses import replace
+    from pathlib import Path as _Path
+
+    from workbench.backend.runtime import TIER_GPU_PENDING
+
+    config = replace(resolve_config(), WORKBENCH_THIRD_PARTY_ROOT=_Path("/nonexistent"))
+    model = _model("limn")
+    assert pcr._requires_gpu(model)
+    # Strip every preparation blocker so the only open question is the GPU capability.
+    monkeypatch.setattr(pcr, "verify_environment",
+                        lambda m, probe=True: type("R", (), {"tier": TIER_GPU_PENDING})())
+    monkeypatch.setattr(pcr, "preflight_blockers", lambda *a, **k: [])
+    monkeypatch.setattr(pcr, "runtime_plan_blockers", lambda *a, **k: [])
+    monkeypatch.setattr(pcr, "model_requirements",
+                        lambda *a, **k: {"blocks": [], "warnings": [],
+                                         "evidence": {"auxiliary_assets": []}})
+    entry = pcr.model_section(model, config)
+    assert entry["state"] == pcr.PC_GPU_VALIDATION_PENDING, entry["reason"]
+    assert entry["gpu_required"] is True and entry["gpu_verified"] is False
+
+def test_the_cli_accepts_the_autopilot_config(capsys, tmp_path):
+    """`--config` must build the same configuration the autopilot run will use."""
+    import json
+    code = pcr.main(["--json", "--config", str(REPO / "workbench" / "configs" / "pc_autopilot.example.yaml")])
+    assert code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert "limn" in payload["models"]
+
+def test_the_cli_rejects_an_invalid_config(capsys, tmp_path):
+    import json
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("schema_version: 2\n")
+    result = pcr.main(["--json", "--config", str(bad)])
+    assert result == 1
+    assert "missing config key" in capsys.readouterr().err
+
+def test_checkpoint_blockers_reach_the_headline_state(tmp_path):
+    """A model with every checkpoint file absent must not read READY_FOR_FULL_EVALUATION.
+
+    The per-variant blockers are merged into the model list and the headline state is
+    reclassified from the merged list; classifying only the preflight list would let a
+    fully-prepared model with no staged weights pass as ready.
+    """
+    from dataclasses import replace
+    from pathlib import Path as _Path
+
+    config = replace(resolve_config(), WORKBENCH_CHECKPOINT_ROOT=_Path(tmp_path) / "empty")
+    config.WORKBENCH_CHECKPOINT_ROOT.mkdir(parents=True, exist_ok=True)
+    entry = pcr.model_section(_model("limn"), config)
+    assert any("checkpoint missing" in b for b in entry["blockers"])
+    assert entry["state"] != pcr.READY_FOR_FULL_EVALUATION, entry["state"]
+
 def test_the_cli_runs_read_only_and_emits_json(capsys):
     import json
 

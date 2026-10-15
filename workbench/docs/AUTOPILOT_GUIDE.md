@@ -188,6 +188,13 @@ The consolidated report records real aggregate metrics:
 - Audit trail: `evaluation_duration_seconds`, `completion_proof` path, `aggregate_report` path;
 - Evaluation kind: `SYNTHETIC` or `OFFICIAL_VERIFIED`.
 
+`OFFICIAL_VERIFIED` records how the run was produced (a real execution, not a synthetic replay);
+it is independent of the paper-gate verdict: whether the checkpoint-to-paper mapping was verified
+lives in `benchmark_gate` (`checkpoint_mapping_verified` / `PASS_METRICS_ONLY_MAPPING_UNVERIFIED`),
+not in this field. Known drift point: the `"VERIFIED_METADATA"` mapping literal is compared at a
+dozen sites across `workbench/`; `checkpoint_selection._VERIFIED_MAPPING` exists and should be the
+single constant if that vocabulary ever changes.
+
 Metrics conventions:
 - Absent values are `null` with a recorded reason (`missing_metrics_reason`), never zero.
 - Evaluated models are marked `aggregate_only: true`; per-query export unavailability is explicitly stated (`per_query_export_available: false`).

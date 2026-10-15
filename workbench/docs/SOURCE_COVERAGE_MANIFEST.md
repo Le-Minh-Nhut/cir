@@ -1,31 +1,18 @@
-# Production source coverage manifest
-
-Regenerated against the working tree of `research/cir-failure-workbench` (post final-audit round),
-superseding the frozen-revision manifest of `9d35861bdcc18183015e1aba02052ffd4c8f99f0`. Every
-production Python file under `workbench/` and `src/` is listed with its content digest, so a
-reviewer can confirm the reviewed bytes are the shipped bytes once the branch is committed.
-
-`workbench/third_party/` checkouts are excluded (they are pinned by `upstream_commit_sha` in the
-registry and verified by `source_clean_and_pinned` at runtime, not by this manifest). Test files
-are listed with `TESTED_PATH` status; production files carry `FULLY_REVIEWED` or
-`REVIEWED_REACHABLE_PATHS` as in the previous manifest generation. YAML registries and frontend
-TypeScript are digested in the commit itself.
-
-| File | Subsystem | Lines | sha256[:16] | Status |
-|---|---|---|---|---|
-| `src/cache/features.py` | legacy evaluation | 186 | `5df907e14c7f5a00` | REVIEWED_REACHABLE_PATHS |
-| `src/cache/__init__.py` | legacy evaluation | 0 | `e3b0c44298fc1c14` | REVIEWED_REACHABLE_PATHS |
-| `src/datasets/cirr.py` | legacy evaluation | 254 | `9a2f7f00933f8056` | REVIEWED_REACHABLE_PATHS |
-| `src/datasets/common.py` | legacy evaluation | 92 | `9155cce5422c13d0` | REVIEWED_REACHABLE_PATHS |
-| `src/datasets/fashioniq.py` | legacy evaluation | 336 | `9b3594add3aeb8cc` | REVIEWED_REACHABLE_PATHS |
-| `src/datasets/__init__.py` | legacy evaluation | 0 | `e3b0c44298fc1c14` | REVIEWED_REACHABLE_PATHS |
-| `src/evaluation/cirr_encoder.py` | legacy evaluation | 368 | `7d67a0ccf30c0954` | REVIEWED_REACHABLE_PATHS |
-| `src/evaluation/cirr.py` | legacy evaluation | 203 | `77992a19b3fcce83` | REVIEWED_REACHABLE_PATHS |
-| `src/evaluation/fashioniq_encoder.py` | legacy evaluation | 149 | `f8ba120dbbe77f22` | REVIEWED_REACHABLE_PATHS |
-| `src/evaluation/fashioniq.py` | legacy evaluation | 344 | `e7884e71a7a74ded` | REVIEWED_REACHABLE_PATHS |
-| `src/evaluation/__init__.py` | legacy evaluation | 0 | `e3b0c44298fc1c14` | REVIEWED_REACHABLE_PATHS |
-| `workbench/backend/adapters/base.py` | backend | 43 | `e704de37bfe83e3c` | FULLY_REVIEWED |
+| `src/cache/__init__.py` | src/cache | 0 | `e3b0c44298fc1c14` | REVIEWED_REACHABLE_PATHS |
+| `src/cache/features.py` | src/cache | 186 | `5df907e14c7f5a00` | REVIEWED_REACHABLE_PATHS |
+| `src/datasets/__init__.py` | src/datasets | 0 | `e3b0c44298fc1c14` | REVIEWED_REACHABLE_PATHS |
+| `src/datasets/cirr.py` | src/datasets | 254 | `9a2f7f00933f8056` | REVIEWED_REACHABLE_PATHS |
+| `src/datasets/common.py` | src/datasets | 92 | `9155cce5422c13d0` | REVIEWED_REACHABLE_PATHS |
+| `src/datasets/fashioniq.py` | src/datasets | 336 | `9b3594add3aeb8cc` | REVIEWED_REACHABLE_PATHS |
+| `src/evaluation/__init__.py` | src/evaluation | 0 | `e3b0c44298fc1c14` | REVIEWED_REACHABLE_PATHS |
+| `src/evaluation/cirr.py` | src/evaluation | 203 | `77992a19b3fcce83` | REVIEWED_REACHABLE_PATHS |
+| `src/evaluation/cirr_encoder.py` | src/evaluation | 368 | `7d67a0ccf30c0954` | REVIEWED_REACHABLE_PATHS |
+| `src/evaluation/fashioniq.py` | src/evaluation | 344 | `e7884e71a7a74ded` | REVIEWED_REACHABLE_PATHS |
+| `src/evaluation/fashioniq_encoder.py` | src/evaluation | 149 | `f8ba120dbbe77f22` | REVIEWED_REACHABLE_PATHS |
+| `workbench/__init__.py` | workbench | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
+| `workbench/backend/__init__.py` | backend | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
 | `workbench/backend/adapters/__init__.py` | backend | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
+| `workbench/backend/adapters/base.py` | backend | 43 | `e704de37bfe83e3c` | FULLY_REVIEWED |
 | `workbench/backend/adapters/models.py` | backend | 197 | `5814f5607a874cf6` | FULLY_REVIEWED |
 | `workbench/backend/analysis.py` | backend | 93 | `041b09a0a9380eca` | FULLY_REVIEWED |
 | `workbench/backend/autopilot.py` | backend | 1210 | `00ca87a6be1500fc` | FULLY_REVIEWED |
@@ -35,21 +22,19 @@ TypeScript are digested in the commit itself.
 | `workbench/backend/errors.py` | backend | 14 | `d1d038737778b3e1` | FULLY_REVIEWED |
 | `workbench/backend/fashioniq_layout.py` | backend | 140 | `4e8d3b77ec7dca49` | FULLY_REVIEWED |
 | `workbench/backend/index.py` | backend | 110 | `6c72f8b8f7b95d6f` | FULLY_REVIEWED |
-| `workbench/backend/__init__.py` | backend | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
 | `workbench/backend/jobs.py` | backend | 333 | `cd3d1d066c615a4b` | FULLY_REVIEWED |
-| `workbench/backend/main.py` | backend | 324 | `59c1ecbc0a38ad7d` | FULLY_REVIEWED |
-| `workbench/backend/metrics_extraction.py` | backend | 411 | `5295bea9a91a6a7e` | FULLY_REVIEWED |
+| `workbench/backend/main.py` | backend | 361 | `2e808c406343580d` | FULLY_REVIEWED |
+| `workbench/backend/metrics_extraction.py` | backend | 422 | `21b887cf719667bd` | FULLY_REVIEWED |
 | `workbench/backend/operator_config.py` | backend | 108 | `46585f87a66db836` | FULLY_REVIEWED |
-| `workbench/backend/paper_gate.py` | backend | 388 | `e3099bd3564dc903` | FULLY_REVIEWED |
+| `workbench/backend/paper_gate.py` | backend | 419 | `2fa58f8c7f8ca218` | FULLY_REVIEWED |
 | `workbench/backend/preflight.py` | backend | 216 | `4ce00334cde37025` | FULLY_REVIEWED |
-| `workbench/backend/registry.py` | backend | 739 | `ec5e9b13e6f884de` | FULLY_REVIEWED |
+| `workbench/backend/registry.py` | backend | 743 | `fefa7e515b4303fb` | FULLY_REVIEWED |
 | `workbench/backend/runtime.py` | backend | 2155 | `a4f1423fd7d6fee0` | FULLY_REVIEWED |
 | `workbench/backend/schemas/__init__.py` | backend | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
 | `workbench/backend/schemas/results.py` | backend | 127 | `c145a75b38651da8` | FULLY_REVIEWED |
 | `workbench/backend/storage.py` | backend | 204 | `392aee56f29e1138` | FULLY_REVIEWED |
-| `workbench/__init__.py` | workbench | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
-| `workbench/replay/common.py` | replay | 108 | `4372af3f3fdacfb2` | FULLY_REVIEWED |
 | `workbench/replay/__init__.py` | replay | 0 | `e3b0c44298fc1c14` | FULLY_REVIEWED |
+| `workbench/replay/common.py` | replay | 108 | `4372af3f3fdacfb2` | FULLY_REVIEWED |
 | `workbench/replay/limn.py` | replay | 216 | `161c74038e447e0c` | FULLY_REVIEWED |
 | `workbench/replay/tgcir.py` | replay | 95 | `8c75201fc83268ed` | FULLY_REVIEWED |
 | `workbench/scripts/autopilot.py` | scripts | 12 | `6cce50aa2774bb11` | FULLY_REVIEWED |
@@ -58,14 +43,14 @@ TypeScript are digested in the commit itself.
 | `workbench/scripts/doctor.py` | scripts | 318 | `76587b4a67387f0d` | FULLY_REVIEWED |
 | `workbench/scripts/download_auxiliary_assets.py` | scripts | 448 | `a3a09ae058a71b4c` | FULLY_REVIEWED |
 | `workbench/scripts/download_checkpoints.py` | scripts | 266 | `d0471991776a6622` | FULLY_REVIEWED |
-| `workbench/scripts/evaluate_models.py` | scripts | 1843 | `d37c920fba78441a` | FULLY_REVIEWED |
+| `workbench/scripts/evaluate_models.py` | scripts | 1851 | `c44dcc538f6e7615` | FULLY_REVIEWED |
 | `workbench/scripts/load_mock_results.py` | scripts | 31 | `a03be7c4e947b7cb` | FULLY_REVIEWED |
 | `workbench/scripts/manage_environment.py` | scripts | 358 | `2492d3780eb65231` | FULLY_REVIEWED |
-| `workbench/scripts/pc_readiness.py` | scripts | 351 | `bebafa0bbe8e5e2c` | FULLY_REVIEWED |
+| `workbench/scripts/pc_readiness.py` | scripts | 395 | `a107f2dded176041` | FULLY_REVIEWED |
 | `workbench/scripts/pipeline.py` | scripts | 2340 | `aef3ca1b35f1bef5` | FULLY_REVIEWED |
 | `workbench/scripts/plan_environments.py` | scripts | 14 | `4de84777f64e07a3` | FULLY_REVIEWED |
 | `workbench/scripts/prepare_dataset.py` | scripts | 133 | `e695e333ffa78f69` | FULLY_REVIEWED |
-| `workbench/scripts/prepare_model.py` | scripts | 730 | `f657463147ac74e1` | FULLY_REVIEWED |
+| `workbench/scripts/prepare_model.py` | scripts | 753 | `218e473744ad97c3` | FULLY_REVIEWED |
 | `workbench/scripts/readiness_matrix.py` | scripts | 215 | `3523b123609401e8` | FULLY_REVIEWED |
 | `workbench/scripts/rebuild_index.py` | scripts | 35 | `b512573520fa4729` | FULLY_REVIEWED |
 | `workbench/scripts/run_eval.py` | scripts | 29 | `8fbae131d3db035f` | FULLY_REVIEWED |
@@ -77,7 +62,7 @@ TypeScript are digested in the commit itself.
 | `workbench/tests/_core_fixture.py` | tests | 34 | `fde5b566067422d8` | TESTED_PATH |
 | `workbench/tests/mock_data.py` | tests | 27 | `5a561676d08f48ff` | TESTED_PATH |
 | `workbench/tests/test_adversarial_environment.py` | tests | 222 | `369f25fcc8e8c63a` | TESTED_PATH |
-| `workbench/tests/test_adversarial_metrics.py` | tests | 193 | `9b19da22f0e77ee8` | TESTED_PATH |
+| `workbench/tests/test_adversarial_metrics.py` | tests | 202 | `a7f5bed8a9536855` | TESTED_PATH |
 | `workbench/tests/test_adversarial_orchestration.py` | tests | 164 | `152d0e23f0e21f9b` | TESTED_PATH |
 | `workbench/tests/test_adversarial_resume.py` | tests | 121 | `e30a6e0aa38fb82a` | TESTED_PATH |
 | `workbench/tests/test_approved_source_patch.py` | tests | 189 | `0d321db140b3592e` | TESTED_PATH |
@@ -91,33 +76,33 @@ TypeScript are digested in the commit itself.
 | `workbench/tests/test_backend_config_roots.py` | tests | 77 | `3ee11f197431b618` | TESTED_PATH |
 | `workbench/tests/test_bundle_selection.py` | tests | 27 | `9a8632d497cd3d3d` | TESTED_PATH |
 | `workbench/tests/test_checkpoint_download_publication.py` | tests | 302 | `5e5e1338a7993e31` | TESTED_PATH |
-| `workbench/tests/test_checkpoint_selection.py` | tests | 201 | `7822ea1c000c0e27` | TESTED_PATH |
+| `workbench/tests/test_checkpoint_selection.py` | tests | 202 | `d472307bfafbf67e` | TESTED_PATH |
 | `workbench/tests/test_concurrency_ownership.py` | tests | 116 | `3ca2b254cccbc742` | TESTED_PATH |
 | `workbench/tests/test_credential_boundary.py` | tests | 157 | `665c3a345a25977e` | TESTED_PATH |
 | `workbench/tests/test_csmcir_source_blocker.py` | tests | 83 | `0f6a435ad019f6fc` | TESTED_PATH |
 | `workbench/tests/test_doctor.py` | tests | 209 | `dfa6a4dfbb3b98d9` | TESTED_PATH |
 | `workbench/tests/test_download_auxiliary_assets.py` | tests | 942 | `b97c8c7db725744e` | TESTED_PATH |
 | `workbench/tests/test_environment_planner.py` | tests | 1367 | `aad0349e909ca8eb` | TESTED_PATH |
-| `workbench/tests/test_evaluate_models.py` | tests | 472 | `3b96e5df6828cbb0` | TESTED_PATH |
+| `workbench/tests/test_evaluate_models.py` | tests | 514 | `fac01b77dfd45233` | TESTED_PATH |
 | `workbench/tests/test_execution_graph_and_dependencies.py` | tests | 332 | `eb4795a9a4a197ab` | TESTED_PATH |
 | `workbench/tests/test_execution_identity.py` | tests | 205 | `5357fb239d524f33` | TESTED_PATH |
 | `workbench/tests/test_gpu_capability_host_identity.py` | tests | 90 | `4966da5252022d4a` | TESTED_PATH |
 | `workbench/tests/test_handoff_commands.py` | tests | 205 | `855c29b0ba42f90f` | TESTED_PATH |
-| `workbench/tests/test_http_api_layer.py` | tests | 243 | `de0c2805b872c14d` | TESTED_PATH |
+| `workbench/tests/test_http_api_layer.py` | tests | 304 | `07963add97e4f7df` | TESTED_PATH |
 | `workbench/tests/test_mutation_effectiveness.py` | tests | 260 | `12c8be71ba57df8c` | TESTED_PATH |
 | `workbench/tests/test_only_synthetic.py` | tests | 35 | `ef6baae79b3b9202` | TESTED_PATH |
 | `workbench/tests/test_operator_config.py` | tests | 44 | `bb7b6d227620607c` | TESTED_PATH |
 | `workbench/tests/test_operator_contracts.py` | tests | 123 | `bba7595350bcadf6` | TESTED_PATH |
 | `workbench/tests/test_operator_runtime.py` | tests | 133 | `ea76255be8ac942d` | TESTED_PATH |
 | `workbench/tests/test_operator_sync.py` | tests | 192 | `68f9bae17c68c734` | TESTED_PATH |
-| `workbench/tests/test_paper_gate.py` | tests | 545 | `0cd825b5f154bb0d` | TESTED_PATH |
-| `workbench/tests/test_pc_readiness.py` | tests | 137 | `fc842bd18399a344` | TESTED_PATH |
+| `workbench/tests/test_paper_gate.py` | tests | 594 | `0d68669e0f17a75c` | TESTED_PATH |
+| `workbench/tests/test_pc_readiness.py` | tests | 217 | `d3bd04a3baba7296` | TESTED_PATH |
 | `workbench/tests/test_phase1_acceptance_scenarios.py` | tests | 443 | `ff7de18d14201236` | TESTED_PATH |
 | `workbench/tests/test_phase1_integration_contracts.py` | tests | 451 | `b6eb9a5c2725a9a8` | TESTED_PATH |
 | `workbench/tests/test_pipeline.py` | tests | 780 | `8d6a91429e5ba861` | TESTED_PATH |
 | `workbench/tests/test_preflight_consistency.py` | tests | 139 | `e6f6ce4fc99b6987` | TESTED_PATH |
 | `workbench/tests/test_preparation_stages.py` | tests | 598 | `cb16960ffdebba7e` | TESTED_PATH |
-| `workbench/tests/test_prepare_dataset.py` | tests | 924 | `31a1e3c664aa4286` | TESTED_PATH |
+| `workbench/tests/test_prepare_dataset.py` | tests | 970 | `e21cc910eb771515` | TESTED_PATH |
 | `workbench/tests/test_process_group_cancellation.py` | tests | 207 | `46029686305c53c1` | TESTED_PATH |
 | `workbench/tests/test_production_stage_resume_invalidation.py` | tests | 132 | `fd34c0631aec16d9` | TESTED_PATH |
 | `workbench/tests/test_protocols.py` | tests | 148 | `b0d8448853d64f30` | TESTED_PATH |
@@ -137,5 +122,5 @@ TypeScript are digested in the commit itself.
 | `workbench/tests/test_strict_acceptance_matrix.py` | tests | 287 | `96f66ad1db2b58cd` | TESTED_PATH |
 | `workbench/tests/test_synthetic_reproduction_e2e.py` | tests | 281 | `19a3bbc8d25ecd19` | TESTED_PATH |
 | `workbench/tests/test_true_master_e2e.py` | tests | 333 | `ae71a10f4ac1febc` | TESTED_PATH |
-| `workbench/tests/test_workbench.py` | tests | 292 | `e3bfec939fcdd9b2` | TESTED_PATH |
+| `workbench/tests/test_workbench.py` | tests | 292 | `dcc24fbf035da887` | TESTED_PATH |
 | `workbench/tests/test_workflow_report_termination.py` | tests | 58 | `80e06c2ee0e1baaf` | TESTED_PATH |

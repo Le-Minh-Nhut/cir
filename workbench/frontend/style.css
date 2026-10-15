@@ -2,3 +2,8 @@
 .warning-label.amber { background: #b45309; color: #fff; }
 .warning-label.red { background: #b91c1c; color: #fff; }
 fieldset.deviation-threshold { display: flex; align-items: center; gap: .4rem; }
+details.gate-detail { margin: .35rem 0 0 1.6rem; font-size: .85rem; }
+details.gate-detail summary { cursor: pointer; color: var(--muted, #9198a1); }
+details.gate-detail table { border-collapse: collapse; margin: .4rem 0; }
+details.gate-detail th, details.gate-detail td { border: 1px solid #30363d; padding: .2rem .5rem; text-align: left; }
+details.gate-detail tr.deviating td { background: #3d1418; }
