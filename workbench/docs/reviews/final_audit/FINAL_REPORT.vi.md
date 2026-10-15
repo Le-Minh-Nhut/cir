@@ -132,3 +132,7 @@ pc_readiness.py, App.tsx, gate.ts, style.css, AUTOPILOT_GUIDE.md,
 PC_TRANSFER_CHECKLIST.md, PC_RELEASE_READINESS.md, FINAL_REPORT.vi.md,
 SOURCE_COVERAGE_MANIFEST.md regenerated, 5 test files) — manifest regen theo
 splitlines (126 rows, 0 mismatch machine check).
+
+Commit vòng 2: `a0f89a178982c276a4696b6087fd392032cb447b`
+(research/cir-failure-workbench, push từ 4143f11, không force-push).
+Manifest verify tại commit: 126 rows, 0 mismatch (commit không đổi bytes).
