@@ -1,14 +1,20 @@
 # FINAL_PC_ACCEPTANCE_REPORT.vi.md
 
 Báo cáo nghiệm thu phát hành cuối — CIR Failure Analysis Workbench
-Nhánh: `research/cir-failure-workbench` · HEAD: `abcd6e3` (nền `6e3c979`, `0b0f3a6`)
+Nhánh: `research/cir-failure-workbench` · HEAD: `a7081f0` (nền `c0c4438`, `abcd6e3`, `6e3c979`)
 
 ---
 
 ## 1. HEAD thực tế
 
-`abcd6e3` — "review: fourth-way adversarial review fixes (launcher, runtime, science, backend)".
-Trước đó: `6e3c979` (sáu audit + fix P0/P1 + `pc.sh`), `0b0f3a6` (báo cáo phát hành vòng trước).
+`a7081f0` — "fix(test): align the GPU-stage stub with verify_environment's real signature".
+Chuỗi commit phát hành: `6e3c979` (sáu audit + fix P0/P1 + `pc.sh`) → `abcd6e3` (fix vòng review
+thứ tư) → `c0c4438` (báo cáo nghiệm thu) → `a7081f0` (sửa stub chữ ký test, suite xanh hoàn toàn).
+
+Lưu ý trung thực: `a7081f0` sửa một **hồi quy do chính wave này gây ra** — tách
+advisory/authoritative thêm tham số `advisory` vào `verify_environment`, trong khi
+`test_gpu_verification_stage_state_machine` stub hàm đó bằng `lambda m, probe=True`. Test đã pass
+ở `0b0f3a6`, fail sau wave, nay đã sửa stub cho khớp chữ ký thật (giữ nguyên assertion).
 
 ## 2. Manifest độ phủ nguồn
 
@@ -79,6 +85,7 @@ Mỗi fix đều có test **fail-before / pass-after** (agent báo cáo lệnh v
 
 | Lệnh | Kết quả |
 |---|---|
+| **Full suite (loại 3 file e2e nặng)** | **951 passed, 0 failed** (27 deselected) |
 | `pytest test_pc_launcher test_final_hardening_regressions test_http_api_layer test_concurrency_ownership` | **72 passed** |
 | `pytest test_paper_gate test_runtime_adaptation test_release_blocker_*` | **126 passed** |
 | `bash workbench/docker/acceptance.sh` (live) | **ACCEPTANCE PASSED (skipped: G-status-unverified)** |
@@ -86,12 +93,22 @@ Mỗi fix đều có test **fail-before / pass-after** (agent báo cáo lệnh v
 | `bash workbench/docker/mutation_checks.sh` | **6/6 mutant DETECTED** |
 | `./pc.sh --self-check` | passed |
 | `./pc.sh --doctor` | 0.3 s, read-only, báo đúng RTX 3050 (không phải 5070 Ti) |
+| `./pc.sh --verify-only` | rc=1 + tóm tắt lỗi tiếng Việt (fail-closed, thiếu toolkit) |
+| `./pc.sh --help` | rc=0 |
+
+Suite đầy đủ chạy hai lần: lần đầu 950/951 (một hồi quy stub chữ ký), sau khi sửa `a7081f0`
+chạy lại **951 passed, 0 failed**.
 
 ## 7. Bằng chứng build Docker
 
-Image build từ `workbench/docker/Dockerfile` với các thay đổi `appuser`/`/opt/mamba`.
-Container chạy uid 1000 xác nhận: `HOME=/home/appuser`, `/artifacts/config` ghi được,
-`node_modules` ghi được, `/opt/mamba` ghi được.
+Image build từ `workbench/docker/Dockerfile` (đổi `appuser` + `/opt/mamba`), tag
+`cir-workbench:final`. Container chạy uid 1000 xác nhận: `HOME=/home/appuser`,
+`MAMBA_ROOT_PREFIX=/opt/mamba`, `/artifacts/config` ghi được, `node_modules` ghi được,
+`/opt/mamba` ghi được. **uid 4242 (tuỳ ý) cũng tạo được prefix micromamba** — trước đây thư mục
+`/artifacts/mamba` nằm trong bind mount nên bị che và chỉ uid 1000 mới dùng được.
+
+Boot smoke image cuối: backend 200, `/api/models` **1.18 s** cho 16 model, `/api/jobs` 200,
+frontend 200.
 
 ## 8. Test launcher PC
 
