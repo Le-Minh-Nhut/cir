@@ -33,17 +33,44 @@ Nhánh: `research/cir-failure-workbench` · Căn cứ: base `cf6cc1e8f3475a3f21e
 | I | Report malformed | Đã có normalization từ vòng trước | Đã verify: 14 test `test_http_api_layer.py` pass |
 | J | Docs/manifest lệch code | Provenance | `SOURCE_COVERAGE_MANIFEST.md` regen: 126 file, machine-verify 0 mismatch |
 
-## 3. Docker deliverables
+## 3. Vòng review độc lập (DeepSeek) và xử lý
+
+Ba reviewer độc lập chạy trên DeepSeek V4.1-Flash (subagent `v41audit`): Sci (khoa học/gate),
+Deploy (triển khai Docker), UX (giao diện/nhãn). Kết quả + xử lý:
+
+| Reviewer | Phát hiện chính | Xử lý |
+|---|---|---|
+| Sci | SCI-1 P1: `paper_gate.py` early-return khi `reproduced_metrics` rỗng làm bỏ qua bằng chứng category → fixed: aggregate-None không xoá category evidence, deviations vẫn surface (ALERT_METRIC_DEVIATION); +2 regression test | ✅ |
+| Sci | SCI-2 P2: `adapted_runtime` không vào `VARIANT_KEYS` | ✅ `declared_variant` trong run_meta bao gồm adapted_runtime; chạy adapted có nhãn variant, không tạo nhãn cảnh báo thứ ba |
+| Sci | SCI-3 P2: run_meta hardcode `evaluation_noise_pct`/`split` | ✅ `evaluation_noise_pct` derive từ protocol của registry; `split` giữ "val" — là cohort annotation (RESULT_SCHEMA v2), `literature_split_label` là vocabulary riêng, reference rows cũng ghi `split: val` cho cả 3 protocol |
+| Sci | SCI-4 P3: comment registry sai `sm_120_blackwell` | ✅ sửa thành `sm_120` |
+| Deploy | B1 P0: 13 key trong `workbench.env.example` thiếu trong `operator_config._KEYS` → ValueError khi import | ✅ mở `_KEYS` (5 weights + 14 `WORKBENCH_*_PYTHON`) |
+| Deploy | B2 P1: capability record forged/HMAC-valid có thể promote GPU_READY | ✅ `_cached_gpu_capability` từ chối record có `probe_source != "interpreter"` trừ khi `WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE=1` (chỉ test dùng) |
+| Deploy | B3 P1: `run.sh pilot` hardcode `fashioniq_original_split` | ✅ derive `protocol_id` từ `/api/models` `native_protocol`, thông điệp 409 rõ hơn |
+| Deploy | B5 P2: compose override `WORKBENCH_BACKEND_PORT` phá proxy | ✅ compose set `WORKBENCH_BACKEND_PORT=8000` + `WORKBENCH_BACKEND_URL` khớp container |
+| Deploy | B6 P2: `workbench/docker/.dockerignore` chết | ✅ xoá (root `.dockerignore` là file thật) |
+| Deploy | B8/B9 P3: `.git` excluded → provenance `?`; 821 record gpu_capabilities forged từ test | B8 ghi nhận trong quickstart (không bloat image); B9 để nguyên — B2 đã vô hiệu hoá tác dụng của record forged |
+| UX | UX-P0-1: nút cancel thiếu `preparing` | ✅ cancel set `["queued","preparing","running"]` |
+| UX | UX-P1-4: lỗi runs không attribution | ✅ prefix `runs: ${e.message}` |
+| UX | UX-P1-2: filter null ref | FALSE POSITIVE — `MetricComparison.to_dict` luôn emit key, reduce có guard |
+| UX | UX-P2-10: GateDetail category null | ✅ skip null + "(no recorded values)" |
+| UX | UX-P2-11: quickstart thiếu enum trạng thái | ✅ thêm đủ 7 trạng thái |
+| Cả ba | acceptance.sh cũ: nhóm D/E quảng cáo nhưng không chạy thật | ✅ viết lại nhóm A–I thật: B per-endpoint, C live config, D `pc_readiness --config` (schema_version/selected_models/permissions allow_*/budgets), E no-GPU-ready-without-probe, SKIP trung thực |
+
+Acceptance chạy 2 lần trên container thật (ports 18001/15173): **tất cả nhóm A–I PASS**,
+exit 0. Offline (không server): PASS với SKIP trung thực, exit 0.
+
+## 4. Docker deliverables
 
 - `workbench/docker/Dockerfile` — 3 stage: node build frontend → python runtime + node (vite
   preview serve dist, proxy `/api`), `python -m uvicorn`.
 - `workbench/docker/docker-compose.yml` — volumes: dataset (ro), third_party, checkpoints,
   artifacts, results; GPU block commented + hướng dẫn bật.
-- `workbench/docker/.dockerignore`, `.env.example` (HOST_* cho mount, WORKBENCH_* cho in-container).
+- `workbench/docker/.env.example` (HOST_* cho mount, WORKBENCH_* cho in-container).
 - `workbench/docker/run.sh` — `up / doctor / pilot limn|csmcir / status / logs / stop`.
 - `workbench/docker/acceptance.sh` — nhóm test A–I chạy được; đã chạy trên container thật: PASS.
 
-## 4. Bằng chứng GPU (trung thực)
+## 5. Bằng chứng GPU (trung thực)
 
 | Kiểm tra | Kết quả |
 |---|---|
@@ -55,7 +82,7 @@ Nhánh: `research/cir-failure-workbench` · Căn cứ: base `cf6cc1e8f3475a3f21e
 Hướng dẫn trên PC đích: `workbench/docs/PC_DOCKER_QUICKSTART.md` (cài toolkit → bỏ comment GPU
 block → `run.sh doctor` → `run.sh pilot limn`).
 
-## 5. Điều kiện nâng lên RELEASE_READY
+## 6. Điều kiện nâng lên RELEASE_READY
 
 1. Trên PC có RTX 5070 Ti: `run.sh up && run.sh doctor` → doctor báo GPU visible.
 2. Chuẩn bị model đầu tiên (LIMN ưu tiên 1, CSMCIR ưu tiên 2).
@@ -64,7 +91,7 @@ block → `run.sh doctor` → `run.sh pilot limn`).
 4. Bật `WORKBENCH_RUNTIME_ADAPTATION=sm_120` nếu dùng torch hiện đại cho LIMN; run report sẽ
    mang nhãn ADAPTED_RUNTIME, không phải exact reproduction.
 
-## 6. Ràng buộc scientific đã giữ
+## 7. Ràng buộc scientific đã giữ
 
 - **Ghi chú test:** lần chạy full-suite đầu tiên có 13 test fail — toàn bộ do hết đĩa
   (`OSError: [Errno 28] No space left on device`, Docker image chiếm chỗ). Sau khi giải phóng
