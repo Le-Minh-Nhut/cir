@@ -1400,7 +1400,9 @@ def probe_gpu_capability(model_id: str, config: WorkbenchConfig | None = None) -
         capability = runtime.verify_gpu_runtime(
             model, cfg, authorized=True, require_cuda=True, force=False
         )
-        print(f"[OK] GPU capability verified and recorded: {capability.get('capability_key')}")
+        print(f"[OK] GPU capability verified and recorded for {model_id}: "
+              f"cuda={capability.get('cuda_available')} verified={capability.get('capability_verified')} "
+              f"compute_capability={capability.get('compute_capability')}")
         return 0
     except (runtime.GpuVerificationError, RuntimeError, Exception) as exc:
         print(f"[BLOCKED] GPU verification failed: {exc}", file=sys.stderr)

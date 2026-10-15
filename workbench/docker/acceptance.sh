@@ -95,7 +95,11 @@ fi
 
 say "== G job status contract =="
 if live; then
-    "$PY" - "$BASE" <<'EOF' || FAILED+=("G-status")
+    # The exit code must be captured from the check itself: appending to FAILED inside a `||`
+    # fallback runs the assignment as part of the compound list, so `$?` afterwards is the
+    # assignment's status (0) and the SKIP branch was unreachable — an unscannable state was
+    # reported as a failure instead.
+    "$PY" - "$BASE" <<'EOF'
 import json, sys, urllib.request
 jobs = json.load(urllib.request.urlopen(sys.argv[1] + "/api/jobs", timeout=30))
 allowed = {"queued","preparing","running","blocked","completed","failed","cancelled"}
@@ -156,9 +160,15 @@ registry = yaml.safe_load(open(f"{repo}/workbench/registry/models.yaml", encodin
 declared = {m["model_id"]: m for m in registry["models"]}
 served_ids = {m["model_id"] for m in served}
 assert served_ids == set(declared), f"served models differ from registry: {sorted(served_ids ^ set(declared))}"
+# A registry row may legitimately declare NO runnable protocol (ptha_mtst is a
+# source_blocker row), so the check is equality with the declaration, not presence.
 for m in served:
-    assert m.get("native_protocol"), f"{m['model_id']}: native_protocol missing"
-    assert m.get("environment", {}).get("python_env_var"), f"{m['model_id']}: environment declaration missing"
+    row = declared[m["model_id"]]
+    assert m.get("native_protocol") == row.get("native_protocol"), \
+        f"{m['model_id']}: native_protocol {m.get('native_protocol')!r} != registry {row.get('native_protocol')!r}"
+    assert (m.get("environment") or {}).get("python_env_var") == \
+        (row.get("environment") or {}).get("python_env_var"), \
+        f"{m['model_id']}: environment declaration differs from the registry"
 print(f"OK {len(served)} models, ids/protocols/environments match the registry")
 EOF
 )"

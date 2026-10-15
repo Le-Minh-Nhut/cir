@@ -49,17 +49,22 @@ RUN python -m pip install --no-cache-dir \
     "torch==2.14.0" "torchvision==0.29.0"
 
 # The compose file runs the container as the operator's uid (WORKBENCH_UID/GID, default
-# 1000:1000) so files written into host bind mounts are not owned by root. The runtime
-# user needs: a real HOME (user caches resolve under it), a writable micromamba root
-# (MAMBA_ROOT_PREFIX, inside the artifacts bind mount), and write access to node_modules
-# (vite preview creates .vite-temp there). 1000 is the compose default; an operator with a
-# different uid rebuilds or overrides both values together.
+# 1000:1000) so files written into host bind mounts are not owned by root. The runtime user
+# needs: a real HOME (user caches resolve under it), a writable micromamba root, and write
+# access to node_modules (vite preview creates .vite-temp there).
+#
+# The micromamba root is a container-local solver cache, NOT a mount point: /artifacts is a
+# host bind mount, so a directory baked into it would be shadowed by the mount and its
+# ownership would come from the host — leaving an operator whose uid is not 1000 unable to
+# create the prefix. It is 0777 inside the image instead, which makes provisioning work for
+# any uid the compose file selects.
 RUN useradd --create-home --uid 1000 --user-group appuser \
-    && mkdir -p /artifacts/mamba \
-    && chown -R 1000:1000 /repo/workbench/frontend/node_modules /artifacts
+    && mkdir -p /opt/mamba \
+    && chmod 0777 /opt/mamba \
+    && chown -R 1000:1000 /repo/workbench/frontend/node_modules
 
 ENV HOME=/home/appuser \
-    MAMBA_ROOT_PREFIX=/artifacts/mamba \
+    MAMBA_ROOT_PREFIX=/opt/mamba \
     PYTHONUNBUFFERED=1 \
     CIR_REPO_ROOT=/repo \
     CIR_DATA_ROOT=/data \

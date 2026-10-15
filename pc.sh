@@ -287,13 +287,16 @@ run_preflight() {
     fi
     free_disk_gb="$(printf '%s' "$free_disk_raw" | sed 's/[^0-9]//g')"
     free_disk_gb="${free_disk_gb:-0}"
-    if (( free_disk_gb >= 20 )); then
+    # LIMN alone needs ~5.4 GB for its three checkpoints plus environment and cache headroom;
+    # a run that passes preflight and then dies of ENOSPC mid-download wastes hours. The floor
+    # is therefore the real working minimum, not an arbitrary small number.
+    if (( free_disk_gb >= 50 )); then
         say "[OK] Dung lượng đĩa trống  : ${free_disk_gb} GB khả dụng tại ${REPO_ROOT}"
-    elif (( free_disk_gb >= 10 )); then
-        say "[OK] Dung lượng đĩa trống  : ${free_disk_gb} GB khả dụng — khuyến nghị >= 20 GB cho checkpoint và cache"
+    elif (( free_disk_gb >= 25 )); then
+        say "[OK] Dung lượng đĩa trống  : ${free_disk_gb} GB khả dụng — đủ cho LIMN; khuyến nghị >= 50 GB cho model khác và cache"
     else
-        say "[FAIL] Dung lượng đĩa trống  : ${free_disk_gb} GB (thấp hơn mức tối thiểu 10 GB)"
-        say "       Khắc phục            : Dọn dẹp phân vùng đĩa (docker system prune, giải phóng dung lượng đĩa)"
+        say "[FAIL] Dung lượng đĩa trống  : ${free_disk_gb} GB (thấp hơn mức tối thiểu 25 GB)"
+        say "       Khắc phục            : giải phóng dung lượng (docker system prune; xoá checkpoint không dùng) rồi chạy lại ./pc.sh"
         has_errors=1
     fi
 
@@ -399,7 +402,11 @@ run_preflight() {
         say "[SKIP] NVIDIA Container RT  : Bỏ qua do cờ --no-gpu được kích hoạt"
     else
         local has_nvidia_rt=0
-        if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"' || docker info 2>/dev/null | grep -iq nvidia; then
+        # The runtime name must appear in the registered-runtimes object. Matching the word
+        # "nvidia" anywhere in `docker info` also matches the GPU model, the driver version and
+        # unrelated plugin strings, so an operator without the toolkit would be told the runtime
+        # is configured.
+        if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"'; then
             has_nvidia_rt=1
         fi
         if (( has_nvidia_rt == 1 )); then
@@ -846,6 +853,9 @@ except Exception:
     local run_id_from_job=""
     while (( SECONDS - start_sec < TIMEOUT )); do
         # Query /api/jobs list first (canonical in run.sh/API), fallback to individual job endpoint
+        # The job's OWN record, never a substitute. Falling back to another job's entry would
+        # report that job's terminal status for a job that may never have run — a fabricated
+        # success. Absent means unknown, and the loop keeps waiting.
         job_json="$(curl -s --max-time 15 "${base}/api/jobs" 2>/dev/null | python3 -c "
 import json, sys
 job_id = sys.argv[1]
@@ -855,8 +865,6 @@ try:
         target = next((j for j in jobs if j.get('job_id') == job_id), None)
         if target:
             print(json.dumps(target))
-        elif jobs:
-            print(json.dumps(jobs[0]))
 except Exception:
     pass
 " "$job_id" 2>/dev/null || true)"
