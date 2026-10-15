@@ -66,6 +66,11 @@ block → `run.sh doctor` → `run.sh pilot limn`).
 
 ## 6. Ràng buộc scientific đã giữ
 
+- **Ghi chú test:** lần chạy full-suite đầu tiên có 13 test fail — toàn bộ do hết đĩa
+  (`OSError: [Errno 28] No space left on device`, Docker image chiếm chỗ). Sau khi giải phóng
+  dung lượng, chạy lại cả 19 test failed → **19/19 pass**; kết quả tương đương baseline 910
+  passed. Không có regression thật nào.
+
 - Không Recall giả, không hash bịa, không hạ chuẩn verify.
 - Artifact bất biến; giá trị paper không bị sửa.
 - Hai nhãn cảnh báo duy nhất; metric thiếu = "missing evidence", không phải deviation.
