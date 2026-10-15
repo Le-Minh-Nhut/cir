@@ -114,3 +114,80 @@ def test_independent_workspaces_do_not_block(tmp_path: Path):
     assert pb.returncode == 0, f"independent workspace blocked: {out_b} {err_b}"
     pa.communicate(timeout=30)
     assert pa.returncode == 0
+
+# ------------------------------------------------------------------------- shutdown ownership
+
+def _alive(pid: int) -> bool:
+    """Liveness from the kernel, so a reaped child cannot be mistaken for a running one."""
+    import os
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+def test_shutdown_terminates_every_live_job_process_group(tmp_path: Path):
+    """A job leads its own session (`start_new_session=True`), so the SIGTERM that `docker stop`
+    sends to the backend never reaches it: without a shutdown path the evaluator child survived
+    the process and kept the GPU. This spawns a real operator with a real sleeping grandchild —
+    neither ignores SIGTERM — and asserts the whole group is gone after shutdown() returns."""
+    import os
+    import sys
+    import time
+
+    from workbench.backend.jobs import SingleGpuQueue
+
+    script = tmp_path / "operator_process.py"
+    script.write_text(
+        "import subprocess, sys, time\n"
+        f"child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+        f"open({str(tmp_path / 'grandchild.pid')!r}, 'w').write(str(child.pid))\n"
+        "time.sleep(60)\n")
+    queue = SingleGpuQueue()
+    queue.GRACE_SECONDS = 2.0
+    job = queue.enqueue("m", "c", "p", [sys.executable, str(script)], tmp_path,
+                        tmp_path / "queue_jobs" / "shutdown", {})
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline and not (tmp_path / "grandchild.pid").exists():
+        time.sleep(0.02)
+    assert (tmp_path / "grandchild.pid").is_file(), "fixture never started"
+    # The pid file appears before the operator reports `running`; wait for the dispatch itself.
+    while time.monotonic() < deadline:
+        status = next(item["status"] for item in queue.list() if item["job_id"] == job["job_id"])
+        if status == "running":
+            break
+        time.sleep(0.02)
+    assert status == "running", status
+    grandchild = int((tmp_path / "grandchild.pid").read_text())
+    group = queue._process_groups[job["job_id"]]
+    assert _alive(grandchild), "the fixture's grandchild is not running"
+
+    survivors = queue.shutdown()
+
+    assert survivors == [], f"a group survived shutdown: {survivors}"
+    assert not _alive(grandchild), "the evaluator grandchild outlived the backend shutdown"
+    try:
+        os.killpg(group, 0)
+        alive_group = True
+    except ProcessLookupError:
+        alive_group = False
+    assert not alive_group, "the job's process group still has a member"
+    record = next(item for item in queue.list() if item["job_id"] == job["job_id"])
+    assert record["status"] == "cancelled", record
+
+def test_shutdown_stops_the_worker_thread(tmp_path: Path):
+    """The worker thread waits on the queue condition forever; shutdown must wake it, or the
+    process it is joined from hangs instead of exiting."""
+    import time
+
+    from workbench.backend.jobs import SingleGpuQueue
+
+    queue = SingleGpuQueue()
+    assert queue._worker.is_alive()
+    assert queue.shutdown() == []
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and queue._worker.is_alive():
+        time.sleep(0.05)
+    assert not queue._worker.is_alive(), "the worker thread survived shutdown"

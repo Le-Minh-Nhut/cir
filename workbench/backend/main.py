@@ -60,6 +60,21 @@ def _startup() -> None:
     # with a different artifacts root must not key recovery to the import-time root.
     _recover_interrupted_jobs()
 
+@app.on_event("shutdown")
+def _shutdown() -> None:
+    """Stop every live job's process group before the process exits.
+
+    A job leads its own session (`start_new_session=True`), so the SIGTERM that `docker stop`
+    sends to the backend reaches this process alone: without this hook the operator's evaluator
+    child — the process that actually holds the GPU — survives the container and keeps holding
+    the device. The queue persists an honest terminal status for each job it stops; if the
+    backend is killed before the handshake runs, startup recovery still marks the record failed.
+    """
+    survivors = JOBS.shutdown()
+    if survivors:
+        logging.getLogger("workbench").warning(
+            "job process group(s) survived shutdown: %s", ", ".join(survivors))
+
 
 def _job_launch_guard(job: object) -> None:
     """Refuse to dispatch a queued evaluation whose runtime is no longer launch-ready.
@@ -368,6 +383,12 @@ class JobInput(BaseModel):
     top_k: int = Field(default=200, ge=1, le=200)
 
 
+def _duplicate_job_conflict(job_id: str, status: str) -> HTTPException:
+    """The one 409 shape a duplicate submission gets, wherever the duplicate is detected."""
+    return HTTPException(409, {"error": "duplicate_job",
+                               "message": "An identical job is already queued or running.",
+                               "details": {"job_id": job_id, "status": status}})
+
 @app.post("/api/jobs")
 def queue_job(payload: JobInput):
     registry = load_registry()
@@ -395,13 +416,16 @@ def queue_job(payload: JobInput):
     # One identical evaluation at a time: an identical model+checkpoint+protocol job already
     # queued or in flight would duplicate expensive GPU work and double-book the single GPU
     # slot. Finished jobs do not block re-running.
+    #
+    # This loop is a fast path *only*: it reads outside the queue lock, so a concurrent POST
+    # that appends in between is invisible here. The authoritative decision is the queue's
+    # (see `refuse_duplicate=True` below), made atomically with the append.
     for existing in JOBS.list():
         if (existing.get("status") in {"queued", "preparing", "running"}
                 and existing.get("model_id") == payload.model_id
                 and existing.get("checkpoint_id") == payload.checkpoint_id
                 and existing.get("protocol_id") == payload.protocol_id):
-            raise HTTPException(409, {"error": "duplicate_job", "message": "An identical job is already queued or running.",
-                                      "details": {"job_id": existing["job_id"], "status": existing["status"]}})
+            raise _duplicate_job_conflict(existing["job_id"], existing["status"])
     plan, blockers = guarded_plan(model, checkpoint, payload.protocol_id, dataset_root, payload.top_k, config)
     if plan is None:
         raise HTTPException(409, {"error": "evaluation_blocked", "message": "Official evaluation is not ready.", "details": {"blockers": blockers}})
@@ -436,8 +460,15 @@ def queue_job(payload: JobInput):
         "checkpoint_local_sha256": sha256_file(plan.checkpoint),
         "dataset_root": str(plan.dataset_root),
     }
-    return JOBS.enqueue(plan.model_id, plan.checkpoint_id, plan.protocol, argv, ROOT,
-                        job_directory, provenance)
+    try:
+        # `refuse_duplicate=True` is what actually holds: the check rides the queue's own lock,
+        # so two concurrent submissions of the same evaluation cannot both be appended.
+        return JOBS.enqueue(plan.model_id, plan.checkpoint_id, plan.protocol, argv, ROOT,
+                            job_directory, provenance, refuse_duplicate=True)
+    except DuplicateJobError as error:
+        # A duplicate that landed after the fast-path loop above is refused here, by the
+        # existing job's identity, so the operator still learns which job holds the GPU.
+        raise _duplicate_job_conflict(error.job_id, error.status) from error
 
 
 @app.post("/api/jobs/{job_id}/cancel")

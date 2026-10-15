@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+import sys
+import os
+import json
+
+log_file = os.environ.get("MOCK_LOG_FILE")
+if log_file:
+    try:
+        secrets = {
+            k: v for k, v in os.environ.items()
+            if any(p in k for p in ("TOKEN", "KEY", "SECRET", "LEDGER"))
+        }
+        with open(log_file, "a") as f:
+            f.write(json.dumps({"tool": "git", "args": sys.argv[1:], "secrets": secrets}) + "\n")
+    except Exception:
+        pass
+
+args_str = " ".join(sys.argv)
+if "--abbrev-ref" in args_str:
+    print("research/cir-failure-workbench")
+    sys.exit(0)
+
+if "rev-parse" in args_str:
+    print("0123456789abcdef0123456789abcdef01234567")
+    sys.exit(0)
+
+if "status" in args_str:
+    print("On branch research/cir-failure-workbench\nnothing to commit, working tree clean")
+    sys.exit(0)
+
+sys.exit(0)

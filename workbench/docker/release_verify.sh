@@ -489,19 +489,62 @@ for dim, spec in out["dimensions"].items():
 # GPU_RUNTIME claims PASS only with a real, interpreter-probed capability record
 # (probe_source == "interpreter"); the fail-closed contract (J5) alone is engineering
 # evidence, not GPU verification. Synthetic (override-source) records never count.
+#
+# An artifact that cannot be read is its own reported condition. It must never be swallowed
+# by the surrounding `except` and turned into real_gpu = False: a leftover 0-byte fixture or
+# a half-written record would then silently discard a genuine probe on the target host, and
+# the release would be capped at GPU_VALIDATION_PENDING for no stated reason. Such files are
+# named in the report and removed (they carry no evidence); a record whose own `capability_key`
+# names a different environment is not evidence either — the same binding runtime.py's
+# `_cached_gpu_capability` enforces when it reads a record back.
+import glob as _glob, json as _json
+from workbench.backend.operator_config import resolve_config as _rc
+from workbench.backend.runtime import gpu_capability_directory as _gcd
+real_gpu = False
+_unreadable: list[tuple[str | None, str]] = []
+_wrong_key: list[str] = []
 try:
-    import glob as _glob, json as _json
-    from workbench.backend.operator_config import resolve_config as _rc
-    from workbench.backend.runtime import gpu_capability_directory as _gcd
-    real_gpu = any(
-        isinstance(record := _load(p), dict)
-        and record.get("probe_source") == "interpreter"
-        and record.get("capability_verified") is True
-        for p in _glob.glob(str(_gcd(_rc()) / "*.json"))
-        for _load in (lambda path: _json.loads(open(path, encoding="utf-8").read()),)
-    )
-except Exception:
-    real_gpu = False
+    for _path in sorted(_glob.glob(str(_gcd(_rc()) / "*.json"))):
+        _capability_key = os.path.basename(_path)[:-len(".json")]
+        try:
+            with open(_path, encoding="utf-8") as _handle:
+                _record = _json.load(_handle)
+        except (OSError, ValueError) as _error:
+            _unreadable.append((_path, f"{type(_error).__name__}: {_error}"))
+            continue
+        if not isinstance(_record, dict):
+            _unreadable.append((_path, "not a JSON object"))
+            continue
+        # `record_gpu_capability` names each file after the capability key it describes, so a
+        # record whose own key differs — including the pre-per-key `gpu_capability.json`, which
+        # carries a key unrelated to its filename — is evidence for a different environment and
+        # fails closed rather than certifying this host.
+        if _record.get("capability_key") != _capability_key:
+            _wrong_key.append(_capability_key)
+            continue
+        if (_record.get("probe_source") == "interpreter"
+                and _record.get("capability_verified") is True):
+            real_gpu = True
+except Exception as _error:      # path/config resolution failed: nothing could be read
+    _unreadable.append((None, f"capability scan failed: {type(_error).__name__}: {_error}"))
+if _unreadable or _wrong_key:
+    _names = [os.path.basename(path) if path else reason for path, reason in _unreadable]
+    for _path, _ in _unreadable:
+        if _path:
+            try:
+                os.remove(_path)
+            except OSError:
+                pass
+    out["gpu_capability_scan"] = {"status": "UNREADABLE" if _unreadable else "WRONG_KEY",
+                                  "unreadable": _names, "wrong_key": _wrong_key,
+                                  "real_gpu": real_gpu}
+    _rule = "; ".join(
+        message for message in (
+            "unreadable capability artifact(s) (removed): " + "; ".join(_names) if _names else "",
+            "capability record(s) for a different environment: " + ", ".join(_wrong_key) if _wrong_key else "")
+        if message)
+    out["checks"]["J5"]["detail"] = (out["checks"]["J5"].get("detail") or "") + f" [WARN] {_rule}"
+    print(f"[WARN] {_rule}", file=sys.stderr)
 if not real_gpu:
     out["dimensions"]["GPU_RUNTIME"]["status"] = "PENDING"
 mandatory_pending = [d for d, spec in out["dimensions"].items()

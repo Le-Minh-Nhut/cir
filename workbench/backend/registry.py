@@ -270,7 +270,97 @@ def external_asset_blockers(model: dict[str, Any]) -> list[str]:
     ]
 
 
-def checkpoint_missing_paths(path: Path, checkpoint: dict[str, Any]) -> list[Path]:
+#: Digest cache for the availability view only. `checkpoint_availability` runs on every
+#: `/api/models` request and hashes whole checkpoints (LIMN's three are 1.79 GB each), which
+#: made a single request take ~85 s. The key carries size and mtime_ns, so a replaced or
+#: rewritten file rehashes; the authoritative hashing behind verification, receipts and the
+#: ledger is deliberately NOT cached and still reads every byte.
+_AVAILABILITY_DIGEST_CACHE: dict[tuple[str, int, int], str] = {}
+
+def _cached_availability_digest(path: Path, required_files: list[str] | None) -> str | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    key = (str(path), stat.st_size, stat.st_mtime_ns)
+    cached = _AVAILABILITY_DIGEST_CACHE.get(key)
+    if cached is None:
+        cached = sha256_file(path, required_files)
+        _AVAILABILITY_DIGEST_CACHE[key] = cached
+    return cached
+
+#: Recorded digests from the checkpoint download manifest, keyed by resolved destination.
+#: The manifest is written when the workbench itself downloads and verifies a file, so the
+#: availability view can report a digest without re-reading gigabytes on every request.
+#: A manifest claim is only reused while the file's size still matches the recorded size;
+#: anything else falls back to hashing the bytes.
+_CHECKPOINT_MANIFEST_CACHE: tuple[float, dict[str, dict[str, Any]]] | None = None
+
+def _recorded_checkpoint_digests(config: Any = None) -> dict[str, dict[str, Any]]:
+    global _CHECKPOINT_MANIFEST_CACHE
+    if config is None:
+        from workbench.backend.operator_config import resolve_config
+        config = resolve_config()
+    manifest_path = Path(config.WORKBENCH_CHECKPOINT_ROOT) / "download_manifest.json"
+    try:
+        mtime = manifest_path.stat().st_mtime
+    except OSError:
+        return {}
+    if _CHECKPOINT_MANIFEST_CACHE is not None and _CHECKPOINT_MANIFEST_CACHE[0] == mtime:
+        return _CHECKPOINT_MANIFEST_CACHE[1]
+    try:
+        entries = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    recorded: dict[str, dict[str, Any]] = {}
+    for entry in entries if isinstance(entries, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        key = _checkpoint_manifest_key(entry.get("model_id"), entry.get("filename"))
+        if key is not None:
+            recorded[key] = entry
+    _CHECKPOINT_MANIFEST_CACHE = (mtime, recorded)
+    return recorded
+
+def _checkpoint_manifest_key(model_id: Any, filename: Any) -> str | None:
+    """The manifest identifies a downloaded checkpoint by model id and file name; it predates
+    any `destination` field, so the key is built from the pair."""
+    if not isinstance(model_id, str) or not isinstance(filename, str):
+        return None
+    return f"{model_id}\0{filename}"
+
+def _availability_digest(config: Any = None, model_id: str = "", checkpoint: dict[str, Any] | None = None, path: Path | None = None) -> str | None:
+    """Digest for the availability view: the manifest's recorded hash when the file on disk
+    still has the size the manifest recorded, otherwise a real read of the bytes.
+
+    A bundle declaration hashes a set of member files with directory framing, which cannot be
+    reconstructed from per-file hashes, so those fall back to hashing (once per process).
+    """
+    if config is None:
+        from workbench.backend.operator_config import resolve_config
+        config = resolve_config()
+    if path is None or checkpoint is None:
+        return None
+    if checkpoint.get("bundle_members"):
+        return _cached_availability_digest(path, checkpoint.get("required_files"))
+    entry = _recorded_checkpoint_digests(config).get(
+        _checkpoint_manifest_key(model_id, checkpoint.get("filename") or path.name) or "")
+    if entry is not None:
+        recorded_sha = entry.get("downloaded_sha256")
+        recorded_size = entry.get("size_bytes")
+        try:
+            actual_size = path.stat().st_size
+        except OSError:
+            return None
+        if recorded_sha and recorded_size == actual_size:
+            return recorded_sha
+    return _cached_availability_digest(path, checkpoint.get("required_files"))
+
+def checkpoint_missing_paths(path: Path, checkpoint: dict[str, Any],
+                             model_id: str | None = None,
+                             config: Any = None) -> list[Path]:
+    if model_id is None:
+        model_id = checkpoint.get("model_id") or (path.parent.name if path.parent else None)
     artifact_type = checkpoint.get("artifact_type", "file")
     if artifact_type in {"run_directory", "bundle_directory", "bundle_placeholder"}:
         members = checkpoint.get("bundle_members")
@@ -285,19 +375,44 @@ def checkpoint_missing_paths(path: Path, checkpoint: dict[str, Any]) -> list[Pat
             except ValueError:
                 missing.append(member_path)
                 continue
-            if member_path.stat().st_size == 0:
+            try:
+                st = member_path.stat()
+            except OSError:
+                missing.append(member_path)
+                continue
+            if st.st_size == 0:
                 missing.append(member_path)
             else:
                 member = next((item for item in members or [] if item["filename"] == name), None)
                 expected_sha = member.get("expected_sha256") if member else None
-                if expected_sha and sha256_file(member_path) != expected_sha:
-                    missing.append(member_path)
+                if expected_sha:
+                    digest = None
+                    if model_id:
+                        entry = _recorded_checkpoint_digests(config).get(
+                            _checkpoint_manifest_key(model_id, name) or "")
+                        if entry is not None:
+                            recorded_sha = entry.get("downloaded_sha256")
+                            recorded_size = entry.get("size_bytes")
+                            if recorded_sha and recorded_size == st.st_size:
+                                digest = recorded_sha
+                    if digest is None:
+                        digest = sha256_file(member_path)
+                    if digest != expected_sha:
+                        missing.append(member_path)
         return missing
-    if not _regular_file(path) or path.stat().st_size == 0:
+    if not _regular_file(path):
+        return [path]
+    try:
+        st = path.stat()
+    except OSError:
+        return [path]
+    if st.st_size == 0:
         return [path]
     expected_sha = checkpoint.get("expected_sha256")
-    return [path] if expected_sha and sha256_file(path) != expected_sha else []
-
+    if not expected_sha:
+        return []
+    actual_sha = _availability_digest(config, model_id or "", checkpoint, path)
+    return [path] if actual_sha != expected_sha else []
 
 def _regular_file(path: Path) -> bool:
     return not path.is_symlink() and path.is_file()
@@ -320,16 +435,24 @@ def _safe_relative_file(root: Path, name: str) -> Path:
         raise ValueError(f"artifact member is not a regular file: {candidate}")
     return candidate
 
-def checkpoint_is_present(path: Path, checkpoint: dict[str, Any]) -> bool:
-    return not checkpoint_missing_paths(path, checkpoint)
+def checkpoint_is_present(path: Path, checkpoint: dict[str, Any],
+                         model_id: str | None = None,
+                         config: Any = None) -> bool:
+    return not checkpoint_missing_paths(path, checkpoint, model_id=model_id, config=config)
 
 
-def checkpoint_bundle_missing_paths(model: dict[str, Any], root: Path) -> dict[str, list[Path]]:
+def checkpoint_bundle_missing_paths(model: dict[str, Any], root: Path,
+                                    config: Any = None) -> dict[str, list[Path]]:
     variants = {checkpoint["checkpoint_id"]: checkpoint for checkpoint in model["checkpoint_variants"]}
     missing: dict[str, list[Path]] = {}
     for bundle in model.get("checkpoint_bundles", []):
         paths = [path for checkpoint_id in bundle["required_checkpoint_ids"]
-                 for path in checkpoint_missing_paths(checkpoint_path(model["model_id"], variants[checkpoint_id], root), variants[checkpoint_id])]
+                 for path in checkpoint_missing_paths(
+                     checkpoint_path(model["model_id"], variants[checkpoint_id], root),
+                     variants[checkpoint_id],
+                     model_id=model["model_id"],
+                     config=config,
+                 )]
         if paths:
             missing[bundle["bundle_id"]] = paths
     return missing
@@ -626,9 +749,29 @@ def model_by_id(model_id: str, registry: dict[str, Any] | None = None) -> dict[s
 
 
 def checkpoint_by_id(model: dict[str, Any], checkpoint_id: str) -> dict[str, Any]:
+    """Resolve a checkpoint selection to the record an evaluation runs against.
+
+    A declared bundle is a first-class selection (LIMN needs all three per-category
+    checkpoints for one complete macro result). The bundle is anchored on its first required
+    member so path/hash handling stays uniform, while `bundle_id` and the member list record
+    what was actually selected. Without this, every caller that goes through the adapter or
+    `run_eval.py` raised `KeyError` on a legitimate bundle id.
+    """
     for checkpoint in model["checkpoint_variants"]:
         if checkpoint["checkpoint_id"] == checkpoint_id:
             return checkpoint
+    for bundle in model.get("checkpoint_bundles") or []:
+        if bundle.get("bundle_id") != checkpoint_id:
+            continue
+        required = list(bundle.get("required_checkpoint_ids") or [])
+        if not required:
+            break
+        anchor = next((item for item in model["checkpoint_variants"]
+                       if item["checkpoint_id"] == required[0]), None)
+        if anchor is None:
+            break
+        return {**anchor, "checkpoint_id": bundle["bundle_id"],
+                "bundle_id": bundle["bundle_id"], "bundle_members": required}
     raise KeyError(checkpoint_id)
 
 
@@ -706,11 +849,11 @@ def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -
 
     config = resolve_config()
     path = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
-    downloaded = checkpoint_is_present(path, checkpoint)
+    downloaded = checkpoint_is_present(path, checkpoint, model_id=model["model_id"], config=config)
     required_files = checkpoint.get("required_files")
     if checkpoint.get("bundle_members"):
         required_files = [member["filename"] for member in checkpoint["bundle_members"]]
-    local_sha = sha256_file(path, required_files) if downloaded else None
+    local_sha = _availability_digest(config, model["model_id"], checkpoint, path) if downloaded else None
     official_sha = checkpoint.get("expected_sha256")
     official_sha_match = local_sha == official_sha if downloaded and official_sha else None
     mapping_verified = checkpoint["checkpoint_mapping_status"] == "VERIFIED_METADATA"

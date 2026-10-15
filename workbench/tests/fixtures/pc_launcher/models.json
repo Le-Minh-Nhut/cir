@@ -1,0 +1,44 @@
+[
+  {
+    "model_id": "limn",
+    "native_protocol": "fashioniq_val_split",
+    "checkpoints": [
+      {
+        "checkpoint_id": "base_iter0_dress",
+        "available": true
+      },
+      {
+        "checkpoint_id": "base_iter0_shirt",
+        "available": true
+      },
+      {
+        "checkpoint_id": "base_iter0_toptee",
+        "available": true
+      }
+    ],
+    "checkpoint_bundles": [
+      {
+        "bundle_id": "base_iter0_all_categories",
+        "required_checkpoint_ids": [
+          "base_iter0_dress",
+          "base_iter0_shirt",
+          "base_iter0_toptee"
+        ],
+        "structure": "category_specific_whole_models",
+        "mapping_status": "VERIFIED_METADATA",
+        "notes": "One independently trained whole-model checkpoint per FashionIQ category; all three are required for a complete macro result."
+      }
+    ]
+  },
+  {
+    "model_id": "csmcir",
+    "native_protocol": "fashioniq_original_split",
+    "checkpoints": [
+      {
+        "checkpoint_id": "fashioniq",
+        "available": true
+      }
+    ],
+    "checkpoint_bundles": []
+  }
+]

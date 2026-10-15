@@ -1,0 +1,403 @@
+# Hướng dẫn một lệnh duy nhất cho CIR Failure Analysis Workbench
+
+Tài liệu hướng dẫn dành cho nhà nghiên cứu Composed Image Retrieval (CIR). Toàn bộ quy trình từ chuẩn bị môi trường, kiểm chứng phần cứng, nạp dữ liệu đến đánh giá mô hình và trực quan hóa kết quả đều được tự động hóa thông qua một lệnh duy nhất. Bạn không cần can thiệp hay gỡ lỗi cấu hình Docker nội bộ.
+
+---
+
+## 1. Tổng quan
+
+CIR Failure Analysis Workbench là hệ thống phục vụ tái lập khoa học và phân tích lỗi cho các mô hình Composed Image Retrieval trên tập dữ liệu benchmark FashionIQ.
+
+- **Kho mã nguồn**: `https://github.com/Le-Minh-Nhut/cir`
+- **Nhánh nghiên cứu**: `research/cir-failure-workbench`
+- **Điểm vào duy nhất (Single Entrypoint)**: Tập lệnh `./pc.sh` nằm tại thư mục gốc của repository.
+
+Dưới nền tảng, `./pc.sh` đóng vai trò điều phối trung tâm. Script tự động gọi các công cụ quản trị cấp thấp hơn gồm `workbench/docker/run.sh` (`up|doctor|prepare <model>|pilot <model>|status|logs|stop`) và pipeline bên trong container `workbench/scripts/pipeline.py`. Bạn chỉ cần tương tác trực tiếp với giao diện của `./pc.sh`.
+
+---
+
+## 2. Yêu cầu phần cứng tối thiểu
+
+Hệ thống được thiết kế và kiểm chứng tối ưu cho cấu hình phần cứng:
+
+- **GPU mục tiêu**: NVIDIA GeForce RTX 5070 Ti (kiến trúc Blackwell, Compute Capability `sm_120`, 16 GB VRAM).
+- **Hệ điều hành**: Linux x86_64 (khuyến nghị Ubuntu 22.04 LTS hoặc Ubuntu 24.04 LTS).
+- **Phần mềm máy chủ (Host)**:
+  - NVIDIA Driver hỗ trợ CUDA 12.8 trở lên.
+  - Docker Engine (khuyến nghị phiên bản 24.0 trở lên) và plugin Docker Compose v2 (`docker compose`).
+  - `nvidia-container-toolkit` đã được cấu hình cho Docker runtime.
+- **Bộ nhớ RAM**: Tối thiểu 16 GB (khuyến nghị 32 GB).
+- **Dung lượng đĩa trống**: Tối thiểu 50 GB dung lượng khả dụng tại phân vùng làm việc để lưu trữ Docker image, dataset FashionIQ, checkpoints và artifacts.
+
+---
+
+## 3. Dữ liệu cần có sẵn
+
+Bộ dữ liệu FashionIQ cần được chuẩn bị sẵn trên máy host trước khi chạy đánh giá. Đường dẫn mặc định được cấu hình là `HOST_FASHIONIQ_ROOT=../../data/FashionIQ` (tính tương đối từ thư mục `workbench/docker/`).
+
+Cấu trúc thư mục dữ liệu yêu cầu:
+
+```text
+data/FashionIQ/
+├── images/
+│   ├── dress/
+│   ├── shirt/
+│   └── toptee/
+├── image_splits/
+│   ├── split.dress.val.json
+│   ├── split.shirt.val.json
+│   └── split.toptee.val.json
+└── captions/
+    ├── cap.dress.val.json
+    ├── cap.shirt.val.json
+    └── cap.toptee.val.json
+```
+
+**Bảo vệ dữ liệu chuẩn (DATA-02)**:
+Hai thư mục dữ liệu gốc `images/` và `image_splits/` được mount vào container ở chế độ chỉ đọc (**ro** - Read-Only) ở cấp kernel:
+- `/data/FashionIQ/images` (**ro**)
+- `/data/FashionIQ/image_splits` (**ro**)
+
+Mọi tiến trình trong container không thể can thiệp hay sửa đổi ảnh gốc. Các ảnh đã chuẩn hóa kích thước (resized) và dữ liệu dẫn xuất (`captions/correction_dict_*.json`) được lưu riêng tại `/data/FashionIQ/resized_image/` và thư mục `captions/`.
+
+---
+
+## 4. Chuẩn bị lần đầu
+
+### Bước 1: Lấy mã nguồn
+
+```bash
+git clone -b research/cir-failure-workbench https://github.com/Le-Minh-Nhut/cir
+cd cir
+```
+
+### Bước 2: Cấu hình môi trường
+
+Tập tin cấu hình chính đặt tại `workbench/docker/.env`. Nếu tập tin này chưa tồn tại, `./pc.sh` sẽ tự động khởi tạo từ bản mẫu `workbench/docker/.env.example`.
+
+Các biến cấu hình quan trọng trong `.env`:
+- `HOST_FASHIONIQ_ROOT`: Đường dẫn tới dataset FashionIQ trên host (mặc định `../../data/FashionIQ`).
+- `HOST_WORKBENCH_THIRD_PARTY_ROOT`: Thư mục lưu mã nguồn mô hình upstream (mặc định `../../workbench/third_party`).
+- `HOST_WORKBENCH_CHECKPOINT_ROOT`: Thư mục lưu trọng số mô hình (mặc định `../../workbench/artifacts/checkpoints`).
+- `HOST_WORKBENCH_ARTIFACTS_ROOT`: Thư mục lưu artifacts và reports (mặc định `../../workbench/artifacts`).
+- `HOST_WORKBENCH_RESULTS_ROOT`: Thư mục lưu kết quả đánh giá (mặc định `../../workbench/artifacts/results`).
+- `WORKBENCH_BACKEND_PORT`: Cổng dịch vụ Backend API trên host (mặc định `8000`).
+- `WORKBENCH_FRONTEND_PORT`: Cổng giao diện Web UI trên host (mặc định `5173`).
+- `WORKBENCH_UID` / `WORKBENCH_GID`: Định danh user và group trên host, bảo đảm các file kết quả ghi ra thuộc quyền sở hữu của bạn, không bị phân quyền root.
+- `WORKBENCH_ENABLE_GPU`: Thiết lập `1` để bật GPU.
+- `WORKBENCH_RUNTIME_ADAPTATION`: Thiết lập `sm_120` để kích hoạt runtime tương thích kiến trúc Blackwell cho các mô hình hỗ trợ.
+
+---
+
+## 5. MỘT LỆNH DUY NHẤT
+
+Tại thư mục gốc của repository, bạn chỉ cần thực thi một lệnh duy nhất:
+
+```bash
+./pc.sh
+```
+
+Đây là lệnh hoàn chỉnh cho toàn bộ quy trình nghiên cứu. Script sẽ tự động:
+1. Kiểm tra toàn bộ điều kiện tiên quyết phần cứng và phần mềm trên host.
+2. Thiết lập cấu hình mặc định (mô hình `limn`, `WORKBENCH_ENABLE_GPU=1`, `WORKBENCH_RUNTIME_ADAPTATION=sm_120`).
+3. Khởi chạy Docker stack trong chế độ nền và xác nhận dịch vụ sẵn sàng.
+4. Tải và kiểm tra mã băm của toàn bộ trọng số checkpoint chính thức.
+5. Kiểm chứng năng lực tính toán thật của GPU bên trong runtime mô hình.
+6. Xếp hàng và thực thi đánh giá mô hình LIMN trên tập FashionIQ val split.
+7. Đối chiếu kết quả với sổ cái bằng chứng và in báo cáo khoa học trực tiếp ra terminal.
+
+Bạn không cần cài đặt Python virtualenv hay bất kỳ package pip nào trên máy host.
+
+---
+
+## 6. Các giai đoạn thực thi
+
+Khi `./pc.sh` chạy, hệ thống sẽ tuần tự đi qua các giai đoạn nghiêm ngặt sau:
+
+1. **Preflight Check**:
+   - Thăm dò hệ điều hành Linux, driver NVIDIA và tên card qua `nvidia-smi`.
+   - Kiểm tra kết nối tới Docker daemon, plugin `docker compose`, và runtime `nvidia` trong `docker info`.
+   - Xác nhận dung lượng RAM và đĩa trống đạt ngưỡng an toàn.
+   - Kiểm tra các thư mục host và quyền sở hữu file.
+2. **Configuration Resolution**:
+   - Phân tích cú pháp nghiêm ngặt tập tin `workbench/docker/.env`.
+   - Khởi tạo giá trị mặc định cho mô hình LIMN nếu chưa có.
+3. **Dataset Verification**:
+   - Xác thực sự hiện diện và tính toàn vẹn của thư mục dataset FashionIQ cùng các thư mục con `images/`, `image_splits/`, `captions/`.
+4. **Docker Stack Startup**:
+   - Nạp cấu hình `docker-compose.yml` kết hợp override `docker-compose.gpu.yml`.
+   - Khởi động container `cir-workbench`.
+   - Thăm dò mức độ sẵn sàng thật (readiness polling) thông qua endpoint API `GET /api/models` và cổng frontend 5173 theo thời hạn định sẵn.
+5. **Model Preparation (LIMN)**:
+   - Đồng bộ mã nguồn upstream của LIMN vào thư mục `/third_party`.
+   - Thiết lập môi trường thực thi đã thích nghi (`sm_120` qua PyTorch >=2.7).
+   - Chuẩn bị dữ liệu FashionIQ derived (ảnh resized và correction dicts).
+   - Tải bộ trọng số checkpoint bundle `base_iter0_all_categories` (`0_dress_best_model.pt`, `0_shirt_best_model.pt`, `0_toptee_best_model.pt`) và đối chiếu mã băm SHA256 chính thức.
+6. **GPU Capability Verification**:
+   - Thực thi `probe_gpu_capability` bên trong container trực tiếp trên môi trường của LIMN.
+   - Kiểm tra tính toán tensor trên GPU và các file compiled ELF. Cơ chế fail-closed đảm bảo dừng ngay nếu không thể tính toán trên GPU thật.
+7. **Evaluation Execution**:
+   - Đưa job vào hàng đợi thông qua API Backend: `model_id=limn`, `checkpoint_id=base_iter0_all_categories`, `protocol_id=fashioniq_val_split`, `top_k=200`.
+   - Cơ chế phát hiện trùng lặp: nếu đã có job tương ứng đang chạy, script tự động theo dõi (attach) thay vì tạo job mới; nếu đã có kết quả hoàn tất có chứng thực, script tái sử dụng trừ khi có cờ `--force`.
+   - Theo dõi trạng thái job cho tới khi hoàn tất (`completed`, `failed`, `blocked`, `cancelled`).
+8. **Validation & Index Rebuild**:
+   - Đối chiếu báo cáo tổng hợp với sổ cái bằng chứng `evidence_ledger.jsonl`.
+   - So sánh các chỉ số với ngưỡng tham chiếu bài báo khoa học.
+   - Yêu cầu backend tái xây dựng chỉ mục DuckDB (`/api/index/rebuild`).
+   - In bảng kết quả tổng hợp bằng tiếng Việt.
+
+---
+
+## 7. Kết quả thành công mong đợi
+
+Khi quá trình đánh giá hoàn thành thành công, `./pc.sh` sẽ in bảng tổng kết các chỉ số đo lường thực tế trên terminal:
+
+- **Metrics đo lường**: Recall@10 và Recall@50 cho từng danh mục (`dress`, `shirt`, `toptee`) và điểm trung bình vĩ mô (Macro Aggregate).
+- **Trạng thái thẩm định đối chiếu bài báo (Scientific Benchmark Gate)**:
+  - `PASS_WITHIN_5_PERCENT`: Giá trị đo lường nằm trong phạm vi sai số 5% so với số liệu công bố trong bài báo gốc.
+  - `PASS_WITHIN_5_PERCENT_VARIANT`: Tái lập thành công trong ngưỡng 5% của biến thể đã ghi nhận.
+  - `PASS_WITH_METRICS_ONLY_MAPPING_UNVERIFIED`: Các chỉ số đạt ngưỡng nhưng liên kết mapping chưa được xác thực đầy đủ.
+  - `ALERT_METRIC_DEVIATION`: Metric lệch khỏi ngưỡng công bố của paper. **Lưu ý**: Đây là một kết quả nghiên cứu khoa học (RESEARCH FINDING), không phải lỗi hệ thống kỹ thuật.
+  - `NOT_RUN`: Thẩm định chưa được chạy.
+
+**Vị trí lưu trữ kết quả**:
+- Báo cáo tổng hợp trong container: `/artifacts/reports/<model>_<checkpoint>_<run_id>_aggregate.json`
+- Báo cáo tổng hợp trên host: `${HOST_WORKBENCH_ARTIFACTS_ROOT}/reports/<model>_<checkpoint>_<run_id>_aggregate.json` (mặc định tại `workbench/artifacts/reports/`).
+- Sổ cái bằng chứng xác thực: `/artifacts/evidence_ledger.jsonl` (trên host: `workbench/artifacts/evidence_ledger.jsonl`).
+
+Một báo cáo chỉ được phục vụ qua API khi được sổ cái xác thực đồng thuận: mã băm báo cáo trùng khớp, trường định danh hợp lệ, `return_code == 0`, và `invocation_status == "INVOCATION_COMPLETED"`.
+
+---
+
+## 8. Xem kết quả nghiên cứu
+
+Sau khi chạy xong, bạn có thể phân tích sâu kết quả qua hai phương thức:
+
+### 1. Giao diện Web UI trực quan
+
+Mở trình duyệt và truy cập:
+```text
+http://localhost:5173
+```
+
+Giao diện Web cung cấp:
+- Danh sách mô hình, checkpoint và các lượt chạy (runs).
+- Trực quan hóa kết quả tìm kiếm CIR tương tác: xem ảnh truy vấn, văn bản chỉnh sửa và top-k ảnh được truy xuất.
+- Phân tích nhóm lỗi (Failure Cohorts) theo từng thuộc tính trang phục.
+- Bảng xếp hạng benchmark đối chiếu trực tiếp với bài báo.
+
+### 2. Backend REST API
+
+Backend API lắng nghe tại:
+```text
+http://localhost:8000
+```
+
+Các endpoint chính:
+- `http://localhost:8000/api/models`: Danh sách mô hình đã đăng ký và cấu hình checkpoint.
+- `http://localhost:8000/api/runs`: Toàn bộ các lần chạy đánh giá đã được chứng thực.
+- `http://localhost:8000/api/jobs`: Hàng đợi tác vụ và trạng thái xử lý.
+- `http://localhost:8000/api/benchmark-runs`: Báo cáo so sánh đối chuẩn khoa học.
+
+Bạn cũng có thể xem trực tiếp các file JSON thô trong thư mục `workbench/artifacts/reports/` trên host.
+
+---
+
+## 9. Chạy model khác
+
+Mặc định `./pc.sh` chạy mô hình LIMN. Để đánh giá mô hình khác đã đăng ký, sử dụng cờ `--model`:
+
+```bash
+./pc.sh --model csmcir
+```
+
+**Sự khác biệt giữa LIMN và CSMCIR**:
+- **LIMN**:
+  - `model_id`: `limn`
+  - `checkpoint_id`: `base_iter0_all_categories` (gồm 3 checkpoint con: `base_iter0_dress`, `base_iter0_shirt`, `base_iter0_toptee`).
+  - `protocol_id`: `fashioniq_val_split`
+  - `top_k`: `200`
+  - Khai báo `adapted_runtime`: Sử dụng runtime thích nghi cho `sm_120`.
+- **CSMCIR**:
+  - `model_id`: `csmcir`
+  - `checkpoint_id`: Biến thể đơn `fashioniq`.
+  - `protocol_id`: `fashioniq_original_split` (giao thức gốc của CSMCIR).
+  - Không có `adapted_runtime`: CSMCIR không khai báo runtime thích nghi và chạy trên môi trường nguyên bản được hỗ trợ.
+
+**Các tùy chọn CLI của `./pc.sh`**:
+- `./pc.sh`: Chạy luồng chuẩn mặc định cho LIMN.
+- `./pc.sh --model <tên_model>`: Chọn mô hình cần đánh giá (ví dụ `csmcir`).
+- `./pc.sh --doctor`: Chỉ thực hiện kiểm tra chẩn đoán hệ thống host và cấu hình, hoàn toàn không làm thay đổi hệ thống, không khởi động container.
+- `./pc.sh --verify-only`: Chỉ thực hiện kiểm chứng năng lực GPU trên môi trường mô hình rồi dừng lại, không chạy đánh giá.
+- `./pc.sh --force`: Buộc chạy lại toàn bộ quy trình đánh giá ngay cả khi đã có kết quả hoàn tất hợp lệ từ trước.
+- `./pc.sh --timeout <số_giây>`: Đặt giới hạn thời gian chạy cho tác vụ đánh giá (tính bằng giây).
+- `./pc.sh --no-gpu`: Chạy ở chế độ không dùng GPU (chỉ dùng cho kiểm tra tích hợp hoặc môi trường không có GPU).
+- `./pc.sh --dataset <đường_dẫn>`: Chỉ định đường dẫn tùy chỉnh đến thư mục FashionIQ trên host.
+- `./pc.sh --help`: In thông tin hướng dẫn và toàn bộ các tùy chọn hỗ trợ.
+
+---
+
+## 10. Lỗi thường gặp
+
+### 1. Thiếu NVIDIA driver (`NVIDIA driver missing`)
+- **Hiện tượng**: `nvidia-smi` báo lỗi lệnh không tồn tại hoặc `NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver`.
+- **Nguyên nhân**: Driver NVIDIA chưa được cài đặt trên máy host hoặc bị ngắt kết nối sau khi cập nhật nhân Linux.
+- **Khắc phục**: Cài đặt NVIDIA driver tương thích trên host (ví dụ: `sudo apt update && sudo apt install nvidia-driver-550`) và khởi động lại máy tính.
+
+### 2. Thiếu nvidia-container-toolkit (`nvidia-container-toolkit missing`)
+- **Hiện tượng**: Quá trình preflight cảnh báo thiếu NVIDIA runtime, hoặc Docker báo lỗi `docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]]`.
+- **Nguyên nhân**: Docker daemon trên host chưa được cấu hình với NVIDIA Container Toolkit.
+- **Khắc phục**:
+  1. Cài đặt toolkit theo tài liệu chính thức của NVIDIA.
+  2. Cấu hình Docker runtime: `sudo nvidia-ctk runtime configure --runtime=docker`.
+  3. Khởi động lại dịch vụ Docker: `sudo systemctl restart docker`.
+
+### 3. GPU không khả dụng (`GPU unavailable`)
+- **Hiện tượng**: `./pc.sh --doctor` báo trạng thái `GPU validation: PENDING` với lý do `WORKBENCH_ENABLE_GPU is not 1` hoặc container không nhìn thấy card đồ họa.
+- **Nguyên nhân**: Biến `WORKBENCH_ENABLE_GPU` bị tắt trong môi trường hoặc trong file `.env`.
+- **Khắc phục**: Đảm bảo khai báo `WORKBENCH_ENABLE_GPU=1` trong `workbench/docker/.env` và chạy lại `./pc.sh`.
+
+### 4. Không tương thích CUDA (`CUDA incompatibility`)
+- **Hiện tượng**: PyTorch ném lỗi không tìm thấy kernel CUDA tương thích cho kiến trúc `sm_120` (GeForce RTX 5070 Ti - Blackwell), hoặc lỗi khởi tạo CUDA context.
+- **Nguyên nhân**: Thư viện PyTorch nguyên bản của mô hình (ví dụ PyTorch 1.12.1 của LIMN phát hành năm 2022) không hỗ trợ phần cứng kiến trúc mới.
+- **Khắc phục**: Hệ thống tự động xử lý qua cơ chế `WORKBENCH_RUNTIME_ADAPTATION=sm_120`, sử dụng PyTorch 2.7+ đã biên dịch cho Blackwell. Đảm bảo bạn không tắt cờ này đối với mô hình LIMN.
+
+### 5. Xung đột phụ thuộc Python (`Python dependency conflict`)
+- **Hiện tượng**: Quá trình chuẩn bị môi trường mô hình thất bại trong bước solver của conda/mamba hoặc cài đặt pip.
+- **Nguyên nhân**: Xung đột phiên bản giữa các gói phụ thuộc bên ngoài khi cài đặt.
+- **Khắc phục**: Workbench sử dụng `micromamba` tích hợp sẵn trong container với danh sách ràng buộc đã được khóa chặt (lockfile). Xem file log tại thư mục `workbench/artifacts/environments/` để xác định gói gây lỗi.
+
+### 6. Hết dung lượng đĩa (`Disk space exhausted`)
+- **Hiện tượng**: Docker build hoặc quá trình tải checkpoint báo lỗi `No space left on device` (ENOSPC).
+- **Nguyên nhân**: Dataset FashionIQ (ảnh và captions), 3 file weights của LIMN (~1.8 GB mỗi file), và image Docker chiếm dung lượng đáng kể.
+- **Khắc phục**: Đảm bảo phân vùng làm việc còn ít nhất 50 GB trống. Dọn dẹp các image hoặc build cache Docker cũ không dùng bằng lệnh `docker system prune -f`, sau đó kiểm tra lại bằng `df -h`.
+
+### 7. Thiếu dataset (`Dataset missing`)
+- **Hiện tượng**: `./pc.sh` dừng lại và thông báo không tìm thấy thư mục dataset hoặc thiếu các thư mục con `images/`, `image_splits/`.
+- **Nguyên nhân**: Đường dẫn `HOST_FASHIONIQ_ROOT` trong `.env` chưa chính xác hoặc dữ liệu chưa được giải nén đúng cấu trúc.
+- **Khắc phục**: Kiểm tra lại cấu trúc thư mục như mô tả ở Mục 3, sau đó truyền đường dẫn chính xác bằng cờ:
+  ```bash
+  ./pc.sh --dataset /duong/dan/that/toi/FashionIQ
+  ```
+
+### 8. Sai lệch mã băm checkpoint (`Checkpoint hash mismatch`)
+- **Hiện tượng**: Quá trình chuẩn bị checkpoint dừng lại và báo lỗi hash mismatch đối với một trong các file `.pt`.
+- **Nguyên nhân**: Quá trình tải file từ máy chủ từ xa bị đứt đoạn khiến file bị hỏng hoặc tải thiếu.
+- **Khắc phục**: Xóa file checkpoint hỏng tương ứng trong `workbench/artifacts/checkpoints/<tên_model>/` và chạy lại `./pc.sh`. Hệ thống sẽ tự động tải lại và kiểm tra mã băm SHA256 chính thức.
+
+### 9. Tràn bộ nhớ GPU (`CUDA out of memory`)
+- **Hiện tượng**: Quá trình trích xuất đặc trưng hoặc đánh giá bị dừng với ngoại lệ `torch.cuda.OutOfMemoryError`.
+- **Nguyên nhân**: Một tiến trình khác đang chiếm dụng bộ nhớ trên card RTX 5070 Ti, hoặc batch size vượt quá dung lượng 16 GB VRAM.
+- **Khắc phục**: Kiểm tra các tiến trình khác trên host qua `nvidia-smi` và tắt các tác vụ nặng không cần thiết. Cấu hình mặc định của hệ thống đã được căn chỉnh an toàn cho 16 GB VRAM.
+
+### 10. Quyền hạn Docker (`Docker permissions error`)
+- **Hiện tượng**: Lệnh `./pc.sh` dừng ngay từ bước preflight với lỗi `permission denied while trying to connect to the Docker daemon socket`.
+- **Nguyên nhân**: User hiện tại chưa được cấp quyền truy cập Docker socket mà không cần `sudo`.
+- **Khắc phục**: Thêm người dùng vào nhóm docker trên host:
+  ```bash
+  sudo usermod -aG docker $USER
+  ```
+  Sau đó đăng xuất và đăng nhập lại hệ thống (hoặc chạy lệnh `newgrp docker`) rồi thử lại.
+
+### 11. Thiếu đầu ra benchmark (`Benchmark output missing`)
+- **Hiện tượng**: Tác vụ đánh giá kết thúc nhưng không có báo cáo tổng hợp trong thư mục reports hoặc API trả về thông tin rỗng.
+- **Nguyên nhân**: Tiến trình đánh giá gặp ngoại lệ bất thường trước khi ghi nhận metrics đầy đủ.
+- **Khắc phục**: Mở file log của job tương ứng tại `workbench/artifacts/jobs/<job_id>.log` để đọc traceback lỗi chi tiết, hoặc kiểm tra trạng thái hàng đợi bằng:
+  ```bash
+  workbench/docker/run.sh status
+  ```
+
+---
+
+## 11. Khôi phục
+
+CIR Failure Analysis Workbench được xây dựng theo nguyên tắc bảo toàn trạng thái (Resumable) và bất biến (Idempotent):
+
+- **Tự động khôi phục**: Nếu quá trình chạy `./pc.sh` bị ngắt quãng giữa chừng (do mất điện, nhấn Ctrl+C, hoặc sự cố mạng khi tải checkpoint), bạn chỉ cần chạy lại:
+  ```bash
+  ./pc.sh
+  ```
+- Script sẽ nhận biết các thành phần đã hoàn thành hợp lệ (checkpoint đã có mã băm đúng, môi trường mô hình đã tạo, dữ liệu đã chuẩn hóa) và tiếp tục thực hiện giai đoạn tiếp theo mà không lặp lại các công việc trước đó.
+- **Tự động gắn vào job đang chạy (Job Attachment)**: Nếu Docker stack đã có một job đang được xếp hàng (`queued`) hoặc đang xử lý (`running`), `./pc.sh` sẽ tự động chuyển sang trạng thái theo dõi job đó thay vì tạo thêm job trùng lặp.
+- **Tái sử dụng kết quả**: Nếu một lượt chạy cho cùng mô hình, cùng checkpoint bundle và giao thức đã hoàn tất với báo cáo được sổ cái chứng thực, `./pc.sh` sẽ hiển thị ngay kết quả đó. Nếu muốn ép buộc chạy đánh giá mới từ đầu, hãy sử dụng:
+  ```bash
+  ./pc.sh --force
+  ```
+
+---
+
+## 12. Log
+
+Hệ thống ghi nhận log minh bạch tại các vị trí xác định:
+
+- **Thông báo lỗi tức thì**: Khi `./pc.sh` gặp lỗi, vị trí tệp log cụ thể sẽ được in trực tiếp ra terminal.
+- **Log của Docker container**:
+  Để theo dõi luồng log tổng thể của container Docker (backend và frontend), sử dụng công cụ nâng cao:
+  ```bash
+  workbench/docker/run.sh logs
+  ```
+- **Log của từng Job đánh giá**:
+  Mỗi lần chạy evaluation được ghi lại tại:
+  - Trong container: `/artifacts/jobs/<job_id>.log`
+  - Trên host: `${HOST_WORKBENCH_ARTIFACTS_ROOT}/jobs/<job_id>.log` (mặc định `workbench/artifacts/jobs/`).
+- **Sổ cái bằng chứng khoa học**:
+  Mọi tác vụ hoàn thành đều được ghi một dòng JSON vào:
+  - `workbench/artifacts/evidence_ledger.jsonl`
+
+---
+
+## 13. Dừng hệ thống
+
+Khi hoàn tất công việc nghiên cứu hoặc cần giải phóng tài nguyên hệ thống, bạn sử dụng lệnh:
+
+```bash
+workbench/docker/run.sh stop
+```
+
+Lệnh này thực hiện `docker compose down` một cách an toàn.
+
+**Nguyên tắc bảo toàn dữ liệu**:
+Lệnh dừng hệ thống **TUYỆT ĐỐI KHÔNG** xóa kết quả đánh giá (`/results`), không xóa các tệp báo cáo (`/artifacts/reports`), không xóa checkpoints đã tải (`/checkpoints`), và không xóa chỉ mục dữ liệu DuckDB. Toàn bộ dữ liệu nằm an toàn trên máy host và sẵn sàng cho các phiên làm việc tiếp theo.
+
+---
+
+## 14. Tính toàn vẹn khoa học
+
+Trong nghiên cứu thực nghiệm khoa học máy tính, việc hiểu đúng bản chất của kết quả là tối quan trọng. Workbench phân biệt rõ ràng 5 khái niệm sau:
+
+1. **Chạy thành công (`Execution Success`)**:
+   - Là việc tiến trình chạy từ đầu đến cuối với mã thoát 0 (`return_code == 0`) và trạng thái job là `completed`.
+   - Ý nghĩa: Hệ thống kỹ thuật và phần mềm không bị crash. Điều này chưa nói lên độ chính xác về mặt khoa học của mô hình.
+2. **Model đã được xác thực GPU (`GPU-Verified Runtime Capability`)**:
+   - Khác biệt hoàn toàn với việc chỉ chạy được trên CPU.
+   - Ý nghĩa: Khẳng định rằng các phép toán tensor thực sự chạy trên nhân phần cứng của GPU NVIDIA (RTX 5070 Ti) với thư viện compiled ELF tương thích. Hệ thống hoạt động theo nguyên tắc fail-closed, tuyệt đối không bao giờ làm giả capability GPU.
+3. **Đánh giá đầy đủ (`Complete Evaluation Coverage`)**:
+   - Là việc quá trình đánh giá đã thực hiện trọn vẹn trên toàn bộ tập dữ liệu kiểm thử của cả 3 danh mục FashionIQ (`dress`, `shirt`, `toptee`) với ngưỡng xếp hạng `top_k=200`.
+   - Ý nghĩa: Khác với các đợt chạy thử nghiệm rút gọn (smoke test) chỉ kiểm tra vài sample.
+4. **Khớp số liệu paper (`Paper Reference Parity`)**:
+   - So sánh trực tiếp giá trị Recall đo được với bảng số liệu đã công bố trong bài báo gốc thông qua Scientific Benchmark Gate (ví dụ trạng thái `PASS_WITHIN_5_PERCENT`).
+   - **Nguyên tắc cốt lõi**: Nếu Recall đo được thấp hơn hoặc lệch khỏi bài báo (`ALERT_METRIC_DEVIATION`), đây là một **PHÁT HIỆN NGHIÊN CỨU (RESEARCH FINDING)** về khả năng tái lập trong thực tế khoa học. Đây **TUYỆT ĐỐI KHÔNG PHẢI** là lỗi hạ tầng hay sự cố kỹ thuật.
+5. **Tái lập với runtime đã adapt (`Reproduction under Adapted Runtime`)**:
+   - Phân biệt minh bạch giữa việc tái lập trên môi trường đóng băng lịch sử nguyên bản (legacy pinned runtime) và môi trường đã thích nghi phần cứng (`ADAPTED_RUNTIME`).
+   - Ý nghĩa: Khi mô hình cổ điển được nâng cấp runtime (PyTorch >=2.7 để chạy được trên Blackwell sm_120), báo cáo được gắn cờ `ADAPTED_RUNTIME` trong provenance. Hệ thống không bao giờ gán nhãn đây là "tái tạo chính xác tuyệt đối" (exact historical reproduction), nhằm bảo đảm tính trung thực học thuật cao nhất.
+
+---
+
+## 15. Quy trình nghiên cứu sau lần đánh giá đầu tiên
+
+Sau khi hoàn tất lần đánh giá đầu tiên với `./pc.sh`, bạn có thể tiến hành chu trình phân tích khoa học tiếp theo:
+
+1. **Phân tích trường hợp thất bại (Failure Analysis)**:
+   - Truy cập giao diện Web UI tại `http://localhost:5173`.
+   - Kiểm tra các truy vấn có điểm Recall thấp hoặc bị xếp hạng sai lệch.
+   - Quan sát mối quan hệ giữa văn bản điều chỉnh (relative caption) và các đặc trưng thị giác bị nhầm lẫn.
+2. **Phân tích theo Cohorts**:
+   - Sử dụng các nhóm lỗi (cohorts) được hệ thống trích xuất tự động để phân loại các dạng lỗi phổ biến: nhầm lẫn màu sắc, sai lệch kiểu dáng (cổ áo, tay áo), hoặc chi tiết hoa văn.
+3. **Đánh giá so sánh đa mô hình**:
+   - Chạy đánh giá mô hình thứ hai bằng lệnh:
+     ```bash
+     ./pc.sh --model csmcir
+     ```
+   - So sánh trực tiếp hiệu năng giữa LIMN và CSMCIR trên cùng một giao diện và cùng điều kiện phần cứng chuẩn mực.
+4. **Khai thác dữ liệu báo cáo chuyên sâu**:
+   - Các file báo cáo tổng hợp JSON tại `workbench/artifacts/reports/` chứa đầy đủ ma trận nhầm lẫn, phân phối điểm số và metadata thực thi, sẵn sàng để tích hợp vào các báo cáo nghiên cứu hoặc bài báo khoa học của bạn.

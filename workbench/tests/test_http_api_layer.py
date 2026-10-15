@@ -349,3 +349,82 @@ def test_wrong_typed_nested_gate_fields_are_normalized_not_crashing(api, tmp_pat
         # the values with Object.entries and would crash on null.
         if row["category_metrics"] is not None:
             assert all(isinstance(v, dict) for v in row["category_metrics"].values())
+
+# ------------------------------------------------------------------------- duplicate submissions
+
+def test_a_duplicate_submission_is_refused_atomically_by_the_queue(api) -> None:
+    """The handler's pre-check reads the queue outside its lock, so two concurrent POSTs could
+    both pass it and both enqueue. The queue must be the one that refuses — it decides
+    atomically with the append — and the refusal must reach the client as the documented 409
+    body naming the job that already holds the GPU."""
+    from workbench.backend.jobs import DuplicateJobError
+
+    mock = api.JOBS
+    # The registered snapshot looks empty: the pre-check cannot be what refuses the second POST.
+    mock.list = lambda: []
+    accepted = []
+
+    def enqueue(*args, **kwargs):
+        if accepted:
+            raise DuplicateJobError("job-1", "running")
+        accepted.append(kwargs)
+        return {"job_id": "job-1", "status": "queued",
+                "log_directory": "/tmp/queue_jobs/job-1"}
+
+    mock.enqueue = enqueue
+    body = json.dumps({"model_id": "synthetic_model", "checkpoint_id": "ckpt",
+                       "protocol_id": "fashioniq_original_split"}).encode()
+
+    status, _, first = asgi_request(api.app, "POST", "/api/jobs", body)
+    assert status == 200, first
+    assert json.loads(first)["job_id"] == "job-1"
+
+    status, _, second = asgi_request(api.app, "POST", "/api/jobs", body)
+    assert status == 409, second
+    detail = json.loads(second)["detail"]
+    assert detail["error"] == "duplicate_job", detail
+    assert detail["details"] == {"job_id": "job-1", "status": "running"}, detail
+
+def test_the_queue_is_asked_to_decide_the_duplicate_question(api) -> None:
+    """The authoritative refusal only happens if the caller opts into it: passing
+    `refuse_duplicate=True` is what binds the check to the queue lock."""
+    mock = api.JOBS
+    mock.list = lambda: []
+    seen = {}
+
+    def enqueue(*args, **kwargs):
+        seen.update(kwargs)
+        return {"job_id": "job-2", "status": "queued", "log_directory": "/tmp/queue_jobs/job-2"}
+
+    mock.enqueue = enqueue
+    status, _, body = asgi_request(
+        api.app, "POST", "/api/jobs",
+        json.dumps({"model_id": "synthetic_model", "checkpoint_id": "ckpt",
+                    "protocol_id": "fashioniq_original_split"}).encode())
+    assert status == 200, body
+    assert seen.get("refuse_duplicate") is True, seen
+
+# ------------------------------------------------------------------------- application lifecycle
+
+def test_the_app_shutdown_hook_stops_the_queue() -> None:
+    """`docker stop` SIGTERMs the backend, which FastAPI answers by running its shutdown
+    handlers. An evaluator child leads its own session, so without a hook registered there the
+    child is never reaped and keeps the GPU: the lifecycle event itself is the subject here."""
+    import importlib.util
+    import sys
+
+    spec = importlib.util.spec_from_file_location(
+        "lifecycle_api", REPOSITORY / "workbench" / "backend" / "main.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    stopped: list[bool] = []
+    module.JOBS = type("Q", (), {"shutdown": lambda self: stopped.append(True) or []})()
+
+    handlers = module.app.router.on_shutdown
+    assert handlers, "the application registers no shutdown handler"
+    for handler in handlers:
+        handler()
+
+    assert stopped == [True], "the shutdown handler must stop the queue (and its job groups)"

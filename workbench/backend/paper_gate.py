@@ -408,9 +408,11 @@ def evaluate_gate(
     # stronger verdict than the reference itself supports.
     reference_mapping = evidence.get("checkpoint_mapping_status")
     # `NO_CHECKPOINT`/absent means the row does not claim a checkpoint asset at all, so the
-    # run's own mapping evidence stands; any recorded mapping claim other than a verified
-    # one caps the verdict at the reference's own state.
-    if reference_mapping and reference_mapping not in ("VERIFIED_METADATA", "NO_CHECKPOINT"):
+    # run's own mapping evidence stands. The two registries spell a confirmed mapping
+    # differently (`papers.yaml` uses `VERIFIED`, `models.yaml` uses `VERIFIED_METADATA`), so
+    # both count as verified; any other recorded claim caps the verdict at the reference's own
+    # state rather than letting a run certify more identity than the reference claims.
+    if reference_mapping and reference_mapping not in ("VERIFIED", "VERIFIED_METADATA", "NO_CHECKPOINT"):
         mapping_verified = False
     if failed:
         return GateVerdict(ALERT_METRIC_DEVIATION, False, variant, comparisons,

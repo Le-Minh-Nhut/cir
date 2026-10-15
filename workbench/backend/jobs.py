@@ -101,6 +101,8 @@ class SingleGpuQueue:
         # them while their group is still being torn down.
         self._cancelling: set[str] = set()
         self._process_groups: dict[str, int | None] = {}
+        # Set by shutdown(): the worker leaves its loop instead of waiting for the next job.
+        self._stopping = False
         self._condition = Condition(Lock())
         self._worker = Thread(target=self._work, daemon=True)
         self._worker.start()
@@ -165,6 +167,44 @@ class SingleGpuQueue:
                              "[WARN] a process in this job's group survived cancellation\n")
             return asdict(live) if live is not None else {"job_id": job_id, "status": "cancelled"}
 
+    def shutdown(self) -> list[str]:
+        """Stop the worker and every process group it still owns.
+
+        A job leads its own session (`start_new_session=True`), so it outlives the backend by
+        design: the operator's evaluator child — the process that actually holds the GPU —
+        does not die with this process, and a container stop would leave it running. Each live
+        job is torn down with exactly the group kill `cancel` uses; this only supplies the
+        "every job" scope. The bounded wait runs outside the queue lock, as in `cancel`, so a
+        slow teardown cannot stall the status API.
+
+        Returns the ids of jobs whose group outlived the bounded kill, so the caller can report
+        a real orphan instead of claiming a clean stop.
+        """
+        with self._condition:
+            self._stopping = True
+            self._condition.notify_all()
+            live = [(job, self._processes.pop(job.job_id, None),
+                     self._process_groups.pop(job.job_id, None))
+                    for job in self._jobs if job.job_id in self._processes]
+        survivors: list[str] = []
+        for job, process, group in live:
+            with self._condition:
+                self._cancelling.add(job.job_id)
+            survivor = self._terminate_group(process, group=group)
+            with self._condition:
+                self._cancelling.discard(job.job_id)
+                if job.status != "cancelled":
+                    job.status = "cancelled"
+                    job.completed_at = now()
+                    self._append(job, "stderr_tail", "[STOP] workbench is shutting down\n")
+                    self._persist(job)
+            if survivor:
+                survivors.append(job.job_id)
+        if self._worker.is_alive():
+            # Outside the lock: the worker takes it to publish a job's final state.
+            self._worker.join(timeout=10.0)
+        return survivors
+
     def adopt_recovered(self, record: dict) -> None:
         """Load a startup-recovered record into the in-memory queue as a terminal job.
 
@@ -188,10 +228,13 @@ class SingleGpuQueue:
                 return
             self._jobs.append(job)
 
-    def _next_job(self) -> Job:
+    def _next_job(self) -> Job | None:
+        """The next queued job, or None once shutdown has been requested."""
         with self._condition:
-            while not any(job.status == "queued" for job in self._jobs):
+            while not self._stopping and not any(job.status == "queued" for job in self._jobs):
                 self._condition.wait()
+            if self._stopping:
+                return None
             job = next(job for job in self._jobs if job.status == "queued")
             job.status = "preparing"
             job.started_at = now()
@@ -336,6 +379,8 @@ class SingleGpuQueue:
     def _work(self) -> None:
         while True:
             job = self._next_job()
+            if job is None:
+                return
             with self._condition:
                 if job.status == "cancelled":
                     continue

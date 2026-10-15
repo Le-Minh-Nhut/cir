@@ -97,14 +97,29 @@ say "== G job status contract =="
 if live; then
     "$PY" - "$BASE" <<'EOF' || FAILED+=("G-status")
 import json, sys, urllib.request
-statuses = set()
-for job in json.load(urllib.request.urlopen(sys.argv[1] + "/api/jobs", timeout=30)):
-    statuses.add(job["status"])
+jobs = json.load(urllib.request.urlopen(sys.argv[1] + "/api/jobs", timeout=30))
 allowed = {"queued","preparing","running","blocked","completed","failed","cancelled"}
+statuses = {job["status"] for job in jobs}
 bad = statuses - allowed
-print("  PASS job statuses lowercase enum" if not bad else f"  FAIL unexpected statuses {bad}")
-sys.exit(1 if bad else 0)
+# An empty queue carries no status at all: checking zero statuses against the enum proves
+# nothing, so report that honestly instead of printing PASS.
+if bad:
+    print(f"  FAIL unexpected statuses {bad}")
+    sys.exit(1)
+if not statuses:
+    print("  NOT VERIFIED no job observed; an empty queue is not evidence the status enum is right")
+    sys.exit(2)
+print(f"  PASS job statuses lowercase enum ({len(statuses)} observed)")
 EOF
+    g_rc=$?
+    if (( g_rc == 0 )); then
+        :
+    elif (( g_rc == 2 )); then
+        say "  SKIP G status contract could not be verified (no queued job observed)"
+        SKIPPED+=("G-status-unverified")
+    else
+        FAILED+=("G-status")
+    fi
 else
     skip "G live check (no server)"
 fi
@@ -216,14 +231,31 @@ repo = sys.argv[1]
 out = subprocess.run([sys.executable, f"{repo}/workbench/scripts/pc_readiness.py", "--json"],
                      capture_output=True, text=True, cwd=repo)
 doc = json.loads(out.stdout)
-gpu_rules = [rule for rule in doc.get("rules", []) if "GPU" in str(rule.get("rule_id", ""))]
-assert not any(r.get("status") in ("READY", "GPU_RUNTIME_READY") for r in gpu_rules), \
-    "readiness must not claim GPU ready without a real probe"
-print(f"PASS no GPU-ready claim without probe evidence ({len(gpu_rules)} GPU rules, none READY)")
+# The report has no `rules` list. GPU readiness is per model: a CUDA-declaring entry carries
+# `gpu_required` (the contract) and `gpu_verified` (the probe's answer), and the unsupported
+# claim this group exists to catch is verified-without-evidence on exactly those entries.
+models = doc.get("models") or {}
+gpu_entries = [m for m in models.values() if isinstance(m, dict) and m.get("gpu_required")]
+if not gpu_entries:
+    # Scanning an empty list prints PASS while checking nothing, which is the bug this replaces.
+    print("  NOT VERIFIED no GPU-requiring model in the report; nothing was checked")
+    sys.exit(2)
+false_claims = [m.get("model_id") for m in gpu_entries
+                if m.get("gpu_verified") and m.get("environment_tier") != "GPU_RUNTIME_READY"]
+if false_claims:
+    print(f"  FAIL GPU verified without GPU_RUNTIME_READY evidence: {false_claims}")
+    sys.exit(1)
+ready_here = [m.get("model_id") for m in gpu_entries
+              if m.get("environment_tier") == "GPU_RUNTIME_READY"]
+print(f"  PASS {len(gpu_entries)} GPU-requiring models; "
+      f"{len(ready_here)} carry a verified GPU_RUNTIME_READY probe")
 EOF
 )" && e_rc=0 || e_rc=$?
     if (( e_rc == 0 )); then
         say "  $e_out"
+    elif (( e_rc == 2 )); then
+        say "  SKIP E could not be verified (no GPU-requiring model reported)"
+        SKIPPED+=("E-gpu-unverified")
     else
         say "  FAIL readiness claims GPU ready without evidence"; FAILED+=("E-gpu")
     fi

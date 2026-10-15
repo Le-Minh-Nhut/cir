@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+import sys
+import os
+import json
+
+log_file = os.environ.get("MOCK_LOG_FILE")
+if log_file:
+    try:
+        secrets = {
+            k: v for k, v in os.environ.items()
+            if any(p in k for p in ("TOKEN", "KEY", "SECRET", "LEDGER"))
+        }
+        with open(log_file, "a") as f:
+            f.write(json.dumps({"tool": "df", "args": sys.argv[1:], "secrets": secrets}) + "\n")
+    except Exception:
+        pass
+
+is_low = os.environ.get("MOCK_DF_LOW_SPACE") == "1"
+
+if "-h" in sys.argv:
+    if is_low:
+        print("Filesystem      Size  Used Avail Use% Mounted on\n/dev/root        50G   45G    5G  90% /")
+    else:
+        print("Filesystem      Size  Used Avail Use% Mounted on\n/dev/root       100G   20G   80G  20% /")
+    sys.exit(0)
+
+if "-m" in sys.argv or "-BM" in sys.argv:
+    if is_low:
+        print("Filesystem     1M-blocks      Used Available Use% Mounted on\n/dev/root          50000     45000       5000  90% /")
+    else:
+        print("Filesystem     1M-blocks      Used Available Use% Mounted on\n/dev/root         100000     20000      80000  20% /")
+    sys.exit(0)
+
+# default POSIX / 1G / 1K output where column 4 is integer available
+if is_low:
+    print("Filesystem     1073741824-blocks      Used Available Capacity Mounted on\n/dev/root                    100        95         5      95% /")
+else:
+    print("Filesystem     1073741824-blocks      Used Available Capacity Mounted on\n/dev/root                    100        20        80      20% /")
+sys.exit(0)

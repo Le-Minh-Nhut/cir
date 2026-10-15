@@ -6,6 +6,7 @@ docstring, and the assertion targets the observable behavior the fix restored.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -389,3 +390,357 @@ def test_synthetic_runs_get_a_named_reason():
     verdict = gate.evaluate_gate(None, None, data_kind="synthetic", real_execution=True)
     assert verdict.status == gate.NOT_RUN
     assert any("self-test" in b for b in verdict.blockers), verdict.blockers
+
+# --------------------------------------------------------------------------- P1 (final wave)
+
+def test_models_endpoint_hashes_each_checkpoint_once(tmp_path, monkeypatch):
+    """`/api/models` reported checkpoint digests by re-reading every downloaded checkpoint on
+    every request (LIMN's three are 1.79 GB each), so one request took ~85 s and a launcher
+    polling it for readiness always timed out. The availability view must hash each unchanged
+    file once; a replaced file must still rehash."""
+    from workbench.backend import registry
+
+    monkeypatch.setattr(registry, "_AVAILABILITY_DIGEST_CACHE", {})
+    payload = tmp_path / "0_dress_best_model.pt"
+    payload.write_bytes(b"x" * 4096)
+
+    calls = {"n": 0}
+    real = registry.sha256_file
+
+    def counting(path, required_files=None):
+        calls["n"] += 1
+        return real(path, required_files)
+
+    monkeypatch.setattr(registry, "sha256_file", counting)
+    first = registry._cached_availability_digest(payload, None)
+    second = registry._cached_availability_digest(payload, None)
+    assert first == second
+    assert calls["n"] == 1, f"unchanged checkpoint was hashed {calls['n']} times"
+
+    # A rewritten file is a different artifact and must be rehashed.
+    payload.write_bytes(b"y" * 4096)
+    third = registry._cached_availability_digest(payload, None)
+    assert third != first
+    assert calls["n"] == 2, "a replaced checkpoint must not reuse the cached digest"
+
+def test_a_verified_reference_mapping_certifies_a_matching_run():
+    """The paper registry and the model registry spell a confirmed checkpoint mapping
+    differently (`VERIFIED` vs `VERIFIED_METADATA`). The gate's identity cap first accepted
+    only one spelling, so a run whose numbers equal the paper's was demoted to
+    PASS_METRICS_ONLY_MAPPING_UNVERIFIED and could never certify."""
+    from workbench.backend import paper_gate as gate
+    from workbench.backend.benchmark_references import references_for_model
+
+    reference = references_for_model("limn")[0]
+    assert reference.payload.get("checkpoint_mapping_status") == "VERIFIED"
+    run_meta = {
+        "gallery_protocol": reference.payload["gallery_protocol"],
+        "checkpoint_id": reference.payload["checkpoint_id"],
+        "checkpoint_training_noise_pct": reference.payload["checkpoint_training_noise_pct"],
+        "evaluation_noise_pct": reference.payload["evaluation_noise_pct"],
+        "split": reference.payload["split"], "dataset": reference.payload["dataset"],
+        "protocol_id": reference.payload["gallery_protocol"],
+        "checkpoint_mapping_verified": True,
+    }
+    reproduced = {key: reference.value_for(key) for key in reference.reported_metrics}
+    verdict = gate.evaluate_gate(reference, reproduced, run_meta=run_meta, real_execution=True,
+                                 reproduced_category_metrics=reference.payload["category_metrics"])
+    assert verdict.status in (gate.PASS_WITHIN_5_PERCENT, gate.PASS_WITHIN_5_PERCENT_VARIANT), verdict.status
+    assert verdict.passed is True
+
+# --------------------------------------------------------------------------- P2 (acceptance scanners)
+
+def _acceptance_snippet(group: str) -> str:
+    """The Python body acceptance.sh runs inline for one group.
+
+    The regression is about the *shipped* scanner, so the test executes the script's own
+    heredoc rather than a paraphrase of it. The heredoc is located from the group's own
+    header forward; searching the file from the top lands in another group's block.
+    """
+    script = (REPOSITORY / "workbench" / "docker" / "acceptance.sh").read_text(encoding="utf-8")
+    start = script.index(f'say "== {group} ')
+    opening = script.index("<<'EOF'", start)
+    body = script.index("\n", opening) + 1
+    return script[body:script.index("\nEOF\n", body)]
+
+def _run_scanner(snippet: str, *args: str) -> tuple[int, str]:
+    import subprocess
+    import sys
+
+    completed = subprocess.run([sys.executable, "-c", snippet, *args],
+                               capture_output=True, text=True, timeout=120)
+    return completed.returncode, completed.stdout + completed.stderr
+
+def _stub_readiness(repo: Path, document: dict) -> None:
+    """A stand-in pc_readiness.py that prints exactly this document, so the scanner's own
+    filtering is what the test exercises."""
+    scripts = repo / "workbench" / "scripts"
+    scripts.mkdir(parents=True, exist_ok=True)
+    (scripts / "pc_readiness.py").write_text(
+        f"import json\nprint({json.dumps(json.dumps(document))})\n", encoding="utf-8")
+
+def test_the_readiness_gpu_scan_checks_a_model_not_an_absent_rules_key(tmp_path):
+    """Group E read `doc["rules"]`, but pc_readiness has no such key (its keys are config,
+    dataset, environment, gpu, intended_gpu, models, papers, read_only, repository, summary),
+    so the list was always empty and it printed PASS having examined nothing. The scan must
+    consult the per-model GPU evidence and must not pass on an empty selection."""
+    snippet = _acceptance_snippet("E")
+    assert 'doc.get("rules"' not in snippet, "group E still scans a key the report does not have"
+
+    repo = tmp_path / "repo"
+    _stub_readiness(repo, {"models": {}})
+    rc, out = _run_scanner(snippet, str(repo))
+    assert rc == 2, f"an empty GPU selection must report not-verified, got rc={rc}: {out}"
+    assert "NOT VERIFIED" in out
+
+    # A model that claims GPU verification without the probe tier is the claim this group
+    # exists to catch; the pre-fix scanner never looked at it.
+    _stub_readiness(repo, {"models": {"m": {
+        "model_id": "m", "gpu_required": True, "gpu_verified": True,
+        "environment_tier": "GPU_VERIFICATION_PENDING"}}})
+    rc, out = _run_scanner(snippet, str(repo))
+    assert rc == 1, f"GPU verified without GPU_RUNTIME_READY evidence must FAIL, got rc={rc}: {out}"
+
+    # And the honest report still passes: verified evidence, matching tier.
+    _stub_readiness(repo, {"models": {"m": {
+        "model_id": "m", "gpu_required": True, "gpu_verified": True,
+        "environment_tier": "GPU_RUNTIME_READY"}}})
+    rc, out = _run_scanner(snippet, str(repo))
+    assert rc == 0, f"a verified GPU report must PASS, got rc={rc}: {out}"
+
+def test_the_job_status_scan_refuses_to_pass_on_an_empty_queue():
+    """An empty queue yields no status values to check, so diffing zero statuses against the
+    enum passed vacuously. An observed job must be required before PASS."""
+    import http.server
+    import json as jsonlib
+    import threading
+
+    snippet = _acceptance_snippet("G")
+    payloads = {"jobs": []}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = jsonlib.dumps(payloads["jobs"]).encode()
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        rc, out = _run_scanner(snippet, base)
+        assert rc == 2, f"an empty queue is not evidence: expected not-verified, got rc={rc}: {out}"
+        assert "NOT VERIFIED" in out
+
+        payloads["jobs"] = [{"job_id": "j1", "status": "queued"}]
+        rc, out = _run_scanner(snippet, base)
+        assert rc == 0, f"an observed valid status must PASS, got rc={rc}: {out}"
+
+        payloads["jobs"] = [{"job_id": "j1", "status": "QUEUED"}]
+        rc, out = _run_scanner(snippet, base)
+        assert rc == 1, f"an out-of-enum status must FAIL, got rc={rc}: {out}"
+    finally:
+        server.shutdown()
+
+
+# --------------------------------------------------------------------------- GPU capability scan
+
+def _gpu_capability_scanner():
+    """The verifier's GPU_RUNTIME scan, extracted verbatim from the embedded Python block.
+
+    The scan lives inside a bash heredoc and cannot be imported, so the block is lifted and
+    executed with `sys.argv[1]` bound to a temporary report path — exactly how
+    release_verify.sh runs it.
+    """
+    import subprocess
+    import sys
+    import tempfile
+    import textwrap
+
+    script = (REPOSITORY / "workbench/docker/release_verify.sh").read_text(encoding="utf-8")
+    start = script.index('J1="${RESULTS[J1]}"')
+    end = script.index('if (( fails > 0 )); then')
+    lines = script[start:end].splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if line.startswith('"${PY}" - "$REPORT" <<\'EOF\''):
+            lines = lines[index + 1:]
+            break
+    block = textwrap.dedent("".join(lines).rsplit("\nEOF", 1)[0])
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "report.json"
+        # The bash runner exports each J-id it graded; J5 is the fail-closed GPU contract. It is
+        # bound here so GPU_RUNTIME has a real check to fold the scan's verdict into — the
+        # standalone default would make every dimension NOT_APPLICABLE and prove nothing.
+        environment = os.environ | {"J5": "PASS", "D5": "fail-closed contract holds"}
+        completed = subprocess.run([sys.executable, "-c", block, str(path)],
+                                   capture_output=True, text=True, env=environment)
+        assert path.is_file(), (completed.stdout, completed.stderr)
+        report = json.loads(path.read_text(encoding="utf-8"))
+    return report, completed
+
+def _scanner_workspace(tmp_path: Path, monkeypatch) -> Path:
+    """A private artifacts root, so the scan reads the fixtures and nothing else."""
+    capabilities = tmp_path / "gpu_capabilities"
+    capabilities.mkdir(parents=True)
+    monkeypatch.setenv("WORKBENCH_ARTIFACTS_ROOT", str(tmp_path))
+    for key in ("CIR_REPO_ROOT", "CIR_DATA_ROOT", "FASHIONIQ_ROOT", "WORKBENCH_CHECKPOINT_ROOT",
+                "WORKBENCH_RESULTS_ROOT", "WORKBENCH_THIRD_PARTY_ROOT"):
+        monkeypatch.setenv(key, str(tmp_path / key.lower()))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    return capabilities
+
+def test_an_unreadable_gpu_capability_artifact_is_reported_not_swallowed(tmp_path, monkeypatch):
+    """A 0-byte fixture left in gpu_capabilities/ raised JSONDecodeError inside the scan; the
+    global try/except turned that into real_gpu = False, so a genuine interpreter probe on the
+    target host was silently discarded and the verdict capped at GPU_VALIDATION_PENDING. An
+    unreadable artifact is reported and repaired; it never overrides readable evidence."""
+    capabilities = _scanner_workspace(tmp_path, monkeypatch)
+    good = capabilities / "interpreter_probe.json"
+    good.write_text(json.dumps({"probe_source": "interpreter", "capability_verified": True,
+                                "capability_key": "interpreter_probe"}))
+    poisoned = capabilities / "1a3bb380cba4518172218c7f22978d745145db7b37c37ac2d2f2a6d1ead42d75.json"
+    poisoned.write_bytes(b"")                       # the leftover fixture from an unisolated run
+
+    report, completed = _gpu_capability_scanner()
+
+    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PASS", report["dimensions"]
+    assert report["gpu_capability_scan"]["status"] == "UNREADABLE"
+    assert report["gpu_capability_scan"]["real_gpu"] is True
+    assert "1a3bb380cba4518172218c7f22978d745145db7b37c37ac2d2f2a6d1ead42d75.json" in \
+        report["gpu_capability_scan"]["unreadable"]
+    assert "[WARN]" in report["checks"]["J5"]["detail"]
+    assert "unreadable capability artifact" in completed.stderr
+    # The unusable file is gone, so the next run cannot trip over it again.
+    assert not poisoned.exists()
+    assert good.exists()
+
+def test_the_gpu_scan_does_not_invent_evidence_from_unreadable_artifacts(tmp_path, monkeypatch):
+    """The mirror image: with nothing readable there is no evidence, and the reason must be
+    named instead of the scan silently reporting a bare PENDING."""
+    capabilities = _scanner_workspace(tmp_path, monkeypatch)
+    (capabilities / "broken.json").write_bytes(b"")                     # 0-byte: unparsable
+    (capabilities / "truncated.json").write_text('{"probe_source": "interpreter"')  # half-written
+
+    report, _ = _gpu_capability_scanner()
+
+    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PENDING"
+    assert report["gpu_capability_scan"]["real_gpu"] is False
+    assert set(report["gpu_capability_scan"]["unreadable"]) == {"broken.json", "truncated.json"}
+    assert not list(capabilities.glob("*.json"))
+
+def test_a_real_record_from_another_environment_cannot_certify_this_host(tmp_path, monkeypatch):
+    """A readable record is not automatically evidence: release_verify.sh accepted any
+    interpreter-probed file in the directory, so one environment's verification could certify a
+    different one. The record's own `capability_key` must name the key in its filename — the
+    binding `_cached_gpu_capability` already enforces when it reads a record back."""
+    capabilities = _scanner_workspace(tmp_path, monkeypatch)
+    (capabilities / "some_other_environment.json").write_text(json.dumps(
+        {"probe_source": "interpreter", "capability_verified": True,
+         "capability_key": "a-completely-different-environment"}))
+
+    report, completed = _gpu_capability_scanner()
+
+    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PENDING"
+    assert report["gpu_capability_scan"]["real_gpu"] is False
+    assert report["gpu_capability_scan"]["wrong_key"] == ["some_other_environment"]
+    assert "different environment" in completed.stderr
+
+def test_advisory_environment_read_does_not_hash_installed_distribution_members(tmp_path: Path, monkeypatch):
+    """The read-only availability/readiness path must perform a cheap presence/metadata check,
+    never walking distribution RECORDs to sha256_file every installed member file.
+    """
+    import venv as _venv
+    from workbench.backend import registry, runtime
+
+    env_dir = tmp_path / "env"
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+    lib = next((env_dir / "lib").glob("python*"))
+    sp = lib / "site-packages"
+    sp.mkdir(parents=True, exist_ok=True)
+    pkg_file = sp / "pkg.py"
+    pkg_file.write_text("x = 1\n")
+    dist = sp / "pkg-1.0.0.dist-info"
+    dist.mkdir()
+    (dist / "METADATA").write_text("Metadata-Version: 2.1\nName: pkg\nVersion: 1.0.0\n")
+    (dist / "RECORD").write_text(f"pkg.py,sha256=xxx,{pkg_file.stat().st_size}\n")
+
+    monkeypatch.setenv("ADVISORY_ENV_VAR", str(env_dir / "bin" / "python"))
+    model = {
+        "model_id": "test_advisory_model",
+        "environment_required": True,
+        "environment": {"python_env_var": "ADVISORY_ENV_VAR", "packages": ["pkg==1.0.0"]},
+    }
+    runtime.forget_environment()
+
+    calls: list[Path] = []
+    orig = registry.sha256_file
+    def counting_sha256(path, *args, **kwargs):
+        calls.append(Path(path))
+        return orig(path, *args, **kwargs)
+
+    monkeypatch.setattr(registry, "sha256_file", counting_sha256)
+
+    blockers = runtime.environment_blockers(model)
+    assert blockers == []
+    assert not any(p == pkg_file for p in calls), f"expected 0 member hashes, got {len(calls)}"
+
+
+def test_checkpoint_availability_and_missing_paths_use_manifest_digest_without_file_reads(tmp_path: Path, monkeypatch):
+    """checkpoint_missing_paths and checkpoint_bundle_missing_paths must reuse the manifest-backed
+    digest when file size matches the manifest record, performing no sha256_file calls.
+    """
+    import json
+    from workbench.backend import registry
+
+    ckpt_root = tmp_path / "checkpoints"
+    model_dir = ckpt_root / "test_model"
+    model_dir.mkdir(parents=True)
+    ckpt_file = model_dir / "weights.pt"
+    content = b"checkpoint payload"
+    ckpt_file.write_bytes(content)
+    real_sha = registry.sha256_file(ckpt_file)
+
+    manifest_data = [{
+        "model_id": "test_model",
+        "filename": "weights.pt",
+        "downloaded_sha256": real_sha,
+        "size_bytes": len(content),
+    }]
+    (ckpt_root / "download_manifest.json").write_text(json.dumps(manifest_data))
+
+    checkpoint = {
+        "checkpoint_id": "ckpt_1",
+        "filename": "weights.pt",
+        "expected_sha256": real_sha,
+    }
+    model = {
+        "model_id": "test_model",
+        "checkpoint_variants": [checkpoint],
+        "checkpoint_bundles": [{"bundle_id": "bundle_1", "required_checkpoint_ids": ["ckpt_1"]}],
+    }
+
+    class DummyConfig:
+        WORKBENCH_CHECKPOINT_ROOT = ckpt_root
+
+    calls: list[Path] = []
+    orig = registry.sha256_file
+    def counting_sha256(path, *args, **kwargs):
+        calls.append(Path(path))
+        return orig(path, *args, **kwargs)
+
+    monkeypatch.setattr(registry, "sha256_file", counting_sha256)
+
+    missing = registry.checkpoint_missing_paths(ckpt_file, checkpoint, model_id="test_model", config=DummyConfig)
+    assert missing == []
+
+    bundle_missing = registry.checkpoint_bundle_missing_paths(model, ckpt_root, config=DummyConfig)
+    assert bundle_missing == {}
+
+    assert calls == [], f"expected 0 file hash reads, got {len(calls)}: {calls}"

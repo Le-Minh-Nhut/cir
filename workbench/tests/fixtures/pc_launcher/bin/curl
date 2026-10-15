@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+import sys
+import os
+import json
+from pathlib import Path
+
+log_file = os.environ.get("MOCK_LOG_FILE")
+if log_file:
+    try:
+        secrets = {
+            k: v for k, v in os.environ.items()
+            if any(p in k for p in ("TOKEN", "KEY", "SECRET", "LEDGER"))
+        }
+        with open(log_file, "a") as f:
+            f.write(json.dumps({"tool": "curl", "args": sys.argv[1:], "secrets": secrets}) + "\n")
+    except Exception:
+        pass
+
+args_str = " ".join(sys.argv)
+has_w = "-w" in sys.argv or "--write-out" in args_str
+is_devnull = "-o /dev/null" in args_str or ("-o" in sys.argv and "/dev/null" in sys.argv)
+
+if os.environ.get("MOCK_CURL_ALWAYS_FAIL") == "1":
+    if has_w:
+        print("000")
+    sys.stderr.write("curl: (7) Failed to connect to 127.0.0.1 port 8000: Connection refused\n")
+    sys.exit(7)
+
+retry_file = os.environ.get("MOCK_CURL_RETRY_COUNT_FILE")
+if retry_file and os.path.exists(retry_file):
+    try:
+        count = int(Path(retry_file).read_text().strip())
+        if count > 0:
+            Path(retry_file).write_text(str(count - 1))
+            if has_w:
+                print("000")
+            sys.stderr.write("curl: (7) Failed to connect to 127.0.0.1 port 8000: Connection refused\n")
+            sys.exit(7)
+    except Exception:
+        pass
+
+url = ""
+for arg in sys.argv[1:]:
+    if arg.startswith("http://") or arg.startswith("https://"):
+        url = arg
+        break
+
+if not url:
+    for arg in reversed(sys.argv[1:]):
+        if not arg.startswith("-"):
+            url = arg
+            break
+
+body = ""
+status_code = "200"
+
+if "/api/models" in url:
+    fixtures_dir = Path(__file__).resolve().parent.parent
+    models_file = fixtures_dir / "models.json"
+    if models_file.exists():
+        body = models_file.read_text().strip()
+    else:
+        body = "[]"
+elif url.endswith("/api/jobs") or url.endswith("/api/jobs/"):
+    is_post = "-X" in sys.argv and ("POST" in sys.argv[sys.argv.index("-X") + 1:] or "POST" in args_str)
+    if is_post or "-d" in sys.argv or "--data" in args_str:
+        post_log = os.environ.get("MOCK_POST_JOBS_FILE")
+        if post_log:
+            try:
+                with open(post_log, "a") as f:
+                    f.write(json.dumps({"args": sys.argv[1:]}) + "\n")
+            except Exception:
+                pass
+        body = json.dumps({
+            "job_id": "job_limn_new_999",
+            "model_id": "limn",
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "status": "queued"
+        })
+        status_code = "201"
+    else:
+        # GET /api/jobs
+        job_status = os.environ.get("MOCK_JOB_STATUS", "")
+        # The list is read several times before a decision is made: the already-running probe,
+        # the readiness poll, then the duplicate-job check. `MOCK_QUEUED_READS` is how many of
+        # those reads still see the pre-existing job as `queued` before it settles to a terminal
+        # state — so a test can put the observable transition exactly where the real backend
+        # would put it (after acceptance / after the worker picks it up) instead of coupling
+        # fixture state to an incidental poll count.
+        reads_file = Path(os.environ.get("MOCK_READS_FILE") or (os.environ.get("MOCK_COUNTER_FILE")
+                                                               or "/tmp/mock_jobs_get_count.txt"))
+        reads = 0
+        if reads_file.exists():
+            try:
+                reads = int(reads_file.read_text().strip())
+            except (OSError, ValueError):
+                reads = 0
+        try:
+            reads_file.write_text(str(reads + 1))
+        except OSError:
+            pass
+        still_queued_for = int(os.environ.get("MOCK_QUEUED_READS", "0") or "0")
+
+        post_log = Path(os.environ.get("MOCK_POST_JOBS_FILE", "/tmp/mock_jobs_post.log"))
+        accepted = 0
+        if post_log.exists():
+            try:
+                accepted = len([line for line in post_log.read_text().splitlines() if line.strip()])
+            except OSError:
+                accepted = 0
+
+        if job_status == "queued":
+            cur_st = "queued" if (accepted == 0 and reads < still_queued_for) else "completed"
+            body = json.dumps([{
+                "job_id": "job_limn_queued_01",
+                "model_id": "limn",
+                "checkpoint_id": "base_iter0_all_categories",
+                "protocol_id": "fashioniq_val_split",
+                "status": cur_st,
+                "return_code": 0,
+                "provenance": {"run_id": "run_limn_corr_01"}
+            }])
+        elif job_status == "running":
+            body = json.dumps([{
+                "job_id": "job_limn_new_999",
+                "model_id": "limn",
+                "checkpoint_id": "base_iter0_all_categories",
+                "protocol_id": "fashioniq_val_split",
+                "status": "running"
+            }])
+        elif job_status == "completed":
+            body = json.dumps([{
+                "job_id": "job_limn_new_999",
+                "model_id": "limn",
+                "checkpoint_id": "base_iter0_all_categories",
+                "protocol_id": "fashioniq_val_split",
+                "status": "completed",
+                "return_code": 0,
+                "provenance": {"run_id": "run_limn_corr_01"}
+            }])
+        elif job_status == "failed":
+            body = json.dumps([{
+                "job_id": "job_limn_new_999",
+                "model_id": "limn",
+                "checkpoint_id": "base_iter0_all_categories",
+                "protocol_id": "fashioniq_val_split",
+                "status": "failed",
+                "stage": "evaluation",
+                "error": "CUDA out of memory",
+                "log_directory": "/artifacts/logs/job_limn_failed_01"
+            }])
+        elif job_status == "blocked":
+            body = json.dumps([{
+                "job_id": "job_limn_new_999",
+                "model_id": "limn",
+                "checkpoint_id": "base_iter0_all_categories",
+                "protocol_id": "fashioniq_val_split",
+                "status": "blocked",
+                "stage": "gpu_verification",
+                "error": "GPU capability unverified",
+                "log_directory": "/artifacts/logs/job_limn_blocked_01"
+            }])
+        else:
+            body = json.dumps([{
+                "job_id": "job_limn_new_999",
+                "model_id": "limn",
+                "checkpoint_id": "base_iter0_all_categories",
+                "protocol_id": "fashioniq_val_split",
+                "status": "completed",
+                "return_code": 0,
+                "provenance": {"run_id": "run_limn_corr_01"}
+            }])
+elif "/api/jobs/" in url:
+    job_status = os.environ.get("MOCK_JOB_STATUS", "completed")
+    if job_status == "failed":
+        body = json.dumps({
+            "job_id": "job_limn_new_999",
+            "model_id": "limn",
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "status": "failed",
+            "stage": "evaluation",
+            "error": "CUDA out of memory",
+            "log_directory": "/artifacts/logs/job_limn_failed_01"
+        })
+    elif job_status == "blocked":
+        body = json.dumps({
+            "job_id": "job_limn_new_999",
+            "model_id": "limn",
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "status": "blocked",
+            "stage": "gpu_verification",
+            "error": "GPU capability unverified",
+            "log_directory": "/artifacts/logs/job_limn_blocked_01"
+        })
+    elif job_status == "running":
+        body = json.dumps({
+            "job_id": "job_limn_new_999",
+            "model_id": "limn",
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "status": "running"
+        })
+    elif job_status == "queued":
+        body = json.dumps({
+            "job_id": "job_limn_new_999",
+            "model_id": "limn",
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "status": "queued"
+        })
+    else:
+        body = json.dumps({
+            "job_id": "job_limn_new_999",
+            "model_id": "limn",
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "status": "completed",
+            "return_code": 0,
+            "provenance": {"run_id": "run_limn_corr_01"}
+        })
+elif "/api/runs" in url:
+    if os.environ.get("MOCK_RUNS_STATUS") == "corroborated":
+        body = json.dumps([{
+            "run_id": "run_limn_corr_01",
+            "model_id": "limn",
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "corroborated": True,
+            "official": True,
+            "created_at": "2026-10-16T00:00:00Z"
+        }])
+    else:
+        body = "[]"
+elif "/api/benchmark-runs" in url:
+    if os.environ.get("MOCK_RUNS_STATUS") == "corroborated":
+        body = json.dumps([{
+            "run_id": "run_limn_corr_01",
+            "model_id": "limn",
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "benchmark_gate": {"status": "PASS_WITHIN_5_PERCENT"},
+            "created_at": "2026-10-16T00:00:00Z"
+        }])
+    else:
+        body = "[]"
+elif "/api/index/rebuild" in url:
+    body = json.dumps({"runs_indexed": 1})
+elif ":5173" in url:
+    body = "<!doctype html><html><head><title>CIR Workbench</title></head><body>OK</body></html>"
+else:
+    body = "{}"
+
+if is_devnull:
+    if has_w:
+        print(status_code)
+elif has_w:
+    if body:
+        print(f"{body}\n{status_code}")
+    else:
+        print(status_code)
+else:
+    if body:
+        print(body)
+
+sys.exit(0)

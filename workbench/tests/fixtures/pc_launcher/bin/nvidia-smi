@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+import sys
+import os
+import json
+
+log_file = os.environ.get("MOCK_LOG_FILE")
+if log_file:
+    try:
+        secrets = {
+            k: v for k, v in os.environ.items()
+            if any(p in k for p in ("TOKEN", "KEY", "SECRET", "LEDGER"))
+        }
+        with open(log_file, "a") as f:
+            f.write(json.dumps({"tool": "nvidia-smi", "args": sys.argv[1:], "secrets": secrets}) + "\n")
+    except Exception:
+        pass
+
+if os.environ.get("MOCK_NVIDIA_SMI_FAIL") == "1":
+    sys.stderr.write("NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver.\n")
+    sys.exit(1)
+
+args_str = " ".join(sys.argv)
+if "--query-gpu" in args_str:
+    if "driver_version" in args_str:
+        print("550.54.14, NVIDIA GeForce RTX 5070 Ti, 12.0")
+    else:
+        print("NVIDIA GeForce RTX 5070 Ti, 12.0")
+    sys.exit(0)
+
+print("""+-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.54.14              Driver Version: 550.54.14      CUDA Version: 12.8     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5070 Ti     Off |   00000000:01:00.0 Off |                  N/A |
+| 30%   42C    P8             18W /  285W |     512MiB /  16384MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+""")
+sys.exit(0)

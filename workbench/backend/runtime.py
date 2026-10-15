@@ -60,6 +60,8 @@ class EnvironmentReport:
     #: Provenance of the verified contract: None for the historical pins, or the registry's
     #: `adapted_runtime.target_compute_capability` when an operator-selected adaptation applied.
     runtime_adaptation: str | None = None
+    advisory_fingerprint: str | None = None
+    content_verified: bool = False
 
 _PROBE_ENV_DENY_PREFIXES = (
     "WORKBENCH_LEDGER_KEY", "WORKBENCH_SECRET_",
@@ -808,9 +810,15 @@ def resolved_runtime_environment(model: dict[str, Any]) -> dict[str, Any]:
     dependency set from the one the verifier validates. The adaptation applies only when the
     registry declares a matching `adapted_runtime.target_compute_capability`; any other model is
     returned exactly as declared (historical pins stay the default contract).
+
+    A selection the model never declared is NOT an error here: a single operator-wide
+    `WORKBENCH_RUNTIME_ADAPTATION` applies to whichever models declare that profile, and every
+    other model keeps its historical contract. Refusing instead made the planner raise for every
+    non-adapted model in a run that mentions the variable at all. A model that DOES declare an
+    adapted_runtime the selection fails to match is still an operator error and refuses loudly.
     """
     env = dict(model.get("environment") or {})
-    adapted = runtime_adaptation(model)
+    adapted = runtime_adaptation(model, undeclared_is_error=False)
     if not adapted:
         return env
     resolved = {**env}
@@ -960,6 +968,7 @@ def record_gpu_capability(model: dict[str, Any], result: dict[str, Any],
     key = _gpu_capability_key(model)
     payload = {
         **result,
+        "model_id": model.get("model_id"),
         "capability_key": key,
         # What this record covers, stated on the record:
         "host_identity": result.get("host_identity") or _host_identity(),
@@ -1015,8 +1024,7 @@ def _host_identity() -> dict[str, str]:
             break
     return identity
 
-
-def _gpu_capability_key(model: dict[str, Any]) -> str:
+def _gpu_capability_key(model: dict[str, Any], authoritative: bool = True) -> str:
     import hashlib
 
     env = model.get("environment") or {}
@@ -1026,7 +1034,7 @@ def _gpu_capability_key(model: dict[str, Any]) -> str:
     if interpreter is not None and interpreter.is_file():
         fingerprint = _interpreter_fingerprint(
             str(interpreter), _environment_contract_digest(model),
-            str(interpreter.parent.parent))
+            str(interpreter.parent.parent), authoritative=authoritative)
     return hashlib.sha256(
         json.dumps({
             "model_id": model.get("model_id"),
@@ -1058,10 +1066,11 @@ def _gpu_cache_key() -> bytes:
     """The operator key for GPU capability records.
 
     Resolution order mirrors the ledger: ``WORKBENCH_LEDGER_KEY`` from the operator's secret
-    store, then ``<CIR_REPO_ROOT>/.workbench_ledger_key``. The file is created on first use,
-    exactly as the ledger creates it, so an operator who relies on the documented fallback key
-    can still persist and reuse a verified capability. Failures return b"", which makes every
-    persisted record unverified rather than trusted.
+    store, a key already present at the legacy ``<CIR_REPO_ROOT>/.workbench_ledger_key``, then
+    the private config directory under ``XDG_CONFIG_HOME`` (or the operator's home). The file is
+    created on first use, exactly as the ledger creates it, so an operator who relies on the
+    documented fallback key can still persist and reuse a verified capability. Failures return
+    b"", which makes every persisted record unverified rather than trusted.
     """
     import secrets
     import stat as _stat
@@ -1074,7 +1083,21 @@ def _gpu_cache_key() -> bytes:
 
         repo_root = Path(getattr(resolve_config(), "CIR_REPO_ROOT",
                                  Path(__file__).resolve().parents[2]))
-        key_path = repo_root / ".workbench_ledger_key"
+        # The repository-root location is not writable in the deployed container (the checkout
+        # is owned by the build user while the container runs as the operator's uid), and the
+        # deployment points XDG_CONFIG_HOME at the persistent artifacts mount for exactly this
+        # class of key. Without that fallback the key resolved to b"", every capability record
+        # was written unsigned, and the cache rejected its own records — closing the GPU launch
+        # gate on the hardware the adaptation exists for.
+        legacy_key_path = repo_root / ".workbench_ledger_key"
+        config_home = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+        private_key_path = config_home / "cir" / "workbench_ledger_key"
+        if legacy_key_path.is_file():
+            key_path = legacy_key_path
+        elif os.access(repo_root, os.W_OK):
+            key_path = legacy_key_path
+        else:
+            key_path = private_key_path
         if key_path.is_file():
             if not _stat.S_ISREG(key_path.lstat().st_mode):
                 return b""
@@ -1121,45 +1144,67 @@ def hmac_compare(expected: str, claimed: str) -> bool:
 GPU_PROBE_OVERRIDE_ENV = "WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE"
 
 
-def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport) -> dict[str, Any] | None:
+def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
+                           authoritative: bool = True) -> dict[str, Any] | None:
     """A previously verified capability for exactly this environment, or None.
 
-    The result is read back from disk when it was recorded by another process (the master
-    verifies and a later preflight or doctor run must see it), and the key includes the
-    interpreter and dependency fingerprints so a changed environment cannot reuse it.
+    On the advisory/readiness path (`authoritative=False`), this reads existing signed
+    records without unbounded content hashing. On the authoritative verification path,
+    it checks the full byte-exact fingerprint.
     """
-    key = _gpu_capability_key(model)
+    env = model.get("environment") or {}
+    configured = os.environ.get(env.get("python_env_var") or "", "")
+    from workbench.backend.operator_config import resolve_config
+
+    config_for_records = resolve_config()
+    synthetic_ok = os.environ.get(GPU_PROBE_OVERRIDE_ENV) == "1"
+
+    if not authoritative:
+        for cached_payload in list(_GPU_CAPABILITY.values()):
+            if (isinstance(cached_payload, dict)
+                    and cached_payload.get("model_id") in (None, model.get("model_id"))
+                    and cached_payload.get("interpreter") == configured
+                    and cached_payload.get("dependency_fingerprint") == _environment_contract_digest(model)
+                    and cached_payload.get("host_identity") == _host_identity()
+                    and _gpu_capability_signature_valid(cached_payload)):
+                return cached_payload
+        directory = gpu_capability_directory(config_for_records)
+        if directory.is_dir():
+            for candidate in sorted(directory.glob("*.json")):
+                try:
+                    payload = json.loads(candidate.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    continue
+                probe_source = payload.get("probe_source", "interpreter") if isinstance(payload, dict) else "interpreter"
+                if not (probe_source == "interpreter" or (synthetic_ok and probe_source == "override")):
+                    continue
+                if (isinstance(payload, dict)
+                        and payload.get("model_id") in (None, model.get("model_id"))
+                        and payload.get("interpreter") == configured
+                        and payload.get("dependency_fingerprint") == _environment_contract_digest(model)
+                        and payload.get("host_identity") == _host_identity()
+                        and _gpu_capability_signature_valid(payload)):
+                    if payload.get("capability_key"):
+                        _GPU_CAPABILITY[payload["capability_key"]] = payload
+                    return payload
+        return None
+
+    key = _gpu_capability_key(model, authoritative=True)
     cached = _GPU_CAPABILITY.get(key)
     if cached is not None and not _gpu_capability_signature_valid(cached):
-        # A record that cannot be authenticated is not evidence.
         _GPU_CAPABILITY.pop(key, None)
         cached = None
     if cached is None:
-        from workbench.backend.operator_config import resolve_config
-
         payload = None
         try:
-            config_for_records = resolve_config()
             path = gpu_capability_path(config_for_records, key)
             if not path.is_file():
-                # Records written before capabilities became per-key live in one file; accept
-                # one only when it names this very key, so a foreign record can never be
-                # promoted into evidence for this model.
                 legacy = gpu_capability_path(config_for_records)
                 path = legacy if legacy.is_file() else path
             if path.is_file():
                 payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             payload = None
-        # The file lives inside the writable artifact tree, so its own fields are not
-        # evidence: it is authenticated with the same out-of-band key as the ledger, and a
-        # record whose signature does not verify is ignored entirely (never trusted, never
-        # rewritten). Forging a capability therefore requires the operator's key.
-        # A record whose probe never ran the real interpreter (probe_source != "interpreter")
-        # is synthetic test evidence: it is honored only while the same test-only switch is
-        # set, never in a real launch gate. The HMAC proves who wrote it, not that the
-        # hardware was probed.
-        synthetic_ok = os.environ.get(GPU_PROBE_OVERRIDE_ENV) == "1"
         probe_source = payload.get("probe_source", "interpreter") if isinstance(payload, dict) else "interpreter"
         if (isinstance(payload, dict) and payload.get("capability_key") == key
                 and (probe_source == "interpreter" or (synthetic_ok and probe_source == "override"))):
@@ -1168,15 +1213,13 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport) -> 
                 _GPU_CAPABILITY[key] = payload
     if cached is None:
         return None
-    # The cached result must describe this very environment: a changed interpreter or
-    # dependency set produces a different key and therefore no reuse.
     if cached.get("interpreter_fingerprint") and report.environment_fingerprint:
         if cached["interpreter_fingerprint"] != report.environment_fingerprint:
             return None
     return cached
 
-
-def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cuda: bool = False) -> EnvironmentReport:
+def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cuda: bool = False,
+                       authoritative: bool | None = None, advisory: bool = False) -> EnvironmentReport:
     """Return a truthful environment report. Never claims RUNTIME_READY without proof."""
     model_id = model.get("model_id", "<unnamed>")
     env = model.get("environment") or {}
@@ -1219,8 +1262,9 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         return EnvironmentReport(model_id, variable, str(interpreter), "INTERPRETER_PRESENT", "NOT_EXECUTABLE",
                                  reason="interpreter is not executable")
 
+    is_authoritative = False if advisory else (True if authoritative is None else authoritative)
     if probe:
-        cached = _reuse(model, require_cuda, str(interpreter))
+        cached = _reuse(model, require_cuda, str(interpreter), authoritative=is_authoritative)
         if cached is not None:
             return cached
 
@@ -1231,6 +1275,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         base_prefix=(identity or {}).get("base_prefix"),
         python_version=(identity or {}).get("version"),
         probe_executed=bool(identity),
+        content_verified=is_authoritative,
     )
     if probe and identity is None:
         report.tier = TIER_BLOCKED
@@ -1363,7 +1408,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         # Interpreter, Python version, and dependencies are verified; GPU capability is a
         # separate question that inspection must never answer. The model is pending, and
         # verify_gpu_runtime() is the authorized path that resolves it on the GPU host.
-        cached_gpu = _cached_gpu_capability(model, report)
+        cached_gpu = _cached_gpu_capability(model, report, authoritative=is_authoritative)
         if cached_gpu is not None and cached_gpu.get("capability_verified"):
             report.gpu_capability = cached_gpu
             report.cuda_available = bool(cached_gpu.get("cuda_available"))
@@ -1447,21 +1492,46 @@ def _member_digest(path: Path) -> str:
     return sha256_file(_Path(path))
 
 
+_ADVISORY_INTERPRETER_FINGERPRINT_CACHE: dict[tuple, str] = {}
+
 def _interpreter_fingerprint(interpreter: str, contract_digest: str,
-                            prefix: str | None = None) -> str:
+                            prefix: str | None = None,
+                            *, authoritative: bool = True) -> str:
     """Identity of the *environment content*, not merely its path.
 
-    A path alone says nothing about later package changes inside that environment,
-    so the interpreter binary, the environment marker files, the installed distributions'
-    own member content, and the contract are all part of the fingerprint. Any change
-    invalidates a cached verification.
+    On the advisory/status path (`authoritative=False`), this performs a cheap presence
+    and metadata check: interpreter binary, environment marker files, site-packages directory
+    mtimes, distribution metadata, and RECORD file text (which records package-manager digests).
+
+    On the authoritative verification path (`authoritative=True`), every distribution member
+    is hashed byte-by-byte via `_member_digest` without caching.
     """
     import hashlib
 
-    from workbench.backend.registry import sha256_file
+    path = Path(interpreter)
+    if prefix:
+        prefix_path = Path(prefix)
+    else:
+        prefix_path = path.parent.parent
+
+    site_packages_dirs = sorted(prefix_path.glob("lib/python*/site-packages"))
+    site_packages_dirs += [prefix_path / "lib" / "site-packages",
+                           prefix_path / "Lib" / "site-packages"]
+
+    cache_key = None
+    if not authoritative:
+        try:
+            st = path.stat()
+            sp_mtimes = tuple((str(sp), sp.stat().st_mtime_ns) for sp in site_packages_dirs if sp.is_dir())
+            cache_key = (str(path), st.st_size, st.st_mtime_ns, str(prefix_path), contract_digest, sp_mtimes)
+            cached = _ADVISORY_INTERPRETER_FINGERPRINT_CACHE.get(cache_key)
+            if cached is not None:
+                return cached
+        except OSError:
+            cache_key = None
+
     hasher = hashlib.sha256()
     hasher.update(contract_digest.encode("utf-8"))
-    path = Path(interpreter)
     hasher.update(str(path).encode("utf-8"))
     for candidate in (path, path.resolve()):
         try:
@@ -1470,13 +1540,6 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
             continue
         hasher.update(f"{candidate}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
         break
-    # Use the prefix the interpreter itself reports when available: resolving the
-    # invocation path can land on a shared base interpreter directory (symlinked
-    # venvs), which would look for markers and packages in the wrong place.
-    if prefix:
-        prefix_path = Path(prefix)
-    else:
-        prefix_path = path.parent.parent
     for marker in ("pyvenv.cfg", "conda-meta/history", "conda-meta"):
         marker_path = prefix_path / marker
         try:
@@ -1484,11 +1547,7 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
         except OSError:
             continue
         hasher.update(f"{marker}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
-    # Package directories live under the environment's lib/: their directory mtimes
-    # change when a dependency is installed or removed there.
-    site_packages_dirs = sorted(prefix_path.glob("lib/python*/site-packages"))
-    site_packages_dirs += [prefix_path / "lib" / "site-packages",
-                           prefix_path / "Lib" / "site-packages"]
+
     for site_packages in site_packages_dirs:
         if not site_packages.is_dir():
             continue
@@ -1496,9 +1555,6 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
             hasher.update(f"{site_packages}:{site_packages.stat().st_mtime_ns}".encode("utf-8"))
         except OSError:
             continue
-        # A force-reinstall or an in-place member rewrite need not touch the directory
-        # mtime, so each distribution's own metadata *and* the files it actually
-        # installs (listed in its RECORD) are hashed.
         for dist in sorted(list(site_packages.glob("*.dist-info")) + list(site_packages.glob("*.egg-info"))):
             metadata = dist / "METADATA" if dist.name.endswith(".dist-info") else dist / "PKG-INFO"
             try:
@@ -1508,7 +1564,6 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
             hasher.update(f"{dist.name}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
             record = dist / "RECORD"
             if not record.is_file():
-                # A legacy egg-info has no RECORD: hash everything it contains.
                 for member in sorted(dist.iterdir()):
                     try:
                         member_stat = member.stat()
@@ -1522,26 +1577,27 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
             except OSError:
                 continue
             hasher.update(f"RECORD:{record_text}".encode("utf-8"))
-            members = [line.split(",", 1)[0] for line in record_text.splitlines() if line.strip()]
-            for member in members:
-                member_path = site_packages / member
-                try:
-                    # Content, not size+mtime: a same-size, same-mtime rewrite (a patch, a
-                    # force-reinstall in place) must invalidate a cached capability. Large
-                    # distributions are hashed in full here — this runs during environment
-                    # verification, not per query — with a process-local digest memo so a
-                    # repeated verification of an unchanged environment stays cheap.
-                    hasher.update(f"{member}:{_member_digest(member_path)}".encode("utf-8"))
-                    continue
-                except (OSError, ValueError):
-                    pass
-                try:
-                    stat_result = member_path.stat()
-                except OSError:
-                    hasher.update(f"{member}:ABSENT".encode("utf-8"))
-                    continue
-                hasher.update(f"{member}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
-    return hasher.hexdigest()
+            if authoritative:
+                members = [line.split(",", 1)[0] for line in record_text.splitlines() if line.strip()]
+                for member in members:
+                    member_path = site_packages / member
+                    try:
+                        hasher.update(f"{member}:{_member_digest(member_path)}".encode("utf-8"))
+                        continue
+                    except (OSError, ValueError):
+                        pass
+                    try:
+                        stat_result = member_path.stat()
+                    except OSError:
+                        hasher.update(f"{member}:ABSENT".encode("utf-8"))
+                        continue
+                    hasher.update(f"{member}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
+
+    digest = hasher.hexdigest()
+    if cache_key is not None:
+        _ADVISORY_INTERPRETER_FINGERPRINT_CACHE[cache_key] = digest
+    return digest
+
 
 
 
@@ -1561,7 +1617,8 @@ def _cache_enabled() -> bool:
     return os.environ.get("WORKBENCH_NO_ENV_CACHE") not in {"1", "true", "yes"}
 
 
-def _reuse(model: dict[str, Any], require_cuda: bool, interpreter: str) -> EnvironmentReport | None:
+def _reuse(model: dict[str, Any], require_cuda: bool, interpreter: str,
+           authoritative: bool = True) -> EnvironmentReport | None:
     """Return a still-valid cached verification, or None.
 
     A cached result is reused only when the contract, the invocation path, the
@@ -1574,11 +1631,24 @@ def _reuse(model: dict[str, Any], require_cuda: bool, interpreter: str) -> Envir
     cached = _VERIFIED_ENVIRONMENTS.get(key)
     if cached is None or cached.interpreter != interpreter:
         return None
-    if cached.environment_fingerprint != _interpreter_fingerprint(
-        interpreter, _environment_contract_digest(model), cached.prefix
-    ):
-        _VERIFIED_ENVIRONMENTS.pop(key, None)
-        return None
+    if authoritative:
+        if cached.environment_fingerprint is None:
+            return None
+        if cached.environment_fingerprint != _interpreter_fingerprint(
+            interpreter, _environment_contract_digest(model), cached.prefix,
+            authoritative=True,
+        ):
+            _VERIFIED_ENVIRONMENTS.pop(key, None)
+            return None
+    else:
+        cached_fp = cached.advisory_fingerprint or cached.environment_fingerprint
+        current_fp = _interpreter_fingerprint(
+            interpreter, _environment_contract_digest(model), cached.prefix,
+            authoritative=False,
+        )
+        if cached_fp != current_fp:
+            _VERIFIED_ENVIRONMENTS.pop(key, None)
+            return None
     # A pinned-interpreter mismatch must never be masked by a cached verification.
     declared_digest = str((model.get("environment") or {}).get("interpreter_sha256") or "").strip().lower()
     if declared_digest and declared_digest.upper() != "UNKNOWN":
@@ -1592,14 +1662,24 @@ def _remember(model: dict[str, Any], require_cuda: bool, report: EnvironmentRepo
     if not _cache_enabled() or report.interpreter is None:
         return
     report.contract_digest = _environment_contract_digest(model)
-    report.environment_fingerprint = _interpreter_fingerprint(
-        report.interpreter, report.contract_digest, report.prefix)
+    is_authoritative = getattr(report, "content_verified", False)
+    if is_authoritative:
+        report.environment_fingerprint = _interpreter_fingerprint(
+            report.interpreter, report.contract_digest, report.prefix,
+            authoritative=True)
+        report.advisory_fingerprint = report.environment_fingerprint
+    else:
+        report.advisory_fingerprint = _interpreter_fingerprint(
+            report.interpreter, report.contract_digest, report.prefix,
+            authoritative=False)
+        report.environment_fingerprint = None
     report.verified_at = datetime.now(timezone.utc).isoformat()
     _VERIFIED_ENVIRONMENTS[_cache_key(model, require_cuda)] = report
 
 
 def forget_environment(interpreter: str | None = None) -> None:
     """Drop cached verifications (all, or those for one interpreter path)."""
+    _ADVISORY_INTERPRETER_FINGERPRINT_CACHE.clear()
     if interpreter is None:
         _VERIFIED_ENVIRONMENTS.clear()
         return
@@ -1647,7 +1727,7 @@ def require_launch_ready(model: dict[str, Any], *, require_cuda: bool = True) ->
     interpreter = require_verified_model_interpreter(model, require_cuda=require_cuda)
     if not _requires_gpu(model):
         return interpreter
-    report = verify_environment(model, probe=True, require_cuda=require_cuda)
+    report = verify_environment(model, probe=True, require_cuda=require_cuda, authoritative=True)
     if report.tier in LAUNCH_READY_TIERS:
         return interpreter
     raise GpuVerificationError(
@@ -1829,11 +1909,11 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
         # A capability already verified for exactly this environment is a recorded
         # observation, not a guess: an evaluation launch consumes the record instead of
         # re-running the probe. `force=True` re-probes (the operator's explicit re-check).
-        existing = _cached_gpu_capability(model, verify_environment(model, probe=True))
+        existing = _cached_gpu_capability(model, verify_environment(model, probe=True, advisory=True))
         if existing is not None and existing.get("capability_verified"):
             return existing
 
-    report = verify_environment(model, probe=True)
+    report = verify_environment(model, probe=True, authoritative=True)
     if report.tier in (TIER_UNCONFIGURED, "INTERPRETER_MISSING", TIER_GPU_DEFERRED) or not report.interpreter:
         raise GpuVerificationError(
             f"cannot probe GPU before the interpreter is usable [{report.tier}/{report.status}]")
@@ -1909,14 +1989,25 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
     # and then raise at the first real kernel launch.
     adaptation_target = report.runtime_adaptation
     if capability and adaptation_target:
-        target = adaptation_target.replace("sm_", "").replace("_blackwell", "")
+        target = adaptation_target.replace("_blackwell", "").strip().lower()
+        # torch's arch list carries the `sm_` prefix and may carry a `+PTX` suffix; the
+        # adaptation names the capability either way, so both sides are normalized to the
+        # bare capability number before comparison. Comparing a stripped target against a
+        # prefixed list made the gate unsatisfiable and closed the launch path on the very
+        # hardware the adaptation exists for (Blackwell sm_120).
+        def _capability_number(value: str) -> str:
+            text = value.strip().lower().split("+")[0]
+            return text[3:] if text.startswith("sm_") else text
+
         arch_list = [str(a).lower() for a in result.get("torch_arch_list") or []]
+        target_number = _capability_number(target)
+        arch_numbers = [_capability_number(a) for a in arch_list]
         device_cap = str(result.get("compute_capability") or "").replace(".", "")
-        if target not in arch_list:
+        if target_number not in arch_numbers:
             capability = False
             result["adaptation_mismatch"] = (
                 f"adapted runtime targets {adaptation_target} but torch arch list lacks it: {arch_list}")
-        elif device_cap and device_cap != target:
+        elif device_cap and device_cap != target_number:
             capability = False
             result["adaptation_mismatch"] = (
                 f"adapted runtime targets {adaptation_target} but the probed device is sm_{device_cap}")
@@ -1957,7 +2048,7 @@ class GpuVerificationError(RuntimeError):
 
 def environment_status(model: dict[str, Any], probe: bool = False) -> dict[str, Any]:
     """Backward-compatible dict view of the environment report."""
-    report = verify_environment(model, probe=probe)
+    report = verify_environment(model, probe=probe, advisory=True)
     data = asdict(report)
     # Legacy consumers read `status`/`interpreter`/`variable`/`tier`.
     data.setdefault("isolation_reason", data.get("reason"))
@@ -1974,7 +2065,7 @@ def environment_blockers(model: dict[str, Any]) -> list[str]:
     if not model.get("environment_required"):
         return []
     probe_environment = globals().get("verify_environment", verify_environment)
-    report = probe_environment(model, probe=True)
+    report = probe_environment(model, probe=True, advisory=True)
     if report.tier in LAUNCH_READY_TIERS:
         return []
     variable = report.variable or "model-specific Python"
@@ -2309,14 +2400,19 @@ def runtime_blockers(model: dict[str, Any], checkpoint: dict[str, Any], config: 
     if protocol is not None and protocol not in model.get("supported_protocols", []):
         blockers.append(f"protocol incompatible: {protocol}")
     checkpoint_file = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
-    if not checkpoint_is_present(checkpoint_file, checkpoint):
-        blockers.append(f"checkpoint missing: {checkpoint_missing_paths(checkpoint_file, checkpoint)[0]}")
+    if not checkpoint_is_present(checkpoint_file, checkpoint, model_id=model["model_id"], config=config):
+        blockers.append(f"checkpoint missing: {checkpoint_missing_paths(checkpoint_file, checkpoint, model_id=model['model_id'], config=config)[0]}")
     if checkpoint.get("checkpoint_mapping_status") != "VERIFIED_METADATA":
         blockers.append("checkpoint mapping unresolved")
     expected_sha = checkpoint.get("expected_sha256")
-    if expected_sha and checkpoint_file.is_file() and sha256_file(checkpoint_file) != expected_sha:
-        blockers.append("official checkpoint hash mismatch")
-    for bundle_id, missing in checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT).items():
+    if expected_sha and checkpoint_file.is_file():
+        # The availability digest is manifest-backed when the workbench downloaded the file
+        # itself, so building a per-model readiness view does not re-read gigabytes for every
+        # model on every request.
+        from workbench.backend.registry import _availability_digest
+        if _availability_digest(config, model["model_id"], checkpoint, checkpoint_file) != expected_sha:
+            blockers.append("official checkpoint hash mismatch")
+    for bundle_id, missing in checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT, config=config).items():
         blockers.append(f"checkpoint bundle incomplete: {bundle_id}: {missing[0]}")
 
     return list(dict.fromkeys(blockers))

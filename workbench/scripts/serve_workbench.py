@@ -145,6 +145,25 @@ def main(argv: list[str] | None = None, root: Path = WORKBENCH_ROOT) -> int:
         return 0
 
     children: list[subprocess.Popen[object]] = []
+    # `docker stop` sends SIGTERM to *this* launcher, not to the children: each child leads its
+    # own session, so nothing would run the backend's shutdown handshake and a queued evaluator
+    # would keep its GPU. Forward the stop as an ordinary SIGTERM to the backend, which then
+    # reaps every live job's process group, then raise SIGINT so the loop below stops the
+    # children as usual.
+    def forward_stop(signum: int, _frame: object) -> None:
+        for child in children:
+            if child.poll() is None:
+                try:
+                    os.kill(child.pid, signal.SIGTERM)
+                except OSError:
+                    pass
+        signal.raise_signal(signal.SIGINT)
+
+    for signum in (signal.SIGTERM, signal.SIGHUP):
+        try:
+            signal.signal(signum, forward_stop)
+        except (ValueError, OSError):
+            pass
     try:
         for command in commands:
             environment = os.environ | ({"WORKBENCH_BACKEND_URL": f"http://127.0.0.1:{args.backend_port}"} if command.name == "frontend" else {})

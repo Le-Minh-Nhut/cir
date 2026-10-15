@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+import sys
+import os
+import json
+
+log_file = os.environ.get("MOCK_LOG_FILE")
+if log_file:
+    try:
+        secrets = {
+            k: v for k, v in os.environ.items()
+            if any(p in k for p in ("TOKEN", "KEY", "SECRET", "LEDGER"))
+        }
+        with open(log_file, "a") as f:
+            f.write(json.dumps({"tool": "docker", "args": sys.argv[1:], "secrets": secrets}) + "\n")
+    except Exception:
+        pass
+
+args_str = " ".join(sys.argv)
+
+if "version" in sys.argv:
+    if os.environ.get("MOCK_DOCKER_NO_DAEMON") == "1" or os.environ.get("MOCK_DOCKER_FAIL_VERSION") == "1":
+        sys.stderr.write("Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?\n")
+        sys.exit(1)
+    if any("--format" in a for a in sys.argv):
+        print("24.0.5")
+    else:
+        print("Docker version 24.0.5, build ced0996")
+    sys.exit(0)
+
+if len(sys.argv) > 1 and sys.argv[1] == "compose":
+    if "version" in sys.argv:
+        if "--short" in sys.argv:
+            print("v2.20.2")
+        else:
+            print("Docker Compose version v2.20.2")
+        sys.exit(0)
+    if "up" in sys.argv:
+        if os.environ.get("MOCK_DOCKER_FAIL_UP") == "1":
+            sys.stderr.write("docker compose up failed\n")
+            sys.exit(1)
+        print("[+] Running 2/2\n ✔ Container cir-workbench Started")
+        sys.exit(0)
+    if "ps" in sys.argv:
+        print("NAME            IMAGE           COMMAND                  SERVICE      STATUS      PORTS\ncir-workbench   cir-workbench   \"python3 -m workbenc…\"   workbench    Up 2 hours  0.0.0.0:8000->8000/tcp, 0.0.0.0:5173->5173/tcp")
+        sys.exit(0)
+    if "stop" in sys.argv or "down" in sys.argv:
+        print("Container cir-workbench Stopped")
+        sys.exit(0)
+    if "exec" in sys.argv or "run" in sys.argv:
+        if "pipeline.py" in args_str and "setup" in args_str:
+            if os.environ.get("MOCK_PIPELINE_SETUP_FAIL") == "1":
+                sys.stderr.write("Pipeline setup failed\n")
+                sys.exit(1)
+            print("Pipeline setup complete: limn prepared")
+            sys.exit(0)
+        if "probe_gpu_capability" in args_str or "nvidia_smi" in args_str or "torch" in args_str:
+            if os.environ.get("MOCK_PROBE_FAIL") == "1":
+                print('{"error": "probe failed"}')
+                sys.exit(1)
+            if os.environ.get("MOCK_DOCKER_NO_NVIDIA") == "1":
+                print('{"nvidia_smi": "NVIDIA RTX 5070 Ti, 12.0", "torch_cuda": false, "cuda_tensor": false, "error": "torch: CUDA unavailable"}')
+                sys.exit(1)
+            else:
+                print('{"nvidia_smi": "NVIDIA GeForce RTX 5070 Ti, 12.0", "torch_cuda": true, "cuda_tensor": true, "compute_capability": "12.0", "device_name": "NVIDIA GeForce RTX 5070 Ti", "error": null}')
+                sys.exit(0)
+        sys.exit(0)
+
+if "info" in sys.argv:
+    if any("Runtimes" in a for a in sys.argv):
+        if os.environ.get("MOCK_DOCKER_NO_NVIDIA") == "1":
+            print('{"runc": {"path": "runc"}}')
+        else:
+            print('{"nvidia": {"path": "nvidia-container-runtime"}, "runc": {"path": "runc"}}')
+        sys.exit(0)
+    else:
+        if os.environ.get("MOCK_DOCKER_NO_NVIDIA") == "1":
+            print("Runtimes: runc\nDefault Runtime: runc")
+        else:
+            print("Runtimes: runc nvidia\nDefault Runtime: runc\nnvidia-container-runtime")
+        sys.exit(0)
+
+if len(sys.argv) > 1 and sys.argv[1] == "ps":
+    if "--filter" in sys.argv:
+        print("cir-workbench-1")
+    else:
+        print("CONTAINER ID   IMAGE           COMMAND                  CREATED        STATUS        PORTS     NAMES\n123456789abc   cir-workbench   \"python3 -m workbenc…\"   2 hours ago    Up 2 hours              cir-workbench")
+    sys.exit(0)
+
+if len(sys.argv) > 1 and sys.argv[1] == "exec":
+    if "test -d" in args_str:
+        sys.exit(0)
+    if "probe_gpu_capability" in args_str or "nvidia_smi" in args_str or "torch" in args_str:
+        if os.environ.get("MOCK_PROBE_FAIL") == "1":
+            print('{"error": "probe failed"}')
+            sys.exit(1)
+        if os.environ.get("MOCK_DOCKER_NO_NVIDIA") == "1":
+            print('{"nvidia_smi": "NVIDIA RTX 5070 Ti, 12.0", "torch_cuda": false, "cuda_tensor": false, "error": "torch: CUDA unavailable"}')
+            sys.exit(1)
+        else:
+            print('{"nvidia_smi": "NVIDIA GeForce RTX 5070 Ti, 12.0", "torch_cuda": true, "cuda_tensor": true, "compute_capability": "12.0", "device_name": "NVIDIA GeForce RTX 5070 Ti", "error": null}')
+            sys.exit(0)
+    if "pipeline.py" in args_str and "setup" in args_str:
+        if os.environ.get("MOCK_PIPELINE_SETUP_FAIL") == "1":
+            sys.stderr.write("Pipeline setup failed\n")
+            sys.exit(1)
+        print("Pipeline setup complete: limn prepared")
+        sys.exit(0)
+    sys.exit(0)
+
+sys.exit(0)
