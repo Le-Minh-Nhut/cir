@@ -16,8 +16,8 @@ export type RunGate = {
   benchmark_gate?: Record<string, unknown> | null;
   parity_status?: string | null;
   variant_provenance?: Record<string, unknown> | null;
-  category_metrics?: Record<string, Record<string, number>> | null;
-  observed_metrics?: Record<string, number> | null;
+  category_metrics?: Record<string, Record<string, number | null>> | null;
+  observed_metrics?: Record<string, number | null> | null;
   execution_status?: string | null;
   is_synthetic?: boolean | null;
 };
