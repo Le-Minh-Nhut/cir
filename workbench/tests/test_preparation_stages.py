@@ -261,7 +261,7 @@ def test_gpu_verification_stage_state_machine(tmp_path: Path, monkeypatch) -> No
         model_id="csmcir", tier=runtime.TIER_GPU_PENDING, status=runtime.TIER_GPU_PENDING,
         interpreter=interp, variable="WORKBENCH_CSMCIR_PYTHON",
     )
-    monkeypatch.setattr(runtime, "verify_environment", lambda m, probe=True: rep)
+    monkeypatch.setattr(runtime, "verify_environment", lambda m, probe=True, **kwargs: rep)
 
     # 1. Probe runs when capability absent
     assert pipeline.probe_gpu_capability("csmcir", config) == 0
