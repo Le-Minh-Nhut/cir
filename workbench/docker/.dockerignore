@@ -1,0 +1,25 @@
+# .git, local venvs, caches and heavy external assets never belong in the image.
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Heavy external assets are mounted at run time, not baked in.
+data
+workbench/third_party
+workbench/artifacts
+
+# Node artifacts (built fresh inside the image).
+workbench/frontend/node_modules
+workbench/frontend/dist
+workbench/frontend/*.tsbuildinfo
+
+# Local secrets and scratch.
+workbench/config/workbench.env
+*.env
+!workbench/config/workbench.env.example
+!workbench/docker/.env.example
