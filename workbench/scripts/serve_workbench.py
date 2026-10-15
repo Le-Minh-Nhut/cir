@@ -45,7 +45,9 @@ def build_commands(
 ) -> list[Command]:
     commands: list[Command] = []
     if backend:
-        commands.append(Command("backend", ["uvicorn", "workbench.backend.main:app", "--host", host, "--port", str(backend_port)], root.parent))
+        # `python -m uvicorn`, not bare `uvicorn`: the workbench interpreter is the venv's, and a
+        # child spawned from it cannot rely on the venv's bin directory being on PATH.
+        commands.append(Command("backend", [sys.executable, "-m", "uvicorn", "workbench.backend.main:app", "--host", host, "--port", str(backend_port)], root.parent))
     if frontend:
         script = "preview" if production_frontend else "dev"
         commands.append(Command("frontend", ["npm", "run", script, "--", "--host", host, "--port", str(frontend_port), "--strictPort"], root / "frontend"))
@@ -100,6 +102,10 @@ def parser(config: WorkbenchConfig) -> argparse.ArgumentParser:
     mode = result.add_mutually_exclusive_group()
     mode.add_argument("--backend-only", action="store_true")
     mode.add_argument("--frontend-only", action="store_true")
+    result.add_argument("--config", type=Path, default=None,
+                        help="autopilot config YAML; its resolved paths override workbench.env "
+                             "for the served backend, so the web, autopilot and readiness "
+                             "reports describe the same artifacts")
     result.add_argument("--host", default=config.WORKBENCH_HOST)
     result.add_argument("--backend-port", type=port_number, default=config.WORKBENCH_BACKEND_PORT)
     result.add_argument("--frontend-port", type=port_number, default=config.WORKBENCH_FRONTEND_PORT)
@@ -142,6 +148,22 @@ def main(argv: list[str] | None = None, root: Path = WORKBENCH_ROOT) -> int:
     try:
         for command in commands:
             environment = os.environ | ({"WORKBENCH_BACKEND_URL": f"http://127.0.0.1:{args.backend_port}"} if command.name == "frontend" else {})
+            if command.name == "backend" and args.config is not None:
+                # One resolved configuration: the served backend sees exactly the paths the
+                # autopilot config names, so readiness reports, queued jobs and the web UI
+                # cannot disagree about where artifacts live.
+                from workbench.backend.autopilot import _workbench_config, load_config
+                autopilot_config = load_config(args.config)
+                resolved = _workbench_config(autopilot_config)
+                environment |= {
+                    "CIR_REPO_ROOT": str(resolved.CIR_REPO_ROOT),
+                    "FASHIONIQ_ROOT": str(resolved.FASHIONIQ_ROOT),
+                    "WORKBENCH_ARTIFACTS_ROOT": str(resolved.WORKBENCH_ARTIFACTS_ROOT),
+                    "WORKBENCH_CHECKPOINT_ROOT": str(resolved.WORKBENCH_CHECKPOINT_ROOT),
+                    "WORKBENCH_RESULTS_ROOT": str(resolved.WORKBENCH_RESULTS_ROOT),
+                    "WORKBENCH_THIRD_PARTY_ROOT": str(resolved.WORKBENCH_THIRD_PARTY_ROOT),
+                    "WORKBENCH_REGISTRY_PATH": str(autopilot_config.paths["registry"]),
+                }
             children.append(subprocess.Popen(command.argv, cwd=command.cwd, env=environment, start_new_session=True))
             print(f"[OK] started {command.name}")
         if args.open_browser:

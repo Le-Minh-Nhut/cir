@@ -19,7 +19,7 @@ def test_server_command_construction_and_dry_run(tmp_path: Path, capsys) -> None
     serve = load_script("serve_workbench")
     commands = serve.build_commands(tmp_path, "127.0.0.1", 8100, 5200, True, True, False)
     assert [(command.name, command.argv, command.cwd) for command in commands] == [
-        ("backend", ["uvicorn", "workbench.backend.main:app", "--host", "127.0.0.1", "--port", "8100"], tmp_path.parent),
+        ("backend", [serve.sys.executable, "-m", "uvicorn", "workbench.backend.main:app", "--host", "127.0.0.1", "--port", "8100"], tmp_path.parent),
         ("frontend", ["npm", "run", "dev", "--", "--host", "127.0.0.1", "--port", "5200", "--strictPort"], tmp_path / "frontend"),
     ]
     assert serve.main(["--frontend-only", "--production-frontend", "--frontend-port", "5200", "--dry-run"], tmp_path) == 0
@@ -39,7 +39,7 @@ def test_server_uses_configured_defaults(monkeypatch, tmp_path: Path, capsys) ->
     assert serve.main(["--dry-run"], tmp_path) == 0
 
     output = capsys.readouterr().out
-    assert "uvicorn workbench.backend.main:app --host 0.0.0.0 --port 8100" in output
+    assert f"{serve.sys.executable} -m uvicorn workbench.backend.main:app --host 0.0.0.0 --port 8100" in output
     assert "npm run dev -- --host 0.0.0.0 --port 5200 --strictPort" in output
 
 
@@ -54,7 +54,7 @@ def test_server_cli_overrides_configured_defaults(monkeypatch, tmp_path: Path, c
     assert serve.main(["--host", "127.0.0.1", "--backend-port", "8300", "--frontend-port", "5300", "--dry-run"], tmp_path) == 0
 
     output = capsys.readouterr().out
-    assert "uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8300" in output
+    assert f"{serve.sys.executable} -m uvicorn workbench.backend.main:app --host 127.0.0.1 --port 8300" in output
     assert "npm run dev -- --host 127.0.0.1 --port 5300 --strictPort" in output
 
 
