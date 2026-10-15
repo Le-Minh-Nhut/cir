@@ -1058,6 +1058,11 @@ def hmac_compare(expected: str, claimed: str) -> bool:
     return _hmac.compare_digest(expected, claimed)
 
 
+#: Test-only switch: allows a synthetic probe (and cached synthetic records) to satisfy the GPU
+#: gate. Never set in production; production launch gates accept only interpreter-probed evidence.
+GPU_PROBE_OVERRIDE_ENV = "WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE"
+
+
 def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport) -> dict[str, Any] | None:
     """A previously verified capability for exactly this environment, or None.
 
@@ -1092,7 +1097,14 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport) -> 
         # evidence: it is authenticated with the same out-of-band key as the ledger, and a
         # record whose signature does not verify is ignored entirely (never trusted, never
         # rewritten). Forging a capability therefore requires the operator's key.
-        if isinstance(payload, dict) and payload.get("capability_key") == key:
+        # A record whose probe never ran the real interpreter (probe_source != "interpreter")
+        # is synthetic test evidence: it is honored only while the same test-only switch is
+        # set, never in a real launch gate. The HMAC proves who wrote it, not that the
+        # hardware was probed.
+        synthetic_ok = os.environ.get(GPU_PROBE_OVERRIDE_ENV) == "1"
+        probe_source = payload.get("probe_source", "interpreter") if isinstance(payload, dict) else "interpreter"
+        if (isinstance(payload, dict) and payload.get("capability_key") == key
+                and (probe_source == "interpreter" or (synthetic_ok and probe_source == "override"))):
             if _gpu_capability_signature_valid(payload):
                 cached = payload
                 _GPU_CAPABILITY[key] = payload
@@ -1660,9 +1672,7 @@ print(json.dumps(out))
 
 # A test-only probe override. It is consulted ONLY when the named integration-test opt-in
 # environment variable is set, so production execution can never select it.
-GPU_PROBE_OVERRIDE_ENV = "WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE"
 _GPU_PROBE_OVERRIDE: Any = None
-
 
 def set_gpu_probe_for_tests(probe: Any) -> None:
     """Install a deterministic GPU probe for integration tests only."""

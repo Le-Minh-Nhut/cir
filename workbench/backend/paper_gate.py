@@ -309,9 +309,13 @@ def evaluate_gate(
     if not evaluation_completed:
         return GateVerdict(FAILED_EVALUATION, False, False, [], ["the evaluation did not complete"],
                            "an evaluator that failed or was interrupted has no metrics to judge")
-    if not reproduced_metrics:
+    if not reproduced_metrics and not (reproduced_category_metrics or {}):
         return GateVerdict(FAILED_OUTPUT_VALIDATION, False, False, [], ["no reproduced metrics"],
                            "the evaluator produced nothing to compare")
+    # An aggregate that failed parser self-consistency (observed_metrics=None) must not erase the
+    # per-category evidence: the category rows are forwarded exactly so a deviating category can
+    # still raise ALERT even when the aggregate line itself could not be validated.
+    reproduced_metrics = {k: v for k, v in (reproduced_metrics or {}).items()}
     if reference is None:
         return GateVerdict(METRIC_REFERENCE_UNVERIFIED, False, False, [],
                            ["no committed reference describes this experiment"],

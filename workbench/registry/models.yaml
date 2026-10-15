@@ -936,8 +936,8 @@ models:
       # Historical pins above do not ship sm_120 (Blackwell) kernels, so on an RTX 5070 Ti the
       # operator may provision an ADAPTED runtime instead. Declaring it here makes the adaptation
       # explicit and auditable; a run under an adapted runtime is recorded as
-      # runtime_adaptation=sm_120_blackwell in variant_provenance and is never labeled an exact
-      # paper reproduction. The historical pins stay the default contract.
+      # variant_provenance.runtime_adaptation=sm_120 in variant_provenance and is never labeled an
+      # exact paper reproduction. The historical pins stay the default contract.
       adapted_runtime:
         target_compute_capability: sm_120
         pytorch: '>=2.7,<3'

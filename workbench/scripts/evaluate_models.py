@@ -137,17 +137,29 @@ def _benchmark_gate_verdict(plan, extraction, return_code: int) -> dict[str, Any
 
     observed = extraction.observed_metrics if isinstance(extraction.observed_metrics, dict) else None
     variant = getattr(plan, "variant_provenance", None) or {}
+    # Comparability fields are declared facts, not assumptions. `evaluation_noise_pct` is read from
+    # the protocol the plan runs; `split` is the annotation cohort (RESULT_SCHEMA.md v2 uses
+    # `split: "val"` for every FashionIQ run and carries the gallery vocabulary separately as
+    # `literature_split_label`/`protocol_id`), which is also the vocabulary the committed paper
+    # rows use — so the cohort, not the gallery label, is what the gate compares.
+    _registry = load_registry()
+    protocols = _registry.get("protocols", {}) if isinstance(_registry, dict) else {}
+    protocol_def = (protocols.get(plan.protocol) if isinstance(protocols, dict) else None) or {}
     run_meta = {
         "protocol_id": plan.protocol,
         "checkpoint_id": plan.checkpoint_id,
         "checkpoint_training_noise_pct": plan.checkpoint_training_noise_pct,
-        "evaluation_noise_pct": 0,
+        "evaluation_noise_pct": protocol_def.get("evaluation_noise_pct"),
         "split": "val",
         "dataset": "fashioniq",
         # Declared-variant facts, from the run's own preflight evidence. The gate reads these to
         # label a passing comparison as a variant, never to wave one through.
         "caption_alias_staged": bool(variant.get("caption_alias_staged")),
-        "declared_variant": bool(variant.get("approved_source_patch")),
+        # An adapted runtime is a declared variant of the historical environment: the run's
+        # numbers come from a different software stack than the authors', so the gate must
+        # label the verdict as a variant (PASS_WITHIN_5_PERCENT_VARIANT) rather than an
+        # official reproduction.
+        "declared_variant": bool(variant.get("approved_source_patch")) or bool(variant.get("adapted_runtime")),
         # Identity evidence, distinct from numerical comparability: an unverified mapping means the
         # gate does not know WHICH upstream asset produced these numbers, so a metric match cannot
         # certify an official reproduction of the paper's experiment.

@@ -81,12 +81,21 @@ cmd_pilot() {
     esac
     # Queue the official evaluation through the API. The backend's guarded plan refuses
     # anything that has not passed preflight; this endpoint only ever queues real work.
-    local payload model_id checkpoint
+    # protocol_id must be the model's own native protocol (limn: fashioniq_val_split,
+    # csmcir: fashioniq_original_split) or the guarded plan rejects it with 409.
+    local payload model_id checkpoint protocol
     payload="$(curl -fsS "${BASE}/api/models")"
-    model_id="$(python3 -c "import json,sys; d=json.load(sys.stdin); print(next(m['model_id'] for m in d if m['model_id']=='${model}'))")"
+    protocol="$(python3 -c "import json,sys; d=json.load(sys.stdin); print(next(m['native_protocol'] for m in d if m['model_id']=='${model}'))")"
     checkpoint="$(python3 -c "import json,sys; d=json.load(sys.stdin); print(next(m['checkpoints'][0]['checkpoint_id'] for m in d if m['model_id']=='${model}'))")"
-    curl -fsS -X POST "${BASE}/api/jobs" -H 'Content-Type: application/json' \
-        -d "{\"model_id\":\"${model_id}\",\"checkpoint_id\":\"${checkpoint}\",\"protocol_id\":\"fashioniq_original_split\",\"top_k\":200}"
+    model_id="${model}"
+    if ! response="$(curl -fsS -X POST "${BASE}/api/jobs" -H 'Content-Type: application/json' \
+        -d "{\"model_id\":\"${model_id}\",\"checkpoint_id\":\"${checkpoint}\",\"protocol_id\":\"${protocol}\",\"top_k\":200}" 2>&1)"; then
+        say "evaluation rejected by the backend guard (preflight has not passed yet):"
+        say "${response}"
+        say "run 'run.sh up' first, prepare the model assets, then retry; see PC_DOCKER_QUICKSTART.md"
+        return 1
+    fi
+    say "${response}"
     say ""
     say "queued; watch with: run.sh status / run.sh logs"
 }

@@ -610,3 +610,23 @@ def test_parity_uses_relative_error_not_absolute_tolerance():
                          {"r10": 57.07, "r50": 77.27, "mean": 67.17}) == "PARITY_VERIFIED"
     assert _check_parity({"r10": 57.07, "r50": 77.27},  # paper missing mean
                          {"r10": 57.07, "r50": 77.27, "mean": 67.17}) == "PARITY_NOT_EVALUATED"
+
+
+def test_a_deviating_category_still_fails_when_the_aggregate_is_absent():
+    # Scenario: the parser could not validate the aggregate line (observed_metrics=None), but the
+    # per-category tables were parsed and forwarded. The category evidence must reach the gate: a
+    # 16% dress deviation cannot vanish just because the aggregate line is missing.
+    ref = reference(**{"category_metrics": {"dress": {"r10": 50.00, "r50": 70.00}}})
+    verdict = run_with_categories({}, {"dress": {"r10": 42.00, "r50": 70.00}}, ref)
+    assert verdict.status == gate.ALERT_METRIC_DEVIATION
+    dress = next(c for c in verdict.comparisons if c.metric == "dress_r10")
+    assert not dress.within_tolerance
+    assert dress.relative_error_pct == pytest.approx(16.0)
+
+
+def test_no_metrics_at_all_still_fails_output_validation():
+    # With neither an aggregate nor category evidence there is nothing to compare: the refusal
+    # state is unchanged by the category-evidence fix.
+    ref = reference(**{"category_metrics": {"dress": {"r10": 50.00, "r50": 70.00}}})
+    verdict = run_with_categories({}, None, ref)
+    assert verdict.status == gate.FAILED_OUTPUT_VALIDATION

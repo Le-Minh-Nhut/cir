@@ -16,6 +16,16 @@ services:
       - "${WORKBENCH_FRONTEND_PORT:-5173}:5173"
     env_file:
       - .env
+    environment:
+      # The container ALWAYS listens on 8000 internally; WORKBENCH_BACKEND_PORT in .env is
+      # host-side only. Override the env_file value so the backend listen port and the
+      # frontend proxy target can never drift apart.
+      WORKBENCH_BACKEND_PORT: "8000"
+      WORKBENCH_BACKEND_URL: "http://127.0.0.1:8000"
+      # Host-side port remapping stays host-side; the frontend inside the container talks
+      # to the backend over loopback, never through the published port.
+      # WORKBENCH_RUNTIME_ADAPTATION: pass through from .env (empty by default).
+      WORKBENCH_RUNTIME_ADAPTATION: "${WORKBENCH_RUNTIME_ADAPTATION:-}"
     volumes:
       # Read-only research inputs.
       - ${HOST_FASHIONIQ_ROOT:-../data/FashionIQ}:/data/FashionIQ:ro

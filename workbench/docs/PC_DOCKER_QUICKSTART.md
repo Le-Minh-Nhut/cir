@@ -73,4 +73,4 @@ Job chỉ được xếp khi preflight pass; gate paper 5% là phán quyết chu
 
 - `runs: index_unavailable` → rebuild index (POST `/api/index/rebuild`) hoặc khởi tạo artifacts.
 - `failed to discover GPU vendor from CDI` → toolkit chưa cài/cấu hình trên host.
-- Job trạng thái lowercase (`queued`/`running`/`completed`/`failed`) — đó là contract backend.
+- Job trạng thái lowercase (`queued`/`preparing`/`running`/`blocked`/`completed`/`failed`/`cancelled`) — đó là contract backend.
