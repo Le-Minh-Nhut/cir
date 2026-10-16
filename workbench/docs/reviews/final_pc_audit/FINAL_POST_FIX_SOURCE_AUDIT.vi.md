@@ -1,8 +1,11 @@
 # FINAL_POST_FIX_SOURCE_AUDIT.vi.md
 
 Báo cáo audit nguồn sau khi sửa — CIR Failure Analysis Workbench
-Baseline: `a517cf9` · Nhánh: `research/cir-failure-workbench`
-(Tệp này ghi commit đã kiểm thử ở mục 0 sau khi commit; xem `git log` cho SHA cuối.)
+Baseline: `a517cf9` · **Commit đã kiểm thử: `46d8e59`** · Nhánh: `research/cir-failure-workbench`
+
+Toàn bộ bằng chứng ở mục 6 được thu trên cây nguồn tại `46d8e59` (giống hệt nội dung đã push;
+`origin/research/cir-failure-workbench` = `46d8e59`). Tệp này được cập nhật SHA sau khi commit đó,
+nên bản thân nó nằm ở commit kế tiếp — nội dung nguồn được kiểm thử không đổi.
 
 ## 0. Phạm vi và cách kiểm
 
