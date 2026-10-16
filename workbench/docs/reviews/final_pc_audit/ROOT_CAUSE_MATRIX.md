@@ -212,3 +212,36 @@ reads it.
 | Real LIMN inference / FashionIQ evaluation | **PENDING** | needs the target host |
 | Paper metric parity | **NOT CLAIMED** | a deviation is a research finding, not an infrastructure result |
 | Any test exercising sm_120/Blackwell kernels | **GAP** | all mocked capability tests use sm_89 |
+
+---
+
+# Đợt “FINAL MISSION” (baseline a517cf9) — ma trận nguyên nhân gốc
+
+## Phase 1 — bốn defect đã xác nhận
+
+| ID | Nguyên nhân gốc | Bằng chứng | Trạng thái |
+|---|---|---|---|
+| P0-1 | `pc.sh` chạy `verify_run.py` bằng `python3` **host** (Python 3.14, thiếu torch/yaml) với `CIR_REPO_ROOT`/`PYTHONPATH` host. Host còn có **hai** khóa ledger xung đột (`.workbench_ledger_key` và `~/.config/cir/...`) nên host `LedgerKeyError` — không thể xác minh ledger do container ghi. | `grep -n 'python3 "$verify_script"' pc.sh` (2 chỗ); `.venv/bin/python -c "em.ledger_hmac_key(...)"` → `LedgerKeyError two different ledger keys exist` | ĐÃ SỬA — `run_verifier_in_container` dùng `docker exec -T cir-workbench python3 workbench/scripts/verify_run.py`; container down → `fail_stage` có tên, không fallback host |
+| P0-2 | `verify_run.py` chỉ kiểm category cho LIMN; không kiểm metric extraction đã chạy chưa, không đối chiếu macro với category, không từ chối synthetic | Audit F break-attempt 3: report synthetic + macro bịa (`r10 99.9` vs trung bình category 27.93) vẫn `verified: true` | ĐÃ SỬA — `metric_evidence_reasons`: `metric_extraction_available is True` + `extraction_status == EXTRACTED_VERIFIED`; macro tái lập từ chính category với dung sai 0.05 điểm %; từ chối `is_synthetic`/`data_kind != experiment`; mọi model khác phải có so sánh publishable |
+| P1-3 | `pc.sh` quyết định tái dùng container mà **không** kiểm mount thật; container trỏ dataset khác vẫn được dùng → sai dữ liệu khoa học | `docker inspect --format '{{json .Mounts}}'` không được đọc ở đâu trong `pc.sh` | ĐÃ SỬA — so `Source` thật với `HOST_FASHIONIQ_ROOT`/`HOST_WORKBENCH_CHECKPOINT_ROOT`/`HOST_WORKBENCH_ARTIFACTS_ROOT` (chuẩn hoá `realpath`); mount thiếu → lý do có tên; `docker inspect` không đọc được → UNKNOWN → fail closed |
+| P2-4 | Nhánh “cấu hình không khớp” gọi `run.sh up`, rồi khối `container_running == 0` ngay dưới gọi **lần nữa** | OLD: `UP CALLS COUNT: 2`; FIXED: `1` (test `test_incompatible_configuration_correction_invokes_docker_startup_exactly_once`) | ĐÃ SỬA — set `container_running=1` sau lần up đầu |
+
+## Phase 2/3 — defect phát hiện bởi audit độc lập
+
+| ID | Nguyên nhân gốc | Bằng chứng | Trạng thái |
+|---|---|---|---|
+| A-E1 (P1) | Container đang chạy nhưng API không trả 200 → `pc.sh` **bỏ qua** kiểm tra active-job rồi `run.sh up` → có thể phá job đang chạy | check active-job nằm trong nhánh `code == 200`; nhánh else không kiểm gì | ĐÃ SỬA — nhánh API-không-trả-lời hỏi cùng câu hỏi, đọc thêm `queue_state.json` dưới artifacts (bind mount host đọc được); có job → refuse; không đọc được → UNKNOWN → fail closed; 2 test mới |
+| E-1 (P1) | Boot lần đầu không có `workbench.duckdb` (gitignored) → `/api/runs` 503 vĩnh viễn tới khi ai đó gọi rebuild | `main.py:_startup` không kiểm DB | ĐÃ SỬA — build index nền khi thiếu; index có sẵn thì giữ nguyên; build lỗi → 503 trung thực kèm lý do thật (không bịa payload) |
+| E-2 (P1) | Export cohort Markdown format `{item['r1']:.2f}` không guard `None` → HTTP 500 | TypeError tại `main.py:364` | ĐÃ SỬA — `_format_metric` render `N/A`, không bao giờ bịa số |
+| D-1 (HIGH) | Hợp đồng hoàn thành cho model không phải LIMN yếu hơn hẳn: bỏ qua extraction/category/macro, dùng `any(...)` | probe 1.7: run thiếu extraction vẫn `verified: True` | ĐÃ SỬA (đang xác minh) |
+| D-2 (HIGH) | `select_reference` trả `None` khi hai row VERIFIED khớp cùng điều kiện → **mọi** run `ptha_mtst` hợp lệ bị từ chối | probe 2.5: legitimate run → refused | ĐÃ SỬA (đang xác minh) |
+| D-3 (MED) | `schemas/results.py:79` `Literal["experiment","mock"]` nhưng pipeline phát `data_kind="synthetic"` | `evaluate_models.py:185` | ĐÃ SỬA (đang xác minh) |
+| D-4 (MED) | `combiner_rn50x4_noft` đã đăng ký nhưng mọi reference UNVERIFIED → run hợp lệ không thể certify, không phân biệt với run giả | probe 2.6 | ĐÃ SỬA (đang xác minh) |
+| F-1 (P2) | `mutation_checks.sh` M4 đọc exit code `docker compose config`; daemon down → non-zero bị hiểu là “đã phát hiện” → PASS giả | FAIL-before log: `M4 ... DETECTED` khi daemon down | ĐÃ SỬA — kiểm docker CLI/daemon trước, không chạy được → SKIP NOT VERIFIED, không tính là detected |
+
+## Điểm đã xác nhận ĐÚNG (không sửa)
+
+- Xác minh hai chiều trên `verify_run.py`: report sửa sau ledger → từ chối; proof replay → từ chối; macro không khớp (LIMN) → từ chối; extraction chưa chạy (LIMN) → từ chối; synthetic → từ chối; metric NaN/ngoài khoảng/bool → từ chối. Và run hợp lệ với Recall đúng biên 0.0 / 100.0 vẫn được chấp nhận.
+- `macros` của LIMN tái lập được từ chính category (dung sai 0.05 điểm % — cùng bound parser extraction đã dùng).
+- Sai lệch số so với paper vẫn là **phát hiện nghiên cứu** (`ALERT_METRIC_DEVIATION`, `passed=False`), `verify_run.py` vẫn `verified: true`: thực thi và tái lập là hai câu hỏi khác nhau — cố ý.
+- UI không thể trình bày run bịa/không hợp lệ như bằng chứng đã chứng thực.

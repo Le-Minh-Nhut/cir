@@ -7,6 +7,7 @@ import io
 import json
 import sys
 from datetime import datetime, timezone
+import threading
 import uuid
 from pathlib import Path
 
@@ -18,7 +19,7 @@ from pydantic import BaseModel, Field
 from workbench.backend.analysis import analysis_rows_from_maps, failure_jaccard_from_maps
 from workbench.backend import runtime
 from workbench.backend.errors import WorkbenchError
-from workbench.backend.index import rebuild_index
+from workbench.backend.index import database_path, rebuild_index
 from workbench.backend.jobs import DuplicateJobError, SingleGpuQueue
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.registry import checkpoint_availability, load_registry, sha256_file
@@ -54,11 +55,48 @@ def _recover_interrupted_jobs() -> None:
         # inspection.
         pass
 
+_index_thread: threading.Thread | None = None
+_index_build_error: Exception | None = None
+
+def _ensure_index() -> None:
+    """Ensure DuckDB index exists on startup, building it asynchronously if absent."""
+    global _index_thread, _index_build_error
+    config = resolve_config()
+    db_path = database_path(config)
+
+    # An existing index is left untouched: do not re-index on every boot to avoid
+    # blocking startup on large result sets and clobbering warm query state.
+    # Operators can trigger an explicit rebuild via POST /api/index/rebuild.
+    if db_path.is_file():
+        return
+
+    if _index_thread is not None and _index_thread.is_alive():
+        return
+
+    results_dir = getattr(config, "WORKBENCH_RESULTS_ROOT", config.WORKBENCH_ARTIFACTS_ROOT / "results")
+
+    def _build() -> None:
+        global _index_build_error
+        try:
+            rebuild_index(results_root=results_dir, database_path=db_path)
+        except Exception as exc:
+            logging.getLogger("workbench").exception("Startup index build failed: %s", exc)
+            _index_build_error = exc
+
+    _index_build_error = None
+    _index_thread = threading.Thread(target=_build, name="workbench-startup-index", daemon=True)
+    _index_thread.start()
+
+def wait_for_startup_index(timeout: float | None = 10.0) -> None:
+    if _index_thread is not None and _index_thread.is_alive():
+        _index_thread.join(timeout=timeout)
+
 @app.on_event("startup")
 def _startup() -> None:
     # Resolved when the server actually starts, not at import: a test importing this module
     # with a different artifacts root must not key recovery to the import-time root.
     _recover_interrupted_jobs()
+    _ensure_index()
 
 @app.on_event("shutdown")
 def _shutdown() -> None:
@@ -70,6 +108,8 @@ def _shutdown() -> None:
     the device. The queue persists an honest terminal status for each job it stops; if the
     backend is killed before the handshake runs, startup recovery still marks the record failed.
     """
+    if _index_thread is not None and _index_thread.is_alive():
+        _index_thread.join(timeout=2.0)
     survivors = JOBS.shutdown()
     if survivors:
         logging.getLogger("workbench").warning(
@@ -136,9 +176,27 @@ def models():
     return out
 
 
+def _check_index_ready(db_path: Path) -> None:
+    if _index_thread is not None and _index_thread.is_alive():
+        raise WorkbenchError(
+            "index_unavailable",
+            "DuckDB index is currently building at startup; please retry shortly.",
+            {"database_path": str(db_path), "status": "building"},
+        )
+    if _index_build_error is not None and not db_path.is_file():
+        cause = type(_index_build_error).__name__
+        msg = f"Startup index build failed: {_index_build_error}"
+        details: dict[str, Any] = {"database_path": str(db_path), "error": str(_index_build_error), "cause": cause}
+        if isinstance(_index_build_error, WorkbenchError):
+            details["inner_details"] = _index_build_error.details
+        raise WorkbenchError("index_unavailable", msg, details)
+
 @app.get("/api/runs")
 def runs(protocol_id: str | None = None):
-    return list_runs(protocol_id)
+    config = resolve_config()
+    db_path = database_path(config)
+    _check_index_ready(db_path)
+    return list_runs(protocol_id, database_path=db_path)
 
 def _aggregate_reports() -> list[dict]:
     """Read every official aggregate report the evaluator has written, ignoring malformed files.
@@ -345,6 +403,14 @@ def save_cohort(payload: CohortInput):
     return record
 
 
+def _format_metric(val: Any) -> str:
+    if val is None or (isinstance(val, float) and val != val):
+        return "N/A"
+    if isinstance(val, float):
+        return f"{val:.2f}"
+    return str(val)
+
+
 @app.get("/api/cohorts/{cohort_id}/export/{format}")
 def export_cohort(cohort_id: str, format: str):
     cohort = next((item for item in read_json(COHORTS_PATH) if item["cohort_id"] == cohort_id), None)
@@ -357,18 +423,29 @@ def export_cohort(cohort_id: str, format: str):
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=list(metrics[0]) if metrics else ["run_id"])
         writer.writeheader()
-        writer.writerows(metrics)
+        writer.writerows([{k: _format_metric(v) for k, v in item.items()} for item in metrics])
         return {"content": output.getvalue()}
     if format == "markdown":
         header = "| Run | N | R@1 | R@5 | R@10 | R@20 | R@50 | R@100 | Mean rank | Median rank |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n"
-        body = "\n".join(f"| {item['run_id']} | {item['query_count']} | {item['r1']:.2f} | {item['r5']:.2f} | {item['r10']:.2f} | {item['r20']:.2f} | {item['r50']:.2f} | {item['r100']:.2f} | {item['mean_target_rank']:.2f} | {item['median_target_rank']:.2f} |" for item in metrics)
+        body = "\n".join(
+            f"| {item['run_id']} | {_format_metric(item.get('query_count'))} | {_format_metric(item.get('r1'))} | {_format_metric(item.get('r5'))} | {_format_metric(item.get('r10'))} | {_format_metric(item.get('r20'))} | {_format_metric(item.get('r50'))} | {_format_metric(item.get('r100'))} | {_format_metric(item.get('mean_target_rank'))} | {_format_metric(item.get('median_target_rank'))} |"
+            for item in metrics
+        )
         return {"content": f"# {cohort_id}\n\nProtocol: {cohort['protocol_id']}\n\n{header}{body}\n"}
     raise HTTPException(400, {"error": "invalid_export_format", "message": "format must be json, csv, or markdown", "details": {"format": format}})
 
 
 @app.post("/api/index/rebuild")
 def index():
-    return {"runs_indexed": rebuild_index()}
+    global _index_build_error
+    if _index_thread is not None and _index_thread.is_alive():
+        _index_thread.join()
+    config = resolve_config()
+    db_path = database_path(config)
+    results_dir = getattr(config, "WORKBENCH_RESULTS_ROOT", config.WORKBENCH_ARTIFACTS_ROOT / "results")
+    count = rebuild_index(results_root=results_dir, database_path=db_path)
+    _index_build_error = None
+    return {"runs_indexed": count}
 
 
 @app.get("/api/jobs")

@@ -177,14 +177,26 @@ else
 fi
 
 say "== M4 BUG 2/3: compose rejects an empty host path; RO submounts protect canonical data =="
-if docker compose -f "${HERE}/docker-compose.yml" --env-file /dev/null config >/dev/null 2>&1; then
-    say "  FAIL: empty HOST_* env accepted (BUG 2 guard missing)"
-    FAILED+=(M4)
+if ! command -v docker >/dev/null 2>&1; then
+    say "  SKIP M4 compose env guard: NOT VERIFIED (docker CLI not found)"
+elif ! docker info >/dev/null 2>&1; then
+    say "  SKIP M4 compose env guard: NOT VERIFIED (docker daemon unavailable)"
 else
-    say "  DETECTED: compose refuses to resolve with missing env guards (BUG 2 guard holds)"
-    PASSED+=(M4)
+    M4_OUT="$(docker compose -f "${HERE}/docker-compose.yml" --env-file /dev/null config 2>&1)" && M4_RC=0 || M4_RC=$?
+    if echo "${M4_OUT}" | grep -qEi "cannot connect to the docker daemon|failed to connect to the docker api|is the docker daemon running|error during connect"; then
+        say "  SKIP M4 compose env guard: NOT VERIFIED (docker daemon unavailable)"
+    elif (( M4_RC == 0 )); then
+        say "  FAIL: empty HOST_* env accepted (BUG 2 guard missing)"
+        FAILED+=(M4)
+    elif echo "${M4_OUT}" | grep -qE "set HOST_FASHIONIQ_ROOT in .env|required variable.*HOST_FASHIONIQ_ROOT"; then
+        say "  DETECTED: compose refuses to resolve with missing env guards (BUG 2 guard holds)"
+        PASSED+=(M4)
+    else
+        say "  FAIL: compose failed without triggering env guard: ${M4_OUT}"
+        FAILED+=(M4)
+    fi
 fi
-if command -v docker >/dev/null && [[ -n "$(docker ps -q --filter name=^cir-workbench$ 2>/dev/null)" ]]; then
+if command -v docker >/dev/null && docker info >/dev/null 2>&1 && [[ -n "$(docker ps -q --filter name=^cir-workbench$ 2>/dev/null)" ]]; then
     C="$(docker ps -q --filter name=^cir-workbench$ | head -1)"
     if docker exec "$C" sh -c 'touch /data/FashionIQ/images/.m4 2>/dev/null'; then
         docker exec "$C" rm -f /data/FashionIQ/images/.m4 2>/dev/null

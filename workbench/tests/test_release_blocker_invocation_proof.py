@@ -12,6 +12,12 @@ Two guarantees are pinned here, both against the real functions rather than a st
 
 ``workbench/scripts/verify_run.py`` is the standalone consumer of the same evidence; it exits 0
 only for a fully corroborated run and names the missing or forged ingredient otherwise.
+
+A run also has to carry usable *metric* evidence, not merely a parseable report: extraction must
+have happened, the LIMN macro must equal the mean of its own three categories (the arithmetic
+``workbench/replay/common.py::macro_aggregate`` defines), a synthetic self-test may not present
+itself as a real result, and a model whose committed reference publishes metrics must carry the
+comparison -- or be refused. Those contracts are pinned below against a real ``execute()`` run.
 """
 from __future__ import annotations
 
@@ -30,6 +36,22 @@ from workbench.backend.operator_config import WorkbenchConfig
 import workbench.scripts.evaluate_models as em
 import workbench.scripts.verify_run as verify_run
 
+#: A published CSMCIR row (``workbench/registry/paper_benchmarks/papers.yaml``,
+#: ``csmcir_fiq_val_ours_vitg``): the model whose protocol publishes metrics and which a report
+#: without them therefore cannot be certified for.
+CSMCIR_PIN = "774f94e2076ff17ea91703a6239d2a08f0e1a44e"
+CSMCIR_CHECKPOINT = "fashioniq"
+CSMCIR_PROTOCOL = "fashioniq_original_split"
+
+#: An evaluator output the real ``parse_csmcir_output`` reads: per-category recalls and their
+#: macro, all within 5 percent relative error of the published row above.
+CSMCIR_GOOD_OUTPUT = {
+    "dress_recall_at10": 52.45, "dress_recall_at50": 74.81,
+    "shirt_recall_at10": 57.70, "shirt_recall_at50": 75.76,
+    "toptee_recall_at10": 61.14, "toptee_recall_at50": 80.98,
+    "average_recall_at10": 57.10, "average_recall_at50": 77.18, "average_recall": 67.14,
+}
+
 PIN = "a" * 40
 MODEL = "limn"
 CHECKPOINT = "ckpt_v1"
@@ -44,16 +66,55 @@ LIMN_CATEGORIES = [
 ]
 LIMN_AGGREGATE = {"macro_r10": 20.0, "macro_r50": 45.0, "macro_mean": 32.5, "complete": True}
 
-def reporting_evaluator(tmp_path: Path, *, exit_code: int = 0) -> list[str]:
-    """A synthetic official evaluator printing a LIMN-shaped aggregate, then exiting."""
+def reporting_evaluator(tmp_path: Path, *, exit_code: int = 0,
+                       aggregate: dict | None = None,
+                       categories: list | None = None) -> list[str]:
+    """A synthetic official evaluator printing a LIMN-shaped aggregate, then exiting.
+
+    ``aggregate``/``categories`` let a case emit what the extraction parser will *refuse* -- a
+    declared macro that disagrees with the categories printed beside it, or an incomplete run --
+    which is the shape of a real evaluator whose own output did not add up.
+    """
     script = tmp_path / f"evaluator_{uuid.uuid4().hex[:8]}.py"
     script.write_text(
         "import json, sys\n"
         'print("evaluating")\n'
-        f"print(json.dumps({{'model_id': 'limn', 'aggregate': {LIMN_AGGREGATE!r},"
-        f" 'categories': {LIMN_CATEGORIES!r}}}))\n"
+        f"print(json.dumps({{'model_id': 'limn',"
+        f" 'aggregate': {aggregate if aggregate is not None else LIMN_AGGREGATE!r},"
+        f" 'categories': {categories if categories is not None else LIMN_CATEGORIES!r}}}))\n"
         f"sys.exit({exit_code})\n", encoding="utf-8")
     return [sys.executable, str(script)]
+
+def evaluator(tmp_path: Path, *lines: str) -> list[str]:
+    """An evaluator that prints exactly ``lines`` and exits 0: the run's own raw output."""
+    script = tmp_path / f"evaluator_{uuid.uuid4().hex[:8]}.py"
+    script.write_text("import json, sys\n" + "".join(f"{line}\n" for line in lines),
+                      encoding="utf-8")
+    return [sys.executable, str(script)]
+
+
+def non_limn_registry(model_id: str = "csmcir", *, pin: str = CSMCIR_PIN) -> dict:
+    """The registry document ``verify_run.py`` and ``execute()`` must resolve, one real model.
+
+    ``model_id`` is read from the registry rather than special-cased in the verifier, so this
+    fixture is the only thing that decides which model the run under test claims to be.
+    """
+    document = registry_document()
+    model = document["models"][0]
+    model.update({
+        "model_id": model_id, "method_name": model_id.upper(), "source_dir": model_id.upper(),
+        "upstream_commit_sha": pin, "native_protocol": CSMCIR_PROTOCOL,
+        "supported_protocols": [CSMCIR_PROTOCOL], "literature_split_label": "original",
+        "reported_r10": 57.07, "reported_r50": 77.27, "reported_mean": 67.17,
+    })
+    document["protocols"] = {CSMCIR_PROTOCOL: {"label": "Original Split",
+                                               "literature_split_label": "original",
+                                               "evaluation_noise_pct": 0}}
+    variant = model["checkpoint_variants"][0]
+    variant.update({"checkpoint_id": CSMCIR_CHECKPOINT,
+                    "checkpoint_training_noise_pct": 0, "evaluation_noise_pct": 0})
+    return document
+
 
 def silent_evaluator(tmp_path: Path) -> list[str]:
     """Exits 0 and prints nothing at all."""
@@ -126,7 +187,9 @@ def env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     return {"repo": repo, "source": source, "checkpoint": checkpoint, "config": config,
             "artifacts": artifacts, "tmp": tmp_path}
 
-def plan_for(env: dict, command: list[str], *, mutated_member: bool = False) -> em.EvaluationPlan:
+def plan_for(env: dict, command: list[str], *, mutated_member: bool = False,
+             model_id: str = MODEL, checkpoint_id: str = CHECKPOINT,
+             protocol: str = PROTOCOL, pin: str = PIN) -> em.EvaluationPlan:
     """The plan the operator is asked to execute.
 
     ``mutated_member`` builds a multi-member checkpoint whose *recorded* manifest no longer
@@ -142,11 +205,16 @@ def plan_for(env: dict, command: list[str], *, mutated_member: bool = False) -> 
         members = [{"filename": "model.pt", "path": str(env["checkpoint"]), "sha256": "0" * 64}]
         bundle = {member["filename"]: member for member in members}
         manifest_digest = em.manifest_digest(bundle)
+    # A non-LIMN model's checkpoint lives under its own registry-declared path; `pin` is the
+    # commit that model's registry entry declares, because the completion validator compares the
+    # proof's source commit against the *registry* pin, not against the plan's.
+    checkpoint = (env["checkpoint"] if model_id == MODEL
+                  else env["tmp"] / "checkpoints" / model_id / "model.pt")
     return em.EvaluationPlan(
-        model_id=MODEL, checkpoint_id=CHECKPOINT, protocol=PROTOCOL,
+        model_id=model_id, checkpoint_id=checkpoint_id, protocol=protocol,
         dataset_root=env["tmp"] / "FashionIQ", source=env["source"],
-        checkpoint=env["checkpoint"], cwd=env["source"], command=command,
-        pin=PIN, actual_source_commit=PIN, paper_metrics=None,
+        checkpoint=checkpoint, cwd=env["source"], command=command,
+        pin=pin, actual_source_commit=pin, paper_metrics=None,
         artifact_type=artifact_type, directory_members=members, checkpoint_bundle=bundle,
         bundle_manifest_digest=manifest_digest)
 
@@ -278,16 +346,103 @@ def test_a_nonzero_exit_records_the_native_code_as_evidence(env):
 
 # ------------------------------------------------------------------------ verify_run.py
 
-def verify(env, run_id: str) -> tuple[int, dict]:
+def verify_as(env, run_id: str, model: str, checkpoint: str,
+              protocol: str) -> tuple[int, dict]:
     """Call the real CLI and return ``(exit code, printed JSON)``."""
     from io import StringIO
     import contextlib
 
     stream = StringIO()
     with contextlib.redirect_stdout(stream):
-        code = verify_run.main(["--run-id", run_id, "--model", MODEL,
-                                "--checkpoint", CHECKPOINT, "--protocol", PROTOCOL, "--json"])
+        code = verify_run.main(["--run-id", run_id, "--model", model,
+                                "--checkpoint", checkpoint, "--protocol", protocol, "--json"])
     return code, json.loads(stream.getvalue())
+
+
+def verify(env, run_id: str) -> tuple[int, dict]:
+    return verify_as(env, run_id, MODEL, CHECKPOINT, PROTOCOL)
+
+
+def run_and_read_report(env, command: list[str], **plan_kwargs) -> tuple[str, dict]:
+    """Execute one real run and return ``(run_id, its aggregate report)``."""
+    plan = plan_for(env, command, **plan_kwargs)
+    code, run_id = run_operator(env, plan)
+    assert code == 0, "the evaluator's own exit code is what the operator returns"
+    return run_id, json.loads(em.run_report_path(env["config"], plan, run_id).read_text())
+
+
+def report_reasons(env, run_id: str, mutations: dict) -> list[str]:
+    """Reasons the verifier gives for a run whose report was altered in exactly one way.
+
+    The metrics a run produces are whatever its evaluator printed, so the report's metric fields
+    are the honest freedom of the run -- not an attack surface. To test the metric contract in
+    isolation, this rewrites the field and then *re-corroborates* the altered report the way the
+    operator would have: a fresh ledger witness over the new bytes, and the completion proof
+    re-pointed at both. Every other ingredient (the real subprocess log, the real proof, the
+    real checkpoint bundle) stays exactly as the run left it, so the reasons returned are the
+    metric-evidence ones and not digest noise.
+    """
+    report_path = next(em.reports_root(env["config"]).glob(f"*_{run_id}_aggregate.json"))
+    # The run is already in the ledger; the ledger refuses a duplicate run id (by design), so the
+    # stale witness is dropped and a fresh one is recorded for the altered bytes.
+    em.evidence_ledger_path(env["config"]).unlink()
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    report.update(mutations)
+    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    witness = em.append_evidence_entry(env["config"], {
+        "run_id": run_id, "model_id": report["model_id"],
+        "checkpoint_id": report["checkpoint_id"], "protocol_id": report["protocol_id"],
+        "return_code": 0, "invocation_status": "INVOCATION_COMPLETED",
+        "report_digest": em.sha256_file(report_path)})
+    proof_path = report_path.with_name(f"{report['model_id']}_{report['checkpoint_id']}"
+                                       f"_{run_id}_completion.json")
+    proof = json.loads(proof_path.read_text(encoding="utf-8"))
+    proof["report_digest"] = em.sha256_file(report_path)
+    proof["ledger_entry_digest"] = witness["entry_digest"]
+    proof_path.write_text(json.dumps(proof, indent=2) + "\n", encoding="utf-8")
+    return verdict_reasons(env, run_id, report["model_id"], report["checkpoint_id"],
+                           report["protocol_id"])
+
+
+def recorroborated_verdict(env, run_id: str, mutations: dict) -> dict:
+    """Re-corroborate an altered report and return the verifier's verdict, unasserted.
+
+    Same mutation + fresh ledger witness + re-pointed proof as `report_reasons`, but it does not
+    demand a refusal: a caller testing WHICH question refuses a run needs the verdict for cases
+    where one of the two answers is legitimately positive.
+    """
+    report_path = next(em.reports_root(env["config"]).glob(f"*_{run_id}_aggregate.json"))
+    em.evidence_ledger_path(env["config"]).unlink()
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    report.update(mutations)
+    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    witness = em.append_evidence_entry(env["config"], {
+        "run_id": run_id, "model_id": report["model_id"],
+        "checkpoint_id": report["checkpoint_id"], "protocol_id": report["protocol_id"],
+        "return_code": 0, "invocation_status": "INVOCATION_COMPLETED",
+        "report_digest": em.sha256_file(report_path)})
+    proof_path = report_path.with_name(f"{report['model_id']}_{report['checkpoint_id']}"
+                                       f"_{run_id}_completion.json")
+    proof = json.loads(proof_path.read_text(encoding="utf-8"))
+    proof["report_digest"] = em.sha256_file(report_path)
+    proof["ledger_entry_digest"] = witness["entry_digest"]
+    proof_path.write_text(json.dumps(proof, indent=2) + "\n", encoding="utf-8")
+    _, verdict = verify_as(env, run_id, report["model_id"], report["checkpoint_id"],
+                           report["protocol_id"])
+    return verdict
+
+
+def verdict_reasons(env, run_id: str, model: str = MODEL, checkpoint: str = CHECKPOINT,
+                    protocol: str = PROTOCOL) -> list[str]:
+    """Every reason a run is not admissible, from both questions the verifier answers.
+
+    A run can be refused for being incompletely corroborated (`reasons`) or for being a
+    corroborated artefact that is not evidence about the paper (`evidence_reasons`, e.g. a
+    declared self-test). A caller testing admissibility needs both.
+    """
+    exit_code, verdict = verify_as(env, run_id, model, checkpoint, protocol)
+    assert exit_code != 0, "this case must not certify"
+    return list(verdict["reasons"]) + list(verdict.get("evidence_reasons") or [])
 
 def test_verify_run_accepts_a_fully_corroborated_run(env):
     """(e) Positive: every ingredient agrees, so the CLI exits 0 with the metrics and the gate."""
@@ -307,6 +462,9 @@ def test_verify_run_accepts_a_fully_corroborated_run(env):
     for category in ("dress", "shirt", "toptee"):
         assert verdict["metrics"]["category"][category]["r10"] == 20.0
         assert verdict["metrics"]["category"][category]["r50"] == 45.0
+    # The macro the report states is the mean of the categories it printed, so this run's
+    # evidence passes the consistency contract as well as the corroboration one.
+    assert verdict["metrics"]["observed"] == {"r10": 20.0, "r50": 45.0, "mean": 32.5}
     assert "gate" in verdict
 
 def test_verify_run_reports_a_missing_report(env):
@@ -392,6 +550,218 @@ def test_verify_run_reports_an_invalid_recall(env):
                for reason in verdict["reasons"]), verdict
 
 
+# ---------------------------------------------------- metric evidence (P0-2) and non-LIMN models
+
+def test_verify_run_reports_an_incomplete_extraction(env):
+    """A run that exited 0 but whose metrics were never extracted is not a certified result.
+
+    The evaluator printed an incomplete declaration (``complete: false``), so the source-backed
+    parser itself refused to extract anything. The categories still look perfect; only the
+    report's own ``extraction_status``/``metric_extraction_available`` say no extraction
+    happened, which is exactly the state the old verifier certified.
+    """
+    incomplete = {"macro_r10": 20.0, "macro_r50": 45.0, "macro_mean": 32.5, "complete": False}
+    run_id, report = run_and_read_report(
+        env, reporting_evaluator(env["tmp"], aggregate=incomplete))
+    assert report["extraction_status"] == "EVALUATION_COMPLETED_METRICS_UNPARSED", report
+    assert report["metric_extraction_available"] is False
+    assert report["observed_metrics"] is None
+
+    reasons = verdict_reasons(env, run_id)
+    assert any("no metric extraction was performed" in reason for reason in reasons), reasons
+
+
+def test_verify_run_reports_a_failed_extraction_status(env):
+    """An ``extraction_status`` that names a failure is refused even when metrics are present.
+
+    This is the report an older or differently-built evaluator could leave behind: usable
+    numbers in ``observed_metrics`` while its own status field says the extraction did not
+    succeed. The status is the report's own claim about itself and it wins.
+    """
+    run_id, _ = run_and_read_report(env, reporting_evaluator(env["tmp"]))
+    reasons = report_reasons(env, run_id, {"extraction_status": "EVALUATION_FAILED"})
+    assert any("the run's metrics were not extracted" in reason for reason in reasons), reasons
+
+
+def test_verify_run_reports_a_macro_inconsistent_with_its_categories(env):
+    """The declared macro must equal the mean of the categories the report itself carries.
+
+    The categories are untouched and the corroboration chain is intact; only the aggregate the
+    report states is wrong (its R@10 is half the mean of the three categories it printed).
+    """
+    run_id, _ = run_and_read_report(env, reporting_evaluator(env["tmp"]))
+    reasons = report_reasons(env, run_id, {
+        "observed_metrics": {"r10": 10.0, "r50": 45.0, "mean": 27.5}})
+    assert any("is inconsistent with its categories" in reason for reason in reasons), reasons
+
+
+def test_verify_run_reports_a_macro_mean_that_is_not_the_mean_of_r10_and_r50(env):
+    """``mean = (r10 + r50) / 2`` is part of the macro contract, checked separately.
+
+    Here each macro Recall matches its categories exactly and only the mean is wrong, so a check
+    that compared just ``r10``/``r50`` would still certify it.
+    """
+    run_id, _ = run_and_read_report(env, reporting_evaluator(env["tmp"]))
+    reasons = report_reasons(env, run_id, {
+        "observed_metrics": {"r10": 20.0, "r50": 45.0, "mean": 40.0}})
+    assert any("macro mean" in reason and "is inconsistent" in reason for reason in reasons), \
+        reasons
+
+
+def test_verify_run_refuses_a_synthetic_run_presenting_as_real(env):
+    """A report that declares itself synthetic is a pipeline self-test, never evidence.
+
+    The run is otherwise perfect: real subprocess, real ledger witness, real completion proof,
+    categories and macro in agreement. Only the run's own declaration disqualifies the numbers.
+    """
+    run_id, _ = run_and_read_report(env, reporting_evaluator(env["tmp"]))
+    verdict = recorroborated_verdict(env, run_id, {"is_synthetic": True})
+    assert verdict["verified"] is True, "the execution itself is corroborated"
+    assert verdict["is_research_evidence"] is False, "a self-test is not evidence"
+    assert any("declares itself synthetic" in reason
+               for reason in verdict["evidence_reasons"]), verdict["evidence_reasons"]
+
+
+def test_verify_run_refuses_a_report_whose_data_kind_is_not_an_experiment(env):
+    """``data_kind`` is the vocabulary the gate refuses on; the verifier must refuse it too."""
+    run_id, _ = run_and_read_report(env, reporting_evaluator(env["tmp"]))
+    verdict = recorroborated_verdict(env, run_id, {"data_kind": "mock"})
+    assert verdict["verified"] is True, "the execution itself is corroborated"
+    assert verdict["is_research_evidence"] is False, "a mock report is not evidence"
+    assert any("not a real experiment" in reason
+               for reason in verdict["evidence_reasons"]), verdict["evidence_reasons"]
+
+
+#: The honest CSMCIR evaluator output and the registry document that names that model, so the
+#: non-LIMN contract is exercised through the real registry rather than a special case.
+def csmcir_env(env: dict, model_id: str = "csmcir", pin: str = CSMCIR_PIN) -> tuple[str, str]:
+    """Point the run's registry at a non-LIMN model whose committed reference publishes metrics.
+
+    Returns the pin that model's registry entry declares and the checkpoint id the run will use:
+    ``ckpt_v1`` is this fixture's own checkpoint, registered as the CSMCIR variant so the plan,
+    the report, the completion proof and this verifier all name one checkpoint. (The registry's
+    committed CSMCIR row is anchored on its own checkpoint id; only the pin and the published
+    row are taken from the real registry here.)
+    """
+    import os
+
+    document = non_limn_registry(model_id, pin=pin)
+    document["models"][0]["checkpoint_variants"][0]["checkpoint_id"] = CHECKPOINT
+    Path(os.environ["WORKBENCH_REGISTRY_PATH"]).write_text(
+        yaml.safe_dump(document), encoding="utf-8")
+    checkpoints = env["tmp"] / "checkpoints" / model_id
+    checkpoints.mkdir(parents=True, exist_ok=True)
+    (checkpoints / "model.pt").write_bytes(f"{model_id}-weights-v1".encode())
+    return pin, CHECKPOINT
+
+
+def test_verify_run_accepts_a_non_limn_model_carrying_its_published_comparison(env):
+    """The positive half of the non-LIMN rule: a real comparison against a real reference.
+
+    CSMCIR's committed row publishes R@10/R@50/mean; an evaluator output within the gate's
+    5 percent relative rule is the evidence its protocol can produce, and it certifies.
+    """
+    pin, checkpoint = csmcir_env(env)
+    run_id, report = run_and_read_report(env, evaluator(
+        env["tmp"], "print(json.dumps(%r))" % CSMCIR_GOOD_OUTPUT),
+        model_id="csmcir", checkpoint_id=checkpoint, pin=pin)
+    assert report["extraction_status"] == "EXTRACTED_VERIFIED", report
+    assert report["observed_metrics"] == {"r10": 57.1, "r50": 77.18, "mean": 67.14}
+
+    exit_code, verdict = verify_as(env, run_id, "csmcir", checkpoint, CSMCIR_PROTOCOL)
+    assert exit_code == 0, verdict["reasons"]
+    assert verdict["verified"] is True
+
+
+def test_verify_run_refuses_a_model_whose_reference_publishes_metrics_the_report_lacks(env):
+    """A model whose protocol publishes metrics but whose report carries none is refused.
+
+    The evaluator ran, exited 0 and even printed a line -- so this is not the silent-evaluator
+    case -- but it printed nothing the source-backed parser can read. Nothing was compared, so
+    nothing can be certified.
+    """
+    pin, checkpoint = csmcir_env(env)
+    run_id, report = run_and_read_report(
+        env, evaluator(env["tmp"], "print('evaluator finished, no recall lines')"),
+        model_id="csmcir", checkpoint_id=checkpoint, pin=pin)
+    assert report["observed_metrics"] is None, report
+
+    reasons = verdict_reasons(env, run_id, "csmcir", checkpoint, CSMCIR_PROTOCOL)
+    assert any("publishes r10, r50, mean but the report carries none" in reason
+               for reason in reasons), reasons
+
+
+def test_verify_run_refuses_a_non_limn_model_with_no_verified_reference(env):
+    """A model with no verified committed row cannot produce a comparison, so it is refused.
+
+    ``pair`` is registered and its reference rows are all UNVERIFIED, which is the honest state
+    of that model's evidence: the verifier must say so rather than certify the run anyway.
+    """
+    model_id, pin = "pair", "b" * 40
+    pin, checkpoint = csmcir_env(env, model_id, pin)
+    run_id, _ = run_and_read_report(
+        env, evaluator(env["tmp"], "print(json.dumps(%r))" % CSMCIR_GOOD_OUTPUT),
+        model_id=model_id, checkpoint_id=checkpoint, pin=pin)
+
+    reasons = verdict_reasons(env, run_id, model_id, checkpoint, CSMCIR_PROTOCOL)
+    assert any("no verified committed reference publishes a metric" in reason
+               for reason in reasons), reasons
+
+
+def test_verify_run_refuses_a_non_limn_run_when_extraction_not_performed(env):
+    """A non-LIMN run whose metrics were never extracted is refused."""
+    pin, checkpoint = csmcir_env(env)
+    run_id, _ = run_and_read_report(
+        env, evaluator(env["tmp"], "print(json.dumps(%r))" % CSMCIR_GOOD_OUTPUT),
+        model_id="csmcir", checkpoint_id=checkpoint, pin=pin)
+    reasons = report_reasons(env, run_id, {
+        "metric_extraction_available": False,
+        "extraction_status": "EVALUATION_COMPLETED_METRICS_UNPARSED",
+    })
+    assert any("no metric extraction was performed" in reason for reason in reasons), reasons
+    assert any("the run's metrics were not extracted" in reason for reason in reasons), reasons
+
+
+def test_verify_run_refuses_a_non_limn_run_with_a_nan_metric(env):
+    """A non-LIMN run carrying a NaN metric alongside finite ones is refused."""
+    pin, checkpoint = csmcir_env(env)
+    run_id, _ = run_and_read_report(
+        env, evaluator(env["tmp"], "print(json.dumps(%r))" % CSMCIR_GOOD_OUTPUT),
+        model_id="csmcir", checkpoint_id=checkpoint, pin=pin)
+    reasons = report_reasons(env, run_id, {
+        "observed_metrics": {"r10": 57.1, "r50": float("nan"), "mean": 67.14},
+    })
+    assert any("not a finite Recall" in reason for reason in reasons), reasons
+
+
+def test_verify_run_refuses_a_non_limn_run_with_macro_inconsistent_with_categories(env):
+    """A non-LIMN run whose declared macro contradicts its categories is refused."""
+    pin, checkpoint = csmcir_env(env)
+    run_id, _ = run_and_read_report(
+        env, evaluator(env["tmp"], "print(json.dumps(%r))" % CSMCIR_GOOD_OUTPUT),
+        model_id="csmcir", checkpoint_id=checkpoint, pin=pin)
+    reasons = report_reasons(env, run_id, {
+        "category_metrics": {
+            "dress": {"r10": 10.0, "r50": 10.0},
+            "shirt": {"r10": 10.0, "r50": 10.0},
+            "toptee": {"r10": 10.0, "r50": 10.0},
+        },
+        "observed_metrics": {"r10": 57.1, "r50": 77.18, "mean": 67.14},
+    })
+    assert any("is inconsistent with its categories" in reason for reason in reasons), reasons
+
+
+def test_verify_run_refuses_a_non_limn_run_with_an_out_of_range_metric(env):
+    """A non-LIMN run carrying an out-of-range metric is refused."""
+    pin, checkpoint = csmcir_env(env)
+    run_id, _ = run_and_read_report(
+        env, evaluator(env["tmp"], "print(json.dumps(%r))" % CSMCIR_GOOD_OUTPUT),
+        model_id="csmcir", checkpoint_id=checkpoint, pin=pin)
+    reasons = report_reasons(env, run_id, {
+        "observed_metrics": {"r10": 57.1, "r50": 150.0, "mean": 67.14},
+    })
+    assert any("not a finite Recall" in reason for reason in reasons), reasons
+
 def test_a_forged_verdict_file_cannot_publish_a_completion(tmp_path, monkeypatch):
     """The verdict file lives in the run directory the operator was dispatched with, so the
     untrusted evaluator child can write it. A claimed PROOF_VALIDATED must therefore be
@@ -412,3 +782,200 @@ def test_a_forged_verdict_file_cannot_publish_a_completion(tmp_path, monkeypatch
     status, reason = settled_status(job, 0, "PROOF_VALIDATED", None)
     assert status == "failed", "a hand-written verdict must never publish a completion"
     assert reason and "does not verify" in reason, reason
+
+
+# ---------------------------------------------------------------------------------------------
+# Registry/schema blockers D-2, D-3, D-4: a legitimate run must never be refused for a reason the
+# operator cannot act on, a registry-declared data kind must be representable without becoming
+# evidence, and a model whose authors published nothing must not read like a forged result.
+#
+# D-2 and D-4 are proved against the *real* committed registries (``registry/models.yaml`` and
+# ``registry/paper_benchmarks/papers.yaml``), because the defects are properties of those files.
+# ``verify_run.verify`` resolves its registry through ``WORKBENCH_REGISTRY_PATH`` (which the ``env``
+# fixture overrides), so these cases call the same function ``verify`` calls for the same inputs
+# (``verify_run.metric_evidence_reasons``) rather than re-deriving its wording.
+# ---------------------------------------------------------------------------------------------
+
+from workbench.backend import benchmark_references as benchmarks
+from workbench.backend import paper_gate
+
+PTHA_ROWS = ("ptha_mtst_fiq_table3_fashiqmtst_blip2", "ptha_mtst_fiq_no_pretrain_table3")
+PTHA_PUBLISHED = {"r10": 54.99, "r50": 76.28, "mean": 65.64}
+
+
+def test_a_legitimate_ptha_run_is_refused_with_the_registry_ambiguity_named():
+    """D-2: two verified rows bind one condition, so the refusal must name that and pick neither.
+
+    The two committed rows declare the same protocol, the same (unstated) training noise and the
+    same checkpoint mapping, so no selector can choose between them on evidence the registry
+    carries. Reporting "no verified committed reference publishes a metric" for such a run is
+    false -- both rows publish all three -- and sends the operator looking for a missing table row
+    that exists.
+    """
+    selection = benchmarks.select_reference_outcome(
+        "ptha_mtst", checkpoint_training_noise_pct=None,
+        protocol_id="fashioniq_original_split")
+
+    assert selection.outcome == benchmarks.SELECTION_AMBIGUOUS, selection
+    assert selection.reference is None, "an ambiguous registry must not yield a row to compare against"
+    assert sorted(row.reference_id for row in selection.matched) == sorted(PTHA_ROWS), \
+        selection.matched
+    assert all(row.value_for("r10") is not None for row in selection.matched), \
+        "both competing rows do publish metrics"
+    for row_id in PTHA_ROWS:
+        assert row_id in selection.reason, selection.reason
+    assert "more than once" in selection.reason and "fashioniq_original_split" in selection.reason, \
+        selection.reason
+    # `(reference, reason)` stays consistent with the outcome: no row, and the same prose.
+    reference, reason = benchmarks.select_reference(
+        "ptha_mtst", checkpoint_training_noise_pct=None,
+        protocol_id="fashioniq_original_split")
+    assert reference is None and reason == selection.reason
+
+
+def test_the_verifier_never_claims_no_row_publishes_a_metric_when_one_does():
+    """D-2 at the verifier's own entry point: the reason must survive into the invocation proof."""
+    reasons, outcome = verify_run.metric_evidence_reasons(
+        "ptha_mtst", "fashioniq", "fashioniq_original_split",
+        {"observed_metrics": dict(PTHA_PUBLISHED)})
+
+    assert outcome == benchmarks.SELECTION_AMBIGUOUS, outcome
+    assert reasons, "an ambiguous registry still refuses the run"
+    joined = " ".join(reasons)
+    assert "no verified committed reference publishes a metric" not in joined, joined
+    for row_id in PTHA_ROWS:
+        assert row_id in joined, joined
+    assert "until the registry is resolved" in joined, joined
+
+
+def test_a_registry_with_one_verified_row_is_still_selected_by_condition():
+    """The D-2 fix must not turn condition selection into first-match-wins.
+
+    HABIT has four verified rows under one protocol and they are distinguished by training noise;
+    each condition still resolves to exactly its own row, and a condition no row states still
+    refuses.
+    """
+    for noise, expected in ((0, "habit_aaai26_table1_fiq_n00"), (20, "habit_aaai26_table1_fiq_n20"),
+                            (50, "habit_aaai26_table1_fiq_n50"), (80, "habit_aaai26_table1_fiq_n80")):
+        selection = benchmarks.select_reference_outcome(
+            "habit", checkpoint_training_noise_pct=noise,
+            protocol_id="fashioniq_full_gallery_ref_excluded")
+        assert selection.outcome == benchmarks.SELECTION_MATCHED, selection
+        assert selection.reference.reference_id == expected, selection.reference
+    missing = benchmarks.select_reference_outcome("habit", checkpoint_training_noise_pct=99)
+    assert missing.outcome == benchmarks.SELECTION_NO_MATCHING_CONDITION, missing
+    assert missing.reference is None
+
+
+def test_a_model_whose_author_published_no_number_is_a_named_permanent_condition():
+    """D-4: `combiner_rn50x4_noft` has no comparable row and must be reported as such.
+
+    The model is registered, its parser is implemented and it can be executed, but its paper
+    prints no FashionIQ row for the noft Combiner -- so the honest outcome is "no publishable
+    comparison", distinct from a failed verification and from a comparison that measured a
+    deviation. The registry says so itself: the model declares no `reported_*` value.
+    """
+    assert benchmarks.unbenchmarked("combiner_rn50x4_noft") is True
+    assert benchmarks.unbenchmarked("clip4cir_rn50x4_fullft") is False, \
+        "the fullft sibling does publish 43.78/66.93 and must stay comparable"
+
+    selection = benchmarks.select_reference_outcome(
+        "combiner_rn50x4_noft", checkpoint_training_noise_pct=0,
+        protocol_id="fashioniq_original_split")
+    assert selection.outcome == benchmarks.SELECTION_NO_PUBLISHED_COMPARISON, selection
+    assert selection.author_published_no_reference is True, selection
+    assert selection.reference is None, "there is nothing to compare against, so no row is returned"
+    assert all(row.value_for("r10") is None for row in selection.candidates), selection.candidates
+
+    reasons, outcome = verify_run.metric_evidence_reasons(
+        "combiner_rn50x4_noft", "rn50x4_noft_unresolved", "fashioniq_original_split",
+        {"observed_metrics": {"r10": 1.0, "r50": 2.0, "mean": 1.5}})
+    assert outcome == benchmarks.SELECTION_NO_PUBLISHED_COMPARISON, outcome
+    joined = " ".join(reasons)
+    assert "no publishable comparison" in joined and "permanent" in joined, joined
+    assert "forged" not in joined.lower() and "not a real experiment" not in joined, joined
+
+
+def test_an_unbenchmarked_model_with_invalid_evidence_is_still_refused_for_that():
+    """The D-4 allowance names a condition; it does not exempt the model from any other refusal.
+
+    The same model id carrying a mock report is refused for declaring itself a non-experiment, and
+    a report whose data kind is fine but whose declared state is inconsistent is refused too. The
+    permanent condition is reported *beside* those reasons, never instead of them.
+    """
+    # The non-experiment refusal is the evidence-kind question, asked separately from the
+    # reference question (the two are independent: a run can be a real experiment with no
+    # publishable comparison, or a self-test with one).
+    mock_kind = verify_run._evidence_kind_reasons({"data_kind": "mock"})
+    assert any("not a real experiment" in reason for reason in mock_kind), mock_kind
+
+    synthetic_kind = verify_run._evidence_kind_reasons(
+        {"data_kind": "synthetic", "is_synthetic": True})
+    assert any("declares itself synthetic" in reason for reason in synthetic_kind), synthetic_kind
+
+    # The permanent-condition sentence is still reported beside them, not instead of them.
+    reference_reasons, _ = verify_run.metric_evidence_reasons(
+        "combiner_rn50x4_noft", "rn50x4_noft_unresolved", "fashioniq_original_split",
+        {"data_kind": "mock"})
+    assert any("no publishable comparison" in reason for reason in reference_reasons), \
+        reference_reasons
+
+
+def test_a_missing_verified_row_for_a_benchmarked_model_is_not_called_permanent():
+    """The other half of D-4's distinction: a real gap in the table must read like a gap.
+
+    PTHA+MTST's paper does print numbers and the registry records them, so its rows being
+    unusable is a defect in the committed table; saying the authors published nothing would be a
+    false statement about a paper that did.
+    """
+    gap = benchmarks.select_reference_outcome(
+        "habit", checkpoint_training_noise_pct=99, protocol_id="fashioniq_full_gallery_ref_excluded")
+    assert gap.outcome == benchmarks.SELECTION_NO_MATCHING_CONDITION
+    assert gap.author_published_no_reference is False, gap
+    assert benchmarks.unbenchmarked("ptha_mtst") is False
+
+
+def test_a_synthetic_data_kind_is_representable_and_never_evidence():
+    """D-3: the pipeline's own declaration must validate, and must not become research evidence.
+
+    ``evaluate_models.py:185`` writes ``data_kind="synthetic"`` for a registry-declared synthetic
+    source, and ``paper_gate.py:312`` refuses exactly that value. A schema that cannot represent it
+    rejects the producer's honest declaration; a schema that accepts it must not soften either
+    consumer.
+    """
+    from workbench.backend.schemas.results import DATA_KINDS, ResultRun
+    from workbench.tests.mock_data import build_mock_runs
+
+    assert "synthetic" in DATA_KINDS
+    raw = build_mock_runs()[0].model_dump()
+    raw["run"]["data_kind"] = "synthetic"
+    validated = ResultRun.model_validate(raw)
+    assert validated.run.data_kind == "synthetic"
+
+    raw["run"]["data_kind"] = "fabricated"
+    with pytest.raises(Exception):
+        ResultRun.model_validate(raw)
+
+    # The gate refuses it before any arithmetic, whatever the numbers say.
+    reference, _ = benchmarks.select_reference(
+        "csmcir", checkpoint_training_noise_pct=0, protocol_id="fashioniq_original_split")
+    paper = {key: reference.value_for(key) for key in ("r10", "r50", "mean")}
+    verdict = paper_gate.evaluate_gate(
+        reference, dict(paper),
+        run_meta={"protocol_id": "fashioniq_original_split", "checkpoint_id": "fashioniq",
+                  "checkpoint_training_noise_pct": 0, "evaluation_noise_pct": 0, "split": "val",
+                  "dataset": "fashioniq"},
+        data_kind="synthetic", real_execution=True)
+    assert verdict.status == paper_gate.NOT_RUN and verdict.passed is False, verdict
+    assert any("synthetic" in blocker for blocker in verdict.blockers), verdict
+
+    # The verifier refuses it too, on the report's own declaration.
+    kind_reasons = verify_run._evidence_kind_reasons({"data_kind": "synthetic"})
+    assert any("not a real experiment" in reason for reason in kind_reasons), kind_reasons
+
+    # And it is not quietly treated as an exempt development fixture: only `mock` is.
+    from workbench.scripts.validate_results import _report_provenance
+
+    lines: list[str] = []
+    valid = _report_provenance([validated], strict_real=True, output=lines.append)
+    assert valid is False and any("BLOCKED" in line for line in lines), lines

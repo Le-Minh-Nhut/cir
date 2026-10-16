@@ -96,7 +96,7 @@ def test_scenario_a_api_to_evaluator_success(master, monkeypatch, request):  # n
     assert "logs" not in job_directory.parts
 
     settled = _wait_for(module.JOBS, job_id)
-    assert settled["status"] == "completed", settled
+    assert settled["status"] == "completed", (settled, settled.get("error"))
 
     artifacts = master["ws"] / "workbench" / "artifacts"
 

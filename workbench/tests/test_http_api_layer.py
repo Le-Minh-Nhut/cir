@@ -428,3 +428,179 @@ def test_the_app_shutdown_hook_stops_the_queue() -> None:
         handler()
 
     assert stopped == [True], "the shutdown handler must stop the queue (and its job groups)"
+
+
+def test_cohort_export_with_none_metrics_renders_na_cells(api, tmp_path, monkeypatch) -> None:
+    """When a cohort has no matching query rows, its metrics are None.
+    Markdown and CSV exports must return HTTP 200 and render explicit N/A cells,
+    never raise 500 or output nan / fabricated numbers."""
+    cohorts_path = tmp_path / "repo" / "workbench" / "artifacts" / "cohorts.json"
+    cohort_data = [{
+        "cohort_id": "cohort-no-matches",
+        "protocol_id": "fashioniq_original_split",
+        "run_ids": ["run-empty-1"],
+        "query_ids": [],
+        "definition": {"category": "dress"},
+        "notes": "",
+    }]
+    cohorts_path.write_text(json.dumps(cohort_data), encoding="utf-8")
+    monkeypatch.setattr(api, "COHORTS_PATH", cohorts_path)
+
+    # 1. Markdown export
+    status_md, _, body_md = asgi_request(
+        api.app, "GET", "/api/cohorts/cohort-no-matches/export/markdown"
+    )
+    assert status_md == 200, body_md
+    content_md = json.loads(body_md)["content"]
+    assert "N/A" in content_md
+    assert "nan" not in content_md.lower()
+    expected_md_row = "| run-empty-1 | 0 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |"
+    assert expected_md_row in content_md
+
+    # 2. CSV export
+    status_csv, _, body_csv = asgi_request(
+        api.app, "GET", "/api/cohorts/cohort-no-matches/export/csv"
+    )
+    assert status_csv == 200, body_csv
+    content_csv = json.loads(body_csv)["content"]
+    assert "N/A" in content_csv
+    assert "nan" not in content_csv.lower()
+    expected_csv_row = "run-empty-1,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A"
+    assert expected_csv_row in content_csv.replace("\r\n", "\n")
+
+    # 3. JSON export
+    status_json, _, body_json = asgi_request(
+        api.app, "GET", "/api/cohorts/cohort-no-matches/export/json"
+    )
+    assert status_json == 200, body_json
+    data = json.loads(body_json)
+    assert data["metrics"][0]["r1"] is None
+
+    # 4. Computed None metrics with query_ids specified
+    cohort_data.append({
+        "cohort_id": "cohort-unmatched-queries",
+        "protocol_id": "fashioniq_original_split",
+        "run_ids": ["run-empty-2"],
+        "query_ids": ["nonexistent_q1"],
+        "definition": {"category": "shirt"},
+        "notes": "",
+    })
+    cohorts_path.write_text(json.dumps(cohort_data), encoding="utf-8")
+    monkeypatch.setattr(
+        api,
+        "cohort_metrics",
+        lambda run_ids, query_ids: [{
+            "run_id": r,
+            "query_count": 0,
+            "r1": None,
+            "r5": None,
+            "r10": None,
+            "r20": None,
+            "r50": None,
+            "r100": None,
+            "mean_target_rank": None,
+            "median_target_rank": None,
+        } for r in run_ids],
+    )
+    status_md2, _, body_md2 = asgi_request(
+        api.app, "GET", "/api/cohorts/cohort-unmatched-queries/export/markdown"
+    )
+    assert status_md2 == 200, body_md2
+    assert "| run-empty-2 | 0 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |" in json.loads(body_md2)["content"]
+
+    status_csv2, _, body_csv2 = asgi_request(
+        api.app, "GET", "/api/cohorts/cohort-unmatched-queries/export/csv"
+    )
+    assert status_csv2 == 200, body_csv2
+    assert "run-empty-2,0,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A" in json.loads(body_csv2)["content"].replace("\r\n", "\n")
+
+
+# ------------------------------------------------------------------------- startup index lifecycle
+
+def test_first_boot_without_database_builds_index_and_serves_runs(api, tmp_path) -> None:
+    """On a fresh boot without workbench.duckdb, startup builds the index and /api/runs answers 200."""
+    db_path = tmp_path / "repo" / "workbench" / "artifacts" / "workbench.duckdb"
+    db_path.unlink(missing_ok=True)
+    assert not db_path.exists()
+
+    for handler in api.app.router.on_startup:
+        handler()
+    api.wait_for_startup_index(timeout=5.0)
+    assert db_path.is_file(), "startup must create workbench.duckdb when absent"
+
+    status, _, body = asgi_request(api.app, "GET", "/api/runs")
+    assert status == 200, body
+    payload = json.loads(body)
+    assert isinstance(payload, list)
+    assert payload == []
+
+    # Second boot: existing index must be left untouched.
+    mtime_before = db_path.stat().st_mtime_ns
+    for handler in api.app.router.on_startup:
+        handler()
+    api.wait_for_startup_index(timeout=5.0)
+    assert db_path.stat().st_mtime_ns == mtime_before, "existing index must not be rebuilt on boot"
+
+
+def test_startup_index_build_failure_yields_honest_typed_error(api, tmp_path, monkeypatch) -> None:
+    """When startup index build fails, /api/runs answers 503 index_unavailable with the real cause."""
+    db_path = tmp_path / "repo" / "workbench" / "artifacts" / "workbench.duckdb"
+    db_path.unlink(missing_ok=True)
+    assert not db_path.exists()
+
+    def failing_rebuild(*args, **kwargs):
+        raise RuntimeError("simulated duckdb disk failure")
+
+    monkeypatch.setattr(api, "rebuild_index", failing_rebuild)
+
+    for handler in api.app.router.on_startup:
+        handler()
+    api.wait_for_startup_index(timeout=5.0)
+    assert not db_path.exists()
+
+    status, _, body = asgi_request(api.app, "GET", "/api/runs")
+    assert status == 503, body
+    err = json.loads(body)
+    assert err["error"] == "index_unavailable"
+    assert "simulated duckdb disk failure" in err["message"] or "simulated duckdb disk failure" in str(err.get("details"))
+    assert not isinstance(err, list), "must return an error payload, never a fabricated list"
+
+
+def test_runs_reports_index_unavailable_while_startup_build_is_in_progress(api, tmp_path, monkeypatch) -> None:
+    """While startup index build is in flight, /api/runs reports 503 rather than fabricating runs."""
+    import threading
+
+    db_path = tmp_path / "repo" / "workbench" / "artifacts" / "workbench.duckdb"
+    db_path.unlink(missing_ok=True)
+    assert not db_path.exists()
+
+    started = threading.Event()
+    proceed = threading.Event()
+
+    def slow_rebuild(*args, **kwargs):
+        started.set()
+        proceed.wait(timeout=5.0)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        db_path.touch()
+        return 0
+
+    monkeypatch.setattr(api, "rebuild_index", slow_rebuild)
+
+    for handler in api.app.router.on_startup:
+        handler()
+    assert started.wait(timeout=2.0)
+
+    # While in flight, must report 503 building
+    status, _, body = asgi_request(api.app, "GET", "/api/runs")
+    assert status == 503, body
+    err = json.loads(body)
+    assert err["error"] == "index_unavailable"
+    assert err["details"]["status"] == "building"
+
+    # Release build and verify 200 once ready
+    proceed.set()
+    api.wait_for_startup_index(timeout=5.0)
+    monkeypatch.setattr(api, "list_runs", lambda *a, **k: [])
+    status, _, body = asgi_request(api.app, "GET", "/api/runs")
+    assert status == 200, body
+    assert json.loads(body) == []

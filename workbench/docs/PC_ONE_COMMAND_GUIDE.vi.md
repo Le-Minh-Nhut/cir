@@ -308,6 +308,19 @@ Mặc định `./pc.sh` chạy mô hình LIMN. Để đánh giá mô hình khác
   workbench/docker/run.sh status
   ```
 
+### 12. Sổ cái bằng chứng không xác minh được (`ledger does not verify`)
+- **Hiện tượng**: `./pc.sh` báo xác thực thất bại với lý do liên quan tới evidence ledger, dù đánh giá đã chạy xong.
+- **Nguyên nhân**: Sổ cái bằng chứng được ký bằng khóa HMAC. Khóa này nằm ở `$XDG_CONFIG_HOME/cir/workbench_ledger_key` — trong container là `/artifacts/config/cir/workbench_ledger_key`, tức **trên ổ đĩa host** (bind mount) nên bền vững và ghi được bởi uid vận hành. Nếu khóa bị mất, đổi, hoặc có **hai** khóa khác nhau cùng tồn tại (ví dụ một bản cũ ở gốc repo), mọi entry đã ký bằng khóa kia sẽ không xác minh được nữa.
+- **Khắc phục**:
+  ```bash
+  # 1) Xem có mấy khóa đang tồn tại
+  ls -la workbench/artifacts/config/cir/workbench_ledger_key
+  ls -la .workbench_ledger_key          # bản cũ ở gốc repo (nếu có)
+  ```
+  - Nếu chỉ có **một** khóa: chạy lại `./pc.sh` — hệ thống tự dùng lại khóa đó.
+  - Nếu có **hai** khóa khác nhau: hệ thống cố ý **từ chối** thay vì đoán sai. Giữ lại khóa đã ký sổ cái hiện có, xoá bản còn lại, hoặc đặt tường minh `WORKBENCH_LEDGER_KEY` trong `workbench/docker/.env`.
+  - Không xoá sổ cái `evidence_ledger.jsonl`: đó là bằng chứng của các lần chạy trước.
+
 ---
 
 ## 11. Khôi phục

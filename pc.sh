@@ -612,6 +612,69 @@ start_docker_and_wait_readiness() {
     if [[ -n "$c_id" ]]; then
         local code
         code="$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "${base}/api/jobs" 2>/dev/null || true)"
+        # A container is running but its API does not answer. Whether it may be restarted is
+        # decided by the SAME question the healthy path asks — is a job in flight? — answered
+        # here from the persisted queue state, which is a bind mount the host can read. Replacing
+        # a container on a non-200 response without that check would tear down a running
+        # evaluation; the permissive answer is never taken on an unreadable state.
+        local running_jobs_known=1 running_jobs_desc="none"
+        if [[ "$code" != "200" ]]; then
+            local rj_info
+            rj_info="$(curl -s --max-time 5 "${base}/api/jobs" 2>/dev/null | python3 -c "
+import json, sys
+try:
+    jobs = json.load(sys.stdin)
+except Exception:
+    print('UNKNOWN unreadable'); raise SystemExit(0)
+if not isinstance(jobs, list):
+    print('UNKNOWN not-a-list'); raise SystemExit(0)
+active = [j for j in jobs if isinstance(j, dict) and j.get('status') in {'queued', 'preparing', 'running'}]
+print((str(len(active)) + ' ' + ', '.join(f\"{j.get('job_id', 'job')}({j.get('status')})\" for j in active)) if active else '0 none')
+")" || rj_info="UNKNOWN curl-failed"
+            running_jobs_desc="${rj_info#* }"
+            if [[ "${rj_info%% *}" == "UNKNOWN" ]]; then
+                # The API is not the only record: the queue persists each job's state under the
+                # artifacts root, a bind mount the host can read directly.
+                local persisted_active
+                persisted_active="$(python3 - "$WORKBENCH_DOCKER_DIR/.env" "$REPO_ROOT" <<'PYEOF' 2>/dev/null || echo "UNKNOWN"
+import json, sys
+from pathlib import Path
+env_file, repo = Path(sys.argv[1]), Path(sys.argv[2])
+artifacts = repo / "workbench" / "artifacts"
+if env_file.is_file():
+    for line in env_file.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.strip().startswith("HOST_WORKBENCH_ARTIFACTS_ROOT="):
+            raw = line.split("=", 1)[1].strip().strip('"').strip("'")
+            artifacts = Path(raw) if raw.startswith("/") else (env_file.parent / raw).resolve()
+            break
+queue = artifacts / "queue_jobs"
+if not queue.is_dir():
+    print("0 none"); raise SystemExit(0)
+active = []
+for state in sorted(queue.glob("*/queue_state.json")):
+    try:
+        record = json.loads(state.read_text(encoding="utf-8"))
+    except Exception:
+        print("UNKNOWN unreadable-state"); raise SystemExit(0)
+    if record.get("status") in {"queued", "preparing", "running"}:
+        active.append(f"{record.get('job_id', 'job')}({record.get('status')})")
+print((str(len(active)) + " " + ", ".join(active)) if active else "0 none")
+PYEOF
+)"
+                if [[ "${persisted_active%% *}" == "UNKNOWN" ]]; then
+                    running_jobs_known=0
+                else
+                    rj_info="$persisted_active"
+                    running_jobs_desc="${persisted_active#* }"
+                fi
+            fi
+            if (( running_jobs_known == 1 )) && [[ "${rj_info%% *}" != "0" ]]; then
+                fail_stage "CONTAINER_REUSE" "Container cir-workbench đang chạy tác vụ (${running_jobs_desc}) nhưng API backend không trả lời (HTTP ${code}); không khởi động lại container khi đang có tác vụ hoạt động." "docker ps / ${base}/api/jobs" "Chờ tác vụ hoàn tất (workbench/docker/run.sh status) rồi chạy lại ./pc.sh."
+            fi
+            if (( running_jobs_known == 0 )); then
+                fail_stage "CONTAINER_REUSE" "Container cir-workbench đang chạy nhưng KHÔNG xác nhận được nó có tác vụ đang hoạt động hay không (API HTTP ${code}, trạng thái hàng đợi không đọc được); từ chối khởi động lại để bảo toàn thí nghiệm đang chạy." "docker ps / ${base}/api/jobs" "Khôi phục backend rồi chạy lại ./pc.sh; hoặc dừng thủ công bằng 'workbench/docker/run.sh stop' nếu chắc chắn không có tác vụ."
+            fi
+        fi
         if [[ "$code" == "200" ]]; then
             # P1-5: Reusing a running container on HTTP 200 alone is insufficient.
             # Verify effective configuration before reusing.
@@ -679,7 +742,89 @@ else:
                 mismatch_reasons+=("Runtime adaptation không khớp (container='${cont_adapt}', yêu cầu='${expected_adaptation}')")
             fi
 
-            # 3. Dataset mount
+            # 3. Mounts provenance (P1-3)
+            local exp_ds_raw="${DATASET_PATH_OVERRIDE:-$(env_value HOST_FASHIONIQ_ROOT ../../data/FashionIQ)}"
+            local expected_ds_mount="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$exp_ds_raw")"
+            local exp_cp_raw="$(env_value HOST_WORKBENCH_CHECKPOINT_ROOT ../../workbench/artifacts/checkpoints)"
+            local expected_cp_mount="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$exp_cp_raw")"
+            local exp_art_raw="$(env_value HOST_WORKBENCH_ARTIFACTS_ROOT ../../workbench/artifacts)"
+            local expected_art_mount="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$exp_art_raw")"
+
+            local mounts_known=1 mounts_desc="ok"
+            local mounts_check_result
+            mounts_check_result="$(docker inspect --format '{{json .Mounts}}' cir-workbench 2>/dev/null | python3 -c "
+import json, os, sys
+
+try:
+    raw = sys.stdin.read().strip()
+    if not raw:
+        print('UNKNOWN empty-inspect')
+        sys.exit(0)
+    data = json.loads(raw)
+except Exception:
+    print('UNKNOWN unparseable-json')
+    sys.exit(0)
+
+if not isinstance(data, list):
+    print('UNKNOWN not-a-list')
+    sys.exit(0)
+
+mounts = {}
+for item in data:
+    if isinstance(item, dict):
+        dest = item.get('Destination')
+        src = item.get('Source')
+        if dest and src:
+            mounts[dest] = src
+
+expected = {
+    '/data/FashionIQ': sys.argv[1],
+    '/checkpoints': sys.argv[2],
+    '/artifacts': sys.argv[3],
+}
+
+mismatches = []
+for dest, exp_path in expected.items():
+    if dest not in mounts:
+        mismatches.append(f'MISSING:{dest}')
+    else:
+        act_real = os.path.realpath(mounts[dest])
+        exp_real = os.path.realpath(exp_path)
+        if act_real != exp_real:
+            mismatches.append(f'MISMATCH:{dest}:{mounts[dest]}:{exp_path}')
+
+if mismatches:
+    print('REJECT ' + '; '.join(mismatches))
+else:
+    print('OK')
+" "$expected_ds_mount" "$expected_cp_mount" "$expected_art_mount" 2>/dev/null || echo "UNKNOWN docker-inspect-failed")"
+
+            if [[ "$mounts_check_result" == UNKNOWN* ]]; then
+                mounts_known=0
+                config_satisfies=0
+                mounts_desc="${mounts_check_result#UNKNOWN }"
+                mismatch_reasons+=("Không thể xác định mount của container cir-workbench từ docker inspect (${mounts_desc})")
+            elif [[ "$mounts_check_result" == REJECT* ]]; then
+                config_satisfies=0
+                local mm_list="${mounts_check_result#REJECT }"
+                local item
+                IFS=';' read -ra mm_arr <<< "$mm_list"
+                for item in "${mm_arr[@]}"; do
+                    item="$(trim "$item")"
+                    if [[ "$item" == MISSING:* ]]; then
+                        local missing_dest="${item#MISSING:}"
+                        mismatch_reasons+=("Mount ${missing_dest} bị thiếu trong container cir-workbench")
+                    elif [[ "$item" == MISMATCH:* ]]; then
+                        local mm_parts="${item#MISMATCH:}"
+                        local m_dest="${mm_parts%%:*}"
+                        local m_rest="${mm_parts#*:}"
+                        local m_act="${m_rest%%:*}"
+                        local m_exp="${m_rest#*:}"
+                        mismatch_reasons+=("Mount ${m_dest} nguồn không khớp (container='${m_act}', yêu cầu='${m_exp}')")
+                    fi
+                done
+            fi
+
             if ! docker exec cir-workbench test -d /data/FashionIQ/images 2>/dev/null; then
                 config_satisfies=0
                 mismatch_reasons+=("Dataset mount /data/FashionIQ/images không tồn tại hoặc không thể truy cập")
@@ -707,11 +852,21 @@ else:
                 if (( active_count > 0 )); then
                     fail_stage "CONTAINER_REUSE" "Container cir-workbench đang chạy tác vụ (${active_desc}) nhưng cấu hình không thỏa mãn yêu cầu của lượt chạy này (${reasons_str}). Tuyệt đối không dừng hoặc khởi động lại container khi đang có tác vụ hoạt động." "docker ps / api/jobs" "Chờ tác vụ hiện tại hoàn tất hoặc hủy tác vụ trước khi cấu hình lại container."
                 fi
+                if (( mounts_known == 0 )); then
+                    fail_stage "CONTAINER_REUSE" "Container cir-workbench đang chạy nhưng KHÔNG thể xác định cấu hình mount từ docker inspect (${mounts_desc}); từ chối tái sử dụng container để bảo đảm tính toàn vẹn dữ liệu. Chi tiết: ${reasons_str}" "docker inspect --format '{{json .Mounts}}' cir-workbench" "Kiểm tra docker daemon và container cir-workbench"
+                fi
 
                 say "Không có tác vụ đang chạy. Khởi chạy lại Docker stack qua run.sh up để cấu hình đúng..."
                 "${RUN_SH}" up
-                container_running=0
+                container_running=1
             fi
+        else
+            # The container exists but its API does not answer. It is not restarted blindly: the
+            # active-job question was already answered above (from the API or from the persisted
+            # queue), so reaching here means no job is in flight and no trajectory is at risk.
+            say "[CẢNH BÁO] Container cir-workbench đang chạy nhưng API backend chưa trả lời (HTTP ${code}); không có tác vụ đang chạy nên stack sẽ được khởi động lại với cấu hình hiện tại."
+            "${RUN_SH}" up
+            container_running=1
         fi
     fi
 
@@ -797,6 +952,25 @@ verify_gpu_in_container() {
 
     say "$probe_out"
     say "[OK] Năng lực GPU cho ${MODEL} đã được kiểm chứng và ghi nhận thành công."
+}
+run_verifier_in_container() {
+    local c_id
+    c_id="$(docker ps -q --filter name=^cir-workbench$ 2>/dev/null | head -n1 || true)"
+    if [[ -z "$c_id" ]]; then
+        fail_stage "VERIFICATION" "Container cir-workbench không chạy. Xác thực bằng chứng thực thi khoa học phải chạy bên trong container execution environment." "docker ps" "Khởi động container bằng '${RUN_SH} up' hoặc chạy lại ./pc.sh"
+    fi
+    # `docker exec` starts a fresh process with the image's ENV plus the service's declared
+    # `environment:` — it does NOT inherit whatever this shell has. The ledger key resolves from
+    # XDG_CONFIG_HOME, so a bare exec could read a different key (or none) than the evaluation
+    # wrote with, and every run would look uncorroborated. The values are read from the running
+    # container's own configuration, not assumed from the host.
+    local -a exec_env=()
+    local declared
+    while IFS= read -r declared; do
+        [[ -n "$declared" ]] && exec_env+=(-e "$declared")
+    done < <(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' cir-workbench 2>/dev/null \
+             | grep -E '^(XDG_CONFIG_HOME|WORKBENCH_[A-Z_]+|CIR_REPO_ROOT|CIR_DATA_ROOT|FASHIONIQ_ROOT)=' || true)
+    docker exec -T "${exec_env[@]}" cir-workbench python3 workbench/scripts/verify_run.py "$@"
 }
 
 # Behaviour 7: Evaluation
@@ -892,19 +1066,12 @@ for r in all_runs:
                 print(rid)
 " "$MODEL" "$checkpoint" "$protocol" "$runs_json" "$b_runs_json" 2>/dev/null || true)"
 
-        local verify_script="${REPO_ROOT}/workbench/scripts/verify_run.py"
-        if [[ ! -f "$verify_script" ]]; then
-            verify_script="${SCRIPT_DIR}/workbench/scripts/verify_run.py"
-        fi
-
-        if [[ -n "$candidate_runs" && -f "$verify_script" ]]; then
-            export CIR_REPO_ROOT="$REPO_ROOT"
-            export PYTHONPATH="${SCRIPT_DIR}${PYTHONPATH:+:$PYTHONPATH}"
+        if [[ -n "$candidate_runs" ]]; then
             while IFS= read -r cand_id; do
                 [[ -z "$cand_id" ]] && continue
                 local v_rc=0 v_out
-                v_out="$(python3 "$verify_script" --run-id "$cand_id" --model "$MODEL" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || v_rc=$?
-                if (( v_rc == 0 )) && python3 -c "import json, sys; res = json.loads(sys.argv[1]); sys.exit(0 if res.get('verified') else 1)" "$v_out" 2>/dev/null; then
+                v_out="$(run_verifier_in_container --run-id "$cand_id" --model "$MODEL" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || v_rc=$?
+                if (( v_rc == 0 )) && python3 -c "import json, sys; res = json.loads(sys.argv[1]); sys.exit(0 if res.get('is_research_evidence') else 1)" "$v_out" 2>/dev/null; then
                     target_run_id="$cand_id"
                     break
                 fi
@@ -1068,21 +1235,8 @@ validate_and_summarize() {
 
     say "Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py..."
 
-    local verify_script="${REPO_ROOT}/workbench/scripts/verify_run.py"
-    if [[ ! -f "$verify_script" ]]; then
-        verify_script="${SCRIPT_DIR}/workbench/scripts/verify_run.py"
-    fi
-
-    if [[ ! -f "$verify_script" ]]; then
-        fail_stage "VERIFICATION" "Không tìm thấy công cụ xác thực độc lập verify_run.py tại ${verify_script}" "$verify_script" "Kiểm tra sự tồn tại của workbench/scripts/verify_run.py"
-    fi
-
-    export CIR_REPO_ROOT="$REPO_ROOT"
-    export PYTHONPATH="${SCRIPT_DIR}${PYTHONPATH:+:$PYTHONPATH}"
-
     local verify_out verify_rc=0
-    verify_out="$(python3 "$verify_script" --run-id "$run_id" --model "$model" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || verify_rc=$?
-
+    verify_out="$(run_verifier_in_container --run-id "$run_id" --model "$model" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || verify_rc=$?
     python3 - <<'PYDOC' "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id"
 import json, sys
 
@@ -1112,8 +1266,11 @@ if result is None:
 if result is None:
     sys.exit(f"Lỗi: verify_run.py không trả về JSON hợp lệ (exit code {verify_rc}):\n{verify_out}")
 
-verified = bool(result.get("verified", False))
-reasons = result.get("reasons") or []
+verified = bool(result.get("is_research_evidence", False))
+# Both lists, because the refusal can come from either question: an incomplete/corroboration
+# failure is in `reasons`, while a run that executed correctly but is a self-test (or has no
+# publishable comparison) is refused only by `evidence_reasons`.
+reasons = list(result.get("reasons") or []) + list(result.get("evidence_reasons") or [])
 
 if verify_rc != 0 or not verified:
     reasons_str = "; ".join(str(r) for r in reasons) if reasons else f"verify_run.py trả về mã lỗi {verify_rc}"

@@ -25,8 +25,8 @@ These are registry/evidence blockers, not tasks Autopilot can bypass:
 
 | Model(s) | Current blocker |
 |---|---|
-| `ptha_mtst` | No verified FashionIQ fine-tuned checkpoint and no source integration. |
-| `tgcir` | No source replay CLI; required ViT-B/16 and preparation assets unresolved. |
+| `ptha_mtst` | No verified FashionIQ fine-tuned checkpoint and no source integration. The registry also commits two `VERIFIED` paper rows that bind the same condition (Table III with-FashionIQ_MTST vs without it), so no run of it can be judged until the rows carry a selectable condition that separates them; selection refuses with the ambiguity named rather than guessing a row. |
+| `combiner_rn50x4_noft` | The authors published no FashionIQ row for this configuration, so the model has no publishable comparison: a run of it is reported as `NO_PUBLISHED_COMPARISON` (permanent) rather than as a failed or forged result. || `tgcir` | No source replay CLI; required ViT-B/16 and preparation assets unresolved. |
 | `pair` | FashionIQ mapping for `pair-B1.pt` / `pair-B2.pt` unresolved. |
 | `clvc_net` | No standalone replay entrypoint; checkpoint mapping and ResNet-50 asset unresolved. |
 | `sprc` | Checkpoint/backbone mapping unresolved. |

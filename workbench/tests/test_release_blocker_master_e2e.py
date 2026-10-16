@@ -33,11 +33,18 @@ if os.environ.get("SYNTHETIC_SILENT"):
     sys.exit(0)
 
 print("starting synthetic evaluation")
+# The declared contract for a registry-declared synthetic evaluator
+# (`evaluate_models.py::_synthetic_aggregate`): one JSON object carrying the macro aggregate and
+# a per-category table. The fixture must print that shape — an older flat key set
+# (`dress_recall_at10`, ...) is a different schema the production reader does not parse, so the
+# run would be reported as having no extracted metrics.
 print(json.dumps({
-    "dress_recall_at10": 60.0, "dress_recall_at50": 80.0,
-    "shirt_recall_at10": 55.0, "shirt_recall_at50": 75.0,
-    "toptee_recall_at10": 50.0, "toptee_recall_at50": 70.0,
-    "average_recall_at10": 55.0, "average_recall_at50": 75.0, "average_recall": 65.0,
+    "aggregate": {"macro_r10": 55.0, "macro_r50": 75.0, "macro_mean": 65.0},
+    "categories": [
+        {"category": "dress", "r10": 60.0, "r50": 80.0},
+        {"category": "shirt", "r10": 55.0, "r50": 75.0},
+        {"category": "toptee", "r10": 50.0, "r50": 70.0},
+    ],
 }))
 print("synthetic evaluation completed successfully")
 '''
@@ -97,6 +104,11 @@ def master(tmp_path: Path):
             "reported_r10": 55.0, "reported_r50": 75.0, "reported_mean": 65.0,
             "reproduction_status": "NOT_RUN", "command_status": "COMMAND_AUDITED",
             "strict_clean_checkpoint_available": True,
+            # The evaluator is a self-test fixture, and the registry must say so: the evaluator
+            # classifies a run as synthetic from this declaration, so without it the run's own
+            # declared aggregate is indistinguishable from an experiment that printed no
+            # parsable metrics, and the run is honestly refused as evidence.
+            "synthetic_source": True,
             "checkpoint_variants": [{
                 "checkpoint_id": "ckpt_v1", "filename": "model.pt",
                 "download_url": "https://example.invalid/model.pt",

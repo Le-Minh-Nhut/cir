@@ -840,3 +840,89 @@ def test_a_capability_record_is_bound_to_the_interpreter_that_probed_it(tmp_path
         "capability_key": key, "capability_verified": True, "probe_source": "interpreter"})
     assert runtime._cached_gpu_capability(model, report) is None, \
         "a record for a different interpreter must not certify this environment"
+
+
+# --------------------------------------------------------------------------- P2 (mutation check M4)
+
+def test_mutation_m4_not_reported_as_passed_when_docker_daemon_unavailable(tmp_path):
+    """When the Docker daemon is unavailable, docker compose config fails for an
+    infrastructure reason, not because the compose env guard detected missing variables.
+    M4 must distinguish daemon failure from guard enforcement and report
+    SKIPPED/NOT VERIFIED, never DETECTED or PASSED."""
+    import os
+    import subprocess
+
+    docker_shim = tmp_path / "docker"
+    docker_shim.write_text(
+        "#!/bin/sh\n"
+        "echo 'Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?' >&2\n"
+        "exit 1\n",
+        encoding="utf-8",
+    )
+    docker_shim.chmod(0o755)
+
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ.get('PATH', '')}"}
+    script = REPOSITORY / "workbench" / "docker" / "mutation_checks.sh"
+    proc = subprocess.run(
+        ["bash", str(script)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    out = proc.stdout + proc.stderr
+
+    assert "DETECTED: compose refuses to resolve" not in out, \
+        f"M4 must not claim compose guard detected regression when daemon is down:\n{out}"
+    passed_lines = [line for line in out.splitlines() if line.startswith("MUTATION CHECKS PASSED:")]
+    assert passed_lines, f"expected passing summary for other mutations, got:\n{out}"
+    assert "M4" not in passed_lines[0].split()[3:], \
+        f"M4 must not be counted in passed mutations when daemon is down: {passed_lines[0]}"
+    assert "SKIP M4" in out or "NOT VERIFIED" in out, \
+        f"M4 must report SKIPPED/NOT VERIFIED when daemon is down:\n{out}"
+
+
+def test_a_new_ledger_key_is_placed_where_it_survives_the_container(tmp_path, monkeypatch):
+    """The repository root is a checkout the runtime user usually cannot write and that is lost
+    when a container is replaced; a key created there invalidates every entry it signed. A fresh
+    ledger must therefore create its key in the durable, writable config location."""
+    from dataclasses import replace
+
+    from workbench.backend.operator_config import resolve_config
+    from workbench.scripts import evaluate_models as evaluator
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (tmp_path / "artifacts").mkdir()
+    config = replace(resolve_config(), CIR_REPO_ROOT=repo,
+                     WORKBENCH_ARTIFACTS_ROOT=tmp_path / "artifacts")
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+
+    key = evaluator.ledger_hmac_key(config)
+    assert len(key) == 32
+    assert (tmp_path / "config" / "cir" / "workbench_ledger_key").is_file(), \
+        "a fresh key must land in the durable config location"
+    assert not (repo / ".workbench_ledger_key").is_file(), \
+        "the repository root is not a durable place for the ledger key"
+
+
+def test_an_existing_repository_key_is_still_honoured(tmp_path, monkeypatch):
+    """A key already at the repository root signed the ledger on disk. Choosing a different
+    location would silently make every existing entry unverifiable."""
+    from dataclasses import replace
+
+    from workbench.backend.operator_config import resolve_config
+    from workbench.scripts import evaluate_models as evaluator
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (tmp_path / "artifacts").mkdir()
+    legacy = b"legacy-key-bytes-32-len-aaaaaaaa"
+    (repo / ".workbench_ledger_key").write_bytes(legacy)
+    config = replace(resolve_config(), CIR_REPO_ROOT=repo,
+                     WORKBENCH_ARTIFACTS_ROOT=tmp_path / "artifacts")
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+
+    assert evaluator.ledger_hmac_key(config) == legacy

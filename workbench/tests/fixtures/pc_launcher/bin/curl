@@ -26,6 +26,15 @@ if os.environ.get("MOCK_CURL_ALWAYS_FAIL") == "1":
     sys.stderr.write("curl: (7) Failed to connect to 127.0.0.1 port 8000: Connection refused\n")
     sys.exit(7)
 
+# A container that is running while its API does not answer is exactly the state in which the
+# launcher must still refuse to replace it if a job is in flight. Only the API endpoints fail;
+# everything else keeps working, so the launcher's other decisions stay testable.
+if os.environ.get("MOCK_API_DOWN") == "1" and "/api/" in args_str:
+    if has_w:
+        print("000")
+    sys.stderr.write("curl: (7) Failed to connect to 127.0.0.1 port 8000: Connection refused\n")
+    sys.exit(7)
+
 retry_file = os.environ.get("MOCK_CURL_RETRY_COUNT_FILE")
 if retry_file and os.path.exists(retry_file):
     try:

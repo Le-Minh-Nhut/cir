@@ -12,6 +12,15 @@ PROTOCOL_LITERATURE_LABELS = {
 }
 PROTOCOL_IDS = frozenset(PROTOCOL_LITERATURE_LABELS)
 
+#: The declared origin of a run's per-query results. ``experiment`` is a real evaluation;
+#: ``mock`` is a deterministic development fixture (``tests/mock_data.py``); ``synthetic`` is a
+#: registry-declared synthetic source (``models.yaml`` ``synthetic_source``), which the pipeline
+#: records as its own kind (``evaluate_models.py:185``). All three are produced by the system, so
+#: all three must be representable; being representable says nothing about being evidence. The
+#: paper gate refuses anything but ``experiment`` (``paper_gate.py:311-318``) and the verifier
+#: refuses it too (``verify_run.py:222-226``).
+DATA_KINDS = ("experiment", "mock", "synthetic")
+
 
 class ReportedMetrics(BaseModel):
     r10: float | None = None
@@ -76,7 +85,7 @@ class RunMetadata(BaseModel):
     #: reproduction; the variant labelling elsewhere keys off this value.
     runtime_adaptation: str | None = None
     timestamp: datetime
-    data_kind: Literal["experiment", "mock"] = "experiment"
+    data_kind: Literal["experiment", "mock", "synthetic"] = "experiment"
     reported_paper_metrics: ReportedMetrics = Field(default_factory=ReportedMetrics)
     reproduced_metrics: ReportedMetrics = Field(default_factory=ReportedMetrics)
 

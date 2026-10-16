@@ -84,6 +84,113 @@ def setup_sandbox(
     sandbox.mkdir(parents=True, exist_ok=True)
     bin_dir = sandbox / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
+    if not omit_tools or "docker" not in omit_tools:
+        docker_shim = bin_dir / "docker"
+        fixtures_docker = FIXTURES_BIN / "docker"
+        docker_shim_content = f"""#!/usr/bin/env python3
+import sys
+import os
+import subprocess
+import json
+
+log_file = os.environ.get("MOCK_LOG_FILE")
+if log_file:
+    try:
+        secrets = {{
+            k: v for k, v in os.environ.items()
+            if any(p in k for p in ("TOKEN", "KEY", "SECRET", "LEDGER"))
+        }}
+        with open(log_file, "a") as f:
+            f.write(json.dumps({{"tool": "docker", "args": sys.argv[1:], "secrets": secrets}}) + "\\n")
+    except Exception:
+        pass
+
+args_str = " ".join(sys.argv)
+
+if os.environ.get("MOCK_CONTAINER_DOWN") == "1":
+    if len(sys.argv) > 1 and sys.argv[1] == "ps":
+        sys.exit(0)
+    if len(sys.argv) > 1 and sys.argv[1] == "exec":
+        sys.stderr.write("Error response from daemon: Container cir-workbench is not running\\n")
+        sys.exit(1)
+
+if os.environ.get("MOCK_CONTAINER_DOWN_ON_VERIFY") == "1":
+    if len(sys.argv) > 1 and sys.argv[1] == "ps":
+        count_file = os.path.join(os.environ.get("CIR_REPO_ROOT", ""), "docker_ps_count.txt")
+        count = 0
+        if os.path.exists(count_file):
+            try:
+                count = int(open(count_file).read().strip())
+            except Exception:
+                pass
+        count += 1
+        try:
+            with open(count_file, "w") as f:
+                f.write(str(count))
+        except Exception:
+            pass
+        if count >= 3:
+            sys.exit(0)
+    if len(sys.argv) > 1 and sys.argv[1] == "exec" and "verify_run.py" in args_str:
+        sys.stderr.write("Error response from daemon: Container cir-workbench is not running\\n")
+        sys.exit(1)
+
+if len(sys.argv) > 1 and sys.argv[1] == "exec" and "verify_run.py" in args_str:
+    repo_root = os.environ.get("CIR_REPO_ROOT", "")
+    script = os.path.join(repo_root, "workbench/scripts/verify_run.py") if repo_root else "workbench/scripts/verify_run.py"
+    v_idx = -1
+    for i, a in enumerate(sys.argv):
+        if "verify_run.py" in a:
+            v_idx = i
+            break
+    sub_args = sys.argv[v_idx + 1:] if v_idx >= 0 else []
+    v_env = dict(os.environ)
+    v_env["PYTHONPATH"] = f"{str(REPO)}:{{v_env.get('PYTHONPATH', '')}}"
+    res = subprocess.run([{repr(sys.executable)}, script] + sub_args, env=v_env)
+    sys.exit(res.returncode)
+
+if "WORKBENCH_RUNTIME_ADAPTATION" in args_str and len(sys.argv) > 1 and sys.argv[1] == "exec":
+    if "MOCK_CONTAINER_ADAPTATION" in os.environ:
+        print(os.environ["MOCK_CONTAINER_ADAPTATION"])
+        sys.exit(0)
+
+if len(sys.argv) > 1 and sys.argv[1] == "inspect":
+    if os.environ.get("MOCK_DOCKER_INSPECT_FAIL") == "1":
+        sys.stderr.write("docker inspect failed\\n")
+        sys.exit(1)
+    if os.environ.get("MOCK_DOCKER_INSPECT_CORRUPT") == "1":
+        print("invalid json")
+        sys.exit(0)
+    if os.environ.get("MOCK_DOCKER_INSPECT_EMPTY") == "1":
+        sys.exit(0)
+    if "MOCK_DOCKER_MOUNTS" in os.environ:
+        print(os.environ["MOCK_DOCKER_MOUNTS"])
+        sys.exit(0)
+    if "Mounts" in args_str:
+        repo_root = os.environ.get("CIR_REPO_ROOT", "")
+        fashioniq_root = os.environ.get("HOST_FASHIONIQ_ROOT", os.path.join(repo_root, "data/FashionIQ"))
+        mounts = [
+            {{"Source": fashioniq_root, "Destination": "/data/FashionIQ", "RW": True}},
+            {{"Source": os.path.join(fashioniq_root, "images"), "Destination": "/data/FashionIQ/images", "RW": False}},
+            {{"Source": os.path.join(fashioniq_root, "image_splits"), "Destination": "/data/FashionIQ/image_splits", "RW": False}},
+            {{"Source": os.path.join(repo_root, "workbench/artifacts"), "Destination": "/artifacts", "RW": True}},
+            {{"Source": os.path.join(repo_root, "workbench/artifacts/checkpoints"), "Destination": "/checkpoints", "RW": False}},
+        ]
+        print(json.dumps(mounts))
+        sys.exit(0)
+    if "DeviceRequests" in args_str:
+        print('[{{ "Driver": "nvidia", "Count": -1, "DeviceIDs": [], "Capabilities": [["gpu"]], "Options": {{}} }}]')
+        sys.exit(0)
+    if "Config.Env" in args_str:
+        print(f"WORKBENCH_RUNTIME_ADAPTATION={{os.environ.get('MOCK_CONTAINER_ADAPTATION', 'sm_120')}}")
+        sys.exit(0)
+child_env = dict(os.environ)
+child_env.pop("MOCK_LOG_FILE", None)
+res = subprocess.run([{repr(sys.executable)}, {repr(str(fixtures_docker))}] + sys.argv[1:], env=child_env)
+sys.exit(res.returncode)
+"""
+        docker_shim.write_text(docker_shim_content)
+        docker_shim.chmod(0o755)
 
     path_var = _make_safe_path(bin_dir, omit_tools=omit_tools)
 
@@ -693,15 +800,21 @@ def _create_corroborated_run(
         "bundle_manifest_digest": md,
         "checkpoint_sha256": "abcdef123456",
         "benchmark_gate": {"status": "PASS_WITHIN_5_PERCENT"},
+        # The run's own extraction facts and its macro. The macro is the mean of the three
+        # categories below and the mean of the two macro recalls, because `verify_run.py`
+        # re-derives that arithmetic rather than trusting the report's claim (the same rule the
+        # extraction parser applies to a real run's output).
+        "extraction_status": "EXTRACTED_VERIFIED",
+        "metric_extraction_available": True,
         "category_metrics": {
             "dress": {"r10": 25.5, "r50": 55.2},
             "shirt": {"r10": 28.1, "r50": 58.4},
             "toptee": {"r10": 30.2, "r50": 60.1},
         },
         "observed_metrics": {
-            "r10": 27.93,
-            "r50": 57.90,
-            "mean": 42.92,
+            "r10": 27.9333,
+            "r50": 57.9,
+            "mean": 42.9167,
         },
     }
 
@@ -863,3 +976,189 @@ def test_active_job_blocks_container_reuse(tmp_path: Path):
     assert proc.returncode != 0
     assert "CONTAINER_REUSE" in proc.stdout or "tác vụ" in proc.stdout.lower()
     assert "không dừng hoặc khởi động lại" in proc.stdout.lower() or "tuyệt đối không" in proc.stdout.lower() or "đang chạy tác vụ" in proc.stdout.lower()
+
+
+# ==============================================================================
+# P1-3 — dataset and mount provenance
+# ==============================================================================
+
+
+def test_container_dataset_mount_source_mismatch_refused(tmp_path: Path):
+    """(a) Container whose dataset mount source differs from configured host path is refused with named reason."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    other_ds = tmp_path / "other_fashioniq_root"
+    other_ds.mkdir(parents=True, exist_ok=True)
+    sb = sandbox
+    mounts = [
+        {"Destination": "/data/FashionIQ", "Source": str(other_ds), "RW": True},
+        {"Destination": "/data/FashionIQ/images", "Source": str(other_ds / "images"), "RW": False},
+        {"Destination": "/data/FashionIQ/image_splits", "Source": str(other_ds / "image_splits"), "RW": False},
+        {"Destination": "/artifacts", "Source": str(sb / "workbench" / "artifacts"), "RW": True},
+        {"Destination": "/checkpoints", "Source": str(sb / "workbench" / "artifacts" / "checkpoints"), "RW": False},
+    ]
+    env["MOCK_DOCKER_MOUNTS"] = json.dumps(mounts)
+    env["MOCK_JOB_STATUS"] = "running"
+
+    proc = run_pc(sandbox, [], env)
+    assert proc.returncode != 0
+    assert "CONTAINER_REUSE" in proc.stdout
+    assert "Mount /data/FashionIQ nguồn không khớp" in proc.stdout
+    assert str(other_ds) in proc.stdout
+
+
+def test_container_missing_mount_refused(tmp_path: Path):
+    """(b) A container missing the mount is refused."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    sb = sandbox
+    # Missing /data/FashionIQ mount
+    mounts = [
+        {"Destination": "/artifacts", "Source": str(sb / "workbench" / "artifacts"), "RW": True},
+        {"Destination": "/checkpoints", "Source": str(sb / "workbench" / "artifacts" / "checkpoints"), "RW": False},
+    ]
+    env["MOCK_DOCKER_MOUNTS"] = json.dumps(mounts)
+    env["MOCK_JOB_STATUS"] = "running"
+
+    proc = run_pc(sandbox, [], env)
+    assert proc.returncode != 0
+    assert "CONTAINER_REUSE" in proc.stdout
+    assert "Mount /data/FashionIQ bị thiếu trong container" in proc.stdout
+
+
+def test_unreadable_mount_list_fails_closed(tmp_path: Path):
+    """(c) An unreadable mount list fails closed."""
+    # Subtest 1: inspect command fails
+    sandbox_a, env_a = setup_sandbox(tmp_path / "a", with_env=True)
+    env_a["MOCK_DOCKER_INSPECT_FAIL"] = "1"
+    proc_a = run_pc(sandbox_a, [], env_a)
+    assert proc_a.returncode != 0
+    assert "CONTAINER_REUSE" in proc_a.stdout
+    assert "KHÔNG thể xác định cấu hình mount" in proc_a.stdout
+
+    # Subtest 2: inspect returns unparseable json
+    sandbox_b, env_b = setup_sandbox(tmp_path / "b", with_env=True)
+    env_b["MOCK_DOCKER_INSPECT_CORRUPT"] = "1"
+    proc_b = run_pc(sandbox_b, [], env_b)
+    assert proc_b.returncode != 0
+    assert "CONTAINER_REUSE" in proc_b.stdout
+
+    # Subtest 3: inspect returns empty string
+    sandbox_c, env_c = setup_sandbox(tmp_path / "c", with_env=True)
+    env_c["MOCK_DOCKER_INSPECT_EMPTY"] = "1"
+    proc_c = run_pc(sandbox_c, [], env_c)
+    assert proc_c.returncode != 0
+    assert "CONTAINER_REUSE" in proc_c.stdout
+
+
+def test_matching_container_is_reused_positive_control(tmp_path: Path):
+    """(d) A matching container is still reused (positive control)."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    ds_root = sandbox / "data" / "FashionIQ"
+    sb = sandbox
+    mounts = [
+        {"Destination": "/data/FashionIQ", "Source": str(ds_root), "RW": True},
+        {"Destination": "/data/FashionIQ/images", "Source": str(ds_root / "images"), "RW": False},
+        {"Destination": "/data/FashionIQ/image_splits", "Source": str(ds_root / "image_splits"), "RW": False},
+        {"Destination": "/artifacts", "Source": str(sb / "workbench" / "artifacts"), "RW": True},
+        {"Destination": "/checkpoints", "Source": str(sb / "workbench" / "artifacts" / "checkpoints"), "RW": False},
+    ]
+    env["MOCK_DOCKER_MOUNTS"] = json.dumps(mounts)
+    env["MOCK_CONTAINER_ADAPTATION"] = "sm_120"
+    _create_corroborated_run(sandbox, "run_limn_corr_01")
+    env["MOCK_RUNS_STATUS"] = "corroborated"
+
+    proc = run_pc(sandbox, [], env)
+    assert proc.returncode == 0
+    assert "Docker container cir-workbench đã đang chạy, cấu hình phù hợp và API sẵn sàng" in proc.stdout
+    assert "Khởi chạy lại Docker stack qua run.sh up để cấu hình đúng" not in proc.stdout
+
+
+def test_verification_attempted_inside_container_not_on_host(tmp_path: Path):
+    """P0-1 (a): Verification is attempted inside the container, not on the host."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_RUNS_STATUS"] = "corroborated"
+    _create_corroborated_run(sandbox, "run_limn_corr_01")
+
+    proc = run_pc(sandbox, [], env)
+    assert proc.returncode == 0
+    assert "CORROBORATED" in proc.stdout or "HỢP LỆ" in proc.stdout
+
+    logs = _read_tool_logs(sandbox)
+    docker_verify_calls = [
+        rec for rec in logs
+        if rec.get("tool") == "docker"
+        and any("verify_run.py" in str(arg) for arg in rec.get("args", []))
+    ]
+    assert len(docker_verify_calls) > 0, "No docker verification calls recorded in shim log!"
+    for call in docker_verify_calls:
+        args = call.get("args", [])
+        assert args[0] == "exec", f"Expected exec call, got {args}"
+        assert "-T" in args, f"Expected -T flag in docker exec, got {args}"
+        assert "cir-workbench" in args, f"Expected cir-workbench container target, got {args}"
+        assert any("verify_run.py" in a for a in args)
+
+
+def test_verification_fails_with_named_reason_when_container_not_running(tmp_path: Path):
+    """P0-1 (b): When container is not running, verification fails with named reason without host fallback."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_RUNS_STATUS"] = "corroborated"
+    env["MOCK_CONTAINER_DOWN_ON_VERIFY"] = "1"
+    _create_corroborated_run(sandbox, "run_limn_corr_01")
+
+    proc = run_pc(sandbox, [], env)
+    assert proc.returncode != 0
+    combined = proc.stdout + proc.stderr
+    assert "Giai đoạn thất bại (Failed stage) : VERIFICATION" in combined
+    assert "Container cir-workbench không chạy" in combined
+    assert "HỢP LỆ (CORROBORATED)" not in combined
+
+
+def test_incompatible_configuration_correction_invokes_docker_startup_exactly_once(tmp_path: Path):
+    """P2-4 (c): Incompatible-configuration correction invokes docker startup exactly once."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_CONTAINER_ADAPTATION"] = "none"
+    env["MOCK_JOB_STATUS"] = "completed"
+
+    proc = run_pc(sandbox, ["--verify-only"], env)
+    logs = _read_tool_logs(sandbox)
+    up_calls = [
+        rec for rec in logs
+        if rec.get("tool") == "docker"
+        and "compose" in rec.get("args", [])
+        and "up" in rec.get("args", [])
+    ]
+    assert len(up_calls) == 1, f"Expected exactly 1 docker compose up, got {len(up_calls)}"
+    assert "Không có tác vụ đang chạy. Khởi chạy lại Docker stack qua run.sh up để cấu hình đúng..." in proc.stdout
+    assert "Khởi chạy Docker stack qua run.sh up..." not in proc.stdout
+
+
+def test_api_unreachable_container_with_a_job_in_flight_is_not_replaced(tmp_path: Path):
+    """A running container whose API does not answer must still be protected: the launcher asks
+    the persisted queue, which is a bind mount the host can read, and refuses to restart the
+    stack while a job is in flight. Restarting here would tear down a running experiment."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_API_DOWN"] = "1"
+    queue_job = sandbox / "workbench" / "artifacts" / "queue_jobs" / "job-in-flight"
+    queue_job.mkdir(parents=True)
+    (queue_job / "queue_state.json").write_text(json.dumps(
+        {"job_id": "job-in-flight", "status": "running"}))
+
+    proc = run_pc(sandbox, [], env, timeout=25)
+    assert proc.returncode != 0
+    assert "CONTAINER_REUSE" in proc.stdout
+    assert "job-in-flight" in proc.stdout
+
+
+def test_api_unreachable_container_with_an_idle_queue_is_restarted_once(tmp_path: Path):
+    """The same state with nothing in flight is recoverable: the stack is reconfigured exactly
+    once, so an unreachable API cannot block a first run on a fresh PC."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_API_DOWN"] = "1"
+    (sandbox / "workbench" / "artifacts" / "queue_jobs").mkdir(parents=True)
+
+    # With the API down the readiness poll cannot succeed, so the run ends by design on the
+    # readiness deadline. The property under test is stated before that: exactly one startup.
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_pc(sandbox, [], env, timeout=25)
+    up_calls = [line for line in (sandbox / "mock_tools.log").read_text().splitlines()
+                if '"up"' in line]
+    assert len(up_calls) == 1, f"expected exactly one docker startup, saw {len(up_calls)}"

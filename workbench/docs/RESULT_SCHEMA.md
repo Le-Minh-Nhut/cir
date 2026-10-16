@@ -55,6 +55,8 @@ The model's official evaluation remains authoritative. For CSMCIR, official eval
 
 ## Provenance and data kinds
 
+`data_kind` has three representable values, because the pipeline produces three kinds of run: `experiment` (a real evaluation), `mock` (a deterministic development fixture), and `synthetic` (a source the model registry declares `synthetic_source`, written by `evaluate_models.py:185`). Being representable says nothing about being evidence: only `experiment` is research evidence, and both the paper gate and the verifier refuse the other two.
+
 Use `data_kind: "mock"` only for deterministic development fixtures. Mock UI output is not research evidence. An experiment should retain source pin/checkpoint/environment/command evidence; `validate_results.py --strict-real` requires non-empty `upstream_commit`, `checkpoint_sha256`, `command_digest`, and `environment_digest` for non-mock artifacts.
 
 Reported paper metrics are references, not reproduced local metrics. Do not add a checksum or direct asset URL that was not independently verified. Schema v1 artifacts are rejected, not migrated: regenerate from verified instrumentation rather than guessing v2 metadata.

@@ -1124,6 +1124,22 @@ class LedgerCorruptError(RuntimeError):
 
 class LedgerDuplicateRunError(RuntimeError):
     """An invocation run id already exists in the evidence ledger."""
+def _config_home_is_usable(config_home: Path) -> bool:
+    """Whether a key can actually be created and kept under ``config_home``.
+
+    The deployment points ``XDG_CONFIG_HOME`` at a bind-mounted, operator-writable volume. A
+    container whose home resolves somewhere read-only (or unset) must not be chosen for a key
+    that then cannot be written — that is how a capability record ends up unsigned and a run
+    unverifiable — so the fallback to the repository-root location stays available, but only
+    when the durable location genuinely cannot be used.
+    """
+    candidate = config_home / "cir"
+    try:
+        candidate.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return False
+    return os.access(candidate, os.W_OK | os.X_OK)
+
 def ledger_hmac_key(config: WorkbenchConfig) -> bytes:
     """Load the operator key, creating a private random key only for a new ledger."""
     configured = os.environ.get("WORKBENCH_LEDGER_KEY")
@@ -1133,10 +1149,13 @@ def ledger_hmac_key(config: WorkbenchConfig) -> bytes:
             return key
         raise LedgerKeyError("WORKBENCH_LEDGER_KEY is set but empty")
 
-    # The fallback key lives in the operator's private config directory, not in the repository: the
-    # repository root is forwarded to the official evaluator child, so a key kept there is readable
-    # by the very code the ledger is meant to be independent of. A key already present at the old
-    # repository-root location is still honoured, so an existing ledger stays verifiable.
+    # Two candidate locations, and the choice matters for durability. The private config
+    # directory is on a writable, bind-mounted volume in the deployment (`XDG_CONFIG_HOME`), so a
+    # key there survives container recreation. The repository root is a mounted-or-baked checkout
+    # the runtime user usually cannot write, and a key there is lost when the container is
+    # replaced — which invalidates every ledger entry signed with it. The config-home key is
+    # therefore preferred; the repository-root key is still honoured when it is the only one, so
+    # an existing ledger stays verifiable.
     repo_root = Path(getattr(config, "CIR_REPO_ROOT", Path(__file__).resolve().parents[2]))
     legacy_key_path = repo_root / ".workbench_ledger_key"
     config_home = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
@@ -1155,13 +1174,22 @@ def ledger_hmac_key(config: WorkbenchConfig) -> bytes:
                 "two different ledger keys exist "
                 f"({legacy_key_path} and {private_key_path}); keep one and remove the other, or set "
                 "WORKBENCH_LEDGER_KEY explicitly to choose")
-    if legacy_key_path.is_file():
+    if legacy_key_path.is_file() and not private_key_path.is_file():
+        # An existing repository-root key already signed the ledger on disk: honouring it is the
+        # only way that ledger stays verifiable. Creating a fresh key elsewhere would silently
+        # invalidate every entry the operator already has. The durable location is used when it
+        # already holds a key, or when no key exists anywhere yet.
         key_path = legacy_key_path
         key_lock_path = repo_root / ".workbench_ledger_key.lock"
-    else:
+    elif private_key_path.is_file() or _config_home_is_usable(config_home):
+        # Preferred location: durable across container recreation, and writable by the runtime
+        # user. Falls back to the legacy path only when there is nowhere durable to put a key.
         private_dir = config_home / "cir"
         key_path = private_key_path
         key_lock_path = private_dir / "workbench_ledger_key.lock"
+    else:
+        key_path = legacy_key_path
+        key_lock_path = repo_root / ".workbench_ledger_key.lock"
     try:
         key_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         try:

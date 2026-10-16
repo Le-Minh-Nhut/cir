@@ -79,6 +79,28 @@ if "info" in sys.argv:
             print("Runtimes: runc nvidia\nDefault Runtime: runc\nnvidia-container-runtime")
         sys.exit(0)
 
+if len(sys.argv) > 1 and sys.argv[1] == "inspect":
+    # `.Mounts` and `.HostConfig.DeviceRequests` are read by the launcher to decide whether a
+    # running container may be reused; without an answer here the mount-provenance check could
+    # never be exercised by the harness.
+    mounts = os.environ.get("MOCK_DOCKER_MOUNTS")
+    if "Mounts" in args_str:
+        if mounts is None:
+            sys.exit(1)
+        print(mounts)
+        sys.exit(0)
+    if "DeviceRequests" in args_str:
+        if os.environ.get("MOCK_DOCKER_NO_NVIDIA") == "1":
+            print("[]")
+        else:
+            print('[{"Driver":"nvidia","Count":0,"DeviceIDs":null,"Capabilities":[["gpu"]],"Options":{}}]')
+        sys.exit(0)
+    if "Config.Env" in args_str:
+        adaptation = os.environ.get("MOCK_CONTAINER_ADAPTATION", "sm_120")
+        print(f"WORKBENCH_RUNTIME_ADAPTATION={adaptation}")
+        sys.exit(0)
+    sys.exit(0)
+
 if len(sys.argv) > 1 and sys.argv[1] == "ps":
     if "--filter" in sys.argv:
         print("cir-workbench-1")

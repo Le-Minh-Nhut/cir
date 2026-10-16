@@ -63,6 +63,13 @@ RUN useradd --create-home --uid 1000 --user-group appuser \
     && chmod 0777 /opt/mamba \
     && chown -R 1000:1000 /repo/workbench/frontend/node_modules
 
+# XDG_CONFIG_HOME is declared in the IMAGE, not only in the compose service, because
+# `docker exec` starts a process with the image's environment plus the service's declared
+# `environment:` — and the ledger HMAC key resolves from XDG_CONFIG_HOME. A key under
+# /artifacts/config lives on the bind-mounted volume (durable across container recreation and
+# writable by the runtime uid), whereas the repository-root fallback is root-owned and lost on
+# recreation. Keeping it here means a verification launched via `docker exec` resolves the same
+# key the evaluation used.
 ENV HOME=/home/appuser \
     MAMBA_ROOT_PREFIX=/opt/mamba \
     PYTHONUNBUFFERED=1 \
@@ -75,7 +82,8 @@ ENV HOME=/home/appuser \
     WORKBENCH_THIRD_PARTY_ROOT=/third_party \
     WORKBENCH_HOST=0.0.0.0 \
     WORKBENCH_BACKEND_PORT=8000 \
-    WORKBENCH_FRONTEND_PORT=5173
+    WORKBENCH_FRONTEND_PORT=5173 \
+    XDG_CONFIG_HOME=/artifacts/config
 
 # Frontend proxy target: backend in the same container.
 ENV WORKBENCH_BACKEND_URL=http://127.0.0.1:8000
