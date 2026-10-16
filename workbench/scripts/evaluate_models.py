@@ -1087,9 +1087,22 @@ def build_artifact_manifest(checkpoint_path_value: Path, members: list[str]) -> 
 
 
 def manifest_digest(manifest: dict[str, dict[str, Any]] | None) -> str | None:
+    """Digest of a member manifest, independent of where the artifact happens to be mounted.
+
+    The manifest is compared across contexts: the container records members under
+    ``/checkpoints/...`` while a host-side validator resolves the same files under
+    ``<artifacts>/checkpoints/...``. Hashing the absolute ``path`` made an unchanged artifact
+    fail its own manifest purely because the mount prefix differed, so a legitimate evaluation
+    was rejected as tampered. Identity is the *member set and its bytes*: filename plus content
+    digest. The path stays in the manifest for readers, but is not part of the identity.
+    """
     if not manifest:
         return None
-    return hashlib.sha256(json.dumps(manifest, sort_keys=True).encode("utf-8")).hexdigest()
+    identity = {
+        name: {"filename": member.get("filename") or name, "sha256": member.get("sha256")}
+        for name, member in sorted(manifest.items())
+    }
+    return hashlib.sha256(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def evidence_ledger_path(config: WorkbenchConfig) -> Path:
@@ -1324,6 +1337,37 @@ def completion_proof_path(config: WorkbenchConfig, plan: EvaluationPlan, run_id:
     return reports_root(config) / f"{plan.model_id}_{plan.checkpoint_id}_{run_id}_completion.json"
 
 
+def invocation_outcome_path(config: WorkbenchConfig, model_id: str, checkpoint_id: str,
+                            run_id: str) -> Path:
+    """The machine-readable verdict of one invocation, beside its report and proof.
+
+    A caller that dispatched an evaluation needs to know one thing the exit code cannot tell it:
+    did this run produce a *valid completion proof*? ``execute()`` returns the native evaluator
+    code (that is evidence, and it is never overwritten with a workbench status), so a run whose
+    proof failed validation still exits 0. This file is where the operator answers the real
+    question, and it is named by the run identity so a leftover file can never be read as this
+    run's verdict.
+    """
+    return reports_root(config) / f"{model_id}_{checkpoint_id}_{run_id}_invocation_outcome.json"
+
+def report_identity(report: dict | None) -> dict[str, Any]:
+    """The comparability identity a report was produced under.
+
+    A run's numbers are only meaningful together with the commit they came from and the runtime
+    they ran on; this is the shape every consumer of a report (the launcher's summary, a verifier)
+    reads, so it is derived once, here, from the report itself.
+    """
+    report = report or {}
+    return {
+        "run_id": report.get("run_id"),
+        "model_id": report.get("model_id"),
+        "checkpoint_id": report.get("checkpoint_id"),
+        "protocol_id": report.get("protocol_id"),
+        "git_commit": report.get("source_actual_commit"),
+        "runtime_adaptation": report.get("runtime_adaptation"),
+    }
+
+
 def latest_pointer(config: WorkbenchConfig, plan: EvaluationPlan, kind: str) -> Path:
     """`kind` is ``attempt`` or ``successful``. Attempts and successes never mix."""
     return reports_root(config) / f"{plan.model_id}_{plan.checkpoint_id}_latest_{kind}.json"
@@ -1342,6 +1386,40 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
         except OSError:
             pass
         raise
+
+
+def record_invocation_outcome(directory: Path, config: WorkbenchConfig, *, run_id: str,
+                              model_id: str, checkpoint_id: str, protocol_id: str,
+                              return_code: int, invocation_status: str, verdict: str,
+                              reason: str | None) -> dict:
+    """Record what this invocation actually achieved, in one machine-readable file.
+
+    ``verdict`` is one of ``PROOF_VALIDATED`` (the completion proof passed the evaluator's own
+    ``validate_run_manifest``), ``NO_OBSERVABLE_OUTPUT`` (exited 0 and printed nothing, so no
+    proof was minted), ``PROOF_REJECTED`` (a proof was minted but failed validation) or
+    ``EXECUTION_FAILED`` (nonzero exit, so no proof could be minted). ``completed`` states in one
+    boolean what a consumer must not infer from the exit code.
+
+    Written both beside the report (for an auditor) and into the run directory (for a caller
+    that only knows the run directory): the two are the same payload, computed once.
+    """
+    payload = {
+        "artifact_type": "invocation_outcome",
+        "schema_version": 1,
+        "run_id": run_id,
+        "model_id": model_id,
+        "checkpoint_id": checkpoint_id,
+        "protocol_id": protocol_id,
+        "return_code": return_code,
+        "invocation_status": invocation_status,
+        "verdict": verdict,
+        "completed": verdict == "PROOF_VALIDATED",
+        "reason": reason,
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+    }
+    _atomic_write_json(invocation_outcome_path(config, model_id, checkpoint_id, run_id), payload)
+    _atomic_write_json(directory / "invocation_outcome.json", payload)
+    return payload
 
 
 def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = None) -> int:
@@ -1535,6 +1613,11 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
     if invocation_status == "INVOCATION_NO_OBSERVABLE_OUTPUT":
         print("[BLOCKED] official command exited 0 but produced no observable evaluation "
               "output; no completion proof can be minted for this invocation", file=sys.stderr)
+        record_invocation_outcome(
+            directory, config, run_id=run_id, model_id=plan.model_id,
+            checkpoint_id=plan.checkpoint_id, protocol_id=plan.protocol, return_code=code,
+            invocation_status=invocation_status, verdict="NO_OBSERVABLE_OUTPUT",
+            reason="the official command exited 0 and produced no observable evaluation output")
         _atomic_write_json(latest_pointer(config, plan, "attempt"), {
             "run_id": run_id,
             "run_directory": str(directory),
@@ -1605,7 +1688,19 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
                                   require_environment_identity=True)
         except EvaluationOutputError as error:
             print(f"[BLOCKED] completion proof rejected: {error}", file=sys.stderr)
+            # The native code stays 0 — it is the evaluator's own evidence — but the run is not
+            # a completion, and the outcome file says so instead of leaving a caller to guess
+            # from an exit code that cannot distinguish the two.
+            record_invocation_outcome(
+                directory, config, run_id=run_id, model_id=plan.model_id,
+                checkpoint_id=plan.checkpoint_id, protocol_id=plan.protocol, return_code=code,
+                invocation_status=invocation_status, verdict="PROOF_REJECTED",
+                reason=str(error))
         else:
+            record_invocation_outcome(
+                directory, config, run_id=run_id, model_id=plan.model_id,
+                checkpoint_id=plan.checkpoint_id, protocol_id=plan.protocol, return_code=code,
+                invocation_status=invocation_status, verdict="PROOF_VALIDATED", reason=None)
             _atomic_write_json(latest_pointer(config, plan, "successful"), {
                 "run_id": run_id,
                 "run_directory": str(directory),
@@ -1616,6 +1711,12 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
                 "report_digest": proof["report_digest"],
                 "updated_at": proof["completed_at"],
             })
+    else:
+        record_invocation_outcome(
+            directory, config, run_id=run_id, model_id=plan.model_id,
+            checkpoint_id=plan.checkpoint_id, protocol_id=plan.protocol, return_code=code,
+            invocation_status=invocation_status, verdict="EXECUTION_FAILED",
+            reason=f"the official command exited with code {code}")
     return code
 
 

@@ -59,9 +59,13 @@ live() { return $((1 - LIVE)); }
 # ---------------------------------------------------------------- J1 CLEAN DOCKER STARTUP
 say "== J1 clean startup: backend, frontend, all 16 models, no fake results =="
 if (( OFFLINE )) || ! live; then
-    pending J1 "no live stack (run compose up first or drop --offline)"
+    # No live stack means no boot state could be observed: say that, instead of
+    # implying an empty stack was seen.
+    pending J1 "boot state UNOBSERVED: no live stack (run compose up, or drop --offline for static checks)"
 else
-    j1="$("${PY}" - "$BASE" "${REPO}" <<'EOF'
+    # 2>&1, so the assertion message survives: capturing stdout alone produced an empty
+    # `detail` for every failing journey, leaving the operator with a bare FAIL and no reason.
+    if j1="$("${PY}" - "$BASE" "${REPO}" 2>&1 <<'EOF'
 import json, sys, urllib.request
 base, repo = sys.argv[1], sys.argv[2]
 import yaml
@@ -75,21 +79,63 @@ assert {m.get("model_id") for m in models} == expected, (
     f"served models differ from the registry: {sorted({m.get('model_id') for m in models} ^ expected)}")
 for m in models:
     assert m.get("model_id"), "model entry without model_id"
-# a clean installation must not present any run that claims real research evidence:
-# everything visible before a real evaluation is either absent or explicitly mock-labeled
+# Two boot states are BOTH legitimate and must be told apart. A clean first boot presents no run
+# at all. An existing run produced by a real evaluation is not "fake": it is presented as real
+# evidence only when the out-of-band ledger corroborates its aggregate report. Everything else
+# visible is exactly the fake this check exists to catch — mock/self-test output, or a run whose
+# report no ledger entry corroborates.
 runs = get("/api/runs")
 assert isinstance(runs, list)
-fake = [r for r in runs if r.get("data_kind") != "mock"]
-assert not fake, f"runs presented as real without evidence: {[r['run_id'] for r in fake]}"
+# The corroboration contract is the backend's own (`_aggregate_reports`): a report is real
+# evidence only when the ledger holds an entry for those bytes carrying the run identity, return
+# code 0 and INVOCATION_COMPLETED. Reusing it means this scan cannot drift from what the API
+# serves as real, and cannot invent a weaker rule of its own.
+from workbench.backend.main import _aggregate_reports
+corroborated = {report.get("run_id"): report for report in _aggregate_reports()}
+def classify(run):
+    if run.get("data_kind") == "mock":
+        return "mock", "labelled data_kind=mock: a development fixture, not research evidence"
+    report = corroborated.get(run.get("run_id"))
+    if report is None:
+        return "uncorroborated", "no evidence-ledger-corroborated aggregate report for this run"
+    if report.get("is_synthetic"):
+        return "synthetic", "its corroborated report is a declared synthetic source"
+    if (str(report.get("model_id")) != str(run.get("model_id"))
+            or str(report.get("protocol_id")) != str(run.get("protocol_id"))):
+        return "uncorroborated", "its aggregate report describes a different run identity"
+    return "real", "its aggregate report is corroborated by the evidence ledger"
+classified = [(run,) + classify(run) for run in runs]
+refused = [(run, kind, reason) for run, kind, reason in classified if kind != "real"]
+# A run that is HONESTLY labelled as non-evidence is not a fake: `data_kind=mock` is a
+# development fixture the workbench itself writes, and it is exactly what a fresh installation
+# shows. The check that matters is that nothing reaches the UI as research evidence without
+# corroboration, so a labelled fixture is reported separately from an uncorroborated claim.
+labelled_non_evidence = [(run, reason) for run, kind, reason in refused if kind == "mock"]
+misrepresented = [(run, kind, reason) for run, kind, reason in refused if kind != "mock"]
 # Jobs may legitimately exist on a long-lived stack; a clean first boot has none. Either
 # way every status must be a real backend enum value, never an invented one.
 allowed = {"queued", "preparing", "running", "blocked", "completed", "failed", "cancelled"}
 bad_jobs = [j.get("status") for j in get("/api/jobs") if j.get("status") not in allowed]
 assert not bad_jobs, f"job statuses outside the backend enum: {bad_jobs}"
-mock_count = len(runs)
-print(f"{len(models)} models; {mock_count} explicitly-mock runs, no run presented as real evidence")
+assert not misrepresented, "runs presented as real evidence without corroboration: " + "; ".join(
+    f"{run.get('run_id')} [{kind}] {reason}" for run, kind, reason in misrepresented)
+real_runs = [run for run, kind, _ in classified if kind == "real"]
+if real_runs:
+    boot_state = "existing valid results"
+elif runs:
+    boot_state = "labelled non-evidence only"
+else:
+    boot_state = "clean first boot"
+print(f"{len(models)} models; boot state={boot_state}: {len(runs)} run(s) visible, "
+      f"{len(real_runs)} ledger-corroborated real, {len(labelled_non_evidence)} labelled non-evidence")
+for run, reason in labelled_non_evidence[:5]:
+    print(f"  labelled non-evidence: {run.get('run_id')} — {reason}")
 EOF
-    )" && pass J1 "$j1" || fail J1 "$j1"
+    )"; then
+        pass J1 "$j1"
+    else
+        fail J1 "$j1"
+    fi
 fi
 
 # ---------------------------------------------------------------- J2 CORRECT VOLUME MOUNTS
@@ -171,7 +217,7 @@ assert doc[\"models\"], \"empty models must fail\"
     # (c) /api/models exposes bundles and /api/jobs resolves the bundle id (BUG 6 API side)
     j4c="skipped"
     if (( ! OFFLINE )) && live; then
-        j4c="$("${PY}" - "$BASE" <<'EOF'
+        j4c="$("${PY}" - "$BASE" 2>&1 <<'EOF'
 import json, sys, urllib.request
 base = sys.argv[1]
 models = json.load(urllib.request.urlopen(base + "/api/models", timeout=60))
@@ -200,7 +246,7 @@ fi
 # ---------------------------------------------------------------- J5 GPU CONTRACT
 say "== J5 GPU contract: fail-closed without a verified capability =="
 if [[ -n "$PY" ]]; then
-    j5="$("${PY}" - "$REPO" <<'EOF'
+    j5="$("${PY}" - "$REPO" 2>&1 <<'EOF'
 from workbench.backend import runtime
 import inspect
 src = inspect.getsource(runtime)
@@ -230,7 +276,7 @@ fi
 # ---------------------------------------------------------------- J6 RUNTIME ADAPTATION
 say "== J6 sm_120 adaptation changes the verified requirements, not just metadata =="
 if [[ -n "$PY" ]]; then
-    j6="$("${PY}" - "$REPO" <<'EOF'
+    j6="$("${PY}" - "$REPO" 2>&1 <<'EOF'
 import os
 from workbench.backend import runtime
 from workbench.backend.registry import load_registry
@@ -265,7 +311,7 @@ fi
 # ---------------------------------------------------------------- J7 COMPLETE LIMN REPORT (synthetic)
 say "== J7 complete-report rule via the synthetic evaluator (marked synthetic) =="
 if [[ -n "$PY" ]]; then
-    j7="$("${PY}" - "$REPO" <<'EOF'
+    j7="$("${PY}" - "$REPO" 2>&1 <<'EOF'
 # The production contract under test: a per-category evaluator MUST deliver all three
 # category results before an aggregate exists, and a report that carries the synthetic
 # marker can never be certified as official paper evidence. Verified directly against the
@@ -301,7 +347,7 @@ say "== J8 job lifecycle statuses are the backend enum =="
 if (( OFFLINE )) || (( LIVE == 0 )); then
     pending J8 "no live stack"
 else
-    j8="$("${PY}" - "$BASE" <<'EOF'
+    j8="$("${PY}" - "$BASE" 2>&1 <<'EOF'
 import json, sys, urllib.request
 jobs = json.load(urllib.request.urlopen(sys.argv[1] + "/api/jobs", timeout=60))
 allowed = {"queued", "preparing", "running", "blocked", "completed", "failed", "cancelled"}
@@ -320,7 +366,7 @@ fi
 # ---------------------------------------------------------------- J9 SCIENTIFIC GATE
 say "== J9 scientific gate cases incl. INCOMPLETE_METRIC_EVIDENCE =="
 if [[ -n "$PY" ]]; then
-    j9="$("${PY}" - "$REPO" <<'EOF'
+    j9="$("${PY}" - "$REPO" 2>&1 <<'EOF'
 from workbench.backend import paper_gate as gate
 # missing reproduced value is INCOMPLETE evidence, never a deviation label
 c = gate.compare_metric("r10", 60.0, None)
@@ -396,7 +442,7 @@ fi
 # ---------------------------------------------------------------- J12 RESOURCE FAILURE
 say "== J12 resource failure: missing checkpoint recorded clearly, others intact =="
 if [[ -n "$PY" ]]; then
-    j12="$("${PY}" - "$REPO" <<'EOF'
+    j12="$("${PY}" - "$REPO" 2>&1 <<'EOF'
 import os, tempfile
 from pathlib import Path
 from workbench.scripts import evaluate_models
@@ -486,25 +532,106 @@ for dim, spec in out["dimensions"].items():
         spec["status"] = "PENDING"
     else:
         spec["status"] = "NOT_APPLICABLE"
-# GPU_RUNTIME claims PASS only with a real, interpreter-probed capability record
-# (probe_source == "interpreter"); the fail-closed contract (J5) alone is engineering
-# evidence, not GPU verification. Synthetic (override-source) records never count.
+# GPU_RUNTIME claims PASS only with a real, interpreter-probed capability record for THIS
+# environment. A record's own fields are NEVER the evidence: the file must be read back through
+# the runtime's authoritative capability path, which requires an HMAC signature under this
+# deployment's operator key, an interpreter fingerprint, a host identity, the runtime adaptation
+# the probe ran under, and a capability key that binds the record to this model + interpreter +
+# dependency set + host. A hand-written file with `probe_source: interpreter` and
+# `capability_verified: true` therefore certifies nothing, and neither does a record signed with
+# another deployment's key or probed elsewhere; each is reported as not-verified with its reason.
+# The fail-closed contract (J5) alone is engineering evidence, not GPU verification.
 #
-# An artifact that cannot be read is its own reported condition. It must never be swallowed
-# by the surrounding `except` and turned into real_gpu = False: a leftover 0-byte fixture or
-# a half-written record would then silently discard a genuine probe on the target host, and
-# the release would be capped at GPU_VALIDATION_PENDING for no stated reason. Such files are
-# named in the report and removed (they carry no evidence); a record whose own `capability_key`
-# names a different environment is not evidence either — the same binding runtime.py's
-# `_cached_gpu_capability` enforces when it reads a record back.
+# An artifact that cannot be read is its own reported condition. It must never be swallowed by
+# the surrounding `except` and turned into real_gpu = False: a leftover 0-byte fixture or a
+# half-written record would then silently discard a genuine probe on the target host, and the
+# release would be capped at GPU_VALIDATION_PENDING for no stated reason. Such files are named
+# in the report and removed (they carry no evidence); a record whose own `capability_key` names
+# a different environment is not evidence either.
 import glob as _glob, json as _json
 from workbench.backend.operator_config import resolve_config as _rc
-from workbench.backend.runtime import gpu_capability_directory as _gcd
+from workbench.backend import runtime as _runtime
+from workbench.backend.registry import load_registry as _load_registry
+
+_EXPECTED_KEYS: dict = {}
+_DECLARED_INTERPRETERS: dict = {}
+
+def _declared_interpreter(model):
+    """The interpreter this deployment resolves for the model, once per model."""
+    model_id = model.get("model_id")
+    if model_id not in _DECLARED_INTERPRETERS:
+        _DECLARED_INTERPRETERS[model_id] = _runtime.verify_environment(model, probe=False).interpreter
+    return _DECLARED_INTERPRETERS[model_id]
+
+def _expected_key(model):
+    """This model's capability key, computed once per scan (the fingerprint is expensive)."""
+    model_id = model.get("model_id")
+    if model_id not in _EXPECTED_KEYS:
+        _EXPECTED_KEYS[model_id] = _runtime._gpu_capability_key(model)
+    return _EXPECTED_KEYS[model_id]
+
+def _unverified_reason(key, record, models):
+    """Why this capability record is not verified evidence for this environment, or None.
+
+    The cheap rejections come first so the report names the actual defect (an unsigned file, a
+    different interpreter, another host, another adaptation) instead of a generic refusal. The
+    decisions themselves are never re-implemented: the authoritative read-back is
+    `verify_environment(..., authoritative=True)` — the path the backend uses to reload a record
+    — which accepts this record only when its HMAC verifies, its interpreter fingerprint matches
+    this environment, and its capability key is the one computed from this model, interpreter,
+    dependency set and host identity.
+    """
+    if record.get("probe_source") == "override":
+        return "probe_source=override is a synthetic test probe, not a real probe"
+    if record.get("probe_source") != "interpreter":
+        return f"probe_source={record.get('probe_source')!r} is not an interpreter probe"
+    if not _runtime._gpu_capability_signature_valid(record):
+        return "the record is not signed with this deployment's operator key"
+    model = next((m for m in models if m.get("model_id") == record.get("model_id")), None)
+    if model is None:
+        return f"the record names an unknown model {record.get('model_id')!r}"
+    interpreter = str(record.get("interpreter") or "")
+    if not interpreter:
+        return "the record does not name the interpreter it was probed with"
+    if interpreter != _declared_interpreter(model):
+        return (f"was probed with interpreter {interpreter!r}, this environment's is "
+                f"{_declared_interpreter(model)!r}")
+    if record.get("dependency_fingerprint") != _runtime._environment_contract_digest(model):
+        return "the record's dependency fingerprint is not this environment's contract"
+    if record.get("host_identity") != _runtime._host_identity():
+        return "the record was probed on a different host, driver or device selection"
+    if not record.get("interpreter_fingerprint"):
+        return "the record carries no interpreter fingerprint"
+    adaptation = _runtime.runtime_adaptation(model, undeclared_is_error=False)
+    expected_adaptation = str(adaptation.get("target_compute_capability")) if adaptation else None
+    if record.get("runtime_adaptation") != expected_adaptation:
+        return (f"was probed under runtime adaptation {record.get('runtime_adaptation')!r}, "
+                f"this environment's is {expected_adaptation!r}")
+    # A superseded record for this model (an older interpreter fingerprint, say) is cheaply
+    # rejected here: only a record whose capability key IS this environment's key can be accepted
+    # below, and the key is computed once per model rather than per record, so a long history of
+    # stale records cannot turn the scan into a series of full environment hashes.
+    if record.get("capability_key") != _expected_key(model):
+        return "the record's capability key is not this environment's key"
+    report = _runtime.verify_environment(model, probe=True, authoritative=True)
+    if report.tier != _runtime.TIER_GPU_READY:
+        return (f"the runtime does not accept it as capability evidence "
+                f"[{report.tier}/{report.status}]")
+    payload = report.gpu_capability or {}
+    if payload.get("capability_key") != key:
+        return "the runtime loaded a different capability record for this environment"
+    if payload.get("probe_source") != "interpreter" or payload.get("capability_verified") is not True:
+        return "the runtime does not treat the record as verified capability evidence"
+    return None
+
 real_gpu = False
 _unreadable: list[tuple[str | None, str]] = []
 _wrong_key: list[str] = []
+_unverified: list[str] = []
 try:
-    for _path in sorted(_glob.glob(str(_gcd(_rc()) / "*.json"))):
+    _directory = _runtime.gpu_capability_directory(_rc())
+    _models = _load_registry()["models"]
+    for _path in sorted(_glob.glob(str(_directory / "*.json"))):
         _capability_key = os.path.basename(_path)[:-len(".json")]
         try:
             with open(_path, encoding="utf-8") as _handle:
@@ -522,26 +649,44 @@ try:
         if _record.get("capability_key") != _capability_key:
             _wrong_key.append(_capability_key)
             continue
-        if (_record.get("probe_source") == "interpreter"
-                and _record.get("capability_verified") is True):
+        _reason = _unverified_reason(_capability_key, _record, _models)
+        if _reason is None:
             real_gpu = True
+        else:
+            _unverified.append(f"{_capability_key}.json: {_reason}")
 except Exception as _error:      # path/config resolution failed: nothing could be read
     _unreadable.append((None, f"capability scan failed: {type(_error).__name__}: {_error}"))
-if _unreadable or _wrong_key:
-    _names = [os.path.basename(path) if path else reason for path, reason in _unreadable]
-    for _path, _ in _unreadable:
-        if _path:
-            try:
-                os.remove(_path)
-            except OSError:
-                pass
-    out["gpu_capability_scan"] = {"status": "UNREADABLE" if _unreadable else "WRONG_KEY",
-                                  "unreadable": _names, "wrong_key": _wrong_key,
-                                  "real_gpu": real_gpu}
+_names = [os.path.basename(path) if path else reason for path, reason in _unreadable]
+for _path, _ in _unreadable:
+    # An unreadable artifact carries no evidence, so it is removed: leaving it behind would make
+    # every later scan report the same condition. Readable records are never touched.
+    if _path:
+        try:
+            os.remove(_path)
+        except OSError:
+            pass
+# A stale directory can hold thousands of superseded records; the report names the condition and a
+# bounded sample of the offenders (with the full count), so volume cannot bury the finding.
+def _sample(items: list[str]) -> list[str]:
+    return items[:10] + ([f"... and {len(items) - 10} more"] if len(items) > 10 else [])
+
+# The scan's own condition is always reported, verified or not: an operator reading the release
+# report must be able to tell "no record was found" from "records were found and rejected".
+out["gpu_capability_scan"] = {
+    # The condition that degraded the scan is named first (an unreadable artifact, a record for
+    # another environment, a rejected record); `real_gpu` states the verdict separately, so a
+    # removed leftover is visible without hiding the genuine probe it sat next to.
+    "status": ("UNREADABLE" if _unreadable else "WRONG_KEY" if _wrong_key
+               else "UNVERIFIED" if not real_gpu else "VERIFIED"),
+    "unreadable": _names, "wrong_key": _wrong_key,
+    "unverified": _sample(_unverified), "unverified_total": len(_unverified),
+    "real_gpu": real_gpu}
+if _unreadable or _wrong_key or _unverified:
     _rule = "; ".join(
         message for message in (
             "unreadable capability artifact(s) (removed): " + "; ".join(_names) if _names else "",
-            "capability record(s) for a different environment: " + ", ".join(_wrong_key) if _wrong_key else "")
+            "capability record(s) for a different environment: " + ", ".join(_wrong_key) if _wrong_key else "",
+            "capability record(s) that are not verified evidence: " + "; ".join(_sample(_unverified)) if _unverified else "")
         if message)
     out["checks"]["J5"]["detail"] = (out["checks"]["J5"].get("detail") or "") + f" [WARN] {_rule}"
     print(f"[WARN] {_rule}", file=sys.stderr)

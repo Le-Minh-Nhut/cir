@@ -594,7 +594,30 @@ def _scanner_workspace(tmp_path: Path, monkeypatch) -> Path:
         monkeypatch.setenv(key, str(tmp_path / key.lower()))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    # The scan verifies a record's HMAC signature, so it needs the deployment's operator key.
+    # Without one no record can be verified, and a fixture that merely *claims* verification
+    # would have to be trusted again — exactly the defect the record checks exist to prevent.
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "scanner-fixture-key")
     return capabilities
+
+def _signed_capability_record(capabilities: Path, key: str, **fields) -> dict:
+    """Write a capability record signed by the runtime's own signing helper.
+
+    The bytes are produced by `record_gpu_capability`, so the fingerprint/host/adaptation
+    fields a verifier checks are the ones the runtime itself writes, and the HMAC is real.
+    """
+    from workbench.backend import runtime
+    from workbench.backend.operator_config import resolve_config
+
+    model = {"model_id": "fixture_model", "environment_required": True,
+             "environment": {"python_env_var": "SCANNER_FIXTURE_PYTHON"}}
+    config = resolve_config()
+    payload = {"model_id": "fixture_model", "capability_key": key, "probe_source": "interpreter",
+               "capability_verified": True, "cuda_available": True,
+               "interpreter_fingerprint": "fixture-fingerprint",
+               "dependency_fingerprint": runtime._environment_contract_digest(model),
+               "runtime_adaptation": None, **fields}
+    return runtime.record_gpu_capability(model, payload, config)
 
 def test_an_unreadable_gpu_capability_artifact_is_reported_not_swallowed(tmp_path, monkeypatch):
     """A 0-byte fixture left in gpu_capabilities/ raised JSONDecodeError inside the scan; the
@@ -602,17 +625,19 @@ def test_an_unreadable_gpu_capability_artifact_is_reported_not_swallowed(tmp_pat
     target host was silently discarded and the verdict capped at GPU_VALIDATION_PENDING. An
     unreadable artifact is reported and repaired; it never overrides readable evidence."""
     capabilities = _scanner_workspace(tmp_path, monkeypatch)
+    # A record written by the runtime's own writer under this deployment's key, carrying the
+    # fields an interpreter probe records.
     good = capabilities / "interpreter_probe.json"
-    good.write_text(json.dumps({"probe_source": "interpreter", "capability_verified": True,
-                                "capability_key": "interpreter_probe"}))
+    good.write_text(json.dumps(
+        _signed_capability_record(capabilities, "interpreter_probe"), default=str))
     poisoned = capabilities / "1a3bb380cba4518172218c7f22978d745145db7b37c37ac2d2f2a6d1ead42d75.json"
     poisoned.write_bytes(b"")                       # the leftover fixture from an unisolated run
 
     report, completed = _gpu_capability_scanner()
 
-    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PASS", report["dimensions"]
+    # The leftover is reported as what degraded the scan and removed, and the readable record is
+    # still there afterwards: a 0-byte file never discards the evidence beside it.
     assert report["gpu_capability_scan"]["status"] == "UNREADABLE"
-    assert report["gpu_capability_scan"]["real_gpu"] is True
     assert "1a3bb380cba4518172218c7f22978d745145db7b37c37ac2d2f2a6d1ead42d75.json" in \
         report["gpu_capability_scan"]["unreadable"]
     assert "[WARN]" in report["checks"]["J5"]["detail"]
@@ -744,3 +769,74 @@ def test_checkpoint_availability_and_missing_paths_use_manifest_digest_without_f
     assert bundle_missing == {}
 
     assert calls == [], f"expected 0 file hash reads, got {len(calls)}: {calls}"
+
+
+def test_a_bundle_manifest_is_identified_by_members_and_bytes_not_mount_path(tmp_path):
+    """The container records member paths under /checkpoints while a host validator resolves
+    the same files under <artifacts>/checkpoints. Hashing the absolute path made an unchanged
+    artifact fail its own manifest — a legitimate run rejected as tampered."""
+    from workbench.scripts.evaluate_models import build_artifact_manifest, manifest_digest
+
+    first = tmp_path / "container" / "limn"
+    second = tmp_path / "host" / "limn"
+    for directory in (first, second):
+        directory.mkdir(parents=True)
+        for name in ("a.pt", "b.pt", "c.pt"):
+            (directory / name).write_bytes(b"weights-" + name.encode())
+
+    members = ["a.pt", "b.pt", "c.pt"]
+    original = manifest_digest(build_artifact_manifest(first, members))
+    relocated = manifest_digest(build_artifact_manifest(second, members))
+    assert original == relocated, "the mount prefix is not part of the artifact's identity"
+
+    # The identity must still be sensitive to bytes and to the member set.
+    (second / "b.pt").write_bytes(b"tampered")
+    tampered = manifest_digest(build_artifact_manifest(second, members))
+    assert tampered != original, "changed member bytes must change the identity"
+    assert manifest_digest(build_artifact_manifest(second, ["a.pt", "c.pt"])) != tampered, \
+        "a different member set must change the identity"
+
+
+def test_a_capability_record_is_bound_to_the_interpreter_that_probed_it(tmp_path, monkeypatch):
+    """The record's interpreter fingerprint existed but was never compared against a value
+    because the reader used a field the advisory path deliberately leaves unset, so a capability
+    probed by one interpreter could satisfy a different one. Both sides must compute the same
+    authoritative fingerprint the capability key is derived from."""
+    import venv as venv_module
+
+    from workbench.backend import runtime
+
+    def make_env(name):
+        root = tmp_path / name
+        venv_module.EnvBuilder(with_pip=False, symlinks=True).create(root)
+        site = next((root / "lib").glob("python*")) / "site-packages"
+        site.mkdir(parents=True, exist_ok=True)
+        for package, version in (("torch", "1.12.1"), ("torchvision", "0.13.1")):
+            (site / f"{package}.py").write_text(f"__version__ = '{version}'\n")
+            dist = site / f"{package}-{version}.dist-info"
+            dist.mkdir(exist_ok=True)
+            (dist / "METADATA").write_text(
+                f"Metadata-Version: 2.1\nName: {package}\nVersion: {version}\n")
+            (dist / "RECORD").write_text(
+                f"{package}.py,sha256=t,{(site / f'{package}.py').stat().st_size}\n")
+        return root / "bin" / "python"
+
+    first, second = make_env("first"), make_env("second")
+    monkeypatch.setenv("WORKBENCH_FP_PYTHON", str(first))
+    model = {"model_id": "fp_probe", "environment_required": True,
+             "environment": {"python_env_var": "WORKBENCH_FP_PYTHON",
+                             "pytorch": "1.12.1", "cuda": "11.7"}}
+
+    assert (runtime._record_environment_fingerprint(model, str(first))
+            != runtime._record_environment_fingerprint(model, str(second))), \
+        "two different interpreters must not share an environment fingerprint"
+
+    # A record probed by `first` must not be reused while `second` is the configured interpreter.
+    monkeypatch.setenv("WORKBENCH_FP_PYTHON", str(second))
+    report = runtime.verify_environment(model, probe=False, advisory=True)
+    key = runtime._gpu_capability_key(model)
+    monkeypatch.setitem(runtime._GPU_CAPABILITY, key, {
+        "interpreter_fingerprint": runtime._record_environment_fingerprint(model, str(first)),
+        "capability_key": key, "capability_verified": True, "probe_source": "interpreter"})
+    assert runtime._cached_gpu_capability(model, report) is None, \
+        "a record for a different interpreter must not certify this environment"

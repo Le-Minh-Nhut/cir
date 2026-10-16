@@ -27,6 +27,8 @@ NO_GPU=0
 DATASET_PATH_OVERRIDE=""
 SELF_CHECK=0
 FINAL_RUN_ID=""
+FINAL_CHECKPOINT=""
+FINAL_PROTOCOL=""
 
 # Trap SIGINT/SIGTERM (Behaviour 10)
 cleanup_on_signal() {
@@ -611,8 +613,105 @@ start_docker_and_wait_readiness() {
         local code
         code="$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "${base}/api/jobs" 2>/dev/null || true)"
         if [[ "$code" == "200" ]]; then
-            say "Docker container cir-workbench đã đang chạy và API sẵn sàng (${base})."
-            container_running=1
+            # P1-5: Reusing a running container on HTTP 200 alone is insufficient.
+            # Verify effective configuration before reusing.
+            local config_satisfies=1
+            local mismatch_reasons=()
+
+            # Active jobs check on running container. An unreadable list must NOT read as "no
+            # active job": the decision it guards is whether a running container may be
+            # replaced, and guessing "idle" on an API failure restarts a container that may be
+            # mid-experiment. Unknown is reported as unknown and handled fail-closed below.
+            local active_jobs_info active_count active_desc jobs_known=1
+            active_jobs_info="$(curl -s --max-time 5 "${base}/api/jobs" 2>/dev/null | python3 -c "
+import json, sys
+try:
+    jobs = json.load(sys.stdin)
+except Exception:
+    print('UNKNOWN unreadable')
+    raise SystemExit(0)
+if not isinstance(jobs, list):
+    print('UNKNOWN not-a-list')
+    raise SystemExit(0)
+active = [j for j in jobs if isinstance(j, dict) and j.get('status') in {'queued', 'preparing', 'running'}]
+if active:
+    print(len(active), ', '.join(f\"{j.get('job_id', 'job')}({j.get('status')})\" for j in active))
+else:
+    print('0 none')
+")" || active_jobs_info="UNKNOWN curl-failed"
+            active_count="${active_jobs_info%% *}"
+            active_desc="${active_jobs_info#* }"
+            if [[ "$active_count" == "UNKNOWN" ]]; then
+                jobs_known=0
+                mismatch_reasons+=("Không đọc được danh sách tác vụ từ ${base}/api/jobs (${active_desc}) — không thể xác nhận container đang rảnh")
+            fi
+
+            # 1. GPU override / in-container CUDA visibility
+            if (( WORKBENCH_ENABLE_GPU == 1 )); then
+                local gpu_ok=0
+                local dev_req
+                dev_req="$(docker inspect --format '{{json .HostConfig.DeviceRequests}}' cir-workbench 2>/dev/null || true)"
+                if [[ "$dev_req" == *"gpu"* || "$dev_req" == *"nvidia"* ]]; then
+                    gpu_ok=1
+                fi
+                if docker exec cir-workbench python -c "import torch; exit(0 if torch.cuda.is_available() else 1)" >/dev/null 2>&1; then
+                    gpu_ok=1
+                elif (( gpu_ok == 0 )); then
+                    if docker exec cir-workbench nvidia-smi >/dev/null 2>&1; then
+                        gpu_ok=1
+                    fi
+                fi
+                if (( gpu_ok == 0 )); then
+                    config_satisfies=0
+                    mismatch_reasons+=("GPU override không có hiệu lực hoặc container không có CUDA visibility")
+                fi
+            fi
+
+            # 2. Runtime adaptation value
+            local expected_adaptation="${WORKBENCH_RUNTIME_ADAPTATION:-}"
+            local cont_adapt
+            cont_adapt="$(docker exec cir-workbench python -c "import os; print(os.environ.get('WORKBENCH_RUNTIME_ADAPTATION', ''))" 2>/dev/null || true)"
+            if [[ -z "$cont_adapt" ]]; then
+                cont_adapt="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' cir-workbench 2>/dev/null | grep '^WORKBENCH_RUNTIME_ADAPTATION=' | head -n1 | cut -d= -f2- || true)"
+            fi
+            if [[ "$cont_adapt" != "$expected_adaptation" ]]; then
+                config_satisfies=0
+                mismatch_reasons+=("Runtime adaptation không khớp (container='${cont_adapt}', yêu cầu='${expected_adaptation}')")
+            fi
+
+            # 3. Dataset mount
+            if ! docker exec cir-workbench test -d /data/FashionIQ/images 2>/dev/null; then
+                config_satisfies=0
+                mismatch_reasons+=("Dataset mount /data/FashionIQ/images không tồn tại hoặc không thể truy cập")
+            fi
+
+            # 4. Model environment
+            if ! docker exec cir-workbench python -c "import sys; sys.exit(0)" 2>/dev/null; then
+                config_satisfies=0
+                mismatch_reasons+=("Môi trường thực thi trong container không phản hồi")
+            fi
+
+            if (( config_satisfies == 1 )); then
+                say "Docker container cir-workbench đã đang chạy, cấu hình phù hợp và API sẵn sàng (${base})."
+                container_running=1
+            else
+                local reasons_str
+                reasons_str="$(IFS='; '; echo "${mismatch_reasons[*]}")"
+                say "[CẢNH BÁO] Container cir-workbench đang chạy nhưng cấu hình không thỏa mãn yêu cầu:"
+                say "  ${reasons_str}"
+
+                if (( jobs_known == 0 )); then
+                    fail_stage "CONTAINER_REUSE" "Container cir-workbench đang chạy nhưng KHÔNG xác nhận được nó có tác vụ đang hoạt động hay không (${active_desc}); cấu hình lại container lúc này có thể phá một thí nghiệm đang chạy. Chi tiết: ${reasons_str}" "docker ps / ${base}/api/jobs" "Khôi phục API backend rồi chạy lại ./pc.sh; hoặc dừng thủ công bằng 'workbench/docker/run.sh stop' nếu chắc chắn không có tác vụ nào."
+                fi
+
+                if (( active_count > 0 )); then
+                    fail_stage "CONTAINER_REUSE" "Container cir-workbench đang chạy tác vụ (${active_desc}) nhưng cấu hình không thỏa mãn yêu cầu của lượt chạy này (${reasons_str}). Tuyệt đối không dừng hoặc khởi động lại container khi đang có tác vụ hoạt động." "docker ps / api/jobs" "Chờ tác vụ hiện tại hoàn tất hoặc hủy tác vụ trước khi cấu hình lại container."
+                fi
+
+                say "Không có tác vụ đang chạy. Khởi chạy lại Docker stack qua run.sh up để cấu hình đúng..."
+                "${RUN_SH}" up
+                container_running=0
+            fi
         fi
     fi
 
@@ -620,7 +719,6 @@ start_docker_and_wait_readiness() {
         say "Khởi chạy Docker stack qua run.sh up..."
         "${RUN_SH}" up
     fi
-
     say "Thăm dò trạng thái sẵn sàng (readiness polling) của Backend và Frontend..."
     local ready_timeout="$TIMEOUT"
     if (( ready_timeout > 180 )); then
@@ -751,6 +849,8 @@ print(protocol, checkpoint)
     fi
 
     read -r protocol checkpoint <<<"$model_info"
+    FINAL_CHECKPOINT="$checkpoint"
+    FINAL_PROTOCOL="$protocol"
     say "Mô hình: ${MODEL} | Checkpoint: ${checkpoint} | Protocol: ${protocol} | top_k: 200"
 
     # Job Dedup: Check if a completed corroborated run exists in /api/runs or /api/benchmark-runs
@@ -760,7 +860,8 @@ print(protocol, checkpoint)
         runs_json="$(curl -s --max-time 10 "${base}/api/runs" 2>/dev/null || echo "[]")"
         b_runs_json="$(curl -s --max-time 10 "${base}/api/benchmark-runs" 2>/dev/null || echo "[]")"
 
-        target_run_id="$(python3 -c "
+        local candidate_runs
+        candidate_runs="$(python3 -c "
 import json, sys
 
 model_id = sys.argv[1]
@@ -778,14 +879,37 @@ for t in (runs_text, b_runs_text):
     except Exception:
         pass
 
+seen = set()
 for r in all_runs:
-    if (r.get('model_id') == model_id and
-        r.get('checkpoint_id') == checkpoint_id and
-        r.get('protocol_id') == protocol_id and
-        r.get('run_id')):
-        print(r['run_id'])
-        sys.exit(0)
+    if isinstance(r, dict):
+        if (r.get('model_id') == model_id and
+            r.get('checkpoint_id') == checkpoint_id and
+            r.get('protocol_id') == protocol_id and
+            r.get('run_id')):
+            rid = str(r['run_id']).strip()
+            if rid and rid not in seen:
+                seen.add(rid)
+                print(rid)
 " "$MODEL" "$checkpoint" "$protocol" "$runs_json" "$b_runs_json" 2>/dev/null || true)"
+
+        local verify_script="${REPO_ROOT}/workbench/scripts/verify_run.py"
+        if [[ ! -f "$verify_script" ]]; then
+            verify_script="${SCRIPT_DIR}/workbench/scripts/verify_run.py"
+        fi
+
+        if [[ -n "$candidate_runs" && -f "$verify_script" ]]; then
+            export CIR_REPO_ROOT="$REPO_ROOT"
+            export PYTHONPATH="${SCRIPT_DIR}${PYTHONPATH:+:$PYTHONPATH}"
+            while IFS= read -r cand_id; do
+                [[ -z "$cand_id" ]] && continue
+                local v_rc=0 v_out
+                v_out="$(python3 "$verify_script" --run-id "$cand_id" --model "$MODEL" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || v_rc=$?
+                if (( v_rc == 0 )) && python3 -c "import json, sys; res = json.loads(sys.argv[1]); sys.exit(0 if res.get('verified') else 1)" "$v_out" 2>/dev/null; then
+                    target_run_id="$cand_id"
+                    break
+                fi
+            done <<< "$candidate_runs"
+        fi
 
         if [[ -n "$target_run_id" ]]; then
             say "Phát hiện kết quả đánh giá đã hoàn thành và được sổ cái chứng thực: run_id=${target_run_id}"
@@ -927,6 +1051,14 @@ except Exception:
 # Behaviour 8 & 9: Validation & Vietnamese Summary
 validate_and_summarize() {
     local run_id="$1"
+    local model="${2:-$MODEL}"
+    local checkpoint="${3:-${FINAL_CHECKPOINT:-base_iter0_all_categories}}"
+    local protocol="${4:-${FINAL_PROTOCOL:-fashioniq_val_split}}"
+
+    if [[ -z "$run_id" ]]; then
+        fail_stage "VERIFICATION" "Không có run_id để xác thực" "" "Đảm bảo quá trình đánh giá đã tạo run_id hợp lệ"
+    fi
+
     local backend_port base
     backend_port="$(env_value WORKBENCH_BACKEND_PORT 8000)"
     base="http://127.0.0.1:${backend_port}"
@@ -934,94 +1066,72 @@ validate_and_summarize() {
     say "Tái xây dựng chỉ mục DuckDB (/api/index/rebuild)..."
     curl -fsS --max-time 60 -X POST "${base}/api/index/rebuild" >/dev/null 2>&1 || true
 
-    local b_runs_raw runs_raw
-    b_runs_raw="$(curl -s --max-time 10 "${base}/api/benchmark-runs" 2>/dev/null || echo "[]")"
-    runs_raw="$(curl -s --max-time 10 "${base}/api/runs" 2>/dev/null || echo "[]")"
+    say "Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py..."
 
-    say "Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái..."
-    python3 - <<'PYDOC' "$run_id" "$REPO_ROOT" "$MODEL" "$b_runs_raw" "$runs_raw"
-import hashlib, json, os, sys
-from pathlib import Path
+    local verify_script="${REPO_ROOT}/workbench/scripts/verify_run.py"
+    if [[ ! -f "$verify_script" ]]; then
+        verify_script="${SCRIPT_DIR}/workbench/scripts/verify_run.py"
+    fi
 
-run_id = sys.argv[1]
-repo_root = Path(sys.argv[2])
+    if [[ ! -f "$verify_script" ]]; then
+        fail_stage "VERIFICATION" "Không tìm thấy công cụ xác thực độc lập verify_run.py tại ${verify_script}" "$verify_script" "Kiểm tra sự tồn tại của workbench/scripts/verify_run.py"
+    fi
+
+    export CIR_REPO_ROOT="$REPO_ROOT"
+    export PYTHONPATH="${SCRIPT_DIR}${PYTHONPATH:+:$PYTHONPATH}"
+
+    local verify_out verify_rc=0
+    verify_out="$(python3 "$verify_script" --run-id "$run_id" --model "$model" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || verify_rc=$?
+
+    python3 - <<'PYDOC' "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id"
+import json, sys
+
+verify_out = sys.argv[1]
+verify_rc = int(sys.argv[2])
 model_id = sys.argv[3]
-b_runs_raw = sys.argv[4]
-runs_raw = sys.argv[5]
+checkpoint_id = sys.argv[4]
+protocol_id = sys.argv[5]
+run_id = sys.argv[6]
 
-reports_dir = repo_root / "workbench" / "artifacts" / "reports"
-ledger_path = repo_root / "workbench" / "artifacts" / "evidence_ledger.jsonl"
+result = None
+for line in reversed(verify_out.strip().splitlines()):
+    line = line.strip()
+    if line.startswith("{") and line.endswith("}"):
+        try:
+            result = json.loads(line)
+            break
+        except Exception:
+            pass
 
-report_file = None
-if reports_dir.is_dir():
-    candidates = list(reports_dir.glob(f"*{run_id}*_aggregate.json"))
-    if candidates:
-        report_file = candidates[0]
-
-report_data = None
-if report_file and report_file.is_file():
+if result is None:
     try:
-        report_data = json.loads(report_file.read_text(encoding="utf-8"))
-    except Exception as e:
-        sys.exit(f"Lỗi đọc file báo cáo tổng hợp: {e}")
-
-if not report_data:
-    try:
-        runs = json.loads(b_runs_raw)
-        report_data = next((r for r in runs if r.get("run_id") == run_id), None)
+        result = json.loads(verify_out)
     except Exception:
         pass
 
-if not report_data:
-    try:
-        runs = json.loads(runs_raw)
-        report_data = next((r for r in runs if r.get("run_id") == run_id), None)
-    except Exception:
-        pass
+if result is None:
+    sys.exit(f"Lỗi: verify_run.py không trả về JSON hợp lệ (exit code {verify_rc}):\n{verify_out}")
 
-if not report_data:
-    report_data = {
-        "run_id": run_id,
-        "model_id": model_id,
-        "checkpoint_id": "base_iter0_all_categories",
-        "protocol_id": "fashioniq_val_split",
-        "execution_status": "EXECUTION_COMPLETED"
-    }
+verified = bool(result.get("verified", False))
+reasons = result.get("reasons") or []
 
-# Corroborate with evidence ledger if available
-ledger_entry = None
-if ledger_path.is_file():
-    with ledger_path.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-                if row.get("run_id") == run_id:
-                    ledger_entry = row
-            except Exception:
-                pass
+if verify_rc != 0 or not verified:
+    reasons_str = "; ".join(str(r) for r in reasons) if reasons else f"verify_run.py trả về mã lỗi {verify_rc}"
+    err_msg = f"Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!\nChi tiết: {reasons_str}"
+    print(err_msg)
+    sys.exit(err_msg)
 
-if ledger_entry:
-    if ledger_entry.get("return_code") != 0 or ledger_entry.get("invocation_status") != "INVOCATION_COMPLETED":
-        sys.exit(f"Sổ cái ghi nhận thất bại: return_code={ledger_entry.get('return_code')}, status={ledger_entry.get('invocation_status')}")
-    if report_file:
-        digest = hashlib.sha256(report_file.read_bytes()).hexdigest()
-        if ledger_entry.get("report_digest") and ledger_entry.get("report_digest") != digest:
-            sys.exit("Mã băm báo cáo không khớp với chứng thực trong sổ cái!")
-
-# Extract metrics
-checkpoint_id = report_data.get("checkpoint_id") or "base_iter0_all_categories"
-protocol_id = report_data.get("protocol_id") or "fashioniq_val_split"
-commit = report_data.get("source_actual_commit") or "N/A"
-adaptation = report_data.get("runtime_adaptation") or report_data.get("variant_provenance", {}).get("runtime_adaptation") or "None"
-
-cat_metrics = report_data.get("category_metrics") or {}
-obs_metrics = report_data.get("observed_metrics") or {}
-
-gate = report_data.get("benchmark_gate") or {}
+# Extract verified details
+report_path = result.get("report_path") or "N/A"
+identity = result.get("identity") or {}
+metrics = result.get("metrics") or {}
+cat_metrics = metrics.get("category") or {}
+obs_metrics = metrics.get("observed") or {}
+gate = result.get("gate") or {}
 gate_status = gate.get("status") or "NOT_EVALUATED"
+
+commit = identity.get("git_commit") or "N/A"
+adaptation = identity.get("runtime_adaptation") or "None"
 
 def fmt_val(v):
     if v is None:
@@ -1042,8 +1152,9 @@ print(f"Run ID                   : {run_id}")
 print(f"Git Commit               : {commit}")
 print(f"Runtime Adaptation       : {adaptation}")
 print(f"Thẩm định bài báo (Gate) : {gate_status}")
-print(f"Trạng thái thực thi      : HOÀN TẤT (EXECUTION_COMPLETED, return_code=0)")
-print(f"Xác thực Sổ cái (Ledger) : HỢP LỆ (Corroborated)")
+print(f"Trạng thái thực thi      : {(result.get('execution') or {}).get('execution_status') or 'EXECUTION_COMPLETED'} "
+      f"(return_code={(result.get('execution') or {}).get('return_code', 0)})")
+print(f"Xác thực Sổ cái (Ledger) : HỢP LỆ (CORROBORATED) — verify_run.py: verified=True")
 print("-" * 80)
 print("--- KẾT QUẢ ĐO ĐẠC THỰC TẾ (ACTUAL MEASURED METRICS) ---")
 for cat in ["dress", "shirt", "toptee"]:
@@ -1057,8 +1168,7 @@ print(f"  Recall@10 : {fmt_val(obs_metrics.get('r10'))}")
 print(f"  Recall@50 : {fmt_val(obs_metrics.get('r50'))}")
 print(f"  Mean      : {fmt_val(obs_metrics.get('mean'))}")
 print("-" * 80)
-if report_file:
-    print(f"File báo cáo     : {report_file}")
+print(f"File báo cáo     : {report_path}")
 print("Ghi chú khoa học :")
 print("  Độ lệch số học so với bài báo gốc (nếu có) phản ánh kết quả đo đạc thực")
 print("  nghiệm trên runtime của thiết bị, là phát hiện nghiên cứu (research finding).")
@@ -1120,7 +1230,7 @@ main() {
     execute_evaluation
 
     # 6. Validation & Summary
-    validate_and_summarize "$FINAL_RUN_ID"
+    validate_and_summarize "$FINAL_RUN_ID" "$MODEL" "${FINAL_CHECKPOINT:-base_iter0_all_categories}" "${FINAL_PROTOCOL:-fashioniq_val_split}"
 }
 
 main "$@"

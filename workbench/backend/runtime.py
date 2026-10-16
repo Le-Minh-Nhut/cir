@@ -1144,6 +1144,24 @@ def hmac_compare(expected: str, claimed: str) -> bool:
 GPU_PROBE_OVERRIDE_ENV = "WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE"
 
 
+def _record_environment_fingerprint(model: dict[str, Any],
+                                          interpreter: str | None) -> str | None:
+    """The authoritative environment fingerprint a capability record is bound to.
+
+    Both the writer and every reader compute this value, so it must match the fingerprint the
+    capability KEY is derived from (`_gpu_capability_key`): same interpreter string, same
+    prefix derivation (the interpreter's parent's parent, unresolved — resolving can land on a
+    shared base interpreter for a symlinked venv and would then disagree with the key), same
+    contract digest. Computing it here is affordable because it happens once per capability
+    probe, never on a status read.
+    """
+    if not interpreter:
+        return None
+    from pathlib import Path as _Path
+    return _interpreter_fingerprint(
+        str(interpreter), _environment_contract_digest(model),
+        str(_Path(interpreter).parent.parent), authoritative=True)
+
 def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
                            authoritative: bool = True) -> dict[str, Any] | None:
     """A previously verified capability for exactly this environment, or None.
@@ -1213,8 +1231,15 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
                 _GPU_CAPABILITY[key] = payload
     if cached is None:
         return None
-    if cached.get("interpreter_fingerprint") and report.environment_fingerprint:
-        if cached["interpreter_fingerprint"] != report.environment_fingerprint:
+    # The record must belong to THIS environment's interpreter. The comparison uses the
+    # AUTHORITATIVE fingerprint on both sides — the same value the capability key is derived
+    # from and the value `_record_environment_fingerprint` stores when the record is written —
+    # so a record produced by a different interpreter (or one whose environment was mutated)
+    # cannot certify this one. Comparing against `report.environment_fingerprint` alone silently
+    # accepted any record on the advisory path, where that field is deliberately unset.
+    expected_fingerprint = _record_environment_fingerprint(model, report.interpreter)
+    if cached.get("interpreter_fingerprint") and expected_fingerprint:
+        if cached["interpreter_fingerprint"] != expected_fingerprint:
             return None
     return cached
 
@@ -2016,7 +2041,15 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
         "capability_verified": capability,
         "runtime_adaptation": adaptation_target,
         "interpreter": str(interpreter),
-        "interpreter_fingerprint": report.environment_fingerprint,
+        # The fingerprint that ties this record to its environment must be the AUTHORITATIVE
+        # one, because that is the fingerprint the capability key is derived from and the one
+        # the reader recomputes when it decides whether the record still describes this
+        # environment. Recording `report.environment_fingerprint` stored null on any probe
+        # reached without a full environment verification, which silently disabled the record's
+        # own identity check: a capability probed by one interpreter could satisfy another.
+        # This runs once per capability probe — the place where hashing is affordable — not on
+        # a status read.
+        "interpreter_fingerprint": _record_environment_fingerprint(model, interpreter),
         "dependency_fingerprint": report.contract_digest,
         "probe_source": "override" if override is not None else "interpreter",
         "probed_at": datetime.now(timezone.utc).isoformat(),

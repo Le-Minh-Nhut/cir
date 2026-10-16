@@ -455,6 +455,10 @@ def queue_job(payload: JobInput):
         "checkpoint_id": plan.checkpoint_id,
         "protocol_id": plan.protocol,
         "run_id": run_id,
+        # Where the run's evidence will land: the operator writes its invocation verdict there,
+        # and the queue reads that verdict instead of inferring completion from the exit code.
+        "run_directory": str(config.WORKBENCH_ARTIFACTS_ROOT / "logs"
+                              / f"{plan.model_id}__{plan.checkpoint_id}__{run_id}"),
         "upstream_expected_pin": plan.pin,
         "actual_source_commit": plan.actual_source_commit,
         "checkpoint_local_sha256": sha256_file(plan.checkpoint),

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import shutil
 import signal
@@ -123,7 +124,18 @@ def setup_sandbox(
         "MOCK_COUNTER_FILE": str(counter_file),
         "WORKBENCH_BACKEND_PORT": "8000",
         "WORKBENCH_FRONTEND_PORT": "5173",
+        "WORKBENCH_LEDGER_KEY": "mock_ledger_key_for_test_harness_32b!",
     }
+
+    scripts_dir = sandbox / "workbench" / "scripts"
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    if (REPO / "workbench/scripts/verify_run.py").exists():
+        shutil.copy2(REPO / "workbench/scripts/verify_run.py", scripts_dir / "verify_run.py")
+        (scripts_dir / "verify_run.py").chmod(0o755)
+    else:
+        (scripts_dir / "verify_run.py").write_text(_VERIFY_RUN_SOURCE, encoding="utf-8")
+        (scripts_dir / "verify_run.py").chmod(0o755)
+
     return sandbox, env
 
 
@@ -359,15 +371,19 @@ def test_existing_completed_corroborated_run_reported_without_re_running_unless_
     post_jobs_file = sandbox / "post_jobs.log"
     env["MOCK_POST_JOBS_FILE"] = str(post_jobs_file)
 
+    _create_corroborated_run(sandbox, "run_limn_corr_01")
+
     # Without --force: should not POST new job
     proc1 = run_pc(sandbox, [], env)
+    assert proc1.returncode == 0
     assert not post_jobs_file.exists() or len(post_jobs_file.read_text().strip().splitlines()) == 0
+    assert "CORROBORATED" in proc1.stdout or "HỢP LỆ" in proc1.stdout
+    assert "Tái sử dụng kết quả có sẵn" in proc1.stdout
 
     # With --force: should queue
     proc2 = run_pc(sandbox, ["--force"], env)
     assert post_jobs_file.exists()
     assert len(post_jobs_file.read_text().strip().splitlines()) > 0
-
 
 def test_failed_evaluation_job_exits_nonzero_with_vietnamese_failure_summary(tmp_path: Path):
     """15. Failed evaluation job -> exits non-zero with Vietnamese failure summary."""
@@ -475,3 +491,375 @@ def test_sigint_during_wait_loop_exits_nonzero_and_preserves_sandbox(tmp_path: P
     assert proc.returncode != 0
     assert sentinel.exists()
     assert sentinel.read_text() == "must survive sigint"
+
+# ---------------------------------------------------------------------------
+# VERIFY_RUN CONTRACT & CORROBORATION FIXTURE HELPERS
+# ---------------------------------------------------------------------------
+
+_VERIFY_RUN_SOURCE = '''#!/usr/bin/env python3
+import argparse
+import hashlib
+import json
+import math
+import os
+import sys
+from pathlib import Path
+
+def main():
+    parser = argparse.ArgumentParser(description="Verify evaluation run evidence")
+    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--checkpoint", required=True)
+    parser.add_argument("--protocol", required=True)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args()
+
+    repo_root = Path(os.environ.get("CIR_REPO_ROOT", Path(__file__).resolve().parents[2]))
+    reports_root = repo_root / "workbench" / "artifacts" / "reports"
+    reasons = []
+
+    report_name = f"{args.model}_{args.checkpoint}_{args.run_id}_aggregate.json"
+    report_file = reports_root / report_name
+    report_data = None
+    if not report_file.is_file():
+        reasons.append(f"missing aggregate report: {report_file}")
+    else:
+        try:
+            report_data = json.loads(report_file.read_text(encoding="utf-8"))
+        except Exception as e:
+            reasons.append(f"failed to parse aggregate report {report_file}: {e}")
+
+    if report_data:
+        if report_data.get("run_id") != args.run_id:
+            reasons.append(f"run_id mismatch: expected {args.run_id}, got {report_data.get('run_id')}")
+        if report_data.get("model_id") != args.model:
+            reasons.append(f"model_id mismatch: expected {args.model}, got {report_data.get('model_id')}")
+        if report_data.get("checkpoint_id") != args.checkpoint:
+            reasons.append(f"checkpoint_id mismatch: expected {args.checkpoint}, got {report_data.get('checkpoint_id')}")
+        if report_data.get("protocol_id") != args.protocol:
+            reasons.append(f"protocol_id mismatch: expected {args.protocol}, got {report_data.get('protocol_id')}")
+
+    # Check evidence ledger
+    sys.path.insert(0, str(repo_root))
+    from workbench.backend.operator_config import resolve_config
+    from workbench.scripts.evaluate_models import read_evidence_ledger, sha256_file
+    config = resolve_config()
+    ledger_entries = read_evidence_ledger(config)
+    if ledger_entries is None:
+        reasons.append("evidence ledger missing or HMAC verification failed")
+    else:
+        entry = next((e for e in ledger_entries if e.get("run_id") == args.run_id), None)
+        if entry is None:
+            reasons.append(f"missing evidence ledger entry for {args.run_id}")
+        else:
+            if entry.get("return_code") != 0:
+                reasons.append(f"ledger return_code={entry.get('return_code')}, expected 0")
+            if entry.get("invocation_status") != "INVOCATION_COMPLETED":
+                reasons.append(f"ledger invocation_status={entry.get('invocation_status')}, expected 'INVOCATION_COMPLETED'")
+            if report_file.is_file():
+                digest = sha256_file(report_file)
+                if entry.get("report_digest") != digest:
+                    reasons.append(f"report digest mismatch: ledger={entry.get('report_digest')}, actual={digest}")
+
+    # Check completion proof
+    proof_name = f"{args.model}_{args.checkpoint}_{args.run_id}_completion.json"
+    proof_file = reports_root / proof_name
+    if not proof_file.is_file():
+        reasons.append(f"missing completion proof: {proof_file}")
+    else:
+        try:
+            proof_data = json.loads(proof_file.read_text(encoding="utf-8"))
+            if proof_data.get("completion_status") != "COMPLETED":
+                reasons.append(f"completion proof status={proof_data.get('completion_status')}, expected 'COMPLETED'")
+            if proof_data.get("return_code") != 0:
+                reasons.append(f"completion proof return_code={proof_data.get('return_code')}, expected 0")
+            if proof_data.get("run_id") != args.run_id:
+                reasons.append(f"completion proof run_id mismatch")
+            if proof_data.get("model_id") != args.model:
+                reasons.append(f"completion proof model_id mismatch")
+            if proof_data.get("checkpoint_id") != args.checkpoint:
+                reasons.append(f"completion proof checkpoint_id mismatch")
+            if proof_data.get("protocol_id") != args.protocol:
+                reasons.append(f"completion proof protocol_id mismatch")
+        except Exception as e:
+            reasons.append(f"failed to parse completion proof: {e}")
+
+    # Check category metrics for limn
+    if args.model == "limn" and report_data:
+        cat_metrics = report_data.get("category_metrics") or {}
+        for cat in ("dress", "shirt", "toptee"):
+            m = cat_metrics.get(cat)
+            if not isinstance(m, dict):
+                reasons.append(f"missing category metric: {cat}")
+            else:
+                for metric in ("r10", "r50"):
+                    val = m.get(metric)
+                    if val is None or not isinstance(val, (int, float)) or not math.isfinite(val) or not (0 <= float(val) <= 100):
+                        reasons.append(f"invalid {metric} for category {cat}: {val}")
+
+    verified = (len(reasons) == 0)
+    identity = {}
+    metrics = {"category": {}, "observed": {}}
+    gate = {}
+    if report_data:
+        identity = {
+            "run_id": report_data.get("run_id"),
+            "model_id": report_data.get("model_id"),
+            "checkpoint_id": report_data.get("checkpoint_id"),
+            "protocol_id": report_data.get("protocol_id"),
+            "git_commit": report_data.get("source_actual_commit"),
+            "runtime_adaptation": report_data.get("runtime_adaptation"),
+        }
+        metrics = {
+            "category": report_data.get("category_metrics") or {},
+            "observed": report_data.get("observed_metrics") or {},
+        }
+        gate = report_data.get("benchmark_gate") or {}
+
+    out = {
+        "verified": verified,
+        "reasons": reasons,
+        "report_path": str(report_file) if report_file.is_file() else None,
+        "identity": identity,
+        "metrics": metrics,
+        "gate": gate,
+    }
+    if args.json:
+        print(json.dumps(out))
+    sys.exit(0 if verified else 1)
+
+if __name__ == "__main__":
+    main()
+'''
+
+
+def _create_corroborated_run(
+    sandbox: Path,
+    run_id: str = "run_limn_corr_01",
+    model_id: str = "limn",
+    checkpoint_id: str = "base_iter0_all_categories",
+    protocol_id: str = "fashioniq_val_split",
+    *,
+    forged_digest: bool = False,
+    wrong_checkpoint: bool = False,
+    wrong_protocol: bool = False,
+    omit_report: bool = False,
+    omit_ledger: bool = False,
+    omit_proof: bool = False,
+) -> None:
+    reports_dir = sandbox / "workbench" / "artifacts" / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+
+    ckpt_dir = sandbox / "workbench" / "artifacts" / "checkpoints" / model_id
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    ckpt_names = ["0_dress_best_model.pt", "0_shirt_best_model.pt", "0_toptee_best_model.pt"]
+    for name in ckpt_names:
+        (ckpt_dir / name).write_bytes(b"dummy_weights_12345")
+
+    from workbench.scripts.evaluate_models import build_artifact_manifest, manifest_digest
+    bundle = build_artifact_manifest(ckpt_dir, ckpt_names)
+    md = manifest_digest(bundle)
+
+    pin = "7d7bc9b116f594a65ac22457491edf28a88d3c3e"
+    rep_ckpt = "wrong_checkpoint_variant" if wrong_checkpoint else checkpoint_id
+    rep_proto = "wrong_protocol_variant" if wrong_protocol else protocol_id
+
+    run_dir = sandbox / "workbench" / "artifacts" / "logs" / f"{model_id}__{checkpoint_id}__{run_id}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "command.json").write_text(json.dumps({
+        "run_id": run_id,
+        "model_id": model_id,
+        "checkpoint_id": rep_ckpt,
+        "protocol_id": rep_proto,
+        "return_code": 0,
+        "invocation_status": "INVOCATION_COMPLETED",
+    }))
+    (run_dir / "stdout.log").write_text("evaluation output\n")
+    (run_dir / "stderr.log").write_text("")
+    logs = {"stdout": "evaluation output\n", "stderr": ""}
+    ev_digest = hashlib.sha256(json.dumps(logs, sort_keys=True).encode("utf-8")).hexdigest()
+
+    report_file = reports_dir / f"{model_id}_{checkpoint_id}_{run_id}_aggregate.json"
+    report_data = {
+        "run_id": run_id,
+        "model_id": model_id,
+        "checkpoint_id": rep_ckpt,
+        "protocol_id": rep_proto,
+        "execution_status": "EXECUTION_COMPLETED",
+        "return_code": 0,
+        "invocation_status": "INVOCATION_COMPLETED",
+        "source_actual_commit": pin,
+        "runtime_adaptation": "sm_120",
+        "bundle_manifest_digest": md,
+        "checkpoint_sha256": "abcdef123456",
+        "benchmark_gate": {"status": "PASS_WITHIN_5_PERCENT"},
+        "category_metrics": {
+            "dress": {"r10": 25.5, "r50": 55.2},
+            "shirt": {"r10": 28.1, "r50": 58.4},
+            "toptee": {"r10": 30.2, "r50": 60.1},
+        },
+        "observed_metrics": {
+            "r10": 27.93,
+            "r50": 57.90,
+            "mean": 42.92,
+        },
+    }
+
+    if not omit_report:
+        report_file.write_text(json.dumps(report_data, indent=2), encoding="utf-8")
+
+    if report_file.exists():
+        actual_digest = hashlib.sha256(report_file.read_bytes()).hexdigest()
+    else:
+        actual_digest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+    digest = "forged_mismatched_sha256_digest_0000" if forged_digest else actual_digest
+
+    ledger_entry_digest = "ledger_digest_placeholder"
+    if not omit_ledger:
+        from workbench.backend.operator_config import WorkbenchConfig
+        from workbench.scripts.evaluate_models import append_evidence_entry
+        config = WorkbenchConfig(
+            CIR_REPO_ROOT=sandbox,
+            CIR_DATA_ROOT=sandbox / "data",
+            FASHIONIQ_ROOT=sandbox / "data" / "FashionIQ",
+            WORKBENCH_HOST="127.0.0.1",
+            WORKBENCH_BACKEND_PORT=8000,
+            WORKBENCH_FRONTEND_PORT=5173,
+            WORKBENCH_CHECKPOINT_ROOT=sandbox / "workbench" / "artifacts" / "checkpoints",
+            WORKBENCH_RESULTS_ROOT=sandbox / "workbench" / "artifacts" / "results",
+            WORKBENCH_THIRD_PARTY_ROOT=sandbox / "workbench" / "third_party",
+        )
+        ledger_entry = {
+            "run_id": run_id,
+            "model_id": model_id,
+            "checkpoint_id": rep_ckpt,
+            "protocol_id": rep_proto,
+            "return_code": 0,
+            "invocation_status": "INVOCATION_COMPLETED",
+            "report_digest": digest,
+        }
+        old_key = os.environ.get("WORKBENCH_LEDGER_KEY")
+        os.environ["WORKBENCH_LEDGER_KEY"] = "mock_ledger_key_for_test_harness_32b!"
+        try:
+            rec = append_evidence_entry(config, ledger_entry)
+            ledger_entry_digest = rec["entry_digest"]
+        finally:
+            if old_key is not None:
+                os.environ["WORKBENCH_LEDGER_KEY"] = old_key
+            else:
+                os.environ.pop("WORKBENCH_LEDGER_KEY", None)
+
+    proof_file = reports_dir / f"{model_id}_{checkpoint_id}_{run_id}_completion.json"
+    if not omit_proof:
+        proof_data = {
+            "artifact_type": "official_evaluation_completion_proof",
+            "schema_version": 1,
+            "completion_status": "COMPLETED",
+            "run_id": run_id,
+            "model_id": model_id,
+            "checkpoint_id": rep_ckpt,
+            "protocol_id": rep_proto,
+            "source_expected_commit": pin,
+            "source_actual_commit": pin,
+            "checkpoint_artifact_type": "directory",
+            "checkpoint_sha256": "abcdef123456",
+            "bundle_manifest_digest": md,
+            "invocation_status": "INVOCATION_COMPLETED",
+            "return_code": 0,
+            "ledger_entry_digest": ledger_entry_digest,
+            "report": str(report_file),
+            "report_digest": digest,
+            "report_relative": report_file.name,
+            "environment_digest": "env_digest_123",
+            "command_digest": "cmd_digest_123",
+            "evidence_digest": ev_digest,
+            "run_directory": str(run_dir),
+            "stdout_log": "stdout.log",
+            "stderr_log": "stderr.log",
+            "completed_at": "2026-10-16T00:00:00Z",
+        }
+        proof_file.write_text(json.dumps(proof_data, indent=2), encoding="utf-8")
+
+# ---------------------------------------------------------------------------
+# VERIFICATION & RUN HARNESS ACCEPTANCE TESTS (a, b, c, d, e)
+# ---------------------------------------------------------------------------
+
+def test_uncorroborated_or_mock_run_is_never_reused(tmp_path: Path):
+    """(c) A mock/synthetic/uncorroborated run is never reused; fresh job queued instead."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_RUNS_STATUS"] = "corroborated"
+    post_jobs_file = sandbox / "post_jobs.log"
+    env["MOCK_POST_JOBS_FILE"] = str(post_jobs_file)
+
+    # Note: no verified files written on disk!
+    proc = run_pc(sandbox, [], env)
+    assert "Tái sử dụng kết quả có sẵn" not in proc.stdout
+    assert post_jobs_file.exists()
+    assert len(post_jobs_file.read_text().strip().splitlines()) > 0
+
+
+def test_missing_report_or_ledger_or_proof_fails_and_never_prints_corroborated(tmp_path: Path):
+    """(a) Missing report, ledger, or proof makes run exit non-zero and never prints CORROBORATED."""
+    # Subtest 1: missing report
+    sandbox_a, env_a = setup_sandbox(tmp_path / "a", with_env=True)
+    _create_corroborated_run(sandbox_a, "run_limn_corr_01", omit_report=True)
+    proc_a = run_pc(sandbox_a, [], env_a)
+    assert proc_a.returncode != 0
+    assert "CORROBORATED" not in proc_a.stdout
+    assert "HỢP LỆ (CORROBORATED)" not in proc_a.stdout
+    assert "Xác thực thất bại" in proc_a.stdout
+
+    # Subtest 2: missing ledger
+    sandbox_b, env_b = setup_sandbox(tmp_path / "b", with_env=True)
+    _create_corroborated_run(sandbox_b, "run_limn_corr_01", omit_ledger=True)
+    proc_b = run_pc(sandbox_b, [], env_b)
+    assert proc_b.returncode != 0
+    assert "CORROBORATED" not in proc_b.stdout
+    assert "HỢP LỆ (CORROBORATED)" not in proc_b.stdout
+
+    # Subtest 3: missing proof
+    sandbox_c, env_c = setup_sandbox(tmp_path / "c", with_env=True)
+    _create_corroborated_run(sandbox_c, "run_limn_corr_01", omit_proof=True)
+    proc_c = run_pc(sandbox_c, [], env_c)
+    assert proc_c.returncode != 0
+    assert "CORROBORATED" not in proc_c.stdout
+    assert "HỢP LỆ (CORROBORATED)" not in proc_c.stdout
+
+
+def test_forged_or_digest_mismatched_ledger_entry_is_refused(tmp_path: Path):
+    """(b) Forged or digest-mismatched ledger entry is refused."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    _create_corroborated_run(sandbox, "run_limn_corr_01", forged_digest=True)
+    proc = run_pc(sandbox, [], env)
+    assert proc.returncode != 0
+    assert "CORROBORATED" not in proc.stdout
+    assert "HỢP LỆ (CORROBORATED)" not in proc.stdout
+    assert "Xác thực thất bại" in proc.stdout
+
+
+def test_wrong_checkpoint_or_protocol_identity_is_refused(tmp_path: Path):
+    """(d) Wrong checkpoint/protocol/identity is refused."""
+    sandbox_a, env_a = setup_sandbox(tmp_path / "a", with_env=True)
+    _create_corroborated_run(sandbox_a, "run_limn_corr_01", wrong_checkpoint=True)
+    proc_a = run_pc(sandbox_a, [], env_a)
+    assert proc_a.returncode != 0
+    assert "CORROBORATED" not in proc_a.stdout
+
+    sandbox_b, env_b = setup_sandbox(tmp_path / "b", with_env=True)
+    _create_corroborated_run(sandbox_b, "run_limn_corr_01", wrong_protocol=True)
+    proc_b = run_pc(sandbox_b, [], env_b)
+    assert proc_b.returncode != 0
+    assert "CORROBORATED" not in proc_b.stdout
+
+
+def test_active_job_blocks_container_reuse(tmp_path: Path):
+    """(e) An active job blocks container reuse when configuration does not satisfy run."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_JOB_STATUS"] = "running"
+    env["MOCK_CONTAINER_ADAPTATION"] = "none"
+
+    proc = run_pc(sandbox, [], env)
+    assert proc.returncode != 0
+    assert "CONTAINER_REUSE" in proc.stdout or "tác vụ" in proc.stdout.lower()
+    assert "không dừng hoặc khởi động lại" in proc.stdout.lower() or "tuyệt đối không" in proc.stdout.lower() or "đang chạy tác vụ" in proc.stdout.lower()

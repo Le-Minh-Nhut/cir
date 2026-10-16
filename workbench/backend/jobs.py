@@ -83,6 +83,108 @@ def _child_environment(job: Job) -> dict[str, str]:
     return child_env
 
 
+#: The one verdict that means "this run produced a completion proof that actually validates".
+#: Nothing else about a queued job may be published as `completed`.
+_COMPLETION_VERDICT = "PROOF_VALIDATED"
+
+def _verdict_reason(verdict: str, job: "Job") -> str:
+    """A named reason for a job that settled without a valid completion proof."""
+    run_id = job.provenance.get("run_id") or job.job_id
+    if verdict == "NO_OBSERVABLE_OUTPUT":
+        return (f"invocation {run_id} exited 0 but produced no observable evaluation output, "
+                "so no completion proof exists")
+    if verdict == "PROOF_REJECTED":
+        return f"the completion proof of invocation {run_id} was rejected"
+    if verdict == "EXECUTION_FAILED":
+        return f"invocation {run_id} did not complete successfully"
+    return f"invocation {run_id} recorded no valid completion proof"
+
+def invocation_verdict(job: "Job") -> tuple[str | None, str | None]:
+    """The operator's own verdict for this job's run: ``(verdict, reason)``.
+
+    Read from the outcome file the operator writes into the run directory it was dispatched
+    with. The file is keyed by the run identity, exists only once the operator reached a
+    verdict, and is written on every path that reaches one — there is deliberately no fallback
+    that could turn a missing file into a completion. ``None`` therefore means no verdict was
+    recorded for this dispatch.
+    """
+    provenance = job.provenance if isinstance(job.provenance, dict) else {}
+    run_directory, run_id = provenance.get("run_directory"), provenance.get("run_id")
+    if not (run_directory and run_id):
+        return None, None
+    try:
+        payload = json.loads(
+            (Path(str(run_directory)) / "invocation_outcome.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None, None
+    if not isinstance(payload, dict) or payload.get("run_id") != run_id:
+        return None, None
+    return (str(payload.get("verdict") or ""),
+            str(payload["reason"]) if payload.get("reason") else None)
+
+def settled_status(job: "Job", code: int, verdict: str | None,
+                   verdict_reason: str | None) -> tuple[str, str | None]:
+    """`(status, reason)` for a dispatched job that was not cancelled.
+
+    A dispatch that names a run identity is an evaluation, and an evaluation is only ever
+    `completed` when an INDEPENDENT verification of the recorded run succeeds. The operator's
+    own verdict file is the fast path, but it lives in the run directory the operator was
+    dispatched with — a directory the evaluator child can write — so the string alone is not
+    evidence: without re-deriving the answer from the report, the ledger and the completion
+    proof, a forged verdict (or a stale one from a previous attempt) would publish a completion
+    for a run that produced nothing. `verify_run.verify` performs exactly that derivation, and
+    it is the same function the launcher and the release verifier call.
+
+    A dispatch that names no run identity is the queue's own bookkeeping (it starts whatever
+    command it was handed), so it keeps the exit-code contract; a job that names a *model*
+    but never claimed a run identity additionally may not be published as `completed` while
+    its invocation printed nothing: no proof can exist for a silent evaluation.
+    """
+    provenance = job.provenance if isinstance(job.provenance, dict) else {}
+    run_id = provenance.get("run_id")
+    if run_id:
+        if verdict == _COMPLETION_VERDICT:
+            verified, why = _verify_recorded_run(job)
+            if verified:
+                return "completed", None
+            if why:
+                return "failed", why
+        return "failed", verdict_reason or _verdict_reason(verdict or "", job)
+    if code != 0:
+        return "failed", None
+    if provenance.get("model_id") and not (job.stdout_tail.strip() or job.stderr_tail.strip()):
+        return "failed", _verdict_reason("NO_OBSERVABLE_OUTPUT", job)
+    return "completed", None
+
+def _verify_recorded_run(job: "Job") -> tuple[bool, str | None]:
+    """Independently verify the run this job claims, reusing the shared verifier.
+
+    Returns ``(verified, reason)``. The verifier is imported lazily and its failure is treated
+    as a failed verification with the real reason, never as a pass: a run whose evidence cannot
+    be checked has not been proven.
+    """
+    provenance = job.provenance if isinstance(job.provenance, dict) else {}
+    run_id = provenance.get("run_id")
+    model_id = provenance.get("model_id")
+    checkpoint_id = provenance.get("checkpoint_id")
+    protocol_id = provenance.get("protocol_id")
+    if not (run_id and model_id and checkpoint_id and protocol_id):
+        return False, (f"job {job.job_id} claims a completed run but its dispatch records no "
+                       "model/checkpoint/protocol identity to verify against")
+    try:
+        from workbench.scripts.verify_run import verify as verify_recorded_run
+    except Exception as error:  # import failure must not become a completion
+        return False, f"the run verifier is unavailable, so run {run_id} cannot be verified: {error}"
+    try:
+        result = verify_recorded_run(str(run_id), str(model_id), str(checkpoint_id), str(protocol_id))
+    except Exception as error:
+        return False, f"verification of run {run_id} failed to run: {error}"
+    if result.get("verified"):
+        return True, None
+    reasons = "; ".join(str(reason) for reason in result.get("reasons") or [])
+    return False, (f"run {run_id} does not verify against its recorded evidence"
+                   + (f": {reasons}" if reasons else ""))
+
 class DuplicateJobError(RuntimeError):
     """An identical model+checkpoint+protocol job is already queued or running."""
 
@@ -455,13 +557,22 @@ class SingleGpuQueue:
                     code = process.wait()
                     for reader in readers:
                         reader.join()
+                # Read before taking the lock: the operator writes its verdict into the run
+                # directory, which is disk I/O and must not be held under the queue's condition.
+                verdict, verdict_reason = invocation_verdict(job)
                 with self._condition:
                     self._processes.pop(job.job_id, None)
                     job.return_code = code
                     # A cancellation in flight wins: the worker must not publish a completion for
                     # a job whose group is still being torn down, whatever the child's exit code.
                     if job.status != "cancelled" and job.job_id not in self._cancelling:
-                        job.status = "completed" if code == 0 else "failed"
+                        # Exit code alone is not a verdict: a run that printed nothing, or whose
+                        # completion proof failed validation, can exit 0 and still have proved
+                        # nothing. `return_code` keeps the native code as evidence either way.
+                        job.status, reason = settled_status(job, code, verdict, verdict_reason)
+                        if reason:
+                            job.error = reason
+                            self._append(job, "stderr_tail", f"[BLOCKED] {reason}\n")
                     job.completed_at = now()
                     self._persist(job)
                 metadata.update(finished_at=job.completed_at, return_code=code)

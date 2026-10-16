@@ -242,7 +242,8 @@ Mặc định `./pc.sh` chạy mô hình LIMN. Để đánh giá mô hình khác
 ### 1. Thiếu NVIDIA driver (`NVIDIA driver missing`)
 - **Hiện tượng**: `nvidia-smi` báo lỗi lệnh không tồn tại hoặc `NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver`.
 - **Nguyên nhân**: Driver NVIDIA chưa được cài đặt trên máy host hoặc bị ngắt kết nối sau khi cập nhật nhân Linux.
-- **Khắc phục**: Cài đặt NVIDIA driver tương thích trên host (ví dụ: `sudo apt update && sudo apt install nvidia-driver-550`) và khởi động lại máy tính.
+- **Khắc phục**: Cài đặt NVIDIA driver tương thích trên host hỗ trợ CUDA 12.8 trở lên (khuyến nghị driver dòng 570 trở lên, ví dụ: `sudo apt update && sudo apt install nvidia-driver-570`) và khởi động lại máy tính.
+  - **Quy tắc tương thích**: Driver máy host bắt buộc phải hỗ trợ CUDA 12.8 để vận hành vi kiến trúc Blackwell (GeForce RTX 5070 Ti / `sm_120`). Đầu ra lệnh `nvidia-smi` hiển thị phiên bản CUDA tối đa mà driver hỗ trợ ở góc trên bên phải (yêu cầu $\ge 12.8$). Môi trường tính toán LIMN đã được tương thích hóa (`WORKBENCH_RUNTIME_ADAPTATION=sm_120`) tự động tải các gói wheel biên dịch sẵn cho CUDA 12.8 (`cu128`), do đó driver dòng 550 cũ sẽ không thể kích hoạt CUDA context trên phần cứng Blackwell.
 
 ### 2. Thiếu nvidia-container-toolkit (`nvidia-container-toolkit missing`)
 - **Hiện tượng**: Quá trình preflight cảnh báo thiếu NVIDIA runtime, hoặc Docker báo lỗi `docker: Error response from daemon: could not select device driver "" with capabilities: [[gpu]]`.
@@ -385,19 +386,41 @@ Trong nghiên cứu thực nghiệm khoa học máy tính, việc hiểu đúng 
 
 ## 15. Quy trình nghiên cứu sau lần đánh giá đầu tiên
 
-Sau khi hoàn tất lần đánh giá đầu tiên với `./pc.sh`, bạn có thể tiến hành chu trình phân tích khoa học tiếp theo:
+Sau khi hoàn tất lần đánh giá đầu tiên với `./pc.sh`, bạn có thể tiến hành chu trình phân tích khoa học tiếp theo.
 
-1. **Phân tích trường hợp thất bại (Failure Analysis)**:
+> **Giới hạn hiện tại — đọc trước khi dùng giao diện phân tích theo truy vấn**
+>
+> `./pc.sh` chạy đường đánh giá chính thức của LIMN, và đường đó sinh ra **Recall tổng hợp theo
+> category** (R@1/R@10/R@50 cho dress/shirt/toptee) cùng macro aggregate — đúng những gì paper công bố.
+> Nó **không** xuất xếp hạng Top-K theo từng truy vấn.
+>
+> Hệ quả: các màn hình phân tích *theo từng truy vấn* (`/api/queries`, so sánh cặp model trên cùng
+> một truy vấn, Jaccard của tập thất bại) hiện **chưa vận hành được với kết quả LIMN thật**. Chúng
+> chỉ chạy trên dữ liệu mock dùng cho phát triển. **Không có kết quả truy hồi nào bị tạo ra giả** ở
+> bất kỳ đâu.
+>
+> Chi tiết kỹ thuật và phần triển khai tối thiểu còn thiếu: `workbench/docs/reviews/final_pc_audit/PER_QUERY_EXPORT_STATUS.md`.
+>
+> Điều **vẫn dùng được ngay** sau lần chạy đầu: Recall theo category, macro aggregate, thẩm định
+> paper gate, và so sánh giữa các model ở mức category.
+
+1. **Đọc kết quả ở mức category và macro**:
    - Truy cập giao diện Web UI tại `http://localhost:5173`.
-   - Kiểm tra các truy vấn có điểm Recall thấp hoặc bị xếp hạng sai lệch.
-   - Quan sát mối quan hệ giữa văn bản điều chỉnh (relative caption) và các đặc trưng thị giác bị nhầm lẫn.
+   - Đối chiếu R@10/R@50 của dress/shirt/toptee với số liệu paper do `verify_run.py` và
+     benchmark gate cung cấp: đây là mức mà paper công bố và là mức được thẩm định.
+   - Sai lệch so với paper là **phát hiện nghiên cứu**, không phải lỗi hạ tầng.
 2. **Phân tích theo Cohorts**:
-   - Sử dụng các nhóm lỗi (cohorts) được hệ thống trích xuất tự động để phân loại các dạng lỗi phổ biến: nhầm lẫn màu sắc, sai lệch kiểu dáng (cổ áo, tay áo), hoặc chi tiết hoa văn.
+   - Cohorts và nhãn annotation là công cụ gán nhãn thủ công của bạn: bạn tự tạo cohort rồi gắn nhãn lên các truy vấn mình chọn. Hệ thống lưu và xuất được chúng.
+   - Việc hệ thống *tự động* phân loại truy vấn thất bại thành "nhầm màu sắc / sai kiểu dáng / sai hoa văn" cần dữ liệu xếp hạng theo từng truy vấn — xem khối giới hạn ở đầu mục này.
 3. **Đánh giá so sánh đa mô hình**:
    - Chạy đánh giá mô hình thứ hai bằng lệnh:
      ```bash
      ./pc.sh --model csmcir
      ```
-   - So sánh trực tiếp hiệu năng giữa LIMN và CSMCIR trên cùng một giao diện và cùng điều kiện phần cứng chuẩn mực.
+   - So sánh R@10/R@50 theo category giữa LIMN và CSMCIR ở mức số liệu paper công bố.
 4. **Khai thác dữ liệu báo cáo chuyên sâu**:
-   - Các file báo cáo tổng hợp JSON tại `workbench/artifacts/reports/` chứa đầy đủ ma trận nhầm lẫn, phân phối điểm số và metadata thực thi, sẵn sàng để tích hợp vào các báo cáo nghiên cứu hoặc bài báo khoa học của bạn.
+   - Các file báo cáo tổng hợp JSON tại `workbench/artifacts/reports/` chứa metric theo category,
+     macro aggregate, thẩm định gate, provenance checkpoint và metadata thực thi (commit nguồn,
+     digest môi trường, runtime adaptation) — đủ để trích dẫn trong báo cáo nghiên cứu.
+   - Ma trận nhầm lẫn và so sánh theo từng truy vấn **không** nằm trong báo cáo tổng hợp; chúng cần
+     dữ liệu per-query như đã nêu ở khối giới hạn phía trên.

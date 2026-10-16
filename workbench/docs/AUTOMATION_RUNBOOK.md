@@ -338,6 +338,34 @@ the native code is 0 but the run's completion proof is missing or invalid, the C
 nonzero, so a direct operator invocation cannot look successful without a valid proof. Missing
 or corrupt ledger keys and a corrupt ledger likewise produce operator failure.
 
+### Invocation verdict (what the queue reads)
+
+An exit code cannot say whether a run proved anything: a zero-exit invocation that printed
+nothing, or whose completion proof failed validation, still exits 0. The operator therefore
+records one machine-readable verdict per invocation —
+`<reports>/<model>_<checkpoint>_<run_id>_invocation_outcome.json`, and the same payload as
+`invocation_outcome.json` inside the run directory — carrying `run_id`, the four identity
+fields, the native `return_code`, `invocation_status`, `verdict`, `completed` and `reason`:
+
+| `verdict` | Meaning | `completed` |
+|---|---|---|
+| `PROOF_VALIDATED` | the proof minted for this invocation passed `validate_run_manifest` | `true` |
+| `NO_OBSERVABLE_OUTPUT` | exited 0 and printed nothing, so no proof was minted | `false` |
+| `PROOF_REJECTED` | a proof was minted but the evaluator's own validation refused it | `false` |
+| `EXECUTION_FAILED` | nonzero exit, so no proof could be minted | `false` |
+
+The queue publishes a job as `completed` **only** on `PROOF_VALIDATED`. That verdict is the
+queue's own dispatch record, not a scientific certification: `completed` means "this invocation
+minted a proof the operator's validator accepted". The authoritative corroboration — proof,
+ledger and report checked against each other — is `workbench/scripts/verify_run.py`. A dispatch that names a
+run identity is an evaluation, and it settles `failed` with a named reason when it recorded no
+verdict — success is never inherited from an exit code. A dispatch that names no run identity
+(the queue's own bookkeeping) keeps the exit-code contract, except that a job naming a *model*
+whose invocation printed nothing is never `completed`, because no proof can exist for a silent
+evaluation. The job's own `return_code` is its child's code, so the native evaluator code is
+never lost: it is recorded in the run's `command.json`, its report, its ledger entry and its
+verdict.
+
 ### Resume
 
 
