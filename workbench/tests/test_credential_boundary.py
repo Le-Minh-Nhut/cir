@@ -187,3 +187,38 @@ def test_no_name_a_key_path_is_derived_from_reaches_the_evaluator(
         monkeypatch.setenv(name, "/tmp/must-not-be-forwarded")
         seen = _run_evaluator(tmp_path, monkeypatch, passthrough=name)
         assert name not in seen, f"{name} leaked into the evaluator"
+
+
+def test_the_evaluator_cannot_read_the_repository_root_ledger_key(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The legacy key location must not be readable by the evaluator child.
+
+    The key is honoured from `<repo_root>/.workbench_ledger_key` when that is the only one, and
+    `CIR_REPO_ROOT` IS on the evaluator allowlist (the model needs it to find its inputs). So a
+    deployment still carrying a repository-root key would hand the untrusted evaluator the HMAC key
+    by a second route, after `HOME` was closed. An independent audit found this.
+
+    The child is not given a redacted CIR_REPO_ROOT, because that would break every model that needs
+    it; what changes is WHERE a fresh key lives, and this pins the second half: whether or not a
+    legacy key exists, the child must not reach a key file through the variable it does receive.
+    """
+    repo = tmp_path / "repo"
+    (repo / "workbench" / "artifacts").mkdir(parents=True)
+    monkeypatch.setenv("CIR_REPO_ROOT", str(repo))
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+
+    from workbench.scripts import evaluate_models as em
+
+    key = em.ledger_hmac_key(_config(tmp_path))
+    assert key, "a key must resolve"
+
+    # The path the resolver chose is one the child's environment can reach ONLY if it is under the
+    # repo root. A fresh key must therefore not be created there.
+    legacy = repo / ".workbench_ledger_key"
+    assert not legacy.exists(), (
+        "a fresh ledger key was written under the repo root, where the evaluator child "
+        "(which is given CIR_REPO_ROOT) can read it")
+
+    # And the child environment really does carry the variable that made this reachable.
+    assert str(repo) in em._evaluator_environment({}).get("CIR_REPO_ROOT", "")
