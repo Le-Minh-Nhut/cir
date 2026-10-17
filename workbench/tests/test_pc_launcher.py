@@ -1621,3 +1621,68 @@ def test_the_launcher_fixture_carries_the_real_api_schema() -> None:
     # The field that caused the defect must never come back.
     assert '"available"' not in (FIXTURES / "models.json").read_text(), (
         "the fixture invented an `available` field the real API never sends")
+
+def test_env_quoted_port_with_a_trailing_comment_is_valid(tmp_path: Path):
+    """A well-formed .env must not be rejected for the SHAPE of its comment.
+
+    `validate_env_file` re-implemented the .env parsing instead of resolving values through
+    `env_value`, and checked the quotes before stripping the comment. `PORT="8000" # default`
+    therefore kept its quotes, `validate_env` rejected `"8000"` as a non-integer, and the launcher
+    refused a configuration that compose, `run.sh` and `pc.sh`'s own `env_value` all read as 8000.
+    """
+    custom = (
+        'WORKBENCH_BACKEND_PORT="8000" # default port\n'
+        "WORKBENCH_FRONTEND_PORT=5173 # frontend\n"
+        "WORKBENCH_ENABLE_GPU=1\n"
+    )
+    sandbox, env = setup_sandbox(tmp_path, custom_env_content=custom)
+    proc = run_pc(sandbox, ["--doctor"], env)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+def test_env_line_without_an_assignment_is_skipped_not_parsed(tmp_path: Path):
+    """A bare word is not a variable, and must not become one.
+
+    `run.sh`'s `env_value` had gained the trailing-newline fix without the `=` guard, so a bare key
+    read as its own value (`WORKBENCH_BACKEND_PORT=WORKBENCH_BACKEND_PORT`) and `validate_env`
+    aborted the launcher, while `pc.sh` skipped the line and used the default.
+    """
+    custom = (
+        "WORKBENCH_BACKEND_PORT\n"
+        "WORKBENCH_FRONTEND_PORT=5173\n"
+        "WORKBENCH_ENABLE_GPU=1\n"
+    )
+    sandbox, env = setup_sandbox(tmp_path, custom_env_content=custom)
+    proc = run_pc(sandbox, ["--doctor"], env)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+def test_env_quoted_port_with_a_trailing_comment_is_valid(tmp_path: Path):
+    """A well-formed .env must not be rejected for the SHAPE of its comment.
+
+    `validate_env_file` checked the quotes before stripping the trailing comment, so
+    `PORT="8000" # default` kept its quotes (the closing one was no longer last), `validate_env`
+    rejected `"8000"` as a non-integer, and the launcher refused a configuration that compose,
+    `run.sh` and `pc.sh`'s own `env_value` all read as 8000.
+    """
+    custom = (
+        'WORKBENCH_BACKEND_PORT="8000" # default port\n'
+        "WORKBENCH_FRONTEND_PORT=5173 # frontend\n"
+        "WORKBENCH_ENABLE_GPU=1\n"
+    )
+    sandbox, env = setup_sandbox(tmp_path, custom_env_content=custom)
+    proc = run_pc(sandbox, ["--doctor"], env)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+def test_env_bare_word_without_an_assignment_is_skipped(tmp_path: Path):
+    """A line with no `=` is not a variable, and must not become one.
+
+    `run.sh`'s `env_value` gained the trailing-newline fix without the `=` guard, so a bare key read
+    as its own value and `validate_env` aborted the launcher, while `pc.sh` skipped the line.
+    """
+    custom = (
+        "WORKBENCH_BACKEND_PORT\n"
+        "WORKBENCH_FRONTEND_PORT=5173\n"
+        "WORKBENCH_ENABLE_GPU=1\n"
+    )
+    sandbox, env = setup_sandbox(tmp_path, custom_env_content=custom)
+    proc = run_pc(sandbox, ["--doctor"], env)
+    assert proc.returncode == 0, proc.stdout + proc.stderr

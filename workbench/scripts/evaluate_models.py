@@ -378,7 +378,12 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
     if model["model_id"] == "limn" and checkpoint["checkpoint_id"] == "base_iter0_all_categories":
         artifact_type = "category_specific_whole_models"
         names = [f"0_{cat}_best_model.pt" for cat in ("dress", "shirt", "toptee")]
-        checkpoint_bundle = build_artifact_manifest(checkpoint_file.parent, names)
+        # The members' own directory. `checkpoint_path` resolves a declared bundle to the
+        # directory its members share, so that resolution is what the manifest is built over --
+        # `.parent` named the whole checkpoint root for a bundle and produced a manifest over
+        # paths that do not exist.
+        member_root = checkpoint_file if checkpoint_file.is_dir() else checkpoint_file.parent
+        checkpoint_bundle = build_artifact_manifest(member_root, names)
         directory_members = list(checkpoint_bundle.values())
         bundle_manifest_digest = manifest_digest(checkpoint_bundle)
     elif artifact_type in ("run_directory", "bundle_directory"):

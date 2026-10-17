@@ -130,7 +130,13 @@ class LIMNAdapter(OfficialScriptAdapter):
         command = [
             _runtime.python_executable(self.model),
             str(Path(__file__).resolve().parents[3] / "workbench" / "replay" / "limn.py"),
-            "--checkpoint-root", str(checkpoint.parent),
+            # The directory the bundle's members occupy. `checkpoint` is the path
+            # `checkpoint_path` resolved -- for a declared bundle that IS the member directory
+            # (the bundle's members are siblings inside it), while for a single-category selection
+            # it is that member's own file and the members live beside it. `.parent` was correct
+            # only for the second shape and named the whole checkpoint root for a bundle, so
+            # `limn.py`'s `checkpoint_root / "<member>.pt"` looked one level too high.
+            "--checkpoint-root", str(checkpoint if checkpoint.is_dir() else checkpoint.parent),
             "--dataset-root", str(request.dataset_root),
             "--source-root", str(source),
         ]

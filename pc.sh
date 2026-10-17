@@ -118,10 +118,20 @@ validate_env_file() {
             k="$(trim "$k")"
             v="${v%$'\r'}"
             v="$(trim "$v")"
-            if [[ "$v" == \"*\" ]]; then
-                v="${v:1:${#v}-2}"
-            elif [[ "$v" == \'*\' ]]; then
-                v="${v:1:${#v}-2}"
+            # Comment first, then one layer of matching quotes -- the order compose and
+            # `env_value` use. Checking the quotes first is what rejected a perfectly well-formed
+            # .env: `PORT="8000" # default` kept its quotes (the closing one was no longer last),
+            # and `validate_env` then refused `"8000"` as a non-integer.
+            #
+            # Validating the FILE's value directly, rather than asking `env_value`, is deliberate:
+            # `env_value` prefers the process environment, so a malformed .env would be silently
+            # bypassed by an exported variable and the file would never actually be validated.
+            if [[ "$v" == \"* ]]; then
+                local stripped="${v:1}"
+                v="${stripped%%\"*}"
+            elif [[ "$v" == \'* ]]; then
+                local stripped="${v:1}"
+                v="${stripped%%\'*}"
             else
                 v="${v%%#*}"
                 v="$(trim "$v")"
@@ -844,7 +854,14 @@ artifacts = repo / "workbench" / "artifacts"
 if env_file.is_file():
     for line in env_file.read_text(encoding="utf-8", errors="replace").splitlines():
         if line.strip().startswith("HOST_WORKBENCH_ARTIFACTS_ROOT="):
-            raw = line.split("=", 1)[1].strip().strip('"').strip("'")
+            # Comment first (outside quotes), then one layer of matching quotes -- the same order
+            # compose and `env_value` use. Stripping quotes first left a trailing comment inside
+            # the value, so a commented path resolved to '/path" # comment' and the running-queue
+            # probe reported no active job.
+            raw = line.split("=", 1)[1]
+            raw = raw.split("#", 1)[0].strip()
+            if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
+                raw = raw[1:-1]
             artifacts = Path(raw) if raw.startswith("/") else (env_file.parent / raw).resolve()
             break
 queue = artifacts / "queue_jobs"

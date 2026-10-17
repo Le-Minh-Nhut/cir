@@ -39,6 +39,10 @@ env_value() { # env_value KEY DEFAULT
         # dropped: without it this function answered the DEFAULT for the last variable while
         # pc.sh and compose answered the file's value, and the three disagreed about the stack.
         while IFS= read -r line || [[ -n "$line" ]]; do
+            # A line with no assignment is not a variable: without this, a bare key name read as
+            # its own value (`WORKBENCH_BACKEND_PORT=WORKBENCH_BACKEND_PORT`) and `validate_env`
+            # aborted the launcher, where pc.sh simply skips it and uses the default.
+            [[ "$line" == *=* ]] || continue
             # Strip a trailing comment, then ONE layer of matching quotes -- the same order and
             # the same rules compose applies, and the same ones pc.sh implements. Stripping the
             # comment first without honouring quotes left `"8000" ` here (quotes retained, because

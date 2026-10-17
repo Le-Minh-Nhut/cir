@@ -256,7 +256,7 @@ def _no_proof_refusal() -> str:
             "process only")
 
 #: Receipts are cached by (report digest, certification mode, ledger stamp, proof stamp,
-#: checkpoint stamp). The key is the whole soundness argument of the cache, so it is a key and not a
+#: checkpoint stamp, run-artifacts stamp). The key is the whole soundness argument of the cache, so it is a key and not a
 #: convenience: the report digest fixes which bytes were verified, the mode which policy judged them,
 #: the ledger stamp which ledger corroborated them, the proof stamp whether an evaluator-written
 #: proof exists and which revision of it was validated, and the checkpoint stamp which revision of
@@ -273,7 +273,7 @@ def _no_proof_refusal() -> str:
 #: refuses a report whose members no longer match the manifest its proof recorded, so a cached
 #: receipt whose key ignored the members kept serving `certified=true` for weights a later edit
 #: replaced. See `_checkpoint_stamp` for why the token it contributes is sound.
-_CERTIFICATION_CACHE: dict[tuple[str, str, str, str, str], dict] = {}
+_CERTIFICATION_CACHE: dict[tuple[str, str, str, str, str, str], dict] = {}
 
 #: How many receipts the cache keeps. The key varies with the checkpoint's change token, so a
 #: long-lived process watching an artifact be rewritten could otherwise grow this dict without
@@ -296,6 +296,43 @@ def _proof_stamp(config, report: dict) -> str:
     except OSError:
         return "absent"
     return f"{stat.st_mtime_ns}:{stat.st_size}"
+
+def _run_artifacts_stamp(config, report: dict) -> str:
+    """A change token for the run's invocation record and logs, which the verifier also re-derives.
+
+    `validate_run_manifest` re-reads `run_directory/command.json` (its independent witness that the
+    execution really succeeded, and the file it cross-checks the proof's model/checkpoint/protocol
+    against) and re-hashes `stdout.log` + `stderr.log` against the proof's `evidence_digest`. A
+    receipt cache that ignored them served `certified=true` for a state the verifier refuses --
+    repointed to another model's invocation record, or a log edited so the evidence digest no longer
+    agrees -- because the *weights* were untouched.
+
+    Content digests again, for the same reason as the checkpoint token: size and mtime are both
+    writable by whoever can edit the file. These are small files, so hashing them is not the cost
+    the checkpoint token has to avoid.
+    """
+    try:
+        artifacts = getattr(config, "WORKBENCH_ARTIFACTS_ROOT", None)
+        if artifacts is None:
+            return "unresolved"
+        run_dir = (Path(artifacts) / "logs"
+                   / f"{report.get('model_id')}__{report.get('checkpoint_id')}__"
+                     f"{report.get('run_id')}")
+        names = ("command.json", "stdout.log", "stderr.log")
+        tokens = []
+        for name in names:
+            path = run_dir / name
+            try:
+                stat = path.stat()
+            except OSError:
+                return f"missing:{name}"
+            digest = _member_digest_cached(path, stat)
+            if digest is None:
+                return f"unreadable:{name}"
+            tokens.append(f"{name}:{digest}")
+        return "|".join(tokens)
+    except Exception:
+        return "unresolved"
 
 def _ledger_path(config) -> Path:
     """The one ledger file both the evaluator and this process read."""
@@ -676,7 +713,12 @@ def _aggregate_reports() -> list[dict]:
         proof_stamp = _proof_stamp(config, report)
         mode = _certification_mode(proof_stamp != "absent")
         checkpoint_stamp = _checkpoint_stamp(report)
-        cache_key = (digest, mode, ledger_stamp, proof_stamp, checkpoint_stamp)
+        run_stamp = _run_artifacts_stamp(config, report)
+        # Five inputs, each the change token of one thing the receipt is a claim about: the
+        # report's bytes, the policy that judged them, the ledger that corroborated them, the
+        # proof that binds the run, the checkpoint the proof describes, and the run's own
+        # invocation record and logs. Anything the verifier re-derives belongs in this key.
+        cache_key = (digest, mode, ledger_stamp, proof_stamp, checkpoint_stamp, run_stamp)
         receipt = _CERTIFICATION_CACHE.get(cache_key)
         if receipt is None:
             receipt = _certify_report(config, path, report, digest, mode=mode)
