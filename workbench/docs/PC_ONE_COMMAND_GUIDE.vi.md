@@ -395,6 +395,44 @@ Trong nghiên cứu thực nghiệm khoa học máy tính, việc hiểu đúng 
    - Phân biệt minh bạch giữa việc tái lập trên môi trường đóng băng lịch sử nguyên bản (legacy pinned runtime) và môi trường đã thích nghi phần cứng (`ADAPTED_RUNTIME`).
    - Ý nghĩa: Khi mô hình cổ điển được nâng cấp runtime (PyTorch >=2.7 để chạy được trên Blackwell sm_120), báo cáo được gắn cờ `ADAPTED_RUNTIME` trong provenance. Hệ thống không bao giờ gán nhãn đây là "tái tạo chính xác tuyệt đối" (exact historical reproduction), nhằm bảo đảm tính trung thực học thuật cao nhất.
 
+### Trạng thái chứng thực của một báo cáo trên API
+
+API trả về một đối tượng `verification` **tách biệt** bốn câu hỏi, để bạn không phải suy diễn:
+
+| Trường | Ý nghĩa |
+|---|---|
+| `artifact_exists` | Có tệp báo cáo tổng hợp trên đĩa (kể cả báo cáo lịch sử / đã bị từ chối) |
+| `execution_authenticated` | Byte của báo cáo đúng là byte sổ cái HMAC ghi nhận, đúng định danh, `return_code == 0`, `invocation_status == "INVOCATION_COMPLETED"` |
+| `is_research_evidence` / `certified` | **Có phải bằng chứng nghiên cứu hợp lệ**: completion proof xác thực, metric extraction thực sự đã chạy, macro khớp category |
+| `parity_status` / `benchmark_gate` | Phán quyết đối chiếu paper (mục 4 ở trên) |
+
+Các trạng thái `state` có thể gặp:
+
+- `certified` — bằng chứng nghiên cứu hợp lệ. Chỉ trạng thái này mới được trình bày như kết quả đã chứng thực.
+- `proof_unavailable` — sổ cái xác thực được việc thực thi, nhưng tệp completion proof không còn (bị xoá/prune). **Không** phải `certified`; dùng để phân biệt với trường hợp dưới.
+- `uncorroborated` — không có entry sổ cái khớp. **Không** phải `certified`.
+- `refused` — proof có nhưng bị từ chối (chữ ký, định danh, hoặc số liệu không hợp lệ).
+
+Giao diện Web hiển thị nhãn riêng cho từng trạng thái: một run chưa `certified` **không bao giờ** được vẽ như một lượt pass sạch.
+
+### Từ vựng phán quyết của release verifier
+
+`workbench/docker/release_verify.sh` không còn chỉ nhìn J1–J12: nó đánh giá **9 chiều độc lập**
+(`STATIC_SOURCE`, `DEPLOYMENT`, `CONFIGURATION`, `MODEL_ENVIRONMENT`, `OPERATIONS`, `GPU_RUNTIME`,
+`MODEL_INFERENCE`, `MODEL_EVALUATION`, `SCIENTIFIC_OUTPUT`) và chỉ đạt `RELEASE_READY` khi **mọi**
+chiều bắt buộc PASS.
+
+| Verdict | Nghĩa |
+|---|---|
+| `RELEASE_READY` | Mọi chiều bắt buộc PASS, gồm GPU thật, suy luận thật và đánh giá khoa học thật |
+| `GPU_VALIDATION_PENDING` | Kỹ thuật đạt, nhưng chưa có bằng chứng GPU trên máy đích |
+| `ENGINEERING_INCOMPLETE` | Có chiều bắt buộc PENDING vì lý do triển khai (ví dụ chạy `--offline`) |
+| `RELEASE_BLOCKED` | Có chiều bắt buộc FAIL (ví dụ khóa sổ cái không dùng được) |
+
+Trên chính máy phát hành này, verdict đúng là `ENGINEERING_INCOMPLETE` (chế độ `--offline`) hoặc
+`RELEASE_BLOCKED` khi có xung đột khóa sổ cái — **không bao giờ** là `RELEASE_READY`, vì chưa có GPU
+đích, suy luận thật hay đánh giá FashionIQ thật. Đó là hành vi trung thực, không phải lỗi.
+
 ---
 
 ## 15. Quy trình nghiên cứu sau lần đánh giá đầu tiên
