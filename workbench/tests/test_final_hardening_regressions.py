@@ -626,7 +626,11 @@ def test_an_unreadable_gpu_capability_artifact_is_reported_not_swallowed(tmp_pat
     """A 0-byte fixture left in gpu_capabilities/ raised JSONDecodeError inside the scan; the
     global try/except turned that into real_gpu = False, so a genuine interpreter probe on the
     target host was silently discarded and the verdict capped at GPU_VALIDATION_PENDING. An
-    unreadable artifact is reported and repaired; it never overrides readable evidence."""
+    unreadable artifact is REPORTED and does not override readable evidence.
+
+    The report is the repair. Deleting the file was a later defect of its own: the verifier runs
+    against the operator's live artifacts root, so it removed files it did not understand -- and a
+    lingering broken artifact is a fact about the deployment that belongs in the next report too."""
     capabilities = _scanner_workspace(tmp_path, monkeypatch)
     # A record written by the runtime's own writer under this deployment's key, carrying the
     # fields an interpreter probe records.
@@ -645,8 +649,9 @@ def test_an_unreadable_gpu_capability_artifact_is_reported_not_swallowed(tmp_pat
         report["gpu_capability_scan"]["unreadable"]
     assert "[WARN]" in report["checks"]["J5"]["detail"]
     assert "unreadable capability artifact" in completed.stderr
-    # The unusable file is gone, so the next run cannot trip over it again.
-    assert not poisoned.exists()
+    # The unusable file is left where it was: the verifier reports what it cannot read, it does
+    # not delete the operator's artifacts.
+    assert poisoned.exists(), "the verifier must not delete artifacts it cannot read"
     assert good.exists()
 
 def test_the_gpu_scan_does_not_invent_evidence_from_unreadable_artifacts(tmp_path, monkeypatch):
@@ -661,7 +666,9 @@ def test_the_gpu_scan_does_not_invent_evidence_from_unreadable_artifacts(tmp_pat
     assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PENDING"
     assert report["gpu_capability_scan"]["real_gpu"] is False
     assert set(report["gpu_capability_scan"]["unreadable"]) == {"broken.json", "truncated.json"}
-    assert not list(capabilities.glob("*.json"))
+    # Both remain on disk and stay named by every later scan: removing them to make a scan look
+    # clean is exactly what a fail-closed verifier must not do.
+    assert {p.name for p in capabilities.glob("*.json")} == {"broken.json", "truncated.json"}
 
 def test_a_real_record_from_another_environment_cannot_certify_this_host(tmp_path, monkeypatch):
     """A readable record is not automatically evidence: release_verify.sh accepted any

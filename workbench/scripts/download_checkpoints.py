@@ -256,7 +256,11 @@ def main(argv: list[str] | None = None) -> int:
             raise RuntimeError(f"sha256 mismatch for {destination}: expected {expected}, got {digest}")
         os.replace(partial, destination)
         manifest = [entry for entry in manifest if not (entry["model_id"] == model["model_id"] and entry["checkpoint_id"] == checkpoint["checkpoint_id"])]
-        manifest.append({"model_id": model["model_id"], "checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_url": checkpoint["download_url"], "downloaded_sha256": digest, "size_bytes": destination.stat().st_size, "downloaded_at": datetime.now(timezone.utc).isoformat(), "official_hash_available": expected is not None, "official_hash_match": digest == expected if expected else None})
+        manifest.append({"model_id": model["model_id"], "checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_url": checkpoint["download_url"], "downloaded_sha256": digest, "size_bytes": destination.stat().st_size,
+                     # The inode change time cannot be set backwards, so it is the cheap,
+                     # un-forgeable half of the presence check's evidence (see
+                     # registry.checkpoint_missing_paths).
+                     "ctime_ns": destination.stat().st_ctime_ns, "downloaded_at": datetime.now(timezone.utc).isoformat(), "official_hash_available": expected is not None, "official_hash_match": digest == expected if expected else None})
         save_manifest(manifest_path, manifest)
         print(f"DOWNLOADED {destination}: {destination.stat().st_size} bytes sha256={digest}\n")
     return int(failed)

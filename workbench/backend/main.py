@@ -601,6 +601,17 @@ def _certify_report(config, report_path: Path, report: dict, digest: str, *,
             "certification_mode": mode, "development_mode": False,
             "state": "proof_unavailable" if mode == "proof_unavailable" else "refused"}
 
+def _checkpoint_digest_or_refuse(path: Path, payload) -> str:
+    """This submission's checkpoint digest, or a named refusal for an artifact it cannot frame."""
+    try:
+        return sha256_file(path)
+    except (OSError, ValueError) as error:
+        raise WorkbenchError(
+            "checkpoint_unreadable",
+            f"the checkpoint for this submission cannot be hashed: {error}",
+            {"model_id": payload.model_id, "checkpoint_id": payload.checkpoint_id,
+             "checkpoint_path": str(path)}) from error
+
 def _aggregate_reports() -> list[dict]:
     """Read every official aggregate report the evaluator has written, ignoring malformed files.
 
@@ -1048,7 +1059,11 @@ def queue_job(payload: JobInput):
                               / f"{plan.model_id}__{plan.checkpoint_id}__{run_id}"),
         "upstream_expected_pin": plan.pin,
         "actual_source_commit": plan.actual_source_commit,
-        "checkpoint_local_sha256": sha256_file(plan.checkpoint),
+        # `sha256_file` refuses an artifact it cannot frame (a missing path, a non-regular
+        # member, a symlink), and its ValueError would otherwise escape the handler and reach the
+        # client as an unhandled 500 with no reason. A submission that cannot describe its own
+        # artifact is a refusal with a name, not a server fault.
+        "checkpoint_local_sha256": _checkpoint_digest_or_refuse(plan.checkpoint, payload),
         "dataset_root": str(plan.dataset_root),
     }
     try:

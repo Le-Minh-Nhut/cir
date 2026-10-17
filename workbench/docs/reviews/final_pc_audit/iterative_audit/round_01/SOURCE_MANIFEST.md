@@ -1,12 +1,12 @@
 # Round 01 source manifest (first-party production inventory)
 
-SOURCE_SHA: a2861b2890bd812c39b2fd2f07628171a6b741cb
-SOURCE_TREE: 83a690b1c69728b0fc9aa02f4dc4a3582ee1a438
+SOURCE_SHA: be083e6264ebb0b12442a97d6bfefa57fc0207b4
+SOURCE_TREE: 36c47b66fd1729d4e8cce6995994f790c9dd6997
 FILES: 110
 
 | source file | bytes | sha256 |
 |---|---|---|
-| pc.sh | 79662 | 151a030e3c6d1aa04e5538cafaf9d55af71e3d5356ed8bced9b2be625967f6d7 |
+| pc.sh | 81999 | 1deb450a89007afffb85dd392e79c98861ca757242846c13facdfb120fdc3a93 |
 | src/cache/__init__.py | 0 | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 |
 | src/cache/features.py | 5121 | 5df907e14c7f5a00580525d675b0fe0b00922767a9a46cc1f212946999e25fec |
 | src/datasets/__init__.py | 0 | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 |
@@ -21,7 +21,7 @@ FILES: 110
 | workbench/backend/__init__.py | 0 | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 |
 | workbench/backend/adapters/__init__.py | 0 | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 |
 | workbench/backend/adapters/base.py | 1680 | e704de37bfe83e3c16f07b45647a437d4beb8e17649e52684231312a4ab34aa0 |
-| workbench/backend/adapters/models.py | 7769 | 5814f5607a874cf6812667dfc014aa71e5c4cb286efc89ff132262906f609b2d |
+| workbench/backend/adapters/models.py | 8361 | 5eb5271db4f8c2ef18470a2cd0c01067487e70f309d4dad07e0487cf69e5c550 |
 | workbench/backend/analysis.py | 6199 | 041b09a0a9380eca3587d03ecc3602eb1a44ffbef8eadcd475f9297b31ea96f3 |
 | workbench/backend/autopilot.py | 68703 | c5f2e59147615b0ddfc27681a66fb7a914ec61aaed502a3e049c8927d4a4f12b |
 | workbench/backend/benchmark_references.py | 16129 | 13d5a895cb67f64d157f539a60ff394cff853e08ed2cdd5656017bfb27b8ee2f |
@@ -31,13 +31,13 @@ FILES: 110
 | workbench/backend/fashioniq_layout.py | 5717 | 4e8d3b77ec7dca496d1f683828684fba222a736800b3897e06d256663d2eb008 |
 | workbench/backend/index.py | 5188 | 6c72f8b8f7b95d6f92ea5e0106094896689c3f0b76e53182d03ad6aac700e184 |
 | workbench/backend/jobs.py | 32836 | 9aca61446788eb195cf8b86aa2e3af2cb19673d5407817411e833d65406c967f |
-| workbench/backend/main.py | 53210 | 5543d96ce9a853ac50bb963dddfba9dbc2f86a09f0d5e33519b143b4709355a0 |
+| workbench/backend/main.py | 60669 | adde007372ac1d2d9804642ab22f7baba396bae855ea4b3f4c1c49835e9fffb9 |
 | workbench/backend/metrics_extraction.py | 17743 | 21b887cf719667bd0656695ec5d4f951806f38ef3119f7e308607e6d37016216 |
 | workbench/backend/operator_config.py | 5206 | 5b72dd5e736817b76c152d89e8e41f7fece0c4a4ac2c111731583ab3003d8ca8 |
 | workbench/backend/paper_gate.py | 26026 | 9c28a3a0b5350f074555f8b207395fab65a1fbb6f64d6ccc8eae5549e6a5fb23 |
 | workbench/backend/preflight.py | 12980 | 4ce00334cde37025b0c757d92e9d8c8649685f3ea33d42712c20e9a5df3508ce |
-| workbench/backend/registry.py | 46872 | cd5af852db8c56a2e043c35f8af9c533af938a6cd31068979b7049182b610960 |
-| workbench/backend/runtime.py | 118954 | da151875fc5693b2e12df3d23305b7deac35d64ac1ccd52674f8f2ac54f7e6e4 |
+| workbench/backend/registry.py | 51311 | 6a554f9e8e0aea631e62db386066ae856a80cbc3fbbd42409dc14e7ba7661e23 |
+| workbench/backend/runtime.py | 121132 | d0d98ee7ceb3cce8a6a5b90f58ac84169d82868e902541b8f7bb41e1d7004834 |
 | workbench/backend/schemas/__init__.py | 0 | e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 |
 | workbench/backend/schemas/results.py | 6060 | e9cb997b576a3554db9c77114e93550c2a5e60b76c4aab829cee579327061b84 |
 | workbench/backend/storage.py | 11831 | 392aee56f29e1138e2c0fc9f7ec61665c59e510824312648fabb63d69c8994fd |
@@ -45,14 +45,14 @@ FILES: 110
 | workbench/docker/docker-compose.gpu.yml | 528 | 55a272dcc7ee221e74dd736d606f3e1a85ac897ee74aba5f29b2f5dffbdea462 |
 | workbench/docker/docker-compose.yml | 3708 | 9e77f1fbf8a66e90e8a85292bb6c4c264eb0e9ed73534347138bb76a9e0b3ac7 |
 | workbench/docker/mutation_checks.sh | 10251 | f0d34ae021a2cc6158893ce073b2d7e2c8654cb619d88f7529a0b5a453e65483 |
-| workbench/docker/release_verify.sh | 51020 | 6c8a94993cf7bba45511e013dfa61804acaf56135e8d82304da443859e568c09 |
-| workbench/docker/release_verify_report.json | 7076 | b07f9090da668120b358032ae6575b7f9625c702e00212a5660d2a73a5957e36 |
-| workbench/docker/run.sh | 12126 | ed2f86706ee6cbf3137d5e78815aff6a5006722a8c38bf0b9bf81ccb72018a93 |
-| workbench/frontend/App.tsx | 24682 | 88b51faef03d7355b7f13d7e12f481fdc386fb99629d7b7b2530bd7fcb5385c1 |
+| workbench/docker/release_verify.sh | 53703 | 513efe76afb2cd30d789b0ba3039a0b5b29981069ddad7700823fdaae601d9ba |
+| workbench/docker/release_verify_report.json | 6798 | 295bfba13fa9309913b7ba94e159b0941a7e5a4f7de6474da04a80a8c1066c78 |
+| workbench/docker/run.sh | 13354 | 6c44a04af6a3c09f3656a78f471d3757b4a1bc694519907bb5856df00337b30b |
+| workbench/frontend/App.tsx | 24650 | 6095c717c796cb516d8fc509c343aba6319e83fe14d612158004b583b87ea1fd |
 | workbench/frontend/client.ts | 370 | 07ed0a7a1c0530e735b03771bf131a2767246ebf3ee6999b3512f54fc173eb0e |
 | workbench/frontend/components.tsx | 603 | 70a81ab3f5c7e38238341dba1d06e4cff304df9aa90b0705ac25423d2c2470b2 |
-| workbench/frontend/evidence.ts | 5696 | 3ccdab475e2931de351bad1660d497022aafc7e36adf0b09384b4569c71b0205 |
-| workbench/frontend/gate.ts | 4430 | 799b0815a9febc06085a38f66bda03a1bfcbbef8c81ea6dc0b1606a4b108b3b1 |
+| workbench/frontend/evidence.ts | 7341 | 4836a08762235d7559dd3f01db581170e300d5f949c1ddf8ed37cbac5d0ca47b |
+| workbench/frontend/gate.ts | 4995 | 49dd285d3413c541c3ad2e61ae567bd78a892dfd3098ceb1fb7ba9f5f6958f3d |
 | workbench/frontend/gate_types.ts | 337 | 226157d09d893d62c7b9e2095c08c9030033b052dd95668d6ef9db3495d1b141 |
 | workbench/frontend/package-lock.json | 39674 | f81b28f278e07241b4158fe8682cc1c94bbb8747deb458a439c14d3dc95767e3 |
 | workbench/frontend/package.json | 438 | 4f31970824d1cabce16d7a553e70790fde65e2c6571d58d2cc1396f81f599f28 |
@@ -98,7 +98,7 @@ FILES: 110
 | workbench/scripts/doctor.py | 18956 | 76587b4a67387f0d6fa1903d9418b57987a4539b85e9921eac404ce8740ac9db |
 | workbench/scripts/download_auxiliary_assets.py | 22442 | a3a09ae058a71b4c78b81768092e9e7ff4cc379a9bb0145c12630631814ba1b4 |
 | workbench/scripts/download_checkpoints.py | 14042 | d0471991776a66229d99a3e58ff0a17070ba6c15a266abefc71165c1362466f0 |
-| workbench/scripts/evaluate_models.py | 107649 | c6e020409030d1b22e03dc9dce7e74206ba3184b56cab9fb7b87a1afebccc20c |
+| workbench/scripts/evaluate_models.py | 108047 | a01ba10372b5e0d2464319ba5590c218b7009ee37f8cea6f3fa0d28028941a73 |
 | workbench/scripts/gpu_check.py | 4098 | 00095e14226f4c01bfa0d6ebfec6c55672930805724e48089dc0fad1aa470a26 |
 | workbench/scripts/load_mock_results.py | 1109 | a03be7c4e947b7cb7be2cabb3e22de1eac59d6fd2e7b2edb71f555897812aaef |
 | workbench/scripts/manage_environment.py | 21779 | 56fbd819ed5703b3b090490ee059e71dbb86beb2e77edd8c76c023c7da97e2fe |
@@ -115,4 +115,4 @@ FILES: 110
 | workbench/scripts/serve_workbench.py | 8813 | 436c37b82ab575b82b707313b8acaebe5f901975c88cb15ea7d01ccb7c7596f4 |
 | workbench/scripts/sync_upstreams.py | 9888 | a5f3f8b71b1eea947d36dcbf5a785ef79094b3d0e272a9ba0abd143c2947e11f |
 | workbench/scripts/validate_results.py | 2915 | dc092e114354a47479f86224569dd6b8aec7231e1f8d81fb3945a8248851aa62 |
-| workbench/scripts/verify_run.py | 28297 | 23d40330d50b0b39eb2fb566583c8c1317496d17e4827ddd690f5cb88e58af83 |
+| workbench/scripts/verify_run.py | 29078 | a3e766d72cbba1da448f1d250e3ea85142ff34fcfac14e01b2e2939954b15f05 |

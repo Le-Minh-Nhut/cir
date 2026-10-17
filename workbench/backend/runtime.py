@@ -1012,7 +1012,15 @@ def _host_identity() -> dict[str, str]:
         pass
     # The visible devices are part of the claim: a capability recorded for device 0 must not
     # authorize a run that is now restricted to no device.
+    #
+    # `NVIDIA_VISIBLE_DEVICES` is read too, and it is the variable the container runtime actually
+    # acts on: a record written with it unset (every device) stayed `AUTHORIZED` when it was set to
+    # a specific device or to none, because only the CUDA spelling was in the identity -- while the
+    # repo's own environment allowlist names all three. A claim about which devices are usable
+    # cannot ignore the lever that selects them.
     identity["cuda_visible_devices"] = os.environ.get("CUDA_VISIBLE_DEVICES", "<unset>")
+    identity["nvidia_visible_devices"] = os.environ.get("NVIDIA_VISIBLE_DEVICES", "<unset>")
+    identity["nvidia_driver_capabilities"] = os.environ.get("NVIDIA_DRIVER_CAPABILITIES", "<unset>")
     for path in ("/proc/driver/nvidia/version", "/sys/module/nvidia/version"):
         try:
             with open(path, "r", encoding="utf-8", errors="replace") as handle:

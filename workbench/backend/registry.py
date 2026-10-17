@@ -393,7 +393,15 @@ def checkpoint_missing_paths(path: Path, checkpoint: dict[str, Any],
                         if entry is not None:
                             recorded_sha = entry.get("downloaded_sha256")
                             recorded_size = entry.get("size_bytes")
-                            if recorded_sha and recorded_size == st.st_size:
+                            # Size ALONE is not a witness: a same-length in-place rewrite (with
+                            # mtime restored) read as present for all three members without a
+                            # single byte being hashed, so a tampered bundle was reported present
+                            # while the verifier refused it. ctime cannot be set backwards by any
+                            # userspace call, so requiring it closes the gap; manifests written
+                            # before this record no ctime and simply fall through to hashing.
+                            recorded_ctime = entry.get("ctime_ns")
+                            if recorded_sha and recorded_size == st.st_size and \
+                                    recorded_ctime is not None and recorded_ctime == st.st_ctime_ns:
                                 digest = recorded_sha
                     if digest is None:
                         digest = sha256_file(member_path)
@@ -923,7 +931,16 @@ def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -
         required_files = [member["filename"] for member in checkpoint["bundle_members"]]
     local_sha = _availability_digest(config, model["model_id"], checkpoint, path) if downloaded else None
     official_sha = checkpoint.get("expected_sha256")
-    official_sha_match = local_sha == official_sha if downloaded and official_sha else None
+    # A BUNDLE's `local_sha256` is a directory digest over its declared members, while the
+    # registry's `expected_sha256` on the derived record is the *anchor member's* file digest
+    # (inherited from `checkpoint_by_id`, which only redirects `filename`/`checkpoint_id`). Comparing
+    # the two reported `official_sha256_match: False` on a pristine, correctly downloaded LIMN
+    # bundle -- a false FAIL that `pc.sh` refuses on -- so the comparison is made only for the
+    # artifacts whose digest framing can agree. For a bundle, the per-member declarations are the
+    # comparable facts, and `checkpoint_missing_paths` already checks each member against them.
+    official_sha_comparable = official_sha is not None and not checkpoint.get("bundle_members")
+    official_sha_match = (local_sha == official_sha
+                          if downloaded and official_sha_comparable else None)
     mapping_verified = checkpoint["checkpoint_mapping_status"] == "VERIFIED_METADATA"
     source_synced = bool(model.get("source_dir")) and (config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]).is_dir()
     command_status = model.get("command_status")
@@ -943,7 +960,9 @@ def checkpoint_availability(model: dict[str, Any], checkpoint: dict[str, Any]) -
         "automatic_download_available": checkpoint.get("download_url") is not None,
         "checkpoint_downloaded": downloaded,
         "local_sha256": local_sha,
-        "official_sha256_known": official_sha is not None,
+        # Stated as what it is: for a bundle the registry declares a member digest, not a bundle
+        # digest, so there is no bundle-level expectation to compare against.
+        "official_sha256_known": official_sha is not None and not checkpoint.get("bundle_members"),
         "official_sha256_match": official_sha_match,
         "mapping_verified": mapping_verified,
         "adapter_command_ready": adapter_command_ready,

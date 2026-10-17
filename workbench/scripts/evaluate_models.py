@@ -234,16 +234,21 @@ def candidates(args: argparse.Namespace, models: list[dict]) -> list[tuple[dict,
                 continue
             bundle = bundles[0]
             if args.checkpoint == [bundle["bundle_id"]] or not requested:
-                anchor = next(checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] == bundle["required_checkpoint_ids"][0])
-                checkpoints = [{**anchor, "checkpoint_id": bundle["bundle_id"], "bundle_id": bundle["bundle_id"]}]
+                # Through the registry resolver, which is the one place a bundle record is built:
+                # a hand-rebuilt fold drops the member facts, and `checkpoint_path` then resolves
+                # to a directory that the presence check reports as missing.
+                from workbench.backend.registry import checkpoint_by_id
+
+                checkpoints = [checkpoint_by_id(model, bundle["bundle_id"])]
             elif requested:
                 # Naming every member of a declared bundle is the same experiment as naming the
                 # bundle, so resolve it to the bundle anchor rather than evaluating the categories
                 # as three unrelated runs.
                 required = set(bundle["required_checkpoint_ids"])
                 if required and set(requested) == required:
-                    anchor = next(checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] == bundle["required_checkpoint_ids"][0])
-                    checkpoints = [{**anchor, "checkpoint_id": bundle["bundle_id"], "bundle_id": bundle["bundle_id"]}]
+                    from workbench.backend.registry import checkpoint_by_id
+
+                    checkpoints = [checkpoint_by_id(model, bundle["bundle_id"])]
                 else:
                     checkpoints = [checkpoint for checkpoint in checkpoints if checkpoint["checkpoint_id"] in set(requested)]
         elif requested:
