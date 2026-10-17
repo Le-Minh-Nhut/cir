@@ -5,7 +5,9 @@ trên máy dev, cái gì chỉ có thể kiểm trên máy đích, và cách đ�
 
 **Chưa từng chạy trên RTX 5070 Ti.** Không có chứng thư GPU nào trong repo.
 
-SHA bàn giao đã kiểm thử: **`84ec6f1`**. Lấy đúng cây đó:
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `84ec6f1`** — mọi test, acceptance, mutation và release_verify trên
+trang này đều chạy trên đúng cây đó. Commit sau nó (`72156eb`) **chỉ sửa tài liệu này**; `git diff` trên
+toàn bộ đường dẫn sản xuất xác nhận hai cây giống hệt nhau. Lấy cây đã kiểm thử:
 
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
