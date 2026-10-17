@@ -68,7 +68,8 @@ def _observed(category: str, ranks: list[int], gallery_size: int = 40, top_depth
 
 
 def _identity(model_id: str, protocol_id: str, tag: str) -> dict:
-    return dict(model_id=model_id, method_name=model_id.upper(), checkpoint_id=f"{model_id}-ckpt",
+    return dict(run_id=f"dev-{model_id}-{protocol_id}-{tag}", model_id=model_id,
+                method_name=model_id.upper(), checkpoint_id=f"{model_id}-ckpt",
                 protocol_id=protocol_id, top_k_saved=20, source_commit="a" * 40,
                 checkpoint_sha256=tag * 64, data_kind="mock")
 
@@ -113,6 +114,10 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     monkeypatch.setattr(operator_config, "resolve_config", lambda: Config())
     monkeypatch.setattr(module, "resolve_config", lambda: Config())
+    # The index now promotes an experiment using the verifier's receipt, which reads the REAL
+    # evidence ledger unless the fixture redirects it. These fixtures assert the development path,
+    # so they declare "no run is corroborated here" explicitly rather than depending on host state.
+    monkeypatch.setattr(index_module, "verifier_verdicts", lambda *a, **k: {})
     monkeypatch.setattr(module, "load_registry", lambda *a, **k: {
         "protocols": {}, "models": [{"model_id": "mock-alpha", "method_name": "Alpha"}],
     })

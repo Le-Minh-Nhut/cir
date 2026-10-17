@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.replay.limn import (LIMN_CHECKPOINTS, MODEL, native_category, preflight)
 from workbench.replay.limn_observer import ObservedCategory, cross_check_with_native, observe_category
-from workbench.replay.publication import publish_observed_categories
+from workbench.replay.publication import development_run_id, publish_observed_categories
 
 DEFAULT_TOP_K = 200
 
@@ -48,8 +48,22 @@ def observe_and_verify(category: str, checkpoint_root: Path, dataset_root: Path,
 
 
 def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results_root: Path,
-           top_k: int = DEFAULT_TOP_K) -> int:
-    """Export the canonical per-query artifact for the FULL three-category bundle."""
+           top_k: int = DEFAULT_TOP_K, run_id: str | None = None,
+           command_digest: str | None = None, environment_digest: str | None = None,
+           runtime_adaptation: str | None = None) -> int:
+    """Export the canonical per-query artifact for the FULL three-category bundle.
+
+    ``run_id`` is the AUTHORITATIVE execution identity (``evaluate_models.make_run_id``). When the
+    parent supplies it, the artifact is bound to that invocation; when it is absent the caller must
+    be a standalone development run, and the identity is named as development so it can never be
+    mistaken for recorded evidence (F-09).
+
+    ``command_digest`` and ``environment_digest`` are the authoritative digests of the invocation
+    that ran the AGGREGATE evaluation. The observer itself runs a different command, so deriving
+    these locally would record the wrong invocation -- and a locally derived value is exactly the
+    fabricated provenance F-11 forbids. They are therefore passed in by the parent that owns them,
+    and their absence keeps the artifact out of the verified state.
+    """
     problems = preflight(checkpoint_root, dataset_root, source_root, CATEGORIES)
     if problems:
         for problem in problems:
@@ -65,8 +79,12 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
         if category_mismatches:
             mismatches[category] = category_mismatches
 
+    identity = run_id or development_run_id(model_id="limn",
+                                            checkpoint_id="base_iter0_all_categories",
+                                            protocol_id="fashioniq_val_split")
     status = {
         "model_id": "limn", "protocol": "fashioniq_val_split", "top_k": top_k,
+        "run_id": identity,
         "categories": list(CATEGORIES),
         "instrumentation_parity": ("INSTRUMENTATION_PARITY_MISMATCH" if mismatches
                                    else "INSTRUMENTATION_PARITY_VERIFIED"),
@@ -83,6 +101,27 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
         print(json.dumps(status, indent=2))
         return 1
 
+    # Every member of the bundle, with its verified digest: one scalar could only name dress, so a
+    # swapped or missing shirt/toptee weight would change nothing (F-12).
+    bundle = {
+        category: {"filename": LIMN_CHECKPOINTS[category]["filename"],
+                   "checkpoint_id": LIMN_CHECKPOINTS[category]["checkpoint_id"],
+                   "sha256": LIMN_CHECKPOINTS[category]["expected_sha256"]}
+        for category in CATEGORIES
+    }
+    category_checkpoint_ids = {category: LIMN_CHECKPOINTS[category]["checkpoint_id"]
+                               for category in CATEGORIES}
+
+    def _manifest_digest(members: dict[str, dict]) -> str:
+        """The same rule `evaluate_models.manifest_digest` uses: filename + content digest."""
+        import hashlib as _hashlib
+        identity_map = {name: {"filename": member.get("filename") or name,
+                               "sha256": member.get("sha256")}
+                        for name, member in sorted(members.items())}
+        return _hashlib.sha256(
+            json.dumps(identity_map, sort_keys=True).encode("utf-8")).hexdigest()
+
+    bundle_digest = _manifest_digest(bundle)
     checkpoint = LIMN_CHECKPOINTS["dress"]
     aggregate = {"macro_r10": None, "macro_r50": None, "macro_mean": None}
     r1_by_category = {observation.category: observation.recall(1) for observation in observed}
@@ -96,10 +135,17 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
 
     destination = publish_observed_categories(
         observed, results_root, parity_mismatches=mismatches,
+        run_id=identity,
         model_id="limn", method_name="LIMN", checkpoint_id="base_iter0_all_categories",
         protocol_id="fashioniq_val_split", top_k_saved=top_k,
         source_commit=MODEL["upstream_commit_sha"], checkpoint_sha256=checkpoint["expected_sha256"],
-        checkpoint_source=checkpoint.get("source"), data_kind="experiment",
+        checkpoint_source=checkpoint.get("source"),
+        command_digest=command_digest, environment_digest=environment_digest,
+        runtime_adaptation=runtime_adaptation,
+        bundle_manifest_digest=bundle_digest, checkpoint_bundle=bundle,
+        category_checkpoint_ids=category_checkpoint_ids,
+        instrumentation_parity="INSTRUMENTATION_PARITY_VERIFIED",
+        data_kind="experiment" if run_id else "mock",
         reproduced_metrics=aggregate,
     )
     print(json.dumps({**status, "published": str(destination)}, indent=2))
@@ -116,9 +162,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--results-root", type=Path, required=True,
                         help="root the canonical per-query ResultRun is published under")
     parser.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
+    parser.add_argument("--run-id", default=None,
+                        help="the authoritative execution identity from the orchestrator; without "
+                             "it the artifact is a development run and is marked as one")
+    parser.add_argument("--command-digest", default=None,
+                        help="the invocation's command digest, as recorded by the orchestrator")
+    parser.add_argument("--environment-digest", default=None,
+                        help="the invocation's environment digest, as recorded by the orchestrator")
+    parser.add_argument("--runtime-adaptation", default=None,
+                        help="the declared runtime adaptation this run executed under")
     args = parser.parse_args(argv)
     return export(args.checkpoint_root, args.dataset_root, args.source_root,
-                  args.results_root, top_k=args.top_k)
+                  args.results_root, top_k=args.top_k, run_id=args.run_id,
+                  command_digest=args.command_digest,
+                  environment_digest=args.environment_digest,
+                  runtime_adaptation=args.runtime_adaptation)
 
 
 if __name__ == "__main__":

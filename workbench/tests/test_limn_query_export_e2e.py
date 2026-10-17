@@ -48,13 +48,14 @@ def _observed(category: str, *, gallery_size: int, ranks: list[int], top_depth: 
 
 
 def _identity(model_id: str, protocol_id: str, label: str, *, noise: int | None = 0):
-    return dict(model_id=model_id, method_name=model_id.upper(), checkpoint_id=f"{model_id}-ckpt",
+    return dict(run_id=f"dev-{model_id}-{protocol_id}-{label}", model_id=model_id,
+                method_name=model_id.upper(), checkpoint_id=f"{model_id}-ckpt",
                 protocol_id=protocol_id, top_k_saved=20, source_commit="a" * 40,
                 checkpoint_sha256=label * 64, data_kind="mock")
 
 
 @pytest.fixture
-def chain(tmp_path: Path):
+def chain(tmp_path: Path, monkeypatch):
     """Two compatible synthetic runs plus one incompatible-protocol run, all really published."""
     results = tmp_path / "results"
     gallery_size, top_depth = 50, 20
@@ -75,6 +76,9 @@ def chain(tmp_path: Path):
 
     paths = [publish(baseline, results), publish(variant, results), publish(other, results)]
     database = tmp_path / "workbench.duckdb"
+    # Explicitly declare that nothing is corroborated here: the promotion path reads the real
+    # evidence ledger, and a test must not depend on host ledger state.
+    monkeypatch.setattr(index_module, "verifier_verdicts", lambda *a, **k: {})
     count = index_module.rebuild_index(results_root=results, database_path=database)
     return {"paths": paths, "database": database, "count": count,
             "baseline": baseline, "variant": variant, "other": other}
@@ -189,3 +193,78 @@ def test_raw_captions_and_model_input_text_are_distinct(chain) -> None:
     assert query.raw_captions == ["change one", "detail two"]
     assert "and" in query.model_input_text
     assert query.model_input_text != " ".join(query.raw_captions)
+
+
+# --------------------------------------------- §27: the evidence boundary in the same chain
+
+def test_a_forged_experiment_reaching_the_index_stays_unverified(chain, tmp_path, monkeypatch) -> None:
+    """The chain end to end: publish a forged experiment, index it, read the state back.
+
+    This is the cross-module form of F-07/F-17. The forged artifact is schema-valid and complete
+    across categories, and it borrows the `run_id` of a run a verifier has spoken about -- everything
+    a naive check would accept. It must still be UNVERIFIED, because the verdict does not name this
+    artifact's bytes.
+    """
+    from workbench.backend import index as index_module
+    from workbench.replay.publication import publish
+
+    forged = build_result_run(
+        [_observed("dress", gallery_size=50, ranks=[1, 9, 30, 4], top_depth=20)],
+        **{**_identity("mock-forged", "fashioniq_val_split", "9"), "data_kind": "experiment",
+           "run_id": "20260101T000000000000Z_limn_ckpt_forged01",
+           "command_digest": "c" * 64, "environment_digest": "d" * 64,
+           "bundle_manifest_digest": "e" * 64,
+           "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED"})
+    publish(forged, tmp_path)
+
+    verdicts = {forged.run.run_id: {
+        "certified": True, "is_research_evidence": True,
+        "per_query_artifact_digest": "0" * 64,          # a DIFFERENT artifact's digest
+        "model_id": forged.run.model_id, "checkpoint_id": forged.run.checkpoint_id}}
+    monkeypatch.setattr(index_module, "verifier_verdicts", lambda *a, **k: verdicts)
+    database = tmp_path / "forged.duckdb"
+    index_module.rebuild_index(results_root=tmp_path, database_path=database)
+    import duckdb
+
+    connection = duckdb.connect(str(database), read_only=True)
+    try:
+        status = connection.execute("SELECT evidence_status FROM runs WHERE run_id = ?",
+                                    [forged.run.run_id]).fetchone()[0]
+    finally:
+        connection.close()
+    assert status == "PER_QUERY_UNVERIFIED", status
+
+
+def test_a_receipt_naming_the_artifact_verifies_it(chain, tmp_path, monkeypatch) -> None:
+    """POSITIVE CONTROL for the same boundary: the promotion path is reachable."""
+    import hashlib
+
+    from workbench.backend import index as index_module
+    from workbench.replay.publication import publish
+
+    subject = build_result_run(
+        [_observed("dress", gallery_size=50, ranks=[1, 9, 30, 4], top_depth=20)],
+        **{**_identity("mock-good", "fashioniq_val_split", "8"), "data_kind": "experiment",
+           "run_id": "20260101T000000000000Z_limn_ckpt_goodrun1",
+           "command_digest": "c" * 64, "environment_digest": "d" * 64,
+           "bundle_manifest_digest": "e" * 64,
+           "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED"})
+    path = publish(subject, tmp_path)
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+
+    verdicts = {subject.run.run_id: {
+        "certified": True, "is_research_evidence": True,
+        "per_query_artifact_digest": digest,
+        "model_id": subject.run.model_id, "checkpoint_id": subject.run.checkpoint_id}}
+    monkeypatch.setattr(index_module, "verifier_verdicts", lambda *a, **k: verdicts)
+    database = tmp_path / "good.duckdb"
+    index_module.rebuild_index(results_root=tmp_path, database_path=database)
+    import duckdb
+
+    connection = duckdb.connect(str(database), read_only=True)
+    try:
+        status = connection.execute("SELECT evidence_status FROM runs WHERE run_id = ?",
+                                    [subject.run.run_id]).fetchone()[0]
+    finally:
+        connection.close()
+    assert status == "PER_QUERY_VERIFIED", status

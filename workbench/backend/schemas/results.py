@@ -5,6 +5,15 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+#: The ONE owner of the protocol -> literature-label map. Every other module imports this; a second
+#: copy drifted silently (`replay/publication.py` had `fashioniq_full_gallery_ref_excluded` as "val"
+#: while this file had "original") because each consumer read its own. The schema owns it because it
+#: VALIDATES the pairing below, so a disagreement here is not a matter of opinion.
+#:
+#: These labels are the LITERATURE's words for the split a paper reports. They are not the protocol:
+#: two different protocols share the label "original" because both draw on the full validation
+#: split, and they differ in whether the reference stays eligible. Executable semantics come from
+#: ``protocol_id`` alone, never from this label.
 PROTOCOL_LITERATURE_LABELS = {
     "fashioniq_original_split": "original",
     "fashioniq_full_gallery_ref_excluded": "original",
@@ -20,6 +29,10 @@ PROTOCOL_IDS = frozenset(PROTOCOL_LITERATURE_LABELS)
 #: paper gate refuses anything but ``experiment`` (``paper_gate.py:311-318``) and the verifier
 #: refuses it too (``verify_run.py:222-226``).
 DATA_KINDS = ("experiment", "mock", "synthetic")
+
+#: The FashionIQ categories a complete benchmark covers. Named here so the admission policy, the
+#: observer and the docs cannot disagree about what "complete" means.
+FASHIONIQ_CATEGORIES = ("dress", "shirt", "toptee")
 
 
 class ReportedMetrics(BaseModel):
@@ -94,6 +107,22 @@ class RunMetadata(BaseModel):
     #: unchanged. Present so an adapted run is never exported as if it were an exact
     #: reproduction; the variant labelling elsewhere keys off this value.
     runtime_adaptation: str | None = None
+    #: The declared checkpoint BUNDLE this run evaluated, as a digest over every member's
+    #: ``filename`` + content digest (``evaluate_models.manifest_digest``). A single scalar
+    #: ``checkpoint_sha256`` cannot identify LIMN's three independently trained category models: it
+    #: would be the dress weights while shirt and toptee went unrecorded, so a swapped or missing
+    #: category member would not change any identity. The digest changes if ANY member changes.
+    bundle_manifest_digest: str | None = None
+    #: The bundle members actually evaluated, keyed by name: ``{name: {filename, sha256, ...}}``.
+    #: Recorded so a reader can see WHICH member was which category, not merely that a bundle existed.
+    checkpoint_bundle: dict[str, dict] | None = None
+    #: The category-checkpoint mapping for a run whose categories use distinct weights, e.g.
+    #: ``{"dress": "base_iter0_dress", ...}``. Present so a per-category substitution is visible.
+    category_checkpoint_ids: dict[str, str] | None = None
+    #: The per-query export's own integrity: the digest of the canonical artifact and whether the
+    #: observation reproduced the native ranking. Absent on aggregate-only runs.
+    per_query_artifact_digest: str | None = None
+    instrumentation_parity: str | None = None
     timestamp: datetime
     data_kind: Literal["experiment", "mock", "synthetic"] = "experiment"
     reported_paper_metrics: ReportedMetrics = Field(default_factory=ReportedMetrics)
@@ -135,14 +164,151 @@ class ResultRun(BaseModel):
             effective_depth = min(self.run.top_k_saved, category_size)
             if len(query.top_results) != effective_depth:
                 raise ValueError("query top_results must match effective saved retrieval depth")
-            if query.target_rank > category_size:
-                raise ValueError("target_rank exceeds gallery_size")
+            # The ELIGIBLE bound when the protocol excludes the reference: under an excluded
+            # protocol the reference still occupies a rank slot in the native matrix, so the true
+            # candidate count is size-1 and the last slot is NOT retrievable. Checking only the raw
+            # gallery size accepted a phantom rank equal to the masked reference's position (F-15).
+            eligible = (self.run.category_eligible_counts or {}).get(query.category)
+            bound = min(category_size, eligible) if eligible is not None else category_size
+            if query.target_rank > bound:
+                raise ValueError(
+                    f"target_rank exceeds the eligible candidate count for {query.category} ({bound})")
             if query.target_rank <= effective_depth and query.top_results[query.target_rank - 1].image_id != query.target_id:
                 raise ValueError("target_rank does not match saved target retrieval")
             if query.target_rank > effective_depth and any(item.image_id == query.target_id for item in query.top_results):
                 raise ValueError("saved target retrieval conflicts with target_rank")
         return self
 
+
+#: The admission states a per-query artifact can be in, in decreasing trust. Derived by
+#: :func:`admission`, never by a consumer reading `data_kind`: `data_kind` is a DECLARATION the
+#: producer writes about itself, and a schema-valid JSON file must not certify its own authenticity.
+PER_QUERY_UNVERIFIED = "PER_QUERY_UNVERIFIED"
+PER_QUERY_PARITY_PENDING = "PER_QUERY_PARITY_PENDING"
+PER_QUERY_PARITY_FAILED = "PER_QUERY_PARITY_FAILED"
+PER_QUERY_VERIFIED = "PER_QUERY_VERIFIED"
+SYNTHETIC_OR_MOCK = "SYNTHETIC_OR_MOCK"
+
+#: What an experiment artifact must RECORD before any layer may call it verified evidence. Named
+#: here once so the exporter, the validator, the index and the API cannot drift apart (F-13).
+EXPERIMENT_REQUIRED_PROVENANCE = ("command_digest", "environment_digest", "bundle_manifest_digest")
+
+def admission(result: "ResultRun") -> tuple[str, list[str]]:
+    """The ONE admission policy: (state, reasons). Every entry point calls this.
+
+    The distinction this encodes is the whole point of the F-07 finding. A run's ``data_kind`` is
+    what its producer DECLARED. Whether it is *verified evidence* is a separate question answered by
+    the authoritative verifier (``scripts/verify_run.py``), which checks the evidence ledger, the
+    completion proof and metric re-extraction -- none of which is visible in the artifact itself.
+
+    This function therefore answers only what the artifact's OWN contents can support, and it is
+    deliberately conservative: a real experiment whose own recorded provenance is incomplete is
+    ``PER_QUERY_UNVERIFIED``, because the pieces its verification compares are absent. It never
+    returns ``PER_QUERY_VERIFIED``: that state requires the verifier's corroboration, so the caller
+    that HAS a verification result is the only one allowed to promote to it (see ``promote``).
+    """
+    run = result.run
+    if run.data_kind == "mock":
+        # A mock is a DECLARED development fixture: structurally valid, used to build the UI, and
+        # never evidence. It is the only kind admitted without further question.
+        return SYNTHETIC_OR_MOCK, [f"data_kind is {run.data_kind!r}: development data, never evidence"]
+    if run.data_kind != "experiment":
+        # `synthetic` is a registry-declared pipeline self-test whose evaluator prints its own
+        # aggregate. It must be REPRESENTABLE (the pipeline produces it) but it is not exempt: the
+        # verifier refuses it on its own declaration, and a strict validator must refuse it too
+        # rather than treating every non-experiment kind as a development fixture.
+        return PER_QUERY_UNVERIFIED, [
+            f"data_kind is {run.data_kind!r}: a declared self-test, not evidence about reproduction"]
+
+    reasons: list[str] = []
+    # A full FashionIQ benchmark covers all three categories. A one-category diagnostic is a
+    # legitimate thing to run, but it must never be admitted as the complete benchmark (the
+    # gateway `PC_PILOT_HANDOFF` conditions name this explicitly). Checked on the admission policy
+    # rather than in the schema so a development fixture may still be partial.
+    present = {query.category for query in result.queries}
+    if present != set(FASHIONIQ_CATEGORIES):
+        missing_categories = sorted(set(FASHIONIQ_CATEGORIES) - present)
+        reasons.append(
+            f"an experiment must cover all three FashionIQ categories; missing: {missing_categories}")
+    # LIMN's three category models are independently trained: one checkpoint must never serve two
+    # categories, and every category present must be mapped, or a substituted weight would be
+    # invisible in the recorded provenance (F-12).
+    if run.category_checkpoint_ids is not None:
+        values = list(run.category_checkpoint_ids.values())
+        if len(set(values)) != len(values):
+            reasons.append("category_checkpoint_ids reuses one checkpoint for more than one "
+                           "category; the categories are independently trained models")
+        unmapped = sorted({query.category for query in result.queries}
+                          - set(run.category_checkpoint_ids))
+        if unmapped:
+            reasons.append(f"category_checkpoint_ids is missing categories present in queries: {unmapped}")
+    missing = [field for field in EXPERIMENT_REQUIRED_PROVENANCE if not getattr(run, field)]
+    if not run.checkpoint_sha256 and not run.bundle_manifest_digest:
+        missing.append("checkpoint_sha256 or bundle_manifest_digest")
+    if missing:
+        reasons.append("the artifact does not record the provenance its verification needs: "
+                       + ", ".join(missing))
+    if run.instrumentation_parity == "INSTRUMENTATION_PARITY_MISMATCH":
+        reasons.append("instrumentation parity failed: the observed ranking does not reproduce the "
+                       "native hit counts")
+        return PER_QUERY_PARITY_FAILED, reasons
+    if run.instrumentation_parity is None:
+        reasons.append("instrumentation parity has not been recorded for this artifact")
+        return PER_QUERY_PARITY_PENDING, reasons
+    if run.instrumentation_parity != "INSTRUMENTATION_PARITY_VERIFIED":
+        reasons.append(f"unrecognized instrumentation parity state {run.instrumentation_parity!r}")
+        return PER_QUERY_UNVERIFIED, reasons
+    if reasons:
+        # Provenance incomplete: the artifact cannot be promoted even by a verifier, because the
+        # digests that tie it to an invocation are absent.
+        return PER_QUERY_UNVERIFIED, reasons
+    # Everything the artifact can prove about itself is present. That is still not verification:
+    # the verifier must corroborate it against the ledger and the completion proof.
+    return PER_QUERY_UNVERIFIED, ["awaiting corroboration by the authoritative verifier "
+                                  "(evidence ledger + completion proof)"]
+
+def promote(result: "ResultRun", state: str, verifier_verdict: dict | None,
+            artifact_digest: str | None = None) -> tuple[str, list[str]]:
+    """Apply the authoritative verifier's verdict to an admission state.
+
+    Only the verifier can move a run to ``PER_QUERY_VERIFIED``, and only for the artifact it actually
+    spoke about. A positive verdict about a run_id is NOT enough on its own: an attacker who knows a
+    verified run's id could write a per-query artifact claiming it, and a run_id-only check would
+    promote fabricated rankings. The verdict must therefore name THIS artifact -- by digest, model and
+    checkpoint -- or the promotion is refused.
+
+    ``verifier_verdict`` is the receipt the API already serves: it carries the aggregate report's
+    identity and, when the run exported per-query results, the digest of that artifact as recorded in
+    the HMAC-ledgered report.
+    """
+    if state != PER_QUERY_UNVERIFIED:
+        return state, []
+    if not verifier_verdict:
+        return state, []
+    reasons = list(verifier_verdict.get("evidence_reasons") or [])
+    if not all(verifier_verdict.get(key) is True for key in ("certified", "is_research_evidence")):
+        return state, reasons
+
+    # The verdict must identify THIS artifact. `per_query_artifact_digest` is computed by the parent
+    # evaluator over the bytes the observer wrote and carried in the report the ledger signs, so a
+    # match means the corroborated report pointed at exactly these bytes.
+    recorded = verifier_verdict.get("per_query_artifact_digest")
+    # The digest must come from the BYTES ON DISK, computed by the reader, never from a field the
+    # artifact writes about itself: that would let a forged file nominate its own digest and pass.
+    claimed = artifact_digest or result.run.per_query_artifact_digest
+    if not recorded or not claimed:
+        return state, ["the verifier's receipt does not bind a per-query artifact digest, so this "
+                       "artifact cannot be attributed to the verified run"]
+    if recorded != claimed:
+        return state, [f"the artifact digest {claimed[:16]}... is not the digest the verified run "
+                       f"recorded ({recorded[:16]}...); this artifact is not the one that was checked"]
+    # ...and both must agree on WHICH run they describe.
+    for field in ("model_id", "checkpoint_id"):
+        expected = verifier_verdict.get(field)
+        if expected is not None and getattr(result.run, field) != expected:
+            return state, [f"the verifier's receipt describes {field}={expected!r}, not "
+                           f"{getattr(result.run, field)!r}"]
+    return PER_QUERY_VERIFIED, reasons
 
 class Annotation(BaseModel):
     query_id: str

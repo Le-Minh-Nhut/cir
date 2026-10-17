@@ -609,3 +609,90 @@ def test_an_incomplete_limn_bundle_is_refused_and_the_member_is_named(monkeypatc
     assert plan is None
     assert [r for r in reasons if r.startswith("checkpoint bundle incomplete")] == [
         f"checkpoint bundle incomplete: {bundle['bundle_id']}: {missing}"], reasons
+
+
+# ---------------------------------------------------------------- F-08: observation integration
+
+def test_execute_invokes_the_observer_with_this_invocations_identity(monkeypatch, tmp_path: Path) -> None:
+    """F-08: the per-query observer must run as part of the SAME run, not as a separate experiment.
+
+    This drives `execute()` with a stubbed evaluator and a stubbed observation module, and asserts
+    the exact argv the observer receives: the authoritative `run_id`, and the AGGREGATE invocation's
+    command/environment digests (which the observer cannot derive for itself, because it runs a
+    different command).
+    """
+    module = load_module()
+    captured: dict = {}
+
+    def fake_invoke(plan, config, run_id, root):
+        directory = tmp_path / "logs" / f"{plan.model_id}__{plan.checkpoint_id}__{run_id}"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "stdout.log").write_text('{"dress_r1": 1.0, "dress_r10": 2.0, "dress_r50": 3.0}')
+        (directory / "stderr.log").write_text("")
+        return 0, directory, {"orchestrator_python": "3", "platform": "test"}
+
+    artifact = tmp_path / "published.json"
+
+    def fake_run(argv, **kwargs):
+        captured["argv"] = argv
+        captured["cwd"] = kwargs.get("cwd")
+
+        class Done:
+            returncode = 0
+            stdout = json.dumps({"published": str(artifact), "run_id": "x"})
+            stderr = ""
+        # Write a minimal valid artifact the parent will re-validate.
+        return Done()
+
+    monkeypatch.setattr(module, "invoke_evaluator", fake_invoke)
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    monkeypatch.setattr(module, "extract_aggregate_metrics",
+                        lambda *a, **k: type("E", (), {
+                            "extraction_status": "EXTRACTED_VERIFIED", "parser_id": "limn_structured_json",
+                            "parser_version": 1, "observed_metrics": {"r10": 1.0, "r50": 2.0, "mean": 1.5},
+                            "category_metrics": None, "parity_status": "PARITY_NOT_EVALUATED",
+                            "metric_source": "stdout"})())
+
+    plan = module.EvaluationPlan(
+        model_id="limn", checkpoint_id="base_iter0_all_categories", protocol="fashioniq_val_split",
+        dataset_root=tmp_path, source=tmp_path, checkpoint=tmp_path / "ckpt",
+        cwd=tmp_path, command=[sys.executable, "x"], pin="a" * 40,
+        actual_source_commit="a" * 40, paper_metrics=None)
+    settings = config(tmp_path)
+
+    run_id = "20260101T000000000000Z_limn_base_iter0_all_categories_deadbeef"
+    module.execute(plan, settings, run_id=run_id)
+
+    argv = captured.get("argv")
+    assert argv is not None, "the observer was never invoked (F-08)"
+    assert "workbench.replay.limn_export" in " ".join(argv)
+    # The SAME identity: the artifact is bound to this invocation, not to an identity of its own.
+    assert argv[argv.index("--run-id") + 1] == run_id
+    # The aggregate invocation's digests, forwarded so the artifact can be verified.
+    assert "--command-digest" in argv and "--environment-digest" in argv
+
+
+def test_the_evaluation_module_does_not_widen_limns_traced_environment() -> None:
+    """The regression that broke cold start twice, pinned as a contract.
+
+    `environment_planner._evaluator_imports` walks `workbench/replay/limn.py` to decide which
+    interpreter LIMN needs, and it follows imports through every module reachable from there --
+    including function-local ones, because it uses `ast.walk`. `backend/runtime` lazily imports this
+    module, so ANY new top-level or function-local import added here becomes a declared requirement
+    of LIMN's environment unless it is already on the path.
+
+    Adding `workbench.backend.schemas.results` here (for pydantic) made the planner demand an
+    interpreter for pydantic, provisioning failed, and the cold-start run stopped before evaluation.
+    The parent verifies what it can from raw JSON instead; the admission verdict belongs to the index
+    and API, which are not on this graph.
+    """
+    from pathlib import Path as _Path
+
+    from workbench.backend.environment_planner import _evaluator_imports
+    from workbench.backend.registry import model_by_id
+
+    traced = _evaluator_imports(model_by_id("limn"), _Path("workbench/third_party")) or set()
+    # pydantic is not a LIMN runtime dependency: it arrives only through the canonical result schema.
+    assert "pydantic" not in traced, f"pydantic leaked into LIMN's traced imports: {sorted(traced)}"
+    # And the modules that must remain reachable still are.
+    assert {"torch", "open_clip", "numpy"} <= set(traced), sorted(traced)

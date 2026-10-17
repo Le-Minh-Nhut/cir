@@ -30,13 +30,14 @@ def _placeholders(values: list[str]) -> str:
 def list_runs(protocol_id: str | None = None, database_path: Path | None = None) -> list[dict[str, Any]]:
     connection = _connect(database_path)
     try:
-        sql = "SELECT metadata FROM runs"
+        sql = "SELECT metadata, evidence_status FROM runs"
         params: list[str] = []
         if protocol_id is not None:
             sql += " WHERE protocol_id = ?"
             params.append(protocol_id)
         sql += " ORDER BY run_id"
-        return [json.loads(metadata) for (metadata,) in connection.execute(sql, params).fetchall()]
+        return [{**json.loads(metadata), "evidence_status": evidence_status}
+                for metadata, evidence_status in connection.execute(sql, params).fetchall()]
     finally:
         connection.close()
 
@@ -57,10 +58,17 @@ def get_runs(run_ids: list[str], database_path: Path | None = None) -> list[dict
         raise WorkbenchError("run_not_found", "Run selection must contain distinct run IDs.", {"requested_run_ids": run_ids})
     connection = _connect(database_path)
     try:
-        rows = connection.execute(f"SELECT run_id, metadata FROM runs WHERE run_id IN ({_placeholders(run_ids)})", run_ids).fetchall()
+        rows = connection.execute(
+            f"SELECT run_id, metadata, evidence_status FROM runs WHERE run_id IN ({_placeholders(run_ids)})",
+            run_ids).fetchall()
     finally:
         connection.close()
-    records = {run_id: json.loads(metadata) for run_id, metadata in rows}
+    # `evidence_status` is an INDEX column, not part of the stored metadata, so reading only
+    # `metadata` silently dropped it -- the API served run records with the evidence state missing,
+    # and the frontend then fell back to trusting `data_kind`. Merged here so the truth the index
+    # computed actually reaches the consumer.
+    records = {run_id: {**json.loads(metadata), "evidence_status": evidence_status}
+               for run_id, metadata, evidence_status in rows}
     missing = [run_id for run_id in run_ids if run_id not in records]
     if missing:
         raise WorkbenchError("run_not_found", "One or more run IDs were not found.", {"requested_run_ids": run_ids, "missing_run_ids": missing})

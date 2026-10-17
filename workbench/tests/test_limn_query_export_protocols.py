@@ -176,3 +176,41 @@ def test_registry_membership_matches_the_declared_protocols() -> None:
         assert native is None or native in declared, (model["model_id"], native)
         for supported in model.get("supported_protocols") or []:
             assert supported in declared, (model["model_id"], supported)
+
+
+def test_protocol_literature_labels_have_exactly_one_owner() -> None:
+    """A second copy of this map drifted silently, so the contract is pinned.
+
+    `replay/publication.py` mapped `fashioniq_full_gallery_ref_excluded` to "val" while the schema
+    mapped it to "original". Neither consumer could notice, because each read its own module. The
+    schema owns the map (it validates the pairing); everyone else must import it, and the exact
+    three mappings are asserted here so a future divergence fails loudly.
+    """
+    import workbench.backend.schemas.results as schema
+    import workbench.replay.publication as publication
+
+    assert publication.PROTOCOL_LITERATURE_LABELS is schema.PROTOCOL_LITERATURE_LABELS, \
+        "publication must import the schema's map, not restate it"
+    assert schema.PROTOCOL_LITERATURE_LABELS == {
+        "fashioniq_original_split": "original",
+        "fashioniq_full_gallery_ref_excluded": "original",
+        "fashioniq_val_split": "val",
+    }
+
+
+def test_no_other_module_restates_the_protocol_label_map() -> None:
+    """Scan the first-party tree for a second literal copy of the mapping."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    owners = {"workbench/backend/schemas/results.py"}
+    offenders = []
+    for path in list(root.glob("workbench/**/*.py")) + list(root.glob("src/**/*.py")):
+        rel = path.relative_to(root).as_posix()
+        if rel in owners or "/tests/" in rel or "__pycache__" in rel:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if re.search(r"fashioniq_full_gallery_ref_excluded\s*:\s*[\"'](?:val|original)[\"']", text):
+            offenders.append(rel)
+    assert offenders == [], f"protocol label map restated in: {offenders}"

@@ -1490,6 +1490,82 @@ def record_invocation_outcome(directory: Path, config: WorkbenchConfig, *, run_i
     return payload
 
 
+def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
+                     directory: Path, command_digest: str | None,
+                     environment_digest: str | None) -> tuple[Path | None, str, str | None, str | None]:
+    """Run the per-query observer as a child of the model's interpreter, then verify its artifact.
+
+    Returns ``(artifact_path, note, artifact_digest, parity)``. The artifact digest is computed HERE,
+    by the parent, from the bytes the child wrote — the child never reports the digest of its own
+    output, because a child evaluator must not self-certify.
+
+    Observation is deliberately non-fatal: the aggregate evaluation already succeeded and is the
+    authoritative result, so a missing per-query artifact is recorded as a reason, not an error. What
+    it must never do is make an unverified artifact look verified, which is why the artifact is
+    re-validated and its admission state recomputed by the parent.
+    """
+    results_root = getattr(config, "WORKBENCH_RESULTS_ROOT",
+                           Path(config.WORKBENCH_ARTIFACTS_ROOT) / "results")
+    interpreter = plan.command[0] if plan.command else sys.executable
+    child_env = dict(os.environ)
+    child_env["PYTHONPATH"] = str(Path(__file__).resolve().parents[2])
+    argv = [interpreter, "-m", "workbench.replay.limn_export",
+            "--checkpoint-root", str(plan.checkpoint.parent),
+            "--dataset-root", str(plan.dataset_root),
+            "--source-root", str(plan.source),
+            "--results-root", str(results_root),
+            "--run-id", run_id]
+    # The observer runs a DIFFERENT command than the aggregate, so its own digests would describe
+    # the wrong invocation. The parent passes the aggregate invocation's digests, which it owns.
+    if command_digest:
+        argv += ["--command-digest", command_digest]
+    if environment_digest:
+        argv += ["--environment-digest", environment_digest]
+    adaptation = (getattr(plan, "variant_provenance", None) or {}).get("adapted_runtime")
+    if isinstance(adaptation, dict) and adaptation.get("runtime_adaptation"):
+        argv += ["--runtime-adaptation", str(adaptation["runtime_adaptation"])]
+    try:
+        completed = subprocess.run(argv, cwd=str(plan.cwd), env=child_env, text=True,
+                                   capture_output=True, timeout=3600)
+    except (OSError, subprocess.SubprocessError) as error:
+        return None, f"observer could not run: {type(error).__name__}: {error}", None, None
+    (directory / "observation.stdout.log").write_text(completed.stdout or "", encoding="utf-8")
+    (directory / "observation.stderr.log").write_text(completed.stderr or "", encoding="utf-8")
+    if completed.returncode != 0:
+        tail = (completed.stderr or completed.stdout or "").strip().splitlines()[-3:]
+        return None, f"observer exited {completed.returncode}: {' | '.join(tail)}", None, None
+
+    try:
+        import json as _json
+        payload = _json.loads(completed.stdout)
+        artifact = Path(payload["published"])
+    except (ValueError, KeyError, TypeError):
+        return None, "observer did not report a published artifact path", None, None
+    if not artifact.is_file():
+        return None, f"observer reported {artifact}, which does not exist", None, None
+
+    # Parent-side checks, deliberately WITHOUT importing the canonical schema: this module is on the
+    # traced import graph for LIMN's interpreter (runtime imports it lazily), so pulling pydantic in
+    # here would make the environment planner demand an interpreter for it and break cold start --
+    # the exact regression isolated earlier. The parent therefore does what it alone can do: confirm
+    # the bytes are a canonical artifact, compute the digest from them, and confirm the artifact
+    # claims THIS invocation. The authoritative admission verdict is computed by the index and the
+    # API (which are not on this graph) from the digest recorded here.
+    try:
+        payload = json.loads(artifact.read_text())
+        claimed_run = payload["run"]["run_id"]
+        parity = payload["run"].get("instrumentation_parity")
+        data_kind = payload["run"].get("data_kind")
+    except (ValueError, KeyError, TypeError) as error:
+        return None, f"observer artifact is not a readable canonical result: {error}", None, None
+    if claimed_run != run_id:
+        return None, (f"observer artifact claims run {claimed_run!r}, not this invocation "
+                      f"{run_id!r}"), None, None
+    digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    note = f"artifact exported (data_kind={data_kind!r}); admission is the verifier's to decide"
+    return artifact, note, digest, parity
+
+
 def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = None) -> int:
     started = datetime.now(timezone.utc)
     run_id = validate_run_id(run_id) if run_id else make_run_id(plan, started)
@@ -1593,6 +1669,19 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
                 category_metrics=declared["categories"],
             )
 
+    # Per-query observation, bound to THIS invocation (F-08/F-09/F-11/F-12). It runs as a separate
+    # process under the model's own interpreter because in production the parent cannot import the
+    # model environment; the parent then VERIFIES what the child wrote rather than trusting it. A
+    # failure here never changes the aggregate result, and never promotes anything.
+    observation_note = "not attempted"
+    per_query_artifact = None
+    per_query_artifact_digest = None
+    instrumentation_parity = None
+    if code == 0 and plan.model_id == "limn":
+        per_query_artifact, observation_note, per_query_artifact_digest, instrumentation_parity = \
+            _run_observation(plan, config, run_id, directory,
+                             metadata.get("command_digest"), metadata.get("environment_digest"))
+
     paper = plan.paper_metrics or {}
     gate_verdict = _benchmark_gate_verdict(plan, extraction, code)
     report = {
@@ -1608,7 +1697,11 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "execution_status": "EXECUTION_COMPLETED" if code == 0 else "EXECUTION_FAILED",
         "invocation_status": invocation_status,
         "reproduction_status": extraction.extraction_status,
-        "per_query_export_available": False,
+        "per_query_export_available": per_query_artifact is not None,
+        "per_query_export_reason": observation_note,
+        "per_query_artifact": str(per_query_artifact) if per_query_artifact else None,
+        "per_query_artifact_digest": per_query_artifact_digest,
+        "instrumentation_parity": instrumentation_parity,
         "extraction_status": extraction.extraction_status,
         "metric_extraction_available": extraction.observed_metrics is not None,
         "parser_id": extraction.parser_id,

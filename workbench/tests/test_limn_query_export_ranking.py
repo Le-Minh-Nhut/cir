@@ -168,3 +168,266 @@ def test_scores_are_finite_for_eligible_results() -> None:
     assert all(np.isfinite(score) for score in eligible)
     masked = [score for _, gallery, score in top[0] if gallery == 0]
     assert masked == [NATIVE_REFERENCE_MASK]
+
+
+# ----------------------------------------------------------------- F-16: non-finite refusal
+
+def test_zero_norm_feature_is_refused_not_ranked() -> None:
+    """A zero-norm row would normalize to NaN, and the sort would then be decided by the mask.
+
+    NumPy produces a ranking here (the masked reference's negated score is a large finite number,
+    which `np.argsort` places ahead of every NaN), so without a guard the observer would report the
+    reference at rank 1 and the target below it -- a plausible ranking built from nothing.
+    """
+    from workbench.replay.limn_observer import NonFiniteRanking
+
+    queries = np.array([[0.0, 0.0]])
+    targets = np.eye(2)
+    with pytest.raises(NonFiniteRanking, match="zero norm"):
+        rank_queries(queries, targets, reference_positions=[1], target_positions=[0])
+
+
+def test_nan_feature_is_refused() -> None:
+    from workbench.replay.limn_observer import NonFiniteRanking
+
+    with pytest.raises(NonFiniteRanking, match="NaN or infinity"):
+        rank_queries(np.array([[np.nan, 1.0]]), np.eye(2), reference_positions=[1], target_positions=[0])
+
+
+def test_infinite_feature_is_refused() -> None:
+    from workbench.replay.limn_observer import NonFiniteRanking
+
+    with pytest.raises(NonFiniteRanking, match="NaN or infinity"):
+        rank_queries(np.array([[np.inf, 1.0]]), np.eye(2), reference_positions=[1], target_positions=[0])
+
+
+def test_non_finite_similarity_check_is_defensive_and_documented_as_such() -> None:
+    """The similarity guard is unreachable through this code path, and saying so is the honest test.
+
+    A `1e308` raw feature normalizes to `1.0` (L2 normalization divides by the magnitude), so
+    finite inputs cannot produce an infinite dot product here. The guard stays as defence in depth
+    for a caller that passes already-normalized-but-huge data; what this test pins is the fact that
+    enormous magnitudes are handled by normalization, not by the guard.
+    """
+    huge = np.array([[1e308, 1e308]])
+    ranks, top = rank_queries(huge, huge.copy(), reference_positions=[0], target_positions=[0])
+    assert ranks == [1]
+    assert all(np.isfinite(score) for _, _, score in top[0])
+
+
+def test_valid_negative_and_positive_embeddings_are_still_accepted() -> None:
+    """POSITIVE CONTROL: the refusal must not reject legitimate signed embeddings."""
+    queries = np.array([[-1.0, -1.0], [1.0, -1.0]])
+    targets = np.array([[-1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]])
+    ranks, top = rank_queries(queries, targets, reference_positions=[2, 2], target_positions=[0, 1])
+    # Query 0 matches gallery 0 exactly (rank 1). Query 1 ties gallery 0 and 1 at 0.0, and the tie
+    # resolves ascending by index, so its target (gallery 1) is rank 2. Gallery 2 is the reference.
+    assert ranks == [1, 2]
+    assert all(np.isfinite(score) for _, _, score in top[0])
+
+
+# ----------------------------------------------------------------- F-15: native vs eligible
+
+def test_the_masked_reference_always_sorts_last_for_normalized_features() -> None:
+    """F-15, resolved: the mask cannot leak into the Top-K for realistic inputs.
+
+    The auditor's differing case requires a similarity at or below -1e11. LIMN normalizes every
+    feature row to unit length before `dot`, so each similarity is bounded by 1 in absolute value --
+    the mask (-1e11) therefore always sorts last, and the reference can never appear as a candidate.
+    The auditor's own trigger (scores <= -1e11) is unreachable through this code path; what IS
+    reachable is the version where the pre-normalization magnitude is huge, and that collapses to
+    -1 as shown here.
+
+    This is asserted rather than assumed because the equivalence between "masked ranking" and
+    "eligible ranking" is exactly what the export's eligibility claim rests on.
+    """
+    queries = np.array([[1.0, 0.0]])
+    # Magnitudes chosen to be enormous in the RAW vector; normalization collapses them to +/-1.
+    targets = np.array([[-2e11, 0.0], [1.0, 0.0], [-3e11, 0.0]])
+    _, top = rank_queries(queries, targets, reference_positions=[1], target_positions=[0], top_k=3)
+    assert [gallery for _, gallery, _ in top[0]] == [0, 2, 1], "the masked reference must sort last"
+    assert all(abs(score) <= 1.0 + 1e-9 for _, gallery, score in top[0] if gallery != 1)
+
+
+def test_a_tied_candidate_set_cannot_be_reordered_by_the_masked_column() -> None:
+    """Ties are where a retained column could change the sort; with the mask last, they cannot.
+
+    The auditor's second case (unstable quicksort reordering ties because the reference occupies an
+    index) is only reachable if the reference participates in the comparison range. Since the mask
+    sorts last for normalized features, the candidates' relative order is decided among themselves.
+    """
+    size = 10
+    queries = np.ones((1, 2))
+    targets = np.ones((size, 2))          # every candidate ties
+    _, top = rank_queries(queries, targets, reference_positions=[0], target_positions=[1],
+                          top_k=size)
+    order = [gallery for _, gallery, _ in top[0]]
+    assert order[-1] == 0, "the masked reference is last even in a fully tied field"
+    assert sorted(order[:-1]) == sorted(range(1, size)), "all real candidates remain eligible"
+
+
+def test_eligible_ranking_excludes_the_reference_and_reports_the_true_candidate_universe() -> None:
+    """The observer's export must not offer the reference as a retrievable candidate (F-15).
+
+    `observe_category` records `eligible_count = gallery_size - 1` under an excluded protocol, and
+    the schema bounds `target_rank` by that count, so a rank that only exists because the masked
+    reference occupies a slot cannot be published as a valid candidate position.
+    """
+    from workbench.backend.schemas.results import ResultRun, admission  # noqa: F401
+
+    # The schema-level guarantee is asserted in the publication tests; here the ranking primitive
+    # is checked: for realistic (finite, bounded) scores the mask always sorts last.
+    queries = np.array([[1.0, 0.0]])
+    targets = np.array([[0.5, 0.0], [1.0, 0.0], [0.25, 0.0]])
+    _, top = rank_queries(queries, targets, reference_positions=[1], target_positions=[0], top_k=3)
+    assert [gallery for _, gallery, _ in top[0]] == [0, 2, 1], "reference must sort last"
+
+
+def test_saved_depth_never_exceeds_the_eligible_candidate_count() -> None:
+    """F-15: a protocol that excludes the reference must not save it as a retrieved image.
+
+    With `top_k >= gallery_size` the native column for the reference is still present, so a naive
+    implementation would return it as the last "retrieved" candidate. The export bounds the saved
+    depth by `gallery_size - 1` instead, which is the true candidate universe.
+    """
+    size = 5
+    queries = np.ones((1, size))
+    targets = np.eye(size)
+    _, top = rank_queries(queries, targets, reference_positions=[0], target_positions=[1],
+                          top_k=size - 1)
+    assert len(top[0]) == size - 1, "save exactly the eligible candidates"
+    assert all(gallery != 0 for _, gallery, _ in top[0]), "the reference must not be offered"
+
+    # The native call with the raw size still returns it -- which is why the bound lives in the
+    # exporter, not in the ranking primitive that must stay native-faithful.
+    _, unbounded = rank_queries(queries, targets, reference_positions=[0], target_positions=[1],
+                                top_k=size)
+    assert len(unbounded[0]) == size
+    assert unbounded[0][-1][1] == 0, "unbounded, the masked reference is the last entry"
+
+
+# ------------------------------------------------- query identity and cache freshness
+
+def _dataset(tmp_path: Path, category: str = "dress") -> tuple[list[str], list[dict], Path]:
+    import json as _json
+
+    images = [f"img{i}" for i in range(4)]
+    annotations = [
+        {"candidate": "img0", "target": "img1", "captions": ["a red shirt", "is blue"]},
+        {"candidate": "img2", "target": "img3", "captions": ["a small bag", "with straps"]},
+    ]
+    (tmp_path / "image_splits").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "captions").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "image_splits" / f"split.{category}.val.json").write_text(_json.dumps(images))
+    (tmp_path / "captions" / f"cap.{category}.val.json").write_text(_json.dumps(annotations))
+    return images, annotations, tmp_path
+
+
+def _native_queries(images: list[str], annotations: list[dict], correction: dict | None = None) -> list[dict]:
+    from workbench.replay.limn_observer import expected_model_input
+
+    correction = correction or {}
+    return [
+        {"source_img_id": images.index(record["candidate"]),
+         "target_img_id": images.index(record["target"]),
+         "mod": {"str": expected_model_input(record["captions"], correction)}}
+        for record in annotations
+    ]
+
+
+def test_aligned_native_queries_are_accepted(tmp_path: Path) -> None:
+    """POSITIVE CONTROL: a correctly cached query set must pass."""
+    from workbench.replay.limn_observer import assert_alignment
+
+    images, annotations, root = _dataset(tmp_path)
+    assert_alignment("dress", _native_queries(images, annotations), images, annotations, root)
+
+
+def test_a_shuffled_cache_is_detected(tmp_path: Path) -> None:
+    """A reordered cache keeps counts equal but mislabels every query -- the dangerous case."""
+    from workbench.replay.limn_observer import QueryAlignmentError, assert_alignment
+
+    images, annotations, root = _dataset(tmp_path)
+    queries = list(reversed(_native_queries(images, annotations)))
+    with pytest.raises(QueryAlignmentError, match="not aligned"):
+        assert_alignment("dress", queries, images, annotations, root)
+
+
+def test_a_truncated_cache_is_detected(tmp_path: Path) -> None:
+    from workbench.replay.limn_observer import QueryAlignmentError, assert_alignment
+
+    images, annotations, root = _dataset(tmp_path)
+    queries = _native_queries(images, annotations)[:1]
+    with pytest.raises(QueryAlignmentError, match="does not match this dataset"):
+        assert_alignment("dress", queries, images, annotations, root)
+
+
+def test_a_swapped_reference_and_target_is_detected(tmp_path: Path) -> None:
+    from workbench.replay.limn_observer import QueryAlignmentError, assert_alignment
+
+    images, annotations, root = _dataset(tmp_path)
+    queries = _native_queries(images, annotations)
+    queries[0]["source_img_id"], queries[0]["target_img_id"] = (
+        queries[0]["target_img_id"], queries[0]["source_img_id"])
+    with pytest.raises(QueryAlignmentError, match="reference is"):
+        assert_alignment("dress", queries, images, annotations, root)
+
+
+def test_a_cache_built_from_other_captions_is_detected(tmp_path: Path) -> None:
+    """Ids can still resolve while the text came from different captions; composition catches it."""
+    import json as _json
+
+    from workbench.replay.limn_observer import QueryAlignmentError, assert_alignment
+
+    images, annotations, root = _dataset(tmp_path)
+    (root / "captions" / "correction_dict_dress.json").write_text(_json.dumps({}))
+    queries = _native_queries(images, annotations)
+    queries[0]["mod"]["str"] = "something else entirely"
+    with pytest.raises(QueryAlignmentError, match="model input text"):
+        assert_alignment("dress", queries, images, annotations, root)
+
+
+def test_without_an_on_disk_dictionary_composition_cannot_be_checked(tmp_path: Path) -> None:
+    """The honest limit of the check: ids are verified, text is only verifiable when the dictionary
+    in force is on disk. Documented here so the guarantee is not overstated."""
+    from workbench.replay.limn_observer import assert_alignment
+
+    images, annotations, root = _dataset(tmp_path)
+    queries = _native_queries(images, annotations)
+    queries[0]["mod"]["str"] = "unverifiable but non-empty"
+    (root / "captions" / "correction_dict_dress.json").unlink(missing_ok=True)
+    assert_alignment("dress", queries, images, annotations, root)
+
+
+def test_a_stale_correction_dictionary_is_detected(tmp_path: Path) -> None:
+    """A different correction dictionary changes every query's text while ids stay aligned."""
+    import json as _json
+
+    from workbench.replay.limn_observer import QueryAlignmentError, assert_alignment
+
+    images, annotations, root = _dataset(tmp_path)
+    (root / "captions" / "correction_dict_dress.json").write_text(_json.dumps({"shirt": "dress"}))
+    # Cached with NO correction applied, while the on-disk dictionary would have rewritten "shirt".
+    queries = _native_queries(images, annotations)
+    with pytest.raises(QueryAlignmentError, match="correction dictionary"):
+        assert_alignment("dress", queries, images, annotations, root)
+
+
+def test_an_out_of_range_image_position_is_detected(tmp_path: Path) -> None:
+    from workbench.replay.limn_observer import QueryAlignmentError, assert_alignment
+
+    images, annotations, root = _dataset(tmp_path)
+    queries = _native_queries(images, annotations)
+    queries[0]["source_img_id"] = 99
+    with pytest.raises(QueryAlignmentError, match="outside split"):
+        assert_alignment("dress", queries, images, annotations, root)
+
+
+def test_expected_model_input_matches_the_pinned_composition() -> None:
+    """The composition rule itself: lowercase, punctuation stripped, dict applied, joined by ' and '."""
+    from workbench.replay.limn_observer import expected_model_input
+
+    assert expected_model_input(["A Red Shirt!", "IS blue."], {}) == "a red shirt and is blue"
+    assert expected_model_input(["a shirt", "is long"], {"shirt": "dress"}) == "a dress and is long"
+    # Punctuation becomes whitespace, then tokens are rejoined with single spaces.
+    assert expected_model_input(["a,b", "c-d"], {}) == "a b and c d"

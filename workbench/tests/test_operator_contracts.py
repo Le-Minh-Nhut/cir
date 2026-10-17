@@ -66,23 +66,94 @@ def test_doctor_reports_csmcir_and_encoder_runtime_blockers(monkeypatch: pytest.
 
 
 def test_strict_real_validation_rejects_missing_provenance(tmp_path: Path) -> None:
-    """The subject is the MISSING-PROVENANCE check, so the fixture must be valid in every other
-    respect -- a derived-consistent run_id and no provenance digests -- or the test would pass on
-    whichever check happened to run first and stop guarding the one it names."""
-    from workbench.replay.publication import run_id_for
+    """`--strict-real` refuses an experiment whose own verification inputs are absent.
 
+    The message now comes from the ONE admission policy (`schemas.results.admission`), so the
+    validator and the index cannot disagree about this artifact -- which was F-13. The subject of
+    the test is unchanged: a declared experiment missing its provenance is refused.
+    """
     artifact = tmp_path / "real.json"
     payload = build_mock_runs()[0].model_dump(mode="json")
     payload["run"]["data_kind"] = "experiment"
-    payload["run"]["run_id"] = run_id_for(
-        model_id=payload["run"]["model_id"], checkpoint_id=payload["run"]["checkpoint_id"],
-        protocol_id=payload["run"]["protocol_id"], source_commit=None, checkpoint_sha256=None)
+    payload["run"]["run_id"] = "20260101T000000000000Z_mock_csmcir_fiq_a_deadbeef"
+    payload["run"]["instrumentation_parity"] = "INSTRUMENTATION_PARITY_VERIFIED"
     artifact.write_text(json.dumps(payload), encoding="utf-8")
     output: list[str] = []
 
     assert not validate_file(artifact, strict_real=True, output=output.append)
-    assert output[0] == (f"[BLOCKED] {payload['run']['run_id']}: missing provenance: "
-                         "upstream_commit, checkpoint_sha256, command_digest, environment_digest")
+    joined = " ".join(output)
+    assert "command and environment digests" in joined, joined
+
+
+def test_a_complete_experiment_is_admitted_but_only_the_verifier_promotes_it(tmp_path: Path) -> None:
+    """The positive path, stated honestly: a complete artifact is ADMITTED, and its promotion to
+    verified evidence is the authoritative verifier's decision alone.
+
+    A release gate that refuses everything is useless, so this asserts the admitted case. It also
+    asserts that `--strict-real` still refuses an UNVERIFIED experiment -- because an artifact whose
+    numbers nobody corroborated must not pass a release gate -- and that a verifier verdict is what
+    changes that. That pairing is the whole point of F-07.
+    """
+    from workbench.backend.schemas.results import (
+        FASHIONIQ_CATEGORIES, PER_QUERY_UNVERIFIED, PER_QUERY_VERIFIED, admission, promote,
+    )
+
+    base = build_mock_runs()[0]
+    payload = base.model_dump(mode="json")
+    payload["run"].update({
+        "data_kind": "experiment",
+        "run_id": "20260101T000000000000Z_mock_fiq_a_deadbeef",
+        "command_digest": "c" * 64, "environment_digest": "d" * 64,
+        "bundle_manifest_digest": "e" * 64,
+        "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED",
+    })
+    queries = []
+    for index, category in enumerate(FASHIONIQ_CATEGORIES):
+        reference, target = f"ref-{category}", f"target-{category}"
+        queries.append({
+            "query_id": f"{category}:{index}:{reference}:{target}", "category": category,
+            "annotation_index": index, "reference_id": reference, "target_id": target,
+            "raw_captions": ["one", "two"], "model_input_text": "one and two",
+            "target_rank": 1,
+            "top_results": [{"rank": rank, "image_id": target if rank == 1 else f"d-{rank}",
+                             "score": 1.0 - rank / 100} for rank in range(1, 201)],
+        })
+    payload["queries"] = queries
+    artifact = tmp_path / "complete.json"
+    artifact.write_text(json.dumps(payload), encoding="utf-8")
+
+    from workbench.backend.schemas.results import ResultRun
+
+    result = ResultRun.model_validate(payload)
+    state, reasons = admission(result)
+    # The artifact's own content cannot promote it: no provenance problem remains, but a verifier
+    # has not spoken, so the honest state is UNVERIFIED.
+    assert state == PER_QUERY_UNVERIFIED, (state, reasons)
+    assert not any("missing" in reason or "reuse" in reason for reason in reasons), reasons
+
+    # The verifier's verdict is the only thing that promotes it -- and only for the artifact it
+    # actually named. The receipt must bind THIS artifact's digest (see the adversarial finding:
+    # a run_id-only check let fabricated rankings borrow a verified run's identity).
+    digest = "a" * 64
+    result = result.model_copy(update={"run": result.run.model_copy(
+        update={"per_query_artifact_digest": digest})})
+    verdict = {"certified": True, "is_research_evidence": True,
+               "per_query_artifact_digest": digest, "model_id": result.run.model_id,
+               "checkpoint_id": result.run.checkpoint_id}
+    assert promote(result, state, verdict)[0] == PER_QUERY_VERIFIED
+    # A refused verdict leaves it unverified.
+    assert promote(result, state, {"certified": False, "is_research_evidence": False})[0] == PER_QUERY_UNVERIFIED
+    # A verdict about a DIFFERENT artifact must not promote this one.
+    other = {**verdict, "per_query_artifact_digest": "b" * 64}
+    assert promote(result, state, other)[0] == PER_QUERY_UNVERIFIED
+    # Nor may a verdict about another model's run.
+    foreign = {**verdict, "model_id": "airknow"}
+    assert promote(result, state, foreign)[0] == PER_QUERY_UNVERIFIED
+
+    # `--strict-real` refuses the uncorroborated artifact, and reports the reason by name.
+    output: list[str] = []
+    assert not validate_file(artifact, strict_real=True, output=output.append), output
+    assert any("verifier" in line for line in output), output
 
 
 def test_sync_dry_run_and_verify_only_output_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

@@ -1131,13 +1131,26 @@ def test_frontend_banner_distinguishes_aggregate_only_from_absent_evidence():
       if (/certified research result/i.test(banner)) throw new Error(`claimed certification: ${banner}`);
       });
     // 5. Per-query real results exist: no mock-only alarm, no aggregate-only claim.
-    check("per-query real", [{ run_id: "r1", data_kind: "experiment" }], [certified("agg1")], {},
+    //
+    // A per-query run is VERIFIED only when the backend's admission policy says so
+    // (`evidence_status`). A run that merely declares `data_kind: "experiment"` is a declared but
+    // UNVERIFIED experiment, and the banner must say that rather than implying a checked result --
+    // that was F-07's consumer half.
+    check("per-query verified", [{ run_id: "r1", data_kind: "experiment", evidence_status: "PER_QUERY_VERIFIED" }],
+          [certified("agg1")], {},
           (state, banner) => {
       if (/MOCK DEVELOPMENT DATA/i.test(banner)) throw new Error(`false mock banner: ${banner}`);
       if (/AGGREGATE-ONLY/i.test(banner)) throw new Error(`per-query results exist: ${banner}`);
+      if (/UNVERIFIED/i.test(banner)) throw new Error(`verified run called unverified: ${banner}`);
       });
-    // 6. Mock AND real: excluded-from-conclusions warning, unchanged.
-    check("mock + real", [{ run_id: "r1", data_kind: "experiment" }, { run_id: "m1", data_kind: "mock" }], [],
+    // 5b. A declared-but-unverified experiment must be announced as unverified.
+    check("per-query declared only", [{ run_id: "r1", data_kind: "experiment" }], [certified("agg1")], {},
+          (state, banner) => {
+      if (!/UNVERIFIED/i.test(banner)) throw new Error(`unverified run not announced: ${banner}`);
+      });
+    // 6. Mock AND verified real: excluded-from-conclusions warning, unchanged.
+    check("mock + real", [{ run_id: "r1", data_kind: "experiment", evidence_status: "PER_QUERY_VERIFIED" },
+                          { run_id: "m1", data_kind: "mock" }], [],
           {}, (_state, banner) => {
       if (!/Mock and real experiment runs/i.test(banner)) throw new Error(`expected mixed warning: ${banner}`);
       });

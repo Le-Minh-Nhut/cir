@@ -208,6 +208,14 @@ def verify(run_id: str, model_id: str, checkpoint_id: str, protocol_id: str) -> 
         "is_research_evidence": is_evidence,
         "reasons": reasons,
         "evidence_reasons": evidence_reasons,
+        # When this run exported per-query results, the digest of THAT artifact, as the parent
+        # evaluator computed it over the bytes the observer wrote and recorded in this report. A
+        # consumer promoting a per-query artifact must match it: a verdict about a run_id is not a
+        # verdict about arbitrary bytes claiming that id (see `schemas.results.promote`).
+        "per_query_artifact_digest": (report or {}).get("per_query_artifact_digest"),
+        # The identity the verdict describes, so a promotion can refuse a foreign model/checkpoint.
+        "model_id": (report or {}).get("model_id"),
+        "checkpoint_id": (report or {}).get("checkpoint_id"),
         "report_path": str(report_path) if report_path.is_file() else None,
         # The report's own identity, not a restatement of the request: the requested identity has
         # already been checked against it above, and a reader needs the commit the run came from

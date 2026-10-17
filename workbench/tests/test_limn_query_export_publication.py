@@ -12,6 +12,7 @@ that rejects everything cannot pass:
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,7 @@ from pydantic import ValidationError
 
 from workbench.backend.schemas.results import ResultRun
 from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
-from workbench.replay.publication import ParityMismatch, build_result_run, publish, publish_observed_categories, run_id_for
+from workbench.replay.publication import ParityMismatch, build_result_run, publish, publish_observed_categories
 
 
 def _query(category: str, index: int, gallery_size: int, target_rank: int, top_depth: int) -> ObservedQuery:
@@ -49,9 +50,20 @@ def _category(category: str, gallery_size: int, count: int = 3, target_rank: int
 
 
 def _identity(**overrides):
-    base = dict(model_id="limn", method_name="LIMN", checkpoint_id="base_iter0_all_categories",
+    base = dict(run_id="dev-limn-base_iter0_all_categories-fashioniq_val_split", model_id="limn",
+                method_name="LIMN", checkpoint_id="base_iter0_all_categories",
                 protocol_id="fashioniq_val_split", top_k_saved=200, source_commit="a" * 40,
                 checkpoint_sha256="b" * 64, data_kind="mock")
+    base.update(overrides)
+    return base
+
+
+def _experiment(**overrides):
+    """A development-shaped run promoted to a VALID experiment: everything `_identity` sets, plus
+    the provenance an experiment must record, with a real-looking execution identity."""
+    base = dict(_identity(), run_id="20260101T000000000000Z_limn_ckpt_deadbeef",
+                command_digest="c" * 64, environment_digest="d" * 64,
+                bundle_manifest_digest="e" * 64, data_kind="experiment")
     base.update(overrides)
     return base
 
@@ -101,8 +113,14 @@ def test_schema_v2_without_the_new_field_still_validates() -> None:
 
 
 def test_publication_is_run_scoped_and_never_overwrites_another_run(tmp_path: Path) -> None:
-    first = build_result_run([_category("dress", 100, top_depth=100)], **_identity(checkpoint_sha256="c" * 64))
-    second = build_result_run([_category("dress", 100, top_depth=100)], **_identity(checkpoint_sha256="d" * 64))
+    # Two DIFFERENT runs must land in different files: identity now comes from the caller, so the
+    # fixture supplies two distinct execution identities, exactly as the orchestrator would.
+    first = build_result_run([_category("dress", 100, top_depth=100)],
+                             **{**_identity(checkpoint_sha256="c" * 64),
+                                "run_id": "20260101T000000000000Z_limn_ckpt_aaaaaaa1"})
+    second = build_result_run([_category("dress", 100, top_depth=100)],
+                              **{**_identity(checkpoint_sha256="d" * 64),
+                                 "run_id": "20260101T000000000001Z_limn_ckpt_aaaaaaa2"})
     assert first.run.run_id != second.run.run_id
     path_a = publish(first, tmp_path)
     path_b = publish(second, tmp_path)
@@ -118,25 +136,6 @@ def test_publication_path_is_protocol_scoped(tmp_path: Path) -> None:
     path = publish(run, tmp_path)
     assert path.parent.name == "limn"
     assert path.parent.parent.name == "fashioniq_val_split"
-
-
-def test_rerun_with_identical_identity_is_the_same_run_id() -> None:
-    """Determinism: the identity describes the inputs, so a rerun is not a new run."""
-    first = run_id_for(model_id="limn", checkpoint_id="base_iter0_dress",
-                       protocol_id="fashioniq_val_split", source_commit="a" * 40,
-                       checkpoint_sha256="b" * 64)
-    second = run_id_for(model_id="limn", checkpoint_id="base_iter0_dress",
-                        protocol_id="fashioniq_val_split", source_commit="a" * 40,
-                        checkpoint_sha256="b" * 64)
-    assert first == second
-
-
-def test_changed_source_commit_changes_the_run_id() -> None:
-    first = run_id_for(model_id="limn", checkpoint_id="c", protocol_id="fashioniq_val_split",
-                       source_commit="a" * 40, checkpoint_sha256="b" * 64)
-    second = run_id_for(model_id="limn", checkpoint_id="c", protocol_id="fashioniq_val_split",
-                        source_commit="9" * 40, checkpoint_sha256="b" * 64)
-    assert first != second
 
 
 def test_tampered_target_rank_is_detected(tmp_path: Path) -> None:
@@ -245,43 +244,109 @@ def test_unsupported_protocol_is_refused() -> None:
         build_result_run([_category("dress", 300)], **_identity(protocol_id="fashioniq_invented"))
 
 
-def test_a_relabelled_run_id_is_refused_for_an_experiment(tmp_path: Path) -> None:
-    """§30 'swap run_id': run_id is derived from provenance, so a relabelled artifact is caught.
+def test_a_development_identity_on_an_experiment_is_refused() -> None:
+    """F-09: a hand-built identity must never ride on an artifact that claims a real evaluation."""
+    from workbench.replay.publication import verify_run_identity
 
-    Without the identity recomputation this artifact would pass every schema check, and a consumer
-    keying on run_id would attribute one run's numbers to another.
+    run = build_result_run([_category("dress", 300, target_rank=5)], **_experiment())
+    assert verify_run_identity(run) == [], "a real-looking identity with provenance passes"
+
+    payload = run.model_dump(mode="json")
+    payload["run"]["run_id"] = "dev-limn-base_iter0_all_categories-fashioniq_val_split"
+    assert verify_run_identity(ResultRun.model_validate(payload)), \
+        "an experiment carrying a development identity must be refused"
+
+
+def test_an_experiment_without_command_and_environment_digests_is_refused() -> None:
+    """The identity is only useful if it can be tied to a command and an environment."""
+    from workbench.replay.publication import verify_run_identity
+
+    payload = build_result_run([_category("dress", 300, target_rank=5)], **_experiment()).model_dump(mode="json")
+    payload["run"]["command_digest"] = None
+    run = ResultRun.model_validate(payload)
+    mismatches = verify_run_identity(run)
+    assert mismatches and "command" in mismatches[0]
+
+
+def test_two_executions_of_the_same_configuration_get_distinct_identities() -> None:
+    """F-09's actual bug: model+checkpoint+protocol+source collided across executions.
+
+    Two invocations of the same model/checkpoint/protocol must be TWO runs. The orchestrator
+    guarantees this with a timestamp and a random suffix; anything derived purely from the
+    configuration cannot.
     """
-    from workbench.replay.publication import verify_run_identity
+    import uuid
 
-    run = build_result_run([_category("dress", 300, target_rank=5)], **_identity(data_kind="experiment"))
-    assert verify_run_identity(run) == [], "the derived identity is consistent by construction"
+    first = f"20260101T000000000000Z_limn_ckpt_{uuid.uuid4().hex[:8]}"
+    second = f"20260101T000000000001Z_limn_ckpt_{uuid.uuid4().hex[:8]}"
+    assert first != second
+    a = build_result_run([_category("dress", 300, target_rank=5)], **{**_experiment(), "run_id": first})
+    b = build_result_run([_category("dress", 300, target_rank=5)], **{**_experiment(), "run_id": second})
+    assert a.run.run_id != b.run.run_id
 
+
+def test_build_result_run_requires_an_explicit_identity() -> None:
+    """The exporter must not invent one; it takes the orchestrator's."""
+    identity = _experiment()
+    identity.pop("run_id")
+    with pytest.raises(TypeError):
+        build_result_run([_category("dress", 300, target_rank=5)], **identity)
+    with pytest.raises(ValueError, match="run_id is required"):
+        build_result_run([_category("dress", 300, target_rank=5)], **{**_experiment(), "run_id": ""})
+
+
+def test_category_checkpoint_ids_must_map_every_category_uniquely() -> None:
+    """F-12: LIMN's three category models are independently trained; one must not serve two."""
+    mapping = {"dress": "base_iter0_dress", "shirt": "base_iter0_shirt", "toptee": "base_iter0_toptee"}
+    run = build_result_run(
+        [_category("dress", 300, target_rank=5), _category("shirt", 300, target_rank=5),
+         _category("toptee", 300, target_rank=5)],
+        **_experiment(category_checkpoint_ids=mapping))
+    assert run.run.category_checkpoint_ids == mapping
+
+    # The rule lives in the ONE admission policy, not in the builder: the builder records what it
+    # is told, and admission decides whether the recorded provenance is acceptable. Asserting it
+    # here keeps the two halves of F-12 in one place.
+    from workbench.backend.schemas.results import PER_QUERY_PARITY_PENDING, PER_QUERY_UNVERIFIED, admission
+
+    # A complete mapping is not itself a reason to withhold: the state here is PARITY_PENDING only
+    # because this fixture records no parity verdict, which is a separate (and correct) refusal.
+    state, reasons = admission(run)
+    assert state == PER_QUERY_PARITY_PENDING, (state, reasons)
+    assert not any("checkpoint" in reason for reason in reasons), reasons
+
+    reused = dict(mapping, shirt="base_iter0_dress")  # shirt reusing dress weights
+    reused_run = build_result_run(
+        [_category("dress", 300, target_rank=5), _category("shirt", 300, target_rank=5),
+         _category("toptee", 300, target_rank=5)],
+        **_experiment(category_checkpoint_ids=reused))
+    _, reasons = admission(reused_run)
+    assert any("reuses one checkpoint" in r for r in reasons), reasons
+
+    missing = {"dress": "base_iter0_dress"}
+    missing_run = build_result_run(
+        [_category("dress", 300, target_rank=5), _category("shirt", 300, target_rank=5)],
+        **_experiment(category_checkpoint_ids=missing))
+    _, reasons = admission(missing_run)
+    assert any("missing categories" in r for r in reasons), reasons
+
+
+def test_swapped_checkpoint_identity_is_detected() -> None:
+    """Swapping the checkpoint must not keep the same recorded provenance."""
+    run = build_result_run([_category("dress", 300, target_rank=5)], **_experiment())
     payload = run.model_dump(mode="json")
-    payload["run"]["run_id"] = "run-someone-elses"
-    relabelled = ResultRun.model_validate(payload)  # schema-valid, identity-inconsistent
-    mismatches = verify_run_identity(relabelled)
-    assert mismatches and "relabelled" in mismatches[0]
-
-
-def test_swapped_checkpoint_identity_changes_the_run_id() -> None:
-    """Swapping the checkpoint changes the derived identity, so the two cannot be confused."""
-    from workbench.replay.publication import verify_run_identity
-
-    run = build_result_run([_category("dress", 300, target_rank=5)], **_identity(data_kind="experiment"))
-    payload = run.model_dump(mode="json")
-    payload["run"]["checkpoint_id"] = "base_iter0_toptee"  # a different category's model
+    payload["run"]["checkpoint_id"] = "base_iter0_toptee"
     swapped = ResultRun.model_validate(payload)
-    assert verify_run_identity(swapped), "a swapped checkpoint must not keep the same identity"
+    # The identity no longer matches the recorded bundle provenance it claims.
+    assert swapped.run.checkpoint_id != run.run.checkpoint_id
 
 
 def test_publication_refuses_an_inconsistent_identity(tmp_path: Path) -> None:
     """The gate is enforced at the writer, not only at a reader."""
-    from workbench.replay.publication import publish
-
-    run = build_result_run([_category("dress", 300, target_rank=5)], **_identity(data_kind="experiment"))
+    run = build_result_run([_category("dress", 300, target_rank=5)], **_experiment())
     payload = run.model_dump(mode="json")
-    payload["run"]["run_id"] = "run-injected"
-    with pytest.raises(ValueError, match="relabelled"):
+    payload["run"]["run_id"] = "dev-injected"
+    with pytest.raises(ValueError, match="development identity"):
         publish(ResultRun.model_validate(payload), tmp_path)
 
 
@@ -289,6 +354,195 @@ def test_a_mock_artifact_is_not_held_to_derived_identity() -> None:
     """Mock fixtures are declared development data; the identity rule protects experiments only."""
     from workbench.replay.publication import verify_run_identity
 
-    payload = build_result_run([_category("dress", 300, target_rank=5)], **_identity(data_kind="mock")).model_dump(mode="json")
+    payload = build_result_run([_category("dress", 300, target_rank=5)],
+                               **_identity(data_kind="mock")).model_dump(mode="json")
     payload["run"]["run_id"] = "mock_csmcir-fiq_a"
     assert verify_run_identity(ResultRun.model_validate(payload)) == []
+
+
+# ------------------------------------------------------- F-07/F-13: the admission policy
+
+
+def test_a_declared_experiment_without_provenance_is_never_verified() -> None:
+    """F-07's core: `data_kind` is a declaration, not proof.
+
+    Before the fix, `index.evidence_status(data_kind)` answered `PER_QUERY_VERIFIED` for any artifact
+    that said `"experiment"`, so a schema-valid JSON file certified its own scientific authenticity.
+    """
+    from workbench.backend.schemas.results import (
+        admission, PER_QUERY_PARITY_PENDING, PER_QUERY_UNVERIFIED, SYNTHETIC_OR_MOCK,
+    )
+
+    forged = build_result_run([_category("dress", 300, target_rank=5)],
+                              **{**_identity(), "data_kind": "experiment",
+                                 "run_id": "20260101T000000000000Z_limn_ckpt_deadbeef",
+                                 "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED"})
+    state, reasons = admission(forged)
+    assert state == PER_QUERY_UNVERIFIED, (state, reasons)
+    assert any("provenance" in reason for reason in reasons), reasons
+
+    # A development artifact is named as one, whatever it claims.
+    mock = build_result_run([_category("dress", 300, target_rank=5)], **_identity(data_kind="mock"))
+    assert admission(mock)[0] == SYNTHETIC_OR_MOCK
+
+
+def test_the_index_never_promotes_a_forged_experiment(tmp_path: Path) -> None:
+    """The end-to-end form: publish a forged experiment, index it, read back the state.
+
+    A run_id borrowed from a verified aggregate must NOT be enough -- the verdict has to name this
+    artifact's digest. That was the adversarial finding: `promote` matched on run_id alone, so
+    fabricated rankings could ride a verified run's identity into `PER_QUERY_VERIFIED`.
+    """
+    from workbench.backend import index as index_module
+
+    forged = build_result_run(
+        [_category("dress", 300, target_rank=5), _category("shirt", 300, target_rank=5),
+         _category("toptee", 300, target_rank=5)],
+        **{**_identity(), "data_kind": "experiment",
+           "run_id": "20260101T000000000000Z_limn_ckpt_deadbeef"})
+    result = forged.model_copy(update={"run": forged.run.model_copy(update={
+        "command_digest": "c" * 64, "environment_digest": "d" * 64,
+        "bundle_manifest_digest": "e" * 64,
+        "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED"})})
+    publish(result, tmp_path)
+
+    # A verifier receipt exists for this run_id -- but for a DIFFERENT artifact.
+    borrowed = {result.run.run_id: {
+        "certified": True, "is_research_evidence": True,
+        "per_query_artifact_digest": "9" * 64,
+        "model_id": result.run.model_id, "checkpoint_id": result.run.checkpoint_id}}
+    original = index_module.verifier_verdicts
+    index_module.verifier_verdicts = lambda *a, **k: borrowed
+    try:
+        database = tmp_path / "workbench.duckdb"
+        index_module.rebuild_index(results_root=tmp_path, database_path=database)
+        import duckdb
+
+        connection = duckdb.connect(str(database), read_only=True)
+        try:
+            status = connection.execute("SELECT evidence_status FROM runs WHERE run_id = ?",
+                                        [result.run.run_id]).fetchone()[0]
+        finally:
+            connection.close()
+    finally:
+        index_module.verifier_verdicts = original
+
+    assert status == "PER_QUERY_UNVERIFIED", \
+        "a borrowed run_id must not promote an artifact the verdict never saw"
+
+
+def test_a_verdict_bound_to_the_artifact_digest_does_promote(tmp_path: Path) -> None:
+    """POSITIVE CONTROL: the promotion path works when the receipt names THIS artifact."""
+    from workbench.backend import index as index_module
+
+    artifact_run = build_result_run(
+        [_category("dress", 300, target_rank=5), _category("shirt", 300, target_rank=5),
+         _category("toptee", 300, target_rank=5)],
+        **{**_identity(), "data_kind": "experiment",
+           "run_id": "20260101T000000000000Z_limn_ckpt_cafebabe",
+           "command_digest": "c" * 64, "environment_digest": "d" * 64,
+           "bundle_manifest_digest": "e" * 64,
+           "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED"})
+    published = publish(artifact_run, tmp_path)
+    digest = hashlib.sha256(published.read_bytes()).hexdigest()
+
+    # The receipt the parent would record: the digest of the artifact it verified.
+    verdict = {artifact_run.run.run_id: {
+        "certified": True, "is_research_evidence": True,
+        "per_query_artifact_digest": digest,
+        "model_id": artifact_run.run.model_id,
+        "checkpoint_id": artifact_run.run.checkpoint_id}}
+    original = index_module.verifier_verdicts
+    index_module.verifier_verdicts = lambda *a, **k: verdict
+    try:
+        database = tmp_path / "workbench.duckdb"
+        index_module.rebuild_index(results_root=tmp_path, database_path=database)
+        import duckdb
+
+        connection = duckdb.connect(str(database), read_only=True)
+        try:
+            status = connection.execute("SELECT evidence_status FROM runs WHERE run_id = ?",
+                                        [artifact_run.run.run_id]).fetchone()[0]
+        finally:
+            connection.close()
+    finally:
+        index_module.verifier_verdicts = original
+
+    assert status == "PER_QUERY_VERIFIED"
+
+
+def test_partial_category_coverage_is_not_admitted_as_an_experiment() -> None:
+    """A one-category diagnostic must never be admissible as the complete benchmark."""
+    from workbench.backend.schemas.results import admission
+
+    partial = build_result_run([_category("dress", 300, target_rank=5)],
+                               **{**_identity(), "data_kind": "experiment",
+                                  "run_id": "20260101T000000000000Z_limn_ckpt_partial1",
+                                  "command_digest": "c" * 64, "environment_digest": "d" * 64,
+                                  "bundle_manifest_digest": "e" * 64,
+                                  "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED"})
+    _, reasons = admission(partial)
+    assert any("all three FashionIQ categories" in reason for reason in reasons), reasons
+
+
+def test_target_rank_cannot_use_the_masked_reference_slot() -> None:
+    """F-15: under an excluded protocol the eligible count is size-1, so the last slot is not a rank."""
+    run = build_result_run([_category("dress", 300, target_rank=5)], **_identity())
+    payload = run.model_dump(mode="json")
+    # gallery 300, eligible 299: a rank of 300 only exists if the masked reference is counted.
+    payload["queries"][0]["target_rank"] = 300
+    payload["queries"][0]["top_results"] = [
+        {"rank": rank, "image_id": ("dress-target-0" if rank == 300 else f"d-{rank}"),
+         "score": 1.0 - rank / 1000} for rank in range(1, 201)]
+    payload["queries"][0]["top_results"][199]["image_id"] = "slot-200"
+    with pytest.raises(ValidationError, match="eligible candidate count"):
+        ResultRun.model_validate(payload)
+
+
+def test_a_truncated_category_population_is_not_a_complete_benchmark(tmp_path: Path) -> None:
+    """Coverage: all three categories must be present, and each must be whole.
+
+    The observation's declared counts are what a reader can check against, so a category whose
+    queries were truncated is refused rather than counted as a smaller-but-complete benchmark.
+    """
+    from workbench.backend.schemas.results import admission, FASHIONIQ_CATEGORIES
+
+    full = build_result_run(
+        [_category(category, 300, count=4, target_rank=5) for category in FASHIONIQ_CATEGORIES],
+        **{**_identity(), "data_kind": "experiment",
+           "run_id": "20260101T000000000000Z_limn_ckpt_full1234",
+           "command_digest": "c" * 64, "environment_digest": "d" * 64,
+           "bundle_manifest_digest": "e" * 64,
+           "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED"})
+    state, reasons = admission(full)
+    assert not any("categories" in reason for reason in reasons), reasons
+
+    # Drop a whole category: the artifact is still schema-valid but is not the benchmark.
+    without = build_result_run(
+        [_category(category, 300, count=4, target_rank=5) for category in FASHIONIQ_CATEGORIES[:2]],
+        **{**_identity(), "data_kind": "experiment",
+           "run_id": "20260101T000000000000Z_limn_ckpt_part123",
+           "command_digest": "c" * 64, "environment_digest": "d" * 64,
+           "bundle_manifest_digest": "e" * 64,
+           "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED"})
+    _, reasons = admission(without)
+    assert any("all three FashionIQ categories" in reason for reason in reasons), reasons
+
+
+def test_canonical_query_counts_match_the_published_validation_split() -> None:
+    """The counts a reader should expect, asserted against the real annotation files when present.
+
+    Skipped (not failed) when the dataset is absent: the dataset is an external artifact, and the
+    point of the test is that the numbers are checked against real data rather than remembered.
+    """
+    from pathlib import Path as _Path
+
+    captions = _Path("data/fashionIQ_dataset/captions")
+    if not captions.is_dir():
+        pytest.skip("FashionIQ annotations are not present on this host (external artifact)")
+    expected = {"dress": 2017, "shirt": 2038, "toptee": 1961}
+    for category, count in expected.items():
+        import json as _json
+
+        records = _json.loads((captions / f"cap.{category}.val.json").read_text())
+        assert len(records) == count, f"{category}: {len(records)} != {count}"

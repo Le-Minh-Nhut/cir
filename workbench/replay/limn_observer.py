@@ -88,6 +88,27 @@ def _raw_captions(dataset_root: Path, category: str) -> list[dict[str, Any]]:
         return json.load(handle)
 
 
+class NonFiniteRanking(ValueError):
+    """A ranking was attempted on non-finite features or similarities (F-16).
+
+    Raised instead of returning a ranking, because NumPy will happily produce one: a zero-norm
+    feature yields NaN similarities, and `np.argsort` places the masked reference (whose negated
+    score is a large finite number) *ahead* of every NaN -- so the observation would report the
+    reference at rank 1 and the target below it, a plausible-looking ranking built from nothing.
+
+    An observer failure must never be promoted to parity verification, so this refuses rather than
+    substituting zero, clamping, or inventing a rank.
+    """
+
+
+def _finite_rows(matrix: "np.ndarray", label: str) -> None:
+    if not np.all(np.isfinite(matrix)):
+        rows = np.flatnonzero(~np.all(np.isfinite(matrix), axis=1))[:5].tolist()
+        raise NonFiniteRanking(
+            f"{label} features contain NaN or infinity in row(s) {rows}; the feature extractor "
+            "produced a non-finite vector and no ranking can be derived from it")
+
+
 def rank_queries(query_features: "np.ndarray", target_features: "np.ndarray",
                  reference_positions: list[int], target_positions: list[int],
                  top_k: int = DEFAULT_TOP_K) -> tuple[list[int], list[list[tuple[int, int, float]]]]:
@@ -97,20 +118,43 @@ def rank_queries(query_features: "np.ndarray", target_features: "np.ndarray",
     checked on a machine with no GPU. It performs exactly the pinned author's steps: per-row L2
     normalization, ``dot`` similarity, the ``-10e10`` reference mask, and ``np.argsort(-sims)``.
 
-    Returns ``(target_ranks, top_results)`` where each rank is 1-based over the FULL gallery and
-    each top-results entry is ``(rank, gallery_index, score)``.
+    Returns ``(target_ranks, top_results)`` where each rank is 1-based over the FULL native
+    ranking (the masked reference still occupies a slot) and each top-results entry is
+    ``(rank, gallery_index, score)``.
+
+    Non-finite inputs are REFUSED (:class:`NonFiniteRanking`) rather than ranked. A zero-norm or NaN
+    feature otherwise yields a NaN similarity matrix whose sort order is dominated by the masked
+    reference -- a ranking that looks plausible and means nothing.
     """
     if query_features.shape[1] != target_features.shape[1]:
         raise ValueError("query and target feature dimensions differ")
     if len(reference_positions) != len(query_features) or len(target_positions) != len(query_features):
         raise ValueError("one reference and one target position are required per query")
 
-    queries = query_features / np.linalg.norm(query_features, axis=1, keepdims=True)
-    targets = target_features / np.linalg.norm(target_features, axis=1, keepdims=True)
+    _finite_rows(query_features, "query")
+    _finite_rows(target_features, "gallery")
+    query_norms = np.linalg.norm(query_features, axis=1, keepdims=True)
+    target_norms = np.linalg.norm(target_features, axis=1, keepdims=True)
+    if np.any(query_norms == 0) or np.any(target_norms == 0):
+        # A zero-norm row normalizes to NaN. Named separately from a NaN INPUT because the cause and
+        # the remedy differ: here the feature is finite but degenerate.
+        raise NonFiniteRanking(
+            "a query or gallery feature has zero norm, so it cannot be L2-normalized; the "
+            "normalization would divide by zero and every similarity for that row would be NaN")
+
+    queries = query_features / query_norms
+    targets = target_features / target_norms
     sims = queries.dot(targets.T)
 
     for index, gallery_index in enumerate(reference_positions):
         sims[index, gallery_index] = NATIVE_REFERENCE_MASK
+
+    if not np.all(np.isfinite(sims)):
+        # Finite features can still produce a non-finite similarity through overflow. Refuse: the
+        # sort order would be decided by the infinities, not by the model's ranking.
+        rows = np.flatnonzero(~np.all(np.isfinite(sims), axis=1))[:5].tolist()
+        raise NonFiniteRanking(
+            f"the similarity matrix is non-finite in row(s) {rows}; no ranking can be derived")
 
     ranks: list[int] = []
     top: list[list[tuple[int, int, float]]] = []
@@ -122,6 +166,91 @@ def rank_queries(query_features: "np.ndarray", target_features: "np.ndarray",
         top.append([(position, int(gallery), float(sims[index, gallery]))
                     for position, gallery in enumerate(order[:top_k], start=1)])
     return ranks, top
+
+
+class QueryAlignmentError(RuntimeError):
+    """The native query set does not correspond to the annotations it is exported against.
+
+    The pinned dataset caches `test_queries`/`test_targets` to `.pkl` and loads them unconditionally
+    when present, without recording which annotations they came from. A stale cache from another
+    dataset, a truncated file, or a reordered file would therefore produce a *self-consistent*
+    ranking whose per-query identities are wrong -- plausible Recall, corrupted failure analysis.
+    Nothing in the native source can detect that, so the observer checks it here.
+    """
+
+
+def assert_alignment(category: str, test_queries: list, images: list[str],
+                     raw_captions: list[dict], dataset_root: Path | None = None) -> None:
+    """Prove every native query corresponds to the annotation at the same index.
+
+    Checks, per index: the reference and target positions map to the annotation's own candidate and
+    target ids, and the composed model input is exactly what the native correction pipeline produces
+    from that annotation's captions. Any disagreement -- a shuffled cache, a stale one from a
+    different dataset, a truncated or longer file -- raises rather than exporting.
+    """
+    if len(test_queries) != len(raw_captions):
+        raise QueryAlignmentError(
+            f"{category}: the native query set has {len(test_queries)} entries but "
+            f"cap.{category}.val.json has {len(raw_captions)} annotations; a cached query file "
+            "does not match this dataset")
+
+    correction_dict: dict[str, str] | None = None
+    if dataset_root is not None:
+        correction_path = dataset_root / "captions" / f"correction_dict_{category}.json"
+        if correction_path.is_file():
+            correction_dict = json.loads(correction_path.read_text())
+
+    for index, entry in enumerate(test_queries):
+        record = raw_captions[index]
+        reference_position = entry["source_img_id"]
+        target_position = entry["target_img_id"]
+        if not isinstance(reference_position, int) or not isinstance(target_position, int):
+            raise QueryAlignmentError(
+                f"{category}: query {index} does not carry integer image positions")
+        if not 0 <= reference_position < len(images) or not 0 <= target_position < len(images):
+            raise QueryAlignmentError(
+                f"{category}: query {index} image position is outside split.{category}.val.json")
+        if images[reference_position] != record["candidate"]:
+            raise QueryAlignmentError(
+                f"{category}: query {index} reference is {images[reference_position]!r} but the "
+                f"annotation says {record['candidate']!r}; the native query set is not aligned with "
+                "the annotations (a stale or reordered cache produces exactly this)")
+        if images[target_position] != record["target"]:
+            raise QueryAlignmentError(
+                f"{category}: query {index} target is {images[target_position]!r} but the "
+                f"annotation says {record['target']!r}")
+        model_text = (entry.get("mod") or {}).get("str")
+        # The composed text is what the model actually read. Recomputing it here from the
+        # annotation proves the correction dictionary in force matches the one the cache used: a
+        # stale dict would silently change every query's text while leaving ids aligned.
+        if model_text is None or not isinstance(model_text, str) or not model_text.strip():
+            raise QueryAlignmentError(
+                f"{category}: query {index} carries no model input text")
+        if correction_dict is not None:
+            expected = expected_model_input(record["captions"], correction_dict)
+            if model_text != expected:
+                raise QueryAlignmentError(
+                    f"{category}: query {index} model input text is {model_text!r} but composing the "
+                    f"annotation's own captions with the on-disk correction dictionary gives "
+                    f"{expected!r}; either the cache used a different dictionary or the captions "
+                    "changed")
+    return None
+
+
+def expected_model_input(captions: list, correction_dict: dict[str, str]) -> str:
+    """The pinned author's composition: lowercase, strip punctuation, apply the dict, join ' and '.
+
+    Reimplemented from ``datasets.py`` ``correct_text``/``concat_text`` so the observer can prove the
+    native text it recorded came from THESE captions and THIS dictionary.
+    """
+    import string
+
+    def correct(text: str) -> str:
+        translation = str.maketrans({key: " " for key in string.punctuation})
+        tokens = str(text).lower().translate(translation).strip().split()
+        return " ".join(correction_dict.get(word, word) for word in tokens)
+
+    return f"{correct(captions[0])} and {correct(captions[1])}"
 
 
 def observe_category(category: str, model: Any, dataset: Any, dataset_root: Path,
@@ -137,6 +266,9 @@ def observe_category(category: str, model: Any, dataset: Any, dataset_root: Path
     test_targets = dataset.test_targets
     images = _image_ids(dataset_root, category)
     raw_captions = _raw_captions(dataset_root, category)
+    # Alignment BEFORE any ranking: identity is checked against the annotations the export claims,
+    # not assumed from list lengths.
+    assert_alignment(category, test_queries, images, raw_captions, dataset_root)
 
     # Gallery ordering is the native dataset's own: test_targets is the ordered unique union of
     # validation references and targets, and test_targets[i]['target_img_id'] is that image's
@@ -175,14 +307,24 @@ def observe_category(category: str, model: Any, dataset: Any, dataset_root: Path
     all_queries = np.concatenate(query_features)
     all_imgs = np.concatenate(target_features)
 
+    # The saved depth is bounded by the ELIGIBLE candidate count, not the raw gallery size: the
+    # reference still occupies a column in the native matrix, so a depth equal to the gallery size
+    # would include it as a "retrieved" image in a protocol that forbids retrieving it (F-15).
+    eligible_depth = min(top_k, len(gallery_ids) - 1)
     ranks, top_rankings = rank_queries(
         all_queries, all_imgs,
         [position_of[entry["source_img_id"]] for entry in test_queries],
         [position_of[entry["target_img_id"]] for entry in test_queries],
-        top_k=top_k,
+        top_k=eligible_depth,
     )
 
     observed = []
+    correction_dict: dict[str, str] | None = None
+    if dataset_root is not None:
+        correction_path = dataset_root / "captions" / f"correction_dict_{category}.json"
+        if correction_path.is_file():
+            correction_dict = json.loads(correction_path.read_text())
+
     for index, entry in enumerate(test_queries):
         record = raw_captions[index]
         observed.append(ObservedQuery(

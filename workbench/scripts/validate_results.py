@@ -10,7 +10,7 @@ from typing import Callable
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.index import load_runs
 from workbench.backend.operator_config import resolve_config
-from workbench.backend.schemas.results import ResultRun
+from workbench.backend.schemas.results import admission, ResultRun
 from workbench.replay.publication import verify_run_identity
 
 PROVENANCE_FIELDS = ("upstream_commit", "checkpoint_sha256", "command_digest", "environment_digest")
@@ -21,26 +21,52 @@ def _missing_provenance(result: ResultRun) -> list[str]:
 
 
 def _report_provenance(runs: list[ResultRun], strict_real: bool, output: Callable[[str], None]) -> bool:
+    """Report the ONE admission policy's verdict (F-13).
+
+    Previously this file applied its own provenance rule while `index.py` applied a different one,
+    so the same artifact could be "valid" to the validator and "verified" to the index. Both now
+    read `schemas.results.admission`, so the two entry points cannot disagree.
+
+    A development fixture is admitted and reported as such; an unverified experiment is admitted but
+    never promoted. `--strict-real` makes incomplete experiment provenance an error, which is what a
+    release gate wants; without it the state is reported as a warning so the operator can still
+    inspect the workspace.
+    """
+    from workbench.backend.schemas.results import SYNTHETIC_OR_MOCK, PER_QUERY_UNVERIFIED
+
     valid = True
     for result in runs:
-        if result.run.data_kind == "mock":
+        state, reasons = admission(result)
+        if state == SYNTHETIC_OR_MOCK:
             continue
-        missing = _missing_provenance(result)
-        if missing:
+        if state == PER_QUERY_UNVERIFIED:
             level = "BLOCKED" if strict_real else "WARN"
-            output(f"[{level}] {result.run.run_id}: missing provenance: {', '.join(missing)}")
+            detail = "; ".join(reasons) or "provenance incomplete"
+            output(f"[{level}] {result.run.run_id}: {detail}")
             valid = valid and not strict_real
+        else:
+            # parity pending/failed: reported, never silently accepted as evidence.
+            output(f"[WARN] {result.run.run_id}: {state}: {'; '.join(reasons)}")
     return valid
 
 
 def validate_root(root: Path, strict_real: bool = False, output: Callable[[str], None] = print) -> bool:
-    """Validate every result file below root using index loading rules."""
+    """Validate every result file below root using index loading rules.
+
+    Applies the SAME per-artifact identity check as `validate_file`, so the two entry points cannot
+    disagree about one file (F-13: `validate_file` used to refuse a relabelled artifact while
+    `validate_root` loaded it through `load_runs` and passed it).
+    """
     try:
         runs = load_runs(root)
     except Exception as error:
         output(f"[BLOCKED] {root}: {error}")
         return False
-    valid = _report_provenance(runs, strict_real, output)
+    mismatched = [(result.run.run_id, mismatch) for result in runs
+                  for mismatch in verify_run_identity(result)]
+    for run_id, mismatch in mismatched:
+        output(f"[BLOCKED] {run_id}: {mismatch}")
+    valid = _report_provenance(runs, strict_real, output) and not mismatched
     output(f"[OK] validated {len(runs)} runs under {root}")
     return valid
 

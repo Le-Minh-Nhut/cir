@@ -22,6 +22,8 @@ export type RunDataKind = "experiment" | "mock" | "synthetic" | string;
 export interface EvidenceRun {
   run_id?: string | null;
   data_kind?: RunDataKind | null;
+  /** The backend's admission state for this artifact. Absent means unverified. */
+  evidence_status?: string | null;
 }
 
 /** The fields of `/api/benchmark-runs` rows this module reads. */
@@ -39,9 +41,24 @@ export interface EvidenceBenchmarkRun {
   } | null;
 }
 
+/** Whether a per-query run may be presented as verified research evidence.
+ *
+ *  `evidence_status` is computed by the backend's admission policy, which only reports
+ *  `PER_QUERY_VERIFIED` when an authoritative verifier corroborated the artifact. Anything else is
+ *  an artifact whose numbers nobody has checked, and the UI must say so rather than reading
+ *  `data_kind === "experiment"` -- which is what the producer DECLARED about itself.
+ */
+export function isPerQueryVerified(run: EvidenceRun): boolean {
+  return run?.evidence_status === "PER_QUERY_VERIFIED";
+}
+
 export interface EvidenceState {
   /** Real runs in the per-query index. */
   experimentRuns: number;
+  /** Per-query runs the authoritative verifier corroborated. */
+  verifiedQueryRuns: number;
+  /** Runs that declare themselves experiments but carry no corroboration. */
+  unverifiedExperimentRuns: number;
   /** Labelled development runs in the per-query index. */
   mockRuns: number;
   /** Aggregate benchmark reports served by the API, of any certification state. */
@@ -77,6 +94,10 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
   const safeBenchmarks = Array.isArray(benchmarkRuns) ? benchmarkRuns : [];
 
   const experimentRuns = safeRuns.filter((run) => run?.data_kind === "experiment").length;
+  // A declared experiment is NOT verified evidence. Counted separately so the banner can say
+  // "declared, unverified" instead of implying a checked result.
+  const verifiedQueryRuns = safeRuns.filter(isPerQueryVerified).length;
+  const unverifiedExperimentRuns = experimentRuns - verifiedQueryRuns;
   const mockRuns = safeRuns.filter((run) => run?.data_kind === "mock").length;
   const aggregateRuns = safeBenchmarks.length;
   const certifiedAggregates = safeBenchmarks.filter(isCertifiedAggregate).length;
@@ -87,6 +108,8 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
   const aggregateOnly = aggregateRuns > 0 && experimentRuns === 0;
   return {
     experimentRuns,
+    verifiedQueryRuns,
+    unverifiedExperimentRuns,
     mockRuns,
     aggregateRuns,
     certifiedAggregates,
@@ -130,6 +153,22 @@ export function evidenceBanner(state: EvidenceState): string {
     return `${head}${trailer}; per-query Top-K analysis unavailable`
       + (state.hasMockEvidence
         ? " (development runs also loaded and excluded from research conclusions)" : "");
+  }
+  if (state.unverifiedExperimentRuns > 0) {
+    // The strongest true statement available: these runs call themselves experiments and nobody has
+    // corroborated them. Saying nothing (the old behaviour) presented them as checked evidence.
+    return `DECLARED EXPERIMENT (UNVERIFIED) — ${state.unverifiedExperimentRuns} per-query `
+      + `run${state.unverifiedExperimentRuns === 1 ? "" : "s"} declare themselves experiments but `
+      + `carry no verifier corroboration; they are not research evidence`
+      + (state.verifiedQueryRuns > 0
+        ? ` (${state.verifiedQueryRuns} verified run${state.verifiedQueryRuns === 1 ? "" : "s"} also loaded)`
+        : "")
+      // The aggregate counters are a separate truth and must survive this branch: the dashboard
+      // says those runs exist, so the banner may not omit them.
+      + (state.uncertifiedAggregates > 0
+        ? `; ${state.uncertifiedAggregates} further aggregate `
+          + `run${state.uncertifiedAggregates === 1 ? "" : "s"} not certified research evidence`
+        : "");
   }
   if (state.hasMockEvidence) {
     return "Mock and real experiment runs are loaded. Mock results are excluded from research conclusions.";
