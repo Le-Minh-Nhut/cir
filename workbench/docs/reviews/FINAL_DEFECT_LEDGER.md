@@ -194,6 +194,44 @@ the LIMN success path.
   own parity check compares the RANKS it derives against the native ranks. Adding a schema rule that
   rejects a legitimate native output on a tie is the larger risk.
 
+### N-04 — The observation cache order is not bound to the caption file's bytes
+
+* **Reported by**: the scientific-semantics challenge (Qwen), as one of two residual risks.
+* **What holds**: `assert_alignment` re-checks, for EVERY query position, that the split file's
+  `reference_position` holds the annotation's `candidate` and its `target_position` holds the
+  annotation's `target`. A stale, truncated, reordered or wrongly-mapped cache is therefore caught
+  per position, not sampled.
+* **What does not hold**: the `.pkl` query list is never itself hash-bound to `cap.<category>.val.json`.
+  A permutation applied consistently to BOTH files — every query's endpoints still agreeing at every
+  position, while `annotation_index` names a different query than it did — would pass the alignment
+  check, and the identity string `category:index:reference:target` would name the wrong query.
+* **Why not fixed here**: closing it means hashing the dataset cache into the run identity, which
+  changes what a run attests about. It is a trust assumption about the operator's dataset root (a
+  bind-mounted directory the registry does not hash), and the correct fix belongs with dataset
+  verification, not with the observer. It is recorded so that a future pass weighs it deliberately.
+
+### N-05 — Rank order under ties is not pinned across NumPy builds
+
+* **Reported by**: the scientific-semantics challenge (Qwen).
+* **What holds**: the observer and the native code call the SAME `np.argsort(-sims[i, :])` on the SAME
+  loaded objects within one run, and the parity check compares the ranks they derive, so an in-run
+  disagreement is impossible and would be refused.
+* **What does not hold**: `argsort` is a quicksort by default, which is not stable, so two different
+  NumPy builds could order exactly-equal scores differently. This is unobservable here (no GPU, no
+  real similarity matrices) and is a property of the pinned upstream code, not of this workbench.
+* **Why not fixed**: "fixing" it would mean diverging from the pinned native ranking, which is the one
+  thing the reproduction must not do.
+
+### N-06 — A DCNet row publishes an aggregate mean without the per-category rows
+
+* **Reported by**: the scientific-semantics challenge (Qwen), as the closest live exposure to a number
+  the checks would accept but that the paper does not state.
+* **Why it is bounded**: the DCNet entry has no evaluator (no CLI entrypoint), so nothing can produce a
+  reproduced number for it; the paper gate's tolerance bounds any comparison that ever runs; and the
+  registry publishes no per-category claim it cannot support.
+* **Why it is recorded**: if a DCNet parser is ever added, the missing per-category rows become a real
+  comparison surface and this note is the starting point.
+
 ### N-03 — `spread`/`sprc` adapter registered without a wrapper
 
 * **Reported by**: the csmcir/sprc audit.

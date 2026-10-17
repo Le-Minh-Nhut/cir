@@ -109,6 +109,26 @@ Two findings were confirmed and deliberately **not** fixed, with the reason reco
 source-text tests, `N-02` score monotonicity). Three recordings were made rather than repairs because
 repairing them would change the verification apparatus itself in a frozen release.
 
+### 3.4 The scientific-semantics challenge found no defect on the reported-number path
+
+Qwen was asked five questions, including "if you had to make this workbench report a scientifically
+wrong number that every existing check would accept, what would you do?". Five attacks were attempted
+(forged artifact, forged report, wrong-protocol run, a number absent from the native output, and
+cross-protocol analytics) and all five were refused at a named line.
+
+Two residuals were returned as `UNVERIFIED_RISK` rather than defects, and both are recorded as such in
+the ledger (`N-04` the dataset cache order is not hash-bound; `N-05` tie order is not pinned across
+NumPy builds) along with `N-06`, a bounded exposure in a model that has no evaluator. The second is
+unobservable on this host and is a property of the PINNED upstream ranking: diverging from it to make
+ties deterministic would break the reproduction, which is the one thing that must not happen.
+
+### 3.5 The parity gate is a refusal, not a warning — checked after an allegation said otherwise
+
+An allegation that parity only warns was rejected with three layers shown: the exporting child exits
+non-zero, the parent refuses before publishing, the publisher raises `ParityMismatch`, and
+`PER_QUERY_PARITY_FAILED` is a state `promote` cannot lift. That is four refusals for one failure,
+which is what a fail-closed gate looks like.
+
 ## 6. What the reviewers could NOT establish
 
 Stated plainly, because the alternative is a report that implies more confidence than it has.

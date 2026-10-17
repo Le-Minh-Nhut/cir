@@ -59,6 +59,9 @@ Thirteen confirmed defects. Full evidence in `FINAL_DEFECT_LEDGER.md`.
 | N-01 | 27 tests assert on source TEXT rather than runtime behaviour (worst five cited by `file:line` in the ledger). | Rewriting the verification apparatus belongs in its own pass, not in a frozen release. No claim in this report rests on those tests: every defect above has a regression test that exercises runtime behaviour. |
 | N-02 | `admission` does not enforce score monotonicity. | No consumer depends on it; a schema rule that rejected a legitimate native output on a tie is the larger risk. |
 | N-03 | The SPRC adapter is registered without a wrapper. | Wrapping it would still not run: upstream's argparse default names an unregistered LAVIS model, `clip` is missing from the pinned requirements, and the author's checkpoint URL returns HTTP 403. |
+| N-04 | The dataset cache's query order is not hash-bound to the caption file. | Per-position alignment is checked for every query, so a stale, truncated or reordered cache is caught; only a permutation applied consistently to both files escapes, which is a trust assumption about the operator's dataset root. Closing it belongs with dataset verification. |
+| N-05 | Rank order under exact score ties is not pinned across NumPy builds. | The observer and the native code call the same `argsort` on the same objects within a run, so in-run parity is guaranteed; cross-build tie order is unobservable here and is a property of the pinned upstream ranking. Diverging from it would break the reproduction. |
+| N-06 | One DCNet row publishes an aggregate mean without per-category rows. | The model has no evaluator, so nothing can produce a reproduced number for it; the paper gate's tolerance bounds any comparison; the registry claims nothing per-category. |
 
 ## The sixteen model workflows
 
