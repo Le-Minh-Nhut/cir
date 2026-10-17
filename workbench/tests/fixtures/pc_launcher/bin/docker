@@ -17,6 +17,29 @@ if log_file:
 
 args_str = " ".join(sys.argv)
 
+# `run.sh up` is idempotent: when the project is already running, compose recreates nothing, so
+# the effective configuration is unchanged by the call. That is exactly the case the launcher's
+# post-restart re-inspection exists for, so it has to be expressible here: `MOCK_DOCKER_MOUNTS`
+# and `MOCK_CONTAINER_ADAPTATION` are the configuration in effect, and the `..._REFRESHED`
+# variants replace them once the container has actually been recreated. A generation counter
+# keeps the two apart and works for several corrected containers in one process.
+def _generation_dir():
+    return os.path.join(os.environ.get("CIR_REPO_ROOT", ""), "mock_docker_gen")
+
+def _generation():
+    try:
+        return int(open(os.path.join(_generation_dir(), "count")).read().strip() or "0")
+    except Exception:
+        return 0
+
+def _bump_generation():
+    try:
+        os.makedirs(_generation_dir(), exist_ok=True)
+        with open(os.path.join(_generation_dir(), "count"), "w") as handle:
+            handle.write(str(_generation() + 1))
+    except OSError:
+        pass
+
 if "version" in sys.argv:
     if os.environ.get("MOCK_DOCKER_NO_DAEMON") == "1" or os.environ.get("MOCK_DOCKER_FAIL_VERSION") == "1":
         sys.stderr.write("Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?\n")
@@ -38,6 +61,12 @@ if len(sys.argv) > 1 and sys.argv[1] == "compose":
         if os.environ.get("MOCK_DOCKER_FAIL_UP") == "1":
             sys.stderr.write("docker compose up failed\n")
             sys.exit(1)
+        if not os.environ.get("MOCK_DOCKER_UP_RECREATES"):
+            # The project is already running: `up -d` is a no-op on the container, so whatever
+            # the configuration was before the call is the configuration after it.
+            pass
+        else:
+            _bump_generation()
         print("[+] Running 2/2\n ✔ Container cir-workbench Started")
         sys.exit(0)
     if "ps" in sys.argv:
@@ -87,6 +116,8 @@ if len(sys.argv) > 1 and sys.argv[1] == "inspect":
     if "Mounts" in args_str:
         if mounts is None:
             sys.exit(1)
+        if _generation() > 0 and os.environ.get("MOCK_DOCKER_MOUNTS_REFRESHED") is not None:
+            mounts = os.environ["MOCK_DOCKER_MOUNTS_REFRESHED"]
         print(mounts)
         sys.exit(0)
     if "DeviceRequests" in args_str:
@@ -97,6 +128,8 @@ if len(sys.argv) > 1 and sys.argv[1] == "inspect":
         sys.exit(0)
     if "Config.Env" in args_str:
         adaptation = os.environ.get("MOCK_CONTAINER_ADAPTATION", "sm_120")
+        if _generation() > 0 and os.environ.get("MOCK_CONTAINER_ADAPTATION_REFRESHED") is not None:
+            adaptation = os.environ["MOCK_CONTAINER_ADAPTATION_REFRESHED"]
         print(f"WORKBENCH_RUNTIME_ADAPTATION={adaptation}")
         sys.exit(0)
     sys.exit(0)

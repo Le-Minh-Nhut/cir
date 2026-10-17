@@ -104,8 +104,21 @@ def verify(run_id: str, model_id: str, checkpoint_id: str, protocol_id: str) -> 
                         reasons.append(
                             f"report {key} is {report.get(key)!r}, expected {expected!r}")
 
-    ledger = em.read_evidence_ledger(config)
+    # The key state is reported on its own line, before the chain verdict, so a reader can tell an
+    # ambiguity the operator must fix apart from a corrupt chain -- and so every existing refusal
+    # reason keeps the exact wording its consumers already match on.
     witness: dict | None = None
+    try:
+        em.ledger_hmac_key(config)
+    except em.LedgerKeyError as key_error:
+        reasons.append(f"the evidence ledger key is unusable: {key_error}")
+    try:
+        ledger = em.read_evidence_ledger(config)
+    except em.LedgerKeyError as error:
+        ledger = None
+        key_err_msg = f"the evidence ledger key is unusable: {error}"
+        if key_err_msg not in reasons:
+            reasons.append(key_err_msg)
     if ledger is None:
         reasons.append("the evidence ledger is missing or its HMAC chain does not verify")
     else:
@@ -192,22 +205,25 @@ def _observed_recall(value: object) -> float | None:
 
 
 def _category_reasons(categories: object, *, required: bool = True) -> list[str]:
-    """Three complete FashionIQ categories, each with a usable Recall@10 and Recall@50."""
+    """Three complete FashionIQ categories for LIMN, or validated carried categories for others."""
     reasons: list[str] = []
     if not isinstance(categories, dict) or not categories:
         if required:
             return ["the report carries no category metrics for limn"]
         return []
-    for category in LIMN_CATEGORIES:
+    target = LIMN_CATEGORIES if required else list(categories.keys())
+    for category in target:
         metrics = categories.get(category)
         if not isinstance(metrics, dict):
-            reasons.append(f"category {category} is missing from the report")
+            if required:
+                reasons.append(f"category {category} is missing from the report")
             continue
         for key in ("r10", "r50"):
-            value = metrics.get(key)
-            if not _is_recall(value):
-                reasons.append(f"category {category} {key} is not a finite Recall "
-                               f"in [0, 100]: {value!r}")
+            if required or key in metrics:
+                value = metrics.get(key)
+                if not _is_recall(value):
+                    reasons.append(f"category {category} {key} is not a finite Recall "
+                                   f"in [0, 100]: {value!r}")
     return reasons
 
 
@@ -256,6 +272,21 @@ def _evidence_kind_reasons(report: dict | None) -> list[str]:
     return []
 
 
+def _has_usable_metric(report: dict | None) -> bool:
+    """Whether the report carries at least one finite Recall in [0, 100]."""
+    if not isinstance(report, dict):
+        return False
+    observed = report.get("observed_metrics")
+    if isinstance(observed, dict) and any(_is_recall(v) for v in observed.values()):
+        return True
+    categories = report.get("category_metrics")
+    if isinstance(categories, dict):
+        for metrics in categories.values():
+            if isinstance(metrics, dict) and any(_is_recall(v) for v in metrics.values()):
+                return True
+    return False
+
+
 def _extraction_reasons(report: dict | None) -> list[str]:
     """Metric extraction must actually have been performed.
 
@@ -274,6 +305,8 @@ def _extraction_reasons(report: dict | None) -> list[str]:
     if status not in (EXTRACTION_COMPLETED, EXTRACTION_SYNTHETIC):
         reasons.append(f"the report's extraction_status is {status!r}, not "
                        f"{EXTRACTION_COMPLETED!r}: the run's metrics were not extracted")
+    if not reasons and not _has_usable_metric(report):
+        reasons.append("the report claims metric extraction succeeded but carries no usable metrics")
     return reasons
 
 
@@ -409,6 +442,7 @@ def metric_evidence_reasons(model_id: str, checkpoint_id: str, protocol_id: str,
     beside the reasons so a caller can tell "this model has no publishable comparison" apart from
     "this run failed verification" without reading English.
     """
+    report = report or {}
     outcome: str | None = None
     if model_id == "limn":
         return _limn_reasons(report), None

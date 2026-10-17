@@ -309,7 +309,7 @@ Mặc định `./pc.sh` chạy mô hình LIMN. Để đánh giá mô hình khác
   ```
 
 ### 12. Sổ cái bằng chứng không xác minh được (`ledger does not verify`)
-- **Hiện tượng**: `./pc.sh` báo xác thực thất bại với lý do liên quan tới evidence ledger, dù đánh giá đã chạy xong.
+- **Hiện tượng**: `./pc.sh` báo xác thực thất bại với lý do liên quan tới evidence ledger, dù đánh giá đã chạy xong. API cũng trả về `400` với `error=ledger_key_unusable` cho `/api/benchmark-runs` (kèm cả hai đường dẫn khóa), thay vì trả danh sách rỗng `[]` không nêu lý do.
 - **Nguyên nhân**: Sổ cái bằng chứng được ký bằng khóa HMAC. Khóa này nằm ở `$XDG_CONFIG_HOME/cir/workbench_ledger_key` — trong container là `/artifacts/config/cir/workbench_ledger_key`, tức **trên ổ đĩa host** (bind mount) nên bền vững và ghi được bởi uid vận hành. Nếu khóa bị mất, đổi, hoặc có **hai** khóa khác nhau cùng tồn tại (ví dụ một bản cũ ở gốc repo), mọi entry đã ký bằng khóa kia sẽ không xác minh được nữa.
 - **Khắc phục**:
   ```bash

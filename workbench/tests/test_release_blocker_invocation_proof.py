@@ -979,3 +979,185 @@ def test_a_synthetic_data_kind_is_representable_and_never_evidence():
     lines: list[str] = []
     valid = _report_provenance([validated], strict_real=True, output=lines.append)
     assert valid is False and any("BLOCKED" in line for line in lines), lines
+
+
+def test_autopilot_ledger_corroboration_contracts(env):
+    """AP-1: autopilot requires corroboration against a valid evidence ledger.
+
+    (a) a missing ledger and an HMAC-invalid ledger both REFUSE the run by name (not OFFICIAL_VERIFIED);
+    (b) a ledger holding no entry for the run still refuses;
+    (c) a legitimate entry still verifies.
+    """
+    from workbench.backend import autopilot
+
+    plan = plan_for(env, reporting_evaluator(env["tmp"]))
+    code, run_id = run_operator(env, plan)
+    assert code == 0
+
+    ap_cfg = autopilot.AutopilotConfig(
+        path=env["tmp"] / "cfg.yaml",
+        selected_model_ids=(MODEL,),
+        paths={
+            "artifacts": env["artifacts"],
+            "checkpoints": env["tmp"] / "checkpoints",
+            "results": env["tmp"] / "results",
+            "dataset_root": env["tmp"] / "FashionIQ",
+            "registry": env["tmp"],
+            "third_party": env["tmp"] / "third_party",
+        },
+        budgets={"max_download_bytes": 0, "max_models": 1, "top_k": 10},
+        permissions={},
+        registry=registry_document(),
+    )
+    ap_plan = {
+        "schema_version": 1,
+        "solver_verified": True,
+        "configuration_digest": "fixture",
+        "models": [{"model_id": MODEL, "status": "NOT_RUN", "blockers": []}],
+    }
+    proof_path = em.completion_proof_path(env["config"], plan, run_id)
+    eval_stage = {
+        "model_id": MODEL,
+        "name": "evaluation",
+        "status": "COMPLETE",
+        "run_id": run_id,
+        "evidence": {"completion_proof": str(proof_path), "run_id": run_id},
+    }
+    execution = {"exit_code": 0, "stages": {f"evaluation:{MODEL}": eval_stage}}
+
+    # (c) Legitimate entry verifies as OFFICIAL_VERIFIED
+    rows, blockers = autopilot._classify(ap_plan, execution, ap_cfg)
+    assert rows[0]["status"] == "COMPLETED"
+    assert rows[0]["evaluation_kind"] == "OFFICIAL_VERIFIED"
+    assert blockers == []
+
+    # (b) Ledger holding no entry for this run still refuses
+    ledger_path = em.evidence_ledger_path(env["config"])
+    ledger_path.unlink()
+    em.append_evidence_entry(env["config"], {
+        "run_id": "other_run",
+        "model_id": MODEL,
+        "checkpoint_id": CHECKPOINT,
+        "protocol_id": PROTOCOL,
+        "report_digest": "0" * 64,
+        "return_code": 0,
+        "invocation_status": "INVOCATION_COMPLETED",
+    })
+    rows, blockers = autopilot._classify(ap_plan, execution, ap_cfg)
+    assert rows[0]["evaluation_kind"] != "OFFICIAL_VERIFIED"
+    assert rows[0]["status"] == "FAILED_OUTPUT_VALIDATION"
+    assert any("evidence-ledger entry for this run" in r or "missing from evidence ledger" in r
+               for b in blockers for r in b.get("reasons", []))
+
+    # (a) HMAC-invalid ledger refuses by name
+    ledger_path.write_text("{\"corrupted\": true}\n", encoding="utf-8")
+    rows, blockers = autopilot._classify(ap_plan, execution, ap_cfg)
+    assert rows[0]["evaluation_kind"] != "OFFICIAL_VERIFIED"
+    assert rows[0]["status"] == "FAILED_OUTPUT_VALIDATION"
+    assert any("the evidence ledger is missing or its HMAC chain does not verify" in r
+               or "the evidence ledger is missing or its chain is broken" in r
+               for b in blockers for r in b.get("reasons", []))
+
+    # (a) Missing ledger refuses by name
+    ledger_path.unlink()
+    rows, blockers = autopilot._classify(ap_plan, execution, ap_cfg)
+    assert rows[0]["evaluation_kind"] != "OFFICIAL_VERIFIED"
+    assert rows[0]["status"] == "FAILED_OUTPUT_VALIDATION"
+    assert any("the evidence ledger is missing or its HMAC chain does not verify" in r
+               or "the evidence ledger is missing or its chain is broken" in r
+               for b in blockers for r in b.get("reasons", []))
+
+
+def test_unregistered_model_metric_evidence_contracts():
+    """D-F1: an unregistered model requiring metric extraction must carry usable values.
+
+    (d) an unregistered model with metric_extraction_available=True and no metrics is refused by name;
+    (e) a run with real metrics still certifies.
+    """
+    no_metrics_report = {
+        "metric_extraction_available": True,
+        "extraction_status": "EXTRACTED_VERIFIED",
+        "observed_metrics": None,
+    }
+    reasons_d, outcome_d = verify_run.metric_evidence_reasons(
+        "unregistered_model", "ckpt", "fashioniq_original_split", no_metrics_report)
+    assert outcome_d == benchmarks.SELECTION_UNREGISTERED
+    assert any("claims metric extraction succeeded but carries no usable metrics" in r
+               for r in reasons_d), reasons_d
+
+    real_metrics_report = {
+        "metric_extraction_available": True,
+        "extraction_status": "EXTRACTED_VERIFIED",
+        "observed_metrics": {"r10": 55.0, "r50": 75.0, "mean": 65.0},
+    }
+    reasons_e, outcome_e = verify_run.metric_evidence_reasons(
+        "unregistered_model", "ckpt", "fashioniq_original_split", real_metrics_report)
+    assert outcome_e == benchmarks.SELECTION_UNREGISTERED
+    assert reasons_e == [], reasons_e
+
+
+def test_partial_category_table_contracts():
+    """D-R2-01: category table validation for non-LIMN vs LIMN models.
+
+    (a) a non-LIMN run with a partial category table whose values are valid is ACCEPTED;
+    (b) the same run with an out-of-range category value is REFUSED;
+    (c) LIMN still requires all three categories.
+    """
+    report_partial_valid = {
+        "metric_extraction_available": True,
+        "extraction_status": "EXTRACTED_VERIFIED",
+        "observed_metrics": {"r10": 55.0, "r50": 75.0, "mean": 65.0},
+        "category_metrics": {"dress": {"r10": 50.0, "r50": 70.0}},
+    }
+    reasons_a, outcome_a = verify_run.metric_evidence_reasons(
+        "unregistered_model", "ckpt", "fashioniq_original_split", report_partial_valid)
+    assert outcome_a == benchmarks.SELECTION_UNREGISTERED
+    assert reasons_a == [], reasons_a
+
+    report_partial_bad = {
+        "metric_extraction_available": True,
+        "extraction_status": "EXTRACTED_VERIFIED",
+        "observed_metrics": {"r10": 55.0, "r50": 75.0, "mean": 65.0},
+        "category_metrics": {"dress": {"r10": 50.0, "r50": 150.0}},
+    }
+    reasons_b, outcome_b = verify_run.metric_evidence_reasons(
+        "unregistered_model", "ckpt", "fashioniq_original_split", report_partial_bad)
+    assert any("category dress r50 is not a finite Recall in [0, 100]: 150.0" in r
+               for r in reasons_b), reasons_b
+
+    reasons_c, outcome_c = verify_run.metric_evidence_reasons(
+        "limn", "ckpt_v1", "fashioniq_original_split", report_partial_valid)
+    assert any("category shirt is missing from the report" in r for r in reasons_c), reasons_c
+    assert any("category toptee is missing from the report" in r for r in reasons_c), reasons_c
+
+
+def test_ledger_key_conflict_appears_once_in_reasons(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """D-R2-02: a key conflict appears exactly once in reasons."""
+    artifacts = tmp_path / "artifacts"
+    reports = artifacts / "reports"
+    reports.mkdir(parents=True)
+    (reports / "csmcir_ckpt_r1_aggregate.json").write_text(json.dumps({
+        "artifact_type": "official_aggregate_evaluation_report",
+        "run_id": "r1",
+        "model_id": "csmcir",
+        "checkpoint_id": "ckpt",
+        "protocol_id": "fashioniq_original_split",
+    }), encoding="utf-8")
+
+    monkeypatch.setenv("WORKBENCH_ARTIFACTS_ROOT", str(artifacts))
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY", raising=False)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.setenv("CIR_REPO_ROOT", str(repo))
+    config_home = tmp_path / "config"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+
+    legacy = repo / ".workbench_ledger_key"
+    private = config_home / "cir" / "workbench_ledger_key"
+    legacy.write_bytes(b"legacy-key-bytes-32-len-aaaaaaaa")
+    private.parent.mkdir(parents=True)
+    private.write_bytes(b"private-key-bytes-32-len-bbbbbbbb")
+
+    verdict = verify_run.verify("r1", "csmcir", "ckpt", "fashioniq_original_split")
+    key_reasons = [r for r in verdict["reasons"] if "the evidence ledger key is unusable" in r]
+    assert len(key_reasons) == 1, key_reasons

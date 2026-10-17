@@ -1024,11 +1024,56 @@ def _host_identity() -> dict[str, str]:
             break
     return identity
 
+def resolve_model_interpreter(model: dict[str, Any], config: Any | None = None) -> str | None:
+    """The interpreter path this model's environment currently resolves to.
+
+    Checks the declared environment variable first. If unset, falls back to the persisted
+    provisioning assignment (`environment_assignment.json`) under this operator's artifacts root,
+    provided the record is RUNTIME_VERIFIED and located within this artifacts root.
+    """
+    env = model.get("environment") or {}
+    variable = env.get("python_env_var")
+    if not variable:
+        return None
+    configured = os.environ.get(variable)
+    if configured:
+        return configured
+    try:
+        from workbench.backend.environment_planner import load_environment_assignment
+        from workbench.backend.operator_config import resolve_config
+
+        cfg = config if config is not None else resolve_config()
+        artifacts_root = Path(getattr(cfg, "WORKBENCH_ARTIFACTS_ROOT", None) or "")
+        assignment_path = artifacts_root / "environment_assignment.json"
+        if assignment_path.is_file():
+            model_id = model.get("model_id", "<unnamed>")
+            persisted = (load_environment_assignment(assignment_path).get("models") or {}).get(model_id) or {}
+            interp = str(persisted.get("interpreter") or "")
+            # Only adopt an interpreter this operator's own artifacts root created: another
+            # root's assignment (different install/host) must not silently become this
+            # environment's interpreter.
+            interp_p = Path(interp)
+            root_p = artifacts_root.resolve()
+            # Only adopt an interpreter this operator's own artifacts root created: another
+            # root's assignment (different install/host) must not silently become this
+            # environment's interpreter.
+            if (persisted.get("state") == "RUNTIME_VERIFIED" and interp
+                    and interp_p.is_absolute()
+                    and (interp_p.is_relative_to(artifacts_root)
+                         or interp_p.parent.parent.resolve().is_relative_to(root_p)
+                         or interp_p.resolve().is_relative_to(root_p))):
+                return interp
+    except Exception:
+        pass
+    return None
+
+_resolve_model_interpreter = resolve_model_interpreter
+
+
 def _gpu_capability_key(model: dict[str, Any], authoritative: bool = True) -> str:
     import hashlib
 
-    env = model.get("environment") or {}
-    configured = os.environ.get(env.get("python_env_var") or "", "")
+    configured = resolve_model_interpreter(model) or ""
     interpreter = Path(configured).expanduser() if configured else None
     fingerprint = None
     if interpreter is not None and interpreter.is_file():
@@ -1092,6 +1137,18 @@ def _gpu_cache_key() -> bytes:
         legacy_key_path = repo_root / ".workbench_ledger_key"
         config_home = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
         private_key_path = config_home / "cir" / "workbench_ledger_key"
+        if (legacy_key_path.is_file() and private_key_path.is_file()
+                and legacy_key_path.read_bytes() != private_key_path.read_bytes()):
+            # Two systems signing under two different keys. The ledger's own resolver refuses this
+            # state outright (`LedgerKeyError`), so a capability record signed here would use a key
+            # the ledger reader never picks, and every record it reads fails its signature check:
+            # both are failure modes the operator cannot see. This helper keeps its documented
+            # precedence (the repository-root key signs), and the consequence is reported where the
+            # reader sees it -- `_gpu_capability_signature` returns None for b"" and the record is
+            # simply not trusted until one key is gone.
+            print(f"workbench: two different ledger keys exist ({legacy_key_path} and "
+                  f"{private_key_path}); keep one file and remove the other, or set "
+                  "WORKBENCH_LEDGER_KEY explicitly to choose one", file=sys.stderr)
         if legacy_key_path.is_file():
             key_path = legacy_key_path
         elif os.access(repo_root, os.W_OK):
@@ -1170,20 +1227,25 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
     records without unbounded content hashing. On the authoritative verification path,
     it checks the full byte-exact fingerprint.
     """
-    env = model.get("environment") or {}
-    configured = os.environ.get(env.get("python_env_var") or "", "")
+    configured = getattr(report, "interpreter", None) or resolve_model_interpreter(model) or ""
     from workbench.backend.operator_config import resolve_config
 
     config_for_records = resolve_config()
     synthetic_ok = os.environ.get(GPU_PROBE_OVERRIDE_ENV) == "1"
+    expected_fingerprint = _record_environment_fingerprint(model, configured)
 
     if not authoritative:
         for cached_payload in list(_GPU_CAPABILITY.values()):
-            if (isinstance(cached_payload, dict)
-                    and cached_payload.get("model_id") in (None, model.get("model_id"))
+            if not isinstance(cached_payload, dict):
+                continue
+            probe_source = cached_payload.get("probe_source", "interpreter")
+            if not (probe_source == "interpreter" or (synthetic_ok and probe_source == "override")):
+                continue
+            if (cached_payload.get("model_id") in (None, model.get("model_id"))
                     and cached_payload.get("interpreter") == configured
                     and cached_payload.get("dependency_fingerprint") == _environment_contract_digest(model)
                     and cached_payload.get("host_identity") == _host_identity()
+                    and (not expected_fingerprint or cached_payload.get("interpreter_fingerprint") == expected_fingerprint)
                     and _gpu_capability_signature_valid(cached_payload)):
                 return cached_payload
         directory = gpu_capability_directory(config_for_records)
@@ -1193,14 +1255,16 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
                     payload = json.loads(candidate.read_text(encoding="utf-8"))
                 except (OSError, ValueError):
                     continue
-                probe_source = payload.get("probe_source", "interpreter") if isinstance(payload, dict) else "interpreter"
+                if not isinstance(payload, dict):
+                    continue
+                probe_source = payload.get("probe_source", "interpreter")
                 if not (probe_source == "interpreter" or (synthetic_ok and probe_source == "override")):
                     continue
-                if (isinstance(payload, dict)
-                        and payload.get("model_id") in (None, model.get("model_id"))
+                if (payload.get("model_id") in (None, model.get("model_id"))
                         and payload.get("interpreter") == configured
                         and payload.get("dependency_fingerprint") == _environment_contract_digest(model)
                         and payload.get("host_identity") == _host_identity()
+                        and (not expected_fingerprint or payload.get("interpreter_fingerprint") == expected_fingerprint)
                         and _gpu_capability_signature_valid(payload)):
                     if payload.get("capability_key"):
                         _GPU_CAPABILITY[payload["capability_key"]] = payload
@@ -1209,9 +1273,13 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
 
     key = _gpu_capability_key(model, authoritative=True)
     cached = _GPU_CAPABILITY.get(key)
-    if cached is not None and not _gpu_capability_signature_valid(cached):
-        _GPU_CAPABILITY.pop(key, None)
-        cached = None
+    if cached is not None:
+        probe_source = cached.get("probe_source", "interpreter") if isinstance(cached, dict) else "interpreter"
+        if not (probe_source == "interpreter" or (synthetic_ok and probe_source == "override")):
+            cached = None
+        elif not _gpu_capability_signature_valid(cached):
+            _GPU_CAPABILITY.pop(key, None)
+            cached = None
     if cached is None:
         payload = None
         try:
@@ -1237,9 +1305,8 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
     # so a record produced by a different interpreter (or one whose environment was mutated)
     # cannot certify this one. Comparing against `report.environment_fingerprint` alone silently
     # accepted any record on the advisory path, where that field is deliberately unset.
-    expected_fingerprint = _record_environment_fingerprint(model, report.interpreter)
-    if cached.get("interpreter_fingerprint") and expected_fingerprint:
-        if cached["interpreter_fingerprint"] != expected_fingerprint:
+    if expected_fingerprint:
+        if cached.get("interpreter_fingerprint") != expected_fingerprint:
             return None
     return cached
 
@@ -1252,29 +1319,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     if not variable:
         return EnvironmentReport(model_id, None, None, TIER_UNCONFIGURED, "UNCONFIGURED",
                                  reason="no environment variable declared")
-    configured = os.environ.get(variable)
-    if not configured:
-        # Fall back to the persisted provisioning assignment: after `environment` provisioning
-        # recorded a RUNTIME_VERIFIED interpreter, subprocesses that were not launched with the
-        # autopilot's child environment (pipeline gpu-verification, doctor probes) would
-        # otherwise see the model as UNCONFIGURED even though a verified interpreter exists.
-        try:
-            from workbench.backend.environment_planner import load_environment_assignment
-            from workbench.backend.operator_config import resolve_config
-            assignment_path = resolve_config().WORKBENCH_ARTIFACTS_ROOT / "environment_assignment.json"
-            if assignment_path.is_file():
-                persisted = (load_environment_assignment(assignment_path).get("models") or {}).get(model_id) or {}
-                interp = str(persisted.get("interpreter") or "")
-                # Only adopt an interpreter this operator's own artifacts root created: another
-                # root's assignment (different install/host) must not silently become this
-                # environment's interpreter.
-                if (persisted.get("state") == "RUNTIME_VERIFIED" and interp
-                        and Path(interp).is_absolute()
-                        and Path(interp).resolve().is_relative_to(
-                            Path(resolve_config().WORKBENCH_ARTIFACTS_ROOT).resolve())):
-                    configured = interp
-        except Exception:
-            configured = None
+    configured = resolve_model_interpreter(model)
     if not configured:
         return EnvironmentReport(model_id, variable, None, TIER_UNCONFIGURED, "UNCONFIGURED",
                                  reason=f"{variable} not set")
@@ -1656,6 +1701,12 @@ def _reuse(model: dict[str, Any], require_cuda: bool, interpreter: str,
     cached = _VERIFIED_ENVIRONMENTS.get(key)
     if cached is None or cached.interpreter != interpreter:
         return None
+    if cached.gpu_capability is not None:
+        synthetic_ok = os.environ.get(GPU_PROBE_OVERRIDE_ENV) == "1"
+        probe_source = cached.gpu_capability.get("probe_source", "interpreter")
+        if not (probe_source == "interpreter" or (synthetic_ok and probe_source == "override")):
+            _VERIFIED_ENVIRONMENTS.pop(key, None)
+            return None
     if authoritative:
         if cached.environment_fingerprint is None:
             return None
@@ -1684,9 +1735,12 @@ def _reuse(model: dict[str, Any], require_cuda: bool, interpreter: str,
 
 
 def _remember(model: dict[str, Any], require_cuda: bool, report: EnvironmentReport) -> None:
+    # The contract digest is the identity of what was just verified, not a cache artifact: a
+    # GPU capability record stores it and every reader compares it against the model's current
+    # contract. Only the fingerprints below are cache state, so only they are gated.
+    report.contract_digest = _environment_contract_digest(model)
     if not _cache_enabled() or report.interpreter is None:
         return
-    report.contract_digest = _environment_contract_digest(model)
     is_authoritative = getattr(report, "content_verified", False)
     if is_authoritative:
         report.environment_fingerprint = _interpreter_fingerprint(

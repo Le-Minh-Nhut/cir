@@ -21,6 +21,7 @@ Set ``RELEASE_VERIFY_SCRIPT`` to run the same tests against the pre-fix copy of 
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -57,6 +58,10 @@ def _python_block(start_marker: str, end_marker: str = "\nEOF\n") -> str:
 def _report_block() -> str:
     """The report-writing block that folds the GPU scan into the verdict."""
     return _python_block('J1="${RESULTS[J1]}"')
+
+def _j8_block() -> str:
+    """The J8 job lifecycle block."""
+    return _python_block('say "== J8 job lifecycle statuses are the backend enum =="')
 
 def _j1_block() -> str:
     """The J1 run-classification block."""
@@ -144,7 +149,8 @@ def _scan(env: dict[str, str]) -> tuple[dict, subprocess.CompletedProcess]:
     """Run the script's own report block, with J5 bound as the bash runner binds it."""
     import tempfile
 
-    child = env | {"J5": "PASS", "D5": "fail-closed contract holds"}
+    base_checks = {f"J{i}": "PASS" for i in range(1, 13)}
+    child = base_checks | env | {"J5": "PASS", "D5": "fail-closed contract holds"}
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "report.json"
         completed = _run_block(_report_block(), str(path), env=child)
@@ -373,3 +379,514 @@ def test_j1_refuses_an_uncorroborated_run(sandbox: Path):
     assert completed.returncode != 0
     assert "presented as real evidence without corroboration" in completed.stderr
     assert "no evidence-ledger-corroborated aggregate report" in completed.stderr
+
+def test_j1_reports_conflicting_ledger_keys_as_named_condition_without_traceback(
+    sandbox: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """A conflicting operator ledger key pair must be reported as a named condition
+    (ledger_key_unusable) with both paths and remedy visible, rather than an unhandled traceback."""
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY", raising=False)
+    (sandbox / "reports").mkdir(parents=True, exist_ok=True)
+    repo_root = Path(os.environ["CIR_REPO_ROOT"])
+    repo_root.mkdir(parents=True, exist_ok=True)
+    config_home = Path(os.environ["XDG_CONFIG_HOME"])
+    (config_home / "cir").mkdir(parents=True, exist_ok=True)
+
+    legacy = repo_root / ".workbench_ledger_key"
+    private = config_home / "cir" / "workbench_ledger_key"
+    legacy.write_text("key-legacy-divergent", encoding="utf-8")
+    private.write_text("key-private-divergent", encoding="utf-8")
+
+    completed = _classify([])
+    assert completed.returncode != 0
+    output = completed.stderr + completed.stdout
+    assert "Traceback (most recent call last):" not in output
+    assert "ledger_key_unusable" in output
+    assert str(legacy) in output
+    assert str(private) in output
+    assert "keep one file and remove the other" in output
+
+# --------------------------------------------------------------------------- Defect B: Premature RELEASE_READY
+
+def _create_benchmark_run(
+    sandbox: Path,
+    run_id: str,
+    *,
+    is_synthetic: bool = False,
+    data_kind: str = "experiment",
+    valid_metrics: bool = True,
+    has_proof: bool = True,
+    corrupt_proof: bool = False,
+    ledger_return_code: int = 0,
+    ledger_invocation_status: str = "INVOCATION_COMPLETED",
+) -> dict:
+    from workbench.backend.operator_config import resolve_config
+    from workbench.scripts import evaluate_models as evaluator, verify_run
+
+    config = resolve_config()
+    model_id = "limn"
+    checkpoint_id = "base_iter0_all_categories"
+    protocol_id = "fashioniq_val_split"
+
+    ckpt_dir = config.WORKBENCH_CHECKPOINT_ROOT / "limn"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("0_dress_best_model.pt", "0_shirt_best_model.pt", "0_toptee_best_model.pt"):
+        member = ckpt_dir / name
+        if not member.is_file():
+            member.write_text("fake weight")
+
+    reports = evaluator.reports_root(config)
+    reports.mkdir(parents=True, exist_ok=True)
+    report_file = reports / f"{model_id}_{checkpoint_id}_{run_id}_aggregate.json"
+
+    if valid_metrics:
+        categories = {
+            "dress": {"r10": 20.0, "r50": 45.0},
+            "shirt": {"r10": 20.0, "r50": 45.0},
+            "toptee": {"r10": 20.0, "r50": 45.0},
+        }
+        observed = {"r10": 20.0, "r50": 45.0, "mean": 32.5}
+        extraction_status = "EXTRACTED_VERIFIED"
+        extraction_avail = True
+    else:
+        categories = {
+            "dress": {"r10": float("nan"), "r50": 45.0},
+            "shirt": {"r10": 20.0, "r50": 45.0},
+            "toptee": {"r10": 20.0, "r50": 45.0},
+        }
+        observed = {"r10": float("nan"), "r50": 45.0, "mean": float("nan")}
+        extraction_status = "EXTRACTED_VERIFIED"
+        extraction_avail = True
+
+    bundle_manifest = evaluator.build_artifact_manifest(
+        ckpt_dir, ["0_dress_best_model.pt", "0_shirt_best_model.pt", "0_toptee_best_model.pt"]
+    )
+    manifest_digest = evaluator.manifest_digest(bundle_manifest)
+
+    pin = verify_run._regression_pin(model_id)
+    plan = evaluator.EvaluationPlan(
+        model_id=model_id, checkpoint_id=checkpoint_id, protocol=protocol_id,
+        dataset_root=sandbox / "FashionIQ", source=sandbox / "source",
+        checkpoint=ckpt_dir / "0_dress_best_model.pt", cwd=sandbox / "source",
+        command=["python"], pin=pin, actual_source_commit=pin,
+        paper_metrics=None, artifact_type="bundle_members"
+    )
+    run_dir = evaluator.log_dir(config, plan, evaluator.datetime.now(evaluator.timezone.utc), run_id)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "stdout.log").write_text("evaluating\nresults: done\n")
+    (run_dir / "stderr.log").write_text("")
+    logs = {"stderr": "", "stdout": "evaluating\nresults: done\n"}
+    evidence_digest = hashlib.sha256(json.dumps(logs, sort_keys=True).encode("utf-8")).hexdigest()
+
+    (run_dir / "command.json").write_text(json.dumps({
+        "run_id": run_id, "model_id": model_id,
+        "checkpoint_id": checkpoint_id, "protocol_id": protocol_id,
+        "invocation_status": "INVOCATION_COMPLETED", "return_code": 0,
+    }))
+
+    report_data = {
+        "artifact_type": "official_aggregate_evaluation_report",
+        "run_id": run_id, "model_id": model_id,
+        "checkpoint_id": checkpoint_id, "protocol_id": protocol_id,
+        "is_synthetic": is_synthetic, "data_kind": data_kind,
+        "return_code": 0, "invocation_status": "INVOCATION_COMPLETED",
+        "execution_status": "EXECUTION_COMPLETED",
+        "metric_extraction_available": extraction_avail,
+        "extraction_status": extraction_status,
+        "category_metrics": categories, "observed_metrics": observed,
+        "checkpoint_sha256": manifest_digest,
+        "bundle_manifest_digest": manifest_digest,
+        "evidence_digest": evidence_digest,
+    }
+    report_file.write_text(json.dumps(report_data))
+    report_digest = evaluator.sha256_file(report_file)
+
+    ledger_entry = {
+        "run_id": run_id, "model_id": model_id,
+        "checkpoint_id": checkpoint_id, "protocol_id": protocol_id,
+        "report_digest": report_digest, "return_code": ledger_return_code,
+        "invocation_status": ledger_invocation_status,
+    }
+    added = evaluator.append_evidence_entry(config, ledger_entry)
+    ledger_entry_digest = added["entry_digest"]
+
+    proof_file = reports / f"{model_id}_{checkpoint_id}_{run_id}_completion.json"
+    if has_proof:
+        proof_data = {
+            "artifact_type": "official_evaluation_completion_proof",
+            "schema_version": 1,
+            "completion_status": "COMPLETED",
+            "return_code": 0,
+            "run_id": run_id, "model_id": model_id,
+            "checkpoint_id": checkpoint_id, "protocol_id": protocol_id,
+            "source_expected_commit": pin, "source_actual_commit": pin,
+            "checkpoint_sha256": manifest_digest,
+            "bundle_manifest_digest": manifest_digest,
+            "ledger_entry_digest": ledger_entry_digest,
+            "report": str(report_file), "report_digest": report_digest,
+            "invocation_status": "INVOCATION_COMPLETED",
+            "environment_digest": "env_test_digest",
+            "evidence_digest": evidence_digest,
+            "run_directory": str(run_dir),
+        }
+        if corrupt_proof:
+            proof_data["report_digest"] = "0" * 64
+        proof_file.write_text(json.dumps(proof_data))
+
+    return report_data
+
+
+def test_defect_b_a_synthetic_only_evidence_does_not_reach_release_ready(probe_environment, sandbox: Path):
+    """(a) Synthetic-only evidence does not reach RELEASE_READY; MODEL_INFERENCE remains PENDING."""
+    model, interpreter, config = probe_environment
+    _genuine_record(model, config, interpreter)
+    _create_benchmark_run(sandbox, "run_syn_fixture", is_synthetic=True, data_kind="mock")
+
+    report, completed = _scan(os.environ)
+
+    assert completed.returncode == 0
+    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PASS"
+    assert report["dimensions"]["MODEL_INFERENCE"]["status"] == "PENDING"
+    assert report["dimensions"]["MODEL_EVALUATION"]["status"] == "PENDING"
+    assert report["verdict"] != "RELEASE_READY"
+    assert report["verdict"] == "GPU_VALIDATION_PENDING"
+
+
+def test_defect_b_b_verified_gpu_record_alone_does_not_reach_release_ready(probe_environment, sandbox: Path):
+    """(b) A verified GPU record alone does not reach RELEASE_READY (MODEL_INFERENCE still PENDING)."""
+    model, interpreter, config = probe_environment
+    _genuine_record(model, config, interpreter)
+
+    report, completed = _scan(os.environ)
+
+    assert completed.returncode == 0
+    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PASS"
+    assert report["dimensions"]["MODEL_INFERENCE"]["status"] == "PENDING"
+    assert report["dimensions"]["MODEL_EVALUATION"]["status"] == "PENDING"
+    assert report["verdict"] != "RELEASE_READY"
+    assert report["verdict"] == "GPU_VALIDATION_PENDING"
+
+
+def test_defect_b_c_inference_claim_without_valid_metrics_does_not_reach_it(probe_environment, sandbox: Path):
+    """(c) An inference claim without valid metrics does not reach RELEASE_READY."""
+    model, interpreter, config = probe_environment
+    _genuine_record(model, config, interpreter)
+    _create_benchmark_run(sandbox, "run_invalid_metrics", is_synthetic=False, data_kind="experiment",
+                          valid_metrics=False, has_proof=True)
+
+    report, completed = _scan(os.environ)
+
+    assert completed.returncode == 0
+    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PASS"
+    assert report["dimensions"]["SCIENTIFIC_OUTPUT"]["status"] == "PENDING"
+    assert report["dimensions"]["MODEL_EVALUATION"]["status"] == "PENDING"
+    assert report["verdict"] != "RELEASE_READY"
+    assert report["verdict"] == "GPU_VALIDATION_PENDING"
+
+
+def test_defect_b_d_run_missing_completion_proof_does_not_reach_it(probe_environment, sandbox: Path):
+    """(d) A run missing a completion proof does not reach RELEASE_READY."""
+    model, interpreter, config = probe_environment
+    _genuine_record(model, config, interpreter)
+    _create_benchmark_run(sandbox, "run_missing_proof", is_synthetic=False, data_kind="experiment",
+                          valid_metrics=True, has_proof=False)
+
+    report, completed = _scan(os.environ)
+
+    assert completed.returncode == 0
+    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PASS"
+    assert report["dimensions"]["MODEL_EVALUATION"]["status"] == "PENDING"
+    assert report["verdict"] != "RELEASE_READY"
+    assert report["verdict"] == "GPU_VALIDATION_PENDING"
+
+
+def test_defect_b_e_forged_capability_record_does_not_reach_it(sandbox: Path):
+    """(e) A forged capability record does not reach RELEASE_READY."""
+    _create_benchmark_run(sandbox, "run_legit_with_forged_gpu", is_synthetic=False,
+                          data_kind="experiment", valid_metrics=True, has_proof=True)
+    forge = sandbox / "gpu_capabilities" / "forged_probe.json"
+    forge.write_text(json.dumps({"probe_source": "override", "capability_verified": True}))
+
+    report, completed = _scan(os.environ)
+
+    assert completed.returncode == 0
+    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PENDING"
+    assert report["gpu_capability_scan"]["real_gpu"] is False
+    assert report["verdict"] != "RELEASE_READY"
+    assert report["verdict"] == "GPU_VALIDATION_PENDING"
+
+
+def test_defect_b_f_legitimate_corroborated_run_is_accepted_evidence(probe_environment, sandbox: Path):
+    """(f) A legitimate corroborated benchmark run is reported as accepted evidence."""
+    model, interpreter, config = probe_environment
+    _genuine_record(model, config, interpreter)
+    _create_benchmark_run(sandbox, "run_legit_accepted", is_synthetic=False,
+                          data_kind="experiment", valid_metrics=True, has_proof=True)
+
+    pass_env = {**os.environ, **{f"J{i}": "PASS" for i in range(1, 13)}}
+    report, completed = _scan(pass_env)
+
+    assert completed.returncode == 0
+    assert report["dimensions"]["STATIC_SOURCE"]["status"] == "PASS"
+    assert report["dimensions"]["DEPLOYMENT"]["status"] == "PASS"
+    assert report["dimensions"]["CONFIGURATION"]["status"] == "PASS"
+    assert report["dimensions"]["MODEL_ENVIRONMENT"]["status"] == "PASS"
+    assert report["dimensions"]["OPERATIONS"]["status"] == "PASS"
+    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PASS"
+    assert report["dimensions"]["MODEL_INFERENCE"]["status"] == "PASS"
+    assert report["dimensions"]["MODEL_EVALUATION"]["status"] == "PASS"
+    assert report["dimensions"]["SCIENTIFIC_OUTPUT"]["status"] == "PASS"
+    assert any(r.get("run_id") == "run_legit_accepted" for r in report.get("accepted_evidence_runs", []))
+    assert report["verdict"] == "RELEASE_READY"
+
+
+def test_defect_b_g_with_no_target_gpu_verdict_is_pending_not_pass(sandbox: Path):
+    """(g) With no target GPU the verdict is PENDING, not PASS."""
+    _create_benchmark_run(sandbox, "run_legit_no_gpu_target", is_synthetic=False,
+                          data_kind="experiment", valid_metrics=True, has_proof=True)
+
+    report, completed = _scan(os.environ)
+
+    assert completed.returncode == 0
+    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PENDING"
+    assert report["gpu_capability_scan"]["real_gpu"] is False
+    assert report["verdict"] != "RELEASE_READY"
+    assert report["verdict"] == "GPU_VALIDATION_PENDING"
+
+    # Also prove against the full release_verify.sh script execution
+    report_path = sandbox / "offline_report.json"
+    sub_env = {**os.environ, "WORKBENCH_ARTIFACTS_ROOT": str(sandbox)}
+    res = subprocess.run(
+        ["bash", str(SCRIPT), "--offline", "--report", str(report_path)],
+        env=sub_env, capture_output=True, text=True, cwd=str(REPOSITORY)
+    )
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    assert report_path.is_file()
+    offline_report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert offline_report["verdict"] == "ENGINEERING_INCOMPLETE"
+    assert offline_report["dimensions"]["DEPLOYMENT"]["status"] == "PENDING"
+    assert offline_report["dimensions"]["OPERATIONS"]["status"] == "PENDING"
+    assert offline_report["dimensions"]["GPU_RUNTIME"]["status"] == "PENDING"
+
+@pytest.mark.parametrize("invocation_builder", [
+    lambda rep, script_dir: ["--offline", "--report", str(rep)],
+    lambda rep, script_dir: ["--report", str(rep), "--offline"],
+    lambda rep, script_dir: ["--offline", "--base", "http://127.0.0.1:8000", "--report", str(rep)],
+    lambda rep, script_dir: ["--base", "http://127.0.0.1:8000", "--report", str(rep), "--offline"],
+    lambda rep, script_dir: ["--offline"],
+])
+def test_release_verify_documented_invocations_produce_parseable_report(tmp_path: Path, invocation_builder):
+    """Each documented invocation syntax produces a parseable report file."""
+    script_copy = tmp_path / "release_verify.sh"
+    script_copy.write_text(SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
+    script_copy.chmod(0o755)
+
+    custom_report = tmp_path / "custom_report.json"
+    args = invocation_builder(custom_report, tmp_path)
+    env = {**os.environ, "WORKBENCH_REPO": str(REPOSITORY)}
+    res = subprocess.run(
+        ["bash", str(script_copy), *args],
+        env=env, capture_output=True, text=True, cwd=str(REPOSITORY)
+    )
+    assert res.returncode == 0, f"Invocation failed: args={args}\nstdout:\n{res.stdout}\nstderr:\n{res.stderr}"
+
+    target_report = custom_report if "--report" in args else (tmp_path / "release_verify_report.json")
+    assert target_report.is_file(), f"Report file not created: {target_report}"
+    data = json.loads(target_report.read_text(encoding="utf-8"))
+    assert "verdict" in data
+    assert "checks" in data
+    assert "dimensions" in data
+
+
+def test_release_verify_report_block_failure_exits_nonzero_with_reason(tmp_path: Path):
+    """Injected failure inside report block must exit NON-ZERO and say why, not exit 0 with no report."""
+    orig_script = SCRIPT.read_text(encoding="utf-8")
+    injected_marker = "import json, os, sys, datetime\nraise RuntimeError('INJECTED_REPORT_BLOCK_CRASH')"
+    injected_script = orig_script.replace("import json, os, sys, datetime", injected_marker)
+    assert injected_script != orig_script, "target import string not found for injection"
+
+    script_copy = tmp_path / "release_verify.sh"
+    script_copy.write_text(injected_script, encoding="utf-8")
+    script_copy.chmod(0o755)
+
+    report_path = tmp_path / "failed_report.json"
+    env = {**os.environ, "WORKBENCH_REPO": str(REPOSITORY)}
+    res = subprocess.run(
+        ["bash", str(script_copy), "--offline", "--report", str(report_path)],
+        env=env, capture_output=True, text=True, cwd=str(REPOSITORY)
+    )
+    assert res.returncode != 0, f"Expected non-zero exit code, got {res.returncode}. stdout:\n{res.stdout}\nstderr:\n{res.stderr}"
+    assert not report_path.is_file(), f"Report file must not exist: {report_path}"
+    combined = (res.stdout + "\n" + res.stderr).lower()
+    assert "report generation failed" in combined, f"Expected failure reason in output, got:\n{res.stdout}\n{res.stderr}"
+    assert "injected_report_block_crash" in combined, f"Expected exception trace in output, got:\n{res.stdout}\n{res.stderr}"
+
+
+def test_f8_refuted_run_does_not_pass_model_inference(probe_environment, sandbox: Path):
+    """F8-release: a refuted run whose wording does NOT contain 'completion proof' must NOT pass MODEL_INFERENCE."""
+    model, interpreter, config = probe_environment
+    _genuine_record(model, config, interpreter)
+    _create_benchmark_run(
+        sandbox, "run_refuted_nonzero_rc", is_synthetic=False, data_kind="experiment",
+        valid_metrics=True, has_proof=True, ledger_return_code=1,
+        ledger_invocation_status="INVOCATION_FAILED",
+    )
+
+    report, completed = _scan(os.environ)
+
+    assert completed.returncode == 0
+    assert report["dimensions"]["MODEL_INFERENCE"]["status"] == "PENDING"
+    assert not any(r.get("run_id") == "run_refuted_nonzero_rc" for r in report.get("accepted_evidence_runs", []))
+
+
+class _MockJobServer:
+    def __init__(self, jobs: list[dict]):
+        self.jobs = jobs
+        self.server = None
+        self.thread = None
+        self.port = 0
+
+    def __enter__(self):
+        payload = json.dumps(self.jobs).encode("utf-8")
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/api/jobs":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(payload)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+            def log_message(self, *args):
+                pass
+        self.server = HTTPServer(("127.0.0.1", 0), Handler)
+        self.port = self.server.server_port
+        self.thread = Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        return f"http://127.0.0.1:{self.port}"
+
+    def __exit__(self, *args):
+        if self.server:
+            self.server.shutdown()
+
+
+def test_a9_empty_queue_alone_does_not_make_operations_fail():
+    """A9: An empty queue alone does not make the mandatory OPERATIONS dimension fail on a finished host."""
+    with _MockJobServer([]) as base_url:
+        completed = _run_block(_j8_block(), base_url, env=os.environ)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "queue idle" in completed.stdout
+
+    report, _ = _scan({"J8": "PASS"})
+    assert report["dimensions"]["OPERATIONS"]["status"] == "PASS"
+
+
+def test_a9_running_job_status_contract_genuinely_checked():
+    """A9: With a running job the status contract is genuinely checked (valid passes, bad fails)."""
+    with _MockJobServer([{"status": "running"}]) as base_url:
+        completed = _run_block(_j8_block(), base_url, env=os.environ)
+        assert completed.returncode == 0, (completed.stdout, completed.stderr)
+        assert "1 jobs, all statuses within the backend enum" in completed.stdout
+
+    with _MockJobServer([{"status": "bogus_status"}]) as base_url:
+        completed = _run_block(_j8_block(), base_url, env=os.environ)
+        assert completed.returncode != 0
+        assert "unexpected job statuses" in (completed.stdout + "\n" + completed.stderr)
+
+
+def test_offline_verdict_names_deployment_reason():
+    """Verdict masking: --offline must report ENGINEERING_INCOMPLETE, not mask as GPU_VALIDATION_PENDING."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        report_path = Path(tmp) / "offline_report.json"
+        env = {**os.environ, "WORKBENCH_REPO": str(REPOSITORY)}
+        res = subprocess.run(
+            ["bash", str(SCRIPT), "--offline", "--report", str(report_path)],
+            env=env, capture_output=True, text=True, cwd=str(REPOSITORY),
+        )
+        assert res.returncode == 0, (res.stdout, res.stderr)
+        assert report_path.is_file()
+        data = json.loads(report_path.read_text(encoding="utf-8"))
+        assert data["verdict"] == "ENGINEERING_INCOMPLETE"
+        assert data["dimensions"]["DEPLOYMENT"]["status"] == "PENDING"
+        assert data["verdict"] != "GPU_VALIDATION_PENDING"
+
+
+def test_frontend_certification_state_visible_and_not_silent_pass():
+    """Frontend F10-R2: uncertified runs (proof_unavailable, uncorroborated) must not be clean passes."""
+    script = """
+    import { warningLabels, isCertifiedEvidence } from "./workbench/frontend/gate.ts";
+
+    // 1. Clean pass with certified research evidence
+    const certifiedGate = {
+      benchmark_gate: { passed: true, status: "PASS_WITHIN_5_PERCENT", comparisons: [] },
+      verification: { certified: true, is_research_evidence: true, state: "certified" }
+    };
+    const certifiedLabels = warningLabels(certifiedGate, 5.0);
+    if (certifiedLabels.length !== 0) {
+      throw new Error(`expected no warning labels for certified run, got ${JSON.stringify(certifiedLabels)}`);
+    }
+    if (!isCertifiedEvidence(certifiedGate)) {
+      throw new Error("expected isCertifiedEvidence to be true");
+    }
+
+    // 2. proof_unavailable state
+    const proofUnavailGate = {
+      benchmark_gate: { passed: true, status: "PASS_WITHIN_5_PERCENT", comparisons: [] },
+      verification: { certified: false, is_research_evidence: false, state: "proof_unavailable" }
+    };
+    const proofUnavailLabels = warningLabels(proofUnavailGate, 5.0);
+    if (!proofUnavailLabels.some(l => l.kind === "proof-unavailable" && l.tone === "amber")) {
+      throw new Error(`expected proof-unavailable amber label, got ${JSON.stringify(proofUnavailLabels)}`);
+    }
+    if (isCertifiedEvidence(proofUnavailGate)) {
+      throw new Error("proof_unavailable must not be certified evidence");
+    }
+
+    // 3. uncorroborated state
+    const uncorrGate = {
+      benchmark_gate: { passed: true, status: "PASS_WITHIN_5_PERCENT", comparisons: [] },
+      verification: { certified: false, is_research_evidence: false, state: "uncorroborated" }
+    };
+    const uncorrLabels = warningLabels(uncorrGate, 5.0);
+    if (!uncorrLabels.some(l => l.kind === "uncorroborated" && l.tone === "red")) {
+      throw new Error(`expected uncorroborated red label, got ${JSON.stringify(uncorrLabels)}`);
+    }
+    if (isCertifiedEvidence(uncorrGate)) {
+      throw new Error("uncorroborated must not be certified evidence");
+    }
+
+    // 4. proof_unavailable is distinguishable from uncorroborated
+    if (proofUnavailLabels[0].kind === uncorrLabels[0].kind || proofUnavailLabels[0].tone === uncorrLabels[0].tone) {
+      throw new Error("proof_unavailable must be distinguishable from uncorroborated");
+    }
+
+    console.log("FRONTEND_GATE_ASSERTIONS_PASS");
+    """
+    res = subprocess.run(["npx", "tsx", "-e", script], cwd=str(REPOSITORY), capture_output=True, text=True)
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    assert "FRONTEND_GATE_ASSERTIONS_PASS" in res.stdout
+
+
+def test_frontend_api_error_surfaces_reason_not_empty_table():
+    """Frontend UI-1: on an HTTP error from /api/benchmark-runs, the reason must be surfaced."""
+    script = """
+    let error = "";
+    function setError(msg: string) { error = msg; }
+    const fakeApiError = new Error("the evidence ledger key is unusable, so no report can be corroborated: key_missing");
+
+    try {
+      throw fakeApiError;
+    } catch (e: any) {
+      setError(`benchmark-runs: ${e.message}`);
+    }
+
+    if (!error.includes("ledger key is unusable")) {
+      throw new Error(`expected surfaced error reason, got: ${error}`);
+    }
+    console.log("API_ERROR_SURFACED_PASS");
+    """
+    res = subprocess.run(["npx", "tsx", "-e", script], cwd=str(REPOSITORY), capture_output=True, text=True)
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    assert "API_ERROR_SURFACED_PASS" in res.stdout

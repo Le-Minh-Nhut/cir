@@ -108,6 +108,7 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(module, "resolve_config", lambda: type("C", (), {
         "WORKBENCH_THIRD_PARTY_ROOT": repo / "third_party",
         "WORKBENCH_ARTIFACTS_ROOT": repo / "workbench" / "artifacts",
+        "WORKBENCH_CHECKPOINT_ROOT": repo / "checkpoints",
         "FASHIONIQ_ROOT": repo / "FashionIQ"})())
     system = __import__("workbench.backend.runtime", fromlist=["runtime"])
     monkeypatch.setattr(system, "require_launch_ready", lambda model: "/usr/bin/python3")
@@ -132,10 +133,16 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                                 "checkpoint_id": report.get("checkpoint_id"),
                                 "protocol_id": report.get("protocol_id"),
                                 "report_digest": digest, "return_code": 0,
-                                "invocation_status": "INVOCATION_COMPLETED"})
+                                "invocation_status": "INVOCATION_COMPLETED",
+                                "entry_digest": f"entry-{digest[:16]}"})
         return entries
 
     monkeypatch.setattr(_em, "read_evidence_ledger", _fake_ledger)
+    # The fixture's reader above corroborates by content, not by HMAC, so the ledger key is never
+    # consulted -- but the route still asks whether one is *usable*, and on a host carrying two
+    # conflicting keys that answer is a refusal (a real behavior a separate test covers). The
+    # fixture stands in for a healthy deployment: one usable key.
+    monkeypatch.setattr(_em, "ledger_hmac_key", lambda config: "0" * 64)
     monkeypatch.setattr(module, "JOBS", type("Q", (), {
         "enqueue": lambda self, *a, **k: {"job_id": "job-1", "status": "queued",
                                           "log_directory": str(repo / "queue_jobs" / "job-1")},
@@ -349,6 +356,560 @@ def test_wrong_typed_nested_gate_fields_are_normalized_not_crashing(api, tmp_pat
         # the values with Object.entries and would crash on null.
         if row["category_metrics"] is not None:
             assert all(isinstance(v, dict) for v in row["category_metrics"].values())
+
+# ------------------------------------------------------------------- verifier-backed evidence
+
+#: A fully valid LIMN report: the macro is the mean of the three categories below and the mean of
+#: the two macro recalls, because `verify_run.py` re-derives that arithmetic rather than trusting
+#: the report's claim.
+VALID_EVIDENCE = {
+    "extraction_status": "EXTRACTED_VERIFIED",
+    "metric_extraction_available": True,
+    "category_metrics": {"dress": {"r10": 25.5, "r50": 55.2},
+                         "shirt": {"r10": 28.1, "r50": 58.4},
+                         "toptee": {"r10": 30.2, "r50": 60.1}},
+    "observed_metrics": {"r10": 27.9333, "r50": 57.9, "mean": 42.9167},
+}
+
+def _evidence_report(tmp_path: Path, run_id: str, *, proof: str | None = None,
+                     **overrides) -> None:
+    """Write one corroborated aggregate report into the fixture workspace.
+
+    The API fixture's ledger corroborates whatever is on disk, so every fixture here is
+    *authenticated*: the differences between them are exactly the research-evidence questions the
+    verifier owns, which is what makes them able to fail independently.
+
+    `proof` writes the completion-proof file, which selects the certification MODE outright: a
+    report with a proof is certified through the authoritative verifier in *any* process, and a
+    report without one is certified at ledger level only in a development process whose operator
+    opted in (`WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES=1`) -- otherwise it is refused by name.
+    """
+    reports = tmp_path / "repo" / "workbench" / "artifacts" / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    report = {"artifact_type": "official_aggregate_evaluation_report", "run_id": run_id,
+              "model_id": "limn", "checkpoint_id": "base_iter0_all_categories",
+              "protocol_id": "fashioniq_val_split", "checkpoint_sha256": "c" * 64,
+              "return_code": 0, "invocation_status": "INVOCATION_COMPLETED",
+              "benchmark_gate": {"status": "PASS_WITHIN_5_PERCENT", "passed": True},
+              "parity_status": "PARITY_VERIFIED", **VALID_EVIDENCE, **overrides}
+    (reports / f"limn_base_iter0_all_categories_{run_id}_aggregate.json").write_text(
+        json.dumps(report))
+    if proof is not None:
+        (reports / f"limn_base_iter0_all_categories_{run_id}_completion.json").write_text(proof)
+
+def _report_path(tmp_path: Path, run_id: str) -> Path:
+    return (tmp_path / "repo" / "workbench" / "artifacts" / "reports" /
+            f"limn_base_iter0_all_categories_{run_id}_aggregate.json")
+
+def _write_proof(tmp_path: Path, run_id: str, proof: str) -> None:
+    """Write this run's completion proof, the file `main.py` keys the certification mode on."""
+    _report_path(tmp_path, run_id).with_name(
+        f"limn_base_iter0_all_categories_{run_id}_completion.json").write_text(proof)
+
+def _write_checkpoint_bundle(tmp_path: Path) -> str:
+    """The three LIMN category weights the registry's bundle declares, and their manifest digest.
+
+    `base_iter0_all_categories` is a *bundle* checkpoint, so the verifier resolves its three
+    declared members under `WORKBENCH_CHECKPOINT_ROOT` and re-hashes them against the manifest the
+    proof records. A deployment has exactly these files; the fixture builds them so the fixture
+    exercises that path instead of failing on a missing weight.
+    """
+    from workbench.scripts.evaluate_models import build_artifact_manifest, manifest_digest
+
+    from workbench.backend.registry import checkpoint_by_id, model_by_id
+
+    model = model_by_id("limn")
+    bundle = checkpoint_by_id(model, "base_iter0_all_categories")
+    root = tmp_path / "repo" / "checkpoints" / "limn"
+    root.mkdir(parents=True, exist_ok=True)
+    names = []
+    for member_id in bundle["bundle_members"]:
+        variant = checkpoint_by_id(model, member_id)
+        (root / variant["filename"]).write_bytes(f"weights:{member_id}".encode())
+        names.append(variant["filename"])
+    return manifest_digest(build_artifact_manifest(root, names)) or ""
+
+def _valid_completion_proof(tmp_path: Path, run_id: str) -> str:
+    """A completion proof the authoritative verifier accepts end to end.
+
+    Every ingredient `validate_run_manifest` checks is real here: the report digest it names, the
+    run directory with its `command.json` and logs, the evaluator's environment identity, the
+    source pin of the registered model, the checkpoint bundle's manifest, and the evidence-ledger
+    entry the proof claims. This is what makes the deployment shape provable: the proof's
+    environment identity is exactly what proof validation needs, so a process serving it must
+    reach the verifier.
+    """
+    import hashlib
+    from workbench.backend.registry import model_by_id
+
+    artifacts = tmp_path / "repo" / "workbench" / "artifacts"
+    report_path = _report_path(tmp_path, run_id)
+    run_dir = artifacts / "logs" / f"limn__base_iter0_all_categories__{run_id}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "command.json").write_text(json.dumps({
+        "run_id": run_id, "model_id": "limn", "checkpoint_id": "base_iter0_all_categories",
+        "protocol_id": "fashioniq_val_split", "return_code": 0,
+        "invocation_status": "INVOCATION_COMPLETED"}))
+    (run_dir / "stdout.log").write_text("recall computed\n")
+    (run_dir / "stderr.log").write_text("")
+    digest = hashlib.sha256(report_path.read_bytes()).hexdigest()
+    logs = {"stdout": (run_dir / "stdout.log").read_text(),
+            "stderr": (run_dir / "stderr.log").read_text()}
+    return json.dumps({
+        "run_id": run_id, "model_id": "limn", "checkpoint_id": "base_iter0_all_categories",
+        "protocol_id": "fashioniq_val_split", "completion_status": "COMPLETED", "return_code": 0,
+        "invocation_status": "INVOCATION_COMPLETED",
+        "source_actual_commit": model_by_id("limn")["upstream_commit_sha"],
+        "checkpoint_sha256": "c" * 64, "environment_digest": "e" * 64,
+        "evidence_digest": hashlib.sha256(json.dumps(logs, sort_keys=True).encode()).hexdigest(),
+        "bundle_manifest_digest": _write_checkpoint_bundle(tmp_path),
+        "ledger_entry_digest": f"entry-{digest[:16]}",
+        "report": str(report_path), "report_digest": digest, "run_directory": str(run_dir)})
+
+def _benchmark_runs(api) -> list[dict]:
+    status, _, body = asgi_request(api.app, "GET", "/api/benchmark-runs")
+    assert status == 200, body
+    return json.loads(body)
+
+def _receipt(api, run_id: str) -> dict:
+    """The one served report's verification receipt, asserting the artifact stays visible."""
+    rows = _benchmark_runs(api)
+    assert [row["run_id"] for row in rows] == [run_id], "the artifact stays visible either way"
+    return rows[0]["verification"]
+
+@pytest.fixture
+def counted_verifier(monkeypatch):
+    """Count every entry into the authoritative verifier without changing its verdict.
+
+    The subject of the mode tests is *which* branch judged the report, so the count is the
+    evidence; the verdict stays the real verifier's.
+    """
+    from workbench.scripts import verify_run
+    calls: list[str] = []
+    original = verify_run.verify
+    monkeypatch.setattr(verify_run, "verify",
+                        lambda *args, **kwargs: (calls.append(args[0]) or original(*args, **kwargs)))
+    return calls
+
+def test_a_production_process_with_no_proof_refuses_by_name_without_entering_the_verifier(
+        api, tmp_path, monkeypatch, counted_verifier) -> None:
+    """DEFECT E (reproduced first): corroboration alone is not evidence.
+
+    The report's bytes match the ledger and the invocation completed, so the artifact is real and
+    its execution is authenticated — but `verify_run.py` validates the completion proof, and this
+    report has none. It may stay visible; it must not be served as certified research evidence.
+
+    This is a *production* process: no pytest, no development-mode declaration, no opt-in. The
+    refusal must therefore name the missing proof, and the verifier must never be entered: there
+    is nothing for it to validate.
+    """
+    _evidence_report(tmp_path, "run-no-proof")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("WORKBENCH_DEVELOPMENT_MODE", raising=False)
+    monkeypatch.delenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", raising=False)
+    api._CERTIFICATION_CACHE.clear()
+
+    verification = _receipt(api, "run-no-proof")
+    assert verification["artifact_exists"] is True
+    assert verification["execution_authenticated"] is True
+    assert verification["is_research_evidence"] is False
+    assert verification["certified"] is False
+    assert verification["development_mode"] is False
+    assert "no completion proof" in verification["evidence_reasons"][0], verification["evidence_reasons"]
+    assert counted_verifier == [], "a report with no proof must never reach the verifier"
+
+def test_a_development_process_without_the_opt_in_refuses_by_name(
+        api, tmp_path, monkeypatch, counted_verifier) -> None:
+    """DEFECT E in its second shape: pytest alone is not a licence to certify.
+
+    The opt-in is what relaxes proof validation, and it is honoured in a development process only.
+    A development process that has not opted in refuses a report with no proof exactly as a
+    deployment does.
+    """
+    _evidence_report(tmp_path, "run-dev-no-opt-in")
+    monkeypatch.delenv("WORKBENCH_DEVELOPMENT_MODE", raising=False)
+    monkeypatch.delenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", raising=False)
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "workbench/tests/test_http_api_layer.py::dev")
+    api._CERTIFICATION_CACHE.clear()
+
+    verification = _receipt(api, "run-dev-no-opt-in")
+    assert verification["certified"] is False
+    assert verification["is_research_evidence"] is False
+    assert verification["development_mode"] is False
+    assert verification["evidence_reasons"], "the refusal must name its reason"
+    assert counted_verifier == [], "a refused report has nothing for the verifier to resolve"
+
+def test_a_production_process_with_a_valid_proof_certifies_through_the_authoritative_verifier(
+        api, tmp_path, monkeypatch, counted_verifier) -> None:
+    """DEFECT E's inverted half: the deployment *is* the proof-validating case.
+
+    A production process serving a report whose completion proof exists has exactly what proof
+    validation needs — the evaluator's environment identity — so the authoritative verifier is the
+    branch that judges it. Its verdict is what the receipt carries, verbatim and alone.
+    """
+    _evidence_report(tmp_path, "run-deploy")
+    _write_proof(tmp_path, "run-deploy", _valid_completion_proof(tmp_path, "run-deploy"))
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("WORKBENCH_DEVELOPMENT_MODE", raising=False)
+    monkeypatch.delenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", raising=False)
+    api._CERTIFICATION_CACHE.clear()
+
+    verification = _receipt(api, "run-deploy")
+    assert counted_verifier == ["run-deploy"], "the authoritative verifier must be consulted"
+    assert verification["development_mode"] is False
+    # The verifier's own verdict is what the receipt carries -- here, its acceptance.
+    assert verification["is_research_evidence"] is True, verification["reasons"]
+    assert verification["certified"] is True
+
+def test_the_development_opt_in_does_not_apply_to_a_deployment(
+        api, tmp_path, monkeypatch, counted_verifier) -> None:
+    """The opt-in is honoured in a *development* process only.
+
+    A deployment that merely exports the variable is still a deployment: its reports are certified
+    through the authoritative verifier when a proof exists, and refused by name when none does. The
+    opt-in must not turn the missing proof into a ledger-level certificate here.
+    """
+    _evidence_report(tmp_path, "run-deploy-opt-in")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("WORKBENCH_DEVELOPMENT_MODE", raising=False)
+    monkeypatch.setenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", "1")
+    api._CERTIFICATION_CACHE.clear()
+
+    verification = _receipt(api, "run-deploy-opt-in")
+    assert verification["development_mode"] is False, "the opt-in must not reach a deployment"
+    assert verification["certified"] is False
+    assert verification["is_research_evidence"] is False
+    assert "no completion proof" in verification["evidence_reasons"][0], verification["evidence_reasons"]
+    assert counted_verifier == [], "the opt-in must not divert a deployment onto the ledger path"
+
+def test_a_proof_is_never_skipped_for_the_opt_in_in_a_development_process(
+        api, tmp_path, monkeypatch, counted_verifier) -> None:
+    """In a development process the opt-in relaxes ledger certification only: a proof still
+    selects the authoritative verifier, whose verdict is then the receipt's."""
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setenv("WORKBENCH_DEVELOPMENT_MODE", "1")
+    monkeypatch.setenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", "1")
+    _evidence_report(tmp_path, "run-opt-in-with-proof")
+    _write_proof(tmp_path, "run-opt-in-with-proof",
+                 _valid_completion_proof(tmp_path, "run-opt-in-with-proof"))
+    api._CERTIFICATION_CACHE.clear()
+
+    verification = _receipt(api, "run-opt-in-with-proof")
+    assert counted_verifier == ["run-opt-in-with-proof"], "a proof is never skipped for the opt-in"
+    assert verification["development_mode"] is False, "a proof is judged in deployment mode"
+    assert verification["is_research_evidence"] is True, verification["reasons"]
+
+#: Does a development process certify at ledger level on this host at all?
+#:
+#: `main.py` certifies through the verifier's own metric rules when there is no proof to validate,
+#: so the answer belongs to the host, not to this test: a host with no committed benchmark
+#: reference (or an unregistered model) legitimately ends in a refusal. The tests below assert the
+#: branch that was taken -- `development_mode` -- and adapt the certified/refused expectation to
+#: the rules that branch really applies. Neither branch may ever be a fabrication, and neither may
+#: be silently assumed.
+def _development_certifies_here() -> bool:
+    from workbench.scripts import verify_run
+    metric_reasons, _ = verify_run.metric_evidence_reasons(
+        "limn", "base_iter0_all_categories", "fashioniq_val_split", VALID_EVIDENCE)
+    return not [*metric_reasons, *verify_run._evidence_kind_reasons(VALID_EVIDENCE)]
+
+def test_a_corroborated_report_with_a_rejected_completion_proof_is_not_certified_evidence(
+        api, tmp_path, counted_verifier) -> None:
+    """A proof file that does not validate is exactly what the authoritative verifier refuses on,
+    and a deployment has a proof file, so this is the receipt the API must carry: authenticated
+    execution, refused evidence, with the verifier's own reason attached."""
+    _evidence_report(tmp_path, "run-bad-proof", proof="{}")
+    api._CERTIFICATION_CACHE.clear()
+    verification = _receipt(api, "run-bad-proof")
+    assert counted_verifier == ["run-bad-proof"], "a proof is judged by the verifier, not skipped"
+    assert verification["artifact_exists"] is True
+    assert verification["execution_authenticated"] is True
+    assert verification["is_research_evidence"] is False
+    assert verification["certified"] is False
+    assert verification["development_mode"] is False
+    # The reason text is the verifier's own sentence, which is the receipt's evidence that the
+    # verdict came from `verify_run` and not from a rule re-implemented here.
+    assert verification["reasons"][0].startswith("completion proof rejected:"), verification["reasons"]
+
+def test_a_report_whose_extraction_did_not_run_is_not_certified_evidence(
+        api, tmp_path, monkeypatch) -> None:
+    """The metrics were never obtained: no branch certifies such a report.
+
+    This report has no proof, so a development process judges it at ledger level -- and the
+    verifier's extraction rule refuses it *there*, which is what the ledger path exists to keep
+    true. A deployment would refuse it for the missing proof instead; both refusals stand.
+    """
+    monkeypatch.setenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", "1")
+    _evidence_report(tmp_path, "run-no-extraction",
+                     metric_extraction_available=False, extraction_status="NOT_EXTRACTED")
+    api._CERTIFICATION_CACHE.clear()
+    verification = _receipt(api, "run-no-extraction")
+    assert verification["execution_authenticated"] is True
+    assert verification["is_research_evidence"] is False
+    assert verification["certified"] is False
+    assert any("extraction" in reason for reason in verification["evidence_reasons"])
+
+def test_a_report_whose_macro_contradicts_its_categories_is_not_certified_evidence(
+        api, tmp_path, monkeypatch) -> None:
+    """Internal arithmetic that does not add up is not evidence, however good it looks."""
+    monkeypatch.setenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", "1")
+    _evidence_report(tmp_path, "run-bad-macro",
+                     observed_metrics={"r10": 90.0, "r50": 95.0, "mean": 92.5})
+    api._CERTIFICATION_CACHE.clear()
+    verification = _receipt(api, "run-bad-macro")
+    assert verification["execution_authenticated"] is True
+    assert verification["is_research_evidence"] is False
+    assert verification["certified"] is False
+    assert verification["evidence_reasons"], "the macro rule must name its reason"
+
+def test_a_production_process_certifies_a_fully_valid_report_through_the_verifier(
+        api, tmp_path, monkeypatch, counted_verifier) -> None:
+    """Positive control: a real deployment shape ends in `certified=true`, which is what F1 broke.
+
+    No pytest, no development-mode declaration, no opt-in: the process is a deployment. The report
+    is corroborated by the ledger and its completion proof validates, so the authoritative verifier
+    is the branch that judges it -- and its `is_research_evidence` is what the receipt carries.
+    """
+    _evidence_report(tmp_path, "run-valid")
+    _write_proof(tmp_path, "run-valid", _valid_completion_proof(tmp_path, "run-valid"))
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("WORKBENCH_DEVELOPMENT_MODE", raising=False)
+    monkeypatch.delenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", raising=False)
+    api._CERTIFICATION_CACHE.clear()
+
+    rows = _benchmark_runs(api)
+    assert [row["run_id"] for row in rows] == ["run-valid"]
+    verification = rows[0]["verification"]
+    assert counted_verifier == ["run-valid"], "the deployment must consult the authoritative verifier"
+    assert verification["is_research_evidence"] is True, verification["reasons"]
+    assert verification["certified"] is True
+    assert verification["execution_authenticated"] is True
+    assert verification["artifact_exists"] is True
+    assert verification["development_mode"] is False
+    # Both directions of "the receipt reflects the verifier's verdict": an accepted proof yields
+    # no reasons at all, and the rejected case below carries the verifier's own refusal sentence.
+    assert verification["reasons"] == []
+    assert verification["evidence_reasons"] == []
+    # The paper-parity verdict stays a separate, visible answer beside the evidence verdict.
+    assert rows[0]["parity_status"] == "PARITY_VERIFIED"
+    assert rows[0]["benchmark_gate"]["passed"] is True
+
+def test_the_response_distinguishes_artifact_exists_from_valid_evidence(api, tmp_path) -> None:
+    """A historical or failed artifact stays visible and is labelled, never hidden.
+
+    Both a certified and a refused report appear, and the four questions are separately readable:
+    the refused one is authenticated but not evidence, the certified one is both.
+    """
+    _evidence_report(tmp_path, "run-good")
+    _write_proof(tmp_path, "run-good", _valid_completion_proof(tmp_path, "run-good"))
+    _evidence_report(tmp_path, "run-bad",
+                     observed_metrics={"r10": 1.0, "r50": 2.0, "mean": 1.5})
+    _write_proof(tmp_path, "run-bad", _valid_completion_proof(tmp_path, "run-bad"))
+    rows = {row["run_id"]: row for row in _benchmark_runs(api)}
+    assert set(rows) == {"run-good", "run-bad"}, "both artifacts remain visible"
+    assert rows["run-good"]["verification"]["certified"] is True
+    assert rows["run-bad"]["verification"]["certified"] is False
+    for row in rows.values():
+        assert row["verification"]["artifact_exists"] is True
+        assert row["verification"]["execution_authenticated"] is True
+    # The gate endpoint carries the same receipt, so a joined `/api/runs` record cannot lose it.
+    status, _, body = asgi_request(api.app, "GET", "/api/runs/gate")
+    assert status == 200
+    gates = json.loads(body)
+    assert gates["run-good"]["verification"]["is_research_evidence"] is True
+    assert gates["run-bad"]["verification"]["is_research_evidence"] is False
+
+def test_a_proof_gaining_report_is_re_judged_never_re_served_a_development_receipt(
+        api, tmp_path, monkeypatch, counted_verifier) -> None:
+    """DEFECT F5 (reproduced first): a receipt computed under one mode must not outlive the mode.
+
+    A development process opts in and serves a report with no proof; the ledger-level receipt is
+    cached. The evaluator then writes the completion proof for that same run -- the bytes of the
+    report and of the ledger are untouched, so digest and ledger stamp are unchanged. The next
+    request must judge the report under the *deployment* mode (the proof's own identity is what
+    validation needs) and enter the authoritative verifier, instead of serving the stale
+    development receipt whose `development_mode` claimed the proof had not been validated here.
+    """
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setenv("WORKBENCH_DEVELOPMENT_MODE", "1")
+    monkeypatch.setenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", "1")
+    _evidence_report(tmp_path, "run-gains-proof")
+    api._CERTIFICATION_CACHE.clear()
+    before = _receipt(api, "run-gains-proof")
+    assert before["development_mode"] is True, "the opt-in must reach the development branch"
+    assert _development_certifies_here() is before["certified"], (
+        "the development branch's verdict must be the verifier's own rules, not a constant: "
+        f"{before}")
+
+    assert counted_verifier == [], "the development branch must not enter the verifier"
+    _write_proof(tmp_path, "run-gains-proof",
+                 _valid_completion_proof(tmp_path, "run-gains-proof"))
+    after = _receipt(api, "run-gains-proof")
+    assert counted_verifier == ["run-gains-proof"], (
+        f"the proof-gaining request must be re-judged by the verifier, saw {counted_verifier}")
+    assert after["development_mode"] is False, "a proof must never be served under a development receipt"
+    assert after["is_research_evidence"] is True, after["reasons"]
+
+def test_the_certification_mode_is_part_of_the_cache_key(api, tmp_path, monkeypatch) -> None:
+    """F5's missing key dimension, isolated: only the MODE changes between the two requests.
+
+    The report bytes, the ledger and the proof's (non-)existence are byte-for-byte identical across
+    the two requests; the first is refused because no proof exists and no opt-in was given, the
+    second is certified at ledger level because the operator opted in. The receipt computed for the
+    first mode must not answer for the second, which is why the mode sits in the key beside the
+    digest, the ledger stamp and the proof stamp.
+    """
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setenv("WORKBENCH_DEVELOPMENT_MODE", "1")
+    monkeypatch.delenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", raising=False)
+    _evidence_report(tmp_path, "run-by-mode")
+    api._CERTIFICATION_CACHE.clear()
+
+    refused = _receipt(api, "run-by-mode")
+    assert refused["development_mode"] is False
+    assert "no completion proof" in refused["evidence_reasons"][0], refused["evidence_reasons"]
+
+    monkeypatch.setenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", "1")
+    certified = _receipt(api, "run-by-mode")
+    assert certified["development_mode"] is True, "the mode change must be recomputed, not cached"
+    assert certified["is_research_evidence"] is _development_certifies_here(), certified
+    assert len(api._CERTIFICATION_CACHE) == 2, (
+        "a receipt computed under one certification mode must never answer for another")
+
+def test_a_corroborated_report_is_verified_once_per_ledger_revision(
+        api, tmp_path, counted_verifier) -> None:
+    """The endpoint must not re-hash multi-GB checkpoints per dashboard request.
+
+    The receipt is the expensive part (the authoritative verifier validates the completion proof,
+    which re-hashes the checkpoint members), so it is cached on the report digest and the
+    certification mode; a second request must not enter the verifier again.
+    """
+    # A proof file puts the request on the authoritative verifier path, which is the expensive one
+    # the receipt exists to avoid repeating. Its content is a stub: the cost being measured is the
+    # verifier being entered, not a pass.
+    _evidence_report(tmp_path, "run-cached")
+    _write_proof(tmp_path, "run-cached", _valid_completion_proof(tmp_path, "run-cached"))
+    api._CERTIFICATION_CACHE.clear()
+    first = _benchmark_runs(api)
+    second = _benchmark_runs(api)
+    assert len(counted_verifier) == 1, (
+        f"the verifier must run once per report per ledger revision, saw {len(counted_verifier)}")
+    assert first == second
+    assert first[0]["verification"]["certified"] is True, first[0]["verification"]["reasons"]
+
+# ------------------------------------------------------------------------- A7 certification policy
+
+def test_a7_report_with_no_proof_is_never_certified_true(
+        api, tmp_path, monkeypatch, counted_verifier) -> None:
+    """A7 (a): a report with no proof is never certified=true."""
+    _evidence_report(tmp_path, "run-a7-no-proof")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("WORKBENCH_DEVELOPMENT_MODE", raising=False)
+    monkeypatch.delenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", raising=False)
+    api._CERTIFICATION_CACHE.clear()
+
+    verification = _receipt(api, "run-a7-no-proof")
+    assert verification["certified"] is False
+    assert verification["is_research_evidence"] is False
+    assert verification["execution_authenticated"] is True
+    assert verification["state"] == "proof_unavailable"
+    assert verification["certification_mode"] == "proof_unavailable"
+    assert counted_verifier == []
+
+
+def test_a7_api_distinguishes_no_proof_available_from_no_ledger_corroboration(
+        api, tmp_path, monkeypatch) -> None:
+    """A7 (b): the API distinguishes 'no proof available' from 'no ledger corroboration' in its payload."""
+    # 1. Ledger-corroborated report whose completion proof is unavailable
+    _evidence_report(tmp_path, "run-a7-proof-unavailable")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("WORKBENCH_DEVELOPMENT_MODE", raising=False)
+    monkeypatch.delenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", raising=False)
+    api._CERTIFICATION_CACHE.clear()
+
+    receipt_proof_unavailable = _receipt(api, "run-a7-proof-unavailable")
+    assert receipt_proof_unavailable["execution_authenticated"] is True
+    assert receipt_proof_unavailable["state"] == "proof_unavailable"
+    assert receipt_proof_unavailable["certification_mode"] == "proof_unavailable"
+    assert receipt_proof_unavailable["certified"] is False
+    assert any("no completion proof" in r for r in receipt_proof_unavailable["evidence_reasons"])
+
+    # 2. No ledger corroboration: omitted from benchmark runs, and gate projection marks uncorroborated
+    receipt_uncorroborated = api._gate_fields({"run_id": "run-a7-uncorroborated"})["verification"]
+    assert receipt_uncorroborated["execution_authenticated"] is False
+    assert receipt_uncorroborated["state"] == "uncorroborated"
+    assert receipt_uncorroborated["certification_mode"] == "uncorroborated"
+    assert receipt_uncorroborated["certified"] is False
+
+    # Distinct states in payload
+    assert receipt_proof_unavailable["execution_authenticated"] != receipt_uncorroborated["execution_authenticated"]
+    assert receipt_proof_unavailable["state"] != receipt_uncorroborated["state"]
+    assert receipt_proof_unavailable["certification_mode"] != receipt_uncorroborated["certification_mode"]
+
+
+def test_a7_launcher_reuses_ledger_corroborated_run_without_proof_and_queues_when_uncorroborated(
+        tmp_path) -> None:
+    """A7 (c): launcher reuses completed run whose proof is gone, and queues fresh run when uncorroborated."""
+    from workbench.tests.test_pc_launcher import setup_sandbox, run_pc, _create_corroborated_run
+
+    # (c-1) Reuses completed run whose proof is gone instead of queueing duplicate
+    sandbox1, env1 = setup_sandbox(tmp_path / "reused", with_env=True)
+    env1["MOCK_RUNS_STATUS"] = "corroborated"
+    post_jobs1 = sandbox1 / "post_jobs.log"
+    env1["MOCK_POST_JOBS_FILE"] = str(post_jobs1)
+    _create_corroborated_run(sandbox1, "run_limn_corr_01", omit_proof=True)
+
+    proc1 = run_pc(sandbox1, [], env1)
+    assert proc1.returncode == 0
+    assert "Tái sử dụng kết quả có sẵn" in proc1.stdout
+    assert "Phát hiện kết quả đánh giá đã hoàn thành và được sổ cái chứng thực" in proc1.stdout
+    assert not post_jobs1.exists() or len(post_jobs1.read_text().strip()) == 0
+
+    # (c-2) Queues fresh run when genuinely no corroboration (forged digest)
+    sandbox2, env2 = setup_sandbox(tmp_path / "forged", with_env=True)
+    env2["MOCK_RUNS_STATUS"] = "corroborated"
+    post_jobs2 = sandbox2 / "post_jobs.log"
+    env2["MOCK_POST_JOBS_FILE"] = str(post_jobs2)
+    _create_corroborated_run(sandbox2, "run_limn_corr_01", forged_digest=True)
+
+    proc2 = run_pc(sandbox2, [], env2)
+    assert "Tái sử dụng kết quả có sẵn" not in proc2.stdout
+    assert post_jobs2.exists() and len(post_jobs2.read_text().strip().splitlines()) > 0
+
+
+def test_a7_report_with_invalid_proof_is_refused_api(
+        api, tmp_path, monkeypatch, counted_verifier) -> None:
+    """A7 (d-1): report with an invalid proof is refused by API verifier, not served as certified."""
+    _evidence_report(tmp_path, "run-a7-invalid-proof", proof=json.dumps({"completion_status": "FAILED", "return_code": 1}))
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("WORKBENCH_DEVELOPMENT_MODE", raising=False)
+    monkeypatch.delenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", raising=False)
+    api._CERTIFICATION_CACHE.clear()
+
+    verification = _receipt(api, "run-a7-invalid-proof")
+    assert verification["certified"] is False
+    assert verification["is_research_evidence"] is False
+    assert verification["execution_authenticated"] is True
+    assert verification["certification_mode"] == "deployment"
+    assert verification["state"] == "refused"
+    assert counted_verifier == ["run-a7-invalid-proof"]
+
+
+def test_a7_report_with_invalid_proof_is_refused_launcher(tmp_path) -> None:
+    """A7 (d-2): launcher dedup refuses invalid proof and queues fresh evaluation."""
+    from workbench.tests.test_pc_launcher import setup_sandbox, run_pc, _create_corroborated_run
+
+    sandbox, env = setup_sandbox(tmp_path / "launcher_invalid", with_env=True)
+    env["MOCK_RUNS_STATUS"] = "corroborated"
+    post_jobs = sandbox / "post_jobs.log"
+    env["MOCK_POST_JOBS_FILE"] = str(post_jobs)
+    _create_corroborated_run(sandbox, "run_limn_corr_01", omit_proof=False)
+    proof_file = sandbox / "workbench" / "artifacts" / "reports" / "limn_base_iter0_all_categories_run_limn_corr_01_completion.json"
+    proof_file.write_text(json.dumps({"completion_status": "FAILED", "return_code": 1}))
+
+    proc = run_pc(sandbox, [], env)
+    assert "Tái sử dụng kết quả có sẵn" not in proc.stdout
+    assert post_jobs.exists() and len(post_jobs.read_text().strip().splitlines()) > 0
 
 # ------------------------------------------------------------------------- duplicate submissions
 

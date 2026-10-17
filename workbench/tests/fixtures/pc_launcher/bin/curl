@@ -35,6 +35,25 @@ if os.environ.get("MOCK_API_DOWN") == "1" and "/api/" in args_str:
     sys.stderr.write("curl: (7) Failed to connect to 127.0.0.1 port 8000: Connection refused\n")
     sys.exit(7)
 
+# The *jobs list read* can fail while every other endpoint answers. That is the state the
+# launcher's fail-closed branch is written for: "no active job" must never be inferred from an
+# unreadable list. `MOCK_CURL_RETRY_COUNT_FILE` fails whole calls instead, so it cannot express
+# "this one endpoint is unreadable" without also breaking the calls that must succeed.
+if os.environ.get("MOCK_JOBS_LIST_UNREADABLE") == "1":
+    target = ""
+    for arg in sys.argv[1:]:
+        if arg.startswith("http://") or arg.startswith("https://"):
+            target = arg
+            break
+    is_post = "-X" in sys.argv and "POST" in sys.argv[sys.argv.index("-X") + 1:]
+    # Only the call that READS THE BODY fails: the status-only probe (`-o /dev/null`) still
+    # answers 200, which is exactly the state where the container is up and reachable while the
+    # job list itself cannot be read. Failing both calls would take the API-down branch instead
+    # and never exercise the job-list decision.
+    if target.endswith("/api/jobs") and not is_post and "-d" not in sys.argv and not is_devnull:
+        sys.stderr.write("curl: (7) Failed to connect to 127.0.0.1 port 8000: Connection refused\n")
+        sys.exit(7)
+
 retry_file = os.environ.get("MOCK_CURL_RETRY_COUNT_FILE")
 if retry_file and os.path.exists(retry_file):
     try:
@@ -70,6 +89,28 @@ if "/api/models" in url:
         body = models_file.read_text().strip()
     else:
         body = "[]"
+    # `MOCK_MODELS_MISSING_MEMBER=<checkpoint_id>` marks one bundle member unavailable in the
+    # availability view, which is the state the real registry reports while a member has not been
+    # downloaded yet. The launcher must not submit the bundle then, so the case has to be
+    # expressible without editing the frozen fixture.
+    missing_member = os.environ.get("MOCK_MODELS_MISSING_MEMBER")
+    if missing_member:
+        models = json.loads(body)
+        for model in models:
+            for bundle in model.get("checkpoint_bundles") or []:
+                for member in bundle.get("members") or []:
+                    if member.get("checkpoint_id") == missing_member:
+                        member["available"] = False
+                        member["runnable"] = False
+                        member["checkpoint_downloaded"] = False
+                        member["blocking_reasons"] = ["checkpoint missing: " + missing_member]
+            for item in model.get("checkpoints") or []:
+                if item.get("checkpoint_id") == missing_member:
+                    item["available"] = False
+                    item["runnable"] = False
+                    item["checkpoint_downloaded"] = False
+                    item["blocking_reasons"] = ["checkpoint missing: " + missing_member]
+        body = json.dumps(models)
 elif url.endswith("/api/jobs") or url.endswith("/api/jobs/"):
     is_post = "-X" in sys.argv and ("POST" in sys.argv[sys.argv.index("-X") + 1:] or "POST" in args_str)
     if is_post or "-d" in sys.argv or "--data" in args_str:

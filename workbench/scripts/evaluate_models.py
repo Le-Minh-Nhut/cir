@@ -317,13 +317,32 @@ def _variant_provenance(model: dict, config: WorkbenchConfig) -> dict[str, Any]:
     }
 
 
+#: BLOCKER TEXT THAT DESCRIBES A *DIFFERENT* SELECTION, not this one. The message names the
+#: bundle the blocker belongs to, so a caller can tell "my selection is incomplete" from "some
+#: other checkpoint group on this model still has a member missing". A bundle selection whose
+#: own members are all present must not be refused by a blocker about itself, and a selection
+#: that is not a bundle must not inherit a bundle's blocker.
+def _bundle_blocker_names(reason: str) -> str | None:
+    prefix = "checkpoint bundle incomplete: "
+    if not reason.startswith(prefix):
+        return None
+    return reason[len(prefix):].split(":", 1)[0].strip()
+
+
 def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | None, config: WorkbenchConfig) -> tuple[Path, Path, str | None, list[str]]:
     source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"] if model.get("source_dir") else config.WORKBENCH_THIRD_PARTY_ROOT
     actual_pin = pinned_revision(source) if source.is_dir() else None
     checkpoint_file = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
     reasons = runtime_plan_blockers(model, checkpoint, config, protocol, dataset_root)
-    if model["model_id"] == "limn" and checkpoint["checkpoint_id"] != checkpoint.get("bundle_id"):
-        reasons = [reason for reason in reasons if not reason.startswith("checkpoint bundle incomplete:")]
+    # A bundle-incomplete blocker is advisory for a *non-bundle* selection: it states that some
+    # other group of checkpoints is incomplete, which is not a reason to refuse a run of one
+    # category. It is authoritative for the bundle itself, and the identity that decides which is
+    # `bundle_id` on the selection, never the checkpoint id — a bundle selection keeps its own
+    # bundle id as `checkpoint_id` (`registry.checkpoint_by_id`), so comparing the two fields
+    # would ask the question with the answer already folded in and always conclude "not a bundle".
+    selected_bundle = checkpoint.get("bundle_id")
+    reasons = [reason for reason in reasons
+               if (named := _bundle_blocker_names(reason)) is None or named == selected_bundle]
     shared = preflight_blockers(model, config, dataset_root=dataset_root)
     reasons.extend(reason for reason in shared if not reason.startswith("execution environment not verified:") and reason not in reasons)
     return source, checkpoint_file, actual_pin, list(dict.fromkeys(reasons))
@@ -1168,12 +1187,15 @@ def ledger_hmac_key(config: WorkbenchConfig) -> bytes:
         try:
             same = legacy_key_path.read_bytes() == private_key_path.read_bytes()
         except OSError as error:
-            raise LedgerKeyError("cannot compare the two ledger key files") from error
+            raise LedgerKeyError(
+                "cannot compare the two ledger key files "
+                f"({legacy_key_path} and {private_key_path}); check that both are readable, or set "
+                "WORKBENCH_LEDGER_KEY explicitly") from error
         if not same:
             raise LedgerKeyError(
                 "two different ledger keys exist "
-                f"({legacy_key_path} and {private_key_path}); keep one and remove the other, or set "
-                "WORKBENCH_LEDGER_KEY explicitly to choose")
+                f"({legacy_key_path} and {private_key_path}); keep one file and remove the other, or "
+                "set WORKBENCH_LEDGER_KEY explicitly to choose one")
     if legacy_key_path.is_file() and not private_key_path.is_file():
         # An existing repository-root key already signed the ledger on disk: honouring it is the
         # only way that ledger stays verifiable. Creating a fresh key elsewhere would silently
@@ -1332,7 +1354,13 @@ def append_evidence_entry(config: WorkbenchConfig, entry: dict) -> dict:
 
 
 def read_evidence_ledger(config: WorkbenchConfig) -> list[dict] | None:
-    """Every authenticated ledger entry, or None when the chain does not verify."""
+    """Every authenticated ledger entry, or None when the chain does not verify.
+
+    None means exactly one thing to a caller: *nothing is corroborated here*. An unusable key is
+    deliberately not folded into it any more: a caller that catches LedgerKeyError can state the
+    actionable cause by name -- the conflicting key paths and the remedy -- while a caller that
+    does not still gets the fail-closed None it always got.
+    """
     path = evidence_ledger_path(config)
     try:
         lock = _ledger_lock(path, fcntl.LOCK_SH)
@@ -1343,7 +1371,9 @@ def read_evidence_ledger(config: WorkbenchConfig) -> list[dict] | None:
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
             lock.close()
-    except (LedgerKeyError, LedgerCorruptError, OSError):
+    except LedgerKeyError:
+        raise
+    except (LedgerCorruptError, OSError):
         return None
 
 def artifact_root(config: WorkbenchConfig) -> Path:

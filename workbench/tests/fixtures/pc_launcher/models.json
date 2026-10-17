@@ -5,15 +5,36 @@
     "checkpoints": [
       {
         "checkpoint_id": "base_iter0_dress",
-        "available": true
+        "available": true,
+        "runnable": true,
+        "blocking_reasons": [],
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true
       },
       {
         "checkpoint_id": "base_iter0_shirt",
-        "available": true
+        "available": true,
+        "runnable": true,
+        "blocking_reasons": [],
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true
       },
       {
         "checkpoint_id": "base_iter0_toptee",
-        "available": true
+        "available": true,
+        "runnable": true,
+        "blocking_reasons": [],
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true
       }
     ],
     "checkpoint_bundles": [
@@ -26,7 +47,42 @@
         ],
         "structure": "category_specific_whole_models",
         "mapping_status": "VERIFIED_METADATA",
-        "notes": "One independently trained whole-model checkpoint per FashionIQ category; all three are required for a complete macro result."
+        "notes": "One independently trained whole-model checkpoint per FashionIQ category; all three are required for a complete macro result.",
+        "members": [
+          {
+            "checkpoint_id": "base_iter0_dress",
+            "available": true,
+            "runnable": true,
+            "blocking_reasons": [],
+            "automatic_download_available": true,
+            "checkpoint_downloaded": true,
+            "mapping_verified": true,
+            "adapter_command_ready": true,
+            "runtime_verified": true
+          },
+          {
+            "checkpoint_id": "base_iter0_shirt",
+            "available": true,
+            "runnable": true,
+            "blocking_reasons": [],
+            "automatic_download_available": true,
+            "checkpoint_downloaded": true,
+            "mapping_verified": true,
+            "adapter_command_ready": true,
+            "runtime_verified": true
+          },
+          {
+            "checkpoint_id": "base_iter0_toptee",
+            "available": true,
+            "runnable": true,
+            "blocking_reasons": [],
+            "automatic_download_available": true,
+            "checkpoint_downloaded": true,
+            "mapping_verified": true,
+            "adapter_command_ready": true,
+            "runtime_verified": true
+          }
+        ]
       }
     ]
   },
@@ -36,7 +92,14 @@
     "checkpoints": [
       {
         "checkpoint_id": "fashioniq",
-        "available": true
+        "available": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "blocking_reasons": []
       }
     ],
     "checkpoint_bundles": []

@@ -866,3 +866,104 @@ def test_the_api_queues_the_audited_orchestrator_not_the_raw_evaluator(workspace
     assert "evaluate_models.py" in " ".join(argv), argv
     assert "RAW_MODEL_EVALUATOR" not in argv, "the raw evaluator bypasses the ledger"
     assert "--run-id" in argv and argv[argv.index("--run-id") + 1]
+
+
+def test_gpu_capability_bidirectional_resolution_env_and_assignment(workspace, monkeypatch):
+    """B-1/A5: a capability record written under an exported env var is readable by a
+    process that resolves the interpreter via environment_assignment.json, and vice versa.
+    """
+    import os
+    artifacts_root = workspace["repo"] / "artifacts"
+    artifacts_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("WORKBENCH_ARTIFACTS_ROOT", str(artifacts_root))
+
+    env_dir = artifacts_root / "environments" / "limn_env"
+    import venv as _venv
+    _venv.EnvBuilder(with_pip=False, symlinks=True).create(env_dir)
+    _install_torch(env_dir)
+    interp = env_dir / "bin" / "python"
+
+    install_probe(SUCCESS, monkeypatch, env_dir)
+    cfg = replace(workspace["config"], WORKBENCH_ARTIFACTS_ROOT=artifacts_root)
+    model = workspace["model"]
+
+    # Direction 1: write with env var, read with assignment (env var unset)
+    monkeypatch.setenv("GPU_TEST_PYTHON", str(interp))
+    runtime.verify_gpu_runtime(model, cfg, authorized=True)
+    runtime.forget_environment()
+    runtime._GPU_CAPABILITY.clear()
+
+    monkeypatch.delenv("GPU_TEST_PYTHON")
+    assignment_path = artifacts_root / "environment_assignment.json"
+    assignment_path.write_text(json.dumps({
+        "models": {
+            model["model_id"]: {
+                "interpreter": str(interp),
+                "state": "RUNTIME_VERIFIED",
+            }
+        }
+    }), encoding="utf-8")
+
+    assert runtime.resolve_model_interpreter(model) == str(interp)
+    rep1 = runtime.verify_environment(model, probe=True, advisory=True)
+    cached_auth1 = runtime._cached_gpu_capability(model, rep1, authoritative=True)
+    cached_adv1 = runtime._cached_gpu_capability(model, rep1, authoritative=False)
+    assert cached_auth1 is not None and cached_auth1.get("capability_verified") is True
+    assert cached_adv1 is not None and cached_adv1.get("capability_verified") is True
+    assert runtime.verify_environment(model, probe=True).tier == "GPU_RUNTIME_READY"
+
+    # Direction 2: write with assignment (env var unset), read with env var (assignment deleted)
+    runtime.forget_environment()
+    runtime.forget_gpu_capability()
+    runtime.clear_gpu_probe_for_tests()
+    install_probe(SUCCESS, monkeypatch, env_dir)
+
+    assert "GPU_TEST_PYTHON" not in os.environ
+    runtime.verify_gpu_runtime(model, cfg, authorized=True)
+    runtime.forget_environment()
+    runtime._GPU_CAPABILITY.clear()
+
+    assignment_path.unlink()
+    monkeypatch.setenv("GPU_TEST_PYTHON", str(interp))
+    assert runtime.resolve_model_interpreter(model) == str(interp)
+
+    rep2 = runtime.verify_environment(model, probe=True, advisory=True)
+    cached_auth2 = runtime._cached_gpu_capability(model, rep2, authoritative=True)
+    cached_adv2 = runtime._cached_gpu_capability(model, rep2, authoritative=False)
+    assert cached_auth2 is not None and cached_auth2.get("capability_verified") is True
+    assert cached_adv2 is not None and cached_adv2.get("capability_verified") is True
+    assert runtime.verify_environment(model, probe=True).tier == "GPU_RUNTIME_READY"
+
+
+def test_gpu_capability_synthetic_record_not_served_when_seam_off(workspace, monkeypatch):
+    """B-4: a synthetic capability record is not served from in-memory cache or disk
+    when WORKBENCH_ALLOW_SYNTHETIC_GPU_PROBE is unset, and accepted when set."""
+    model = workspace["model"]
+    interp = workspace["interpreter"]
+    report = runtime.verify_environment(model, probe=False, advisory=True)
+    key = runtime._gpu_capability_key(model)
+    real_fp = runtime._record_environment_fingerprint(model, str(interp))
+
+    payload = {
+        "capability_key": key,
+        "capability_verified": True,
+        "probe_source": "override",
+        "interpreter": str(interp),
+        "interpreter_fingerprint": real_fp,
+        "dependency_fingerprint": runtime._environment_contract_digest(model),
+        "host_identity": runtime._host_identity(),
+    }
+    payload["signature"] = runtime._gpu_capability_signature(payload)
+
+    # When seam is OFF:
+    monkeypatch.delenv(runtime.GPU_PROBE_OVERRIDE_ENV, raising=False)
+    runtime._GPU_CAPABILITY.clear()
+    runtime._GPU_CAPABILITY[key] = dict(payload)
+
+    assert runtime._cached_gpu_capability(model, report, authoritative=True) is None
+    assert runtime._cached_gpu_capability(model, report, authoritative=False) is None
+
+    # When seam is ON:
+    monkeypatch.setenv(runtime.GPU_PROBE_OVERRIDE_ENV, "1")
+    assert runtime._cached_gpu_capability(model, report, authoritative=True) is not None
+    assert runtime._cached_gpu_capability(model, report, authoritative=False) is not None

@@ -12,6 +12,19 @@ export function readThresholdPct(storage: Pick<Storage, "getItem"> = localStorag
   return Number.isFinite(saved) && saved >= 0 && saved <= 20 ? saved : DEFAULT_THRESHOLD_PCT;
 }
 
+export type VerificationInfo = {
+  artifact_exists?: boolean;
+  execution_authenticated?: boolean;
+  is_research_evidence?: boolean;
+  certified?: boolean;
+  development_mode?: boolean;
+  certification_mode?: string;
+  state?: string;
+  report_digest?: string | null;
+  reasons?: string[];
+  evidence_reasons?: string[];
+};
+
 export type RunGate = {
   benchmark_gate?: Record<string, unknown> | null;
   parity_status?: string | null;
@@ -20,8 +33,8 @@ export type RunGate = {
   observed_metrics?: Record<string, number | null> | null;
   execution_status?: string | null;
   is_synthetic?: boolean | null;
+  verification?: VerificationInfo | null;
 };
-
 export type GateVerdict = {
   status?: string;
   passed?: boolean;
@@ -50,8 +63,14 @@ export function reflag(comparisons: MetricComparison[] | undefined, thresholdPct
  *  detail text, not to a new label colour. */
 export type WarningLabel =
   | { kind: "caption-substitute"; text: "CAPTION THAY THẾ"; tone: "amber" }
-  | { kind: "paper-deviation"; text: string; tone: "red" };
+  | { kind: "paper-deviation"; text: string; tone: "red" }
+  | { kind: "proof-unavailable"; text: "CHƯA CÓ PROOF (PROOF UNAVAILABLE)"; tone: "amber" }
+  | { kind: "uncorroborated"; text: "CHƯA ĐỐI SOÁT LEDGER (UNCORROBORATED)"; tone: "red" }
+  | { kind: "uncertified"; text: "CHƯA CHỨNG NHẬN (UNCERTIFIED)"; tone: "red" };
 
+export function isCertifiedEvidence(gate: RunGate | undefined): boolean {
+  return Boolean(gate?.verification?.certified && gate?.verification?.is_research_evidence);
+}
 export function warningLabels(gate: RunGate | undefined, thresholdPct: number): WarningLabel[] {
   const labels: WarningLabel[] = [];
   if ((gate?.variant_provenance || {}).caption_alias_staged) {
@@ -66,6 +85,16 @@ export function warningLabels(gate: RunGate | undefined, thresholdPct: number): 
       text: `LỆCH PAPER ${Math.max(worst.relative_error_pct ?? 0, thresholdPct).toFixed(2)}% (${worst.metric})`,
       tone: "red",
     });
+  }
+  if (gate && (!gate.verification || !gate.verification.certified || !gate.verification.is_research_evidence)) {
+    const state = gate.verification?.state || gate.verification?.certification_mode || (gate.verification ? "uncertified" : "uncorroborated");
+    if (state === "proof_unavailable") {
+      labels.push({ kind: "proof-unavailable", text: "CHƯA CÓ PROOF (PROOF UNAVAILABLE)", tone: "amber" });
+    } else if (state === "uncorroborated") {
+      labels.push({ kind: "uncorroborated", text: "CHƯA ĐỐI SOÁT LEDGER (UNCORROBORATED)", tone: "red" });
+    } else {
+      labels.push({ kind: "uncertified", text: "CHƯA CHỨNG NHẬN (UNCERTIFIED)", tone: "red" });
+    }
   }
   return labels;
 }

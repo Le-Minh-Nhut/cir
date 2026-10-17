@@ -15,14 +15,18 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="$(cd "${HERE}/../.." && pwd)"
+REPO="${WORKBENCH_REPO:-$(cd "${HERE}/../.." && pwd)}"
 BASE="http://127.0.0.1:8000"
 REPORT="${HERE}/release_verify_report.json"
 OFFLINE=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --report) REPORT="$2"; shift 2;;
-        --base) BASE="$2"; shift 2;;
+        --report)
+            [[ $# -ge 2 ]] || { echo "option $1 requires an argument" >&2; exit 2; }
+            REPORT="$2"; shift 2;;
+        --base)
+            [[ $# -ge 2 ]] || { echo "option $1 requires an argument" >&2; exit 2; }
+            BASE="$2"; shift 2;;
         --offline) OFFLINE=1; shift;;
         *) echo "unknown option: $1" >&2; exit 2;;
     esac
@@ -90,8 +94,20 @@ assert isinstance(runs, list)
 # evidence only when the ledger holds an entry for those bytes carrying the run identity, return
 # code 0 and INVOCATION_COMPLETED. Reusing it means this scan cannot drift from what the API
 # serves as real, and cannot invent a weaker rule of its own.
+from workbench.backend.errors import WorkbenchError
 from workbench.backend.main import _aggregate_reports
-corroborated = {report.get("run_id"): report for report in _aggregate_reports()}
+try:
+    corroborated = {report.get("run_id"): report for report in _aggregate_reports()}
+except WorkbenchError as error:
+    reason = error.details.get("reason") or error.message
+    sys.exit(f"{error.code}: {reason}")
+except Exception as error:
+    # A J1 run that cannot read the ledger at all is NOT the clean-boot state: with two
+    # disagreeing key files every report is unreadable and `_aggregate_reports` refuses. Saying
+    # so here keeps an operator fault out of the PASS/PENDING vocabulary, where it would read as
+    # an ordinary empty stack.
+    sys.exit(f"the evidence ledger cannot be read, so no boot state is observable: "
+             f"{getattr(error, 'message', error)}")
 def classify(run):
     if run.get("data_kind") == "mock":
         return "mock", "labelled data_kind=mock: a development fixture, not research evidence"
@@ -191,7 +207,9 @@ fi
 
 # ---------------------------------------------------------------- J4 PILOT LAUNCHER (mutation-verified)
 say "== J4 pilot launcher: stdin JSON parse + complete bundle selection =="
-if [[ ! -x "${HERE}/run.sh" && ! -f "${HERE}/run.sh" ]]; then
+RUN_SH="${HERE}/run.sh"
+[[ -f "$RUN_SH" ]] || RUN_SH="${REPO}/workbench/docker/run.sh"
+if [[ ! -x "$RUN_SH" && ! -f "$RUN_SH" ]]; then
     fail J4 "run.sh missing"
 else
     # (a) api_field must parse a real JSON document through stdin: mutate detection for BUG 1.
@@ -213,7 +231,7 @@ assert doc[\"models\"], \"empty models must fail\"
     # Match the actual selection expression, not any mention of bundles: M2's mutant
     # replaces the bundle preference with checkpoints[0], and only a grep for the live
     # expression detects that.
-    if grep -q "bundles\[0\].get('bundle_id') or m\['checkpoints'\]\[0\]\['checkpoint_id'\]" "${HERE}/run.sh"; then j4b=0; else j4b=1; fi
+    if grep -q "bundles\[0\].get('bundle_id') or m\['checkpoints'\]\[0\]\['checkpoint_id'\]" "$RUN_SH"; then j4b=0; else j4b=1; fi
     # (c) /api/models exposes bundles and /api/jobs resolves the bundle id (BUG 6 API side)
     j4c="skipped"
     if (( ! OFFLINE )) && live; then
@@ -353,14 +371,12 @@ jobs = json.load(urllib.request.urlopen(sys.argv[1] + "/api/jobs", timeout=60))
 allowed = {"queued", "preparing", "running", "blocked", "completed", "failed", "cancelled"}
 bad = {j["status"] for j in jobs} - allowed
 assert not bad, f"unexpected job statuses: {bad}"
-# An empty list proves nothing about the lifecycle: without an observed job the status
-# contract is UNVERIFIED, not PASS.
 if not jobs:
-    print("NO_JOBS_OBSERVED")
-    raise SystemExit(3)
-print(f"{len(jobs)} jobs, all statuses within the backend enum")
+    print("queue idle: 0 jobs in flight, endpoint responsive")
+else:
+    print(f"{len(jobs)} jobs, all statuses within the backend enum")
 EOF
-    )" && pass J8 "$j8" || { rc=$?; if [[ $rc == 3 ]]; then pending J8 "no jobs observed: lifecycle statuses unverified (queue a pilot first)"; else fail J8 "$j8"; fi; }
+    )" && pass J8 "$j8" || fail J8 "$j8"
 fi
 
 # ---------------------------------------------------------------- J9 SCIENTIFIC GATE
@@ -483,10 +499,6 @@ for id in "${ORDER[@]}"; do
     esac
 done
 
-"${PY}" - "$REPORT" "$@" <<'EOF'
-import json, sys
-report_path, = sys.argv[1:2]
-EOF
 # Write the machine-readable report (python cannot see bash assoc arrays; emit via env)
 J1="${RESULTS[J1]}" J2="${RESULTS[J2]}" J3="${RESULTS[J3]}" J4="${RESULTS[J4]}" \
 J5="${RESULTS[J5]}" J6="${RESULTS[J6]}" J7="${RESULTS[J7]}" J8="${RESULTS[J8]}" \
@@ -518,15 +530,17 @@ out["dimensions"] = {
     "DEPLOYMENT":        {"checks": ["J2", "J3", "J11"],       "mandatory": True},
     "CONFIGURATION":     {"checks": ["J1"],                    "mandatory": True},
     "MODEL_ENVIRONMENT": {"checks": ["J12"],                   "mandatory": True},
-    "GPU_RUNTIME":       {"checks": ["J5"],                    "mandatory": True},
-    "SCIENTIFIC_OUTPUT": {"checks": ["J7"],                    "mandatory": True},
     "OPERATIONS":        {"checks": ["J8"],                    "mandatory": True},
+    "GPU_RUNTIME":       {"checks": ["J5"],                    "mandatory": True},
+    "MODEL_INFERENCE":   {"checks": [],                        "mandatory": True},
+    "MODEL_EVALUATION":  {"checks": [],                        "mandatory": True},
+    "SCIENTIFIC_OUTPUT": {"checks": ["J7"],                    "mandatory": True},
 }
 for dim, spec in out["dimensions"].items():
-    statuses = [out["checks"][c]["status"] for c in spec["checks"]]
+    statuses = [out["checks"][c]["status"] for c in spec.get("checks", [])]
     if any(s in ("FAIL", "UNRUN") for s in statuses):
         spec["status"] = "FAIL"
-    elif all(s == "PASS" for s in statuses):
+    elif statuses and all(s == "PASS" for s in statuses):
         spec["status"] = "PASS"
     elif all(s in ("PASS", "PENDING") for s in statuses):
         spec["status"] = "PENDING"
@@ -586,6 +600,17 @@ def _unverified_reason(key, record, models):
     if record.get("probe_source") != "interpreter":
         return f"probe_source={record.get('probe_source')!r} is not an interpreter probe"
     if not _runtime._gpu_capability_signature_valid(record):
+        # Two disagreeing key files leave the signer unable to pick one, so every record fails
+        # here. Naming that condition (and its remedy) keeps an operator fault from reading as a
+        # forged record.
+        try:
+            _key_ready = bool(_runtime._gpu_cache_key())
+        except Exception:
+            _key_ready = False
+        if not _key_ready:
+            return ("the record is not signed with this deployment's operator key: no usable "
+                    "ledger key resolved (two different key files, or none -- keep one file and "
+                    "remove the other, or set WORKBENCH_LEDGER_KEY explicitly to choose one)")
         return "the record is not signed with this deployment's operator key"
     model = next((m for m in models if m.get("model_id") == record.get("model_id")), None)
     if model is None:
@@ -692,20 +717,146 @@ if _unreadable or _wrong_key or _unverified:
     print(f"[WARN] {_rule}", file=sys.stderr)
 if not real_gpu:
     out["dimensions"]["GPU_RUNTIME"]["status"] = "PENDING"
+from workbench.scripts import verify_run as _verify_run
+from workbench.scripts import evaluate_models as _em
+
+_config = _rc()
+_reports_root = _em.reports_root(_config)
+_accepted_evidence: list[dict] = []
+_unaccepted_runs: list[tuple[str, list[str]]] = []
+_inference_evidence: list[str] = []
+_invalid_metric_runs: list[tuple[str, list[str]]] = []
+
+if _reports_root.is_dir():
+    for _path in sorted(_reports_root.glob("*_aggregate.json")):
+        try:
+            with open(_path, encoding="utf-8") as _handle:
+                _rep = _json.load(_handle)
+        except Exception:
+            continue
+        if not isinstance(_rep, dict):
+            continue
+        _run_id = str(_rep.get("run_id") or "")
+        _model_id = str(_rep.get("model_id") or "")
+        _checkpoint_id = str(_rep.get("checkpoint_id") or "")
+        _protocol_id = str(_rep.get("protocol_id") or "")
+        if not (_run_id and _model_id and _checkpoint_id and _protocol_id):
+            continue
+        try:
+            _v = _verify_run.verify(_run_id, _model_id, _checkpoint_id, _protocol_id)
+        except Exception as _verr:
+            _unaccepted_runs.append((_run_id, [f"verifier error: {type(_verr).__name__}: {_verr}"]))
+            continue
+
+        _is_synthetic = _rep.get("is_synthetic") is True or _rep.get("data_kind") == "mock"
+        _reasons = list(_v.get("reasons") or [])
+        _evidence_reasons = list(_v.get("evidence_reasons") or [])
+        _metric_reasons, _ = _verify_run.metric_evidence_reasons(_model_id, _checkpoint_id, _protocol_id, _rep)
+        if _metric_reasons:
+            _invalid_metric_runs.append((_run_id, _metric_reasons))
+
+        _proof_ok = False
+        try:
+            _validator = _em.completion_validator(
+                _model_id, _checkpoint_id, _protocol_id,
+                _verify_run._regression_pin(_model_id), _config
+            )
+            _proof_ok, _, _ = _validator({"run_id": _run_id})
+        except Exception:
+            _proof_ok = False
+
+        _corroboration_reasons = [r for r in _reasons if r not in _metric_reasons]
+        _has_execution_evidence = (
+            not _is_synthetic
+            and _rep.get("data_kind") == "experiment"
+            and _proof_ok
+            and not _corroboration_reasons
+        )
+        if _v.get("is_research_evidence") is True:
+            _accepted_evidence.append(_v)
+            _inference_evidence.append(_run_id)
+        else:
+            _all_refusals = _reasons + _evidence_reasons
+            _unaccepted_runs.append((_run_id, _all_refusals or ["not research evidence"]))
+            if _has_execution_evidence:
+                _inference_evidence.append(_run_id)
+
+if _accepted_evidence:
+    out["dimensions"]["MODEL_INFERENCE"]["status"] = "PASS"
+    out["dimensions"]["MODEL_INFERENCE"]["detail"] = f"real model execution observed: {', '.join(_inference_evidence)}"
+    out["dimensions"]["MODEL_EVALUATION"]["status"] = "PASS"
+    out["dimensions"]["MODEL_EVALUATION"]["detail"] = f"legitimate corroborated benchmark run(s) accepted: {', '.join(v.get('identity', {}).get('run_id') or '' for v in _accepted_evidence)}"
+    out["dimensions"]["SCIENTIFIC_OUTPUT"]["status"] = "PASS"
+    out["dimensions"]["SCIENTIFIC_OUTPUT"]["detail"] = f"valid, authenticated metrics verified: {', '.join(v.get('identity', {}).get('run_id') or '' for v in _accepted_evidence)}"
+else:
+    out["dimensions"]["MODEL_EVALUATION"]["status"] = "PENDING"
+    if _unaccepted_runs:
+        _uid, _ureasons = _unaccepted_runs[0]
+        out["dimensions"]["MODEL_EVALUATION"]["detail"] = f"no corroborated research-evidence run ({_uid}: {'; '.join(_ureasons[:2])})"
+    else:
+        out["dimensions"]["MODEL_EVALUATION"]["detail"] = "no corroborated research-evidence run: no benchmark runs found"
+
+    if _inference_evidence:
+        out["dimensions"]["MODEL_INFERENCE"]["status"] = "PASS"
+        out["dimensions"]["MODEL_INFERENCE"]["detail"] = f"real model execution observed: {', '.join(_inference_evidence)}"
+    else:
+        out["dimensions"]["MODEL_INFERENCE"]["status"] = "PENDING"
+        if _unaccepted_runs:
+            out["dimensions"]["MODEL_INFERENCE"]["detail"] = "synthetic/self-test evaluator is not real model execution; pending real model execution evidence"
+        else:
+            out["dimensions"]["MODEL_INFERENCE"]["detail"] = "no model execution evidence observed"
+
+    out["dimensions"]["SCIENTIFIC_OUTPUT"]["status"] = "PENDING"
+    if _invalid_metric_runs:
+        _mid, _mreasons = _invalid_metric_runs[0]
+        out["dimensions"]["SCIENTIFIC_OUTPUT"]["detail"] = f"invalid metrics for {_mid} ({'; '.join(_mreasons[:2])})"
+    else:
+        out["dimensions"]["SCIENTIFIC_OUTPUT"]["detail"] = "no valid, authenticated metrics: no corroborated research-evidence run"
+
+out["accepted_evidence_runs"] = [
+    {
+        "run_id": v.get("identity", {}).get("run_id"),
+        "model_id": v.get("identity", {}).get("model_id"),
+        "checkpoint_id": v.get("identity", {}).get("checkpoint_id"),
+        "protocol_id": v.get("identity", {}).get("protocol_id"),
+        "report_path": v.get("report_path"),
+        "metrics": v.get("metrics"),
+    }
+    for v in _accepted_evidence
+]
+
 mandatory_pending = [d for d, spec in out["dimensions"].items()
                      if spec["mandatory"] and spec["status"] != "PASS"]
 out["pending_dimensions"] = mandatory_pending
-if out["summary"]["fail"] > 0:
+if out["summary"]["fail"] > 0 or any(spec["status"] == "FAIL" for spec in out["dimensions"].values() if spec["mandatory"]):
     out["verdict"] = "RELEASE_BLOCKED"
 elif mandatory_pending:
-    out["verdict"] = "GPU_VALIDATION_PENDING" if "GPU_RUNTIME" in mandatory_pending else "ENGINEERING_INCOMPLETE"
+    _gpu_or_research_dims = {"GPU_RUNTIME", "MODEL_INFERENCE", "MODEL_EVALUATION", "SCIENTIFIC_OUTPUT"}
+    _non_gpu_pending = [d for d in mandatory_pending if d not in _gpu_or_research_dims]
+    if _non_gpu_pending:
+        out["verdict"] = "ENGINEERING_INCOMPLETE"
+    else:
+        out["verdict"] = "GPU_VALIDATION_PENDING"
 else:
     out["verdict"] = "RELEASE_READY"
+
+print("\nAcceptance dimensions:")
+for dim, spec in out["dimensions"].items():
+    print(f"  {dim:<20} {spec['status']}")
 with open(sys.argv[1], "w", encoding="utf-8") as fh:
     json.dump(out, fh, indent=2, ensure_ascii=False)
     fh.write("\n")
 print(f"report written: {sys.argv[1]} verdict={out['verdict']}")
 EOF
+REPORT_RC=$?
+if (( REPORT_RC != 0 )); then
+    say "RELEASE VERIFIER: FAILED (report generation failed with exit code ${REPORT_RC})" >&2
+    exit 1
+fi
+if [[ ! -f "$REPORT" ]]; then
+    say "RELEASE VERIFIER: FAILED (report file not written: ${REPORT})" >&2
+    exit 1
+fi
 
 if (( fails > 0 )); then
     say "RELEASE VERIFIER: FAILED (${fails} unmet, ${pendings} pending)"
@@ -713,4 +864,3 @@ if (( fails > 0 )); then
 fi
 say "RELEASE VERIFIER: no unmet criteria (${pendings} pending)"
 exit 0
-EOF

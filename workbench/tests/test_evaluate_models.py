@@ -512,3 +512,96 @@ def test_execute_writes_reproducible_logs(monkeypatch, tmp_path: Path) -> None:
     assert metadata["started_at"] and metadata["finished_at"]
     assert metadata["return_code"] == 0
     assert metadata["dataset_root"] == str(tmp_path / "FashionIQ")
+
+
+def _limn_bundle_environment(monkeypatch, module, tmp_path: Path):
+    """A LIMN environment whose bundle state the caller controls, with the REAL blocker sources.
+
+    Nothing is stubbed between `runtime_blockers` and the registry: the bundle-incomplete blocker
+    is produced by `checkpoint_bundle_missing_paths` reading the checkpoint root, so the test
+    exercises the same chain the API does.
+    """
+    import workbench.backend.runtime as runtime
+
+    settings = config(tmp_path)
+    model = records()["limn"]
+    bundle = model["checkpoint_bundles"][0]
+    payload, digest = b"member-bytes", hashlib.sha256(b"member-bytes").hexdigest()
+    checkpoint_root = settings.WORKBENCH_CHECKPOINT_ROOT / "limn"
+    checkpoint_root.mkdir(parents=True)
+    for name in ("0_dress_best_model.pt", "0_shirt_best_model.pt", "0_toptee_best_model.pt"):
+        (checkpoint_root / name).write_bytes(payload)
+    source = settings.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
+    (source / "LIMN").mkdir(parents=True)
+    (source / "LIMN" / "test.py").write_text("")
+    dataset_root = settings.FASHIONIQ_ROOT
+    for directory in ("captions", "image_splits", "resized_image/dress", "resized_image/shirt",
+                      "resized_image/toptee"):
+        (dataset_root / directory).mkdir(parents=True, exist_ok=True)
+    for category in ("dress", "shirt", "toptee"):
+        for name in (f"cap.{category}.val.json", f"cap.{category}.train.json",
+                     f"correction_dict_{category}.json"):
+            (dataset_root / "captions" / name).write_text("[]")
+        (dataset_root / "image_splits" / f"split.{category}.val.json").write_text("[]")
+    # The bundle members are real registry entries with author-published digests; the fixture
+    # writes its own bytes, so the declarations are rewritten on every registry load rather than
+    # left to contradict the files.
+    original_loader = registry.load_registry
+
+    def loader_with_fixture_declarations():
+        loaded = original_loader()
+        for candidate in loaded["models"]:
+            if candidate["model_id"] == "limn":
+                for variant in candidate["checkpoint_variants"]:
+                    variant["expected_sha256"] = digest
+                    variant["expected_size_bytes"] = len(payload)
+        return loaded
+
+    monkeypatch.setattr(registry, "load_registry", loader_with_fixture_declarations)
+    monkeypatch.setattr(module, "load_registry", loader_with_fixture_declarations, raising=False)
+    for variant in model["checkpoint_variants"]:
+        variant["expected_sha256"] = digest
+        variant["expected_size_bytes"] = len(payload)
+
+    interpreter = _fake_isolated_interpreter(tmp_path)
+    monkeypatch.setenv("WORKBENCH_LIMN_PYTHON", str(interpreter))
+    monkeypatch.setattr(runtime, "python_executable", lambda _model: str(interpreter))
+    monkeypatch.setattr(runtime, "source_clean_and_pinned",
+                        lambda _model, _source: (True, model["upstream_commit_sha"], None))
+    monkeypatch.setattr(module, "resolve_config", lambda: settings)
+    monkeypatch.setattr(module, "pinned_revision", lambda _: model["upstream_commit_sha"])
+    # The fold `POST /api/jobs` performs: the bundle anchored on its first member, keeping the
+    # bundle identity. The bundle must stay ONE selection with `checkpoint_id == bundle_id`.
+    anchor = model["checkpoint_variants"][0]
+    folded = {**anchor, "checkpoint_id": bundle["bundle_id"], "bundle_id": bundle["bundle_id"]}
+    return settings, model, dataset_root, folded, checkpoint_root, bundle
+
+
+def test_a_complete_limn_bundle_is_not_refused_by_a_bundle_blocker(monkeypatch, tmp_path: Path) -> None:
+    """(a) All three members present -> no bundle-incomplete blocker, and ONE bundle plan."""
+    module = load_module()
+    settings, model, dataset_root, folded, _, bundle = _limn_bundle_environment(monkeypatch, module, tmp_path)
+
+    plan, reasons = module.guarded_plan(model, folded, model["native_protocol"], dataset_root, 200, settings)
+
+    assert not [r for r in reasons if r.startswith("checkpoint bundle incomplete")], reasons
+    assert plan is not None, reasons
+    # One selection, not three runs, and all three categories recorded as consumed.
+    assert plan.checkpoint_id == bundle["bundle_id"]
+    assert sorted(plan.checkpoint_bundle) == ["0_dress_best_model.pt", "0_shirt_best_model.pt",
+                                              "0_toptee_best_model.pt"]
+    assert plan.artifact_type == "category_specific_whole_models"
+
+
+def test_an_incomplete_limn_bundle_is_refused_and_the_member_is_named(monkeypatch, tmp_path: Path) -> None:
+    """(b) A missing member still refuses the bundle, and the blocker names the member."""
+    module = load_module()
+    settings, model, dataset_root, folded, checkpoint_root, bundle = _limn_bundle_environment(monkeypatch, module, tmp_path)
+    missing = checkpoint_root / "0_toptee_best_model.pt"
+    missing.unlink()
+
+    plan, reasons = module.guarded_plan(model, folded, model["native_protocol"], dataset_root, 200, settings)
+
+    assert plan is None
+    assert [r for r in reasons if r.startswith("checkpoint bundle incomplete")] == [
+        f"checkpoint bundle incomplete: {bundle['bundle_id']}: {missing}"], reasons

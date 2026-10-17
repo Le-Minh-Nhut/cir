@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 import csv
 import io
@@ -20,7 +21,7 @@ from workbench.backend.analysis import analysis_rows_from_maps, failure_jaccard_
 from workbench.backend import runtime
 from workbench.backend.errors import WorkbenchError
 from workbench.backend.index import database_path, rebuild_index
-from workbench.backend.jobs import DuplicateJobError, SingleGpuQueue
+from workbench.backend.jobs import DuplicateJobError, QueueShutdownError, SingleGpuQueue
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.registry import checkpoint_availability, load_registry, sha256_file
 from workbench.backend.schemas.results import Annotation, SavedCohort
@@ -198,6 +199,215 @@ def runs(protocol_id: str | None = None):
     _check_index_ready(db_path)
     return list_runs(protocol_id, database_path=db_path)
 
+def _artifact_root(config) -> Path:
+    """The artifacts root, resolving the fallback exactly as `evaluate_models.artifact_root`."""
+    from workbench.scripts.evaluate_models import artifact_root
+
+    return Path(artifact_root(config))
+
+def _development_process() -> bool:
+    """Whether this process is a development one, i.e. allowed to relax proof validation.
+
+    Development is *explicit opt-in state*, never the absence of a deployment flag: the deployment
+    itself sets neither variable, so treating "neither is set" as development is what made every
+    deployed report uncertifiable. Either variable, when set to a non-empty value, says the
+    operator declared this process a development one.
+    """
+    return any(os.environ.get(flag) for flag in ("PYTEST_CURRENT_TEST", "WORKBENCH_DEVELOPMENT_MODE"))
+
+def _development_opt_in() -> bool:
+    """``WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES=1``: the operator's explicit development opt-in.
+
+    It relaxes proof validation *in a development process only*; see ``_certification_mode``.
+    """
+    return str(os.environ.get("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", "")).strip() == "1"
+
+def _certification_mode(proof_exists: bool) -> str:
+    """Which certification policy this process must apply to *this* report.
+
+    * ``"deployment"`` -- the report has a completion proof, so it is certified through the
+      authoritative verifier, in full (checksum and environment identity included). This is the
+      real deployment case and the only one that may end in ``certified=true`` on a proof.
+    * ``"development"`` -- a development process (pytest or ``WORKBENCH_DEVELOPMENT_MODE``) whose
+      operator opted in with ``WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES=1`` and whose report has no
+      usable proof: a synthetic no-op evaluator writes no environment identity, so proof-level
+      validation is impossible in principle, not merely slow. The receipt is ledger level and says
+      so.
+    * ``"proof_unavailable"`` -- neither applies: a completed, ledger-corroborated report whose
+      completion proof is absent / pruned / lost. The execution is authenticated, but without
+      the proof's environment identity it cannot be certified research evidence.
+    """
+    if proof_exists:
+        return "deployment"
+    if _development_process() and _development_opt_in():
+        return "development"
+    return "proof_unavailable"
+
+def _no_proof_refusal() -> str:
+    """Why a report with no usable completion proof cannot be certified here, by name."""
+    if _development_process():
+        return ("this process is in development and no completion proof exists for this report, so "
+                "the authoritative verifier cannot validate it; set "
+                "WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES=1 to certify at ledger level in "
+                "development only")
+    return ("this report has no completion proof, so the authoritative verifier cannot validate "
+            "its environment identity here; a deployment certifies only reports it produced "
+            "itself, and WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES=1 is honoured in a development "
+            "process only")
+
+#: Receipts are cached by (report digest, certification mode, ledger stamp, proof stamp). The key
+#: is the whole soundness argument of the cache, so it is a key and not a convenience: the report
+#: digest fixes which bytes were verified, the mode which policy judged them, the ledger stamp which
+#: ledger corroborated them, and the proof stamp whether an evaluator-written proof exists and which
+#: revision of it was validated. Neither the ledger read nor the manifest validation (which re-hashes
+#: the checkpoint's multi-GB members) therefore runs on every dashboard request -- only when a
+#: report, the process's certification mode, the ledger, or a proof actually changed. Refusals are
+#: cached too: avoiding that cost per request is the point, and every input that could turn a refusal
+#: into a certification is in the key -- the mode included, so a development receipt is never
+#: re-served for a report that later gained a proof (the proof stamp changes, and the mode with it).
+_CERTIFICATION_CACHE: dict[tuple[str, str, str, str], dict] = {}
+
+def _reports_root(config) -> Path:
+    """Where the evaluator writes aggregate reports and completion proofs."""
+    from workbench.scripts.evaluate_models import reports_root
+
+    return reports_root(config)
+
+def _proof_stamp(config, report: dict) -> str:
+    """A change token for the completion proof `verify_run.verify` would validate, if any."""
+    try:
+        stat = (_reports_root(config) / (
+            f"{report.get('model_id')}_{report.get('checkpoint_id')}_"
+            f"{report.get('run_id')}_completion.json")).stat()
+    except OSError:
+        return "absent"
+    return f"{stat.st_mtime_ns}:{stat.st_size}"
+
+def _ledger_path(config) -> Path:
+    """The one ledger file both the evaluator and this process read."""
+    from workbench.scripts.evaluate_models import evidence_ledger_path
+
+    return evidence_ledger_path(config)
+
+def _ledger_stamp(config) -> str:
+    """A change token for the ledger file: mtime plus size.
+
+    The receipt cache is sound only because a *rewritten* ledger cannot pass
+    ``read_evidence_ledger`` again (its HMAC chain stops verifying), so an in-place edit can only
+    ever shrink the set of reports that are corroborated. A new entry is an append, and an append
+    always moves both mtime and size. Either moving invalidates the cache; nothing else can turn a
+    previously refused report into an acceptable one.
+    """
+    try:
+        stat = _ledger_path(config).stat()
+    except OSError:
+        return "absent"
+    return f"{stat.st_mtime_ns}:{stat.st_size}"
+
+def _verifier_verdict(config, report_path: Path, report: dict) -> dict | None:
+    """The authoritative verdict for one report, or None when the verifier cannot resolve it.
+
+    ``verify_run.verify`` is imported lazily so a backend that never serves a report pays nothing,
+    and it is asked the *same* question ``pc.sh`` and the job queue ask. Nothing is re-implemented
+    here: the verdict is the verifier's, verbatim.
+    """
+    from workbench.scripts import verify_run
+
+    original_resolve_config = verify_run.resolve_config
+    if config is not None:
+        # The verifier resolves its own config from the process environment; the request already
+        # has one, and handing it the same object is what keeps a deployment (or a test) verifying
+        # the reports it is actually serving.
+        verify_run.resolve_config = lambda: config
+    try:
+        return verify_run.verify(str(report.get("run_id") or ""), str(report.get("model_id") or ""),
+                                 str(report.get("checkpoint_id") or ""),
+                                 str(report.get("protocol_id") or ""))
+    except Exception as error:                 # a verifier that cannot answer is not a pass
+        print(f"workbench: could not verify {report_path}: {error}", file=sys.stderr)
+        return None
+    finally:
+        verify_run.resolve_config = original_resolve_config
+
+def _development_certification(config, report_path: Path, report: dict, digest: str) -> dict:
+    """A ledger-level receipt for a development process, never for a deployment.
+
+    Only the *execution* question is relaxed: the report bytes are the bytes the ledger records,
+    under the identity it records, from a completed invocation -- all checked by the caller before
+    this runs. The two research questions are answered by the verifier's own rules, called
+    directly: ``metric_evidence_reasons`` (its extraction/category/macro contract) and
+    ``_evidence_kind_reasons`` (its synthetic / not-an-experiment rule). What cannot run on this
+    host is ``validate_run_manifest``, because there is no evaluator-written proof to validate; the
+    receipt says so under ``development_mode`` and the fact is printed on stderr on every request,
+    so it is never invisible to an operator or an auditor.
+    """
+    from workbench.scripts import verify_run
+
+    metric_reasons, _ = verify_run.metric_evidence_reasons(
+        str(report.get("model_id") or ""), str(report.get("checkpoint_id") or ""),
+        str(report.get("protocol_id") or ""), report)
+    reasons = [*metric_reasons, *verify_run._evidence_kind_reasons(report)]
+    print(f"workbench: certifying {report_path} at ledger level under a development certificate "
+          f"(report digest {digest}, run {report.get('run_id')!r}; the completion proof was not "
+          "validated here)", file=sys.stderr)
+    # `certified` answers the same question as `is_research_evidence` in every mode: the receipt is
+    # cached by digest, so a receipt that claimed certification regardless of its own reasons would
+    # hand every later request a `certified=true` for a report the verifier's rules refused.
+    return {"report_digest": digest, "verified": not reasons, "is_research_evidence": not reasons,
+            "reasons": [], "evidence_reasons": reasons, "certified": not reasons,
+            "certification_mode": "development", "development_mode": True}
+
+def _certify_report(config, report_path: Path, report: dict, digest: str, *,
+                    mode: str | None = None) -> dict:
+    """What the API owes a consumer about one report: four separate questions.
+
+    (1) an aggregate artifact exists -- decided by the caller: a report on disk is served either
+    way, because a historical or refused run is still a record of something that happened;
+    (2) its execution is authenticated -- the report's bytes are the bytes the HMAC ledger records,
+    under the identity it records, from a completed invocation (all checked before this runs);
+    (3) it is VALID RESEARCH EVIDENCE -- the authoritative verifier's ``is_research_evidence``: the
+    completion proof validates, the metric extraction really happened, the report's own numbers are
+    usable, and its macro agrees with its own categories;
+    (4) its paper-parity verdict -- ``parity_status`` and ``benchmark_gate``, served as before.
+
+    ``mode`` is the policy ``_certification_mode`` already chose for this report; the caller passes
+    it so the cache key and the receipt can never disagree about which policy judged the report.
+
+    Only (3) is ever presented as certified evidence. A refused report keeps (1), (2) and (4) and
+    carries ``certified=false`` with the verifier's own reasons, so a consumer can tell "an
+    artifact exists" apart from "valid evidence" without reading English.
+    """
+    if mode is None:
+        mode = _certification_mode(_proof_stamp(config, report) != "absent")
+    if mode == "deployment":
+        # The proof exists: the verifier is authoritative, in full, including the checksum and
+        # environment identity of this run's own proof. A development opt-in cannot skip this: the
+        # mode is chosen by the report's proof, not by the process's environment.
+        verdict = _verifier_verdict(config, report_path, report)
+        if verdict is None:
+            return {"verified": False, "is_research_evidence": False, "reasons": [],
+                    "evidence_reasons": ["the authoritative verifier could not resolve this run"],
+                    "certified": False, "certification_mode": mode, "development_mode": False,
+                    "state": "refused"}
+        certified = bool(verdict.get("is_research_evidence"))
+        return {"report_digest": digest,
+                "verified": bool(verdict.get("verified")),
+                "is_research_evidence": certified,
+                "reasons": list(verdict.get("reasons") or []),
+                "evidence_reasons": list(verdict.get("evidence_reasons") or []),
+                "certified": certified,
+                "certification_mode": mode,
+                "development_mode": False,
+                "state": "certified" if certified else "refused"}
+    if mode == "development":
+        receipt = _development_certification(config, report_path, report, digest)
+        receipt["state"] = "certified" if receipt.get("certified") else "refused"
+        return receipt
+    return {"verified": False, "is_research_evidence": False, "reasons": [],
+            "evidence_reasons": [_no_proof_refusal()], "certified": False,
+            "certification_mode": mode, "development_mode": False,
+            "state": "proof_unavailable" if mode == "proof_unavailable" else "refused"}
+
 def _aggregate_reports() -> list[dict]:
     """Read every official aggregate report the evaluator has written, ignoring malformed files.
 
@@ -205,23 +415,65 @@ def _aggregate_reports() -> list[dict]:
     records, while an aggregate report can exist for a run whose per-query export was not saved.
     Reading them at request time keeps the API in sync with new evaluator output without a
     re-index.
+
+    Serving one is not the same as certifying it. The report's *evidence* verdict is the
+    authoritative verifier's (``workbench/scripts/verify_run.py``), attached to each report as a
+    verification receipt: the same completion-proof, extraction, category, macro and synthetic
+    contract ``pc.sh`` and the job queue enforce, so the API can no longer serve as research
+    evidence a report the verifier would refuse. Only the cheap parts run per request -- a digest,
+    the ledger read, and the receipt cache lookup; proof validation happens once per report per
+    ledger revision.
     """
-    from workbench.scripts.evaluate_models import reports_root
+    from workbench.scripts.evaluate_models import (
+        LedgerKeyError, ledger_hmac_key, read_evidence_ledger, reports_root,
+        sha256_file as report_digest_of)
 
     config = resolve_config()
     if not reports_root(config).is_dir():
         return []
+    # A ledger that cannot be *READ AT ALL* is a different answer from "no report is
+    # corroborated", and the endpoints must not conflate them: this deployment carries both
+    # `<CIR_REPO_ROOT>/.workbench_ledger_key` and `$XDG_CONFIG_HOME/cir/workbench_ledger_key`, and
+    # when they differ every consumer used to answer `[]` with no reason stated anywhere. The
+    # conflict is deliberately not resolved by preference -- whichever key this process picked
+    # would be wrong for a ledger signed with the other -- so it is surfaced instead, naming both
+    # paths, while reports are still not served: fail closed, never silently.
+    #
+    # A ledger that reads *back* empty is not this case: that is the ordinary "nothing is
+    # corroborated" answer, and it is deliberately left alone.
+    try:
+        ledger = read_evidence_ledger(config)
+    except LedgerKeyError as error:
+        raise WorkbenchError(
+            "ledger_key_unusable",
+            f"the evidence ledger key is unusable, so no report can be corroborated: {error}",
+            {"reason": str(error), "ledger": str(_ledger_path(config))})
+    if ledger is None:
+        # A missing ledger file is also a None answer, and a conflict that exists before the first
+        # entry was ever written is still something the operator must fix (or no run can be
+        # audited at all), so the key is asked directly here rather than left implicit.
+        try:
+            ledger_hmac_key(config)
+        except LedgerKeyError as error:
+            raise WorkbenchError(
+                "ledger_key_unusable",
+                f"the evidence ledger key is unusable, so no report can be corroborated: {error}",
+                {"reason": str(error), "ledger": str(_ledger_path(config))})
+        # With a usable key, None is a corrupt chain, not a missing one: the per-report skips
+        # below already state it on stderr, and this states it once.
+        if _ledger_path(config).is_file():
+            print(f"workbench: the evidence ledger {_ledger_path(config)} does not verify; "
+                  "no aggregate report can be corroborated", file=sys.stderr)
     # A report is evidence only when the out-of-band ledger corroborates it. Any parseable JSON
     # in this directory could have been written by anyone with filesystem access; without the
-    # ledger cross-check a forged report would be served as `passed=True`. A report whose
-    # digest, identity fields, or completion status disagree with the ledger — or that has no
-    # ledger entry at all — is isolated, never served.
-    from workbench.scripts.evaluate_models import read_evidence_ledger, sha256_file
-    ledger = read_evidence_ledger(config)
-    # Key the ledger by report digest, not run_id: two files claiming the same run_id must
-    # each find the entry whose bytes they match, and a copied report must not inherit a
-    # different run's corroboration.
+    # ledger cross-check a forged report would be served as `passed=True`. A report whose digest,
+    # identity fields, or completion status disagree with the ledger — or that has no ledger entry
+    # at all — is isolated, never served.
+    # Key the ledger by report digest, not run_id: two files claiming the same run_id must each
+    # find the entry whose bytes they match, and a copied report must not inherit a different
+    # run's corroboration.
     ledger_by_digest = {item.get("report_digest"): item for item in ledger or []}
+    ledger_stamp = _ledger_stamp(config)
     reports = []
     for path in sorted(reports_root(config).glob("*_aggregate.json")):
         try:
@@ -232,7 +484,8 @@ def _aggregate_reports() -> list[dict]:
             continue
         if not _aggregate_report_is_well_formed(report, path):
             continue
-        witness = ledger_by_digest.get(sha256_file(path))
+        digest = report_digest_of(path)
+        witness = ledger_by_digest.get(digest)
         # A copied report must not inherit another run's corroboration: the witness entry's
         # identity fields must match the file's own claims.
         if witness is not None and witness.get("run_id") != report.get("run_id"):
@@ -241,7 +494,7 @@ def _aggregate_reports() -> list[dict]:
             print(f"workbench: skipping aggregate report {path}: no evidence-ledger entry for its run", file=sys.stderr)
             continue
         corroborated = (
-            witness.get("report_digest") == sha256_file(path)
+            witness.get("report_digest") == digest
             and str(witness.get("model_id")) == str(report.get("model_id"))
             and str(witness.get("checkpoint_id")) == str(report.get("checkpoint_id"))
             and str(witness.get("protocol_id")) == str(report.get("protocol_id"))
@@ -258,6 +511,28 @@ def _aggregate_reports() -> list[dict]:
             # run_id, so serving both would present one run twice.
             print(f"workbench: skipping aggregate report {path}: duplicate run_id", file=sys.stderr)
             continue
+        proof_stamp = _proof_stamp(config, report)
+        mode = _certification_mode(proof_stamp != "absent")
+        cache_key = (digest, mode, ledger_stamp, proof_stamp)
+        receipt = _CERTIFICATION_CACHE.get(cache_key)
+        if receipt is None:
+            receipt = _certify_report(config, path, report, digest, mode=mode)
+            _CERTIFICATION_CACHE[cache_key] = receipt
+        report["verification"] = {
+            # The four questions, kept separate so a consumer can tell "an artifact exists" apart
+            # from "valid evidence": (1) is answered by this report being served at all, (2) by
+            # the ledger corroboration above, (3) by the verifier's receipt, (4) by the gate.
+            "artifact_exists": True,
+            "execution_authenticated": True,
+            "is_research_evidence": bool(receipt["is_research_evidence"]),
+            "certified": bool(receipt["certified"]),
+            "development_mode": bool(receipt["development_mode"]),
+            "certification_mode": receipt.get("certification_mode", mode),
+            "state": receipt.get("state", "certified" if receipt["certified"] else ("proof_unavailable" if mode == "proof_unavailable" else "refused")),
+            "report_digest": digest,
+            "reasons": list(receipt["reasons"]),
+            "evidence_reasons": list(receipt["evidence_reasons"]),
+        }
         reports.append(report)
     return reports
 
@@ -293,9 +568,23 @@ def _gate_fields(report: dict) -> dict:
     comparisons = gate.get("comparisons")
     gate = {**gate, "comparisons": [c for c in comparisons or [] if isinstance(c, dict)]
             if isinstance(comparisons, list) else []}
+    verification = report.get("verification")
     return {
         "benchmark_gate": gate,
         "parity_status": report.get("parity_status"),
+        # The receipt's first three answers, so a consumer can tell "an artifact exists" apart from
+        # "valid evidence". The parity verdict stays its own field (`parity_status`, `benchmark_gate`
+        # above), which keeps all four questions visible and separate. A report with no receipt --
+        # only reachable if the report was mutated after it was read -- degrades to "not evidence",
+        # never to "certified".
+        "verification": (verification if isinstance(verification, dict) else {
+            "artifact_exists": True, "execution_authenticated": False,
+            "is_research_evidence": False, "certified": False, "development_mode": False,
+            "certification_mode": "uncorroborated",
+            "state": "uncorroborated",
+            "report_digest": None, "reasons": ["no evidence ledger corroboration for this run"],
+            "evidence_reasons": ["the report carries no verification receipt"],
+        }),
         "variant_provenance": (report.get("variant_provenance")
                                if isinstance(report.get("variant_provenance"), dict) else {}),
         # The frontend iterates these with Object.entries, once at the top level and once per
@@ -314,7 +603,16 @@ def _gate_fields(report: dict) -> dict:
 
 @app.get("/api/benchmark-runs")
 def benchmark_runs():
-    """Aggregate-report runs, including runs with no per-query export in the index."""
+    """Aggregate-report runs, including runs with no per-query export in the index.
+
+    Every report carries the verifier's receipt: `verification.is_research_evidence` is the
+    authoritative answer, and a report without it is an artifact whose execution is recorded but
+    which is not certified research evidence.
+
+    An unusable evidence-ledger key is not an empty result: it answers 400 `ledger_key_unusable`
+    naming the cause and the remedy, because `[]` is otherwise indistinguishable from a stack
+    that genuinely has no corroborated run.
+    """
     return [{"run_id": report["run_id"], "model_id": report.get("model_id"),
              "checkpoint_id": report.get("checkpoint_id"), "protocol_id": report.get("protocol_id"),
              **_gate_fields(report)} for report in _aggregate_reports()]
@@ -546,6 +844,12 @@ def queue_job(payload: JobInput):
         # so two concurrent submissions of the same evaluation cannot both be appended.
         return JOBS.enqueue(plan.model_id, plan.checkpoint_id, plan.protocol, argv, ROOT,
                             job_directory, provenance, refuse_duplicate=True)
+    except QueueShutdownError as error:
+        # The queue is shutting down (or has): a client cannot be told its job was accepted,
+        # so this is a server-state condition, not a bad request.
+        raise HTTPException(503, {"error": "queue_unavailable",
+                                  "message": "The evaluation queue is shutting down and cannot accept new jobs.",
+                                  "details": {"reason": str(error)}}) from error
     except DuplicateJobError as error:
         # A duplicate that landed after the fast-path loop above is refused here, by the
         # existing job's identity, so the operator still learns which job holds the GPU.

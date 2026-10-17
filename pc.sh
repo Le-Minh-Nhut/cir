@@ -596,6 +596,198 @@ else:
     say "Môi trường đã sẵn sàng: WORKBENCH_ENABLE_GPU=${WORKBENCH_ENABLE_GPU}, MODEL=${MODEL}"
 }
 
+# The single source of truth for "does this container's effective configuration satisfy this
+# run?". The inline check that used to live in the reuse decision and the correction path are
+# the same check, so a restart is now followed by exactly the same inspection that decided it
+# was needed: a restart that does not correct the configuration can no longer be followed by
+# preparation and evaluation on a container that still has the wrong mount.
+inspect_container_config() {
+    local base="$1"
+    inspect_config_satisfies=1
+    inspect_mismatch_reasons=()
+    inspect_mounts_known=1
+    inspect_mounts_desc="ok"
+    inspect_gpu_mismatch=0
+    inspect_adaptation_mismatch=0
+    inspect_mount_mismatch=0
+    inspect_env_mismatch=0
+
+    # 1. GPU override / in-container CUDA visibility
+    if (( WORKBENCH_ENABLE_GPU == 1 )); then
+        local gpu_ok=0
+        local dev_req
+        dev_req="$(docker inspect --format '{{json .HostConfig.DeviceRequests}}' cir-workbench 2>/dev/null || true)"
+        if [[ "$dev_req" == *"gpu"* || "$dev_req" == *"nvidia"* ]]; then
+            gpu_ok=1
+        fi
+        if docker exec cir-workbench python -c "import torch; exit(0 if torch.cuda.is_available() else 1)" >/dev/null 2>&1; then
+            gpu_ok=1
+        elif (( gpu_ok == 0 )); then
+            if docker exec cir-workbench nvidia-smi >/dev/null 2>&1; then
+                gpu_ok=1
+            fi
+        fi
+        if (( gpu_ok == 0 )); then
+            inspect_config_satisfies=0
+            inspect_gpu_mismatch=1
+            inspect_mismatch_reasons+=("Container cir-workbench thiếu GPU passthrough (GPU override không có hiệu lực hoặc không có CUDA visibility)")
+        fi
+    fi
+
+    # 2. Runtime adaptation value
+    local expected_adaptation="${WORKBENCH_RUNTIME_ADAPTATION:-}"
+    local cont_adapt
+    cont_adapt="$(docker exec cir-workbench python -c "import os; print(os.environ.get('WORKBENCH_RUNTIME_ADAPTATION', ''))" 2>/dev/null || true)"
+    if [[ -z "$cont_adapt" ]]; then
+        cont_adapt="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' cir-workbench 2>/dev/null | grep '^WORKBENCH_RUNTIME_ADAPTATION=' | head -n1 | cut -d= -f2- || true)"
+    fi
+    if [[ "$cont_adapt" != "$expected_adaptation" ]]; then
+        inspect_config_satisfies=0
+        inspect_adaptation_mismatch=1
+        inspect_mismatch_reasons+=("Runtime adaptation không khớp (container='${cont_adapt}', yêu cầu='${expected_adaptation}')")
+    fi
+
+    # 3. Mounts provenance (P1-3)
+    local exp_ds_raw="${DATASET_PATH_OVERRIDE:-$(env_value HOST_FASHIONIQ_ROOT ../../data/FashionIQ)}"
+    local expected_ds_mount="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$exp_ds_raw")"
+    local exp_cp_raw="$(env_value HOST_WORKBENCH_CHECKPOINT_ROOT ../../workbench/artifacts/checkpoints)"
+    local expected_cp_mount="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$exp_cp_raw")"
+    local exp_art_raw="$(env_value HOST_WORKBENCH_ARTIFACTS_ROOT ../../workbench/artifacts)"
+    local expected_art_mount="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$exp_art_raw")"
+
+    local mounts_check_result
+    mounts_check_result="$(docker inspect --format '{{json .Mounts}}' cir-workbench 2>/dev/null | python3 -c "
+import json, os, sys
+
+try:
+    raw = sys.stdin.read().strip()
+    if not raw:
+        print('UNKNOWN empty-inspect')
+        sys.exit(0)
+    data = json.loads(raw)
+except Exception:
+    print('UNKNOWN unparseable-json')
+    sys.exit(0)
+
+if not isinstance(data, list):
+    print('UNKNOWN not-a-list')
+    sys.exit(0)
+
+mounts = {}
+for item in data:
+    if isinstance(item, dict):
+        dest = item.get('Destination')
+        src = item.get('Source')
+        if dest and src:
+            mounts[dest] = src
+
+expected = {
+    '/data/FashionIQ': sys.argv[1],
+    '/checkpoints': sys.argv[2],
+    '/artifacts': sys.argv[3],
+}
+
+mismatches = []
+for dest, exp_path in expected.items():
+    if dest not in mounts:
+        mismatches.append(f'MISSING:{dest}')
+    else:
+        act_real = os.path.realpath(mounts[dest])
+        exp_real = os.path.realpath(exp_path)
+        if act_real != exp_real:
+            mismatches.append(f'MISMATCH:{dest}:{mounts[dest]}:{exp_path}')
+
+if mismatches:
+    print('REJECT ' + '; '.join(mismatches))
+else:
+    print('OK')
+" "$expected_ds_mount" "$expected_cp_mount" "$expected_art_mount" 2>/dev/null || echo "UNKNOWN docker-inspect-failed")"
+
+    if [[ "$mounts_check_result" == UNKNOWN* ]]; then
+        inspect_mounts_known=0
+        inspect_config_satisfies=0
+        inspect_mount_mismatch=1
+        inspect_mounts_desc="${mounts_check_result#UNKNOWN }"
+        inspect_mismatch_reasons+=("Không thể xác định mount của container cir-workbench từ docker inspect (${inspect_mounts_desc})")
+    elif [[ "$mounts_check_result" == REJECT* ]]; then
+        inspect_config_satisfies=0
+        inspect_mount_mismatch=1
+        local mm_list="${mounts_check_result#REJECT }"
+        local item
+        IFS=';' read -ra mm_arr <<< "$mm_list"
+        for item in "${mm_arr[@]}"; do
+            item="$(trim "$item")"
+            if [[ "$item" == MISSING:* ]]; then
+                local missing_dest="${item#MISSING:}"
+                inspect_mismatch_reasons+=("Mount ${missing_dest} bị thiếu trong container cir-workbench")
+            elif [[ "$item" == MISMATCH:* ]]; then
+                local mm_parts="${item#MISMATCH:}"
+                local m_dest="${mm_parts%%:*}"
+                local m_rest="${mm_parts#*:}"
+                local m_act="${m_rest%%:*}"
+                local m_exp="${m_rest#*:}"
+                inspect_mismatch_reasons+=("Mount ${m_dest} nguồn không khớp (container='${m_act}', yêu cầu='${m_exp}')")
+            fi
+        done
+    fi
+
+    # The dataset must be readable where the evaluator reads it, not merely mounted.
+    if ! docker exec cir-workbench test -d /data/FashionIQ/images 2>/dev/null; then
+        inspect_config_satisfies=0
+        inspect_mount_mismatch=1
+        inspect_mismatch_reasons+=("Dataset mount /data/FashionIQ/images không tồn tại hoặc không thể truy cập")
+    fi
+
+    # 4. Runtime environment responds
+    if ! docker exec cir-workbench python -c "import sys; sys.exit(0)" 2>/dev/null; then
+        inspect_config_satisfies=0
+        inspect_env_mismatch=1
+        inspect_mismatch_reasons+=("Môi trường thực thi trong container không phản hồi")
+    fi
+
+}
+
+# Fail closed on a container that still does not satisfy the requested configuration after a
+# restart/recreation. Returns non-zero and names the exact remedy for each cause.
+require_corrected_configuration() {
+    local stage="$1"
+    local base="$2"
+    inspect_container_config "$base"
+    if (( inspect_config_satisfies == 1 )); then
+        say "[OK] Cấu hình container cir-workbench đã đúng yêu cầu sau khi khởi động lại."
+        return 0
+    fi
+    local reasons_str
+    reasons_str="$(IFS='; '; echo "${inspect_mismatch_reasons[*]}")"
+
+    local remedies=()
+    local log_cmd=""
+    if (( inspect_gpu_mismatch == 1 )); then
+        remedies+=("Cài đặt nvidia-container-toolkit trên host hoặc cấu hình WORKBENCH_ENABLE_GPU trong workbench/docker/.env (hoặc chạy với cờ --no-gpu nếu không dùng GPU)")
+        log_cmd="docker inspect --format '{{json .HostConfig.DeviceRequests}}' cir-workbench"
+    fi
+    if (( inspect_adaptation_mismatch == 1 )); then
+        remedies+=("Kiểm tra WORKBENCH_RUNTIME_ADAPTATION trong workbench/docker/.env cho khớp cấu hình yêu cầu")
+        [[ -z "$log_cmd" ]] && log_cmd="docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' cir-workbench"
+    fi
+    if (( inspect_mount_mismatch == 1 )); then
+        remedies+=("Sửa các khóa host path trong workbench/docker/.env (HOST_FASHIONIQ_ROOT / HOST_WORKBENCH_CHECKPOINT_ROOT / HOST_WORKBENCH_ARTIFACTS_ROOT) cho khớp yêu cầu của lượt chạy này, rồi chạy lại ./pc.sh")
+        [[ -z "$log_cmd" ]] && log_cmd="docker inspect --format '{{json .Mounts}}' cir-workbench"
+    fi
+    if (( inspect_env_mismatch == 1 )); then
+        remedies+=("Kiểm tra trạng thái container và docker daemon")
+        [[ -z "$log_cmd" ]] && log_cmd="docker logs cir-workbench"
+    fi
+    if (( ${#remedies[@]} == 0 )); then
+        remedies+=("Kiểm tra cấu hình container trong workbench/docker/.env")
+        log_cmd="docker inspect cir-workbench"
+    fi
+    local remedy_str
+    remedy_str="$(IFS='; '; echo "${remedies[*]}")"
+
+    fail_stage "${stage}" "Container cir-workbench vẫn KHÔNG thỏa mãn cấu hình yêu cầu sau khi khởi động lại: ${reasons_str}" "${log_cmd}" "${remedy_str}"
+}
+
 # Behaviour 4: Docker Stack Startup & Readiness Polling
 start_docker_and_wait_readiness() {
     local backend_port frontend_port base
@@ -709,133 +901,16 @@ else:
                 mismatch_reasons+=("Không đọc được danh sách tác vụ từ ${base}/api/jobs (${active_desc}) — không thể xác nhận container đang rảnh")
             fi
 
-            # 1. GPU override / in-container CUDA visibility
-            if (( WORKBENCH_ENABLE_GPU == 1 )); then
-                local gpu_ok=0
-                local dev_req
-                dev_req="$(docker inspect --format '{{json .HostConfig.DeviceRequests}}' cir-workbench 2>/dev/null || true)"
-                if [[ "$dev_req" == *"gpu"* || "$dev_req" == *"nvidia"* ]]; then
-                    gpu_ok=1
-                fi
-                if docker exec cir-workbench python -c "import torch; exit(0 if torch.cuda.is_available() else 1)" >/dev/null 2>&1; then
-                    gpu_ok=1
-                elif (( gpu_ok == 0 )); then
-                    if docker exec cir-workbench nvidia-smi >/dev/null 2>&1; then
-                        gpu_ok=1
-                    fi
-                fi
-                if (( gpu_ok == 0 )); then
-                    config_satisfies=0
-                    mismatch_reasons+=("GPU override không có hiệu lực hoặc container không có CUDA visibility")
-                fi
+            inspect_container_config "$base"
+            local config_satisfies=$inspect_config_satisfies
+            local mounts_known=$inspect_mounts_known mounts_desc="$inspect_mounts_desc"
+            # `mismatch_reasons` is declared once, before the first append above: re-declaring it
+            # here would silently discard the reasons already recorded (the unreadable job list),
+            # and the fail-closed branch below would then report a failure without the reason that
+            # caused it. The inspection's reasons are accumulated into the same array instead.
+            if (( ${#inspect_mismatch_reasons[@]} > 0 )); then
+                mismatch_reasons+=("${inspect_mismatch_reasons[@]}")
             fi
-
-            # 2. Runtime adaptation value
-            local expected_adaptation="${WORKBENCH_RUNTIME_ADAPTATION:-}"
-            local cont_adapt
-            cont_adapt="$(docker exec cir-workbench python -c "import os; print(os.environ.get('WORKBENCH_RUNTIME_ADAPTATION', ''))" 2>/dev/null || true)"
-            if [[ -z "$cont_adapt" ]]; then
-                cont_adapt="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' cir-workbench 2>/dev/null | grep '^WORKBENCH_RUNTIME_ADAPTATION=' | head -n1 | cut -d= -f2- || true)"
-            fi
-            if [[ "$cont_adapt" != "$expected_adaptation" ]]; then
-                config_satisfies=0
-                mismatch_reasons+=("Runtime adaptation không khớp (container='${cont_adapt}', yêu cầu='${expected_adaptation}')")
-            fi
-
-            # 3. Mounts provenance (P1-3)
-            local exp_ds_raw="${DATASET_PATH_OVERRIDE:-$(env_value HOST_FASHIONIQ_ROOT ../../data/FashionIQ)}"
-            local expected_ds_mount="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$exp_ds_raw")"
-            local exp_cp_raw="$(env_value HOST_WORKBENCH_CHECKPOINT_ROOT ../../workbench/artifacts/checkpoints)"
-            local expected_cp_mount="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$exp_cp_raw")"
-            local exp_art_raw="$(env_value HOST_WORKBENCH_ARTIFACTS_ROOT ../../workbench/artifacts)"
-            local expected_art_mount="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$exp_art_raw")"
-
-            local mounts_known=1 mounts_desc="ok"
-            local mounts_check_result
-            mounts_check_result="$(docker inspect --format '{{json .Mounts}}' cir-workbench 2>/dev/null | python3 -c "
-import json, os, sys
-
-try:
-    raw = sys.stdin.read().strip()
-    if not raw:
-        print('UNKNOWN empty-inspect')
-        sys.exit(0)
-    data = json.loads(raw)
-except Exception:
-    print('UNKNOWN unparseable-json')
-    sys.exit(0)
-
-if not isinstance(data, list):
-    print('UNKNOWN not-a-list')
-    sys.exit(0)
-
-mounts = {}
-for item in data:
-    if isinstance(item, dict):
-        dest = item.get('Destination')
-        src = item.get('Source')
-        if dest and src:
-            mounts[dest] = src
-
-expected = {
-    '/data/FashionIQ': sys.argv[1],
-    '/checkpoints': sys.argv[2],
-    '/artifacts': sys.argv[3],
-}
-
-mismatches = []
-for dest, exp_path in expected.items():
-    if dest not in mounts:
-        mismatches.append(f'MISSING:{dest}')
-    else:
-        act_real = os.path.realpath(mounts[dest])
-        exp_real = os.path.realpath(exp_path)
-        if act_real != exp_real:
-            mismatches.append(f'MISMATCH:{dest}:{mounts[dest]}:{exp_path}')
-
-if mismatches:
-    print('REJECT ' + '; '.join(mismatches))
-else:
-    print('OK')
-" "$expected_ds_mount" "$expected_cp_mount" "$expected_art_mount" 2>/dev/null || echo "UNKNOWN docker-inspect-failed")"
-
-            if [[ "$mounts_check_result" == UNKNOWN* ]]; then
-                mounts_known=0
-                config_satisfies=0
-                mounts_desc="${mounts_check_result#UNKNOWN }"
-                mismatch_reasons+=("Không thể xác định mount của container cir-workbench từ docker inspect (${mounts_desc})")
-            elif [[ "$mounts_check_result" == REJECT* ]]; then
-                config_satisfies=0
-                local mm_list="${mounts_check_result#REJECT }"
-                local item
-                IFS=';' read -ra mm_arr <<< "$mm_list"
-                for item in "${mm_arr[@]}"; do
-                    item="$(trim "$item")"
-                    if [[ "$item" == MISSING:* ]]; then
-                        local missing_dest="${item#MISSING:}"
-                        mismatch_reasons+=("Mount ${missing_dest} bị thiếu trong container cir-workbench")
-                    elif [[ "$item" == MISMATCH:* ]]; then
-                        local mm_parts="${item#MISMATCH:}"
-                        local m_dest="${mm_parts%%:*}"
-                        local m_rest="${mm_parts#*:}"
-                        local m_act="${m_rest%%:*}"
-                        local m_exp="${m_rest#*:}"
-                        mismatch_reasons+=("Mount ${m_dest} nguồn không khớp (container='${m_act}', yêu cầu='${m_exp}')")
-                    fi
-                done
-            fi
-
-            if ! docker exec cir-workbench test -d /data/FashionIQ/images 2>/dev/null; then
-                config_satisfies=0
-                mismatch_reasons+=("Dataset mount /data/FashionIQ/images không tồn tại hoặc không thể truy cập")
-            fi
-
-            # 4. Model environment
-            if ! docker exec cir-workbench python -c "import sys; sys.exit(0)" 2>/dev/null; then
-                config_satisfies=0
-                mismatch_reasons+=("Môi trường thực thi trong container không phản hồi")
-            fi
-
             if (( config_satisfies == 1 )); then
                 say "Docker container cir-workbench đã đang chạy, cấu hình phù hợp và API sẵn sàng (${base})."
                 container_running=1
@@ -856,16 +931,35 @@ else:
                     fail_stage "CONTAINER_REUSE" "Container cir-workbench đang chạy nhưng KHÔNG thể xác định cấu hình mount từ docker inspect (${mounts_desc}); từ chối tái sử dụng container để bảo đảm tính toàn vẹn dữ liệu. Chi tiết: ${reasons_str}" "docker inspect --format '{{json .Mounts}}' cir-workbench" "Kiểm tra docker daemon và container cir-workbench"
                 fi
 
+                # If container is missing GPU passthrough and the host cannot satisfy it (no nvidia runtime in docker info), fail immediately instead of restarting identically.
+                if (( inspect_gpu_mismatch == 1 )); then
+                    local host_has_toolkit=0
+                    if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"'; then
+                        host_has_toolkit=1
+                    fi
+                    if (( host_has_toolkit == 0 )); then
+                        fail_stage "CONTAINER_REUSE" "Container cir-workbench thiếu GPU passthrough nhưng host chưa cài đặt nvidia-container-toolkit; không thể cấu hình GPU trong container trên host này. Chi tiết: ${reasons_str}" "docker info" "Cài đặt nvidia-container-toolkit (sudo apt-get install -y nvidia-container-toolkit) và khởi động lại docker daemon; hoặc chạy pc.sh với cờ --no-gpu (WORKBENCH_ENABLE_GPU=0) để đánh giá bằng CPU."
+                    fi
+                fi
+
                 say "Không có tác vụ đang chạy. Khởi chạy lại Docker stack qua run.sh up để cấu hình đúng..."
                 "${RUN_SH}" up
+                # A restart is requested, never assumed to have corrected anything: the same
+                # inspection that refused the container is run again against the new one, and a
+                # residual mismatch fails closed here instead of being discovered against the
+                # wrong dataset hours into an evaluation.
+                require_corrected_configuration "CONTAINER_RECONFIGURE" "$base"
                 container_running=1
             fi
         else
             # The container exists but its API does not answer. It is not restarted blindly: the
             # active-job question was already answered above (from the API or from the persisted
             # queue), so reaching here means no job is in flight and no trajectory is at risk.
+            # The restart is not trusted either: only a container that then satisfies the
+            # requested configuration is used for this run (readiness is polled below).
             say "[CẢNH BÁO] Container cir-workbench đang chạy nhưng API backend chưa trả lời (HTTP ${code}); không có tác vụ đang chạy nên stack sẽ được khởi động lại với cấu hình hiện tại."
             "${RUN_SH}" up
+            require_corrected_configuration "CONTAINER_RECONFIGURE" "$base"
             container_running=1
         fi
     fi
@@ -1002,11 +1096,42 @@ if not m:
     sys.exit(f'Mô hình {model_id} không tìm thấy trong /api/models')
 
 protocol = m.get('native_protocol') or 'fashioniq_val_split'
+
+# The declared bundle is the launcher preferred selection, and it is a *complete* experiment
+# only when every member is present and runnable. The API reports that per member; a bundle whose
+# member is missing would be submitted and then refused (409 evaluation_blocked) naming the
+# member, so choosing it blindly turns one undownloaded category into a launcher failure. Prefer
+# a complete bundle; otherwise fall back to a runnable single-category checkpoint, which is a
+# partial run, never presented as the complete macro result.
+#
+# No double quotes may appear in this snippet: it is passed to python3 through a double-quoted
+# shell argument, so a quote here would terminate the argument and the snippet would never run.
 bundles = m.get('checkpoint_bundles') or []
-if bundles and bundles[0].get('bundle_id'):
+
+def _members_of(bundle):
+    members = bundle.get('members') or []
+    return members or None
+
+def _complete(bundle):
+    members = _members_of(bundle)
+    if not members:
+        # No member view to judge by: the selection keeps its previous behaviour rather than
+        # inventing a completeness the API did not report.
+        return False
+    return all(member.get('available') and member.get('runnable') for member in members)
+
+complete_bundle = next((b for b in bundles if b.get('bundle_id') and _complete(b)), None)
+checkpoints = m.get('checkpoints') or []
+runnable = next((c for c in checkpoints if c.get('available') and c.get('runnable')), None)
+
+if complete_bundle is not None:
+    checkpoint = complete_bundle['bundle_id']
+elif runnable is not None:
+    checkpoint = runnable.get('checkpoint_id')
+elif bundles and bundles[0].get('bundle_id'):
     checkpoint = bundles[0]['bundle_id']
-elif m.get('checkpoints'):
-    checkpoint = m['checkpoints'][0].get('checkpoint_id')
+elif checkpoints:
+    checkpoint = checkpoints[0].get('checkpoint_id')
 else:
     checkpoint = 'base_iter0_all_categories'
 print(protocol, checkpoint)
@@ -1071,8 +1196,96 @@ for r in all_runs:
                 [[ -z "$cand_id" ]] && continue
                 local v_rc=0 v_out
                 v_out="$(run_verifier_in_container --run-id "$cand_id" --model "$MODEL" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || v_rc=$?
-                if (( v_rc == 0 )) && python3 -c "import json, sys; res = json.loads(sys.argv[1]); sys.exit(0 if res.get('is_research_evidence') else 1)" "$v_out" 2>/dev/null; then
+                local check_rc=0
+                python3 - "$v_out" "$v_rc" "$cand_id" "$b_runs_json" <<'PYCHECK' || check_rc=$?
+import json, sys
+
+v_out_str = sys.argv[1]
+v_rc = int(sys.argv[2])
+cand_id = sys.argv[3]
+b_runs_str = sys.argv[4]
+
+res = None
+try:
+    res = json.loads(v_out_str)
+except Exception:
+    for line in reversed(v_out_str.strip().splitlines()):
+        line = line.strip()
+        if line.startswith("{") and line.endswith("}"):
+            try:
+                res = json.loads(line)
+                break
+            except Exception:
+                pass
+
+if not isinstance(res, dict):
+    sys.exit(1)
+
+if v_rc == 0 and res.get("is_research_evidence"):
+    sys.exit(0)
+
+try:
+    b_runs = json.loads(b_runs_str)
+except Exception:
+    b_runs = []
+
+api_proof_unavailable = False
+if isinstance(b_runs, list):
+    for r in b_runs:
+        if isinstance(r, dict) and str(r.get("run_id")).strip() == cand_id:
+            v = r.get("verification")
+            if isinstance(v, dict):
+                if (v.get("state") == "proof_unavailable" or v.get("certification_mode") == "proof_unavailable") and v.get("execution_authenticated"):
+                    api_proof_unavailable = True
+                    break
+            elif r.get("corroborated") or r.get("benchmark_gate"):
+                api_proof_unavailable = True
+                break
+
+if not api_proof_unavailable:
+    sys.exit(1)
+
+reasons = list(res.get("reasons") or [])
+if not reasons:
+    sys.exit(1)
+
+ledger_ok = all(
+    ("proof" in r.lower() or "declared output missing" in r.lower()) and
+    ("missing" in r.lower() or "does not exist" in r.lower() or "no such file" in r.lower()) and
+    "evidence ledger" not in r.lower() and
+    "ledger return_code" not in r.lower() and
+    "ledger invocation_status" not in r.lower() and
+    "ledger=" not in r.lower() and
+    "report digest" not in r.lower() and
+    "category metric" not in r.lower() and
+    "metric extraction" not in r.lower() and
+    "missing aggregate" not in r.lower() and
+    "status=" not in r.lower() and
+    "return_code=" not in r.lower() and
+    "checksum" not in r.lower() and
+    "mismatch" not in r.lower() and
+    "did not complete" not in r.lower()
+    for r in reasons
+)
+
+execution = res.get("execution") or {}
+if execution.get("return_code") not in (None, 0):
+    ledger_ok = False
+if execution.get("invocation_status") not in (None, "INVOCATION_COMPLETED"):
+    ledger_ok = False
+
+if ledger_ok:
+    sys.exit(2)
+
+sys.exit(1)
+PYCHECK
+                if (( check_rc == 0 )); then
                     target_run_id="$cand_id"
+                    FINAL_RUN_PROOF_UNAVAILABLE=0
+                    break
+                elif (( check_rc == 2 )); then
+                    target_run_id="$cand_id"
+                    FINAL_RUN_PROOF_UNAVAILABLE=1
                     break
                 fi
             done <<< "$candidate_runs"
@@ -1237,7 +1450,7 @@ validate_and_summarize() {
 
     local verify_out verify_rc=0
     verify_out="$(run_verifier_in_container --run-id "$run_id" --model "$model" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || verify_rc=$?
-    python3 - <<'PYDOC' "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id"
+    python3 - <<'PYDOC' "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" "${FINAL_RUN_PROOF_UNAVAILABLE:-0}"
 import json, sys
 
 verify_out = sys.argv[1]
@@ -1272,11 +1485,47 @@ verified = bool(result.get("is_research_evidence", False))
 # publishable comparison) is refused only by `evidence_reasons`.
 reasons = list(result.get("reasons") or []) + list(result.get("evidence_reasons") or [])
 
+proof_unavailable = (len(sys.argv) > 7 and sys.argv[7] == "1")
 if verify_rc != 0 or not verified:
-    reasons_str = "; ".join(str(r) for r in reasons) if reasons else f"verify_run.py trả về mã lỗi {verify_rc}"
-    err_msg = f"Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!\nChi tiết: {reasons_str}"
-    print(err_msg)
-    sys.exit(err_msg)
+    if proof_unavailable:
+        proof_only = all(
+            ("proof" in r.lower() or "declared output missing" in r.lower()) and
+            ("missing" in r.lower() or "does not exist" in r.lower() or "no such file" in r.lower()) and
+            "evidence ledger" not in r.lower() and
+            "ledger return_code" not in r.lower() and
+            "ledger invocation_status" not in r.lower() and
+            "ledger=" not in r.lower() and
+            "report digest" not in r.lower() and
+            "category metric" not in r.lower() and
+            "metric extraction" not in r.lower() and
+            "missing aggregate" not in r.lower() and
+            "status=" not in r.lower() and
+            "return_code=" not in r.lower() and
+            "checksum" not in r.lower() and
+            "mismatch" not in r.lower() and
+            "did not complete" not in r.lower()
+            for r in reasons
+        )
+        if not proof_only:
+            reasons_str = "; ".join(str(r) for r in reasons) if reasons else f"verify_run.py trả về mã lỗi {verify_rc}"
+            err_msg = (f"Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!\n"
+                       f"Chi tiết: {reasons_str}")
+            print(err_msg)
+            sys.exit(err_msg)
+    else:
+        reasons_str = "; ".join(str(r) for r in reasons) if reasons else f"verify_run.py trả về mã lỗi {verify_rc}"
+        # Bước khắc phục cụ thể: một khóa ledger dùng được mới cho phép xác thực sổ cái. Khi lý do
+        # từ chối nói về khóa (thiếu, rỗng, hoặc HAI tệp khác nhau), lệnh sửa phải được nêu ra cùng
+        # chỗ với lý do, thay vì để nhà vận hành tự đoán.
+        remedy = ""
+        if any("ledger key" in str(r).lower() for r in reasons):
+            remedy = ("\nKhắc phục: giữ ĐÚNG MỘT tệp khóa (xoá tệp còn lại), hoặc đặt tường minh "
+                      "WORKBENCH_LEDGER_KEY trong workbench/docker/.env — xem "
+                      "workbench/docs/PC_ONE_COMMAND_GUIDE.vi.md mục 12 (Sổ cái bằng chứng không xác minh được).")
+        err_msg = (f"Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!\n"
+                   f"Chi tiết: {reasons_str}{remedy}")
+        print(err_msg)
+        sys.exit(err_msg)
 
 # Extract verified details
 report_path = result.get("report_path") or "N/A"
@@ -1311,7 +1560,10 @@ print(f"Runtime Adaptation       : {adaptation}")
 print(f"Thẩm định bài báo (Gate) : {gate_status}")
 print(f"Trạng thái thực thi      : {(result.get('execution') or {}).get('execution_status') or 'EXECUTION_COMPLETED'} "
       f"(return_code={(result.get('execution') or {}).get('return_code', 0)})")
-print(f"Xác thực Sổ cái (Ledger) : HỢP LỆ (CORROBORATED) — verify_run.py: verified=True")
+if proof_unavailable:
+    print(f"Xác thực Sổ cái (Ledger) : HỢP LỆ SỔ CÁI (TỆP PROOF KHÔNG CÒN TỒN TẠI)")
+else:
+    print(f"Xác thực Sổ cái (Ledger) : HỢP LỆ (CORROBORATED) — verify_run.py: verified=True")
 print("-" * 80)
 print("--- KẾT QUẢ ĐO ĐẠC THỰC TẾ (ACTUAL MEASURED METRICS) ---")
 for cat in ["dress", "shirt", "toptee"]:

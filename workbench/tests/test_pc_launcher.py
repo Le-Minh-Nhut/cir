@@ -149,11 +149,62 @@ if len(sys.argv) > 1 and sys.argv[1] == "exec" and "verify_run.py" in args_str:
     res = subprocess.run([{repr(sys.executable)}, script] + sub_args, env=v_env)
     sys.exit(res.returncode)
 
-if "WORKBENCH_RUNTIME_ADAPTATION" in args_str and len(sys.argv) > 1 and sys.argv[1] == "exec":
-    if "MOCK_CONTAINER_ADAPTATION" in os.environ:
-        print(os.environ["MOCK_CONTAINER_ADAPTATION"])
-        sys.exit(0)
+# "How many times this sandbox's container has actually been recreated". `run.sh up` is
+# idempotent: on an already-running project compose recreates nothing, so the effective
+# configuration is unchanged by the call. Expressing that here is what makes the launcher's
+# post-restart re-inspection testable -- a correction that corrects nothing has to be observable,
+# or the promise about it cannot be exercised.
+def _generation() -> int:
+    try:
+        with open(os.path.join(os.environ.get("CIR_REPO_ROOT", ""),
+                               "mock_docker_gen", "count")) as handle:
+            return int(handle.read().strip() or "0")
+    except Exception:
+        return 0
 
+def _effective(variable: str, default: str) -> str:
+    # The in-container value: the refreshed one, once this sandbox's container was recreated.
+    if _generation() > 0:
+        refreshed = os.environ.get(variable + "_REFRESHED")
+        if refreshed is not None:
+            return refreshed
+    return os.environ.get(variable, default)
+
+if len(sys.argv) > 1 and sys.argv[1] == "compose" and "up" in sys.argv and os.environ.get("MOCK_DOCKER_UP_RECREATES"):
+    try:
+        os.makedirs(os.path.join(os.environ.get("CIR_REPO_ROOT", ""), "mock_docker_gen"), exist_ok=True)
+        with open(os.path.join(os.environ.get("CIR_REPO_ROOT", ""), "mock_docker_gen", "count"), "w") as handle:
+            handle.write(str(_generation() + 1))
+    except Exception:
+        pass
+
+if "WORKBENCH_RUNTIME_ADAPTATION" in args_str and len(sys.argv) > 1 and sys.argv[1] == "exec":
+    print(_effective("MOCK_CONTAINER_ADAPTATION", ""))
+    sys.exit(0)
+
+if os.environ.get("MOCK_CONTAINER_NO_GPU") == "1" and len(sys.argv) > 1 and sys.argv[1] == "exec":
+    if "torch" in args_str or "nvidia-smi" in args_str:
+        sys.exit(1)
+
+if len(sys.argv) > 1 and sys.argv[1] == "info":
+    if os.environ.get("MOCK_HOST_NO_TOOLKIT") == "1" and any("Runtimes" in a for a in sys.argv):
+        info_count_file = os.path.join(os.environ.get("CIR_REPO_ROOT", ""), "mock_docker_info_count.txt")
+        count = 0
+        try:
+            count = int(open(info_count_file).read().strip())
+        except Exception:
+            pass
+        try:
+            with open(info_count_file, "w") as f:
+                f.write(str(count + 1))
+        except Exception:
+            pass
+        if count == 0:
+            print('{{"nvidia": {{"path": "nvidia-container-runtime"}}, "runc": {{"path": "runc"}}}}')
+            sys.exit(0)
+        else:
+            print('{{"runc": {{"path": "runc"}}}}')
+            sys.exit(0)
 if len(sys.argv) > 1 and sys.argv[1] == "inspect":
     if os.environ.get("MOCK_DOCKER_INSPECT_FAIL") == "1":
         sys.stderr.write("docker inspect failed\\n")
@@ -164,7 +215,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "inspect":
     if os.environ.get("MOCK_DOCKER_INSPECT_EMPTY") == "1":
         sys.exit(0)
     if "MOCK_DOCKER_MOUNTS" in os.environ:
-        print(os.environ["MOCK_DOCKER_MOUNTS"])
+        print(_effective("MOCK_DOCKER_MOUNTS", ""))
         sys.exit(0)
     if "Mounts" in args_str:
         repo_root = os.environ.get("CIR_REPO_ROOT", "")
@@ -179,10 +230,15 @@ if len(sys.argv) > 1 and sys.argv[1] == "inspect":
         print(json.dumps(mounts))
         sys.exit(0)
     if "DeviceRequests" in args_str:
-        print('[{{ "Driver": "nvidia", "Count": -1, "DeviceIDs": [], "Capabilities": [["gpu"]], "Options": {{}} }}]')
+        if os.environ.get("MOCK_CONTAINER_NO_GPU") == "1":
+            print("null")
+        elif "MOCK_CONTAINER_DEVICE_REQUESTS" in os.environ:
+            print(_effective("MOCK_CONTAINER_DEVICE_REQUESTS", "null"))
+        else:
+            print('[{{ "Driver": "nvidia", "Count": -1, "DeviceIDs": [], "Capabilities": [["gpu"]], "Options": {{}} }}]')
         sys.exit(0)
     if "Config.Env" in args_str:
-        print(f"WORKBENCH_RUNTIME_ADAPTATION={{os.environ.get('MOCK_CONTAINER_ADAPTATION', 'sm_120')}}")
+        print(f"WORKBENCH_RUNTIME_ADAPTATION={{_effective('MOCK_CONTAINER_ADAPTATION', 'sm_120')}}")
         sys.exit(0)
 child_env = dict(os.environ)
 child_env.pop("MOCK_LOG_FILE", None)
@@ -1131,6 +1187,80 @@ def test_incompatible_configuration_correction_invokes_docker_startup_exactly_on
     assert "Khởi chạy Docker stack qua run.sh up..." not in proc.stdout
 
 
+def test_a_correction_that_corrects_nothing_is_refused_by_name(tmp_path: Path):
+    """DEFECT D: the correction path ran `run.sh up` and then assumed the mismatch was gone.
+
+    `run.sh up` is idempotent — on an already-running project compose recreates nothing — so a
+    requested dataset that differs from `.env` is not corrected by restarting: the recreation
+    reads the same `.env`. The launcher must re-inspect the effective configuration after the
+    restart, name the mount that is still wrong, name the `.env` key that fixes it, and stop
+    before preparation.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    wrong_ds = tmp_path / "wrong_fashioniq_root"
+    wrong_ds.mkdir(parents=True, exist_ok=True)
+
+    def mounts_for(dataset_root: Path) -> str:
+        return json.dumps([
+            {"Destination": "/data/FashionIQ", "Source": str(dataset_root), "RW": True},
+            {"Destination": "/data/FashionIQ/images", "Source": str(dataset_root / "images"), "RW": False},
+            {"Destination": "/artifacts", "Source": str(sandbox / "workbench" / "artifacts"), "RW": True},
+            {"Destination": "/checkpoints",
+             "Source": str(sandbox / "workbench" / "artifacts" / "checkpoints"), "RW": False},
+        ])
+
+    # Before and after the no-op restart the dataset mount is the same wrong source.
+    env["MOCK_DOCKER_MOUNTS"] = mounts_for(wrong_ds)
+    env["MOCK_CONTAINER_ADAPTATION"] = "sm_120"
+
+    proc = run_pc(sandbox, ["--verify-only"], env, timeout=40)
+
+    assert proc.returncode != 0, proc.stdout
+    assert "CONTAINER_RECONFIGURE" in proc.stdout
+    assert "Mount /data/FashionIQ nguồn không khớp" in proc.stdout
+    assert str(wrong_ds) in proc.stdout
+    assert "HOST_FASHIONIQ_ROOT" in proc.stdout
+    assert "Chuẩn bị mô hình" not in proc.stdout, "preparation must not run on a mismatched container"
+    up_calls = [rec for rec in _read_tool_logs(sandbox)
+                if rec.get("tool") == "docker" and "compose" in rec.get("args", [])
+                and "up" in rec.get("args", [])]
+    assert len(up_calls) == 1, f"one correction attempt, saw {len(up_calls)}"
+
+def test_a_correction_that_corrects_the_mismatch_proceeds(tmp_path: Path):
+    """Positive control for DEFECT D: when the recreation does bring the container in line, the
+    post-restart inspection passes and the launcher continues (--verify-only proves the run got
+    past preparation and evaluation dispatch), with still exactly one startup."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    good_ds = sandbox / "data" / "FashionIQ"
+    wrong_ds = tmp_path / "wrong_fashioniq_root"
+    wrong_ds.mkdir(parents=True, exist_ok=True)
+
+    def mounts_for(dataset_root: Path) -> str:
+        return json.dumps([
+            {"Destination": "/data/FashionIQ", "Source": str(dataset_root), "RW": True},
+            {"Destination": "/data/FashionIQ/images", "Source": str(dataset_root / "images"), "RW": False},
+            {"Destination": "/artifacts", "Source": str(sandbox / "workbench" / "artifacts"), "RW": True},
+            {"Destination": "/checkpoints",
+             "Source": str(sandbox / "workbench" / "artifacts" / "checkpoints"), "RW": False},
+        ])
+
+    # The mismatch before the restart is the dataset mount; the recreation really changes it.
+    env["MOCK_DOCKER_MOUNTS"] = mounts_for(wrong_ds)
+    env["MOCK_DOCKER_MOUNTS_REFRESHED"] = mounts_for(good_ds)
+    env["MOCK_DOCKER_UP_RECREATES"] = "1"
+    env["MOCK_CONTAINER_ADAPTATION"] = "sm_120"
+
+    proc = run_pc(sandbox, ["--verify-only"], env, timeout=40)
+
+    assert proc.returncode == 0, proc.stdout
+    assert "Không có tác vụ đang chạy. Khởi chạy lại Docker stack qua run.sh up để cấu hình đúng..." in proc.stdout
+    assert "Cấu hình container cir-workbench đã đúng yêu cầu sau khi khởi động lại" in proc.stdout
+    assert "CONTAINER_RECONFIGURE" not in proc.stdout
+    up_calls = [rec for rec in _read_tool_logs(sandbox)
+                if rec.get("tool") == "docker" and "compose" in rec.get("args", [])
+                and "up" in rec.get("args", [])]
+    assert len(up_calls) == 1, f"exactly one startup per correction, saw {len(up_calls)}"
+
 def test_api_unreachable_container_with_a_job_in_flight_is_not_replaced(tmp_path: Path):
     """A running container whose API does not answer must still be protected: the launcher asks
     the persisted queue, which is a bind mount the host can read, and refuses to restart the
@@ -1162,3 +1292,245 @@ def test_api_unreachable_container_with_an_idle_queue_is_restarted_once(tmp_path
     up_calls = [line for line in (sandbox / "mock_tools.log").read_text().splitlines()
                 if '"up"' in line]
     assert len(up_calls) == 1, f"expected exactly one docker startup, saw {len(up_calls)}"
+
+
+def test_limn_bundle_selection_submits_bundle_id_with_native_protocol(tmp_path: Path):
+    """Selecting LIMN official bundle queues bundle_id == 'base_iter0_all_categories' with native protocol."""
+    fixtures_models_file = FIXTURES_BIN.parent / "models.json"
+    assert fixtures_models_file.exists()
+    models_data = json.loads(fixtures_models_file.read_text())
+    limn_model = next(m for m in models_data if m["model_id"] == "limn")
+    assert "checkpoint_bundles" in limn_model and len(limn_model["checkpoint_bundles"]) > 0
+    bundle = limn_model["checkpoint_bundles"][0]
+    assert bundle["bundle_id"] == "base_iter0_all_categories"
+    assert set(bundle["required_checkpoint_ids"]) == {"base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee"}
+    assert "members" in bundle
+    assert len(bundle["members"]) == 3
+    assert all("blocking_reasons" in mem for mem in bundle["members"])
+
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    _create_corroborated_run(sandbox, "run_limn_corr_01")
+    post_jobs_file = sandbox / "post_jobs.log"
+    env["MOCK_POST_JOBS_FILE"] = str(post_jobs_file)
+
+    proc = run_pc(sandbox, ["--force"], env)
+    assert proc.returncode == 0
+    assert post_jobs_file.exists()
+
+    records = [json.loads(line) for line in post_jobs_file.read_text().splitlines() if line.strip()]
+    post_records = [r for r in records if "-d" in r.get("args", [])]
+    assert len(post_records) > 0, f"No POST to /api/jobs recorded: {records}"
+    d_idx = post_records[0]["args"].index("-d") + 1
+    submitted_payload = json.loads(post_records[0]["args"][d_idx])
+
+    # Assert submitted payload has checkpoint_id == "base_iter0_all_categories" with native protocol
+    assert submitted_payload["model_id"] == "limn"
+    assert submitted_payload["checkpoint_id"] == "base_iter0_all_categories"
+    assert submitted_payload["protocol_id"] == limn_model["native_protocol"]
+    assert submitted_payload["protocol_id"] == "fashioniq_val_split"
+
+    # Assert submitted payload does NOT submit a per-category checkpoint
+    per_category_ids = {"base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee"}
+    assert submitted_payload["checkpoint_id"] not in per_category_ids
+
+    # Assert bundle is distinguishable from single-category checkpoint on submitted payload
+    single_checkpoints = {c["checkpoint_id"] for c in limn_model["checkpoints"]}
+    assert submitted_payload["checkpoint_id"] not in single_checkpoints
+
+    # Assert on the rendered frontend bundle: bundle is marked COMPLETE and distinguished from single-category checkpoints
+    dist_dir = REPO / "workbench" / "frontend" / "dist" / "assets"
+    js_bundles = list(dist_dir.glob("index-*.js"))
+    assert len(js_bundles) > 0, "Built frontend bundle missing under workbench/frontend/dist/assets"
+    bundle_js_text = js_bundles[0].read_text(encoding="utf-8")
+    assert "COMPLETE" in bundle_js_text, "Rendered frontend bundle must label official bundles as COMPLETE multi-category"
+    assert "Single-category" in bundle_js_text or "partial" in bundle_js_text, "Rendered frontend bundle must distinguish single-category checkpoints as partial"
+
+# ==============================================================================
+# F3 — the LIMN bundle is one complete selection, and only a COMPLETE bundle is submitted
+# ==============================================================================
+
+def _submitted_checkpoint(post_jobs_file: Path) -> str:
+    """The checkpoint_id the launcher actually POSTed, from the shim's own request log."""
+    assert post_jobs_file.exists(), "the launcher POSTed nothing to /api/jobs"
+    records = [json.loads(line) for line in post_jobs_file.read_text().splitlines() if line.strip()]
+    posts = [r for r in records if "-d" in r.get("args", [])]
+    assert posts, f"no POST to /api/jobs recorded: {records}"
+    args = posts[0]["args"]
+    return json.loads(args[args.index("-d") + 1])["checkpoint_id"]
+
+def test_a_complete_limn_bundle_is_submitted_as_one_bundle_selection(tmp_path: Path):
+    """(a) Every member present and runnable -> the bundle id is submitted, unchanged.
+
+    The bundle stays ONE selection with `checkpoint_id == bundle_id`; it is never split into three
+    category runs and never degraded to a single category. (The run's own terminal status is the
+    mock's business: this test is about which selection reached the queue.)
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    post_jobs_file = sandbox / "post_jobs.log"
+    env["MOCK_POST_JOBS_FILE"] = str(post_jobs_file)
+
+    proc = run_pc(sandbox, ["--force"], env)
+    out = proc.stdout + proc.stderr
+    assert _submitted_checkpoint(post_jobs_file) == "base_iter0_all_categories", out
+    # Presented as the complete selection, never as a partial run.
+    assert "Mô hình: limn | Checkpoint: base_iter0_all_categories" in out, out
+    assert "base_iter0_dress" not in out.split("Xác định protocol")[-1]
+
+def test_a_limn_bundle_with_a_missing_member_is_not_submitted(tmp_path: Path):
+    """(b) A member that is missing/unusable makes the launcher fall back to a partial run.
+
+    The incomplete bundle is never submitted, so it is never refused with `evaluation_blocked`:
+    submitting it would turn one undownloaded category into a launcher failure. The run that IS
+    submitted names one of the bundle's own member checkpoints, and the summary must not present
+    it as the complete three-category result.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    post_jobs_file = sandbox / "post_jobs.log"
+    env["MOCK_POST_JOBS_FILE"] = str(post_jobs_file)
+    env["MOCK_MODELS_MISSING_MEMBER"] = "base_iter0_shirt"
+
+    proc = run_pc(sandbox, ["--force"], env)
+    out = proc.stdout + proc.stderr
+    submitted = _submitted_checkpoint(post_jobs_file)
+    assert submitted in {"base_iter0_dress", "base_iter0_toptee"}, out
+    assert "Mô hình: limn | Checkpoint: base_iter0_all_categories" not in out, out
+
+def test_a_single_checkpoint_model_is_still_queueable_as_a_partial_run(tmp_path: Path):
+    """(c) A single-category selection is unaffected: still queueable, still not complete.
+
+    CSMCIR declares no bundle and one checkpoint, so the complete-bundle preference cannot change
+    anything about it: the checkpoint is submitted, and no bundle is presented.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    post_jobs_file = sandbox / "post_jobs.log"
+    env["MOCK_POST_JOBS_FILE"] = str(post_jobs_file)
+    # CSMCIR declares no adapted runtime, so the sandbox container must report the empty
+    # adaptation string the launcher computes for it; otherwise the run stops at configuration
+    # reconciliation and never reaches the queue.
+    env["MOCK_CONTAINER_ADAPTATION"] = ""
+
+    proc = run_pc(sandbox, ["--model", "csmcir", "--force"], env)
+    out = proc.stdout + proc.stderr
+    assert _submitted_checkpoint(post_jobs_file) == "fashioniq", out
+    assert "Mô hình: csmcir | Checkpoint: fashioniq" in out, out
+    assert "base_iter0_all_categories" not in out.split("Xác định protocol")[-1], out
+
+def test_the_job_list_read_failure_reason_reaches_the_failure_output(tmp_path: Path):
+    """A1: the fail-closed refusal must name the API-unreadable job list as one of its reasons.
+
+    The job-list read and the container configuration are recorded into ONE reasons array. When
+    the array was re-initialised inside the reuse branch, the API-unreadable reason appended
+    earlier was silently discarded and the failure named only the configuration mismatch.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_JOBS_LIST_UNREADABLE"] = "1"
+    env["MOCK_CONTAINER_ADAPTATION"] = "none"
+
+    proc = run_pc(sandbox, [], env)
+    out = proc.stdout + proc.stderr
+    assert proc.returncode != 0, out
+    assert "Không đọc được danh sách tác vụ" in out, out
+    assert "CONTAINER_REUSE" in out, out
+
+
+# ==============================================================================
+# A4 — GPU passthrough, runtime adaptation, mount mismatch diagnosis
+# ==============================================================================
+
+
+def test_container_without_requested_gpu_passthrough_refused_with_gpu_toolkit_remedy(tmp_path: Path):
+    """(a) Container without requested GPU passthrough is refused with GPU/toolkit remedy and NOT dataset-path remedy."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_CONTAINER_NO_GPU"] = "1"
+    env["MOCK_CONTAINER_ADAPTATION"] = "sm_120"
+
+    proc = run_pc(sandbox, ["--verify-only"], env, timeout=40)
+
+    assert proc.returncode != 0, proc.stdout
+    assert "CONTAINER_RECONFIGURE" in proc.stdout
+    assert "GPU" in proc.stdout
+    assert "nvidia-container-toolkit" in proc.stdout or "WORKBENCH_ENABLE_GPU" in proc.stdout
+    assert "HOST_FASHIONIQ_ROOT" not in proc.stdout
+    assert "HOST_WORKBENCH_CHECKPOINT_ROOT" not in proc.stdout
+    assert "HOST_WORKBENCH_ARTIFACTS_ROOT" not in proc.stdout
+    up_calls = [
+        rec for rec in _read_tool_logs(sandbox)
+        if rec.get("tool") == "docker" and "compose" in rec.get("args", [])
+        and "up" in rec.get("args", [])
+    ]
+    assert len(up_calls) == 1, f"exactly one startup per correction, saw {len(up_calls)}"
+
+
+def test_container_adaptation_mismatch_named_and_refused(tmp_path: Path):
+    """(b) Runtime-adaptation mismatch is named as such with adaptation remedy and NOT dataset remedy."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_CONTAINER_ADAPTATION"] = "sm_80"
+
+    proc = run_pc(sandbox, ["--verify-only"], env, timeout=40)
+
+    assert proc.returncode != 0, proc.stdout
+    assert "CONTAINER_RECONFIGURE" in proc.stdout
+    assert "Runtime adaptation không khớp" in proc.stdout
+    assert "WORKBENCH_RUNTIME_ADAPTATION" in proc.stdout
+    assert "HOST_FASHIONIQ_ROOT" not in proc.stdout
+    up_calls = [
+        rec for rec in _read_tool_logs(sandbox)
+        if rec.get("tool") == "docker" and "compose" in rec.get("args", [])
+        and "up" in rec.get("args", [])
+    ]
+    assert len(up_calls) == 1, f"exactly one startup per correction, saw {len(up_calls)}"
+
+
+def test_container_genuine_mount_mismatch_names_mount_and_dataset_remedy(tmp_path: Path):
+    """(c) Genuine mount mismatch still names the mount and provides dataset-path remedy."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    wrong_ds = tmp_path / "wrong_fashioniq_root"
+    wrong_ds.mkdir(parents=True, exist_ok=True)
+
+    def mounts_for(dataset_root: Path) -> str:
+        return json.dumps([
+            {"Destination": "/data/FashionIQ", "Source": str(dataset_root), "RW": True},
+            {"Destination": "/data/FashionIQ/images", "Source": str(dataset_root / "images"), "RW": False},
+            {"Destination": "/artifacts", "Source": str(sandbox / "workbench" / "artifacts"), "RW": True},
+            {"Destination": "/checkpoints",
+             "Source": str(sandbox / "workbench" / "artifacts" / "checkpoints"), "RW": False},
+        ])
+
+    env["MOCK_DOCKER_MOUNTS"] = mounts_for(wrong_ds)
+    env["MOCK_CONTAINER_ADAPTATION"] = "sm_120"
+
+    proc = run_pc(sandbox, ["--verify-only"], env, timeout=40)
+
+    assert proc.returncode != 0, proc.stdout
+    assert "CONTAINER_RECONFIGURE" in proc.stdout
+    assert "Mount /data/FashionIQ nguồn không khớp" in proc.stdout
+    assert str(wrong_ds) in proc.stdout
+    assert "HOST_FASHIONIQ_ROOT" in proc.stdout
+    up_calls = [
+        rec for rec in _read_tool_logs(sandbox)
+        if rec.get("tool") == "docker" and "compose" in rec.get("args", [])
+        and "up" in rec.get("args", [])
+    ]
+    assert len(up_calls) == 1, f"exactly one startup per correction, saw {len(up_calls)}"
+
+
+def test_container_gpu_mismatch_without_host_toolkit_fails_once_without_restart(tmp_path: Path):
+    """When the requested configuration simply cannot be satisfied on this host (no toolkit),
+    fail once with that reason instead of restarting and failing identically."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_CONTAINER_NO_GPU"] = "1"
+    env["MOCK_CONTAINER_ADAPTATION"] = "sm_120"
+    env["MOCK_HOST_NO_TOOLKIT"] = "1"
+
+    proc = run_pc(sandbox, ["--verify-only"], env, timeout=40)
+
+    assert proc.returncode != 0, proc.stdout
+    assert "CONTAINER_REUSE" in proc.stdout
+    assert "nvidia-container-toolkit" in proc.stdout
+    assert "HOST_FASHIONIQ_ROOT" not in proc.stdout
+    up_calls = [
+        rec for rec in _read_tool_logs(sandbox)
+        if rec.get("tool") == "docker" and "compose" in rec.get("args", [])
+        and "up" in rec.get("args", [])
+    ]
+    assert len(up_calls) == 0, f"no restart when unsatisfiable on host, saw {len(up_calls)}"

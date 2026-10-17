@@ -12,6 +12,22 @@ import pytest
 
 from workbench.backend import environment_planner as planner
 
+@pytest.fixture(autouse=True)
+def _isolated_solve_cache():
+    """Reset the planner's process-global solver cache around every test.
+
+    ``_solve`` caches a solve result in the module-level ``_SOLVE_CACHE`` keyed by the canonical
+    constraint set. A test that records a FAILED conda solve therefore poisons every later test
+    whose constraints canonicalize to the same key — including tests that monkeypatch the solver,
+    because the cache is consulted before the patched function is ever called. Clearing it per test
+    makes the file order-independent instead of relying on the suite running in a lucky order.
+    """
+    planner._SOLVE_CACHE.clear()
+    planner._SOLVE_CACHE_OWNERS.clear()
+    yield
+    planner._SOLVE_CACHE.clear()
+    planner._SOLVE_CACHE_OWNERS.clear()
+
 def model(model_id, *, python="3.9", torch="UNKNOWN", torchvision="UNKNOWN", packages=None,
           ranges=None, env_var=None):
     declared = {"python": python, "pytorch": torch, "torchvision": torchvision,

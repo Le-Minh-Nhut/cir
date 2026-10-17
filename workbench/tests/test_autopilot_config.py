@@ -325,6 +325,12 @@ def test_an_unknown_selected_checkpoint_size_blocks_rather_than_guessing(tmp_pat
 
 
 def test_offline_blocked_source_acquisition_survives_into_final_rows(tmp_path: Path):
+    # The planner caches solve results in a process-global dict keyed by the canonical constraint
+    # set, so a failure recorded by an earlier test would make this run be classified
+    # BLOCKED_ENVIRONMENT instead of reaching the offline source-acquisition path it is testing.
+    from workbench.backend import environment_planner as _planner
+
+    _planner._SOLVE_CACHE.clear()
     dirs = {name: tmp_path / name for name in ("dataset", "artifacts", "checkpoints", "results", "third_party")}
     for d in dirs.values():
         d.mkdir()

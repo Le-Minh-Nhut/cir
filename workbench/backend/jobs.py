@@ -193,6 +193,10 @@ class DuplicateJobError(RuntimeError):
         self.job_id = job_id
         self.status = status
 
+
+class QueueShutdownError(RuntimeError):
+    """The queue has been shut down and cannot accept new jobs."""
+
 class SingleGpuQueue:
     """Runs one preflighted upstream evaluator at a time."""
 
@@ -211,6 +215,8 @@ class SingleGpuQueue:
 
     def enqueue(self, model_id: str, checkpoint_id: str, protocol_id: str, command: list[str], cwd: Path, log_directory: Path, provenance: dict[str, object], *, refuse_duplicate: bool = False) -> dict:
         with self._condition:
+            if self._stopping:
+                raise QueueShutdownError("queue has shut down")
             if refuse_duplicate:
                 # The duplicate check is atomic with the append: a handler that checks first
                 # and enqueues later races a concurrent enqueue past the check (TOCTOU).
@@ -288,6 +294,19 @@ class SingleGpuQueue:
             live = [(job, self._processes.pop(job.job_id, None),
                      self._process_groups.pop(job.job_id, None))
                     for job in self._jobs if job.job_id in self._processes]
+            # A queued or preparing job owns no process, and — because `_stopping` is set under
+            # this same lock that the dispatch decision reads — it never will. Leaving it
+            # `queued`/`preparing` forever would be a state the status API keeps reporting for a
+            # job nobody will ever run, so it is settled here. `cancelled` is exactly the
+            # terminal state `cancel` records for a job stopped before dispatch; it is never a
+            # completion.
+            for job in self._jobs:
+                if job.status in {"queued", "preparing"}:
+                    job.status = "cancelled"
+                    job.error = "workbench shut down before dispatch"
+                    job.completed_at = now()
+                    self._append(job, "stderr_tail", "[STOP] workbench shut down before dispatch\n")
+                    self._persist(job)
         survivors: list[str] = []
         for job, process, group in live:
             with self._condition:
@@ -297,6 +316,8 @@ class SingleGpuQueue:
                 self._cancelling.discard(job.job_id)
                 if job.status != "cancelled":
                     job.status = "cancelled"
+                    job.error = ("workbench shutdown could not stop every process in the job's group"
+                                 if survivor else "workbench is shutting down")
                     job.completed_at = now()
                     self._append(job, "stderr_tail", "[STOP] workbench is shutting down\n")
                     self._persist(job)
@@ -428,6 +449,17 @@ class SingleGpuQueue:
         setattr(job, field, value)
 
     @staticmethod
+    def _write_command_metadata(directory: Path, metadata: dict) -> None:
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            target = directory / "queue_command.json"
+            tmp = target.with_suffix(".tmp")
+            tmp.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+            tmp.replace(target)
+        except OSError:
+            pass
+
+    @staticmethod
     def _persist(job: "Job") -> None:
         """Write a status snapshot next to the queue's dispatch record.
 
@@ -440,11 +472,14 @@ class SingleGpuQueue:
             # A queued job has no log directory yet: the worker creates it only when the job
             # is dispatched. Persist anyway — a restart must still recover queued jobs.
             directory.mkdir(parents=True, exist_ok=True)
-            (directory / "queue_state.json").write_text(
+            target = directory / "queue_state.json"
+            tmp = target.with_suffix(".tmp")
+            tmp.write_text(
                     json.dumps({key: getattr(job, key) for key in (
                         "job_id", "model_id", "checkpoint_id", "protocol_id", "status",
                         "started_at", "completed_at", "return_code", "error")}, indent=2) + "\n",
                     encoding="utf-8")
+            tmp.replace(target)
         except OSError:
             # Persistence is best-effort bookkeeping; the dispatch record on disk remains
             # the durable trace even when this snapshot write fails.
@@ -512,15 +547,21 @@ class SingleGpuQueue:
                 # `command.json` describe the run instead of the operator's own record, and the
                 # evidence digest pointed at a file the queue could rewrite.
                 metadata = {**job.provenance, "job_id": job.job_id, "argv": job.command, "cwd": job.cwd, "started_at": job.started_at, "finished_at": None, "return_code": None}
-                (directory / "queue_command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+                self._write_command_metadata(directory, metadata)
                 with (directory / "queue_stdout.log").open("w", encoding="utf-8") as stdout, (directory / "queue_stderr.log").open("w", encoding="utf-8") as stderr:
                     with self._condition:
-                        # The guard above can be slow, so a cancellation that arrived while it
-                        # ran must still win. Creation, registration (which is what cancel
-                        # terminates) and the status transition happen under the same lock, so
-                        # no cancellation can observe `preparing` with no process to kill and
-                        # then be overwritten by `running`.
-                        if job.status == "cancelled":
+                        # The guard above can be slow, so a cancellation — or a shutdown — that
+                        # arrived while it ran must still win. Creation, registration (which is
+                        # what cancel terminates) and the status transition happen under the
+                        # same lock, so no cancellation can observe `preparing` with no process
+                        # to kill and then be overwritten by `running`.
+                        #
+                        # `_stopping` is read under the same lock `shutdown` sets it under, so
+                        # "shutdown has begun" and "no process is created" are one decision:
+                        # checking it anywhere else let a job in `preparing` spawn a session
+                        # leader after shutdown had already collected the processes it knew
+                        # about, and nothing would ever reap that group.
+                        if job.status == "cancelled" or self._stopping:
                             continue
                         # The job command is the evaluation operator, which starts the
                         # official evaluator as its own child. Killing only the operator's PID
@@ -560,6 +601,9 @@ class SingleGpuQueue:
                 # Read before taking the lock: the operator writes its verdict into the run
                 # directory, which is disk I/O and must not be held under the queue's condition.
                 verdict, verdict_reason = invocation_verdict(job)
+                completed_at = now()
+                metadata.update(finished_at=completed_at, return_code=code)
+                self._write_command_metadata(directory, metadata)
                 with self._condition:
                     self._processes.pop(job.job_id, None)
                     job.return_code = code
@@ -573,15 +617,20 @@ class SingleGpuQueue:
                         if reason:
                             job.error = reason
                             self._append(job, "stderr_tail", f"[BLOCKED] {reason}\n")
-                    job.completed_at = now()
+                    job.completed_at = completed_at
                     self._persist(job)
-                metadata.update(finished_at=job.completed_at, return_code=code)
-                (directory / "queue_command.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
             except Exception as error:
+                completed_at = now()
+                if "metadata" in locals():
+                    try:
+                        metadata.update(finished_at=completed_at, return_code=getattr(job, "return_code", None))
+                        self._write_command_metadata(directory, metadata)
+                    except Exception:
+                        pass
                 with self._condition:
                     self._processes.pop(job.job_id, None)
                     job.error = str(error)
                     if job.status != "cancelled" and job.job_id not in self._cancelling:
                         job.status = "failed"
-                    job.completed_at = now()
+                    job.completed_at = completed_at
                     self._persist(job)

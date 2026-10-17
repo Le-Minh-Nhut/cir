@@ -572,7 +572,7 @@ def _resolve_evaluation_metrics(
 ) -> tuple[dict[str, Any], str | None]:
     from workbench.backend.metrics_extraction import extract_aggregate_metrics
     from workbench.backend.registry import sha256_file
-    from workbench.scripts.evaluate_models import read_evidence_ledger
+    from workbench.scripts.evaluate_models import LedgerKeyError, read_evidence_ledger
 
     models = {m["model_id"]: m for m in config.registry["models"]}
     model = models.get(model_id, {})
@@ -718,20 +718,6 @@ def _resolve_evaluation_metrics(
         return base_fields, f"corrupted evidence rejected: aggregate report digest mismatch (expected {declared_report_digest[:12]}, actual {actual_report_digest[:12]})"
 
     wb_cfg = _workbench_config(config)
-    ledger = read_evidence_ledger(wb_cfg)
-    if ledger is not None:
-        matching = [item for item in ledger if item.get("run_id") == run_id]
-        if not matching:
-            return base_fields, f"corrupted evidence rejected: run {run_id} missing from evidence ledger"
-        witness = matching[-1]
-        claimed_entry = proof_payload.get("ledger_entry_digest")
-        if claimed_entry and witness.get("entry_digest") != claimed_entry:
-            return base_fields, "corrupted evidence rejected: proof ledger entry digest disagrees with ledger"
-        if witness.get("return_code") not in (0, None):
-            return base_fields, f"corrupted evidence rejected: evidence ledger records failed return code {witness.get('return_code')}"
-        if witness.get("report_digest") and witness["report_digest"] != actual_report_digest:
-            return base_fields, "corrupted evidence rejected: aggregate report digest disagrees with evidence ledger"
-
     try:
         report_payload = json.loads(report_path.read_text(encoding="utf-8"))
     except Exception as err:
@@ -755,6 +741,26 @@ def _resolve_evaluation_metrics(
     except Exception as exc:
         return base_fields, f"corrupted evidence rejected: validation error: {exc}"
 
+    try:
+        ledger = read_evidence_ledger(wb_cfg)
+    except LedgerKeyError as error:
+        # The same refusal every other consumer of the ledger reports, in the operator's own
+        # words: an unusable operator key cannot be corroborated against, and this is not a
+        # statement about the run's evidence.
+        return base_fields, f"the evidence ledger key is unusable: {error}"
+    if ledger is None:
+        return base_fields, "corrupted evidence rejected: the evidence ledger is missing or its HMAC chain does not verify"
+    matching = [item for item in ledger if item.get("run_id") == run_id]
+    if not matching:
+        return base_fields, f"corrupted evidence rejected: run {run_id} missing from evidence ledger"
+    witness = matching[-1]
+    claimed_entry = proof_payload.get("ledger_entry_digest")
+    if claimed_entry and witness.get("entry_digest") != claimed_entry:
+        return base_fields, "corrupted evidence rejected: proof ledger entry digest disagrees with ledger"
+    if witness.get("return_code") not in (0, None):
+        return base_fields, f"corrupted evidence rejected: evidence ledger records failed return code {witness.get('return_code')}"
+    if witness.get("report_digest") and witness["report_digest"] != actual_report_digest:
+        return base_fields, "corrupted evidence rejected: aggregate report digest disagrees with evidence ledger"
     is_synthetic = bool(
         model.get("synthetic_source")
         or model.get("source_type") == "synthetic"

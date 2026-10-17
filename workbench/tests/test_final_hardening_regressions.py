@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from workbench.backend import runtime
 
 import pytest
 
@@ -307,6 +308,7 @@ def test_a_queued_job_is_persisted_and_a_queued_cancel_is_recorded(tmp_path):
 
     queue = SingleGpuQueue.__new__(SingleGpuQueue)
     queue._jobs, queue._condition, queue._processes, queue._process_groups = [], Condition(), {}, {}
+    queue._cancelling, queue._stopping = set(), False
     directory = tmp_path / "job-1"
     queue.enqueue("m", "c", "p", ["x"], tmp_path, directory, {})
     assert (directory / "queue_state.json").is_file(), "queued job must be persisted"
@@ -324,6 +326,7 @@ def test_the_duplicate_job_check_is_atomic_with_the_append(tmp_path):
 
     queue = SingleGpuQueue.__new__(SingleGpuQueue)
     queue._jobs, queue._condition, queue._processes, queue._process_groups = [], Condition(), {}, {}
+    queue._cancelling, queue._stopping = set(), False
     queue.enqueue("m", "c", "p", ["x"], tmp_path, tmp_path / "a", {})
     import pytest
     with pytest.raises(DuplicateJobError):
@@ -926,3 +929,378 @@ def test_an_existing_repository_key_is_still_honoured(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
 
     assert evaluator.ledger_hmac_key(config) == legacy
+
+# --------------------------------------------------------------------------- F2 (ambiguous ledger key)
+
+_AMBIGUOUS_ENV_KEYS = ("CIR_REPO_ROOT", "CIR_DATA_ROOT", "FASHIONIQ_ROOT",
+                       "WORKBENCH_CHECKPOINT_ROOT", "WORKBENCH_RESULTS_ROOT",
+                       "WORKBENCH_THIRD_PARTY_ROOT")
+
+
+def _workspace_with_two_different_keys(tmp_path: Path, monkeypatch) -> tuple:
+    """A workspace carrying BOTH key locations with different bytes, and one report on disk.
+
+    That is the state this host is actually in: `<CIR_REPO_ROOT>/.workbench_ledger_key` and
+    `$XDG_CONFIG_HOME/cir/workbench_ledger_key` both exist and disagree.
+    """
+    from workbench.backend.operator_config import resolve_config
+
+    artifacts = tmp_path / "artifacts"
+    reports = artifacts / "reports"
+    reports.mkdir(parents=True)
+    (reports / "m_c_r1_aggregate.json").write_text(json.dumps({
+        "artifact_type": "official_aggregate_evaluation_report", "run_id": "r1",
+        "model_id": "m", "checkpoint_id": "c", "protocol_id": "p"}))
+
+    monkeypatch.setenv("WORKBENCH_ARTIFACTS_ROOT", str(artifacts))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    for key in _AMBIGUOUS_ENV_KEYS:
+        monkeypatch.setenv(key, str(tmp_path / key.lower()))
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY", raising=False)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.setenv("CIR_REPO_ROOT", str(repo))
+    config_home = tmp_path / "config"
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
+    legacy = repo / ".workbench_ledger_key"
+    private = config_home / "cir" / "workbench_ledger_key"
+    legacy.write_bytes(b"legacy-key-bytes-32-len-aaaaaaaa")
+    private.parent.mkdir(parents=True)
+    private.write_bytes(b"private-key-bytes-32-len-bbbbbbbb")
+    return resolve_config(), legacy, private
+
+
+def test_an_ambiguous_ledger_key_names_both_key_paths(tmp_path, monkeypatch):
+    """F2 (a): two differing key files must produce a refusal that names BOTH paths and the
+    remedy, never a bare None. Fail-closed is kept: no key is preferred over the other."""
+    from workbench.scripts import evaluate_models as evaluator
+
+    config, legacy, private = _workspace_with_two_different_keys(tmp_path, monkeypatch)
+
+    with pytest.raises(evaluator.LedgerKeyError) as error:
+        evaluator.ledger_hmac_key(config)
+    message = str(error.value)
+    assert "two different ledger keys exist" in message, message
+    assert str(legacy) in message, f"the refusal must name the repository-root key: {message}"
+    assert str(private) in message, f"the refusal must name the config-home key: {message}"
+    assert "WORKBENCH_LEDGER_KEY" in message, f"the refusal must state the remedy: {message}"
+
+
+def test_an_unreadable_ambiguous_key_still_names_both_paths(tmp_path, monkeypatch):
+    """F2 (a): the *other* ambiguity refusal -- two files that exist but cannot be compared --
+    used to say only "cannot compare the two ledger key files", naming neither file. The operator
+    has no way to act on that, so the paths and the remedy are stated there too."""
+    from workbench.scripts import evaluate_models as evaluator
+
+    config, legacy, private = _workspace_with_two_different_keys(tmp_path, monkeypatch)
+    original = Path.read_bytes
+    unreadable = {legacy}
+
+    def read_bytes(path):
+        if path in unreadable:
+            raise PermissionError("denied")
+        return original(path)
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    with pytest.raises(evaluator.LedgerKeyError) as error:
+        evaluator.ledger_hmac_key(config)
+    message = str(error.value)
+    assert str(legacy) in message and str(private) in message, message
+    assert "WORKBENCH_LEDGER_KEY" in message, message
+
+
+def test_the_ledger_read_fails_with_a_reason_naming_both_paths(tmp_path, monkeypatch):
+    """F2 (a): `read_evidence_ledger` still answers None (fail closed), but the reason is
+    obtainable instead of silent -- which is what every consumer now reports."""
+    from workbench.scripts import evaluate_models as evaluator
+    from workbench.scripts import verify_run
+
+    config, legacy, private = _workspace_with_two_different_keys(tmp_path, monkeypatch)
+    assert evaluator.read_evidence_ledger(config) is None
+    with pytest.raises(evaluator.LedgerKeyError) as error:
+        evaluator.ledger_hmac_key(config)
+    # The verifier is a ledger consumer: the same ambiguity must be one of its stated reasons,
+    # in place of the generic "missing or its HMAC chain does not verify".
+    verdict = verify_run.verify("r1", "m", "c", "p")
+    assert verdict["verified"] is False
+    reason = next((r for r in verdict["reasons"] if "ledger key" in r), None)
+    assert reason, verdict["reasons"]
+    assert str(legacy) in reason and str(private) in reason, reason
+    assert str(error.value) in reason, reason
+
+
+def test_the_aggregate_report_list_surfaces_the_key_conflict(tmp_path, monkeypatch):
+    """F2 (b): `/api/benchmark-runs` and `/api/runs/gate` read `_aggregate_reports`, which used
+    to answer `[]` when the key was ambiguous. It must now raise a structured, client-visible
+    error that states the reason, instead of an empty list nobody can explain."""
+    from workbench.backend import main as api
+    from workbench.backend.errors import WorkbenchError
+
+    config, legacy, private = _workspace_with_two_different_keys(tmp_path, monkeypatch)
+    monkeypatch.setattr(api, "resolve_config", lambda: config)
+
+    with pytest.raises(WorkbenchError) as error:
+        api._aggregate_reports()
+    assert error.value.code == "ledger_key_unusable", error.value.code
+    assert str(legacy) in error.value.message and str(private) in error.value.message, \
+        error.value.message
+    assert "WORKBENCH_LEDGER_KEY" in error.value.message, error.value.message
+    assert str(legacy) in error.value.details["reason"], error.value.details
+
+    # The same refusal reaches the ASGI surface as a 400 with the machine-readable payload,
+    # never as a 200 with `[]`.
+    status, _, body = _asgi_get(api.app, "/api/benchmark-runs")
+    assert status == 400, (status, body)
+    payload = json.loads(body)
+    assert payload["error"] == "ledger_key_unusable", payload
+    assert str(legacy) in payload["message"] and str(private) in payload["message"], payload
+
+
+def test_one_key_file_alone_keeps_the_ledger_working(tmp_path, monkeypatch):
+    """F2 (c): exactly one key file is not ambiguity. The ledger works and a report whose entry
+    that key signed is served; removing the second file is the documented remedy."""
+    from workbench.backend import main as api
+    from workbench.scripts import evaluate_models as evaluator
+
+    config, legacy, private = _workspace_with_two_different_keys(tmp_path, monkeypatch)
+    private.unlink()
+
+    key = evaluator.ledger_hmac_key(config)
+    assert key == legacy.read_bytes(), "the surviving repository-root key must be honoured"
+    reports = evaluator.reports_root(config)
+    path = reports / "m_c_r1_aggregate.json"
+    evaluator.append_evidence_entry(config, {
+        "run_id": "r1", "report_digest": evaluator.sha256_file(path), "model_id": "m",
+        "checkpoint_id": "c", "protocol_id": "p",
+        "return_code": 0, "invocation_status": "INVOCATION_COMPLETED"})
+    monkeypatch.setattr(api, "resolve_config", lambda: config)
+    assert [report["run_id"] for report in api._aggregate_reports()] == ["r1"]
+
+
+def test_an_explicit_operator_key_resolves_the_ambiguity(tmp_path, monkeypatch):
+    """F2 (d): `WORKBENCH_LEDGER_KEY` is the operator's explicit choice, so no ambiguity remains:
+    it wins over both files, and the same value both writes and reads the ledger."""
+    from dataclasses import replace
+
+    from workbench.backend.operator_config import resolve_config
+    from workbench.scripts import evaluate_models as evaluator
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (tmp_path / "artifacts").mkdir()
+    (repo / ".workbench_ledger_key").write_bytes(b"legacy-key-bytes-32-len-aaaaaaaa")
+    private = tmp_path / "config" / "cir" / "workbench_ledger_key"
+    private.parent.mkdir(parents=True)
+    private.write_bytes(b"private-key-bytes-32-len-bbbbbbbb")
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "operator-chosen-key")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    config = replace(resolve_config(), CIR_REPO_ROOT=repo,
+                     WORKBENCH_ARTIFACTS_ROOT=tmp_path / "artifacts")
+
+    assert evaluator.ledger_hmac_key(config) == b"operator-chosen-key"
+
+    reports = evaluator.reports_root(config)
+    reports.mkdir(parents=True)
+    path = reports / "m_c_r1_aggregate.json"
+    path.write_text(json.dumps({
+        "artifact_type": "official_aggregate_evaluation_report", "run_id": "r1",
+        "model_id": "m", "checkpoint_id": "c", "protocol_id": "p"}))
+    evaluator.append_evidence_entry(config, {
+        "run_id": "r1", "report_digest": evaluator.sha256_file(path), "model_id": "m",
+        "checkpoint_id": "c", "protocol_id": "p",
+        "return_code": 0, "invocation_status": "INVOCATION_COMPLETED"})
+    entries = evaluator.read_evidence_ledger(config)
+    assert entries is not None and [entry["run_id"] for entry in entries] == ["r1"]
+
+
+def test_the_gpu_capability_key_reports_the_same_conflict(tmp_path, monkeypatch, capsys):
+    """F2 (GPU capability key path): the capability signer kept its documented precedence between
+    the same two files, so it signed with one of two keys the operator never chose -- and the
+    ledger reader refuses that state outright, so every record failed its signature check with no
+    visible reason. The conflict must be named, with both paths and the remedy, where the reader
+    sees it."""
+    from dataclasses import replace
+
+    from workbench.backend import runtime
+    from workbench.backend import operator_config
+    from workbench.backend.operator_config import resolve_config
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    legacy = repo / ".workbench_ledger_key"
+    legacy_bytes = b"legacy-key-bytes-32-len-aaaaaaaa"
+    legacy.write_bytes(legacy_bytes)
+    private = tmp_path / "config" / "cir" / "workbench_ledger_key"
+    private.parent.mkdir(parents=True)
+    private.write_bytes(b"private-key-bytes-32-len-bbbbbbbb")
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setattr(operator_config, "resolve_config",
+                        lambda: replace(resolve_config(), CIR_REPO_ROOT=repo))
+
+    key = runtime._gpu_cache_key()
+    assert key == legacy_bytes, "the documented precedence is unchanged"
+    warning = capsys.readouterr().err
+    assert "two different ledger keys exist" in warning, warning
+    assert str(legacy) in warning and str(private) in warning, warning
+    assert "WORKBENCH_LEDGER_KEY" in warning, warning
+
+    # Unambiguous again: one file removed, the surviving key signs and verifies as before.
+    private.unlink()
+    assert runtime._gpu_cache_key() == legacy_bytes
+    record = {"capability_verified": True, "interpreter": "/x/python"}
+    assert runtime._gpu_capability_signature_valid(
+        {**record, "signature": runtime._gpu_capability_signature(record)})
+
+
+def test_every_ledger_consumer_names_the_key_conflict_and_the_remedy():
+    """F2 (consumers): `_aggregate_reports` (serving `/api/benchmark-runs` and `/api/runs/gate`),
+    `verify_run.py` (the verifier `pc.sh` invokes, and the queue's completion check) and the
+    autopilot report all read the same ledger. A consumer that catches the key refusal must state
+    it, and the phrase it states must carry the remedy, so no operator is left with `[]`."""
+    consumers = {
+        REPOSITORY / "workbench/backend/main.py": "except LedgerKeyError as error:",
+        REPOSITORY / "workbench/scripts/verify_run.py": "except em.LedgerKeyError as key_error:",
+        REPOSITORY / "workbench/backend/autopilot.py": "except LedgerKeyError as error:",
+    }
+    for path, catch in consumers.items():
+        text = path.read_text(encoding="utf-8")
+        assert catch in text, f"{path.name} must catch the ledger key refusal"
+        assert "read_evidence_ledger" in text, path.name
+    # The remedy the operator is told to use is the same phrase the key loader recommends.
+    loader = (REPOSITORY / "workbench/scripts/evaluate_models.py").read_text(encoding="utf-8")
+    assert loader.count("WORKBENCH_LEDGER_KEY explicitly to choose one") == 1, loader.count(
+        "WORKBENCH_LEDGER_KEY explicitly to choose one")
+
+
+def _asgi_get(app, path: str) -> tuple[int, dict, bytes]:
+    """One GET through the real ASGI app, so the status code and payload are observed, not
+    assumed from the handler's signature."""
+    import asyncio
+
+    response: dict = {"status": None, "headers": [], "body": b""}
+
+    async def receive() -> dict:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict) -> None:
+        if message["type"] == "http.response.start":
+            response["status"] = message["status"]
+            response["headers"] = message.get("headers", [])
+        elif message["type"] == "http.response.body":
+            response["body"] += message.get("body", b"")
+
+    scope = {
+        "type": "http", "asgi": {"version": "3.0", "spec_version": "2.3"}, "http_version": "1.1",
+        "method": "GET", "scheme": "http", "path": path, "raw_path": path.encode(),
+        "query_string": b"", "root_path": "",
+        "headers": [(b"host", b"testserver")],
+        "client": ("127.0.0.1", 50123), "server": ("testserver", 80),
+    }
+    asyncio.run(app(scope, receive, send))
+    return response["status"], {}, response["body"]
+
+
+def test_gpu_capability_refuses_different_interpreter_on_both_paths(tmp_path, monkeypatch):
+    """B-2: a record for a different interpreter (or drifted fingerprint) is refused
+    on BOTH authoritative and advisory cache read paths."""
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "0" * 64)
+    model = {
+        "model_id": "test_drift",
+        "environment": {"python_env_var": "DRIFT_PYTHON", "pytorch": "1.12.1", "cuda": "11.7"},
+    }
+    root = tmp_path / "env"
+    (root / "bin").mkdir(parents=True)
+    interp = root / "bin" / "python"
+    interp.write_text("#!/bin/sh\nexit 0\n")
+    interp.chmod(0o755)
+    monkeypatch.setenv("DRIFT_PYTHON", str(interp))
+
+    report = runtime.verify_environment(model, probe=False, advisory=True)
+    key = runtime._gpu_capability_key(model)
+    stale_fp = "0123456789abcdef" * 4
+
+    payload = {
+        "capability_key": key,
+        "capability_verified": True,
+        "probe_source": "interpreter",
+        "interpreter": str(interp),
+        "interpreter_fingerprint": stale_fp,
+        "dependency_fingerprint": runtime._environment_contract_digest(model),
+        "host_identity": runtime._host_identity(),
+    }
+    payload["signature"] = runtime._gpu_capability_signature(payload)
+    runtime._GPU_CAPABILITY.clear()
+    runtime._GPU_CAPABILITY[key] = payload
+
+    assert runtime._cached_gpu_capability(model, report, authoritative=True) is None
+    assert runtime._cached_gpu_capability(model, report, authoritative=False) is None
+
+
+def test_gpu_capability_falsy_fingerprint_guard_refuses_unfingerprinted_record(tmp_path, monkeypatch):
+    """B-11: a record carrying no interpreter_fingerprint (None) is refused rather than skipped
+    when an environment fingerprint can be computed."""
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "0" * 64)
+    model = {
+        "model_id": "test_b11",
+        "environment": {"python_env_var": "B11_PYTHON", "pytorch": "1.12.1", "cuda": "11.7"},
+    }
+    root = tmp_path / "env"
+    (root / "bin").mkdir(parents=True)
+    interp = root / "bin" / "python"
+    interp.write_text("#!/bin/sh\nexit 0\n")
+    interp.chmod(0o755)
+    monkeypatch.setenv("B11_PYTHON", str(interp))
+
+    report = runtime.verify_environment(model, probe=False, advisory=True)
+    key = runtime._gpu_capability_key(model)
+
+    payload = {
+        "capability_key": key,
+        "capability_verified": True,
+        "probe_source": "interpreter",
+        "interpreter": str(interp),
+        "interpreter_fingerprint": None,
+        "dependency_fingerprint": runtime._environment_contract_digest(model),
+        "host_identity": runtime._host_identity(),
+    }
+    payload["signature"] = runtime._gpu_capability_signature(payload)
+    runtime._GPU_CAPABILITY.clear()
+    runtime._GPU_CAPABILITY[key] = payload
+
+    assert runtime._cached_gpu_capability(model, report, authoritative=True) is None
+    assert runtime._cached_gpu_capability(model, report, authoritative=False) is None
+
+
+def test_assignment_from_different_artifacts_root_is_refused(tmp_path, monkeypatch):
+    """B-1 containment: an interpreter recorded in environment_assignment.json located
+    in another artifacts root (outside the active WORKBENCH_ARTIFACTS_ROOT) is refused."""
+    artifacts_root = tmp_path / "my_artifacts"
+    artifacts_root.mkdir()
+    foreign_root = tmp_path / "foreign_artifacts"
+    foreign_root.mkdir()
+    monkeypatch.setenv("WORKBENCH_ARTIFACTS_ROOT", str(artifacts_root))
+    monkeypatch.delenv("FOREIGN_MODEL_PYTHON", raising=False)
+
+    foreign_interp = foreign_root / "environments" / "m" / "bin" / "python"
+    foreign_interp.parent.mkdir(parents=True)
+    foreign_interp.touch()
+
+    model = {
+        "model_id": "foreign_model",
+        "environment": {"python_env_var": "FOREIGN_MODEL_PYTHON"},
+    }
+    assignment_path = artifacts_root / "environment_assignment.json"
+    assignment_path.write_text(json.dumps({
+        "models": {
+            "foreign_model": {
+                "interpreter": str(foreign_interp),
+                "state": "RUNTIME_VERIFIED",
+            }
+        }
+    }), encoding="utf-8")
+
+    assert runtime.resolve_model_interpreter(model) is None
+    report = runtime.verify_environment(model, probe=False)
+    assert report.tier == "UNCONFIGURED"
+    assert "not set" in (report.reason or "")
