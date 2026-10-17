@@ -28,8 +28,8 @@ from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.metrics_extraction import extract_aggregate_metrics
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
 from workbench.backend.registry import (
-    checkpoint_bundle_missing_paths, checkpoint_is_present, checkpoint_missing_paths,
-    checkpoint_path, load_registry, sha256_file,
+    checkpoint_bundle_missing_paths, checkpoint_is_present, checkpoint_member_root,
+    checkpoint_missing_paths, checkpoint_path, load_registry, sha256_file,
 )
 from workbench.backend import runtime
 from workbench.backend.preflight import approved_patch_state, model_requirements, preflight_blockers
@@ -53,6 +53,12 @@ class EvaluationPlan:
     bundle_manifest_digest: str | None = None
     artifact_type: str = "single_file"
     directory_members: list[dict[str, Any]] | None = None
+    #: The directory this artifact's MEMBERS occupy, resolved once from the declared artifact type.
+    #: Consumers (the adapter's command, the observer's command, the manifest) must read this rather
+    #: than re-deriving it: three separate `is_dir()`-based expressions is how the observer ended up
+    #: one directory too high for LIMN's bundle, and `is_dir()` also answers differently before the
+    #: weights are downloaded than after.
+    member_root: Path | None = None
     checkpoint_sha256: str | None = None
     #: The training-noise condition of the checkpoint this plan will evaluate, from the registry. The
     #: benchmark reference is selected by condition, so a 0%-noise row cannot judge a noisy weight.
@@ -387,8 +393,10 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
         # directory its members share, so that resolution is what the manifest is built over --
         # `.parent` named the whole checkpoint root for a bundle and produced a manifest over
         # paths that do not exist.
-        member_root = checkpoint_file if checkpoint_file.is_dir() else checkpoint_file.parent
-        checkpoint_bundle = build_artifact_manifest(member_root, names)
+        # Declared, not filesystem-derived: a bundle is a member directory regardless of whether the
+        # weights have been downloaded, and `is_dir()` answers differently before and after.
+        bundle_root = checkpoint_file if checkpoint_file.is_dir() else checkpoint_file.parent
+        checkpoint_bundle = build_artifact_manifest(bundle_root, names)
         directory_members = list(checkpoint_bundle.values())
         bundle_manifest_digest = manifest_digest(checkpoint_bundle)
     elif artifact_type in ("run_directory", "bundle_directory"):
@@ -408,6 +416,14 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
         except (OSError, ValueError):
             checkpoint_digest = None
 
+    # One resolution of the member directory, from the DECLARATION. A multi-member artifact keeps its
+    # members as siblings inside its resolved directory; a single artifact is itself the member.
+    multi_member = (artifact_type in ("category_specific_whole_models", "run_directory",
+                                      "bundle_directory", "bundle_placeholder")
+                    or bool(checkpoint.get("bundle_id")))
+    member_root = checkpoint_member_root(checkpoint_file, artifact_type=artifact_type,
+                                         is_multi_member=multi_member)
+
     return EvaluationPlan(
         model["model_id"],
         checkpoint["checkpoint_id"],
@@ -420,6 +436,7 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
         model.get("upstream_commit_sha"),
         actual_pin,
         paper_metrics,
+        member_root=member_root,
         checkpoint_bundle=checkpoint_bundle,
         bundle_manifest_digest=bundle_manifest_digest,
         artifact_type=artifact_type,
@@ -1526,6 +1543,48 @@ def _atomic_replace(destination: Path, content: str) -> None:
         Path(temporary).unlink(missing_ok=True)
 
 
+#: The registry field that declares a model has a per-query observer. A model without it is not a
+#: failed export -- it is a model whose result is aggregate-only by design, and the launcher must not
+#: treat the absence as a defect.
+PER_QUERY_CAPABILITY = "per_query_observer"
+
+#: The per-query outcome vocabulary, used by the report and consumed by the launcher. Distinct from
+#: the EVIDENCE states (schemas/results.py): these describe what the RUN achieved, those describe what
+#: a stored artifact may be called.
+PER_QUERY_STATES = (
+    "CAPABILITY_ABSENT",       # the model declares no observer: aggregate-only by design
+    "PER_QUERY_EXPORT_FAILED",  # an observer exists and did not produce an artifact
+    "PER_QUERY_EXPORTED_UNVERIFIED",  # an artifact exists; the verifier has not spoken
+    "PER_QUERY_VERIFIED",      # exported AND the verifier corroborated it
+)
+
+
+def per_query_state(capability: str | None, artifact: Path | None, note: str) -> str:
+    """What this run achieved on the per-query axis. One function, so the report and any consumer
+    cannot disagree about the same facts."""
+    if not capability:
+        return "CAPABILITY_ABSENT"
+    if artifact is None:
+        return "PER_QUERY_EXPORT_FAILED"
+    # An artifact exists. Whether it may be called VERIFIED is the verifier's answer, never this
+    # function's: the run can only report that it produced one.
+    return "PER_QUERY_EXPORTED_UNVERIFIED"
+
+
+def per_query_capability(model_id: str) -> str | None:
+    """The declared per-query capability of a model, or None when it has none.
+
+    Read from the registry rather than hardcoded here, so adding an observer to another model is a
+    registry change and the launcher follows automatically.
+    """
+    from workbench.backend.registry import model_by_id
+
+    try:
+        return model_by_id(model_id).get(PER_QUERY_CAPABILITY)
+    except Exception:
+        return None
+
+
 def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
                      directory: Path, command_digest: str | None,
                      environment_digest: str | None) -> tuple[Path | None, str, str | None, str | None]:
@@ -1543,10 +1602,31 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     results_root = getattr(config, "WORKBENCH_RESULTS_ROOT",
                            Path(config.WORKBENCH_ARTIFACTS_ROOT) / "results")
     interpreter = plan.command[0] if plan.command else sys.executable
-    child_env = dict(os.environ)
+    # The SAME allowlisted environment the official evaluator gets. `os.environ` would hand model
+    # code the operator's tokens, cloud credentials and -- worst of all -- the ledger signing key,
+    # which is the one secret that must never reach a child that writes evidence.
+    child_env = _evaluator_environment({
+        "orchestrator_python": sys.version,
+        "orchestrator_executable": sys.executable,
+        "platform": sys.platform,
+        "model_interpreter": interpreter,
+        "evaluation_run_id": run_id,
+        "evaluation_output_root": str(artifact_root(config)),
+    })
+    # The observer is workbench code, so the repository must be importable in its child. This is the
+    # one addition to the evaluator's allowlist, and it is deliberate: the evaluator gets the same
+    # value through its own PYTHONPATH handling when the operator sets it, and without it the child
+    # cannot import `workbench.replay.limn_export` at all.
     child_env["PYTHONPATH"] = str(Path(__file__).resolve().parents[2])
     argv = [interpreter, "-m", "workbench.replay.limn_export",
-            "--checkpoint-root", str(plan.checkpoint.parent),
+            # The plan's own recorded member root: resolved once from the DECLARED artifact type,
+            # so it is the same directory whether or not the weights are on disk yet. `plan.
+            # checkpoint.parent` named the whole checkpoint root for LIMN's three-category bundle
+            # and every member lookup came up one level too high, so observation failed while the
+            # aggregate succeeded (P1 -- the exact regression the 1309-test release did not catch).
+            "--checkpoint-root", str(
+                plan.member_root
+                or checkpoint_member_root(plan.checkpoint, artifact_type=plan.artifact_type)),
             "--dataset-root", str(plan.dataset_root),
             "--source-root", str(plan.source),
             "--results-root", str(results_root),
@@ -1571,47 +1651,51 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
         tail = (completed.stderr or completed.stdout or "").strip().splitlines()[-3:]
         return None, f"observer exited {completed.returncode}: {' | '.join(tail)}", None, None
 
+    # Two-stage: the child STAGED a plain payload (model interpreter), and the parent PUBLISHES it
+    # here, in the workbench interpreter, because only this side has the canonical schema. The child
+    # cannot do it: pydantic is not in the model's provisioned environment, and importing it there
+    # made every export fail while the aggregate succeeded.
     try:
-        import json as _json
-        # The exporter emits exactly one JSON object, but a compiled dependency could still write to
-        # fd 1 directly, which no Python-level discipline can prevent. So parse the LAST line that
-        # looks like the status object rather than trusting the whole stream.
-        payload = None
-        for line in reversed([line for line in (completed.stdout or "").splitlines() if line.strip()]):
-            if line.lstrip().startswith("{"):
-                try:
-                    candidate = _json.loads(line)
-                except ValueError:
-                    continue
-                if isinstance(candidate, dict) and "published" in candidate:
-                    payload = candidate
-                    break
-        if payload is None:
-            raise ValueError("no status object on stdout")
-        artifact = Path(payload["published"])
-    except (ValueError, KeyError, TypeError):
-        return None, "observer did not report a published artifact path", None, None
-    if not artifact.is_file():
-        return None, f"observer reported {artifact}, which does not exist", None, None
-
-    # Parent-side checks, deliberately WITHOUT importing the canonical schema: this module is on the
-    # traced import graph for LIMN's interpreter (runtime imports it lazily), so pulling pydantic in
-    # here would make the environment planner demand an interpreter for it and break cold start --
-    # the exact regression isolated earlier. The parent therefore does what it alone can do: confirm
-    # the bytes are a canonical artifact, compute the digest from them, and confirm the artifact
-    # claims THIS invocation. The authoritative admission verdict is computed by the index and the
-    # API (which are not on this graph) from the digest recorded here.
+        staged = Path(json.loads(completed.stdout)["payload"])
+    except (ValueError, KeyError, TypeError) as error:
+        return None, f"observer did not report a staged payload: {error}", None, None
+    # The publisher is invoked as a CHILD under the WORKBENCH interpreter, never imported here.
+    # Importing it would put the canonical schema (pydantic) on this module's import graph, and this
+    # module is reachable from `workbench/replay/limn.py` -- which the environment planner traces to
+    # decide LIMN's interpreter. That is the regression that broke cold start twice.
+    publish_argv = [sys.executable, "-m", "workbench.replay.limn_publish",
+                    "--payload", str(staged), "--results-root", str(results_root)]
+    try:
+        published = subprocess.run(publish_argv, cwd=str(plan.cwd), env=child_env, text=True,
+                                   capture_output=True, timeout=900)
+    except (OSError, subprocess.SubprocessError) as error:
+        return None, f"publisher could not run: {type(error).__name__}: {error}", None, None
+    (directory / "publish.stdout.log").write_text(published.stdout or "", encoding="utf-8")
+    (directory / "publish.stderr.log").write_text(published.stderr or "", encoding="utf-8")
+    if published.returncode != 0:
+        tail = (published.stderr or published.stdout or "").strip().splitlines()[-3:]
+        return None, f"publisher exited {published.returncode}: {' | '.join(tail)}", None, None
+    try:
+        artifact = Path(json.loads(published.stdout)["published"])
+    except (ValueError, KeyError, TypeError) as error:
+        return None, f"publisher did not report a published artifact: {error}", None, None
     try:
         payload = json.loads(artifact.read_text())
         claimed_run = payload["run"]["run_id"]
         parity = payload["run"].get("instrumentation_parity")
         data_kind = payload["run"].get("data_kind")
     except (ValueError, KeyError, TypeError) as error:
-        return None, f"observer artifact is not a readable canonical result: {error}", None, None
+        return None, f"published artifact is not a readable canonical result: {error}", None, None
     if claimed_run != run_id:
         return None, (f"observer artifact claims run {claimed_run!r}, not this invocation "
                       f"{run_id!r}"), None, None
     digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    # The staging file is an interchange detail, not evidence: leaving it beside the canonical
+    # artifacts would make the results directory hold two descriptions of one run.
+    try:
+        staged.unlink(missing_ok=True)
+    except OSError:
+        pass
     note = f"artifact exported (data_kind={data_kind!r}); admission is the verifier's to decide"
     return artifact, note, digest, parity
 
@@ -1723,11 +1807,17 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
     # process under the model's own interpreter because in production the parent cannot import the
     # model environment; the parent then VERIFIES what the child wrote rather than trusting it. A
     # failure here never changes the aggregate result, and never promotes anything.
-    observation_note = "not attempted"
+    # The per-query capability is DECLARED, not inferred from a model id, so a capability-absent
+    # model (one the registry gives no observer) is distinguishable from a capability that FAILED.
+    # The launcher needs that distinction: only the second is a pilot blocker.
+    capability = per_query_capability(plan.model_id)
+    observation_note = f"{capability}: not attempted" if capability else "CAPABILITY_ABSENT"
     per_query_artifact = None
     per_query_artifact_digest = None
     instrumentation_parity = None
-    if code == 0 and plan.model_id == "limn":
+    # The field NAME is the constant; its VALUE is the observer's identity (e.g.
+    # "LIMN_QUERY_OBSERVER_V1"). The gate is "the registry declares one", not equality with the key.
+    if code == 0 and capability:
         per_query_artifact, observation_note, per_query_artifact_digest, instrumentation_parity = \
             _run_observation(plan, config, run_id, directory,
                              metadata.get("command_digest"), metadata.get("environment_digest"))
@@ -1749,6 +1839,11 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         "reproduction_status": extraction.extraction_status,
         "per_query_export_available": per_query_artifact is not None,
         "per_query_export_reason": observation_note,
+        # What this RUN achieved on the per-query axis, distinct from the artifact's evidence state.
+        # `CAPABILITY_ABSENT` is not a failure; `PER_QUERY_EXPORT_FAILED` is a pilot blocker for a
+        # model that declares an observer.
+        "per_query_capability": capability,
+        "per_query_state": per_query_state(capability, per_query_artifact, observation_note),
         "per_query_artifact": str(per_query_artifact) if per_query_artifact else None,
         "per_query_artifact_digest": per_query_artifact_digest,
         "instrumentation_parity": instrumentation_parity,

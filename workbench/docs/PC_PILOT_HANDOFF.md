@@ -22,13 +22,36 @@ Cờ đã tồn tại (đọc từ `pc.sh`): `--model`, `--force`, `--doctor`, `
 
 ### Xuất per-query: tự động, không cần cờ
 
-Với LIMN, export per-query là **tự động** trong `./pc.sh`: `evaluate_models.execute()` gọi observer như
-tiến trình con dưới interpreter của model và truyền thẳng `--run-id <run_id>` — chính danh tính mà
-orchestrator đã dùng cho lượt này (đường vào `execute()` cũng đã chở nó từ `POST /api/jobs`). Vì cha
-truyền xuống con đúng chuỗi đó, **không thể** có hai danh tính cho một lượt chạy.
+Với LIMN, export per-query là **tự động** trong `./pc.sh`. Không có cờ nào để bật.
 
-Chạy exporter độc lập (không qua `pc.sh`) vẫn được, nhưng khi đó **không có** danh tính orchestrator:
-artifact được đánh dấu `data_kind="mock"` và **không bao giờ** thành bằng chứng nghiên cứu.
+Cơ chế là **hai tầng**, và lý do là kỹ thuật chứ không phải kiến trúc cho vui:
+
+1. **Trình quan sát** (`workbench.replay.limn_export`) chạy dưới **interpreter của model**. Nó nạp
+   checkpoint qua loader gốc, tái dẫn xuất xếp hạng, đối chiếu với aggregate native, rồi ghi **một
+   payload JSON thuần**. Nó KHÔNG import schema canonical, vì môi trường model được cài từ
+   `requirements` của chính model (torch, open_clip, numpy) và **không có pydantic** — import pydantic
+   ở đó làm observer chết ngay khi khởi động, khiến aggregate đạt mà mọi export thất bại.
+2. **Trình xuất bản** (`workbench.replay.limn_publish`) chạy dưới **interpreter workbench** (nơi có
+   pydantic), validate payload, kiểm chính sách admission, và công bố artifact canonical **atomic**.
+
+Cả hai chạy dưới **cùng một `run_id`** do orchestrator sinh, và cùng mang digest lệnh/môi trường của
+lượt aggregate. Cha (`evaluate_models.execute`) chạy observer như tiến trình con, rồi chạy publisher
+như tiến trình con, rồi **tự đọc lại bytes** để tính digest — con không bao giờ tự khai digest của mình.
+
+**Trạng thái per-query** (`per_query_state` trong report aggregate):
+
+| Trạng thái | Nghĩa | Exit code của `./pc.sh` |
+|---|---|---|
+| `CAPABILITY_ABSENT` | model không khai báo observer — **aggregate-only theo thiết kế**, không phải lỗi | 0 |
+| `PER_QUERY_EXPORT_FAILED` | model CÓ khai báo observer và nó không xuất được gì | **3** |
+| `PER_QUERY_EXPORTED_UNVERIFIED` | đã xuất artifact, verifier chưa chứng thực | **4** |
+| `PER_QUERY_VERIFIED` | đã xuất + verifier đã chứng thực | 0 |
+
+Exit code 3 nghĩa là: *tổng hợp đạt và hợp lệ, nhưng pilot ĐẦY ĐỦ chưa sẵn sàng* — phân tích theo
+truy vấn chưa dùng được. Kết quả tổng hợp, sổ cái và completion proof **vẫn được giữ nguyên**.
+
+Trình quan sát và trình xuất bản nhận **môi trường đã lọc** giống hệt evaluator chính thức: không có
+`WORKBENCH_LEDGER_KEY`, `OPENAI_API_KEY`, `GITHUB_TOKEN` hay credential nào của người vận hành.
 
 ## 2. Điều kiện tiên quyết trên máy đích
 
@@ -63,7 +86,39 @@ artifact được đánh dấu `data_kind="mock"` và **không bao giờ** thàn
 | Ledger | `<artifacts>/evidence_ledger.jsonl` |
 | Chỉ mục | `<artifacts>/workbench.duckdb` |
 
-## 5. Trạng thái bằng chứng — cách đọc
+## 5. Bộ lọc thất bại theo mọi Top-K và chọn lượt đang xem
+
+Sample Explorer có một bộ chọn **Active model/run** riêng: đây là lượt mà ảnh Top-K đang hiển thị
+thuộc về, và nhãn của nó (model, checkpoint, protocol, run ID, trạng thái bằng chứng) hiện ngay trên
+chi tiết truy vấn. Chọn nhiều lượt vẫn dùng cho **Compare Models**, **Failure Analytics**, **Common
+Failures** và **Disagreement** — chúng là hai việc khác nhau.
+
+**Bộ lọc kết quả** có đủ mọi ngưỡng:
+
+```
+All · fail @1 · fail @5 · fail @10 · fail @20 · fail @50 · fail @100 · fail @200
+                          pass @1 · pass @5 · pass @10 · pass @20 · pass @50 · pass @100 · pass @200
+```
+
+Ngữ nghĩa (rank 1-based, `target_rank` là vị trí trong **toàn bộ** xếp hạng ứng viên hợp lệ):
+
+```
+SUCCESS@K  ⟺  target_rank <= K
+FAILURE@K  ⟺  target_rank >  K
+```
+
+`fail @K` và `pass @K` **loại trừ lẫn nhau** (gửi cả hai → HTTP 400 `conflicting_rank_filter`), và
+giá trị ngoài khoảng → 400 `invalid_rank_threshold`. Lọc chạy **trước** phân trang, nên `total` luôn
+là số của tập đã lọc chứ không phải số của trang.
+
+`target_rank` **không** phụ thuộc độ sâu đã lưu: một truy vấn rank 500 vẫn là thất bại ở mọi K dù
+Top-K đã lưu chỉ có 50 ảnh. Phân loại thất bại và khả năng xem ảnh là hai chuyện khác nhau — khi K
+vượt độ sâu đã lưu, giao diện **nói rõ** ("Yêu cầu Top-200 — chỉ có Top-50 được lưu"), không im lặng
+hiển thị 50 ảnh dưới nhãn Top-200. Đổi K chỉ đổi phần hiển thị; **không** chạy lại suy luận.
+
+---
+
+## 6. Trạng thái bằng chứng — cách đọc
 
 `evidence_status` **không** đến từ `data_kind`. Nó do chính sách admission quyết, và chỉ `verifier`
 được promote lên `PER_QUERY_VERIFIED`:
@@ -76,7 +131,7 @@ artifact được đánh dấu `data_kind="mock"` và **không bao giờ** thàn
 | `PER_QUERY_UNVERIFIED` | khai là experiment nhưng chưa ai chứng thực |
 | `PER_QUERY_VERIFIED` | verifier đã chứng thực, và receipt **khớp digest artifact này** |
 
-## 6. Cách xác minh và dựng lại chỉ mục
+## 7. Cách xác minh và dựng lại chỉ mục
 
 ```bash
 python -m workbench.scripts.validate_results --all --strict-real
@@ -84,7 +139,7 @@ python -m workbench.scripts.verify_run --run-id <run_id>      # verdict của ve
 # dựng lại chỉ mục: POST /api/index/rebuild, hoặc khởi động backend (tự dựng nếu chỉ mục thiếu)
 ```
 
-## 7. Trạng thái GPU mong đợi lúc bàn giao
+## 8. Trạng thái GPU mong đợi lúc bàn giao
 
 ```
 GPU_RUNTIME          NOT_EXECUTED_ON_TARGET_PC
@@ -97,7 +152,7 @@ PER_QUERY_PARITY     PENDING  (chỉ kiểm được sau suy luận thật)
 `GPU_SCIENTIFIC_VALIDATION_READY` **không** đạt được trên máy dev, và không có gì trong repo tuyên bố
 ngược lại.
 
-## 8. Lỗi thường gặp thật (không phải lỗi phần mềm)
+## 9. Lỗi thường gặp thật (không phải lỗi phần mềm)
 
 | Triệu chứng | Nguyên nhân |
 |---|---|

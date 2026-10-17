@@ -43,9 +43,17 @@ def _query(category: str, index: int, gallery_size: int, target_rank: int, top_d
 
 def _category(category: str, gallery_size: int, count: int = 3, target_rank: int = 2,
               top_depth: int = 200) -> ObservedCategory:
+    """A category fixture at the ELIGIBLE depth the schema requires.
+
+    `top_depth` is clamped to the eligible candidate count (`gallery_size - 1`) because that is what
+    an excluded protocol can actually store: producing `top_depth` results for a 20-item gallery
+    created a fixture the schema correctly refuses, which is the whole point of the depth rule.
+    """
+    eligible = max(gallery_size - 1, 0)
+    depth = min(top_depth, eligible)
     return ObservedCategory(
-        category=category, gallery_size=gallery_size, eligible_count=gallery_size - 1,
-        queries=tuple(_query(category, index, gallery_size, target_rank, top_depth) for index in range(count)),
+        category=category, gallery_size=gallery_size, eligible_count=eligible,
+        queries=tuple(_query(category, index, gallery_size, target_rank, depth) for index in range(count)),
     )
 
 
@@ -81,7 +89,7 @@ def test_category_gallery_sizes_are_per_category_not_a_single_scalar() -> None:
 
 def test_a_dress_rank_beyond_the_dress_gallery_is_refused() -> None:
     """The regression this guards: a toptee-sized dress rank would pass a global-only check."""
-    with pytest.raises(ValueError, match="exceeds its category gallery size"):
+    with pytest.raises(ValueError, match="exceeds the eligible candidate count"):
         build_result_run([_category("dress", 100, target_rank=150)], **_identity())
 
 
@@ -695,3 +703,39 @@ def test_strict_real_rejects_every_unresolved_parity_state(tmp_path: Path) -> No
         # Without the flag it is inspectable as a warning.
         warnings: list[str] = []
         assert validate_file(artifact, strict_real=False, output=warnings.append) is True, warnings
+
+
+def test_saved_depth_follows_the_eligible_count_not_the_raw_gallery() -> None:
+    """P2: `gallery_size <= top_k_saved` under an excluded protocol stores `size-1`, not `size`.
+
+    The two rules disagreed: the observer saved `min(top_k, size-1)` while the schema demanded
+    `min(top_k_saved, size)`, so a legitimate artifact whose saved depth was capped by the eligible
+    count was rejected. Exercised at the boundary the defect names.
+    """
+    for gallery_size in (5, 20, 21):
+        observed = _category("dress", gallery_size, count=2, target_rank=2, top_depth=100)
+        run = build_result_run([observed], **_identity(top_k_saved=100))
+        # 100 requested, but only `size - 1` candidates exist.
+        assert len(run.queries[0].top_results) == gallery_size - 1
+        assert run.run.category_eligible_counts == {"dress": gallery_size - 1}
+        # The reference is not among them.
+        reference = run.queries[0].reference_id
+        assert all(item.image_id != reference for item in run.queries[0].top_results)
+
+
+def test_the_schema_still_requires_exactly_the_eligible_depth() -> None:
+    """The rule is a bound, not a suggestion: both too few and too many are refused."""
+    run = build_result_run([_category("dress", 20, count=2, target_rank=2, top_depth=19)],
+                           **_identity(top_k_saved=100))
+    payload = run.model_dump(mode="json")
+    # Too few.
+    payload["queries"][0]["top_results"] = payload["queries"][0]["top_results"][:10]
+    with pytest.raises(ValidationError, match="effective saved retrieval depth"):
+        ResultRun.model_validate(payload)
+    # Too many (the raw gallery size, which the old rule wrongly demanded).
+    payload2 = run.model_dump(mode="json")
+    last_rank = len(payload2["queries"][0]["top_results"]) + 1
+    payload2["queries"][0]["top_results"].append(
+        {"rank": last_rank, "image_id": f"extra-{last_rank}", "score": 0.01})
+    with pytest.raises(ValidationError, match="effective saved retrieval depth"):
+        ResultRun.model_validate(payload2)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from workbench.backend.adapters.base import EvalRequest, ModelAdapter
-from workbench.backend.registry import checkpoint_path
+from workbench.backend.registry import checkpoint_path, checkpoint_member_root
 from workbench.backend import runtime as _runtime
 
 
@@ -136,7 +136,10 @@ class LIMNAdapter(OfficialScriptAdapter):
             # it is that member's own file and the members live beside it. `.parent` was correct
             # only for the second shape and named the whole checkpoint root for a bundle, so
             # `limn.py`'s `checkpoint_root / "<member>.pt"` looked one level too high.
-            "--checkpoint-root", str(checkpoint if checkpoint.is_dir() else checkpoint.parent),
+            # The shared member-root rule: a multi-member artifact keeps its members as siblings
+            # inside its resolved directory, a single artifact is itself the member. Delegated so
+            # this expression cannot drift from the observer's.
+            "--checkpoint-root", str(checkpoint_member_root(checkpoint)),
             "--dataset-root", str(request.dataset_root),
             "--source-root", str(source),
         ]

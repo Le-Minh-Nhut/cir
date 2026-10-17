@@ -750,3 +750,310 @@ def test_a_failed_observation_leaves_the_aggregate_result_intact(monkeypatch, tm
     assert report["per_query_export_available"] is False, "no artifact was produced"
     assert report.get("per_query_artifact_digest") is None
     assert "observer exited" in (report.get("per_query_export_reason") or "")
+
+
+# --------------------------------------------- per-query capability and truthful status (P1)
+
+def _run_with(module, monkeypatch, tmp_path: Path, *, model_id: str, observer_run):
+    """Drive execute() for one model with a stubbed native command and a stubbed child pipeline."""
+
+    def fake_invoke(plan, config, run_id, root):
+        directory = tmp_path / "logs" / f"{plan.model_id}__{plan.checkpoint_id}__{run_id}"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "stdout.log").write_text('{"dress_r1": 1.0, "dress_r10": 2.0, "dress_r50": 3.0}')
+        (directory / "stderr.log").write_text("")
+        return 0, directory, {"orchestrator_python": "3", "platform": "test"}
+
+    monkeypatch.setattr(module, "invoke_evaluator", fake_invoke)
+    monkeypatch.setattr(module.subprocess, "run", observer_run)
+    monkeypatch.setattr(module, "extract_aggregate_metrics",
+                        lambda *a, **k: type("E", (), {
+                            "extraction_status": "EXTRACTED_VERIFIED", "parser_id": "p",
+                            "parser_version": 1, "observed_metrics": {"r10": 1.0, "r50": 2.0, "mean": 1.5},
+                            "category_metrics": None, "parity_status": "PARITY_NOT_EVALUATED",
+                            "metric_source": "stdout"})())
+    plan = module.EvaluationPlan(
+        model_id=model_id, checkpoint_id="base_iter0_all_categories",
+        protocol="fashioniq_val_split", dataset_root=tmp_path, source=tmp_path,
+        checkpoint=tmp_path / "ckpt", cwd=tmp_path, command=[sys.executable, "x"],
+        pin="a" * 40, actual_source_commit="a" * 40, paper_metrics=None)
+    settings = config(tmp_path)
+    run_id = f"20260101T000000000000Z_{model_id}_ckpt_deadbeef"
+    module.execute(plan, settings, run_id=run_id)
+    reports = sorted(tmp_path.rglob("*_aggregate.json"))
+    assert reports, "the aggregate report must exist"
+    return json.loads(reports[-1].read_text()), run_id
+
+
+def test_a_declared_observer_that_exports_nothing_is_reported_as_export_failed(monkeypatch, tmp_path: Path) -> None:
+    """P1: a model that DECLARED a per-query observer and produced no artifact has failed that axis.
+
+    The aggregate stays valid and is preserved -- `execute()` still returns the native exit code --
+    but the report must say so plainly, because the launcher's readiness claim is derived from it.
+    """
+
+    def failing_observer(argv, **kwargs):
+        class Failed:
+            returncode = 1
+            stdout = ""
+            stderr = "observer could not resolve the checkpoint directory"
+
+        return Failed()
+
+    report, _ = _run_with(load_module(), monkeypatch, tmp_path, model_id="limn",
+                          observer_run=failing_observer)
+    assert report["per_query_capability"] == "LIMN_QUERY_OBSERVER_V1"
+    assert report["per_query_state"] == "PER_QUERY_EXPORT_FAILED", report["per_query_state"]
+    assert report["per_query_export_available"] is False
+    assert report["execution_status"] == "EXECUTION_COMPLETED", "the aggregate must be untouched"
+
+
+def test_a_model_without_an_observer_is_capability_absent_not_a_failure(monkeypatch, tmp_path: Path) -> None:
+    """P1: an aggregate-only model must not be reported as a failed per-query export.
+
+    No observer exists for it by design, so the launcher must not treat its absence as a pilot
+    blocker. The capability is read from the registry, not inferred from a model id.
+    """
+    called = {"observer": False}
+
+    def must_not_run(argv, **kwargs):
+        called["observer"] = True
+
+        class Never:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Never()
+
+    report, _ = _run_with(load_module(), monkeypatch, tmp_path, model_id="encoder",
+                          observer_run=must_not_run)
+    assert report["per_query_capability"] is None
+    assert report["per_query_state"] == "CAPABILITY_ABSENT", report["per_query_state"]
+    assert not called["observer"], "an observer must not run for a model that declares none"
+    assert report["execution_status"] == "EXECUTION_COMPLETED"
+
+
+def test_a_successful_two_stage_export_is_reported_as_exported_but_unverified(monkeypatch, tmp_path: Path) -> None:
+    """Only the verifier may say VERIFIED; the run can only report that it produced an artifact.
+
+    Exercises the real two-stage contract: the observer child stages a payload, the publisher child
+    (under the workbench interpreter) writes the canonical artifact, and the parent reads it back to
+    compute the digest itself.
+    """
+    canonical = tmp_path / "canonical" / "run.json"
+    canonical.parent.mkdir(parents=True, exist_ok=True)
+    seen: list[list[str]] = []
+
+    def two_stage(argv, **kwargs):
+        seen.append(list(argv))
+        is_publisher = "workbench.replay.limn_publish" in argv
+        if is_publisher:
+            canonical.write_text(json.dumps({
+                "schema_version": 2,
+                "run": {"run_id": "20260101T000000000000Z_limn_ckpt_deadbeef",
+                        "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED",
+                        "data_kind": "experiment"},
+                "queries": [],
+            }))
+            out = json.dumps({"published": str(canonical)})
+        else:
+            staged = tmp_path / "staged.payload.json"
+            staged.write_text(json.dumps({"artifact_type": "limn_observation_payload"}))
+            out = json.dumps({"payload": str(staged)})
+
+        class Done:
+            returncode = 0
+            stdout = out
+            stderr = ""
+
+        return Done()
+
+    report, run_id = _run_with(load_module(), monkeypatch, tmp_path, model_id="limn",
+                               observer_run=two_stage)
+    assert report["per_query_state"] == "PER_QUERY_EXPORTED_UNVERIFIED", report["per_query_state"]
+    assert report["per_query_export_available"] is True
+    assert report["per_query_artifact_digest"], "the parent computes the digest from the bytes"
+    # BOTH stages ran, and the publisher ran under the WORKBENCH interpreter (this process's).
+    assert any("workbench.replay.limn_export" in call for call in seen)
+    publisher = next(call for call in seen if "workbench.replay.limn_publish" in call)
+    assert publisher[0] == sys.executable
+
+
+def test_the_observer_and_publisher_receive_a_sanitized_environment(monkeypatch, tmp_path: Path) -> None:
+    """P1: model code must not receive the operator's secrets, least of all the ledger key.
+
+    The observer runs model-supplied code paths, so it gets the same allowlisted environment as the
+    official evaluator. This asserts the ACTUAL environment built for both children, not a helper.
+    """
+    seen_envs: list[dict] = []
+
+    def capture(argv, **kwargs):
+        seen_envs.append(dict(kwargs.get("env") or {}))
+        is_publisher = "workbench.replay.limn_publish" in argv
+        if is_publisher:
+            # The parent re-reads whatever the publisher reports, so it must exist.
+            reported = tmp_path / "env-probe.json"
+            reported.write_text(json.dumps({
+                "schema_version": 2,
+                "run": {"run_id": "20260101T000000000000Z_limn_ckpt_deadbeef",
+                        "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED",
+                        "data_kind": "experiment"},
+                "queries": [],
+            }))
+            out = json.dumps({"published": str(reported)})
+        else:
+            staged = tmp_path / "env-probe.payload.json"
+            staged.write_text(json.dumps({"artifact_type": "limn_observation_payload"}))
+            out = json.dumps({"payload": str(staged)})
+
+        class Done:
+            returncode = 0
+            stdout = out
+            stderr = ""
+
+        return Done()
+
+    monkeypatch.setenv("WORKBENCH_LEDGER_KEY", "TEST_SECRET")
+    monkeypatch.setenv("OPENAI_API_KEY", "TEST_SECRET")
+    monkeypatch.setenv("GITHUB_TOKEN", "TEST_SECRET")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+
+    _run_with(load_model_module := load_module(), monkeypatch, tmp_path, model_id="limn",
+              observer_run=capture)
+    assert seen_envs, "the observer must have been invoked"
+    for env in seen_envs:
+        assert "WORKBENCH_LEDGER_KEY" not in env, "the ledger signing key must never reach a child"
+        assert "OPENAI_API_KEY" not in env and "GITHUB_TOKEN" not in env
+    # A required runtime variable is still forwarded: CUDA visibility is a deliberate operator
+    # decision the evaluator needs.
+    assert any(env.get("CUDA_VISIBLE_DEVICES") == "0" for env in seen_envs), seen_envs
+
+
+def test_the_evaluation_module_does_not_widen_limns_traced_environment() -> None:
+    """The regression that broke cold start twice, pinned as a contract.
+
+    `environment_planner._evaluator_imports` walks `workbench/replay/limn.py` to decide which
+    interpreter LIMN needs, and it follows imports through every module reachable from there --
+    including function-local ones, because it uses `ast.walk`. `backend/runtime` lazily imports this
+    module, so ANY new import added here becomes a declared requirement of LIMN's environment.
+
+    The canonical schema (pydantic) must stay off that graph: the model environment does not have it,
+    which is why the observer stages plain JSON and a separate publisher (run under the workbench
+    interpreter) writes the artifact.
+    """
+    from pathlib import Path as _Path
+
+    from workbench.backend.environment_planner import _evaluator_imports
+    from workbench.backend.registry import model_by_id
+
+    traced = _evaluator_imports(model_by_id("limn"), _Path("workbench/third_party")) or set()
+    assert "pydantic" not in traced, f"pydantic leaked into LIMN's traced imports: {sorted(traced)}"
+    assert {"torch", "open_clip", "numpy"} <= set(traced), sorted(traced)
+
+
+# ------------------------------- §22: the LIMN bundle path, adapter and observer agreeing
+
+def test_the_adapter_and_the_observer_resolve_the_same_member_directory(monkeypatch, tmp_path: Path) -> None:
+    """The regression that survived the previous 1309-test release, pinned end to end.
+
+    A LIMN bundle's members are SIBLINGS inside the directory `checkpoint_path` resolves to. The
+    observer used `plan.checkpoint.parent`, which is one level too high for a bundle, so it searched
+    the whole checkpoint root for `0_*_best_model.pt` and found nothing while the aggregate
+    succeeded. This drives the real resolver, the real adapter, and the real observation command
+    builder over a temporary bundle.
+    """
+    import subprocess as _sp
+
+    from workbench.backend.adapters.models import ADAPTERS
+    from workbench.backend.adapters.base import EvalRequest
+    from workbench.backend.registry import (
+        checkpoint_bundle_missing_paths, checkpoint_member_root, checkpoint_path, load_registry,
+    )
+
+    module = load_module()
+    model = next(m for m in load_registry()["models"] if m["model_id"] == "limn")
+
+    # Real member files on disk, under the layout the registry declares.
+    checkpoints = tmp_path / "checkpoints"
+    member_dir = checkpoints / "limn"
+    member_dir.mkdir(parents=True)
+    members = [f"0_{category}_best_model.pt" for category in ("dress", "shirt", "toptee")]
+    for name in members:
+        (member_dir / name).write_bytes(b"weights-" + name.encode())
+
+    # A bundle selection dict, exactly as the pipeline builds one.
+    bundle = {"bundle_id": "base_iter0_all_categories",
+              "required_checkpoint_ids": ["base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee"]}
+    resolved = checkpoint_path("limn", bundle, root=checkpoints)
+    member_root = checkpoint_member_root(resolved)
+
+    # The declared rule and the filesystem agree, and every member is found there.
+    assert member_root == member_dir, (member_root, member_dir)
+    assert resolved.is_dir(), "a bundle resolves to the directory its members occupy"
+    assert sorted(p.name for p in member_root.glob("*.pt")) == sorted(members)
+    # The bundle resolver looks for the members INSIDE the member directory. (The dummy weights do
+    # not match the declared digests, so they are reported as unusable -- that is the digest contract
+    # working, not a path defect. What this test pins is WHERE it looked.)
+    reported = checkpoint_bundle_missing_paths(model, checkpoints)
+    assert reported, "dummy bytes cannot satisfy the declared digests"
+    for paths in reported.values():
+        for path in paths:
+            assert path.parent == member_dir, f"looked in the wrong directory: {path}"
+
+    # The old expression names the WRONG directory and would find no members there.
+    assert resolved.parent == checkpoints
+    assert list(resolved.parent.glob("0_*_best_model.pt")) == []
+
+    # The adapter builds its command from the SHARED rule.
+    request = EvalRequest(model_id="limn", checkpoint_id="base_iter0_all_categories",
+                          protocol_id="fashioniq_val_split", dataset_root=tmp_path,
+                          output_path=tmp_path / "out.json", top_k=200)
+    # ADAPTERS maps a model id to the adapter CLASS.
+    adapter = ADAPTERS["limn"]()
+    import workbench.backend.runtime as _runtime
+
+    # The adapter asks the runtime for the model's verified interpreter; the interpreter itself is
+    # not what this test is about, so it is supplied.
+    monkeypatch.setattr(_runtime, "python_executable", lambda m: sys.executable, raising=False)
+    command = adapter.command(tmp_path, resolved, request)
+    root_argument = command[command.index("--checkpoint-root") + 1]
+    assert Path(root_argument) == member_dir, command
+
+    # And the observation command the parent builds agrees with both.
+    plan = module.EvaluationPlan(
+        model_id="limn", checkpoint_id="base_iter0_all_categories",
+        protocol="fashioniq_val_split", dataset_root=tmp_path, source=tmp_path,
+        checkpoint=resolved, cwd=tmp_path, command=command, pin="a" * 40,
+        actual_source_commit="a" * 40, paper_metrics=None, member_root=member_root,
+        artifact_type="category_specific_whole_models")
+    assert plan.member_root == member_dir
+    # The observer's own argument is derived from the plan, so it cannot differ.
+    assert str(plan.member_root or checkpoint_member_root(plan.checkpoint)) == str(member_dir)
+
+
+def test_the_member_root_follows_the_declaration_not_the_filesystem(tmp_path: Path) -> None:
+    """A bundle is a member directory even before its weights are downloaded.
+
+    `is_dir()` answers differently before and after a download, so deriving the member root from the
+    filesystem made the adapter and the manifest disagree with a freshly-planned run. The plan
+    records the root from the DECLARED artifact type instead.
+    """
+    from workbench.backend.registry import checkpoint_member_root
+
+    module = load_module()
+    absent = tmp_path / "checkpoints" / "limn"  # does not exist yet
+    plan = module.EvaluationPlan(
+        model_id="limn", checkpoint_id="base_iter0_all_categories",
+        protocol="fashioniq_val_split", dataset_root=tmp_path, source=tmp_path,
+        checkpoint=absent, cwd=tmp_path, command=[sys.executable, "x"], pin=None,
+        actual_source_commit=None, paper_metrics=None, member_root=absent,
+        artifact_type="category_specific_whole_models")
+    assert plan.member_root == absent
+    # The shared fallback agrees for a file-shaped artifact and for a directory-shaped one.
+    # Declared rules, so the answer is the same before and after the weights arrive.
+    assert checkpoint_member_root(tmp_path / "limn" / "0_dress_best_model.pt",
+                                  artifact_type="single_file") == tmp_path / "limn"
+    assert checkpoint_member_root(absent, artifact_type="category_specific_whole_models") == absent
+    # A bare path with no declaration still resolves (filesystem fallback).
+    assert checkpoint_member_root(tmp_path / "limn" / "0_dress_best_model.pt") == tmp_path / "limn"

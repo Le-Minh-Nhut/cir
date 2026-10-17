@@ -899,6 +899,9 @@ models:
         checkpoint_mapping_status: UNVERIFIED
   - model_id: limn
     replay_status: REPLAY_CODE_IMPLEMENTED
+    # The observer exists for this model, so a full pilot is only complete when its per-query
+    # artifact is exported and verified. A model without this field is aggregate-only by design.
+    per_query_observer: LIMN_QUERY_OBSERVER_V1
     category_model_policy: independent
     checkpoint_serialization: whole_model
     replay_type: SOURCE_FAITHFUL_WORKBENCH_REPLAY

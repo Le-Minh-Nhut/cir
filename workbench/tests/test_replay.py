@@ -350,120 +350,34 @@ def test_the_export_entry_point_is_separate_from_the_traced_native_replay(monkey
 
     for name in ("observe_category", "publish_observed_categories", "ObservedCategory"):
         assert not hasattr(limn, name), f"{name} must not be reachable from the traced module"
-    # And the export module itself is importable with both capabilities present.
-    assert hasattr(limn_export, "export") and hasattr(limn_export, "observe_and_verify")
+    assert hasattr(limn_export, "export")
 
 
-def test_export_refuses_when_instrumentation_parity_fails(monkeypatch, tmp_path, capsys):
-    """PARITY 1 failure: the artifact is withheld, and the native aggregate is not invented."""
-    import workbench.replay.limn_export as limn_export
-    from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
+def test_the_exporter_does_not_require_the_canonical_schema() -> None:
+    """P1: the exporter runs under the MODEL interpreter, which has no pydantic.
 
-    query = ObservedQuery(annotation_index=0, reference_id="r", target_id="t",
-                          raw_captions=("a", "b"), model_input_text="a and b",
-                          target_rank=2, top_results=((1, "d", 0.5), (2, "t", 0.4)), category="dress")
-    observation = ObservedCategory(category="dress", gallery_size=3, eligible_count=2, queries=(query,))
-
-    def fake_observe(category, *_a, **_k):
-        return 1.0, observation, ("dress_r1: observer 33.3 != native 1.0",)
-
-    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
-    monkeypatch.setattr(limn_export, "observe_and_verify", fake_observe)
-
-    code = limn_export.export(tmp_path, tmp_path, tmp_path, tmp_path / "results")
-    assert code == 1
-    captured = capsys.readouterr()
-    assert "QUERY_EXPORT_PARITY_MISMATCH" in captured.err
-    assert "INSTRUMENTATION_PARITY_MISMATCH" in captured.out
-    assert not (tmp_path / "results").exists()
-
-
-def test_export_publishes_a_validated_artifact_when_parity_holds(monkeypatch, tmp_path, capsys):
-    """POSITIVE CONTROL: clean parity publishes, and the file validates on its own from disk."""
-    import workbench.replay.limn_export as limn_export
-    from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
-    from workbench.backend.schemas.results import ResultRun
-
-    def fake_observe(category, *_a, **_k):
-        # The export walks the full three-category bundle, so the stub must answer per category.
-        queries = tuple(
-            ObservedQuery(annotation_index=index, reference_id=f"{category}-r{index}",
-                          target_id=f"{category}-t{index}", raw_captions=("a", "b"),
-                          model_input_text="a and b", target_rank=1,
-                          top_results=((1, f"{category}-t{index}", 0.9),), category=category)
-            for index in range(2))
-        observation = ObservedCategory(category=category, gallery_size=2, eligible_count=1,
-                                       queries=queries)
-        return 100.0, observation, ()
-
-    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
-    monkeypatch.setattr(limn_export, "observe_and_verify", fake_observe)
-
-    results_root = tmp_path / "results"
-    # With the orchestrator's identity supplied, the artifact is a real experiment bound to it.
-    run_id = "20260101T000000000000Z_limn_base_iter0_all_categories_deadbeef"
-    code = limn_export.export(tmp_path, tmp_path, tmp_path, results_root, top_k=1, run_id=run_id,
-                              command_digest="c" * 64, environment_digest="d" * 64)
-    assert code == 0, capsys.readouterr().err
-    published = list(results_root.rglob("*.json"))
-    assert len(published) == 1, published
-    artifact = ResultRun.model_validate_json(published[0].read_text())
-    assert artifact.run.protocol_id == "fashioniq_val_split"
-    assert artifact.run.data_kind == "experiment"
-    # Bound to the supplied invocation, not to an identity of its own invention.
-    assert artifact.run.run_id == run_id
-    # One artifact covering the whole bundle, not one per category.
-    assert len(artifact.queries) == 6
-    assert set(artifact.run.category_gallery_sizes) == {"dress", "shirt", "toptee"}
-    # Every bundle member is recorded, so a substituted category weight changes the digest (F-12).
-    assert set(artifact.run.checkpoint_bundle) == {"dress", "shirt", "toptee"}
-    assert artifact.run.bundle_manifest_digest
-    assert set(artifact.run.category_checkpoint_ids.values()) == {
-        "base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee"}
-
-
-def test_export_without_a_run_id_is_marked_as_development(monkeypatch, tmp_path, capsys):
-    """F-09: a standalone export must not be able to claim a recorded invocation.
-
-    With no orchestrator identity there is nothing to bind to, so the artifact is declared
-    development data -- which can never become research evidence -- rather than inventing an
-    identity that looks like a real run.
+    It therefore must not import the canonical schema -- not at module level and not inside a
+    function, because the model environment is provisioned from the model's own requirements. The
+    publisher (`limn_publish`, which imports pydantic) runs in the workbench interpreter instead.
+    This is checked by AST so a future refactor cannot quietly reintroduce the dependency.
     """
-    import workbench.replay.limn_export as limn_export
-    from workbench.backend.schemas.results import ResultRun
-    from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
+    import ast
+    from pathlib import Path
 
-    def fake_observe(category, *_a, **_k):
-        queries = tuple(
-            ObservedQuery(annotation_index=index, reference_id=f"{category}-r{index}",
-                          target_id=f"{category}-t{index}", raw_captions=("a", "b"),
-                          model_input_text="a and b", target_rank=1,
-                          top_results=((1, f"{category}-t{index}", 0.9),), category=category)
-            for index in range(2))
-        return 100.0, ObservedCategory(category=category, gallery_size=2, eligible_count=1,
-                                      queries=queries), ()
-
-    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
-    monkeypatch.setattr(limn_export, "observe_and_verify", fake_observe)
-    results_root = tmp_path / "results"
-    assert limn_export.export(tmp_path, tmp_path, tmp_path, results_root, top_k=1) == 0
-    artifact = ResultRun.model_validate_json(list(results_root.rglob("*.json"))[0].read_text())
-    assert artifact.run.data_kind == "mock", "a standalone export is development data"
-    assert artifact.run.run_id.startswith("dev-")
-    assert "PENDING" in capsys.readouterr().out
-
-
-def test_export_refuses_before_inference_when_preflight_fails(monkeypatch, tmp_path, capsys):
-    """A missing bundle is refused by name, and no inference starts."""
-    import workbench.replay.limn_export as limn_export
-
-    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: ["checkpoint missing: /x"])
-    monkeypatch.setattr(limn_export, "observe_and_verify",
-                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no inference")))
-
-    code = limn_export.export(tmp_path, tmp_path, tmp_path, tmp_path / "results")
-    assert code == 1
-    assert "checkpoint missing" in capsys.readouterr().err
+    source = (Path(__file__).resolve().parents[2] / "workbench/replay/limn_export.py").read_text()
+    tree = ast.parse(source)
+    required = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            required.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            required.add(node.module.split(".")[0])
+    assert "pydantic" not in required, sorted(required)
+    # And the schema module must not be reachable through a local import either.
+    assert "workbench.backend.schemas.results" not in source, \
+        "the exporter must not reach the canonical schema"
+    assert "workbench.replay.publication" not in source, \
+        "the exporter must not import the publication layer (it pulls pydantic)"
 
 
 def test_the_export_stdout_is_exactly_one_json_object(monkeypatch, tmp_path, capsys):
@@ -478,7 +392,6 @@ def test_the_export_stdout_is_exactly_one_json_object(monkeypatch, tmp_path, cap
 
     import workbench.replay.limn_export as limn_export
     from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
-    from workbench.tests.test_limn_query_export_publication import _category  # noqa: F401 - reuse
 
     def fake_observe(category, *_a, **_k):
         queries = tuple(
@@ -499,10 +412,10 @@ def test_the_export_stdout_is_exactly_one_json_object(monkeypatch, tmp_path, cap
     assert code == 0
     captured = capsys.readouterr()
     payload = _json.loads(captured.out)  # must not raise
-    assert payload["published"].endswith(".json")
+    assert payload["payload"].endswith(".json"), payload
     assert payload["run_id"] == "20260101T000000000000Z_limn_ckpt_stream01"
-    # The human note belongs on stderr. (`PENDING_PC_GPU_VALIDATION` is a JSON FIELD named
-    # `publication`, so the check is on the sentence, not the token.)
+    assert payload["instrumentation_parity"] == "INSTRUMENTATION_PARITY_VERIFIED"
+    # The human note belongs on stderr.
     assert "not against a real target-GPU inference" in captured.err
     assert "not against a real target-GPU inference" not in captured.out
 
@@ -526,8 +439,102 @@ def test_the_export_reports_a_parity_mismatch_on_stderr_with_a_nonzero_code(monk
                               run_id="20260101T000000000000Z_limn_ckpt_parity01",
                               command_digest="c" * 64, environment_digest="d" * 64)
     assert code == 1
-    captured = capsys.readouterr()
-    status = _json.loads(captured.out)
+    status = _json.loads(capsys.readouterr().out)
     assert status["instrumentation_parity"] == "INSTRUMENTATION_PARITY_MISMATCH"
-    assert status["publication"] == "WITHHELD_ON_PARITY_MISMATCH"
-    assert "QUERY_EXPORT_PARITY_MISMATCH" in captured.err
+    assert status["instrumentation_mismatches"], status
+
+
+def test_the_publisher_turns_a_staged_payload_into_a_validated_artifact(monkeypatch, tmp_path, capsys):
+    """The two-stage contract: the model interpreter stages JSON, the workbench publishes it.
+
+    This is the path production uses, and it is what makes the exporter runnable in an environment
+    that lacks pydantic.
+    """
+    import json as _json
+
+    import workbench.replay.limn_export as limn_export
+    import workbench.replay.limn_publish as limn_publish
+    from workbench.backend.schemas.results import ResultRun
+    from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
+
+    def fake_observe(category, *_a, **_k):
+        queries = tuple(
+            ObservedQuery(annotation_index=index, reference_id=f"{category}-r{index}",
+                          target_id=f"{category}-t{index}", raw_captions=("a", "b"),
+                          model_input_text="a and b", target_rank=1,
+                          top_results=((1, f"{category}-t{index}", 0.9),), category=category)
+            for index in range(2))
+        return 100.0, ObservedCategory(category=category, gallery_size=2, eligible_count=1,
+                                      queries=queries), ()
+
+    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
+    monkeypatch.setattr(limn_export, "observe_and_verify", fake_observe)
+    results_root = tmp_path / "results"
+    run_id = "20260101T000000000000Z_limn_ckpt_stage001"
+    assert limn_export.export(tmp_path, tmp_path, tmp_path, results_root, top_k=1, run_id=run_id,
+                              command_digest="c" * 64, environment_digest="d" * 64) == 0
+    staged = _json.loads(capsys.readouterr().out)["payload"]
+
+    destination = limn_publish.publish_payload(Path(staged), results_root)
+    artifact = ResultRun.model_validate_json(destination.read_text())
+    assert artifact.run.run_id == run_id
+    assert artifact.run.protocol_id == "fashioniq_val_split"
+    assert artifact.run.data_kind == "experiment"
+    # The staged interchange file is not itself a canonical artifact, and the publisher is what
+    # turns it into one.
+    assert Path(staged).name.startswith(".observation-")
+
+
+def test_a_staged_payload_without_an_orchestrator_identity_is_development_data(monkeypatch, tmp_path, capsys):
+    """Without a run id there is nothing to bind to, so the artifact must not claim an experiment."""
+    import json as _json
+
+    import workbench.replay.limn_export as limn_export
+    import workbench.replay.limn_publish as limn_publish
+    from workbench.backend.schemas.results import ResultRun
+    from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
+
+    def fake_observe(category, *_a, **_k):
+        queries = tuple(
+            ObservedQuery(annotation_index=index, reference_id=f"{category}-r{index}",
+                          target_id=f"{category}-t{index}", raw_captions=("a", "b"),
+                          model_input_text="a and b", target_rank=1,
+                          top_results=((1, f"{category}-t{index}", 0.9),), category=category)
+            for index in range(2))
+        return 100.0, ObservedCategory(category=category, gallery_size=2, eligible_count=1,
+                                      queries=queries), ()
+
+    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
+    monkeypatch.setattr(limn_export, "observe_and_verify", fake_observe)
+    results_root = tmp_path / "results"
+    assert limn_export.export(tmp_path, tmp_path, tmp_path, results_root, top_k=1) == 0
+    staged = _json.loads(capsys.readouterr().out)["payload"]
+    destination = limn_publish.publish_payload(Path(staged), results_root)
+    artifact = ResultRun.model_validate_json(destination.read_text())
+    assert artifact.run.data_kind == "mock"
+    assert artifact.run.run_id.startswith("dev-")
+
+
+def test_the_publisher_refuses_a_parity_mismatch(monkeypatch, tmp_path, capsys):
+    """The publication contract still withholds an artifact whose parity failed."""
+    import json as _json
+
+    import pytest as _pytest
+
+    import workbench.replay.limn_export as limn_export
+    import workbench.replay.limn_publish as limn_publish
+    from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
+
+    query = ObservedQuery(annotation_index=0, reference_id="r", target_id="t",
+                          raw_captions=("a", "b"), model_input_text="a and b", target_rank=2,
+                          top_results=((1, "d", 0.5), (2, "t", 0.4)), category="dress")
+    observation = ObservedCategory(category="dress", gallery_size=3, eligible_count=2, queries=(query,))
+    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
+    monkeypatch.setattr(limn_export, "observe_and_verify",
+                        lambda category, *a, **k: (1.0, observation, ("dress_r1: 33 != 1",)))
+    results_root = tmp_path / "results"
+    limn_export.export(tmp_path, tmp_path, tmp_path, results_root, top_k=1,
+                       run_id="20260101T000000000000Z_limn_ckpt_parity99")
+    staged = _json.loads(capsys.readouterr().out)["payload"]
+    with _pytest.raises(Exception):
+        limn_publish.publish_payload(Path(staged), results_root)

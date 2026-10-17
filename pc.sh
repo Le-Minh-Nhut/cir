@@ -1529,7 +1529,23 @@ validate_and_summarize() {
 
     local verify_out verify_rc=0
     verify_out="$(run_verifier_in_container --run-id "$run_id" --model "$model" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || verify_rc=$?
-    python3 - <<'PYDOC' "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" "${FINAL_RUN_PROOF_UNAVAILABLE:-0}"
+    # The run's own report is the only place its per-query state is recorded, so the summary reads it
+    # rather than inferring readiness from the aggregate verdict alone.
+    FINAL_RUN_REPORT_PATH="$(python3 -c "
+import json, sys
+out = sys.argv[1]
+for line in reversed(out.strip().splitlines()):
+    line = line.strip()
+    if line.startswith('{') and line.endswith('}'):
+        try:
+            print((json.loads(line).get('report_path') or ''))
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except Exception:
+            pass
+" "$verify_out" 2>/dev/null || true)"
+    python3 - <<'PYDOC' "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" "${FINAL_RUN_PROOF_UNAVAILABLE:-0}" "${FINAL_RUN_REPORT_PATH:-}"
 import json, sys
 
 verify_out = sys.argv[1]
@@ -1559,6 +1575,21 @@ if result is None:
     sys.exit(f"Lỗi: verify_run.py không trả về JSON hợp lệ (exit code {verify_rc}):\n{verify_out}")
 
 verified = bool(result.get("is_research_evidence", False))
+
+# The per-query axis is a SEPARATE achievement from the aggregate. A model that declares an observer
+# is only fully pilot-ready when its Top-K artifact was exported; a model that declares none is
+# aggregate-only BY DESIGN and must not be reported as a failure. Read from the aggregate report
+# rather than guessed, because the report is what the run itself recorded.
+per_query_capability = None
+per_query_state = None
+try:
+    with open(sys.argv[8] if len(sys.argv) > 8 else "", "r", encoding="utf-8") as fh:
+        _report = json.load(fh)
+    per_query_capability = _report.get("per_query_capability")
+    per_query_state = _report.get("per_query_state")
+    _per_query_reason = _report.get("per_query_export_reason") or ""
+except Exception:
+    _per_query_reason = ""
 # Both lists, because the refusal can come from either question: an incomplete/corroboration
 # failure is in `reasons`, while a run that executed correctly but is a self-test (or has no
 # publishable comparison) is refused only by `evidence_reasons`.
@@ -1656,11 +1687,39 @@ print(f"  Recall@10 : {fmt_val(obs_metrics.get('r10'))}")
 print(f"  Recall@50 : {fmt_val(obs_metrics.get('r50'))}")
 print(f"  Mean      : {fmt_val(obs_metrics.get('mean'))}")
 print("-" * 80)
+if per_query_state == "CAPABILITY_ABSENT" or per_query_capability is None:
+    print(f"Phân tích theo truy vấn  : KHÔNG HỖ TRỢ CHO MÔ HÌNH NÀY (aggregate-only; không phải lỗi)")
+elif per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED":
+    print(f"Phân tích theo truy vấn  : ĐÃ XUẤT Top-K — CHỜ TRÌNH XÁC THỰC chứng thực")
+elif per_query_state == "PER_QUERY_VERIFIED":
+    print(f"Phân tích theo truy vấn  : ĐÃ XUẤT + ĐÃ CHỨNG THỰC (Top-K + phân tích khả dụng)")
+else:
+    print(f"Phân tích theo truy vấn  : THẤT BẠI — {per_query_capability} được khai báo nhưng không")
+    print(f"                           có artifact Top-K nào được xuất. Lý do: {_per_query_reason}")
+    print(f"                           Kết quả TỔNG HỢP ở trên vẫn hợp lệ và đã được lưu.")
 print(f"File báo cáo     : {report_path}")
+print("-" * 80)
+if per_query_capability and per_query_state in (None, "PER_QUERY_EXPORT_FAILED"):
+    print("KẾT LUẬN: TỔNG HỢP ĐẠT — PILOT ĐẦY ĐỦ CHƯA SẴN SÀNG.")
+    print("  Đánh giá chính thức đã hoàn tất và được chứng thực, nhưng mô hình này KHAI BÁO có")
+    print("  trình quan sát theo truy vấn và nó đã KHÔNG xuất được artifact Top-K. Phân tích")
+    print("  thất bại theo từng truy vấn (Top-K, so sánh mô hình, Jaccard) CHƯA dùng được.")
+elif per_query_capability and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED":
+    print("KẾT LUẬN: TỔNG HỢP ĐẠT — PILOT ĐẦY ĐỦ chờ chứng thực artifact Top-K.")
+else:
+    print("KẾT LUẬN: SẴN SÀNG CHO PILOT (theo khả năng đã khai báo của mô hình).")
 print("Ghi chú khoa học :")
 print("  Độ lệch số học so với bài báo gốc (nếu có) phản ánh kết quả đo đạc thực")
 print("  nghiệm trên runtime của thiết bị, là phát hiện nghiên cứu (research finding).")
 print("================================================================================")
+
+# The exit status is what a script or a CI step reads, so it must carry the same meaning as the
+# conclusion above: an aggregate-only model is complete, while a model that DECLARED a per-query
+# observer and exported nothing has NOT delivered the full pilot this run was asked for.
+if per_query_capability and per_query_state in (None, "PER_QUERY_EXPORT_FAILED"):
+    sys.exit(3)
+if per_query_capability and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED":
+    sys.exit(4)
 PYDOC
 }
 

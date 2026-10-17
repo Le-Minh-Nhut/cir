@@ -168,14 +168,27 @@ class ResultRun(BaseModel):
             # A category-specific bound when one is declared, otherwise the historical scalar. A
             # dress rank of 300 is not excused by a larger toptee gallery.
             category_size = sizes[query.category] if sizes is not None else self.run.gallery_size
-            effective_depth = min(self.run.top_k_saved, category_size)
+            # The saved depth is bounded by the ELIGIBLE candidate count, not the raw gallery: under
+            # an excluded protocol the masked reference is not a retrievable candidate, so an
+            # artifact with `gallery_size <= top_k_saved` correctly stores one fewer result than the
+            # raw size implies. Using the raw size here rejected exactly that artifact (P2).
+            declared_eligible = (self.run.category_eligible_counts or {}).get(query.category)
+            if declared_eligible is not None:
+                depth_bound = min(category_size, declared_eligible)
+            elif self.run.protocol_id in REFERENCE_EXCLUDED_PROTOCOLS:
+                depth_bound = category_size - 1
+            else:
+                depth_bound = category_size
+            effective_depth = min(self.run.top_k_saved, max(depth_bound, 0))
             if len(query.top_results) != effective_depth:
-                raise ValueError("query top_results must match effective saved retrieval depth")
+                raise ValueError(
+                    f"query top_results must match the effective saved retrieval depth "
+                    f"({effective_depth}); stored {len(query.top_results)}")
             # The ELIGIBLE bound when the protocol excludes the reference: under an excluded
             # protocol the reference still occupies a rank slot in the native matrix, so the true
             # candidate count is size-1 and the last slot is NOT retrievable. Checking only the raw
             # gallery size accepted a phantom rank equal to the masked reference's position (F-15).
-            eligible = (self.run.category_eligible_counts or {}).get(query.category)
+            eligible = declared_eligible
             if eligible is not None:
                 bound = min(category_size, eligible)
             elif self.run.protocol_id in REFERENCE_EXCLUDED_PROTOCOLS:

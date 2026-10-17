@@ -82,8 +82,15 @@ def build_result_run(observed_categories: list[ObservedCategory], *, run_id: str
         # category-specific bound, so the largest is declared and each query is checked against its
         # own category's size here — a dress rank of 300 is not excused by a larger toptee gallery.
         for query in category.queries:
-            if query.target_rank > category.gallery_size:
-                raise ValueError(f"{query.query_id}: target_rank exceeds its category gallery size")
+            # Bound by the ELIGIBLE count, not the raw gallery: under an excluded protocol the masked
+            # reference is not a retrievable candidate, so a rank equal to the raw size would only
+            # exist by counting it. (A looser check here let a value through that the schema validator
+            # then rejected, which is the kind of late failure that hides its own cause.)
+            bound = min(category.gallery_size, category.eligible_count)
+            if query.target_rank > bound:
+                raise ValueError(
+                    f"{query.query_id}: target_rank {query.target_rank} exceeds the eligible "
+                    f"candidate count for {category.category} ({bound})")
             queries.append(QueryResult(
                 query_id=query.query_id,
                 category=query.category,

@@ -75,16 +75,22 @@ def get_runs(run_ids: list[str], database_path: Path | None = None) -> list[dict
     return [records[run_id] for run_id in run_ids]
 
 
-def _query_filters(run_id: str, query_id: str | None, category: str | None, failed_at: int | None, min_rank: int | None, max_rank: int | None) -> tuple[str, list[Any]]:
+def _query_filters(run_id: str, query_id: str | None, category: str | None, failed_at: int | None, min_rank: int | None, max_rank: int | None, passed_at: int | None = None) -> tuple[str, list[Any]]:
     filters = ["run_id = ?"]
     params: list[Any] = [run_id]
     for column, value in (("query_id", query_id), ("category", category)):
         if value is not None:
             filters.append(f"{column} = ?")
             params.append(value)
+    # `failed_at`/`passed_at` compare the AUTHORITATIVE `target_rank`, which is a position in the
+    # complete eligible ranking -- never the length of a saved Top-K list. A run that stores fewer
+    # retrieved images than another still classifies every query identically.
     if failed_at is not None:
         filters.append("target_rank > ?")
         params.append(failed_at)
+    if passed_at is not None:
+        filters.append("target_rank <= ?")
+        params.append(passed_at)
     if min_rank is not None:
         filters.append("target_rank >= ?")
         params.append(min_rank)
@@ -109,13 +115,25 @@ def _top_results(connection, run_id: str, query_ids: list[str], k: int | None = 
     return output
 
 
-def query_page(run_id: str, *, query_id: str | None = None, category: str | None = None, failed_at: int | None = None, min_rank: int | None = None, max_rank: int | None = None, order: str = "worst", limit: int = 50, offset: int = 0, database_path: Path | None = None) -> dict[str, Any]:
+def query_page(run_id: str, *, query_id: str | None = None, category: str | None = None, failed_at: int | None = None, min_rank: int | None = None, max_rank: int | None = None, order: str = "worst", limit: int = 50, offset: int = 0, database_path: Path | None = None, passed_at: int | None = None) -> dict[str, Any]:
     if not 1 <= limit <= 200 or offset < 0:
         raise WorkbenchError("invalid_pagination", "limit must be 1..200 and offset must be non-negative.", {"limit": limit, "offset": offset})
     if order not in {"worst", "best"}:
         raise WorkbenchError("invalid_query_order", "order must be worst or best.", {"order": order})
+    # The two threshold filters are complements: "fails at K" is exactly "does not pass at K", so
+    # accepting both would express an empty or contradictory selection rather than a question.
+    if failed_at is not None and passed_at is not None:
+        raise WorkbenchError("conflicting_rank_filter",
+                             "failed_at and passed_at are mutually exclusive; a query cannot both "
+                             "fail and pass at a threshold.",
+                             {"failed_at": failed_at, "passed_at": passed_at})
+    for name, value in (("failed_at", failed_at), ("passed_at", passed_at)):
+        if value is not None and not 1 <= value <= 10000:
+            raise WorkbenchError("invalid_rank_threshold",
+                                 f"{name} must be a positive rank between 1 and 10000.",
+                                 {name: value})
     get_run(run_id, database_path)
-    where, params = _query_filters(run_id, query_id, category, failed_at, min_rank, max_rank)
+    where, params = _query_filters(run_id, query_id, category, failed_at, min_rank, max_rank, passed_at)
     connection = _connect(database_path)
     try:
         total = connection.execute(f"SELECT COUNT(*) FROM queries WHERE {where}", params).fetchone()[0]

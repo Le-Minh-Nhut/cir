@@ -24,7 +24,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.replay.limn import (LIMN_CHECKPOINTS, MODEL, native_category, preflight)
 from workbench.replay.limn_observer import ObservedCategory, cross_check_with_native, observe_category
-from workbench.replay.publication import development_run_id, publish_observed_categories
+# Deliberately NOT imported here: `publication` pulls the pydantic-backed canonical schema, and this
+# module runs under the MODEL interpreter, which is provisioned from the model's own requirements and
+# does not contain pydantic. Importing it made the exporter crash with `ModuleNotFoundError: No module
+# named 'pydantic'` on a clean LIMN environment, so the aggregate succeeded while every per-query
+# export failed (P1). This module now emits plain JSON and the PARENT publishes it -- see
+# `limn_observer_io` for the interchange format.
 
 DEFAULT_TOP_K = 200
 
@@ -47,22 +52,71 @@ def observe_and_verify(category: str, checkpoint_root: Path, dataset_root: Path,
     return metrics.get(f"{category}_r1"), observed, mismatches
 
 
+def observation_payload(observed: list[ObservedCategory], mismatches: dict[str, tuple[str, ...]],
+                        *, run_id: str, top_k: int) -> dict:
+    """The interchange between the model interpreter and the publishing interpreter.
+
+    Everything here is plain JSON-serialisable data. It exists so the observer never has to import
+    the canonical schema: this side runs in the model's environment, which has torch/numpy but not
+    pydantic, and importing pydantic there made every export fail on a clean LIMN environment.
+    """
+    categories = []
+    for observation in observed:
+        categories.append({
+            "category": observation.category,
+            "gallery_size": observation.gallery_size,
+            "eligible_count": observation.eligible_count,
+            "queries": [
+                {
+                    "annotation_index": query.annotation_index,
+                    "reference_id": query.reference_id,
+                    "target_id": query.target_id,
+                    "raw_captions": list(query.raw_captions),
+                    "model_input_text": query.model_input_text,
+                    "target_rank": query.target_rank,
+                    "top_results": [{"rank": rank, "image_id": image_id, "score": score}
+                                    for rank, image_id, score in query.top_results],
+                }
+                for query in observation.queries
+            ],
+        })
+    return {
+        "artifact_type": "limn_observation_payload",
+        "schema_version": 1,
+        "model_id": "limn",
+        "method_name": "LIMN",
+        "checkpoint_id": "base_iter0_all_categories",
+        "protocol_id": "fashioniq_val_split",
+        "run_id": run_id,
+        "top_k": top_k,
+        "upstream_commit": MODEL["upstream_commit_sha"],
+        "checkpoint_members": {
+            category: {"filename": LIMN_CHECKPOINTS[category]["filename"],
+                       "checkpoint_id": LIMN_CHECKPOINTS[category]["checkpoint_id"],
+                       "sha256": LIMN_CHECKPOINTS[category]["expected_sha256"]}
+            for category in CATEGORIES
+        },
+        "instrumentation_parity": ("INSTRUMENTATION_PARITY_MISMATCH" if mismatches
+                                   else "INSTRUMENTATION_PARITY_VERIFIED"),
+        "instrumentation_mismatches": {name: list(items) for name, items in mismatches.items()},
+        "categories": categories,
+    }
+
+
 def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results_root: Path,
            top_k: int = DEFAULT_TOP_K, run_id: str | None = None,
            command_digest: str | None = None, environment_digest: str | None = None,
            runtime_adaptation: str | None = None) -> int:
-    """Export the canonical per-query artifact for the FULL three-category bundle.
+    """OBSERVE the per-query rankings and write a plain-JSON payload for the parent to publish.
 
-    ``run_id`` is the AUTHORITATIVE execution identity (``evaluate_models.make_run_id``). When the
-    parent supplies it, the artifact is bound to that invocation; when it is absent the caller must
-    be a standalone development run, and the identity is named as development so it can never be
-    mistaken for recorded evidence (F-09).
+    This function runs under the MODEL interpreter, so it does only what that environment supports:
+    load the checkpoint through the native loader, re-derive the rankings, cross-check them against
+    the native aggregate, and write the result. It does NOT validate or publish a canonical artifact
+    -- that is the workbench interpreter's job (`workbench.replay.limn_publish`), which is where
+    pydantic lives.
 
-    ``command_digest`` and ``environment_digest`` are the authoritative digests of the invocation
-    that ran the AGGREGATE evaluation. The observer itself runs a different command, so deriving
-    these locally would record the wrong invocation -- and a locally derived value is exactly the
-    fabricated provenance F-11 forbids. They are therefore passed in by the parent that owns them,
-    and their absence keeps the artifact out of the verified state.
+    ``run_id`` is the authoritative execution identity from the orchestrator. Without it the payload
+    is marked as a development run and the publisher will refuse to call it evidence.
     """
     problems = preflight(checkpoint_root, dataset_root, source_root, CATEGORIES)
     if problems:
@@ -79,84 +133,28 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
         if category_mismatches:
             mismatches[category] = category_mismatches
 
-    identity = run_id or development_run_id(model_id="limn",
-                                            checkpoint_id="base_iter0_all_categories",
-                                            protocol_id="fashioniq_val_split")
-    status = {
-        "model_id": "limn", "protocol": "fashioniq_val_split", "top_k": top_k,
-        "run_id": identity,
-        "categories": list(CATEGORIES),
-        "instrumentation_parity": ("INSTRUMENTATION_PARITY_MISMATCH" if mismatches
-                                   else "INSTRUMENTATION_PARITY_VERIFIED"),
-        "instrumentation_mismatches": {category: list(items) for category, items in mismatches.items()},
-        "publication": ("WITHHELD_ON_PARITY_MISMATCH" if mismatches else "PENDING_PC_GPU_VALIDATION"),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
-    if mismatches:
-        # The native aggregate is untouched and already recorded by the aggregate path; the
-        # per-query artifact is withheld because it does not reproduce it.
-        for category, items in sorted(mismatches.items()):
-            for item in items:
-                print(f"[BLOCKED] QUERY_EXPORT_PARITY_MISMATCH {category}: {item}", file=sys.stderr)
-        print(json.dumps(status, separators=(",", ":")))
-        return 1
+    identity = run_id or f"dev-limn-base_iter0_all_categories-fashioniq_val_split"
+    payload = observation_payload(observed, mismatches, run_id=identity, top_k=top_k)
+    payload["command_digest"] = command_digest
+    payload["environment_digest"] = environment_digest
+    payload["runtime_adaptation"] = runtime_adaptation
 
-    # Every member of the bundle, with its verified digest: one scalar could only name dress, so a
-    # swapped or missing shirt/toptee weight would change nothing (F-12).
-    bundle = {
-        category: {"filename": LIMN_CHECKPOINTS[category]["filename"],
-                   "checkpoint_id": LIMN_CHECKPOINTS[category]["checkpoint_id"],
-                   "sha256": LIMN_CHECKPOINTS[category]["expected_sha256"]}
-        for category in CATEGORIES
-    }
-    category_checkpoint_ids = {category: LIMN_CHECKPOINTS[category]["checkpoint_id"]
-                               for category in CATEGORIES}
+    results_root.mkdir(parents=True, exist_ok=True)
+    staged = results_root / f".observation-{identity}.payload.json"
+    staged.write_text(json.dumps(payload), encoding="utf-8")
 
-    def _manifest_digest(members: dict[str, dict]) -> str:
-        """The same rule `evaluate_models.manifest_digest` uses: filename + content digest."""
-        import hashlib as _hashlib
-        identity_map = {name: {"filename": member.get("filename") or name,
-                               "sha256": member.get("sha256")}
-                        for name, member in sorted(members.items())}
-        return _hashlib.sha256(
-            json.dumps(identity_map, sort_keys=True).encode("utf-8")).hexdigest()
-
-    bundle_digest = _manifest_digest(bundle)
-    checkpoint = LIMN_CHECKPOINTS["dress"]
-    aggregate = {"macro_r10": None, "macro_r50": None, "macro_mean": None}
-    r1_by_category = {observation.category: observation.recall(1) for observation in observed}
-    # The macro aggregate is the arithmetic mean of the per-category values, which is what
-    # `macro_aggregate` computes for the native results; derived here from the observed rankings so
-    # the artifact never carries a number no ranking supports.
-    r10 = sum(observation.recall(10) for observation in observed) / len(observed)
-    r50 = sum(observation.recall(50) for observation in observed) / len(observed)
-    aggregate.update({"macro_r10": r10, "macro_r50": r50, "macro_mean": (r10 + r50) / 2})
-    del r1_by_category
-
-    destination = publish_observed_categories(
-        observed, results_root, parity_mismatches=mismatches,
-        run_id=identity,
-        model_id="limn", method_name="LIMN", checkpoint_id="base_iter0_all_categories",
-        protocol_id="fashioniq_val_split", top_k_saved=top_k,
-        source_commit=MODEL["upstream_commit_sha"], checkpoint_sha256=checkpoint["expected_sha256"],
-        checkpoint_source=checkpoint.get("source"),
-        command_digest=command_digest, environment_digest=environment_digest,
-        runtime_adaptation=runtime_adaptation,
-        bundle_manifest_digest=bundle_digest, checkpoint_bundle=bundle,
-        category_checkpoint_ids=category_checkpoint_ids,
-        instrumentation_parity="INSTRUMENTATION_PARITY_VERIFIED",
-        data_kind="experiment" if run_id else "mock",
-        reproduced_metrics=aggregate,
-    )
     # The JSON is the machine-readable contract the orchestrator parses, and it is emitted as ONE
-    # compact line so a caller can identify it even if a compiled dependency writes to fd 1. There is
-    # exactly one such line per run; everything human-readable goes to stderr. (Printing a note after
-    # the JSON made the parent's parse fail with "Extra data", so the exporter appeared to succeed
-    # while the parent recorded no artifact.)
-    print(json.dumps({**status, "published": str(destination)}, separators=(",", ":")))
+    # compact line so a caller can identify it even if a compiled dependency writes to fd 1.
+    print(json.dumps({
+        "model_id": "limn", "run_id": identity, "protocol": "fashioniq_val_split", "top_k": top_k,
+        "instrumentation_parity": payload["instrumentation_parity"],
+        "instrumentation_mismatches": payload["instrumentation_mismatches"],
+        "payload": str(staged),
+        "queries": sum(len(category["queries"]) for category in payload["categories"]),
+    }, separators=(",", ":")))
     print("[PENDING] PC GPU validation: instrumentation parity was checked against this run's own "
           "native aggregate, not against a real target-GPU inference", file=sys.stderr)
-    return 0
+    return 0 if not mismatches else 1
 
 
 def main(argv: list[str] | None = None) -> int:

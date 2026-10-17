@@ -69,7 +69,7 @@ def test_schema_rejects_top_results_beyond_gallery() -> None:
 def test_schema_rejects_truncated_or_inconsistent_saved_rankings() -> None:
     payload = build_mock_runs()[0].model_dump()
     payload["queries"][0]["top_results"].pop()
-    with pytest.raises(ValueError, match="must match effective saved retrieval depth"):
+    with pytest.raises(ValueError, match="must match the effective saved retrieval depth"):
         ResultRun.model_validate(payload)
 
     payload = build_mock_runs()[0].model_dump()

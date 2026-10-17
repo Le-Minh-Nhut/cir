@@ -863,6 +863,34 @@ def checkpoint_path(model_id: str, checkpoint: dict[str, Any], root: Path | None
     return base / checkpoint["filename"]
 
 
+def checkpoint_member_root(checkpoint: Path, members: list[dict[str, Any]] | None = None,
+                           artifact_type: str | None = None,
+                           is_multi_member: bool | None = None) -> Path:
+    """The directory the checkpoint's MEMBERS occupy -- one rule for every consumer.
+
+    ``checkpoint_path`` resolves a multi-member artifact (LIMN's three per-category weights) to the
+    directory holding them, and a single-artifact selection to that file. Both shapes need the same
+    answer here, and the answer differs per shape:
+
+    * a multi-member bundle keeps its members as SIBLINGS inside the resolved directory, so the
+      member root IS that directory -- ``checkpoint.parent`` would name the whole checkpoint root and
+      every member lookup would come up one level too high;
+    * a single checkpoint is itself the one member, so its members live in ``checkpoint.parent``.
+
+    This was duplicated as slightly different expressions in the adapter and in the observer, and the
+    observer's copy was wrong for bundles. One function, so it cannot drift again.
+    """
+    if is_multi_member is None:
+        is_multi_member = artifact_type in ("category_specific_whole_models", "run_directory",
+                                            "bundle_directory", "bundle_placeholder")
+    if artifact_type is not None or is_multi_member:
+        # The declaration answers, so the result does not change when the weights arrive.
+        return checkpoint if is_multi_member else checkpoint.parent
+    # No declaration available (a bare path): fall back to the filesystem, which is the best
+    # available answer and is what a caller passing only a path can mean.
+    return checkpoint if checkpoint.is_dir() else checkpoint.parent
+
+
 def sha256_file(path: Path, required_files: list[str] | None = None) -> str:
     """Hash file bytes for single files, or sorted relative-path/content pairs for directories.
 
