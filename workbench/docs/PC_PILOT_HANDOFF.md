@@ -5,6 +5,14 @@ trên máy dev, cái gì chỉ có thể kiểm trên máy đích, và cách đ�
 
 **Chưa từng chạy trên RTX 5070 Ti.** Không có chứng thư GPU nào trong repo.
 
+SHA bàn giao đã kiểm thử: **`84ec6f1`**. Lấy đúng cây đó:
+
+```bash
+git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
+git checkout research/cir-failure-workbench
+git reset --hard 84ec6f1
+```
+
 ## 1. Lệnh chính
 
 ```bash
@@ -46,6 +54,10 @@ như tiến trình con, rồi **tự đọc lại bytes** để tính digest —
 | `PER_QUERY_EXPORT_FAILED` | model CÓ khai báo observer và nó không xuất được gì | **3** |
 | `PER_QUERY_EXPORTED_UNVERIFIED` | đã xuất artifact, verifier chưa chứng thực | **4** |
 | `PER_QUERY_VERIFIED` | đã xuất + verifier đã chứng thực | 0 |
+| (không đọc được report) | launcher không đọc được điều lượt chạy đã ghi — **không** được coi là aggregate-only | **5** |
+
+Exit code 5 nghĩa là launcher **không biết** — nó không được phép tuyên bố "mô hình này không có trình
+quan sát" khi sự thật là nó không đọc được report. Kiểm tra đường dẫn `HOST_WORKBENCH_ARTIFACTS_ROOT`.
 
 Exit code 3 nghĩa là: *tổng hợp đạt và hợp lệ, nhưng pilot ĐẦY ĐỦ chưa sẵn sàng* — phân tích theo
 truy vấn chưa dùng được. Kết quả tổng hợp, sổ cái và completion proof **vẫn được giữ nguyên**.
