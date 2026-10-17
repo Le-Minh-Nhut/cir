@@ -44,6 +44,12 @@ SCRIPT = Path(os.environ.get("RELEASE_VERIFY_SCRIPT")
 PROBE_MODEL = "cap_record_probe"
 PROBE_VARIABLE = "CAP_RECORD_PROBE_PYTHON"
 SANDBOX_KEY = "sandbox-operator-ledger-key"
+#: The shipped-release-target identity, declared in the sandbox registry so tests about the
+#: model-evidence dimensions can bind their evidence to the same model their run is about.
+TARGET_MODEL_ID = "limn"
+TARGET_PROTOCOL_ID = "fashioniq_val_split"
+TARGET_VARIABLE = "SANDBOX_TARGET_PYTHON"
+TARGET_PIN = "d" * 40
 
 # --------------------------------------------------------------------------- script extraction
 
@@ -103,7 +109,11 @@ def probe_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sandbox: 
     registry = tmp_path / "registry.yaml"
     registry.write_text(textwrap.dedent(f"""\
         schema_version: 1
-        protocols: {{}}
+        protocols:
+          {TARGET_PROTOCOL_ID}:
+            label: Sandbox target protocol
+            literature_split_label: val
+            evaluation_noise_pct: 0
         models:
           - model_id: {PROBE_MODEL}
             native_protocol: null
@@ -117,13 +127,67 @@ def probe_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sandbox: 
               required_imports: [json]
             checkpoint_variants: []
             checkpoint_bundles: []
+          # The shipped release target, declared so tests about the model-evidence dimensions can
+          # bind their evidence to it. Model-evidence dimensions are bound to the declared target,
+          # so a capability record for the probe model is deliberately NOT this model's evidence.
+          - model_id: {TARGET_MODEL_ID}
+            method_name: Sandbox target
+            native_protocol: {TARGET_PROTOCOL_ID}
+            supported_protocols: [{TARGET_PROTOCOL_ID}]
+            literature_split_label: val
+            source_available: true
+            source_dir: sandbox_target
+            fashioniq_layout: fashioniq_standard
+            upstream_commit_sha: {TARGET_PIN}
+            reproduction_status: VERIFIED
+            environment_required: true
+            environment:
+              python_env_var: {TARGET_VARIABLE}
+              cuda: "12.4"
+              required_imports: [json]
+            checkpoint_variants:
+              - checkpoint_id: base_iter0_dress
+                filename: 0_dress_best_model.pt
+                evaluation_noise_pct: 0
+                checkpoint_mapping_status: VERIFIED_METADATA
+                status: URL_VERIFIED
+              - checkpoint_id: base_iter0_shirt
+                filename: 0_shirt_best_model.pt
+                evaluation_noise_pct: 0
+                checkpoint_mapping_status: VERIFIED_METADATA
+                status: URL_VERIFIED
+              - checkpoint_id: base_iter0_toptee
+                filename: 0_toptee_best_model.pt
+                evaluation_noise_pct: 0
+                checkpoint_mapping_status: VERIFIED_METADATA
+                status: URL_VERIFIED
+            checkpoint_bundles:
+              - bundle_id: base_iter0_all_categories
+                required_checkpoint_ids: [base_iter0_dress, base_iter0_shirt, base_iter0_toptee]
+                structure: category_specific_whole_models
+                mapping_status: VERIFIED_METADATA
+                notes: sandbox target bundle
         """), encoding="utf-8")
     monkeypatch.setenv("WORKBENCH_REGISTRY_PATH", str(registry))
     monkeypatch.setenv(PROBE_VARIABLE, str(environment / "bin" / "python"))
+    monkeypatch.setenv(TARGET_VARIABLE, str(environment / "bin" / "python"))
     runtime.forget_environment()
     runtime.forget_gpu_capability()
     model = next(m for m in load_registry()["models"] if m["model_id"] == PROBE_MODEL)
     return model, str(environment / "bin" / "python"), resolve_config()
+
+@pytest.fixture()
+def target_environment(probe_environment):
+    """The shipped release target as this sandbox declares it, plus its interpreter."""
+    from workbench.backend.registry import load_registry
+
+    _, interpreter, config = probe_environment
+    model = next(m for m in load_registry()["models"] if m["model_id"] == TARGET_MODEL_ID)
+    return model, interpreter, config
+
+def _target_env_for_target() -> dict[str, str]:
+    """`os.environ` with the release target set to the sandbox's declared target identity."""
+    return _target_env(TARGET_MODEL_ID, "base_iter0_all_categories", TARGET_PROTOCOL_ID)
 
 def _genuine_record(model: dict, config, interpreter: str, *, record=None) -> dict:
     """A capability record exactly as the authorized probe writes it for this environment.
@@ -160,6 +224,23 @@ def _scan(env: dict[str, str]) -> tuple[dict, subprocess.CompletedProcess]:
 
 def _gpu_status(report: dict) -> str:
     return report["dimensions"]["GPU_RUNTIME"]["status"]
+
+#: Model-evidence dimensions are bound to the declared release target, and the sandbox's only
+#: model is the capability probe. Tests that DO want those dimensions to reach PASS must say so;
+#: the default target stays the shipped artifact so no test accidentally relaxes the binding.
+TARGET_MODEL_ENV = "WORKBENCH_RELEASE_TARGET_MODEL"
+TARGET_CHECKPOINT_ENV = "WORKBENCH_RELEASE_TARGET_CHECKPOINT"
+TARGET_PROTOCOL_ENV = "WORKBENCH_RELEASE_TARGET_PROTOCOL"
+
+def _target_env(model_id: str, checkpoint_id: str | None = None,
+                protocol_id: str | None = None) -> dict[str, str]:
+    """`os.environ` with the release target pointed at the model under test."""
+    env = {**os.environ, TARGET_MODEL_ENV: model_id}
+    if checkpoint_id is not None:
+        env[TARGET_CHECKPOINT_ENV] = checkpoint_id
+    if protocol_id is not None:
+        env[TARGET_PROTOCOL_ENV] = protocol_id
+    return env
 
 # --------------------------------------------------------------------------- P1-4 GPU records
 
@@ -232,13 +313,40 @@ def test_a_genuine_record_for_this_environment_is_accepted(probe_environment, sa
     path = runtime.gpu_capability_path(config, runtime._gpu_capability_key(model))
     assert path.is_file()
 
-    report, completed = _scan(os.environ)
+    # The declared release target must be the model this record was probed for: the dimension is
+    # now bound to the target, so the positive control names it instead of accepting *any* model's
+    # verified record as this host's capability evidence.
+    report, completed = _scan(_target_env(PROBE_MODEL))
 
     assert _gpu_status(report) == "PASS", (report["dimensions"], completed.stderr)
     # The scan block was only emitted on degradation before this fix, so the positive control
     # reads it defensively: it proves the verdict, which is what the release acts on.
     assert report.get("gpu_capability_scan", {}).get("real_gpu", True) is True
     assert report.get("gpu_capability_scan", {}).get("status", "VERIFIED") == "VERIFIED"
+
+def test_a_verified_record_for_another_model_does_not_certify_the_target(
+        probe_environment, sandbox: Path):
+    """DEFECT C (reproduced first): GPU_RUNTIME accepted *any* model's capability record.
+
+    `_expected_key` folds the model's interpreter and dependency contract into the capability key,
+    so a record is evidence for exactly one model. The scan nevertheless set `real_gpu` on the
+    first fully verified record it found, which let model A's probe certify a release of model B.
+    Here the record is the genuine article for the probe model and the declared target is the
+    shipped LIMN artifact: it must be reported as off-target, not promoted.
+    """
+    from workbench.backend import runtime
+
+    model, interpreter, config = probe_environment
+    _genuine_record(model, config, interpreter)
+    assert runtime.gpu_capability_path(config, runtime._gpu_capability_key(model)).is_file()
+
+    report, completed = _scan(os.environ)          # no target override: the shipped default
+
+    assert report["release_target"]["model_id"] != PROBE_MODEL
+    assert _gpu_status(report) == "PENDING", (report["dimensions"], completed.stderr)
+    assert report["gpu_capability_scan"]["real_gpu"] is False
+    reasons = "; ".join(report["gpu_capability_scan"]["unverified"])
+    assert "different model than the declared release target" in reasons, reasons
 
 def test_a_record_for_another_host_is_not_evidence(probe_environment, sandbox: Path):
     """(c2) The same signed record is bound to the host it was probed on: relabelling its host
@@ -269,7 +377,7 @@ def test_an_unreadable_artifact_does_not_downgrade_readable_evidence(probe_envir
     poisoned = sandbox / "gpu_capabilities" / "leftover.json"
     poisoned.write_bytes(b"")
 
-    report, completed = _scan(os.environ)
+    report, completed = _scan(_target_env(PROBE_MODEL))
 
     assert _gpu_status(report) == "PASS", (report["dimensions"], completed.stderr)
     assert report["gpu_capability_scan"]["real_gpu"] is True
@@ -419,16 +527,17 @@ def _create_benchmark_run(
     corrupt_proof: bool = False,
     ledger_return_code: int = 0,
     ledger_invocation_status: str = "INVOCATION_COMPLETED",
+    model_id: str = TARGET_MODEL_ID,
+    checkpoint_id: str = "base_iter0_all_categories",
+    protocol_id: str = TARGET_PROTOCOL_ID,
 ) -> dict:
     from workbench.backend.operator_config import resolve_config
     from workbench.scripts import evaluate_models as evaluator, verify_run
 
     config = resolve_config()
-    model_id = "limn"
-    checkpoint_id = "base_iter0_all_categories"
-    protocol_id = "fashioniq_val_split"
-
-    ckpt_dir = config.WORKBENCH_CHECKPOINT_ROOT / "limn"
+    # The run's own identity is a parameter so a test can build a legitimate run for an identity
+    # that is NOT the declared release target -- the combination DEFECT C is about.
+    ckpt_dir = config.WORKBENCH_CHECKPOINT_ROOT / model_id
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     for name in ("0_dress_best_model.pt", "0_shirt_best_model.pt", "0_toptee_best_model.pt"):
         member = ckpt_dir / name
@@ -536,13 +645,18 @@ def _create_benchmark_run(
     return report_data
 
 
-def test_defect_b_a_synthetic_only_evidence_does_not_reach_release_ready(probe_environment, sandbox: Path):
-    """(a) Synthetic-only evidence does not reach RELEASE_READY; MODEL_INFERENCE remains PENDING."""
-    model, interpreter, config = probe_environment
+def test_defect_b_a_synthetic_only_evidence_does_not_reach_release_ready(target_environment, sandbox: Path):
+    """(a) Synthetic-only evidence does not reach RELEASE_READY; MODEL_INFERENCE remains PENDING.
+
+    The evidence is for the DECLARED TARGET: the model-evidence dimensions are bound to it, so a
+    synthetic run for any other identity would be excluded for the wrong reason and the test
+    would pass without exercising its subject.
+    """
+    model, interpreter, config = target_environment
     _genuine_record(model, config, interpreter)
     _create_benchmark_run(sandbox, "run_syn_fixture", is_synthetic=True, data_kind="mock")
 
-    report, completed = _scan(os.environ)
+    report, completed = _scan(_target_env_for_target())
 
     assert completed.returncode == 0
     assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PASS"
@@ -552,12 +666,12 @@ def test_defect_b_a_synthetic_only_evidence_does_not_reach_release_ready(probe_e
     assert report["verdict"] == "GPU_VALIDATION_PENDING"
 
 
-def test_defect_b_b_verified_gpu_record_alone_does_not_reach_release_ready(probe_environment, sandbox: Path):
+def test_defect_b_b_verified_gpu_record_alone_does_not_reach_release_ready(target_environment, sandbox: Path):
     """(b) A verified GPU record alone does not reach RELEASE_READY (MODEL_INFERENCE still PENDING)."""
-    model, interpreter, config = probe_environment
+    model, interpreter, config = target_environment
     _genuine_record(model, config, interpreter)
 
-    report, completed = _scan(os.environ)
+    report, completed = _scan(_target_env_for_target())
 
     assert completed.returncode == 0
     assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PASS"
@@ -567,14 +681,14 @@ def test_defect_b_b_verified_gpu_record_alone_does_not_reach_release_ready(probe
     assert report["verdict"] == "GPU_VALIDATION_PENDING"
 
 
-def test_defect_b_c_inference_claim_without_valid_metrics_does_not_reach_it(probe_environment, sandbox: Path):
+def test_defect_b_c_inference_claim_without_valid_metrics_does_not_reach_it(target_environment, sandbox: Path):
     """(c) An inference claim without valid metrics does not reach RELEASE_READY."""
-    model, interpreter, config = probe_environment
+    model, interpreter, config = target_environment
     _genuine_record(model, config, interpreter)
     _create_benchmark_run(sandbox, "run_invalid_metrics", is_synthetic=False, data_kind="experiment",
                           valid_metrics=False, has_proof=True)
 
-    report, completed = _scan(os.environ)
+    report, completed = _scan(_target_env_for_target())
 
     assert completed.returncode == 0
     assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PASS"
@@ -584,14 +698,14 @@ def test_defect_b_c_inference_claim_without_valid_metrics_does_not_reach_it(prob
     assert report["verdict"] == "GPU_VALIDATION_PENDING"
 
 
-def test_defect_b_d_run_missing_completion_proof_does_not_reach_it(probe_environment, sandbox: Path):
+def test_defect_b_d_run_missing_completion_proof_does_not_reach_it(target_environment, sandbox: Path):
     """(d) A run missing a completion proof does not reach RELEASE_READY."""
-    model, interpreter, config = probe_environment
+    model, interpreter, config = target_environment
     _genuine_record(model, config, interpreter)
     _create_benchmark_run(sandbox, "run_missing_proof", is_synthetic=False, data_kind="experiment",
                           valid_metrics=True, has_proof=False)
 
-    report, completed = _scan(os.environ)
+    report, completed = _scan(_target_env_for_target())
 
     assert completed.returncode == 0
     assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PASS"
@@ -616,14 +730,18 @@ def test_defect_b_e_forged_capability_record_does_not_reach_it(sandbox: Path):
     assert report["verdict"] == "GPU_VALIDATION_PENDING"
 
 
-def test_defect_b_f_legitimate_corroborated_run_is_accepted_evidence(probe_environment, sandbox: Path):
-    """(f) A legitimate corroborated benchmark run is reported as accepted evidence."""
-    model, interpreter, config = probe_environment
+def test_defect_b_f_legitimate_corroborated_run_is_accepted_evidence(target_environment, sandbox: Path):
+    """(f) A legitimate corroborated benchmark run is reported as accepted evidence.
+
+    The positive control for the model-evidence dimensions: the run and the capability record are
+    both for the declared target, so all four reach PASS and the verdict is RELEASE_READY.
+    """
+    model, interpreter, config = target_environment
     _genuine_record(model, config, interpreter)
     _create_benchmark_run(sandbox, "run_legit_accepted", is_synthetic=False,
                           data_kind="experiment", valid_metrics=True, has_proof=True)
 
-    pass_env = {**os.environ, **{f"J{i}": "PASS" for i in range(1, 13)}}
+    pass_env = {**_target_env_for_target(), **{f"J{i}": "PASS" for i in range(1, 13)}}
     report, completed = _scan(pass_env)
 
     assert completed.returncode == 0
@@ -890,3 +1008,128 @@ def test_frontend_api_error_surfaces_reason_not_empty_table():
     res = subprocess.run(["npx", "tsx", "-e", script], cwd=str(REPOSITORY), capture_output=True, text=True)
     assert res.returncode == 0, (res.stdout, res.stderr)
     assert "API_ERROR_SURFACED_PASS" in res.stdout
+
+def test_evidence_for_another_identity_cannot_certify_the_declared_target(
+        target_environment, sandbox: Path) -> None:
+    """DEFECT C, second half: the *benchmark* dimensions accepted any model's run.
+
+    With the capability record belonging to the declared target, the only thing off-target here
+    is the run. The preregistered failure was that `MODEL_INFERENCE`/`MODEL_EVALUATION`/
+    `SCIENTIFIC_OUTPUT` passed on any accepted evidence on disk, so a release of LIMN could be
+    certified by a run for a different model. The run must be excluded by identity and named.
+    """
+    from workbench.backend.registry import load_registry
+    from workbench.scripts import evaluate_models as evaluator
+
+    model, interpreter, config = target_environment
+    _genuine_record(model, config, interpreter)
+
+    # A fully legitimate corroborated run -- but for the OTHER model the sandbox declares.
+    off = _create_benchmark_run(sandbox, "run_off_target", is_synthetic=False,
+                                data_kind="experiment", valid_metrics=True, has_proof=True,
+                                model_id=PROBE_MODEL)
+    assert off["model_id"] == PROBE_MODEL
+
+    report, completed = _scan(_target_env_for_target())
+
+    assert completed.returncode == 0
+    assert report["release_target"]["model_id"] == TARGET_MODEL_ID
+    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PASS"
+    for dimension in ("MODEL_INFERENCE", "MODEL_EVALUATION", "SCIENTIFIC_OUTPUT"):
+        assert report["dimensions"][dimension]["status"] == "PENDING", report["dimensions"][dimension]
+    assert report["accepted_evidence_runs"] == []
+    assert any("run_off_target" in entry for entry in report["off_target_evidence_runs"]), \
+        report["off_target_evidence_runs"]
+    assert report["verdict"] != "RELEASE_READY"
+    assert report["verdict"] == "GPU_VALIDATION_PENDING"
+
+def test_a_declared_target_that_is_not_in_the_registry_blocks_the_release(sandbox: Path) -> None:
+    """A target the registry cannot resolve is an operator fault, not an unbounded wildcard.
+
+    This is the fail-closed direction of the target binding: if the requested identity were
+    silently dropped, every dimension would fall back to accepting anything on disk, which is
+    exactly the defect. TARGET_BINDING fails instead.
+    """
+    report, completed = _scan(_target_env("no_such_model", "no_such_checkpoint", "no_such_protocol"))
+
+    assert completed.returncode == 0
+    assert report["dimensions"]["TARGET_BINDING"]["status"] == "FAIL"
+    assert "not in the registry" in report["dimensions"]["TARGET_BINDING"]["detail"]
+    assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PENDING"
+    assert report["verdict"] == "RELEASE_BLOCKED"
+
+def test_frontend_banner_distinguishes_aggregate_only_from_absent_evidence():
+    """DEFECT D (reproduced first): a certified aggregate-only evaluation was announced as absent.
+
+    The banner derived real runs from `/api/runs` (the per-query DuckDB index) while an official
+    LIMN benchmark result lives in `/api/benchmark-runs` as an aggregate. A valid, certified
+    three-category evaluation with no per-query export therefore rendered
+    "MOCK DEVELOPMENT DATA — no real evaluation results are loaded" over its own result. Each
+    state below is a real deployment shape; none may be described as another.
+    """
+    script = """
+    import { evidenceBanner, evidenceState } from "./workbench/frontend/evidence.ts";
+
+    const check = (label, runs, benchmarks, expectBanner, extra = () => {}) => {
+      const state = evidenceState(runs, benchmarks);
+      const banner = evidenceBanner(state);
+      for (const [key, value] of Object.entries(expectBanner)) {
+        if (banner !== value) {
+          throw new Error(`${label}: banner ${JSON.stringify(banner)} !== ${JSON.stringify(value)} (${key})`);
+        }
+      }
+      extra(state, banner);
+    };
+
+    const certified = (run_id) => ({ run_id, verification: { certified: true, is_research_evidence: true, execution_authenticated: true, state: "certified" } });
+    const uncertified = (run_id, state) => ({ run_id, verification: { certified: false, is_research_evidence: false, execution_authenticated: true, state } });
+
+    // 1. Nothing real at all, and no development data either.
+    check("empty", [], [], {});
+    // 2. Development data only: the original mock warning, and it must say DEVELOPMENT.
+    check("mock-only", [{ run_id: "m1", data_kind: "mock" }], [],
+          {}, () => {});
+    // 3. THE DEFECT: a certified aggregate-only real evaluation, no per-query rows.
+    check("aggregate-only certified", [], [certified("agg1")], {}, (state, banner) => {
+      if (/no real evaluation results/i.test(banner)) {
+        throw new Error(`a certified aggregate was announced as absent: ${JSON.stringify(banner)}`);
+      }
+      if (!/AGGREGATE-ONLY/i.test(banner)) throw new Error(`expected aggregate-only: ${banner}`);
+      if (!/certified/i.test(banner)) throw new Error(`expected certification stated: ${banner}`);
+      if (!/per-query/i.test(banner)) throw new Error(`expected the unavailable level named: ${banner}`);
+      if (!state.queryLevelUnavailable) throw new Error("query level must be flagged unavailable");
+      if (state.noRealEvidence) throw new Error("real aggregate evidence exists");
+    });
+    // 4. Aggregate present but NOT certified: authenticated, not evidence.
+    check("aggregate-only uncertified", [], [uncertified("agg2", "proof_unavailable")], {},
+          (state, banner) => {
+      if (/no real evaluation results/i.test(banner)) throw new Error(`said absent: ${banner}`);
+      if (!/uncertified/i.test(banner)) throw new Error(`expected uncertified stated: ${banner}`);
+      if (/certified research result/i.test(banner)) throw new Error(`claimed certification: ${banner}`);
+      });
+    // 5. Per-query real results exist: no mock-only alarm, no aggregate-only claim.
+    check("per-query real", [{ run_id: "r1", data_kind: "experiment" }], [certified("agg1")], {},
+          (state, banner) => {
+      if (/MOCK DEVELOPMENT DATA/i.test(banner)) throw new Error(`false mock banner: ${banner}`);
+      if (/AGGREGATE-ONLY/i.test(banner)) throw new Error(`per-query results exist: ${banner}`);
+      });
+    // 6. Mock AND real: excluded-from-conclusions warning, unchanged.
+    check("mock + real", [{ run_id: "r1", data_kind: "experiment" }, { run_id: "m1", data_kind: "mock" }], [],
+          {}, (_state, banner) => {
+      if (!/Mock and real experiment runs/i.test(banner)) throw new Error(`expected mixed warning: ${banner}`);
+      });
+    // 7. Mock + aggregate-only real: both facts, neither suppressing the other.
+    check("mock + aggregate-only", [{ run_id: "m1", data_kind: "mock" }], [certified("agg1")], {},
+          (_state, banner) => {
+      if (!/AGGREGATE-ONLY/i.test(banner)) throw new Error(`real aggregate hidden: ${banner}`);
+      if (!/development runs/i.test(banner)) throw new Error(`mock data hidden: ${banner}`);
+      });
+    // 8. API returned nothing parseable: no evidence, no crash.
+    check("nulls", null, null, {});
+    check("api error", [], [], {});
+
+    console.log("FRONTEND_EVIDENCE_ASSERTIONS_PASS");
+    """
+    res = subprocess.run(["npx", "tsx", "-e", script], cwd=str(REPOSITORY), capture_output=True, text=True)
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    assert "FRONTEND_EVIDENCE_ASSERTIONS_PASS" in res.stdout

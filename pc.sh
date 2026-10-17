@@ -25,6 +25,7 @@ FORCE=0
 TIMEOUT=3600
 NO_GPU=0
 DATASET_PATH_OVERRIDE=""
+CHECKPOINT_REQUEST=""
 SELF_CHECK=0
 FINAL_RUN_ID=""
 FINAL_CHECKPOINT=""
@@ -171,6 +172,10 @@ Options:
   --timeout <sec>    Maximum wait time for evaluation job in seconds (default: 3600)
   --no-gpu           Disable GPU override (WORKBENCH_ENABLE_GPU=0)
   --dataset <path>   Override FashionIQ dataset path
+  --checkpoint <id>  Pin one exact checkpoint or bundle id. Use to run an INTENTIONAL
+                     single-category evaluation; omit it to run the model's declared bundle,
+                     which refuses by name when any member is missing rather than silently
+                     narrowing itself to one category.
   --self-check       Run internal self-tests for helper functions and exit
   -h, --help         Show this help message and exit
 EOF
@@ -196,6 +201,9 @@ while [[ $# -gt 0 ]]; do
         --dataset)
             [[ $# -ge 2 ]] || fail_stage "CLI_PARSING" "Thiếu giá trị cho --dataset" "" "Truyền đường dẫn FashionIQ, ví dụ: --dataset /path/to/FashionIQ"
             DATASET_PATH_OVERRIDE="$2"; shift 2;;
+        --checkpoint)
+            [[ $# -ge 2 ]] || fail_stage "CLI_PARSING" "Thiếu giá trị cho --checkpoint" "" "Truyền checkpoint id, ví dụ: --checkpoint base_iter0_all_categories"
+            CHECKPOINT_REQUEST="$2"; shift 2;;
         --self-check)
             SELF_CHECK=1; shift;;
         -h|--help)
@@ -1078,7 +1086,7 @@ execute_evaluation() {
     # presence and digests, environment fingerprints). On a host with multi-GB checkpoints that
     # is seconds, not milliseconds, so the timeout is generous and one retry is allowed — a
     # bare 30 s cap turns a slow-but-correct first call into a spurious failure.
-    local protocol checkpoint
+    local protocol checkpoint bundle_status bundle_detail
     local model_info=""
     local attempt
     for attempt in 1 2; do
@@ -1086,6 +1094,7 @@ execute_evaluation() {
 import json, sys
 
 model_id = sys.argv[1]
+requested = sys.argv[2] if len(sys.argv) > 2 else ''
 try:
     models = json.load(sys.stdin)
 except Exception as e:
@@ -1096,46 +1105,70 @@ if not m:
     sys.exit(f'Mô hình {model_id} không tìm thấy trong /api/models')
 
 protocol = m.get('native_protocol') or 'fashioniq_val_split'
-
-# The declared bundle is the launcher preferred selection, and it is a *complete* experiment
-# only when every member is present and runnable. The API reports that per member; a bundle whose
-# member is missing would be submitted and then refused (409 evaluation_blocked) naming the
-# member, so choosing it blindly turns one undownloaded category into a launcher failure. Prefer
-# a complete bundle; otherwise fall back to a runnable single-category checkpoint, which is a
-# partial run, never presented as the complete macro result.
-#
-# No double quotes may appear in this snippet: it is passed to python3 through a double-quoted
-# shell argument, so a quote here would terminate the argument and the snippet would never run.
 bundles = m.get('checkpoint_bundles') or []
-
-def _members_of(bundle):
-    members = bundle.get('members') or []
-    return members or None
-
-def _complete(bundle):
-    members = _members_of(bundle)
-    if not members:
-        # No member view to judge by: the selection keeps its previous behaviour rather than
-        # inventing a completeness the API did not report.
-        return False
-    return all(member.get('available') and member.get('runnable') for member in members)
-
-complete_bundle = next((b for b in bundles if b.get('bundle_id') and _complete(b)), None)
 checkpoints = m.get('checkpoints') or []
-runnable = next((c for c in checkpoints if c.get('available') and c.get('runnable')), None)
 
-if complete_bundle is not None:
-    checkpoint = complete_bundle['bundle_id']
-elif runnable is not None:
-    checkpoint = runnable.get('checkpoint_id')
-elif bundles and bundles[0].get('bundle_id'):
-    checkpoint = bundles[0]['bundle_id']
-elif checkpoints:
-    checkpoint = checkpoints[0].get('checkpoint_id')
-else:
-    checkpoint = 'base_iter0_all_categories'
-print(protocol, checkpoint)
-" "$MODEL" 2>/dev/null)"; then
+def _member_reasons(member):
+    # The real /api/models contract. checkpoint_availability() reports presence as
+    # checkpoint_downloaded and readiness as runnable; there has never been an 'available' field,
+    # so testing for one made every member -- and every checkpoint -- look absent, which silently
+    # downgraded the default full-bundle reproduction to a single category.
+    reasons = []
+    cid = member.get('checkpoint_id')
+    if not member.get('checkpoint_downloaded'):
+        reasons.append(cid + ' chưa tải về (' + str(member.get('checkpoint_path') or '?') + ')')
+    if not member.get('runnable'):
+        blockers = member.get('blocking_reasons') or []
+        reasons.append(cid + ' chưa sẵn sàng chạy' + (' — ' + str(blockers[0]) if blockers else ''))
+    if not member.get('mapping_verified'):
+        reasons.append(cid + ' chưa VERIFIED_METADATA')
+    if member.get('official_sha256_known') and member.get('official_sha256_match') is False:
+        reasons.append(cid + ' không khớp sha256 chính thức')
+    return reasons
+
+def _bundle_reasons(bundle):
+    required = list(bundle.get('required_checkpoint_ids') or [])
+    members = bundle.get('members') or []
+    by_id = {mm.get('checkpoint_id'): mm for mm in members}
+    reasons = []
+    if not required:
+        reasons.append('bundle không khai báo required_checkpoint_ids')
+    absent = [cid for cid in required if cid not in by_id]
+    if absent:
+        reasons.append('API không báo cáo thành phần ' + ', '.join(absent))
+    for member in members:
+        reasons.extend(_member_reasons(member))
+    return reasons
+
+def _emit(selected, reasons, note):
+    print(protocol, selected, 'complete' if not reasons else 'incomplete',
+          ' | '.join(reasons) if reasons else note, sep='\t')
+
+# No explicit selection: the model's declared bundle IS the target. This either runs the complete
+# official experiment or refuses by name -- it never narrows itself to one category and presents
+# that as the reproduction.
+if not requested:
+    if not bundles:
+        if not checkpoints:
+            sys.exit(model_id + ' không có checkpoint nào trong registry')
+        ckpt = checkpoints[0]
+        _emit(ckpt.get('checkpoint_id'), _member_reasons(ckpt), 'sẵn sàng')
+        sys.exit(0)
+    bundle = bundles[0]
+    _emit(bundle.get('bundle_id'), _bundle_reasons(bundle), 'toàn bộ thành phần đã sẵn sàng')
+    sys.exit(0)
+
+# An explicit selection is the operator asking for that exact thing, including an intentional
+# single-category run; it is still refused when the artifact it names is not actually usable.
+bundle = next((b for b in bundles if b.get('bundle_id') == requested), None)
+if bundle is not None:
+    _emit(requested, _bundle_reasons(bundle), 'toàn bộ thành phần đã sẵn sàng')
+    sys.exit(0)
+ckpt = next((c for c in checkpoints if c.get('checkpoint_id') == requested), None)
+if ckpt is None:
+    sys.exit('checkpoint ' + requested + ' không có trong registry của ' + model_id)
+_emit(requested, _member_reasons(ckpt), 'sẵn sàng')
+" "$MODEL" "$CHECKPOINT_REQUEST" 2>/dev/null)"; then
             if [[ -n "$model_info" ]]; then
                 break
             fi
@@ -1147,9 +1180,22 @@ print(protocol, checkpoint)
         fail_stage "REGISTRY_RESOLUTION" "Không đọc được /api/models sau 2 lần thử" "docker logs cir-workbench" "Kiểm tra log container bằng: docker logs cir-workbench"
     fi
 
-    read -r protocol checkpoint <<<"$model_info"
+    IFS=$'\t' read -r protocol checkpoint bundle_status bundle_detail <<<"$model_info"
     FINAL_CHECKPOINT="$checkpoint"
     FINAL_PROTOCOL="$protocol"
+
+    # A partial selection may only ever be the operator's explicit choice. The default command
+    # asks for the model's declared bundle and gets either that complete experiment or a named
+    # refusal -- never a single category wearing the label of a full reproduction.
+    if [[ "$bundle_status" == "incomplete" ]]; then
+        fail_stage "CHECKPOINT_SELECTION" \
+            "Không thể chạy đánh giá đầy đủ cho ${MODEL} với checkpoint '${checkpoint}': ${bundle_detail}" \
+            "workbench/artifacts/checkpoints/" \
+            "Tải và xác thực checkpoint trước: ./pc.sh --verify-only (hoặc ./pc.sh <...> --checkpoint <id> để chủ động chạy một danh mục đơn lẻ, KHÔNG phải tái lập đầy đủ)"
+    fi
+    if [[ -n "$CHECKPOINT_REQUEST" && -n "$bundle_detail" ]]; then
+        say "Lưu ý: đã chọn checkpoint '${checkpoint}' theo yêu cầu; đây KHÔNG phải tái lập đầy đủ nếu chỉ gồm một danh mục."
+    fi
     say "Mô hình: ${MODEL} | Checkpoint: ${checkpoint} | Protocol: ${protocol} | top_k: 200"
 
     # Job Dedup: Check if a completed corroborated run exists in /api/runs or /api/benchmark-runs

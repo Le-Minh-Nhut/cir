@@ -255,17 +255,31 @@ def _no_proof_refusal() -> str:
             "itself, and WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES=1 is honoured in a development "
             "process only")
 
-#: Receipts are cached by (report digest, certification mode, ledger stamp, proof stamp). The key
-#: is the whole soundness argument of the cache, so it is a key and not a convenience: the report
-#: digest fixes which bytes were verified, the mode which policy judged them, the ledger stamp which
-#: ledger corroborated them, and the proof stamp whether an evaluator-written proof exists and which
-#: revision of it was validated. Neither the ledger read nor the manifest validation (which re-hashes
-#: the checkpoint's multi-GB members) therefore runs on every dashboard request -- only when a
-#: report, the process's certification mode, the ledger, or a proof actually changed. Refusals are
-#: cached too: avoiding that cost per request is the point, and every input that could turn a refusal
-#: into a certification is in the key -- the mode included, so a development receipt is never
-#: re-served for a report that later gained a proof (the proof stamp changes, and the mode with it).
-_CERTIFICATION_CACHE: dict[tuple[str, str, str, str], dict] = {}
+#: Receipts are cached by (report digest, certification mode, ledger stamp, proof stamp,
+#: checkpoint stamp). The key is the whole soundness argument of the cache, so it is a key and not a
+#: convenience: the report digest fixes which bytes were verified, the mode which policy judged them,
+#: the ledger stamp which ledger corroborated them, the proof stamp whether an evaluator-written
+#: proof exists and which revision of it was validated, and the checkpoint stamp which revision of
+#: the *artifact the certificate is about* those bytes describe. Neither the ledger read nor the
+#: manifest validation (which re-hashes the checkpoint's multi-GB members) therefore runs on every
+#: dashboard request -- only when a report, the process's certification mode, the ledger, a proof, or
+#: the checkpoint artifact itself actually changed. Refusals are cached too: avoiding that cost per
+#: request is the point, and every input that could turn a refusal into a certification is in the
+#: key -- the mode included, so a development receipt is never re-served for a report that later
+#: gained a proof (the proof stamp changes, and the mode with it).
+#:
+#: The checkpoint stamp is the one input that is neither authenticated nor cheap to hash, and
+#: omitting it was a real defect: `verify_run` re-hashes the run's declared bundle members and
+#: refuses a report whose members no longer match the manifest its proof recorded, so a cached
+#: receipt whose key ignored the members kept serving `certified=true` for weights a later edit
+#: replaced. See `_checkpoint_stamp` for why the token it contributes is sound.
+_CERTIFICATION_CACHE: dict[tuple[str, str, str, str, str], dict] = {}
+
+#: How many receipts the cache keeps. The key varies with the checkpoint's change token, so a
+#: long-lived process watching an artifact be rewritten could otherwise grow this dict without
+#: bound. Bounded and FIFO: a receipt is cheap to rebuild, and the entry evicted is a refusal at
+#: worst, which the next request recomputes.
+_CERTIFICATION_CACHE_LIMIT = 256
 
 def _reports_root(config) -> Path:
     """Where the evaluator writes aggregate reports and completion proofs."""
@@ -288,6 +302,71 @@ def _ledger_path(config) -> Path:
     from workbench.scripts.evaluate_models import evidence_ledger_path
 
     return evidence_ledger_path(config)
+
+def _checkpoint_member_names(model_id: str, checkpoint_id: str) -> list[str] | None:
+    """The member filenames the run's own proof says it consumed, or None when unresolved.
+
+    Deliberately the *recorded* bundle contract and not the registry's: the verifier resolves the
+    bundle through `completion_validator`, so a token built from a different member list would
+    change for reasons the verdict does not, and would miss a change that it does.
+    """
+    try:
+        from workbench.backend.registry import checkpoint_by_id, model_by_id
+
+        model = model_by_id(model_id)
+        resolved = checkpoint_by_id(model, checkpoint_id)
+        if resolved.get("bundle_members"):
+            from workbench.backend.registry import checkpoint_path
+
+            return [checkpoint_path(model_id, checkpoint_by_id(model, member_id),
+                                    resolve_config().WORKBENCH_CHECKPOINT_ROOT).name
+                    for member_id in resolved["bundle_members"]]
+        required = resolved.get("required_files")
+        return list(required) if required else None
+    except Exception:
+        return None
+
+def _checkpoint_stamp(config, report: dict) -> str:
+    """A change token for the checkpoint artifact this report's certificate is *about*.
+
+    The receipt answers "is this valid research evidence", and one of the things
+    `validate_run_manifest` checks to answer it is that the run's declared bundle members still
+    hash to the manifest its proof recorded. A receipt that ignored the members therefore stayed
+    valid across an edit that the verifier refuses, which is a *false certificate* over weights
+    nobody re-hashed -- reproduced before this existed: tamper one member, leave the report, the
+    ledger and the proof untouched, and `/api/benchmark-runs` kept serving `certified=true` until
+    the cache was cleared.
+
+    The members' multi-GB digests deliberately do NOT enter the token, because hashing them per
+    request is the cost this cache exists to avoid. What enters it is each member's size and mtime
+    -- both of which a content edit that changes the file's length moves, and neither of which is
+    trusted as evidence in its place: the token only decides *whether* to re-run the verifier, and
+    the verifier is what hashes the bytes. So the token can only ever cause a re-check (never a
+    skipped one) for an in-place rewrite that preserved size *and* mtime, which is the same
+    `os.utime` attack the runtime's own capability cache rejects by hashing every time
+    (`workbench/backend/runtime.py:_member_digest`); the mtime here is a cost optimization over
+    that, and the digest is the authority.
+    """
+    names = _checkpoint_member_names(str(report.get("model_id") or ""),
+                                     str(report.get("checkpoint_id") or ""))
+    if not names:
+        return "unresolved"
+    from workbench.backend.registry import checkpoint_path, model_by_id
+
+    try:
+        model_id = str(report.get("model_id") or "")
+        root = checkpoint_path(model_id, model_by_id(model_id)["checkpoint_variants"][0],
+                               getattr(config, "WORKBENCH_CHECKPOINT_ROOT", None)).parent
+    except Exception:
+        return "unresolved"
+    tokens = []
+    for name in names:
+        try:
+            stat = (root / name).stat()
+        except OSError:
+            return f"missing:{name}"
+        tokens.append(f"{name}:{stat.st_size}:{stat.st_mtime_ns}")
+    return "|".join(tokens)
 
 def _ledger_stamp(config) -> str:
     """A change token for the ledger file: mtime plus size.
@@ -513,10 +592,13 @@ def _aggregate_reports() -> list[dict]:
             continue
         proof_stamp = _proof_stamp(config, report)
         mode = _certification_mode(proof_stamp != "absent")
-        cache_key = (digest, mode, ledger_stamp, proof_stamp)
+        checkpoint_stamp = _checkpoint_stamp(config, report)
+        cache_key = (digest, mode, ledger_stamp, proof_stamp, checkpoint_stamp)
         receipt = _CERTIFICATION_CACHE.get(cache_key)
         if receipt is None:
             receipt = _certify_report(config, path, report, digest, mode=mode)
+            while len(_CERTIFICATION_CACHE) >= _CERTIFICATION_CACHE_LIMIT:
+                del _CERTIFICATION_CACHE[next(iter(_CERTIFICATION_CACHE))]
             _CERTIFICATION_CACHE[cache_key] = receipt
         report["verification"] = {
             # The four questions, kept separate so a consumer can tell "an artifact exists" apart

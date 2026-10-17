@@ -19,6 +19,16 @@ REPO="${WORKBENCH_REPO:-$(cd "${HERE}/../.." && pwd)}"
 BASE="http://127.0.0.1:8000"
 REPORT="${HERE}/release_verify_report.json"
 OFFLINE=0
+# The release target. Every target-specific dimension (GPU_RUNTIME, MODEL_INFERENCE,
+# MODEL_EVALUATION, SCIENTIFIC_OUTPUT) is bound to THIS identity, so evidence for one model,
+# checkpoint or protocol can never certify another. The defaults are the artifact this repository
+# actually ships as its target, not a wildcard: a WILDCARD would be the defect. They live in the
+# report block rather than in the option parser so an empty override and an absent override mean
+# the same thing -- the shipped target -- and no invocation can accidentally unbind the binding.
+TARGET_MODEL="${WORKBENCH_RELEASE_TARGET_MODEL:-}"
+TARGET_CHECKPOINT="${WORKBENCH_RELEASE_TARGET_CHECKPOINT:-}"
+TARGET_PROTOCOL="${WORKBENCH_RELEASE_TARGET_PROTOCOL:-}"
+TARGET_INTERPRETER="${WORKBENCH_RELEASE_TARGET_INTERPRETER:-}"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --report)
@@ -27,6 +37,18 @@ while [[ $# -gt 0 ]]; do
         --base)
             [[ $# -ge 2 ]] || { echo "option $1 requires an argument" >&2; exit 2; }
             BASE="$2"; shift 2;;
+        --target-model)
+            [[ $# -ge 2 ]] || { echo "option $1 requires an argument" >&2; exit 2; }
+            TARGET_MODEL="$2"; shift 2;;
+        --target-checkpoint)
+            [[ $# -ge 2 ]] || { echo "option $1 requires an argument" >&2; exit 2; }
+            TARGET_CHECKPOINT="$2"; shift 2;;
+        --target-protocol)
+            [[ $# -ge 2 ]] || { echo "option $1 requires an argument" >&2; exit 2; }
+            TARGET_PROTOCOL="$2"; shift 2;;
+        --target-interpreter)
+            [[ $# -ge 2 ]] || { echo "option $1 requires an argument" >&2; exit 2; }
+            TARGET_INTERPRETER="$2"; shift 2;;
         --offline) OFFLINE=1; shift;;
         *) echo "unknown option: $1" >&2; exit 2;;
     esac
@@ -506,11 +528,29 @@ J9="${RESULTS[J9]}" J10="${RESULTS[J10]}" J11="${RESULTS[J11]}" J12="${RESULTS[J
 D1="${DETAILS[J1]}" D2="${DETAILS[J2]}" D3="${DETAILS[J3]}" D4="${DETAILS[J4]}" \
 D5="${DETAILS[J5]}" D6="${DETAILS[J6]}" D7="${DETAILS[J7]}" D8="${DETAILS[J8]}" \
 D9="${DETAILS[J9]}" D10="${DETAILS[J10]}" D11="${DETAILS[J11]}" D12="${DETAILS[J12]}" \
+TARGET_MODEL="$TARGET_MODEL" TARGET_CHECKPOINT="$TARGET_CHECKPOINT" \
+TARGET_PROTOCOL="$TARGET_PROTOCOL" TARGET_INTERPRETER="$TARGET_INTERPRETER" \
 "${PY}" - "$REPORT" <<'EOF'
 import json, os, sys, datetime
 out = {"generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-       "verifier": "workbench/docker/release_verify.sh",
-       "checks": {}}
+       "verifier": "workbench/docker/release_verify.sh"}
+# The identity every target-specific dimension below is bound to. Stated first because
+# the verdict is only meaningful *about* this artifact. The defaults are the shipped target, and
+# the override names are the documented `WORKBENCH_RELEASE_TARGET_*` ones -- read here directly,
+# so there is exactly one name for each setting and no shell-to-block mapping to get wrong.
+_TARGET_ENV = {"model_id": "WORKBENCH_RELEASE_TARGET_MODEL",
+               "checkpoint_id": "WORKBENCH_RELEASE_TARGET_CHECKPOINT",
+               "protocol_id": "WORKBENCH_RELEASE_TARGET_PROTOCOL"}
+# The shipped release target. A wildcard default would itself be the defect: the verdict claims
+# something about one artifact, so an absent override must mean this one.
+_DEFAULT_TARGET = {"model_id": "limn", "checkpoint_id": "base_iter0_all_categories",
+                   "protocol_id": "fashioniq_val_split"}
+out["release_target"] = {
+    name: (os.environ.get(_TARGET_ENV[name]) or _DEFAULT_TARGET[name])
+    for name in ("model_id", "checkpoint_id", "protocol_id")
+}
+out["release_target"]["interpreter"] = os.environ.get("WORKBENCH_RELEASE_TARGET_INTERPRETER") or None
+out["checks"] = {}
 for i in range(1, 13):
     key = f"J{i}"
     dkey = f"D{i}"
@@ -653,6 +693,30 @@ real_gpu = False
 _unreadable: list[tuple[str | None, str]] = []
 _wrong_key: list[str] = []
 _unverified: list[str] = []
+# The declared target. Evidence for another model, another checkpoint or another protocol is
+# reported as such and never promoted: this is what stops GPU evidence for model A combining
+# with a benchmark for model B into a RELEASE_READY certificate for a target neither of them is.
+_target = out["release_target"]
+_off_target: list[str] = []
+# A GPU capability record is probed *for one model*: `_expected_key` folds the model's interpreter
+# and dependency contract into the key, so model A's record is not model B's evidence. The
+# target-specific dimension is therefore decided per record, not by any verified record existing:
+# a verified record for a different model caps GPU_RUNTIME at PENDING for THIS target instead of
+# certifying it.
+_target_model = None
+_target_key = None
+_target_declared_interpreter = None
+try:
+    _target_model = next((m for m in _load_registry()["models"]
+                          if m.get("model_id") == _target.get("model_id")), None)
+    if _target_model is not None:
+        _target_key = _expected_key(_target_model)
+        _target_declared_interpreter = _declared_interpreter(_target_model)
+except Exception:
+    _target_model = None
+if _target.get("interpreter") and _target_declared_interpreter \
+        and _target["interpreter"] != _target_declared_interpreter:
+    _target_key = None            # the operator declared an interpreter this deployment does not
 try:
     _directory = _runtime.gpu_capability_directory(_rc())
     _models = _load_registry()["models"]
@@ -675,10 +739,14 @@ try:
             _wrong_key.append(_capability_key)
             continue
         _reason = _unverified_reason(_capability_key, _record, _models)
-        if _reason is None:
+        if _reason is not None:
+            _unverified.append(f"{_capability_key}.json: {_reason}")
+        elif _target_key is not None and _capability_key == _target_key:
             real_gpu = True
         else:
-            _unverified.append(f"{_capability_key}.json: {_reason}")
+            _unverified.append(
+                f"{_capability_key}.json: verified for a different model than the declared "
+                f"release target {_target.get('model_id')!r}")
 except Exception as _error:      # path/config resolution failed: nothing could be read
     _unreadable.append((None, f"capability scan failed: {type(_error).__name__}: {_error}"))
 _names = [os.path.basename(path) if path else reason for path, reason in _unreadable]
@@ -727,6 +795,15 @@ _unaccepted_runs: list[tuple[str, list[str]]] = []
 _inference_evidence: list[str] = []
 _invalid_metric_runs: list[tuple[str, list[str]]] = []
 
+def _is_target(_model_id: str, _checkpoint_id: str, _protocol_id: str) -> bool:
+    if _target.get("model_id") and _model_id != _target["model_id"]:
+        return False
+    if _target.get("checkpoint_id") and _checkpoint_id != _target["checkpoint_id"]:
+        return False
+    if _target.get("protocol_id") and _protocol_id != _target["protocol_id"]:
+        return False
+    return True
+
 if _reports_root.is_dir():
     for _path in sorted(_reports_root.glob("*_aggregate.json")):
         try:
@@ -741,6 +818,9 @@ if _reports_root.is_dir():
         _checkpoint_id = str(_rep.get("checkpoint_id") or "")
         _protocol_id = str(_rep.get("protocol_id") or "")
         if not (_run_id and _model_id and _checkpoint_id and _protocol_id):
+            continue
+        if not _is_target(_model_id, _checkpoint_id, _protocol_id):
+            _off_target.append(f"{_run_id} ({_model_id}/{_checkpoint_id}/{_protocol_id})")
             continue
         try:
             _v = _verify_run.verify(_run_id, _model_id, _checkpoint_id, _protocol_id)
@@ -824,6 +904,22 @@ out["accepted_evidence_runs"] = [
     }
     for v in _accepted_evidence
 ]
+# Every run on disk that is NOT the declared target, named. A release report that silently
+# ignored them would make "the target reproduced" indistinguishable from "something did".
+out["off_target_evidence_runs"] = _off_target
+out["dimensions"]["TARGET_BINDING"] = {
+    "checks": [], "mandatory": True,
+    "status": "PASS",
+    "detail": (f"all target-specific dimensions are bound to "
+               f"{_target.get('model_id')}/{_target.get('checkpoint_id')}/"
+               f"{_target.get('protocol_id')}"
+               + (f"; {len(_off_target)} run(s) for other identities were excluded"
+                  if _off_target else "")),
+}
+if _target_model is None:
+    out["dimensions"]["TARGET_BINDING"]["status"] = "FAIL"
+    out["dimensions"]["TARGET_BINDING"]["detail"] = (
+        f"the declared release target model {_target.get('model_id')!r} is not in the registry")
 
 mandatory_pending = [d for d, spec in out["dimensions"].items()
                      if spec["mandatory"] and spec["status"] != "PASS"]
@@ -831,7 +927,8 @@ out["pending_dimensions"] = mandatory_pending
 if out["summary"]["fail"] > 0 or any(spec["status"] == "FAIL" for spec in out["dimensions"].values() if spec["mandatory"]):
     out["verdict"] = "RELEASE_BLOCKED"
 elif mandatory_pending:
-    _gpu_or_research_dims = {"GPU_RUNTIME", "MODEL_INFERENCE", "MODEL_EVALUATION", "SCIENTIFIC_OUTPUT"}
+    _gpu_or_research_dims = {"GPU_RUNTIME", "MODEL_INFERENCE", "MODEL_EVALUATION",
+                             "SCIENTIFIC_OUTPUT", "TARGET_BINDING"}
     _non_gpu_pending = [d for d in mandatory_pending if d not in _gpu_or_research_dims]
     if _non_gpu_pending:
         out["verdict"] = "ENGINEERING_INCOMPLETE"

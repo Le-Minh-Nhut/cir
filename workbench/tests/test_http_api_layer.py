@@ -1165,3 +1165,91 @@ def test_runs_reports_index_unavailable_while_startup_build_is_in_progress(api, 
     status, _, body = asgi_request(api.app, "GET", "/api/runs")
     assert status == 200, body
     assert json.loads(body) == []
+
+# ------------------------------------------------- checkpoint-bound receipt cache
+def _checkpoint_root(tmp_path: Path) -> tuple[Path, list[str]]:
+    """The LIMN bundle's weight directory and declared member filenames, as the run resolved them."""
+    from workbench.backend.registry import checkpoint_by_id, model_by_id
+
+    model = model_by_id("limn")
+    bundle = checkpoint_by_id(model, "base_iter0_all_categories")
+    names = [checkpoint_by_id(model, member_id)["filename"] for member_id in bundle["bundle_members"]]
+    return tmp_path / "repo" / "checkpoints" / "limn", names
+
+def _certified_deployment_run(api, tmp_path, monkeypatch, run_id: str) -> dict:
+    """One report the authoritative verifier accepts in a production process, with its proof."""
+    _evidence_report(tmp_path, run_id)
+    _write_proof(tmp_path, run_id, _valid_completion_proof(tmp_path, run_id))
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("WORKBENCH_DEVELOPMENT_MODE", raising=False)
+    monkeypatch.delenv("WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES", raising=False)
+    api._CERTIFICATION_CACHE.clear()
+    receipt = _receipt(api, run_id)
+    assert receipt["certified"] is True, receipt["reasons"]
+    return receipt
+
+def test_a_checkpoint_edit_invalidates_an_already_issued_certificate(
+        api, tmp_path, monkeypatch, counted_verifier) -> None:
+    """DEFECT A (reproduced first): the cache key ignored the artifact the certificate is about.
+
+    `verify_run` re-hashes the run's declared bundle members and refuses a report whose members no
+    longer match the manifest its own proof recorded. The receipt cache was keyed on the report
+    digest, the policy mode, the ledger and the proof — every input *except* the checkpoint — so a
+    rewritten weight kept serving `certified=true` from cache while a cleared cache refused it.
+    Here the report, the ledger and the proof are deliberately left byte-identical: the checkpoint
+    member is the only thing that changes, and it must be enough on its own.
+    """
+    _certified_deployment_run(api, tmp_path, monkeypatch, "run-tamper")
+    were_consulted = list(counted_verifier)
+
+    root, names = _checkpoint_root(tmp_path)
+    victim = root / names[0]
+    before = victim.read_bytes()
+    victim.write_bytes(b"different weights, same run")
+
+    # The report, the ledger and the proof are untouched: the claim under test is that the
+    # checkpoint's own change is what has to invalidate the receipt.
+    after = _receipt(api, "run-tamper")
+    assert after["certified"] is False, (
+        "a certificate must not survive a change to the artifact it certifies")
+    assert after["state"] == "refused"
+    assert any("checkpoint" in reason.lower() for reason in after["reasons"]), after["reasons"]
+    assert counted_verifier != were_consulted, "the verifier must be re-asked, not the cache trusted"
+
+    # False-FAIL direction: restoring the original bytes must restore the verdict, or the cache
+    # key would be invalidating legitimate evidence rather than tracking the artifact.
+    victim.write_bytes(before)
+    restored = _receipt(api, "run-tamper")
+    assert restored["certified"] is True, restored["reasons"]
+
+def test_an_unchanged_checkpoint_does_not_re_enter_the_verifier_per_request(
+        api, tmp_path, monkeypatch, counted_verifier) -> None:
+    """The other half of DEFECT A: the fix must not turn every dashboard poll into a re-verification.
+
+    The receipt cache exists because proof validation re-hashes multi-GB members. A key that moved
+    on its own would be a false FAIL of the most expensive kind, so the token it adds is asserted
+    to be stable across identical requests.
+    """
+    _certified_deployment_run(api, tmp_path, monkeypatch, "run-stable")
+    calls = len(counted_verifier)
+    for _ in range(3):
+        assert _receipt(api, "run-stable")["certified"] is True
+    assert len(counted_verifier) == calls, "an unchanged checkpoint must stay cached"
+
+def test_the_checkpoint_change_token_covers_every_declared_member(
+        api, tmp_path, monkeypatch, counted_verifier) -> None:
+    """A bundle is three weights: editing any one of them invalidates the certificate.
+
+    Guards the specific shape of DEFECT A's fix — a token over only the first member would have
+    passed the single-member test above while leaving two thirds of the bundle uncovered.
+    """
+    _certified_deployment_run(api, tmp_path, monkeypatch, "run-permember")
+    root, names = _checkpoint_root(tmp_path)
+    assert len(names) >= 2, "the LIMN bundle is expected to declare several members"
+    for name in names:
+        original = (root / name).read_bytes()
+        (root / name).write_bytes(b"edited " + name.encode())
+        assert _receipt(api, "run-permember")["certified"] is False, (
+            f"editing member {name} must invalidate the certificate")
+        (root / name).write_bytes(original)
+    assert _receipt(api, "run-permember")["certified"] is True
