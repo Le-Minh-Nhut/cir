@@ -173,12 +173,16 @@ class ResultRun(BaseModel):
             # artifact with `gallery_size <= top_k_saved` correctly stores one fewer result than the
             # raw size implies. Using the raw size here rejected exactly that artifact (P2).
             declared_eligible = (self.run.category_eligible_counts or {}).get(query.category)
-            if declared_eligible is not None:
-                depth_bound = min(category_size, declared_eligible)
-            elif self.run.protocol_id in REFERENCE_EXCLUDED_PROTOCOLS:
-                depth_bound = category_size - 1
+            if self.run.protocol_id in REFERENCE_EXCLUDED_PROTOCOLS:
+                # An excluded protocol can never have more than `size - 1` eligible candidates, so
+                # the DECLARED count is clamped by that ceiling: a declared value was a way to claim
+                # the raw gallery size and admit a rank equal to the masked reference's slot (found
+                # in review). The declaration may narrow the bound; it may not widen it past the
+                # protocol.
+                ceiling = category_size - 1
+                depth_bound = min(ceiling, declared_eligible) if declared_eligible is not None else ceiling
             else:
-                depth_bound = category_size
+                depth_bound = min(category_size, declared_eligible) if declared_eligible is not None else category_size
             effective_depth = min(self.run.top_k_saved, max(depth_bound, 0))
             if len(query.top_results) != effective_depth:
                 raise ValueError(
@@ -189,18 +193,13 @@ class ResultRun(BaseModel):
             # candidate count is size-1 and the last slot is NOT retrievable. Checking only the raw
             # gallery size accepted a phantom rank equal to the masked reference's position (F-15).
             eligible = declared_eligible
-            if eligible is not None:
-                bound = min(category_size, eligible)
-            elif self.run.protocol_id in REFERENCE_EXCLUDED_PROTOCOLS:
-                # An excluded protocol has no retrievable slot for the reference, and the reference is
-                # always one candidate, so the eligible count is AT MOST size-1. Legacy artifacts that
-                # predate the field are bounded by that conservative value rather than by the raw
-                # gallery size, which would have admitted a rank equal to the masked slot (found in
-                # review). The field is still what a new artifact should record, and it is required
-                # by `admission` for an experiment.
-                bound = category_size - 1
+            if self.run.protocol_id in REFERENCE_EXCLUDED_PROTOCOLS:
+                # Same ceiling as the depth rule, so the rank bound and the depth bound cannot
+                # disagree about how many candidates the protocol can produce.
+                ceiling = category_size - 1
+                bound = min(ceiling, eligible) if eligible is not None else ceiling
             else:
-                bound = category_size
+                bound = min(category_size, eligible) if eligible is not None else category_size
             if query.target_rank > bound:
                 raise ValueError(
                     f"target_rank exceeds the eligible candidate count for {query.category} ({bound})")

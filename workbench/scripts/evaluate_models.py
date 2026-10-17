@@ -1585,6 +1585,26 @@ def per_query_capability(model_id: str) -> str | None:
         return None
 
 
+def _status_object(stdout: str, field: str) -> str:
+    """The named field of the LAST JSON object on a child's stdout.
+
+    Both children emit exactly one compact status line, but a compiled dependency can still write to
+    fd 1 directly, and `json.loads` on the whole stream would then fail and the parent would discard
+    a valid payload. Scanning for the status object makes the contract robust without relaxing it:
+    the object must still carry the field being asked for.
+    """
+    for line in reversed([line for line in (stdout or "").splitlines() if line.strip()]):
+        if not line.lstrip().startswith("{"):
+            continue
+        try:
+            candidate = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(candidate, dict) and field in candidate:
+            return candidate[field]
+    raise ValueError(f"no status object carrying {field!r} on stdout")
+
+
 def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
                      directory: Path, command_digest: str | None,
                      environment_digest: str | None) -> tuple[Path | None, str, str | None, str | None]:
@@ -1656,7 +1676,7 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     # cannot do it: pydantic is not in the model's provisioned environment, and importing it there
     # made every export fail while the aggregate succeeded.
     try:
-        staged = Path(json.loads(completed.stdout)["payload"])
+        staged = Path(_status_object(completed.stdout, "payload"))
     except (ValueError, KeyError, TypeError) as error:
         return None, f"observer did not report a staged payload: {error}", None, None
     # The publisher is invoked as a CHILD under the WORKBENCH interpreter, never imported here.
@@ -1676,7 +1696,7 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
         tail = (published.stderr or published.stdout or "").strip().splitlines()[-3:]
         return None, f"publisher exited {published.returncode}: {' | '.join(tail)}", None, None
     try:
-        artifact = Path(json.loads(published.stdout)["published"])
+        artifact = Path(_status_object(published.stdout, "published"))
     except (ValueError, KeyError, TypeError) as error:
         return None, f"publisher did not report a published artifact: {error}", None, None
     try:
@@ -1689,6 +1709,14 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     if claimed_run != run_id:
         return None, (f"observer artifact claims run {claimed_run!r}, not this invocation "
                       f"{run_id!r}"), None, None
+    # The artifact must describe THIS plan. The observer always observes the full three-category
+    # bundle, so a single-category plan would otherwise have a bundle artifact -- with its own
+    # checkpoint/protocol identity -- accepted and bound to the diagnostic run's report.
+    for field, expected in (("model_id", plan.model_id), ("protocol_id", plan.protocol)):
+        claimed = payload["run"].get(field)
+        if claimed is not None and expected is not None and claimed != expected:
+            return None, (f"observer artifact describes {field}={claimed!r}, not this run's "
+                          f"{expected!r}"), None, None
     digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
     # The staging file is an interchange detail, not evidence: leaving it beside the canonical
     # artifacts would make the results directory hold two descriptions of one run.
@@ -1811,6 +1839,13 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
     # model (one the registry gives no observer) is distinguishable from a capability that FAILED.
     # The launcher needs that distinction: only the second is a pilot blocker.
     capability = per_query_capability(plan.model_id)
+    if capability and plan.checkpoint_id != "base_iter0_all_categories":
+        # The observer exports the FULL three-category bundle. A single-category diagnostic is a
+        # legitimate run, but its per-query artifact would describe a different experiment, so it is
+        # not attempted -- and saying so is better than binding a bundle artifact to a diagnostic.
+        capability = None
+        observation_note = ("CAPABILITY_ABSENT_FOR_DIAGNOSTIC: the observer covers the full bundle, "
+                            "and this run selected a single category")
     observation_note = f"{capability}: not attempted" if capability else "CAPABILITY_ABSENT"
     per_query_artifact = None
     per_query_artifact_digest = None

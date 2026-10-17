@@ -31,20 +31,34 @@ DATABASE_PATH = configured_database_path()
 RESULTS_ROOT = results_path()
 
 
+#: `artifact_type` values that live under the results root but are not canonical per-query results.
+#: An aggregate report is the official macro output; an observation payload is the model-interpreter
+#: stage of the two-stage export. Neither may be loaded as a `ResultRun`.
+NON_RESULT_ARTIFACT_TYPES = frozenset({
+    "official_aggregate_evaluation_report",
+    "limn_observation_payload",
+})
+
+
 def result_files(root: Path | None = None) -> list[Path]:
     from workbench.backend.operator_config import resolve_config
 
     root = root or results_path()
     files = []
     for path in sorted(root.rglob("*.json")):
-        if path.name == ".gitkeep":
+        # An INTERCHANGE file is not a canonical result: the two-stage observer stages a plain
+        # payload under the results root, and a crash between the stages leaves it there. Loading it
+        # as a ResultRun fails validation and takes the whole index down with it, so both the hidden
+        # naming convention and the declared artifact_type are honoured -- a leftover must never be
+        # able to break an unrelated rebuild.
+        if path.name.startswith("."):
             continue
         try:
             artifact = json.loads(path.read_text())
         except (OSError, json.JSONDecodeError):
             files.append(path)
             continue
-        if artifact.get("artifact_type") == "official_aggregate_evaluation_report":
+        if artifact.get("artifact_type") in NON_RESULT_ARTIFACT_TYPES:
             continue
         files.append(path)
     return files

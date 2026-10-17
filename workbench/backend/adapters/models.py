@@ -139,6 +139,12 @@ class LIMNAdapter(OfficialScriptAdapter):
             # The shared member-root rule: a multi-member artifact keeps its members as siblings
             # inside its resolved directory, a single artifact is itself the member. Delegated so
             # this expression cannot drift from the observer's.
+            # The shared member-root rule, applied to an ALREADY-RESOLVED path: `checkpoint` comes
+            # from `registry.checkpoint_path`, which returns the member directory for a bundle and
+            # the member's own file for a single selection. So the shape is already decided, and the
+            # rule is exactly "directory means the members are inside it". (Resolving from the
+            # declaration instead would be wrong here: this receives a user-supplied path, which
+            # cannot say whether it is a bundle before the artifact exists.)
             "--checkpoint-root", str(checkpoint_member_root(checkpoint)),
             "--dataset-root", str(request.dataset_root),
             "--source-root", str(source),

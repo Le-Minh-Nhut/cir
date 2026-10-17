@@ -1720,3 +1720,48 @@ def test_help_lists_the_same_flags_the_document_promises(tmp_path: Path):
     help_text = result.stdout + result.stderr
     absent = sorted(flag for flag in flags if flag not in help_text)
     assert absent == [], f"--help does not mention: {absent}"
+
+
+def test_the_summary_advances_an_exported_artifact_only_on_a_verifier_verdict() -> None:
+    """A run cannot report itself verified: the verdict does not exist when it writes its report.
+
+    So the launcher advances `PER_QUERY_EXPORTED_UNVERIFIED` to `PER_QUERY_VERIFIED` only when the
+    verification it just ran succeeded AND the receipt binds a per-query artifact digest. Without
+    that, a fully successful LIMN run could never reach the verified state and every pilot would
+    exit 4 -- which a reviewer found, on the very commit that introduced the vocabulary.
+    """
+    script = PC_SH.read_text(encoding="utf-8")
+    assert "PER_QUERY_EXPORTED_UNVERIFIED" in script
+    assert 'per_query_state = "PER_QUERY_VERIFIED"' in script, \
+        "the launcher must be able to advance the state"
+    advancement = script.split('per_query_state = "PER_QUERY_VERIFIED"')[0].rsplit("\n\n", 1)[-1]
+    assert "verified" in advancement, "the advancement must be gated on the verifier"
+    assert "per_query_artifact_digest" in advancement, \
+        "the advancement must require the receipt to bind the artifact"
+
+
+def test_the_summary_translates_the_container_report_path_before_reading_it() -> None:
+    """`verify_run.py` runs in the container, so the path it reports does not exist on the host.
+
+    Reading it directly raised FileNotFoundError, the error was swallowed, and the summary then
+    reported a model that DOES declare an observer as "aggregate-only" -- a false statement that
+    also produced a false FULL-readiness claim at exit 0. Reviewer-found; pinned here.
+    """
+    script = PC_SH.read_text(encoding="utf-8")
+    assert '"/artifacts/"' in script, "the container prefix must be translated"
+    assert "_report_read" in script, "an unreadable report must be distinguishable from absent"
+    # An unreadable report may not be reported as aggregate-only, and may not exit 0.
+    assert "KHÔNG XÁC ĐỊNH ĐƯỢC" in script
+    assert "sys.exit(5)" in script
+
+
+def test_the_summary_exit_codes_match_the_handoff_document() -> None:
+    """The documented operator contract and the code must agree, including the numbers."""
+    docs = (REPO / "workbench/docs/PC_PILOT_HANDOFF.md").read_text(encoding="utf-8")
+    script = PC_SH.read_text(encoding="utf-8")
+    for code in ("sys.exit(0)", "sys.exit(3)", "sys.exit(4)", "sys.exit(5)"):
+        assert code in script or code == "sys.exit(0)", f"{code} missing from pc.sh"
+    for fragment in ("PER_QUERY_EXPORT_FAILED", "PER_QUERY_EXPORTED_UNVERIFIED",
+                     "PER_QUERY_VERIFIED", "CAPABILITY_ABSENT"):
+        assert fragment in script, f"{fragment} missing from pc.sh"
+        assert fragment in docs, f"{fragment} undocumented in the handoff"

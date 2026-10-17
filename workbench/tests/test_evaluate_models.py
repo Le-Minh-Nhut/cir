@@ -1057,3 +1057,35 @@ def test_the_member_root_follows_the_declaration_not_the_filesystem(tmp_path: Pa
     assert checkpoint_member_root(absent, artifact_type="category_specific_whole_models") == absent
     # A bare path with no declaration still resolves (filesystem fallback).
     assert checkpoint_member_root(tmp_path / "limn" / "0_dress_best_model.pt") == tmp_path / "limn"
+
+
+def test_the_plan_and_the_observer_agree_before_the_weights_exist(tmp_path: Path) -> None:
+    """The disagreement a reviewer found: the plan and the observer must resolve the SAME directory.
+
+    `guarded_plan` derives the member root from the DECLARED artifact type, so it is correct before a
+    download. The adapter is handed an already-resolved path (a directory for a bundle, a file for a
+    single selection), so its shared rule is correct there. What must hold is that the two agree --
+    the observer is invoked with the plan's answer, and the adapter's answer for the same selection
+    is the same directory.
+    """
+    from workbench.backend.registry import checkpoint_member_root
+
+    module = load_module()
+    absent = tmp_path / "checkpoints" / "limn"          # not downloaded yet
+    plan = module.EvaluationPlan(
+        model_id="limn", checkpoint_id="base_iter0_all_categories",
+        protocol="fashioniq_val_split", dataset_root=tmp_path, source=tmp_path,
+        checkpoint=absent, cwd=tmp_path, command=[sys.executable, "x"], pin=None,
+        actual_source_commit=None, paper_metrics=None, member_root=absent,
+        artifact_type="category_specific_whole_models")
+    # The observer's argument, exactly as `_run_observation` builds it.
+    observer_root = plan.member_root or checkpoint_member_root(plan.checkpoint,
+                                                               artifact_type=plan.artifact_type)
+    assert observer_root == absent
+
+    # Once downloaded, `checkpoint_path` resolves the bundle to that same directory, and the
+    # adapter's shared rule returns it unchanged -- so the two answers coincide.
+    absent.mkdir(parents=True)
+    for category in ("dress", "shirt", "toptee"):
+        (absent / f"0_{category}_best_model.pt").write_bytes(b"w")
+    assert checkpoint_member_root(absent) == absent == observer_root

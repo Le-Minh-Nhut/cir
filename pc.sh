@@ -1545,7 +1545,7 @@ for line in reversed(out.strip().splitlines()):
         except Exception:
             pass
 " "$verify_out" 2>/dev/null || true)"
-    python3 - <<'PYDOC' "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" "${FINAL_RUN_PROOF_UNAVAILABLE:-0}" "${FINAL_RUN_REPORT_PATH:-}"
+    python3 - <<'PYDOC' "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" "${FINAL_RUN_PROOF_UNAVAILABLE:-0}" "${FINAL_RUN_REPORT_PATH:-}" "$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$(env_value HOST_WORKBENCH_ARTIFACTS_ROOT ../../workbench/artifacts)")"
 import json, sys
 
 verify_out = sys.argv[1]
@@ -1582,14 +1582,35 @@ verified = bool(result.get("is_research_evidence", False))
 # rather than guessed, because the report is what the run itself recorded.
 per_query_capability = None
 per_query_state = None
-try:
-    with open(sys.argv[8] if len(sys.argv) > 8 else "", "r", encoding="utf-8") as fh:
-        _report = json.load(fh)
-    per_query_capability = _report.get("per_query_capability")
-    per_query_state = _report.get("per_query_state")
-    _per_query_reason = _report.get("per_query_export_reason") or ""
-except Exception:
-    _per_query_reason = ""
+_per_query_reason = ""
+# The verifier runs INSIDE the container, so the path it reports is the CONTAINER's
+# (`/artifacts/reports/...`), which does not exist on the host. Translating the container prefix onto
+# the host artifacts root is what lets this read the run's own report. Without it the read failed and
+# the summary silently fell through to "aggregate-only", which is a false statement about a model
+# that does declare an observer -- and, worse, a false FULL-readiness claim.
+_report_path = sys.argv[8] if len(sys.argv) > 8 else ""
+_host_artifacts = sys.argv[9] if len(sys.argv) > 9 else ""
+if _report_path and _host_artifacts and _report_path.startswith("/artifacts/"):
+    _report_path = _host_artifacts.rstrip("/") + "/" + _report_path[len("/artifacts/"):]
+_report_read = False
+if _report_path:
+    try:
+        with open(_report_path, "r", encoding="utf-8") as fh:
+            _report = json.load(fh)
+        per_query_capability = _report.get("per_query_capability")
+        per_query_state = _report.get("per_query_state")
+        _per_query_reason = _report.get("per_query_export_reason") or ""
+        _report_read = True
+    except Exception as error:
+        _per_query_reason = f"không đọc được report của lượt chạy: {type(error).__name__}"
+
+# The verification the launcher just ran IS the corroboration the run could not report about itself:
+# a run cannot say it is verified (that verdict does not exist yet when it writes its report), so the
+# launcher advances the state here. Without this, a fully successful LIMN run could never reach
+# PER_QUERY_VERIFIED and every pilot would exit 4.
+if verified and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED" \
+        and result.get("per_query_artifact_digest"):
+    per_query_state = "PER_QUERY_VERIFIED"
 # Both lists, because the refusal can come from either question: an incomplete/corroboration
 # failure is in `reasons`, while a run that executed correctly but is a self-test (or has no
 # publishable comparison) is refused only by `evidence_reasons`.
@@ -1687,7 +1708,11 @@ print(f"  Recall@10 : {fmt_val(obs_metrics.get('r10'))}")
 print(f"  Recall@50 : {fmt_val(obs_metrics.get('r50'))}")
 print(f"  Mean      : {fmt_val(obs_metrics.get('mean'))}")
 print("-" * 80)
-if per_query_state == "CAPABILITY_ABSENT" or per_query_capability is None:
+if not _report_read:
+    # Unknown is not "aggregate-only". Stating the latter here would tell the operator a model has no
+    # observer when the truth is that this launcher could not read what the run recorded.
+    print(f"Phân tích theo truy vấn  : KHÔNG XÁC ĐỊNH ĐƯỢC — {_per_query_reason}")
+elif per_query_state == "CAPABILITY_ABSENT" or per_query_capability is None:
     print(f"Phân tích theo truy vấn  : KHÔNG HỖ TRỢ CHO MÔ HÌNH NÀY (aggregate-only; không phải lỗi)")
 elif per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED":
     print(f"Phân tích theo truy vấn  : ĐÃ XUẤT Top-K — CHỜ TRÌNH XÁC THỰC chứng thực")
@@ -1716,6 +1741,9 @@ print("=========================================================================
 # The exit status is what a script or a CI step reads, so it must carry the same meaning as the
 # conclusion above: an aggregate-only model is complete, while a model that DECLARED a per-query
 # observer and exported nothing has NOT delivered the full pilot this run was asked for.
+if not _report_read:
+    # The launcher cannot say a declared observer succeeded if it could not read the verdict.
+    sys.exit(5)
 if per_query_capability and per_query_state in (None, "PER_QUERY_EXPORT_FAILED"):
     sys.exit(3)
 if per_query_capability and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED":

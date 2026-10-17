@@ -739,3 +739,29 @@ def test_the_schema_still_requires_exactly_the_eligible_depth() -> None:
         {"rank": last_rank, "image_id": f"extra-{last_rank}", "score": 0.01})
     with pytest.raises(ValidationError, match="effective saved retrieval depth"):
         ResultRun.model_validate(payload2)
+
+
+def test_a_declared_eligible_count_cannot_widen_the_protocol_ceiling() -> None:
+    """A self-declared count may narrow the bound, never widen it past the protocol.
+
+    A verifier found this: declaring `category_eligible_counts[category] == gallery_size` under an
+    excluded protocol made `min(size, declared)` equal the raw size, so a rank equal to the masked
+    reference's slot was admitted -- the phantom rank F-15 exists to prevent.
+    """
+    run = build_result_run([_category("dress", 20, count=2, target_rank=2, top_depth=19)],
+                           **_identity(top_k_saved=100))
+    payload = run.model_dump(mode="json")
+    # Claim every candidate is eligible, which the protocol cannot produce.
+    payload["run"]["category_eligible_counts"] = {"dress": 20}
+    # Rank 20 is the masked reference's slot, so it must be refused regardless of what is declared.
+    payload["queries"][0]["target_rank"] = 20
+    with pytest.raises(ValidationError, match="target_rank exceeds the eligible candidate count"):
+        ResultRun.model_validate(payload)
+
+    # Narrowing is allowed: a claim below the ceiling is honoured, and the depth follows it.
+    narrower = run.model_dump(mode="json")
+    narrower["run"]["category_eligible_counts"] = {"dress": 10}
+    narrower["run"]["top_k_saved"] = 10
+    for query in narrower["queries"]:
+        query["top_results"] = query["top_results"][:10]
+    ResultRun.model_validate(narrower)
