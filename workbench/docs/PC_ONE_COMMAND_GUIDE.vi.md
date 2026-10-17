@@ -338,6 +338,35 @@ CIR Failure Analysis Workbench được xây dựng theo nguyên tắc bảo to�
   ./pc.sh --force
   ```
 
+- **Lệnh mặc định chạy ĐẦY ĐỦ hoặc TỪ CHỐI, không bao giờ thoái hoá**
+
+  `./pc.sh` yêu cầu **bundle đầy đủ ba danh mục** mà registry của mô hình đã khai
+  (`base_iter0_all_categories` với LIMN). Hai kết cục duy nhất:
+
+  * **Chạy đủ** — cả ba trọng số đã tải, chạy được, mapping đã xác thực, sha khớp.
+  * **Từ chối nêu tên** — thiếu một thành phần thì script **dừng** ở giai đoạn
+    `CHECKPOINT_SELECTION`, in ra **đúng thành phần nào còn thiếu hoặc chưa chạy được** và
+    **không xếp job nào**. Xem mục 6 để tải nốt rồi chạy lại.
+
+  Script sẽ **không** âm thầm rút xuống một danh mục rồi trình bày như một lần tái lập đầy đủ. Một
+  danh mục đơn lẻ làm sai lệch chính đại lượng mà bài báo công bố (macro trên ba danh mục), nên nó
+  chỉ được chạy khi bạn **chủ động** yêu cầu:
+
+  ```bash
+  ./pc.sh --checkpoint base_iter0_dress     # CHỦ ĐỘNG chạy một danh mục
+  ```
+
+  Khi đó script nói rõ đây **KHÔNG** phải tái lập đầy đủ, và UI cũng gắn nhãn
+  `Single-category (partial evaluation — NOT complete reproduction)`.
+
+- **Kết quả đã chứng thực thì không tự "cũ đi"**
+
+  Nếu sau khi có kết quả chứng thực mà bạn (hoặc một tiến trình khác) sửa **một byte** của trọng số,
+  đổi file `command.json` hay log của lượt chạy, hệ thống sẽ **rút chứng thực** ở lần đọc kế tiếp:
+  lượt chạy vẫn hiển thị (đó là một sự kiện đã xảy ra) nhưng **không còn** được trình bày là bằng
+  chứng nghiên cứu. Khôi phục lại byte gốc thì chứng thực trở lại. Đây là chủ ý: tem chứng thực là
+  một phát biểu về **nội dung hiện tại** của artifact, không phải một thuộc tính vĩnh viễn của tên file.
+
 ---
 
 ## 12. Log
@@ -382,6 +411,18 @@ Trong nghiên cứu thực nghiệm khoa học máy tính, việc hiểu đúng 
 1. **Chạy thành công (`Execution Success`)**:
    - Là việc tiến trình chạy từ đầu đến cuối với mã thoát 0 (`return_code == 0`) và trạng thái job là `completed`.
    - Ý nghĩa: Hệ thống kỹ thuật và phần mềm không bị crash. Điều này chưa nói lên độ chính xác về mặt khoa học của mô hình.
+
+   **Quan trọng — con số đến từ output, không từ lời tự khai.** Trình xác thực
+   (`verify_run.py`) **đọc lại chính `stdout.log`/`stderr.log` của lượt chạy** (hai file đã được
+   `evidence_digest` ràng buộc vào completion proof) và **trích xuất lại** metric bằng đúng parser mà
+   evaluator đã dùng, rồi **so với con số mà report khai**. Nếu output không chứa dòng metric nào,
+   hoặc chứa số khác với report, lượt chạy **không** được coi là bằng chứng nghiên cứu.
+
+   Lý do phải làm vậy: các trường như `extraction_status` hay `metric_extraction_available` do **chính
+   lượt chạy tự viết về mình**. Một report có thể khai `EXTRACTED_VERIFIED` mang số của bài báo trong
+   khi output không hề có metric — trước đây hệ thống đã chấp nhận đúng tình huống đó. Output là phần
+   duy nhất mà report **không thể tự trả lời thay**.
+
 2. **Model đã được xác thực GPU (`GPU-Verified Runtime Capability`)**:
    - Khác biệt hoàn toàn với việc chỉ chạy được trên CPU.
    - Ý nghĩa: Khẳng định rằng các phép toán tensor thực sự chạy trên nhân phần cứng của GPU NVIDIA (RTX 5070 Ti) với thư viện compiled ELF tương thích. Hệ thống hoạt động theo nguyên tắc fail-closed, tuyệt đối không bao giờ làm giả capability GPU.
@@ -417,10 +458,20 @@ Giao diện Web hiển thị nhãn riêng cho từng trạng thái: một run ch
 
 ### Từ vựng phán quyết của release verifier
 
-`workbench/docker/release_verify.sh` không còn chỉ nhìn J1–J12: nó đánh giá **9 chiều độc lập**
+`workbench/docker/release_verify.sh` không còn chỉ nhìn J1–J12: nó đánh giá **10 chiều độc lập**
 (`STATIC_SOURCE`, `DEPLOYMENT`, `CONFIGURATION`, `MODEL_ENVIRONMENT`, `OPERATIONS`, `GPU_RUNTIME`,
-`MODEL_INFERENCE`, `MODEL_EVALUATION`, `SCIENTIFIC_OUTPUT`) và chỉ đạt `RELEASE_READY` khi **mọi**
-chiều bắt buộc PASS.
+`MODEL_INFERENCE`, `MODEL_EVALUATION`, `SCIENTIFIC_OUTPUT`, `TARGET_BINDING`) và chỉ đạt
+`RELEASE_READY` khi **mọi** chiều bắt buộc PASS.
+
+Hai điểm cần lưu ý về cách các chiều được quyết định:
+
+- **`TARGET_BINDING`** trói mọi chiều gắn với mục tiêu vào **một danh tính phát hành đã khai**
+  (`WORKBENCH_RELEASE_TARGET_MODEL/CHECKPOINT/PROTOCOL/INTERPRETER`, mặc định là artifact LIMN mà
+  repo này phát hành). Bằng chứng của model/checkpoint/giao thức/runtime adaptation **khác** bị **nêu
+  tên** trong `off_target_evidence_runs` và **không** được tính. Một mục tiêu không giải được → chiều
+  này FAIL → `RELEASE_BLOCKED`, chứ không âm thầm nới thành "nhận bất kỳ".
+- **Một chiều không thể PASS nếu check của chính nó không PASS.** `SCIENTIFIC_OUTPUT` cần cả check
+  `J7` **và** bằng chứng; bằng chứng một mình không đủ để bật một chiều đang PENDING hay FAIL.
 
 | Verdict | Nghĩa |
 |---|---|
