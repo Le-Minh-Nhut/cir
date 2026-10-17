@@ -11,10 +11,11 @@ Mục tiêu không phải một báo cáo ấn tượng. Mục tiêu là phần 
 
 | | |
 |---|---|
-| **TESTED_SOURCE_SHA** | `20afc55` (cây sạch, 0 file chưa commit) |
+| **TESTED_SOURCE_SHA** | `ddcb71f` (cây sạch, 0 file chưa commit) |
+| **RELEASE_COMMIT_SHA** | `0943042` — chỉ tài liệu; nguồn sản xuất giống hệt `ddcb71f` |
 | Baseline đầu chiến dịch | `cf52311` |
 | Mốc audit vòng 01 | `a2861b2` |
-| Cây trước khi viết báo cáo | `5f36116` — toàn bộ suite: **1169 passed, 0 failed** (24:36) |
+| Cây cuối (đóng băng) | `ddcb71f` — toàn bộ suite: **1171 passed, 0 failed** (24:54) |
 
 Nguồn sản xuất **không đổi** sau lần chạy acceptance cuối: báo cáo này chỉ sửa tài liệu.
 
@@ -29,6 +30,8 @@ Nguồn sản xuất **không đổi** sau lần chạy acceptance cuối: báo 
 | `5f36116` | Wave D — 5 defect từ slice định danh vòng 02 |
 | `1a2b875` | Wave E — 6 defect từ red-team |
 | `20afc55` | Wave F — **verifier tự trích xuất lại metric** (defect nghiêm trọng nhất) |
+| `ddcb71f` | Wave G — giới hạn re-extraction cho model có parser (không từ chối model không parser) |
+| `0943042` | Tài liệu: báo cáo cuối + guide |
 
 ## C. Manifest nguồn
 
@@ -164,6 +167,7 @@ Một mẫu lặp lại chi phối gần hết các defect: **một sự thật 
 | `...::test_env_quoted_port_with_a_trailing_comment_is_valid` | `.env` hợp lệ không bị từ chối |
 | `...::test_env_bare_word_without_an_assignment_is_skipped` | Regression của chính tôi |
 | `test_e2e_release_chain.py` | Chuỗi thật đầu-cuối + tamper→refused→restore→re-certified |
+| `test_release_invariants.py::test_i01b_...` | Re-extraction: report khai số, output phải khớp; model không parser được miễn |
 
 ## H. Ma trận hợp đồng liên module
 
@@ -195,8 +199,9 @@ tính đầy đủ của ma trận cũng là một test (thiếu I nào, hoặc 
 
 | Lần chạy | Cây | Kết quả |
 |---|---|---|
-| Cuối, đầy đủ | `5f36116` | **1169 passed, 0 failed** (24:36) |
-| Sau wave F (re-extraction) | `20afc55` | xem `M` — 5 fixture builder phải bắt đầu phát output thật |
+| **Cuối, đầy đủ (đóng băng)** | **`ddcb71f`** | **1171 passed, 0 failed** (24:54) |
+| Trước đó | `5f36116` | 1169 passed, 0 failed (24:36) |
+| Sau wave F (re-extraction) | `20afc55` | 5 fixture builder phải bắt đầu phát output thật |
 | Heavy E2E (`*_master_e2e`, `autopilot_e2e`) | gồm trong lần chạy đầy đủ | pass — không deselect, không skip, không xfail |
 | `test_release_invariants.py` | `20afc55` | 22 passed |
 
@@ -270,7 +275,7 @@ dùng được, nên live acceptance đầy đủ không thể PASS ở đây (n
 git clone git@github.com:Le-Minh-Nhut/cir.git
 cd cir
 git checkout research/cir-failure-workbench
-git reset --hard 20afc55          # TESTED_SOURCE_SHA
+git reset --hard ddcb71f          # TESTED_SOURCE_SHA (nguồn sản xuất đã kiểm thử)
 ./pc.sh
 ```
 
