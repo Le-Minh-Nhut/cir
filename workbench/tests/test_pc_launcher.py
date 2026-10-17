@@ -1689,3 +1689,34 @@ def test_env_bare_word_without_an_assignment_is_skipped(tmp_path: Path):
     sandbox, env = setup_sandbox(tmp_path, custom_env_content=custom)
     proc = run_pc(sandbox, ["--doctor"], env)
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_every_flag_the_handoff_document_names_is_actually_parsed(tmp_path: Path):
+    """The handoff doc lists the CLI flags an operator will use; each must exist in pc.sh.
+
+    A documented option that the parser rejects is worse than an undocumented one, because the
+    operator plans around it. This reads the flags out of the document and asserts pc.sh handles
+    each -- so a doc edit that invents a flag fails here.
+    """
+    doc = (REPO / "workbench/docs/PC_PILOT_HANDOFF.md").read_text(encoding="utf-8")
+    marker = "Cờ đã tồn tại"
+    assert marker in doc, "the handoff document no longer names its flags"
+    listing = doc.split(marker, 1)[1].split("\n", 1)[0]
+    flags = [token.strip("`:,.") for token in listing.split() if token.startswith("`--")]
+    assert flags, f"no flags parsed out of: {listing!r}"
+    script = PC_SH.read_text(encoding="utf-8")
+    missing = [flag for flag in flags if flag not in script]
+    assert missing == [], f"documented but absent from pc.sh: {missing}"
+
+
+def test_help_lists_the_same_flags_the_document_promises(tmp_path: Path):
+    """`--help` is the operator's own discovery path, so it must agree with the document."""
+    doc = (REPO / "workbench/docs/PC_PILOT_HANDOFF.md").read_text(encoding="utf-8")
+    listing = doc.split("Cờ đã tồn tại", 1)[1].split("\n", 1)[0]
+    flags = {token.strip("`:,.") for token in listing.split() if token.startswith("`--")}
+    result = subprocess.run([str(PC_SH), "--help"], capture_output=True, text=True,
+                            cwd=str(REPO), timeout=120)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    help_text = result.stdout + result.stderr
+    absent = sorted(flag for flag in flags if flag not in help_text)
+    assert absent == [], f"--help does not mention: {absent}"
