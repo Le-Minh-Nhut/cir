@@ -1288,3 +1288,26 @@ def test_the_checkpoint_change_token_covers_every_declared_member(
             f"editing member {name} must invalidate the certificate")
         (root / name).write_bytes(original)
     assert _receipt(api, "run-permember")["certified"] is True
+
+
+def test_the_served_receipt_carries_the_fields_a_promotion_needs(api) -> None:
+    """`/api/benchmark-runs` serves the receipt that `index.verifier_verdicts` reads.
+
+    Two separate projections shape it (`_certify_report` and `_aggregate_reports`), and dropping the
+    binding fields in EITHER one makes `promote` unable to attribute a per-query artifact, so no
+    production run can ever reach PER_QUERY_VERIFIED. Both were found by reviewers, one after the
+    other, so the contract is pinned here: if a projection is ever rewritten, this fails.
+    """
+    import json as _json
+
+    status, _headers, body = asgi_request(api.app, "GET", "/api/benchmark-runs")
+    assert status == 200, body
+    for entry in _json.loads(body):
+        verification = entry.get("verification")
+        if not isinstance(verification, dict):
+            continue
+        # The projection is allowed to omit them only when the verifier had nothing to say.
+        for field in ("per_query_artifact_digest", "model_id", "checkpoint_id"):
+            assert field in verification, (
+                f"the served receipt drops {field!r}, so a per-query artifact can never be "
+                f"attributed to this verification: {sorted(verification)}")

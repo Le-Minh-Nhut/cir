@@ -207,6 +207,20 @@ PER_QUERY_PARITY_FAILED = "PER_QUERY_PARITY_FAILED"
 PER_QUERY_VERIFIED = "PER_QUERY_VERIFIED"
 SYNTHETIC_OR_MOCK = "SYNTHETIC_OR_MOCK"
 
+#: The states `instrumentation_parity` may hold. Named as a closed set because the promotion filter
+#: below must distinguish "this artifact is only waiting to be checked" from a defect -- and a free
+#: string let an artifact choose its own reason text and slip through a substring test.
+INSTRUMENTATION_PARITY_STATES = frozenset({
+    "INSTRUMENTATION_PARITY_VERIFIED",
+    "INSTRUMENTATION_PARITY_MISMATCH",
+})
+
+#: The exact reason that means "no defect; a verifier has simply not spoken yet". Compared by
+#: EQUALITY, never as a substring: an artifact controls its own field values, so any substring test
+#: over its text can be satisfied by the artifact itself.
+AWAITING_CORROBORATION = ("awaiting corroboration by the authoritative verifier "
+                          "(evidence ledger + completion proof)")
+
 #: What an experiment artifact must RECORD before any layer may call it verified evidence. Named
 #: here once so the exporter, the validator, the index and the API cannot drift apart (F-13).
 EXPERIMENT_REQUIRED_PROVENANCE = ("command_digest", "environment_digest", "bundle_manifest_digest")
@@ -273,8 +287,12 @@ def admission(result: "ResultRun") -> tuple[str, list[str]]:
     if run.instrumentation_parity is None:
         reasons.append("instrumentation parity has not been recorded for this artifact")
         return PER_QUERY_PARITY_PENDING, reasons
-    if run.instrumentation_parity != "INSTRUMENTATION_PARITY_VERIFIED":
-        reasons.append(f"unrecognized instrumentation parity state {run.instrumentation_parity!r}")
+    if run.instrumentation_parity not in INSTRUMENTATION_PARITY_STATES:
+        # An unrecognized state is a DEFECT, not a passthrough: the closed set above is what the
+        # promotion filter relies on, and a free string here was exploitable.
+        reasons.append("unrecognized instrumentation parity state "
+                       f"{run.instrumentation_parity!r}; expected one of "
+                       f"{sorted(INSTRUMENTATION_PARITY_STATES)}")
         return PER_QUERY_UNVERIFIED, reasons
     if reasons:
         # Provenance incomplete: the artifact cannot be promoted even by a verifier, because the
@@ -282,8 +300,7 @@ def admission(result: "ResultRun") -> tuple[str, list[str]]:
         return PER_QUERY_UNVERIFIED, reasons
     # Everything the artifact can prove about itself is present. That is still not verification:
     # the verifier must corroborate it against the ledger and the completion proof.
-    return PER_QUERY_UNVERIFIED, ["awaiting corroboration by the authoritative verifier "
-                                  "(evidence ledger + completion proof)"]
+    return PER_QUERY_UNVERIFIED, [AWAITING_CORROBORATION]
 
 def promote(result: "ResultRun", state: str, verifier_verdict: dict | None,
             artifact_digest: str | None = None) -> tuple[str, list[str]]:
@@ -305,8 +322,7 @@ def promote(result: "ResultRun", state: str, verifier_verdict: dict | None,
     # category set, a reused checkpoint, a missing bundle digest. The verifier cannot see those -- it
     # judges the aggregate report -- so they are re-checked here. Without this, a dress-only
     # experiment with a matching digest became PER_QUERY_VERIFIED (found in review).
-    blocking = [reason for reason in admission(result)[1]
-                if "awaiting corroboration" not in reason]
+    blocking = [reason for reason in admission(result)[1] if reason != AWAITING_CORROBORATION]
     if blocking:
         return state, blocking
     if not verifier_verdict:

@@ -44,6 +44,16 @@ và một cái khiến tính năng trung tâm chưa từng chạy thật.
 | **F-27** | **P1** | `--strict-real` **chặn mọi experiment hợp lệ** (vì reason "đang chờ corroboration" bị coi là thiếu provenance) và **cho qua** artifact `PARITY_FAILED`. Mức độ bị đảo. | Tách reason provenance khỏi reason chờ-xác-thực; `PARITY_FAILED` là BLOCKED dưới strict-real. |
 | **F-28** | **P1** | Ghi không nguyên tử: `load_mock_results` và report aggregate dùng `write_text`/`open("x")` trực tiếp → gián đoạn để lại JSON cắt cụt, làm cả results root không load được và không bao giờ ghi đè được. Destination là symlink cũng được chấp nhận. | Ghi qua temp + `fsync` + `os.link`/`os.replace`; từ chối destination symlink. |
 
+### B3. Vòng xác minh chính các bản sửa (ba lỗi nữa, hai trong đó là bản sửa dở của tôi)
+
+Hai verifier đọc `534faa5` để **bác bỏ chính các bản sửa**. Kết quả: fix 1 và 5 `HOLDS`; ba chỗ khác hỏng.
+
+| ID | Mức | Tái hiện | Sửa |
+|---|---|---|---|
+| **F-29** | **P1** | Filter lọc reason dùng **substring** `"awaiting corroboration" not in reason`, mà `instrumentation_parity` là chuỗi tự do → artifact đặt giá trị bằng đúng câu đó, reason lỗi "unrecognized instrumentation parity state 'awaiting corroboration'" bị lọc mất, và artifact **được promote**. | Tập trạng thái parity là **tập đóng**; reason so sánh bằng **đẳng thức** với hằng số `AWAITING_CORROBORATION`. Test dựng lại đúng exploit. |
+| **F-30** | **P0** | `main._aggregate_reports` có **projection thứ hai** của receipt, và nó cũng rơi mất `per_query_artifact_digest`/`model_id`/`checkpoint_id`. Sửa chỗ thứ nhất không đủ: `index.verifier_verdicts` đọc đúng dict này, nên vẫn không lượt nào promote được. | Cả hai projection giữ đủ trường; test API chốt receipt phục vụ ra phải có chúng. |
+| **F-31** | **P1** | `--strict-real` bỏ qua `PER_QUERY_PARITY_PENDING` (chỉ cảnh báo, exit 0) → artifact chưa ai kiểm vẫn qua cổng phát hành. | Mọi trạng thái chưa `VERIFIED` đều bị từ chối dưới strict-real; không có cờ thì vẫn là cảnh báo để soi workspace. |
+
 **Bài học được ghi lại, không chỉ nói suông**: cả ba lỗi trong bản sửa của tôi đều lọt qua test vì test
 **stub đúng cái hàm đang được chứng minh** (F-23, F-24) hoặc nới lỏng kiểm tra để test xanh (F-25).
 Các test thay thế giờ đi qua đường thật: stdout thật của exporter, và `verifier_verdicts` thật khi có

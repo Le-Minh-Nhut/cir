@@ -626,3 +626,72 @@ def test_a_parity_failure_is_rejected_by_strict_real(tmp_path: Path) -> None:
     output: list[str] = []
     assert validate_file(artifact, strict_real=True, output=output.append) is False, output
     assert any("PARITY_FAILED" in line and "BLOCKED" in line for line in output), output
+
+
+def test_a_reason_filter_cannot_be_defeated_by_the_artifacts_own_text() -> None:
+    """The promotion filter must compare against a closed set, never a substring of artifact text.
+
+    A verifier found this: `instrumentation_parity` was a free string, so an artifact could set it to
+    the text of the "awaiting corroboration" reason, making the filter drop the real defect that
+    followed it. The state is now drawn from a closed set and the reason compared by equality.
+    """
+    from workbench.backend.schemas.results import (
+        INSTRUMENTATION_PARITY_STATES, PER_QUERY_UNVERIFIED, PER_QUERY_VERIFIED, promote,
+    )
+
+    assert "awaiting corroboration" not in INSTRUMENTATION_PARITY_STATES
+
+    complete = build_result_run(
+        [_category(category, 300, target_rank=5) for category in ("dress", "shirt", "toptee")],
+        **{**_identity(), "data_kind": "experiment",
+           "run_id": "20260101T000000000000Z_limn_ckpt_selftext",
+           "command_digest": "c" * 64, "environment_digest": "d" * 64,
+           "bundle_manifest_digest": "e" * 64,
+           "instrumentation_parity": "awaiting corroboration"})  # the exploit
+    digest = "a" * 64
+    receipt = {"certified": True, "is_research_evidence": True,
+               "per_query_artifact_digest": digest, "model_id": complete.run.model_id,
+               "checkpoint_id": complete.run.checkpoint_id}
+    state, blocking = promote(complete, PER_QUERY_UNVERIFIED, receipt, artifact_digest=digest)
+    assert state == PER_QUERY_UNVERIFIED, "an unrecognized parity state must never be promoted"
+    assert blocking and "unrecognized instrumentation parity state" in blocking[0], blocking
+    # And the legitimate "no verifier yet" reason is still recognized by equality.
+    clean = build_result_run(
+        [_category(category, 300, target_rank=5) for category in ("dress", "shirt", "toptee")],
+        **{**_identity(), "data_kind": "experiment",
+           "run_id": "20260101T000000000000Z_limn_ckpt_oktext01",
+           "command_digest": "c" * 64, "environment_digest": "d" * 64,
+           "bundle_manifest_digest": "e" * 64,
+           "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED"})
+    state, blocking = promote(clean, PER_QUERY_UNVERIFIED,
+                              {**receipt, "model_id": clean.run.model_id,
+                               "checkpoint_id": clean.run.checkpoint_id},
+                              artifact_digest=digest)
+    assert state == PER_QUERY_VERIFIED and blocking == [], blocking
+
+
+def test_strict_real_rejects_every_unresolved_parity_state(tmp_path: Path) -> None:
+    """A release gate must not accept an artifact whose numbers nobody established.
+
+    PARITY_PENDING slipped through `--strict-real` (found by a verifier): it was reported as a
+    warning and the exit code stayed 0, so an unchecked artifact passed the gate. FAILED is a
+    defect and PENDING is an absence of checking -- both are rejections at release time, and both
+    remain warnings without the flag so a workspace in progress stays inspectable.
+    """
+    from workbench.scripts.validate_results import validate_file
+
+    for parity in ("INSTRUMENTATION_PARITY_MISMATCH", None):
+        run = build_result_run(
+            [_category(category, 300, target_rank=5) for category in ("dress", "shirt", "toptee")],
+            **{**_identity(), "data_kind": "experiment",
+               "run_id": f"20260101T000000000000Z_limn_ckpt_gate{str(parity)[:4]}",
+               "command_digest": "c" * 64, "environment_digest": "d" * 64,
+               "bundle_manifest_digest": "e" * 64, "instrumentation_parity": parity})
+        artifact = tmp_path / f"gate-{str(parity)[:8]}.json"
+        artifact.write_text(run.model_dump_json())
+        output: list[str] = []
+        assert validate_file(artifact, strict_real=True, output=output.append) is False, (parity, output)
+        assert any("BLOCKED" in line for line in output), (parity, output)
+        # Without the flag it is inspectable as a warning.
+        warnings: list[str] = []
+        assert validate_file(artifact, strict_real=False, output=warnings.append) is True, warnings

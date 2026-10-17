@@ -773,6 +773,13 @@ def _aggregate_reports() -> list[dict]:
             "report_digest": digest,
             "reasons": list(receipt["reasons"]),
             "evidence_reasons": list(receipt["evidence_reasons"]),
+            # The fields a consumer needs to attribute a PER-QUERY artifact to THIS verification.
+            # `index.verifier_verdicts` reads exactly this dict, so omitting them here made
+            # `promote` unable to bind and no production run could ever be verified -- the second
+            # place this dropped them (found by a verifier after the first was fixed).
+            "per_query_artifact_digest": receipt.get("per_query_artifact_digest"),
+            "model_id": receipt.get("model_id"),
+            "checkpoint_id": receipt.get("checkpoint_id"),
         }
         reports.append(report)
     return reports

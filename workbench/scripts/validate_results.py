@@ -32,8 +32,8 @@ def _report_provenance(runs: list[ResultRun], strict_real: bool, output: Callabl
     release gate wants; without it the state is reported as a warning so the operator can still
     inspect the workspace.
     """
-    from workbench.backend.schemas.results import (PER_QUERY_PARITY_FAILED, PER_QUERY_UNVERIFIED,
-                                               SYNTHETIC_OR_MOCK)
+    from workbench.backend.schemas.results import (AWAITING_CORROBORATION, PER_QUERY_UNVERIFIED,
+                                               PER_QUERY_VERIFIED, SYNTHETIC_OR_MOCK)
 
     valid = True
     for result in runs:
@@ -45,7 +45,7 @@ def _report_provenance(runs: list[ResultRun], strict_real: bool, output: Callabl
             # merely not yet checked by the verifier. --strict-real asks whether the artifact records
             # what its verification needs, so that reason alone must not fail it (review finding:
             # every valid experiment was being BLOCKED).
-            provenance_reasons = [r for r in reasons if "awaiting corroboration" not in r]
+            provenance_reasons = [r for r in reasons if r != AWAITING_CORROBORATION]
             if not provenance_reasons:
                 output(f"[OK] {result.run.run_id}: provenance complete; awaiting verifier corroboration")
                 continue
@@ -53,14 +53,15 @@ def _report_provenance(runs: list[ResultRun], strict_real: bool, output: Callabl
             output(f"[{level}] {result.run.run_id}: {'; '.join(provenance_reasons)}")
             valid = valid and not strict_real
         else:
-            # parity pending/failed: never silently accepted as evidence. A FAILED parity is a
-            # defect in the artifact, so `--strict-real` must reject it -- reporting it as a warning
-            # left the exit code 0 while a clean-but-unchecked run was blocked, which inverted the
-            # severity (found in review).
-            failed = state == PER_QUERY_PARITY_FAILED
-            level = "BLOCKED" if (failed and strict_real) else "WARN"
+            # A parity state that is not VERIFIED means the artifact's numbers are not established:
+            # FAILED is a defect, and PENDING means nobody checked. `--strict-real` is a release
+            # gate, so it must reject both -- accepting PENDING there let an unchecked artifact
+            # through the gate (found by a verifier). Without the flag both are reported as warnings
+            # so an operator can still inspect a workspace in progress.
+            unresolved = state != PER_QUERY_VERIFIED
+            level = "BLOCKED" if (unresolved and strict_real) else "WARN"
             output(f"[{level}] {result.run.run_id}: {state}: {'; '.join(reasons)}")
-            valid = valid and not (failed and strict_real)
+            valid = valid and not (unresolved and strict_real)
     return valid
 
 

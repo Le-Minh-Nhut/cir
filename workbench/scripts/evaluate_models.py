@@ -1573,7 +1573,21 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
 
     try:
         import json as _json
-        payload = _json.loads(completed.stdout)
+        # The exporter emits exactly one JSON object, but a compiled dependency could still write to
+        # fd 1 directly, which no Python-level discipline can prevent. So parse the LAST line that
+        # looks like the status object rather than trusting the whole stream.
+        payload = None
+        for line in reversed([line for line in (completed.stdout or "").splitlines() if line.strip()]):
+            if line.lstrip().startswith("{"):
+                try:
+                    candidate = _json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(candidate, dict) and "published" in candidate:
+                    payload = candidate
+                    break
+        if payload is None:
+            raise ValueError("no status object on stdout")
         artifact = Path(payload["published"])
     except (ValueError, KeyError, TypeError):
         return None, "observer did not report a published artifact path", None, None

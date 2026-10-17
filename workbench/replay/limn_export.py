@@ -98,7 +98,7 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
         for category, items in sorted(mismatches.items()):
             for item in items:
                 print(f"[BLOCKED] QUERY_EXPORT_PARITY_MISMATCH {category}: {item}", file=sys.stderr)
-        print(json.dumps(status, indent=2))
+        print(json.dumps(status, separators=(",", ":")))
         return 1
 
     # Every member of the bundle, with its verified digest: one scalar could only name dress, so a
@@ -148,10 +148,12 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
         data_kind="experiment" if run_id else "mock",
         reproduced_metrics=aggregate,
     )
-    # The JSON line is the machine-readable contract the orchestrator parses; everything else goes
-    # to stderr. Printing a human note after the JSON on stdout made the parent's parse fail with
-    # "Extra data", so the exporter appeared to succeed while the parent recorded no artifact.
-    print(json.dumps({**status, "published": str(destination)}, indent=2))
+    # The JSON is the machine-readable contract the orchestrator parses, and it is emitted as ONE
+    # compact line so a caller can identify it even if a compiled dependency writes to fd 1. There is
+    # exactly one such line per run; everything human-readable goes to stderr. (Printing a note after
+    # the JSON made the parent's parse fail with "Extra data", so the exporter appeared to succeed
+    # while the parent recorded no artifact.)
+    print(json.dumps({**status, "published": str(destination)}, separators=(",", ":")))
     print("[PENDING] PC GPU validation: instrumentation parity was checked against this run's own "
           "native aggregate, not against a real target-GPU inference", file=sys.stderr)
     return 0
