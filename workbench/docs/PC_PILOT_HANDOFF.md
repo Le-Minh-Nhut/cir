@@ -5,17 +5,22 @@ trên máy dev, cái gì chỉ có thể kiểm trên máy đích, và cách đ�
 
 **Chưa từng chạy trên RTX 5070 Ti.** Không có chứng thư GPU nào trong repo.
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `84ec6f1`** — mọi test, acceptance, mutation và release_verify trên
-trang này đều chạy trên đúng cây đó. Commit sau nó (`72156eb`) **chỉ sửa tài liệu này**; `git diff` trên
-toàn bộ đường dẫn sản xuất xác nhận hai cây giống hệt nhau. Lấy cây đã kiểm thử:
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `4b32063`** — mọi test, acceptance, mutation và release_verify
+mô tả trên trang này đã chạy trên đúng cây đó. Các commit sau nó **chỉ sửa tài liệu** (`git diff` trên
+toàn bộ đường dẫn sản xuất đối chiếu `4b32063` → HEAD cho ra 0 dòng).
+
+Lấy cây đã kiểm thử:
 
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-# An explicit checkout of the pinned commit. NOT `git reset --hard`: on a machine that already
-# holds work, reset discards it silently.
-git checkout FETCH_HEAD
+# Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
+# không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
+git checkout 4b32063
 ```
+
+Bản đầy đủ của lượt review cuối (ma trận 16 model, coverage, sổ lỗi, đối chiếu độc lập, verdict) nằm
+trong `workbench/docs/reviews/FINAL_*.md`.
 
 ## 1. Lệnh chính
 
