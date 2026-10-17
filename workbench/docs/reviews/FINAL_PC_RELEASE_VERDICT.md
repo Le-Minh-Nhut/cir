@@ -6,8 +6,8 @@
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`4b32063f6544f10e7b0b6e9425e7467fef3d08b9`** |
-| **FINAL_HEAD_SHA** | `1aa5ff6976dc3e6256ddaf51216f03955338b467` (documentation only; the production diff against `4b32063` is empty) |
+| **TESTED_SOURCE_SHA** | **`4b32063f6544f10e7b0b6e9425e7467fef3d08b9`** (production source; every gate ran on it) |
+| **FINAL_HEAD_SHA** | `e94d2ad` — documentation and tests only. `git diff 4b32063 HEAD` over every production path is **empty**; the only non-doc change after it is one added credential test. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 
@@ -21,7 +21,7 @@ the production diff for it is recorded at the end.
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1365 passed, 0 failed** (25:40) |
+| Backend suite | `pytest workbench/tests -q` | **1366 passed, 0 failed** (25:20) |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED** (1 honest skip: GPG status unverified) |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
