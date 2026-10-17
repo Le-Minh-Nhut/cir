@@ -2538,7 +2538,14 @@ def runtime_blockers(model: dict[str, Any], checkpoint: dict[str, Any], config: 
         from workbench.backend.registry import _availability_digest
         if _availability_digest(config, model["model_id"], checkpoint, checkpoint_file) != expected_sha:
             blockers.append("official checkpoint hash mismatch")
-    for bundle_id, missing in checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT, config=config).items():
-        blockers.append(f"checkpoint bundle incomplete: {bundle_id}: {missing[0]}")
+    # Only when a BUNDLE is what was selected. `checkpoint_availability` calls this for each
+    # variant too, and a single-category checkpoint is not made unrunnable by a sibling category
+    # that has not been downloaded -- reporting it as such marked every member unrunnable, which
+    # disabled the frontend's per-checkpoint button and made an intentional single-category
+    # evaluation (./pc.sh --checkpoint base_iter0_dress) impossible to launch.
+    if checkpoint.get("bundle_id"):
+        for bundle_id, missing in checkpoint_bundle_missing_paths(
+                model, config.WORKBENCH_CHECKPOINT_ROOT, config=config).items():
+            blockers.append(f"checkpoint bundle incomplete: {bundle_id}: {missing[0]}")
 
     return list(dict.fromkeys(blockers))

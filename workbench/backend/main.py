@@ -682,7 +682,14 @@ def _aggregate_reports() -> list[dict]:
     # Key the ledger by report digest, not run_id: two files claiming the same run_id must each
     # find the entry whose bytes they match, and a copied report must not inherit a different
     # run's corroboration.
-    ledger_by_digest = {item.get("report_digest"): item for item in ledger or []}
+    # Keyed on (digest, run) rather than digest alone. Two identical report files are legitimate --
+    # a re-export of the same aggregate, or a byte-identical rerun -- and they share a digest, so a
+    # digest-only index kept whichever entry came last and then failed the identity guard below for
+    # the other, refusing a run the verifier accepts. The identity guard is the authority for
+    # which run a witness belongs to, so the index must not destroy the candidate it needs.
+    ledger_by_digest: dict[tuple, dict] = {}
+    for _item in ledger or []:
+        ledger_by_digest[(_item.get("report_digest"), _item.get("run_id"))] = _item
     ledger_stamp = _ledger_stamp(config)
     reports = []
     for path in sorted(reports_root(config).glob("*_aggregate.json")):
@@ -695,11 +702,7 @@ def _aggregate_reports() -> list[dict]:
         if not _aggregate_report_is_well_formed(report, path):
             continue
         digest = report_digest_of(path)
-        witness = ledger_by_digest.get(digest)
-        # A copied report must not inherit another run's corroboration: the witness entry's
-        # identity fields must match the file's own claims.
-        if witness is not None and witness.get("run_id") != report.get("run_id"):
-            witness = None
+        witness = ledger_by_digest.get((digest, report.get("run_id")))
         if witness is None:
             print(f"workbench: skipping aggregate report {path}: no evidence-ledger entry for its run", file=sys.stderr)
             continue

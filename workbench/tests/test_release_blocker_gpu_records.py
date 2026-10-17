@@ -1233,3 +1233,28 @@ def test_frontend_gate_fails_closed_and_distinguishes_refusal():
     res = subprocess.run(["npx", "tsx", "-e", script], cwd=str(REPOSITORY), capture_output=True, text=True)
     assert res.returncode == 0, (res.stdout, res.stderr)
     assert "FRONTEND_GATE_FAILCLOSED_ASSERTIONS_PASS" in res.stdout
+
+def test_a_dimension_may_not_pass_when_its_own_check_did_not(sandbox: Path) -> None:
+    """Red-team finding: SCIENTIFIC_OUTPUT was promoted to PASS from accepted evidence alone.
+
+    The block set the dimension to PASS whenever a corroborated run existed, discarding its own
+    J-check. With J7 PENDING (or FAIL) that let a dimension PASS without its check running, and the
+    verdict reach RELEASE_READY while the scientific-output check was unanswered -- the "claims more
+    than its evidence supports" failure the dimension split exists to prevent (I20).
+    """
+    # The dimension needs BOTH its own check PASSing AND evidence to be about (which this sandbox
+    # has none of, so it stays PENDING rather than claiming a PASS from a check alone -- that would
+    # be the same over-claim in the other direction).
+    for j7, expected_dimension, expect_nonzero_exit in (
+            ("PENDING", "PENDING", False),
+            ("FAIL", "FAIL", True),
+            ("PASS", "PENDING", False)):
+        report, completed = _scan({**os.environ, "J7": j7})
+        dimension = report["dimensions"]["SCIENTIFIC_OUTPUT"]["status"]
+        assert dimension == expected_dimension, (
+            f"J7={j7}: the dimension must follow its own check, got {dimension}")
+        # Never RELEASE_READY in this sandbox: the GPU and real-inference dimensions are PENDING
+        # here, so the strongest honest verdict is GPU_VALIDATION_PENDING.
+        assert report["verdict"] != "RELEASE_READY", f"J7={j7}: verdict {report['verdict']}"
+        assert (completed.returncode != 0) is expect_nonzero_exit, (
+            f"J7={j7}: exit {completed.returncode} for verdict {report['verdict']}")

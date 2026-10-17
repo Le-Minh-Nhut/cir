@@ -747,6 +747,9 @@ def test_checkpoint_availability_and_missing_paths_use_manifest_digest_without_f
         "filename": "weights.pt",
         "downloaded_sha256": real_sha,
         "size_bytes": len(content),
+        # The inode change time is the other half of the shortcut's evidence: size alone let a
+        # same-length in-place rewrite read as present with zero bytes hashed.
+        "ctime_ns": ckpt_file.stat().st_ctime_ns,
     }]
     (ckpt_root / "download_manifest.json").write_text(json.dumps(manifest_data))
 

@@ -348,11 +348,17 @@ def _availability_digest(config: Any = None, model_id: str = "", checkpoint: dic
     if entry is not None:
         recorded_sha = entry.get("downloaded_sha256")
         recorded_size = entry.get("size_bytes")
+        recorded_ctime = entry.get("ctime_ns")
         try:
-            actual_size = path.stat().st_size
+            stat_result = path.stat()
         except OSError:
             return None
-        if recorded_sha and recorded_size == actual_size:
+        # Size AND ctime: size alone let a same-length in-place rewrite (mtime restored) produce a
+        # forged `official_sha256_match: True` while the verifier refused the same file -- the
+        # presence half of this defect, here in the digest half. ctime cannot be set backwards by
+        # any userspace call; manifests written before this record none and fall through to hashing.
+        if (recorded_sha and recorded_size == stat_result.st_size
+                and recorded_ctime is not None and recorded_ctime == stat_result.st_ctime_ns):
             return recorded_sha
     return _cached_availability_digest(path, checkpoint.get("required_files"))
 

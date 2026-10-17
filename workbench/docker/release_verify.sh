@@ -711,12 +711,16 @@ _off_target: list[str] = []
 _target_model = None
 _target_key = None
 _target_declared_interpreter = None
+_target_adaptation = None
 try:
     _target_model = next((m for m in _load_registry()["models"]
                           if m.get("model_id") == _target.get("model_id")), None)
     if _target_model is not None:
         _target_key = _expected_key(_target_model)
         _target_declared_interpreter = _declared_interpreter(_target_model)
+        _adaptation = _runtime.runtime_adaptation(_target_model, undeclared_is_error=False)
+        if _adaptation:
+            _target_adaptation = str(_adaptation.get("target_compute_capability"))
 except Exception:
     _target_model = None
 if _target.get("interpreter") and _target_declared_interpreter \
@@ -799,13 +803,21 @@ _unaccepted_runs: list[tuple[str, list[str]]] = []
 _inference_evidence: list[str] = []
 _invalid_metric_runs: list[tuple[str, list[str]]] = []
 
-def _is_target(_model_id: str, _checkpoint_id: str, _protocol_id: str) -> bool:
+def _is_target(_model_id: str, _checkpoint_id: str, _protocol_id: str,
+               _report: dict | None = None) -> bool:
     if _target.get("model_id") and _model_id != _target["model_id"]:
         return False
     if _target.get("checkpoint_id") and _checkpoint_id != _target["checkpoint_id"]:
         return False
     if _target.get("protocol_id") and _protocol_id != _target["protocol_id"]:
         return False
+    # The runtime adaptation is a comparability condition, not an implementation detail: a run
+    # executed on the historical unadapted stack carries different software than an adapted
+    # release target, and its numbers must not certify that target. The capability record already
+    # binds the adaptation; the *evidence* has to be checked for the same thing.
+    if _report is not None and _target_adaptation is not None:
+        if str(_report.get("runtime_adaptation") or "") != str(_target_adaptation):
+            return False
     return True
 
 if _reports_root.is_dir():
@@ -823,8 +835,10 @@ if _reports_root.is_dir():
         _protocol_id = str(_rep.get("protocol_id") or "")
         if not (_run_id and _model_id and _checkpoint_id and _protocol_id):
             continue
-        if not _is_target(_model_id, _checkpoint_id, _protocol_id):
-            _off_target.append(f"{_run_id} ({_model_id}/{_checkpoint_id}/{_protocol_id})")
+        if not _is_target(_model_id, _checkpoint_id, _protocol_id, _rep):
+            _off_target.append(
+                f"{_run_id} ({_model_id}/{_checkpoint_id}/{_protocol_id}, "
+                f"runtime_adaptation={_rep.get('runtime_adaptation')!r})")
             continue
         try:
             _v = _verify_run.verify(_run_id, _model_id, _checkpoint_id, _protocol_id)
@@ -865,13 +879,25 @@ if _reports_root.is_dir():
             if _has_execution_evidence:
                 _inference_evidence.append(_run_id)
 
+# A dimension with its own J-check may only be promoted when that check actually PASSED.
+# SCIENTIFIC_OUTPUT was overwritten to PASS from accepted evidence alone, so a PENDING or FAIL J7
+# was discarded and the verdict could reach RELEASE_READY with the scientific-output check unrun --
+# exactly the "claims more than its evidence supports" failure the dimension split exists to prevent.
+_j7_ok = out["checks"].get("J7", {}).get("status") == "PASS"
 if _accepted_evidence:
     out["dimensions"]["MODEL_INFERENCE"]["status"] = "PASS"
     out["dimensions"]["MODEL_INFERENCE"]["detail"] = f"real model execution observed: {', '.join(_inference_evidence)}"
     out["dimensions"]["MODEL_EVALUATION"]["status"] = "PASS"
     out["dimensions"]["MODEL_EVALUATION"]["detail"] = f"legitimate corroborated benchmark run(s) accepted: {', '.join(v.get('identity', {}).get('run_id') or '' for v in _accepted_evidence)}"
-    out["dimensions"]["SCIENTIFIC_OUTPUT"]["status"] = "PASS"
-    out["dimensions"]["SCIENTIFIC_OUTPUT"]["detail"] = f"valid, authenticated metrics verified: {', '.join(v.get('identity', {}).get('run_id') or '' for v in _accepted_evidence)}"
+    if _j7_ok:
+        out["dimensions"]["SCIENTIFIC_OUTPUT"]["status"] = "PASS"
+        out["dimensions"]["SCIENTIFIC_OUTPUT"]["detail"] = f"valid, authenticated metrics verified: {', '.join(v.get('identity', {}).get('run_id') or '' for v in _accepted_evidence)}"
+    else:
+        # The evidence is real, and it says so; the scientific-output check is a separate question
+        # that has not been answered, so the dimension keeps whatever its own check decided.
+        out["dimensions"]["SCIENTIFIC_OUTPUT"]["detail"] = (
+            f"corroborated research evidence present ({', '.join(v.get('identity', {}).get('run_id') or '' for v in _accepted_evidence)}), "
+            f"but its own check J7 is {out['checks'].get('J7', {}).get('status')!r}")
 else:
     out["dimensions"]["MODEL_EVALUATION"]["status"] = "PENDING"
     if _unaccepted_runs:
@@ -890,8 +916,18 @@ else:
         else:
             out["dimensions"]["MODEL_INFERENCE"]["detail"] = "no model execution evidence observed"
 
-    out["dimensions"]["SCIENTIFIC_OUTPUT"]["status"] = "PENDING"
-    if _invalid_metric_runs:
+    # No accepted evidence: the dimension has nothing to PASS on. Its own J-check may still FAIL
+    # it (the dimension loop set that), and it must never be left at a status no branch assigned.
+    if out["dimensions"]["SCIENTIFIC_OUTPUT"]["status"] != "FAIL":
+        out["dimensions"]["SCIENTIFIC_OUTPUT"]["status"] = "PENDING"
+    if not _j7_ok and out["checks"].get("J7", {}).get("status") in ("FAIL", "UNRUN"):
+        # A FAILED J7 owns the dimension: naming "no corroborated run" over it would hide the check.
+        out["dimensions"]["SCIENTIFIC_OUTPUT"]["detail"] = (
+            f"its own check J7 is {out['checks']['J7']['status']}; "
+            + (f"invalid metrics for {_invalid_metric_runs[0][0]} "
+               f"({'; '.join(_invalid_metric_runs[0][1][:2])})" if _invalid_metric_runs
+               else "no valid, authenticated metrics: no corroborated research-evidence run"))
+    elif _invalid_metric_runs:
         _mid, _mreasons = _invalid_metric_runs[0]
         out["dimensions"]["SCIENTIFIC_OUTPUT"]["detail"] = f"invalid metrics for {_mid} ({'; '.join(_mreasons[:2])})"
     else:
@@ -997,5 +1033,5 @@ if (( fails > 0 )); then
     say "RELEASE VERIFIER: FAILED (${fails} unmet, ${pendings} pending)"
     exit 1
 fi
-say "RELEASE VERIFIER: no unmet criteria (${pendings} pending)"
+say "RELEASE VERIFIER: no unmet criteria; ${pendings} pending (verdict is not RELEASE_READY)"
 exit 0
