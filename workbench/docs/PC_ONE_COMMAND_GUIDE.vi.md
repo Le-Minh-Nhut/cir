@@ -233,6 +233,10 @@ Mặc định `./pc.sh` chạy mô hình LIMN. Để đánh giá mô hình khác
 - `./pc.sh --timeout <số_giây>`: Đặt giới hạn thời gian chạy cho tác vụ đánh giá (tính bằng giây).
 - `./pc.sh --no-gpu`: Chạy ở chế độ không dùng GPU (chỉ dùng cho kiểm tra tích hợp hoặc môi trường không có GPU).
 - `./pc.sh --dataset <đường_dẫn>`: Chỉ định đường dẫn tùy chỉnh đến thư mục FashionIQ trên host.
+- `./pc.sh --checkpoint <id>`: Ghim đúng một checkpoint hoặc bundle id. Dùng để **chủ động** chạy một
+  danh mục đơn lẻ (ví dụ `base_iter0_dress`) — đây **KHÔNG** phải tái lập đầy đủ. Bỏ cờ này thì script
+  chạy bundle đầy đủ mà registry khai, và **từ chối nêu tên** nếu thiếu thành phần, chứ không tự thu
+  hẹp phạm vi.
 - `./pc.sh --help`: In thông tin hướng dẫn và toàn bộ các tùy chọn hỗ trợ.
 
 ---
