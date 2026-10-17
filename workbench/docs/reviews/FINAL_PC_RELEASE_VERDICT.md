@@ -7,7 +7,7 @@
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
 | **TESTED_SOURCE_SHA** | **`4b32063f6544f10e7b0b6e9425e7467fef3d08b9`** |
-| FINAL_HEAD_SHA | see the push record at the end of this file |
+| **FINAL_HEAD_SHA** | `1aa5ff6976dc3e6256ddaf51216f03955338b467` (documentation only; the production diff against `4b32063` is empty) |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 
