@@ -215,6 +215,12 @@ if len(sys.argv) > 1 and sys.argv[1] == "inspect":
         sys.exit(0)
     if os.environ.get("MOCK_DOCKER_INSPECT_EMPTY") == "1":
         sys.exit(0)
+    # The commit probe is answered FIRST and by its own template. A blanket "mounts are set, so
+    # answer with mounts" shortcut answered the launcher's image-identity question with a mount
+    # list, which the launcher then reported as the image's commit.
+    if "cir.commit" in args_str:
+        print(_effective("MOCK_IMAGE_COMMIT", "0123456789abcdef0123456789abcdef01234567"))
+        sys.exit(0)
     if "MOCK_DOCKER_MOUNTS" in os.environ:
         print(_effective("MOCK_DOCKER_MOUNTS", ""))
         sys.exit(0)
@@ -1323,6 +1329,10 @@ def test_limn_bundle_selection_submits_bundle_id_with_native_protocol(tmp_path: 
     _create_corroborated_run(sandbox, "run_limn_corr_01")
     post_jobs_file = sandbox / "post_jobs.log"
     env["MOCK_POST_JOBS_FILE"] = str(post_jobs_file)
+    # The launcher requires the evaluated run to be IN the index before it reports the pilot
+    # finished -- the API and the UI read that index, so a run absent from it is a run nobody can
+    # inspect. The fixture must therefore serve the state the real rebuild would have produced.
+    env["MOCK_RUNS_STATUS"] = "corroborated"
 
     proc = run_pc(sandbox, ["--force"], env)
     assert proc.returncode == 0
@@ -1765,3 +1775,35 @@ def test_the_summary_exit_codes_match_the_handoff_document() -> None:
                      "PER_QUERY_VERIFIED", "CAPABILITY_ABSENT"):
         assert fragment in script, f"{fragment} missing from pc.sh"
         assert fragment in docs, f"{fragment} undocumented in the handoff"
+
+
+def test_a_container_built_from_another_commit_is_not_reused(tmp_path: Path):
+    """A reused container must be THIS checkout's code.
+
+    `pc.sh` reuses a live container on a configuration match, and configuration says nothing about
+    which commit was baked into the image. After a `git pull` the old image's backend, queue,
+    verifier and evaluator would sign a report naming the new commit: the report would be about code
+    that never ran. An independent runtime audit found exactly this. `run.sh up` stamps `cir.commit`,
+    and the launcher must refuse a container whose label is absent or different.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_CONTAINER_ADAPTATION"] = "sm_120"
+    _create_corroborated_run(sandbox, "run_limn_corr_01")
+    env["MOCK_RUNS_STATUS"] = "corroborated"
+
+    # Positive control: the stamp matches the checkout, so reuse is allowed.
+    env["MOCK_IMAGE_COMMIT"] = "0123456789abcdef0123456789abcdef01234567"
+    proc = run_pc(sandbox, [], env)
+    assert proc.returncode == 0
+    assert "cấu hình phù hợp và API sẵn sàng" in proc.stdout
+
+    # A different commit is a mismatch.
+    sandbox2, env2 = setup_sandbox(tmp_path / "stale", with_env=True)
+    env2["MOCK_CONTAINER_ADAPTATION"] = "sm_120"
+    _create_corroborated_run(sandbox2, "run_limn_corr_01")
+    env2["MOCK_RUNS_STATUS"] = "corroborated"
+    env2["MOCK_IMAGE_COMMIT"] = "f" * 40
+    proc2 = run_pc(sandbox2, [], env2)
+    combined = proc2.stdout + proc2.stderr
+    assert "Image đang chạy được dựng từ commit" in combined
+    assert "chạy code cũ" in combined

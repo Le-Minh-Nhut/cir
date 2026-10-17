@@ -32,6 +32,20 @@ def _generation():
     except Exception:
         return 0
 
+def _label():
+    """The commit the running image was built from, as `run.sh up` stamps it.
+
+    `pc.sh` reuses a live container on a configuration match, and configuration says nothing about
+    which commit was baked into the image: after a `git pull` the old image's backend, queue,
+    verifier and evaluator would sign a report naming the new commit. The launcher therefore asks
+    the container, and the default here is the harness's own git shim value -- so "same checkout"
+    is the default state and a test changes `MOCK_IMAGE_COMMIT` to express a stale image.
+    """
+    label = os.environ.get("MOCK_IMAGE_COMMIT", "0123456789abcdef0123456789abcdef01234567")
+    if _generation() > 0 and os.environ.get("MOCK_IMAGE_COMMIT_REFRESHED") is not None:
+        label = os.environ["MOCK_IMAGE_COMMIT_REFRESHED"]
+    return label
+
 def _bump_generation():
     try:
         os.makedirs(_generation_dir(), exist_ok=True)
@@ -112,7 +126,24 @@ if len(sys.argv) > 1 and sys.argv[1] == "inspect":
     # `.Mounts` and `.HostConfig.DeviceRequests` are read by the launcher to decide whether a
     # running container may be reused; without an answer here the mount-provenance check could
     # never be exercised by the harness.
+    if "cir.commit" in args_str:
+        # The launcher asks a running container which COMMIT it was built from, because a container
+        # reused on a configuration match can still be the previous checkout's code -- and then a
+        # report naming the new commit would be signed by the old one. The default is the harness's
+        # own git shim value, so "same checkout" is the default state and a test changes it to
+        # express a stale image.
+        label = os.environ.get("MOCK_IMAGE_COMMIT", "0123456789abcdef0123456789abcdef01234567")
+        if _generation() > 0 and os.environ.get("MOCK_IMAGE_COMMIT_REFRESHED") is not None:
+            label = os.environ["MOCK_IMAGE_COMMIT_REFRESHED"]
+        print(label)
+        sys.exit(0)
     mounts = os.environ.get("MOCK_DOCKER_MOUNTS")
+    # The label probe is matched FIRST: the launcher's other inspect templates also contain the
+    # literal `Mounts` (the mount list), so a looser test would answer the commit question with a
+    # mount list. `cir.commit` appears only in the commit probe.
+    if "cir.commit" in args_str:
+        print(_label())
+        sys.exit(0)
     if "Mounts" in args_str:
         if mounts is None:
             sys.exit(1)
@@ -120,6 +151,8 @@ if len(sys.argv) > 1 and sys.argv[1] == "inspect":
             mounts = os.environ["MOCK_DOCKER_MOUNTS_REFRESHED"]
         print(mounts)
         sys.exit(0)
+    # The label probe must be matched BEFORE the mounts probe: its template also contains the
+    # literal `Mounts`, so a looser test would answer the moutotquestion with a commit hash.
     if "DeviceRequests" in args_str:
         if os.environ.get("MOCK_DOCKER_NO_NVIDIA") == "1":
             print("[]")

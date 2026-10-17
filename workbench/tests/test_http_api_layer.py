@@ -1311,3 +1311,33 @@ def test_the_served_receipt_carries_the_fields_a_promotion_needs(api) -> None:
             assert field in verification, (
                 f"the served receipt drops {field!r}, so a per-query artifact can never be "
                 f"attributed to this verification: {sorted(verification)}")
+
+
+def test_an_annotation_must_name_a_protocol_and_a_canonical_query(api) -> None:
+    """A note is keyed by (query, protocol) and served back by both, so both must be validated.
+
+    An independent audit found that any string was accepted: a note could be stored under a protocol
+    that does not exist, or under a query id no run could contain, and then read back as though it
+    were about this workbench's data.
+    """
+
+    def put(payload: dict) -> tuple[int, dict]:
+        status, _, body = asgi_request(api.app, "PUT", "/api/annotations",
+                                       json.dumps(payload).encode())
+        return status, json.loads(body or b"{}")
+
+    good = {"query_id": "dress:0:ref_img:target_img", "protocol_id": "fashioniq_val_split",
+            "labels": ["other"], "note": "ok"}
+    assert put(good)[0] == 200
+
+    for field, value, error in (
+        ("protocol_id", "not_a_protocol", "unknown_protocol"),
+        ("protocol_id", "fashioniq_val_split_", "unknown_protocol"),
+        ("query_id", "anything", "invalid_query_id"),
+        ("query_id", "dress:0:ref_img", "invalid_query_id"),
+        ("query_id", "birds:0:ref:target", "invalid_query_id"),
+        ("query_id", "dress:x:ref:target", "invalid_query_id"),
+    ):
+        status, parsed = put({**good, field: value})
+        assert status == 400, f"{field}={value!r} was accepted"
+        assert parsed["detail"]["error"] == error

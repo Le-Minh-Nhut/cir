@@ -76,15 +76,13 @@ def publish_payload(path: Path, results_root: Path) -> Path:
     members = payload.get("checkpoint_members") or {}
     category_checkpoint_ids = {category: member.get("checkpoint_id")
                                for category, member in members.items()}
-    bundle_digest = None
-    if members:
-        import hashlib
+    # The evaluator computes the SAME digest for the same bundle from its own manifest. A second
+    # implementation here produced two unequal "bundle manifest digests" for one artifact whenever
+    # the two keyed their members differently (the evaluator keys by filename, this module's member
+    # map is keyed by category), so the two halves of one runs's provenance could never agree.
+    from workbench.scripts.evaluate_models import manifest_digest
 
-        identity_map = {name: {"filename": member.get("filename") or name,
-                               "sha256": member.get("sha256")}
-                        for name, member in sorted(members.items())}
-        bundle_digest = hashlib.sha256(
-            json.dumps(identity_map, sort_keys=True).encode("utf-8")).hexdigest()
+    bundle_digest = manifest_digest(members) if members else None
 
     destination = publish_observed_categories(
         observed, results_root, parity_mismatches=mismatches,

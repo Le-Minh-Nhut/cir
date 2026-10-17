@@ -11,8 +11,10 @@ toàn bộ đường dẫn sản xuất xác nhận hai cây giống hệt nhau.
 
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
-git checkout research/cir-failure-workbench
-git reset --hard 84ec6f1
+git fetch origin research/cir-failure-workbench
+# An explicit checkout of the pinned commit. NOT `git reset --hard`: on a machine that already
+# holds work, reset discards it silently.
+git checkout FETCH_HEAD
 ```
 
 ## 1. Lệnh chính

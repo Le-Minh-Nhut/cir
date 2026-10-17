@@ -235,7 +235,7 @@ AWAITING_CORROBORATION = ("awaiting corroboration by the authoritative verifier 
 
 #: What an experiment artifact must RECORD before any layer may call it verified evidence. Named
 #: here once so the exporter, the validator, the index and the API cannot drift apart (F-13).
-EXPERIMENT_REQUIRED_PROVENANCE = ("command_digest", "environment_digest", "bundle_manifest_digest")
+EXPERIMENT_REQUIRED_PROVENANCE = ("command_digest", "environment_digest")
 
 def admission(result: "ResultRun") -> tuple[str, list[str]]:
     """The ONE admission policy: (state, reasons). Every entry point calls this.
@@ -286,6 +286,10 @@ def admission(result: "ResultRun") -> tuple[str, list[str]]:
                           - set(run.category_checkpoint_ids))
         if unmapped:
             reasons.append(f"category_checkpoint_ids is missing categories present in queries: {unmapped}")
+    # The checkpoint-identity requirement is "one of these two", so it is asked once, here. Listing
+    # `bundle_manifest_digest` in the tuple as well made a single-file run report it as a second,
+    # separate absence -- advice the operator could not act on, because supplying it would not
+    # satisfy the requirement they had already met (found by an independent audit).
     missing = [field for field in EXPERIMENT_REQUIRED_PROVENANCE if not getattr(run, field)]
     if not run.checkpoint_sha256 and not run.bundle_manifest_digest:
         missing.append("checkpoint_sha256 or bundle_manifest_digest")

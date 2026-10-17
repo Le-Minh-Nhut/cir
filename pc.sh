@@ -665,6 +665,30 @@ inspect_container_config() {
         inspect_mismatch_reasons+=("Runtime adaptation không khớp (container='${cont_adapt}', yêu cầu='${expected_adaptation}')")
     fi
 
+    # 2b. Image identity: the code inside the container must be THIS checkout's code.
+    # `pc.sh` reuses a live container on a configuration match, and configuration says nothing about
+    # which commit was baked into the image. After a `git pull` the old image's backend, queue,
+    # verifier and evaluator would sign a report naming the new commit -- the report would be about
+    # code that did not run (found by an independent audit). `run.sh up` stamps `cir.commit`; an
+    # image built without the label, or one built from another commit, is a mismatch.
+    local host_commit image_commit
+    host_commit="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
+    image_commit="$(docker inspect --format '{{index .Config.Labels "cir.commit"}}' cir-workbench 2>/dev/null || echo unknown)"
+    if [[ -z "$image_commit" || "$image_commit" == "<no value>" ]]; then
+        image_commit="unknown"
+    fi
+    if [[ "$host_commit" == "unknown" ]]; then
+        # No checkout to compare against (a packaged deployment, or git absent). Saying so is the
+        # honest outcome: the image identity is unverifiable here, not wrong.
+        say "[CẢNH BÁO] Không xác định được commit của checkout hiện tại; bỏ qua kiểm tra danh tính image."
+    elif [[ "$image_commit" == "unknown" ]]; then
+        inspect_config_satisfies=0
+        inspect_mismatch_reasons+=("Không xác định được commit của image đang chạy (nhãn cir.commit trống). Image có thể là code của lần checkout trước; dựng lại bằng 'workbench/docker/run.sh up'.")
+    elif [[ "$image_commit" != "$host_commit" ]]; then
+        inspect_config_satisfies=0
+        inspect_mismatch_reasons+=("Image đang chạy được dựng từ commit ${image_commit:0:12} nhưng checkout hiện tại là ${host_commit:0:12}; lượt chạy sẽ ghi commit mới trong khi backend/queue/verifier chạy code cũ.")
+    fi
+
     # 3. Mounts provenance (P1-3)
     local exp_ds_raw="${DATASET_PATH_OVERRIDE:-$(env_value HOST_FASHIONIQ_ROOT ../../data/FashionIQ)}"
     local expected_ds_mount="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$exp_ds_raw")"
@@ -1121,7 +1145,14 @@ m = next((item for item in models if item.get('model_id') == model_id), None)
 if not m:
     sys.exit(f'Mô hình {model_id} không tìm thấy trong /api/models')
 
-protocol = m.get('native_protocol') or 'fashioniq_val_split'
+protocol = m.get('native_protocol')
+if not protocol:
+    # No default. `ptha_mtst`'s protocol is unresolved in the registry, and substituting
+    # `fashioniq_val_split` made the launcher evaluate a model under a protocol nobody had
+    # established -- the one thing the protocol invariance rules forbid. A model whose native
+    # protocol is not declared cannot be evaluated by this launcher, and saying so is the answer.
+    sys.exit(f'Mô hình {model_id} không khai báo native_protocol trong registry; '
+             'không thể xác định giao thức đánh giá (từ chối thay bằng mặc định).')
 bundles = m.get('checkpoint_bundles') or []
 checkpoints = m.get('checkpoints') or []
 
@@ -1507,45 +1538,87 @@ if isinstance(runs, list):
     FINAL_RUN_ID="$run_id_from_job"
 }
 
-# Behaviour 8 & 9: Validation & Vietnamese Summary
-validate_and_summarize() {
-    local run_id="$1"
-    local model="${2:-$MODEL}"
-    local checkpoint="${3:-${FINAL_CHECKPOINT:-base_iter0_all_categories}}"
-    local protocol="${4:-${FINAL_PROTOCOL:-fashioniq_val_split}}"
 
-    if [[ -z "$run_id" ]]; then
-        fail_stage "VERIFICATION" "Không có run_id để xác thực" "" "Đảm bảo quá trình đánh giá đã tạo run_id hợp lệ"
-    fi
-
+# The DuckDB index is a CONSUMER of the verification, not a step beside it: `index.evidence_status`
+# promotes a per-query artifact only by reading the receipt the API derives from the aggregate report.
+# Rebuilding before the verifier ran therefore indexed a state that was already stale, and `|| true`
+# hid every failure -- so a run could be fully evaluated and verified yet absent from the API and the UI.
+rebuild_and_verify_index() { # rebuild_and_verify_index RUN_ID MODEL CHECKPOINT PROTOCOL
+    local run_id="$1" model="$2" checkpoint="$3" protocol="$4"
     local backend_port base
     backend_port="$(env_value WORKBENCH_BACKEND_PORT 8000)"
     base="http://127.0.0.1:${backend_port}"
 
     say "Tái xây dựng chỉ mục DuckDB (/api/index/rebuild)..."
-    curl -fsS --max-time 60 -X POST "${base}/api/index/rebuild" >/dev/null 2>&1 || true
+    local resp code body
+    # `|| true` INSIDE the substitution: a curl that times out or cannot connect must not abort the
+    # script here (that would skip the diagnosis), and its own error text is what the operator needs.
+    resp="$(curl -sS -w '\n%{http_code}' --max-time 300 -X POST "${base}/api/index/rebuild" 2>&1 || true)"
+    code="$(printf '%s' "$resp" | tail -n1)"
+    body="$(printf '%s' "$resp" | sed '$d')"
+    if [[ ! "$code" =~ ^2[0-9][0-9]$ ]]; then
+        fail_stage "INDEX_REBUILD" \
+            "Tái xây dựng chỉ mục DuckDB thất bại (HTTP ${code:-không có mã}): ${body:-không có phản hồi}" \
+            "${base}/api/index/rebuild" \
+            "Chỉ mục là thứ API và UI đọc; lượt chạy đã đánh giá vẫn còn trên đĩa nhưng CHƯA hiển thị được. Kiểm tra log backend rồi chạy lại ./pc.sh --verify-only."
+    fi
 
-    say "Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py..."
-
-    local verify_out verify_rc=0
-    verify_out="$(run_verifier_in_container --run-id "$run_id" --model "$model" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || verify_rc=$?
-    # The run's own report is the only place its per-query state is recorded, so the summary reads it
-    # rather than inferring readiness from the aggregate verdict alone.
-    FINAL_RUN_REPORT_PATH="$(python3 -c "
+    # An HTTP 200 is not enough: the rebuild must actually contain THIS run with the evidence state
+    # the verification just established. A stale index -- the previous model's run, or this run
+    # before the verifier spoke -- returns 200 and would be reported as success.
+    # The reader lives in a variable because a here-document and a pipe cannot both feed one
+    # interpreter: the document wins and the JSON would be lost.
+    local runs_check checked
+    runs_check="$(curl -fsS --max-time 60 "${base}/api/runs" 2>/dev/null || echo "__API_UNREACHABLE__")"
+    local idx_program
+    idx_program="$(cat <<'PYIDX'
 import json, sys
-out = sys.argv[1]
-for line in reversed(out.strip().splitlines()):
-    line = line.strip()
-    if line.startswith('{') and line.endswith('}'):
-        try:
-            print((json.loads(line).get('report_path') or ''))
-            raise SystemExit(0)
-        except SystemExit:
-            raise
-        except Exception:
-            pass
-" "$verify_out" 2>/dev/null || true)"
-    python3 - <<'PYDOC' "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" "${FINAL_RUN_PROOF_UNAVAILABLE:-0}" "${FINAL_RUN_REPORT_PATH:-}" "$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$(env_value HOST_WORKBENCH_ARTIFACTS_ROOT ../../workbench/artifacts)")"
+run_id, model, checkpoint, protocol = sys.argv[1:5]
+raw = sys.stdin.read()
+if raw.strip() == "__API_UNREACHABLE__" or not raw.strip():
+    sys.exit("không gọi được /api/runs")
+try:
+    runs = json.loads(raw)
+except Exception as error:
+    sys.exit("không đọc được /api/runs: %s" % type(error).__name__)
+if not isinstance(runs, list):
+    sys.exit("phản hồi /api/runs không phải danh sách")
+match = [r for r in runs if isinstance(r, dict) and r.get("run_id") == run_id]
+if not match:
+    sys.exit("run %s KHÔNG có trong chỉ mục sau khi tái xây dựng" % run_id)
+run = match[0]
+for field, expected in (("model_id", model), ("checkpoint_id", checkpoint), ("protocol_id", protocol)):
+    if run.get(field) != expected:
+        sys.exit("chỉ mục gắn %s=%r, không phải %r" % (field, run.get(field), expected))
+status = run.get("evidence_status")
+if not isinstance(status, str) or not status:
+    sys.exit("chỉ mục không công bố trạng thái bằng chứng cho lượt chạy này")
+print(status)
+PYIDX
+)"
+    checked="$(printf '%s' "$runs_check" | python3 -c "$idx_program" "$run_id" "$model" "$checkpoint" "$protocol" 2>&1)" \
+        || checked="__INDEX_CHECK_FAILED__: ${checked:-không xác định}"
+    if [[ "$checked" == __INDEX_CHECK_FAILED__* ]]; then
+        fail_stage "INDEX_VERIFY" \
+            "Lượt chạy không hiện diện trong chỉ mục với đúng danh tính và trạng thái bằng chứng: ${checked#__INDEX_CHECK_FAILED__: }" \
+            "${base}/api/runs" \
+            "Không tuyên bố hoàn tất: một lượt chạy không có trong chỉ mục thì API và UI không đọc được. Xem workbench/docs/PC_ONE_COMMAND_GUIDE.vi.md (chỉ mục DuckDB)."
+    fi
+    INDEX_EVIDENCE_STATUS="$checked"
+}
+
+# The verdict is consumed exactly once. Two facts fix the order: an unverified run must not be
+# indexed nor reported as finished, so the gate runs first; and the receipt the index promotes a
+# per-query artifact from is derived from the aggregate report, so the rebuild must run after the
+# verifier has spoken. This function therefore decides, writes the decision for the summary, and
+# leaves the rebuild to `rebuild_and_verify_index`.
+verify_gate() { # verify_gate VERIFY_OUT VERIFY_RC MODEL CHECKPOINT PROTOCOL RUN_ID PROOF_UNAVAILABLE REPORT_PATH HOST_ARTIFACTS
+    local verify_out="$1" verify_rc="$2" model="$3" checkpoint="$4" protocol="$5" run_id="$6"
+    VERIFY_GATE_STATE="${TMPDIR:-/tmp}/cir_verify_state.$$"
+    python3 - "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" \
+             "${7:-0}" "${8:-}" "$VERIFY_GATE_STATE" "${9:-}" <<'PYGATE'
+#!/usr/bin/env python3
+"""The one place the verifier's verdict is interpreted. Prints the refusal, writes the decision."""
 import json, sys
 
 verify_out = sys.argv[1]
@@ -1554,6 +1627,9 @@ model_id = sys.argv[3]
 checkpoint_id = sys.argv[4]
 protocol_id = sys.argv[5]
 run_id = sys.argv[6]
+proof_unavailable = sys.argv[7] == "1"
+report_path = sys.argv[8]
+state_path = sys.argv[9]
 
 result = None
 for line in reversed(verify_out.strip().splitlines()):
@@ -1564,15 +1640,14 @@ for line in reversed(verify_out.strip().splitlines()):
             break
         except Exception:
             pass
-
 if result is None:
     try:
         result = json.loads(verify_out)
     except Exception:
         pass
-
 if result is None:
-    sys.exit(f"Lỗi: verify_run.py không trả về JSON hợp lệ (exit code {verify_rc}):\n{verify_out}")
+    print(f"Lỗi: verify_run.py không trả về JSON hợp lệ (exit code {verify_rc}):\n{verify_out}")
+    sys.exit(1)
 
 verified = bool(result.get("is_research_evidence", False))
 
@@ -1584,12 +1659,9 @@ per_query_capability = None
 per_query_state = None
 _per_query_reason = ""
 # The verifier runs INSIDE the container, so the path it reports is the CONTAINER's
-# (`/artifacts/reports/...`), which does not exist on the host. Translating the container prefix onto
-# the host artifacts root is what lets this read the run's own report. Without it the read failed and
-# the summary silently fell through to "aggregate-only", which is a false statement about a model
-# that does declare an observer -- and, worse, a false FULL-readiness claim.
-_report_path = sys.argv[8] if len(sys.argv) > 8 else ""
-_host_artifacts = sys.argv[9] if len(sys.argv) > 9 else ""
+# (`/artifacts/reports/...`), which does not exist on the host.
+_report_path = report_path
+_host_artifacts = sys.argv[10] if len(sys.argv) > 10 else ""
 if _report_path and _host_artifacts and _report_path.startswith("/artifacts/"):
     _report_path = _host_artifacts.rstrip("/") + "/" + _report_path[len("/artifacts/"):]
 _report_read = False
@@ -1604,19 +1676,13 @@ if _report_path:
     except Exception as error:
         _per_query_reason = f"không đọc được report của lượt chạy: {type(error).__name__}"
 
-# The verification the launcher just ran IS the corroboration the run could not report about itself:
-# a run cannot say it is verified (that verdict does not exist yet when it writes its report), so the
-# launcher advances the state here. Without this, a fully successful LIMN run could never reach
-# PER_QUERY_VERIFIED and every pilot would exit 4.
+# The verification the launcher just ran IS the corroboration the run could not report about itself.
 if verified and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED" \
         and result.get("per_query_artifact_digest"):
     per_query_state = "PER_QUERY_VERIFIED"
-# Both lists, because the refusal can come from either question: an incomplete/corroboration
-# failure is in `reasons`, while a run that executed correctly but is a self-test (or has no
-# publishable comparison) is refused only by `evidence_reasons`.
+
 reasons = list(result.get("reasons") or []) + list(result.get("evidence_reasons") or [])
 
-proof_unavailable = (len(sys.argv) > 7 and sys.argv[7] == "1")
 if verify_rc != 0 or not verified:
     if proof_unavailable:
         proof_only = all(
@@ -1639,25 +1705,111 @@ if verify_rc != 0 or not verified:
         )
         if not proof_only:
             reasons_str = "; ".join(str(r) for r in reasons) if reasons else f"verify_run.py trả về mã lỗi {verify_rc}"
-            err_msg = (f"Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!\n"
-                       f"Chi tiết: {reasons_str}")
-            print(err_msg)
-            sys.exit(err_msg)
+            print(f"Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!\n"
+                  f"Chi tiết: {reasons_str}")
+            sys.exit(1)
     else:
         reasons_str = "; ".join(str(r) for r in reasons) if reasons else f"verify_run.py trả về mã lỗi {verify_rc}"
-        # Bước khắc phục cụ thể: một khóa ledger dùng được mới cho phép xác thực sổ cái. Khi lý do
-        # từ chối nói về khóa (thiếu, rỗng, hoặc HAI tệp khác nhau), lệnh sửa phải được nêu ra cùng
-        # chỗ với lý do, thay vì để nhà vận hành tự đoán.
         remedy = ""
         if any("ledger key" in str(r).lower() for r in reasons):
             remedy = ("\nKhắc phục: giữ ĐÚNG MỘT tệp khóa (xoá tệp còn lại), hoặc đặt tường minh "
                       "WORKBENCH_LEDGER_KEY trong workbench/docker/.env — xem "
                       "workbench/docs/PC_ONE_COMMAND_GUIDE.vi.md mục 12 (Sổ cái bằng chứng không xác minh được).")
-        err_msg = (f"Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!\n"
-                   f"Chi tiết: {reasons_str}{remedy}")
-        print(err_msg)
-        sys.exit(err_msg)
+        print(f"Xác thực thất bại: Thiếu bằng chứng thực thi khoa học hoặc bằng chứng không hợp lệ!\n"
+              f"Chi tiết: {reasons_str}{remedy}")
+        sys.exit(1)
 
+with open(state_path, "w", encoding="utf-8") as handle:
+    json.dump({
+        "result": result,
+        "per_query_capability": per_query_capability,
+        "per_query_state": per_query_state,
+        "per_query_reason": _per_query_reason,
+        "report_read": _report_read,
+        "proof_unavailable": proof_unavailable,
+        "model_id": model_id,
+        "checkpoint_id": checkpoint_id,
+        "protocol_id": protocol_id,
+        "run_id": run_id,
+        "report_path": result.get("report_path") or "",
+    }, handle)
+PYGATE
+}
+
+# Behaviour 8 & 9: Validation & Vietnamese Summary
+validate_and_summarize() {
+    local run_id="$1"
+    local model="${2:-$MODEL}"
+    local checkpoint="${3:-${FINAL_CHECKPOINT:-base_iter0_all_categories}}"
+    local protocol="${4:-${FINAL_PROTOCOL:-fashioniq_val_split}}"
+
+    if [[ -z "$run_id" ]]; then
+        fail_stage "VERIFICATION" "Không có run_id để xác thực" "" "Đảm bảo quá trình đánh giá đã tạo run_id hợp lệ"
+    fi
+
+    local backend_port base
+    backend_port="$(env_value WORKBENCH_BACKEND_PORT 8000)"
+    base="http://127.0.0.1:${backend_port}"
+
+    say "Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py..."
+
+    local verify_out verify_rc=0
+    verify_out="$(run_verifier_in_container --run-id "$run_id" --model "$model" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || verify_rc=$?
+    # The run's own report is the only place its per-query state is recorded, so the summary reads it
+    # rather than inferring readiness from the aggregate verdict alone.
+    FINAL_RUN_REPORT_PATH="$(python3 -c "
+import json, sys
+out = sys.argv[1]
+for line in reversed(out.strip().splitlines()):
+    line = line.strip()
+    if line.startswith('{') and line.endswith('}'):
+        try:
+            print((json.loads(line).get('report_path') or ''))
+            raise SystemExit(0)
+        except SystemExit:
+            raise
+        except Exception:
+            pass
+" "$verify_out" 2>/dev/null || true)"
+    local host_artifacts
+    host_artifacts="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$(env_value HOST_WORKBENCH_ARTIFACTS_ROOT ../../workbench/artifacts)")"
+    local verify_state verify_message
+    # No new tool dependency: the launcher's sandbox and the container both have a shell, a PID and
+    # /tmp, and a name derived from the PID is unique for the life of this process.
+    verify_state="${TMPDIR:-/tmp}/cir_verify_state.$$"
+    verify_message="${TMPDIR:-/tmp}/cir_verify_msg.$$"
+    if ! verify_gate "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" \
+            "${FINAL_RUN_PROOF_UNAVAILABLE:-0}" "${FINAL_RUN_REPORT_PATH:-}" "$host_artifacts" >"$verify_message"; then
+        cat "$verify_message"
+        rm -f "$verify_state" "$verify_message"
+        fail_stage "VERIFICATION" "$(cat "$verify_message")" "verify_run.py (trong container)" \
+            "Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh --verify-only"
+    fi
+    rm -f "$verify_message"
+
+    # The verifier has spoken, so the index can now reflect the FINAL verification state. The
+    # rebuild used to run before this point and swallowed its own failure, so a run could be fully
+    # evaluated and verified yet absent from the API and the UI.
+    rebuild_and_verify_index "$run_id" "$model" "$checkpoint" "$protocol"
+
+    python3 - "${INDEX_EVIDENCE_STATUS:-}" "$verify_state" <<'PYDOC'
+import json, sys
+
+# The state file is DATA. Passing its path as the program made python execute the JSON as a script.
+with open(sys.argv[2], encoding="utf-8") as handle:
+    _state = json.load(handle)
+
+result = _state["result"] or {}
+per_query_capability = _state["per_query_capability"]
+per_query_state = _state["per_query_state"]
+_per_query_reason = _state["per_query_reason"]
+_report_read = _state["report_read"]
+proof_unavailable = _state["proof_unavailable"]
+model_id = _state["model_id"]
+checkpoint_id = _state["checkpoint_id"]
+protocol_id = _state["protocol_id"]
+run_id = _state["run_id"]
+_index_evidence_status = sys.argv[1] if len(sys.argv) > 1 else ""
 # Extract verified details
 report_path = result.get("report_path") or "N/A"
 identity = result.get("identity") or {}
@@ -1669,6 +1821,20 @@ gate_status = gate.get("status") or "NOT_EVALUATED"
 
 commit = identity.get("git_commit") or "N/A"
 adaptation = identity.get("runtime_adaptation") or "None"
+
+# The two claims about one run are checked BEFORE anything is reported. Printing a conclusion and
+# then contradicting it in the same output is a report that cannot be trusted about itself.
+if per_query_state == "PER_QUERY_VERIFIED" and _index_evidence_status != "PER_QUERY_VERIFIED":
+    print(f"LỖI: phần tổng hợp kết luận ĐÃ CHỨNG THỰC nhưng chỉ mục đang công bố "
+          f"{_index_evidence_status!r} cho đúng lượt chạy này.")
+    print("      API và UI đọc chỉ mục, nên hai nơi đang nói hai điều khác nhau về cùng một lượt chạy.")
+    print("      Hành động: chạy './pc.sh --verify-only' để dựng lại chỉ mục sau khi xác thực.")
+    sys.exit(6)
+if per_query_state in ("PER_QUERY_EXPORT_FAILED", "PER_QUERY_EXPORTED_UNVERIFIED") \
+        and _index_evidence_status == "PER_QUERY_VERIFIED":
+    print(f"LỖI: chỉ mục công bố ĐÃ CHỨNG THỰC trong khi phần tổng hợp kết luận "
+          f"{per_query_state}. Một trong hai đã đọc sai trạng thái.")
+    sys.exit(6)
 
 def fmt_val(v):
     if v is None:
@@ -1722,6 +1888,7 @@ else:
     print(f"Phân tích theo truy vấn  : THẤT BẠI — {per_query_capability} được khai báo nhưng không")
     print(f"                           có artifact Top-K nào được xuất. Lý do: {_per_query_reason}")
     print(f"                           Kết quả TỔNG HỢP ở trên vẫn hợp lệ và đã được lưu.")
+print(f"Trạng thái chỉ mục: {_index_evidence_status or 'KHÔNG XÁC ĐỊNH ĐƯỢC'}")
 print(f"File báo cáo     : {report_path}")
 print("-" * 80)
 if per_query_capability and per_query_state in (None, "PER_QUERY_EXPORT_FAILED"):
@@ -1733,17 +1900,19 @@ elif per_query_capability and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED"
     print("KẾT LUẬN: TỔNG HỢP ĐẠT — PILOT ĐẦY ĐỦ chờ chứng thực artifact Top-K.")
 else:
     print("KẾT LUẬN: SẴN SÀNG CHO PILOT (theo khả năng đã khai báo của mô hình).")
+    print("  Bằng chứng tổng hợp: đã chứng thực. Chỉ mục DuckDB: đã chứa lượt chạy này")
+    print("  (API và UI đọc được kết quả). Trạng thái bằng chứng per-query ở trên.")
 print("Ghi chú khoa học :")
 print("  Độ lệch số học so với bài báo gốc (nếu có) phản ánh kết quả đo đạc thực")
 print("  nghiệm trên runtime của thiết bị, là phát hiện nghiên cứu (research finding).")
 print("================================================================================")
 
-# The exit status is what a script or a CI step reads, so it must carry the same meaning as the
-# conclusion above: an aggregate-only model is complete, while a model that DECLARED a per-query
-# observer and exported nothing has NOT delivered the full pilot this run was asked for.
 if not _report_read:
     # The launcher cannot say a declared observer succeeded if it could not read the verdict.
     sys.exit(5)
+# The index is what the API and the UI read, so the launcher's own conclusion and the index's
+# published state must be the SAME claim. Two places disagreeing about one run means the operator is
+# told one thing and the interface shows another.
 if per_query_capability and per_query_state in (None, "PER_QUERY_EXPORT_FAILED"):
     sys.exit(3)
 if per_query_capability and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED":

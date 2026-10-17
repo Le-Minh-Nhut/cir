@@ -7,6 +7,7 @@ received, by having that child print it.
 """
 from __future__ import annotations
 
+import itertools
 import json
 import sys
 from pathlib import Path
@@ -42,6 +43,8 @@ def _config(tmp_path: Path) -> WorkbenchConfig:
         WORKBENCH_THIRD_PARTY_ROOT=tmp_path / "third_party")
 
 
+_RUN_SEQUENCE = itertools.count()
+
 def _run_evaluator(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
                    *, passthrough: str | None = None) -> dict:
     """Run a real child that reports its whole environment, and return the report."""
@@ -56,8 +59,10 @@ def _run_evaluator(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
                              pin="p" * 40, actual_source_commit="a" * 40)
     if passthrough is not None:
         monkeypatch.setenv("WORKBENCH_EVALUATOR_ENV_PASSTHROUGH", passthrough)
-    code, directory, _ = em.invoke_evaluator(plan, _config(tmp_path), "sec-run",
-                                             tmp_path / "out")
+    # A fresh run id per invocation: the run directory is claimed exclusively and an existing one
+    # is refused, so looping over names in ONE test must not collide with itself.
+    code, directory, _ = em.invoke_evaluator(plan, _config(tmp_path),
+                                             f"sec-run-{next(_RUN_SEQUENCE)}", tmp_path / "out")
     assert code == 0
     return json.loads((directory / "stdout.log").read_text().strip().splitlines()[-1])
 
@@ -155,3 +160,30 @@ def test_no_credential_appears_in_the_queued_operator_record(
     # The operator hop keeps the ledger key, because the operator is the signer: verified through
     # the child's own view rather than assumed.
     assert "LEDGER True" in child_view
+
+
+def test_an_operator_passthrough_cannot_re_admit_the_ledger_key_path(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`WORKBENCH_EVALUATOR_ENV_PASSTHROUGH` may add a name; it may not defeat the deny prefixes.
+
+    The ledger key is resolved from XDG_CONFIG_HOME, and from `Path.home()` when that is unset, so a
+    child that receives HOME can re-derive the operator's key directory and read the HMAC key -- the
+    one secret that would let the untrusted evaluator forge its own ledger entry. An independent
+    audit found this: the allowlist withheld XDG_CONFIG_HOME but not HOME, and an explicit
+    passthrough of `HOME` put it back. Denying by prefix is what makes the declaration a no-op
+    rather than an override.
+    """
+    for declared in ("HOME", "XDG_CONFIG_HOME", "HOME:XDG_CONFIG_HOME"):
+        seen = _run_evaluator(tmp_path, monkeypatch, passthrough=declared)
+        assert "HOME" not in seen, f"HOME reached the evaluator via passthrough={declared!r}"
+        assert "XDG_CONFIG_HOME" not in seen, \
+            f"XDG_CONFIG_HOME reached the evaluator via passthrough={declared!r}"
+
+
+def test_no_name_a_key_path_is_derived_from_reaches_the_evaluator(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The deny-by-prefix rule covers the whole key-path surface, not the two names seen so far."""
+    for name in ("HOME", "USERPROFILE", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_RUNTIME_DIR"):
+        monkeypatch.setenv(name, "/tmp/must-not-be-forwarded")
+        seen = _run_evaluator(tmp_path, monkeypatch, passthrough=name)
+        assert name not in seen, f"{name} leaked into the evaluator"

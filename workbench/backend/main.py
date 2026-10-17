@@ -7,6 +7,7 @@ import csv
 import io
 import json
 import sys
+import re
 from datetime import datetime, timezone
 import threading
 import uuid
@@ -24,7 +25,7 @@ from workbench.backend.index import database_path, rebuild_index
 from workbench.backend.jobs import DuplicateJobError, QueueShutdownError, SingleGpuQueue
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.registry import checkpoint_availability, load_registry, sha256_file
-from workbench.backend.schemas.results import Annotation, SavedCohort
+from workbench.backend.schemas.results import PROTOCOL_IDS, Annotation, SavedCohort
 from workbench.backend.storage import cohort_metrics, get_analysis_input, get_query, list_runs, query_page, validate_analysis_selection
 from workbench.scripts.evaluate_models import guarded_plan
 
@@ -897,6 +898,11 @@ def overlap(run_ids: str, k: int = 10):
     return failure_jaccard_from_maps(selected, maps, k)
 
 
+#: The canonical `category:annotation_index:reference:target` identity, as
+#: `schemas.results.QueryIdentity` builds it. A pattern rather than a substring test: an annotation
+#: must describe a query a run could actually contain.
+ANNOTATION_QUERY_ID = re.compile(r"^(dress|shirt|toptee):[0-9]+:[^:]+:[^:]+$")
+
 class AnnotationInput(BaseModel):
     query_id: str
     protocol_id: str
@@ -914,6 +920,20 @@ def annotations(query_id: str | None = None, protocol_id: str | None = None):
 def save_annotation(payload: AnnotationInput):
     if invalid := sorted(set(payload.labels) - set(LABELS)):
         raise HTTPException(400, {"error": "invalid_annotation_labels", "message": "Unknown annotation labels.", "details": {"labels": invalid}})
+    # A note is keyed by (query, protocol) and served back by both. Accepting an arbitrary string made
+    # it possible to store a note under a protocol that does not exist, or under a query id no run
+    # could produce, and then read it back as if it were about this workbench's data (found by an
+    # independent audit). The two identities are validated against the SAME rules the canonical
+    # schema uses, so an annotation cannot describe something the schema would refuse.
+    if payload.protocol_id not in PROTOCOL_IDS:
+        raise HTTPException(400, {"error": "unknown_protocol", "message": "Unknown protocol id.",
+                                  "details": {"protocol_id": payload.protocol_id,
+                                              "known": sorted(PROTOCOL_IDS)}})
+    if not ANNOTATION_QUERY_ID.fullmatch(payload.query_id):
+        raise HTTPException(400, {"error": "invalid_query_id",
+                                  "message": "query_id must use the canonical "
+                                             "category:index:reference:target identity.",
+                                  "details": {"query_id": payload.query_id}})
     record = Annotation(**payload.model_dump(), updated_at=datetime.now(timezone.utc)).model_dump(mode="json")
     records = [item for item in read_json(ANNOTATIONS_PATH) if (item["query_id"], item["protocol_id"]) != (payload.query_id, payload.protocol_id)] + [record]
     write_json(ANNOTATIONS_PATH, records)

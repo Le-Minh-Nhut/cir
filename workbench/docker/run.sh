@@ -105,7 +105,12 @@ compose() { docker compose "${COMPOSE_FILES[@]}" --env-file "${HERE}/.env" "$@";
 
 cmd_up() {
     need_env
-    compose up -d --build
+    # Stamp the image with the commit it is built from, so a later `pc.sh` can tell whether the
+    # running container is the code in this checkout. Without it a `git pull` followed by `./pc.sh`
+    # evaluated new sources with the old image's backend, queue and verifier.
+    local commit
+    commit="$(git -C "${HERE}/../.." rev-parse HEAD 2>/dev/null || echo unknown)"
+    CIR_IMAGE_COMMIT="$commit" compose up -d --build || return 1
     say "backend: ${BASE}  frontend: http://127.0.0.1:${FRONTEND_PORT}"
     cmd_doctor || true
 }

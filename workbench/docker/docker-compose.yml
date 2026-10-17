@@ -14,6 +14,12 @@ services:
     build:
       context: ../..
       dockerfile: workbench/docker/Dockerfile
+      # The code inside the image, named. `pc.sh` reuses a running container on a config match, and
+      # without this the reused container could be the PREVIOUS commit's code while the report it
+      # signs names the current one. `run.sh` supplies the value; an empty label means "unknown",
+      # which the launcher treats as a mismatch rather than as agreement.
+      labels:
+        cir.commit: "${CIR_IMAGE_COMMIT:-unknown}"
     container_name: cir-workbench
     # Run as the invoking operator's uid/gid (default 1000:1000) so files the container
     # writes into host bind mounts (artifacts, checkpoints, results) are owned by the

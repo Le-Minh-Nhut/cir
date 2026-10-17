@@ -511,6 +511,13 @@ _EVALUATOR_ENV_DENY_PREFIXES = (
     "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN",
     "AZURE_", "GOOGLE_APPLICATION_CREDENTIALS", "GCP_",
     "DOCKER_", "KUBECONFIG", "SLACK_TOKEN", "STRIPE_", "NPM_TOKEN",
+    # The ledger key is resolved from these, and the parent uses `Path.home()` for the same
+    # directory when XDG_CONFIG_HOME is unset. Withholding only XDG_CONFIG_HOME left the key
+    # reachable through HOME: an operator passthrough of `HOME` (or a shell that has it set)
+    # let the untrusted evaluator child read the HMAC key, which is the one secret it could
+    # use to forge a ledger entry. The prefix rule is what makes an explicit passthrough of one
+    # of these names a no-op instead of an override.
+    "HOME", "USERPROFILE", "XDG_",
 )
 
 
@@ -1144,10 +1151,15 @@ def manifest_digest(manifest: dict[str, dict[str, Any]] | None) -> str | None:
     """
     if not manifest:
         return None
-    identity = {
-        name: {"filename": member.get("filename") or name, "sha256": member.get("sha256")}
-        for name, member in sorted(manifest.items())
-    }
+    # Keyed by the MEMBER'S OWN filename, not by whatever key the caller's map happens to use. Two
+    # callers describe the same bundle with different map keys -- the evaluator keys by filename, the
+    # publisher's member map keys by category -- and using the map key as the identity made the two
+    # halves of one run record two unequal digests for one artifact (found by an independent audit).
+    identity = sorted(
+        ({"filename": member.get("filename") or name, "sha256": member.get("sha256")}
+         for name, member in manifest.items()),
+        key=lambda entry: str(entry["filename"]),
+    )
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()
 
 
@@ -1846,7 +1858,10 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         capability = None
         observation_note = ("CAPABILITY_ABSENT_FOR_DIAGNOSTIC: the observer covers the full bundle, "
                             "and this run selected a single category")
-    observation_note = f"{capability}: not attempted" if capability else "CAPABILITY_ABSENT"
+    elif not capability:
+        observation_note = "CAPABILITY_ABSENT"
+    else:
+        observation_note = f"{capability}: not attempted"
     per_query_artifact = None
     per_query_artifact_digest = None
     instrumentation_parity = None
@@ -2172,6 +2187,8 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
                            for name in required]
             return path, members
         except Exception:
+            # Path(".") is not a sentinel a caller can distinguish from a real path, and it made
+            # `checkpoint_sha256` a hash of a DIRECTORY the run never used. The caller tests for it.
             return Path("."), None
 
     def _validate(record: dict | None) -> tuple[bool, str | None, dict | None]:
@@ -2193,9 +2210,22 @@ def completion_validator(model_id: str, checkpoint_id: str, protocol: str, pin: 
                               checkpoint_bundle=resolved_bundle,
                               bundle_manifest_digest=manifest_digest(resolved_bundle))
         if not (resolved_checkpoint.is_file() or resolved_checkpoint.is_dir()):
-            # No checkpoint file to re-hash (e.g. a non-file artifact): bind the proof to
-            # the digest recorded by the run itself, which is run-scoped and unforgeable
-            # across runs.
+            # No checkpoint to RE-HASH. Two different situations reach here and they must not be
+            # treated alike.
+            #
+            # (a) The registry does not describe this (model, checkpoint id) pair, so the resolution
+            #     above caught an exception and the path is not one. Falling back to the digest the
+            #     REPORT claims about itself makes the proof self-referential: a proof repointed to
+            #     another run, or a tampered weight file, is then checked against the claim it makes
+            #     rather than against bytes on disk (found by an independent audit). Refuse instead --
+            #     an unresolvable identity is an unverifiable one.
+            #
+            # (b) The artifact is genuinely not a single file (a directory or bundle already handled
+            #     above), where the run's own recorded digest is the only available binding.
+            if not (resolved_members or resolved_bundle):
+                return False, (f"the registry does not resolve checkpoint {checkpoint_id!r} for "
+                               f"{model_id!r}, so this proof's checkpoint identity cannot be "
+                               f"re-derived from disk"), None
             recorded = _recorded_report_checkpoint_digest(proof_path)
             if recorded is None:
                 return False, "cannot verify the checkpoint identity of this proof", None

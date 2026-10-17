@@ -290,12 +290,31 @@ elif "/api/jobs/" in url:
             "provenance": {"run_id": "run_limn_corr_01"}
         })
 elif "/api/runs" in url:
-    if os.environ.get("MOCK_RUNS_STATUS") == "corroborated":
+    # The index-facing view. `MOCK_INDEX_RUNS` expresses the states the launcher's index gate must
+    # DISTINGUISH: a run indexed under another identity, one indexed without an evidence state, and
+    # ones indexed with one. `evidence_status` is what the real `/api/runs` serves (storage.list_runs
+    # merges it from the DuckDB column), so a fixture without it is the state the gate refuses.
+    if os.environ.get("MOCK_INDEX_RUNS"):
+        variant = os.environ["MOCK_INDEX_RUNS"]
+        row = {
+            "run_id": {"wrong_run": "run_limn_OTHER_99"}.get(variant, "run_limn_corr_01"),
+            "model_id": {"wrong_model": "dcnet"}.get(variant, "limn"),
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "created_at": "2026-10-16T00:00:00Z",
+        }
+        if variant != "no_state":
+            row["evidence_status"] = {
+                "unverified": "PER_QUERY_UNVERIFIED",
+            }.get(variant, "PER_QUERY_VERIFIED")
+        body = json.dumps([row])
+    elif os.environ.get("MOCK_RUNS_STATUS") == "corroborated":
         body = json.dumps([{
             "run_id": "run_limn_corr_01",
             "model_id": "limn",
             "checkpoint_id": "base_iter0_all_categories",
             "protocol_id": "fashioniq_val_split",
+            "evidence_status": "PER_QUERY_VERIFIED",
             "corroborated": True,
             "official": True,
             "created_at": "2026-10-16T00:00:00Z"
@@ -315,7 +334,17 @@ elif "/api/benchmark-runs" in url:
     else:
         body = "[]"
 elif "/api/index/rebuild" in url:
-    body = json.dumps({"runs_indexed": 1})
+    # The rebuild is the step whose failure the launcher used to swallow. `MOCK_INDEX_REBUILD`
+    # reproduces each real failure shape: a 5xx from the endpoint, and a response that is not the
+    # shape a rebuild answers with.
+    variant = os.environ.get("MOCK_INDEX_REBUILD", "")
+    if variant == "http_500":
+        body = json.dumps({"detail": "duckdb: IO Error: could not open database"})
+        status_code = "500"
+    elif variant == "malformed":
+        body = "{not json"
+    else:
+        body = json.dumps({"runs_indexed": 1})
 elif ":5173" in url:
     body = "<!doctype html><html><head><title>CIR Workbench</title></head><body>OK</body></html>"
 else:
