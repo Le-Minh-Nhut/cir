@@ -132,28 +132,40 @@ def test_a_complete_experiment_is_admitted_but_only_the_verifier_promotes_it(tmp
     assert not any("missing" in reason or "reuse" in reason for reason in reasons), reasons
 
     # The verifier's verdict is the only thing that promotes it -- and only for the artifact it
-    # actually named. The receipt must bind THIS artifact's digest (see the adversarial finding:
-    # a run_id-only check let fabricated rankings borrow a verified run's identity).
+    # actually named. The receipt must bind THIS artifact's digest AS READ FROM DISK; a digest the
+    # artifact writes about itself is not evidence (a reviewer found that fallback reopened the
+    # self-certification hole this mechanism exists to close).
     digest = "a" * 64
-    result = result.model_copy(update={"run": result.run.model_copy(
-        update={"per_query_artifact_digest": digest})})
     verdict = {"certified": True, "is_research_evidence": True,
                "per_query_artifact_digest": digest, "model_id": result.run.model_id,
                "checkpoint_id": result.run.checkpoint_id}
-    assert promote(result, state, verdict)[0] == PER_QUERY_VERIFIED
+    assert promote(result, state, verdict, artifact_digest=digest)[0] == PER_QUERY_VERIFIED
     # A refused verdict leaves it unverified.
-    assert promote(result, state, {"certified": False, "is_research_evidence": False})[0] == PER_QUERY_UNVERIFIED
+    assert promote(result, state, {"certified": False, "is_research_evidence": False},
+                   artifact_digest=digest)[0] == PER_QUERY_UNVERIFIED
     # A verdict about a DIFFERENT artifact must not promote this one.
-    other = {**verdict, "per_query_artifact_digest": "b" * 64}
-    assert promote(result, state, other)[0] == PER_QUERY_UNVERIFIED
+    assert promote(result, state, {**verdict, "per_query_artifact_digest": "b" * 64},
+                   artifact_digest=digest)[0] == PER_QUERY_UNVERIFIED
     # Nor may a verdict about another model's run.
-    foreign = {**verdict, "model_id": "airknow"}
-    assert promote(result, state, foreign)[0] == PER_QUERY_UNVERIFIED
+    assert promote(result, state, {**verdict, "model_id": "airknow"},
+                   artifact_digest=digest)[0] == PER_QUERY_UNVERIFIED
+    # And a digest the artifact claims about itself is NOT accepted in place of the reader's.
+    self_nominated = result.model_copy(update={"run": result.run.model_copy(
+        update={"per_query_artifact_digest": "c" * 64})})
+    assert promote(self_nominated, state, {**verdict, "per_query_artifact_digest": "c" * 64})[0] \
+        == PER_QUERY_UNVERIFIED, "an artifact must not nominate its own digest"
 
-    # `--strict-real` refuses the uncorroborated artifact, and reports the reason by name.
+    # `--strict-real` asks whether the artifact RECORDS what its verification needs. A complete
+    # artifact does, so it passes -- with an explicit note that the verifier has not yet spoken.
+    # (An earlier revision blocked every valid experiment here; a reviewer caught that this made the
+    # gate useless.) It must still refuse an artifact whose recorded provenance is INCOMPLETE, which
+    # the test above covers.
     output: list[str] = []
-    assert not validate_file(artifact, strict_real=True, output=output.append), output
-    assert any("verifier" in line for line in output), output
+    assert validate_file(artifact, strict_real=True, output=output.append), output
+    joined = " ".join(output)
+    assert "awaiting verifier corroboration" in joined, output
+    # And the artifact is still NOT promoted to verified evidence by validation alone.
+    assert admission(result)[0] == PER_QUERY_UNVERIFIED
 
 
 def test_sync_dry_run_and_verify_only_output_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

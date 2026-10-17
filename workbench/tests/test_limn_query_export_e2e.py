@@ -209,7 +209,8 @@ def test_a_forged_experiment_reaching_the_index_stays_unverified(chain, tmp_path
     from workbench.replay.publication import publish
 
     forged = build_result_run(
-        [_observed("dress", gallery_size=50, ranks=[1, 9, 30, 4], top_depth=20)],
+        [_observed(category, gallery_size=50, ranks=[1, 9, 30, 4], top_depth=20)
+         for category in ("dress", "shirt", "toptee")],
         **{**_identity("mock-forged", "fashioniq_val_split", "9"), "data_kind": "experiment",
            "run_id": "20260101T000000000000Z_limn_ckpt_forged01",
            "command_digest": "c" * 64, "environment_digest": "d" * 64,
@@ -243,7 +244,8 @@ def test_a_receipt_naming_the_artifact_verifies_it(chain, tmp_path, monkeypatch)
     from workbench.replay.publication import publish
 
     subject = build_result_run(
-        [_observed("dress", gallery_size=50, ranks=[1, 9, 30, 4], top_depth=20)],
+        [_observed(category, gallery_size=50, ranks=[1, 9, 30, 4], top_depth=20)
+         for category in ("dress", "shirt", "toptee")],
         **{**_identity("mock-good", "fashioniq_val_split", "8"), "data_kind": "experiment",
            "run_id": "20260101T000000000000Z_limn_ckpt_goodrun1",
            "command_digest": "c" * 64, "environment_digest": "d" * 64,

@@ -32,7 +32,8 @@ def _report_provenance(runs: list[ResultRun], strict_real: bool, output: Callabl
     release gate wants; without it the state is reported as a warning so the operator can still
     inspect the workspace.
     """
-    from workbench.backend.schemas.results import SYNTHETIC_OR_MOCK, PER_QUERY_UNVERIFIED
+    from workbench.backend.schemas.results import (PER_QUERY_PARITY_FAILED, PER_QUERY_UNVERIFIED,
+                                               SYNTHETIC_OR_MOCK)
 
     valid = True
     for result in runs:
@@ -40,13 +41,26 @@ def _report_provenance(runs: list[ResultRun], strict_real: bool, output: Callabl
         if state == SYNTHETIC_OR_MOCK:
             continue
         if state == PER_QUERY_UNVERIFIED:
+            # "awaiting corroboration" is not a PROVENANCE defect: the artifact may be complete and
+            # merely not yet checked by the verifier. --strict-real asks whether the artifact records
+            # what its verification needs, so that reason alone must not fail it (review finding:
+            # every valid experiment was being BLOCKED).
+            provenance_reasons = [r for r in reasons if "awaiting corroboration" not in r]
+            if not provenance_reasons:
+                output(f"[OK] {result.run.run_id}: provenance complete; awaiting verifier corroboration")
+                continue
             level = "BLOCKED" if strict_real else "WARN"
-            detail = "; ".join(reasons) or "provenance incomplete"
-            output(f"[{level}] {result.run.run_id}: {detail}")
+            output(f"[{level}] {result.run.run_id}: {'; '.join(provenance_reasons)}")
             valid = valid and not strict_real
         else:
-            # parity pending/failed: reported, never silently accepted as evidence.
-            output(f"[WARN] {result.run.run_id}: {state}: {'; '.join(reasons)}")
+            # parity pending/failed: never silently accepted as evidence. A FAILED parity is a
+            # defect in the artifact, so `--strict-real` must reject it -- reporting it as a warning
+            # left the exit code 0 while a clean-but-unchecked run was blocked, which inverted the
+            # severity (found in review).
+            failed = state == PER_QUERY_PARITY_FAILED
+            level = "BLOCKED" if (failed and strict_real) else "WARN"
+            output(f"[{level}] {result.run.run_id}: {state}: {'; '.join(reasons)}")
+            valid = valid and not (failed and strict_real)
     return valid
 
 

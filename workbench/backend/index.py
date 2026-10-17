@@ -64,11 +64,19 @@ def load_runs_with_digests(root: Path | None = None) -> list[tuple[str, ResultRu
     """
     import hashlib
 
+    from workbench.replay.publication import verify_run_identity
+
     runs: list[tuple[str, ResultRun]] = []
     sources: dict[str, Path] = {}
     for path in result_files(root):
         raw = path.read_bytes()
         result = ResultRun.model_validate_json(raw.decode("utf-8"))
+        # The SAME identity check the validator applies: the index must not admit an artifact the
+        # validator refuses, or the two entry points disagree about one file (F-13).
+        if mismatches := verify_run_identity(result):
+            raise WorkbenchError("invalid_run_identity",
+                                 "; ".join(mismatches),
+                                 {"run_id": result.run.run_id, "source": str(path)})
         prior = sources.get(result.run.run_id)
         if prior is not None:
             raise WorkbenchError("duplicate_run_id", "Duplicate run_id in result JSON files.", {"run_id": result.run.run_id, "first_source": str(prior), "second_source": str(path)})

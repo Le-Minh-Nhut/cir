@@ -1490,6 +1490,42 @@ def record_invocation_outcome(directory: Path, config: WorkbenchConfig, *, run_i
     return payload
 
 
+def _atomic_exclusive_write(destination: Path, content: str) -> None:
+    """Create `destination` with `content`, never exposing a partial file at that name.
+
+    Raises ``FileExistsError`` when the name already exists, preserving the exclusive-create
+    contract the run-scoped report relies on (a colliding run id must never overwrite an earlier
+    experiment). The content is written and fsynced in a private temporary first, then linked into
+    place: the link fails atomically if the name appeared meanwhile, so two writers cannot collide.
+    """
+    import tempfile as _tempfile
+
+    handle, temporary = _tempfile.mkstemp(dir=destination.parent, suffix=".tmp")
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as file:
+            file.write(content)
+            file.flush()
+            os.fsync(file.fileno())
+        os.link(temporary, destination)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def _atomic_replace(destination: Path, content: str) -> None:
+    """Write `content` to `destination` atomically, replacing any existing file."""
+    import tempfile as _tempfile
+
+    handle, temporary = _tempfile.mkstemp(dir=destination.parent, suffix=".tmp")
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as file:
+            file.write(content)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary, destination)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
 def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
                      directory: Path, command_digest: str | None,
                      environment_digest: str | None) -> tuple[Path | None, str, str | None, str | None]:
@@ -1749,11 +1785,16 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
     # overwrite a previous experiment.
     reports.mkdir(parents=True, exist_ok=True)
     try:
-        with run_report.open("x", encoding="utf-8") as handle:
-            handle.write(report_json)
+        # `open("x")` is atomic for the NAME but not for the BYTES: an interruption mid-write leaves
+        # a partial file at the final path, which then fails its own digest on every later run and can
+        # never be replaced. Written to a private temporary and linked, so the name appears only once
+        # the content is complete.
+        _atomic_exclusive_write(run_report, report_json)
     except FileExistsError as error:
         raise RuntimeError(f"refusing to overwrite existing run report: {run_report}") from error
-    (directory / "aggregate_report.json").write_text(report_json, encoding="utf-8")
+    # The run-directory copy is replaced wholesale on a rerun, so it is written atomically rather
+    # than exclusively: a reader must never see a truncated report either way.
+    _atomic_replace(directory / "aggregate_report.json", report_json)
 
 
     # Append the out-of-band witness before any pointer moves; failed and silent invocations

@@ -30,6 +30,25 @@ Baseline: `4658986`. Mỗi mục dưới đây đều được **tái hiện** t
 | **F-21** | **P1** | Query identity: dataset native cache `.pkl` được nạp **vô điều kiện**, không kiểm nguồn → cache lệch/cũ làm hỏng danh tính mà Recall vẫn hợp lý. | `assert_alignment()` kiểm từng index: vị trí reference/target khớp annotation, và `model_input_text` khớp composition từ chính caption + correction dict trên đĩa. |
 | **F-22** | **P1** | **Do lượt này gây ra**: import `schemas.results` (pydantic) vào đường bị truy vết của `evaluate_models` → planner đòi interpreter cho pydantic → cold start hỏng. | Parent kiểm bằng JSON thuần; verdict admission thuộc về index/API (không nằm trên đồ thị). Test chốt `pydantic` không được lọt vào tập import bị truy vết của LIMN. |
 
+## B2. Bug do vòng review độc lập tìm ra (trên chính bản sửa trên)
+
+Bốn reviewer đọc commit `35ad05e`, tìm được sáu lỗi — **ba trong số đó nằm trong chính bản sửa của tôi**,
+và một cái khiến tính năng trung tâm chưa từng chạy thật.
+
+| ID | Mức | Tái hiện | Sửa |
+|---|---|---|---|
+| **F-23** | **P0** | `limn_export` in JSON ra stdout **rồi** in thêm một dòng người-đọc. Parent `json.loads(stdout)` → `JSONDecodeError: Extra data` → **mọi lượt** ghi `per_query_export_available: False`. | Dòng ghi chú chuyển sang `stderr`. Test chốt stdout là **đúng một** object JSON và ghi chú nằm ở stderr (test cũ pass vì stub `subprocess.run`). |
+| **F-24** | **P0** | Receipt của verifier mang `per_query_artifact_digest`/`model_id`/`checkpoint_id`, nhưng `_certify_report` **rơi mất** cả ba → `promote` không bao giờ bind được → **không lượt nào** lên `PER_QUERY_VERIFIED` trong production. | Receipt giữ đủ ba trường. Test cũ pass vì monkeypatch `verifier_verdicts`. |
+| **F-25** | **P1** | `promote` fallback `artifact_digest or result.run.per_query_artifact_digest` → artifact bịa có thể **tự đề cử digest** của mình. Fallback được thêm vào để một test pass — tức là nới lỏng bảo mật cho test. | Bỏ fallback; `artifact_digest` bắt buộc, do reader tính từ bytes. Test khẳng định artifact tự đề cử bị từ chối. |
+| **F-26** | **P1** | `promote` chỉ kiểm `state`, bỏ qua reasons của `admission` → artifact **một category** với receipt khớp digest thành `PER_QUERY_VERIFIED`. | `promote` kiểm lại chính reasons đó (bỏ reason "đang chờ verifier"), nên artifact không hợp lệ không thể được promote. |
+| **F-27** | **P1** | `--strict-real` **chặn mọi experiment hợp lệ** (vì reason "đang chờ corroboration" bị coi là thiếu provenance) và **cho qua** artifact `PARITY_FAILED`. Mức độ bị đảo. | Tách reason provenance khỏi reason chờ-xác-thực; `PARITY_FAILED` là BLOCKED dưới strict-real. |
+| **F-28** | **P1** | Ghi không nguyên tử: `load_mock_results` và report aggregate dùng `write_text`/`open("x")` trực tiếp → gián đoạn để lại JSON cắt cụt, làm cả results root không load được và không bao giờ ghi đè được. Destination là symlink cũng được chấp nhận. | Ghi qua temp + `fsync` + `os.link`/`os.replace`; từ chối destination symlink. |
+
+**Bài học được ghi lại, không chỉ nói suông**: cả ba lỗi trong bản sửa của tôi đều lọt qua test vì test
+**stub đúng cái hàm đang được chứng minh** (F-23, F-24) hoặc nới lỏng kiểm tra để test xanh (F-25).
+Các test thay thế giờ đi qua đường thật: stdout thật của exporter, và `verifier_verdicts` thật khi có
+thể.
+
 ## C. Bác bỏ sau khi kiểm chứng
 
 | Cáo buộc | Kết luận | Bằng chứng |

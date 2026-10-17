@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
+import tempfile
 import sys
 from pathlib import Path
 
@@ -23,7 +25,19 @@ def main() -> None:
         run = result.run
         destination = args.output_root / run.protocol_id / "mock" / f"{run.run_id}.json"
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(result.model_dump_json(indent=2) + "\n")
+        # Written via a temporary + atomic replace: a direct `write_text` to the final name leaves
+        # a TRUNCATED canonical JSON if interrupted, and the index then refuses to load the whole
+        # results root. Fixtures are development data, but the reader's contract is the same.
+        handle, temporary = tempfile.mkstemp(dir=destination.parent, suffix=".tmp")
+        try:
+            with os.fdopen(handle, "w", encoding="utf-8") as file:
+                file.write(result.model_dump_json(indent=2) + "\n")
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(temporary, destination)
+        except BaseException:
+            Path(temporary).unlink(missing_ok=True)
+            raise
     print(f"generated {len(build_mock_runs())} deterministic schema-v2 mock result files in {args.output_root}")
 
 

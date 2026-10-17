@@ -55,8 +55,8 @@ artifact được đánh dấu `data_kind="mock"` và **không bao giờ** thàn
 
 | Artifact | Đường dẫn |
 |---|---|
-| Report aggregate chính thức | `<artifacts>/reports/<model>__<checkpoint>__<run_id>_aggregate.json` |
-| Completion proof | `<artifacts>/reports/proofs/<model>__<checkpoint>__<run_id>.proof.json` |
+| Report aggregate chính thức | `<artifacts>/reports/<model>_<checkpoint>_<run_id>_aggregate.json` |
+| Completion proof | `<artifacts>/reports/<model>_<checkpoint>_<run_id>_completion.json` |
 | Log lượt chạy | `<artifacts>/logs/<model>__<checkpoint>__<run_id>/{stdout,stderr}.log` |
 | Log quan sát | cùng thư mục: `observation.{stdout,stderr}.log` |
 | Artifact per-query canonical | `<results>/<protocol>/<model>/<run_id>.json` |

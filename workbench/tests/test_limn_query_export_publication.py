@@ -546,3 +546,83 @@ def test_canonical_query_counts_match_the_published_validation_split() -> None:
 
         records = _json.loads((captions / f"cap.{category}.val.json").read_text())
         assert len(records) == count, f"{category}: {len(records)} != {count}"
+
+
+def test_a_symlink_destination_is_refused(tmp_path: Path) -> None:
+    """A symlink would put the artifact's bytes outside the results root, where they can change
+    after the index read their digest (found in review)."""
+    run = build_result_run([_category("dress", 300, target_rank=5)], **_identity())
+    destination = tmp_path / run.run.protocol_id / run.run.model_id / f"{run.run.run_id}.json"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}")
+    destination.symlink_to(outside)
+
+    with pytest.raises(FileExistsError, match="symlink"):
+        publish(run, tmp_path)
+    assert outside.read_text() == "{}", "the symlink target must be untouched"
+
+
+def test_a_partial_category_run_is_not_promoted_even_with_a_matching_receipt() -> None:
+    """Coverage and promotion are two different checks, and both must hold.
+
+    The verifier judges the AGGREGATE report and cannot see that a per-query artifact covers only
+    one category, so the artifact's own admissibility is re-checked during promotion. Without that,
+    a dress-only artifact with a matching digest became PER_QUERY_VERIFIED (found in review).
+    """
+    from workbench.backend.schemas.results import (
+        PER_QUERY_UNVERIFIED, PER_QUERY_VERIFIED, admission, promote,
+    )
+
+    partial = build_result_run(
+        [_category("dress", 300, target_rank=5)],
+        **{**_identity(), "data_kind": "experiment",
+           "run_id": "20260101T000000000000Z_limn_ckpt_partial9",
+           "command_digest": "c" * 64, "environment_digest": "d" * 64,
+           "bundle_manifest_digest": "e" * 64,
+           "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED"})
+    state, reasons = admission(partial)
+    assert state == PER_QUERY_UNVERIFIED and any("categories" in r for r in reasons), reasons
+
+    digest = "a" * 64
+    receipt = {"certified": True, "is_research_evidence": True,
+               "per_query_artifact_digest": digest, "model_id": partial.run.model_id,
+               "checkpoint_id": partial.run.checkpoint_id}
+    promoted, blocking = promote(partial, state, receipt, artifact_digest=digest)
+    assert promoted == PER_QUERY_UNVERIFIED, "a partial benchmark must never be verified"
+    assert any("categories" in reason for reason in blocking), blocking
+
+    # POSITIVE CONTROL: the same receipt DOES promote a complete artifact.
+    complete = build_result_run(
+        [_category(category, 300, target_rank=5) for category in ("dress", "shirt", "toptee")],
+        **{**_identity(), "data_kind": "experiment",
+           "run_id": "20260101T000000000000Z_limn_ckpt_complete1",
+           "command_digest": "c" * 64, "environment_digest": "d" * 64,
+           "bundle_manifest_digest": "e" * 64,
+           "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED"})
+    receipt_complete = {**receipt, "model_id": complete.run.model_id,
+                        "checkpoint_id": complete.run.checkpoint_id}
+    assert promote(complete, PER_QUERY_UNVERIFIED, receipt_complete,
+                   artifact_digest=digest)[0] == PER_QUERY_VERIFIED
+
+
+def test_a_parity_failure_is_rejected_by_strict_real(tmp_path: Path) -> None:
+    """A failed parity is a DEFECT in the artifact, so a release gate must reject it.
+
+    Reporting it as a warning left `--strict-real` exiting 0 for a corrupted run while blocking a
+    clean-but-unchecked one, which inverted the severity (found in review).
+    """
+    from workbench.scripts.validate_results import validate_file
+
+    run = build_result_run(
+        [_category(category, 300, target_rank=5) for category in ("dress", "shirt", "toptee")],
+        **{**_identity(), "data_kind": "experiment",
+           "run_id": "20260101T000000000000Z_limn_ckpt_parity9",
+           "command_digest": "c" * 64, "environment_digest": "d" * 64,
+           "bundle_manifest_digest": "e" * 64,
+           "instrumentation_parity": "INSTRUMENTATION_PARITY_MISMATCH"})
+    artifact = tmp_path / "mismatch.json"
+    artifact.write_text(run.model_dump_json())
+    output: list[str] = []
+    assert validate_file(artifact, strict_real=True, output=output.append) is False, output
+    assert any("PARITY_FAILED" in line and "BLOCKED" in line for line in output), output

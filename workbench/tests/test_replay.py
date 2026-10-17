@@ -464,3 +464,70 @@ def test_export_refuses_before_inference_when_preflight_fails(monkeypatch, tmp_p
     code = limn_export.export(tmp_path, tmp_path, tmp_path, tmp_path / "results")
     assert code == 1
     assert "checkpoint missing" in capsys.readouterr().err
+
+
+def test_the_export_stdout_is_exactly_one_json_object(monkeypatch, tmp_path, capsys):
+    """The orchestrator parses the exporter's stdout as JSON, so nothing else may go there.
+
+    A reviewer found this: the exporter printed its JSON and THEN a human note, so the parent's
+    `json.loads` failed with "Extra data" and recorded no artifact while the exporter reported
+    success. The unit tests passed because they stubbed the subprocess. This asserts the actual
+    stream contract.
+    """
+    import json as _json
+
+    import workbench.replay.limn_export as limn_export
+    from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
+    from workbench.tests.test_limn_query_export_publication import _category  # noqa: F401 - reuse
+
+    def fake_observe(category, *_a, **_k):
+        queries = tuple(
+            ObservedQuery(annotation_index=index, reference_id=f"{category}-r{index}",
+                          target_id=f"{category}-t{index}", raw_captions=("a", "b"),
+                          model_input_text="a and b", target_rank=1,
+                          top_results=((1, f"{category}-t{index}", 0.9),), category=category)
+            for index in range(2))
+        return 100.0, ObservedCategory(category=category, gallery_size=2, eligible_count=1,
+                                      queries=queries), ()
+
+    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
+    monkeypatch.setattr(limn_export, "observe_and_verify", fake_observe)
+
+    code = limn_export.export(tmp_path, tmp_path, tmp_path, tmp_path / "results", top_k=1,
+                              run_id="20260101T000000000000Z_limn_ckpt_stream01",
+                              command_digest="c" * 64, environment_digest="d" * 64)
+    assert code == 0
+    captured = capsys.readouterr()
+    payload = _json.loads(captured.out)  # must not raise
+    assert payload["published"].endswith(".json")
+    assert payload["run_id"] == "20260101T000000000000Z_limn_ckpt_stream01"
+    # The human note belongs on stderr. (`PENDING_PC_GPU_VALIDATION` is a JSON FIELD named
+    # `publication`, so the check is on the sentence, not the token.)
+    assert "not against a real target-GPU inference" in captured.err
+    assert "not against a real target-GPU inference" not in captured.out
+
+
+def test_the_export_reports_a_parity_mismatch_on_stderr_with_a_nonzero_code(monkeypatch, tmp_path, capsys):
+    """A mismatch is a failure, and its diagnostic must not corrupt the JSON contract either."""
+    import json as _json
+
+    import workbench.replay.limn_export as limn_export
+    from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
+
+    query = ObservedQuery(annotation_index=0, reference_id="r", target_id="t",
+                          raw_captions=("a", "b"), model_input_text="a and b", target_rank=2,
+                          top_results=((1, "d", 0.5), (2, "t", 0.4)), category="dress")
+    observation = ObservedCategory(category="dress", gallery_size=3, eligible_count=2, queries=(query,))
+
+    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
+    monkeypatch.setattr(limn_export, "observe_and_verify",
+                        lambda category, *a, **k: (1.0, observation, ("dress_r1: 33 != 1",)))
+    code = limn_export.export(tmp_path, tmp_path, tmp_path, tmp_path / "results", top_k=1,
+                              run_id="20260101T000000000000Z_limn_ckpt_parity01",
+                              command_digest="c" * 64, environment_digest="d" * 64)
+    assert code == 1
+    captured = capsys.readouterr()
+    status = _json.loads(captured.out)
+    assert status["instrumentation_parity"] == "INSTRUMENTATION_PARITY_MISMATCH"
+    assert status["publication"] == "WITHHELD_ON_PARITY_MISMATCH"
+    assert "QUERY_EXPORT_PARITY_MISMATCH" in captured.err

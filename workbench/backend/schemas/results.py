@@ -34,6 +34,13 @@ DATA_KINDS = ("experiment", "mock", "synthetic")
 #: observer and the docs cannot disagree about what "complete" means.
 FASHIONIQ_CATEGORIES = ("dress", "shirt", "toptee")
 
+#: The protocols whose reference policy removes the reference as a candidate. Named once so the
+#: eligible-bound rule and the protocol definitions cannot drift apart.
+REFERENCE_EXCLUDED_PROTOCOLS = frozenset({
+    "fashioniq_full_gallery_ref_excluded",
+    "fashioniq_val_split",
+})
+
 
 class ReportedMetrics(BaseModel):
     r10: float | None = None
@@ -169,7 +176,18 @@ class ResultRun(BaseModel):
             # candidate count is size-1 and the last slot is NOT retrievable. Checking only the raw
             # gallery size accepted a phantom rank equal to the masked reference's position (F-15).
             eligible = (self.run.category_eligible_counts or {}).get(query.category)
-            bound = min(category_size, eligible) if eligible is not None else category_size
+            if eligible is not None:
+                bound = min(category_size, eligible)
+            elif self.run.protocol_id in REFERENCE_EXCLUDED_PROTOCOLS:
+                # An excluded protocol has no retrievable slot for the reference, and the reference is
+                # always one candidate, so the eligible count is AT MOST size-1. Legacy artifacts that
+                # predate the field are bounded by that conservative value rather than by the raw
+                # gallery size, which would have admitted a rank equal to the masked slot (found in
+                # review). The field is still what a new artifact should record, and it is required
+                # by `admission` for an experiment.
+                bound = category_size - 1
+            else:
+                bound = category_size
             if query.target_rank > bound:
                 raise ValueError(
                     f"target_rank exceeds the eligible candidate count for {query.category} ({bound})")
@@ -283,6 +301,14 @@ def promote(result: "ResultRun", state: str, verifier_verdict: dict | None,
     """
     if state != PER_QUERY_UNVERIFIED:
         return state, []
+    # A receipt about the bytes is not enough if the artifact is WRONG about itself: a partial
+    # category set, a reused checkpoint, a missing bundle digest. The verifier cannot see those -- it
+    # judges the aggregate report -- so they are re-checked here. Without this, a dress-only
+    # experiment with a matching digest became PER_QUERY_VERIFIED (found in review).
+    blocking = [reason for reason in admission(result)[1]
+                if "awaiting corroboration" not in reason]
+    if blocking:
+        return state, blocking
     if not verifier_verdict:
         return state, []
     reasons = list(verifier_verdict.get("evidence_reasons") or [])
@@ -293,9 +319,11 @@ def promote(result: "ResultRun", state: str, verifier_verdict: dict | None,
     # evaluator over the bytes the observer wrote and carried in the report the ledger signs, so a
     # match means the corroborated report pointed at exactly these bytes.
     recorded = verifier_verdict.get("per_query_artifact_digest")
-    # The digest must come from the BYTES ON DISK, computed by the reader, never from a field the
-    # artifact writes about itself: that would let a forged file nominate its own digest and pass.
-    claimed = artifact_digest or result.run.per_query_artifact_digest
+    # The digest MUST be supplied by the reader from the bytes on disk. Falling back to a field the
+    # artifact writes about itself would let a forged file nominate its own digest and pass -- the
+    # exact self-certification this whole mechanism exists to prevent (found in review: the fallback
+    # was added to make a test pass, and it reopened the hole).
+    claimed = artifact_digest
     if not recorded or not claimed:
         return state, ["the verifier's receipt does not bind a per-query artifact digest, so this "
                        "artifact cannot be attributed to the verified run"]

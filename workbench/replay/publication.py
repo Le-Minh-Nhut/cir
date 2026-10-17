@@ -163,6 +163,11 @@ def publish(result: ResultRun, results_root: Path, *, allow_identical_repeat: bo
             file.write(serialized)
             file.flush()
             os.fsync(file.fileno())
+        if destination.is_symlink():
+            # A symlink would place the artifact's bytes outside the results root, where they can be
+            # mutated out of band while the index reports a digest it read once (found in review).
+            raise FileExistsError(
+                f"refusing to publish to a symlink destination: {destination}")
         try:
             # Atomic, no-clobber: the link either creates the name or raises. A reader never sees a
             # partial file, and no concurrent publisher can replace what is already there.

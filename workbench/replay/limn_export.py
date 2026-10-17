@@ -148,9 +148,12 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
         data_kind="experiment" if run_id else "mock",
         reproduced_metrics=aggregate,
     )
+    # The JSON line is the machine-readable contract the orchestrator parses; everything else goes
+    # to stderr. Printing a human note after the JSON on stdout made the parent's parse fail with
+    # "Extra data", so the exporter appeared to succeed while the parent recorded no artifact.
     print(json.dumps({**status, "published": str(destination)}, indent=2))
     print("[PENDING] PC GPU validation: instrumentation parity was checked against this run's own "
-          "native aggregate, not against a real target-GPU inference")
+          "native aggregate, not against a real target-GPU inference", file=sys.stderr)
     return 0
 
 

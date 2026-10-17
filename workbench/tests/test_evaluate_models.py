@@ -696,3 +696,57 @@ def test_the_evaluation_module_does_not_widen_limns_traced_environment() -> None
     assert "pydantic" not in traced, f"pydantic leaked into LIMN's traced imports: {sorted(traced)}"
     # And the modules that must remain reachable still are.
     assert {"torch", "open_clip", "numpy"} <= set(traced), sorted(traced)
+
+
+def test_a_failed_observation_leaves_the_aggregate_result_intact(monkeypatch, tmp_path: Path) -> None:
+    """§28: a failed query export must not destroy a valid aggregate evaluation.
+
+    The aggregate is the authoritative result and has already succeeded by the time observation
+    runs. Observation is an optional capability, so its failure is recorded as a reason -- and the
+    report must say `per_query_export_available: False` rather than claiming an artifact exists.
+    """
+    module = load_module()
+    from workbench.backend.schemas.results import ResultRun
+
+    def fake_invoke(plan, config, run_id, root):
+        directory = tmp_path / "logs" / f"{plan.model_id}__{plan.checkpoint_id}__{run_id}"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "stdout.log").write_text('{"dress_r1": 1.0, "dress_r10": 2.0, "dress_r50": 3.0}')
+        (directory / "stderr.log").write_text("")
+        return 0, directory, {"orchestrator_python": "3", "platform": "test"}
+
+    def failing_run(argv, **kwargs):
+        class Failed:
+            returncode = 1
+            stdout = ""
+            stderr = "observer could not load the checkpoint"
+
+        return Failed()
+
+    monkeypatch.setattr(module, "invoke_evaluator", fake_invoke)
+    monkeypatch.setattr(module.subprocess, "run", failing_run)
+    monkeypatch.setattr(module, "extract_aggregate_metrics",
+                        lambda *a, **k: type("E", (), {
+                            "extraction_status": "EXTRACTED_VERIFIED", "parser_id": "limn_structured_json",
+                            "parser_version": 1, "observed_metrics": {"r10": 1.0, "r50": 2.0, "mean": 1.5},
+                            "category_metrics": None, "parity_status": "PARITY_NOT_EVALUATED",
+                            "metric_source": "stdout"})())
+
+    plan = module.EvaluationPlan(
+        model_id="limn", checkpoint_id="base_iter0_all_categories", protocol="fashioniq_val_split",
+        dataset_root=tmp_path, source=tmp_path, checkpoint=tmp_path / "ckpt",
+        cwd=tmp_path, command=[sys.executable, "x"], pin="a" * 40,
+        actual_source_commit="a" * 40, paper_metrics=None)
+    settings = config(tmp_path)
+    run_id = "20260101T000000000000Z_limn_base_iter0_all_categories_fa11ed"
+    assert module.execute(plan, settings, run_id=run_id) == 0, "an observation failure is not fatal"
+
+    # The aggregate report is written under the artifacts root the config names.
+    reports = list(tmp_path.rglob("*_aggregate.json"))
+    assert reports, f"the aggregate report must still exist; tree: {sorted(p.name for p in tmp_path.rglob('*'))}"
+    report = json.loads(reports[0].read_text())
+    assert report["run_id"] == run_id
+    assert report["execution_status"] == "EXECUTION_COMPLETED"
+    assert report["per_query_export_available"] is False, "no artifact was produced"
+    assert report.get("per_query_artifact_digest") is None
+    assert "observer exited" in (report.get("per_query_export_reason") or "")

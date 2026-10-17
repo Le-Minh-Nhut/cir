@@ -596,7 +596,14 @@ def _certify_report(config, report_path: Path, report: dict, digest: str, *,
                     "certified": False, "certification_mode": mode, "development_mode": False,
                     "state": "refused"}
         certified = bool(verdict.get("is_research_evidence"))
+        # The receipt must carry the fields a consumer needs to attribute a per-query artifact to
+        # THIS verification: the artifact digest the verifier's report records, plus the identity it
+        # describes. Dropping them made `promote` unable to bind, so no per-query run could ever be
+        # verified in production (found in review).
         return {"report_digest": digest,
+                "per_query_artifact_digest": verdict.get("per_query_artifact_digest"),
+                "model_id": verdict.get("model_id"),
+                "checkpoint_id": verdict.get("checkpoint_id"),
                 "verified": bool(verdict.get("verified")),
                 "is_research_evidence": certified,
                 "reasons": list(verdict.get("reasons") or []),
