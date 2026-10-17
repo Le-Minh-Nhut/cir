@@ -767,12 +767,20 @@ def test_the_fallback_key_is_created_so_a_capability_can_be_signed(tmp_path, mon
     from workbench.backend import operator_config
 
     monkeypatch.delenv("WORKBENCH_LEDGER_KEY", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    # A genuinely FRESH host: neither a key nor an evidence ledger exists here. The key is now
+    # created by the ledger's own resolver (which the capability signer delegates to), and that
+    # resolver refuses to mint a key while a ledger already exists -- minting one would orphan every
+    # entry signed with the key it cannot find. Redirecting the artifacts root is what makes this
+    # host fresh; without it the resolver correctly refuses, and the test would be asserting the
+    # opposite of the intended behaviour.
     monkeypatch.setattr(operator_config, "resolve_config",
-                        lambda: replace(resolve_config(), CIR_REPO_ROOT=tmp_path))
+                        lambda: replace(resolve_config(), CIR_REPO_ROOT=tmp_path,
+                                        WORKBENCH_ARTIFACTS_ROOT=tmp_path / "artifacts"))
 
     key = runtime._gpu_cache_key()
     assert key and len(key) == 32, "the fallback key must be created, not silently empty"
-    assert (tmp_path / ".workbench_ledger_key").is_file()
+    assert (tmp_path / "config" / "cir" / "workbench_ledger_key").is_file()
 
     # The same key signs and verifies a record, which is what launch readiness consumes.
     record = {"capability_verified": True, "interpreter": "/x/python"}

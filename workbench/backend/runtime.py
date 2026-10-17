@@ -979,7 +979,7 @@ def record_gpu_capability(model: dict[str, Any], result: dict[str, Any],
             "interpreter change", "dependency change", "host change",
             "driver change", "CUDA_VISIBLE_DEVICES change"],
     }
-    signature = _gpu_capability_signature(payload)
+    signature = _gpu_capability_signature(payload, config)
     if signature:
         payload["signature"] = signature
     _GPU_CAPABILITY[key] = payload
@@ -1100,10 +1100,16 @@ def _gpu_capability_key(model: dict[str, Any], authoritative: bool = True) -> st
     ).hexdigest()
 
 
-def _gpu_capability_signature(record_without_signature: dict[str, Any]) -> str | None:
-    """HMAC of a GPU capability record, using the operator key kept outside the artifacts."""
+def _gpu_capability_signature(record_without_signature: dict[str, Any],
+                              config: Any | None = None) -> str | None:
+    """HMAC of a GPU capability record, using the operator key kept outside the artifacts.
+
+    ``config`` is passed through when the caller has one: resolving a fresh global config here would
+    read a different repository root than the record was written under, so a capability that exists
+    on disk would fail its own signature check and be re-probed.
+    """
     try:
-        key = _gpu_cache_key()
+        key = _gpu_cache_key(config)
     except Exception:
         return None
     if not key:
@@ -1115,86 +1121,44 @@ def _gpu_capability_signature(record_without_signature: dict[str, Any]) -> str |
     return _hmac.new(key, canonical, hashlib.sha256).hexdigest()
 
 
-def _gpu_cache_key() -> bytes:
-    """The operator key for GPU capability records.
+def _gpu_cache_key(config: Any | None = None) -> bytes:
+    """The operator key for GPU capability records: the LEDGER's decision, not a second one.
 
-    Resolution order mirrors the ledger: ``WORKBENCH_LEDGER_KEY`` from the operator's secret
-    store, a key already present at the legacy ``<CIR_REPO_ROOT>/.workbench_ledger_key``, then
-    the private config directory under ``XDG_CONFIG_HOME`` (or the operator's home). The file is
-    created on first use, exactly as the ledger creates it, so an operator who relies on the
-    documented fallback key can still persist and reuse a verified capability. Failures return
-    b"", which makes every persisted record unverified rather than trusted.
+    Two resolvers used to coexist with different preferences -- this one took the repository-root
+    key whenever the checkout was writable, while ``evaluate_models.ledger_hmac_key`` preferred the
+    durable ``$XDG_CONFIG_HOME/cir`` key -- so on a writable repo each created a DIFFERENT key file
+    and the next run failed with "two different ledger keys exist". The capability cache and the
+    evidence ledger then disagreed about which host they were describing.
+
+    The ledger is the owner because it has the stronger requirement: a ledger signed with the other
+    key is unverifiable, so it refuses to guess. This function adopts the same decision, and treats
+    the refusal as "unverified" rather than "trusted" -- a capability record that cannot be signed
+    with a known key must not be accepted.
+
+    Failures return b"", which makes every persisted record unverified rather than trusted.
     """
-    import secrets
-    import stat as _stat
-
-    configured = os.environ.get("WORKBENCH_LEDGER_KEY")
-    if configured is not None:
-        return configured.strip().encode("utf-8")
     try:
+        from workbench.scripts.evaluate_models import LedgerKeyError, ledger_hmac_key
         from workbench.backend.operator_config import resolve_config
 
-        repo_root = Path(getattr(resolve_config(), "CIR_REPO_ROOT",
-                                 Path(__file__).resolve().parents[2]))
-        # The repository-root location is not writable in the deployed container (the checkout
-        # is owned by the build user while the container runs as the operator's uid), and the
-        # deployment points XDG_CONFIG_HOME at the persistent artifacts mount for exactly this
-        # class of key. Without that fallback the key resolved to b"", every capability record
-        # was written unsigned, and the cache rejected its own records — closing the GPU launch
-        # gate on the hardware the adaptation exists for.
-        legacy_key_path = repo_root / ".workbench_ledger_key"
-        config_home = Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
-        private_key_path = config_home / "cir" / "workbench_ledger_key"
-        if (legacy_key_path.is_file() and private_key_path.is_file()
-                and legacy_key_path.read_bytes() != private_key_path.read_bytes()):
-            # Two systems signing under two different keys. The ledger's own resolver refuses this
-            # state outright (`LedgerKeyError`), so a capability record signed here would use a key
-            # the ledger reader never picks, and every record it reads fails its signature check:
-            # both are failure modes the operator cannot see. This helper keeps its documented
-            # precedence (the repository-root key signs), and the consequence is reported where the
-            # reader sees it -- `_gpu_capability_signature` returns None for b"" and the record is
-            # simply not trusted until one key is gone.
-            print(f"workbench: two different ledger keys exist ({legacy_key_path} and "
-                  f"{private_key_path}); keep one file and remove the other, or set "
-                  "WORKBENCH_LEDGER_KEY explicitly to choose one", file=sys.stderr)
-        if legacy_key_path.is_file():
-            key_path = legacy_key_path
-        elif os.access(repo_root, os.W_OK):
-            key_path = legacy_key_path
-        else:
-            key_path = private_key_path
-        if key_path.is_file():
-            if not _stat.S_ISREG(key_path.lstat().st_mode):
-                return b""
-            return key_path.read_bytes().strip()
-        key_path.parent.mkdir(parents=True, exist_ok=True)
-        key = secrets.token_bytes(32)
-        fd, temporary = tempfile.mkstemp(prefix=".workbench_ledger_key.", dir=key_path.parent)
-        try:
-            os.fchmod(fd, 0o600)
-            with os.fdopen(fd, "wb") as handle:
-                handle.write(key)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(temporary, key_path)
-        except BaseException:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-            Path(temporary).unlink(missing_ok=True)
-            raise
-        return key
-    except OSError:
+        return ledger_hmac_key(config or resolve_config())
+    except LedgerKeyError as error:
+        # Re-emit the owner's message verbatim: it names both paths and the remedy, and an operator
+        # who saw it from the ledger must see the same words here.
+        print(f"workbench: {error}", file=sys.stderr)
+        return b""
+    except Exception:
+        # The import is lazy only to keep the module graph acyclic (evaluate_models imports this
+        # module); if it ever fails, an unverified record is the safe answer.
         return b""
 
 
-def _gpu_capability_signature_valid(payload: dict[str, Any]) -> bool:
+def _gpu_capability_signature_valid(payload: dict[str, Any], config: Any | None = None) -> bool:
     claimed = payload.get("signature")
     if not isinstance(claimed, str) or not claimed:
         return False
     body = {key: value for key, value in payload.items() if key != "signature"}
-    expected = _gpu_capability_signature(body)
+    expected = _gpu_capability_signature(body, config)
     return bool(expected) and hmac_compare(expected, claimed)
 
 
@@ -1254,7 +1218,7 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
                     and cached_payload.get("dependency_fingerprint") == _environment_contract_digest(model)
                     and cached_payload.get("host_identity") == _host_identity()
                     and (not expected_fingerprint or cached_payload.get("interpreter_fingerprint") == expected_fingerprint)
-                    and _gpu_capability_signature_valid(cached_payload)):
+                    and _gpu_capability_signature_valid(cached_payload, config_for_records)):
                 return cached_payload
         directory = gpu_capability_directory(config_for_records)
         if directory.is_dir():
@@ -1273,7 +1237,7 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
                         and payload.get("dependency_fingerprint") == _environment_contract_digest(model)
                         and payload.get("host_identity") == _host_identity()
                         and (not expected_fingerprint or payload.get("interpreter_fingerprint") == expected_fingerprint)
-                        and _gpu_capability_signature_valid(payload)):
+                        and _gpu_capability_signature_valid(payload, config_for_records)):
                     if payload.get("capability_key"):
                         _GPU_CAPABILITY[payload["capability_key"]] = payload
                     return payload
@@ -1285,7 +1249,7 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
         probe_source = cached.get("probe_source", "interpreter") if isinstance(cached, dict) else "interpreter"
         if not (probe_source == "interpreter" or (synthetic_ok and probe_source == "override")):
             cached = None
-        elif not _gpu_capability_signature_valid(cached):
+        elif not _gpu_capability_signature_valid(cached, config_for_records):
             _GPU_CAPABILITY.pop(key, None)
             cached = None
     if cached is None:
@@ -1302,7 +1266,7 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
         probe_source = payload.get("probe_source", "interpreter") if isinstance(payload, dict) else "interpreter"
         if (isinstance(payload, dict) and payload.get("capability_key") == key
                 and (probe_source == "interpreter" or (synthetic_ok and probe_source == "override"))):
-            if _gpu_capability_signature_valid(payload):
+            if _gpu_capability_signature_valid(payload, config_for_records):
                 cached = payload
                 _GPU_CAPABILITY[key] = payload
     if cached is None:

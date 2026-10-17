@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.index import load_runs
 from workbench.backend.operator_config import resolve_config
 from workbench.backend.schemas.results import ResultRun
+from workbench.replay.publication import verify_run_identity
 
 PROVENANCE_FIELDS = ("upstream_commit", "checkpoint_sha256", "command_digest", "environment_digest")
 
@@ -45,11 +46,20 @@ def validate_root(root: Path, strict_real: bool = False, output: Callable[[str],
 
 
 def validate_file(path: Path, strict_real: bool = False, output: Callable[[str], None] = print) -> bool:
-    """Validate one result artifact without changing it."""
+    """Validate one result artifact without changing it.
+
+    Schema validity is not identity consistency: `run_id` is derived from the artifact's own
+    provenance, so it is recomputed here. An artifact whose identity was edited to another run's
+    would otherwise pass every schema check.
+    """
     try:
         result = ResultRun.model_validate_json(path.read_text())
     except Exception as error:
         output(f"[BLOCKED] {path}: {error}")
+        return False
+    if mismatches := verify_run_identity(result):
+        for mismatch in mismatches:
+            output(f"[BLOCKED] {path}: {mismatch}")
         return False
     valid = _report_provenance([result], strict_real, output)
     output(f"[OK] validated {path}")

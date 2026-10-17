@@ -66,14 +66,23 @@ def test_doctor_reports_csmcir_and_encoder_runtime_blockers(monkeypatch: pytest.
 
 
 def test_strict_real_validation_rejects_missing_provenance(tmp_path: Path) -> None:
+    """The subject is the MISSING-PROVENANCE check, so the fixture must be valid in every other
+    respect -- a derived-consistent run_id and no provenance digests -- or the test would pass on
+    whichever check happened to run first and stop guarding the one it names."""
+    from workbench.replay.publication import run_id_for
+
     artifact = tmp_path / "real.json"
     payload = build_mock_runs()[0].model_dump(mode="json")
     payload["run"]["data_kind"] = "experiment"
+    payload["run"]["run_id"] = run_id_for(
+        model_id=payload["run"]["model_id"], checkpoint_id=payload["run"]["checkpoint_id"],
+        protocol_id=payload["run"]["protocol_id"], source_commit=None, checkpoint_sha256=None)
     artifact.write_text(json.dumps(payload), encoding="utf-8")
     output: list[str] = []
 
     assert not validate_file(artifact, strict_real=True, output=output.append)
-    assert output[0] == "[BLOCKED] mock_csmcir-fiq_a: missing provenance: upstream_commit, checkpoint_sha256, command_digest, environment_digest"
+    assert output[0] == (f"[BLOCKED] {payload['run']['run_id']}: missing provenance: "
+                         "upstream_commit, checkpoint_sha256, command_digest, environment_digest")
 
 
 def test_sync_dry_run_and_verify_only_output_contract(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

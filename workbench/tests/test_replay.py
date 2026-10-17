@@ -334,3 +334,93 @@ def test_replay_and_runtime_agree_that_bytecode_is_not_a_source_change(tmp_path:
     (repo / "src.py").write_text("x = 2\n")
     edited_ok, _, reason = source_checkout_status(repo, head)
     assert not edited_ok and "dirty" in (reason or ""), "a real source edit must still be refused"
+
+
+def test_the_export_entry_point_is_separate_from_the_traced_native_replay(monkeypatch, tmp_path, capsys):
+    """The per-query exporter must not live in the module the environment planner traces.
+
+    `_evaluator_imports` walks `workbench/replay/limn.py` to decide LIMN's interpreter. Putting the
+    observer (numpy) and the canonical-result schema (pydantic) in that file made the planner
+    require an interpreter for packages the native replay never imports, and a cold-start run
+    stopped provisioning LIMN. The export therefore lives in its own module, and this test pins
+    that separation -- it is the regression for that cold-start failure.
+    """
+    import workbench.replay.limn as limn
+    import workbench.replay.limn_export as limn_export
+
+    for name in ("observe_category", "publish_observed_categories", "ObservedCategory"):
+        assert not hasattr(limn, name), f"{name} must not be reachable from the traced module"
+    # And the export module itself is importable with both capabilities present.
+    assert hasattr(limn_export, "export") and hasattr(limn_export, "observe_and_verify")
+
+
+def test_export_refuses_when_instrumentation_parity_fails(monkeypatch, tmp_path, capsys):
+    """PARITY 1 failure: the artifact is withheld, and the native aggregate is not invented."""
+    import workbench.replay.limn_export as limn_export
+    from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
+
+    query = ObservedQuery(annotation_index=0, reference_id="r", target_id="t",
+                          raw_captions=("a", "b"), model_input_text="a and b",
+                          target_rank=2, top_results=((1, "d", 0.5), (2, "t", 0.4)), category="dress")
+    observation = ObservedCategory(category="dress", gallery_size=3, eligible_count=2, queries=(query,))
+
+    def fake_observe(category, *_a, **_k):
+        return 1.0, observation, ("dress_r1: observer 33.3 != native 1.0",)
+
+    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
+    monkeypatch.setattr(limn_export, "observe_and_verify", fake_observe)
+
+    code = limn_export.export(tmp_path, tmp_path, tmp_path, tmp_path / "results")
+    assert code == 1
+    captured = capsys.readouterr()
+    assert "QUERY_EXPORT_PARITY_MISMATCH" in captured.err
+    assert "INSTRUMENTATION_PARITY_MISMATCH" in captured.out
+    assert not (tmp_path / "results").exists()
+
+
+def test_export_publishes_a_validated_artifact_when_parity_holds(monkeypatch, tmp_path, capsys):
+    """POSITIVE CONTROL: clean parity publishes, and the file validates on its own from disk."""
+    import workbench.replay.limn_export as limn_export
+    from workbench.replay.limn_observer import ObservedCategory, ObservedQuery
+    from workbench.backend.schemas.results import ResultRun
+
+    def fake_observe(category, *_a, **_k):
+        # The export walks the full three-category bundle, so the stub must answer per category.
+        queries = tuple(
+            ObservedQuery(annotation_index=index, reference_id=f"{category}-r{index}",
+                          target_id=f"{category}-t{index}", raw_captions=("a", "b"),
+                          model_input_text="a and b", target_rank=1,
+                          top_results=((1, f"{category}-t{index}", 0.9),), category=category)
+            for index in range(2))
+        observation = ObservedCategory(category=category, gallery_size=2, eligible_count=1,
+                                       queries=queries)
+        return 100.0, observation, ()
+
+    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: [])
+    monkeypatch.setattr(limn_export, "observe_and_verify", fake_observe)
+
+    results_root = tmp_path / "results"
+    code = limn_export.export(tmp_path, tmp_path, tmp_path, results_root, top_k=1)
+    assert code == 0, capsys.readouterr().err
+    published = list(results_root.rglob("*.json"))
+    assert len(published) == 1, published
+    artifact = ResultRun.model_validate_json(published[0].read_text())
+    assert artifact.run.protocol_id == "fashioniq_val_split"
+    assert artifact.run.data_kind == "experiment"
+    # One artifact covering the whole bundle, not one per category.
+    assert len(artifact.queries) == 6
+    assert set(artifact.run.category_gallery_sizes) == {"dress", "shirt", "toptee"}
+    assert "PENDING" in capsys.readouterr().out
+
+
+def test_export_refuses_before_inference_when_preflight_fails(monkeypatch, tmp_path, capsys):
+    """A missing bundle is refused by name, and no inference starts."""
+    import workbench.replay.limn_export as limn_export
+
+    monkeypatch.setattr(limn_export, "preflight", lambda *a, **k: ["checkpoint missing: /x"])
+    monkeypatch.setattr(limn_export, "observe_and_verify",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no inference")))
+
+    code = limn_export.export(tmp_path, tmp_path, tmp_path, tmp_path / "results")
+    assert code == 1
+    assert "checkpoint missing" in capsys.readouterr().err

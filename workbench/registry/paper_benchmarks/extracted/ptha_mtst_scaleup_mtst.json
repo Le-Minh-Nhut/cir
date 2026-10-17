@@ -1,135 +1,135 @@
 {
- "experiments": [
-  {
-   "aggregation_method": "unweighted macro mean over the three categories (dress, shirt, toptee) for each of R@10 and R@50; the paper's 'Avg.' column is (mean R@10 + mean R@50)/2",
-   "augmentation_policy": null,
-   "backbone": "BLIP2 (baseline column value 'BLIP2' in Table III; paper body: 'The multimodal encoder is the query encoder in BLIP-2, the text encoder is the text encoder in BLIP-2. The vision encoder is the frozen ViT-g/14 from EVA-CLIP', batch size 128, N=32 query tokens)",
-   "category_metrics": {
-    "dress": {
-     "r10": 50.77,
-     "r50": 73.78
+  "experiments": [
+    {
+      "aggregation_method": "unweighted macro mean over the three categories (dress, shirt, toptee) for each of R@10 and R@50; the paper's 'Avg.' column is (mean R@10 + mean R@50)/2",
+      "augmentation_policy": null,
+      "backbone": "BLIP2 (baseline column value 'BLIP2' in Table III; paper body: 'The multimodal encoder is the query encoder in BLIP-2, the text encoder is the text encoder in BLIP-2. The vision encoder is the frozen ViT-g/14 from EVA-CLIP', batch size 128, N=32 query tokens)",
+      "category_metrics": {
+        "dress": {
+          "r10": 50.77,
+          "r50": 73.78
+        },
+        "shirt": {
+          "r10": 55.91,
+          "r50": 75.36
+        },
+        "toptee": {
+          "r10": 58.28,
+          "r50": 79.7
+        }
+      },
+      "checkpoint_id": null,
+      "checkpoint_mapping_evidence": "No FashionIQ fine-tuned checkpoint is published by the authors. The registry declares checkpoint_variants: [] (workbench/registry/models.yaml:222) and strict_clean_checkpoint_available: false (:220). Independent hunt: the only author Hub repo is https://huggingface.co/yinanzhou1/mtst_ptha (API sha b5e669c8ef28b0084f43398d184a5a0116903ccf, lastModified 2024-12-26T07:42:49Z, usedStorage 3034364073) whose complete file list is .gitattributes, README.md (31 bytes: '---\\nlicense: apache-2.0\\n---'), cirr_modifier_generated_5p_completed_rev.json (298419312 B, lfs oid 6cb4c02170f703da5ae40ae6d988a6aae272c2fa821d30c1d090de671ddfbd4d), cirr_train_modifier_rev_long.json (15591788 B, lfs oid b1b7e72b3416e4479e4ddb9a807e789210e8d4f9d32210da460a22882f90d15d), tuned_mtst_cirr.pt (2720352973 B, lfs oid 1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f). The author README links exactly three downloads, all CIRR-related (README lines 85-87). GET https://api.github.com/repos/zyinan99/MTST_PTHA/git/trees/main?recursive=1 -> truncated:false, 433 entries, 361 blobs, ZERO blobs matching .pt/.pth/.bin/.ckpt/.safetensors/.tar/.zip/.h5. curl -I on https://huggingface.co/yinanzhou1/mtst_ptha/resolve/main/{fashioniq.pt, fashioniq_mtst.pt, mtst_fashioniq.pt, tuned_mtst_fashioniq.pt, ptha_fashioniq.pt, tuned_mtst_fiq.pt, fashioniq_gen.json} -> 404 for all seven. GET https://api.github.com/repos/zyinan99/MTST_PTHA/releases -> [] and /tags -> []. GET https://api.github.com/users/zyinan99/repos -> 6 repos (DOGR, github-slideshow, MATM, MTST_PTHA, r1_mask, zyinan99.dogr.github.io), no second CIR repo. GET https://huggingface.co/api/models?author=yinanzhou1 -> 6 repos, only yinanzhou1/mtst_ptha is CIR-related. GET https://huggingface.co/api/datasets?author=yinanzhou1 -> 11 datasets, all GeoQA/DOGR/math, none CIR. So the paper's FashionIQ row has no published weight of any noise level.",
+      "checkpoint_mapping_status": "NO_CHECKPOINT",
+      "checkpoint_training_noise_pct": null,
+      "dataset": "fashioniq",
+      "dataset_version": "FashionIQ validation split, official three categories (dress, shirt, toptee); paper states only 'R@10 and R@50 on the val set in three categories' (implementation/evaluation paragraph, PDF p.6, paper.txt:391) and gives no further split or gallery detail",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": null,
+      "method_name": "PTHA",
+      "method_variant": "PTHA (Ours) pretrained with FashionIQ_MTST (row label 'PTHA (Ours)', Pretraining Data column 'FashionIQMTST'); this is the row that corresponds to the registry's 54.99 / 76.28 / 65.64",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K of the ranked gallery; here K in {10, 50}",
+      "metric_provenance": {
+        "paper_column": "Dress R@10/R@50, Shirt R@10/R@50, Toptee R@10/R@50, Average R@10/R@50, Avg.",
+        "paper_page": 7,
+        "paper_row": "PTHA (Ours) | BLIP2 | FashionIQMTST",
+        "paper_table": "Table III",
+        "source_excerpt_or_description": "TABLE III: Comparison on FashionIQ validation set. \"Avg.\" means (Recall@10 + Recall@50)/2. * indicates that the method deploys extra re-ranking strategy. Columns: Method | baseline | Pretraining Data | Dress R@10 R@50 | Shirt R@10 R@50 | Toptee R@10 R@50 | Average R@10 R@50 | Avg. The final data row is 'PTHA (Ours) BLIP2 FashionIQMTST 50.77 73.78 55.91 75.36 58.28 79.70 54.99 76.28 65.64'. The immediately preceding row is a different condition and must not be confused with it: 'PTHA (Ours) BLIP2 - 49.54 72.81 55.50 73.97 57.96 78.96 54.33 75.24 64.79'."
+      },
+      "model_id": "ptha_mtst",
+      "preprocessing_id": null,
+      "reference_excluded": null,
+      "reference_id": "ptha_mtst_fiq_table3_fashiqmtst_blip2",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 65.64,
+        "r10": 54.99,
+        "r50": 76.28
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED for all three: Table III prints 54.99 (Average R@10), 76.28 (Average R@50) and 65.64 (Avg. column) for the row 'PTHA (Ours) | BLIP2 | FashionIQMTST'. The caption itself defines the column: 'TABLE III: Comparison on FashionIQ validation set. \"Avg.\" means (Recall@10 + Recall@50)/2.'",
+      "review_status": "CONFIRMED",
+      "split": "val",
+      "verification_evidence": "Rendered page 7 (PDF page 7 of 12) shows Table III; the registry's 54.99 / 76.28 / 65.64 matches the row 'PTHA (Ours) | BLIP2 | FashionIQMTST' exactly and matches no other row (the closest non-MTST PTHA row is 54.33 / 75.24 / 64.79). The PAPER NEVER STATES ITS GALLERY CONSTRUCTION OR REFERENCE POLICY: the evaluation paragraph says only 'R@10 and R@50 on the val set in three categories' and gives no split or gallery detail. An earlier revision of this record asserted gallery_protocol=fashioniq_original_split from an unverifiable route -- the assert at validate_blip.py:51 of the author repository, which this workbench has NOT synced, pinned or audited (workbench/registry/models.yaml:229-236, upstream_commit_sha: null, source_available: false). That is an inference about an unread file, not evidence, and it contradicted the registry's own native_protocol: null. The protocol is UNKNOWN; STATIC_AUDIT, no GPU inference was run.",
+      "verification_method": "Two independent routes that agree, plus an arithmetic check. (1) HTML route: curl https://arxiv.org/html/2504.05316v1 (HTML 200, 303805 B), parsed the 12th <table> on the page row-by-row with a Python regex/HTML unescape script; every cell of the last row read 50.77 | 73.78 | 55.91 | 75.36 | 58.28 | 79.70 | 54.99 | 76.28 | 65.64. (2) PDF route: pdftotext -layout paper.pdf paper.txt, the same row at lines 465-466 of paper.txt with identical values and column alignment. (3) Visual route: pdftoppm -f 7 -l 7 -r 160 -png paper.pdf then read page7-07.png as an image; the Table III last row visibly reads PTHA (Ours) / BLIP2 / FashionIQ_MTST / 50.77 73.78 / 55.91 75.36 / 58.28 79.70 / 54.99 76.28 / 65.64, with 'FashionIQMTST' in subscript shading. All three routes agree on every digit. (4) Arithmetic: category macro means recomputed as (50.77+55.91+58.28)/3 = 54.9867 -> 54.99 and (73.78+75.36+79.70)/3 = 76.28; (54.99+76.28)/2 = 65.635 -> 65.64, matching the printed Average and Avg. columns, so the printed averages are internally consistent and are not a per-category value.",
+      "checkpoint_noise_evidence": "Final audit re-derivation: the word \"noise\" occurs 0 times in the pinned paper text (arXiv 2504.05316v1, sha256 0801d37a...) apart from two bibliography strings; the paper describes no noise-injection protocol, so the rows must not assert a clean condition."
     },
-    "shirt": {
-     "r10": 55.91,
-     "r50": 75.36
-    },
-    "toptee": {
-     "r10": 58.28,
-     "r50": 79.7
+    {
+      "aggregation_method": "macro over categories, then mean of R@10 and R@50",
+      "augmentation_policy": null,
+      "backbone": "BLIP2",
+      "category_metrics": {
+        "dress": {
+          "r10": 49.54,
+          "r50": 72.81
+        },
+        "shirt": {
+          "r10": 55.5,
+          "r50": 73.97
+        },
+        "toptee": {
+          "r10": 57.96,
+          "r50": 78.96
+        }
+      },
+      "checkpoint_id": null,
+      "checkpoint_mapping_evidence": "Same as the pretrained row: no FashionIQ weight of any kind is published (see the other experiment's evidence: 7x404 probes on the author Hub repo, zero weight blobs in the GitHub tree, no releases, no tags).",
+      "checkpoint_mapping_status": "NO_CHECKPOINT",
+      "checkpoint_training_noise_pct": null,
+      "dataset": "fashioniq",
+      "dataset_version": "FashionIQ validation split, three categories",
+      "derived_metrics": [],
+      "evaluation_noise_pct": 0,
+      "gallery_protocol": null,
+      "method_name": "PTHA",
+      "method_variant": "PTHA (Ours) WITHOUT FashionIQ_MTST pretraining (row 'PTHA (Ours)', Pretraining Data column '-'); recorded only to document the control row so a comparator cannot bind the registry numbers to it",
+      "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
+      "metric_provenance": {
+        "paper_column": "Dress/Shirt/Toptee R@10 R@50, Average R@10 R@50, Avg.",
+        "paper_page": 7,
+        "paper_row": "PTHA (Ours) | BLIP2 | -",
+        "paper_table": "Table III",
+        "source_excerpt_or_description": "'PTHA (Ours) BLIP2 - 49.54 72.81 55.50 73.97 57.96 78.96 54.33 75.24 64.79' - the second-to-last data row of Table III, i.e. the same network without the paper's FashionIQ_MTST pretraining."
+      },
+      "model_id": "ptha_mtst",
+      "preprocessing_id": null,
+      "reference_excluded": null,
+      "reference_id": "ptha_mtst_fiq_no_pretrain_table3",
+      "reference_status": "VERIFIED",
+      "reported_metrics": {
+        "mean": 64.79,
+        "r10": 54.33,
+        "r50": 75.24
+      },
+      "reported_metrics_provenance": "PAPER_REPORTED (Table III, row 'PTHA (Ours) | BLIP2 | -')",
+      "review_status": "CONFIRMED",
+      "split": "val",
+      "verification_evidence": "Rendered page 7 shows this row immediately above the FashionIQ_MTST row, with '-' in the Pretraining Data column. This entry exists purely so the comparator has the control row's exact numbers and cannot silently bind them to the registry's reported_metrics. Protocol UNKNOWN: the paper states no gallery construction or reference policy for either PTHA row.",
+      "verification_method": "Same three routes as the pretrained row (HTML table parse, pdftotext -layout, rendered page-7 image); all agree on 49.54 / 72.81 / 55.50 / 73.97 / 57.96 / 78.96 / 54.33 / 75.24 / 64.79.",
+      "checkpoint_noise_evidence": "Final audit re-derivation: the word \"noise\" occurs 0 times in the pinned paper text (arXiv 2504.05316v1, sha256 0801d37a...) apart from two bibliography strings; the paper describes no noise-injection protocol, so the rows must not assert a clean condition."
     }
-   },
-   "checkpoint_id": null,
-   "checkpoint_mapping_evidence": "No FashionIQ fine-tuned checkpoint is published by the authors. The registry declares checkpoint_variants: [] (workbench/registry/models.yaml:222) and strict_clean_checkpoint_available: false (:220). Independent hunt: the only author Hub repo is https://huggingface.co/yinanzhou1/mtst_ptha (API sha b5e669c8ef28b0084f43398d184a5a0116903ccf, lastModified 2024-12-26T07:42:49Z, usedStorage 3034364073) whose complete file list is .gitattributes, README.md (31 bytes: '---\\nlicense: apache-2.0\\n---'), cirr_modifier_generated_5p_completed_rev.json (298419312 B, lfs oid 6cb4c02170f703da5ae40ae6d988a6aae272c2fa821d30c1d090de671ddfbd4d), cirr_train_modifier_rev_long.json (15591788 B, lfs oid b1b7e72b3416e4479e4ddb9a807e789210e8d4f9d32210da460a22882f90d15d), tuned_mtst_cirr.pt (2720352973 B, lfs oid 1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f). The author README links exactly three downloads, all CIRR-related (README lines 85-87). GET https://api.github.com/repos/zyinan99/MTST_PTHA/git/trees/main?recursive=1 -> truncated:false, 433 entries, 361 blobs, ZERO blobs matching .pt/.pth/.bin/.ckpt/.safetensors/.tar/.zip/.h5. curl -I on https://huggingface.co/yinanzhou1/mtst_ptha/resolve/main/{fashioniq.pt, fashioniq_mtst.pt, mtst_fashioniq.pt, tuned_mtst_fashioniq.pt, ptha_fashioniq.pt, tuned_mtst_fiq.pt, fashioniq_gen.json} -> 404 for all seven. GET https://api.github.com/repos/zyinan99/MTST_PTHA/releases -> [] and /tags -> []. GET https://api.github.com/users/zyinan99/repos -> 6 repos (DOGR, github-slideshow, MATM, MTST_PTHA, r1_mask, zyinan99.dogr.github.io), no second CIR repo. GET https://huggingface.co/api/models?author=yinanzhou1 -> 6 repos, only yinanzhou1/mtst_ptha is CIR-related. GET https://huggingface.co/api/datasets?author=yinanzhou1 -> 11 datasets, all GeoQA/DOGR/math, none CIR. So the paper's FashionIQ row has no published weight of any noise level.",
-   "checkpoint_mapping_status": "NO_CHECKPOINT",
-   "checkpoint_training_noise_pct": null,
-   "dataset": "fashioniq",
-   "dataset_version": "FashionIQ validation split, official three categories (dress, shirt, toptee); paper states only 'R@10 and R@50 on the val set in three categories' (implementation/evaluation paragraph, PDF p.6, paper.txt:391) and gives no further split or gallery detail",
-   "derived_metrics": [],
-   "evaluation_noise_pct": 0,
-   "gallery_protocol": "fashioniq_original_split",
-   "method_name": "PTHA",
-   "method_variant": "PTHA (Ours) pretrained with FashionIQ_MTST (row label 'PTHA (Ours)', Pretraining Data column 'FashionIQMTST'); this is the row that corresponds to the registry's 54.99 / 76.28 / 65.64",
-   "metric_definition": "Recall@K = fraction of queries whose target image is in the top K of the ranked gallery; here K in {10, 50}",
-   "metric_provenance": {
-    "paper_column": "Dress R@10/R@50, Shirt R@10/R@50, Toptee R@10/R@50, Average R@10/R@50, Avg.",
-    "paper_page": 7,
-    "paper_row": "PTHA (Ours) | BLIP2 | FashionIQMTST",
-    "paper_table": "Table III",
-    "source_excerpt_or_description": "TABLE III: Comparison on FashionIQ validation set. \"Avg.\" means (Recall@10 + Recall@50)/2. * indicates that the method deploys extra re-ranking strategy. Columns: Method | baseline | Pretraining Data | Dress R@10 R@50 | Shirt R@10 R@50 | Toptee R@10 R@50 | Average R@10 R@50 | Avg. The final data row is 'PTHA (Ours) BLIP2 FashionIQMTST 50.77 73.78 55.91 75.36 58.28 79.70 54.99 76.28 65.64'. The immediately preceding row is a different condition and must not be confused with it: 'PTHA (Ours) BLIP2 - 49.54 72.81 55.50 73.97 57.96 78.96 54.33 75.24 64.79'."
-   },
-   "model_id": "ptha_mtst",
-   "preprocessing_id": null,
-   "reference_excluded": false,
-   "reference_id": "ptha_mtst_fiq_table3_fashiqmtst_blip2",
-   "reference_status": "VERIFIED",
-   "reported_metrics": {
-    "mean": 65.64,
-    "r10": 54.99,
-    "r50": 76.28
-   },
-   "reported_metrics_provenance": "PAPER_REPORTED for all three: Table III prints 54.99 (Average R@10), 76.28 (Average R@50) and 65.64 (Avg. column) for the row 'PTHA (Ours) | BLIP2 | FashionIQMTST'. The caption itself defines the column: 'TABLE III: Comparison on FashionIQ validation set. \"Avg.\" means (Recall@10 + Recall@50)/2.'",
-   "review_status": "CONFIRMED",
-   "split": "val",
-   "verification_evidence": "Rendered page 7 (PDF page 7 of 12; pdfinfo reports Pages: 12) shows Table III directly below Table II caption. Table III spans printed rows from 'TIRG [5]' to 'Baseline | BLIP2 | - | 48.04 72.65 | 53.54 73.91 | 57.37 78.85 | 52.98 75.13 | 64.07' and 'PTHA (Ours) | BLIP2 | - | 49.54 72.81 | 55.50 73.97 | 57.96 78.96 | 54.33 75.24 | 64.79', then the paper's FashionIQ row 'PTHA (Ours) | BLIP2 | FashionIQMTST | 50.77 73.78 | 55.91 75.36 | 58.28 79.70 | 54.99 76.28 | 65.64'. The registry's 54.99 / 76.28 / 65.64 matches this row exactly and matches no other row (the closest non-MTST PTHA row is 54.33 / 75.24 / 64.79 and SPRC is 54.92 / 74.97 / 64.85), so the registry is not reading a competitor row or a no-pretraining row. GALLERY PROTOCOL CAVEAT, stated explicitly: the PAPER does not state its gallery construction or reference policy - the only protocol sentence is 'For FashionIQ, we report the R@10 and R@50 on the val set in three categories'. The protocol recorded here is therefore a SOURCE-DERIVED reading of the authors' own published evaluator (https://github.com/zyinan99/MTST_PTHA, un-pinned upstream main HEAD 6a02ee4763fc2260b6abfb18be78853facb91d86), NOT a paper statement: data_utils.py:165-168 builds the gallery by json.load of image_splits/split.{cat}.val.json in file order (full split, one category per dataset instance), utils.py:54-55 iterates it with DataLoader(batch_size=64, num_workers=2, pin_memory=True, collate_fn=collate_fn) with NO shuffle argument, and validate_blip.py:44-51 compares sorted_index_names against np.repeat(target_names, len(index_names)) with no reference mask anywhere on the FashionIQ path (the CIRR path does build a reference_mask, at validate_blip.py:258-260 and :331-333, proving the omission on the FIQ path is deliberate). That combination is exactly workbench protocol fashioniq_original_split (src/evaluation/fashioniq.py:172-174: gallery='full_split', reference_excluded=False). Local dataset confirms the gallery is well formed for that protocol: dress gallery 3817 / queries 2017, shirt 6346 / 2038, toptee 5373 / 1961, all gallery ids unique within their category, every reference and every target present in its gallery, ref==target count 0 in all three - so the assert at validate_blip.py:51 (exactly one hit per query) would hold. STATIC_AUDIT: no GPU inference was run and no checkpoint was loaded.",
-   "verification_method": "Two independent routes that agree, plus an arithmetic check. (1) HTML route: curl https://arxiv.org/html/2504.05316v1 (HTML 200, 303805 B), parsed the 12th <table> on the page row-by-row with a Python regex/HTML unescape script; every cell of the last row read 50.77 | 73.78 | 55.91 | 75.36 | 58.28 | 79.70 | 54.99 | 76.28 | 65.64. (2) PDF route: pdftotext -layout paper.pdf paper.txt, the same row at lines 465-466 of paper.txt with identical values and column alignment. (3) Visual route: pdftoppm -f 7 -l 7 -r 160 -png paper.pdf then read page7-07.png as an image; the Table III last row visibly reads PTHA (Ours) / BLIP2 / FashionIQ_MTST / 50.77 73.78 / 55.91 75.36 / 58.28 79.70 / 54.99 76.28 / 65.64, with 'FashionIQMTST' in subscript shading. All three routes agree on every digit. (4) Arithmetic: category macro means recomputed as (50.77+55.91+58.28)/3 = 54.9867 -> 54.99 and (73.78+75.36+79.70)/3 = 76.28; (54.99+76.28)/2 = 65.635 -> 65.64, matching the printed Average and Avg. columns, so the printed averages are internally consistent and are not a per-category value.",
-   "checkpoint_noise_evidence": "Final audit re-derivation: the word \"noise\" occurs 0 times in the pinned paper text (arXiv 2504.05316v1, sha256 0801d37a...) apart from two bibliography strings; the paper describes no noise-injection protocol, so the rows must not assert a clean condition."
-  },
-  {
-   "aggregation_method": "macro over categories, then mean of R@10 and R@50",
-   "augmentation_policy": null,
-   "backbone": "BLIP2",
-   "category_metrics": {
-    "dress": {
-     "r10": 49.54,
-     "r50": 72.81
-    },
-    "shirt": {
-     "r10": 55.5,
-     "r50": 73.97
-    },
-    "toptee": {
-     "r10": 57.96,
-     "r50": 78.96
-    }
-   },
-   "checkpoint_id": null,
-   "checkpoint_mapping_evidence": "Same as the pretrained row: no FashionIQ weight of any kind is published (see the other experiment's evidence: 7x404 probes on the author Hub repo, zero weight blobs in the GitHub tree, no releases, no tags).",
-   "checkpoint_mapping_status": "NO_CHECKPOINT",
-   "checkpoint_training_noise_pct": null,
-   "dataset": "fashioniq",
-   "dataset_version": "FashionIQ validation split, three categories",
-   "derived_metrics": [],
-   "evaluation_noise_pct": 0,
-   "gallery_protocol": "fashioniq_original_split",
-   "method_name": "PTHA",
-   "method_variant": "PTHA (Ours) WITHOUT FashionIQ_MTST pretraining (row 'PTHA (Ours)', Pretraining Data column '-'); recorded only to document the control row so a comparator cannot bind the registry numbers to it",
-   "metric_definition": "Recall@K = fraction of queries whose target image is in the top K",
-   "metric_provenance": {
-    "paper_column": "Dress/Shirt/Toptee R@10 R@50, Average R@10 R@50, Avg.",
-    "paper_page": 7,
-    "paper_row": "PTHA (Ours) | BLIP2 | -",
-    "paper_table": "Table III",
-    "source_excerpt_or_description": "'PTHA (Ours) BLIP2 - 49.54 72.81 55.50 73.97 57.96 78.96 54.33 75.24 64.79' - the second-to-last data row of Table III, i.e. the same network without the paper's FashionIQ_MTST pretraining."
-   },
-   "model_id": "ptha_mtst",
-   "preprocessing_id": null,
-   "reference_excluded": false,
-   "reference_id": "ptha_mtst_fiq_no_pretrain_table3",
-   "reference_status": "VERIFIED",
-   "reported_metrics": {
-    "mean": 64.79,
-    "r10": 54.33,
-    "r50": 75.24
-   },
-   "reported_metrics_provenance": "PAPER_REPORTED (Table III, row 'PTHA (Ours) | BLIP2 | -')",
-   "review_status": "CONFIRMED",
-   "split": "val",
-   "verification_evidence": "Rendered page 7 shows this row immediately above the FashionIQ_MTST row, with '-' in the Pretraining Data column. The registry values 54.99 / 76.28 / 65.64 belong to the row BELOW it, not to this one. This entry exists purely so the comparator has the control row's exact numbers and cannot silently bind them to the registry's reported_metrics.",
-   "verification_method": "Same three routes as the pretrained row (HTML table parse, pdftotext -layout, rendered page-7 image); all agree on 49.54 / 72.81 / 55.50 / 73.97 / 57.96 / 78.96 / 54.33 / 75.24 / 64.79.",
-   "checkpoint_noise_evidence": "Final audit re-derivation: the word \"noise\" occurs 0 times in the pinned paper text (arXiv 2504.05316v1, sha256 0801d37a...) apart from two bibliography strings; the paper describes no noise-injection protocol, so the rows must not assert a clean condition."
-  }
- ],
- "paper": {
-  "access": "FULL_TEXT",
-  "access_evidence": "curl -sL -o arxiv_v1.html https://arxiv.org/html/2504.05316v1 -> HTTP 200, 303805 bytes (machine-readable Table III); curl -sL -o paper.pdf https://arxiv.org/pdf/2504.05316v1 -> HTTP 200, 9095049 bytes, sha256 0801d37af9471a391c0007a9ea81611c5f6459bd04619801c5ed7193f486af2a; pdftotext -layout paper.pdf paper.txt -> Table III text present; pdftoppm -f 7 -l 7 -r 160 -png paper.pdf -> page 7 rendered and read visually. IEEE Xplore landing page (https://ieeexplore.ieee.org/abstract/document/11125949/) returned HTTP 420 with 0 bytes and was NOT read.",
-  "arxiv_id": "2504.05316",
-  "authors": [
-   "Yinan Zhou",
-   "Yaxiong Wang",
-   "Haokun Lin",
-   "Chen Ma",
-   "Li Zhu",
-   "Zhedong Zheng"
   ],
-  "doi": "10.1109/TMM.2025.3599088",
-  "paper_id": "ptha_mtst_scaleup_mtst",
-  "paper_title": "Scale Up Composed Image Retrieval Learning via Modification Text Generation",
-  "paper_url": "https://arxiv.org/abs/2504.05316",
-  "paper_version": "arXiv v1 2025-02-21 (only version; 'export.arxiv.org/api/query?id_list=2504.05316' returns exactly one <id> http://arxiv.org/abs/2504.05316v1)",
-  "pdf_bytes": 9095049,
-  "pdf_sha256": "0801d37af9471a391c0007a9ea81611c5f6459bd04619801c5ed7193f486af2a",
-  "publication_year": 2025,
-  "supplement_url": null,
-  "venue": "arXiv preprint (cs.IR); published version: IEEE Transactions on Multimedia, vol. 27, pp. 7510-7521, online 2025-08-18"
- }
+  "paper": {
+    "access": "FULL_TEXT",
+    "access_evidence": "curl -sL -o arxiv_v1.html https://arxiv.org/html/2504.05316v1 -> HTTP 200, 303805 bytes (machine-readable Table III); curl -sL -o paper.pdf https://arxiv.org/pdf/2504.05316v1 -> HTTP 200, 9095049 bytes, sha256 0801d37af9471a391c0007a9ea81611c5f6459bd04619801c5ed7193f486af2a; pdftotext -layout paper.pdf paper.txt -> Table III text present; pdftoppm -f 7 -l 7 -r 160 -png paper.pdf -> page 7 rendered and read visually. IEEE Xplore landing page (https://ieeexplore.ieee.org/abstract/document/11125949/) returned HTTP 420 with 0 bytes and was NOT read.",
+    "arxiv_id": "2504.05316",
+    "authors": [
+      "Yinan Zhou",
+      "Yaxiong Wang",
+      "Haokun Lin",
+      "Chen Ma",
+      "Li Zhu",
+      "Zhedong Zheng"
+    ],
+    "doi": "10.1109/TMM.2025.3599088",
+    "paper_id": "ptha_mtst_scaleup_mtst",
+    "paper_title": "Scale Up Composed Image Retrieval Learning via Modification Text Generation",
+    "paper_url": "https://arxiv.org/abs/2504.05316",
+    "paper_version": "arXiv v1 2025-02-21 (only version; 'export.arxiv.org/api/query?id_list=2504.05316' returns exactly one <id> http://arxiv.org/abs/2504.05316v1)",
+    "pdf_bytes": 9095049,
+    "pdf_sha256": "0801d37af9471a391c0007a9ea81611c5f6459bd04619801c5ed7193f486af2a",
+    "publication_year": 2025,
+    "supplement_url": null,
+    "venue": "arXiv preprint (cs.IR); published version: IEEE Transactions on Multimedia, vol. 27, pp. 7510-7521, online 2025-08-18"
+  }
 }

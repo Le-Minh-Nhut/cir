@@ -43,7 +43,15 @@ BLOCKED_IMPLEMENTATION = "BLOCKED_IMPLEMENTATION"
 BLOCKED_ENVIRONMENT = "BLOCKED_ENVIRONMENT"
 PC_GPU_VALIDATION_PENDING = "PC_GPU_VALIDATION_PENDING"
 
-#: Which blocker text belongs to which cause. Order matters: the first match classifies the model.
+#: Which blocker text belongs to which cause, in the order a reader should act on them: the table
+#: position IS the priority. A blocker often mentions more than one of these (usually because it
+#: embeds a path), and the earlier entry wins.
+#:
+#: The broad words therefore come last, after every cause phrase that says what is actually wrong.
+#: "FashionIQ" used to sit above the checkpoint phrases, so a missing checkpoint reported as
+#: "checkpoint missing: /data/FashionIQ/fashioniq_dcnet" was classified as a missing dataset and the
+#: operator was sent to fix the dataset. A noun naming where something lives must never outrank a
+#: phrase naming what is broken.
 BLOCKER_KINDS = (
     ("source cannot run", BLOCKED_SOURCE),
     ("upstream source unavailable", BLOCKED_SOURCE),
@@ -52,30 +60,47 @@ BLOCKER_KINDS = (
     ("official evaluator missing", BLOCKED_IMPLEMENTATION),
     ("command not runnable", BLOCKED_IMPLEMENTATION),
     ("environment", BLOCKED_ENVIRONMENT),
-    ("FashionIQ", BLOCKED_DATASET),
     ("raw benchmark input missing", BLOCKED_DATASET),
     ("required generated artifact missing", BLOCKED_DATASET),
     ("canonical dataset link", BLOCKED_DATASET),
-    ("captions", BLOCKED_EXTERNAL_ASSET),
-    ("asset", BLOCKED_EXTERNAL_ASSET),
     ("checkpoint mapping unresolved", BLOCKED_EXTERNAL_ASSET),
     ("official checkpoint hash mismatch", BLOCKED_EXTERNAL_ASSET),
     ("checkpoint bundle incomplete", BLOCKED_EXTERNAL_ASSET),
     ("checkpoint missing", BLOCKED_EXTERNAL_ASSET),
+    # "FashionIQ" names WHERE something lives, so it outranks only the vague words below it and
+    # never a phrase naming what is broken.
+    ("FashionIQ", BLOCKED_DATASET),
+    # Vague nouns last: "missing" and "asset" appear in blockers of every kind, so they may decide
+    # the state only when nothing more particular did.
+    ("captions", BLOCKED_EXTERNAL_ASSET),
+    ("asset", BLOCKED_EXTERNAL_ASSET),
     ("unverified", BLOCKED_EXTERNAL_ASSET),
     ("missing", BLOCKED_EXTERNAL_ASSET),
 )
 
 
 def classify(blockers: list[str]) -> tuple[str, str]:
-    """Map a blocker list to one state and the reason a reader should act on."""
+    """Map a blocker list to one state and the reason a reader should act on.
+
+    The most specific matching needle decides, where length stands in for specificity: a blocker
+    names its own cause in its own words, and any broader word it also contains (usually part of an
+    embedded path) describes where the problem is rather than what it is. Ties in length cannot
+    occur -- the needles are distinct -- so this is deterministic.
+    """
     if not blockers:
         return READY_FOR_FULL_EVALUATION, "no blocker reported by preflight"
-    for needle, state in BLOCKER_KINDS:
-        for blocker in blockers:
-            if needle.lower() in blocker.lower():
-                return state, blocker
-    return BLOCKED_IMPLEMENTATION, blockers[0]
+    # The highest-priority cause across the WHOLE list, not the first blocker that matched
+    # anything: taken per blocker, the answer would depend on how preflight happened to order its
+    # messages, which is the same position-dependence this function was fixed for. Ties on priority
+    # resolve to the blocker list's own order, so the result is deterministic either way.
+    candidates = [(priority, index, state, blocker)
+                  for index, blocker in enumerate(blockers)
+                  for priority, (needle, state) in enumerate(BLOCKER_KINDS)
+                  if needle.lower() in blocker.lower()]
+    if not candidates:
+        return BLOCKED_IMPLEMENTATION, blockers[0]
+    priority, _, state, blocker = min(candidates, key=lambda item: (item[0], item[1]))
+    return state, blocker
 
 
 def repository_section() -> dict:

@@ -23,6 +23,13 @@ class ReplayResult:
     r50: float | None = None
     complete: bool = False
     provenance: dict[str, Any] = field(default_factory=dict)
+    #: PARITY 1 (native instrumentation parity) mismatches between the native aggregate and the
+    #: aggregate reconstructed from observed per-query rankings. Empty means the observation is
+    #: the native ranking. Non-empty means QUERY_EXPORT_PARITY_MISMATCH: the native aggregate
+    #: stands, and no per-query artifact may be published for this category.
+    parity_mismatches: tuple[str, ...] = ()
+    #: True only when per-query rankings were observed AND matched the native hit counts exactly.
+    per_query_published: bool = False
 
 
 def sha256_file(path: Path) -> str:

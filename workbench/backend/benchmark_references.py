@@ -282,7 +282,13 @@ def select_reference_outcome(
                 return False
         if protocol_id is not None:
             recorded = record.get("gallery_protocol")
-            if recorded is not None and recorded != protocol_id:
+            if recorded is None:
+                # A row whose protocol nobody established does NOT match every protocol. Treating
+                # an absent value as a wildcard let a paper that states no gallery construction
+                # bind to any run -- an identity asserted by default rather than by evidence. The
+                # row is still reported; it simply cannot be chosen as the reference.
+                return False
+            if recorded != protocol_id:
                 return False
         return True
 
@@ -303,6 +309,21 @@ def select_reference_outcome(
             f"condition that separates them, or declare which row is this experiment, before "
             f"this run can be judged",
             candidates, exact, author_published_no_reference=unbenchmarked_model)
+    unresolved = sorted(row.reference_id for row in unresolved_protocol_rows(verified))
+    if unresolved:
+        # A row that publishes metrics but declares no protocol must not be reported as a row
+        # that does not exist. The refusal has to say what is actually missing: the paper's
+        # gallery construction, which nobody has established.
+        return ReferenceSelection(
+            None, SELECTION_NO_MATCHING_CONDITION,
+            (f"{model_id}: no verified reference for it under "
+             f"{', '.join(_condition_prose(checkpoint_training_noise_pct, protocol_id))}; the rows "
+             f"that do exist for it ({', '.join(unresolved)}) publish metrics but declare no "
+             f"protocol, and this paper states no gallery construction or reference policy, so no "
+             f"protocol can be matched by evidence and none is matched by default. This stays "
+             f"refused until the registry is resolved from pinned source or the paper's own text, "
+             f"not once a run is produced"),
+            candidates, exact, author_published_no_reference=unbenchmarked_model)
     return ReferenceSelection(
         None, SELECTION_NO_MATCHING_CONDITION,
         (f"{model_id}: no verified reference for it under "
@@ -310,6 +331,17 @@ def select_reference_outcome(
          f"committed rows are "
          f"{sorted(c.reference_id for c in verified)}"),
         candidates, exact, author_published_no_reference=unbenchmarked_model)
+
+def unresolved_protocol_rows(references: Iterable[BenchmarkReference]) -> list[BenchmarkReference]:
+    """Rows that publish metrics but declare no gallery protocol.
+
+    A paper that states no gallery construction or reference policy leaves its rows unusable as a
+    comparison target (see ``matches``), but those rows must still be visible: reporting them as
+    absent would send the operator looking for a table row that exists.
+    """
+    return sorted((row for row in references if row.payload.get("gallery_protocol") is None),
+                  key=lambda row: row.reference_id)
+
 
 def select_reference(
     model_id: str,

@@ -133,9 +133,16 @@ def preflight(checkpoint_root: Path, dataset_root: Path, source_root: Path,
             + validate_dataset(dataset_root, categories) + validate_environment())
 
 
-def replay_category(category: str, checkpoint_root: Path, dataset_root: Path,
-                    source_root: Path) -> ReplayResult:
-    """Load one verified category model and call pinned native test()."""
+def load_native(category: str, checkpoint_root: Path, dataset_root: Path, source_root: Path) -> dict:
+    """Load ONE verified category: the pinned modules, the model, and the native dataset.
+
+    Returns the four things both consumers need -- the native modules, the model, the dataset — so
+    the per-query export (`limn_export.py`) observes exactly the objects this function verified,
+    instead of loading a second copy and hoping the two agree.
+
+    The dataset is materialized inside `isolated_cache_root`, so the caller must use it within the
+    returned context. It is yielded through a context manager by `native_category`.
+    """
     if category not in CATEGORIES:
         raise ValueError(f"unsupported LIMN category: {category}")
     checkpoint = LIMN_CHECKPOINTS[category]
@@ -170,11 +177,31 @@ def replay_category(category: str, checkpoint_root: Path, dataset_root: Path,
                                                  mean=visual.image_mean, std=visual.image_std)
     preprocess_val = open_clip.image_transform(visual.image_size, is_train=False,
                                                mean=visual.image_mean, std=visual.image_std)
-    with isolated_cache_root(dataset_root) as cache_root:
-        dataset = native_datasets.FashionIQ(
-            path=f"{cache_root}/", name=category,
-            transform=[preprocess_train, preprocess_val],
-        )
+    return {"checkpoint": checkpoint, "checkpoint_path": checkpoint_path, "model": model,
+            "native_model": native_model, "native_test": native_test,
+            "dataset_factory": lambda cache_root: native_datasets.FashionIQ(
+                path=f"{cache_root}/", name=category,
+                transform=[preprocess_train, preprocess_val])}
+
+def native_category(category: str, checkpoint_root: Path, dataset_root: Path, source_root: Path):
+    """Context manager yielding the verified model and native dataset for one category."""
+    import contextlib
+
+    @contextlib.contextmanager
+    def _open():
+        loaded = load_native(category, checkpoint_root, dataset_root, source_root)
+        with isolated_cache_root(dataset_root) as cache_root:
+            yield {**loaded, "dataset": loaded["dataset_factory"](cache_root)}
+
+    return _open()
+
+def replay_category(category: str, checkpoint_root: Path, dataset_root: Path,
+                    source_root: Path) -> ReplayResult:
+    """Load one verified category model and call pinned native test()."""
+    with native_category(category, checkpoint_root, dataset_root, source_root) as loaded:
+        checkpoint = loaded["checkpoint"]
+        native_test, model, dataset = loaded["native_test"], loaded["model"], loaded["dataset"]
+        checkpoint_path = loaded["checkpoint_path"]
         metrics = dict(native_test.test(SimpleNamespace(local_rank=0, batch_size=32), model, dataset, category))
     return ReplayResult(
         model_id="limn", checkpoint_id=checkpoint["checkpoint_id"], category=category,

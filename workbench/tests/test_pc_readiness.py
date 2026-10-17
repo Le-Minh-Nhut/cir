@@ -215,3 +215,36 @@ def test_the_cli_runs_read_only_and_emits_json(capsys):
 def test_the_cli_rejects_an_unknown_model():
     with pytest.raises(SystemExit):
         pcr.main(["--model", "no_such_model"])
+
+
+def test_classify_is_not_decided_by_where_a_word_sits_in_the_table():
+    """A blocker that embeds a path must still be classified by what it SAYS, not by which needle
+    happens to come first in BLOCKER_KINDS.
+
+    Regression: "checkpoint missing: /data/FashionIQ/fashioniq_dcnet" contained both "FashionIQ" and
+    "checkpoint missing"; the dataset needle was earlier in the table, so a missing checkpoint was
+    reported as a missing dataset — sending the operator to fix the wrong thing. Two independent
+    model audits reproduced this. The fix matches on the most specific needle, so a longer, more
+    particular phrase wins over a shorter, more general one wherever it appears.
+    """
+    assert pcr.classify(["/data/FashionIQ/checkpoints/fashioniq_dcnet: checkpoint missing"])[0] == pcr.BLOCKED_EXTERNAL_ASSET
+    assert pcr.classify(["checkpoint missing: /checkpoints/FashionIQ/fashioniq_dcnet"])[0] == pcr.BLOCKED_EXTERNAL_ASSET
+    assert pcr.classify(["official checkpoint hash mismatch for /FashionIQ/x"])[0] == pcr.BLOCKED_EXTERNAL_ASSET
+    assert pcr.classify(["ConeSep checkpoint mapping unresolved: /FashionIQ/x"])[0] == pcr.BLOCKED_EXTERNAL_ASSET
+    # And the specific-cause reading still applies the other way round: a genuinely missing dataset
+    # is still a dataset, even when the message also mentions a checkpoint.
+    assert pcr.classify(["FashionIQ raw benchmark input missing: /x"])[0] == pcr.BLOCKED_DATASET
+
+
+def test_classify_reports_the_blocker_that_decided_the_state():
+    """The second return value must be the blocker the state came from, so the reader acts on it."""
+    state, reason = pcr.classify(["unrelated", "checkpoint missing: /x"])
+    assert state == pcr.BLOCKED_EXTERNAL_ASSET
+    assert reason == "checkpoint missing: /x"
+
+
+def test_classify_is_order_independent_across_the_blocker_list():
+    """The same set of blockers must classify the same way however it is ordered."""
+    forward = pcr.classify(["source cannot run: x", "checkpoint missing: /y"])[0]
+    backward = pcr.classify(["checkpoint missing: /y", "source cannot run: x"])[0]
+    assert forward == backward == pcr.BLOCKED_SOURCE, (forward, backward)

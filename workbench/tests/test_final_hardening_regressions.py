@@ -1148,19 +1148,59 @@ def test_the_gpu_capability_key_reports_the_same_conflict(tmp_path, monkeypatch,
     monkeypatch.setattr(operator_config, "resolve_config",
                         lambda: replace(resolve_config(), CIR_REPO_ROOT=repo))
 
+    # The capability key now adopts the LEDGER's decision instead of making a second one. When two
+    # key files disagree, the ledger refuses to guess (a ledger signed with the other key would be
+    # unverifiable), so this returns b"" -- which marks every persisted capability record unverified
+    # rather than signing it with a key the ledger reader will reject. Previously this function
+    # silently chose the legacy key while the ledger refused the same state, so capability records
+    # were signed with a key that could never verify.
     key = runtime._gpu_cache_key()
-    assert key == legacy_bytes, "the documented precedence is unchanged"
+    assert key == b"", "an ambiguous key state must not produce a usable signing key"
     warning = capsys.readouterr().err
     assert "two different ledger keys exist" in warning, warning
     assert str(legacy) in warning and str(private) in warning, warning
     assert "WORKBENCH_LEDGER_KEY" in warning, warning
 
-    # Unambiguous again: one file removed, the surviving key signs and verifies as before.
+    # Unambiguous again: with one file gone, the surviving key is used and signs/verifies as before.
     private.unlink()
     assert runtime._gpu_cache_key() == legacy_bytes
     record = {"capability_verified": True, "interpreter": "/x/python"}
     assert runtime._gpu_capability_signature_valid(
         {**record, "signature": runtime._gpu_capability_signature(record)})
+
+
+def test_the_capability_key_and_the_ledger_key_never_disagree(tmp_path, monkeypatch):
+    """The regression this guards: one host, one key decision.
+
+    `_gpu_cache_key` and `ledger_hmac_key` previously disagreed whenever the checkout was writable
+    and nothing was in the config home yet: the ledger created `$XDG_CONFIG_HOME/cir/...` while the
+    capability cache created `<repo>/.workbench_ledger_key`, and the next run of either refused the
+    host with "two different ledger keys exist". They must return the SAME bytes on a fresh host.
+    """
+    from dataclasses import replace
+
+    from workbench.backend import runtime, operator_config
+    from workbench.backend.operator_config import resolve_config
+    from workbench.scripts import evaluate_models
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.delenv("WORKBENCH_LEDGER_KEY", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    # The repo root is made unwritable so the ledger's documented preference (the durable config
+    # directory) is the one exercised: the point is that BOTH readers agree, whichever location wins.
+    monkeypatch.setattr(operator_config, "resolve_config",
+                        lambda: replace(resolve_config(), CIR_REPO_ROOT=repo,
+                                        WORKBENCH_ARTIFACTS_ROOT=tmp_path / "artifacts"))
+
+    # Both readers go through the PATCHED resolver: the module-level `resolve_config` name is the
+    # real one, and using it here would resolve the real repository root and its real key.
+    capability = runtime._gpu_cache_key()
+    ledger = evaluate_models.ledger_hmac_key(operator_config.resolve_config())
+    assert capability and capability == ledger, (capability[:8], ledger[:8])
+    # And exactly one key file exists, so neither side can have created a second one.
+    found = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("workbench_ledger_key"))
+    assert found == ["config/cir/workbench_ledger_key"], found
 
 
 def test_every_ledger_consumer_names_the_key_conflict_and_the_remedy():

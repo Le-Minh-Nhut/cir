@@ -490,7 +490,52 @@ Trên chính máy phát hành này, verdict đúng là `ENGINEERING_INCOMPLETE` 
 
 ---
 
-## 15. Quy trình nghiên cứu sau lần đánh giá đầu tiên
+## 15. Phân tích theo từng truy vấn (per-query export)
+
+Sau khi có một lượt LIMN đầy đủ, bước tiếp theo của nghiên cứu là phân tích **theo từng truy vấn**:
+truy vấn nào thất bại ở mọi mô hình, ảnh nhiễu nào bị lấy nhầm chung, mức độ trùng nhau của tập thất
+bại. Đường đánh giá chính thức của LIMN (`./pc.sh`) **không** sinh ra dữ liệu đó — hàm `test()` gốc
+tính ranking rồi **vứt đi**, chỉ giữ lại Recall tổng hợp.
+
+Lệnh xuất artifact per-query:
+
+```bash
+python -m workbench.replay.limn_export \
+  --checkpoint-root "$WORKBENCH_CHECKPOINT_ROOT" \
+  --dataset-root    "$FASHIONIQ_ROOT" \
+  --source-root     "$WORKBENCH_THIRD_PARTY_ROOT" \
+  --results-root    "$WORKBENCH_RESULTS_ROOT"
+```
+
+Đây là một **entry point riêng**, cố ý tách khỏi `workbench/replay/limn.py`. Lý do kỹ thuật: bộ lập
+kế hoạch môi trường truy vết import từ `limn.py` để quyết định interpreter của LIMN, nên mọi thứ
+import trong file đó trở thành **yêu cầu môi trường đã khai**; để observer (numpy) và schema kết quả
+canonical (pydantic) ở đó sẽ khiến LIMN đòi interpreter cho những gói đường chạy native không hề dùng.
+
+**Hợp đồng — đọc kỹ trước khi tin kết quả:**
+
+1. **Parity thiết bị đo (instrumentation parity) là điều kiện bắt buộc.** Sau khi quan sát ranking,
+   hệ thống **tính lại Recall từ chính ranking đó** và so với Recall native cho R@1/R@10/R@50 **từng
+   category**, ở dạng **số nguyên hit**. Lệch ⇒ exit code 1, artifact bị **giữ lại**, và lý do được in
+   ra. Kết quả tổng hợp native **không** bị sửa để hai bên khớp nhau.
+2. **Con số đến từ ranking, không từ report.** Mọi metric trong artifact được dẫn xuất từ ranking đã
+   quan sát ở bước trên.
+3. **Caption thô được giữ nguyên.** `raw_captions` là nguyên văn từ `cap.{category}.val.json`;
+   `model_input_text` là văn bản **thực sự** đưa vào LIMN (đã lowercase, bỏ dấu câu, áp
+   `correction_dict`, nối bằng `" and "`). Hai trường này **không** thay thế nhau và **không** được
+   ghi đè lẫn nhau.
+4. **Kích thước gallery theo từng category.** FashionIQ có gallery khác nhau cho dress/shirt/toptee;
+   artifact lưu `category_gallery_sizes` và `category_eligible_counts`, và validator dùng đúng bound
+   của từng category — rank 300 ở dress không được "tha" bởi gallery toptee lớn hơn.
+5. **Chưa có xác thực trên GPU đích.** Trên máy dev, `QUERY_EXPORT_IMPLEMENTED` là đúng, nhưng
+   `QUERY_EXPORT_NATIVE_PARITY_VERIFIED` **phải** vẫn là PENDING cho tới khi chạy thật trên PC. Không
+   có chứng thư GPU nào được tạo ra ở đây.
+6. **Artifact tổng hợp không bị thay thế.** File aggregate chính thức vẫn là kết quả đánh giá; artifact
+   per-query chỉ là **bằng chứng bổ sung**.
+
+---
+
+## 16. Quy trình nghiên cứu sau lần đánh giá đầu tiên
 
 Sau khi hoàn tất lần đánh giá đầu tiên với `./pc.sh`, bạn có thể tiến hành chu trình phân tích khoa học tiếp theo.
 

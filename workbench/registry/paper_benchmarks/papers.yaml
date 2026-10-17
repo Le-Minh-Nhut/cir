@@ -1675,8 +1675,8 @@ references:
     states only 'R@10 and R@50 on the val set in three categories' (implementation/evaluation paragraph,
     PDF p.6, paper.txt:391) and gives no further split or gallery detail
   split: val
-  gallery_protocol: fashioniq_original_split
-  reference_excluded: false
+  gallery_protocol: null  # the paper states no gallery construction; unverifiable, see verification_evidence
+  reference_excluded: null  # not stated by the paper
   evaluation_noise_pct: 0
   preprocessing_id: null
   augmentation_policy: null
@@ -1738,8 +1738,8 @@ references:
   dataset: fashioniq
   dataset_version: FashionIQ validation split, three categories
   split: val
-  gallery_protocol: fashioniq_original_split
-  reference_excluded: false
+  gallery_protocol: null  # the paper states no gallery construction; unverifiable, see verification_evidence
+  reference_excluded: null  # not stated by the paper
   evaluation_noise_pct: 0
   preprocessing_id: null
   augmentation_policy: null

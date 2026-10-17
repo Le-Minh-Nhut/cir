@@ -347,6 +347,12 @@ def cold_workbench(tmp_path: Path) -> dict:
         "WORKBENCH_EVALUATOR_ENV_PASSTHROUGH": "SYNTHETIC_FAIL:SYNTHETIC_SILENT",
         "WORKBENCH_NO_ENV_CACHE": "1",
         "WORKBENCH_LEDGER_KEY": "synthetic-autopilot-key",
+        # A genuine cold start has no operator config home. Without this, the key resolver reads the
+        # HOST's `~/.config/cir` and the capability/ledger key can disagree with a key file the run
+        # itself creates under the temporary repo root -- so a persisted capability fails its own
+        # signature check and the probe is re-executed. Isolating the config home is what makes this
+        # fixture hermetic; it is not a workaround for the product behaviour.
+        "XDG_CONFIG_HOME": str(ws / "config"),
         "SYNTHETIC_FAIL": "",
     }
     # Ensure NO pre-assigned model interpreter variables

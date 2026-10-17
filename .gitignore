@@ -249,3 +249,6 @@ workbench/artifacts/*.jsonl
 
 # release verifier default report (use --report to redirect)
 workbench/docker/release_verify_report.json
+
+# Runtime state from the ledger key lock, never an artifact.
+.workbench_ledger_key.lock

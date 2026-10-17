@@ -803,34 +803,51 @@ PTHA_ROWS = ("ptha_mtst_fiq_table3_fashiqmtst_blip2", "ptha_mtst_fiq_no_pretrain
 PTHA_PUBLISHED = {"r10": 54.99, "r50": 76.28, "mean": 65.64}
 
 
-def test_a_legitimate_ptha_run_is_refused_with_the_registry_ambiguity_named():
-    """D-2: two verified rows bind one condition, so the refusal must name that and pick neither.
+def test_a_legitimate_ptha_run_is_refused_because_no_protocol_was_ever_established():
+    """D-2: the paper states no gallery construction, so no protocol can be matched.
 
-    The two committed rows declare the same protocol, the same (unstated) training noise and the
-    same checkpoint mapping, so no selector can choose between them on evidence the registry
-    carries. Reporting "no verified committed reference publishes a metric" for such a run is
-    false -- both rows publish all three -- and sends the operator looking for a missing table row
-    that exists.
+    The two committed rows publish metrics but declare no protocol (the paper's evaluation
+    paragraph gives no split or gallery detail, and the author repository that an earlier revision
+    cited is not synced or pinned here). They therefore cannot be chosen as the reference for a run
+    under any protocol: matching them by default would assert an identity nobody established, and
+    would contradict the registry's own `native_protocol: null`.
+
+    The refusal must still tell the operator the truth -- that rows for this model exist and publish
+    numbers -- rather than sending them looking for a table row that does exist.
     """
     selection = benchmarks.select_reference_outcome(
         "ptha_mtst", checkpoint_training_noise_pct=None,
         protocol_id="fashioniq_original_split")
 
-    assert selection.outcome == benchmarks.SELECTION_AMBIGUOUS, selection
-    assert selection.reference is None, "an ambiguous registry must not yield a row to compare against"
-    assert sorted(row.reference_id for row in selection.matched) == sorted(PTHA_ROWS), \
-        selection.matched
-    assert all(row.value_for("r10") is not None for row in selection.matched), \
-        "both competing rows do publish metrics"
-    for row_id in PTHA_ROWS:
-        assert row_id in selection.reason, selection.reason
-    assert "more than once" in selection.reason and "fashioniq_original_split" in selection.reason, \
-        selection.reason
+    assert selection.outcome == benchmarks.SELECTION_NO_MATCHING_CONDITION, selection
+    assert selection.reference is None, "an unmatched registry must not yield a row to compare against"
+    assert selection.matched == (), selection.matched
+    # The rows are reported as candidates, not hidden: the operator sees that numbers exist.
+    assert sorted(row.reference_id for row in selection.candidates) == sorted(PTHA_ROWS), \
+        selection.candidates
+    assert all(row.value_for("r10") is not None for row in selection.candidates), \
+        "the competing rows do publish metrics and must still be visible"
     # `(reference, reason)` stays consistent with the outcome: no row, and the same prose.
     reference, reason = benchmarks.select_reference(
         "ptha_mtst", checkpoint_training_noise_pct=None,
         protocol_id="fashioniq_original_split")
     assert reference is None and reason == selection.reason
+
+
+def test_an_unresolved_reference_protocol_never_wildcard_matches_a_run():
+    """The regression guard: an absent `gallery_protocol` must not match every protocol.
+
+    Before this, `reference_excluded: false` / `gallery_protocol: fashioniq_original_split` was
+    asserted for a paper that states neither -- so a run was silently bound to a reference whose
+    protocol was never established, and the gate could certify a comparison across different
+    candidate universes.
+    """
+    for protocol_id in ("fashioniq_original_split", "fashioniq_full_gallery_ref_excluded",
+                        "fashioniq_val_split"):
+        selection = benchmarks.select_reference_outcome(
+            "ptha_mtst", checkpoint_training_noise_pct=None, protocol_id=protocol_id)
+        assert selection.reference is None, (protocol_id, selection)
+        assert selection.outcome == benchmarks.SELECTION_NO_MATCHING_CONDITION, (protocol_id, selection)
 
 
 def test_the_verifier_never_claims_no_row_publishes_a_metric_when_one_does():
@@ -839,12 +856,15 @@ def test_the_verifier_never_claims_no_row_publishes_a_metric_when_one_does():
         "ptha_mtst", "fashioniq", "fashioniq_original_split",
         {"observed_metrics": dict(PTHA_PUBLISHED)})
 
-    assert outcome == benchmarks.SELECTION_AMBIGUOUS, outcome
-    assert reasons, "an ambiguous registry still refuses the run"
+    assert outcome == benchmarks.SELECTION_NO_MATCHING_CONDITION, outcome
+    assert reasons, "an unresolved-protocol registry still refuses the run"
     joined = " ".join(reasons)
+    # The refusal must not claim the rows are absent: they publish metrics, they simply declare no
+    # protocol. The operator is told what is actually missing.
     assert "no verified committed reference publishes a metric" not in joined, joined
     for row_id in PTHA_ROWS:
         assert row_id in joined, joined
+    assert "declare no protocol" in joined, joined
     assert "until the registry is resolved" in joined, joined
 
 

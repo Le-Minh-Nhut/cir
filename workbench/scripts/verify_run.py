@@ -536,7 +536,14 @@ def _non_limn_reasons(model_id: str, checkpoint_id: str, protocol_id: str,
     # publishes under this condition" sentence false, so it is not written -- the selection
     # outcome above already says what the trouble is. A row that matched nothing is not evidence
     # about this run's condition, which is why this is asked of `matched`, not of `candidates`.
-    matched_publishes = any(_publishes_a_metric(row) for row in selection.matched)
+    # An unresolved-protocol row is neither matched nor absent: it prints numbers, and the run
+    # cannot be compared against it because nobody established what its numbers mean. The tail must
+    # say that rather than claiming no row publishes a metric.
+    from workbench.backend.benchmark_references import unresolved_protocol_rows
+
+    ambiguous_protocol = unresolved_protocol_rows(selection.candidates)
+    matched_publishes = (any(_publishes_a_metric(row) for row in selection.matched)
+                         or any(_publishes_a_metric(row) for row in ambiguous_protocol))
     if outcome == benchmarks.SELECTION_NO_PUBLISHED_COMPARISON:
         # Whether this is permanent depends on the model, not on the outcome: a variant whose
         # authors never published a FashionIQ number has nothing to compare against, forever,

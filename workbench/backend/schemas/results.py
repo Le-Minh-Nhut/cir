@@ -71,6 +71,16 @@ class RunMetadata(BaseModel):
     checkpoint_training_noise_pct: int | None = Field(default=None, ge=0, le=100)
     top_k_saved: Annotated[int, Field(ge=1)]
     gallery_size: Annotated[int, Field(ge=1)]
+    #: Per-category raw gallery sizes. FashionIQ categories have genuinely different gallery
+    #: sizes, and a single scalar cannot express a category-specific bound — a dress toptee-sized
+    #: rank would pass a global check it should fail. ``gallery_size`` remains the declared upper
+    #: bound (the largest category) so schema-v2 artifacts written before this field stay valid and
+    #: keep their meaning; when present this mapping is authoritative per category.
+    category_gallery_sizes: dict[str, Annotated[int, Field(ge=1)]] | None = None
+    #: Per-category eligible candidate count after the protocol's reference policy is applied.
+    #: Under an excluded protocol this is ``size - 1``; under Protocol A the reference stays
+    #: eligible and it equals ``size``. Present so the two are never conflated.
+    category_eligible_counts: dict[str, Annotated[int, Field(ge=1)]] | None = None
     upstream_repo: str | None = None
     upstream_commit: str | None = None
     checkpoint_path: str | None = None
@@ -109,11 +119,23 @@ class ResultRun(BaseModel):
     def validate_queries(self) -> "ResultRun":
         if len({query.query_id for query in self.queries}) != len(self.queries):
             raise ValueError("query_id values must be unique per run")
-        effective_depth = min(self.run.top_k_saved, self.run.gallery_size)
+        sizes = self.run.category_gallery_sizes
+        if sizes is not None:
+            unknown = sorted({query.category for query in self.queries} - set(sizes))
+            if unknown:
+                raise ValueError(f"category_gallery_sizes is missing categories present in queries: {unknown}")
+            # The scalar must remain the declared upper bound, or the two disagree about what the
+            # run's gallery actually was.
+            if max(sizes.values()) != self.run.gallery_size:
+                raise ValueError("gallery_size must equal the largest category_gallery_sizes entry")
         for query in self.queries:
+            # A category-specific bound when one is declared, otherwise the historical scalar. A
+            # dress rank of 300 is not excused by a larger toptee gallery.
+            category_size = sizes[query.category] if sizes is not None else self.run.gallery_size
+            effective_depth = min(self.run.top_k_saved, category_size)
             if len(query.top_results) != effective_depth:
                 raise ValueError("query top_results must match effective saved retrieval depth")
-            if query.target_rank > self.run.gallery_size:
+            if query.target_rank > category_size:
                 raise ValueError("target_rank exceeds gallery_size")
             if query.target_rank <= effective_depth and query.top_results[query.target_rank - 1].image_id != query.target_id:
                 raise ValueError("target_rank does not match saved target retrieval")

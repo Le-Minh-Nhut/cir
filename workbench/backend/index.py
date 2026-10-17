@@ -63,8 +63,23 @@ def load_runs(root: Path | None = None) -> list[ResultRun]:
     return runs
 
 
+def evidence_status(data_kind: str) -> str:
+    """The query-level evidence state for a stored run (§21).
+
+    Derived from the artifact's own declared kind, not from a caller's opinion: a run with per-query
+    results is either experiment-grade evidence or explicitly not. ``per_query_parity_failed``
+    cannot reach here — a parity mismatch blocks publication entirely — so the reachable states are
+    exactly these three.
+    """
+    if data_kind == "experiment":
+        return "PER_QUERY_VERIFIED"
+    if data_kind == "mock":
+        return "SYNTHETIC_OR_MOCK"
+    return "SYNTHETIC_OR_MOCK"
+
+
 def _create_schema(connection) -> None:
-    connection.execute("CREATE TABLE runs (run_id VARCHAR PRIMARY KEY, protocol_id VARCHAR NOT NULL, model_id VARCHAR NOT NULL, checkpoint_id VARCHAR NOT NULL, checkpoint_training_noise_pct INTEGER, data_kind VARCHAR NOT NULL, top_k_saved INTEGER NOT NULL, gallery_size INTEGER NOT NULL, r10 DOUBLE, r50 DOUBLE, mean DOUBLE, metadata JSON NOT NULL)")
+    connection.execute("CREATE TABLE runs (run_id VARCHAR PRIMARY KEY, protocol_id VARCHAR NOT NULL, model_id VARCHAR NOT NULL, checkpoint_id VARCHAR NOT NULL, checkpoint_training_noise_pct INTEGER, data_kind VARCHAR NOT NULL, top_k_saved INTEGER NOT NULL, gallery_size INTEGER NOT NULL, category_gallery_sizes JSON, category_eligible_counts JSON, evidence_status VARCHAR NOT NULL, r10 DOUBLE, r50 DOUBLE, mean DOUBLE, metadata JSON NOT NULL)")
     connection.execute("CREATE TABLE queries (run_id VARCHAR NOT NULL, query_id VARCHAR NOT NULL, category VARCHAR NOT NULL, annotation_index INTEGER NOT NULL, reference_id VARCHAR NOT NULL, target_id VARCHAR NOT NULL, raw_captions JSON NOT NULL, model_input_text VARCHAR NOT NULL, target_rank INTEGER NOT NULL, PRIMARY KEY(run_id, query_id))")
     connection.execute("CREATE TABLE top_results (run_id VARCHAR NOT NULL, query_id VARCHAR NOT NULL, rank INTEGER NOT NULL, image_id VARCHAR NOT NULL, score DOUBLE NOT NULL, PRIMARY KEY(run_id, query_id, rank))")
     connection.execute("CREATE INDEX queries_by_run_rank ON queries(run_id, target_rank)")
@@ -86,7 +101,7 @@ def rebuild_index(results_root: Path | None = None, database_path: Path | None =
         rows = {"runs": [], "queries": [], "top_results": []}
         for result in runs:
             run = result.run
-            rows["runs"].append([run.run_id, run.protocol_id, run.model_id, run.checkpoint_id, run.checkpoint_training_noise_pct, run.data_kind, run.top_k_saved, run.gallery_size, run.reproduced_metrics.r10, run.reproduced_metrics.r50, run.reproduced_metrics.mean, run.model_dump_json()])
+            rows["runs"].append([run.run_id, run.protocol_id, run.model_id, run.checkpoint_id, run.checkpoint_training_noise_pct, run.data_kind, run.top_k_saved, run.gallery_size, json.dumps(run.category_gallery_sizes) if run.category_gallery_sizes else None, json.dumps(run.category_eligible_counts) if run.category_eligible_counts else None, evidence_status(run.data_kind), run.reproduced_metrics.r10, run.reproduced_metrics.r50, run.reproduced_metrics.mean, run.model_dump_json()])
             for query in result.queries:
                 rows["queries"].append([run.run_id, query.query_id, query.category, query.annotation_index, query.reference_id, query.target_id, json.dumps(query.raw_captions), query.model_input_text, query.target_rank])
                 rows["top_results"].extend([run.run_id, query.query_id, item.rank, item.image_id, item.score] for item in query.top_results)
