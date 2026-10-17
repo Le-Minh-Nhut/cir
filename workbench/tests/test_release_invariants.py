@@ -508,3 +508,9 @@ def test_i01b_the_verifier_re_extracts_metrics_from_the_runs_own_output() -> Non
         reasons = verify_run._reextraction_reasons("limn", report, str(run_dir))
         assert reasons, "the report's numbers must match its own output"
         assert "are not what its own recorded output yields" in reasons[0], reasons
+
+        # A model this deployment has no aggregate parser for is not a run hiding its numbers: the
+        # check says nothing rather than refusing a run for a limitation of the parser set. That
+        # model's own metric contract (`_non_limn_reasons`) is what governs it.
+        (run_dir / "stdout.log").write_text(limn_aggregate_line(categories) + "\n")
+        assert verify_run._reextraction_reasons("synthetic_model", report, str(run_dir)) == []

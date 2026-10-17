@@ -355,6 +355,14 @@ def _reextraction_reasons(model_id: str, report: dict | None,
         return [f"re-extracting this run's metrics from its own output failed: "
                 f"{type(error).__name__}: {error}"]
 
+    if extracted.extraction_status == "AGGREGATE_PARSER_UNAVAILABLE":
+        # Not every registered model has an aggregate parser (`metrics_extraction` returns this
+        # status in that case), and a model whose output the workbench cannot read is not a run
+        # hiding its numbers -- it is a model the metric contract already handles on its own terms
+        # (`_non_limn_reasons`). Re-extraction has nothing to compare with, so it says nothing
+        # rather than refusing a run for a limitation of this deployment's parser set.
+        return []
+
     reasons: list[str] = []
     claimed_observed = report.get("observed_metrics")
     if extracted.observed_metrics is None:
