@@ -589,11 +589,21 @@ def _create_benchmark_run(
         paper_metrics=None, artifact_type="bundle_members"
     )
     run_dir = evaluator.log_dir(config, plan, evaluator.datetime.now(evaluator.timezone.utc), run_id)
-    run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "stdout.log").write_text("evaluating\nresults: done\n")
-    (run_dir / "stderr.log").write_text("")
-    logs = {"stderr": "", "stdout": "evaluating\nresults: done\n"}
-    evidence_digest = hashlib.sha256(json.dumps(logs, sort_keys=True).encode("utf-8")).hexdigest()
+    # The run's own output in the format the parser reads: the verifier re-extracts it and compares
+    # against the report's numbers, so prose logs cannot be certified.
+    from workbench.tests._evaluator_output import write_run_output
+
+    if valid_metrics:
+        _cats = {"dress": {"r10": 20.0, "r50": 45.0}, "shirt": {"r10": 20.0, "r50": 45.0},
+                 "toptee": {"r10": 20.0, "r50": 45.0}}
+    else:
+        # The invalid-metrics case must be a run whose output the parser cannot accept either: a
+        # category reporting a non-finite recall is what the parser refuses.
+        _cats = {"dress": {"r10": float("nan"), "r50": 45.0}, "shirt": {"r10": 20.0, "r50": 45.0},
+                 "toptee": {"r10": 20.0, "r50": 45.0}}
+    _, _, evidence_digest = write_run_output(run_dir, _cats)
+    logs = {"stdout": (run_dir / "stdout.log").read_text(),
+            "stderr": (run_dir / "stderr.log").read_text()}
 
     (run_dir / "command.json").write_text(json.dumps({
         "run_id": run_id, "model_id": model_id,
@@ -610,7 +620,8 @@ def _create_benchmark_run(
         "execution_status": "EXECUTION_COMPLETED",
         "metric_extraction_available": extraction_avail,
         "extraction_status": extraction_status,
-        "category_metrics": categories, "observed_metrics": observed,
+        "category_metrics": {name: {"r1": None, **values} for name, values in categories.items()},
+        "observed_metrics": observed,
         "checkpoint_sha256": directory_sha256,
         "bundle_manifest_digest": manifest_digest,
         "evidence_digest": evidence_digest,

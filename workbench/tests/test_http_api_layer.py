@@ -365,9 +365,11 @@ def test_wrong_typed_nested_gate_fields_are_normalized_not_crashing(api, tmp_pat
 VALID_EVIDENCE = {
     "extraction_status": "EXTRACTED_VERIFIED",
     "metric_extraction_available": True,
-    "category_metrics": {"dress": {"r10": 25.5, "r50": 55.2},
-                         "shirt": {"r10": 28.1, "r50": 58.4},
-                         "toptee": {"r10": 30.2, "r50": 60.1}},
+    # The parser also records r1 per category; the report is a copy of its output, so the fixture
+    # carries the same keys the parser emits (the verifier compares the two).
+    "category_metrics": {"dress": {"r1": None, "r10": 25.5, "r50": 55.2},
+                         "shirt": {"r1": None, "r10": 28.1, "r50": 58.4},
+                         "toptee": {"r1": None, "r10": 30.2, "r50": 60.1}},
     "observed_metrics": {"r10": 27.9333, "r50": 57.9, "mean": 42.9167},
 }
 
@@ -475,8 +477,14 @@ def _valid_completion_proof(tmp_path: Path, run_id: str) -> str:
         "run_id": run_id, "model_id": "limn", "checkpoint_id": "base_iter0_all_categories",
         "protocol_id": "fashioniq_val_split", "return_code": 0,
         "invocation_status": "INVOCATION_COMPLETED"}))
-    (run_dir / "stdout.log").write_text("recall computed\n")
-    (run_dir / "stderr.log").write_text("")
+    # The run's own output, in the format the parser reads: the verifier re-extracts it and
+    # compares the result against the report's numbers, so a fixture whose logs are prose cannot
+    # be certified -- which is the check's whole purpose.
+    from workbench.tests._evaluator_output import write_run_output
+
+    categories = {"dress": {"r10": 25.5, "r50": 55.2}, "shirt": {"r10": 28.1, "r50": 58.4},
+                  "toptee": {"r10": 30.2, "r50": 60.1}}
+    _, _, evidence_digest = write_run_output(run_dir, categories)
     digest = hashlib.sha256(report_path.read_bytes()).hexdigest()
     bundle_manifest_digest, checkpoint_sha256 = _write_checkpoint_bundle(tmp_path)
     logs = {"stdout": (run_dir / "stdout.log").read_text(),
@@ -487,7 +495,7 @@ def _valid_completion_proof(tmp_path: Path, run_id: str) -> str:
         "invocation_status": "INVOCATION_COMPLETED",
         "source_actual_commit": model_by_id("limn")["upstream_commit_sha"],
         "checkpoint_sha256": checkpoint_sha256, "environment_digest": "e" * 64,
-        "evidence_digest": hashlib.sha256(json.dumps(logs, sort_keys=True).encode()).hexdigest(),
+        "evidence_digest": evidence_digest,
         "bundle_manifest_digest": bundle_manifest_digest,
         "ledger_entry_digest": f"entry-{digest[:16]}",
         "report": str(report_path), "report_digest": digest, "run_directory": str(run_dir)})

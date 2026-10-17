@@ -290,12 +290,18 @@ def _reports_root(config) -> Path:
 def _proof_stamp(config, report: dict) -> str:
     """A change token for the completion proof `verify_run.verify` would validate, if any."""
     try:
-        stat = (_reports_root(config) / (
+        proof = (_reports_root(config) / (
             f"{report.get('model_id')}_{report.get('checkpoint_id')}_"
-            f"{report.get('run_id')}_completion.json")).stat()
+            f"{report.get('run_id')}_completion.json"))
+        stat = proof.stat()
     except OSError:
         return "absent"
-    return f"{stat.st_mtime_ns}:{stat.st_size}"
+    # The proof's CONTENT, for the same reason the checkpoint and run-artifact tokens use content:
+    # `size:mtime` is writable by whoever can edit the file, so a one-character edit with mtime
+    # restored left this stamp frozen and a tampered proof kept serving `certified=true` while a
+    # fresh verification refused it. The proof is small; hashing it is not a cost question.
+    digest = _member_digest_cached(proof, stat)
+    return f"absent-unreadable" if digest is None else digest
 
 def _run_artifacts_stamp(config, report: dict) -> str:
     """A change token for the run's invocation record and logs, which the verifier also re-derives.
@@ -491,11 +497,18 @@ def _ledger_stamp(config) -> str:
     always moves both mtime and size. Either moving invalidates the cache; nothing else can turn a
     previously refused report into an acceptable one.
     """
+    ledger = _ledger_path(config)
     try:
-        stat = _ledger_path(config).stat()
+        stat = ledger.stat()
     except OSError:
         return "absent"
-    return f"{stat.st_mtime_ns}:{stat.st_size}"
+    # Content again. The ledger is append-only in normal operation, so its size and mtime do move
+    # for every legitimate change -- but a REWRITE that preserves both (a truncation and rewrite of
+    # equal length, with mtime restored) would leave this stamp frozen while `read_evidence_ledger`
+    # answered differently. The digest is the fact; it is also what makes the cache key's claim
+    # ("the ledger stamp which ledger corroborated them") true rather than assumed.
+    digest = _member_digest_cached(ledger, stat)
+    return "absent-unreadable" if digest is None else digest
 
 def _verifier_verdict(config, report_path: Path, report: dict) -> dict | None:
     """The authoritative verdict for one report, or None when the verifier cannot resolve it.
@@ -728,7 +741,7 @@ def _aggregate_reports() -> list[dict]:
         mode = _certification_mode(proof_stamp != "absent")
         checkpoint_stamp = _checkpoint_stamp(report)
         run_stamp = _run_artifacts_stamp(config, report)
-        # Five inputs, each the change token of one thing the receipt is a claim about: the
+        # Six inputs, each the change token of one thing the receipt is a claim about: the
         # report's bytes, the policy that judged them, the ledger that corroborated them, the
         # proof that binds the run, the checkpoint the proof describes, and the run's own
         # invocation record and logs. Anything the verifier re-derives belongs in this key.

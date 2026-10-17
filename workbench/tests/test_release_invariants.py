@@ -457,3 +457,54 @@ def test_the_invariant_matrix_itself_is_complete() -> None:
     # The declared-unverified set must only name invariants that exist.
     for key in UNVERIFIED:
         assert key.split("_")[0] in expected, key
+
+def test_i01b_the_verifier_re_extracts_metrics_from_the_runs_own_output() -> None:
+    """I01, the half the red-team found missing: a report may not attest to its own metrics.
+
+    `metric_extraction_available` and `extraction_status` are fields the RUN writes about itself, so
+    a verifier that reads only those is taking the numbers on the run's word. Reproduced before this
+    check existed: a report whose recorded stdout contained no metric line at all was served as
+    `is_research_evidence: True` with the paper's numbers in it. The output is the one part of a run
+    the report cannot answer for -- it is bound to the completion proof by `evidence_digest`.
+
+    Exercised through the verifier's own checker over real files, in both directions.
+    """
+    import tempfile
+    from pathlib import Path as _Path
+
+    from workbench.scripts import verify_run
+    from workbench.tests._evaluator_output import limn_aggregate_line
+
+    categories = {"dress": {"r10": 25.5, "r50": 55.2}, "shirt": {"r10": 28.1, "r50": 58.4},
+                  "toptee": {"r10": 30.2, "r50": 60.1}}
+    r10 = sum(c["r10"] for c in categories.values()) / 3
+    r50 = sum(c["r50"] for c in categories.values()) / 3
+    report = {
+        "return_code": 0, "metric_extraction_available": True,
+        "extraction_status": "EXTRACTED_VERIFIED",
+        "category_metrics": {name: {"r1": None, **values} for name, values in categories.items()},
+        "observed_metrics": {"r10": round(r10, 4), "r50": round(r50, 4),
+                             "mean": round((r10 + r50) / 2, 4)},
+    }
+
+    with tempfile.TemporaryDirectory() as tmp:
+        run_dir = _Path(tmp)
+        (run_dir / "stdout.log").write_text(limn_aggregate_line(categories) + "\n")
+        (run_dir / "stderr.log").write_text("")
+
+        # The output yields exactly the report's numbers: no reason to refuse.
+        assert verify_run._reextraction_reasons("limn", report, str(run_dir)) == []
+
+        # The same report over an output that yields nothing: refused, and it says why.
+        (run_dir / "stdout.log").write_text("evaluating\nnothing to report\n")
+        reasons = verify_run._reextraction_reasons("limn", report, str(run_dir))
+        assert reasons, "a report whose output contains no metric must not be corroborated"
+        assert "no metric" in reasons[0], reasons
+
+        # And an output whose numbers disagree with the report's: refused.
+        (run_dir / "stdout.log").write_text(limn_aggregate_line(
+            {"dress": {"r10": 99.0, "r50": 99.0}, "shirt": {"r10": 99.0, "r50": 99.0},
+             "toptee": {"r10": 99.0, "r50": 99.0}}) + "\n")
+        reasons = verify_run._reextraction_reasons("limn", report, str(run_dir))
+        assert reasons, "the report's numbers must match its own output"
+        assert "are not what its own recorded output yields" in reasons[0], reasons

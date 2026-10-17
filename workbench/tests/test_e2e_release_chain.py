@@ -253,12 +253,15 @@ def _controlled_evaluation(config, run_id: str) -> None:
     (run_dir / "command.json").write_text(json.dumps({
         "run_id": run_id, "model_id": MODEL, "checkpoint_id": BUNDLE, "protocol_id": PROTOCOL,
         "return_code": 0, "invocation_status": "INVOCATION_COMPLETED"}))
-    (run_dir / "stdout.log").write_text("evaluating\nresults: done\n")
-    (run_dir / "stderr.log").write_text("")
-    logs = {"stderr": "", "stdout": "evaluating\nresults: done\n"}
 
     categories = {"dress": {"r10": 25.5, "r50": 55.2}, "shirt": {"r10": 28.1, "r50": 58.4},
                   "toptee": {"r10": 30.2, "r50": 60.1}}
+    # The controlled evaluator's OUTPUT, not just its report: the verifier re-parses the run's own
+    # digest-bound logs with the real parser and compares against the report's numbers.
+    from workbench.tests._evaluator_output import write_run_output
+
+    _, _, evidence_digest = write_run_output(run_dir, categories)
+    logs = {"stdout": (run_dir / "stdout.log").read_text(), "stderr": ""}
     r10 = sum(c["r10"] for c in categories.values()) / 3
     r50 = sum(c["r50"] for c in categories.values()) / 3
 
@@ -270,12 +273,12 @@ def _controlled_evaluation(config, run_id: str) -> None:
         "return_code": 0, "invocation_status": "INVOCATION_COMPLETED",
         "execution_status": "EXECUTION_COMPLETED",
         "extraction_status": "EXTRACTED_VERIFIED", "metric_extraction_available": True,
-        "category_metrics": categories,
-        "observed_metrics": {"r10": r10, "r50": r50, "mean": (r10 + r50) / 2},
+        "category_metrics": {name: {"r1": None, **values} for name, values in categories.items()},
+        "observed_metrics": {"r10": round(r10, 4), "r50": round(r50, 4),
+                             "mean": round((r10 + r50) / 2, 4)},
         "benchmark_gate": {"status": "PASS_WITHIN_5_PERCENT", "passed": True},
         "parity_status": "PARITY_VERIFIED",
-        "evidence_digest": hashlib.sha256(
-            json.dumps(logs, sort_keys=True).encode()).hexdigest(),
+        "evidence_digest": evidence_digest,
         "data_kind": "experiment",
     }))
 
@@ -297,7 +300,7 @@ def _controlled_evaluation(config, run_id: str) -> None:
         "report": str(report_path), "report_digest": digest,
         "invocation_status": "INVOCATION_COMPLETED",
         "environment_digest": "e" * 64,
-        "evidence_digest": hashlib.sha256(json.dumps(logs, sort_keys=True).encode()).hexdigest(),
+        "evidence_digest": evidence_digest,
         "run_directory": str(run_dir),
     }))
 

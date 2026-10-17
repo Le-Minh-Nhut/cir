@@ -845,10 +845,13 @@ def _create_corroborated_run(
         "return_code": 0,
         "invocation_status": "INVOCATION_COMPLETED",
     }))
-    (run_dir / "stdout.log").write_text("evaluation output\n")
-    (run_dir / "stderr.log").write_text("")
-    logs = {"stdout": "evaluation output\n", "stderr": ""}
-    ev_digest = hashlib.sha256(json.dumps(logs, sort_keys=True).encode("utf-8")).hexdigest()
+    # The evaluator's own output in the format the parser reads, because the verifier re-extracts
+    # it and compares against the report's numbers.
+    from workbench.tests._evaluator_output import write_run_output
+
+    _, _, ev_digest = write_run_output(run_dir, {
+        "dress": {"r10": 25.5, "r50": 55.2}, "shirt": {"r10": 28.1, "r50": 58.4},
+        "toptee": {"r10": 30.2, "r50": 60.1}})
 
     report_file = reports_dir / f"{model_id}_{checkpoint_id}_{run_id}_aggregate.json"
     report_data = {
@@ -871,9 +874,9 @@ def _create_corroborated_run(
         "extraction_status": "EXTRACTED_VERIFIED",
         "metric_extraction_available": True,
         "category_metrics": {
-            "dress": {"r10": 25.5, "r50": 55.2},
-            "shirt": {"r10": 28.1, "r50": 58.4},
-            "toptee": {"r10": 30.2, "r50": 60.1},
+            "dress": {"r1": None, "r10": 25.5, "r50": 55.2},
+            "shirt": {"r1": None, "r10": 28.1, "r50": 58.4},
+            "toptee": {"r1": None, "r10": 30.2, "r50": 60.1},
         },
         "observed_metrics": {
             "r10": 27.9333,

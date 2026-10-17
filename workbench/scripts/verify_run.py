@@ -152,6 +152,20 @@ def verify(run_id: str, model_id: str, checkpoint_id: str, protocol_id: str) -> 
                                f"{witness.get('invocation_status')!r}, "
                                "expected 'INVOCATION_COMPLETED'")
 
+    # Where the run's own output lives, taken from the proof the validator is about to accept --
+    # the same value `validate_run_manifest` re-reads for the invocation record and the evidence
+    # digest, rather than a filename guessed here.
+    proof_run_directory: str | None = None
+    if report_path.is_file():
+        try:
+            _proof_payload = json.loads(
+                (reports / f"{model_id}_{checkpoint_id}_{run_id}_completion.json").read_text())
+            _candidate = _proof_payload.get("run_directory")
+            if isinstance(_candidate, str) and _candidate:
+                proof_run_directory = _candidate
+        except (OSError, json.JSONDecodeError, AttributeError):
+            proof_run_directory = None
+
     # The evaluator's own validator, on its own terms: same function the pipeline calls, which
     # resolves bundle members exactly as the run did and requires the checksum and the
     # environment identity.
@@ -174,6 +188,14 @@ def verify(run_id: str, model_id: str, checkpoint_id: str, protocol_id: str) -> 
     # what the launcher and the release report must know — a synthetic self-test can never
     # satisfy it. Collapsing them made an honestly labelled self-test look like a failed
     # execution, and made the launcher's success claim depend on a question it was not asking.
+    # The metrics the report CLAIMS must be the metrics its own digest-bound output actually
+    # contains. Without this the verifier only asked the report whether it had extracted anything
+    # -- and a report can say `EXTRACTED_VERIFIED` while its recorded stdout contains no metric
+    # line at all, so the numbers were taken on the run's word. The logs are already bound to the
+    # proof by `evidence_digest`, and the parser is the same one the evaluator used, so this is one
+    # call over evidence the verifier has already authenticated.
+    reextraction_reasons = _reextraction_reasons(model_id, report, proof_run_directory)
+    reasons.extend(reextraction_reasons)
     evidence_reasons = _evidence_kind_reasons(report)
     corroborated = not reasons and not metric_reasons
     is_evidence = corroborated and not evidence_reasons
@@ -297,6 +319,90 @@ def _has_usable_metric(report: dict | None) -> bool:
                 return True
     return False
 
+
+def _reextraction_reasons(model_id: str, report: dict | None,
+                          run_directory: str | None) -> list[str]:
+    """Why the report's own numbers are not what its recorded output contains.
+
+    The report attests to its own extraction (`metric_extraction_available`,
+    `extraction_status`), and those fields are written by the run under review. The evidence that
+    is *not* self-attested is the output: `stdout.log`/`stderr.log` are bound to the completion
+    proof by `evidence_digest`, so re-parsing them with the same parser the evaluator used is a
+    check the run cannot answer for itself.
+
+    Deliberately silent when the extraction contract already refused the report (nothing to compare
+    against) or when the run directory is unavailable -- `validate_run_manifest` owns that, and
+    asserting it twice would bury the reason that matters.
+    """
+    from workbench.backend import metrics_extraction
+
+    report = report or {}
+    if run_directory is None or report.get("metric_extraction_available") is not True:
+        return []
+    if _extraction_reasons(report):
+        return []
+    directory = Path(run_directory)
+    try:
+        stdout_text = (directory / "stdout.log").read_text(encoding="utf-8", errors="replace")
+        stderr_text = (directory / "stderr.log").read_text(encoding="utf-8", errors="replace")
+    except OSError as error:
+        return [f"the run's recorded output is unreadable, so its metrics cannot be corroborated: {error}"]
+
+    try:
+        extracted = metrics_extraction.extract_aggregate_metrics(
+            model_id, stdout_text, stderr_text, int(report.get("return_code") or 0))
+    except Exception as error:                 # a parser that cannot answer is not a pass
+        return [f"re-extracting this run's metrics from its own output failed: "
+                f"{type(error).__name__}: {error}"]
+
+    reasons: list[str] = []
+    claimed_observed = report.get("observed_metrics")
+    if extracted.observed_metrics is None:
+        reasons.append(
+            "the run's recorded output contains no metric this parser can read "
+            f"({extracted.extraction_status}), so the report's numbers are not corroborated by "
+            "the output they claim to come from")
+    elif claimed_observed is not None and _metrics_differ(extracted.observed_metrics, claimed_observed):
+        reasons.append(
+            f"the report's observed metrics {claimed_observed} are not what its own recorded "
+            f"output yields ({extracted.observed_metrics})")
+    claimed_categories = report.get("category_metrics")
+    if extracted.category_metrics is not None and isinstance(claimed_categories, dict) \
+            and claimed_categories:
+        for category, values in extracted.category_metrics.items():
+            claimed = claimed_categories.get(category)
+            if not isinstance(claimed, dict):
+                reasons.append(
+                    f"the report claims no {category} metrics, but its own output produced them")
+                continue
+            if _metrics_differ(values, claimed):
+                reasons.append(
+                    f"the report's {category} metrics {claimed} are not what its own recorded "
+                    f"output yields ({values})")
+    return reasons
+
+#: How far a re-extracted value may differ from the report's copy of it. The report's numbers ARE
+#: copies of this parser's output, so the only legitimate difference is the print precision the
+#: parser itself rounds to (four decimals) -- the same rounding allowance `MACRO_TOLERANCE_PP`
+#: documents, applied per cell.
+REEXTRACTION_TOLERANCE = 0.00011
+
+def _metrics_differ(left: dict, right: dict) -> bool:
+    """Whether two metric mappings disagree beyond the parser's own rounding."""
+    for key, left_value in left.items():
+        if key not in right:
+            return True
+        right_value = right[key]
+        if left_value is None or right_value is None:
+            if left_value is not right_value:
+                return True
+            continue
+        try:
+            if abs(float(left_value) - float(right_value)) > REEXTRACTION_TOLERANCE:
+                return True
+        except (TypeError, ValueError):
+            return True
+    return any(key not in left for key in right)
 
 def _extraction_reasons(report: dict | None) -> list[str]:
     """Metric extraction must actually have been performed.
