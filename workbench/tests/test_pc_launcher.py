@@ -22,6 +22,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 PC_SH = REPO / "pc.sh"
 FIXTURES_BIN = Path(__file__).resolve().parent / "fixtures" / "pc_launcher" / "bin"
+FIXTURES = FIXTURES_BIN.parent
 CRITICAL_REPO_FILES = [
     REPO / "workbench/docker/.env.example",
     REPO / "workbench/docker/run.sh",
@@ -819,9 +820,16 @@ def _create_corroborated_run(
     for name in ckpt_names:
         (ckpt_dir / name).write_bytes(b"dummy_weights_12345")
 
-    from workbench.scripts.evaluate_models import build_artifact_manifest, manifest_digest
+    from workbench.scripts.evaluate_models import (
+        build_artifact_manifest, manifest_digest, sha256_file)
     bundle = build_artifact_manifest(ckpt_dir, ckpt_names)
     md = manifest_digest(bundle)
+    # The companion digest a real run's plan records for a directory artifact
+    # (evaluate_models.py:390-397): the same module's `sha256_file` over the directory restricted
+    # to the declared members. The literal placeholder that used to sit in this slot made every
+    # fixture proof self-inconsistent in a way a real run never is, so once the verifier re-hashed
+    # the live members it refused its own fixtures.
+    dir_sha256 = sha256_file(ckpt_dir, required_files=ckpt_names)
 
     pin = "7d7bc9b116f594a65ac22457491edf28a88d3c3e"
     rep_ckpt = "wrong_checkpoint_variant" if wrong_checkpoint else checkpoint_id
@@ -854,7 +862,7 @@ def _create_corroborated_run(
         "source_actual_commit": pin,
         "runtime_adaptation": "sm_120",
         "bundle_manifest_digest": md,
-        "checkpoint_sha256": "abcdef123456",
+        "checkpoint_sha256": dir_sha256,
         "benchmark_gate": {"status": "PASS_WITHIN_5_PERCENT"},
         # The run's own extraction facts and its macro. The macro is the mean of the three
         # categories below and the mean of the two macro recalls, because `verify_run.py`
@@ -932,7 +940,7 @@ def _create_corroborated_run(
             "source_expected_commit": pin,
             "source_actual_commit": pin,
             "checkpoint_artifact_type": "directory",
-            "checkpoint_sha256": "abcdef123456",
+            "checkpoint_sha256": dir_sha256,
             "bundle_manifest_digest": md,
             "invocation_status": "INVOCATION_COMPLETED",
             "return_code": 0,
@@ -1376,13 +1384,14 @@ def test_a_complete_limn_bundle_is_submitted_as_one_bundle_selection(tmp_path: P
     assert "Mô hình: limn | Checkpoint: base_iter0_all_categories" in out, out
     assert "base_iter0_dress" not in out.split("Xác định protocol")[-1]
 
-def test_a_limn_bundle_with_a_missing_member_is_not_submitted(tmp_path: Path):
-    """(b) A member that is missing/unusable makes the launcher fall back to a partial run.
+def test_a_limn_bundle_with_a_missing_member_is_refused_not_degraded(tmp_path: Path):
+    """(b) A member that is missing/unusable refuses the DEFAULT run by name; it never degrades.
 
-    The incomplete bundle is never submitted, so it is never refused with `evaluation_blocked`:
-    submitting it would turn one undownloaded category into a launcher failure. The run that IS
-    submitted names one of the bundle's own member checkpoints, and the summary must not present
-    it as the complete three-category result.
+    The default `./pc.sh` asks for the model's declared bundle, which is the complete
+    three-category experiment. Submitting a subset of it while presenting the workflow as the
+    reproduction would be the documented `evaluation_blocked` failure in reverse: a partial run
+    labelled complete (invariant I04). So the launcher submits NOTHING, names the missing member,
+    and exits nonzero with a remedy -- the operator who wants one category says so explicitly.
     """
     sandbox, env = setup_sandbox(tmp_path, with_env=True)
     post_jobs_file = sandbox / "post_jobs.log"
@@ -1391,9 +1400,32 @@ def test_a_limn_bundle_with_a_missing_member_is_not_submitted(tmp_path: Path):
 
     proc = run_pc(sandbox, ["--force"], env)
     out = proc.stdout + proc.stderr
-    submitted = _submitted_checkpoint(post_jobs_file)
-    assert submitted in {"base_iter0_dress", "base_iter0_toptee"}, out
+    assert proc.returncode != 0, out
+    assert not post_jobs_file.exists(), "nothing may be submitted when the bundle is incomplete"
+    assert "CHECKPOINT_SELECTION" in out, out
+    assert "base_iter0_shirt" in out, "the missing member must be named"
+    # The failure must state the remedy, including how to ask for a deliberate partial run.
+    assert "--checkpoint" in out, out
     assert "Mô hình: limn | Checkpoint: base_iter0_all_categories" not in out, out
+
+def test_a_limn_bundle_member_missing_only_the_runnable_flag_still_refuses(tmp_path: Path):
+    """The real API reports readiness as `runnable`, and the launcher must read that field.
+
+    Regression for the contract mismatch: the check used `member.get('available')`, a field
+    `checkpoint_availability` has never produced, so EVERY member looked absent. A member that is
+    downloaded but not runnable is a distinct real state (a missing adapted runtime, an
+    unverified mapping) and must also refuse rather than be submitted.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    post_jobs_file = sandbox / "post_jobs.log"
+    env["MOCK_POST_JOBS_FILE"] = str(post_jobs_file)
+    env["MOCK_MODELS_UNRUNNABLE_MEMBER"] = "base_iter0_toptee"
+
+    proc = run_pc(sandbox, ["--force"], env)
+    out = proc.stdout + proc.stderr
+    assert proc.returncode != 0, out
+    assert "base_iter0_toptee" in out, out
+    assert not post_jobs_file.exists(), out
 
 def test_a_single_checkpoint_model_is_still_queueable_as_a_partial_run(tmp_path: Path):
     """(c) A single-category selection is unaffected: still queueable, still not complete.
@@ -1534,3 +1566,58 @@ def test_container_gpu_mismatch_without_host_toolkit_fails_once_without_restart(
         and "up" in rec.get("args", [])
     ]
     assert len(up_calls) == 0, f"no restart when unsatisfiable on host, saw {len(up_calls)}"
+
+# ==============================================================================
+# The fixture must speak the real /api/models schema
+# ==============================================================================
+
+def test_the_launcher_fixture_carries_the_real_api_schema() -> None:
+    """DEFECT B's root cause, guarded at the level it actually occurred.
+
+    The fixture shipped an `available` field that `checkpoint_availability` has never produced
+    while omitting nine fields it does produce -- so the launcher's wrong field name passed every
+    launcher test, and the mismatch was only visible against the live deployment. The fixture is
+    now generated from the producer, and this test fails if it drifts again: it compares the KEY
+    SET of the committed fixture against a live call to the real registry producer, which is the
+    thing the launcher consumes.
+    """
+    import json
+    from workbench.backend.registry import checkpoint_availability, load_registry
+
+    fixture = json.loads((FIXTURES / "models.json").read_text())
+    registry = load_registry()
+    real = {model["model_id"]: model for model in registry["models"]}
+
+    assert [entry["model_id"] for entry in fixture] == [m["model_id"] for m in registry["models"]], \
+        "the fixture must cover the registry's models in the same order"
+
+    for entry in fixture:
+        model = real[entry["model_id"]]
+        expected_variants = [checkpoint_availability(model, item)
+                             for item in model["checkpoint_variants"]]
+        if not expected_variants:
+            # A model the registry declares with no runnable checkpoint cannot have a served
+            # availability view; an empty list is the correct, complete fixture for it.
+            assert entry["checkpoints"] == [], entry["model_id"]
+            continue
+        assert entry["checkpoints"], f"{entry['model_id']} has no checkpoints"
+        for served, expected in zip(entry["checkpoints"], expected_variants):
+            assert set(served) == set(expected), (
+                f"{entry['model_id']} checkpoint {served.get('checkpoint_id')}: the fixture's "
+                f"fields differ from the real producer's. "
+                f"missing={sorted(set(expected) - set(served))} "
+                f"extra={sorted(set(served) - set(expected))}")
+        bundles = model.get("checkpoint_bundles") or []
+        assert ("checkpoint_bundles" in entry) == bool(bundles), (
+            f"{entry['model_id']}: bundle key must be present exactly when the registry declares "
+            f"a bundle")
+        for served_bundle, expected_bundle in zip(entry.get("checkpoint_bundles") or [], bundles):
+            assert served_bundle["bundle_id"] == expected_bundle["bundle_id"]
+            assert len(served_bundle["members"]) == len(expected_bundle["required_checkpoint_ids"])
+            for member in served_bundle["members"]:
+                assert set(member) == set(expected_variants[0]), (
+                    f"bundle member {member.get('checkpoint_id')} field set differs from the "
+                    f"real producer's")
+    # The field that caused the defect must never come back.
+    assert '"available"' not in (FIXTURES / "models.json").read_text(), (
+        "the fixture invented an `available` field the real API never sends")

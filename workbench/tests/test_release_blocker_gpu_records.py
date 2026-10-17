@@ -383,7 +383,9 @@ def test_an_unreadable_artifact_does_not_downgrade_readable_evidence(probe_envir
     assert report["gpu_capability_scan"]["real_gpu"] is True
     assert report["gpu_capability_scan"]["status"] == "UNREADABLE"
     assert "leftover.json" in report["gpu_capability_scan"]["unreadable"]
-    assert not poisoned.exists()
+    # And it is REPORTED rather than deleted: the verifier runs against the operator's live
+    # artifacts root and must never remove a file it did not understand.
+    assert poisoned.exists(), "the verifier must not delete the operator's artifacts"
 
 # --------------------------------------------------------------------------- P2-7 J1 boot state
 
@@ -567,10 +569,16 @@ def _create_benchmark_run(
         extraction_status = "EXTRACTED_VERIFIED"
         extraction_avail = True
 
-    bundle_manifest = evaluator.build_artifact_manifest(
-        ckpt_dir, ["0_dress_best_model.pt", "0_shirt_best_model.pt", "0_toptee_best_model.pt"]
-    )
+    member_names = ["0_dress_best_model.pt", "0_shirt_best_model.pt", "0_toptee_best_model.pt"]
+    bundle_manifest = evaluator.build_artifact_manifest(ckpt_dir, member_names)
     manifest_digest = evaluator.manifest_digest(bundle_manifest)
+    # Both digests a real run's plan records for a directory artifact (evaluate_models.py:390-397):
+    # the manifest digest of the declared members AND the same module's `sha256_file` over the
+    # directory restricted to those members. Recording the manifest digest in the
+    # `checkpoint_sha256` slot as a placeholder made the proof self-inconsistent in a way a real
+    # run never is, and once the verifier actually re-hashed the live members that inconsistency
+    # became what the test measured instead of its subject.
+    directory_sha256 = evaluator.sha256_file(ckpt_dir, required_files=member_names)
 
     pin = verify_run._regression_pin(model_id)
     plan = evaluator.EvaluationPlan(
@@ -603,7 +611,7 @@ def _create_benchmark_run(
         "metric_extraction_available": extraction_avail,
         "extraction_status": extraction_status,
         "category_metrics": categories, "observed_metrics": observed,
-        "checkpoint_sha256": manifest_digest,
+        "checkpoint_sha256": directory_sha256,
         "bundle_manifest_digest": manifest_digest,
         "evidence_digest": evidence_digest,
     }
@@ -629,7 +637,7 @@ def _create_benchmark_run(
             "run_id": run_id, "model_id": model_id,
             "checkpoint_id": checkpoint_id, "protocol_id": protocol_id,
             "source_expected_commit": pin, "source_actual_commit": pin,
-            "checkpoint_sha256": manifest_digest,
+            "checkpoint_sha256": directory_sha256,
             "bundle_manifest_digest": manifest_digest,
             "ledger_entry_digest": ledger_entry_digest,
             "report": str(report_file), "report_digest": report_digest,
@@ -744,7 +752,7 @@ def test_defect_b_f_legitimate_corroborated_run_is_accepted_evidence(target_envi
     pass_env = {**_target_env_for_target(), **{f"J{i}": "PASS" for i in range(1, 13)}}
     report, completed = _scan(pass_env)
 
-    assert completed.returncode == 0
+    assert completed.returncode == 0, completed.stderr
     assert report["dimensions"]["STATIC_SOURCE"]["status"] == "PASS"
     assert report["dimensions"]["DEPLOYMENT"]["status"] == "PASS"
     assert report["dimensions"]["CONFIGURATION"]["status"] == "PASS"
@@ -1052,11 +1060,15 @@ def test_a_declared_target_that_is_not_in_the_registry_blocks_the_release(sandbo
     """
     report, completed = _scan(_target_env("no_such_model", "no_such_checkpoint", "no_such_protocol"))
 
-    assert completed.returncode == 0
     assert report["dimensions"]["TARGET_BINDING"]["status"] == "FAIL"
     assert "not in the registry" in report["dimensions"]["TARGET_BINDING"]["detail"]
     assert report["dimensions"]["GPU_RUNTIME"]["status"] == "PENDING"
     assert report["verdict"] == "RELEASE_BLOCKED"
+    # The verdict owns the exit code. `TARGET_BINDING` has no J-check, so counting only J1-J12 in
+    # bash once let a RELEASE_BLOCKED report exit 0 -- the report said blocked and the shell said
+    # fine. The block itself must signal it.
+    assert completed.returncode != 0, (
+        "a RELEASE_BLOCKED verdict must not exit 0", completed.stdout, completed.stderr)
 
 def test_frontend_banner_distinguishes_aggregate_only_from_absent_evidence():
     """DEFECT D (reproduced first): a certified aggregate-only evaluation was announced as absent.
@@ -1128,8 +1140,96 @@ def test_frontend_banner_distinguishes_aggregate_only_from_absent_evidence():
     check("nulls", null, null, {});
     check("api error", [], [], {});
 
+    // --- an independent adversarial review of this module found the following, each reproduced
+    // --- here first. A synthetic or refused aggregate is NOT a real evaluation (I03/I14/I16).
+    const synthetic = (run_id) => ({ run_id, is_synthetic: true, data_kind: "mock",
+      verification: { certified: false, is_research_evidence: false, state: "refused" } });
+    const refused = (run_id) => ({ run_id,
+      verification: { certified: false, is_research_evidence: false, state: "refused" } });
+
+    // 9. A synthetic aggregate-only run must not be announced as a real evaluation. The claim is
+    // spelled "AGGREGATE-ONLY REAL EVALUATION"; matching a bare /real evaluation/ would also hit
+    // the correct disclaimer "no real evaluation results", so the test pins the claim itself.
+    check("aggregate-only synthetic", [], [synthetic("s1")], {}, (_s, banner) => {
+      if (/AGGREGATE-ONLY REAL EVALUATION/i.test(banner)) {
+        throw new Error(`a synthetic run was announced as a real evaluation: ${banner}`);
+      }
+      if (!/MOCK DEVELOPMENT DATA/i.test(banner)) {
+        throw new Error(`expected the development warning: ${banner}`);
+      }
+    });
+
+    // 10. An aggregate-only set with NO certified member must not claim "REAL EVALUATION" either.
+    check("aggregate-only refused", [], [refused("r1")], {}, (_s, banner) => {
+      if (/AGGREGATE-ONLY REAL EVALUATION/i.test(banner)) {
+        throw new Error(`nothing is certified yet the banner claims a real evaluation: ${banner}`);
+      }
+      if (!/no certified research evidence/i.test(banner)) {
+        throw new Error(`expected the absence of certification stated: ${banner}`);
+      }
+    });
+
+    // 11. Per-query real results plus an uncertified aggregate: the aggregate must not be silently
+    // suppressed (the dashboard counters say it exists, so the banner may not say nothing).
+    check("mixed certification with per-query runs", [{ run_id: "r1", data_kind: "experiment" }],
+          [certified("b1"), { run_id: "b2", verification: { certified: false, is_research_evidence: false } }],
+          {}, (state, banner) => {
+      if (banner === "") {
+        throw new Error("an uncertified aggregate was silently suppressed");
+      }
+      if (!/not certified research evidence/i.test(banner)) {
+        throw new Error(`expected the uncertified aggregate named: ${banner}`);
+      }
+    });
+
     console.log("FRONTEND_EVIDENCE_ASSERTIONS_PASS");
     """
     res = subprocess.run(["npx", "tsx", "-e", script], cwd=str(REPOSITORY), capture_output=True, text=True)
     assert res.returncode == 0, (res.stdout, res.stderr)
     assert "FRONTEND_EVIDENCE_ASSERTIONS_PASS" in res.stdout
+
+def test_frontend_gate_fails_closed_and_distinguishes_refusal():
+    """Adversarial review findings in `gate.ts`, each reproduced before the fix.
+
+    (F3) `warningLabels(undefined)` returned `[]`. A `/api/runs` row without an aggregate gate
+    record therefore rendered with no warning at all: `undefined` is not a certified run, it is a
+    run whose certification was never stated, and the UI must fail closed.
+    (F5) the backend's `refused` state fell through to the generic `uncertified` label, so an
+    operator could not tell a run the verifier looked at and rejected from one whose certification
+    was simply never established.
+    """
+    script = """
+    import { warningLabels } from "./workbench/frontend/gate.ts";
+
+    const kinds = (gate) => warningLabels(gate, 5.0).map((l) => l.kind);
+
+    // F3: no gate record is not a clean run.
+    const absent = kinds(undefined);
+    if (!absent.includes("uncorroborated")) {
+      throw new Error(`a run with no gate record must not look clean, got ${JSON.stringify(absent)}`);
+    }
+
+    // F5: refusal is its own state.
+    const refused = kinds({ verification: { state: "refused", certified: false, is_research_evidence: false } });
+    const uncorroborated = kinds({ verification: { state: "uncorroborated", certified: false, is_research_evidence: false } });
+    const unavailable = kinds({ verification: { state: "proof_unavailable", certified: false, is_research_evidence: false } });
+    if (!refused.includes("refused")) {
+      throw new Error(`refused must be its own label, got ${JSON.stringify(refused)}`);
+    }
+    for (const [other, otherKinds] of [["uncorroborated", uncorroborated], ["proof_unavailable", unavailable]]) {
+      if (refused[0] === otherKinds[0]) {
+        throw new Error(`refused must be distinguishable from ${other}`);
+      }
+    }
+
+    // A certified run still carries no certification warning.
+    const certified = kinds({ verification: { state: "certified", certified: true, is_research_evidence: true } });
+    if (certified.length !== 0) {
+      throw new Error(`a certified run must carry no warning, got ${JSON.stringify(certified)}`);
+    }
+
+    console.log("FRONTEND_GATE_FAILCLOSED_ASSERTIONS_PASS");
+    """
+    res = subprocess.run(["npx", "tsx", "-e", script], cwd=str(REPOSITORY), capture_output=True, text=True)
+    assert res.returncode == 0, (res.stdout, res.stderr)
+    assert "FRONTEND_GATE_FAILCLOSED_ASSERTIONS_PASS" in res.stdout

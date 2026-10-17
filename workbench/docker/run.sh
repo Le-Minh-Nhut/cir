@@ -30,21 +30,37 @@ say() { printf '%s\n' "$*"; }
 # to a stack the operator did not configure.
 # ---------------------------------------------------------------------------
 env_value() { # env_value KEY DEFAULT
-    local key="$1" default="$2" line value
+    local key="$1" default="$2" line value k
     if [[ -n "${!key:-}" ]]; then
         printf '%s\n' "${!key}"; return 0
     fi
     if [[ -f "${HERE}/.env" ]]; then
-        while IFS= read -r line; do
-            line="${line%%#*}"
-            [[ "$line" != *=* ]] && continue
-            if [[ "${line%%=*}" == "$key" ]]; then
+        # `|| [[ -n "$line" ]]` so a final line without a trailing newline is not silently
+        # dropped: without it this function answered the DEFAULT for the last variable while
+        # pc.sh and compose answered the file's value, and the three disagreed about the stack.
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # Strip a trailing comment, then ONE layer of matching quotes -- the same order and
+            # the same rules compose applies, and the same ones pc.sh implements. Stripping the
+            # comment first without honouring quotes left `"8000" ` here (quotes retained, because
+            # the closing quote was no longer last), which `validate_env` then rejected as a
+            # non-integer port: a well-formed .env failed only when read through this path.
+            line="${line%$'\r'}"
+            k="${line%%=*}"
+            k="${k#"${k%%[![:space:]]*}"}"
+            k="${k%"${k##*[![:space:]]}"}"
+            if [[ "$k" == "$key" ]]; then
                 value="${line#*=}"
                 value="${value%$'\r'}"
-                # compose strips one layer of matching double or single quotes; the launcher
-                # must resolve the identical value or the two disagree about the stack.
-                if [[ ${#value} -ge 2 && ( "${value:0:1}" == '"' && "${value: -1}" == '"' || "${value:0:1}" == "'" && "${value: -1}" == "'" ) ]]; then
-                    value="${value:1:${#value}-2}"
+                if [[ "$value" == \"* ]]; then
+                    value="${value:1}"
+                    value="${value%%\"*}"
+                elif [[ "$value" == \'* ]]; then
+                    value="${value:1}"
+                    value="${value%%\'*}"
+                else
+                    value="${value%%#*}"
+                    value="${value#"${value%%[![:space:]]*}"}"
+                    value="${value%"${value##*[![:space:]]}"}"
                 fi
                 printf '%s\n' "$value"; return 0
             fi

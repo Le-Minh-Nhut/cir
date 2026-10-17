@@ -184,10 +184,13 @@ elif ! command -v docker >/dev/null || [[ -z "$(docker ps -q --filter name=^cir-
     pending J2 "workbench container not running"
 else
     C="$(docker ps -q --filter name=^cir-workbench$ | head -1)"
-    mounts="$(docker inspect "$C" --format '{{range .Mounts}}{{.Source}}=>{{.Destination}} {{end}}')"
+    # One mount per LINE. Splitting on whitespace broke as soon as any host path contained a
+    # space (a checkout under "/home/user/my data"), producing a token with no "=>" at all and
+    # crashing the parser with ValueError instead of reporting the mount.
+    mounts="$(docker inspect "$C" --format '{{range .Mounts}}{{.Source}}=>{{.Destination}}{{"\n"}}{{end}}')"
     mounts="$mounts" "${PY}" - <<'EOF' && pass J2 "$mounts" || fail J2 "$mounts"
 import os, sys
-mounts = os.environ["mounts"].split()
+mounts = [line.strip() for line in os.environ["mounts"].splitlines() if line.strip()]
 pairs = dict(m.split("=>", 1) for m in mounts)
 destinations = list(pairs.values())
 for dest in ("/data/FashionIQ", "/third_party", "/checkpoints"):
@@ -528,8 +531,10 @@ J9="${RESULTS[J9]}" J10="${RESULTS[J10]}" J11="${RESULTS[J11]}" J12="${RESULTS[J
 D1="${DETAILS[J1]}" D2="${DETAILS[J2]}" D3="${DETAILS[J3]}" D4="${DETAILS[J4]}" \
 D5="${DETAILS[J5]}" D6="${DETAILS[J6]}" D7="${DETAILS[J7]}" D8="${DETAILS[J8]}" \
 D9="${DETAILS[J9]}" D10="${DETAILS[J10]}" D11="${DETAILS[J11]}" D12="${DETAILS[J12]}" \
-TARGET_MODEL="$TARGET_MODEL" TARGET_CHECKPOINT="$TARGET_CHECKPOINT" \
-TARGET_PROTOCOL="$TARGET_PROTOCOL" TARGET_INTERPRETER="$TARGET_INTERPRETER" \
+WORKBENCH_RELEASE_TARGET_MODEL="$TARGET_MODEL" \
+WORKBENCH_RELEASE_TARGET_CHECKPOINT="$TARGET_CHECKPOINT" \
+WORKBENCH_RELEASE_TARGET_PROTOCOL="$TARGET_PROTOCOL" \
+WORKBENCH_RELEASE_TARGET_INTERPRETER="$TARGET_INTERPRETER" \
 "${PY}" - "$REPORT" <<'EOF'
 import json, os, sys, datetime
 out = {"generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -750,14 +755,13 @@ try:
 except Exception as _error:      # path/config resolution failed: nothing could be read
     _unreadable.append((None, f"capability scan failed: {type(_error).__name__}: {_error}"))
 _names = [os.path.basename(path) if path else reason for path, reason in _unreadable]
-for _path, _ in _unreadable:
-    # An unreadable artifact carries no evidence, so it is removed: leaving it behind would make
-    # every later scan report the same condition. Readable records are never touched.
-    if _path:
-        try:
-            os.remove(_path)
-        except OSError:
-            pass
+# Unreadable artifacts are REPORTED, never deleted. Deleting them was a real defect: this verifier
+# is run against the operator's live artifacts root, and it silently removed files it did not
+# understand -- including any non-JSON file a user happened to place there. The stated reason
+# ("leaving it behind would make every later scan report the same condition") is the correct
+# behaviour for a verifier: a lingering broken artifact is a fact about the deployment and belongs
+# in the next report too, where the operator can act on it. Removing evidence to make a scan look
+# clean is exactly what a fail-closed verifier must not do.
 # A stale directory can hold thousands of superseded records; the report names the condition and a
 # bounded sample of the offenders (with the full count), so volume cannot bury the finding.
 def _sample(items: list[str]) -> list[str]:
@@ -916,10 +920,36 @@ out["dimensions"]["TARGET_BINDING"] = {
                + (f"; {len(_off_target)} run(s) for other identities were excluded"
                   if _off_target else "")),
 }
+_target_faults: list[str] = []
 if _target_model is None:
+    _target_faults.append(
+        f"model {_target.get('model_id')!r} is not in the registry")
+else:
+    # A target that names something the registry cannot resolve must not silently mean "any":
+    # a fictional checkpoint id would otherwise leave every dimension unbound while the report
+    # claimed the target was bound (I06/I07).
+    _known_checkpoints = {v.get("checkpoint_id") for v in _target_model.get("checkpoint_variants") or []}
+    _known_checkpoints |= {b.get("bundle_id") for b in _target_model.get("checkpoint_bundles") or []}
+    if _target.get("checkpoint_id") not in _known_checkpoints:
+        _target_faults.append(
+            f"checkpoint {_target.get('checkpoint_id')!r} is not one of the registry's "
+            f"{sorted(c for c in _known_checkpoints if c)}")
+    _known_protocols = set(_target_model.get("supported_protocols") or [])
+    if _target_model.get("native_protocol"):
+        _known_protocols.add(_target_model["native_protocol"])
+    if _target.get("protocol_id") not in _known_protocols:
+        _target_faults.append(
+            f"protocol {_target.get('protocol_id')!r} is not one of the registry's "
+            f"{sorted(_known_protocols)}")
+    if _target.get("interpreter") and _target_declared_interpreter \
+            and _target["interpreter"] != _target_declared_interpreter:
+        _target_faults.append(
+            f"declared interpreter {_target['interpreter']!r} is not this deployment's "
+            f"{_target_declared_interpreter!r}")
+if _target_faults:
     out["dimensions"]["TARGET_BINDING"]["status"] = "FAIL"
     out["dimensions"]["TARGET_BINDING"]["detail"] = (
-        f"the declared release target model {_target.get('model_id')!r} is not in the registry")
+        "the declared release target does not resolve: " + "; ".join(_target_faults))
 
 mandatory_pending = [d for d, spec in out["dimensions"].items()
                      if spec["mandatory"] and spec["status"] != "PASS"]
@@ -944,8 +974,16 @@ with open(sys.argv[1], "w", encoding="utf-8") as fh:
     json.dump(out, fh, indent=2, ensure_ascii=False)
     fh.write("\n")
 print(f"report written: {sys.argv[1]} verdict={out['verdict']}")
+# The report block owns the verdict, and the bash `fails` counter only walks J1-J12 -- so a
+# FAIL raised in a dimension with no J-check (TARGET_BINDING) used to print RELEASE_BLOCKED and
+# still exit 0. The exit code is derived here, from the verdict itself.
+sys.exit(3 if out["verdict"] == "RELEASE_BLOCKED" else 0)
 EOF
 REPORT_RC=$?
+if (( REPORT_RC == 3 )); then
+    say "RELEASE VERIFIER: FAILED (verdict RELEASE_BLOCKED)"
+    exit 1
+fi
 if (( REPORT_RC != 0 )); then
     say "RELEASE VERIFIER: FAILED (report generation failed with exit code ${REPORT_RC})" >&2
     exit 1

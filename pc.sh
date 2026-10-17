@@ -1114,7 +1114,10 @@ def _member_reasons(member):
     # so testing for one made every member -- and every checkpoint -- look absent, which silently
     # downgraded the default full-bundle reproduction to a single category.
     reasons = []
-    cid = member.get('checkpoint_id')
+    # String coercion, not concatenation of a value that may be null: a member whose
+    # checkpoint_id is missing or null is exactly the malformed response this function exists to
+    # report, and it must name that rather than raise TypeError inside the selection.
+    cid = str(member.get('checkpoint_id') or '<unnamed member>')
     if not member.get('checkpoint_downloaded'):
         reasons.append(cid + ' chưa tải về (' + str(member.get('checkpoint_path') or '?') + ')')
     if not member.get('runnable'):
@@ -1130,6 +1133,7 @@ def _bundle_reasons(bundle):
     required = list(bundle.get('required_checkpoint_ids') or [])
     members = bundle.get('members') or []
     by_id = {mm.get('checkpoint_id'): mm for mm in members}
+    required = [str(x) for x in required]
     reasons = []
     if not required:
         reasons.append('bundle không khai báo required_checkpoint_ids')
@@ -1462,13 +1466,25 @@ except Exception:
     if [[ -z "$run_id_from_job" ]]; then
         run_id_from_job="$(curl -s --max-time 10 "${base}/api/benchmark-runs" 2>/dev/null | python3 -c "
 import json, sys
+
+# The fallback for a job whose own record did not name its run. It must match the identity this
+# job was submitted for: taking the last report on disk regardless of model/checkpoint/protocol
+# would hand the summary -- and so the verification, the gate and the success claim -- whatever run
+# happened to be newest, which is how a certificate about one artifact gets printed for another.
+model_id, checkpoint_id, protocol_id = sys.argv[1], sys.argv[2], sys.argv[3]
 try:
     runs = json.load(sys.stdin)
-    if runs:
-        print(runs[-1].get('run_id', ''))
 except Exception:
-    pass
-" 2>/dev/null || true)"
+    runs = []
+if isinstance(runs, list):
+    matches = [r for r in runs if isinstance(r, dict)
+               and str(r.get('model_id')) == model_id
+               and str(r.get('checkpoint_id')) == checkpoint_id
+               and str(r.get('protocol_id')) == protocol_id
+               and r.get('run_id')]
+    if matches:
+        print(matches[-1]['run_id'])
+" "$MODEL" "$checkpoint" "$protocol" 2>/dev/null || true)"
     fi
 
     FINAL_RUN_ID="$run_id_from_job"

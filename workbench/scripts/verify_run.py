@@ -54,14 +54,25 @@ EXTRACTION_COMPLETED = "EXTRACTED_VERIFIED"
 EXTRACTION_SYNTHETIC = "EXTRACTED_SYNTHETIC"
 
 #: Absolute bound, in Recall percentage points, on the disagreement allowed between a macro
-#: aggregate and the categories it must be the mean of. It is deliberately the same bound the
-#: extraction parser itself applies when it validates a declared aggregate against the
-#: categories of the same run (``workbench/backend/metrics_extraction.py:173``, ``:272``,
-#: ``:359``): the report's numbers are copies of what that parser produced, so re-deriving them
-#: here cannot legitimately differ at all, while 0.05 pp is four orders of magnitude below the
-#: smallest deviation the 5 percent acceptance gate could ever act on. A tighter float64
-#: epsilon would reject a report whose evaluator printed its macro rounded to two decimals --
-#: an honest report -- without catching any inconsistency the parser's own bound misses.
+#: aggregate and the categories it must be the mean of.
+#:
+#: The bound is a *rounding* allowance, not a scientific one, and that is the whole of it. The
+#: report's macro is a copy of what the extraction parser computed, and the parser rounds every
+#: value it publishes to four decimals (``metrics_extraction.py:200-204``), so the arithmetic
+#: mean of the rounded per-category values can differ from the rounded macro by at most a couple
+#: of units in the last place -- ~0.0002 pp for the values this benchmark carries. 0.05 pp is used
+#: because it is the bound the parser itself applies between the same numbers, so the two agree
+#: about what "consistent" means.
+#:
+#: An earlier revision of this comment justified the bound as being "four orders of magnitude
+#: below the smallest deviation the 5 percent gate could act on". That arithmetic was wrong (the
+#: smallest committed metric is 30.70, so the gate's smallest actionable deviation is ~1.54 pp,
+#: roughly 31x this bound, not 10000x), and it described a *slack* over an exact check while
+#: claiming an exact check needed the slack. The comparison is deliberately ``>`` rather than
+#: ``>=``, which accepts exactly the bound rather than rejecting it -- consistent with the
+#: parser's own ``>`` comparisons, and safe because the per-category values this mean is built
+#: from are themselves compared exactly. The ceiling this leaves is a macro up to +0.04 pp off its
+#: own categories, which cannot move any run across the 5 percent acceptance gate.
 MACRO_TOLERANCE_PP = 0.05
 
 def _is_recall(value: object) -> bool:

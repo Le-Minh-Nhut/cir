@@ -1593,7 +1593,10 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
         try:
             st = path.stat()
             sp_mtimes = tuple((str(sp), sp.stat().st_mtime_ns) for sp in site_packages_dirs if sp.is_dir())
-            cache_key = (str(path), st.st_size, st.st_mtime_ns, str(prefix_path), contract_digest, sp_mtimes)
+            # ctime is in the key because a same-length rewrite with mtime restored moves neither
+            # size nor mtime, and ctime is the one inode field userspace cannot set backwards.
+            cache_key = (str(path), st.st_size, st.st_mtime_ns, st.st_ctime_ns, str(prefix_path),
+                         contract_digest, sp_mtimes)
             cached = _ADVISORY_INTERPRETER_FINGERPRINT_CACHE.get(cache_key)
             if cached is not None:
                 return cached
@@ -1608,7 +1611,16 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
             stat_result = candidate.stat()
         except OSError:
             continue
-        hasher.update(f"{candidate}:{stat_result.st_size}:{stat_result.st_mtime_ns}".encode("utf-8"))
+        # The interpreter's CONTENT, not just its metadata. `size:mtime` cannot witness a
+        # same-length in-place replacement followed by `os.utime` -- the same attack this file's
+        # capability-record helper already rejects by hashing byte-for-byte (`_member_digest`)
+        # and the same one the receipt cache had to be rewritten to survive. The binary is the
+        # thing the whole environment claim is anchored to, so it is hashed; the cost is one pass
+        # over a ~15 MB file on the authoritative path, which already hashes every distribution
+        # member byte-by-byte, and the advisory path memoizes its answer.
+        digest = _interpreter_digest(candidate)
+        hasher.update(
+            f"{candidate}:{stat_result.st_size}:{stat_result.st_mtime_ns}:{digest}".encode("utf-8"))
         break
     for marker in ("pyvenv.cfg", "conda-meta/history", "conda-meta"):
         marker_path = prefix_path / marker
@@ -1677,10 +1689,22 @@ _VERIFIED_ENVIRONMENTS: dict[str, EnvironmentReport] = {}
 
 
 def _cache_key(model: dict[str, Any], require_cuda: bool) -> str:
+    """Everything a cached verification's claim depends on.
+
+    The host identity is part of it because a *GPU capability* is a claim about this machine,
+    driver and visible devices, and the cache could otherwise serve a `GPU_RUNTIME_READY` report
+    recorded elsewhere -- after a driver upgrade, on another node, or with the device selection
+    changed -- to a launch that the capability record itself correctly refuses. The report's own
+    `expires_on` names exactly those conditions (``runtime.py`` `record_gpu_capability`), so
+    omitting them from the key made the record's honest expiry advisory while the cache stayed
+    authoritative.
+    """
     env = model.get("environment") or {}
     configured = os.environ.get(env.get("python_env_var") or "", "")
+    host = hashlib.sha256(
+        json.dumps(_host_identity(), sort_keys=True).encode("utf-8")).hexdigest()
     return (f"{model.get('model_id')}|{env.get('python_env_var')}|{configured}|"
-            f"{_environment_contract_digest(model)}|cuda={bool(require_cuda)}")
+            f"{_environment_contract_digest(model)}|cuda={bool(require_cuda)}|host={host}")
 
 
 def _cache_enabled() -> bool:
@@ -1705,6 +1729,13 @@ def _reuse(model: dict[str, Any], require_cuda: bool, interpreter: str,
         synthetic_ok = os.environ.get(GPU_PROBE_OVERRIDE_ENV) == "1"
         probe_source = cached.gpu_capability.get("probe_source", "interpreter")
         if not (probe_source == "interpreter" or (synthetic_ok and probe_source == "override")):
+            _VERIFIED_ENVIRONMENTS.pop(key, None)
+            return None
+        # The record's own host identity is compared as well as the key: the key is a hash, and a
+        # capability that reports another host may never authorize this one's launch even if the
+        # key somehow agreed.
+        recorded_host = cached.gpu_capability.get("host_identity")
+        if isinstance(recorded_host, dict) and recorded_host != _host_identity():
             _VERIFIED_ENVIRONMENTS.pop(key, None)
             return None
     if authoritative:

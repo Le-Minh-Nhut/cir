@@ -59,13 +59,14 @@ export function reflag(comparisons: MetricComparison[] | undefined, thresholdPct
   );
 }
 
-/** The two warning labels, and only these two. Anything else a run can say belongs to the gate
- *  detail text, not to a new label colour. */
+/** The warning labels a run can carry. Anything else belongs to the gate detail text, not to a
+ *  new label colour. */
 export type WarningLabel =
   | { kind: "caption-substitute"; text: "CAPTION THAY THẾ"; tone: "amber" }
   | { kind: "paper-deviation"; text: string; tone: "red" }
   | { kind: "proof-unavailable"; text: "CHƯA CÓ PROOF (PROOF UNAVAILABLE)"; tone: "amber" }
   | { kind: "uncorroborated"; text: "CHƯA ĐỐI SOÁT LEDGER (UNCORROBORATED)"; tone: "red" }
+  | { kind: "refused"; text: "TỪ CHỐI CHỨNG NHẬN (REFUSED)"; tone: "red" }
   | { kind: "uncertified"; text: "CHƯA CHỨNG NHẬN (UNCERTIFIED)"; tone: "red" };
 
 export function isCertifiedEvidence(gate: RunGate | undefined): boolean {
@@ -86,10 +87,18 @@ export function warningLabels(gate: RunGate | undefined, thresholdPct: number): 
       tone: "red",
     });
   }
-  if (gate && (!gate.verification || !gate.verification.certified || !gate.verification.is_research_evidence)) {
-    const state = gate.verification?.state || gate.verification?.certification_mode || (gate.verification ? "uncertified" : "uncorroborated");
+  // Fail closed: `undefined` is not a certified run, it is a run whose certification was never
+  // stated. Treating it as clean made every `/api/runs` row without an aggregate gate record
+  // render with no warning at all, so an uncorroborated run looked valid.
+  if (!isCertifiedEvidence(gate)) {
+    const state = gate?.verification?.state || gate?.verification?.certification_mode
+      || (gate?.verification ? "uncertified" : "uncorroborated");
     if (state === "proof_unavailable") {
       labels.push({ kind: "proof-unavailable", text: "CHƯA CÓ PROOF (PROOF UNAVAILABLE)", tone: "amber" });
+    } else if (state === "refused") {
+      // Distinct from "uncertified": the verifier looked at this run and rejected it, which is a
+      // different fact from "its certification was never established".
+      labels.push({ kind: "refused", text: "TỪ CHỐI CHỨNG NHẬN (REFUSED)", tone: "red" });
     } else if (state === "uncorroborated") {
       labels.push({ kind: "uncorroborated", text: "CHƯA ĐỐI SOÁT LEDGER (UNCORROBORATED)", tone: "red" });
     } else {

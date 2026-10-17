@@ -570,10 +570,14 @@ def _limn_bundle_environment(monkeypatch, module, tmp_path: Path):
                         lambda _model, _source: (True, model["upstream_commit_sha"], None))
     monkeypatch.setattr(module, "resolve_config", lambda: settings)
     monkeypatch.setattr(module, "pinned_revision", lambda _: model["upstream_commit_sha"])
-    # The fold `POST /api/jobs` performs: the bundle anchored on its first member, keeping the
-    # bundle identity. The bundle must stay ONE selection with `checkpoint_id == bundle_id`.
-    anchor = model["checkpoint_variants"][0]
-    folded = {**anchor, "checkpoint_id": bundle["bundle_id"], "bundle_id": bundle["bundle_id"]}
+    # The fold `POST /api/jobs` performs: the bundle record, keeping the bundle identity. The
+    # bundle must stay ONE selection with `checkpoint_id == bundle_id`. Resolved through the
+    # registry so this fixture builds exactly the record production builds -- a hand-rebuilt fold
+    # that dropped the member facts is what let a complete bundle be reported as a missing
+    # directory in production while this test's own fold looked fine.
+    from workbench.backend.registry import checkpoint_by_id
+
+    folded = checkpoint_by_id(model, bundle["bundle_id"])
     return settings, model, dataset_root, folded, checkpoint_root, bundle
 
 

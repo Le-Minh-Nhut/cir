@@ -27,6 +27,9 @@ export interface EvidenceRun {
 /** The fields of `/api/benchmark-runs` rows this module reads. */
 export interface EvidenceBenchmarkRun {
   run_id?: string | null;
+  /** The evaluator's own declaration that this run is a self-test, not an experiment. */
+  is_synthetic?: boolean | null;
+  data_kind?: RunDataKind | null;
   /** The API's four-question receipt, when the endpoint served it. */
   verification?: {
     certified?: boolean | null;
@@ -47,6 +50,8 @@ export interface EvidenceState {
   certifiedAggregates: number;
   /** Aggregate reports whose execution is authenticated but which are not evidence. */
   uncertifiedAggregates: number;
+  /** Aggregate reports that declare themselves synthetic or development self-tests. */
+  syntheticAggregates: number;
   /** True when a real experiment exists ONLY as an aggregate, with no per-query export. */
   aggregateOnly: boolean;
   /** True when this deployment holds no real evidence at all, at either level. */
@@ -57,6 +62,15 @@ export interface EvidenceState {
   queryLevelUnavailable: boolean;
 }
 
+/** Whether a served report is a self-test rather than an experiment about the paper. */
+function isSyntheticAggregate(run: EvidenceBenchmarkRun): boolean {
+  return run?.is_synthetic === true || run?.data_kind === "mock" || run?.data_kind === "synthetic";
+}
+
+function isCertifiedAggregate(run: EvidenceBenchmarkRun): boolean {
+  return run?.verification?.certified === true && run?.verification?.is_research_evidence === true;
+}
+
 export function evidenceState(runs: EvidenceRun[] | null | undefined,
                               benchmarkRuns: EvidenceBenchmarkRun[] | null | undefined): EvidenceState {
   const safeRuns = Array.isArray(runs) ? runs : [];
@@ -65,12 +79,9 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
   const experimentRuns = safeRuns.filter((run) => run?.data_kind === "experiment").length;
   const mockRuns = safeRuns.filter((run) => run?.data_kind === "mock").length;
   const aggregateRuns = safeBenchmarks.length;
-  const certifiedAggregates = safeBenchmarks.filter(
-    (run) => run?.verification?.certified === true
-      && run?.verification?.is_research_evidence === true).length;
-  const uncertifiedAggregates = safeBenchmarks.filter(
-    (run) => !(run?.verification?.certified === true
-      && run?.verification?.is_research_evidence === true)).length;
+  const certifiedAggregates = safeBenchmarks.filter(isCertifiedAggregate).length;
+  const syntheticAggregates = safeBenchmarks.filter(isSyntheticAggregate).length;
+  const uncertifiedAggregates = aggregateRuns - certifiedAggregates;
   // "Aggregate-only" is a statement about the per-query export, not about certification: a
   // refusal is still a real thing that happened, and it must not be reported as absent.
   const aggregateOnly = aggregateRuns > 0 && experimentRuns === 0;
@@ -80,6 +91,7 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
     aggregateRuns,
     certifiedAggregates,
     uncertifiedAggregates,
+    syntheticAggregates,
     aggregateOnly,
     noRealEvidence: aggregateRuns === 0 && experimentRuns === 0,
     hasMockEvidence: mockRuns > 0,
@@ -90,7 +102,8 @@ export function evidenceState(runs: EvidenceRun[] | null | undefined,
 /** The header label for a state, or "" when nothing needs saying.
  *
  *  Precedence: the most severe true statement about the deployment wins, and no branch may
- *  assert the absence of real evidence while an aggregate report exists.
+ *  assert the presence of real evidence it does not have, nor the absence of evidence that
+ *  exists. A synthetic or refused aggregate is never described as a real evaluation (I03/I14/I16).
  */
 export function evidenceBanner(state: EvidenceState): string {
   if (state.noRealEvidence) {
@@ -98,21 +111,37 @@ export function evidenceBanner(state: EvidenceState): string {
       ? "MOCK DEVELOPMENT DATA — only labelled development runs are loaded; no real evaluation results"
       : "MOCK DEVELOPMENT DATA — no real evaluation results are loaded";
   }
+  const onlySynthetic = state.syntheticAggregates === state.aggregateRuns && state.experimentRuns === 0;
+  if (onlySynthetic) {
+    return `MOCK DEVELOPMENT DATA — ${state.syntheticAggregates} synthetic aggregate `
+      + `run${state.syntheticAggregates === 1 ? "" : "s"} loaded; no real evaluation results`;
+  }
   if (state.aggregateOnly) {
-    const certification = state.certifiedAggregates > 0
-      ? `${state.certifiedAggregates} certified research result${state.certifiedAggregates === 1 ? "" : "s"}`
-      : (state.uncertifiedAggregates > 0
-        ? `${state.uncertifiedAggregates} uncertified aggregate result${state.uncertifiedAggregates === 1 ? "" : "s"}`
-        : `${state.aggregateRuns} aggregate result${state.aggregateRuns === 1 ? "" : "s"}`);
-    return `AGGREGATE-ONLY REAL EVALUATION — ${certification}; per-query Top-K analysis unavailable`
+    // "REAL EVALUATION" is only earned by evidence that is neither synthetic nor refused.
+    const head = state.certifiedAggregates > 0
+      ? `AGGREGATE-ONLY REAL EVALUATION — ${state.certifiedAggregates} certified research `
+        + `result${state.certifiedAggregates === 1 ? "" : "s"}`
+      : `AGGREGATE-ONLY RESULTS — ${state.uncertifiedAggregates} uncertified aggregate `
+        + `run${state.uncertifiedAggregates === 1 ? "" : "s"}, no certified research evidence`;
+    const trailer = state.uncertifiedAggregates > 0 && state.certifiedAggregates > 0
+      ? ` (${state.uncertifiedAggregates} further aggregate `
+        + `run${state.uncertifiedAggregates === 1 ? "" : "s"} uncertified)`
+      : "";
+    return `${head}${trailer}; per-query Top-K analysis unavailable`
       + (state.hasMockEvidence
         ? " (development runs also loaded and excluded from research conclusions)" : "");
   }
   if (state.hasMockEvidence) {
     return "Mock and real experiment runs are loaded. Mock results are excluded from research conclusions.";
   }
-  if (state.aggregateRuns > 0 && state.uncertifiedAggregates > 0 && state.certifiedAggregates === 0) {
-    return `Real evaluation present (${state.experimentRuns} indexed) with only uncertified aggregate reports.`;
+  // Per-query real results exist, so the mock alarm is not the right one -- but an uncertified
+  // aggregate must still be announced rather than silently suppressed (I17's UI half).
+  if (state.uncertifiedAggregates > 0) {
+    return `Real evaluation present (${state.experimentRuns} indexed); `
+      + `${state.uncertifiedAggregates} aggregate run${state.uncertifiedAggregates === 1 ? "" : "s"} `
+      + `not certified research evidence`
+      + (state.syntheticAggregates > 0
+        ? ` (${state.syntheticAggregates} synthetic)` : ".");
   }
   return "";
 }

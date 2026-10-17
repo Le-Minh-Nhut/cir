@@ -1,40 +1,1533 @@
 [
   {
-    "model_id": "limn",
-    "native_protocol": "fashioniq_val_split",
+    "model_id": "csmcir",
+    "environment": {
+      "python_env_var": "WORKBENCH_CSMCIR_PYTHON",
+      "confidence": "VERIFIED_README",
+      "python": "3.9",
+      "pytorch": "2.0.1",
+      "torchvision": "0.15.2",
+      "cuda": "11.7",
+      "packages": []
+    },
+    "canonical_dataset_link": "fashionIQ_dataset",
+    "method_name": "CSMCIR",
+    "research_generation": "recent",
+    "publication_year": null,
+    "preparation_contract": "manual_standard",
+    "paper_title": "CSMCIR: CoT-Enhanced Symmetric Alignment with Memory Bank for Composed Image Retrieval",
+    "paper_url": "https://arxiv.org/abs/2601.03728",
+    "upstream_repo_url": "https://github.com/qzp2018/CSMCIR",
+    "upstream_default_branch": "main",
+    "upstream_commit_sha": "774f94e2076ff17ea91703a6239d2a08f0e1a44e",
+    "source_available": true,
+    "source_dir": "CSMCIR",
+    "fashioniq_layout": "fashioniq_standard",
+    "fashioniq_image_extensions": [
+      ".png"
+    ],
+    "literature_split_label": "original",
+    "native_protocol": "fashioniq_original_split",
+    "supported_protocols": [
+      "fashioniq_original_split"
+    ],
+    "reported_r10": 57.07,
+    "reported_r50": 77.27,
+    "reported_mean": 67.17,
+    "reproduction_status": "NOT_RUN",
+    "strict_clean_checkpoint_available": true,
+    "approved_source_patches": [
+      {
+        "path": "src/lavis/models/__init__.py",
+        "patch_file": "workbench/patches/csmcir_models_init_compat.patch",
+        "patch_sha256": "0e703584a7ecb5df3781574c2516fd406745c414491b6aa487fbb3e76532b9bd",
+        "base_sha256": "9d8c914b551a7de614e062f9a241f44626fd591a31a0ccf1cc79f0ae23c9db01",
+        "derived_sha256": "aa68fe5e20bcda5e17d978799deb8ec0ff4636e5b3b2a6ef637ce5e385b0c818",
+        "reason": "98 unguarded imports of modules absent from the pinned public revision prevent the package from importing, so the shipped CSMCIR class is never registered"
+      }
+    ],
+    "source_blocker": "pinned lavis.models package cannot be imported as published (98 unguarded imports of absent modules sit before the registration); an approved patch is declared in approved_source_patches and removes only that blocker",
+    "notes": "Official Hugging Face model repository; checkpoint has an author-published size and sha256 (Hugging Face LFS oid).",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "fashioniq",
+        "filename": "fashioniq_tuned_clip_best.pt",
+        "download_url": "https://huggingface.co/peng12138/CSMCIR/resolve/main/fashioniq_tuned_clip_best.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": 0,
+        "evaluation_noise_pct": 0,
+        "expected_sha256": "c8812071de0640d647c5ba2a70628b80a3289ee2c47676f7a1b6abaa313fa49e",
+        "expected_size_bytes": 2720615859,
+        "status": "URL_VERIFIED",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      }
+    ],
     "checkpoints": [
       {
-        "checkpoint_id": "base_iter0_dress",
-        "available": true,
-        "runnable": true,
-        "blocking_reasons": [],
+        "checkpoint_id": "fashioniq",
+        "filename": "fashioniq_tuned_clip_best.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
         "automatic_download_available": true,
         "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
         "mapping_verified": true,
         "adapter_command_ready": true,
-        "runtime_verified": true
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/csmcir/fashioniq_tuned_clip_best.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "airknow",
+    "source_blocker": "no runnable evaluation path is registered for this model: the pinned evaluator is a callable with no CLI or checkpoint loader, the adapter deliberately declines to build a command, and the required correction dictionaries and resized images have no published source; the paper row is the 0%-noise row and no 0% checkpoint is published (see workbench/docs/reviews/models for the model's audit). An earlier note in this registry claimed a tensor-shape failure in the similarity computation; that claim was WRONG and is withdrawn - np.matmul broadcasts and the ranking matrix has the shape the indexing expects",
+    "environment": {
+      "python_env_var": "WORKBENCH_AIRKNOW_PYTHON",
+      "confidence": "VERIFIED_README",
+      "python": "3.8.10",
+      "pytorch": "2.1.0",
+      "torchvision": "0.16.0",
+      "cuda": "12.6",
+      "packages": [
+        "scikit-learn==1.3.2",
+        "transformers==4.25.0",
+        "salesforce-lavis==1.0.2",
+        "timm==0.9.16"
+      ]
+    },
+    "method_name": "Air-Know",
+    "research_generation": "recent",
+    "publication_year": 2026,
+    "preparation_contract": "manual_ilearn_resized",
+    "paper_title": "Air-Know: Arbiter-Calibrated Knowledge-Internalizing Robust Network for Composed Image Retrieval",
+    "paper_url": "https://arxiv.org/abs/2604.19386",
+    "upstream_repo_url": "https://github.com/iLearn-Lab/CVPR26-Air-Know",
+    "upstream_default_branch": "main",
+    "upstream_commit_sha": "6ab6fa95b746f85b08eea4cb66eb51448bce99b7",
+    "source_available": true,
+    "source_dir": "AirKnow",
+    "fashioniq_layout": "fashioniq_ilearn_resized",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "literature_split_label": "original",
+    "native_protocol": "fashioniq_full_gallery_ref_excluded",
+    "supported_protocols": [
+      "fashioniq_full_gallery_ref_excluded"
+    ],
+    "reported_r10": 55.75,
+    "reported_r50": 75.72,
+    "reported_mean": 65.73,
+    "reproduction_status": "NOT_RUN",
+    "strict_clean_checkpoint_available": false,
+    "notes": "Official Hub lists only FashionIQ 50% and 80% noise-trained weights; clean evaluation remains 0%.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "fiq_n05",
+        "filename": "airknow_fiq_0.5.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.5.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": 50,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "NO_CLEAN_CHECKPOINT",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      },
+      {
+        "checkpoint_id": "fiq_n08",
+        "filename": "airknow_fiq_0.8.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/CVPR26-Air-Know/resolve/main/airknow_fiq_0.8.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": 80,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "NO_CLEAN_CHECKPOINT",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "fiq_n05",
+        "filename": "airknow_fiq_0.5.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/airknow/airknow_fiq_0.5.pt",
+        "blocking_reasons": []
+      },
+      {
+        "checkpoint_id": "fiq_n08",
+        "filename": "airknow_fiq_0.8.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/airknow/airknow_fiq_0.8.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "conesep",
+    "source_blocker": "no runnable evaluation path is registered for this model: the pinned evaluator is a callable with no CLI or checkpoint loader, the adapter deliberately declines to build a command, and the required correction dictionaries and resized images have no published source; the paper row is the 0%-noise row and no 0% checkpoint is published (see workbench/docs/reviews/models for the model's audit). An earlier note in this registry claimed a tensor-shape failure in the similarity computation; that claim was WRONG and is withdrawn - np.matmul broadcasts and the ranking matrix has the shape the indexing expects",
+    "environment": {
+      "python_env_var": "WORKBENCH_CONESEP_PYTHON",
+      "confidence": "VERIFIED_README",
+      "python": "3.8.10",
+      "pytorch": "2.1.0",
+      "torchvision": "0.16.0",
+      "cuda": "12.6",
+      "packages": [
+        "scikit-learn==1.3.2",
+        "transformers==4.25.0",
+        "salesforce-lavis==1.0.2",
+        "timm==0.9.16"
+      ]
+    },
+    "method_name": "ConeSep",
+    "research_generation": "recent",
+    "publication_year": 2026,
+    "preparation_contract": "manual_ilearn_resized",
+    "paper_title": "ConeSep: Cone-based Robust Noise-Unlearning Compositional Network for Composed Image Retrieval",
+    "paper_url": "https://arxiv.org/abs/2604.20358",
+    "upstream_repo_url": "https://github.com/Lee-zixu/ConeSep",
+    "upstream_default_branch": "main",
+    "upstream_commit_sha": "bd4bf629ebe68045c1a54dcc61e4a3ea65f8759b",
+    "source_available": true,
+    "source_dir": "ConeSep",
+    "fashioniq_layout": "fashioniq_ilearn_resized",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "literature_split_label": "original",
+    "native_protocol": "fashioniq_full_gallery_ref_excluded",
+    "supported_protocols": [
+      "fashioniq_full_gallery_ref_excluded"
+    ],
+    "reported_r10": 55.58,
+    "reported_r50": 75.88,
+    "reported_mean": 65.73,
+    "reproduction_status": "NOT_RUN",
+    "strict_clean_checkpoint_available": false,
+    "notes": "Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "fiq_n02",
+        "filename": "ConeSep-FIQ-N0.2.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/main/fiq/ConeSep-FIQ-N0.2.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": 20,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "NO_CLEAN_CHECKPOINT",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      },
+      {
+        "checkpoint_id": "fiq_n05",
+        "filename": "ConeSep-FIQ-N0.5.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/main/fiq/ConeSep-FIQ-N0.5.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": 50,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "NO_CLEAN_CHECKPOINT",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      },
+      {
+        "checkpoint_id": "fiq_n08",
+        "filename": "ConeSep-FIQ_N0.8.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/main/fiq/ConeSep-FIQ_N0.8.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": 80,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "NO_CLEAN_CHECKPOINT",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "fiq_n02",
+        "filename": "ConeSep-FIQ-N0.2.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/conesep/ConeSep-FIQ-N0.2.pt",
+        "blocking_reasons": []
+      },
+      {
+        "checkpoint_id": "fiq_n05",
+        "filename": "ConeSep-FIQ-N0.5.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/conesep/ConeSep-FIQ-N0.5.pt",
+        "blocking_reasons": []
+      },
+      {
+        "checkpoint_id": "fiq_n08",
+        "filename": "ConeSep-FIQ_N0.8.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/conesep/ConeSep-FIQ_N0.8.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "ptha_mtst",
+    "method_name": "PTHA + MTST",
+    "research_generation": "recent",
+    "publication_year": 2025,
+    "preparation_contract": "unavailable",
+    "paper_title": "Scale Up Composed Image Retrieval Learning via Modification Text Generation",
+    "paper_url": "https://arxiv.org/abs/2504.05316",
+    "upstream_repo_url": "https://github.com/zyinan99/MTST_PTHA",
+    "upstream_default_branch": "main",
+    "upstream_commit_sha": null,
+    "source_available": false,
+    "source_dir": null,
+    "source_blocker": "author repository https://github.com/zyinan99/MTST_PTHA exists and is reachable (README title matches the paper, commits authored by the paper's first author Yinan Zhou, HEAD 6a02ee4763fc2260b6abfb18be78853facb91d86 at 2025-02-09) but is not synced, pinned or audited here, and no FashionIQ fine-tuned checkpoint is verified; the earlier 'no source exists' note was incomplete",
+    "native_protocol": null,
+    "supported_protocols": [],
+    "reported_r10": 54.99,
+    "reported_r50": 76.28,
+    "reported_mean": 65.64,
+    "reproduction_status": "BLOCKED_NO_VERIFIED_FASHIONIQ_CHECKPOINT",
+    "strict_clean_checkpoint_available": false,
+    "notes": "No author-linked FashionIQ fine-tuned checkpoint verified. CIRR pretraining evidence is not eligible.",
+    "checkpoint_variants": [],
+    "checkpoints": []
+  },
+  {
+    "model_id": "habit",
+    "environment": {
+      "python_env_var": "WORKBENCH_HABIT_PYTHON",
+      "confidence": "VERIFIED_README",
+      "python": "3.8.10",
+      "pytorch": "2.1.0",
+      "torchvision": "0.16.0",
+      "cuda": "12.6",
+      "packages": [
+        "open-clip-torch==2.24.0",
+        "scikit-learn==1.3.2",
+        "transformers==4.25.0",
+        "salesforce-lavis==1.0.2",
+        "timm==0.9.16"
+      ]
+    },
+    "method_name": "HABIT",
+    "research_generation": "recent",
+    "publication_year": 2026,
+    "preparation_contract": "manual_ilearn_resized",
+    "paper_title": "HABIT: Chrono-Synergia Robust Progressive Learning Framework for Composed Image Retrieval",
+    "paper_url": "https://ojs.aaai.org/index.php/AAAI/article/view/37608",
+    "upstream_repo_url": "https://github.com/iLearn-Lab/AAAI26-HABIT",
+    "upstream_default_branch": "main",
+    "upstream_commit_sha": "6ddc2cd63eac1f65693f4e821c34fb3b42aee306",
+    "source_available": true,
+    "source_dir": "HABIT",
+    "fashioniq_layout": "fashioniq_ilearn_resized",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "literature_split_label": "original",
+    "native_protocol": "fashioniq_full_gallery_ref_excluded",
+    "supported_protocols": [
+      "fashioniq_full_gallery_ref_excluded"
+    ],
+    "reported_r10": 55.38,
+    "reported_r50": 75.2,
+    "reported_mean": 65.29,
+    "reproduction_status": "NOT_RUN",
+    "strict_clean_checkpoint_available": false,
+    "notes": "Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "fiq_n02",
+        "filename": "HABIT-FIQ_N0.2.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/main/fiq/HABIT-FIQ_N0.2.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": 20,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": 2730715930,
+        "expected_sha256": "814d2d0ceb29ef910f37562e8bea8a76cf38aa546fbc2102e495df687c276b03",
+        "status": "NO_CLEAN_CHECKPOINT",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      },
+      {
+        "checkpoint_id": "fiq_n05",
+        "filename": "HABIT-FIQ_N0.5.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/main/fiq/HABIT-FIQ_N0.5.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": 50,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": 2730715930,
+        "expected_sha256": "8a0d3bd27cf46d8334f9596404d89ebf803da0fa65236d89815bb3929b9a4216",
+        "status": "NO_CLEAN_CHECKPOINT",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      },
+      {
+        "checkpoint_id": "fiq_n08",
+        "filename": "HABIT-FIQ_N0.8.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/main/fiq/HABIT-FIQ_N0.8.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": 80,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": 2730715930,
+        "expected_sha256": "763885de6907bca4f017b336ed7ec3740cb9305c5adb6a135da45c158ddb9717",
+        "status": "NO_CLEAN_CHECKPOINT",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "fiq_n02",
+        "filename": "HABIT-FIQ_N0.2.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/habit/HABIT-FIQ_N0.2.pt",
+        "blocking_reasons": []
+      },
+      {
+        "checkpoint_id": "fiq_n05",
+        "filename": "HABIT-FIQ_N0.5.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/habit/HABIT-FIQ_N0.5.pt",
+        "blocking_reasons": []
+      },
+      {
+        "checkpoint_id": "fiq_n08",
+        "filename": "HABIT-FIQ_N0.8.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/habit/HABIT-FIQ_N0.8.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "intent",
+    "source_blocker": "no runnable evaluation path is registered for this model: the pinned evaluator is a callable with no CLI or checkpoint loader, the adapter deliberately declines to build a command, and the required correction dictionaries and resized images have no published source; the paper row is the 0%-noise row and no 0% checkpoint is published (see workbench/docs/reviews/models for the model's audit). An earlier note in this registry claimed a tensor-shape failure in the similarity computation; that claim was WRONG and is withdrawn - np.matmul broadcasts and the ranking matrix has the shape the indexing expects",
+    "environment": {
+      "python_env_var": "WORKBENCH_INTENT_PYTHON",
+      "confidence": "VERIFIED_README",
+      "python": "3.9",
+      "pytorch": "2.1.0",
+      "torchvision": "0.16.0",
+      "cuda": "12.6",
+      "packages": [
+        "open-clip-torch==2.24.0",
+        "scikit-learn==1.3.2",
+        "transformers==4.25.0",
+        "salesforce-lavis==1.0.2",
+        "timm==0.9.16"
+      ]
+    },
+    "method_name": "INTENT",
+    "research_generation": "recent",
+    "publication_year": 2026,
+    "preparation_contract": "manual_ilearn_resized",
+    "paper_title": "INTENT: Invariance and Discrimination-aware Noise Mitigation for Robust Composed Image Retrieval",
+    "paper_url": "https://ojs.aaai.org/index.php/AAAI/article/view/39181",
+    "upstream_repo_url": "https://github.com/iLearn-Lab/AAAI26-INTENT",
+    "upstream_default_branch": "main",
+    "upstream_commit_sha": "2a75fc6f57d1a036bf3167a7fe1d2cee072f51f3",
+    "source_available": true,
+    "source_dir": "INTENT",
+    "fashioniq_layout": "fashioniq_ilearn_resized",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "literature_split_label": "original",
+    "native_protocol": "fashioniq_full_gallery_ref_excluded",
+    "supported_protocols": [
+      "fashioniq_full_gallery_ref_excluded"
+    ],
+    "reported_r10": 55.31,
+    "reported_r50": 75.16,
+    "reported_mean": 65.24,
+    "reproduction_status": "NOT_RUN",
+    "strict_clean_checkpoint_available": false,
+    "notes": "Official Hub lists only FashionIQ 20%, 50%, and 80% noise-trained weights.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "fiq_n02",
+        "filename": "intent_fiq_0.2.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/main/intent_fiq_0.2.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": 20,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": 2722478522,
+        "expected_sha256": "2a504cadfd6b1c2486a2c508538b0160c5653f62c7cd11f4f3d8a9534dc26afc",
+        "status": "NO_CLEAN_CHECKPOINT",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      },
+      {
+        "checkpoint_id": "fiq_n05",
+        "filename": "intent_fiq_0.5.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/main/intent_fiq_0.5.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": 50,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": 2722478522,
+        "expected_sha256": "2d59ae002ecbf645a52c7e93bf8afd914e3061e2304413b97a0bf15ca43e39a9",
+        "status": "NO_CLEAN_CHECKPOINT",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      },
+      {
+        "checkpoint_id": "fiq_n08",
+        "filename": "intent_fiq_0.8.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/main/intent_fiq_0.8.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": 80,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": 2722478522,
+        "expected_sha256": "671bb217d3fdf32e6133fcb98eef4e80ebf831b5a203493c54507ef3c23b5cd2",
+        "status": "NO_CLEAN_CHECKPOINT",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "fiq_n02",
+        "filename": "intent_fiq_0.2.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/intent/intent_fiq_0.2.pt",
+        "blocking_reasons": []
+      },
+      {
+        "checkpoint_id": "fiq_n05",
+        "filename": "intent_fiq_0.5.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/intent/intent_fiq_0.5.pt",
+        "blocking_reasons": []
+      },
+      {
+        "checkpoint_id": "fiq_n08",
+        "filename": "intent_fiq_0.8.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/intent/intent_fiq_0.8.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "hint",
+    "environment": {
+      "python_env_var": "WORKBENCH_HINT_PYTHON",
+      "confidence": "VERIFIED_README",
+      "python": "3.8.10",
+      "pytorch": "2.1.0",
+      "torchvision": "0.16.0",
+      "cuda": "12.6",
+      "packages": [
+        "open-clip-torch==2.24.0",
+        "scikit-learn==1.3.2",
+        "transformers==4.25.0",
+        "salesforce-lavis==1.0.2",
+        "timm==0.9.16"
+      ]
+    },
+    "method_name": "HINT",
+    "research_generation": "recent",
+    "publication_year": 2026,
+    "preparation_contract": "manual_ilearn_resized",
+    "paper_title": "HINT: Composed Image Retrieval with Dual-Path Compositional Contextualized Network",
+    "paper_url": "https://arxiv.org/abs/2603.26341",
+    "upstream_repo_url": "https://github.com/iLearn-Lab/ICASSP26-HINT",
+    "upstream_default_branch": "main",
+    "upstream_commit_sha": "bec50b6c8c19111893b617979502b948d1cea5b2",
+    "source_available": true,
+    "source_dir": "HINT",
+    "fashioniq_layout": "fashioniq_ilearn_resized",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "native_protocol": "fashioniq_val_split",
+    "literature_split_label": "val",
+    "supported_protocols": [
+      "fashioniq_val_split"
+    ],
+    "reported_r10": 58.48,
+    "reported_r50": 77.93,
+    "reported_mean": 68.21,
+    "reproduction_status": "NOT_RUN",
+    "strict_clean_checkpoint_available": true,
+    "notes": "Official iLearn-Lab Hugging Face repository exposes FashionIQ checkpoint.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "fashioniq",
+        "filename": "fashioniq.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/HINT/resolve/main/fashioniq.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": null,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": 2724451182,
+        "expected_sha256": "bf9c72d42206b667ed586758c15c648970df821857e4067f26155a114a6517d4",
+        "status": "URL_VERIFIED",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "fashioniq",
+        "filename": "fashioniq.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/hint/fashioniq.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "encoder",
+    "environment": {
+      "python_env_var": "WORKBENCH_ENCODER_PYTHON",
+      "confidence": "VERIFIED_REQUIREMENTS",
+      "python": "3.9",
+      "pytorch": "1.13.1",
+      "torchvision": "0.14.1",
+      "cuda": "12.6",
+      "packages": []
+    },
+    "category_model_policy": "shared",
+    "checkpoint_serialization": "state_dict",
+    "method_name": "ENCODER",
+    "research_generation": "recent",
+    "publication_year": 2025,
+    "preparation_contract": "manual_ilearn_resized",
+    "paper_title": "ENCODER: Entity Mining and Modification Relation Binding for Composed Image Retrieval",
+    "paper_url": "https://ojs.aaai.org/index.php/AAAI/article/view/32541",
+    "upstream_repo_url": "https://github.com/iLearn-Lab/AAAI25-ENCODER",
+    "upstream_default_branch": "main",
+    "upstream_commit_sha": "29a2a31d6a56f677bf450c3be7cdaef423fb7018",
+    "source_available": true,
+    "source_dir": "ENCODER",
+    "fashioniq_layout": "fashioniq_ilearn_resized",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "native_protocol": "fashioniq_val_split",
+    "literature_split_label": "val",
+    "supported_protocols": [
+      "fashioniq_val_split"
+    ],
+    "reported_r10": 56.13,
+    "reported_r50": 77.59,
+    "reported_mean": 66.86,
+    "reproduction_status": "NOT_RUN",
+    "strict_clean_checkpoint_available": false,
+    "notes": "Official README links public Google Drive folder; direct file URL and SHA remain unverified.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "fashioniq",
+        "filename": "fashioniq.pt",
+        "download_url": null,
+        "source_url": "https://drive.google.com/drive/folders/1QuBQVIybLwn-qFSORhpBsnXy6ebhtNr3",
+        "source_type": "author_google_drive",
+        "checkpoint_training_noise_pct": null,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "URL_UNRESOLVED",
+        "checkpoint_mapping_status": "UNVERIFIED"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "fashioniq",
+        "filename": "fashioniq.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": false,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/encoder/fashioniq.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "pair",
+    "environment": {
+      "python_env_var": "WORKBENCH_PAIR_PYTHON",
+      "confidence": "VERIFIED_README",
+      "python": "3.8.10",
+      "pytorch": "2.0.0",
+      "torchvision": "UNKNOWN",
+      "cuda": "11.8",
+      "packages": []
+    },
+    "method_name": "PAIR",
+    "research_generation": "recent",
+    "publication_year": 2025,
+    "preparation_contract": "manual_ilearn_resized",
+    "preparation_id": "pair_fashioniq",
+    "paper_title": "PAIR: Complementarity-guided Disentanglement for Composed Image Retrieval",
+    "paper_url": "https://ieeexplore.ieee.org/document/10888153",
+    "upstream_repo_url": "https://github.com/iLearn-Lab/ICASSP25-PAIR",
+    "upstream_default_branch": "main",
+    "upstream_commit_sha": "bfb0b98cdb4c44f6b9190baaa84d783a77dd888f",
+    "source_available": true,
+    "source_dir": "PAIR",
+    "fashioniq_layout": "fashioniq_ilearn_resized",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "native_protocol": "fashioniq_val_split",
+    "literature_split_label": "val",
+    "supported_protocols": [
+      "fashioniq_val_split"
+    ],
+    "reported_r10": 52.76,
+    "reported_r50": 74.51,
+    "reported_mean": 63.64,
+    "reproduction_status": "BLOCKED_CHECKPOINT_MAPPING_UNVERIFIED",
+    "command_status": "COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+    "strict_clean_checkpoint_available": false,
+    "notes": "Existing audit found pair-B1.pt and pair-B2.pt; official FashionIQ mapping is not verified.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "pair_b1",
+        "filename": "pair-B1.pt",
+        "download_url": "https://huggingface.co/ZhihengFu/PAIR/resolve/main/pair-B1.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": null,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": 694958565,
+        "expected_sha256": null,
+        "status": "CHECKPOINT_MAPPING_UNVERIFIED",
+        "checkpoint_mapping_status": "UNVERIFIED"
+      },
+      {
+        "checkpoint_id": "pair_b2",
+        "filename": "pair-B2.pt",
+        "download_url": "https://huggingface.co/ZhihengFu/PAIR/resolve/main/pair-B2.pt",
+        "source_type": "author_huggingface",
+        "checkpoint_training_noise_pct": null,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": 694872371,
+        "expected_sha256": null,
+        "status": "CHECKPOINT_MAPPING_UNVERIFIED",
+        "checkpoint_mapping_status": "UNVERIFIED"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "pair_b1",
+        "filename": "pair-B1.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/pair/pair-B1.pt",
+        "blocking_reasons": []
+      },
+      {
+        "checkpoint_id": "pair_b2",
+        "filename": "pair-B2.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/pair/pair-B2.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "clvc_net",
+    "replay_status": "BLOCKED_NO_SOURCE_REPLAY",
+    "category_model_policy": "independent",
+    "category_checkpoint_structure": {
+      "categories": [
+        "dress",
+        "shirt",
+        "toptee"
+      ],
+      "per_category_members": [
+        "local",
+        "global"
+      ],
+      "member_count_expected": 6,
+      "mapping_status": "UNVERIFIED",
+      "notes": "author Drive archive member/category mapping unresolved; do not claim six available files"
+    },
+    "checkpoint_serialization": "whole_model",
+    "environment_required": true,
+    "method_name": "CLVC-Net",
+    "research_generation": "legacy",
+    "publication_year": 2021,
+    "paper_title": "Comprehensive Linguistic-Visual Composition Network for Image Retrieval",
+    "paper_url": "https://doi.org/10.1145/3404835.3462967",
+    "upstream_repo_url": "https://github.com/iLearn-Lab/SIGIR21-CLVC-Net",
+    "upstream_default_branch": "main",
+    "upstream_commit_sha": "bd9b6889489806cb60676597880f91d918b279cb",
+    "source_available": true,
+    "source_dir": "CLVCNet",
+    "fashioniq_layout": "fashioniq_clvc_resized",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "preparation_contract": "manual_clvc_resized",
+    "preparation_id": "clvc_net_fashioniq",
+    "literature_split_label": "val",
+    "native_protocol": "fashioniq_val_split",
+    "supported_protocols": [
+      "fashioniq_val_split"
+    ],
+    "reported_r10": 30.7,
+    "reported_r50": 58.41,
+    "reported_mean": 44.56,
+    "reproduction_status": "BLOCKED_CHECKPOINT_MAPPING",
+    "command_status": "COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+    "environment": {
+      "python_env_var": "WORKBENCH_CLVC_PYTHON",
+      "confidence": "VERIFIED_README",
+      "python": "3.7.6",
+      "pytorch": "1.6.0",
+      "torchvision": "UNKNOWN",
+      "cuda": "10.2",
+      "packages": [
+        "torchvision"
+      ]
+    },
+    "strict_clean_checkpoint_available": null,
+    "notes": "Native pair-union and reference exclusion verified. Pinned test.py has no CLI/model loader; author Drive CLVCNET.zip member/category mapping is unresolved. Evaluation requires torchvision ResNet-50 ImageNet weights through an unpinned Torch cache.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "author_drive_unresolved",
+        "filename": "checkpoint-unresolved.pt",
+        "download_url": null,
+        "source_url": "https://drive.google.com/file/d/159rBhWyhkLN7sXAi8iyW_ljzFNLJinKa/view?usp=sharing",
+        "source_type": "author_google_drive",
+        "checkpoint_training_noise_pct": null,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "CHECKPOINT_MAPPING_UNVERIFIED",
+        "checkpoint_mapping_status": "UNVERIFIED"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "author_drive_unresolved",
+        "filename": "checkpoint-unresolved.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": false,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/clvc_net/checkpoint-unresolved.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "dcnet",
+    "replay_status": "REPLAY_CODE_IMPLEMENTED",
+    "category_model_policy": "shared",
+    "checkpoint_serialization": "run_directory",
+    "replay_type": "OFFICIAL_CLI",
+    "environment_required": true,
+    "method_name": "DCNet",
+    "research_generation": "legacy",
+    "publication_year": 2021,
+    "paper_title": "Dual Compositional Learning in Interactive Image Retrieval",
+    "paper_url": "https://github.com/ozmig77/dcnet/blob/68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb/DCNet_Kim2021.pdf",
+    "upstream_repo_url": "https://github.com/ozmig77/dcnet",
+    "upstream_default_branch": "main",
+    "upstream_commit_sha": "68c79d38569f01ca39c3b4ea641b3b7eb2ccb5fb",
+    "source_available": true,
+    "source_dir": "DCNet",
+    "fashioniq_layout": "fashioniq_dcnet",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "preparation_contract": "manual_dcnet",
+    "preparation_id": "dcnet_fashioniq",
+    "literature_split_label": "original",
+    "native_protocol": "fashioniq_full_gallery_ref_excluded",
+    "supported_protocols": [
+      "fashioniq_full_gallery_ref_excluded"
+    ],
+    "reported_mean": 40.83,
+    "reproduction_status": "BLOCKED_CHECKPOINT_MAPPING",
+    "command_status": "COMMAND_AUDITED",
+    "environment": {
+      "python_env_var": "WORKBENCH_DCNET_PYTHON",
+      "confidence": "VERIFIED_REQUIREMENTS",
+      "python": "3.7.7",
+      "pytorch": "1.4.0",
+      "torchvision": "0.5.0",
+      "cuda": "UNKNOWN",
+      "packages": [
+        "nltk==3.5",
+        "spacy==2.3.0"
+      ]
+    },
+    "strict_clean_checkpoint_available": null,
+    "notes": "Native evaluator masks references and fuses log-softmax branch scores. Standard run directory requires config.json plus trained_model.pth; standard config uses ImageNet-pretrained ResNet-50, not optional DeepFashion DenseNet.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "fashioniq_run_directory",
+        "filename": "fashioniq_dcnet",
+        "artifact_type": "run_directory",
+        "required_files": [
+          "config.json",
+          "trained_model.pth"
+        ],
+        "download_url": null,
+        "source_url": "https://drive.google.com/drive/folders/1wgygqF095Di67EaHaGOXbwh3wEzk9izB?usp=sharing",
+        "source_type": "author_google_drive",
+        "checkpoint_training_noise_pct": null,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "CHECKPOINT_MAPPING_UNVERIFIED",
+        "checkpoint_mapping_status": "UNVERIFIED"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "fashioniq_run_directory",
+        "filename": "fashioniq_dcnet",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": false,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/dcnet/fashioniq_dcnet",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "combiner_rn50x4_noft",
+    "canonical_dataset_link": "fashionIQ_dataset",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "replay_status": "REPLAY_CODE_IMPLEMENTED",
+    "category_model_policy": "shared",
+    "checkpoint_serialization": "state_dict",
+    "replay_type": "OFFICIAL_CLI",
+    "environment_required": true,
+    "method_name": "Combiner RN50x4 noft",
+    "research_generation": "legacy",
+    "publication_year": 2023,
+    "paper_title": "Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features",
+    "paper_url": "https://arxiv.org/abs/2308.11485",
+    "upstream_repo_url": "https://github.com/ABaldrati/CLIP4Cir",
+    "upstream_default_branch": "master",
+    "upstream_commit_sha": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+    "source_available": true,
+    "source_dir": "CLIP4Cir",
+    "fashioniq_layout": "fashioniq_standard",
+    "preparation_contract": "manual_standard",
+    "preparation_id": "clip4cir_fashioniq",
+    "literature_split_label": "original",
+    "native_protocol": "fashioniq_original_split",
+    "supported_protocols": [
+      "fashioniq_original_split"
+    ],
+    "reported_r10": null,
+    "reported_r50": null,
+    "reported_mean": null,
+    "reproduction_status": "BLOCKED_CHECKPOINT_MAPPING",
+    "command_status": "COMMAND_AUDITED",
+    "environment": {
+      "python_env_var": "WORKBENCH_CLIP4CIR_PYTHON",
+      "confidence": "VERIFIED_README",
+      "python": "3.8",
+      "pytorch": "1.11.0",
+      "torchvision": "0.12.0",
+      "cuda": "UNKNOWN",
+      "packages": [
+        "pandas==1.4.2",
+        "comet-ml==3.21.0",
+        "clip"
+      ]
+    },
+    "strict_clean_checkpoint_available": null,
+    "notes": "Native full-gallery reference-eligible evaluator verified. RN50x4 noft Combiner state mapping is unverified; base OpenAI CLIP RN50x4 remains an evaluation asset.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "rn50x4_noft_unresolved",
+        "filename": "rn50x4-noft-unresolved.pt",
+        "artifact_type": "file",
+        "download_url": null,
+        "source_url": "https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing",
+        "source_type": "author_google_drive",
+        "checkpoint_training_noise_pct": 0,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "CHECKPOINT_MAPPING_UNVERIFIED",
+        "checkpoint_mapping_status": "UNVERIFIED"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "rn50x4_noft_unresolved",
+        "filename": "rn50x4-noft-unresolved.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": false,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/combiner_rn50x4_noft/rn50x4-noft-unresolved.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "clip4cir_rn50x4_fullft",
+    "canonical_dataset_link": "fashionIQ_dataset",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "replay_status": "BLOCKED_CHECKPOINT_MAPPING",
+    "category_model_policy": "shared",
+    "checkpoint_serialization": "state_dict",
+    "replay_type": "OFFICIAL_CLI",
+    "environment_required": true,
+    "method_name": "CLIP4Cir RN50x4 fullft",
+    "research_generation": "legacy",
+    "publication_year": 2023,
+    "command_status": "COMMAND_AUDITED",
+    "paper_title": "Composed Image Retrieval using Contrastive Learning and Task-oriented CLIP-based Features",
+    "paper_url": "https://arxiv.org/abs/2308.11485",
+    "upstream_repo_url": "https://github.com/ABaldrati/CLIP4Cir",
+    "upstream_default_branch": "master",
+    "upstream_commit_sha": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+    "source_available": true,
+    "source_dir": "CLIP4Cir",
+    "fashioniq_layout": "fashioniq_standard",
+    "preparation_contract": "manual_standard",
+    "preparation_id": "clip4cir_fashioniq",
+    "literature_split_label": "original",
+    "native_protocol": "fashioniq_original_split",
+    "supported_protocols": [
+      "fashioniq_original_split"
+    ],
+    "reported_r10": 43.78,
+    "reported_r50": 66.93,
+    "reported_mean": 55.36,
+    "reproduction_status": "BLOCKED_CHECKPOINT_BUNDLE",
+    "environment": {
+      "python_env_var": "WORKBENCH_CLIP4CIR_PYTHON",
+      "confidence": "VERIFIED_README",
+      "python": "3.8",
+      "pytorch": "1.11.0",
+      "torchvision": "0.12.0",
+      "cuda": "UNKNOWN",
+      "packages": [
+        "pandas==1.4.2",
+        "comet-ml==3.21.0",
+        "clip"
+      ]
+    },
+    "strict_clean_checkpoint_available": null,
+    "notes": "Native full-gallery reference-eligible evaluator verified. RN50x4 fullft needs separately loaded Combiner and fine-tuned CLIP states; author pairing is unverified.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "rn50x4_fullft_unresolved",
+        "filename": "rn50x4-fullft-unresolved.pt",
+        "artifact_type": "bundle_placeholder",
+        "required_files": [
+          "combiner_state.pt",
+          "clip_state.pt"
+        ],
+        "download_url": null,
+        "source_url": "https://drive.google.com/drive/folders/1ny2hhzP8HZBnXhjvDEni8P8G4_inCNTv?usp=sharing",
+        "source_type": "author_google_drive",
+        "checkpoint_training_noise_pct": 0,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "CHECKPOINT_MAPPING_UNVERIFIED",
+        "checkpoint_mapping_status": "UNVERIFIED"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "rn50x4_fullft_unresolved",
+        "filename": "rn50x4-fullft-unresolved.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": false,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/clip4cir_rn50x4_fullft/rn50x4-fullft-unresolved.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "tgcir",
+    "replay_status": "PREFLIGHT_ONLY",
+    "category_model_policy": "shared",
+    "checkpoint_serialization": "whole_model",
+    "replay_type": "PREFLIGHT_ONLY",
+    "environment_required": true,
+    "method_name": "TG-CIR",
+    "research_generation": "legacy",
+    "publication_year": 2023,
+    "paper_title": "Target-Guided Composed Image Retrieval",
+    "paper_url": "https://arxiv.org/abs/2309.01366",
+    "upstream_repo_url": "https://github.com/iLearn-Lab/MM23-TG-CIR",
+    "upstream_default_branch": "main",
+    "upstream_commit_sha": "65fa78eaf8cabe8197fcc22ccab42207c591bdee",
+    "source_available": true,
+    "source_dir": "TGCIR",
+    "fashioniq_layout": "fashioniq_ilearn_resized_training",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "preparation_contract": "manual_ilearn_resized",
+    "preparation_id": "tgcir_fashioniq",
+    "literature_split_label": "val",
+    "native_protocol": "fashioniq_val_split",
+    "supported_protocols": [
+      "fashioniq_val_split"
+    ],
+    "reported_r10": 51.32,
+    "reported_r50": 73.09,
+    "reported_mean": null,
+    "reported_score_note": "Paper reports macro R@10 and R@50; 62.205 is derivable but not presented as a reproduced metric.",
+    "reproduction_status": "BLOCKED_COMMAND",
+    "command_status": "COMMAND_BLOCKED_SOURCE_ENTRYPOINT",
+    "environment": {
+      "python_env_var": "WORKBENCH_TGCIR_PYTHON",
+      "confidence": "VERIFIED_README",
+      "python": "UNKNOWN",
+      "pytorch": "1.7.0",
+      "torchvision": "0.8.0",
+      "cuda": "11.0",
+      "packages": [
+        "clip==0.2.0",
+        "numpy==1.22.3",
+        "pandas==1.4.2",
+        "Pillow"
+      ]
+    },
+    "strict_clean_checkpoint_available": null,
+    "notes": "Native annotation endpoint-union/reference-excluded evaluator verified. Pinned test.py has no CLI/checkpoint replay; TG-CIR.zip FashionIQ member mapping and hash remain unresolved.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "tgcir_archive_unresolved",
+        "filename": "tgcir-fashioniq-unresolved.pt",
+        "download_url": null,
+        "source_url": "https://drive.google.com/file/d/1OdZTtJqy-RTpYXBaq5ThmH3IBnGvYCyi/view",
+        "source_type": "author_google_drive",
+        "checkpoint_training_noise_pct": null,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "CHECKPOINT_MAPPING_UNVERIFIED",
+        "checkpoint_mapping_status": "UNVERIFIED"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "tgcir_archive_unresolved",
+        "filename": "tgcir-fashioniq-unresolved.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": false,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/tgcir/tgcir-fashioniq-unresolved.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "sprc",
+    "canonical_dataset_link": "fashionIQ_dataset",
+    "fashioniq_image_extensions": [
+      ".png"
+    ],
+    "replay_status": "BLOCKED_CHECKPOINT_MAPPING",
+    "category_model_policy": "shared",
+    "checkpoint_serialization": "state_dict",
+    "method_name": "SPRC",
+    "environment_required": true,
+    "research_generation": "legacy",
+    "publication_year": 2024,
+    "paper_title": "Sentence-level Prompts Benefit Composed Image Retrieval",
+    "paper_url": "https://arxiv.org/abs/2310.05473",
+    "upstream_repo_url": "https://github.com/chunmeifeng/SPRC",
+    "upstream_default_branch": null,
+    "upstream_commit_sha": "2935a5397732260d1db6fa577e5926f963e36f0f",
+    "source_available": true,
+    "source_dir": "SPRC",
+    "fashioniq_layout": "fashioniq_standard",
+    "preparation_contract": "manual_standard",
+    "preparation_id": "sprc_fashioniq",
+    "literature_split_label": "original",
+    "native_protocol": "fashioniq_original_split",
+    "supported_protocols": [
+      "fashioniq_original_split"
+    ],
+    "reported_r10": 54.92,
+    "reported_r50": 74.97,
+    "reported_mean": 64.85,
+    "reported_score_note": "Paper Table 1 prints R@10 54.92 while printed per-category values average 54.72; unresolved primary-source discrepancy.",
+    "reproduction_status": "BLOCKED_CHECKPOINT_MAPPING",
+    "command_status": "COMMAND_BLOCKED_MODEL_MAPPING",
+    "environment": {
+      "python_env_var": "WORKBENCH_SPRC_PYTHON",
+      "confidence": "VERIFIED_REQUIREMENTS",
+      "python": "3.9",
+      "pytorch": "2.0.1",
+      "torchvision": "0.15.2",
+      "cuda": "UNKNOWN",
+      "packages": [
+        "transformers==4.36.2",
+        "timm==0.9.12",
+        "spacy==3.7.2",
+        "salesforce-lavis==1.0.2"
+      ]
+    },
+    "strict_clean_checkpoint_available": null,
+    "notes": "The evaluator's argparse default `--blip-model-name blip2_cir_rerank_learn` names a class the pinned repo does not register (only an argparse default; no @registry.register_model); the checkpoint class-key mapping remains unverified and loads non-strictly.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "sprc_fiq_unresolved",
+        "filename": "sprc_fiq.pt",
+        "download_url": null,
+        "source_url": "https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj",
+        "source_type": "author_onedrive",
+        "checkpoint_training_noise_pct": null,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "CHECKPOINT_MAPPING_UNVERIFIED",
+        "checkpoint_mapping_status": "UNVERIFIED"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "sprc_fiq_unresolved",
+        "filename": "sprc_fiq.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": false,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/sprc/sprc_fiq.pt",
+        "blocking_reasons": []
+      }
+    ]
+  },
+  {
+    "model_id": "limn",
+    "replay_status": "REPLAY_CODE_IMPLEMENTED",
+    "category_model_policy": "independent",
+    "checkpoint_serialization": "whole_model",
+    "replay_type": "SOURCE_FAITHFUL_WORKBENCH_REPLAY",
+    "environment_required": true,
+    "method_name": "LIMN",
+    "research_generation": "legacy",
+    "publication_year": 2024,
+    "paper_title": "Self-Training Boosted Multi-Factor Matching Network for Composed Image Retrieval",
+    "paper_url": "https://doi.org/10.1109/TPAMI.2023.3346434",
+    "upstream_repo_url": "https://github.com/iLearn-Lab/TPAMI24-LIMN",
+    "upstream_default_branch": null,
+    "upstream_commit_sha": "7d7bc9b116f594a65ac22457491edf28a88d3c3e",
+    "source_available": true,
+    "source_dir": "LIMN",
+    "fashioniq_layout": "fashioniq_ilearn_resized_training",
+    "fashioniq_image_extensions": [
+      ".jpg"
+    ],
+    "preparation_contract": "manual_ilearn_resized",
+    "preparation_id": "limn_fashioniq",
+    "literature_split_label": "val",
+    "native_protocol": "fashioniq_val_split",
+    "supported_protocols": [
+      "fashioniq_val_split"
+    ],
+    "reported_r10": 55.91,
+    "reported_r50": 77.82,
+    "reported_mean": 66.87,
+    "reproduction_status": "BLOCKED_RUNTIME_PREREQUISITES",
+    "command_status": "REPLAY_COMMAND_IMPLEMENTED",
+    "environment": {
+      "python_env_var": "WORKBENCH_LIMN_PYTHON",
+      "confidence": "VERIFIED_README",
+      "python": "UNKNOWN",
+      "pytorch": "1.12.1",
+      "torchvision": "0.13.1",
+      "cuda": "12.4",
+      "packages": [
+        "open_clip_torch==2.20.0"
+      ],
+      "adapted_runtime": {
+        "target_compute_capability": "sm_120",
+        "pytorch": ">=2.7,<3",
+        "torchvision": ">=0.22,<1",
+        "cuda": "12.8",
+        "packages": [
+          "open_clip_torch>=2.24,<2.27"
+        ],
+        "pip_index_url": "https://download.pytorch.org/whl/cu128"
+      }
+    },
+    "strict_clean_checkpoint_available": null,
+    "notes": "Base LIMN iteration 0 only. Author README and pinned train.py bind iteration-0 filenames to independently run dress, shirt, and toptee categories; author Hub LFS metadata supplies hashes. Workbench replay calls pinned native test.py:test(); full runtime remains unverified.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "base_iter0_dress",
+        "filename": "0_dress_best_model.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_dress_best_model.pt",
+        "checkpoint_training_noise_pct": null,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": 1792010157,
+        "expected_sha256": "96a335d4eb8b1e77d35575aab9177637208e2eb6c59e12f833f67e5cb0e7fc1c",
+        "status": "URL_VERIFIED",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
       },
       {
         "checkpoint_id": "base_iter0_shirt",
-        "available": true,
-        "runnable": true,
-        "blocking_reasons": [],
-        "automatic_download_available": true,
-        "checkpoint_downloaded": true,
-        "mapping_verified": true,
-        "adapter_command_ready": true,
-        "runtime_verified": true
+        "filename": "0_shirt_best_model.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_shirt_best_model.pt",
+        "checkpoint_training_noise_pct": null,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": 1792010157,
+        "expected_sha256": "9260c7f77d3017d8cc10e6652cc8cfe275dbc9704366fa2bf581a24808930d74",
+        "status": "URL_VERIFIED",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
       },
       {
         "checkpoint_id": "base_iter0_toptee",
-        "available": true,
-        "runnable": true,
-        "blocking_reasons": [],
-        "automatic_download_available": true,
-        "checkpoint_downloaded": true,
-        "mapping_verified": true,
-        "adapter_command_ready": true,
-        "runtime_verified": true
+        "filename": "0_toptee_best_model.pt",
+        "download_url": "https://huggingface.co/iLearn-Lab/TPAMI24-LIMN/resolve/30560ad575a56c39cc39047d1a474269338c77c0/0_toptee_best_model.pt",
+        "checkpoint_training_noise_pct": null,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": 1792010157,
+        "expected_sha256": "79f663a14d89d455fdc3612b0b36d011c06d7957d1475a654755e1053a6cece2",
+        "status": "URL_VERIFIED",
+        "checkpoint_mapping_status": "VERIFIED_METADATA"
       }
     ],
     "checkpoint_bundles": [
@@ -51,57 +1544,145 @@
         "members": [
           {
             "checkpoint_id": "base_iter0_dress",
-            "available": true,
-            "runnable": true,
-            "blocking_reasons": [],
+            "filename": "0_dress_best_model.pt",
+            "source_metadata": true,
+            "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+            "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+            "source_synced_locally": true,
             "automatic_download_available": true,
             "checkpoint_downloaded": true,
+            "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "official_sha256_known": true,
+            "official_sha256_match": true,
             "mapping_verified": true,
             "adapter_command_ready": true,
-            "runtime_verified": true
+            "runtime_verified": true,
+            "runnable": true,
+            "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/limn/0_dress_best_model.pt",
+            "blocking_reasons": []
           },
           {
             "checkpoint_id": "base_iter0_shirt",
-            "available": true,
-            "runnable": true,
-            "blocking_reasons": [],
+            "filename": "0_shirt_best_model.pt",
+            "source_metadata": true,
+            "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+            "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+            "source_synced_locally": true,
             "automatic_download_available": true,
             "checkpoint_downloaded": true,
+            "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "official_sha256_known": true,
+            "official_sha256_match": true,
             "mapping_verified": true,
             "adapter_command_ready": true,
-            "runtime_verified": true
+            "runtime_verified": true,
+            "runnable": true,
+            "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/limn/0_shirt_best_model.pt",
+            "blocking_reasons": []
           },
           {
             "checkpoint_id": "base_iter0_toptee",
-            "available": true,
-            "runnable": true,
-            "blocking_reasons": [],
+            "filename": "0_toptee_best_model.pt",
+            "source_metadata": true,
+            "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+            "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+            "source_synced_locally": true,
             "automatic_download_available": true,
             "checkpoint_downloaded": true,
+            "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "official_sha256_known": true,
+            "official_sha256_match": true,
             "mapping_verified": true,
             "adapter_command_ready": true,
-            "runtime_verified": true
+            "runtime_verified": true,
+            "runnable": true,
+            "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/limn/0_toptee_best_model.pt",
+            "blocking_reasons": []
+          }
+        ],
+        "artifact_type": "bundle_placeholder",
+        "required_files": [
+          "0_dress_best_model.pt",
+          "0_shirt_best_model.pt",
+          "0_toptee_best_model.pt"
+        ],
+        "bundle_members": [
+          {
+            "filename": "0_dress_best_model.pt",
+            "expected_sha256": null,
+            "checkpoint_id": "base_iter0_dress"
+          },
+          {
+            "filename": "0_shirt_best_model.pt",
+            "expected_sha256": null,
+            "checkpoint_id": "base_iter0_shirt"
+          },
+          {
+            "filename": "0_toptee_best_model.pt",
+            "expected_sha256": null,
+            "checkpoint_id": "base_iter0_toptee"
           }
         ]
       }
-    ]
-  },
-  {
-    "model_id": "csmcir",
-    "native_protocol": "fashioniq_original_split",
+    ],
     "checkpoints": [
       {
-        "checkpoint_id": "fashioniq",
-        "available": true,
+        "checkpoint_id": "base_iter0_dress",
+        "filename": "0_dress_best_model.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
         "automatic_download_available": true,
         "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
         "mapping_verified": true,
         "adapter_command_ready": true,
         "runtime_verified": true,
         "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/limn/0_dress_best_model.pt",
+        "blocking_reasons": []
+      },
+      {
+        "checkpoint_id": "base_iter0_shirt",
+        "filename": "0_shirt_best_model.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/limn/0_shirt_best_model.pt",
+        "blocking_reasons": []
+      },
+      {
+        "checkpoint_id": "base_iter0_toptee",
+        "filename": "0_toptee_best_model.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": true,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/limn/0_toptee_best_model.pt",
         "blocking_reasons": []
       }
-    ],
-    "checkpoint_bundles": []
+    ]
   }
 ]

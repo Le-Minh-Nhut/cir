@@ -91,8 +91,9 @@ if "/api/models" in url:
         body = "[]"
     # `MOCK_MODELS_MISSING_MEMBER=<checkpoint_id>` marks one bundle member unavailable in the
     # availability view, which is the state the real registry reports while a member has not been
-    # downloaded yet. The launcher must not submit the bundle then, so the case has to be
-    # expressible without editing the frozen fixture.
+    # downloaded yet: `checkpoint_downloaded` false and `runnable` false, with the reason named.
+    # Exactly the fields `checkpoint_availability` produces are set -- an invented field here
+    # would let the launcher pass this fixture while disagreeing with the real API.
     missing_member = os.environ.get("MOCK_MODELS_MISSING_MEMBER")
     if missing_member:
         models = json.loads(body)
@@ -100,16 +101,33 @@ if "/api/models" in url:
             for bundle in model.get("checkpoint_bundles") or []:
                 for member in bundle.get("members") or []:
                     if member.get("checkpoint_id") == missing_member:
-                        member["available"] = False
                         member["runnable"] = False
                         member["checkpoint_downloaded"] = False
                         member["blocking_reasons"] = ["checkpoint missing: " + missing_member]
             for item in model.get("checkpoints") or []:
                 if item.get("checkpoint_id") == missing_member:
-                    item["available"] = False
                     item["runnable"] = False
                     item["checkpoint_downloaded"] = False
                     item["blocking_reasons"] = ["checkpoint missing: " + missing_member]
+        body = json.dumps(models)
+    # `MOCK_MODELS_UNRUNNABLE_MEMBER=<checkpoint_id>` is the OTHER real blocking state: the
+    # weights are present but the member is not runnable (a missing adapted runtime, an
+    # unverified mapping). It must refuse too.
+    unrunnable_member = os.environ.get("MOCK_MODELS_UNRUNNABLE_MEMBER")
+    if unrunnable_member:
+        models = json.loads(body)
+        for model in models:
+            for bundle in model.get("checkpoint_bundles") or []:
+                for member in bundle.get("members") or []:
+                    if member.get("checkpoint_id") == unrunnable_member:
+                        member["runnable"] = False
+                        member["checkpoint_downloaded"] = True
+                        member["blocking_reasons"] = ["runtime not ready: " + unrunnable_member]
+            for item in model.get("checkpoints") or []:
+                if item.get("checkpoint_id") == unrunnable_member:
+                    item["runnable"] = False
+                    item["checkpoint_downloaded"] = True
+                    item["blocking_reasons"] = ["runtime not ready: " + unrunnable_member]
         body = json.dumps(models)
 elif url.endswith("/api/jobs") or url.endswith("/api/jobs/"):
     is_post = "-X" in sys.argv and ("POST" in sys.argv[sys.argv.index("-X") + 1:] or "POST" in args_str)

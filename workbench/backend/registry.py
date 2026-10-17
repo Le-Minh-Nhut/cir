@@ -756,6 +756,26 @@ def checkpoint_by_id(model: dict[str, Any], checkpoint_id: str) -> dict[str, Any
     member so path/hash handling stays uniform, while `bundle_id` and the member list record
     what was actually selected. Without this, every caller that goes through the adapter or
     `run_eval.py` raised `KeyError` on a legitimate bundle id.
+
+    The derived record carries THREE consistent views of its members, because different
+    consumers need different things and one shape cannot serve all of them:
+
+    * ``bundle_members`` -- the member *records*, each carrying its ``filename``. Every consumer
+      that has to name or hash the files a bundle is made of reads this
+      (``checkpoint_missing_paths``, ``checkpoint_availability``, ``evaluate_models``' plan
+      building and ``completion_validator``).
+    * ``required_files`` -- the member filenames. This is the key those consumers' hashing and
+      availability helpers already thread through (`checkpoint_missing_paths`,
+      `_availability_digest`), so a bundle must populate it too or its digest path silently took
+      the single-file branch.
+    * ``required_checkpoint_ids`` -- the member *checkpoint ids*, the registry's own vocabulary,
+      for any reader that resolves members through the registry.
+
+    Before this, ``bundle_members`` was the raw id list while five consumers indexed it as
+    records: ``checkpoint_availability`` and ``completion_validator`` raised ``TypeError`` on a
+    bundle, and ``completion_validator`` swallowed it in a bare ``except`` and fell back to
+    ``Path(".")`` -- so a bundle's completion proof was validated against the process's working
+    directory instead of its weights.
     """
     for checkpoint in model["checkpoint_variants"]:
         if checkpoint["checkpoint_id"] == checkpoint_id:
@@ -766,19 +786,67 @@ def checkpoint_by_id(model: dict[str, Any], checkpoint_id: str) -> dict[str, Any
         required = list(bundle.get("required_checkpoint_ids") or [])
         if not required:
             break
-        anchor = next((item for item in model["checkpoint_variants"]
-                       if item["checkpoint_id"] == required[0]), None)
-        if anchor is None:
-            break
-        return {**anchor, "checkpoint_id": bundle["bundle_id"],
-                "bundle_id": bundle["bundle_id"], "bundle_members": required}
+        variants = []
+        for member_id in required:
+            member = next((item for item in model["checkpoint_variants"]
+                           if item["checkpoint_id"] == member_id), None)
+            if member is None:
+                break
+            variants.append(member)
+        else:
+            # The anchor is a FULL variant record (the derived bundle inherits its protocol,
+            # mapping state, environment and source facts); `bundle_members` is the *normalized*
+            # member view. The two are deliberately different shapes: spreading a normalized
+            # member as the anchor silently dropped every other field a caller reads.
+            anchor = variants[0]
+            # The canonical member shape a proof, a manifest and a reader all speak: `filename`
+            # (the file that gets hashed), `expected_sha256` (the declared digest, when the
+            # registry states one), and the member's own checkpoint id. `checkpoint_missing_paths`
+            # reads the first two for a bundle/placeholder artifact, so a member record without
+            # them made a complete bundle verify as missing.
+            members = [{"filename": str(member["filename"]),
+                        "expected_sha256": member.get("expected_sha256"),
+                        "checkpoint_id": str(member["checkpoint_id"])}
+                       for member in variants]
+            return {**anchor, "checkpoint_id": bundle["bundle_id"],
+                    "bundle_id": bundle["bundle_id"],
+                    # The anchor's own `artifact_type` (usually absent, i.e. `file`) describes ONE
+                    # member, not the bundle -- and `checkpoint_missing_paths` keys its member
+                    # sweep on this field, so leaving it as `file` made a bundle whose members are
+                    # all present be reported as a missing directory. `bundle_placeholder` is the
+                    # registry's own vocabulary for "a directory of declared members"
+                    # (`checkpoint_missing_paths` treats it identically to `bundle_directory`), so
+                    # reusing it here keeps the derived record inside the registry's schema.
+                    "artifact_type": "bundle_placeholder",
+                    "bundle_members": members,
+                    "required_files": [str(member["filename"]) for member in variants],
+                    "required_checkpoint_ids": required}
+        break
     raise KeyError(checkpoint_id)
 
 
 def checkpoint_path(model_id: str, checkpoint: dict[str, Any], root: Path | None = None) -> Path:
+    """Where the artifact this selection names lives.
+
+    Three shapes, all of which must resolve to the directory or file the *members* actually occupy:
+
+    * a **bundle** is not one file. Its members are the per-category weights, which live together
+      in the model's checkpoint directory, so the artifact's path is that directory. Returning the
+      anchor member's own filename would name one member and leave the other two unresolvable --
+      which is how a bundle's manifest came out with a single member and its completion proof was
+      rejected as a digest mismatch.
+    * a **directory** artifact declares the directory name in `filename` and its members in
+      `required_files`; the path is that directory.
+    * a **file** artifact's path is the file.
+
+    The last two are the same expression, so there is one branch and no third convention to drift.
+    """
     from workbench.backend.operator_config import resolve_config
 
-    return (root or resolve_config().WORKBENCH_CHECKPOINT_ROOT) / model_id / checkpoint["filename"]
+    base = (root or resolve_config().WORKBENCH_CHECKPOINT_ROOT) / model_id
+    if checkpoint.get("bundle_id"):
+        return base
+    return base / checkpoint["filename"]
 
 
 def sha256_file(path: Path, required_files: list[str] | None = None) -> str:

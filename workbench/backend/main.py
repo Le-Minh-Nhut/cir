@@ -303,30 +303,70 @@ def _ledger_path(config) -> Path:
 
     return evidence_ledger_path(config)
 
-def _checkpoint_member_names(model_id: str, checkpoint_id: str) -> list[str] | None:
-    """The member filenames the run's own proof says it consumed, or None when unresolved.
+def _checkpoint_artifact(model_id: str, checkpoint_id: str) -> tuple[Path, list[str]] | None:
+    """The directory an artifact's members live in, and their filenames. None when unresolved.
 
-    Deliberately the *recorded* bundle contract and not the registry's: the verifier resolves the
-    bundle through `completion_validator`, so a token built from a different member list would
-    change for reasons the verdict does not, and would miss a change that it does.
+    The shape differs per artifact, and getting it wrong is not cosmetic -- both errors below were
+    found by attack:
+
+    * a **file** artifact's member is the file itself, living in its parent directory. Ignoring the
+      `filename` field entirely made every single-file checkpoint (csmcir's `fashioniq`, LIMN's
+      per-category `base_iter0_dress`) hash to the literal token `"unresolved"`, so its receipt
+      cache key never moved and a rewritten weight kept serving a certificate.
+    * a **directory** artifact's members live *inside* the directory, so the root is the checkpoint
+      path itself. Using `.parent` made a run-directory checkpoint look for `config.json` beside
+      the directory instead of inside it, so it always reported a missing member and never
+      re-certified.
+
+    Memoized on the pair *and the checkpoint root*: resolving it parses the registry YAML
+    (~100 ms measured), and `/api/benchmark-runs` asks once per report. The root is part of the
+    key because it comes from the operator's configuration -- a process whose configuration is
+    redirected (a test, a second deployment in one interpreter) must not be served another root's
+    paths, which is the same module-global leak that once made the environment planner answer from
+    a previous test's cache. A deployment does not change its root while running; one that does
+    restarts.
     """
+    # The module-level `resolve_config`, not a fresh import of it: this module's configuration is
+    # a seam its consumers (and the tests) patch, and re-importing would read the real deployment's
+    # paths while every other path in this file honoured the patch.
     try:
-        from workbench.backend.registry import checkpoint_by_id, model_by_id
+        root = resolve_config().WORKBENCH_CHECKPOINT_ROOT
+    except Exception:
+        root = None
+    key = (model_id, checkpoint_id, str(root))
+    if key in _CHECKPOINT_ARTIFACTS:
+        return _CHECKPOINT_ARTIFACTS[key]
+    resolved_pair: tuple[Path, list[str]] | None = None
+    try:
+        from workbench.backend.registry import checkpoint_by_id, checkpoint_path, model_by_id
 
         model = model_by_id(model_id)
-        resolved = checkpoint_by_id(model, checkpoint_id)
-        if resolved.get("bundle_members"):
-            from workbench.backend.registry import checkpoint_path
-
-            return [checkpoint_path(model_id, checkpoint_by_id(model, member_id),
-                                    resolve_config().WORKBENCH_CHECKPOINT_ROOT).name
-                    for member_id in resolved["bundle_members"]]
-        required = resolved.get("required_files")
-        return list(required) if required else None
+        variant = checkpoint_by_id(model, checkpoint_id)
+        # `root` is this module's resolved checkpoint root (the patched seam); pass it explicitly
+        # so the registry never falls back to its own resolution.
+        path = checkpoint_path(model_id, variant, root)
+        members = [str(name) for name in (variant.get("required_files") or [])]
+        if not members:
+            # A single-file artifact's member IS the file.
+            if variant.get("filename"):
+                resolved_pair = (path.parent, [str(variant["filename"])])
+        else:
+            # `checkpoint_path` already resolves a bundle to the directory its members share and a
+            # directory artifact to the directory it names, so the members' root is that path --
+            # whether or not it is installed yet, and no matter how its filename is spelled.
+            resolved_pair = (path, members)
     except Exception:
-        return None
+        resolved_pair = None
+    while len(_CHECKPOINT_ARTIFACTS) >= _CHECKPOINT_ARTIFACTS_LIMIT:
+        del _CHECKPOINT_ARTIFACTS[next(iter(_CHECKPOINT_ARTIFACTS))]
+    _CHECKPOINT_ARTIFACTS[key] = resolved_pair
+    return resolved_pair
 
-def _checkpoint_stamp(config, report: dict) -> str:
+#: Memoized `_checkpoint_artifact` answers, bounded like the other caches.
+_CHECKPOINT_ARTIFACTS: dict[tuple[str, str], tuple[Path, list[str]] | None] = {}
+_CHECKPOINT_ARTIFACTS_LIMIT = 1024
+
+def _checkpoint_stamp(report: dict) -> str:
     """A change token for the checkpoint artifact this report's certificate is *about*.
 
     The receipt answers "is this valid research evidence", and one of the things
@@ -335,38 +375,75 @@ def _checkpoint_stamp(config, report: dict) -> str:
     valid across an edit that the verifier refuses, which is a *false certificate* over weights
     nobody re-hashed -- reproduced before this existed: tamper one member, leave the report, the
     ledger and the proof untouched, and `/api/benchmark-runs` kept serving `certified=true` until
-    the cache was cleared.
+    the cache was cleared by hand.
 
-    The members' multi-GB digests deliberately do NOT enter the token, because hashing them per
-    request is the cost this cache exists to avoid. What enters it is each member's size and mtime
-    -- both of which a content edit that changes the file's length moves, and neither of which is
-    trusted as evidence in its place: the token only decides *whether* to re-run the verifier, and
-    the verifier is what hashes the bytes. So the token can only ever cause a re-check (never a
-    skipped one) for an in-place rewrite that preserved size *and* mtime, which is the same
-    `os.utime` attack the runtime's own capability cache rejects by hashing every time
-    (`workbench/backend/runtime.py:_member_digest`); the mtime here is a cost optimization over
-    that, and the digest is the authority.
+    The first fix keyed the cache on each member's size and mtime, which is NOT sufficient: an
+    in-place rewrite of the same length followed by `os.utime` moves neither field, and that attack
+    still served a certificate (attacked and reproduced against that version). Size and mtime are
+    both forgeable by the writer, so neither may decide a security question.
+
+    The token is therefore the members' **content** digest, which is exactly the fact the verifier
+    acts on, and the cost that made the first token size+mtime is paid only when a cheap,
+    un-forgeable change detector moves. That detector is the inode change time (`st_ctime_ns`),
+    which no userspace call can set: `os.utime` moves mtime and atime, while
+    `os.chmod`/`os.chown`/`write` move ctime *forward*, so every content change is caught while an
+    untouched file is not re-hashed per request. The digest is memoized per
+    `(name, st_ctime_ns, st_size, st_ino)` -- a stale entry is impossible because the key cannot
+    repeat without the file having been restored to an identical state, and the digest is the
+    authority either way.
+
+    A change that moves ctime without changing bytes (a chmod) costs one re-hash and then
+    re-certifies identically: a wasted recomputation, never a wrong verdict.
     """
-    names = _checkpoint_member_names(str(report.get("model_id") or ""),
-                                     str(report.get("checkpoint_id") or ""))
-    if not names:
+    resolved_pair = _checkpoint_artifact(str(report.get("model_id") or ""),
+                                        str(report.get("checkpoint_id") or ""))
+    if resolved_pair is None:
         return "unresolved"
-    from workbench.backend.registry import checkpoint_path, model_by_id
-
-    try:
-        model_id = str(report.get("model_id") or "")
-        root = checkpoint_path(model_id, model_by_id(model_id)["checkpoint_variants"][0],
-                               getattr(config, "WORKBENCH_CHECKPOINT_ROOT", None)).parent
-    except Exception:
-        return "unresolved"
+    root, names = resolved_pair
     tokens = []
     for name in names:
+        member = root / name
         try:
-            stat = (root / name).stat()
+            stat = member.stat()
         except OSError:
             return f"missing:{name}"
-        tokens.append(f"{name}:{stat.st_size}:{stat.st_mtime_ns}")
+        digest = _member_digest_cached(member, stat)
+        if digest is None:
+            return f"unreadable:{name}"
+        tokens.append(f"{name}:{digest}")
     return "|".join(tokens)
+
+#: Memoized content digests, keyed on the inode state that cannot repeat without the file being
+#: in an identical state. Bounded like the receipt cache: an evicted entry costs one re-hash.
+_MEMBER_DIGESTS: dict[tuple[str, int, int, int, int], str] = {}
+_MEMBER_DIGESTS_LIMIT = 4096
+
+def _member_digest_cached(path: Path, stat) -> str | None:
+    """This member's content digest, re-read only when the inode's own state moved.
+
+    The hasher is resolved from `workbench.backend.registry` at call time rather than through this
+    module's own `sha256_file` binding: the token exists to predict what the *verifier* will
+    compute, and the verifier hashes through the registry. This module's name is a seam other
+    concerns patch -- the HTTP-layer tests replace it with a constant so fixtures are not hashed --
+    and a security token reading a stubbed hasher computes a constant for every input, which is
+    precisely how this fix first failed its own regression test.
+    """
+    # ctime changes when the file changes; mtime is in the key too so the one case ctime cannot
+    # witness (a restore that rewinds mtime *and* reuses the same ctime and size) still misses.
+    key = (str(path), stat.st_ctime_ns, stat.st_mtime_ns, stat.st_size, stat.st_ino)
+    cached = _MEMBER_DIGESTS.get(key)
+    if cached is not None:
+        return cached
+    try:
+        from workbench.backend.registry import sha256_file as authoritative_sha256_file
+
+        digest = authoritative_sha256_file(path)
+    except (OSError, ValueError, ImportError):
+        return None
+    while len(_MEMBER_DIGESTS) >= _MEMBER_DIGESTS_LIMIT:
+        del _MEMBER_DIGESTS[next(iter(_MEMBER_DIGESTS))]
+    _MEMBER_DIGESTS[key] = digest
+    return digest
 
 def _ledger_stamp(config) -> str:
     """A change token for the ledger file: mtime plus size.
@@ -538,11 +615,17 @@ def _aggregate_reports() -> list[dict]:
                 "ledger_key_unusable",
                 f"the evidence ledger key is unusable, so no report can be corroborated: {error}",
                 {"reason": str(error), "ledger": str(_ledger_path(config))})
-        # With a usable key, None is a corrupt chain, not a missing one: the per-report skips
-        # below already state it on stderr, and this states it once.
+        # With a usable key, None is a corrupt chain, not a missing one. That is a different
+        # answer from "nothing is corroborated", and conflating them was a real defect: a tampered
+        # or truncated ledger made every endpoint answer HTTP 200 with an empty list, which is
+        # indistinguishable from an empty workspace and hid the compromise entirely (I02/I17).
+        # A *missing* file stays a valid empty answer -- nothing has been recorded yet.
         if _ledger_path(config).is_file():
-            print(f"workbench: the evidence ledger {_ledger_path(config)} does not verify; "
-                  "no aggregate report can be corroborated", file=sys.stderr)
+            raise WorkbenchError(
+                "ledger_corrupt",
+                "the evidence ledger exists but its HMAC chain does not verify, so no report can "
+                "be corroborated and this is not an empty workspace",
+                {"ledger": str(_ledger_path(config))})
     # A report is evidence only when the out-of-band ledger corroborates it. Any parseable JSON
     # in this directory could have been written by anyone with filesystem access; without the
     # ledger cross-check a forged report would be served as `passed=True`. A report whose digest,
@@ -592,7 +675,7 @@ def _aggregate_reports() -> list[dict]:
             continue
         proof_stamp = _proof_stamp(config, report)
         mode = _certification_mode(proof_stamp != "absent")
-        checkpoint_stamp = _checkpoint_stamp(config, report)
+        checkpoint_stamp = _checkpoint_stamp(report)
         cache_key = (digest, mode, ledger_stamp, proof_stamp, checkpoint_stamp)
         receipt = _CERTIFICATION_CACHE.get(cache_key)
         if receipt is None:
@@ -856,16 +939,21 @@ def queue_job(payload: JobInput):
     if checkpoint is None:
         # A declared bundle names a set of member checkpoints (LIMN's three category models);
         # selecting it is the *complete* benchmark, so the queue resolves it to the bundle
-        # anchor instead of refusing a legitimate selection.
-        bundle = next((b for b in model.get("checkpoint_bundles", [])
-                       if b["bundle_id"] == payload.checkpoint_id), None)
-        if bundle is not None:
-            anchor_id = bundle["required_checkpoint_ids"][0]
-            checkpoint = next((item for item in model["checkpoint_variants"]
-                               if item["checkpoint_id"] == anchor_id), None)
-            if checkpoint is not None:
-                checkpoint = {**checkpoint, "checkpoint_id": bundle["bundle_id"],
-                              "bundle_id": bundle["bundle_id"]}
+        # record instead of refusing a legitimate selection.
+        #
+        # Through `checkpoint_by_id`, not by rebuilding the record here. This site used to repeat
+        # the fold as `{**anchor, "checkpoint_id": bundle_id, "bundle_id": bundle_id}` and drop
+        # every member fact, which is a *different* record from the one the verifier, the planner
+        # and `checkpoint_missing_paths` build: with no `bundle_members` and no `required_files`,
+        # the presence check fell back to the single-file branch and reported the whole bundle
+        # directory as missing. One resolver, so the queue cannot disagree with the evaluator about
+        # what a bundle is.
+        try:
+            from workbench.backend.registry import checkpoint_by_id
+
+            checkpoint = checkpoint_by_id(model, payload.checkpoint_id)
+        except (KeyError, ValueError):
+            checkpoint = None
     if checkpoint is None:
         raise HTTPException(404, {"error": "checkpoint_not_found", "message": "Checkpoint is not registered for model.", "details": {"model_id": payload.model_id, "checkpoint_id": payload.checkpoint_id}})
     config = resolve_config()

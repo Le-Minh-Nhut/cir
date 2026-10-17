@@ -371,6 +371,21 @@ VALID_EVIDENCE = {
     "observed_metrics": {"r10": 27.9333, "r50": 57.9, "mean": 42.9167},
 }
 
+def _checkpoint_digest(tmp_path: Path) -> str:
+    """The bundle's declared-member directory digest, as a real run's plan records it."""
+    from workbench.scripts.evaluate_models import sha256_file
+
+    from workbench.backend.registry import checkpoint_by_id, model_by_id
+
+    model = model_by_id("limn")
+    bundle = checkpoint_by_id(model, "base_iter0_all_categories")
+    root = tmp_path / "repo" / "checkpoints" / "limn"
+    names = [checkpoint_by_id(model, member_id)["filename"]
+             for member_id in bundle["required_checkpoint_ids"]]
+    if not root.is_dir():
+        return ""
+    return sha256_file(root, required_files=names)
+
 def _evidence_report(tmp_path: Path, run_id: str, *, proof: str | None = None,
                      **overrides) -> None:
     """Write one corroborated aggregate report into the fixture workspace.
@@ -388,7 +403,7 @@ def _evidence_report(tmp_path: Path, run_id: str, *, proof: str | None = None,
     reports.mkdir(parents=True, exist_ok=True)
     report = {"artifact_type": "official_aggregate_evaluation_report", "run_id": run_id,
               "model_id": "limn", "checkpoint_id": "base_iter0_all_categories",
-              "protocol_id": "fashioniq_val_split", "checkpoint_sha256": "c" * 64,
+              "protocol_id": "fashioniq_val_split", "checkpoint_sha256": _checkpoint_digest(tmp_path),
               "return_code": 0, "invocation_status": "INVOCATION_COMPLETED",
               "benchmark_gate": {"status": "PASS_WITHIN_5_PERCENT", "passed": True},
               "parity_status": "PARITY_VERIFIED", **VALID_EVIDENCE, **overrides}
@@ -406,15 +421,24 @@ def _write_proof(tmp_path: Path, run_id: str, proof: str) -> None:
     _report_path(tmp_path, run_id).with_name(
         f"limn_base_iter0_all_categories_{run_id}_completion.json").write_text(proof)
 
-def _write_checkpoint_bundle(tmp_path: Path) -> str:
-    """The three LIMN category weights the registry's bundle declares, and their manifest digest.
+def _write_checkpoint_bundle(tmp_path: Path) -> tuple[str, str]:
+    """The three LIMN category weights the registry's bundle declares, and the digests a real run
+    records for them.
 
     `base_iter0_all_categories` is a *bundle* checkpoint, so the verifier resolves its three
     declared members under `WORKBENCH_CHECKPOINT_ROOT` and re-hashes them against the manifest the
     proof records. A deployment has exactly these files; the fixture builds them so the fixture
     exercises that path instead of failing on a missing weight.
+
+    Returns `(bundle_manifest_digest, checkpoint_sha256)`. Both are the digests the evaluator's own
+    plan records for a directory artifact (`evaluate_models.py:390-397`): the *manifest* digest of
+    the declared members, and the same module's `sha256_file` over the directory restricted to
+    those members. A fixture that hard-coded one of them as a placeholder made the proof
+    self-inconsistent in a way a real run never is -- and, once the verifier actually re-hashed the
+    live members, that inconsistency became the thing the test measured instead of its subject.
     """
-    from workbench.scripts.evaluate_models import build_artifact_manifest, manifest_digest
+    from workbench.scripts.evaluate_models import (
+        build_artifact_manifest, manifest_digest, sha256_file)
 
     from workbench.backend.registry import checkpoint_by_id, model_by_id
 
@@ -423,11 +447,12 @@ def _write_checkpoint_bundle(tmp_path: Path) -> str:
     root = tmp_path / "repo" / "checkpoints" / "limn"
     root.mkdir(parents=True, exist_ok=True)
     names = []
-    for member_id in bundle["bundle_members"]:
+    for member_id in bundle["required_checkpoint_ids"]:
         variant = checkpoint_by_id(model, member_id)
         (root / variant["filename"]).write_bytes(f"weights:{member_id}".encode())
         names.append(variant["filename"])
-    return manifest_digest(build_artifact_manifest(root, names)) or ""
+    return (manifest_digest(build_artifact_manifest(root, names)) or "",
+            sha256_file(root, required_files=names))
 
 def _valid_completion_proof(tmp_path: Path, run_id: str) -> str:
     """A completion proof the authoritative verifier accepts end to end.
@@ -453,6 +478,7 @@ def _valid_completion_proof(tmp_path: Path, run_id: str) -> str:
     (run_dir / "stdout.log").write_text("recall computed\n")
     (run_dir / "stderr.log").write_text("")
     digest = hashlib.sha256(report_path.read_bytes()).hexdigest()
+    bundle_manifest_digest, checkpoint_sha256 = _write_checkpoint_bundle(tmp_path)
     logs = {"stdout": (run_dir / "stdout.log").read_text(),
             "stderr": (run_dir / "stderr.log").read_text()}
     return json.dumps({
@@ -460,9 +486,9 @@ def _valid_completion_proof(tmp_path: Path, run_id: str) -> str:
         "protocol_id": "fashioniq_val_split", "completion_status": "COMPLETED", "return_code": 0,
         "invocation_status": "INVOCATION_COMPLETED",
         "source_actual_commit": model_by_id("limn")["upstream_commit_sha"],
-        "checkpoint_sha256": "c" * 64, "environment_digest": "e" * 64,
+        "checkpoint_sha256": checkpoint_sha256, "environment_digest": "e" * 64,
         "evidence_digest": hashlib.sha256(json.dumps(logs, sort_keys=True).encode()).hexdigest(),
-        "bundle_manifest_digest": _write_checkpoint_bundle(tmp_path),
+        "bundle_manifest_digest": bundle_manifest_digest,
         "ledger_entry_digest": f"entry-{digest[:16]}",
         "report": str(report_path), "report_digest": digest, "run_directory": str(run_dir)})
 
@@ -1173,7 +1199,8 @@ def _checkpoint_root(tmp_path: Path) -> tuple[Path, list[str]]:
 
     model = model_by_id("limn")
     bundle = checkpoint_by_id(model, "base_iter0_all_categories")
-    names = [checkpoint_by_id(model, member_id)["filename"] for member_id in bundle["bundle_members"]]
+    names = [checkpoint_by_id(model, member_id)["filename"]
+             for member_id in bundle["required_checkpoint_ids"]]
     return tmp_path / "repo" / "checkpoints" / "limn", names
 
 def _certified_deployment_run(api, tmp_path, monkeypatch, run_id: str) -> dict:
