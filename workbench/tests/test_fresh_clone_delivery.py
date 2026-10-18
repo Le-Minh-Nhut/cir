@@ -176,8 +176,13 @@ def test_pair_ships_the_dataset_module_its_own_model_imports(fresh_clone: Path) 
     payload = json.loads((fresh_clone / VENDOR_ROOT / "PAIR" / "provenance.json").read_text())
     assert "data/datasets.py" in payload["file_manifest"]
 
-    importer = (fresh_clone / VENDOR_ROOT / "PAIR" / "models" / "model.py").read_text()
-    assert "import datasets" in importer, "PAIR no longer imports it; re-check this assertion"
+    # The importers are `train.py:16` and `cirr_test_submission.py:6`, both a bare `import datasets`
+    # that resolves to this module once `data/` is importable. (An earlier revision of this test named
+    # `models/model.py`, which does not import it — the assertion was wrong, not the delivery.)
+    for importer_name in ("train.py", "cirr_test_submission.py"):
+        importer = (fresh_clone / VENDOR_ROOT / "PAIR" / importer_name).read_text()
+        assert "import datasets" in importer, (
+            f"PAIR/{importer_name} no longer imports datasets; re-check this assertion")
 
 
 def test_the_delivery_does_not_ship_bytecode_or_the_dataset_root(fresh_clone: Path) -> None:
