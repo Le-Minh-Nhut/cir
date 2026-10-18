@@ -196,7 +196,13 @@ def _record_auxiliary_digests(csmcir_checkout, paths: list[Path]) -> None:
     ]))
 
 
-def test_src07_declared_auxiliary_asset_accepted_only_with_provenance(csmcir_checkout):
+def test_src07_declared_auxiliary_asset_accepted_only_with_provenance(csmcir_checkout, monkeypatch):
+    """A declared asset is approved only when it has a provenance digest to verify against.
+
+    The asset is a real one (CSMCIR's in-checkout COT_ours2 captions) whose bytes are synthetic here,
+    so the published digest is neutralized for the duration of this test: what is under test is the
+    *recorded acquisition* digest, and `test_src07b` covers the published-digest check.
+    """
     model = csmcir_model(csmcir_checkout["head"])
     source = csmcir_checkout["source"]
     asset_dir = source / "COT_ours2" / "fashioniq"
@@ -206,6 +212,15 @@ def test_src07_declared_auxiliary_asset_accepted_only_with_provenance(csmcir_che
         path = asset_dir / f"{category}_cot_val.json"
         path.write_text('{"captions": []}')
         assets.append(path)
+
+    import workbench.backend.registry as registry
+
+    original = registry.auxiliary_assets_for_model
+
+    def patched(model_id: str):
+        return [{**asset, "expected_sha256": None} for asset in original(model_id)]
+
+    monkeypatch.setattr(registry, "auxiliary_assets_for_model", patched)
 
     # Without any recorded acquisition digest the declared asset cannot be trusted.
     assert _source_dirty(source) is True
@@ -216,21 +231,31 @@ def test_src07_declared_auxiliary_asset_accepted_only_with_provenance(csmcir_che
     assert clean is True, reason
 
 
-def test_src08_modified_auxiliary_asset_rejected(csmcir_checkout):
+def test_src08_modified_auxiliary_asset_rejected(csmcir_checkout, monkeypatch):
+    """A declared asset whose bytes changed after acquisition is rejected.
+
+    As in `test_src07`, the published digest is neutralized so the *recorded acquisition* digest is
+    the authority under test; COT_ours2 does now declare real published digests, because the author
+    Hub publishes those caption files.
+    """
     model = csmcir_model(csmcir_checkout["head"])
     source = csmcir_checkout["source"]
     asset_dir = source / "COT_ours2" / "fashioniq"
     asset_dir.mkdir(parents=True)
-    assets = []
-    for category in ("dress", "shirt", "toptee"):
-        path = asset_dir / f"{category}_cot_val.json"
-        path.write_text('{"captions": []}')
-        assets.append(path)
-    _record_auxiliary_digests(csmcir_checkout, assets)
-    assert _source_dirty(source) is False
+    asset = asset_dir / "dress_cot_val.json"
+    asset.write_text('{"captions": []}')
 
-    (asset_dir / "dress_cot_val.json").write_text('{"captions": ["tampered"]}')
-    assert _source_dirty(source) is True
+    import workbench.backend.registry as registry
+
+    original = registry.auxiliary_assets_for_model
+    monkeypatch.setattr(registry, "auxiliary_assets_for_model",
+                        lambda model_id: [{**a, "expected_sha256": None} for a in original(model_id)])
+
+    _record_auxiliary_digests(csmcir_checkout, [asset])
+    assert _source_dirty(source) is False, "recorded bytes are approved"
+
+    asset.write_text('{"captions": [{"tampered": true}]}')
+    assert _source_dirty(source) is True, "bytes that no longer match the record are a source change"
     clean, _, reason = source_clean_and_pinned(model, source)
     assert clean is False
     assert "dress_cot_val.json" in reason

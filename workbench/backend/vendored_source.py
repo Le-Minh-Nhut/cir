@@ -107,29 +107,32 @@ def manifest_digest(digests: dict[str, str]) -> str:
     return hashlib.sha256(json.dumps(digests, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+def _git_backed_provenance(model: dict[str, Any], source: Path, expected: str | None) -> dict[str, Any]:
+    """The Git-backed answer for a checkout that carries a nested repository.
+
+    Imported lazily: `runtime` imports this module at load time, so a module-scope import of it here
+    would be circular. `runtime.source_provenance` sends a checkout *with* nested Git metadata down
+    its own Git path, so this delegates rather than keeping a second copy of that logic that could
+    drift from it.
+    """
+    from workbench.backend.runtime import source_provenance as runtime_source_provenance
+
+    provenance = runtime_source_provenance(model, source)
+    provenance.setdefault("local_fixes", [])
+    provenance.setdefault("state", "nested_git_checkout")
+    return provenance
+
+
 def source_provenance(model: dict[str, Any], source: Path) -> dict[str, Any]:
     """Expected upstream commit, what is on disk, and whether the two still agree."""
     record = load_vendor_provenance(source)
     expected = model.get("upstream_commit_sha")
     if (source / ".git").exists():
-        # A checkout that carries BOTH the vendored manifest and nested Git metadata is the exact
-        # state vendoring removes: the path reported as the pin would be whatever the nested
-        # repository happens to point at, and the digest manifest would describe a tree nobody
-        # version-controlled. Refusing it is the point of the contract, so neither path is preferred.
-        return {
-            "expected_commit": expected,
-            "actual_commit": None,
-            "local_fixes": [],
-            "dirty": True,
-            "tracked_modifications": [".git (nested Git metadata inside a vendored checkout)"],
-            "unauthorized_untracked": [],
-            "approved_runtime_artifacts": [],
-            "invalid_runtime_artifacts": [],
-            "error": "vendored checkout still carries nested Git metadata",
-            "verified": False,
-            "provenance_digest": None,
-            "state": "vendored_with_nested_git",
-        }
+        # Nested Git metadata means this is a checkout someone synced, not the vendored layout. It
+        # wins over any manifest that happens to sit beside it: the repository's own HEAD is the
+        # authority on what is checked out, and honouring a stale manifest instead would let a
+        # git-based checkout — including a dirty one — be reported as a verified vendored pin.
+        return _git_backed_provenance(model, source, expected)
     if record is None:
         return {
             "expected_commit": expected,

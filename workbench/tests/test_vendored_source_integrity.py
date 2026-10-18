@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -129,14 +130,16 @@ def test_a_declared_runtime_artifact_is_not_a_source_change(tmp_path: Path) -> N
 
 
 def test_a_checkout_still_carrying_nested_git_is_refused(tmp_path: Path) -> None:
-    """Vendoring exists to remove that metadata; leaving it means the path reported as a pin is
-    whatever a nested repository happens to point at."""
+    """Vendoring removes that metadata; a manifest beside a nested repository must not be honoured.
+
+    The nested repository is the authority on what is checked out, so a checkout whose HEAD is not
+    the pin is refused — the recorded manifest cannot vouch for it.
+    """
     checkout, model = _vendor(tmp_path)
-    (checkout / ".git").mkdir()
-    (checkout / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
     provenance = source_provenance(model, checkout)
     assert provenance["verified"] is False
-    assert provenance["state"] == "vendored_with_nested_git"
+    assert provenance["error"]
 
 
 def test_pin_mismatch_is_refused(tmp_path: Path) -> None:
