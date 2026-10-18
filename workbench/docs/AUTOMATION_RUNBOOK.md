@@ -270,8 +270,20 @@ against a malicious evaluator that already holds the operator's secrets: that ne
 OS-level trust boundary, which this release does not implement.
 
 Set `WORKBENCH_LEDGER_KEY` before a reproduction run and keep it out of the repository: the
-ledger is only as trustworthy as that key. The key is **never** passed to the official
-evaluator — model code is untrusted and must not be able to forge ledger entries. `clean_generated.py --logs` removes the ledger
+ledger is only as trustworthy as that key. The key is **never** passed IN THE ENVIRONMENT to the
+official evaluator, and the names the child could use to locate it (`HOME`, `XDG_*`,
+`WORKBENCH_LEDGER_KEY`, `WORKBENCH_SECRET_*`) are withheld from the allowlist, so no name in the
+child's environment leads to it.
+
+That is a construction, not a boundary, and the two must not be confused: the evaluator runs as the
+**same OS user** on the **same filesystem**, so model code that goes looking for the key — the
+default location is `$XDG_CONFIG_HOME/cir/workbench_ledger_key`, which in the deployment is
+`/artifacts/config/cir/workbench_ledger_key` — can read it. **The evaluator is therefore trusted
+code.** The workbench's threat model is (A) upstream sources pinned to recorded commits and
+checkpoints verified against recorded digests; it does not defend against (B) hostile upstream
+Python or (C) a checkpoint whose deserialisation executes code. Running either requires a real
+boundary — a separate OS user for the evaluator with the signer in its own process and no shared
+filesystem access to the key — which this release does not implement and does not claim. `clean_generated.py --logs` removes the ledger
 along with the logs, since it is generated run metadata. The ledger sits at the artifact root rather than inside a run directory, so
 rewriting a run consistently requires rewriting the entire chain; it is the operator's own
 record, and `clean_generated.py --logs` removes it along with the logs.

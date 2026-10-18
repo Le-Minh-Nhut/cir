@@ -372,10 +372,31 @@ def _run_launcher_selection(served: list[dict]) -> dict:
     logic; running it through `python3` mirrors how the shell invokes it.
     """
     source = (REPOSITORY / "pc.sh").read_text()
-    start = source.index('model_info="$(curl -fsS')
-    opening = source.index('python3 -c "', start) + len('python3 -c "')
-    end = source.index('" "$MODEL" "$CHECKPOINT_REQUEST"', opening)
+    start = 0
+    # `model_info` is CONSUMED by the substitution, so the program is defined BEFORE the line that
+    # uses it: the search for the definition has to start from the top of the script, not from the
+    # call site.
+    assert source.index('model_info="$(curl -fsS') > source.index("models_program="), (
+        "the selection program is defined before the line that consumes it")
+    # The program travels in a variable, because a here-document and a pipe cannot both feed one
+    # interpreter (the document wins and the JSON on stdin is lost). The extraction therefore
+    # follows the here-document that DEFINES the variable, and then checks that the invocation
+    # really passes that variable -- otherwise this test could keep measuring a snippet the
+    # launcher no longer runs.
+    # Composed rather than written out, so the quote characters cannot be lost in transit. The line
+    # in pc.sh is: models_program="$(cat <<'PYMODELS'
+    marker = "models_program=" + chr(34) + "$(cat <<" + chr(39) + "PYMODELS" + chr(39)
+    opening = source.index(marker, start) + len(marker)
+    end = source.index("\nPYMODELS\n", opening)
+    end += 1  # keep the newline that ends the last program line, drop the terminator's own
     snippet = source[opening:end]
+    assert snippet.strip().startswith("import"), snippet[:60]
+    # The `if` that consumes the substitution ends with `"; then`, not `]; then`: the selection
+    # program is passed as an argument, so the command substitution closes with a quote.
+    invocation = source[end:source.index("; then", end)]
+    assert 'python3 -c "$models_program" "$MODEL" "$CHECKPOINT_REQUEST"' in invocation, (
+        "pc.sh defines the selection program but no longer passes it as $models_program:\n"
+        + invocation[:300])
 
     completed = subprocess.run([sys.executable, "-c", snippet, MODEL, ""],
                                input=json.dumps(served), capture_output=True, text=True)

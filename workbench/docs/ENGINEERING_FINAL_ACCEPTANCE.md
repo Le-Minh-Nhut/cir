@@ -81,7 +81,8 @@ Every one was reproduced before being changed, and each has a regression test.
 |---|---|
 | API queue launches the trusted operator | yes |
 | Trusted operator receives its signing credentials | yes |
-| Native evaluator receives no signing key | yes |
+| Native evaluator receives no signing key IN ITS ENVIRONMENT, and no name in that environment locates it | yes |
+| Native evaluator is prevented from READING the signing key off the shared filesystem | **no — documented trust requirement**: the evaluator runs as the same OS user on the same mounts, so the key at `/artifacts/config/cir/workbench_ledger_key` is readable by it. Isolation means a separate OS user and a separate signing process, which this release does not implement (`AUTOMATION_RUNBOOK.md`, "Honest trust model") |
 | Queue and scientific logs have separate ownership | yes |
 | Existing run directories cannot be overwritten | yes |
 | Failed launches cannot delete previous evidence | yes |

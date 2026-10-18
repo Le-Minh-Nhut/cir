@@ -150,3 +150,23 @@ def test_the_built_bundle_is_not_older_than_the_sources() -> None:
                         + list(FRONTEND.glob("*.tsx")))
     assert dist.stat().st_mtime >= newest_source, (
         "frontend/dist is older than the sources it was built from: run `npx vite build`")
+
+
+def test_availability_claims_are_derived_from_the_selection_not_from_a_global_counter() -> None:
+    """A deployment-wide boolean cannot answer a question about one run.
+
+    `evidence.queryLevelUnavailable` is true only when the deployment holds aggregates and NO
+    per-query run. In a deployment holding both families it is false, and the pages used to fall
+    through to a table — correct there by accident — while the pager printed the page count for a
+    run with no rows; in the mock-only case it is true, and the pager suppressed the page count for a
+    mock run that HAS rows. Both are claims about the wrong subject. The UI now asks the selection.
+    """
+    app = APP_TSX.read_text(encoding="utf-8")
+    assert "evidence.queryLevelUnavailable" not in app, (
+        "a deployment-wide flag is deciding a per-selection claim again")
+    assert "activeRunId ? `" in app, (
+        "the pager must branch on whether a run is selected")
+    # Both failure pages must keep telling the operator WHY there is nothing, rather than showing an
+    # empty table next to a Jaccard matrix that also has no input.
+    assert app.count("aggregate-only models hold none by design") == 2, (
+        "both Failure Analytics and the failure pages must explain an empty result")
