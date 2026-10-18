@@ -6,6 +6,8 @@ from workbench.backend.adapters.base import EvalRequest, ModelAdapter
 from workbench.backend.registry import checkpoint_path, checkpoint_member_root
 from workbench.backend import runtime as _runtime
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
 
 class OfficialScriptAdapter(ModelAdapter):
     script: str
@@ -25,6 +27,35 @@ class OfficialScriptAdapter(ModelAdapter):
         raise NotImplementedError("upstream evaluation command requires audit before execution")
 
 
+def _replay_command(adapter: OfficialScriptAdapter, checkpoint: Path, request: EvalRequest,
+                    source: Path, *, variant: str | None = None,
+                    checkpoint_id: bool = False) -> list[str]:
+    """Build the command for a model whose only runnable entry point is a workbench replay wrapper.
+
+    These evaluators have no CLI of their own: upstream ships `test(params, model, testset, category)`
+    as a bare callable, so there is nothing to launch. The wrapper is the missing shell and calls the
+    pinned evaluator unchanged, which is why the adapter points at it rather than at `test.py`.
+
+    `--checkpoint-root` receives the directory the members occupy rather than the resolved file, so the
+    shape is decided by the same rule every other consumer uses (`checkpoint_member_root`): a single
+    artifact resolves to its own directory, a multi-member bundle to the directory holding its
+    members. Hard-coding `.parent` here would break silently the moment a checkpoint became a bundle.
+    """
+    replayer = REPO_ROOT / "workbench" / "replay" / f"{adapter.model_id}.py"
+    command = [
+        _runtime.python_executable(adapter.model),
+        str(replayer),
+        "--checkpoint-root", str(checkpoint_member_root(checkpoint)),
+        "--dataset-root", str(request.dataset_root),
+        "--source-root", str(source),
+    ]
+    if variant is not None:
+        command.extend(("--variant", variant))
+    if checkpoint_id and request.checkpoint_id:
+        command.extend(("--checkpoint-id", request.checkpoint_id))
+    return command
+
+
 class CSMCIRAdapter(OfficialScriptAdapter):
     model_id = "csmcir"
     script = "src/validate_blip_csmcir.py"
@@ -38,7 +69,11 @@ class EncoderAdapter(OfficialScriptAdapter):
     script = "evaluate_model.py"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
-        return [_runtime.python_executable(self.model), str(source / self.script), "--dataset", "fashioniq", "--fashioniq_split", "val-split", "--fashioniq_path", f"{request.dataset_root}/", "--ckpt_path", str(checkpoint)]
+        # `evaluate_model.py` is importable but is not a script: it reads `args` at module scope and
+        # its loader passes an arbitrary local file to `load_state_dict`, so what a run must actually
+        # establish — which keys loaded and which did not — is only reported by the replay wrapper.
+        # The official command is kept here, unmodified, as the fallback path.
+        return _replay_command(self, checkpoint, request, source, checkpoint_id=True)
 
 
 class HintAdapter(OfficialScriptAdapter):
@@ -67,30 +102,62 @@ class PairAdapter(OfficialScriptAdapter):
     model_id = "pair"
     script = "test.py"
 
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        # `test.py:6` is `test(params, model, testset, category)` — a callable with no CLI, so the
+        # wrapper supplies the missing shell and calls it unchanged.
+        return _replay_command(self, checkpoint, request, source, checkpoint_id=True)
+
 
 class AirKnowAdapter(OfficialScriptAdapter):
     model_id = "airknow"
     script = "test_BLIP2.py"
+
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        # `test_BLIP2.py` has no `__main__` and no checkpoint loader, and one of its branches calls
+        # `load_obj("")` with an empty path, so it cannot be launched as published.
+        return _replay_command(self, checkpoint, request, source, checkpoint_id=True)
 
 
 class ConeSepAdapter(OfficialScriptAdapter):
     model_id = "conesep"
     script = "test.py"
 
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        # Single checkpoint shared across the three categories, and a callable-only evaluator: the
+        # `--variant` flag records WHICH published noise level this run evaluates, because the Hub
+        # publishes 20/50/80 % variants and no clean one.
+        return _replay_command(self, checkpoint, request, source,
+                               variant=(request.checkpoint_id or None))
+
 
 class HabitAdapter(OfficialScriptAdapter):
     model_id = "habit"
     script = "test.py"
+
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        # As with conesep: the selected variant is recorded so a noisy-trained checkpoint can never be
+        # presented as a clean-trained one.
+        return _replay_command(self, checkpoint, request, source,
+                               variant=(request.checkpoint_id or None))
 
 
 class IntentAdapter(OfficialScriptAdapter):
     model_id = "intent"
     script = "test.py"
 
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        return _replay_command(self, checkpoint, request, source,
+                               variant=(request.checkpoint_id or None))
+
 
 class CLVCNetAdapter(OfficialScriptAdapter):
     model_id = "clvc_net"
     script = "test.py"
+
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        # `test.py:6` is `test(params, local_model, global_model, testset, dataname)`: this evaluator
+        # needs TWO whole models per category (six files), which the wrapper loads by name.
+        return _replay_command(self, checkpoint, request, source)
 
 
 class DCNetAdapter(OfficialScriptAdapter):
@@ -132,10 +199,42 @@ class TGCIRAdapter(OfficialScriptAdapter):
     model_id = "tgcir"
     script = "test.py"
 
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        # `test.py:6` is `test(params, model, testset, category)` with no CLI and no checkpoint
+        # loader, so the wrapper supplies both. `workbench/replay/tgcir.py` is the existing preflight
+        # entry point; it refuses to run while the archive member mapping is unresolved rather than
+        # launching an unrelated path.
+        return _replay_command(self, checkpoint, request, source)
+
 
 class SPRCAdapter(OfficialScriptAdapter):
     model_id = "sprc"
     script = "src/blip_validate.py"
+
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        """The real evaluator, with the two flags its own defaults get wrong.
+
+        `src/blip_validate.py:144` defaults `--blip-model-name` to `blip2_cir_rerank_learn`, which is
+        **not registered anywhere in the pinned tree** — the class the FashionIQ path loads is
+        `blip2_cir_align_prompt` (`blip2_qformer_cir_align_prompt.py:25`). Launching on the default
+        therefore fails at `load_model_and_preprocess`, so the name is passed explicitly.
+
+        `--backbone` selects the vision encoder (`:145`): `pretrain` is EVA-CLIP ViT-g, `pretrain_vitL`
+        is ViT-L. The paper reports ViT-L while the code defaults to ViT-g (upstream issue #4), so the
+        choice is a SCIENTIFIC VARIANT and is derived from the selected checkpoint rather than assumed:
+        a `_vitl` checkpoint must not be run under the ViT-g backbone.
+        """
+        # `checkpoint` here is the RESOLVED PATH (`build_command` passes `checkpoint_path(...)`), so
+        # the variant is read from the filename the registry resolved rather than from a record dict.
+        backbone = "pretrain_vitL" if "vitl" in Path(checkpoint).name.lower() else "pretrain"
+        return [
+            _runtime.python_executable(self.model),
+            str(source / self.script),
+            "--dataset", "fashionIQ",
+            "--blip-model-name", "blip2_cir_align_prompt",
+            "--backbone", backbone,
+            "--model-path", str(checkpoint),
+        ]
 
 
 

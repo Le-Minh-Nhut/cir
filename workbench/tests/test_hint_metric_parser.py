@@ -161,7 +161,9 @@ def test_adding_hint_did_not_disturb_the_existing_parsers() -> None:
     # And the LIMN parser does not silently accept HINT's output shape.
     assert parse_limn_output(wrapper_output()).extraction_status != "EXTRACTED_VERIFIED"
 
-    # A model with no parser still reports that honestly rather than borrowing HINT's.
-    other = extract_aggregate_metrics("pair", wrapper_output(), "", 0)
+    # A model with no parser still reports that honestly rather than borrowing HINT's. `pair` is no
+    # longer such a model -- it has a replay wrapper and therefore the shared replay parser -- so this
+    # uses one that genuinely has none: dcnet's evaluator writes files rather than printing metrics.
+    other = extract_aggregate_metrics("dcnet", wrapper_output(), "", 0)
     assert other.extraction_status == "AGGREGATE_PARSER_UNAVAILABLE"
     assert other.parser_id is None

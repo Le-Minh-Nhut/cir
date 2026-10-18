@@ -5,6 +5,8 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[2]
 from types import SimpleNamespace
 
 
@@ -180,29 +182,49 @@ def prepare_standard_layout(root: Path) -> None:
 
 
 
-def test_unaudited_adapter_is_skipped() -> None:
-    """A model whose adapter does not override `command` is skipped, never silently planned.
+def test_every_registered_adapter_builds_a_command() -> None:
+    """No adapter may inherit the base `command`, which raises NotImplementedError.
 
-    This used `hint` while HINT's adapter inherited the base `command`. HINT now has a real command
-    (its evaluator has no CLI of its own), so the test asserts the *rule* against a model that still
-    inherits it — `tgcir`. The rule is what matters: `command_is_audited` decides by identity with the
-    base class, so moving any model into or out of that state cannot quietly change how it is
-    reported.
+    The earlier form of this test asserted that *some* model still inherited it, so that the skip rule
+    stayed exercised. That is no longer a reachable state: every one of the fifteen adapters now
+    builds a real command, because "upstream has no CLI" is a reason to write a replay wrapper, not a
+    reason to leave a model unreachable. What still matters is the rule itself, so the rule is tested
+    directly on a synthetic class below, and this test asserts the real registry has no such model.
     """
     module = load_module()
     from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 
-    model_id = next(mid for mid, adapter in sorted(ADAPTERS.items())
-                    if getattr(adapter, "command", None) is OfficialScriptAdapter.command)
-    assert not module.command_is_audited(ADAPTERS[model_id])
-    assert module.command_is_audited(ADAPTERS["hint"])
+    unimplemented = [mid for mid, adapter in sorted(ADAPTERS.items())
+                     if getattr(adapter, "command", None) is OfficialScriptAdapter.command]
+    assert unimplemented == [], f"these adapters cannot build a command: {unimplemented}"
+    for mid, adapter in sorted(ADAPTERS.items()):
+        assert module.command_is_audited(adapter), mid
 
-    model = records()[model_id]
-    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], None, 200)
+
+def test_an_unaudited_adapter_is_still_skipped() -> None:
+    """The skip rule must stay enforced, even with no real model in that state.
+
+    A synthetic adapter that inherits the base `command` is the honest way to test a rule whose real
+    instances no longer exist: if someone reintroduces one, `guarded_plan` must refuse it rather than
+    plan a run whose command would raise.
+    """
+    module = load_module()
+    from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+
+    class UnauditedAdapter(OfficialScriptAdapter):
+        model_id = "tgcir"
+
+    assert not module.command_is_audited(UnauditedAdapter)
+    saved = ADAPTERS["tgcir"]
+    ADAPTERS["tgcir"] = UnauditedAdapter
+    try:
+        model = records()["tgcir"]
+        plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0],
+                                            model["native_protocol"], None, 200)
+    finally:
+        ADAPTERS["tgcir"] = saved
     assert plan is None
     assert reasons == ["SKIPPED: adapter command not audited"]
-
-
 
 
 def test_limn_candidate_is_complete_checkpoint_bundle_and_all_runnable_schedules_once() -> None:
@@ -257,14 +279,24 @@ def test_limn_adapter_runs_full_bundle_or_named_category(monkeypatch, tmp_path: 
     assert "--category" not in bundle
     assert bundle[bundle.index("--checkpoint-root") + 1] == str(checkpoint_root)
     assert diagnostic[diagnostic.index("--category") + 1] == "dress"
-def test_legacy_adapter_is_skipped_without_guessed_command() -> None:
+def test_tgcir_reports_the_archive_mapping_blocker_rather_than_launching() -> None:
+    """TG-CIR's member mapping is unresolved, and the reported reason must say so.
+
+    This test previously asserted that the adapter was skipped as unaudited. TG-CIR now has a command
+    (its evaluator is a callable with no CLI, so the wrapper supplies one), which moves the model out
+    of the skip case and into having to name its real missing prerequisite. "We cannot launch" and
+    "we do not know which archive member to load" are different facts, and only the second is true.
+    """
     module = load_module()
     model = records()["tgcir"]
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], None, 200)
 
     assert plan is None
-    assert reasons == ["SKIPPED: adapter command not audited"]
+    joined = " ".join(reasons)
+    assert "checkpoint mapping unresolved" in joined, reasons
+    assert not any("not audited" in reason for reason in reasons), (
+        "tgcir has an audited command now; reporting it as unaudited would be false")
 
 
 def test_dcnet_audited_command_reports_non_command_blockers() -> None:
@@ -547,17 +579,52 @@ def test_encoder_complete_local_prerequisites_still_block_on_unverified_mapping(
     assert plan is None
     assert reasons == ["checkpoint mapping unresolved"]
 
-def test_encoder_command_preserves_upstream_trailing_root_separator(tmp_path: Path) -> None:
-    from workbench.backend.adapters.models import EncoderAdapter
+def test_encoder_replay_preserves_upstream_trailing_root_separator(tmp_path: Path) -> None:
+    """The native encoder dataset CONCATENATES the root, so it must end with a separator.
+
+    `datasets.py:67-69` does `self.image_dir = self.path + 'resized_image'` — not a join — so a root
+    lacking its trailing separator builds `.../FashionIQresized_image` and reads nothing. The flag
+    that used to carry the separator to the legacy script is gone (that script reads `args` at module
+    scope and cannot be launched), so the guarantee now lives in the replay wrapper, which is what
+    runs. This asserts it there rather than on a command path that no longer exists.
+    """
+    source = (REPO / "workbench" / "replay" / "encoder.py").read_text()
+    assert 'rstrip("/") + "/"' in source, (
+        "the wrapper must terminate the dataset root with a separator for the native dataset")
+    assert "isolated_cache_root" in source, (
+        "and it must materialize the dataset in an isolated root, or a stale cache is reused")
+
+
+def test_sprc_command_selects_the_registered_model_and_a_matching_backbone(tmp_path: Path) -> None:
+    """SPRC's own defaults are wrong in two ways, and the command must override both.
+
+    `src/blip_validate.py:144` defaults `--blip-model-name` to a class the pinned tree never
+    registers, so a default launch dies in `load_model_and_preprocess`; the command passes the
+    registered name explicitly. `--backbone` selects the vision encoder, and the paper reports ViT-L
+    while the code defaults to ViT-g (upstream issue #4), so the flag is derived from the selected
+    checkpoint instead of assumed.
+    """
     from workbench.backend.adapters.base import EvalRequest
+    from workbench.backend.adapters.models import ADAPTERS
 
-    command = EncoderAdapter().command(
-        tmp_path / "ENCODER",
-        tmp_path / "fashioniq.pt",
-        EvalRequest("encoder", "fashioniq", "fashioniq_val_split", tmp_path / "FashionIQ", tmp_path / "result.json"),
-    )
+    request = EvalRequest("sprc", "sprc_fiq_unresolved", "fashioniq_original_split",
+                          tmp_path, tmp_path / "out.json")
+    # `command()` builds the interpreter path through `runtime.python_executable`, which refuses an
+    # unconfigured environment; the argument list is what this test is about, so the interpreter is
+    # stubbed rather than the assertion weakened.
+    from unittest.mock import patch
+    from workbench.backend import runtime as _runtime
 
-    assert command[command.index("--fashioniq_path") + 1] == f"{tmp_path / 'FashionIQ'}/"
+    with patch.object(_runtime, "python_executable", lambda model: "/usr/bin/python3"):
+        command = ADAPTERS["sprc"]().command(tmp_path / "SPRC", tmp_path / "sprc_fiq_vitl.pt", request)
+        gpu_variant = ADAPTERS["sprc"]().command(tmp_path / "SPRC", tmp_path / "sprc_fiq.pt", request)
+    assert command[command.index("--blip-model-name") + 1] == "blip2_cir_align_prompt"
+    assert command[command.index("--backbone") + 1] == "pretrain_vitL", (
+        "a ViT-L checkpoint must not be run under the ViT-g backbone")
+    assert command[command.index("--dataset") + 1] == "fashionIQ"
+
+    assert gpu_variant[gpu_variant.index("--backbone") + 1] == "pretrain"
+
 
 
 def test_execute_writes_reproducible_logs(monkeypatch, tmp_path: Path) -> None:

@@ -25,6 +25,15 @@ class MetricExtractionResult:
         return asdict(self)
 
 
+#: Models whose only runnable entry point is a workbench replay wrapper, so the JSON the wrapper
+#: prints is the model's real output and gets the shared replay parser. A model is added here only
+#: when a wrapper for it exists; the `tb`-style evaluators that print their own format keep their
+#: own parsers.
+_WORKBENCH_REPLAY_PARSED_MODELS = {
+    "pair", "encoder", "clvc_net", "intent", "habit", "conesep", "airknow",
+}
+
+
 def _check_parity(
     observed: dict[str, float | None] | None,
     paper: dict[str, float | None] | None,
@@ -430,6 +439,112 @@ def parse_hint_output(stdout_text: str, paper_metrics: dict[str, float | None] |
         raw_output=json_obj,
     )
 
+def parse_workbench_replay_output(model_id: str, stdout_text: str,
+                                  paper_metrics: dict[str, float | None] | None = None) -> MetricExtractionResult:
+    """Parse the JSON a `workbench/replay/*` wrapper prints.
+
+    Every replay wrapper this repository adds emits one document with a `results` list (one record
+    per category, carrying `r1`/`r10`/`r50`) and an `aggregate` block. That document is a workbench
+    product, not upstream's, so no model-specific parser reads it: without this one the eight models
+    whose only runnable entry point IS a wrapper -- pair, encoder, clvc_net, intent, habit, conesep,
+    airknow, hint -- reported AGGREGATE_PARSER_UNAVAILABLE even on a successful run with exit 0.
+
+    The metrics are the native ones (`test()`'s own recall values, recorded by the wrapper). The
+    macro is recomputed here from the three categories instead of being copied from `aggregate`, so a
+    wrapper whose arithmetic or category set is wrong cannot pass as a complete result.
+    """
+    categories = ("dress", "shirt", "toptee")
+    parser_id = f"{model_id}_workbench_replay_json"
+    unparsed = MetricExtractionResult(
+        extraction_status="EVALUATION_COMPLETED_METRICS_UNPARSED",
+        parser_id=parser_id,
+        parser_version=1,
+        observed_metrics=None,
+        category_metrics=None,
+        parity_status="PARITY_NOT_EVALUATED",
+        metric_source="stdout",
+    )
+
+    # The wrapper prints the document and nothing else, but progress lines are allowed for, so the
+    # outermost brace-matched object is used rather than requiring a bare stream.
+    document = None
+    try:
+        candidate = json.loads(stdout_text.strip())
+        if isinstance(candidate, dict):
+            document = candidate
+    except Exception:
+        document = None
+    if document is None:
+        for start in (i for i, ch in enumerate(stdout_text) if ch == "{"):
+            depth = 0
+            for index in range(start, len(stdout_text)):
+                char = stdout_text[index]
+                if char == "{":
+                    depth += 1
+                elif char == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            candidate = json.loads(stdout_text[start:index + 1])
+                        except Exception:
+                            break
+                        if isinstance(candidate, dict) and "results" in candidate:
+                            document = candidate
+                        break
+            if document is not None:
+                break
+
+    if not isinstance(document, dict) or not isinstance(document.get("results"), list):
+        return unparsed
+    # A wrapper for a different model must not satisfy this model's dispatch entry.
+    if document.get("model_id") != model_id:
+        return unparsed
+    # Every category must be present exactly once and marked complete: a partial run is not a
+    # complete benchmark result, and the wrapper itself refuses to claim one.
+    records = {}
+    for record in document["results"]:
+        if not isinstance(record, dict):
+            return unparsed
+        category = record.get("category")
+        if category in records:
+            return unparsed
+        records[category] = record
+    if set(records) != set(categories):
+        return unparsed
+    if not all(records[category].get("complete") for category in categories):
+        return unparsed
+
+    category_metrics: dict[str, dict[str, float | None]] = {}
+    for category in categories:
+        record = records[category]
+        r10 = record.get("r10")
+        r50 = record.get("r50")
+        if not (_is_valid_recall(r10) and _is_valid_recall(r50)):
+            return unparsed
+        category_metrics[category] = {"r10": float(r10), "r50": float(r50)}
+
+    r10 = sum(category_metrics[c]["r10"] for c in categories) / len(categories)
+    r50 = sum(category_metrics[c]["r50"] for c in categories) / len(categories)
+    mean = (r10 + r50) / 2.0
+
+    declared = document.get("aggregate") or {}
+    for key, value in (("macro_r10", r10), ("macro_r50", r50), ("macro_mean", mean)):
+        declared_value = declared.get(key)
+        if declared_value is not None and abs(float(declared_value) - value) > 0.05:
+            return unparsed
+
+    observed = {"r10": round(r10, 4), "r50": round(r50, 4), "mean": round(mean, 4)}
+    return MetricExtractionResult(
+        extraction_status="EXTRACTED_VERIFIED",
+        parser_id=parser_id,
+        parser_version=1,
+        observed_metrics=observed,
+        category_metrics=category_metrics,
+        parity_status=_check_parity(observed, paper_metrics),
+        metric_source="stdout",
+        raw_output=document,
+    )
+
 def parse_combiner_output(stdout_text: str, paper_metrics: dict[str, float | None] | None = None) -> MetricExtractionResult:
     """Parse the `name = value` recall lines CLIP4Cir's src/validate.py prints for FashionIQ.
 
@@ -531,6 +646,8 @@ def extract_aggregate_metrics(
         return parse_combiner_output(stdout_text, paper_metrics)
     if model_id == "hint":
         return parse_hint_output(stdout_text, paper_metrics)
+    if model_id in _WORKBENCH_REPLAY_PARSED_MODELS:
+        return parse_workbench_replay_output(model_id, stdout_text, paper_metrics)
     if model_id == "sprc":
         # blip_validate.py:88-98 prints the same JSON key set as CSMCIR's evaluator; the csmcir
         # parser's macro-validation matches the same keys, so the shape is reused, not assumed.
