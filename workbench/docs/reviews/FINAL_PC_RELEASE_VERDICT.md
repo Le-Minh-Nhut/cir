@@ -6,9 +6,9 @@
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`5567bc7`** (production source; every gate below ran on it) |
+| **TESTED_SOURCE_SHA** | **`851eec3`** (production source; every gate below ran on it) |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | identical in `5567bc7` and every later commit — the successors changed documentation only |
+| Production tree | identical in `851eec3` and every later commit — the successors changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 
@@ -20,7 +20,7 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| TESTED_SOURCE_SHA | `5567bc7` — every gate below ran on it |
+| TESTED_SOURCE_SHA | `851eec3` — every gate below ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 16 model entries; **16 `source_available`** (every entry now has vendored source); **15 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc` with protocol `fashioniq_original_split`, and stays blocked only because no FashionIQ checkpoint is published for it |
@@ -33,7 +33,7 @@ root, the model's provisioned interpreter, and exactly one ledger key file.
 
 ## What was tested
 
-The full verification ran against `5567bc7`. Commits after it on
+The full verification ran against `851eec3`. Commits after it on
 `research/cir-failure-workbench` changed **documentation only** — a tracked document cannot name the
 commit that contains it, so the metadata commit that records this verdict is itself outside the tested
 source. The earlier `59949ff` pass is superseded: the vendored-source work changed production files
@@ -46,7 +46,7 @@ source. The earlier `59949ff` pass is superseded: the vendored-source work chang
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1544 passed, 0 failed** (23:41); 1547 collected, 3 gated on documents that must name this commit |
+| Backend suite | `pytest workbench/tests -q` | **1599 passed, 0 failed** (24:55); 1601 collected, 2 are the document gates that must name this commit |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 16 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
