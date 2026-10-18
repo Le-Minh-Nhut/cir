@@ -18,6 +18,9 @@ bổ sung: `encoder` cần một bản sửa nhỏ (alias import, asset LAION Vi
 `dcnet` cần asset thượng nguồn; `ptha_mtst` cần tác giả cung cấp source/checkpoint;
 10 model còn lại cần wrapper. Ma trận đầy đủ ở `workbench/docs/reviews/r8/R8_16_MODEL_STATUS.md`.
 
+**Trạng thái 16 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
+[`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
+
 **SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `5567bc7`** — mọi test, acceptance, mutation và release_verify mô
 tả trên trang này đã chạy trên đúng cây đó (1544 passed; acceptance, mutation và release_verify đều
 chạy lại trên cùng commit).

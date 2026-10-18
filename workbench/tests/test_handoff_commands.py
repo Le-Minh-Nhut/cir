@@ -173,6 +173,12 @@ def test_every_document_in_the_handoff_set_has_run_commands_or_says_why_not() ->
         "LEGACY_CLEANUP_AUDIT.md", "LEGACY_REPRODUCTION_RUNBOOK.md", "LEGACY_SOURCE_AUDIT.md",
         "PC_DOCKER_QUICKSTART.md", "PC_TRANSFER_CHECKLIST.md", "PROTOCOL_AUDIT.md",
         "READINESS_MATRIX.md", "RESULT_SCHEMA.md", "UPSTREAM_SOURCE_AUDIT.md",
+        # MODEL_STATUS_SPEC.md carries the PC continuation commands (clone, verify from a fresh
+        # checkout, download assets, preflight, run). They cannot be executed as an audit here for the
+        # same reason the model rows are PENDING: staging a checkpoint needs multi-GB downloads and
+        # running any model needs a GPU, neither of which this host has. The document is the operator
+        # handoff, so it is exempt rather than silently unaudited.
+        "MODEL_STATUS_SPEC.md",
     }
     audited = {path.name for path in DOCS}
     unclassified = []
