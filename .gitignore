@@ -48,7 +48,15 @@ wandb/
 *.pt
 *.pth
 *.ckpt
-workbench/third_party/
+# The pinned upstream checkouts under workbench/third_party are TRACKED SOURCE: the delivered
+# branch must carry the code it evaluates instead of a gitlink nobody can fetch, and a reader must
+# be able to check a claim against the revision it was made about. Each checkout keeps its
+# upstream LICENSE, carries provenance.json (resolved URL, exact commit, commit date, per-file
+# digest manifest, and the list of local fixes), and has NO nested .git.
+# Only what the authorized preparation step generates inside a checkout stays ignored, and only
+# when it would otherwise be committed with a machine-specific path baked in.
+workbench/third_party/*/fashionIQ_dataset
+workbench/third_party/*/fashionIQ_dataset/
 # Everything under artifacts/ is generated run state. Ignoring the whole directory and then
 # re-including the two markers is the only form that cannot be defeated by a new filename: the
 # earlier per-file list silently let a new lock or queue file become committable.

@@ -57,28 +57,17 @@ def load_trusted_whole_model(path: Path, expected_sha256: str | None, torch_modu
 
 def source_checkout_status(source_root: Path, expected_commit: str) -> tuple[bool, str | None, str | None]:
     if not source_root.is_dir():
-        return False, None, "source is not a readable Git checkout"
-    try:
-        top_level = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=source_root,
-                                   check=True, capture_output=True, text=True).stdout.strip()
-        if Path(top_level).resolve() != source_root.resolve():
-            return False, None, "source path is not a Git checkout root"
-        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source_root, check=True,
-                              capture_output=True, text=True).stdout.strip()
-        dirty = subprocess.run(["git", "status", "--porcelain"], cwd=source_root, check=True,
-                               capture_output=True, text=True).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
-        return False, None, "source is not a readable Git checkout"
-    # `__pycache__`/`*.pyc` are the unavoidable product of running Python and never change evaluator
-    # semantics, so they are not a source change. This matches `runtime._source_dirty`; a raw
-    # `git status` check would refuse a perfectly pinned checkout merely because someone imported it,
-    # which is exactly what happened to LIMN before this agreed with the runtime.
-    from workbench.backend.runtime import _path_of, is_bytecode
+        return False, None, "source checkout missing"
+    # The delivered layout vendors the pinned upstream source *inside this repository* with the
+    # nested Git metadata removed, so there is no `.git` here to interrogate. `source_provenance`
+    # answers the same question from the recorded commit and the per-file digest manifest, and it
+    # falls back to the Git-based path for an operator scratch checkout.
+    from workbench.backend.runtime import source_provenance
 
-    relevant = [line for line in dirty.splitlines()
-                if line.strip() and not is_bytecode(_path_of(line))]
-    if relevant:
-        return False, head, "source checkout is dirty"
+    provenance = source_provenance({"upstream_commit_sha": expected_commit}, source_root)
+    if provenance.get("error"):
+        return False, provenance.get("actual_commit"), provenance["error"]
+    head = provenance.get("actual_commit")
     if head != expected_commit:
         return False, head, f"source pin mismatch: expected {expected_commit}, found {head}"
     return True, head, None

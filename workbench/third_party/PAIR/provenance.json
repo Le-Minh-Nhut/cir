@@ -1,0 +1,62 @@
+{
+  "model_ids": [
+    "pair"
+  ],
+  "requested_url": "https://github.com/iLearn-Lab/ICASSP25-PAIR",
+  "resolved_url": "git@github.com:iLearn-Lab/ICASSP25-PAIR",
+  "upstream_commit": "bfb0b98cdb4c44f6b9190baaa84d783a77dd888f",
+  "upstream_commit_date": "2026-04-05T15:58:53+08:00",
+  "license_file": "LICENSE",
+  "destination": "/home/heheboiz/data/cir/workbench/third_party/PAIR",
+  "vendored_at": "2026-10-18T12:18:01+00:00",
+  "files_written": 42,
+  "nested_git_removed": [
+    ".git",
+    "__pycache__",
+    "data/__pycache__",
+    "models/__pycache__",
+    "utils/__pycache__"
+  ],
+  "preserved_local_files": [
+    ".git/HEAD",
+    ".git/config",
+    ".git/hooks/pre-commit.sample",
+    ".git/index",
+    ".git/logs/HEAD",
+    ".git/logs/refs/heads/main",
+    ".git/logs/refs/remotes/origin/HEAD"
+  ],
+  "submodules_declared": "",
+  "git_lfs_pointers": [],
+  "file_manifest": {
+    "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "README.md": "ea3cf798777bc59e4b0b958a9aeda2bcb63f41a9ecd20a0843c4245bec382300",
+    "assets/cirr.png": "814ee7c2cb6c115a7532ff627d4754ffc9b55d2db21ac33e9d5d8ac3aeeece40",
+    "assets/fiqshoes.png": "662d4d712950f2c56990fef00631a5d190d1eeebbeeaf86e1693f9d02a6722e3",
+    "assets/logo/airknow-logo.png": "2b26cf39410e4dd9e579cb2293599307910d0cfc1611b753345a8072bf9b3115",
+    "assets/logo/consep-logo.png": "4ceab1a6cb6bff5c7968355d0643b8cb1440f97b31ec5e5426597b802a4c6523",
+    "assets/logo/encoder-logo.png": "c5fdd32e723d5243b3a6d12f16568326e508f41db7d8ee1b7c8f61bfca2852bd",
+    "assets/logo/habit-logo.png": "f012a0651f2d58dff8936d17373e400cea5042501a0bba605c8b4b576c9521ce",
+    "assets/logo/hud-logo.png": "700307f6d53ae74c5f886594c656ec6bb7b4275367f5194f6bb2556b812c8d87",
+    "assets/logo/intent-logo.png": "5115e6f8e99aefe874fb130a8941458d629b360d4b9bee98a9b3964552d30ff2",
+    "assets/logo/offset-logo.png": "37fe5c002d2b60649ee6943bfe5a06b656b0c8583c21d47cf0573d77e0ebebb5",
+    "assets/logo/pair-logo.png": "2b6241243e3c33aefef4001796c906ef1ead9b8599ae794013d0c398531fe302",
+    "assets/logo/retrack-logo.png": "d5ef2ecfeb2d6fde3d863033c15db22283213665320d58605f103a6221c78f1d",
+    "assets/pair.png": "4ff11a4e0c49b1891e2a538e5fd0e020a64f9116cb8ff8055bc6f8314d3106ff",
+    "cirr_test_submission.py": "24fa6587ed933fc5fbdf90e7e7296c1386de2fee10aa0a44a3d6c74890803369",
+    "data/datasets.py": "13f7deb5d6ad9ece6d8d2cca6e96a7cb83947f792b749360d3750661a9b736a0",
+    "models/MHTransformer.py": "1c13df48b1b9cb2e9058b0e176237b1874b42a4a00e64d33802d1f49c2dd1a5a",
+    "models/model.py": "88470c3de9fb23e6f411024ea36181e203fafa63786def50b6db1362e1054a49",
+    "test.py": "33b53088c8600fcbe1c591cbddb3f2ec59abc0d9d048cc40043e63effd0eefd1",
+    "train.py": "7cf3cdcfbb155e30ca996ac1c415577dac13cadfb269e2044cee17733e1c2e5f",
+    "utils/utils.py": "2876c2129c74f70432b76ca121df3c0d0b24e01b8c0b5775ea088e5460c4a9e7"
+  },
+  "local_fixes": [
+    {
+      "path": "models/MHTransformer_rev.py",
+      "origin": "model_recovery_addition",
+      "upstream_sha256": null,
+      "delivered_sha256": "33980bab5ab924ed1dedd1198ff3edd26f14a064c52e8760eb01cb28685edb06"
+    }
+  ]
+}

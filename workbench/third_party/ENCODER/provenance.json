@@ -1,0 +1,69 @@
+{
+  "model_ids": [
+    "encoder"
+  ],
+  "requested_url": "https://github.com/iLearn-Lab/AAAI25-ENCODER",
+  "resolved_url": "git@github.com:iLearn-Lab/AAAI25-ENCODER",
+  "upstream_commit": "29a2a31d6a56f677bf450c3be7cdaef423fb7018",
+  "upstream_commit_date": "2026-05-25T18:00:29+08:00",
+  "license_file": "LICENSE",
+  "destination": "/home/heheboiz/data/cir/workbench/third_party/ENCODER",
+  "vendored_at": "2026-10-18T12:17:53+00:00",
+  "files_written": 46,
+  "nested_git_removed": [
+    ".git",
+    "__pycache__"
+  ],
+  "preserved_local_files": [
+    ".git/HEAD",
+    ".git/config",
+    ".git/hooks/pre-commit.sample",
+    ".git/index",
+    ".git/logs/HEAD",
+    ".git/logs/refs/heads/main",
+    ".git/logs/refs/remotes/origin/HEAD"
+  ],
+  "submodules_declared": "",
+  "git_lfs_pointers": [],
+  "file_manifest": {
+    "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "README.md": "244d0df9f8574aba0cc44064a30ede71ce8f12fd333c166cd390e20b8fbbbc3e",
+    "assets/cirr-results.png": "ac8f80891d9460d2a2ce39b2f5ea17bc6f02e8806ce7aa8f10f6b60bc90765ed",
+    "assets/encoder-intro.png": "b639637f832bc93692b8259d74a8f33ff16dafce6b7c5da4e13d960c0832bd40",
+    "assets/encoder-logo.png": "c5fdd32e723d5243b3a6d12f16568326e508f41db7d8ee1b7c8f61bfca2852bd",
+    "assets/encoder-pipeline.png": "c75fa876d843b99516b7d6779bef59368a83ff0da3a56174e8db47ba0bd93d15",
+    "assets/fashion-results.png": "a2ae8f80bb792ffd4ffeb16b8c44244a5dee024d57233647cc97e3a608e4c3b6",
+    "assets/fashion200k-results.png": "275103852049a964dabe798031588fe620482c7ee450e86fdf29e2d6e23cffd4",
+    "assets/logos/airknow-logo.png": "2b26cf39410e4dd9e579cb2293599307910d0cfc1611b753345a8072bf9b3115",
+    "assets/logos/consep-logo.png": "4ceab1a6cb6bff5c7968355d0643b8cb1440f97b31ec5e5426597b802a4c6523",
+    "assets/logos/habit-logo.png": "f012a0651f2d58dff8936d17373e400cea5042501a0bba605c8b4b576c9521ce",
+    "assets/logos/hud-logo.png": "700307f6d53ae74c5f886594c656ec6bb7b4275367f5194f6bb2556b812c8d87",
+    "assets/logos/intent-logo.png": "5115e6f8e99aefe874fb130a8941458d629b360d4b9bee98a9b3964552d30ff2",
+    "assets/logos/offset-logo.png": "37fe5c002d2b60649ee6943bfe5a06b656b0c8583c21d47cf0573d77e0ebebb5",
+    "assets/logos/retrack-logo.png": "d5ef2ecfeb2d6fde3d863033c15db22283213665320d58605f103a6221c78f1d",
+    "assets/logos/tema-logo.png": "c00a781463f71d1077c1e1277fbd273f2d224b202a2dc335564929828f9bb91b",
+    "cirr_test_submission.py": "30e3f9f16cc6206a546adfedc55226902a5c33fb8ef3002d7b33ee7913146a17",
+    "datasets.py": "6e94fc7c010848f690f46876a7d2d2db77fcce5e4b426cd9c4c609d64641a113",
+    "evaluate_model.py": "8a147bd1474f18651117fb4712c600b58c1d894f130e1b3f509894816f2969e9",
+    "model_try2.py": "f0c435dc3d44d1bfb3681606369fd1cc350ab6be91ca4b111f83c5adff4ef4bf",
+    "requirements.txt": "34204f178d7e95cbe10db716cf2e867f6292963bda69fe5b7b715f00181ddbcd",
+    "test.py": "d2bab967aeea291707fc4421356a48cdff323d155149c37af9c0190a6d7df679",
+    "token_wise_matching.py": "9416fdb4d187f4f178927f44646dd8ffbcad9c747b3b75ca5eebdc382315708a",
+    "train.py": "36126aa39e1a058d4788482cdb06c5e72b703ae136fe7e73adc6a3578b679202",
+    "utils.py": "2876c2129c74f70432b76ca121df3c0d0b24e01b8c0b5775ea088e5460c4a9e7"
+  },
+  "local_fixes": [
+    {
+      "path": "datasets1.py",
+      "origin": "model_recovery_addition",
+      "upstream_sha256": null,
+      "delivered_sha256": "05b2ee20228c3bafb757785f14789f0855c6c0128c34837020b88e479a682dc7"
+    },
+    {
+      "path": "evaluate_model.py",
+      "origin": "model_recovery",
+      "upstream_sha256": "8a147bd1474f18651117fb4712c600b58c1d894f130e1b3f509894816f2969e9",
+      "delivered_sha256": "e01623e35cdee23cf976b4dd359728feb301d81fc2efe09a91f3a9e4a29f932f"
+    }
+  ]
+}

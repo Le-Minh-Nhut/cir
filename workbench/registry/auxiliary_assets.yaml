@@ -72,27 +72,24 @@ assets:
 - model_id: csmcir
   family: COT_ours2 captions
   required_for: official_evaluation
-  # SOURCE_COMPATIBLE_EQUIVALENCE_UNKNOWN (workbench/docs/COT_OURS2_AUDIT.md).
-  # The author never published `COT_ours2/fashioniq/*`, and no copy is reachable, so the strict
-  # requirement stays UNVERIFIED and csmcir stays blocked by default. The published Qwen caption of
-  # the same category and split is a source-compatible stand-in: it is the file the author ships, its
-  # gallery-id coverage is exact against the declared split, and it carries the `Final_Caption` every
-  # executing consumer reads. `caption_alias_from` names that published asset so an explicitly
-  # opted-in run can stage it at this path, labelled as a variant rather than as official parity.
-  source_type: none
-  source_repo: null
-  source_revision: null
-  source_path: null
+  # PUBLISHED at the author Hub. The earlier note ("the author never published COT_ours2/fashioniq/*,
+  # and no copy is reachable") was FALSE: the same three files are served at
+  # https://huggingface.co/peng12138/CSMCIR under `fashioniq_qwen_captions/qwen_captions/`, and the
+  # bytes were verified against the local copies and against the sibling `qwen_captions` assets the
+  # workbench already downloads at revision cf0c19bb (identical sha256 for all three categories).
+  # The destination path is the in-checkout path the executing consumer opens
+  # (`src/utils_csmcir.py:100`), so the workbench stages the published file there rather than
+  # aliasing a different file into it.
+  source_type: author_huggingface
+  source_repo: https://huggingface.co/peng12138/CSMCIR
+  source_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
+  source_path: fashioniq_qwen_captions/qwen_captions/dress_cot_val.json
   destination_scope: model_source
   destination_path: COT_ours2/fashioniq/dress_cot_val.json
-  automatic_download_available: false
-  provenance_status: UNVERIFIED
-  caption_alias_from:
-    source_path: fashioniq_qwen_captions/qwen_captions/dress_cot_val.json
-    source_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
-    expected_sha256: b7129bafc56ed7f33ea5175e565358b042b5ef9263af002758564579ebb5b6a6
-    expected_size_bytes: 2817386
-  expected_sha256: null
+  automatic_download_available: true
+  expected_sha256: b7129bafc56ed7f33ea5175e565358b042b5ef9263af002758564579ebb5b6a6
+  provenance_status: VERIFIED
+  expected_size_bytes: 2817386
   content_contract:
     record_key_fields:
     - Final_Caption
@@ -102,20 +99,16 @@ assets:
 - model_id: csmcir
   family: COT_ours2 captions
   required_for: official_evaluation
-  source_type: none
-  source_repo: null
-  source_revision: null
-  source_path: null
+  source_type: author_huggingface
+  source_repo: https://huggingface.co/peng12138/CSMCIR
+  source_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
+  source_path: fashioniq_qwen_captions/qwen_captions/shirt_cot_val.json
   destination_scope: model_source
   destination_path: COT_ours2/fashioniq/shirt_cot_val.json
-  automatic_download_available: false
-  provenance_status: UNVERIFIED
-  caption_alias_from:
-    source_path: fashioniq_qwen_captions/qwen_captions/shirt_cot_val.json
-    source_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
-    expected_sha256: bbe6f689dfe0c5fcc897979f90877fcaa2c4c8d3dc405cb64f1507fc78452cc9
-    expected_size_bytes: 5015979
-  expected_sha256: null
+  automatic_download_available: true
+  expected_sha256: bbe6f689dfe0c5fcc897979f90877fcaa2c4c8d3dc405cb64f1507fc78452cc9
+  provenance_status: VERIFIED
+  expected_size_bytes: 5015979
   content_contract:
     record_key_fields:
     - Final_Caption
@@ -125,20 +118,16 @@ assets:
 - model_id: csmcir
   family: COT_ours2 captions
   required_for: official_evaluation
-  source_type: none
-  source_repo: null
-  source_revision: null
-  source_path: null
+  source_type: author_huggingface
+  source_repo: https://huggingface.co/peng12138/CSMCIR
+  source_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
+  source_path: fashioniq_qwen_captions/qwen_captions/toptee_cot_val.json
   destination_scope: model_source
   destination_path: COT_ours2/fashioniq/toptee_cot_val.json
-  automatic_download_available: false
-  provenance_status: UNVERIFIED
-  caption_alias_from:
-    source_path: fashioniq_qwen_captions/qwen_captions/toptee_cot_val.json
-    source_revision: cf0c19bb346266c295b4b5772ebf03bd1c4f0467
-    expected_sha256: acdacc3d8d0565e645324ddd838cb288f1bc69434635d83ece127b93dacac1cc
-    expected_size_bytes: 3929303
-  expected_sha256: null
+  automatic_download_available: true
+  expected_sha256: acdacc3d8d0565e645324ddd838cb288f1bc69434635d83ece127b93dacac1cc
+  provenance_status: VERIFIED
+  expected_size_bytes: 3929303
   content_contract:
     record_key_fields:
     - Final_Caption
@@ -244,6 +233,52 @@ assets:
   automatic_download_available: true
   # content-length the storage host serves (final audit C-5; HEAD observed). No published digest.
   expected_size_bytes: 746998955
+  expected_sha256: null
+  provenance_status: UNVERIFIED
+- model_id: encoder
+  family: LAION CLIP ViT-B/32 (open_clip format)
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://huggingface.co/laion/CLIP-ViT-B-32-laion2B-s34B-b79K/resolve/main/open_clip_pytorch_model.bin
+  source_revision: main
+  source_path: null
+  destination_scope: model_source
+  # The pinned evaluator sets `clip_path = '.'` and calls
+  # `open_clip.create_model_and_transforms('ViT-B-32', pretrained=os.path.join(clip_path,
+  # 'open_clip_pytorch_model.bin'))` (evaluate_model.py:38; the same literal appears in
+  # model_try2.py), so the file must sit at the CHECKOUT ROOT under exactly this name. It is the
+  # LAION-2B ViT-B/32 open_clip checkpoint the paper's pretrained backbone names.
+  destination_path: open_clip_pytorch_model.bin
+  automatic_download_available: true
+  expected_size_bytes: null
+  expected_sha256: null
+  provenance_status: UNVERIFIED
+- model_id: airknow
+  family: LAVIS BLIP-2 pretrain weights
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth
+  source_revision: null
+  source_path: null
+  destination_scope: user_cache
+  destination_path: lavis/blip2_pretrained.pth
+  cache_root_env_var: XDG_CACHE_HOME
+  automatic_download_available: true
+  expected_size_bytes: 746998955
+  expected_sha256: null
+  provenance_status: UNVERIFIED
+- model_id: airknow
+  family: EVA-ViT-g backbone weights
+  required_for: official_evaluation
+  source_type: direct_url
+  source_repo: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth
+  source_revision: null
+  source_path: null
+  destination_scope: user_cache
+  destination_path: hub/checkpoints/eva_vit_g.pth
+  cache_root_env_var: TORCH_HOME
+  automatic_download_available: true
+  expected_size_bytes: 2025249237
   expected_sha256: null
   provenance_status: UNVERIFIED
 - model_id: csmcir

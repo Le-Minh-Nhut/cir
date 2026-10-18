@@ -45,6 +45,23 @@ class HintAdapter(OfficialScriptAdapter):
     model_id = "hint"
     script = "test.py"
 
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        # The pinned evaluator has no `__main__`, no argument parser and no checkpoint loader, so
+        # `test.py` cannot be launched at all. `workbench/replay/hint.py` is the missing shell and
+        # calls the pinned `test()` and the pinned `datasets.FashionIQ` unchanged; the single
+        # checkpoint is shared across the three categories (`category_model_policy: shared`).
+        return [
+            _runtime.python_executable(self.model),
+            str(Path(__file__).resolve().parents[3] / "workbench" / "replay" / "hint.py"),
+            # Shared member-root rule, applied to the already-resolved path: HINT's artifact is a
+            # single file, so `checkpoint_member_root` returns its own directory and the wrapper
+            # looks the member up by name. Hard-coding `.parent` would silently break if this
+            # checkpoint ever became a directory artifact.
+            "--checkpoint-root", str(checkpoint_member_root(checkpoint)),
+            "--dataset-root", str(request.dataset_root),
+            "--source-root", str(source),
+        ]
+
 
 class PairAdapter(OfficialScriptAdapter):
     model_id = "pair"

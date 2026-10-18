@@ -1,0 +1,63 @@
+{
+  "model_ids": [
+    "limn"
+  ],
+  "requested_url": "https://github.com/iLearn-Lab/TPAMI24-LIMN",
+  "resolved_url": "git@github.com:iLearn-Lab/TPAMI24-LIMN",
+  "upstream_commit": "7d7bc9b116f594a65ac22457491edf28a88d3c3e",
+  "upstream_commit_date": "2026-04-05T19:33:05+08:00",
+  "license_file": "LICENSE",
+  "destination": "/home/heheboiz/data/cir/workbench/third_party/LIMN",
+  "vendored_at": "2026-10-18T12:18:32+00:00",
+  "files_written": 56,
+  "nested_git_removed": [
+    ".git",
+    "LIMN/__pycache__",
+    "LIMN+/__pycache__"
+  ],
+  "preserved_local_files": [
+    ".git/config",
+    ".git/index",
+    ".git/logs/HEAD",
+    ".git/logs/refs/heads/main",
+    ".git/logs/refs/remotes/origin/HEAD"
+  ],
+  "submodules_declared": "",
+  "git_lfs_pointers": [],
+  "file_manifest": {
+    "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "LIMN/MHTransformer.py": "4d3407a73db6aa866e471e1e230869ed5c29d5daa5a2623d28a97e518e660ca9",
+    "LIMN/Transformer.py": "a1ca41c4c35eef8fda8d20f32fce189dccb3c106f67b616685b4d3ba3b332459",
+    "LIMN/cirr_test_submission.py": "59ae63077b720385f778585dc93de70c4ddfc0082fcd1668dbc2776ef91ae2c9",
+    "LIMN/datasets.py": "d5a61843942f206bc449040b22efc51b55d98cb65ae7038a98424113504b6a5e",
+    "LIMN/model.py": "20f8cf90fb4384c3847d2c8b183175f2330de66cb245e7484f7e285695dcbf5d",
+    "LIMN/test.py": "14cbf9a9428a1a23a6e0dcb7384d64e1fe451c2ff22d4867250bc10885472b6c",
+    "LIMN/train.py": "02474c52052ecccec2976ab7c9bb931113ed819ba3a819712414d554938e23b2",
+    "LIMN/utils.py": "68a3cf7a95e6d49b2e269c09896878fb0caeda6f4e3ad007dbed6c6d7e3da69c",
+    "LIMN+/MHTransformer.py": "4d3407a73db6aa866e471e1e230869ed5c29d5daa5a2623d28a97e518e660ca9",
+    "LIMN+/Transformer.py": "a1ca41c4c35eef8fda8d20f32fce189dccb3c106f67b616685b4d3ba3b332459",
+    "LIMN+/cirr_test_submission.py": "59ae63077b720385f778585dc93de70c4ddfc0082fcd1668dbc2776ef91ae2c9",
+    "LIMN+/datasets.py": "442290b62685e9693fff77a4d86c193383ed933f1de22e00302863343dace9c7",
+    "LIMN+/model.py": "e107c4b6eb0bdeda2f3fbdc7b92bd2651b0c0900f7c9417b11c069ec8586d0c1",
+    "LIMN+/pseudo_data/augment_data_cirr_1.json": "e998a09054275d1d4d4675120516b296c33b64467cb62882a1572fb9d4d352b6",
+    "LIMN+/pseudo_data/augment_data_dress_1.json": "be0eef415d6480f173bbfd250c32564ba40c28bf2402a233d7722b9da21d7715",
+    "LIMN+/pseudo_data/augment_data_dress_2.json": "33ec9a2c0b05c0794ef73c858b48c7efd842be117058af691d3343fb4ea1e2fd",
+    "LIMN+/pseudo_data/augment_data_shirt_1.json": "edb9ec7be209d25887c59a44ced8528319dea3e075148513abe940c7f9b469d4",
+    "LIMN+/pseudo_data/augment_data_shirt_2.json": "3121c1a6362be5b5c1fcab83f08cb9c09f29837c139a8e6772a4fa1ebc1935cb",
+    "LIMN+/pseudo_data/augment_data_shoes_1.json": "cb7a8e3aaf10123bf171dbcb48eff253b895ca48606dd08e403c08dbc04efaa8",
+    "LIMN+/pseudo_data/augment_data_shoes_2.json": "09f1885840eabecebebae5a7d61293dc3b842853b791ac335aec38964b1319c0",
+    "LIMN+/pseudo_data/augment_data_toptee_1.json": "0faf44e4c318d4f6614a6653436a8360665ce04ee1535caf3e5fb4a17a61b90c",
+    "LIMN+/pseudo_data/augment_data_toptee_2.json": "588f64cfbf60b879255ba48d386c182a255c8b105732f384257ed298c0afbab5",
+    "LIMN+/pseudo_data/xx": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "LIMN+/test.py": "5db74b5cd59e2e17fbc8903034c27faffb37b9d4a8990bf3b403c63e713e97f1",
+    "LIMN+/train.py": "e20dd284936318d54464556ae7c0f30cf0b4f9c979f846474b4edd0ea9603a02",
+    "LIMN+/utils.py": "68a3cf7a95e6d49b2e269c09896878fb0caeda6f4e3ad007dbed6c6d7e3da69c",
+    "README.md": "f914ea693558882c7aa540bf20a36a8e82f3c6badb427fb7b729fb654bd54060",
+    "correct_files/correction_dict_dress.json": "9e4a59877098fe26036b70759387be589990eb4068692427e890113dcba2edda",
+    "correct_files/correction_dict_shirt.json": "ca29e29e23c0a1987d6b121219d9580bdae9872df0ea219c5aea870ee2f8567e",
+    "correct_files/correction_dict_shoes.json": "50451054df2d2365d732413bea40983c03c6f00ea4361ec258d16bd2c6238c24",
+    "correct_files/correction_dict_toptee.json": "3dfbf15fa6d3a30dc0f5cf7e2908ca36d1775e42aa6598f1dba7899267dc1b71",
+    "requirements.txt": "cf6ffa8bc09b9ab873440b3d36315d2675d723a848f1e25f5e1ec47d5a9df724"
+  },
+  "local_fixes": []
+}

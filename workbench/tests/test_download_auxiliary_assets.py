@@ -53,7 +53,7 @@ def load_module():
     return module
 
 
-def test_assets_list_qwen_and_unverified_cot(tmp_path: Path) -> None:
+def test_assets_list_qwen_and_published_cot(tmp_path: Path) -> None:
     module = load_module()
     items = module.assets({"csmcir"}, tmp_path / "third_party", tmp_path / "FashionIQ")
     qwen = tuple(asset for asset in items if asset.family == "Qwen captions")
@@ -61,7 +61,15 @@ def test_assets_list_qwen_and_unverified_cot(tmp_path: Path) -> None:
 
     assert len(qwen) == len(cot) == 3
     assert all(asset.required and asset.source_url and asset.source_revision == "cf0c19bb346266c295b4b5772ebf03bd1c4f0467" and asset.provenance_status == "VERIFIED" for asset in qwen)
-    assert all(asset.required and asset.source_url is None and asset.provenance_status == "UNVERIFIED" for asset in cot)
+    # The COT_ours2 captions ARE published: the author Hub serves `fashioniq_qwen_captions/
+    # qwen_captions/{cat}_cot_val.json`, the local checkout copies are byte-identical to those
+    # bytes, and the registry therefore declares a real acquisition source and digest for the
+    # in-checkout path the evaluator opens. An earlier revision of this test asserted the opposite
+    # ("no source URL, UNVERIFIED"); that assertion encoded a claim the Hub refutes.
+    assert all(asset.required and asset.source_url and asset.provenance_status == "VERIFIED"
+               and asset.expected_sha256 for asset in cot)
+    assert {Path(asset.destination).name for asset in cot} == {
+        f"{category}_cot_val.json" for category in ("dress", "shirt", "toptee")}
 
 
 def test_dry_run_reports_pinned_qwen_urls_and_never_opens_network(monkeypatch, tmp_path: Path, capsys) -> None:
@@ -76,7 +84,11 @@ def test_dry_run_reports_pinned_qwen_urls_and_never_opens_network(monkeypatch, t
     for category in ("dress", "shirt", "toptee"):
         assert f"https://huggingface.co/peng12138/CSMCIR/resolve/cf0c19bb346266c295b4b5772ebf03bd1c4f0467/fashioniq_qwen_captions/qwen_captions/{category}_cot_val.json" in output
         assert str(config.FASHIONIQ_ROOT / "qwen_captions" / f"{category}_cot_val.json") in output
-    assert "required asset has no verified automatic acquisition source" in output
+    # Every required CSMCIR asset now has a verified acquisition source, so nothing is reported
+    # blocked: the COT_ours2 captions are published by the author Hub and are fetched to the
+    # in-checkout path the evaluator opens.
+    assert "required asset has no verified automatic acquisition source" not in output
+    assert str(config.WORKBENCH_THIRD_PARTY_ROOT / "CSMCIR" / "COT_ours2" / "fashioniq") in output
     assert "no network request" in output
 
 
@@ -635,9 +647,25 @@ def _alias_fixture(tmp_path: Path, monkeypatch) -> tuple:
                 "key_kind": "fashioniq_image_id",
                 "id_source": id_source,
             }
-            asset["caption_alias_from"] = dict(
-                asset["caption_alias_from"], expected_sha256=digest, expected_size_bytes=len(body),
-            )
+            # The COT_ours2 destination is a *published* asset URL again (the author Hub serves the
+            # same file under `fashioniq_qwen_captions/qwen_captions/`), while these tests exercise
+            # the *alias* path: staging a published asset at a destination whose own URL is
+            # unobtainable. The fixture therefore restates the record as alias-shaped, which is the
+            # only way to reach `stage_caption_alias` now that the registry no longer uses that shape
+            # for COT_ours2. `caption_alias_from` itself is still a live, exercised code path — see
+            # `stage_caption_alias` in download_auxiliary_assets.py.
+            alias_source = asset["source_path"]
+            asset["source_path"] = None
+            asset["source_repo"] = None
+            asset["source_revision"] = None
+            asset["automatic_download_available"] = False
+            asset["provenance_status"] = "UNVERIFIED"
+            asset["caption_alias_from"] = {
+                "source_path": alias_source,
+                "source_revision": "cf0c19bb346266c295b4b5772ebf03bd1c4f0467",
+                "expected_sha256": digest,
+                "expected_size_bytes": len(body),
+            }
         patched.append(asset)
 
     monkeypatch.setattr(registry_module, "load_auxiliary_assets", lambda *a, **k: patched)

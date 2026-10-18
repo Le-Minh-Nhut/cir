@@ -12,6 +12,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.operator_config import resolve_config
+from workbench.backend.vendored_source import (
+    PROVENANCE_FILENAME,
+    source_provenance as vendor_provenance,
+)
 
 from workbench.backend.registry import load_registry
 
@@ -31,9 +35,35 @@ def git_output(destination: Path, *command: str) -> str | None:
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def _model_for(destination: Path) -> dict | None:
+    """The registry model whose ``source_dir`` names this checkout, if any."""
+    for model in load_registry()["models"]:
+        source_dir = model.get("source_dir")
+        if not source_dir:
+            continue
+        try:
+            if destination_for(Path(destination.parent), model) == destination.resolve():
+                return model
+        except (OSError, ValueError):
+            continue
+    return None
+
 def local_state(destination: Path) -> tuple[str, str | None, bool | None]:
     if not destination.exists():
         return "missing", None, None
+    if (destination / PROVENANCE_FILENAME).is_file():
+        # Vendored layout: upstream source is tracked in this repository with the nested Git
+        # metadata removed, so there is no Git here to interrogate. The recorded commit *is* the
+        # pin and the content manifest *is* the cleanliness check, so this reports on that basis
+        # rather than reporting a healthy delivered checkout as "not a git repository".
+        model = _model_for(destination)
+        prov = vendor_provenance(model, destination) if model else {}
+        head = prov.get("actual_commit")
+        if prov.get("error"):
+            return "dirty", head, True
+        if head is None:
+            return "unreadable", None, None
+        return "clean", head, False
     head = git_output(destination, "rev-parse", "HEAD")
     if head is None:
         return "not a git repository", None, None

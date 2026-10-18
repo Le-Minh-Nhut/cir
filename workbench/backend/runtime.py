@@ -14,6 +14,12 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from workbench.backend.vendored_source import (
+    PROVENANCE_FILENAME,
+    source_clean_and_pinned as vendor_source_clean_and_pinned,
+    source_provenance as vendor_provenance,
+)
+
 # Tier ordering: each tier implies all lower tiers were verified.
 TIER_ORDER = [
     "INTERPRETER_MISSING",
@@ -2388,12 +2394,23 @@ def _verify_declared_artifact(source: Path, path: str, declaration: dict[str, An
 def _source_dirty(source: Path, model: dict[str, Any] | None = None) -> bool | None:
     """True when the checkout differs from the pin in a way that matters.
 
-    ``__pycache__``/``*.pyc`` are unavoidable products of running Python and do not
-    change evaluator semantics. Declared, verified runtime artifacts (the CSMCIR
-    canonical dataset link, audited auxiliary assets) are legitimate products of the
-    workbench's own preparation contract. Everything else — tracked edits, and any
-    untracked/ignored path that is *not* a verified declared artifact — is dirty.
+    A *vendored* checkout (the delivered layout: upstream source tracked in this repository with
+    the nested Git metadata removed) has no ``.git`` to run ``status`` against, so integrity comes
+    from the recorded per-file digest manifest instead — see ``vendored_source``. It is also the
+    stronger check: it cannot be fooled by a modification made after the pin.
+
+    A nested checkout is still supported for an operator who syncs upstream into a scratch root.
+    ``__pycache__``/``*.pyc`` are unavoidable products of running Python and do not change
+    evaluator semantics. Declared, verified runtime artifacts (the canonical dataset link, audited
+    auxiliary assets) are legitimate products of the workbench's own preparation contract.
+    Everything else — tracked edits, and any untracked/ignored path that is *not* a verified
+    declared artifact — is dirty.
     """
+    if (source / PROVENANCE_FILENAME).is_file():
+        provenance = vendor_provenance(model, source)
+        if provenance.get("error"):
+            return True
+        return None
     entries = source_status(source)
     if entries is None:
         return None
@@ -2401,6 +2418,10 @@ def _source_dirty(source: Path, model: dict[str, Any] | None = None) -> bool | N
 
 
 def source_clean_and_pinned(model: dict[str, Any], source: Path) -> tuple[bool, str | None, str | None]:
+    if (source / PROVENANCE_FILENAME).is_file():
+        # Vendored layout: the pin is the recorded upstream commit and integrity is the content
+        # manifest, so this needs no Git call at all.
+        return vendor_source_clean_and_pinned(model, source)
     try:
         top_level = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=source,
                                    check=True, capture_output=True, text=True).stdout.strip()
@@ -2428,8 +2449,15 @@ def source_clean_and_pinned(model: dict[str, Any], source: Path) -> tuple[bool, 
 
 
 def source_provenance(model: dict[str, Any], source: Path) -> dict[str, Any]:
-    """Record expected pin, actual pin, cleanliness, and a provenance digest."""
+    """Record expected pin, actual pin, cleanliness, and a provenance digest.
+
+    Shape is identical for both layouts so every consumer keeps working: a vendored checkout fills
+    the same keys from the recorded manifest instead of from ``git status``.
+    """
     import hashlib
+
+    if (source / PROVENANCE_FILENAME).is_file():
+        return vendor_provenance(model, source)
 
     expected = model.get("upstream_commit_sha")
     actual = None

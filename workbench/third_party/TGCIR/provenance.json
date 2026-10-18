@@ -1,0 +1,40 @@
+{
+  "model_ids": [
+    "tgcir"
+  ],
+  "requested_url": "https://github.com/iLearn-Lab/MM23-TG-CIR",
+  "resolved_url": "git@github.com:iLearn-Lab/MM23-TG-CIR",
+  "upstream_commit": "65fa78eaf8cabe8197fcc22ccab42207c591bdee",
+  "upstream_commit_date": "2026-04-09T16:03:25+08:00",
+  "license_file": null,
+  "destination": "/home/heheboiz/data/cir/workbench/third_party/TGCIR",
+  "vendored_at": "2026-10-18T12:18:20+00:00",
+  "files_written": 34,
+  "nested_git_removed": [
+    ".git",
+    "__pycache__"
+  ],
+  "preserved_local_files": [
+    ".git/config",
+    ".git/index",
+    ".git/logs/HEAD",
+    ".git/logs/refs/heads/main",
+    ".git/logs/refs/remotes/origin/HEAD"
+  ],
+  "submodules_declared": "",
+  "git_lfs_pointers": [],
+  "file_manifest": {
+    "README.md": "cc2095c93838a1ad35c224b062cca4830e913e6a47f97cde9fe3837bebd28a97",
+    "cirr_test_submission.py": "3acde2add76990b4d17753c1690f20c3d616f2d52bdc43f8ab00ba1e519fba09",
+    "correction_dict/correction_dict_dress.json": "9e4a59877098fe26036b70759387be589990eb4068692427e890113dcba2edda",
+    "correction_dict/correction_dict_shirt.json": "ca29e29e23c0a1987d6b121219d9580bdae9872df0ea219c5aea870ee2f8567e",
+    "correction_dict/correction_dict_shoes.json": "50451054df2d2365d732413bea40983c03c6f00ea4361ec258d16bd2c6238c24",
+    "correction_dict/correction_dict_toptee.json": "3dfbf15fa6d3a30dc0f5cf7e2908ca36d1775e42aa6598f1dba7899267dc1b71",
+    "datasets.py": "bbe219805cbb57f49686c1ecaa13a295afa4c03af04a687af0233d7885ed53c4",
+    "model.py": "98438b3d86506eefd270aac38ebd73215fde5a28a3b6136b7578473bdf43e423",
+    "test.py": "c3f93987eb24788a5ae1e390bb9cbbd74d097b66604a97acf7e51d92b3c0dadf",
+    "train.py": "a1b0e4116ed207d3e3c0e2128486869d114a2eb3f21f74b31a800a822f3ead73",
+    "utils.py": "68a3cf7a95e6d49b2e269c09896878fb0caeda6f4e3ad007dbed6c6d7e3da69c"
+  },
+  "local_fixes": []
+}

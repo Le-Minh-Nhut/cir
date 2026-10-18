@@ -218,27 +218,37 @@ models:
     method_name: PTHA + MTST
     research_generation: recent
     publication_year: 2025
-    preparation_contract: unavailable
+    preparation_contract: manual_standard
     paper_title: Scale Up Composed Image Retrieval Learning via Modification Text Generation
     paper_url: https://arxiv.org/abs/2504.05316
-    # Independence review (workbench/docs/reviews/models/ptha_mtst.md) refuted the earlier "no source"
-    # conclusion: an author repository exists. It is recorded as evidence, not registered as a source_dir
-    # or a commit pin, because registering it would claim a checkout the workbench has not synced, audited
-    # or verified. Sync and audit it before promoting it to `source_dir`.
+    # Author repository, now vendored as tracked source at `source_dir`. Independence review
+    # (workbench/docs/reviews/models/ptha_mtst.md) refuted the earlier "no source" conclusion; the
+    # checkout is pinned at the commit whose tree is committed under workbench/third_party/MTST_PTHA,
+    # with provenance.json recording the resolved URL, the commit, and the per-file digest manifest.
+    # One local fix is recorded there: `src/lavis/models/__init__.py:54` is the only import in the
+    # package that names a module the pinned revision does not contain
+    # (`blip2_qformer_tgir_concatembedding_sim_zyn.py`), and the class this evaluator needs
+    # (`Blip2Qformer4TGIRCESIM`, registered as `blip2_tgir_ce_sim`) is imported on the line above it,
+    # so the unguarded import took down a package that would otherwise load.
     upstream_repo_url: https://github.com/zyinan99/MTST_PTHA
     upstream_default_branch: main
-    upstream_commit_sha: null
-    source_available: false
-    source_dir: null
-    source_blocker: "author repository https://github.com/zyinan99/MTST_PTHA exists and is reachable (README title matches the paper, commits authored by the paper's first author Yinan Zhou, HEAD 6a02ee4763fc2260b6abfb18be78853facb91d86 at 2025-02-09) but is not synced, pinned or audited here, and no FashionIQ fine-tuned checkpoint is verified; the earlier 'no source exists' note was incomplete"
-    native_protocol: null
-    supported_protocols: []
+    upstream_commit_sha: 6a02ee4763fc2260b6abfb18be78853facb91d86
+    source_available: true
+    source_dir: MTST_PTHA
+    # The pinned evaluator hard-codes `base_path` to the literal the README tells the operator to
+    # hand-edit (`src/data_utils.py:15`), and it opens `fashionIQ_dataset/images/{id}.png`
+    # (`:170`, `:206`) — matching the canonical mirror, which ships `.png` only.
+    fashioniq_layout: fashioniq_standard
+    fashioniq_image_extensions: [".png"]
+    literature_split_label: original
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
     reported_r10: 54.99
     reported_r50: 76.28
     reported_mean: 65.64
     reproduction_status: BLOCKED_NO_VERIFIED_FASHIONIQ_CHECKPOINT
     strict_clean_checkpoint_available: false
-    notes: No author-linked FashionIQ fine-tuned checkpoint verified. CIRR pretraining evidence is not eligible.
+    notes: No author-linked FashionIQ fine-tuned checkpoint verified. CIRR pretraining evidence is not eligible. The gallery is the complete ordered validation split with the reference ELIGIBLE (validate_blip.py:44-51 builds labels against targets only and contains no reference mask, unlike the CIRR path at :258-260), which is what makes fashioniq_original_split its protocol.
     checkpoint_variants: []
   - model_id: habit
     environment:

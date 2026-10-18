@@ -1,0 +1,7 @@
+# Vendored upstream trees keep their bytes exactly as the pinned commit has them.
+#
+# The digests in `workbench/third_party/<dir>/provenance.json` are the integrity baseline for these
+# checkouts, so Git must never rewrite a file on checkout: a normalization would leave the file on
+# disk failing its own recorded digest, and a healthy delivered tree would then be reported as
+# tampered with. 124 vendored files carry CRLF, so this is not hypothetical.
+workbench/third_party/** -text -diff

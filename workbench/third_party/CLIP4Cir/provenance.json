@@ -1,0 +1,46 @@
+{
+  "model_ids": [
+    "combiner_rn50x4_noft",
+    "clip4cir_rn50x4_fullft"
+  ],
+  "requested_url": "https://github.com/ABaldrati/CLIP4Cir",
+  "resolved_url": "git@github.com:ABaldrati/CLIP4Cir",
+  "upstream_commit": "dfed9f748a8a4d05abf613164e06d59b22dbdf13",
+  "upstream_commit_date": "2023-09-05T09:31:52+02:00",
+  "license_file": "LICENSE",
+  "destination": "/home/heheboiz/data/cir/workbench/third_party/CLIP4Cir",
+  "vendored_at": "2026-10-18T12:18:16+00:00",
+  "files_written": 35,
+  "nested_git_removed": [
+    ".git",
+    "src/__pycache__"
+  ],
+  "preserved_local_files": [
+    ".git/config",
+    ".git/index",
+    ".git/logs/HEAD",
+    ".git/logs/refs/heads/master",
+    ".git/logs/refs/remotes/origin/HEAD",
+    ".git/packed-refs",
+    ".git/refs/heads/master"
+  ],
+  "submodules_declared": "",
+  "git_lfs_pointers": [],
+  "file_manifest": {
+    ".gitignore": "19d4f34c92d4dafa217d8fdf246d9d59ecb1c5b150574e7a1059b0b0972eccfd",
+    "LICENSE": "edd2cec48ba6d07b120ff2a1cca34f172c34c4f5c79b033162f8e1bfdf5ad618",
+    "README.md": "10bde4c3013c4f6392cee2acb27e6756d33b3d45492d6922a094fb3bacb9baa8",
+    "images/Combiner-architecture.png": "f2dad95701ef1a6bab1693e082a36d26ed28f9c05e47f52db88cb9d2b793f29d",
+    "images/cir-overview.png": "05e597f958aa7f42a08342e5704ac8e6e2d586f830eb0e9162d49caec7e514e8",
+    "images/clip-fine-tuning.png": "18462488c010702ca00dd1c32e4426cf517d4f523845783fdb71db796cf9d85b",
+    "images/combiner-training.png": "34d34d469364f7288d591d04e875fdc8d2b6c2d709159b60bbfcd7892df33e71",
+    "src/cirr_test_submission.py": "e650486e54ea739e97b8c3ca25f7d79132f3a687e3decac47b20935a1f6ac1f4",
+    "src/clip_fine_tune.py": "c97e6ce392220dbe539caf4a5effcd542d3c6ebc0b24e8566c4b6b8738b5d221",
+    "src/combiner.py": "8c7cf22aece540ca41c6540fc2f40cf43e7aaf3dbb6e8007b3285f5200db08be",
+    "src/combiner_train.py": "60ed74e7f64927f28ee586d89afdc22e445c7fff11c546542bd9092a5543bb84",
+    "src/data_utils.py": "bd8ecc90417b2258681a4085b3dab4098db6f2f54ec924c3d35ee9a93a57c3bd",
+    "src/utils.py": "ca336ef308f3d2f04094f464f5d54a4bc8e623d10014bccae16753cf3a0060f2",
+    "src/validate.py": "bc0b3e6e88e73d56d6e8ae3b076d5ad71b357118f1e5b2b0212dacd187c4f16c"
+  },
+  "local_fixes": []
+}
