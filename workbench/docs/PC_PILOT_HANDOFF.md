@@ -3,10 +3,23 @@
 Tài liệu này là hợp đồng bàn giao sang máy RTX 5070 Ti. Nó nói **chính xác** cái gì đã được kiểm chứng
 trên máy dev, cái gì chỉ có thể kiểm trên máy đích, và cách đọc kết quả.
 
-**Chưa từng chạy trên RTX 5070 Ti.** Không có chứng thư GPU nào trong repo.
+**Chưa từng chạy trên RTX 5070 Ti.** Không có chứng thư GPU nào trong repo, chưa từng có suy luận
+thật trên GPU và chưa từng tái lập Recall — mọi khẳng định về LIMN trong tài liệu này là mức tĩnh
+hoặc mức fixture.
+
+## Phán quyết
+
+**`PC_PILOT_HANDOFF_READY`** — đường pilot chạy được trên máy đích.
+**`GPU_SCIENTIFIC_VALIDATION_PENDING`** — toàn bộ phần khoa học còn chờ GPU.
+
+**Chỉ LIMN sẵn sàng cho lượt PC pilot đầu tiên.** 15 model còn lại **chưa** sẵn sàng và vẫn cần việc
+bổ sung: `encoder` cần một bản sửa nhỏ (alias import, asset LAION ViT-B/32, parser metric);
+`clip4cir_rn50x4_noft` và `clip4cir_rn50x4_fullft` cần map checkpoint thành viên;
+`dcnet` cần asset thượng nguồn; `ptha_mtst` cần tác giả cung cấp source/checkpoint;
+10 model còn lại cần wrapper. Ma trận đầy đủ ở `workbench/docs/reviews/r8/R8_16_MODEL_STATUS.md`.
 
 **SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `59949ff`** — mọi test, acceptance, mutation và release_verify mô
-tả trên trang này đã chạy trên đúng cây đó (1426 passed; acceptance, mutation và release_verify đều
+tả trên trang này đã chạy trên đúng cây đó (1427 passed; acceptance, mutation và release_verify đều
 chạy lại trên cùng commit).
 
 Trước đây trang này trỏ tới `11ba3df`. Commit đó nay là **nguồn đã lỗi thời**: `git diff 11ba3df
@@ -35,7 +48,8 @@ Nhánh này sẽ tiếp tục tiến lên. Mốc bất biến để đối chi�
 cây nguồn sản xuất theo từng byte sẽ thất bại nếu điều đó không còn đúng.
 
 Bản đầy đủ của lượt review cuối (ma trận 16 model, coverage, sổ lỗi, đối chiếu độc lập, verdict) nằm
-trong `workbench/docs/reviews/FINAL_*.md`.
+trong `workbench/docs/reviews/FINAL_*.md` và `workbench/docs/reviews/r8/R8_FINAL_REPORT.md` (báo cáo
+của lượt R8: git state, đóng lỗi, kết quả test, phán quyết).
 
 ## 1. Lệnh chính
 
