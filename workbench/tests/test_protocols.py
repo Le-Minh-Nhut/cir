@@ -68,15 +68,45 @@ def test_dcnet_shares_only_reference_excluded_full_gallery_cohort() -> None:
     assert models["dcnet"]["native_protocol"] != models["hint"]["native_protocol"]
 
 
-def test_audited_legacy_cli_commands_match_pinned_source() -> None:
+def test_every_legacy_entry_has_a_command_derived_from_its_pinned_source() -> None:
+    """All entries build a command; none inherits the base `NotImplementedError`.
+
+    This test used to assert that four of these seven -- `clvc_net`, `tgcir`, `sprc`, `limn` -- still
+    inherited the base `command`. That encoded the pre-recovery state, in which an entry could be
+    registered, listed and still be impossible to launch. "Upstream has no CLI" is the reason a replay
+    wrapper exists, so the property worth holding is the opposite: every entry the registry declares
+    must have a command, and that command must name a file that exists in the tree.
+    """
+    from pathlib import Path
+
+    from unittest.mock import patch
+
+    from workbench.backend import runtime as _runtime
+    from workbench.backend.adapters.base import EvalRequest
     from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+    from workbench.backend.registry import load_registry
 
     legacy = {"clvc_net", "dcnet", "combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "tgcir", "sprc", "limn"}
-
     assert legacy <= ADAPTERS.keys()
-    audited = {"dcnet", "combiner_rn50x4_noft", "clip4cir_rn50x4_fullft", "limn"}
-    assert all(ADAPTERS[model_id].command is not OfficialScriptAdapter.command for model_id in audited)
-    assert all(ADAPTERS[model_id].command is OfficialScriptAdapter.command for model_id in legacy - audited)
+
+    unimplemented = [model_id for model_id, adapter in ADAPTERS.items()
+                     if adapter.command is OfficialScriptAdapter.command]
+    assert unimplemented == [], f"entries that cannot be launched: {unimplemented}"
+
+    sources = {model["model_id"]: model.get("source_dir") for model in load_registry()["models"]}
+    repo_root = Path(__file__).resolve().parents[2]
+    for model_id in sorted(legacy):
+        source = repo_root / "workbench" / "third_party" / (sources[model_id] or "")
+        # `command()` resolves the interpreter through `runtime.python_executable`, which refuses an
+        # unconfigured environment. The argument list is what this test is about, so the interpreter
+        # is stubbed rather than the assertion weakened.
+        with patch.object(_runtime, "python_executable", lambda model: "/usr/bin/python3"):
+            command = ADAPTERS[model_id]().command(
+                source, repo_root / "checkpoints" / model_id / "unused.pt",
+                EvalRequest(model_id, "unused", None, repo_root / "data", repo_root / "out.json"))
+        target = Path(command[1])
+        assert target.exists() or (source / target).exists(), (
+            f"{model_id} names a command target that is not in the tree: {target}")
 
 
 def test_legacy_layout_contracts_require_native_inputs(tmp_path) -> None:
