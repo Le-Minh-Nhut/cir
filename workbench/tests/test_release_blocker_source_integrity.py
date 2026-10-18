@@ -108,7 +108,15 @@ def test_src06_tracked_evaluator_modification_rejected(csmcir_checkout):
     assert clean is False and "validate_blip_csmcir.py" in reason
     provenance = source_provenance(model, source)
     assert provenance["verified"] is False
-    assert provenance["tracked_modifications"]
+    # The divergence is recorded in `invalid_runtime_artifacts`, because the file IS covered by a
+    # declared approved patch and the edit fell outside that patch's delta -- which is a different
+    # finding from an undeclared change and belongs in its own field. `tracked_modifications` stays
+    # empty for that case, and the refusal now also carries a reason so the distinction is readable
+    # rather than implied.
+    assert provenance["error"] and "validate_blip_csmcir.py" in provenance["error"]
+    assert any("validate_blip_csmcir.py" in entry
+               for entry in provenance["invalid_runtime_artifacts"])
+    assert provenance["tracked_modifications"] == []
 
 
 # ------------------------------------------------------------------ SRC-02 SRC-03 SRC-04

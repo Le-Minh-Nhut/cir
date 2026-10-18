@@ -93,7 +93,10 @@ def test_every_legacy_entry_has_a_command_derived_from_its_pinned_source() -> No
                      if adapter.command is OfficialScriptAdapter.command]
     assert unimplemented == [], f"entries that cannot be launched: {unimplemented}"
 
-    sources = {model["model_id"]: model.get("source_dir") for model in load_registry()["models"]}
+    registry = load_registry()["models"]
+    sources = {model["model_id"]: model.get("source_dir") for model in registry}
+    model_variants = {model["model_id"]: [v["checkpoint_id"] for v in model.get("checkpoint_variants") or []]
+                      for model in registry}
     repo_root = Path(__file__).resolve().parents[2]
     for model_id in sorted(legacy):
         source = repo_root / "workbench" / "third_party" / (sources[model_id] or "")
@@ -103,7 +106,11 @@ def test_every_legacy_entry_has_a_command_derived_from_its_pinned_source() -> No
         with patch.object(_runtime, "python_executable", lambda model: "/usr/bin/python3"):
             command = ADAPTERS[model_id]().command(
                 source, repo_root / "checkpoints" / model_id / "unused.pt",
-                EvalRequest(model_id, "unused", None, repo_root / "data", repo_root / "out.json"))
+                # The request must name a REAL variant, because an adapter is allowed to refuse a selection
+        # whose contract it cannot satisfy (SPRC refuses to choose a vision encoder when the variant
+        # declares none). `"unused"` was fine while every adapter ignored the id.
+        EvalRequest(model_id, (model_variants.get(model_id) or ["unused"])[0], None,
+                    repo_root / "data", repo_root / "out.json"))
         target = Path(command[1])
         assert target.exists() or (source / target).exists(), (
             f"{model_id} names a command target that is not in the tree: {target}")

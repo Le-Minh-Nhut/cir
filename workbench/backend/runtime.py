@@ -2225,6 +2225,11 @@ def source_status(source: Path) -> dict[str, list[str]] | None:
         if line.strip():
             other_paths.append(_path_of(line))
 
+    # A refusal must say WHY, and once. `git status --porcelain` lists a modified tracked file once,
+    # while the untracked+ignored union can list an ignored path in both of its columns, so the same
+    # divergence appeared up to three times in one list and an operator had to dedupe it by eye to see
+    # whether one path or three were at fault.
+    _dedupe = lambda items: list(dict.fromkeys(items))
     for line in tracked.splitlines():
         if not line.strip():
             continue
@@ -2258,6 +2263,8 @@ def source_status(source: Path) -> dict[str, list[str]] | None:
             continue
         verdict = _verify_declared_artifact(source, path, declaration)
         entries["approved" if verdict is None else "invalid"].append(path if verdict is None else f"{path}: {verdict}")
+    for key in ("tracked", "unauthorized", "approved", "invalid"):
+        entries[key] = _dedupe(entries[key])
     return entries
 
 def _approved_source_artifacts(source: Path) -> dict[str, dict[str, Any]]:
@@ -2477,7 +2484,20 @@ def source_provenance(model: dict[str, Any], source: Path) -> dict[str, Any]:
         error = f"git metadata unreadable: {exc}"
     entries = source_status(source) or {}
 
+    # A refusal must say WHY. `_source_dirty` can reject for three different reasons -- a tracked
+    # edit, an undeclared path, or a declared artifact whose verification failed -- and this function
+    # reported none of them: `error` stayed None while `verified` was False, so a caller could see the
+    # refusal but not the cause. That is what made an approved-patch rejection look like a silent
+    # failure, and it is the same shape of defect as reporting a dirty checkout as clean, only in the
+    # opposite direction: the answer is right and the explanation is missing.
+    if not error and dirty:
+        reason = (entries.get("tracked") or entries.get("invalid") or entries.get("unauthorized")
+                  or ["unknown divergence"])
+        error = f"source checkout is dirty: {reason[0]}"
+
     clean_and_pinned = bool(actual and not dirty and (not expected or actual == expected))
+    if not error and expected and actual and actual != expected:
+        error = f"source pin mismatch: expected {expected}, found {actual}"
     digest = hashlib.sha256(
         json.dumps(
             {"expected": expected, "actual": actual, "dirty": dirty, "error": error},

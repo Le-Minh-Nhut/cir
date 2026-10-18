@@ -98,12 +98,13 @@ def test_v11_limn_inconsistent_mean_rejected():
 def test_v12_missing_parser_no_fabrication():
     """A model with no parser reports that, and never invents a metric.
 
-    This used `airknow` while it had no parser. Air-Know now has a replay wrapper and therefore the
-    shared replay parser, so the premise moved: `dcnet` is the model whose evaluator writes files
-    instead of printing metrics, and it genuinely has no parser. The invariant being guarded is
-    unchanged -- unreadable output yields no observed metric rather than a substituted one.
+    The model used here keeps moving for the right reason: `airknow` gained a parser, then `dcnet`
+    did too (its evaluator prints fractions that are now parsed). `ptha_mtst` is the current holder —
+    it has a preflight wrapper and NO metric output at all, because no FashionIQ checkpoint exists to
+    produce one. The invariant is unchanged: unreadable output yields no observed metric rather than a
+    substituted one, and a model must not borrow another model's parser.
     """
-    r = mx.extract_aggregate_metrics("dcnet", "irrelevant output", "", 0)
+    r = mx.extract_aggregate_metrics("ptha_mtst", "irrelevant output", "", 0)
     assert r.extraction_status == "AGGREGATE_PARSER_UNAVAILABLE"
     assert r.observed_metrics is None
     assert r.parser_id is None

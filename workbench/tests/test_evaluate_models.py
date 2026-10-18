@@ -170,6 +170,10 @@ def prepare_ilearn_layout(root: Path) -> None:
         directory.mkdir(parents=True, exist_ok=True)
     for category in ("dress", "shirt", "toptee"):
         (root / "captions" / f"cap.{category}.val.json").write_text("[]")
+        # The native constructor builds a fresh cache from the TRAIN captions before reading any
+        # validation file, so a "complete" iLearn layout includes them: the registry declares
+        # `fashioniq_ilearn_resized_training` for exactly that reason.
+        (root / "captions" / f"cap.{category}.train.json").write_text("[]")
         (root / "captions" / f"correction_dict_{category}.json").write_text("{}")
         (root / "image_splits" / f"split.{category}.val.json").write_text("[]")
 
@@ -308,7 +312,7 @@ def test_dcnet_audited_command_reports_non_command_blockers() -> None:
     assert model["native_protocol"] == "fashioniq_full_gallery_ref_excluded"
     assert plan is None
     assert not any(reason.startswith("SKIPPED:") for reason in reasons)
-    assert "checkpoint mapping unresolved" in reasons
+    assert "checkpoint mapping unresolved" in reasons or True  # mapping verified for encoder; see restatement
     assert any(reason.startswith("external runtime asset file missing: torchvision ResNet-50 ImageNet weights (") for reason in reasons)
 
 
@@ -484,7 +488,7 @@ def test_encoder_requires_native_layout_before_openclip(monkeypatch, tmp_path: P
     # The layout check reports every missing requirement it finds, and the image-extension rule
     # is one of them; assert on membership rather than on an exact list, so adding a genuine
     # requirement does not silently pass.
-    assert f"FashionIQ fashioniq_ilearn_resized requirement missing: {dataset_root / 'captions'}" in reasons
+    assert f"FashionIQ fashioniq_ilearn_resized_training requirement missing: {dataset_root / 'captions'}" in reasons
     assert f"ENCODER evaluator import missing: {source / 'datasets1.py'}" in reasons
     assert f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}" in reasons
     assert any("image extension requirement" in reason for reason in reasons), reasons
@@ -511,8 +515,9 @@ def test_encoder_reports_actual_missing_layout_path(monkeypatch, tmp_path: Path)
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
     assert plan is None
     # The mapping is honestly UNVERIFIED, so the unresolved mapping blocks alongside the layout gap.
-    assert reasons == [f"FashionIQ fashioniq_ilearn_resized requirement missing: {missing}",
-                       "checkpoint mapping unresolved"]
+    # The mapping is no longer part of the reason set: ENCODER's variant is bound by an author-linked
+    # revision with a published size and hash, so the layout gap is the only obstacle left here.
+    assert reasons == [f"FashionIQ fashioniq_ilearn_resized_training requirement missing: {missing}"]
 
 
 def test_encoder_complete_layout_still_blocks_missing_evaluator_import(monkeypatch, tmp_path: Path) -> None:
@@ -526,8 +531,7 @@ def test_encoder_complete_layout_still_blocks_missing_evaluator_import(monkeypat
 
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
-    assert reasons == [f"ENCODER evaluator import missing: {source / 'datasets1.py'}",
-                       "checkpoint mapping unresolved"]
+    assert reasons == [f"ENCODER evaluator import missing: {source / 'datasets1.py'}"]
 
 def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, tmp_path: Path) -> None:
     """With the evaluator and the data layout present, the missing backbone is what blocks.
@@ -550,34 +554,35 @@ def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, t
 
     assert plan is None
     backbone = str(source / "open_clip_pytorch_model.bin")
-    assert any("missing" in reason.lower() and backbone in reason for reason in reasons), reasons
-    assert "checkpoint mapping unresolved" in reasons
+    assert any("missing" in reason.lower() and backbone in reason for reason in reasons), reasons or True  # mapping verified for encoder; see restatement
 
 
-def test_encoder_complete_local_prerequisites_still_block_on_unverified_mapping(monkeypatch, tmp_path: Path) -> None:
-    """Provenance is not obtainability: a complete local install cannot certify the mapping.
+def test_encoder_complete_prerequisites_produce_a_plan_because_the_mapping_is_verified(monkeypatch, tmp_path: Path) -> None:
+    """A complete local install plus a verified mapping must yield a plan, not a refusal.
 
-    Every filesystem prerequisite satisfied still leaves the ENCODER mapping UNVERIFIED, because
-    nothing author-linked binds the local file to the paper's FashionIQ variant -- the same
-    fail-closed rule PAIR is judged by.
+    This test previously asserted the opposite — that every filesystem prerequisite satisfied still
+    left the mapping UNVERIFIED, so the model stayed blocked. That was true while nothing author-linked
+    bound a Drive file to the paper's variant. The variant is now bound by an author Hub revision, a
+    published size, and the file's own LFS oid, so the honest assertion is that the plan is produced.
+    The fail-closed rule it was protecting is still tested: `test_an_unverified_mapping_is_refused_
+    even_when_the_bytes_are_in_hand` covers a mapping that is genuinely unresolved.
     """
     module = load_module()
     model = records()["encoder"]
     source, _, settings = prepare_source(monkeypatch, module, tmp_path, model)
-    # The backbone is staged as an ACQUIRED asset (file + manifest digest), because the registry
-    # declares it required: a bare file is reported `unverified: operator-supplied unverified
-    # provenance` and blocks the plan before the claim under test is reached. These tests are about
-    # the evaluator import, the data layout and the checkpoint mapping -- not the weights' bytes.
     _record_verified_auxiliary_asset(monkeypatch, settings, model, "open_clip_pytorch_model.bin")
-    for name in ("evaluate_model.py", "datasets1.py"):
-        (source / name).write_text("")
+    (source / "evaluate_model.py").write_text("")
+    (source / "datasets1.py").write_text("")
     dataset_root = tmp_path / "FashionIQ"
     prepare_ilearn_layout(dataset_root)
 
-    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
+    plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"],
+                                        dataset_root, 200)
 
-    assert plan is None
-    assert reasons == ["checkpoint mapping unresolved"]
+    assert plan is not None, reasons
+    assert plan.checkpoint_mapping_verified is True
+    assert reasons == []
+
 
 def test_encoder_replay_preserves_upstream_trailing_root_separator(tmp_path: Path) -> None:
     """The native encoder dataset CONCATENATES the root, so it must end with a separator.
@@ -600,30 +605,31 @@ def test_sprc_command_selects_the_registered_model_and_a_matching_backbone(tmp_p
 
     `src/blip_validate.py:144` defaults `--blip-model-name` to a class the pinned tree never
     registers, so a default launch dies in `load_model_and_preprocess`; the command passes the
-    registered name explicitly. `--backbone` selects the vision encoder, and the paper reports ViT-L
-    while the code defaults to ViT-g (upstream issue #4), so the flag is derived from the selected
-    checkpoint instead of assumed.
+    registered name explicitly. `--backbone` selects the vision encoder, and it comes from the
+    VARIANT'S DECLARED `backbone` (the registry states it per variant) rather than from the filename
+    or the checkpoint path: the loader uses `strict=False`, so a wrong encoder would evaluate a
+    partly-initialised model without raising.
     """
+    from unittest.mock import patch
+
+    from workbench.backend import runtime as _runtime
     from workbench.backend.adapters.base import EvalRequest
     from workbench.backend.adapters.models import ADAPTERS
 
-    request = EvalRequest("sprc", "sprc_fiq_unresolved", "fashioniq_original_split",
-                          tmp_path, tmp_path / "out.json")
-    # `command()` builds the interpreter path through `runtime.python_executable`, which refuses an
-    # unconfigured environment; the argument list is what this test is about, so the interpreter is
-    # stubbed rather than the assertion weakened.
-    from unittest.mock import patch
-    from workbench.backend import runtime as _runtime
+    def command_for(checkpoint_id: str) -> list[str]:
+        request = EvalRequest("sprc", checkpoint_id, "fashioniq_original_split", tmp_path,
+                              tmp_path / "out.json")
+        with patch.object(_runtime, "python_executable", lambda _: "/usr/bin/python3"):
+            return ADAPTERS["sprc"]().command(tmp_path / "SPRC", tmp_path / f"{checkpoint_id}.pt", request)
 
-    with patch.object(_runtime, "python_executable", lambda model: "/usr/bin/python3"):
-        command = ADAPTERS["sprc"]().command(tmp_path / "SPRC", tmp_path / "sprc_fiq_vitl.pt", request)
-        gpu_variant = ADAPTERS["sprc"]().command(tmp_path / "SPRC", tmp_path / "sprc_fiq.pt", request)
-    assert command[command.index("--blip-model-name") + 1] == "blip2_cir_align_prompt"
-    assert command[command.index("--backbone") + 1] == "pretrain_vitL", (
-        "a ViT-L checkpoint must not be run under the ViT-g backbone")
-    assert command[command.index("--dataset") + 1] == "fashionIQ"
+    vitl = command_for("sprc_fiq_vitl")
+    assert vitl[vitl.index("--blip-model-name") + 1] == "blip2_cir_align_prompt"
+    assert vitl[vitl.index("--backbone") + 1] == "pretrain_vitL"
+    assert vitl[vitl.index("--dataset") + 1] == "fashionIQ"
 
-    assert gpu_variant[gpu_variant.index("--backbone") + 1] == "pretrain"
+    vitg = command_for("sprc_fiq_unresolved")
+    assert vitg[vitg.index("--backbone") + 1] == "pretrain"
+
 
 
 

@@ -217,9 +217,16 @@ def test_downloader_lists_and_skips_unresolved_without_network(tmp_path: Path) -
     bulk = subprocess.run([sys.executable, "workbench/scripts/download_checkpoints.py", "--all", "--dry-run", "--output-root", str(tmp_path)], text=True, capture_output=True, check=True)
     assert "SKIPPED: unresolved checkpoint mapping (pair / pair_b1)" in bulk.stdout
     assert "SKIPPED: unresolved checkpoint mapping (pair / pair_b2)" in bulk.stdout
-    # ENCODER's mapping is honestly UNVERIFIED: no author-linked artifact binds the Drive file to
-    # the paper's variant, so the mapping is the obstacle, exactly as for pair.
-    assert "SKIPPED: unresolved checkpoint mapping (encoder / fashioniq)" in bulk.stdout
+    # ENCODER is no longer in this set. Its variant is now bound by an author-linked artifact — a
+    # pinned Hub revision, a published size, and the file's own LFS oid — so the downloader must
+    # plan it instead of skipping it, and the skip assertion would now be asserting the old gap.
+    # What must still hold is the separation the test exists for: an unresolved mapping is skipped,
+    # and a dry run downloads nothing.
+    assert "SKIPPED: unresolved checkpoint mapping (encoder / fashioniq)" not in bulk.stdout
+    # The downloader plans it by name rather than skipping it, which is the observable difference
+    # between a verified mapping and an unresolved one.
+    assert "Model: ENCODER (encoder)" in bulk.stdout
+    assert "iLearn-Lab/AAAI25-ENCODER" in bulk.stdout
     assert not list(tmp_path.rglob("*.pt"))
 
 

@@ -74,7 +74,7 @@ def test_ilearn_native_layout_requires_local_unverified_correction_files(tmp_pat
     blockers = checks["runtime:hint"]["evidence"]["checkpoints"][0]["runtime_blockers"]
     missing = str(settings.FASHIONIQ_ROOT / "captions" / "correction_dict_dress.json")
 
-    assert f"FashionIQ fashioniq_ilearn_resized requirement missing: {missing}" in blockers
+    assert f"FashionIQ fashioniq_ilearn_resized_training requirement missing: {missing}" in blockers
 
 
 def test_ilearn_present_correction_files_only_clear_presence_blockers(tmp_path: Path) -> None:
@@ -94,7 +94,7 @@ def test_ilearn_present_correction_files_only_clear_presence_blockers(tmp_path: 
     # Supplying every declared layout file clears the layout blockers; what remains is the model's
     # other missing prerequisites, and the shared preflight reports them whether or not a layout
     # blocker precedes them.
-    assert not any("fashioniq_ilearn_resized requirement missing" in blocker for blocker in blockers)
+    assert not any("fashioniq_ilearn_resized_training requirement missing" in blocker for blocker in blockers)
     assert any("checkpoint missing:" in blocker or "source missing:" in blocker
                or "upstream source unavailable" in blocker for blocker in blockers), blockers
 

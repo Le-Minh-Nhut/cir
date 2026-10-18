@@ -126,8 +126,13 @@ def test_a_failed_process_still_yields_no_metrics() -> None:
 
 
 def test_models_without_a_wrapper_keep_reporting_the_honest_gap() -> None:
-    """dcnet/tgcir/ptha_mtst print nothing parseable yet; saying so is the correct answer."""
-    for model_id in ("dcnet", "tgcir", "ptha_mtst"):
+    """Models with no metric output must say so rather than borrow another model's parser.
+
+    `dcnet` is no longer in this set: its evaluator prints fractions that the workbench now parses
+    (F09). The models below still produce nothing parseable — `tgcir` is preflight-only because its
+    archive mapping is unresolved, and `ptha_mtst` has no FashionIQ checkpoint at all.
+    """
+    for model_id in ("tgcir", "ptha_mtst"):
         result = extract_aggregate_metrics(model_id, replay_document(model_id), "", 0)
         assert result.extraction_status == "AGGREGATE_PARSER_UNAVAILABLE", (
             f"{model_id} borrowed a parser it does not have")

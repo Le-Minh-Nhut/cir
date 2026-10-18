@@ -139,18 +139,51 @@ def test_the_val_split_family_records_no_training_condition(models) -> None:
     assert selection.checkpoint_ids == ("base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee")
     assert selection.bundle_id == "base_iter0_all_categories"
 
-def test_an_unresolved_url_keeps_its_mapping_state_separate(models) -> None:
+def test_verified_metadata_and_an_unresolved_url_stay_independent(models) -> None:
     """An obtainability fact and a knowledge fact are different fields and must not be transposed.
 
-    ENCODER's direct file URL is unresolved (author Drive folder only), and nothing observed binds a
-    Drive file to the paper's FashionIQ variant, so the mapping is honestly UNVERIFIED. That pairing
-    (unresolved URL, unverified mapping) must stay legal: the URL fact says nothing about the
-    mapping, and the registry documents exactly that separation.
+    ENCODER used to be the example of the opposite pairing: an unresolved URL with an unverified
+    mapping. Its metadata is now verified against the author Hub — a pinned revision, a published
+    size, and the file's own LFS oid — so the mapping is VERIFIED_METADATA while the *status* field
+    records that the bytes are not staged locally. Those two facts remain separate fields: verifying
+    which artifact a variant is does not claim the artifact has been fetched, and staging it does not
+    verify which variant it is.
     """
     variant = models["encoder"]["checkpoint_variants"][0]
-    assert variant["checkpoint_mapping_status"] == "UNVERIFIED"
-    assert variant["status"] == "URL_UNRESOLVED"
-    assert variant["download_url"] is None
+    assert variant["checkpoint_mapping_status"] == "VERIFIED_METADATA"
+    assert variant["status"] == "URL_VERIFIED"
+    assert "iLearn-Lab/AAAI25-ENCODER" in variant["download_url"]
+    # A revision, not a moving branch: "main" would make the verified hash meaningless.
+    assert "/resolve/main/" not in variant["download_url"]
+    # The published hash is what makes the mapping verified; without it this would be a name only.
+    assert variant["expected_sha256"] and variant["expected_size_bytes"]
+
+
+def test_an_unresolved_url_may_coexist_with_any_mapping_state(models) -> None:
+    """The pairing must stay LEGAL: an unresolved URL says nothing about the mapping.
+
+    ENCODER was the last live example of `URL_UNRESOLVED`, and its metadata is now verified against
+    the author Hub, so no variant currently carries that status. The rule still has to hold — a
+    registry edit that reintroduces an unresolved URL must not be rejected merely for pairing it with
+    an unverified mapping, and must not be *accepted* for pairing it with a verified one either. The
+    rule is asserted on the vocabulary and on every variant that does carry a null URL, rather than on
+    one model that happens to be in that state today.
+    """
+    registry = load_registry()
+    allowed = {"URL_VERIFIED", "NO_CLEAN_CHECKPOINT", "URL_UNRESOLVED", "NO_SOURCE",
+               "CHECKPOINT_MAPPING_UNVERIFIED"}
+    assert "URL_UNRESOLVED" in allowed, "the vocabulary must keep the state a null URL describes"
+
+    null_url = [variant for model in models.values()
+                for variant in model.get("checkpoint_variants") or []
+                if variant.get("download_url") is None]
+    assert null_url, "some variant must still have no direct URL"
+    for variant in null_url:
+        assert variant["checkpoint_mapping_status"] in {"UNVERIFIED", "VERIFIED_METADATA"}
+        # A variant with no URL cannot claim its bytes were verified by fetching them.
+        if variant["status"] == "URL_UNRESOLVED":
+            assert variant["download_url"] is None
+
 
 def test_an_unverified_mapping_is_refused_even_when_the_bytes_are_in_hand(models) -> None:
     """Provenance is not obtainability: an unverified mapping must not be selected as clean.
