@@ -36,11 +36,11 @@ achieved verification level 1–6. **P/Q**: per-query capability today.
 | model_id | year | source / pinned SHA | proto | entry | wrap | ckpt | asset | lvl | P/Q | verdict |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `limn` | 2024 | `iLearn-Lab/TPAMI24-LIMN` `7d7bc9b1` | C | `REPLAY_COMMAND_IMPLEMENTED` | done | VERIFIED (3 sha256) | correction dicts in-tree | **3** | **observer** | **ACTUALLY_READY_PENDING_GPU** |
-| `clip4cir_rn50x4_fullft` | 2023 | `ABaldrati/CLIP4Cir` `dfed9f74` | A | `CLI_READY` | — | **upstream now ships checksummed release** | RN50x4 base | 2 | none | REQUIRES_UPSTREAM_ASSET (≤1 env fix away) |
-| `combiner_rn50x4_noft` | 2023 | `ABaldrati/CLIP4Cir` `dfed9f74` | A | `CLI_READY` | — | **`fiq_comb_RN50x4_noft.pt` sha256 published** | same | 2 | none | REQUIRES_UPSTREAM_ASSET (≤1 env fix away) |
+| `clip4cir_rn50x4_fullft` | 2023 | `ABaldrati/CLIP4Cir` `dfed9f74` | A | `CLI_READY` | — | **upstream now ships a checksummed release (members UNKNOWN without download)** | RN50x4 base | 2 | none | CHECKPOINT_ARCHIVE_PUBLIC + MEMBER_MAPPING_PENDING_DOWNLOAD |
+| `combiner_rn50x4_noft` | 2023 | `ABaldrati/CLIP4Cir` `dfed9f74` | A | `CLI_READY` | — | **`fiq_comb_RN50x4_noft.pt` sha256 published** | same | 2 | none | CHECKPOINT_ARCHIVE_PUBLIC + MEMBER_MAPPING_PENDING_DOWNLOAD |
 | `clvc_net` | 2021 | `iLearn-Lab/SIGIR21-CLVC-Net` `bd9b6889` | C | `CALLABLE_NO_CLI` | MODERATE | whole-module pickle, 6 members | asset-blocked | 2 | none | REQUIRES_EVALUATION_WRAPPER + LEGACY_RUNTIME (2 numerics-neutral edits proved) |
-| `dcnet` | 2021 | `ozmig77/dcnet` `68c79d38` | B | `CLI_READY` | — | 2 files, VERIFIED | **OOV unseeded → NONDETERMINISTIC** | 2 | none | REQUIRES_UPSTREAM_ASSET (permanent, see §5) |
-| `encoder` | 2025 | `iLearn-Lab/AAAI25-ENCODER` `29a2a31d` | C | `CLI_READY` | — | measured 631,879,365 B, sha256 unrecorded | LAION ViT-B/32 not provisioned | **3** | none | READY_AFTER_SMALL_FIX (alias + asset + parser) |
+| `dcnet` | 2021 | `ozmig77/dcnet` `68c79d38` | B | `CLI_READY` | — | 2 files, VERIFIED | **OOV unseeded → NONDETERMINISTIC** | 2 | none | REQUIRES_UPSTREAM_ASSET (author cache unavailable, see §5) |
+| `encoder` | 2025 | `iLearn-Lab/AAAI25-ENCODER` `29a2a31d` | C | `CLI_READY` | — | measured 631,879,365 B, sha256 unrecorded | LAION ViT-B/32 not provisioned | **3** | none | RECOVERY_PLAN_IDENTIFIED (alias + asset + parser NOT yet implemented) |
 | `hint` | 2026 | `iLearn-Lab/ICASSP26-HINT` `bec50b6c` | C | `CALLABLE_NO_CLI` | MODERATE | **no FIQ loader exists** | correction dicts present | 2 | none | REQUIRES_EVALUATION_WRAPPER |
 | `pair` | 2025 | `iLearn-Lab/ICASSP25-PAIR` `bfb0b98c` | C | `CALLABLE_NO_CLI` | BLOCKED_BY_MISSING_SOURCE | mapping unverified | — | 2 | none | **REQUIRES_SIGNIFICANT_RECONSTRUCTION** |
 | `airknow` | 2026 | `iLearn-Lab/CVPR26-Air-Know` `6ab6fa95` | B | `CALLABLE_NO_CLI` | MODERATE | whole-module pickle, url live | correction dicts **unpublished** | 2 | none | REQUIRES_EVALUATION_WRAPPER + REQUIRES_UPSTREAM_ASSET |
@@ -49,8 +49,8 @@ achieved verification level 1–6. **P/Q**: per-query capability today.
 | `conesep` | 2026 | `Lee-zixu/ConeSep` → `iLearn-Lab/CVPR26-ConeSep` `bd4bf629` | B | `CALLABLE_NO_CLI` | MODERATE | NO_CLEAN_CHECKPOINT (correct) | correction dicts present | 2 | none | REQUIRES_EVALUATION_WRAPPER |
 | `csmcir` | — | `qzp2018/CSMCIR` `774f94e2` | A | `CLI_READY` | — | VERIFIED (2.72 GB, oid) | **CoT val captions unpublished** | 2 | none | REQUIRES_UPSTREAM_ASSET |
 | `sprc` | 2024 | `chunmeifeng/SPRC` `2935a539` | A | `ADAPTER_NOT_IMPLEMENTED` | MODERATE | **URL 403** | vendored LAVIS complete | 2 | none | REQUIRES_UPSTREAM_ASSET (checkpoint republish) |
-| `tgcir` | 2023 | `iLearn-Lab/MM23-TG-CIR` `65fa78ea` | C | `CALLABLE_NO_CLI` | COMPLEX | zip, mapping UNKNOWN | CLIP ViT-B/16 unprovisioned | 2 | none | REQUIRES_EVALUATION_WRAPPER + checkpt mapping |
-| `ptha_mtst` | 2025 | **none vendored**; `zyinan99/MTST_PTHA` is the authors' own repo | **UNRESOLVED** | `SOURCE_MISSING` | BLOCKED | **no FashionIQ weight published** | — | 1 | none | **SOURCE_UNAVAILABLE** + SCIENTIFIC_PROTOCOL_UNVERIFIED |
+| `tgcir` | 2023 | `iLearn-Lab/MM23-TG-CIR` `65fa78ea` | C | `CALLABLE_NO_CLI` | COMPLEX | zip, mapping UNKNOWN | CLIP ViT-B/16 unprovisioned | 2 | none | REQUIRES_EVALUATION_WRAPPER + NEEDS_CHECKPOINT_MAPPING |
+| `ptha_mtst` | 2025 | **none vendored**; `zyinan99/MTST_PTHA` is the authors' own repo | **UNRESOLVED** | `SOURCE_MISSING` | BLOCKED | **no FashionIQ weight published** | — | 1 | none | **SOURCE_NOT_INTEGRATED** + CHECKPOINT_UNAVAILABLE + PROTOCOL_UNVERIFIED |
 
 ## 3. What the reassessment changed about the previous picture
 
@@ -73,10 +73,15 @@ Six findings that a documentation-level review would not have produced:
 4. **Four models' correction dictionaries are already on disk.** `conesep`, `hint`, `intent` (and
    `tgcir`) declare them missing; the files are present and **byte-identical** to LIMN's
    `correct_files/` (`9e4a5987…`, `ca29e29e…`, `3dfbf15f…`). Prior documents are stale here.
-5. **`dcnet` has a permanent scientific blocker, not an engineering one.** `preprocess/process_cap.py:31`
-   draws out-of-vocabulary embeddings from `np.random.normal` with **no seeding call anywhere in
-   `preprocess/`** (verified). Regenerating the cache yields a different experiment; the authors
-   published no `.pkl`.
+5. **`dcnet`'s blocker is scientific, not engineering — and not permanent.**
+   `preprocess/process_cap.py:31` draws out-of-vocabulary embeddings from `np.random.normal` with
+   **no seeding call anywhere in `preprocess/`** (verified), so
+   `ORIGINAL_PREPROCESSING_PARITY_UNVERIFIED`; the authors published no cache containing the
+   embeddings they drew, so `AUTHOR_CACHE_UNAVAILABLE`. A seeded reimplementation is reproducible
+   (`DETERMINISTIC_VARIANT_POSSIBLE`) but is not evidence of the original draw, so
+   `ORIGINAL_PAPER_PARITY_NOT_ESTABLISHED`. Missing public data today is not proof that the
+   authors' cache can never surface, so this is reported as an unestablished parity rather than as
+   a permanent impossibility.
 6. **`clvc_net`'s legacy problem is two edits, and both are numerically neutral.** `resnet.py:3`'s
    removed re-export and the `weights_only` flag; the audit proved bit-identical outputs and equal
    gradients. But the same audit found the `pretrained=` default now resolves to a **different weight

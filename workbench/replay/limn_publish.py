@@ -39,7 +39,49 @@ def load_payload(path: Path) -> dict:
         raise PayloadError(f"observation payload is not JSON: {error}") from error
     if not isinstance(payload, dict) or payload.get("artifact_type") != "limn_observation_payload":
         raise PayloadError(f"{path} is not an observation payload")
+    _require_declared_bundle(payload, path)
     return payload
+
+
+def _require_declared_bundle(payload: dict, path: Path) -> None:
+    """The staged members must match the bundle the REGISTRY declares for this checkpoint.
+
+    The planned-digest comparison is the strongest check available, but it lives in the payload: the
+    observer writes both the members and the digest it is compared against, and an operator running
+    this module directly supplies both. Neither can be the authority for what "all categories" means.
+
+    The registry can. LIMN's `base_iter0_all_categories` declares three required checkpoint ids --
+    one per category -- and a payload is an observation of that bundle only if it staged exactly
+    them. Without this, a payload declaring a single member published successfully: a
+    "three-category" per-query artifact whose recorded bundle contained one file, which no consumer
+    comparing bundle identity would catch, because the identity was internally consistent.
+    """
+    from workbench.backend.registry import model_by_id
+
+    checkpoint_id = payload.get("checkpoint_id")
+    model_id = payload.get("model_id")
+    if not checkpoint_id or not model_id:
+        return
+    try:
+        model = model_by_id(str(model_id))
+    except Exception:
+        return
+    bundle = next((item for item in (model.get("checkpoint_bundles") or [])
+                   if item.get("bundle_id") == checkpoint_id), None)
+    if not bundle:
+        # A single-category checkpoint declares no bundle, and there is nothing to compare against.
+        return
+    required = list(bundle.get("required_checkpoint_ids") or [])
+    if not required:
+        return
+    members = payload.get("checkpoint_members") or {}
+    declared = {str(member.get("checkpoint_id") or "") for member in members.values()}
+    if declared != set(required):
+        raise PayloadError(
+            f"{path} stages checkpoint members for {sorted(declared)}, but {model_id}'s "
+            f"{checkpoint_id!r} declares the bundle {sorted(required)}: a per-query artifact must "
+            "observe every member the registry requires, and a payload cannot decide for itself "
+            "what that set is")
 
 
 def _observed_categories(payload: dict) -> list[ObservedCategory]:

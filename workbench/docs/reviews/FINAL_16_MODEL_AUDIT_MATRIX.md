@@ -6,7 +6,8 @@ source**, cloned at the exact `upstream_commit_sha` in `workbench/registry/model
 families; the raw reports are the evidence for this table and are reproduced verbatim in the
 `verdict` column's reasoning.
 
-- **Tested source**: `84ec6f1` (the production tree every gate ran against)
+- **Tested source at the time of THIS matrix**: `84ec6f1`. Superseded; the current release metadata
+  is `FINAL_PC_RELEASE_VERDICT.md`.
 - **Audit inputs**: 15 distinct upstream repositories, all fetched and checked out at their pinned
   SHAs. `git rev-parse HEAD` in each clone matched the registry exactly.
 - **What "adapter" means**: `workbench/backend/adapters/models.py`. The adapter's only job is to

@@ -11,6 +11,7 @@ that rejects everything cannot pass:
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import hashlib
 from pathlib import Path
@@ -765,3 +766,87 @@ def test_a_declared_eligible_count_cannot_widen_the_protocol_ceiling() -> None:
     for query in narrower["queries"]:
         query["top_results"] = query["top_results"][:10]
     ResultRun.model_validate(narrower)
+
+# ---------------------------------------------------------------------------
+# The declared bundle identity cannot be decided by the payload
+# ---------------------------------------------------------------------------
+
+def _staged_payload(tmp_path: Path, members: dict) -> Path:
+    """A staged observation payload that is valid in every respect except the members passed in."""
+    categories = [dataclasses.asdict(_category(name, 20)) for name in ("dress", "shirt", "toptee")]
+    for category in categories:
+        for query in category["queries"]:
+            query["raw_captions"] = list(query["raw_captions"])
+            query["top_results"] = [{"rank": rank, "image_id": image_id, "score": score}
+                                    for rank, image_id, score in query["top_results"]]
+            query["query_id"] = (f"{query['category']}:{query['annotation_index']}:"
+                                 f"{query['reference_id']}:{query['target_id']}")
+    payload = {
+        "artifact_type": "limn_observation_payload", "schema_version": 1, "model_id": "limn",
+        "method_name": "LIMN", "checkpoint_id": "base_iter0_all_categories",
+        "protocol_id": "fashioniq_val_split",
+        "run_id": "dev-limn-base_iter0_all_categories-fashioniq_val_split",
+        "top_k": 200, "upstream_commit": "7d7bc9b116f594a65ac22457491edf28a88d3c3e",
+        "checkpoint_members": members,
+        "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED",
+        "instrumentation_mismatches": {}, "categories": categories,
+    }
+    path = tmp_path / "payload.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def _member(category: str, digest_char: str) -> dict:
+    return {"filename": f"0_{category}_best_model.pt",
+            "checkpoint_id": f"base_iter0_{category}", "sha256": digest_char * 64}
+
+
+def test_a_payload_cannot_publish_a_partial_bundle(tmp_path: Path) -> None:
+    """R8-04: the member set is the REGISTRY's to declare, not the payload's.
+
+    The planned-digest comparison lives inside the payload: the observer writes both the members and
+    the digest they are compared against, and an operator running the publisher directly supplies
+    both. So it cannot answer "is this the declared bundle". Measured on the pre-fix tree, a payload
+    declaring ONE member of LIMN's three-member bundle published successfully (rc 0) as a
+    `base_iter0_all_categories` artifact -- a "three-category" per-query result whose recorded bundle
+    held a single file, and internally consistent enough that no consumer comparing bundle identity
+    would notice.
+    """
+    from workbench.replay.limn_publish import load_payload
+
+    partial = _staged_payload(tmp_path, {"dress": _member("dress", "a")})
+    with pytest.raises(Exception) as refusal:
+        load_payload(partial)
+    message = str(refusal.value)
+    assert "base_iter0_shirt" in message and "base_iter0_toptee" in message, message
+    assert "base_iter0_all_categories" in message, message
+
+
+def test_the_declared_bundle_is_accepted_when_all_three_members_are_staged(tmp_path: Path) -> None:
+    """The positive control: refusing everything would also pass the test above.
+
+    Three members, one per declared category, are what the registry requires, and they must publish.
+    """
+    from workbench.replay.limn_publish import load_payload
+
+    complete = _staged_payload(tmp_path, {
+        "dress": _member("dress", "a"), "shirt": _member("shirt", "b"),
+        "toptee": _member("toptee", "c")})
+    loaded = load_payload(complete)
+    assert sorted(loaded["checkpoint_members"]) == ["dress", "shirt", "toptee"]
+
+
+def test_a_single_category_checkpoint_declares_no_bundle_to_compare(tmp_path: Path) -> None:
+    """A DSP: `base_iter0_dress` is not a bundle, so the check must not invent a requirement for it.
+
+    The registry declares `checkpoint_bundles` only for the all-categories bundle. A payload for a
+    single-category checkpoint has nothing to compare against, and demanding three members there
+    would refuse a legitimate diagnostic run.
+    """
+    from workbench.replay.limn_publish import load_payload
+
+    payload = _staged_payload(tmp_path, {"dress": _member("dress", "a")})
+    data = json.loads(payload.read_text(encoding="utf-8"))
+    data["checkpoint_id"] = "base_iter0_dress"
+    payload.write_text(json.dumps(data), encoding="utf-8")
+    assert load_payload(payload)["checkpoint_id"] == "base_iter0_dress"

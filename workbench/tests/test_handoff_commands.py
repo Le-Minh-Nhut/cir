@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import ast
 import argparse
+import hashlib
 import importlib.util
 import inspect
 import re
 import shlex
+import subprocess
 import sys
 from pathlib import Path
 
@@ -295,19 +297,64 @@ RELEASE_DOCS = tuple(ROOT / path for path in (
     "workbench/docs/PC_PILOT_HANDOFF.md",
     "workbench/docs/PC_ONE_COMMAND_GUIDE.vi.md",
     "workbench/docs/reviews/FINAL_PC_RELEASE_VERDICT.md",
+    "workbench/docs/reviews/FINAL_DEFECT_LEDGER.md",
+    "workbench/docs/AUTOMATION_RUNBOOK.md",
 ))
+
+#!/usr/bin/env python3
+"""The production tree of a revision: the paths that decide what the operator actually runs."""
+def _git(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
+
+
+# `git diff` and `git ls-tree` disagree about pathspec magic, so the excluded paths are named once
+# per form: the `ls-tree` filter inside `_production_tree` uses prefixes, the `git diff` predicate in
+# the guard below uses excludes.
+DOCS_AND_TESTS_EXCLUDED_PATHS = (":(exclude)workbench/docs", ":(exclude)workbench/tests")
+
+
+def _production_tree(rev: str) -> str | None:
+    """A fingerprint of every production path at ``rev``, or None if the revision is unreadable.
+
+    Exact by construction: the fingerprint is over each path's recorded object id, so two revisions
+    agree only when every production file is byte-identical. `git ls-tree` refuses exclude pathspecs,
+    so the listing is filtered here rather than in the pathspec, and the full tree is asked for once.
+    """
+    listing = subprocess.run(["git", "ls-tree", "-r", "-z", "--full-tree", rev], cwd=ROOT,
+                             capture_output=True, text=True)
+    if listing.returncode != 0:
+        return None
+    kept: list[str] = []
+    for entry in listing.stdout.split("\0"):
+        if not entry:
+            continue
+        _meta, _, path = entry.partition("\t")
+        if not path:
+            continue
+        if path.startswith("workbench/docs/") or path.startswith("workbench/tests/"):
+            continue
+        kept.append(entry)
+    return hashlib.sha256("\n".join(kept).encode("utf-8")).hexdigest()
 
 
 def test_no_release_document_points_at_a_superseded_source_sha() -> None:
-    """A handoff that tells the operator to check out the wrong commit installs the wrong code.
+    """The SHA the documents tell you to check out must install the code that was tested.
 
-    The PC documents were updated across three passes, and each pass left the previous pass's SHA in
-    a sentence that was still written in the present tense ("every gate ran on this tree"). A reader
-    following the checkout command would have received a tree that predates the fixes the same page
-    describes. This test pins the relationship: the SHA the documents tell you to check out must be
-    the one the verdict names as tested, and the tested SHA must be an ancestor of HEAD.
+    This test used to assert only that the checkout SHA was an ANCESTOR of the tested source, and an
+    ancestor can be obsolete: `11ba3df` is one, and its `pc.sh` contains zero occurrences of
+    `sys.exit(7)` and of `REGISTRY_UNKNOWN`, both of which the handoff page documents as real
+    behaviour. Following that instruction installed a launcher that cannot print the exit code the
+    same page defines. Ancestry proves a commit is in the history; it proves nothing about the bytes.
+
+    What is asserted now is PRODUCTION-TREE EQUALITY: checking out the documented revision must give
+    byte-identical production source to the revision the gates ran on. A documentation-only successor
+    still passes -- it has the same production tree -- while an ancestor whose production code has
+    since changed cannot.
     """
-    import subprocess
+    docs_and_tests = ("workbench/docs", "workbench/tests")
+
+    def documents() -> str:
+        return "\n".join(document.read_text(encoding="utf-8") for document in RELEASE_DOCS)
 
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
                           text=True).stdout.strip()
@@ -326,17 +373,136 @@ def test_no_release_document_points_at_a_superseded_source_sha() -> None:
         f"the tested SHA {tested_sha} is not an ancestor of HEAD {head}: the verdict claims gates ran "
         "on a tree that is not in this line of history")
 
+    # THE TESTED SOURCE MUST CONTAIN EVERY PRODUCTION CHANGE ON DISK.
+    #
+    # Comparing the documents with each other is satisfiable by editing both. A reviewer built a
+    # history where the handoff and the verdict were BOTH rewritten to name an obsolete revision
+    # whose production code had since moved 189 lines, and this test still reported 7 passed. The
+    # predicate that cannot be satisfied that way is against the working tree: whatever the documents
+    # claim, the revision they call tested must contain every production byte that is here now. A
+    # documentation edit after it is still fine -- only production paths are compared -- but a
+    # production fix made after it must advance the recorded source.
+    production_diff = subprocess.run(
+        ["git", "diff", "--quiet", tested_sha, "--", ".", *DOCS_AND_TESTS_EXCLUDED_PATHS],
+        cwd=ROOT, capture_output=True, text=True)
+    assert production_diff.returncode == 0, (
+        f"TESTED_SOURCE_SHA {tested_sha} does not contain the production code currently on disk: "
+        "production files changed after the revision the release documents name as tested. Advance "
+        "the recorded source to a revision that includes them, or the handoff installs code that was "
+        "never gated.")
+
     handoff = (ROOT / "workbench/docs/PC_PILOT_HANDOFF.md").read_text(encoding="utf-8")
     checkouts = re.findall(r"^git checkout ([0-9a-f]{7,40})", handoff, re.M)
     assert checkouts, "the handoff must give an explicit checkout command"
+    for target in re.findall(r"^git checkout (\S+)", handoff, re.M):
+        assert re.fullmatch(r"[0-9a-f]{7,40}", target), (
+            f"the handoff offers `git checkout {target}`, which is a MOVING TARGET: a branch name or "
+            "FETCH_HEAD cannot be compared with the tested source, so following it may install code "
+            "this test never gated. Pin the revision.")
+
+    tested_production = _production_tree(tested_sha)
+    assert tested_production is not None, f"could not read the production tree of {tested_sha}"
     for sha in checkouts:
         assert subprocess.run(["git", "rev-parse", sha], cwd=ROOT, capture_output=True,
                               text=True).returncode == 0, f"checkout points at unknown commit {sha}"
-        assert subprocess.run(["git", "merge-base", "--is-ancestor", sha, tested_sha], cwd=ROOT,
-                              capture_output=True).returncode == 0, (
-            f"the handoff tells the operator to check out {sha}, which is NOT an ancestor of the "
-            f"tested source {tested_sha}: following it installs code that predates the tested tree")
+        # Not `FETCH_HEAD` and not a branch name: neither is a fixed revision, so neither can be
+        # compared with the tested source, and a moving target cannot be verified by this test.
+        assert re.fullmatch(r"[0-9a-f]{7,40}", sha), (
+            f"the handoff must check out a fixed revision; {sha!r} is a moving target")
+        checked_out = _production_tree(sha)
+        assert checked_out == tested_production, (
+            f"the handoff tells the operator to check out {sha}, whose PRODUCTION source differs from "
+            f"the tested source {tested_sha}: following it installs different code. If {sha} is a "
+            f"legitimate documentation-only follow-up its production tree would be identical; it is "
+            f"not, so the tested source itself must be advanced instead.")
 
+    # A documentation-only successor is allowed, and this is what distinguishes it from an obsolete
+    # ancestor: same production tree, different commit.
+    for document in RELEASE_DOCS:
+        rel = document.relative_to(ROOT)
+        assert rel.is_file(), f"release document {rel} is missing"
+
+    # The degree is not the claim. `git rev-parse --short` can print fewer than seven characters in a
+    # small repository, and every consumer here compares the resolved object, so the documents are
+    # checked for a resolvable revision rather than for a nice-looking string.
+    for sha in re.findall(r"\*\*`([0-9a-f]{7,40})`\*\*", documents()):
+        if subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=ROOT,
+                          capture_output=True).returncode != 0:
+            continue  # a digest, not a revision: sha256 values share this alphabet
+        assert subprocess.run(["git", "rev-parse", sha], cwd=ROOT, capture_output=True,
+                              text=True).returncode == 0, f"document names unknown revision {sha}"
+
+
+def test_a_release_document_cannot_quote_a_production_tree_that_never_ran_the_gates() -> None:
+    """The defect this pins: an OBSOLETE ancestor passed an ancestry-only check.
+
+    `11ba3df` is an ancestor of the tested source and its production code differs from it. It was
+    the checkout target in the handoff, so the test above would have passed while the operator
+    installed a launcher without the exit codes the same page documents. This test proves the
+    comparison is sensitive to that difference rather than merely present, using two revisions whose
+    relationship to each other is exactly the one that used to be accepted.
+    """
+    tested_production = _production_tree("11ba3df")
+    later_production = _production_tree("2bc0cd2")
+    assert tested_production is not None and later_production is not None
+
+    ancestry = subprocess.run(["git", "merge-base", "--is-ancestor", "11ba3df", "2bc0cd2"],
+                              cwd=ROOT, capture_output=True)
+    assert ancestry.returncode == 0, "11ba3df must still be an ancestor, or this test is vacuous"
+    assert tested_production != later_production, (
+        "11ba3df and 2bc0cd2 must differ in production source for this test to mean anything")
+
+    # And the difference is functional, not cosmetic: the older launcher cannot print the exit code
+    # the current handoff documents, because the string is not in it at all.
+    older_launcher = subprocess.run(["git", "show", "11ba3df:pc.sh"], cwd=ROOT, capture_output=True,
+                                    text=True).stdout
+    newer_launcher = subprocess.run(["git", "show", "2bc0cd2:pc.sh"], cwd=ROOT, capture_output=True,
+                                    text=True).stdout
+    for token in ("sys.exit(7)", "REGISTRY_UNKNOWN"):
+        assert token not in older_launcher, (
+            f"this test assumes {token} is absent from the obsolete launcher; if that changed, the "
+            "example needs replacing")
+        assert token in newer_launcher, f"the tested launcher must still contain {token}"
+
+
+def test_the_release_documents_quote_the_test_count_they_actually_ran() -> None:
+    """A count nobody can reproduce is a claim, not a record.
+
+    The verdict quoted `1394 passed` while the tree it named collects a different number, and the
+    old guard compared the verdict only against itself -- so two documents could disagree, or agree
+    on a number neither tree produces. The count recorded for the tested source must be the count
+    that source actually collects, which is read from the tree rather than from the prose.
+    """
+    verdict = (ROOT / "workbench/docs/reviews/FINAL_PC_RELEASE_VERDICT.md").read_text(encoding="utf-8")
+    counts = re.findall(r"\*\*(\d+) passed, 0 failed\*\*", verdict)
+    assert counts, "the verdict must record the suite's pass count"
+    assert len(set(counts)) == 1, f"the verdict contradicts itself about the suite: {counts}"
+
+    tested = re.search(r"\*\*TESTED_SOURCE_SHA\*\* \| \*\*`([0-9a-f]{7,40})`\*\*", verdict)
+    assert tested, "the verdict must name a TESTED_SOURCE_SHA"
+    # The recorded count must be OBSERVABLE: the suite as it stands must contain at least that many
+    # collected tests. Counting `def test_` in the sources is not the same quantity -- a
+    # parametrized test is one function and many tests -- and a threshold that only needs to be
+    # exceeded cannot tell a stale number from a current one. The collection is the quantity the
+    # documents are quoting, so it is the quantity this compares against.
+    #
+    # A full collection is a few seconds and does not run anything.
+    collection = subprocess.run(
+        [sys.executable, "-m", "pytest", "workbench/tests", "--collect-only", "-q",
+         "-p", "no:cacheprovider"],
+        cwd=ROOT, capture_output=True, text=True).stdout
+    collected = len([line for line in collection.splitlines() if "::" in line])
+    assert collected, "collection produced no test ids; this check cannot verify the count"
+    recorded = int(counts[0])
+    assert recorded <= collected, (
+        f"the verdict records {recorded} passing tests, but this tree only collects {collected}: the "
+        "number cannot describe this suite")
+    # A count far below what the suite collects is a stale transcription rather than a subset, and a
+    # subset is not what the documents claim -- they claim the whole suite's result.
+    assert collected - recorded <= 5, (
+        f"the verdict records {recorded} passing tests while the tree collects {collected}; a "
+        f"difference of more than a few means the recorded number is stale, not a subset. Update it "
+        "to the count the current suite reports.")
 
 def test_no_release_document_describes_verify_only_as_verifying_a_run() -> None:
     """A-05: the flag's meaning is one sentence, and every document must repeat that sentence.

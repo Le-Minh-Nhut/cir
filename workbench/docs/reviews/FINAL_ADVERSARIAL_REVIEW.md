@@ -3,7 +3,8 @@
 What independent reviewers were asked, what they found, what was disproved, and — most importantly —
 what the reviewers got from the code rather than from the documentation.
 
-**Tested source**: `84ec6f1` + the fixes in `FINAL_DEFECT_LEDGER.md`
+**Tested source at the time of this review**: `84ec6f1` + the fixes in `FINAL_DEFECT_LEDGER.md`.
+Superseded; the current release metadata is `FINAL_PC_RELEASE_VERDICT.md`.
 **Baseline before this pass**: `3aae18f`
 
 ## 1. Who reviewed, on which model

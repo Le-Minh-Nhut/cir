@@ -3,7 +3,10 @@
 Every defect confirmed in this pass, with the root cause, the fix, and the regression test that
 fails if the fix is reverted. Ordered by severity, then by the order they were fixed.
 
-**Tested source**: `84ec6f1` plus the fixes listed here. **Baseline**: `3aae18f`.
+**Tested source at the time of this ledger's original pass**: `84ec6f1` plus the fixes listed here.
+**Baseline**: `3aae18f`. Later passes added findings of their own; the entries below the A-series and
+F-series sections record the source their pass ran on. The current release metadata is the
+authoritative record, and lives in `FINAL_PC_RELEASE_VERDICT.md`.
 
 Classification of every finding raised by the 21 independent audits (16 model + 5 cross-cutting):
 
@@ -352,10 +355,18 @@ that establishes each.
   while every gate in the current pass ran on `11ba3df`; the verdict named a `TESTED_SOURCE_SHA` that
   had been superseded twice. Following the document installs code predating the fixes the same page
   describes.
-* **Fix**: both name `11ba3df`; the branch tip is distinguished from the immutable release SHA.
+* **Fix**: both name the tested source; the branch tip is distinguished from the immutable release
+  SHA.
 * **Regression**: `test_no_release_document_points_at_a_superseded_source_sha` — the checkout target
-  must be an ancestor of the tested source, which must be an ancestor of HEAD. Negative control:
-  restoring `git checkout 4b32063` fails the test.
+  must be PRODUCTION-TREE IDENTICAL to the tested source, the tested source must contain every
+  production change on disk, and the checkout must be a pinned revision rather than `FETCH_HEAD`.
+* **Correction**: this entry originally claimed an ancestry check with `git checkout 4b32063` as its
+  negative control. That control was false — `git merge-base --is-ancestor 4b32063 <tested>` succeeds,
+  so restoring that line passes an ancestry test. The same weakness made `11ba3df` acceptable while
+  its `pc.sh` contained no `sys.exit(7)` and no `REGISTRY_UNKNOWN`, both documented on the handoff
+  page. The predicate is now byte-level, and the negative control is the one measured in the R8 pass:
+  the pre-fix tree leaks a temp file where the fixed tree does not, and an obsolete ancestor's
+  production tree demonstrably differs (`_production_tree("11ba3df") != _production_tree("2bc0cd2")`).
 
 ### A-02 — execution authentication reported as scientific certification
 
@@ -460,6 +471,112 @@ that establishes each.
   `LEGACY_RUNTIME_INCOMPATIBILITY`. The authors' own pin is `torch 1.12.1`, whose Linux wheel requires
   an executable stack; the declared `adapted_runtime` (cu128) is the sanctioned path. The action is on
   the environment report's readiness decision, not on the model.
+
+---
+
+## R8 pass — the PC handoff repair
+
+Five named defects, four independent adversarial reviews of the fixes, and four more defects those
+reviews found **in this pass's own work**. Every entry states how it was reproduced.
+
+### R8-01 — the handoff checked out a superseded source
+
+* **Confirmed.** `PC_PILOT_HANDOFF.md` instructed `git checkout 11ba3df` and the verdict named
+  `TESTED_SOURCE_SHA = 11ba3df` / `1394 passed`, while production source had moved. Measured:
+  `git show 11ba3df:pc.sh | grep -c 'sys.exit(7)'` → **0**, and `REGISTRY_UNKNOWN` → **0**, against
+  **1** and **5** at the tested revision. Following the instruction installed a launcher that cannot
+  print the exit code the same page defines.
+* **Root cause**: the guard asserted ancestry, and an ancestor can be obsolete.
+* **Fix**: the guard compares PRODUCTION TREES byte-for-byte, requires the tested source to contain
+  every production change on disk, refuses `FETCH_HEAD`/branch targets, and the documents name the
+  tested revision. `1394 passed` → the count the suite actually reports.
+* **Regression**: `test_no_release_document_points_at_a_superseded_source_sha` (with the working-tree
+  predicate), `test_a_release_document_cannot_quote_a_production_tree_that_never_ran_the_gates`,
+  `test_the_release_documents_quote_the_test_count_they_actually_ran`. Negative control: the
+  documents were edited and the guard still refused the obsolete revision.
+
+### R8-02 — API bodies carried through argv
+
+* **Confirmed.** Two full API responses and the verifier's verdict reached embedded Python programs as
+  argv elements. Measured on this host: `getconf ARG_MAX` = 2097152, but a single argument is capped
+  at `MAX_ARG_STRLEN` = 131072 (32 pages); 131072 bytes raises `OSError: [Errno 7] Argument list too
+  long` from `execve` **before Python starts**. `/api/benchmark-runs` crosses that at 30–37 runs, and
+  a 48-run workload (16 models x 3 protocols) produces ≈173 KiB. Reproduced: a 2000-row payload gave
+  `E2BIG` at the same boundary.
+* **Fix**: four sites now pass FILE PATHS, and the launcher owns the files' lifetime.
+* **Regression**: the gate is driven with a body past the ceiling and must succeed; the negative
+  control passes the same body as an argument and must still raise `E2BIG`; unreachable / empty /
+  malformed bodies keep their exact refusals.
+
+### R8-03 — a development certificate could satisfy the release gate
+
+* **Confirmed reachable in the index gate in isolation.** `_certification_mode` answers `development`
+  for an opted-in development process whose report has no proof, and `_development_certification`
+  then sets `certified=true` and `is_research_evidence=true` without validating any proof. The gate
+  read only those two booleans, so an aggregate-only model's development receipt printed
+  `AGGREGATE_ONLY_VERIFIED` and the summary printed "SẴN SÀNG CHO PILOT".
+* **Closure**: end to end the heavy verifier refuses first, so the operator's `./pc.sh` exit code was
+  never 0 for this shape — but the gate that decides the success token must not depend on another
+  program for its own correctness. Both signals are now checked by name.
+* **Regression**: receipts with `development_mode` alone, `certification_mode` alone, both, and
+  neither; plus a positive control that a deployment receipt still reaches the token.
+
+### R8-04 — the published bundle identity was self-declared
+
+* **Confirmed, two paths.** (a) The publisher compared the payload's members against the payload's own
+  `planned_bundle_manifest_digest`; the observer writes BOTH fields, so a disagreement was refusable
+  but agreement proved nothing. Nothing downstream re-derived it. (b) **Measured**: with no planned
+  digest, the publisher accepted a payload declaring **one** member of LIMN's three-member bundle and
+  published it as a `base_iter0_all_categories` artifact, rc 0.
+* **Fix**: the parent binds the artifact's digest to the one it computed from the plan on disk — the
+  same expression the completion proof records, so artifact, proof and plan must agree — and the
+  publisher validates the staged members against the bundle the REGISTRY declares for that checkpoint.
+* **Regression**: a partial bundle is refused by name; the registry-correct three-member bundle
+  publishes; a single-category checkpoint (which declares no bundle) still publishes.
+
+### R8-05 — release documents contradicted the source and each other
+
+* **Confirmed.** `FETCH_HEAD` offered as the checkout in the verdict (unpinned, and invisible to a
+  hex-only guard); "Thirteen confirmed defects" against twelve rows; the ledger's own negative control
+  was false (`merge-base --is-ancestor 4b32063 <tested>` succeeds, so restoring that line passes); the
+  coverage manifest stale in **45 of 126** rows; three documents claiming a superseded tested source.
+* **Fix**: all corrected; a stale count claim is now refused by test.
+
+### R8-06 — the evidence token and its advisory notes shared one channel (found by review)
+
+* **Confirmed, P1.** The gate prints its state on stdout and its notes on stderr *precisely so a note
+  cannot contaminate the token*, and its own comment says so. The shell read it with `2>&1`: the note
+  was prepended to the status, `INDEX_EVIDENCE_STATUS` equalled no token the summary compares, every
+  branch fell through to its `else`, and a proof-unavailable run was reported "SẴN SÀNG CHO PILOT"
+  with **exit 0** instead of exit 7. Reproduced through the real gate program and the real summary.
+* **Fix**: stdout is the token, stderr is the notes, and the notes are still printed for the operator.
+* **Regression**: the gate's stdout must be exactly one state name while stderr carries the note; the
+  shell invocation must not merge them.
+
+### R8-07 — temporary files leaked on every non-zero exit (found by review)
+
+* **Confirmed, P1.** `fail_stage` and a non-zero `sys.exit` from the summary both leave the shell
+  immediately, so the `rm` that followed them never ran. Measured: the pre-fix launcher leaves
+  `cir_verify_state.*` behind after a proof-unavailable run and after a failed index rebuild.
+* **Fix**: one `EXIT` trap, with every created path registered as it is created.
+* **Regression**: two failure cases that provably leaked are driven through the REAL launcher with
+  its own `TMPDIR` and must leave nothing; a companion test asserts every creation site is registered.
+  The test was checked RED against the pre-fix launcher before being accepted.
+
+### R8-08 — the cleanup test proved nothing (found by review)
+
+* **Confirmed.** The first version asserted that `rm -rf "$idx_tmp_dir"` appears in `pc.sh`. That is a
+  source-text search, which the release brief explicitly refuses, and it passes on a tree that leaks.
+* **Fix**: replaced by the two real-run tests above.
+
+### R8-09 — the model-status document overstated three things (found by review)
+
+* **Confirmed.** It labelled `command_status` as a registry field (the registry has no such key); it
+  said an adapter's `command()` was missing for `encoder` (it exists, `adapters/models.py:36-41`); and
+  it described metric parsers as general when **five of sixteen** models have one branch
+  (`metrics_extraction.py:402-411`).
+* **Fix**: the matrix is regenerated with every cell read from the code, and says which column comes
+  from where.
 
 ---
 

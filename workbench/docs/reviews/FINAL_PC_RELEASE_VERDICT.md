@@ -6,8 +6,8 @@
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`11ba3df`** (production source; every gate in this pass ran on it) |
-| **FINAL_HEAD_SHA** | `11ba3df` — the stabilization pass. Production files changed here (launcher index gate, API projection, frontend request handling, release J10); native evaluation, scoring, protocol mapping and all 16 model contracts are untouched. |
+| **TESTED_SOURCE_SHA** | **`2bc0cd2`** (production source; every gate below ran on it) |
+| **FINAL_HEAD_SHA** | `2bc0cd2` — the stabilization pass. Production files changed across `11ba3df`..`2bc0cd2` (launcher index gate and API bodies, LIMN publisher binding, frontend request handling, release J10); native evaluation, scoring, protocol mapping and all 16 model contracts are untouched. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 
@@ -19,8 +19,8 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| TESTED_SOURCE_SHA | `11ba3df` — every gate below ran on it |
-| FINAL_HEAD_SHA | see `git rev-parse HEAD` on the branch tip; everything after `11ba3df` is documentation and tests |
+| TESTED_SOURCE_SHA | `2bc0cd2` — every gate below ran on it |
+| FINAL_HEAD_SHA | see `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 16 model entries; 15 `source_available`; **14 distinct upstream URLs** among those 15 (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` has no vendored source, no pin and no protocol |
 | Protocols | A `fashioniq_original_split` (full gallery, reference eligible) · B `fashioniq_full_gallery_ref_excluded` (full gallery, reference excluded) · C `fashioniq_val_split` (ordered pair-union, reference excluded) · `ptha_mtst` unresolved |
@@ -32,12 +32,14 @@ root, the model's provisioned interpreter, and exactly one ledger key file.
 
 ## What was tested
 
-The full verification ran against `11ba3df`. The only commit after it is documentation only, and
-the production diff for it is recorded at the end.
+The full verification ran against `2bc0cd2`. Earlier passes ran on `11ba3df`, which is now an
+obsolete source: `git diff 11ba3df 2bc0cd2` touches `pc.sh`, `workbench/replay/limn_export.py`,
+`workbench/replay/limn_publish.py`, `workbench/scripts/evaluate_models.py` and
+`workbench/frontend/evidence.ts`. The handoff's checkout target is `2bc0cd2` for that reason.
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1394 passed, 0 failed** (26:08) |
+| Backend suite | `pytest workbench/tests -q` | **1406 passed, 0 failed** (25:43) |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED** (1 honest skip: GPG status unverified) |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -51,7 +53,8 @@ the production diff for it is recorded at the end.
 
 ## Defects fixed in this pass
 
-Thirteen confirmed defects. Full evidence in `FINAL_DEFECT_LEDGER.md`.
+Twelve confirmed defects in this pass, plus the A-series and F-series entries the ledger
+records for later passes. Full evidence in `FINAL_DEFECT_LEDGER.md`.
 
 | ID | Sev | One line |
 |---|---|---|
@@ -147,7 +150,8 @@ downloaded. Every LIMN runtime claim in this pass is static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout FETCH_HEAD        # an explicit checkout; never `git reset --hard`
+git checkout 2bc0cd2           # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print the full SHA whose short form is 2bc0cd2
 ./pc.sh                        # the one operator command
 ```
 

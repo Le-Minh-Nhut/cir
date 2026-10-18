@@ -31,6 +31,30 @@ FINAL_RUN_ID=""
 FINAL_CHECKPOINT=""
 FINAL_PROTOCOL=""
 
+# Temporary files this run created, removed together on EVERY exit path.
+#
+# The launcher writes the API bodies and the verifier's verdict to files rather than carrying them
+# through argv, so those files now have a lifetime the launcher owns. Removing them where they are
+# created is not enough: `fail_stage` and a non-zero `sys.exit` from the summary both leave the shell
+# immediately, and the SIGINT/SIGTERM handler below leaves it too -- so each of those paths leaked
+# `cir_idx.*` (which holds run metadata), `cir_dedup.*`, `cir_verify_out.*`, `cir_verify_state.*` and
+# `cir_verify_msg.*` under a shared temp directory. An EXIT trap covers all of them at once,
+# including the paths nobody remembered.
+LAUNCHER_TEMP_PATHS=()
+_register_temp() {
+    LAUNCHER_TEMP_PATHS+=("$1")
+}
+_cleanup_temp_paths() {
+    local path
+    for path in "${LAUNCHER_TEMP_PATHS[@]:-}"; do
+        [[ -n "$path" ]] && rm -rf -- "$path"
+    done
+    LAUNCHER_TEMP_PATHS=()
+}
+# `EXIT` fires for normal return, `exit`, and an uncaught `set -e` abort. The signal handlers exit
+# 130, which fires it as well, so no path needs its own cleanup call.
+trap '_cleanup_temp_paths' EXIT
+
 # Trap SIGINT/SIGTERM (Behaviour 10)
 cleanup_on_signal() {
     local sig="$1"
@@ -1261,28 +1285,50 @@ PYMODELS
     # Job Dedup: Check if a completed corroborated run exists in /api/runs or /api/benchmark-runs
     local target_run_id=""
     if (( FORCE != 1 )); then
-        local runs_json b_runs_json
-        runs_json="$(curl -s --max-time 10 "${base}/api/runs" 2>/dev/null || echo "[]")"
-        b_runs_json="$(curl -s --max-time 10 "${base}/api/benchmark-runs" 2>/dev/null || echo "[]")"
+        # The dedup reader must see BOTH artifact families: a per-query run in the DuckDB index and
+        # an aggregate-only run beside it. Both bodies go to FILES for the same reason the index gate
+        # does it -- a single argv element is capped at MAX_ARG_STRLEN (128 KiB) regardless of
+        # ARG_MAX, and both endpoints grow with the deployment's run count, so passing them as
+        # arguments would fail with E2BIG before python started. Only paths cross the boundary.
+        #
+        # A failed curl leaves an empty or truncated file; the `[ -s ]` test below replaces it with
+        # `[]`, which is the semantics the old `|| echo "[]"` had, without holding the body in a
+        # shell variable.
+        local dedup_tmp_dir runs_json_file b_runs_json_file
+        dedup_tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/cir_dedup.XXXXXX")" || dedup_tmp_dir=""
+        [[ -n "$dedup_tmp_dir" ]] && _register_temp "$dedup_tmp_dir"
+        local candidate_runs=""
+        if [[ -n "$dedup_tmp_dir" ]]; then
+            chmod 700 "$dedup_tmp_dir" 2>/dev/null || true
+            runs_json_file="${dedup_tmp_dir}/runs.json"
+            b_runs_json_file="${dedup_tmp_dir}/benchmark-runs.json"
+            curl -s --max-time 10 "${base}/api/runs" >"$runs_json_file" 2>/dev/null || true
+            curl -s --max-time 10 "${base}/api/benchmark-runs" >"$b_runs_json_file" 2>/dev/null || true
+            # A failed call leaves an empty file, which the reader already treats as "no runs" --
+            # the semantics the old `|| echo "[]"` had.
+            [[ -s "$runs_json_file" ]] || printf '%s' "[]" >"$runs_json_file"
+            [[ -s "$b_runs_json_file" ]] || printf '%s' "[]" >"$b_runs_json_file"
 
-        local candidate_runs
-        candidate_runs="$(python3 -c "
+            local dedup_paths="${runs_json_file}
+${b_runs_json_file}"
+            candidate_runs="$(python3 -c "
 import json, sys
 
-model_id = sys.argv[1]
-checkpoint_id = sys.argv[2]
-protocol_id = sys.argv[3]
-runs_text = sys.argv[4]
-b_runs_text = sys.argv[5]
+model_id, checkpoint_id, protocol_id = sys.argv[1], sys.argv[2], sys.argv[3]
+paths = sys.argv[4]
+
+# Paths, not bodies: see the index gate for why an argv element cannot carry a response body.
+def _load(path):
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as handle:
+            data = json.load(handle)
+    except Exception:
+        return []
+    return data if isinstance(data, list) else []
 
 all_runs = []
-for t in (runs_text, b_runs_text):
-    try:
-        data = json.loads(t)
-        if isinstance(data, list):
-            all_runs.extend(data)
-    except Exception:
-        pass
+for _path in paths.split('\n', 1):
+    all_runs.extend(_load(_path))
 
 seen = set()
 for r in all_runs:
@@ -1295,21 +1341,47 @@ for r in all_runs:
             if rid and rid not in seen:
                 seen.add(rid)
                 print(rid)
-" "$MODEL" "$checkpoint" "$protocol" "$runs_json" "$b_runs_json" 2>/dev/null || true)"
+" "$MODEL" "$checkpoint" "$protocol" "$dedup_paths" 2>/dev/null || true)"
 
-        if [[ -n "$candidate_runs" ]]; then
-            while IFS= read -r cand_id; do
-                [[ -z "$cand_id" ]] && continue
-                local v_rc=0 v_out
-                v_out="$(run_verifier_in_container --run-id "$cand_id" --model "$MODEL" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || v_rc=$?
-                local check_rc=0
-                python3 - "$v_out" "$v_rc" "$cand_id" "$b_runs_json" <<'PYCHECK' || check_rc=$?
+            if [[ -n "$candidate_runs" ]]; then
+                while IFS= read -r cand_id; do
+                    [[ -z "$cand_id" ]] && continue
+                    local v_rc=0 v_out_file
+                    v_out_file="${dedup_tmp_dir}/verifier.$$.${RANDOM}.json"
+                    # The verifier's own JSON goes to a FILE too. It is small in the success case and
+                    # unbounded in the refusal case, where every rejected reason is echoed back, and
+                    # it used to be argv[1] of the reader below -- the same 128 KiB ceiling.
+                    # A SUBSHELL, not a redirection group. `run_verifier_in_container` calls
+                    # `fail_stage` when the container is down, and `fail_stage` exits the shell it
+                    # runs in; the previous `$( ... )` captured that exit because a command
+                    # substitution IS a subshell. `>file` alone kept the function in the current
+                    # shell, so that exit terminated the whole launcher from the middle of the frame
+                    # it was analyzing, and the refusal vanished into the redirection: the operator
+                    # saw a silent exit 1 with no stage named. Parentheses restore the old
+                    # containment while still landing the output in the file every reader expects.
+                    ( run_verifier_in_container --run-id "$cand_id" --model "$MODEL" --checkpoint "$checkpoint" --protocol "$protocol" --json ) >"$v_out_file" 2>&1 || v_rc=$?
+                    local check_rc=0
+                    python3 - "$v_out_file" "$v_rc" "$cand_id" "$b_runs_json_file" <<'PYCHECK' || check_rc=$?
 import json, sys
 
-v_out_str = sys.argv[1]
+v_out_path = sys.argv[1]
 v_rc = int(sys.argv[2])
 cand_id = sys.argv[3]
-b_runs_str = sys.argv[4]
+b_runs_path = sys.argv[4]
+
+try:
+    with open(v_out_path, 'r', encoding='utf-8', errors='replace') as handle:
+        v_out_str = handle.read()
+except OSError:
+    # A reader that cannot read the verdict knows nothing about the run, so it refuses rather than
+    # falling through to the aggregate-answer path below.
+    sys.exit(1)
+
+try:
+    with open(b_runs_path, 'r', encoding='utf-8', errors='replace') as handle:
+        b_runs_str = handle.read()
+except OSError:
+    b_runs_str = "[]"
 
 res = None
 try:
@@ -1323,10 +1395,8 @@ except Exception:
                 break
             except Exception:
                 pass
-
 if not isinstance(res, dict):
     sys.exit(1)
-
 if v_rc == 0 and res.get("is_research_evidence"):
     sys.exit(0)
 
@@ -1385,16 +1455,18 @@ if ledger_ok:
 
 sys.exit(1)
 PYCHECK
-                if (( check_rc == 0 )); then
-                    target_run_id="$cand_id"
-                    FINAL_RUN_PROOF_UNAVAILABLE=0
-                    break
-                elif (( check_rc == 2 )); then
-                    target_run_id="$cand_id"
-                    FINAL_RUN_PROOF_UNAVAILABLE=1
-                    break
-                fi
-            done <<< "$candidate_runs"
+                    if (( check_rc == 0 )); then
+                        target_run_id="$cand_id"
+                        FINAL_RUN_PROOF_UNAVAILABLE=0
+                        break
+                    elif (( check_rc == 2 )); then
+                        target_run_id="$cand_id"
+                        FINAL_RUN_PROOF_UNAVAILABLE=1
+                        break
+                    fi
+                done <<< "$candidate_runs"
+            fi
+            rm -rf "$dedup_tmp_dir"
         fi
 
         if [[ -n "$target_run_id" ]]; then
@@ -1570,10 +1642,40 @@ rebuild_and_verify_index() { # rebuild_and_verify_index RUN_ID MODEL CHECKPOINT 
     # The reader lives in a variable because a here-document and a pipe cannot both feed one
     # interpreter: the document wins and the JSON would be lost.
     local runs_check reports_check checked
-    runs_check="$(curl -fsS --max-time 60 "${base}/api/runs" 2>/dev/null || echo "__API_UNREACHABLE__")"
+    # The API bodies are written to FILES, never passed as arguments.
+    #
+    # A single argv element is capped at MAX_ARG_STRLEN -- 32 pages, i.e. 128 KiB -- independently of
+    # the much larger ARG_MAX, and both endpoints grow with the number of runs the deployment has
+    # accumulated. The gate used to pass both bodies (and the verifier's JSON) through argv, so past
+    # that cap execve failed with E2BIG *before* python started and the launcher reported an index
+    # failure for a run whose evidence was perfectly valid. `mktemp` names the files and only short
+    # paths cross the argv boundary; the bodies themselves stay on disk.
+    #
+    # The redirection also replaces the command substitution: a curl failure leaves an EMPTY or
+    # PARTIAL file rather than a shell variable, so the empty-body test below is the same test it
+    # always was, and the `__API_UNREACHABLE__` sentinel is written explicitly instead of being
+    # substituted. A PARTIAL body is the case that differs from a shell variable: `>` writes what
+    # curl managed to send before it failed, and a truncated JSON document does not parse, so the
+    # gate refuses it as malformed rather than reading it as an empty deployment.
+    local idx_tmp_dir
+    idx_tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/cir_idx.XXXXXX")" || \
+        fail_stage "INDEX_VERIFY" "Không tạo được thư mục tạm để đọc API" "${TMPDIR:-/tmp}" \
+            "Kiểm tra quyền ghi vào thư mục tạm rồi chạy lại ./pc.sh"
+    _register_temp "$idx_tmp_dir"
+    # The bodies can carry run metadata an operator would not want world-readable; the directory is
+    # private to this user and is removed on every exit path below.
+    chmod 700 "$idx_tmp_dir" 2>/dev/null || true
+    local runs_file reports_file
+    runs_file="${idx_tmp_dir}/runs.json"
+    reports_file="${idx_tmp_dir}/benchmark-runs.json"
+    if ! curl -fsS --max-time 60 "${base}/api/runs" >"$runs_file" 2>/dev/null; then
+        printf '%s' "__API_UNREACHABLE__" >"$runs_file"
+    fi
     # The aggregate view is the one that carries runs with no per-query export, so the gate has to
     # ask BOTH endpoints. An aggregate-only run is in the second and not the first.
-    reports_check="$(curl -fsS --max-time 60 "${base}/api/benchmark-runs" 2>/dev/null || echo "__API_UNREACHABLE__")"
+    if ! curl -fsS --max-time 60 "${base}/api/benchmark-runs" >"$reports_file" 2>/dev/null; then
+        printf '%s' "__API_UNREACHABLE__" >"$reports_file"
+    fi
     local idx_program
     idx_program="$(cat <<'PYIDX'
 import json, sys
@@ -1593,9 +1695,26 @@ import json, sys
 #
 # A per-query run whose artifact is missing or unverified keeps its report in the aggregate view
 # (a real execution happened) but is refused, so this gate can never present one as full.
-raw, reports_raw, run_id, model, checkpoint, protocol = sys.argv[1:7]
-if raw.strip() == "__API_UNREACHABLE__" or not raw.strip():
-    sys.exit("không gọi được /api/runs")
+paths, run_id, model, checkpoint, protocol = sys.argv[1:6]
+# The bodies arrive as PATHS. A single argv element is capped at MAX_ARG_STRLEN (128 KiB) no matter
+# how generous ARG_MAX is, and both endpoints grow with the deployment's run count, so passing them
+# as arguments failed with E2BIG before this program ever started. A path cannot grow with the data.
+def _body(path):
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            return handle.read()
+    except OSError as error:
+        # An unreadable file is NOT an empty deployment: every message below that treats a missing
+        # body as "the API is down" must stay reachable, so an I/O failure is reported as unreachable
+        # rather than as a parse error about content nobody received.
+        return "__API_UNREACHABLE__ (%s: %s)" % (type(error).__name__, error)
+
+_runs_path, _reports_path = paths.split("\n", 1)
+raw = _body(_runs_path)
+reports_raw = _body(_reports_path)
+if raw.strip().startswith("__API_UNREACHABLE__") or not raw.strip():
+    sys.exit("không gọi được /api/runs: %s" % raw.strip().replace("__API_UNREACHABLE__", "").strip(" ()")
+             if raw.strip().startswith("__API_UNREACHABLE__") else "không gọi được /api/runs")
 try:
     runs = json.loads(raw)
 except Exception as error:
@@ -1603,8 +1722,10 @@ except Exception as error:
 if not isinstance(runs, list):
     sys.exit("phản hồi /api/runs không phải danh sách")
 
-if reports_raw.strip() == "__API_UNREACHABLE__" or not reports_raw.strip():
-    sys.exit("không gọi được /api/benchmark-runs")
+if reports_raw.strip().startswith("__API_UNREACHABLE__") or not reports_raw.strip():
+    sys.exit("không gọi được /api/benchmark-runs: %s"
+             % reports_raw.strip().replace("__API_UNREACHABLE__", "").strip(" ()")
+             if reports_raw.strip().startswith("__API_UNREACHABLE__") else "không gọi được /api/benchmark-runs")
 try:
     reports = json.loads(reports_raw)
 except Exception as error:
@@ -1634,6 +1755,26 @@ proof_policy = (
     and receipt.get("execution_authenticated") is True
     and receipt.get("state") in ("proof_unavailable", "refused"))
 
+# A DEVELOPMENT CERTIFICATE IS NOT A PRODUCTION CERTIFICATION.
+#
+# `_certification_mode` answers "development" only for a process that declared itself one AND opted
+# in, and there is deliberately no completion proof to validate in that state -- which is why the
+# API's development receipt can carry `certified=true` and `is_research_evidence=true` while nothing
+# about the RUN was ever verified against a proof. Those booleans answer the verifier's metric rules;
+# they are not a statement about the artifact. Reading them here without asking WHICH policy produced
+# them is what would let a development receipt satisfy the production release gate, so the policy is
+# checked first and by name. The frontend was already hardened for this; the launcher's own gate is
+# the one that decides the operator's exit code, so it must refuse independently.
+_certification_mode = receipt.get("certification_mode")
+if receipt.get("development_mode") is True or _certification_mode == "development":
+    sys.exit("API chứng thực lượt chạy này bằng CHỨNG THƯ PHÁT TRIỂN (development_mode=%r, "
+             "certification_mode=%r). Đây là chế độ dành cho quy trình phát triển: completion proof "
+             "đã KHÔNG được xác thực, nên lượt chạy không thể là bằng chứng nghiên cứu đã chứng thực "
+             "của bản phát hành. Chạy lại trên một tiến trình triển khai (không đặt "
+             "WORKBENCH_DEVELOPMENT_MODE / WORKBENCH_ALLOW_DEVELOPMENT_CERTIFICATES) để có chứng thực "
+             "đầy đủ theo proof."
+             % (receipt.get("development_mode"), _certification_mode))
+
 if not (receipt.get("is_research_evidence") and receipt.get("certified")):
     if not proof_policy:
         reasons = "; ".join(str(r) for r in (receipt.get("evidence_reasons") or receipt.get("reasons") or []))
@@ -1653,7 +1794,7 @@ if not receipt.get("report_digest"):
 # the same declaration the evaluator read when it decided whether to run an observer. Reading it
 # out of the report cannot work: a report is a file, and one without the field would downgrade an
 # observer model to aggregate-only and skip its Top-K requirement entirely.
-declaration = sys.argv[7].strip() if len(sys.argv) > 7 else ""
+declaration = sys.argv[6].strip() if len(sys.argv) > 6 else ""
 if declaration.startswith("REGISTRY_CONFIRMED_PER_QUERY:"):
     declared_observer = declaration.split(":", 1)[1].strip()
 elif declaration == "REGISTRY_CONFIRMED_AGGREGATE_ONLY":
@@ -1764,8 +1905,27 @@ else:
             "${base}/api/models" \
             "Không tuyên bố hoàn tất khi chưa biết mô hình có trình quan sát hay không: một API không đọc được KHÔNG có nghĩa là mô hình không cần bằng chứng per-query. Kiểm tra backend (docker logs cir-workbench) rồi chạy lại ./pc.sh."
     fi
-    checked="$(python3 -c "$idx_program" "$runs_check" "$reports_check" "$run_id" "$model" "$checkpoint" "$protocol" "${declared_observer:-}" 2>&1)" \
-        || checked="__INDEX_CHECK_FAILED__: ${checked:-không xác định}"
+    local idx_paths="${runs_file}
+${reports_file}"
+    # STDOUT IS THE TOKEN, STDERR IS THE EXPLANATION, and they must never be merged.
+    #
+    # This reader is both a verdict and a sentence: it prints the evidence state on stdout, and it
+    # also prints advisory notes -- a model that declares no observer, a state worth mentioning -- on
+    # stderr precisely so they cannot contaminate the token. `2>&1` destroyed that: the note was
+    # prepended to the status, `INDEX_EVIDENCE_STATUS` no longer equalled any token the summary
+    # compares against, every branch below fell through to its `else`, and a proof-unavailable run
+    # was reported "SẴN SÀNG CHO PILOT" with exit 0 instead of exit 7. The program already states
+    # this contract in its own comment; the shell was violating it.
+    #
+    # The notes go to the operator's stderr, where they were always meant to be read.
+    local idx_stderr_file="${idx_tmp_dir}/gate.stderr"
+    checked="$(python3 -c "$idx_program" "$idx_paths" "$run_id" "$model" "$checkpoint" "$protocol" "${declared_observer:-}" 2>"$idx_stderr_file")" \
+        || checked="__INDEX_CHECK_FAILED__: ${checked:-không xác định} $(cat "$idx_stderr_file" 2>/dev/null)"
+    if [[ -s "$idx_stderr_file" ]]; then
+        # Kept out of the token but not thrown away: a silent stderr would be its own defect.
+        cat "$idx_stderr_file" >&2
+    fi
+    rm -rf "$idx_tmp_dir"
     if [[ "$checked" == __INDEX_CHECK_FAILED__* ]]; then
         fail_stage "INDEX_VERIFY" \
             "Lượt chạy không hiện diện trong chỉ mục với đúng danh tính và trạng thái bằng chứng: ${checked#__INDEX_CHECK_FAILED__: }" \
@@ -1780,7 +1940,10 @@ else:
 # per-query artifact from is derived from the aggregate report, so the rebuild must run after the
 # verifier has spoken. This function therefore decides, writes the decision for the summary, and
 # leaves the rebuild to `rebuild_and_verify_index`.
-verify_gate() { # verify_gate VERIFY_OUT VERIFY_RC MODEL CHECKPOINT PROTOCOL RUN_ID PROOF_UNAVAILABLE REPORT_PATH HOST_ARTIFACTS
+verify_gate() { # verify_gate VERIFY_OUT_PATH VERIFY_RC MODEL CHECKPOINT PROTOCOL RUN_ID PROOF_UNAVAILABLE REPORT_PATH HOST_ARTIFACTS
+    # The first argument is a PATH, not the verdict text. A refusal that names every rejected reason
+    # is unbounded, and a single argv element is capped at MAX_ARG_STRLEN (128 KiB) independently of
+    # ARG_MAX, so passing the text here could fail with E2BIG before this reader started.
     local verify_out="$1" verify_rc="$2" model="$3" checkpoint="$4" protocol="$5" run_id="$6"
     # The caller owns the temp path and passes it in: it creates one with `mktemp`, so the file the
     # gate writes is the file the summary reads, and neither name is guessable in a shared /tmp.
@@ -1791,7 +1954,15 @@ verify_gate() { # verify_gate VERIFY_OUT VERIFY_RC MODEL CHECKPOINT PROTOCOL RUN
 """The one place the verifier's verdict is interpreted. Prints the refusal, writes the decision."""
 import json, sys
 
-verify_out = sys.argv[1]
+# The verdict is READ FROM A FILE. Its size is data, and argv cannot carry data.
+try:
+    with open(sys.argv[1], "r", encoding="utf-8", errors="replace") as _handle:
+        verify_out = _handle.read()
+except OSError as _error:
+    # An unreadable verdict is not an empty one: the refusal below is the honest answer, and it must
+    # not be reachable as "result is None -> invalid JSON" with no indication that the file was gone.
+    print(f"Lỗi: không đọc được kết quả xác thực: {type(_error).__name__}: {_error}")
+    sys.exit(1)
 verify_rc = int(sys.argv[2])
 model_id = sys.argv[3]
 checkpoint_id = sys.argv[4]
@@ -1944,12 +2115,31 @@ validate_and_summarize() {
     # called the function twice, and the gate would then have read the wrong run's report. Not
     # `local` because the caller reads it after this function returns.
     FINAL_RUN_REPORT_PATH=""
-    verify_out="$(run_verifier_in_container --run-id "$run_id" --model "$model" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || verify_rc=$?
+    # The verdict goes to a FILE, never into argv: it is small when the run passes and unbounded when
+    # it does not, because `2>&1` folds in whatever the container wrote, and a single argv element is
+    # capped at MAX_ARG_STRLEN (128 KiB) regardless of ARG_MAX. A refusal long enough to be useful
+    # would be the one that could not be read.
+    local verify_out_file
+    verify_out_file="$(mktemp "${TMPDIR:-/tmp}/cir_verify_out.XXXXXX")" || \
+        fail_stage "VERIFICATION" "Không tạo được tệp tạm để đọc kết quả xác thực" "${TMPDIR:-/tmp}" \
+            "Kiểm tra quyền ghi vào thư mục tạm rồi chạy lại ./pc.sh"
+    _register_temp "$verify_out_file"
+    # A subshell for the same reason the dedup reader uses one: this function calls `fail_stage`
+    # when the container is down, and `fail_stage` exits the shell it runs in. The old
+    # `$( ... )` contained that exit; a bare redirection does not, and the message would land in the
+    # file while the launcher died without ever printing the stage.
+    ( run_verifier_in_container --run-id "$run_id" --model "$model" --checkpoint "$checkpoint" --protocol "$protocol" --json ) >"$verify_out_file" 2>&1 || verify_rc=$?
     # The run's own report is the only place its per-query state is recorded, so the summary reads it
     # rather than inferring readiness from the aggregate verdict alone.
     FINAL_RUN_REPORT_PATH="$(python3 -c "
 import json, sys
-out = sys.argv[1]
+try:
+    with open(sys.argv[1], 'r', encoding='utf-8', errors='replace') as _handle:
+        out = _handle.read()
+except OSError:
+    # Nothing to read is not an empty verdict: leave the path empty so the summary's own
+    # report-read check refuses rather than concluding this run has no per-query axis.
+    out = ''
 for line in reversed(out.strip().splitlines()):
     line = line.strip()
     if line.startswith('{') and line.endswith('}'):
@@ -1960,7 +2150,7 @@ for line in reversed(out.strip().splitlines()):
             raise
         except Exception:
             pass
-" "$verify_out" 2>/dev/null || true)"
+" "$verify_out_file" 2>/dev/null || true)"
     local host_artifacts
     host_artifacts="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$(env_value HOST_WORKBENCH_ARTIFACTS_ROOT ../../workbench/artifacts)")"
     local verify_state verify_message
@@ -1971,8 +2161,10 @@ for line in reversed(out.strip().splitlines()):
     # there is no reason to leave a predictable name in place.
     verify_state="$(mktemp "${TMPDIR:-/tmp}/cir_verify_state.XXXXXX")"
     verify_message="$(mktemp "${TMPDIR:-/tmp}/cir_verify_msg.XXXXXX")"
+    _register_temp "$verify_state"
+    _register_temp "$verify_message"
     VERIFY_STATE_FILE="$verify_state"
-    if ! verify_gate "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" \
+    if ! verify_gate "$verify_out_file" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" \
             "${FINAL_RUN_PROOF_UNAVAILABLE:-0}" "${FINAL_RUN_REPORT_PATH:-}" "$host_artifacts" >"$verify_message"; then
         # The text is CAPTURED before the file is removed. `cat` the file, `rm` it, then `cat` it
         # again inside the fail_stage argument read an empty file: the operator got the refusal in
@@ -1980,7 +2172,7 @@ for line in reversed(out.strip().splitlines()):
         # deliver. Both the visible line and the failure detail come from the captured text.
         local verify_refusal
         verify_refusal="$(cat "$verify_message")"
-        rm -f "$verify_state" "$verify_message"
+        rm -f "$verify_state" "$verify_message" "$verify_out_file"
         printf '%s\n' "$verify_refusal"
         fail_stage "VERIFICATION" "$verify_refusal" "verify_run.py (trong container)" \
             "Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh (dùng ./pc.sh --verify-only nếu bạn chỉ muốn kiểm chứng lại năng lực GPU trước khi tốn thời gian đánh giá)"
@@ -2168,8 +2360,8 @@ if per_query_capability and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED":
     # promoted, so the full pilot is not ready and the exit code says so instead of 0.
     sys.exit(4)
 PYDOC
-    # The summary has read it; nothing else consumes the state file.
-    rm -f "$verify_state"
+    # The summary has read it; nothing else consumes the state file or the captured verdict.
+    rm -f "$verify_state" "$verify_out_file"
 }
 
 # Main Execution Flow

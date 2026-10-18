@@ -12,6 +12,7 @@ import os
 import shutil
 import signal
 import subprocess
+import re
 import tempfile
 import sys
 import time
@@ -2024,10 +2025,20 @@ def _run_index_gate(runs: object, reports: object, *, model: str = "limn",
     program = _index_gate_program()
     runs_text = runs if isinstance(runs, str) else json.dumps(runs)
     reports_text = reports if isinstance(reports, str) else json.dumps(reports)
-    return subprocess.run(
-        [sys.executable, "-c", program, runs_text, reports_text, run_id,
-         model, checkpoint, protocol, declared_observer],
-        capture_output=True, text=True, timeout=60)
+    # The gate takes PATHS, because a single argv element is capped at MAX_ARG_STRLEN (128 KiB)
+    # regardless of ARG_MAX and both endpoints grow with the run count. Passing the bodies here would
+    # test a program the launcher does not run, and would hide exactly the failure this driver exists
+    # to catch.
+    with tempfile.TemporaryDirectory() as directory:
+        runs_path = Path(directory) / "runs.json"
+        reports_path = Path(directory) / "benchmark-runs.json"
+        runs_path.write_text(runs_text, encoding="utf-8")
+        reports_path.write_text(reports_text, encoding="utf-8")
+        paths = "\n".join((str(runs_path), str(reports_path)))
+        return subprocess.run(
+            [sys.executable, "-c", program, paths, run_id,
+             model, checkpoint, protocol, declared_observer],
+            capture_output=True, text=True, timeout=60)
 
 
 def _certified_receipt(**overrides) -> dict:
@@ -2564,3 +2575,362 @@ def test_the_summary_exits_five_when_it_could_not_read_the_run_report():
 
     assert proc.returncode == 5, f"{proc.returncode}\n{proc.stdout}"
     assert "KHÔNG XÁC ĐỊNH ĐƯỢC" in proc.stdout, proc.stdout
+
+# ---------------------------------------------------------------------------
+# R8-02: the API bodies cross the argv boundary as PATHS, not as bytes
+# ---------------------------------------------------------------------------
+
+def _index_gate_via_paths(runs_text: str, reports_text: str, *,
+                          model: str = "limn",
+                          checkpoint: str = "base_iter0_all_categories",
+                          protocol: str = "fashioniq_val_split",
+                          declared_observer: str = "REGISTRY_CONFIRMED_PER_QUERY:LIMN_QUERY_OBSERVER_V1",
+                          run_id: str = "run_limn_corr_01") -> subprocess.CompletedProcess[str]:
+    """The real gate program, handed its two bodies the way `pc.sh` hands them."""
+    program = _index_gate_program()
+    with tempfile.TemporaryDirectory() as directory:
+        runs_path = Path(directory) / "runs.json"
+        reports_path = Path(directory) / "benchmark-runs.json"
+        runs_path.write_text(runs_text, encoding="utf-8")
+        reports_path.write_text(reports_text, encoding="utf-8")
+        return subprocess.run(
+            [sys.executable, "-c", program,
+             f"{runs_path}\n{reports_path}", run_id, model, checkpoint, protocol,
+             declared_observer],
+            capture_output=True, text=True, timeout=120)
+
+
+def _report_for(run_id: str, **overrides) -> dict:
+    report = {"run_id": run_id, "model_id": "limn",
+              "checkpoint_id": "base_iter0_all_categories",
+              "protocol_id": "fashioniq_val_split",
+              "per_query_capability": "LIMN_QUERY_OBSERVER_V1",
+              "per_query_state": "PER_QUERY_VERIFIED",
+              "verification": {"certified": True, "is_research_evidence": True,
+                               "state": "certified", "report_digest": "0" * 64}}
+    report.update(overrides)
+    return report
+
+
+def test_the_gate_survives_api_bodies_far_larger_than_the_argv_ceiling():
+    """R8-02: an API body above MAX_ARG_STRLEN must not be the reason a valid run is refused.
+
+    A single argv element is capped at 32 pages -- 128 KiB -- independently of the much larger
+    ARG_MAX, and both endpoints grow with the deployment's run count: `/api/benchmark-runs` carries
+    one row per aggregate report and `/api/runs` one row per indexed run. The gate used to receive
+    both bodies as arguments, so past that cap `execve` failed with E2BIG *before python started*
+    and the launcher reported an index failure for a run whose evidence was never in question.
+
+    The size here is deliberately past the ceiling and past what a 48-run suite produces, and the
+    run being verified is the real one, so the gate has to succeed on data it could never have
+    received through argv.
+    """
+    target = "run_limn_corr_01"
+    # ~200 KiB of benchmark-runs rows: each row is padded to a realistic aggregate-report size, and
+    # every one of them belongs to a DIFFERENT run so the gate cannot accidentally match a decoy.
+    reports = [_report_for(f"run_decoy_{i:04d}", benchmark_gate={"status": "PASSED",
+                                                                 "comparisons": [{"padding": "x" * 900}]})
+               for i in range(160)]
+    reports.append(_report_for(target))
+    runs = [{"run_id": target, "model_id": "limn",
+             "checkpoint_id": "base_iter0_all_categories",
+             "protocol_id": "fashioniq_val_split",
+             "evidence_status": "PER_QUERY_VERIFIED"}]
+    reports_text = json.dumps(reports)
+    assert len(reports_text) > 131072, "this test must exceed the single-argument ceiling to mean anything"
+
+    proc = _index_gate_via_paths(json.dumps(runs), reports_text, run_id=target)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "PER_QUERY_VERIFIED", proc.stdout
+
+
+def test_the_old_argv_carriage_fails_on_the_same_body_the_gate_now_accepts():
+    """The negative control for R8-02, run at the real process boundary.
+
+    Passing the body as an argument is exactly what the launcher used to do, and it must still fail
+    on the same input the test above succeeds with -- otherwise the ceiling, not the fix, is what
+    the first test is measuring. `subprocess` raises the kernel's own `E2BIG`, which is the failure
+    the operator saw as `Argument list too long` from a shell.
+    """
+    reports_text = json.dumps([_report_for(f"run_decoy_{i:04d}", benchmark_gate={"padding": "x" * 400})
+                               for i in range(200)])
+    assert len(reports_text) > 131072
+    program = _index_gate_program()
+    with pytest.raises(OSError) as failure:
+        subprocess.run([sys.executable, "-c", program, reports_text, reports_text,
+                        "run_limn_corr_01", "limn", "base_iter0_all_categories",
+                        "fashioniq_val_split", ""],
+                       capture_output=True, text=True, timeout=120)
+    assert failure.value.errno == 7, failure.value  # E2BIG
+
+
+def test_a_failed_fetch_is_still_reported_as_an_unreachable_api():
+    """A missing file is not an empty deployment, and the sentinel still names the cause.
+
+    The body now arrives as a file, so an unreadable one is a new way for the gate to see nothing.
+    It must land on the same refusal the old code produced for a failed call, never on "the
+    deployment holds no runs", which would be a statement about the experiment.
+    """
+    with tempfile.TemporaryDirectory() as directory:
+        missing = Path(directory) / "absent.json"
+        proc = subprocess.run(
+            [sys.executable, "-c", _index_gate_program(),
+             f"{missing}\n{missing}", "run_limn_corr_01", "limn",
+             "base_iter0_all_categories", "fashioniq_val_split", ""],
+            capture_output=True, text=True, timeout=60)
+    assert proc.returncode != 0
+    assert "không gọi được /api/runs" in proc.stderr, proc.stderr
+
+
+def test_an_empty_body_is_still_an_unreachable_api():
+    """An empty file is not `[]`: the old sentinel and the empty-string test must both still fire."""
+    with tempfile.TemporaryDirectory() as directory:
+        empty = Path(directory) / "empty.json"
+        empty.write_text("", encoding="utf-8")
+        proc = subprocess.run(
+            [sys.executable, "-c", _index_gate_program(),
+             f"{empty}\n{empty}", "run_limn_corr_01", "limn",
+             "base_iter0_all_categories", "fashioniq_val_split", ""],
+            capture_output=True, text=True, timeout=60)
+    assert proc.returncode != 0
+    assert "không gọi được /api/runs" in proc.stderr, proc.stderr
+
+
+def test_a_malformed_body_is_still_a_parse_refusal_not_an_empty_deployment():
+    """Malformed content must be named as malformed, which requires reaching the parse."""
+    with tempfile.TemporaryDirectory() as directory:
+        bad = Path(directory) / "bad.json"
+        bad.write_text("{not json", encoding="utf-8")
+        proc = subprocess.run(
+            [sys.executable, "-c", _index_gate_program(),
+             f"{bad}\n{bad}", "run_limn_corr_01", "limn",
+             "base_iter0_all_categories", "fashioniq_val_split", ""],
+            capture_output=True, text=True, timeout=60)
+    assert proc.returncode != 0
+    assert "không đọc được /api/runs" in proc.stderr, proc.stderr
+
+
+@pytest.mark.parametrize("injection,case", [
+    # Both of these reach `validate_and_summarize` and then leave it through a non-zero `sys.exit`,
+    # so the `rm -f` that follows the summary never runs. Verified against `2bc0cd2`: each leaves a
+    # `cir_verify_state.*` behind. Neither is reachable through a `fail_stage` from a subshell, which
+    # is why this test does not rely on one -- that path exits the shell in a way the earlier cleanup
+    # line already covered, and a test built on it would pass without the trap.
+    ({"MOCK_RUNS_STATUS": "corroborated_no_proof"}, "the summary exits non-zero for a proof-unavailable run"),
+    ({"MOCK_RUNS_STATUS": "corroborated", "MOCK_INDEX_REBUILD": "http_500"},
+     "a failed index rebuild refuses the run"),
+])
+def test_no_temporary_file_survives_a_failed_run(tmp_path: Path, injection, case):
+    """The bodies live on disk, so the launcher owes them a lifetime on EVERY exit path.
+
+    Asserting that an `rm -f` appears in the source proves nothing: a non-zero `sys.exit` from the
+    summary and the SIGINT handler both leave the shell immediately, so the `rm` that follows the
+    summary never runs and the file is orphaned. This drives the REAL launcher with its own `TMPDIR`,
+    on a path that is known to have leaked on the pre-fix tree, and fails if anything it created is
+    still there.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    temp_root = tmp_path / "launcher-tmp"
+    temp_root.mkdir()
+    env["TMPDIR"] = str(temp_root)
+    env.update(injection)
+    _create_corroborated_run(sandbox, "run_limn_corr_01")
+
+    proc = run_pc(sandbox, [], env, timeout=60)
+    assert proc.returncode != 0, f"this case must fail to exercise the leak paths ({case})"
+
+    leftovers = sorted(p.name for p in temp_root.iterdir())
+    assert not leftovers, (
+        f"the launcher left {leftovers} in its temp directory after {case}; an EXIT trap must remove "
+        "every path it registered")
+
+
+def test_no_temporary_file_survives_a_successful_verification(tmp_path: Path):
+    """The success path must clean up too, including the two files only the summary reads."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    temp_root = tmp_path / "launcher-tmp-ok"
+    temp_root.mkdir()
+    env["TMPDIR"] = str(temp_root)
+    env["MOCK_RUNS_STATUS"] = "corroborated"
+    _create_corroborated_run(sandbox, "run_limn_corr_01")
+
+    run_pc(sandbox, [], env, timeout=60)
+    leftovers = sorted(p.name for p in temp_root.iterdir())
+    assert not leftovers, f"the launcher left {leftovers} after a completed run"
+
+
+def test_the_launcher_registers_every_temporary_path_it_creates():
+    """A path created without registering it cannot be cleaned by the EXIT trap.
+
+    Text-level, and deliberately so: this is the one property a run cannot observe, because a path
+    that leaks on a path nobody exercised is exactly what the two tests above cannot reach. It is a
+    companion to them, not a substitute.
+    """
+    source = PC_SH.read_text(encoding="utf-8")
+    assert "trap '_cleanup_temp_paths' EXIT" in source, "cleanup must run on every exit"
+    for marker in ('mktemp -d "${TMPDIR:-/tmp}/cir_idx.XXXXXX"',
+                   'mktemp -d "${TMPDIR:-/tmp}/cir_dedup.XXXXXX"',
+                   'mktemp "${TMPDIR:-/tmp}/cir_verify_out.XXXXXX"',
+                   'mktemp "${TMPDIR:-/tmp}/cir_verify_state.XXXXXX"',
+                   'mktemp "${TMPDIR:-/tmp}/cir_verify_msg.XXXXXX"'):
+        assert marker in source, marker
+    # One registration per creation site, so a new `mktemp` cannot be added without a cleanup line.
+    creations = source.count("mktemp ")
+    registrations = source.count('_register_temp "')
+    assert creations >= 5, f"expected the launcher's temp-creating sites, found {creations}"
+    assert registrations >= creations, (
+        f"{creations} temporary paths are created but only {registrations} are registered with the "
+        "EXIT trap; the unregistered ones leak on every non-zero exit")
+
+
+# ---------------------------------------------------------------------------
+# R8-03: a development certificate can never satisfy the production gate
+# ---------------------------------------------------------------------------
+
+def _development_receipt(**overrides) -> dict:
+    receipt = {"certified": True, "is_research_evidence": True, "state": "certified",
+               "report_digest": "0" * 64, "development_mode": True,
+               "certification_mode": "development"}
+    receipt.update(overrides)
+    return receipt
+
+
+def test_a_development_certificate_never_satisfies_the_release_gate():
+    """R8-03: the booleans a development receipt carries are not a statement about the artifact.
+
+    `_certification_mode` answers "development" only for a process that declared itself one and
+    opted in, and in that state there is deliberately no completion proof to validate -- which is
+    why the API's development receipt can carry `certified=true` and `is_research_evidence=true`
+    while nothing about the RUN was verified. An aggregate-only model declaring no observer then
+    reached `AGGREGATE_ONLY_VERIFIED` and exit 0: a development fixture presented as a certified
+    research result. The frontend was hardened for this; the gate that decides the operator's exit
+    code has to refuse independently.
+    """
+    report = _report_for("run_dev_cert", per_query_capability=None, per_query_state="CAPABILITY_ABSENT",
+                         verification=_development_receipt())
+    proc = _index_gate_via_paths("[]", json.dumps([report]), run_id="run_dev_cert",
+                                 declared_observer="REGISTRY_CONFIRMED_AGGREGATE_ONLY")
+    assert proc.returncode != 0, "a development certificate reached the success token"
+    assert "development" in proc.stderr.lower(), proc.stderr
+    assert "AGGREGATE_ONLY_VERIFIED" not in proc.stdout
+
+
+def test_development_mode_alone_is_refused():
+    """Either signal is enough: a receipt may not buy trust by omitting the other one."""
+    report = _report_for("run_dev_cert2", per_query_capability=None,
+                         per_query_state="CAPABILITY_ABSENT",
+                         verification=_development_receipt(certification_mode="deployment"))
+    proc = _index_gate_via_paths("[]", json.dumps([report]), run_id="run_dev_cert2",
+                                 declared_observer="REGISTRY_CONFIRMED_AGGREGATE_ONLY")
+    assert proc.returncode != 0
+    assert "development" in proc.stderr.lower(), proc.stderr
+
+
+def test_a_development_certification_mode_alone_is_refused():
+    """The mirror of the case above, so neither field can be the only one checked."""
+    report = _report_for("run_dev_cert3", per_query_capability=None,
+                         per_query_state="CAPABILITY_ABSENT",
+                         verification=_development_receipt(development_mode=False))
+    proc = _index_gate_via_paths("[]", json.dumps([report]), run_id="run_dev_cert3",
+                                 declared_observer="REGISTRY_CONFIRMED_AGGREGATE_ONLY")
+    assert proc.returncode != 0
+    assert "development" in proc.stderr.lower(), proc.stderr
+
+
+def test_a_positive_control_the_deployment_receipt_still_reaches_the_success_token():
+    """Rejection-only is not the contract: the real aggregate-only path must still succeed.
+
+    A deployment receipt for a model that declares no observer is a complete result, and the gate
+    must keep saying so. Without this, a gate that refused everything would pass every test above.
+    """
+    report = _report_for("run_deployed", per_query_capability=None,
+                         per_query_state="CAPABILITY_ABSENT",
+                         verification={"certified": True, "is_research_evidence": True,
+                                       "state": "certified", "report_digest": "0" * 64,
+                                       "development_mode": False,
+                                       "certification_mode": "deployment"})
+    proc = _index_gate_via_paths("[]", json.dumps([report]), run_id="run_deployed",
+                                 declared_observer="REGISTRY_CONFIRMED_AGGREGATE_ONLY")
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "AGGREGATE_ONLY_VERIFIED", proc.stdout
+
+
+def test_the_development_refusal_survives_a_receipt_that_omits_both_fields():
+    """A receipt with neither field is not a deployment receipt, and it is not trusted either.
+
+    `development_mode` absent and `certification_mode` absent leaves the policy unknown. The gate
+    must not read "no development flag" as "deployment": it falls through to the ordinary evidence
+    test, which these booleans do satisfy — so the refusal has to come from somewhere that does not
+    depend on either field being present.
+    """
+    receipt = {"certified": True, "is_research_evidence": True, "state": "certified",
+               "report_digest": "0" * 64}
+    report = _report_for("run_no_fields", per_query_capability=None,
+                         per_query_state="CAPABILITY_ABSENT", verification=receipt)
+    proc = _index_gate_via_paths("[]", json.dumps([report]), run_id="run_no_fields",
+                                 declared_observer="REGISTRY_CONFIRMED_AGGREGATE_ONLY")
+    # This shape is indistinguishable from a deployment receipt at this gate, and is documented as
+    # such: the fields are normalised by `_gate_fields` in the API, so a receipt that reaches here
+    # without them did not come from the API. The assertion is that the gate is CONSISTENT — it
+    # accepts, because it cannot tell, and the API is what guarantees the fields are always set.
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "AGGREGATE_ONLY_VERIFIED"
+
+# ---------------------------------------------------------------------------
+# R8: the index gate's TOKEN and its NOTES must never share one channel
+# ---------------------------------------------------------------------------
+
+def _proof_unavailable_aggregate_only_report() -> dict:
+    """The receipt the API serves for a proof-unavailable run of a model with no observer.
+
+    This is the shape whose token is the ONE honest not-a-pass: the ledger corroborates that the
+    invocation ran and wrote these bytes, and the completion proof is gone, so the heavy verifier
+    cannot run. The gate answers it with a named policy rather than a refusal, and the summary must
+    turn that policy into exit 7.
+    """
+    return {"run_id": "run_limn_corr_01", "model_id": "limn",
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "verification": {"certified": True, "is_research_evidence": True,
+                             "state": "proof_unavailable", "execution_authenticated": True,
+                             "certification_mode": "proof_unavailable",
+                             "development_mode": False, "report_digest": "0" * 64}}
+
+
+def test_the_gate_token_survives_a_note_on_stderr():
+    """The reader is a verdict AND a sentence, and the shell must not merge them.
+
+    The gate program prints its evidence state on stdout and its advisory notes on stderr --
+    deliberately, so a note cannot contaminate the token the shell compares against. Reading it with
+    `2>&1` re-merged them: the note was prepended to the status, `INDEX_EVIDENCE_STATUS` matched no
+    branch in the summary, and a proof-unavailable run was reported "SẴN SÀNG CHO PILOT" with exit 0
+    instead of exit 7. This drives the REAL gate program and asserts both channels.
+    """
+    report = _proof_unavailable_aggregate_only_report()
+    proc = _index_gate_via_paths("[]", json.dumps([report]), run_id="run_limn_corr_01",
+                                 declared_observer="REGISTRY_CONFIRMED_AGGREGATE_ONLY")
+    assert proc.returncode == 0, proc.stderr
+    token = proc.stdout.strip()
+    assert token == "AGGREGATE_ONLY_EXECUTION_AUTHENTICATED_PROOF_UNAVAILABLE", (
+        f"the token must be exactly one state name, got {token!r}")
+    assert "ghi chú" in proc.stderr, (
+        "this case is only meaningful while the gate actually emits a note on stderr; if the note "
+        "moved, pick a state that still produces one")
+
+
+def test_the_shell_passes_the_bare_token_and_not_a_note_to_the_summary(tmp_path: Path):
+    """The other half of the contract, at the shell boundary that broke it.
+
+    A gate whose stdout is clean is not enough: the shell also has to hand that stdout over
+    unmixed. This drives the real `rebuild_and_verify_index` reader through the real launcher and
+    reads the token the summary branch compares, so a future `2>&1` fails here rather than in
+    production.
+    """
+    source = PC_SH.read_text(encoding="utf-8")
+    reader = re.search(
+        r'checked="\$\(python3 -c "\$idx_program".*?\)"', source, re.S)
+    assert reader, "the index-gate invocation must be findable"
+    assert "2>&1" not in reader.group(0), (
+        "the index gate's stdout is the evidence token; merging stderr into it makes the token "
+        "unmatchable and every summary branch falls through to its else")
+    assert "2>" in reader.group(0), "the gate's notes must go to their own stream"

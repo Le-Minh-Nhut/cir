@@ -5,10 +5,17 @@ trên máy dev, cái gì chỉ có thể kiểm trên máy đích, và cách đ�
 
 **Chưa từng chạy trên RTX 5070 Ti.** Không có chứng thư GPU nào trong repo.
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `11ba3df`** — mọi test, acceptance, mutation và release_verify mô
-tả trên trang này đã chạy trên đúng cây đó (1394 passed; acceptance, mutation và release_verify đều
-chạy lại trên cùng commit). Commit `b70d092` sau nó **chỉ sửa tài liệu**: `git diff 11ba3df b70d092`
-trên `pc.sh`, `workbench/`, `src/` cho ra **0 dòng**.
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `2bc0cd2`** — mọi test, acceptance, mutation và release_verify mô
+tả trên trang này đã chạy trên đúng cây đó (1406 passed; acceptance, mutation và release_verify đều
+chạy lại trên cùng commit).
+
+Trước đây trang này trỏ tới `11ba3df`. Commit đó nay là **nguồn đã lỗi thời**: `git diff 11ba3df
+2bc0cd2` thay đổi `pc.sh`, `workbench/replay/limn_export.py`, `workbench/replay/limn_publish.py`,
+`workbench/scripts/evaluate_models.py` và `workbench/frontend/evidence.ts`. Cụ thể, bản `pc.sh` ở
+`11ba3df` không hề chứa `sys.exit(7)` hay `REGISTRY_UNKNOWN` (mã thoát 7 được định nghĩa ngay trên
+trang này), nên checkout theo nó sẽ cài một launcher KHÔNG THỂ in ra mã thoát mà chính tài liệu này
+mô tả. Test `test_no_release_document_points_at_a_superseded_source_sha` nay so sánh **cây nguồn sản
+xuất theo từng byte**, không phải quan hệ tổ tiên.
 
 Đây là một SHA bất biến, không phải đầu nhánh: nhánh `research/cir-failure-workbench` sẽ tiếp tục tiến
 lên, nên **không** checkout theo tên nhánh nếu bạn muốn đúng cây đã kiểm thử.
@@ -20,10 +27,11 @@ git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
-git checkout 11ba3df
+git checkout 2bc0cd2
 ```
 
-Cây mới nhất (gồm cả tài liệu cập nhật) là `b70d092`; khác biệt so với `11ba3df` chỉ là tài liệu.
+Cây mới nhất trên nhánh có thể đi xa hơn `2bc0cd2`; phần khác biệt sau đó chỉ là tài liệu, và
+`TESTED_SOURCE_SHA` trong `FINAL_PC_RELEASE_VERDICT.md` là mốc bất biến để đối chiếu.
 
 Bản đầy đủ của lượt review cuối (ma trận 16 model, coverage, sổ lỗi, đối chiếu độc lập, verdict) nằm
 trong `workbench/docs/reviews/FINAL_*.md`.

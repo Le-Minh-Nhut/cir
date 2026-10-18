@@ -1747,6 +1747,33 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
         if claimed is not None and expected is not None and claimed != expected:
             return None, (f"observer artifact describes {field}={claimed!r}, not this run's "
                           f"{expected!r}"), None, None
+    # THE PARENT BINDS THE PUBLISHED BUNDLE IDENTITY TO THE PLAN, and this check is the one that
+    # holds, because the parent is the only participant that derives the digest from OUTSIDE the
+    # payload.
+    #
+    # The publisher compares the payload's staged members against the payload's own
+    # `planned_bundle_manifest_digest`, and it does refuse a disagreement -- but the observer writes
+    # BOTH fields, so an observer that staged the wrong checkpoint could declare a matching planned
+    # digest and the two halves would agree while describing a bundle this run never evaluated.
+    # Payload-versus-payload is not a binding. The plan is: `_plan_members` hashes the members on
+    # DISK, before the observer runs, and `plan.bundle_manifest_digest` is derived from that. When
+    # the plan resolves members, the artifact must record exactly that digest.
+    #
+    # The expression below is deliberately the same one the observer is handed and the same one the
+    # completion proof records (an earlier line in this file, and the `checkpoint_local_sha256`
+    # block's neighbour). Three sites, one expression: the artifact, the proof and the run's own
+    # record of the plan must agree, and a difference between them is the defect this check exists
+    # to catch. `_plan_members` re-reads each member from disk rather than copying the plan's
+    # recorded digest, because a plan built before the run may carry placeholders.
+    planned_digest = plan.bundle_manifest_digest or manifest_digest(_plan_members(plan))
+    if planned_digest:
+        recorded_digest = payload["run"].get("bundle_manifest_digest")
+        if recorded_digest != planned_digest:
+            return None, (
+                f"observer artifact records bundle_manifest_digest={recorded_digest!r}, but this "
+                f"run planned {planned_digest!r}: the per-query artifact must describe the members "
+                "the aggregate run actually evaluated, and neither the observer nor the publisher "
+                "can be the authority for that"), None, None
     digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
     # The staging file is an interchange detail, not evidence: leaving it beside the canonical
     # artifacts would make the results directory hold two descriptions of one run.

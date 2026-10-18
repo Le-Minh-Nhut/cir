@@ -97,11 +97,17 @@ load is unguarded code execution in the evaluator's interpreter, and the registr
 for it. The registry also declares a `.pt` where the author ships a `.zip` whose members are UNKNOWN.
 **Next step**: fetch and digest the archive (isolated host), then map members; only then a wrapper.
 
-### `dcnet` — Protocol B, permanently unreproducible as published
+### `dcnet` — Protocol B, original preprocessing parity not established
 `process_cap.py:31` draws OOV embeddings from `np.random.normal` with **no seed anywhere in
-`preprocess/`**. Regeneration produces a different experiment, and the authors published no `.pkl`.
-**Decision required, not work**: either accept a variant whose numbers are not the paper's, or drop
-the model from failure analysis. Do not spend engineering time on this expecting parity.
+`preprocess/`** (`ORIGINAL_PREPROCESSING_PARITY_UNVERIFIED`), and the authors published no cache
+containing the embeddings they drew (`AUTHOR_CACHE_UNAVAILABLE`). A deterministic reimplementation
+(`DETERMINISTIC_VARIANT_POSSIBLE`) is therefore reproducible but is **not** automatically identical
+to the original author's draw, so `ORIGINAL_PAPER_PARITY_NOT_ESTABLISHED`. Missing public data today
+is not proof that the original artifacts can never surface, so "permanently unreproducible" claims
+more than the evidence supports.
+**Decision required, not work**: either accept a variant whose numbers may differ from the paper's,
+or leave the model out of cross-model failure analysis. Do not change DCNet's native preprocessing or
+scoring to make the benchmark easier.
 
 ---
 
@@ -116,13 +122,16 @@ additionally not importable (`datasets` under `data/`, no `__init__.py`, no `sys
 `train.py`'s `__main__` never calls `train()` or `test.test()`.
 **Verdict**: reconstruction would mean writing a component the authors did not publish. Not advised.
 
-### `ptha_mtst` — no source, no weights, no protocol
-The repository linked in the registry **is** the paper's own source (verified: title, first author,
-his commits) — so "source unavailable" was the wrong label. What is missing is everything else: no
-FashionIQ checkpoint (Hub holds three CIRR files; `fashioniq.pt` → 404), and the pinned revision
-cannot even import (`models/__init__.py:51` names a module that 404s). The protocol is genuinely
-**UNRESOLVED**, and guessing it would violate the invariant that a model's protocol comes from
-evidence.
+### `ptha_mtst` — author source exists but is not integrated; no weights, no protocol
+`PUBLIC_AUTHOR_SOURCE_EXISTS`: the repository linked in the registry **is** the paper's own source
+(verified: title, first author, his commits), so "source unavailable" was the wrong label. What is
+missing is everything else. `SOURCE_NOT_INTEGRATED`: no pinned FashionIQ source/evaluator
+configuration has been audited into the workbench (status `SOURCE_EXISTS_UPSTREAM`, pin `null`).
+`CHECKPOINT_UNAVAILABLE`: no FashionIQ checkpoint (the Hub holds three CIRR files; `fashioniq.pt` →
+404); substituting a CIRR weight would be a different experiment. And the pinned revision cannot even
+import (`models/__init__.py:51` names a module that 404s). `PROTOCOL_UNVERIFIED`: the protocol is
+genuinely **UNRESOLVED**, and guessing it would violate the invariant that a model's protocol comes
+from evidence.
 **Verdict**: needs the authors. No amount of local work reaches it.
 
 ---

@@ -4,7 +4,8 @@ What was inventoried, what was actually read by an independent audit, and what w
 excluded. A file is only counted as covered when an audit report names it while making a claim about
 its behaviour — not when it appears in a listing.
 
-- **Tested source**: `84ec6f1`
+- **Tested source at the time of this coverage pass**: `84ec6f1`. Superseded; the current release
+  metadata is `FINAL_PC_RELEASE_VERDICT.md`.
 - **Audits whose citations were counted**: 16 model audits (`/tmp/model_audits/*.md`) and 5
   cross-cutting first-party audits (`/tmp/firstparty/*.md`), performed by subagents across four model
   families.
