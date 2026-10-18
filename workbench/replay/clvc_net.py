@@ -129,8 +129,19 @@ def evaluate_categories(
     target_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
     import torchvision.transforms as transforms
+    # The NATIVE FashionIQ validation pipeline, copied from `train.py:90-96` (`load_dataset`, the
+    # `args.dataset == 'fashioniq'` branch, `split='val'`):
+    #
+    #     Resize(256) -> CenterCrop(224) -> ToTensor -> ImageNet Normalize
+    #
+    # This wrapper used `Resize(224)`, which is the *fashion200k* branch (`train.py:113-117`) rather
+    # than the FashionIQ one. Both produce a (3, 224, 224) tensor, so nothing failed visibly: the
+    # short side was scaled to 224 and then center-cropped to 224, i.e. a tighter crop of a smaller
+    # resample than the evaluator these weights were validated under. On a 300x500 fixture the two
+    # pipelines differ by up to 4.24 in normalized units while matching in shape, which is exactly
+    # the kind of mismatch that shows up as an unexplained Recall gap rather than an error.
     transform = transforms.Compose([
-        transforms.Resize(224),
+        transforms.Resize(256),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),

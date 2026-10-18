@@ -115,7 +115,15 @@ class AirKnowAdapter(OfficialScriptAdapter):
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # `test_BLIP2.py` has no `__main__` and no checkpoint loader, and one of its branches calls
         # `load_obj("")` with an empty path, so it cannot be launched as published.
-        return _replay_command(self, checkpoint, request, source, checkpoint_id=True)
+        #
+        # The variant is passed as `--variant`, because that is the flag the wrapper actually
+        # accepts (`airknow.py:add_argument("--variant")`). It used to be passed as
+        # `--checkpoint-id`, which no wrapper argument matches: argparse exits 2 with
+        # "unrecognized arguments" before any model is touched, so the model could not run at all.
+        # The value is the request's selection, so the variant the caller chose is the variant
+        # evaluated — not a default that happens to be first in the registry.
+        return _replay_command(self, checkpoint, request, source,
+                               variant=(request.checkpoint_id or None))
 
 
 class ConeSepAdapter(OfficialScriptAdapter):

@@ -1,0 +1,47 @@
+--- a/src/validate_blip_csmcir.py
++++ b/src/validate_blip_csmcir.py
+@@ -506,13 +506,21 @@
+     parser.add_argument("--target-ratio", default=1.25, type=float, help="TargetPad target ratio")
+     parser.add_argument("--transform", default="targetpad", type=str,
+                         help="Preprocess pipeline, should be in ['clip', 'squarepad', 'targetpad'] ")
++    # Diagnostic image dumps (`vis_fiq`) are a development aid, not part of measurement. They were
++    # previously unconditional and ran AFTER the metrics were printed, so a benchmark run died in the
++    # drawing code -- `vis_fiq` treats `data[1]` of the val-relative dataset as a score tensor while
++    # it is a target id string -- and exited non-zero with the metrics already computed. Making it
++    # opt-in keeps the drawing tools untouched and leaves the metric stage unaffected.
++    parser.add_argument("--visualize", action="store_true",
++                        help="write diagnostic image dumps after evaluation (off by default)")
+ 
+     args = parser.parse_args()
+ 
+     if args.dataset == 'CIRR':
+         blip_validate_cirr(args.blip_model_name, args.blip_model_path, args.transform, args.target_ratio)
+     elif args.dataset == 'fashionIQ':
+-        blip_validate_fashioniq(args.blip_model_name, args.blip_model_path, args.transform, args.target_ratio)
++        blip_validate_fashioniq(args.blip_model_name, args.blip_model_path, args.transform,
++                                args.target_ratio, visualize=args.visualize)
+ 
+ 
+ 
+@@ -562,7 +570,8 @@
+ 
+ 
+ 
+-def blip_validate_fashioniq(blip_model_name, blip_model_path, transform, target_ratio):
++def blip_validate_fashioniq(blip_model_name, blip_model_path, transform, target_ratio,
++                            visualize: bool = False):
+ 
+     # clip_model, clip_preprocess = clip.load(clip_model_name, device=device, jit=False)
+     blip_model, _, txt_processors = load_model_and_preprocess(name=blip_model_name, model_type="pretrain", is_eval=False, device=device)
+@@ -630,7 +639,10 @@
+     print(json.dumps(results_dict, indent=4))
+ 
+ 
+-    # 可视化部分
++    # 可视化部分 -- opt-in only. `--visualize` is off for evaluation so the metric stage above is the
++    # last thing a benchmark run depends on.
++    if not visualize:
++        return
+     for relative_val_dataset, classic_val_dataset, idx in zip(relative_val_datasets, classic_val_datasets,
+                                                               idx_to_dress_mapping):
+         index_features, index_names = extract_index_blip_caption_features(classic_val_dataset, blip_model)

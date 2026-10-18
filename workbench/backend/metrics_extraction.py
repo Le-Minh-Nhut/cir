@@ -375,6 +375,12 @@ def parse_hint_output(stdout_text: str, paper_metrics: dict[str, float | None] |
             json_obj = parsed
             break
 
+    # Identity: when the document declares which model produced it, it must be THIS model. The
+    # native tuple shape carries no model id, so the check applies only where the producer states
+    # one — but it must apply there, or another model's document would be read as HINT's result.
+    if isinstance(json_obj, dict) and json_obj.get("model_id") not in (None, "hint"):
+        return unparsed
+
     if isinstance(json_obj, dict):
         for category in categories:
             entry = next((item for item in (json_obj.get("categories") or [])
@@ -439,6 +445,33 @@ def parse_hint_output(stdout_text: str, paper_metrics: dict[str, float | None] |
         raw_output=json_obj,
     )
 
+def _replay_records(document: dict) -> list | None:
+    """The per-category records in a replay document, whichever key the producer used.
+
+    Two real spellings exist in this repository, and both are produced by wrappers that call the same
+    native `test()`:
+
+    * `results` — `pair`, `encoder`, `clvc_net` and the LIMN-family observer payloads;
+    * `categories` — `airknow`, `habit`, `intent`, `conesep`, and every other `*_replay` main written
+      from the same template.
+
+    Accepting only `results` meant four wrappers produced a complete, correct document that the
+    parser refused, so a successful run with exit 0 reported
+    `EVALUATION_COMPLETED_METRICS_UNPARSED` and the model looked unintegrated. The keys are synonyms
+    for the same list, so either is read; if a document carries BOTH and they disagree, that is an
+    ambiguous result and is refused rather than resolved by preferring one.
+    """
+    results = document.get("results")
+    categories = document.get("categories")
+    if results is not None and categories is not None:
+        if results != categories:
+            return None
+    for candidate in (results, categories):
+        if isinstance(candidate, list):
+            return candidate
+    return None
+
+
 def parse_workbench_replay_output(model_id: str, stdout_text: str,
                                   paper_metrics: dict[str, float | None] | None = None) -> MetricExtractionResult:
     """Parse the JSON a `workbench/replay/*` wrapper prints.
@@ -488,27 +521,29 @@ def parse_workbench_replay_output(model_id: str, stdout_text: str,
                             candidate = json.loads(stdout_text[start:index + 1])
                         except Exception:
                             break
-                        if isinstance(candidate, dict) and "results" in candidate:
+                        if isinstance(candidate, dict) and _replay_records(candidate) is not None:
                             document = candidate
                         break
             if document is not None:
                 break
 
-    if not isinstance(document, dict) or not isinstance(document.get("results"), list):
+    records = _replay_records(document) if isinstance(document, dict) else None
+    if records is None:
         return unparsed
     # A wrapper for a different model must not satisfy this model's dispatch entry.
     if document.get("model_id") != model_id:
         return unparsed
     # Every category must be present exactly once and marked complete: a partial run is not a
     # complete benchmark result, and the wrapper itself refuses to claim one.
-    records = {}
-    for record in document["results"]:
+    by_category: dict[str, dict] = {}
+    for record in records:
         if not isinstance(record, dict):
             return unparsed
         category = record.get("category")
-        if category in records:
+        if category in by_category:
             return unparsed
-        records[category] = record
+        by_category[category] = record
+    records = by_category
     if set(records) != set(categories):
         return unparsed
     if not all(records[category].get("complete") for category in categories):

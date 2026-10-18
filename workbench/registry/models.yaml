@@ -77,6 +77,12 @@ models:
         base_sha256: 9d8c914b551a7de614e062f9a241f44626fd591a31a0ccf1cc79f0ae23c9db01
         derived_sha256: aa68fe5e20bcda5e17d978799deb8ec0ff4636e5b3b2a6ef637ce5e385b0c818
         reason: "98 unguarded imports of modules absent from the pinned public revision prevent the package from importing, so the shipped CSMCIR class is never registered"
+      - path: src/validate_blip_csmcir.py
+        patch_file: workbench/patches/csmcir_validate_visualization_opt_in.patch
+        patch_sha256: eef0594109aa7e65a024a49bf3784f287ec21cbb466c7fc84712e5ba98582f68
+        base_sha256: aa7a4395cdb700fded0567e0969da774a331927eaea327b5a23da82fdc7506a9
+        derived_sha256: 84a1d476e99d9687b16b1a9c5238f89295f23d2a6f9f4dfb449acba2c118262c
+        reason: "the evaluator prints its metric JSON and then unconditionally runs the `vis_fiq` diagnostic dump, which raises AttributeError on the val-relative dataset's target-id field and exits non-zero after the metrics were already computed; the patch makes that dump opt-in and leaves the metric stage untouched"
     source_blocker: "pinned lavis.models package cannot be imported as published (98 unguarded imports of absent modules sit before the registration); an approved patch is declared in approved_source_patches and removes only that blocker"
     notes: Official Hugging Face model repository; checkpoint has an author-published size and sha256 (Hugging Face LFS oid).
     checkpoint_variants:
