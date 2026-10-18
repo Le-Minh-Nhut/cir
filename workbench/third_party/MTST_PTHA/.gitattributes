@@ -1,6 +1,8 @@
 # Upstream's file was `* text=auto`, which normalizes line endings on checkout. Inside this
-# repository that is destructive: `provenance.json` records a digest per file and 124 vendored files
-# carry CRLF, so normalization would leave `LICENSE` and `.gitignore` here failing their own
-# recorded digests and report a healthy delivered tree as tampered with. The bytes are kept as the
-# pinned commit has them, which is what the integrity manifest asserts.
-* -text -diff
+# repository that is destructive: `provenance.json` records a digest per file and this checkout
+# carries CRLF bytes, so normalization would leave `LICENSE` and `.gitignore` failing their own
+# recorded digests and report a healthy delivered tree as tampered with. The bytes are kept exactly
+# as the pinned commit has them, which is what the integrity manifest asserts.
+#
+# `-text` alone preserves them; diffing stays enabled so the vendored source remains reviewable.
+* -text

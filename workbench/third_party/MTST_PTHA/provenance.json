@@ -386,7 +386,7 @@
       "origin": "coordinator",
       "justification": "upstream's `* text=auto` normalizes line endings on checkout, which would rewrite the 124 vendored files that carry CRLF and leave them failing their own recorded digests; replaced with `* -text -diff`",
       "upstream_sha256": "1a1dbe176bc233b499d35a57db7513f2941c99ab9759f177830c9149be99005b",
-      "delivered_sha256": "a62b6c83e10009303f2d772569e9892239b6f9f2c8b7f6039510e40018abd6e7"
+      "delivered_sha256": "f864bd73f2ff7555faadbc25023d8265123035d51495e065fc233586ffb56905"
     },
     {
       "path": "MTST_PTHA/src/data_utils.py",

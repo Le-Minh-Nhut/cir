@@ -3,5 +3,10 @@
 # The digests in `workbench/third_party/<dir>/provenance.json` are the integrity baseline for these
 # checkouts, so Git must never rewrite a file on checkout: a normalization would leave the file on
 # disk failing its own recorded digest, and a healthy delivered tree would then be reported as
-# tampered with. 124 vendored files carry CRLF, so this is not hypothetical.
-workbench/third_party/** -text -diff
+# tampered with. 63 vendored files carry CRLF, so this is not hypothetical.
+#
+# `-text` alone is what preserves the bytes. Diffing is deliberately left ENABLED: `-diff` would
+# make every vendored file render as binary, which is precisely the reviewability this branch
+# exists to provide. Upstream's own `MTST_PTHA/.gitattributes` declared `* text=auto`, and because
+# an in-tree `.gitattributes` outranks this one, that file was rewritten to `* -text -diff` too.
+workbench/third_party/** -text
