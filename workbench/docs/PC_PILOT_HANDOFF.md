@@ -5,8 +5,8 @@ trên máy dev, cái gì chỉ có thể kiểm trên máy đích, và cách đ�
 
 **Chưa từng chạy trên RTX 5070 Ti.** Không có chứng thư GPU nào trong repo.
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `2bc0cd2`** — mọi test, acceptance, mutation và release_verify mô
-tả trên trang này đã chạy trên đúng cây đó (1406 passed; acceptance, mutation và release_verify đều
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `59949ff`** — mọi test, acceptance, mutation và release_verify mô
+tả trên trang này đã chạy trên đúng cây đó (1426 passed; acceptance, mutation và release_verify đều
 chạy lại trên cùng commit).
 
 Trước đây trang này trỏ tới `11ba3df`. Commit đó nay là **nguồn đã lỗi thời**: `git diff 11ba3df
@@ -27,11 +27,12 @@ git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
-git checkout 2bc0cd2
+git checkout 59949ff
 ```
 
-Cây mới nhất trên nhánh có thể đi xa hơn `2bc0cd2`; phần khác biệt sau đó chỉ là tài liệu, và
-`TESTED_SOURCE_SHA` trong `FINAL_PC_RELEASE_VERDICT.md` là mốc bất biến để đối chiếu.
+Nhánh này sẽ tiếp tục tiến lên. Mốc bất biến để đối chiếu là `TESTED_SOURCE_SHA` trong
+`FINAL_PC_RELEASE_VERDICT.md`; commit sau mốc đó chỉ được phép sửa tài liệu, và một test so sánh
+cây nguồn sản xuất theo từng byte sẽ thất bại nếu điều đó không còn đúng.
 
 Bản đầy đủ của lượt review cuối (ma trận 16 model, coverage, sổ lỗi, đối chiếu độc lập, verdict) nằm
 trong `workbench/docs/reviews/FINAL_*.md`.
