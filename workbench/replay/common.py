@@ -56,21 +56,18 @@ def load_trusted_whole_model(path: Path, expected_sha256: str | None, torch_modu
 
 
 def source_checkout_status(source_root: Path, expected_commit: str) -> tuple[bool, str | None, str | None]:
-    if not source_root.is_dir():
-        return False, None, "source checkout missing"
-    # The delivered layout vendors the pinned upstream source *inside this repository* with the
-    # nested Git metadata removed, so there is no `.git` here to interrogate. `source_provenance`
-    # answers the same question from the recorded commit and the per-file digest manifest, and it
-    # falls back to the Git-based path for an operator scratch checkout.
-    from workbench.backend.runtime import source_provenance
+    """The runtime's answer, so the two entry points cannot disagree.
 
-    provenance = source_provenance({"upstream_commit_sha": expected_commit}, source_root)
-    if provenance.get("error"):
-        return False, provenance.get("actual_commit"), provenance["error"]
-    head = provenance.get("actual_commit")
-    if head != expected_commit:
-        return False, head, f"source pin mismatch: expected {expected_commit}, found {head}"
-    return True, head, None
+    This used to be a second implementation of the same question, and the copy silently lost the
+    dirtiness check: it compared the pin and nothing else, so a *modified* source file was accepted
+    by the replay path while `runtime.source_clean_and_pinned` refused it. Delegating means one
+    implementation covers both layouts — the vendored digest manifest, and a nested Git checkout
+    including "is it dirty" — and `test_replay_and_runtime_agree_that_bytecode_is_not_a_source_change`
+    holds the two together.
+    """
+    from workbench.backend.runtime import source_clean_and_pinned
+
+    return source_clean_and_pinned({"upstream_commit_sha": expected_commit}, source_root)
 
 
 def source_pin_status(source_root: Path, expected_commit: str) -> tuple[bool, str | None]:

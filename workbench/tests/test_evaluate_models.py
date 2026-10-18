@@ -5,6 +5,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 
 from workbench.backend.operator_config import WorkbenchConfig
@@ -34,6 +35,55 @@ def config(tmp_path: Path) -> WorkbenchConfig:
     return WorkbenchConfig(tmp_path, tmp_path / "data", tmp_path / "FashionIQ", "127.0.0.1", 8000, 5173, tmp_path / "checkpoints", tmp_path / "results", tmp_path / "third_party")
 def records():
     return {model["model_id"]: model for model in load_registry()["models"]}
+
+
+def _record_verified_auxiliary_asset(monkeypatch, settings: WorkbenchConfig, model: dict,
+                                     relative_path: str,
+                                     payload: bytes = b"placeholder weights") -> Path:
+    """Place an auxiliary asset inside the checkout *and record it as an acquired, verified asset*.
+
+    The registry declares ENCODER's open_clip backbone as a required asset, so a file that merely
+    exists is reported `unverified: operator-supplied unverified provenance` and blocks the plan
+    before the test's own claim is reached. A real acquisition writes three things this mirrors:
+    the file, a manifest entry naming its digest, and — because the registry entry says VERIFIED —
+    the declared published digest the file is checked against. `validate_auxiliary_asset` decides
+    provenance from the *record*, so the record is what has to say VERIFIED.
+    """
+    path = settings.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"] / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(payload)
+    digest = hashlib.sha256(payload).hexdigest()
+
+    manifest_dir = (settings.WORKBENCH_ARTIFACTS_ROOT
+                    or settings.CIR_REPO_ROOT / "workbench" / "artifacts") / "auxiliary"
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    manifest = manifest_dir / "download_manifest.json"
+    try:
+        entries = json.loads(manifest.read_text())
+    except (OSError, ValueError):
+        entries = []
+    entries = [entry for entry in entries if entry.get("destination") != str(path)]
+    entries.append({"destination": str(path), "downloaded_sha256": digest})
+    manifest.write_text(json.dumps(entries))
+
+    from workbench.backend import registry as registry_module
+
+    original_loader = registry_module.load_auxiliary_assets
+
+    def loader_with_verified_backbone(*args, **kwargs):
+        records = []
+        for record in original_loader(*args, **kwargs):
+            if record["model_id"] == model["model_id"] and Path(record["destination_path"]).name == relative_path:
+                record = {**record, "provenance_status": "VERIFIED",
+                          "expected_sha256": digest, "expected_size_bytes": len(payload)}
+            records.append(record)
+        return records
+
+    # `raising=False`: preflight imports the name at module scope in some paths, and a plain
+    # assignment would leak the stub into later tests if it were not undone.
+    monkeypatch.setattr(registry_module, "load_auxiliary_assets", loader_with_verified_backbone,
+                        raising=False)
+    return path
 
 
 def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Path, Path, WorkbenchConfig]:
@@ -94,6 +144,18 @@ def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Pa
     import workbench.backend.runtime as runtime
 
     monkeypatch.setattr(runtime, "source_clean_and_pinned", lambda model, _: (True, model["upstream_commit_sha"], None))
+    # The declared-artifact check resolves the acquisition manifest through `resolve_config()`, which
+    # reads the process environment rather than the config object this fixture builds. Without this
+    # redirection a staged asset would be looked up under the real artifacts root, find no manifest
+    # entry, and be reported as operator-supplied with unverified provenance.
+    def runtime_config():
+        return SimpleNamespace(WORKBENCH_ARTIFACTS_ROOT=settings.WORKBENCH_ARTIFACTS_ROOT,
+                               FASHIONIQ_ROOT=settings.FASHIONIQ_ROOT,
+                               WORKBENCH_THIRD_PARTY_ROOT=settings.WORKBENCH_THIRD_PARTY_ROOT)
+
+    monkeypatch.setattr(runtime, "resolve_config", runtime_config, raising=False)
+    import workbench.backend.operator_config as operator_config
+    monkeypatch.setattr(operator_config, "resolve_config", runtime_config)
     return source, checkpoint_file, settings
 
 def prepare_ilearn_layout(root: Path) -> None:
@@ -119,8 +181,23 @@ def prepare_standard_layout(root: Path) -> None:
 
 
 def test_unaudited_adapter_is_skipped() -> None:
+    """A model whose adapter does not override `command` is skipped, never silently planned.
+
+    This used `hint` while HINT's adapter inherited the base `command`. HINT now has a real command
+    (its evaluator has no CLI of its own), so the test asserts the *rule* against a model that still
+    inherits it — `tgcir`. The rule is what matters: `command_is_audited` decides by identity with the
+    base class, so moving any model into or out of that state cannot quietly change how it is
+    reported.
+    """
     module = load_module()
-    model = records()["hint"]
+    from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
+
+    model_id = next(mid for mid, adapter in sorted(ADAPTERS.items())
+                    if getattr(adapter, "command", None) is OfficialScriptAdapter.command)
+    assert not module.command_is_audited(ADAPTERS[model_id])
+    assert module.command_is_audited(ADAPTERS["hint"])
+
+    model = records()[model_id]
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], None, 200)
     assert plan is None
     assert reasons == ["SKIPPED: adapter command not audited"]
@@ -386,8 +463,13 @@ def test_encoder_requires_native_layout_before_openclip(monkeypatch, tmp_path: P
 def test_encoder_reports_actual_missing_layout_path(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
     model = records()["encoder"]
-    source, _, _ = prepare_source(monkeypatch, module, tmp_path, model)
-    for name in ("evaluate_model.py", "datasets1.py", "open_clip_pytorch_model.bin"):
+    source, _, settings = prepare_source(monkeypatch, module, tmp_path, model)
+    # The backbone is staged as an ACQUIRED asset (file + manifest digest), because the registry
+    # declares it required: a bare file is reported `unverified: operator-supplied unverified
+    # provenance` and blocks the plan before the claim under test is reached. These tests are about
+    # the evaluator import, the data layout and the checkpoint mapping -- not the weights' bytes.
+    _record_verified_auxiliary_asset(monkeypatch, settings, model, "open_clip_pytorch_model.bin")
+    for name in ("evaluate_model.py", "datasets1.py"):
         (source / name).write_text("")
     dataset_root = tmp_path / "FashionIQ"
     prepare_ilearn_layout(dataset_root)
@@ -404,9 +486,9 @@ def test_encoder_reports_actual_missing_layout_path(monkeypatch, tmp_path: Path)
 def test_encoder_complete_layout_still_blocks_missing_evaluator_import(monkeypatch, tmp_path: Path) -> None:
     module = load_module()
     model = records()["encoder"]
-    source, _, _ = prepare_source(monkeypatch, module, tmp_path, model)
-    for name in ("evaluate_model.py", "open_clip_pytorch_model.bin"):
-        (source / name).write_text("")
+    source, _, settings = prepare_source(monkeypatch, module, tmp_path, model)
+    _record_verified_auxiliary_asset(monkeypatch, settings, model, "open_clip_pytorch_model.bin")
+    (source / "evaluate_model.py").write_text("")
     dataset_root = tmp_path / "FashionIQ"
     prepare_ilearn_layout(dataset_root)
 
@@ -416,6 +498,14 @@ def test_encoder_complete_layout_still_blocks_missing_evaluator_import(monkeypat
                        "checkpoint mapping unresolved"]
 
 def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, tmp_path: Path) -> None:
+    """With the evaluator and the data layout present, the missing backbone is what blocks.
+
+    The assertion checks that the backbone is reported *missing* rather than pinning the exact
+    producer string: the registry now declares this asset, so it is reported by the auxiliary-asset
+    check as well as by the model's own prerequisite list, and two accurate messages must not make
+    the test fail. The claim — a missing backbone blocks the plan even when layout and import are
+    satisfied — is what is asserted.
+    """
     module = load_module()
     model = records()["encoder"]
     source, _, _ = prepare_source(monkeypatch, module, tmp_path, model)
@@ -427,8 +517,9 @@ def test_encoder_complete_layout_and_import_still_blocks_openclip(monkeypatch, t
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200)
 
     assert plan is None
-    assert reasons == [f"ENCODER asset missing: {source / 'open_clip_pytorch_model.bin'}",
-                       "checkpoint mapping unresolved"]
+    backbone = str(source / "open_clip_pytorch_model.bin")
+    assert any("missing" in reason.lower() and backbone in reason for reason in reasons), reasons
+    assert "checkpoint mapping unresolved" in reasons
 
 
 def test_encoder_complete_local_prerequisites_still_block_on_unverified_mapping(monkeypatch, tmp_path: Path) -> None:
@@ -440,8 +531,13 @@ def test_encoder_complete_local_prerequisites_still_block_on_unverified_mapping(
     """
     module = load_module()
     model = records()["encoder"]
-    source, _, _ = prepare_source(monkeypatch, module, tmp_path, model)
-    for name in ("evaluate_model.py", "datasets1.py", "open_clip_pytorch_model.bin"):
+    source, _, settings = prepare_source(monkeypatch, module, tmp_path, model)
+    # The backbone is staged as an ACQUIRED asset (file + manifest digest), because the registry
+    # declares it required: a bare file is reported `unverified: operator-supplied unverified
+    # provenance` and blocks the plan before the claim under test is reached. These tests are about
+    # the evaluator import, the data layout and the checkpoint mapping -- not the weights' bytes.
+    _record_verified_auxiliary_asset(monkeypatch, settings, model, "open_clip_pytorch_model.bin")
+    for name in ("evaluate_model.py", "datasets1.py"):
         (source / name).write_text("")
     dataset_root = tmp_path / "FashionIQ"
     prepare_ilearn_layout(dataset_root)

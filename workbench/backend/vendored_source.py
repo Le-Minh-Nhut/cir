@@ -36,7 +36,7 @@ def load_vendor_provenance(source: Path) -> dict[str, Any] | None:
         return None
 
 
-def _declared_runtime_artifacts(model: dict[str, Any], source: Path | None = None) -> set[str]:
+def _declared_runtime_artifacts(model: dict[str, Any]) -> set[str]:
     """Paths preparation is allowed to create inside the checkout, relative to its root.
 
     These are artifacts the *workbench* creates at run time — the canonical FashionIQ symlink and
@@ -76,7 +76,7 @@ def _hash_file(path: Path) -> str:
 
 def live_digest(source: Path, model: dict[str, Any] | None = None) -> dict[str, str]:
     """Content digest of every regular file in the checkout, minus declared artifacts."""
-    declared = _declared_runtime_artifacts(model or {}, source)
+    declared = _declared_runtime_artifacts(model or {})
     digests: dict[str, str] = {}
     for path in sorted(source.rglob("*")):
         relative = str(path.relative_to(source))
