@@ -72,6 +72,7 @@ Xem mục 7 để có lệnh kiểm chứng từng bước.
 | `PER_QUERY_EXPORTED_UNVERIFIED` | đã xuất artifact, verifier chưa chứng thực | **4** |
 | `PER_QUERY_VERIFIED` | đã xuất + verifier đã chứng thực | 0 |
 | (không đọc được report) | launcher không đọc được điều lượt chạy đã ghi — **không** được coi là aggregate-only | **5** |
+| `PROOF_UNAVAILABLE_AND_*` | tệp completion proof không còn: full verification không chạy được. Lượt gọi vẫn được xác thực (`execution_authenticated`) và báo cáo tổng hợp vẫn được phục vụ, nhưng một artifact per-query **không bao giờ** được promote lên `PER_QUERY_VERIFIED` — nên đây **không** phải pilot đầy đủ | **4** nếu mô hình khai báo observer; 0 nếu aggregate-only |
 
 Exit code 5 nghĩa là launcher **không biết** — nó không được phép tuyên bố "mô hình này không có trình
 quan sát" khi sự thật là nó không đọc được report. Kiểm tra đường dẫn `HOST_WORKBENCH_ARTIFACTS_ROOT`.

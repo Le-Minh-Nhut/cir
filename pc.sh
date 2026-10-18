@@ -2034,8 +2034,8 @@ else:
     print(f"Phân tích theo truy vấn  : THẤT BẠI — {per_query_capability} được khai báo nhưng không")
     print(f"                           có artifact Top-K nào được xuất. Lý do: {_per_query_reason}")
     print(f"                           Kết quả TỔNG HỢP ở trên vẫn hợp lệ và đã được lưu.")
-if _index_evidence_status == "PROOF_UNAVAILABLE":
-    print("Trạng thái chỉ mục: PROOF_UNAVAILABLE — tệp completion proof không còn tồn tại, nên")
+if _index_evidence_status.startswith("PROOF_UNAVAILABLE"):
+    print(f"Trạng thái chỉ mục: {_index_evidence_status} — tệp completion proof không còn tồn tại, nên")
     print("                   xác thực đầy đủ không chạy được; API vẫn xác thực được LƯỢT GỌI")
     print("                   (execution_authenticated) và đã phục vụ báo cáo tổng hợp.")
 elif _index_evidence_status == "AGGREGATE_ONLY_VERIFIED":
@@ -2054,9 +2054,15 @@ if per_query_capability and per_query_state in (None, "PER_QUERY_EXPORT_FAILED")
 elif per_query_capability and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED":
     print("KẾT LUẬN: TỔNG HỢP ĐẠT — PILOT ĐẦY ĐỦ chờ chứng thực artifact Top-K.")
 else:
-    print("KẾT LUẬN: SẴN SÀNG CHO PILOT (theo khả năng đã khai báo của mô hình).")
+    if _index_evidence_status.startswith("PROOF_UNAVAILABLE"):
+        print("KẾT LUẬN: TỔNG HỢP ĐẠT — PILOT ĐẦY ĐỦ CHƯA SẴN SÀNG (tệp proof không còn).")
+    else:
+        print("KẾT LUẬN: SẴN SÀNG CHO PILOT (theo khả năng đã khai báo của mô hình).")
     print("  Bằng chứng tổng hợp: đã chứng thực và API phục vụ được lượt chạy này.")
-    if _index_evidence_status == "AGGREGATE_ONLY_VERIFIED":
+    if _index_evidence_status.startswith("PROOF_UNAVAILABLE"):
+        print("  Chỉ mục DuckDB: lượt chạy này KHÔNG được promote lên PER_QUERY_VERIFIED (tệp proof")
+        print("  không còn nên không có receipt nào gắn được với artifact). Đây KHÔNG phải pilot đầy đủ.")
+    elif _index_evidence_status == "AGGREGATE_ONLY_VERIFIED":
         # Saying "the DuckDB index holds this run" here would be false: the index holds canonical
         # PER-QUERY records, and this model declares no observer, so there is nothing of its kind
         # to hold. The aggregate view is where its evidence lives, and the summary must send the
@@ -2081,6 +2087,8 @@ if not _report_read:
 if per_query_capability and per_query_state in (None, "PER_QUERY_EXPORT_FAILED"):
     sys.exit(3)
 if per_query_capability and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED":
+    # 4 also covers the proof-unavailable run of an observer model: its artifact can never be
+    # promoted, so the full pilot is not ready and the exit code says so instead of 0.
     sys.exit(4)
 PYDOC
 }
