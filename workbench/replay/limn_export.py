@@ -90,12 +90,6 @@ def observation_payload(observed: list[ObservedCategory], mismatches: dict[str, 
         "run_id": run_id,
         "top_k": top_k,
         "upstream_commit": MODEL["upstream_commit_sha"],
-        # The digest the ORCHESTRATOR computed over the members it will evaluate. The publisher
-        # compares it with the members this payload staged, so a per-query artifact cannot record a
-        # bundle identity that disagrees with the aggregate run's. The observer does not compute this
-        # value; it only carries the parent's, exactly as it carries the command and environment
-        # digests.
-        "planned_bundle_manifest_digest": planned_bundle_manifest_digest,
         "checkpoint_members": {
             category: {"filename": LIMN_CHECKPOINTS[category]["filename"],
                        "checkpoint_id": LIMN_CHECKPOINTS[category]["checkpoint_id"],
@@ -144,6 +138,10 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
     payload = observation_payload(observed, mismatches, run_id=identity, top_k=top_k)
     payload["command_digest"] = command_digest
     payload["environment_digest"] = environment_digest
+    # The digest the ORCHESTRATOR computed over the members it will evaluate. The publisher compares
+    # it with the members this payload staged, so a per-query artifact cannot record a bundle identity
+    # that disagrees with the aggregate run's. The observer never computes this value; it carries the
+    # parent's, exactly as it carries the command and environment digests.
     payload["planned_bundle_manifest_digest"] = planned_bundle_manifest_digest
     payload["runtime_adaptation"] = runtime_adaptation
 
