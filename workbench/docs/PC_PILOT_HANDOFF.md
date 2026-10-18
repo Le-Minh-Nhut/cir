@@ -18,9 +18,17 @@ bổ sung: `encoder` cần một bản sửa nhỏ (alias import, asset LAION Vi
 `dcnet` cần asset thượng nguồn; `ptha_mtst` cần tác giả cung cấp source/checkpoint;
 10 model còn lại cần wrapper. Ma trận đầy đủ ở `workbench/docs/reviews/r8/R8_16_MODEL_STATUS.md`.
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `59949ff`** — mọi test, acceptance, mutation và release_verify mô
-tả trên trang này đã chạy trên đúng cây đó (1427 passed; acceptance, mutation và release_verify đều
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `9a53ee1`** — mọi test, acceptance, mutation và release_verify mô
+tả trên trang này đã chạy trên đúng cây đó (1438 passed; acceptance, mutation và release_verify đều
 chạy lại trên cùng commit).
+
+Lưu ý: `59949ff` (bản ghi cũ) đã bị **thay thế** — công việc vendoring đã thay đổi file production
+(`workbench/backend/runtime.py`, `workbench/replay/common.py`, `workbench/backend/adapters/models.py`,
+`workbench/registry/*`), nên số test và kết quả gate của bản ghi cũ không còn mô tả cây hiện tại.
+
+Nhóm C của acceptance chỉ fail khi chạy vào container `cir-workbench` **dựng trước** thay đổi này
+(image cũ vẫn phục vụ registry cũ: `ptha_mtst source_available: false`). Chạy lại với backend khởi
+động từ source hiện tại thì nhóm C PASS. Cần rebuild image trước khi chạy lại acceptance.
 
 Trước đây trang này trỏ tới `11ba3df`. Commit đó nay là **nguồn đã lỗi thời**: `git diff 11ba3df
 2bc0cd2` thay đổi `pc.sh`, `workbench/replay/limn_export.py`, `workbench/replay/limn_publish.py`,
@@ -40,7 +48,7 @@ git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
-git checkout 59949ff
+git checkout 9a53ee1
 ```
 
 Nhánh này sẽ tiếp tục tiến lên. Mốc bất biến để đối chiếu là `TESTED_SOURCE_SHA` trong
