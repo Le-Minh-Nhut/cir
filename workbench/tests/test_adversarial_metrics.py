@@ -96,9 +96,17 @@ def test_v11_limn_inconsistent_mean_rejected():
 
 # V12: Missing parser never fabricates metrics
 def test_v12_missing_parser_no_fabrication():
-    r = mx.extract_aggregate_metrics("airknow", "irrelevant output", "", 0)
+    """A model with no parser reports that, and never invents a metric.
+
+    This used `airknow` while it had no parser. Air-Know now has a replay wrapper and therefore the
+    shared replay parser, so the premise moved: `dcnet` is the model whose evaluator writes files
+    instead of printing metrics, and it genuinely has no parser. The invariant being guarded is
+    unchanged -- unreadable output yields no observed metric rather than a substituted one.
+    """
+    r = mx.extract_aggregate_metrics("dcnet", "irrelevant output", "", 0)
     assert r.extraction_status == "AGGREGATE_PARSER_UNAVAILABLE"
     assert r.observed_metrics is None
+    assert r.parser_id is None
 
 
 # V13: Paper score never substituted for observed
