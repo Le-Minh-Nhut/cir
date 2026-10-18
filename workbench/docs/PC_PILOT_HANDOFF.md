@@ -22,7 +22,7 @@ bổ sung: `encoder` cần một bản sửa nhỏ (alias import, asset LAION Vi
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
 **SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `851eec3`** — mọi test, acceptance, mutation và release_verify mô
-tả trên trang này đã chạy trên đúng cây đó (1599 passed; acceptance, mutation và release_verify đều
+tả trên trang này đã chạy trên đúng cây đó (1609 passed; acceptance, mutation và release_verify đều
 chạy lại trên cùng commit).
 
 Lưu ý: các bản ghi cũ `59949ff`, `9a53ee1` và `5567bc7` đã bị **thay thế**. Công việc vendoring và phục hồi

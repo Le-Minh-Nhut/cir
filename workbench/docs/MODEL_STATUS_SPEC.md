@@ -223,7 +223,7 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | F03 | `FIXED` | `clvc_net.py` dùng `Resize(256)` theo nhánh FashionIQ native | `test_component_boundaries.py` so tensor thật | — |
 | F04 | `FIXED` | `--visualize` off-by-default, qua approved patch thứ 2 | `test_component_boundaries.py` (4 test patch + gate) | — |
 | F05 | `FIXED` | validator HINT/ENCODER/PAIR yêu cầu train; layout → `ilearn_resized_training` | `test_verified_declarations.py` | — |
-| F06 | `FIXED` (đề xuất) | thay `load_model_and_preprocess` bằng processor trực tiếp — **agent đề xuất, tôi chưa áp vì chưa tự chứng minh parity text preprocessing** | agent report | `UNFINISHED_ENGINEERING` (cần chứng minh prompt/max_words/truncation) |
+| F06 | `DEFERRED_WITH_REASON` | Thay `load_model_and_preprocess` bằng processor trực tiếp: **chưa áp**. Đã chứng minh được 5 model resolve **cùng** khai báo processor (`prompt=""`, `max_words=50`) từ config pinned (`test_blip2_text_processor_parity.py`), nhưng chưa chứng minh được **output parity** vì `lavis.processors` kéo `torchaudio` — không cài được trên host này; mọi assertion kiểu đó sẽ là test một stub. Điều kiện áp: chứng minh prompt/max_words/punctuation/spaces/truncation không đổi **trên runtime có torchaudio**. | `test_blip2_text_processor_parity.py` (6) | `UNFINISHED_ENGINEERING` |
 | F07 | `FIXED` | pin OpenAI CLIP revision thay `clip==0.2.0` | `test_verified_declarations.py` | — |
 | F08 | `FIXED` | preflight báo `data_dir` mismatch/relative/missing | `dcnet.validate_dataset_binding` + test | — |
 | F09 | `FIXED` | parser DCNet, fraction→% một lần, nhánh `comb:`, tách comp/corr | `test_verified_declarations.py` (6 test) | — |
