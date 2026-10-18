@@ -400,12 +400,23 @@ elif "/api/benchmark-runs" in url:
             "checkpoint_id": "base_iter0_all_categories",
             "protocol_id": "fashioniq_val_split",
             "execution_status": "EXECUTION_COMPLETED",
+            # The model's own declaration, as the report always carries it: the registry says LIMN
+            # has an observer, so a run of LIMN whose report omitted the field would be a report
+            # disagreeing with the registry -- which the gate refuses, correctly. With the proof
+            # gone, the artifact can never be promoted, so the state the producer itself would have
+            # written is the exported-but-unverified one.
+            "per_query_capability": "LIMN_QUERY_OBSERVER_V1",
+            "per_query_state": "PER_QUERY_EXPORTED_UNVERIFIED",
             "verification": {
                 "certified": False,
                 "is_research_evidence": False,
                 "execution_authenticated": True,
                 "state": "proof_unavailable",
                 "certification_mode": "proof_unavailable",
+                # The receipt still names the bytes it was derived from: the proof is what is missing,
+                # not the report, and the launcher refuses a receipt that names nothing because then
+                # the report's own fields are tied to no certified file.
+                "report_digest": "0" * 64,
                 "reasons": [],
                 "evidence_reasons": ["declared output missing: completion proof"],
             },
