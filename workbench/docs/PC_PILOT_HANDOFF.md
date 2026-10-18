@@ -21,7 +21,7 @@ bổ sung: `encoder` cần một bản sửa nhỏ (alias import, asset LAION Vi
 **Trạng thái 16 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `851eec3`** — mọi test, acceptance, mutation và release_verify mô
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `119df5f`** — mọi test, acceptance, mutation và release_verify mô
 tả trên trang này đã chạy trên đúng cây đó (1609 passed; acceptance, mutation và release_verify đều
 chạy lại trên cùng commit).
 
@@ -52,7 +52,7 @@ git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
-git checkout 851eec3
+git checkout research/cir-failure-workbench   # hoặc: git checkout 119df5f (nguồn đã kiểm thử)
 ```
 
 Nhánh này sẽ tiếp tục tiến lên. Mốc bất biến để đối chiếu là `TESTED_SOURCE_SHA` trong
