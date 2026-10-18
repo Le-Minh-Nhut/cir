@@ -28,7 +28,7 @@
     "blocks.py": "d98395c2049a9bc5d6596cfc6c44d3afb1d3efee06e0d2b5433c15be031e3d5d",
     "datasets.py": "58f3c67c4da951b356135891a9e4b95cf7adb55162befd183497c26718416bed",
     "model.py": "fe97d7c8a37c1f158bb0214760846e603a8d67ac7e944472f9c82b571038bf1b",
-    "resnet.py": "8eb6ad211ff91372e61c41f408f6adefef00c7757e9c6eef3144689fbe31cdf1",
+    "resnet.py": "de1fc79597adff1a73fa9e1ddd6a68ed18a2ee2a76cd1d7bd206ad64535fbddd",
     "test.py": "0b06407bba79d102c894ce4defb3c6b33da0ee61809dce4290b9f11a67c7c29c",
     "text_model.py": "34662dd446aa56c7d1665424df9a797a994af6e6258a59bebf6572e2659033eb",
     "train.py": "959933f11d774dd60ca4b89667136de6562b22db5738a5acc3f8d50e7523efd5",
@@ -41,5 +41,6 @@
       "upstream_sha256": "8eb6ad211ff91372e61c41f408f6adefef00c7757e9c6eef3144689fbe31cdf1",
       "delivered_sha256": "de1fc79597adff1a73fa9e1ddd6a68ed18a2ee2a76cd1d7bd206ad64535fbddd"
     }
-  ]
+  ],
+  "excluded_by_vendoring": []
 }

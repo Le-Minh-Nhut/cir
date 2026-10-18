@@ -18,10 +18,13 @@
   "submodules_declared": "",
   "git_lfs_pointers": [],
   "file_manifest": {
+    ".gitattributes": "f864bd73f2ff7555faadbc25023d8265123035d51495e065fc233586ffb56905",
+    ".gitignore": "93c7be0ce8f47d89d762394b3821e837918182d90d5c701811f116af7fd8655d",
+    "LICENSE": "c8cf8124018ce984c0491e4f973e4639575864ee537f0589c0a5412ad271fe29",
     "MTST_PTHA/src/blip_fine_tune_2.py": "59490ec19225a9523f7f52fd3f07d5ff04513fa0434f50beca735918c0fa2240",
     "MTST_PTHA/src/blip_validate.py": "fb040a92e9534405e13b5992dc6686ea650b1925e5931442462d1c25a76655bb",
     "MTST_PTHA/src/cirr_test_submission.py": "1fdd01d3671164e62a66c2d2b0fcf0731c83dde06c1cfd3f7df6f280da953251",
-    "MTST_PTHA/src/data_utils.py": "bfcce728c5fa54b843e3a0e9009b85aba0b017370b4d147fc4206365c0543935",
+    "MTST_PTHA/src/data_utils.py": "ac933197e817dec27ee47fcf28c32534198b67cee6ba9f8d663e12d00e7d5d3f",
     "MTST_PTHA/src/lavis/__init__.py": "6ad1f5f087ec8ff32c3a3ec50431026d45a0e3f6d0c9332e206a576b44b40d86",
     "MTST_PTHA/src/lavis/common/config.py": "62e754848c88e0ee5cf9bca65d5d62e5964eb89a5caf7631a187b14afac92b6c",
     "MTST_PTHA/src/lavis/common/dist_utils.py": "80ac52911e1f4f2dc6aa551272a25cf75a8adb1db288b4d6a7488566b8b916e9",
@@ -82,7 +85,6 @@
     "MTST_PTHA/src/lavis/configs/models/blip2/blip2_instruct_flant5xl.yaml": "c4c2c819586483006c3fd21b285a19356fe56d5c308f3e3802b95244f4b543df",
     "MTST_PTHA/src/lavis/configs/models/blip2/blip2_instruct_flant5xxl.yaml": "9327db6ed2ce1bc718f425059befe0e7a76330cc1f6613a05d2155da044ca264",
     "MTST_PTHA/src/lavis/configs/models/blip2/blip2_instruct_vicuna13b.yaml": "fdee3944ddbc96187215183b26c0dcccd314fe725bc22ae7dde541de68249ab2",
-    "MTST_PTHA/src/lavis/configs/models/blip2/blip2_instruct_vicuna7b copy.yaml": "1af2309c0d2e0a5be2d1d3373e552684ae55ccad1e0ab0d358e19d15571188c9",
     "MTST_PTHA/src/lavis/configs/models/blip2/blip2_instruct_vicuna7b.yaml": "eb27163cacf96a56900b1a6e3eea97d5eff086ba1150b81bf202023962c304ee",
     "MTST_PTHA/src/lavis/configs/models/blip2/blip2_pretrain.yaml": "7bd23b42ef6d256f17464970e13bda6be252184facad47ca526c7efb677a89bb",
     "MTST_PTHA/src/lavis/configs/models/blip2/blip2_pretrain_flant5xl.yaml": "65913a0167bc8a22d35d888993ad0fd09e1c44bc1e84b633467d68859c60b2d2",
@@ -197,7 +199,7 @@
     "MTST_PTHA/src/lavis/datasets/download_scripts/download_nocaps.py": "bad5e9e9e38e9001c05a04bad66598cc3c05037cc5d506ee633804f12d3cfff3",
     "MTST_PTHA/src/lavis/datasets/download_scripts/download_sbu.py": "ec80f88837dbe2d2b42abe647ed9b43e38a6dbfbf60c2755bad7ea212d76330e",
     "MTST_PTHA/src/lavis/datasets/download_scripts/download_vg.py": "a68b4630dc28d3510d591cfb5cb509fbc9b9727180d36dc5fb7058aa2243c2b5",
-    "MTST_PTHA/src/lavis/models/__init__.py": "fe9449e56b99e5fdf081c47dfbac05dc958f1d0a27f6fa7559abee45fd825bfa",
+    "MTST_PTHA/src/lavis/models/__init__.py": "6a1feee8364a2636160bbdc0da14e843561265adc9dfc6410f8736ab06f307dd",
     "MTST_PTHA/src/lavis/models/albef_models/__init__.py": "54c431293447fd684dd7bd4220a0774ffb56e011751c963d0ae76ccb257987f5",
     "MTST_PTHA/src/lavis/models/albef_models/albef_classification.py": "9d7f82ac2ad6f25b61c3c12e71b33082feaf46704b0de7247a1c965f27449a32",
     "MTST_PTHA/src/lavis/models/albef_models/albef_feature_extractor.py": "27372a918b9416b3e86ae146b75637b4332828902b65e1e5c6144fef0bdfdf8a",
@@ -374,9 +376,6 @@
     "MTST_PTHA/src/utils.py": "8878c0ff81da42f683f2c4a1280985de407aa168098bf0e63811ecf60f90ffb6",
     "MTST_PTHA/src/validate_blip.py": "741272d4973416e16dd3908c0539fe3989d992229b6696ab353edb62f8eb7b3e",
     "MTST_PTHA/src/validate_blip_circo.py": "0bdd3b1e9eb040e9af304613e0991d64e945d2c99759c409a22074ce3dea6c99",
-    ".gitattributes": "1a1dbe176bc233b499d35a57db7513f2941c99ab9759f177830c9149be99005b",
-    ".gitignore": "93c7be0ce8f47d89d762394b3821e837918182d90d5c701811f116af7fd8655d",
-    "LICENSE": "c8cf8124018ce984c0491e4f973e4639575864ee537f0589c0a5412ad271fe29",
     "README.md": "728913e3ea5b04cb7c6bd2df5777653fdf64ab401ab247527bac640e1408cedd",
     "requirements.txt": "3e3067d75744cd62fa8a9afefa383fe457d13884de9eea6e57c580174239d262"
   },
@@ -402,5 +401,8 @@
       "upstream_sha256": "fe9449e56b99e5fdf081c47dfbac05dc958f1d0a27f6fa7559abee45fd825bfa",
       "delivered_sha256": "6a1feee8364a2636160bbdc0da14e843561265adc9dfc6410f8736ab06f307dd"
     }
+  ],
+  "excluded_by_vendoring": [
+    "MTST_PTHA/src/lavis/configs/models/blip2/blip2_instruct_vicuna7b copy.yaml"
   ]
 }

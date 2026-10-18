@@ -59,5 +59,6 @@
     "correct_files/correction_dict_toptee.json": "3dfbf15fa6d3a30dc0f5cf7e2908ca36d1775e42aa6598f1dba7899267dc1b71",
     "requirements.txt": "cf6ffa8bc09b9ab873440b3d36315d2675d723a848f1e25f5e1ec47d5a9df724"
   },
-  "local_fixes": []
+  "local_fixes": [],
+  "excluded_by_vendoring": []
 }

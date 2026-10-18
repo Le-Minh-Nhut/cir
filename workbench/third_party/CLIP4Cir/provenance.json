@@ -42,5 +42,6 @@
     "src/utils.py": "ca336ef308f3d2f04094f464f5d54a4bc8e623d10014bccae16753cf3a0060f2",
     "src/validate.py": "bc0b3e6e88e73d56d6e8ae3b076d5ad71b357118f1e5b2b0212dacd187c4f16c"
   },
-  "local_fixes": []
+  "local_fixes": [],
+  "excluded_by_vendoring": []
 }

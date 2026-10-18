@@ -6,6 +6,19 @@ __pycache__/
 # C extensions
 *.so
 data/
+# The vendored upstream trees under workbench/third_party are tracked source (see the note in
+# .gitattributes). A few of them keep required code in a directory *called* `data` — PAIR ships its
+# dataset module as `data/datasets.py`, which its own `models/model.py` imports — so the broad `data/`
+# rule above silently swallowed a required source file. The negation is scoped to the vendored trees
+# only, so the repository's own dataset root (`data/fashionIQ_dataset`) stays ignored.
+!workbench/third_party/**/data/
+!workbench/third_party/**/data/**
+# A path negation outranks the `*.py[codz]` rule (Git takes the LAST matching pattern), so the
+# bytecode these negations would otherwise re-include has to be re-ignored explicitly and after them.
+# Bytecode is a build product: it must never ship, and the vendoring step removes it for that reason.
+workbench/third_party/**/__pycache__/
+workbench/third_party/**/*.pyc
+workbench/third_party/**/*.pyo
 # Distribution / packaging
 .Python
 build/

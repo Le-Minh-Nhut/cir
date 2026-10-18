@@ -49,6 +49,9 @@
   "git_lfs_pointers": [],
   "file_manifest": {
     ".gitignore": "145a6a0926296d458d442dc1e18a05fb67f52ac191086f0fab8666c561b6eab6",
+    "COT_ours2/fashioniq/dress_cot_val.json": "b7129bafc56ed7f33ea5175e565358b042b5ef9263af002758564579ebb5b6a6",
+    "COT_ours2/fashioniq/shirt_cot_val.json": "bbe6f689dfe0c5fcc897979f90877fcaa2c4c8d3dc405cb64f1507fc78452cc9",
+    "COT_ours2/fashioniq/toptee_cot_val.json": "acdacc3d8d0565e645324ddd838cb288f1bc69434635d83ece127b93dacac1cc",
     "README.md": "1c7a9138c141d92941160e6fd39f6bb28ee048aedbe2fc8af814cb9bb3728179",
     "requirements.txt": "74726b197c22c64ce5669d50fc774e36ea4ee6b40d3eb0d6b37eafb0b672a17f",
     "src/blip_fine_tune_2_csmcir.py": "4c4689dc316ede315e4aeb1de2f9d888b59d5b385a19466620ade615cdc2ab74",
@@ -115,7 +118,6 @@
     "src/lavis/configs/models/blip2/blip2_instruct_flant5xl.yaml": "c4c2c819586483006c3fd21b285a19356fe56d5c308f3e3802b95244f4b543df",
     "src/lavis/configs/models/blip2/blip2_instruct_flant5xxl.yaml": "9327db6ed2ce1bc718f425059befe0e7a76330cc1f6613a05d2155da044ca264",
     "src/lavis/configs/models/blip2/blip2_instruct_vicuna13b.yaml": "fdee3944ddbc96187215183b26c0dcccd314fe725bc22ae7dde541de68249ab2",
-    "src/lavis/configs/models/blip2/blip2_instruct_vicuna7b copy.yaml": "1af2309c0d2e0a5be2d1d3373e552684ae55ccad1e0ab0d358e19d15571188c9",
     "src/lavis/configs/models/blip2/blip2_instruct_vicuna7b.yaml": "eb27163cacf96a56900b1a6e3eea97d5eff086ba1150b81bf202023962c304ee",
     "src/lavis/configs/models/blip2/blip2_pretrain.yaml": "b2fce0fc0a34834fad02704a4f4263e0f0d1befd62912c52d43ab9624ceb5135",
     "src/lavis/configs/models/blip2/blip2_pretrain_flant5xl.yaml": "65913a0167bc8a22d35d888993ad0fd09e1c44bc1e84b633467d68859c60b2d2",
@@ -243,7 +245,6 @@
     "src/lavis/models/alpro_models/alpro_qa.py": "64229dc9745083ef2b678e2070fe731e0f8e74c12c310d7d2e1de15f6e8e74bb",
     "src/lavis/models/alpro_models/alpro_retrieval.py": "13db023ab0c881dfd7a1454b08f3e650f764f5d52c478a290d8179faf4a322b8",
     "src/lavis/models/base_model.py": "1aac2c08a772386c80dd5e747022b9cd2734e1afe9ac65465897660ca20997c9",
-    "src/lavis/models/blip2_models/.ipynb_checkpoints/blip2_qformer_cir_align_prompt_target_image_caption_shiyan88-checkpoint.py": "95b248ab9d387e70f58fb38805c05a1e40b895bc1929baefaab116bc1fd21763",
     "src/lavis/models/blip2_models/Qformer.py": "412a1444f4aeae8f16c5b6a593f2f401e87fd3fbe58e456a8be18b05557c916c",
     "src/lavis/models/blip2_models/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/lavis/models/blip2_models/blip2.py": "2cbb918c9bb43bde43e6d46325f4dca1c3392497d3736ea01396d6538cd0e7d2",
@@ -407,5 +408,9 @@
     "src/utils_test1_csmcir.py": "3d1bda04e882ebfa6959d0012c6c1d443b355b934edec0ce7053fbec68b3a7b7",
     "src/validate_blip_csmcir.py": "aa7a4395cdb700fded0567e0969da774a331927eaea327b5a23da82fdc7506a9"
   },
-  "local_fixes": []
+  "local_fixes": [],
+  "excluded_by_vendoring": [
+    "src/lavis/configs/models/blip2/blip2_instruct_vicuna7b copy.yaml",
+    "src/lavis/models/blip2_models/.ipynb_checkpoints/blip2_qformer_cir_align_prompt_target_image_caption_shiyan88-checkpoint.py"
+  ]
 }

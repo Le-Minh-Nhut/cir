@@ -37,7 +37,7 @@ NATIVE_CACHES = (
 def preflight(source_root: Path, dataset_root: Path, checkpoint_root: Path) -> list[str]:
     """Return all known blockers without importing upstream code or mutating inputs."""
     blockers = []
-    ok, reason = source_pin_status(source_root, MODEL["upstream_commit_sha"])
+    ok, reason = source_pin_status(source_root, MODEL["upstream_commit_sha"], MODEL)
     if not ok:
         blockers.append(f"pinned TG-CIR source unavailable: {reason}")
 

@@ -52,7 +52,7 @@ def validate_checkpoint_bundle(checkpoint_root: Path, categories: tuple[str, ...
 
 
 def validate_source(source_root: Path) -> list[str]:
-    ok, reason = source_pin_status(source_root, MODEL["upstream_commit_sha"])
+    ok, reason = source_pin_status(source_root, MODEL["upstream_commit_sha"], MODEL)
     return [] if ok else [f"LIMN source pin invalid: {reason}"]
 
 

@@ -126,7 +126,6 @@
     "figs/pipeline.png": "dde52b3cea1e7ea12cd67730b390f9756fbda38d9c746e9ef96f8085810e86c9",
     "googleef10cadbf6a593ec.html": "532f7903591ff258a272d80448043935b4bf056e4c69ee0545ad2896c736f69e",
     "lavis/.DS_Store": "37af64342a6e3107fcf6566e2385ad3c6265816574b2c3d4fbaf8fdb50ec87d5",
-    "lavis/.ipynb_checkpoints/Untitled-checkpoint.ipynb": "4a62b68a633d79c53a6fd8893e8ea42dcf2b9a8a3e907b1b9861661f04f21517",
     "lavis/__init__.py": "6ad1f5f087ec8ff32c3a3ec50431026d45a0e3f6d0c9332e206a576b44b40d86",
     "lavis/common/.DS_Store": "d0836f18b078546410117ecdff47dfefb225f4ad6d956b3284b5e6ad12b7e3e9",
     "lavis/common/annotator/canny/__init__.py": "29d8aa0ae674f53b54d478b54c10a7ae09fbae34074e297ced722bf0d65b61ef",
@@ -820,7 +819,6 @@
     "lavis/models/blip_diffusion_models/modeling_ctx_clip.py": "6f131390252027c38f4926dedc0607036de670882952bd6ab46387272b4d5677",
     "lavis/models/blip_diffusion_models/ptp_utils.py": "31b6c6813a094c8590d837600753119a0e7c6d4a2b7d5feff0e37db23aab6f9c",
     "lavis/models/blip_diffusion_models/utils.py": "e377e374d001240490c96c49a7a9e66ab7c10876b0bc65ca912eebaf9b6f7273",
-    "lavis/models/blip_models/.ipynb_checkpoints/blip_cir-checkpoint.py": "7e4553b0b06917e44236cf25211ce54765b9fda121af3ef4a5c268469256b1a4",
     "lavis/models/blip_models/__init__.py": "446109d1d628473a733224457029b37bc562f05e4b6ab44d333c4ab0181c5a74",
     "lavis/models/blip_models/blip.py": "4f828b5991232516e9a12499a9f0365742bc54a8e0d34e4424f6bdca97fd5f51",
     "lavis/models/blip_models/blip_caption.py": "343d4fd79df135e07484b40e42ba0a9954ab2a9e447ffa729f1180097f1d5169",
@@ -1027,7 +1025,6 @@
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe.yaml": "3954f172e1071bb67c7fe7d670fb048a747ff1d8101c9f457f54e738a2ed08e1",
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_13b.yaml": "55a1dc19198db68f1a351999e13d607ac1778174b9f721c8880e93687af6bab1",
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_nocue.yaml": "a0bbf0df7dadfd3bb1bab683d231b7a89de24f6f80445bc976796254e4507d92",
-    "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj copy.yaml": "5b712a60a9bc27f99566d67f77043048426417845dabd2fbd2fe57dea4f3d68a",
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj.yaml": "5b712a60a9bc27f99566d67f77043048426417845dabd2fbd2fe57dea4f3d68a",
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_rand_init.yaml": "50a498d6920cafbd01cbf53359768d466ff619deca85c3d0345809f6aedf802a",
     "lavis/projects/xinstruct_blip/eval/discrn/image_3d_caption.yaml": "e7eb3f1340974e247b38902eac45d35aeb030d47e7d0f06cb975fb4e8f2091b3",
@@ -1336,5 +1333,10 @@
     "train_INTENT.py": "e389f31511ebd28061bdb35b6f7b5c006cba17a5b9f3fde24e638f12ed05b097",
     "utils.py": "694a5081a6eb81ef29607d50d9a8c78335a59e43968b5e9e58ff84421833a85f"
   },
-  "local_fixes": []
+  "local_fixes": [],
+  "excluded_by_vendoring": [
+    "lavis/.ipynb_checkpoints/Untitled-checkpoint.ipynb",
+    "lavis/models/blip_models/.ipynb_checkpoints/blip_cir-checkpoint.py",
+    "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj copy.yaml"
+  ]
 }

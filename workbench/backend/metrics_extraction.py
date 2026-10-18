@@ -306,6 +306,130 @@ def parse_csmcir_output(stdout_text: str, paper_metrics: dict[str, float | None]
             raw_output=json_obj,
         )
 
+def parse_hint_output(stdout_text: str, paper_metrics: dict[str, float | None] | None = None) -> MetricExtractionResult:
+    """Parse aggregate Recall from the HINT replay wrapper OR from the native evaluator's own print.
+
+    Two real output shapes exist, and both are produced by this repository:
+
+    * the wrapper (`workbench/replay/hint.py`) prints one JSON document containing `aggregate` and
+      per-category `r10`/`r50`, because the pinned `test.py` has no `__main__` to print anything;
+    * the pinned evaluator itself returns `[('{cat}_r{k}', value), ...]` for k in (1, 10, 50)
+      (`test.py:103-108`), which callers such as `train.py:199` print directly.
+
+    Either way the numbers are the native ones — this function reads them, it never derives or
+    substitutes them. The macro is recomputed from the categories and compared with whatever the
+    producer declared, so a misread or a truncated stream cannot pass as a complete result.
+    """
+    categories = ("dress", "shirt", "toptee")
+    parser_id = "hint_native_recall"
+    unparsed = MetricExtractionResult(
+        extraction_status="EVALUATION_COMPLETED_METRICS_UNPARSED",
+        parser_id=parser_id,
+        parser_version=1,
+        observed_metrics=None,
+        category_metrics=None,
+        parity_status="PARITY_NOT_EVALUATED",
+        metric_source="stdout",
+    )
+
+    category_metrics: dict[str, dict[str, float | None]] = {}
+
+    # Shape 1: the wrapper's JSON document. `json.loads` on the whole stream first (the wrapper
+    # prints the document and nothing else), then a brace-matching scan for a document embedded in
+    # other output. A regex is not enough here: the document nests `aggregate` inside `categories`,
+    # and a pattern that cannot span nesting silently reports a complete result as unparsed.
+    json_obj = None
+    candidates: list[str] = []
+    try:
+        parsed = json.loads(stdout_text.strip())
+        if isinstance(parsed, dict):
+            candidates.append(stdout_text.strip())
+    except Exception:
+        pass
+    for start in (i for i, ch in enumerate(stdout_text) if ch == "{"):
+        depth = 0
+        for index in range(start, len(stdout_text)):
+            char = stdout_text[index]
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    candidates.append(stdout_text[start:index + 1])
+                    break
+    for candidate in reversed(candidates):
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(parsed, dict) and ("aggregate" in parsed or "categories" in parsed):
+            json_obj = parsed
+            break
+
+    if isinstance(json_obj, dict):
+        for category in categories:
+            entry = next((item for item in (json_obj.get("categories") or [])
+                          if isinstance(item, dict) and item.get("category") == category), None)
+            r10 = entry.get("r10") if entry else json_obj.get(f"{category}_r10")
+            r50 = entry.get("r50") if entry else json_obj.get(f"{category}_r50")
+            if not (_is_valid_recall(r10) and _is_valid_recall(r50)):
+                return unparsed
+            category_metrics[category] = {"r10": float(r10), "r50": float(r50)}
+    else:
+        # Shape 2: the evaluator's native `[(label, value), ...]` print.
+        pairs = re.findall(r"\(\s*'([a-z]+)_r(1|10|50)'\s*,\s*([0-9]+(?:\.[0-9]+)?)\s*\)", stdout_text)
+        if not pairs:
+            pairs = re.findall(r"\(\s*\"([a-z]+)_r(1|10|50)\"\s*,\s*([0-9]+(?:\.[0-9]+)?)\s*\)", stdout_text)
+        if not pairs:
+            return unparsed
+        collected: dict[str, dict[str, float]] = {}
+        for category, k, value in pairs:
+            if category not in categories:
+                return unparsed
+            collected.setdefault(category, {})[f"r{k}"] = float(value)
+        for category in categories:
+            entry = collected.get(category)
+            if not entry or "r10" not in entry or "r50" not in entry:
+                return unparsed
+            if not (_is_valid_recall(entry["r10"]) and _is_valid_recall(entry["r50"])):
+                return unparsed
+            category_metrics[category] = {"r10": entry["r10"], "r50": entry["r50"]}
+
+    if set(category_metrics) != set(categories):
+        return unparsed
+
+    # Independent macro recomputation. The evaluator's own convention is the unweighted mean over the
+    # three categories, then `(mean_r10 + mean_r50) / 2` (blip_validate.py:90-95) — the same
+    # arithmetic the registry's `reported_mean` uses. A declared value that disagrees means the
+    # parser misread the stream.
+    r10 = sum(category_metrics[c]["r10"] for c in categories) / len(categories)
+    r50 = sum(category_metrics[c]["r50"] for c in categories) / len(categories)
+    mean = (r10 + r50) / 2.0
+
+    if isinstance(json_obj, dict):
+        declared = json_obj.get("aggregate") or {}
+        declared_r10 = declared.get("macro_r10")
+        declared_r50 = declared.get("macro_r50")
+        declared_mean = declared.get("macro_mean")
+        if declared_r10 is not None and abs(float(declared_r10) - r10) > 0.05:
+            return unparsed
+        if declared_r50 is not None and abs(float(declared_r50) - r50) > 0.05:
+            return unparsed
+        if declared_mean is not None and abs(float(declared_mean) - mean) > 0.05:
+            return unparsed
+
+    observed = {"r10": round(r10, 4), "r50": round(r50, 4), "mean": round(mean, 4)}
+    return MetricExtractionResult(
+        extraction_status="EXTRACTED_VERIFIED",
+        parser_id=parser_id,
+        parser_version=1,
+        observed_metrics=observed,
+        category_metrics=category_metrics,
+        parity_status=_check_parity(observed, paper_metrics),
+        metric_source="stdout",
+        raw_output=json_obj,
+    )
+
 def parse_combiner_output(stdout_text: str, paper_metrics: dict[str, float | None] | None = None) -> MetricExtractionResult:
     """Parse the `name = value` recall lines CLIP4Cir's src/validate.py prints for FashionIQ.
 
@@ -405,6 +529,8 @@ def extract_aggregate_metrics(
         return parse_csmcir_output(stdout_text, paper_metrics)
     if model_id in ("combiner_rn50x4_noft", "clip4cir_rn50x4_fullft"):
         return parse_combiner_output(stdout_text, paper_metrics)
+    if model_id == "hint":
+        return parse_hint_output(stdout_text, paper_metrics)
     if model_id == "sprc":
         # blip_validate.py:88-98 prints the same JSON key set as CSMCIR's evaluator; the csmcir
         # parser's macro-validation matches the same keys, so the shape is reused, not assumed.

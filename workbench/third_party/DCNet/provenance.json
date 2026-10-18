@@ -71,5 +71,6 @@
     "utils/util.py": "c804ea8ef332b84a22b48a8a5100206d4491551bcd83dec3a06c328ec8d44f17",
     "utils/vocab.py": "c879783db6131052955913689d6f0df24c2d0a6a3f61bf5f2dba7ec911009da0"
   },
-  "local_fixes": []
+  "local_fixes": [],
+  "excluded_by_vendoring": []
 }

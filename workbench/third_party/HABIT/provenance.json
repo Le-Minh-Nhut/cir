@@ -1029,7 +1029,6 @@
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe.yaml": "3954f172e1071bb67c7fe7d670fb048a747ff1d8101c9f457f54e738a2ed08e1",
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_13b.yaml": "55a1dc19198db68f1a351999e13d607ac1778174b9f721c8880e93687af6bab1",
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_nocue.yaml": "a0bbf0df7dadfd3bb1bab683d231b7a89de24f6f80445bc976796254e4507d92",
-    "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj copy.yaml": "5b712a60a9bc27f99566d67f77043048426417845dabd2fbd2fe57dea4f3d68a",
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj.yaml": "5b712a60a9bc27f99566d67f77043048426417845dabd2fbd2fe57dea4f3d68a",
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_rand_init.yaml": "50a498d6920cafbd01cbf53359768d466ff619deca85c3d0345809f6aedf802a",
     "lavis/projects/xinstruct_blip/eval/discrn/image_3d_caption.yaml": "e7eb3f1340974e247b38902eac45d35aeb030d47e7d0f06cb975fb4e8f2091b3",
@@ -1338,5 +1337,8 @@
     "train.py": "ce26fe4d9ff2a263b8b7b4dcb26fc027ef6d3e5cf2ba5aa30e8ca90b2374595a",
     "utils.py": "694a5081a6eb81ef29607d50d9a8c78335a59e43968b5e9e58ff84421833a85f"
   },
-  "local_fixes": []
+  "local_fixes": [],
+  "excluded_by_vendoring": [
+    "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj copy.yaml"
+  ]
 }

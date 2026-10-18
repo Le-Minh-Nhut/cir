@@ -111,7 +111,6 @@
     "src/lavis/configs/models/blip2/blip2_instruct_flant5xl.yaml": "c4c2c819586483006c3fd21b285a19356fe56d5c308f3e3802b95244f4b543df",
     "src/lavis/configs/models/blip2/blip2_instruct_flant5xxl.yaml": "9327db6ed2ce1bc718f425059befe0e7a76330cc1f6613a05d2155da044ca264",
     "src/lavis/configs/models/blip2/blip2_instruct_vicuna13b.yaml": "fdee3944ddbc96187215183b26c0dcccd314fe725bc22ae7dde541de68249ab2",
-    "src/lavis/configs/models/blip2/blip2_instruct_vicuna7b copy.yaml": "1af2309c0d2e0a5be2d1d3373e552684ae55ccad1e0ab0d358e19d15571188c9",
     "src/lavis/configs/models/blip2/blip2_instruct_vicuna7b.yaml": "eb27163cacf96a56900b1a6e3eea97d5eff086ba1150b81bf202023962c304ee",
     "src/lavis/configs/models/blip2/blip2_pretrain.yaml": "b2fce0fc0a34834fad02704a4f4263e0f0d1befd62912c52d43ab9624ceb5135",
     "src/lavis/configs/models/blip2/blip2_pretrain_flant5xl.yaml": "65913a0167bc8a22d35d888993ad0fd09e1c44bc1e84b633467d68859c60b2d2",
@@ -401,5 +400,8 @@
     "src/validate_blip.py": "741272d4973416e16dd3908c0539fe3989d992229b6696ab353edb62f8eb7b3e",
     "src/validate_blip_rerank.py": "dd761c5155a4b992920d6deb8694564219ba300d1c40d77ac825768f0692c380"
   },
-  "local_fixes": []
+  "local_fixes": [],
+  "excluded_by_vendoring": [
+    "src/lavis/configs/models/blip2/blip2_instruct_vicuna7b copy.yaml"
+  ]
 }

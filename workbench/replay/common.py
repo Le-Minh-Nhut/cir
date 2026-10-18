@@ -55,7 +55,8 @@ def load_trusted_whole_model(path: Path, expected_sha256: str | None, torch_modu
     return torch_module.load(path, map_location="cpu")
 
 
-def source_checkout_status(source_root: Path, expected_commit: str) -> tuple[bool, str | None, str | None]:
+def source_checkout_status(source_root: Path, expected_commit: str,
+                           model: dict[str, Any] | None = None) -> tuple[bool, str | None, str | None]:
     """The runtime's answer, so the two entry points cannot disagree.
 
     This used to be a second implementation of the same question, and the copy silently lost the
@@ -64,14 +65,24 @@ def source_checkout_status(source_root: Path, expected_commit: str) -> tuple[boo
     implementation covers both layouts — the vendored digest manifest, and a nested Git checkout
     including "is it dirty" — and `test_replay_and_runtime_agree_that_bytecode_is_not_a_source_change`
     holds the two together.
+
+    ``model`` is the registry entry when the caller has it. Passing it matters for a checkout under an
+    **approved patch**: the declaration that makes the patched bytes acceptable lives on the model, so
+    a bare commit string cannot express it, and a patched CSMCIR checkout was reported dirty here
+    while the runtime accepted it. Callers holding only the commit still work; they simply cannot
+    authorize a patch, which is the fail-closed direction.
     """
     from workbench.backend.runtime import source_clean_and_pinned
 
-    return source_clean_and_pinned({"upstream_commit_sha": expected_commit}, source_root)
+    if model is None:
+        model = {"upstream_commit_sha": expected_commit}
+    return source_clean_and_pinned(model, source_root)
 
 
-def source_pin_status(source_root: Path, expected_commit: str) -> tuple[bool, str | None]:
-    ok, _, reason = source_checkout_status(source_root, expected_commit)
+def source_pin_status(source_root: Path, expected_commit: str,
+                      model: dict[str, Any] | None = None) -> tuple[bool, str | None]:
+    """Pin check for replay callers; ``model`` authorizes an approved patch when supplied."""
+    ok, _, reason = source_checkout_status(source_root, expected_commit, model)
     return ok, reason
 
 

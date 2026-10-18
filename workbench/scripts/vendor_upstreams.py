@@ -46,9 +46,19 @@ LICENSE_CANDIDATES = ("LICENSE", "LICENSE.txt", "LICENSE.md", "license", "COPYIN
 # header matches the source, so shipping it would let the executed code differ from the
 # reviewed `.py`. It is dropped at vendoring time, which is exactly what running the
 # checkout does anyway.
-SKIP_DIRS = {"__pycache__"}
+SKIP_DIRS = {"__pycache__", ".ipynb_checkpoints", ".idea"}
 SKIP_FILES = {".git", ".gitmodules"}
 SKIP_SUFFIXES = (".pyc", ".pyo")
+# A notebook/junk duplicate: macOS/Windows "copy" names and Jupyter checkpoint files are editor
+# by-products of the author's machine, not part of the method. They are excluded from the delivered
+# tree, so they must be excluded from the manifest too — the manifest describes what is DELIVERED.
+#
+# The bug this replaces: `live_digest(destination)` was computed AFTER the copy, but the copy's
+# exclusions and Git's ignore rules are different sets, so the manifest kept listing junk that was
+# never committed (34 paths across five checkouts) and the delivery check could not reconcile the two.
+# A manifest that names files the branch does not contain is not a weaker integrity check, it is a
+# wrong one: it makes the checkout look incomplete to anyone who verifies it from a fresh clone.
+SKIP_NAME_FRAGMENTS = (" copy.", "-Copy.", "copy ", "conflicted copy")
 
 
 def git(*command: str, cwd: Path | None = None) -> str:
@@ -69,11 +79,17 @@ def resolved_remote(url: str) -> str:
 
 
 def is_skipped(relative: Path) -> bool:
+    """Single source of truth for "not part of the delivered snapshot".
+
+    Both the copy step and the manifest step call this, so the two cannot describe different trees.
+    """
     if relative.name in SKIP_FILES:
         return True
     if set(relative.parts) & SKIP_DIRS:
         return True
-    return relative.suffix in SKIP_SUFFIXES
+    if relative.suffix in SKIP_SUFFIXES:
+        return True
+    return any(fragment in relative.name for fragment in SKIP_NAME_FRAGMENTS)
 
 
 def copy_tree(staging: Path, destination: Path, accept_local_changes: bool) -> tuple[list[str], list[str]]:
@@ -168,7 +184,9 @@ def vendor(model: dict, output_root: Path, accept_local_changes: bool, keep_stag
         from workbench.backend.vendored_source import live_digest
 
         # The manifest is the integrity baseline: monitoring re-hashes these files later, which
-        # is what makes a vendored tree (no .git to run `status` against) still auditable.
+        # is what makes a vendored tree (no .git to run `status` against) still auditable. It is
+        # computed from the DELIVERED tree, and `live_digest` applies the same `is_skipped`
+        # predicate the copy step used, so the manifest can only ever name files this run wrote.
         manifest = live_digest(destination, model)
         record = {
             "model_ids": [item["model_id"] for item in load_registry()["models"] if item.get("source_dir") == source_dir],

@@ -94,8 +94,27 @@ def live_digest(source: Path, model: dict[str, Any] | None = None) -> dict[str, 
     return digests
 
 
+#: Editor/notebook by-products that are never part of a delivered snapshot. These are the SAME
+#: exclusions the vendoring script applies when it copies a checkout in, so the manifest it computes
+#: afterwards and the tree Git actually commits describe one snapshot rather than two. Keeping the
+#: predicate in one place is what makes that true: a manifest that names files the branch does not
+#: contain makes every fresh-clone verification of that checkout fail.
+UNWANTED_DIRS = {"__pycache__", ".ipynb_checkpoints", ".idea"}
+UNWANTED_SUFFIXES = (".pyc", ".pyo")
+UNWANTED_NAME_FRAGMENTS = (" copy.", "-Copy.", "copy ", "conflicted copy")
+
+
+def is_unwanted(relative: Path) -> bool:
+    """True for a path that is not part of the delivered snapshot."""
+    if set(relative.parts) & UNWANTED_DIRS:
+        return True
+    if relative.suffix in UNWANTED_SUFFIXES:
+        return True
+    return any(fragment in relative.name for fragment in UNWANTED_NAME_FRAGMENTS)
+
+
 def _is_excluded(path: Path, relative: str, declared: set[str]) -> bool:
-    if "__pycache__" in path.parts or path.suffix in (".pyc", ".pyo"):
+    if is_unwanted(Path(relative)):
         return True
     if relative in declared:
         return True
@@ -160,22 +179,63 @@ def source_provenance(model: dict[str, Any], source: Path) -> dict[str, Any]:
         recorded = entry.get("delivered_sha256") or entry.get("upstream_sha256")
         if recorded:
             expected_digests[entry["path"]] = recorded
+    # A model may declare one APPROVED PATCH for a file its pinned source cannot run without. The
+    # declaration is exact in both directions -- the file must match the published base digest or the
+    # recorded post-patch digest, and nothing else -- so the approved delta is accepted here exactly
+    # as the nested-Git path accepts it in `runtime._verify_declared_artifact`. Without this the
+    # documented CSMCIR recipe failed its own integrity check: applying the registry's approved patch
+    # made the file hash to `derived_sha256` and it was still reported as an unauthorized modification.
+    patch_contracts = {
+        patch["path"]: patch for patch in (model.get("approved_source_patches") or [])
+        if patch.get("path")
+    }
     live = live_digest(source, model)
-    modified = sorted(
-        path for path, digest in expected_digests.items()
-        if path in live and live[path] != digest
-    )
-    removed = sorted(path for path in expected_digests if path not in live)
+    modified: list[str] = []
+    patch_rejections: list[str] = []
+    for path, digest in sorted(expected_digests.items()):
+        if path not in live or live[path] == digest:
+            continue
+        contract = patch_contracts.get(path)
+        if contract is None:
+            modified.append(path)
+            continue
+        base = contract.get("base_sha256")
+        derived = contract.get("derived_sha256")
+        if derived and live[path] == derived:
+            continue  # the approved delta is applied, byte-for-byte
+        if base and live[path] == base:
+            patch_rejections.append(f"{path}: the approved patch has not been applied")
+        else:
+            patch_rejections.append(
+                f"{path}: modified source in an approved-patch checkout (matches neither the "
+                f"published base nor the recorded post-patch digest)")
+    # A manifest path that is *also* a registry-declared runtime artifact is not missing: the
+    # declaration means preparation may create it, and this branch now SHIPS it (CSMCIR's CoT captions
+    # are both a published asset and tracked source). `live_digest` excludes declared artifacts from
+    # the digest, so without this the checkout reported three files it actually contained as removed
+    # -- and the same mistake in the reverse direction made every declared artifact look like
+    # undeclared content. The reported state has to describe the tree, not the digest's exclusions.
+    declared_paths = _declared_runtime_artifacts(model or {}) if model else set()
+    on_disk = {str(path.relative_to(source)) for path in source.rglob("*") if path.is_file()}
+    removed = sorted(path for path in expected_digests if path not in live and path not in on_disk)
+    approved = sorted(set(
+        [path for path in declared_paths if path in on_disk and path in expected_digests]
+        + [path for path in fixed_paths if path in live and path not in modified]
+        + [path for path in patch_contracts
+           if path in live and live.get(path) == patch_contracts[path].get("derived_sha256")]
+    ))
     # A recorded fix whose *file* is absent is reported by `removed` above; `added` covers content
     # nobody declared, which matters more now that the checkout is committed, because a stray file
     # there would ship with the branch.
-    added = sorted(path for path in live if path not in manifest and path not in fixed_paths)
-    approved = sorted(path for path in fixed_paths if path in live and path not in modified)
+    added = sorted(path for path in live if path not in manifest and path not in fixed_paths
+                   and path not in patch_contracts and path not in declared_paths)
     error = None
     if modified or removed:
         error = (f"vendored source changed since vendoring: "
                  f"{len(modified)} modified, {len(removed)} removed"
                  + (f" (first: {modified[0]})" if modified else f" (first: {removed[0]})"))
+    elif patch_rejections:
+        error = patch_rejections[0]
     elif added:
         error = f"undeclared files present in checkout: {len(added)} (first: {added[0]})"
     verified = bool(actual and not error and (not expected or actual == expected))
@@ -184,7 +244,7 @@ def source_provenance(model: dict[str, Any], source: Path) -> dict[str, Any]:
         "actual_commit": actual,
         "local_fixes": local_fixes,
         "dirty": bool(error),
-        "tracked_modifications": modified or removed,
+        "tracked_modifications": (modified or removed or patch_rejections),
         "unauthorized_untracked": added,
         "approved_runtime_artifacts": approved,
         "invalid_runtime_artifacts": [],

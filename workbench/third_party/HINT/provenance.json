@@ -102,13 +102,6 @@
   "submodules_declared": "",
   "git_lfs_pointers": [],
   "file_manifest": {
-    ".idea/.gitignore": "0a5548b173aac0ef943bbb3af850d676f7b651ddedb9f8d7f06735bc2809b3db",
-    ".idea/HINT-FINAL.iml": "c344d6de8f6a11a62bd62611d63c18aa5501626dcacb182708ad4f0f4dd7bf04",
-    ".idea/inspectionProfiles/Project_Default.xml": "720c698a47be30b0672a1c10cb340dbeff134d8aa067dbe267fe572c5c0c3369",
-    ".idea/inspectionProfiles/profiles_settings.xml": "6172c5997eeb3cd19c9ca2b5b97d6e2983cdd1fa60b2460d7bbb74055edcaa46",
-    ".idea/misc.xml": "39fa963470c256bca8b747348824b5acf24dcd77271464f89f9124bd4bb3daa0",
-    ".idea/modules.xml": "e02389d36dd982f9d96a408281d058977f2b8e3abba54ad4d6682636e2e92436",
-    ".idea/vcs.xml": "38eba43aec5e6f9eda191f4522d74904303aeff94ca0327a55d933a0dd1fee00",
     "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "README.md": "03467e3f32a3287f55c20633118aec0c0a02708e473a7f67cde410396fde1376",
     "assets/.DS_Store": "9f2445b48ca39f99ffc201b080b9daaaf6c6d7cfeb402185da8d588769385146",
@@ -1027,7 +1020,6 @@
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe.yaml": "3954f172e1071bb67c7fe7d670fb048a747ff1d8101c9f457f54e738a2ed08e1",
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_13b.yaml": "55a1dc19198db68f1a351999e13d607ac1778174b9f721c8880e93687af6bab1",
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_nocue.yaml": "a0bbf0df7dadfd3bb1bab683d231b7a89de24f6f80445bc976796254e4507d92",
-    "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj copy.yaml": "5b712a60a9bc27f99566d67f77043048426417845dabd2fbd2fe57dea4f3d68a",
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj.yaml": "5b712a60a9bc27f99566d67f77043048426417845dabd2fbd2fe57dea4f3d68a",
     "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_rand_init.yaml": "50a498d6920cafbd01cbf53359768d466ff619deca85c3d0345809f6aedf802a",
     "lavis/projects/xinstruct_blip/eval/discrn/image_3d_caption.yaml": "e7eb3f1340974e247b38902eac45d35aeb030d47e7d0f06cb975fb4e8f2091b3",
@@ -1336,5 +1328,15 @@
     "train.py": "1107396337e5619c25c110f3e82c3d0003efad38cec4b9bcf235e3e5a97d119e",
     "utils.py": "f61d32ebd4f62e64f36e52aaf8af0fa35362fd154b3c4ce136731212fe711694"
   },
-  "local_fixes": []
+  "local_fixes": [],
+  "excluded_by_vendoring": [
+    ".idea/.gitignore",
+    ".idea/HINT-FINAL.iml",
+    ".idea/inspectionProfiles/Project_Default.xml",
+    ".idea/inspectionProfiles/profiles_settings.xml",
+    ".idea/misc.xml",
+    ".idea/modules.xml",
+    ".idea/vcs.xml",
+    "lavis/projects/xinstruct_blip/eval/discrn/audio_video_describe_proj copy.yaml"
+  ]
 }

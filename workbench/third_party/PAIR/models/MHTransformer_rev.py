@@ -1,3 +1,14 @@
+"""EXPERIMENTAL_RECONSTRUCTION: Reverse-attention Transformer module for PAIR.
+
+Derived:
+- MultiHeadAttentionRev is a faithful copy of MHTransformer.py:61-95 using
+  `attention = 1 - attention.softmax(dim=2)` (line 92) instead of standard softmax.
+- Surrounding TransformerLayer and Transformer classes mirror MHTransformer.py structure.
+
+NOT established:
+- That the author's unpublished upstream MHTransformer_rev.py is structurally identical.
+- A 2-line diff from a locally constructed module does not prove author parity.
+"""
 import torch
 import torch.nn as nn
 from torch.nn import functional as nnf

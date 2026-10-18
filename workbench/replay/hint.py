@@ -40,6 +40,7 @@ from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
 from workbench.replay.common import (
     ReplayResult,
+    isolated_cache_root,
     load_trusted_whole_model,
     macro_aggregate,
     sha256_file,
@@ -75,7 +76,7 @@ def validate_checkpoint(checkpoint_root: Path) -> list[str]:
 
 
 def validate_source(source_root: Path) -> list[str]:
-    ok, reason = source_pin_status(source_root, MODEL["upstream_commit_sha"])
+    ok, reason = source_pin_status(source_root, MODEL["upstream_commit_sha"], MODEL)
     return [] if ok else [f"HINT source pin invalid: {reason}"]
 
 
@@ -139,35 +140,36 @@ def evaluate_categories(checkpoint_root: Path, dataset_root: Path, source_root: 
     model.eval()
 
     # `datasets.py:29` concatenates the root with bare subdirectory names.
-    root = str(dataset_root).rstrip("/") + "/"
     transform = data_utils.targetpad_transform(1.25, 224)
-    dataset = datasets.FashionIQ(path=root, transform=transform)
 
     # Only these two attributes are read by the pinned evaluator.
     params = SimpleNamespace(batch_size=batch_size, dataset=DATASET_LABEL)
 
     results: list[ReplayResult] = []
-    for category in categories:
-        recalls = dict(test_module.test(params, model, dataset, category, txt_processors))
-        results.append(ReplayResult(
-            model_id="hint",
-            checkpoint_id=CHECKPOINT["checkpoint_id"],
-            category=category,
-            protocol=PROTOCOL,
-            r1=recalls.get(f"{category}_r1"),
-            r10=recalls.get(f"{category}_r10"),
-            r50=recalls.get(f"{category}_r50"),
-            complete=True,
-            provenance={
-                "native_evaluator": "test.py:test",
-                "native_output": {key: recalls[key] for key in sorted(recalls)},
-                "checkpoint_sha256": (sha256_file(model_path)
-                                      if model_path.is_file() and model_path.stat().st_size else None),
-                "checkpoint_size_bytes": (model_path.stat().st_size
-                                          if model_path.is_file() else None),
-                "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224 (blip_validate.py equivalent path)",
-            },
-        ))
+    with isolated_cache_root(dataset_root) as cache_root:
+        root = str(cache_root).rstrip("/") + "/"
+        dataset = datasets.FashionIQ(path=root, transform=transform)
+        for category in categories:
+            recalls = dict(test_module.test(params, model, dataset, category, txt_processors))
+            results.append(ReplayResult(
+                model_id="hint",
+                checkpoint_id=CHECKPOINT["checkpoint_id"],
+                category=category,
+                protocol=PROTOCOL,
+                r1=recalls.get(f"{category}_r1"),
+                r10=recalls.get(f"{category}_r10"),
+                r50=recalls.get(f"{category}_r50"),
+                complete=True,
+                provenance={
+                    "native_evaluator": "test.py:test",
+                    "native_output": {key: recalls[key] for key in sorted(recalls)},
+                    "checkpoint_sha256": (sha256_file(model_path)
+                                          if model_path.is_file() and model_path.stat().st_size else None),
+                    "checkpoint_size_bytes": (model_path.stat().st_size
+                                              if model_path.is_file() else None),
+                    "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224 (blip_validate.py equivalent path)",
+                },
+            ))
     return results, macro_aggregate(results)
 
 

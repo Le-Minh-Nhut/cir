@@ -46,6 +46,7 @@
     "cirr_test_submission.py": "24fa6587ed933fc5fbdf90e7e7296c1386de2fee10aa0a44a3d6c74890803369",
     "data/datasets.py": "13f7deb5d6ad9ece6d8d2cca6e96a7cb83947f792b749360d3750661a9b736a0",
     "models/MHTransformer.py": "1c13df48b1b9cb2e9058b0e176237b1874b42a4a00e64d33802d1f49c2dd1a5a",
+    "models/MHTransformer_rev.py": "d683df18db253f1dada1ec6ba0a9788f728da7d7dec6c11db347393eb5b26ce6",
     "models/model.py": "88470c3de9fb23e6f411024ea36181e203fafa63786def50b6db1362e1054a49",
     "test.py": "33b53088c8600fcbe1c591cbddb3f2ec59abc0d9d048cc40043e63effd0eefd1",
     "train.py": "7cf3cdcfbb155e30ca996ac1c415577dac13cadfb269e2044cee17733e1c2e5f",
@@ -56,7 +57,8 @@
       "path": "models/MHTransformer_rev.py",
       "origin": "model_recovery_addition",
       "upstream_sha256": null,
-      "delivered_sha256": "33980bab5ab924ed1dedd1198ff3edd26f14a064c52e8760eb01cb28685edb06"
+      "delivered_sha256": "d683df18db253f1dada1ec6ba0a9788f728da7d7dec6c11db347393eb5b26ce6"
     }
-  ]
+  ],
+  "excluded_by_vendoring": []
 }
