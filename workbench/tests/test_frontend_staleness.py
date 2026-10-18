@@ -23,18 +23,27 @@ FRONTEND = REPO / "workbench" / "frontend"
 APP_TSX = FRONTEND / "App.tsx"
 STALENESS_TS = FRONTEND / "staleness.ts"
 
-#: The transition set from the finding, written as (requested, current, may_apply). "may_apply" is
-#: the answer to the only question that matters: is the state this response describes still the
-#: state on screen? Two entries with the same key are the ONLY ones where it is yes.
+#: The transition set from the finding: state the request was issued for -> state live when the
+#: answer arrives. The rule is equality of the identity, so the empty-to-empty row is TRUE -- the
+#: answer describes the same (empty) state it always did, and applying it changes nothing. That row
+#: was the one the first version of this table got wrong, in the direction that would have made
+#: "switch between two protocols that both lack runs" look like a refusal.
 TRANSITIONS = [
-    # (requested protocol, requested run, current protocol, current run, may_apply)
-    ("A", "run1", "A", "run1", True),    # valid -> valid, unchanged
-    ("A", "run1", "A", "", False),       # valid -> empty (new protocol has no compatible run)
-    ("A", "", "A", "run1", False),       # empty -> valid (a run appeared)
-    ("A", "run1", "B", "run2", False),   # protocol A -> protocol B
+    # A response may be applied to the live state, and to nothing else. Every row is a state the
+    # explorer can be in when an answer arrives; `may_apply` is true only when the answer is about
+    # the state on screen.
+    #
+    # (requested protocol, requested run, live protocol, live run, may_apply)
+    ("A", "run1", "A", "run1", True),    # unchanged: the answer is about what is on screen
     ("A", "run1", "A", "run2", False),   # run A -> run B, same protocol
-    ("A", "run1", "A", "", False),       # run A -> removed
+    ("A", "run1", "A", "", False),       # the protocol's run was removed
+    ("A", "", "A", "run1", False),       # a protocol that had no run gained one
+    ("A", "", "A", "", True),            # no run then and no run now: the same (empty) state
     ("A", "run1", "B", "run1", False),   # same run id under another protocol
+    ("A", "run1", "B", "run2", False),   # protocol A -> protocol B
+    ("A", "run1", "B", "", False),       # a protocol with a run -> one with none
+    ("A", "", "B", "run1", False),       # a protocol with no run -> one that has a run
+    ("A", "", "B", "", False),           # one empty protocol -> another empty protocol
 ]
 
 
@@ -114,6 +123,36 @@ console.log("ok");
                             capture_output=True, text=True, timeout=120)
     assert result.returncode == 0, (
         f"the transition table failed: {result.stdout} {result.stderr}")
+
+
+def test_every_request_family_that_can_outlive_its_subject_is_guarded() -> None:
+    """A guard on three of four fetches is not a guard.
+
+    `Compare` fetches `/api/compare/<query_id>` for the selected query, and the query can change
+    while that request is in flight -- exactly the hazard the other three families are guarded
+    against. It was the one family left unguarded, and the same race applied a previous query's
+    comparison rows under the new query's header and images.
+    """
+    app = APP_TSX.read_text(encoding="utf-8")
+    # The component is a one-liner covering many lines? No: it is one physical line, and the next
+    # declaration starts on a new one. The window is therefore from its own declaration to the next
+    # top-level `function` at the START of a line.
+    start = app.index("function Compare(")
+    following = app.find("\nfunction ", start)
+    end = len(app) if following == -1 else following
+    body = app[start:end]
+    assert "api<" in body, "the extraction no longer finds the Compare fetch"
+    # Any of the three equivalent guards is acceptable -- the shared pure guard, an AbortController,
+    # or this component's own counter -- but SOME request identity must be consulted before the
+    # answer is applied. What is not acceptable is an unguarded `then(setRows)`.
+    guarded = ("mayApply(" in body) or ("AbortController" in body) or (
+        "request.current" in body and ".then(" in body and "current)return" in body.replace(" ", ""))
+    assert guarded, (
+        "the Compare fetch can still be answered after its query changed:\n" + body[:400])
+    # Dropping below two runs must clear the previous comparison rather than leave it on screen.
+    if "runIds.length>1" in body:
+        assert "setRows([])" in body, (
+            "deselecting runs leaves the previous comparison rendered")
 
 
 def test_every_registered_native_protocol_is_selectable_in_the_frontend() -> None:

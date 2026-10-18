@@ -1624,26 +1624,48 @@ for field, expected in (("model_id", model), ("checkpoint_id", checkpoint), ("pr
     if report.get(field) != expected:
         sys.exit("báo cáo tổng hợp gắn %s=%r, không phải %r" % (field, report.get(field), expected))
 receipt = report.get("verification") if isinstance(report.get("verification"), dict) else {}
+
+# ONE policy is an honest not-a-pass rather than a refusal: the deployment's completion proof is
+# gone, so the heavy verifier cannot run, and the API says so by name. The launcher's own verifier
+# output decides whether that is the actual reason; this program only sees the API, so it carries
+# the policy forward rather than re-deciding it.
+proof_policy = (
+    receipt.get("certification_mode") == "proof_unavailable"
+    and receipt.get("execution_authenticated") is True
+    and receipt.get("state") in ("proof_unavailable", "refused"))
+
 if not (receipt.get("is_research_evidence") and receipt.get("certified")):
-    # ONE policy is an honest not-a-pass rather than a refusal: the deployment's completion proof
-    # is gone, so the heavy verifier cannot run, and the API says so by name --
-    # `certification_mode == "proof_unavailable"` with `execution_authenticated` still true, which
-    # is what the launcher's own verify gate accepts for exactly this state. Its reasons are then
-    # the proof's absence, which the gate re-checks against its own verifier output below; a run
-    # refused for any OTHER reason does not reach it.
-    proof_policy = (
-        receipt.get("certification_mode") == "proof_unavailable"
-        and receipt.get("execution_authenticated") is True
-        and receipt.get("state") in ("proof_unavailable", "refused"))
     if not proof_policy:
         reasons = "; ".join(str(r) for r in (receipt.get("evidence_reasons") or receipt.get("reasons") or []))
         sys.exit("API không công bố lượt chạy này là bằng chứng nghiên cứu đã chứng thực "
                  "(trạng thái %r)%s" % (receipt.get("state") or "không xác định",
                                         (": " + reasons) if reasons else ""))
-    print("PROOF_UNAVAILABLE")
 
-capability = report.get("per_query_capability")
+# The receipt must name the bytes it is a verdict about. The row arrives from the API, so the
+# digest is what ties the fields below to the file the ledger corroborated: a receipt without one
+# means the capability that decides the whole success contract was read from a report nobody
+# certified.
+if not receipt.get("report_digest"):
+    sys.exit("API không công bố digest của báo cáo cho lượt chạy %s, nên không thể gắn báo cáo "
+             "với chứng thực" % run_id)
+
+# The model's OWN declaration decides which contract applies, and it comes from the registry --
+# the same declaration the evaluator read when it decided whether to run an observer. Reading it
+# out of the report cannot work: a report is a file, and one without the field would downgrade an
+# observer model to aggregate-only and skip its Top-K requirement entirely.
+declared_observer = sys.argv[7].strip() if len(sys.argv) > 7 else ""
+declared_observer = declared_observer if declared_observer not in ("", "-", "None") else ""
+report_capability = report.get("per_query_capability")
+if declared_observer and not report_capability:
+    sys.exit("mô hình %s KHAI BÁO trình quan sát (%s) trong registry, nhưng báo cáo của lượt chạy "
+             "%s không khai báo năng lực per-query: báo cáo và registry nói hai điều khác nhau "
+             "về cùng một mô hình" % (model, declared_observer, run_id))
+capability = report_capability or declared_observer
 state = report.get("per_query_state")
+if proof_policy:
+    # Which axis the missing proof belongs to is a property of the model, so the policy name is
+    # reported with it rather than instead of it.
+    state = "PROOF_UNAVAILABLE_AND_" + (state or "CAPABILITY_ABSENT")
 indexed = None
 for candidate in runs:
     if isinstance(candidate, dict) and candidate.get("run_id") == run_id:
@@ -1653,10 +1675,13 @@ for candidate in runs:
 if not capability:
     # Aggregate-only by declaration. There is no per-query artifact to look for, and demanding
     # one would refuse a run that is complete for what its model claims to be able to do.
-    if state in (None, "", "CAPABILITY_ABSENT"):
-        print("AGGREGATE_ONLY_VERIFIED")
-    else:
-        print("AGGREGATE_ONLY_VERIFIED (khai báo %r cho mô hình không có trình quan sát)" % state)
+    #
+    # The state is REPORTED, not folded into the token: the shell compares this value, and a
+    # line with a parenthetical in it would compare unequal to every branch that looks for it.
+    if state and state not in ("CAPABILITY_ABSENT",):
+        print("ghi chú: báo cáo khai %r cho một mô hình không có trình quan sát" % state,
+              file=sys.stderr)
+    print("AGGREGATE_ONLY_VERIFIED")
     sys.exit(0)
 
 if indexed is None:
@@ -1677,7 +1702,26 @@ PYIDX
 )"
     # The reader is handed its inputs as ARGUMENTS, never on stdin: a here-document and a pipe
     # cannot both feed one interpreter, and this script has a here-document immediately below.
-    checked="$(python3 -c "$idx_program" "$runs_check" "$reports_check" "$run_id" "$model" "$checkpoint" "$protocol" 2>&1)" \
+    # The registry's own declaration of the model's per-query capability is passed IN. It is the
+    # same field the evaluator read when it decided whether to run an observer, and the launcher
+    # already has it: the summary's own model_info did not carry it, so it is asked for here, once,
+    # from the API that serves the registry.
+    local declared_observer
+    declared_observer="$(curl -fsS --max-time 30 "${base}/api/models" 2>/dev/null | python3 -c "
+import json, sys
+model_id = sys.argv[1]
+try:
+    models = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+if isinstance(models, list):
+    for entry in models:
+        if isinstance(entry, dict) and entry.get('model_id') == model_id:
+            value = entry.get('per_query_observer')
+            print(value if isinstance(value, str) else '')
+            break
+" "$model" 2>/dev/null || true)"
+    checked="$(python3 -c "$idx_program" "$runs_check" "$reports_check" "$run_id" "$model" "$checkpoint" "$protocol" "${declared_observer:-}" 2>&1)" \
         || checked="__INDEX_CHECK_FAILED__: ${checked:-không xác định}"
     if [[ "$checked" == __INDEX_CHECK_FAILED__* ]]; then
         fail_stage "INDEX_VERIFY" \
@@ -1767,7 +1811,11 @@ if _report_path:
         _per_query_reason = _report.get("per_query_export_reason") or ""
         _report_read = True
     except Exception as error:
+        # A failure here is not "the run is aggregate-only": if the report could not be read, or it
+        # belongs to a different run, nothing about this run's per-query axis is known, and the
+        # summary refuses with code 5 rather than concluding either way.
         _per_query_reason = f"không đọc được report của lượt chạy: {type(error).__name__}: {error}"
+        _report_read = False
 
 # The verification the launcher just ran IS the corroboration the run could not report about itself.
 if verified and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED" \

@@ -1683,6 +1683,7 @@
         "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/limn/0_toptee_best_model.pt",
         "blocking_reasons": []
       }
-    ]
+    ],
+    "per_query_observer": "LIMN_QUERY_OBSERVER_V1"
   }
 ]

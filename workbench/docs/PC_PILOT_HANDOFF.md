@@ -55,6 +55,13 @@ Cả hai chạy dưới **cùng một `run_id`** do orchestrator sinh, và cùng
 lượt aggregate. Cha (`evaluate_models.execute`) chạy observer như tiến trình con, rồi chạy publisher
 như tiến trình con, rồi **tự đọc lại bytes** để tính digest — con không bao giờ tự khai digest của mình.
 
+**Lượt chạy trên API/UI**: chỉ mục DuckDB chứa bản ghi per-query canonical, nên chỉ lượt chạy của
+model có observer mới xuất hiện ở `/api/runs` và tab **Evaluation Runs**. Lượt của 15 model
+aggregate-only nằm ở `/api/benchmark-runs` và tab **Models**. `./pc.sh` đọc **cả hai** endpoint và
+kết luận theo đúng khả năng mà chính report của lượt chạy khai (`AGGREGATE_ONLY_VERIFIED`), nên một
+lượt aggregate-only hợp lệ vẫn đạt exit 0 — nó **không** bị đòi một artifact per-query không tồn tại.
+Xem mục 7 để có lệnh kiểm chứng từng bước.
+
 **Trạng thái per-query** (`per_query_state` trong report aggregate):
 
 | Trạng thái | Nghĩa | Exit code của `./pc.sh` |
