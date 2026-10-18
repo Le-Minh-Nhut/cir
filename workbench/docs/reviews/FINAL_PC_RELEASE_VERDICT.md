@@ -6,7 +6,7 @@
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`4b32063f6544f10e7b0b6e9425e7467fef3d08b9`** (production source; every gate ran on it) |
+| **TESTED_SOURCE_SHA** | **`11ba3df`** (production source; every gate in this pass ran on it) |
 | **FINAL_HEAD_SHA** | `11ba3df` — the stabilization pass. Production files changed here (launcher index gate, API projection, frontend request handling, release J10); native evaluation, scoring, protocol mapping and all 16 model contracts are untouched. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
@@ -14,9 +14,25 @@
 `main` was never touched. Nothing was rebased, reset, force-pushed or amended; every change is a new
 commit on the research branch. No checkpoint, dataset, cache or secret is tracked.
 
+## Release metadata (the single authoritative record)
+
+| Field | Value |
+|---|---|
+| Branch | `research/cir-failure-workbench` |
+| TESTED_SOURCE_SHA | `11ba3df` — every gate below ran on it |
+| FINAL_HEAD_SHA | see `git rev-parse HEAD` on the branch tip; everything after `11ba3df` is documentation and tests |
+| `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
+| Registry models | 16 model entries; 15 `source_available`; **14 distinct upstream URLs** among those 15 (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` has no vendored source, no pin and no protocol |
+| Protocols | A `fashioniq_original_split` (full gallery, reference eligible) · B `fashioniq_full_gallery_ref_excluded` (full gallery, reference excluded) · C `fashioniq_val_split` (ordered pair-union, reference excluded) · `ptha_mtst` unresolved |
+| Launcher exit codes | 0 success by declared capability · 3 aggregate reached, declared observer has no artifact · 4 artifact exported but not verified, or proof unavailable for an observer model · 5 launcher could not read what the run recorded · 6 summary and index disagree · 7 invocation authenticated but **not** scientifically certified |
+| `--verify-only` | GPU runtime probe only. It does not verify a run, rebuild the index, or download a checkpoint. |
+
+`./pc.sh` requires: a FashionIQ dataset path, the model's declared bundle members under the checkpoint
+root, the model's provisioned interpreter, and exactly one ledger key file.
+
 ## What was tested
 
-The full verification ran against `4b32063`. Any later commit in this pass is documentation only, and
+The full verification ran against `11ba3df`. The only commit after it is documentation only, and
 the production diff for it is recorded at the end.
 
 | Gate | Command | Result |
@@ -137,8 +153,12 @@ git checkout FETCH_HEAD        # an explicit checkout; never `git reset --hard`
 
 `./pc.sh` requires: a FashionIQ dataset path, the three LIMN bundle members under the checkpoint root,
 `WORKBENCH_LIMN_PYTHON` pointing at an interpreter with `torch` and `open_clip`, and exactly one
-ledger key file. Exit codes are the table above; `./pc.sh --verify-only` re-runs verification against
-an existing run without re-evaluating.
+ledger key file. Exit codes are the table above.
+
+`./pc.sh --verify-only` does **one** thing: it probes the model's GPU runtime inside the container and
+exits. It does **not** verify a recorded run, does **not** rebuild the DuckDB index, and does **not**
+download a checkpoint. Verifying an existing run and refreshing the index is what a plain `./pc.sh`
+does — it reuses a corroborated run instead of re-evaluating.
 
 ## VERDICT
 

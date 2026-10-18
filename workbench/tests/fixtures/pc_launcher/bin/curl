@@ -108,6 +108,12 @@ if _api_state:
             sys.exit(0)
 
 if "/api/models" in url:
+    # The registry read can fail in four ways, and the launcher's capability determination must
+    # refuse all of them rather than concluding "no observer".
+    _models_variant = os.environ.get("MOCK_MODELS_UNREADABLE", "")
+    if _models_variant == "1":
+        sys.stderr.write("curl: (7) Failed to connect to 127.0.0.1 port 8000: Connection refused\n")
+        sys.exit(7)
     fixtures_dir = Path(__file__).resolve().parent.parent
     models_file = fixtures_dir / "models.json"
     if models_file.exists():

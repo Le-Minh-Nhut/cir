@@ -12,6 +12,7 @@ import os
 import shutil
 import signal
 import subprocess
+import tempfile
 import sys
 import time
 from pathlib import Path
@@ -2018,7 +2019,7 @@ def _index_gate_program() -> str:
 def _run_index_gate(runs: object, reports: object, *, model: str = "limn",
                     checkpoint: str = "base_iter0_all_categories",
                     protocol: str = "fashioniq_val_split",
-                    declared_observer: str = "LIMN_QUERY_OBSERVER_V1",
+                    declared_observer: str = "REGISTRY_CONFIRMED_PER_QUERY:LIMN_QUERY_OBSERVER_V1",
                     run_id: str = "run_limn_corr_01") -> subprocess.CompletedProcess[str]:
     program = _index_gate_program()
     runs_text = runs if isinstance(runs, str) else json.dumps(runs)
@@ -2058,10 +2059,27 @@ def test_an_aggregate_only_model_satisfies_the_gate_without_a_per_query_artifact
                          protocol_id="fashioniq_original_split",
                          per_query_capability=None, per_query_state="CAPABILITY_ABSENT")],
         model="csmcir", checkpoint="fashioniq", protocol="fashioniq_original_split",
-        declared_observer="")
+        declared_observer="REGISTRY_CONFIRMED_AGGREGATE_ONLY")
 
     assert proc.returncode == 0, proc.stderr
     assert proc.stdout.strip() == "AGGREGATE_ONLY_VERIFIED", proc.stdout
+
+
+def test_the_gate_refuses_when_the_registry_could_not_be_read():
+    """A-03 — "I could not read the registry" is not "this model needs no per-query evidence".
+
+    The launcher reads the model's declared observer from `/api/models`. An HTTP error, a timeout, a
+    malformed body, an absent model or an absent key all used to collapse into an empty string, which
+    the gate then read as an authoritative aggregate-only declaration. An API outage must not become a
+    scientific statement about a model, and LIMN must never be silently downgraded.
+    """
+    for unknown in ("", "REGISTRY_UNKNOWN", "garbage"):
+        proc = _run_index_gate(
+            runs=[],
+            reports=[_report(per_query_capability=None, per_query_state="CAPABILITY_ABSENT")],
+            declared_observer=unknown)
+        assert proc.returncode != 0, f"{unknown!r} was accepted: {proc.stdout}"
+        assert "không xác định được khai báo per-query" in proc.stderr, proc.stderr
 
 
 def test_the_gate_refuses_a_report_that_silently_drops_a_declared_observer():
@@ -2074,7 +2092,7 @@ def test_the_gate_refuses_a_report_that_silently_drops_a_declared_observer():
     proc = _run_index_gate(
         runs=[],
         reports=[_report(per_query_capability=None, per_query_state="CAPABILITY_ABSENT")],
-        declared_observer="LIMN_QUERY_OBSERVER_V1")
+        declared_observer="REGISTRY_CONFIRMED_PER_QUERY:LIMN_QUERY_OBSERVER_V1")
 
     assert proc.returncode != 0, proc.stdout
     assert "KHAI BÁO trình quan sát" in proc.stderr, proc.stderr
@@ -2146,7 +2164,7 @@ def test_the_gate_refuses_an_aggregate_only_model_the_api_does_not_certify():
                              certified=False, is_research_evidence=False, state="refused",
                              evidence_reasons=["the evidence ledger holds no entry for this run"]))],
         model="csmcir", checkpoint="fashioniq", protocol="fashioniq_original_split",
-        declared_observer="")
+        declared_observer="REGISTRY_CONFIRMED_AGGREGATE_ONLY")
 
     assert proc.returncode != 0, proc.stdout
     assert "bằng chứng nghiên cứu đã chứng thực" in proc.stderr, proc.stderr
@@ -2183,7 +2201,7 @@ def test_the_gate_refuses_a_report_under_another_identity():
         runs=[],
         reports=[_report(checkpoint_id="SOME_OTHER_CHECKPOINT",
                          per_query_capability=None, per_query_state="CAPABILITY_ABSENT")],
-        declared_observer="")
+        declared_observer="REGISTRY_CONFIRMED_AGGREGATE_ONLY")
 
     assert proc.returncode != 0, proc.stdout
     assert "checkpoint_id=" in proc.stderr, proc.stderr
@@ -2385,3 +2403,158 @@ def test_a_completed_job_naming_its_run_uses_exactly_that_run(tmp_path: Path):
     assert proc.returncode == 0, output
     assert "run_limn_corr_01" in output, output
     assert "EVALUATION_IDENTITY" not in output, output
+
+
+def test_an_unreadable_registry_never_reaches_a_success_claim(tmp_path: Path):
+    """A-03, end to end through the real launcher.
+
+    There are two places an unreadable registry could become a false statement, and BOTH now refuse.
+    The earlier one fires here: `/api/models` supplies the model's protocol and checkpoint bundle, so
+    an unreadable registry stops the launcher at `REGISTRY_RESOLUTION` with a non-zero exit and a
+    remedy, and the capability question is never reached. The later one — the endpoint answering for
+    the selection while the capability is unreadable — is covered by the gate-level case above
+    (`test_the_gate_refuses_when_the_registry_could_not_be_read`), which is the only place that state
+    can be constructed.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_MODELS_UNREADABLE"] = "1"
+    env["MOCK_RUNS_STATUS"] = "corroborated"
+    _create_corroborated_run(sandbox, run_id="run_limn_corr_01")
+
+    proc = run_pc(sandbox, [], env, timeout=60)
+    output = proc.stdout + proc.stderr
+    assert proc.returncode != 0, output
+    assert "REGISTRY_RESOLUTION" in output, output
+    for false_success in ("AGGREGATE_ONLY_VERIFIED", "KẾT LUẬN: SẴN SÀNG", "PER_QUERY_VERIFIED"):
+        assert false_success not in output, f"{false_success} claimed with no registry: {output}"
+
+
+# ---------------------------------------------------------------------------
+# A-02 — execution authentication is NOT scientific certification
+# ---------------------------------------------------------------------------
+
+def test_an_aggregate_only_run_without_a_proof_is_not_reported_as_verified():
+    """A-02 — the gate must not merge two different claims into one token.
+
+    `execution_authenticated` says the ledger corroborates that this invocation ran and wrote these
+    bytes at this identity. `certified` says the completion proof validated and the numbers are
+    reproducible from the run's own output. A missing proof satisfies the first and NOT the second,
+    so an aggregate-only run in that state is "executed and recorded", never "verified". Reporting
+    AGGREGATE_ONLY_VERIFIED there upgrades a run that never passed verification.
+    """
+    proc = _run_index_gate(
+        runs=[],
+        reports=[_report(model_id="csmcir", checkpoint_id="fashioniq",
+                         protocol_id="fashioniq_original_split",
+                         per_query_capability=None, per_query_state="CAPABILITY_ABSENT",
+                         verification={
+                             "certified": False, "is_research_evidence": False,
+                             "execution_authenticated": True, "state": "proof_unavailable",
+                             "certification_mode": "proof_unavailable",
+                             "report_digest": "0" * 64, "reasons": [],
+                             "evidence_reasons": ["declared output missing: completion proof"]})],
+        model="csmcir", checkpoint="fashioniq", protocol="fashioniq_original_split",
+        declared_observer="REGISTRY_CONFIRMED_AGGREGATE_ONLY")
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "AGGREGATE_ONLY_EXECUTION_AUTHENTICATED_PROOF_UNAVAILABLE", proc.stdout
+    assert "AGGREGATE_ONLY_VERIFIED" not in proc.stdout, proc.stdout
+
+
+def test_an_aggregate_only_run_with_a_valid_proof_is_verified():
+    """The positive control: a complete proof keeps the verified classification."""
+    proc = _run_index_gate(
+        runs=[],
+        reports=[_report(model_id="csmcir", checkpoint_id="fashioniq",
+                         protocol_id="fashioniq_original_split",
+                         per_query_capability=None, per_query_state="CAPABILITY_ABSENT")],
+        model="csmcir", checkpoint="fashioniq", protocol="fashioniq_original_split",
+        declared_observer="REGISTRY_CONFIRMED_AGGREGATE_ONLY")
+
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "AGGREGATE_ONLY_VERIFIED", proc.stdout
+
+
+def _summary_program() -> str:
+    """The launcher's own summary program, extracted from `pc.sh`.
+
+    Extracted rather than re-implemented, and driven exactly as the shell drives it: the program
+    wins stdin (it is a here-document), and its inputs are the index status plus the state file the
+    gate wrote. This is the only way to exercise the summary's exit-code contract for a state the
+    real verifier would refuse to produce a fixture for.
+    """
+    source = PC_SH.read_text(encoding="utf-8")
+    start = source.index("python3 - \"${INDEX_EVIDENCE_STATUS:-}\" \"$verify_state\" <<'PYDOC'")
+    start = source.index("\n", start) + 1
+    end = source.index("\nPYDOC\n", start)
+    program = source[start:end]
+    assert program.lstrip().startswith("import json, sys"), program[:60]
+    return program
+
+
+def _run_summary(index_status: str, state: dict) -> subprocess.CompletedProcess[str]:
+    state_file = Path(tempfile.mkdtemp()) / "verify_state.json"
+    state_file.write_text(json.dumps(state), encoding="utf-8")
+    try:
+        return subprocess.run(
+            [sys.executable, "-c", _summary_program(), index_status, str(state_file)],
+            capture_output=True, text=True, timeout=60)
+    finally:
+        shutil.rmtree(state_file.parent, ignore_errors=True)
+
+
+def _aggregate_only_state(**overrides) -> dict:
+    state = {
+        "result": {"report_path": "/tmp/does-not-matter.json", "identity": {}, "metrics": {},
+                   "gate": {}, "execution": {"execution_status": "EXECUTION_COMPLETED",
+                                             "return_code": 0}},
+        "per_query_capability": None,
+        "per_query_state": "CAPABILITY_ABSENT",
+        "per_query_reason": "",
+        "report_read": True,
+        "proof_unavailable": 1,
+        "model_id": "csmcir",
+        "checkpoint_id": "fashioniq",
+        "protocol_id": "fashioniq_original_split",
+        "run_id": "run_csmcir_01",
+        "report_path": "",
+    }
+    state.update(overrides)
+    return state
+
+
+def test_the_summary_exits_seven_for_an_authenticated_but_unverified_aggregate_run():
+    """A-02 — the exit code must carry the same distinction the status token does.
+
+    Exit 0 would present an unverified run as a passed pilot. The invocation is authenticated and its
+    numbers are recorded, but nothing verified them, so the honest answer is "recorded, not
+    certified" and the exit code says so.
+    """
+    proc = _run_summary(
+        "AGGREGATE_ONLY_EXECUTION_AUTHENTICATED_PROOF_UNAVAILABLE", _aggregate_only_state())
+
+    assert proc.returncode == 7, f"{proc.returncode}\n{proc.stdout}"
+    assert "CHƯA CHỨNG THỰC KHOA HỌC" in proc.stdout, proc.stdout
+    assert "KẾT LUẬN: SẴN SÀNG CHO PILOT" not in proc.stdout, proc.stdout
+
+
+def test_the_summary_exits_zero_for_a_verified_aggregate_only_run():
+    """The positive control: a complete proof keeps the verified path, and its code is 0."""
+    proc = _run_summary("AGGREGATE_ONLY_VERIFIED",
+                        _aggregate_only_state(proof_unavailable=0))
+
+    assert proc.returncode == 0, f"{proc.returncode}\n{proc.stdout}"
+    assert "KẾT LUẬN: SẴN SÀNG CHO PILOT" in proc.stdout, proc.stdout
+    assert "KHÔNG chứa lượt chạy này" in proc.stdout, proc.stdout
+
+
+def test_the_summary_exits_five_when_it_could_not_read_the_run_report():
+    """Exit 5 is 'the launcher does not know', and it must beat every success branch."""
+    proc = _run_summary("PER_QUERY_VERIFIED",
+                        _aggregate_only_state(report_read=False,
+                                              per_query_capability="LIMN_QUERY_OBSERVER_V1",
+                                              per_query_state="PER_QUERY_VERIFIED",
+                                              per_query_reason="no such file"))
+
+    assert proc.returncode == 5, f"{proc.returncode}\n{proc.stdout}"
+    assert "KHÔNG XÁC ĐỊNH ĐƯỢC" in proc.stdout, proc.stdout

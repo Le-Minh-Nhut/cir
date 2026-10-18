@@ -5,9 +5,13 @@ trên máy dev, cái gì chỉ có thể kiểm trên máy đích, và cách đ�
 
 **Chưa từng chạy trên RTX 5070 Ti.** Không có chứng thư GPU nào trong repo.
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `4b32063`** — mọi test, acceptance, mutation và release_verify
-mô tả trên trang này đã chạy trên đúng cây đó. Các commit sau nó **chỉ sửa tài liệu** (`git diff` trên
-toàn bộ đường dẫn sản xuất đối chiếu `4b32063` → HEAD cho ra 0 dòng).
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `11ba3df`** — mọi test, acceptance, mutation và release_verify mô
+tả trên trang này đã chạy trên đúng cây đó (1394 passed; acceptance, mutation và release_verify đều
+chạy lại trên cùng commit). Commit `b70d092` sau nó **chỉ sửa tài liệu**: `git diff 11ba3df b70d092`
+trên `pc.sh`, `workbench/`, `src/` cho ra **0 dòng**.
+
+Đây là một SHA bất biến, không phải đầu nhánh: nhánh `research/cir-failure-workbench` sẽ tiếp tục tiến
+lên, nên **không** checkout theo tên nhánh nếu bạn muốn đúng cây đã kiểm thử.
 
 Lấy cây đã kiểm thử:
 
@@ -16,8 +20,10 @@ git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
-git checkout 4b32063
+git checkout 11ba3df
 ```
+
+Cây mới nhất (gồm cả tài liệu cập nhật) là `b70d092`; khác biệt so với `11ba3df` chỉ là tài liệu.
 
 Bản đầy đủ của lượt review cuối (ma trận 16 model, coverage, sổ lỗi, đối chiếu độc lập, verdict) nằm
 trong `workbench/docs/reviews/FINAL_*.md`.
@@ -72,7 +78,14 @@ Xem mục 7 để có lệnh kiểm chứng từng bước.
 | `PER_QUERY_EXPORTED_UNVERIFIED` | đã xuất artifact, verifier chưa chứng thực | **4** |
 | `PER_QUERY_VERIFIED` | đã xuất + verifier đã chứng thực | 0 |
 | (không đọc được report) | launcher không đọc được điều lượt chạy đã ghi — **không** được coi là aggregate-only | **5** |
-| `PROOF_UNAVAILABLE_AND_*` | tệp completion proof không còn: full verification không chạy được. Lượt gọi vẫn được xác thực (`execution_authenticated`) và báo cáo tổng hợp vẫn được phục vụ, nhưng một artifact per-query **không bao giờ** được promote lên `PER_QUERY_VERIFIED` — nên đây **không** phải pilot đầy đủ | **4** nếu mô hình khai báo observer; 0 nếu aggregate-only |
+| `PROOF_UNAVAILABLE_AND_*` | tệp completion proof không còn: full verification không chạy được. Lượt gọi vẫn được xác thực (`execution_authenticated`) và báo cáo tổng hợp vẫn được phục vụ, nhưng một artifact per-query **không bao giờ** được promote lên `PER_QUERY_VERIFIED` — nên đây **không** phải pilot đầy đủ | **4** nếu mô hình khai báo observer |
+| `AGGREGATE_ONLY_EXECUTION_AUTHENTICATED_PROOF_UNAVAILABLE` | mô hình aggregate-only, sổ cái xác thực LƯỢT GỌI, nhưng **thiếu completion proof** nên **không** chứng thực được khoa học | **7** |
+
+**Xác thực lượt gọi KHÔNG phải chứng thực khoa học.** `execution_authenticated` nghĩa là sổ cái xác
+nhận lượt gọi này đã chạy và đã ghi đúng các byte này, ở đúng danh tính này. `certified` nghĩa là
+completion proof hợp lệ và các con số tái lập được từ chính output của lượt chạy. Thiếu proof thì điều
+thứ nhất đúng, điều thứ hai **sai**, và hai điều đó **không bao giờ** dùng chung một nhãn hay một exit
+code. Exit code 7 là "đã ghi nhận trung thực, chưa chứng thực" — không phải thành công.
 
 Exit code 5 nghĩa là launcher **không biết** — nó không được phép tuyên bố "mô hình này không có trình
 quan sát" khi sự thật là nó không đọc được report. Kiểm tra đường dẫn `HOST_WORKBENCH_ARTIFACTS_ROOT`.

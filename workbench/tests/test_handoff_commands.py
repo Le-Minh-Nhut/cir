@@ -286,3 +286,84 @@ def test_every_documented_command_parses_and_pipeline_has_required_authorization
                 missing = sorted(cap for cap in required if not getattr(namespace, cap, False))
                 assert not missing, f"{location} missing --{' --'.join(cap.replace('_', '-') for cap in missing)}"
     assert checked > 0
+
+# ---------------------------------------------------------------------------
+# Release metadata: one record, and every document must agree with it
+# ---------------------------------------------------------------------------
+
+RELEASE_DOCS = tuple(ROOT / path for path in (
+    "workbench/docs/PC_PILOT_HANDOFF.md",
+    "workbench/docs/PC_ONE_COMMAND_GUIDE.vi.md",
+    "workbench/docs/reviews/FINAL_PC_RELEASE_VERDICT.md",
+))
+
+
+def test_no_release_document_points_at_a_superseded_source_sha() -> None:
+    """A handoff that tells the operator to check out the wrong commit installs the wrong code.
+
+    The PC documents were updated across three passes, and each pass left the previous pass's SHA in
+    a sentence that was still written in the present tense ("every gate ran on this tree"). A reader
+    following the checkout command would have received a tree that predates the fixes the same page
+    describes. This test pins the relationship: the SHA the documents tell you to check out must be
+    the one the verdict names as tested, and the tested SHA must be an ancestor of HEAD.
+    """
+    import subprocess
+
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
+                          text=True).stdout.strip()
+    verdict = (ROOT / "workbench/docs/reviews/FINAL_PC_RELEASE_VERDICT.md").read_text(encoding="utf-8")
+
+    tested = re.search(r"\*\*TESTED_SOURCE_SHA\*\* \| \*\*`([0-9a-f]{7,40})`\*\*", verdict)
+    assert tested, "the verdict must name a TESTED_SOURCE_SHA"
+    tested_sha = tested.group(1)
+    resolved = subprocess.run(["git", "rev-parse", tested_sha], cwd=ROOT, capture_output=True,
+                              text=True)
+    assert resolved.returncode == 0, f"TESTED_SOURCE_SHA {tested_sha} is not a commit in this repo"
+
+    ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", tested_sha, head], cwd=ROOT,
+                              capture_output=True, text=True)
+    assert ancestor.returncode == 0, (
+        f"the tested SHA {tested_sha} is not an ancestor of HEAD {head}: the verdict claims gates ran "
+        "on a tree that is not in this line of history")
+
+    handoff = (ROOT / "workbench/docs/PC_PILOT_HANDOFF.md").read_text(encoding="utf-8")
+    checkouts = re.findall(r"^git checkout ([0-9a-f]{7,40})", handoff, re.M)
+    assert checkouts, "the handoff must give an explicit checkout command"
+    for sha in checkouts:
+        assert subprocess.run(["git", "rev-parse", sha], cwd=ROOT, capture_output=True,
+                              text=True).returncode == 0, f"checkout points at unknown commit {sha}"
+        assert subprocess.run(["git", "merge-base", "--is-ancestor", sha, tested_sha], cwd=ROOT,
+                              capture_output=True).returncode == 0, (
+            f"the handoff tells the operator to check out {sha}, which is NOT an ancestor of the "
+            f"tested source {tested_sha}: following it installs code that predates the tested tree")
+
+
+def test_no_release_document_describes_verify_only_as_verifying_a_run() -> None:
+    """A-05: the flag's meaning is one sentence, and every document must repeat that sentence.
+
+    `--verify-only` probes the GPU runtime and exits. It has been described, in three separate
+    documents, as re-running verification against an existing run -- advice that sends the operator to
+    a command that cannot do the job they were told it does.
+    """
+    offenders = []
+    for document in RELEASE_DOCS:
+        for number, line in enumerate(document.read_text(encoding="utf-8").splitlines(), 1):
+            if "--verify-only" not in line:
+                continue
+            lowered = line.lower()
+            # The forbidden claim: the flag verifies, rebuilds, or re-runs something about a RUN.
+            if re.search(r"verify-only[^.]*\b(re-runs?|re-runs verification|rebuild|dựng lại|xác thực)"
+                         r"[^.]*\b(run|lượt chạy|index|chỉ mục)", lowered):
+                if "không" not in lowered and "does not" not in lowered and "not " not in lowered:
+                    offenders.append(f"{document.relative_to(ROOT)}:{number}")
+    assert not offenders, (
+        "these lines describe --verify-only as doing work it does not do: " + ", ".join(offenders))
+
+
+def test_the_verdict_names_the_same_test_count_the_handoff_does() -> None:
+    """Two documents quoting different numbers for the same run is how a report loses its meaning."""
+    verdict = (ROOT / "workbench/docs/reviews/FINAL_PC_RELEASE_VERDICT.md").read_text(encoding="utf-8")
+    counts = re.findall(r"\*\*(\d+) passed, 0 failed\*\*", verdict)
+    assert counts, "the verdict must record the suite's pass count"
+    assert len(set(counts)) == 1, f"the verdict contradicts itself about the suite: {counts}"
+

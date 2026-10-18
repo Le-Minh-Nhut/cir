@@ -1653,8 +1653,16 @@ if not receipt.get("report_digest"):
 # the same declaration the evaluator read when it decided whether to run an observer. Reading it
 # out of the report cannot work: a report is a file, and one without the field would downgrade an
 # observer model to aggregate-only and skip its Top-K requirement entirely.
-declared_observer = sys.argv[7].strip() if len(sys.argv) > 7 else ""
-declared_observer = declared_observer if declared_observer not in ("", "-", "None") else ""
+declaration = sys.argv[7].strip() if len(sys.argv) > 7 else ""
+if declaration.startswith("REGISTRY_CONFIRMED_PER_QUERY:"):
+    declared_observer = declaration.split(":", 1)[1].strip()
+elif declaration == "REGISTRY_CONFIRMED_AGGREGATE_ONLY":
+    declared_observer = ""
+else:
+    # Unknown is not absent. Without a read of the registry there is no authority for the claim that
+    # this model needs no per-query evidence, and the contract cannot be decided from a report.
+    sys.exit("không xác định được khai báo per-query của mô hình %s từ registry (%r)"
+             % (model, declaration or "không có phản hồi"))
 report_capability = report.get("per_query_capability")
 if declared_observer and not report_capability:
     sys.exit("mô hình %s KHAI BÁO trình quan sát (%s) trong registry, nhưng báo cáo của lượt chạy "
@@ -1681,7 +1689,19 @@ if not capability:
     if state and state not in ("CAPABILITY_ABSENT",):
         print("ghi chú: báo cáo khai %r cho một mô hình không có trình quan sát" % state,
               file=sys.stderr)
-    print("AGGREGATE_ONLY_VERIFIED")
+    # EXECUTION AUTHENTICATION IS NOT SCIENTIFIC CERTIFICATION.
+    #
+    # `execution_authenticated` says the ledger corroborates that this invocation ran and wrote these
+    # bytes at this identity. `certified` says the completion proof validated and the run's numbers
+    # are reproducible from its own output. A missing proof satisfies the first and not the second,
+    # and the two must never share a token: on the honest-policy branch the API is telling the caller
+    # that it could NOT complete the verification, so an aggregate-only run in that state is
+    # "executed and recorded", not "verified". Reporting AGGREGATE_ONLY_VERIFIED here would upgrade a
+    # run that never passed verification into a verified research result.
+    if proof_policy:
+        print("AGGREGATE_ONLY_EXECUTION_AUTHENTICATED_PROOF_UNAVAILABLE")
+    else:
+        print("AGGREGATE_ONLY_VERIFIED")
     sys.exit(0)
 
 if indexed is None:
@@ -1707,20 +1727,43 @@ PYIDX
     # already has it: the summary's own model_info did not carry it, so it is asked for here, once,
     # from the API that serves the registry.
     local declared_observer
+    # THREE states, never two. "The registry declares no observer" and "I could not read the
+    # registry" are different facts, and collapsing them -- which an empty string did -- turns an
+    # API outage into an authoritative statement that the model needs no per-query evidence. The
+    # program therefore prints a named state, and UNKNOWN is refused below.
     declared_observer="$(curl -fsS --max-time 30 "${base}/api/models" 2>/dev/null | python3 -c "
 import json, sys
 model_id = sys.argv[1]
 try:
     models = json.load(sys.stdin)
 except Exception:
-    sys.exit(0)
-if isinstance(models, list):
-    for entry in models:
-        if isinstance(entry, dict) and entry.get('model_id') == model_id:
-            value = entry.get('per_query_observer')
-            print(value if isinstance(value, str) else '')
-            break
+    print('REGISTRY_UNKNOWN')
+    raise SystemExit(0)
+if not isinstance(models, list):
+    print('REGISTRY_UNKNOWN')
+    raise SystemExit(0)
+for entry in models:
+    if isinstance(entry, dict) and entry.get('model_id') == model_id:
+        value = entry.get('per_query_observer')
+        if isinstance(value, str) and value.strip():
+            print('REGISTRY_CONFIRMED_PER_QUERY:' + value.strip())
+        elif value is None:
+            # The key is absent or null for every model that declares no observer: that IS the
+            # registry's declaration, and it is the only way aggregate-only is established.
+            print('REGISTRY_CONFIRMED_AGGREGATE_ONLY')
+        else:
+            # Present but not a string: a malformed declaration is not a declaration.
+            print('REGISTRY_UNKNOWN')
+        break
+else:
+    print('REGISTRY_UNKNOWN')
 " "$model" 2>/dev/null || true)"
+    if [[ -z "$declared_observer" || "$declared_observer" == "REGISTRY_UNKNOWN" ]]; then
+        fail_stage "REGISTRY_CAPABILITY" \
+            "Không xác định được khai báo per-query của mô hình ${model} từ /api/models (${declared_observer:-không có phản hồi})" \
+            "${base}/api/models" \
+            "Không tuyên bố hoàn tất khi chưa biết mô hình có trình quan sát hay không: một API không đọc được KHÔNG có nghĩa là mô hình không cần bằng chứng per-query. Kiểm tra backend (docker logs cir-workbench) rồi chạy lại ./pc.sh."
+    fi
     checked="$(python3 -c "$idx_program" "$runs_check" "$reports_check" "$run_id" "$model" "$checkpoint" "$protocol" "${declared_observer:-}" 2>&1)" \
         || checked="__INDEX_CHECK_FAILED__: ${checked:-không xác định}"
     if [[ "$checked" == __INDEX_CHECK_FAILED__* ]]; then
@@ -1925,9 +1968,15 @@ for line in reversed(out.strip().splitlines()):
     verify_message="${TMPDIR:-/tmp}/cir_verify_msg.$$"
     if ! verify_gate "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" \
             "${FINAL_RUN_PROOF_UNAVAILABLE:-0}" "${FINAL_RUN_REPORT_PATH:-}" "$host_artifacts" >"$verify_message"; then
-        cat "$verify_message"
+        # The text is CAPTURED before the file is removed. `cat` the file, `rm` it, then `cat` it
+        # again inside the fail_stage argument read an empty file: the operator got the refusal in
+        # the stage block with NO reason attached, which is the one thing this branch exists to
+        # deliver. Both the visible line and the failure detail come from the captured text.
+        local verify_refusal
+        verify_refusal="$(cat "$verify_message")"
         rm -f "$verify_state" "$verify_message"
-        fail_stage "VERIFICATION" "$(cat "$verify_message")" "verify_run.py (trong container)" \
+        printf '%s\n' "$verify_refusal"
+        fail_stage "VERIFICATION" "$verify_refusal" "verify_run.py (trong container)" \
             "Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh (dùng ./pc.sh --verify-only nếu bạn chỉ muốn kiểm chứng lại năng lực GPU trước khi tốn thời gian đánh giá)"
     fi
     rm -f "$verify_message"
@@ -2034,7 +2083,13 @@ else:
     print(f"Phân tích theo truy vấn  : THẤT BẠI — {per_query_capability} được khai báo nhưng không")
     print(f"                           có artifact Top-K nào được xuất. Lý do: {_per_query_reason}")
     print(f"                           Kết quả TỔNG HỢP ở trên vẫn hợp lệ và đã được lưu.")
-if _index_evidence_status.startswith("PROOF_UNAVAILABLE"):
+if _index_evidence_status == "AGGREGATE_ONLY_EXECUTION_AUTHENTICATED_PROOF_UNAVAILABLE":
+    print("Trạng thái chỉ mục: ĐÃ XÁC THỰC LƯỢT GỌI — CHƯA CHỨNG THỰC KHOA HỌC (thiếu completion proof).")
+    print("                   Sổ cái xác nhận LƯỢT GỌI này đã chạy và đã ghi đúng các byte này; nhưng")
+    print("                   tệp completion proof không còn, nên xác thực đầy đủ KHÔNG chạy được và")
+    print("                   lượt chạy KHÔNG được coi là bằng chứng nghiên cứu đã chứng thực.")
+    print("                   Báo cáo tổng hợp vẫn được phục vụ (đó là ghi nhận một sự kiện đã xảy ra).")
+elif _index_evidence_status.startswith("PROOF_UNAVAILABLE"):
     print(f"Trạng thái chỉ mục: {_index_evidence_status} — tệp completion proof không còn tồn tại, nên")
     print("                   xác thực đầy đủ không chạy được; API vẫn xác thực được LƯỢT GỌI")
     print("                   (execution_authenticated) và đã phục vụ báo cáo tổng hợp.")
@@ -2054,12 +2109,16 @@ if per_query_capability and per_query_state in (None, "PER_QUERY_EXPORT_FAILED")
 elif per_query_capability and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED":
     print("KẾT LUẬN: TỔNG HỢP ĐẠT — PILOT ĐẦY ĐỦ chờ chứng thực artifact Top-K.")
 else:
-    if _index_evidence_status.startswith("PROOF_UNAVAILABLE"):
-        print("KẾT LUẬN: TỔNG HỢP ĐẠT — PILOT ĐẦY ĐỦ CHƯA SẴN SÀNG (tệp proof không còn).")
+    if _index_evidence_status == "AGGREGATE_ONLY_EXECUTION_AUTHENTICATED_PROOF_UNAVAILABLE" \
+            or _index_evidence_status.startswith("PROOF_UNAVAILABLE"):
+        print("KẾT LUẬN: LƯỢT GỌI ĐÃ ĐƯỢC XÁC THỰC — CHƯA PHẢI BẰNG CHỨNG ĐÃ CHỨNG THỰC (tệp proof không còn).")
     else:
         print("KẾT LUẬN: SẴN SÀNG CHO PILOT (theo khả năng đã khai báo của mô hình).")
     print("  Bằng chứng tổng hợp: đã chứng thực và API phục vụ được lượt chạy này.")
-    if _index_evidence_status.startswith("PROOF_UNAVAILABLE"):
+    if _index_evidence_status == "AGGREGATE_ONLY_EXECUTION_AUTHENTICATED_PROOF_UNAVAILABLE":
+        print("  Chỉ mục DuckDB: không có bản ghi per-query (mô hình không có trình quan sát).")
+        print("  Xác thực khoa học: CHƯA đạt — không có completion proof để chạy xác thực đầy đủ.")
+    elif _index_evidence_status.startswith("PROOF_UNAVAILABLE"):
         print("  Chỉ mục DuckDB: lượt chạy này KHÔNG được promote lên PER_QUERY_VERIFIED (tệp proof")
         print("  không còn nên không có receipt nào gắn được với artifact). Đây KHÔNG phải pilot đầy đủ.")
     elif _index_evidence_status == "AGGREGATE_ONLY_VERIFIED":
@@ -2084,6 +2143,10 @@ if not _report_read:
 # The index is what the API and the UI read, so the launcher's own conclusion and the index's
 # published state must be the SAME claim. Two places disagreeing about one run means the operator is
 # told one thing and the interface shows another.
+if _index_evidence_status == "AGGREGATE_ONLY_EXECUTION_AUTHENTICATED_PROOF_UNAVAILABLE":
+    # Not 0. The invocation is authenticated and the numbers are recorded, but nothing verified them,
+    # and a zero here would present an unverified run as a passed pilot.
+    sys.exit(7)
 if per_query_capability and per_query_state in (None, "PER_QUERY_EXPORT_FAILED"):
     sys.exit(3)
 if per_query_capability and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED":

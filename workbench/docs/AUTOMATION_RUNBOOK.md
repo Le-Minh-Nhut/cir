@@ -269,6 +269,26 @@ tampering, missing entries, and inconsistent reports. It does **not** claim prot
 against a malicious evaluator that already holds the operator's secrets: that needs an
 OS-level trust boundary, which this release does not implement.
 
+**What IS enforced** is that only reviewed code reaches the evaluator, and that is a real check with
+a real refusal, not a promise:
+
+* `runtime.source_clean_and_pinned` refuses a checkout whose `HEAD` differs from the registry's
+  `upstream_commit_sha` (`source pin mismatch: expected …, found …`) and refuses a dirty one, naming
+  the modified path. Both run before a launch, so an unpinned `git pull` cannot silently change what
+  executed.
+* A model whose published source cannot run may declare exactly ONE `approved_source_patches` entry,
+  carrying the file's base and derived digests. `preflight.approved_patch_state` accepts the checkout
+  only while it holds that single delta; any other modification still blocks, and the run is labelled
+  an approved compatibility variant rather than official parity (`preflight_blockers` inserts
+  `source cannot run: …` while the checkout is unrepaired).
+* Checkpoint bytes are verified against the digests the registry and the completion proof record, so a
+  substituted weight invalidates the proof it would otherwise contribute to.
+
+Verified in this pass against the real functions: a checkout with one modified file is refused
+(`source checkout is dirty: README.md`), a checkout whose recorded pin does not match its `HEAD` is
+refused (`source pin mismatch: expected 0000…, found 65fa78ea…`), and the pinned clean checkout is
+accepted.
+
 Set `WORKBENCH_LEDGER_KEY` before a reproduction run and keep it out of the repository: the
 ledger is only as trustworthy as that key. The key is **never** passed IN THE ENVIRONMENT to the
 official evaluator, and the names the child could use to locate it (`HOME`, `XDG_*`,
