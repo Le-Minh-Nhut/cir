@@ -401,7 +401,7 @@ models:
     upstream_commit_sha: bec50b6c8c19111893b617979502b948d1cea5b2
     source_available: true
     source_dir: HINT
-    fashioniq_layout: fashioniq_ilearn_resized
+    fashioniq_layout: fashioniq_ilearn_resized_training
     fashioniq_image_extensions: [".jpg"]
     native_protocol: fashioniq_val_split
     literature_split_label: val
@@ -455,7 +455,7 @@ models:
     upstream_commit_sha: 29a2a31d6a56f677bf450c3be7cdaef423fb7018
     source_available: true
     source_dir: ENCODER
-    fashioniq_layout: fashioniq_ilearn_resized
+    fashioniq_layout: fashioniq_ilearn_resized_training
     fashioniq_image_extensions: [".jpg"]
     native_protocol: fashioniq_val_split
     literature_split_label: val
@@ -472,24 +472,28 @@ models:
     checkpoint_variants:
       - checkpoint_id: fashioniq
         filename: fashioniq.pt
-        download_url: null
-        source_url: https://drive.google.com/drive/folders/1QuBQVIybLwn-qFSORhpBsnXy6ebhtNr3
-        source_type: author_google_drive
+        # Author Hub, resolved to a revision so the bytes are pinned rather than "whatever main is".
+        # Verified independently by the workbench against the Hugging Face API: repository revision
+        # dd9b086569fe69bd9111b6114546201c97934b01, file size 631 879 365 bytes, LFS oid
+        # 0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173 (the pointer's own
+        # sha256). A Range request on the object returns `PK..fashioniq/data.pkl` followed by a
+        # `collections.OrderedDict` whose first key is `loss_T`, matching `model_try2.py`'s parameter
+        # names — a flat full state_dict, which is what the replay loader now asserts.
+        download_url: https://huggingface.co/iLearn-Lab/AAAI25-ENCODER/resolve/dd9b086569fe69bd9111b6114546201c97934b01/fashioniq.pt
+        source_url: https://huggingface.co/iLearn-Lab/AAAI25-ENCODER/tree/main
+        source_type: author_huggingface
+        expected_size_bytes: 631879365
+        expected_sha256: 0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173
         # The paper states no training condition (AAAI-25 paper, Table 1 has no noise blocks); the 0
         # was an extraction assumption. Recorded as unstated so the gate reports the condition as
         # unchecked (see the LIMN row).
         checkpoint_training_noise_pct: null
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
-        # The seed bundle calls the mapping UNVERIFIED and nothing observed since contradicts that:
-        # there is no author-linked direct URL, no expected size or hash, and no local artifact
-        # tying a Drive file to the paper's FashionIQ result. Local availability, even if complete,
-        # cannot establish which benchmark variant the bytes are; mapping stays UNVERIFIED until an
-        # author-linked artifact or metadata binds the file (final audit C4 + holistic science
-        # review concur).
-        status: URL_UNRESOLVED
-        checkpoint_mapping_status: UNVERIFIED
+        # Promoted from UNVERIFIED on the evidence above: an author-linked revision, a published size
+        # and hash, and a container whose schema matches the model the evaluator builds. What this
+        # does NOT claim is that inference has been run — that remains PENDING until a GPU executes it.
+        status: URL_VERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: pair
     environment:
       python_env_var: WORKBENCH_PAIR_PYTHON
@@ -511,7 +515,7 @@ models:
     upstream_commit_sha: bfb0b98cdb4c44f6b9190baaa84d783a77dd888f
     source_available: true
     source_dir: PAIR
-    fashioniq_layout: fashioniq_ilearn_resized
+    fashioniq_layout: fashioniq_ilearn_resized_training
     fashioniq_image_extensions: [".jpg"]
     native_protocol: fashioniq_val_split
     literature_split_label: val
@@ -838,10 +842,14 @@ models:
       # UNKNOWN meant "the README declares no version", which is not "no GPU is needed" — the
       # GPU-verification gate then never fired for a CUDA-hard evaluator.
       cuda: '11.0'
-      # `clip==0.2.0` on PyPI is silent1mezzo/clip (a clipboard CLI), not OpenAI CLIP; openai/CLIP
-      # publishes no tags (final audit P2). Recorded as-is because the pinned README pins nothing;
-      # this entry is a KNOWN-WRONG pin that a future operator must replace with a git revision.
-      packages: [clip==0.2.0, numpy==1.22.3, pandas==1.4.2, Pillow]
+      # OpenAI CLIP, pinned to a revision rather than a release name. The module the evaluator
+      # imports is `clip` (`model.py:5`), and it calls `clip.load(img_encoder, device=..., jit=False)`
+      # (`:41`) and `clip.tokenize` (`cirr_test_submission.py`) — the OpenAI API. PyPI's `clip==0.2.0`
+      # is silent1mezzo/clip, an unrelated clipboard CLI that has neither function, so the previous
+      # pin installed a package the evaluator cannot import; it was recorded as knowingly wrong
+      # because openai/CLIP publishes no tags. A revision pins it properly: the commit below resolves
+      # (HTTP 200 on `clip/clip.py`) and defines both `load` and `tokenize`.
+      packages: ['clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33', numpy==1.22.3, pandas==1.4.2, Pillow]
     strict_clean_checkpoint_available: null
     notes: Native annotation endpoint-union/reference-excluded evaluator verified. Pinned test.py has no CLI/checkpoint replay; TG-CIR.zip FashionIQ member mapping and hash remain unresolved.
     checkpoint_variants:
@@ -902,8 +910,17 @@ models:
     strict_clean_checkpoint_available: null
     notes: The evaluator's argparse default `--blip-model-name blip2_cir_rerank_learn` names a class the pinned repo does not register (only an argparse default; no @registry.register_model); the checkpoint class-key mapping remains unverified and loads non-strictly.
     checkpoint_variants:
+      # `backbone` is the authors' flag value, declared rather than inferred. The evaluator selects
+      # its vision encoder from `--backbone` (`blip_validate.py:145`: `pretrain` is EVA-CLIP ViT-g,
+      # `pretrain_vitL` is CLIP ViT-L), and it loads with `strict=False` (`:49`), so a mismatched
+      # backbone would evaluate a partly-initialised model WITHOUT raising. Deriving the encoder from
+      # a filename substring is therefore unsafe: a rename would silently change the architecture.
+      # The paper's row is ViT-g while the released Google Drive checkpoints are ViT-L (upstream
+      # issue #4, acknowledged by the author), so choosing ViT-L is a SCIENTIFIC VARIANT and the
+      # distinction is recorded per variant instead of being guessed at run time.
       - checkpoint_id: sprc_fiq_unresolved
         filename: sprc_fiq.pt
+        backbone: pretrain
         download_url: null
         source_url: https://1drv.ms/u/s!Aj0q22vyiZbabnUya4mnufIBtYI?e=n4ZVKj
         source_type: author_onedrive
@@ -913,6 +930,28 @@ models:
         expected_sha256: null
         status: CHECKPOINT_MAPPING_UNVERIFIED
         checkpoint_mapping_status: UNVERIFIED
+      - checkpoint_id: sprc_fiq_vitl
+        filename: sprc_fiq_vitl.pt
+        backbone: pretrain_vitL
+        download_url: https://drive.usercontent.google.com/download?id=11p95msuuTAU6Pej7d_a-KjUHHpP3kH8Y&export=download&confirm=t
+        source_url: https://drive.google.com/file/d/11p95msuuTAU6Pej7d_a-KjUHHpP3kH8Y/view?usp=sharing
+        source_type: author_google_drive
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: 1459756541
+        expected_sha256: null
+        # Obtainability: reachable, but no author checksum and the class-key mapping is not
+        # established, so the mapping stays UNVERIFIED rather than being promoted on a filename.
+        status: CHECKPOINT_MAPPING_UNVERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+        scientific_variant: true
+        variant_provenance:
+          variant_id: vitl_backbone
+          changes: "CLIP ViT-L/14 vision encoder instead of the paper's EVA-CLIP ViT-g/14"
+          evidence: "upstream issue #4: the author acknowledges the paper reported ViT-L while the released code defaults to ViT-g, and published ViT-L weights as a separate variant"
+          comparability: "NOT comparable to the registry's paper row (reported_r10/reported_r50 describe the ViT-g configuration); a result from this checkpoint must not be compared against it"
+        notes: "ViT-L backbone (CLIP ViT-L/14), author-published as a variant after the paper's ViT-g code default was acknowledged in upstream issue #4. Reachable (HTTP 200, 1 459 756 541 bytes observed); no published checksum."
+
   - model_id: limn
     replay_status: REPLAY_CODE_IMPLEMENTED
     # The observer exists for this model, so a full pilot is only complete when its per-query

@@ -93,6 +93,17 @@ def validate_dataset(dataset_root: Path, categories: tuple[str, ...] = CATEGORIE
         cat_resized = dataset_root / "resized_image" / category
         if not cat_resized.is_dir():
             blockers.append(f"PAIR dataset input missing: {cat_resized}")
+        # `data/datasets.py:34-36` builds a FRESH cache with `train_init_process`, which opens the
+        # TRAIN captions for all three categories before any validation file. The standalone preflight
+        # therefore has to require them, or the constructor raises FileNotFoundError after the
+        # checkpoint has been loaded. (The orchestrator's preparation contract already declares the
+        # training layout, so this aligns the standalone path with it rather than adding a new rule.)
+        for relative in (
+            f"captions/cap.{category}.train.json",
+            f"captions/correction_dict_{category}.json",
+        ):
+            if not (dataset_root / relative).is_file():
+                blockers.append(f"PAIR dataset input missing: {dataset_root / relative}")
     return blockers
 
 

@@ -580,6 +580,124 @@ def parse_workbench_replay_output(model_id: str, stdout_text: str,
         raw_output=document,
     )
 
+def parse_dcnet_output(stdout_text: str, paper_metrics: dict[str, float | None] | None = None) -> MetricExtractionResult:
+    """Parse the metrics DCNet's own evaluator logs.
+
+    `test.py:65-84` prints, per epoch of validation:
+
+        [<category>] comp corr r@10, r@50: <comp10> <comp50> <corr10> <corr50>
+        comb: <cat1_10> <cat1_50> <cat2_10> <cat2_50> <cat3_10> <cat3_50>
+
+    and, when a category yields fewer cells, a two-number `[<category>] r@10, r@50:` line instead.
+
+    Two facts decide how to read them:
+
+    * **units.** `model/metric.py:5-21` computes `recall` as a FRACTION (`len(inter)/len(act)`), so
+      every printed cell is 0..1 and must be multiplied by 100 EXACTLY ONCE on the way into the
+      workbench % schema. Multiplying twice was the obvious way to make the numbers look plausible.
+    * **which branch.** Three variants exist (combined, composition, correction). The `comb:` line is
+      the one the registry's own paper row describes — `paper_benchmarks/papers.yaml` defines the row
+      as "the mean of the six printed cells" — so that is what is read. The composition and correction
+      splits are kept in `category_metrics` under distinct keys rather than being silently conflated
+      with the combined result, and no branch is chosen by which number looks better.
+
+    The macro is recomputed from the parsed cells and then checked against the evaluator's own
+    `comb_avg`, so a misread stream is refused instead of being reported as a measurement.
+    """
+    parser_id = "dcnet_native_logger"
+    unparsed = MetricExtractionResult(
+        extraction_status="EVALUATION_COMPLETED_METRICS_UNPARSED",
+        parser_id=parser_id,
+        parser_version=1,
+        observed_metrics=None,
+        category_metrics=None,
+        parity_status="PARITY_NOT_EVALUATED",
+        metric_source="stdout",
+    )
+
+    # The category ORDER is the evaluator's, taken from the config it ran with, so each combined pair
+    # is mapped by the name in the per-category line rather than by position. Position alone would
+    # silently transpose dress/shirt/toptee if a config ordered them differently, which is exactly the
+    # class of error the paper row's "mean of the six cells" cannot detect.
+    combined_pairs: dict[str, tuple[float, float]] = {}
+    for match in re.finditer(
+            r"\[(dress|shirt|toptee)\]\s+comp\s+corr\s+r@10,\s*r@50:\s*"
+            r"([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)", stdout_text):
+        category = match.group(1)
+        # `i[0..3]` is comp10, comp50, corr10, corr50 (trainer_joint.py:231 `metric['recall'][i] =`).
+        comp10, comp50, corr10, corr50 = (float(match.group(n)) * 100.0 for n in (2, 3, 4, 5))
+        combined_pairs[category] = (comp10, comp50)
+        combined_pairs[f"{category}__correction"] = (corr10, corr50)
+        combined_pairs[f"{category}__composition"] = (comp10, comp50)
+
+    single_pairs: dict[str, tuple[float, float]] = {}
+    for match in re.finditer(
+            r"\[(dress|shirt|toptee)\]\s+r@10,\s*r@50:\s*([0-9.eE+-]+)\s+([0-9.eE+-]+)",
+            stdout_text):
+        single_pairs[match.group(1)] = (float(match.group(2)) * 100.0, float(match.group(3)) * 100.0)
+
+    comb_line = re.search(r"(?:^|\n)\s*(?:[^\n]* - INFO - )?comb:\s*"
+                          r"([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+"
+                          r"([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)", stdout_text)
+
+    if comb_line:
+        cells = [float(value) * 100.0 for value in comb_line.groups()]
+        # The `comb:` line carries no names, so it is only usable when the named per-category lines
+        # are present to establish the order and the count.
+        named = [c for c in ("dress", "shirt", "toptee") if c in combined_pairs]
+        if len(named) != 3:
+            return unparsed
+        for index, category in enumerate(named):
+            combined_pairs[category] = (cells[index * 2], cells[index * 2 + 1])
+    elif single_pairs:
+        # The two-cell shape reports the same combined metric; accept it only when all three
+        # categories appear, so a truncated stream cannot look complete.
+        if set(single_pairs) != {"dress", "shirt", "toptee"}:
+            return unparsed
+        combined_pairs = dict(single_pairs)
+    else:
+        return unparsed
+
+    category_metrics: dict[str, dict[str, float | None]] = {}
+    for category in ("dress", "shirt", "toptee"):
+        pair = combined_pairs.get(category)
+        if pair is None:
+            return unparsed
+        r10, r50 = pair
+        if not (_is_valid_recall(r10) and _is_valid_recall(r50)):
+            return unparsed
+        category_metrics[category] = {"r10": round(r10, 4), "r50": round(r50, 4)}
+
+    # The composition/correction splits are kept beside the combined result, never merged into it.
+    for variant in ("__composition", "__correction"):
+        for category in ("dress", "shirt", "toptee"):
+            pair = combined_pairs.get(f"{category}{variant}")
+            if pair and _is_valid_recall(pair[0]) and _is_valid_recall(pair[1]):
+                category_metrics[f"{category}{variant}"] = {"r10": round(pair[0], 4),
+                                                            "r50": round(pair[1], 4)}
+
+    macro_r10 = sum(category_metrics[c]["r10"] for c in ("dress", "shirt", "toptee")) / 3.0
+    macro_r50 = sum(category_metrics[c]["r50"] for c in ("dress", "shirt", "toptee")) / 3.0
+    macro_mean = (macro_r10 + macro_r50) / 2.0
+
+    declared = re.search(r"\[comb_avg\]\s*:\s*([0-9.eE+-]+)", stdout_text)
+    if declared and abs(float(declared.group(1)) * 100.0 - macro_mean) > 0.5:
+        # A cancellation reveals itself here: with every cell multiplied once, the mean of the six is
+        # the macro mean, so a mismatch means the stream was misread or the run was partial.
+        return unparsed
+
+    observed = {"r10": round(macro_r10, 4), "r50": round(macro_r50, 4), "mean": round(macro_mean, 4)}
+    return MetricExtractionResult(
+        extraction_status="EXTRACTED_VERIFIED",
+        parser_id=parser_id,
+        parser_version=1,
+        observed_metrics=observed,
+        category_metrics=category_metrics,
+        parity_status=_check_parity(observed, paper_metrics),
+        metric_source="stdout",
+        raw_output={"branch": "combined"},
+    )
+
 def parse_combiner_output(stdout_text: str, paper_metrics: dict[str, float | None] | None = None) -> MetricExtractionResult:
     """Parse the `name = value` recall lines CLIP4Cir's src/validate.py prints for FashionIQ.
 
@@ -679,6 +797,8 @@ def extract_aggregate_metrics(
         return parse_csmcir_output(stdout_text, paper_metrics)
     if model_id in ("combiner_rn50x4_noft", "clip4cir_rn50x4_fullft"):
         return parse_combiner_output(stdout_text, paper_metrics)
+    if model_id == "dcnet":
+        return parse_dcnet_output(stdout_text, paper_metrics)
     if model_id == "hint":
         return parse_hint_output(stdout_text, paper_metrics)
     if model_id in _WORKBENCH_REPLAY_PARSED_MODELS:

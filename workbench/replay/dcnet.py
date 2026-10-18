@@ -29,6 +29,46 @@ def validate_source(source_root: Path) -> list[str]:
     return [] if ok else [f"DCNet source pin invalid: {reason}"]
 
 
+def validate_dataset_binding(checkpoint_root: Path, dataset_root: Path) -> list[str]:
+    """The evaluator opens the data root its own config names, not the one the caller passed.
+
+    `test.py --resume <run_dir>` reads `<run_dir>/config.json`, and the native loaders take their
+    path from `data_loader.args.data_dir` (`parse_config.py:18-28`), which the shipped configs set to
+    the relative literal `dataset/fashioniq`. That literal resolves against the evaluator's CWD, so a
+    run can pass every other check and still read a *different* tree than the one whose provenance was
+    verified — silently, because nothing compares the two.
+
+    This reports the mismatch instead of editing the author's config: the declaration stays as
+    published, and the operator is told exactly which path the evaluator will open and what to do.
+    """
+    blockers: list[str] = []
+    config_file = checkpoint_root / "config.json"
+    if not config_file.is_file() or config_file.stat().st_size == 0:
+        return blockers  # already reported by validate_run_directory
+    try:
+        config = json.loads(config_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        blockers.append(f"DCNet config unreadable: {config_file}: {error}")
+        return blockers
+
+    declared = (config.get("data_loader") or {}).get("args", {}).get("data_dir")
+    if not declared:
+        blockers.append(
+            f"DCNet config declares no data_loader.args.data_dir: {config_file}. The evaluator "
+            "resolves its dataset from that field, so the tree it reads cannot be verified.")
+        return blockers
+
+    declared_path = Path(declared)
+    if not declared_path.is_absolute():
+        # Relative literals resolve against the CWD the evaluator runs in, which is the source
+        # checkout (the adapter launches `test.py` from there).
+        blockers.append(
+            f"DCNet config data_dir is a relative path ({declared!r}), so the evaluator reads it "
+            f"relative to its own working directory, not the --dataset-root {dataset_root} the "
+            "operator passed. Bind it absolutely (or run the evaluator from the directory the "
+            "literal was written for) before trusting which tree was evaluated.")
+    return blockers
+
 def validate_run_directory(checkpoint_root: Path) -> list[str]:
     blockers: list[str] = []
     if not checkpoint_root.is_dir():
@@ -71,6 +111,7 @@ def preflight(
     return (
         validate_source(source_root)
         + validate_run_directory(checkpoint_root)
+        + validate_dataset_binding(checkpoint_root, dataset_root)
         + validate_dataset(dataset_root, categories)
     )
 

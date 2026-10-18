@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from workbench.backend.adapters.base import EvalRequest, ModelAdapter
+from workbench.backend.errors import WorkbenchError
 from workbench.backend.registry import checkpoint_path, checkpoint_member_root
 from workbench.backend import runtime as _runtime
 
@@ -232,9 +233,23 @@ class SPRCAdapter(OfficialScriptAdapter):
         choice is a SCIENTIFIC VARIANT and is derived from the selected checkpoint rather than assumed:
         a `_vitl` checkpoint must not be run under the ViT-g backbone.
         """
-        # `checkpoint` here is the RESOLVED PATH (`build_command` passes `checkpoint_path(...)`), so
-        # the variant is read from the filename the registry resolved rather than from a record dict.
-        backbone = "pretrain_vitL" if "vitl" in Path(checkpoint).name.lower() else "pretrain"
+        # The encoder comes from the DECLARED variant, not from the filename. `command()` receives
+        # the resolved path, so the declaration is looked up by the request's checkpoint id: the
+        # registry now states `backbone` per variant. Inferring from a substring was unsafe because
+        # `blip_validate.py:49` loads with `strict=False`, so a rename could silently switch the
+        # architecture from ViT-g to ViT-L and evaluate a partly-initialised model without raising.
+        declared = next((variant.get("backbone")
+                         for variant in self.model.get("checkpoint_variants") or []
+                         if variant.get("checkpoint_id") == request.checkpoint_id), None)
+        if declared is None:
+            # No declared backbone for this selection: refuse to guess. A wrong encoder is a silently
+            # different experiment, which is worse than a blocked command.
+            raise WorkbenchError(
+                "checkpoint_backbone_undeclared",
+                "SPRC selects its vision encoder from --backbone and loads with strict=False; the "
+                "selected checkpoint declares no backbone, so the encoder cannot be chosen safely.",
+                {"model_id": self.model_id, "checkpoint_id": request.checkpoint_id})
+        backbone = declared
         return [
             _runtime.python_executable(self.model),
             str(source / self.script),

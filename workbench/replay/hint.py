@@ -98,6 +98,18 @@ def validate_dataset(dataset_root: Path, categories: tuple[str, ...] = CATEGORIE
                 blockers.append(f"HINT dataset input missing: {dataset_root / relative}")
         if not (dataset_root / "resized_image" / category).is_dir():
             blockers.append(f"HINT dataset input missing: {dataset_root / 'resized_image' / category}")
+        # `datasets.py` builds a FRESH cache with `train_init_process`, which opens
+        # `cap.<category>.train.json` and the correction dictionary for all three categories BEFORE
+        # reading any validation file (`train_init_process` at :59-73, called from `__init__`).
+        # `isolated_cache_root` gives that constructor an empty temp root every run, so a cache in the
+        # canonical root does NOT satisfy it: without the train captions the constructor raises
+        # FileNotFoundError at dataset construction, long after an expensive model load.
+        for relative in (
+            f"captions/cap.{category}.train.json",
+            f"captions/correction_dict_{category}.json",
+        ):
+            if not (dataset_root / relative).is_file():
+                blockers.append(f"{'HINT'} dataset input missing: {dataset_root / relative}")
     return blockers
 
 

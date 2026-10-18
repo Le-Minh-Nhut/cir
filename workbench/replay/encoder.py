@@ -99,6 +99,18 @@ def validate_dataset(dataset_root: Path, categories: tuple[str, ...] = CATEGORIE
         cat_resized = dataset_root / "resized_image" / category
         if not cat_resized.is_dir():
             blockers.append(f"ENCODER dataset input missing: {cat_resized}")
+        # `datasets.py` builds a FRESH cache with `train_init_process`, which opens
+        # `cap.<category>.train.json` and the correction dictionary for all three categories BEFORE
+        # reading any validation file (`train_init_process` at :59-73, called from `__init__`).
+        # `isolated_cache_root` gives that constructor an empty temp root every run, so a cache in the
+        # canonical root does NOT satisfy it: without the train captions the constructor raises
+        # FileNotFoundError at dataset construction, long after an expensive model load.
+        for relative in (
+            f"captions/cap.{category}.train.json",
+            f"captions/correction_dict_{category}.json",
+        ):
+            if not (dataset_root / relative).is_file():
+                blockers.append(f"{'ENCODER'} dataset input missing: {dataset_root / relative}")
     return blockers
 
 
@@ -162,7 +174,26 @@ def evaluate_categories(
 
     ckpt_data = torch.load(checkpoint_path, map_location="cpu")
     if isinstance(ckpt_data, dict):
-        encoder_model.load_state_dict(ckpt_data, strict=False)
+        # `strict=False` is upstream's choice and it is kept, but its RESULT is no longer discarded:
+        # a checkpoint wrapped in the wrong schema loads nothing and `load_state_dict` returns
+        # normally, so the wrapper used to evaluate a randomly-initialised model and print plausible
+        # Recall. Two checks make that impossible to miss:
+        #
+        #   * the module's own parameter set must be covered. The author's file is a flat
+        #     `OrderedDict` of `loss_T`/`local_weight`/`backbone.*` entries (verified from the
+        #     checkpoint's `fashioniq/data.pkl` header), i.e. a full state_dict, so every parameter
+        #     the model declares should be present.
+        #   * `loss_T` is the training temperature and is not part of the module's forward path, so
+        #     the author's file legitimately carries that one extra entry.
+        report = encoder_model.load_state_dict(ckpt_data, strict=False)
+        missing = [key for key in getattr(report, "missing_keys", [])]
+        unexpected = [key for key in getattr(report, "unexpected_keys", []) if key != "loss_T"]
+        if missing or unexpected:
+            raise ValueError(
+                "ENCODER checkpoint does not match the model: "
+                f"{len(missing)} missing parameter(s) (first: {missing[0] if missing else '-'}), "
+                f"{len(unexpected)} unexpected key(s) (first: {unexpected[0] if unexpected else '-'}). "
+                "Refusing to evaluate a partially-loaded model.")
     else:
         encoder_model = ckpt_data
 
