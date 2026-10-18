@@ -340,6 +340,129 @@ code, two were real gaps in the audit surface, one was a false claim in a summar
 
 ---
 
+## PC-handoff pass — A-series and the 16-model reassessment
+
+Four release defects were confirmed and fixed; one independent review then found a defect **in those
+fixes**; the LIMN audit found three more first-party defects. All are listed with the reproduction
+that establishes each.
+
+### A-01 — the handoff checked out a superseded tree
+
+* **Confirmed.** `PC_PILOT_HANDOFF.md` said `git checkout 4b32063` and "SHA ĐÃ KIỂM THỬ: `4b32063`",
+  while every gate in the current pass ran on `11ba3df`; the verdict named a `TESTED_SOURCE_SHA` that
+  had been superseded twice. Following the document installs code predating the fixes the same page
+  describes.
+* **Fix**: both name `11ba3df`; the branch tip is distinguished from the immutable release SHA.
+* **Regression**: `test_no_release_document_points_at_a_superseded_source_sha` — the checkout target
+  must be an ancestor of the tested source, which must be an ancestor of HEAD. Negative control:
+  restoring `git checkout 4b32063` fails the test.
+
+### A-02 — execution authentication reported as scientific certification
+
+* **Confirmed.** An aggregate-only run whose ledger authenticates the invocation but whose completion
+  proof is gone printed `AGGREGATE_ONLY_VERIFIED` and exited **0**. The two claims are different: the
+  ledger says the call happened and wrote these bytes; certification says the proof validated and the
+  numbers reproduce from the run's own output.
+* **Fix**: a distinct state, `AGGREGATE_ONLY_EXECUTION_AUTHENTICATED_PROOF_UNAVAILABLE`, and exit **7**.
+* **Regression**: three cases — the token, the exit code, and a positive control that a complete proof
+  still reaches `AGGREGATE_ONLY_VERIFIED` with exit 0.
+
+### A-03 — an unreadable registry became "this model needs no per-query evidence"
+
+* **Confirmed.** The capability was read from `/api/models` into a shell variable; HTTP error, timeout,
+  malformed body, absent model and absent key all collapsed to an empty string, which the gate read as
+  an authoritative aggregate-only declaration. An API outage must not become a scientific statement
+  about a model.
+* **Fix**: three named states — `REGISTRY_CONFIRMED_PER_QUERY`, `REGISTRY_CONFIRMED_AGGREGATE_ONLY`,
+  `REGISTRY_UNKNOWN` — and UNKNOWN is refused at its own stage.
+* **Regression**: four inputs refused at the gate level, plus an end-to-end case proving an unreadable
+  registry never reaches a success claim.
+
+### A-04 — the refusal reason was deleted before it was printed
+
+* **Confirmed.** The failure branch ran `cat`, then `rm`, then `cat` again **inside the `fail_stage`
+  argument**, so the operator received the refusal with an empty reason field. This was directly
+  observable in this pass's own earlier runs.
+* **Fix**: the text is captured before cleanup; the visible line and the failure detail both use it.
+
+### A-05 — `--verify-only` described as verifying a run
+
+* **Confirmed.** `FINAL_PC_RELEASE_VERDICT.md` said it "re-runs verification against an existing run".
+  It is a GPU runtime probe and nothing else.
+* **Fix**: the sentence is corrected and `test_no_release_document_describes_verify_only_as_verifying_a_run`
+  refuses that claim in any release document. Negative control: reinserting the sentence fails.
+
+### A-06 — trust model: what is enforced vs what is assumed
+
+* **Confirmed as a documentation gap**, and the enforcement turned out to be stronger than assumed.
+  Verified by calling the real functions: a checkout with one modified file is refused
+  (`source checkout is dirty: README.md`); a checkout whose recorded pin differs from its `HEAD` is
+  refused (`source pin mismatch: expected 0000…, found 65fa78ea…`); the pinned clean checkout is
+  accepted. One digest-checked `approved_source_patches` entry is permitted per model.
+* **Fix**: the runbook now separates what is enforced (pin, cleanliness, one approved patch, checkpoint
+  digests) from what is not (no OS isolation between evaluator and signer), with the verification
+  commands recorded.
+
+### F-1 — the fix for A-02 contradicted itself (found by independent review)
+
+* **Confirmed.** The exit-7 summary printed "LƯỢT GỌI ĐÃ ĐƯỢC XÁC THỰC — CHƯA PHẢI BẰNG CHỨNG ĐÃ
+  CHỨNG THỰC" and then, two lines later, "Bằng chứng tổng hợp: **đã chứng thực**". A report that
+  contradicts itself cannot be trusted about itself — the same defect class as F-11.
+* **Fix**: the evidence line branches on the same condition as the conclusion.
+* **Regression**: the exit-7 test asserts both the conclusion and the refusal of the certified-evidence
+  phrasing.
+
+### F-2 — predictable temp file names
+
+* **Confirmed as hardening.** `/tmp/cir_verify_msg.$$` was PID-derived and therefore guessable in a
+  shared temp directory.
+* **Fix**: `mktemp`, and the state file is now removed after its last reader instead of being left
+  behind on the success path.
+
+### F-4 — a development certificate counted as a certified research result
+
+* **Confirmed.** `isCertifiedAggregate` read `certified && is_research_evidence` and ignored
+  `development_mode`. Under a development certificate the API relaxes the **execution** question
+  because there is no evaluator-written proof to validate; the receipt still says `certified` when the
+  verifier's metric rules pass. The dashboard banner therefore claimed certified results for runs whose
+  proof was never checked.
+* **Fix**: the frontend excludes `development_mode`/`certification_mode == "development"`.
+* **Regression**: executed through the shipping module with receipts shaped exactly as
+  `_development_certification` returns them — 2 aggregates, 1 certified.
+
+### 9.2 — the per-query artifact recorded a self-declared bundle identity
+
+* **Confirmed** by the LIMN audit and by reading `limn_publish.py:76-85`: the recorded
+  `checkpoint_bundle` / `checkpoint_sha256` came straight from the payload, and nothing compared them
+  with the plan. The *evaluated* weights were safe (both loaders hash every member, and the aggregate
+  path is bound by the completion proof); the **recorded identity** was not.
+* **Fix**: the parent passes `--planned-bundle-manifest-digest` (the same value the report records) and
+  the publisher refuses a payload whose staged members disagree — checked **before** the payload is
+  interpreted, because which bundle ran is a property of the run, not of whether the payload parses.
+* **Verified**: a disagreeing payload is refused by name; the agreeing shape passes the check and
+  fails later on its own merits.
+
+### 9.3 — the reserved `dev-` prefix decided data classification
+
+* **Confirmed** by reading `limn_publish.py:118` and `limn_export.py:136`: an operator-supplied
+  `dev-…` run id was accepted by `validate_run_id` and then silently relabelled `mock`. A naming
+  mistake should not decide whether a run is evidence.
+* **Fix**: `validate_run_id` refuses the reserved prefix by name; a caller who wants a development
+  artifact omits the id.
+* **Regression**: refused with a named reason; the orchestrator's generated identity is accepted
+  unchanged.
+
+### 9.6 — a provisioned environment that installs and then cannot load
+
+* **Confirmed** by execution: `workbench/artifacts/environments/cir-1bbd9872cf166f0d/bin/python -c
+  "import torch"` fails with `libtorch_cpu.so: cannot enable executable stack` on this host's kernel.
+\* **Classified, not code-fixed**: this is `FIRST_PARTY_ENVIRONMENT_CONFIGURATION` +
+  `LEGACY_RUNTIME_INCOMPATIBILITY`. The authors' own pin is `torch 1.12.1`, whose Linux wheel requires
+  an executable stack; the declared `adapted_runtime` (cu128) is the sanctioned path. The action is on
+  the environment report's readiness decision, not on the model.
+
+---
+
 ## Rejected findings
 
 | Allegation | Why it is wrong |

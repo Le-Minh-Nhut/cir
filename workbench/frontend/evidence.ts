@@ -38,6 +38,10 @@ export interface EvidenceBenchmarkRun {
     is_research_evidence?: boolean | null;
     execution_authenticated?: boolean | null;
     state?: string | null;
+    /** The policy that judged this report. `development` means the completion proof was NOT
+     *  validated, so the receipt is an execution-level answer and not a research certification. */
+    certification_mode?: string | null;
+    development_mode?: boolean | null;
   } | null;
 }
 
@@ -85,7 +89,14 @@ function isSyntheticAggregate(run: EvidenceBenchmarkRun): boolean {
 }
 
 function isCertifiedAggregate(run: EvidenceBenchmarkRun): boolean {
-  return run?.verification?.certified === true && run?.verification?.is_research_evidence === true;
+  // `certified` is necessary and not sufficient: under a development certificate the API returns a
+  // receipt whose execution question was relaxed because there was no evaluator-written proof to
+  // validate, and a report judged that way is an execution record, not a research result. Counting
+  // it as one made the dashboard banner claim certified results for runs whose proof was never
+  // checked -- the exact claim this module exists to keep honest.
+  const receipt = run?.verification;
+  if (receipt?.certified !== true || receipt?.is_research_evidence !== true) return false;
+  return receipt?.development_mode !== true && receipt?.certification_mode !== "development";
 }
 
 export function evidenceState(runs: EvidenceRun[] | null | undefined,

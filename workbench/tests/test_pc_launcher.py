@@ -50,7 +50,7 @@ def _make_safe_path(bin_dir: Path, omit_tools: set[str] | None = None) -> str:
         "chmod", "cp", "mkdir", "rm", "sleep", "printf", "echo", "dirname",
         "basename", "uname", "cut", "tr", "head", "tail", "wc", "sort",
         "uniq", "find", "test", "expr", "env", "which", "id", "stat", "date",
-        "xargs"
+        "xargs", "mktemp"
     ]
     for tool in needed_tools:
         if tool in omits:
@@ -2536,6 +2536,12 @@ def test_the_summary_exits_seven_for_an_authenticated_but_unverified_aggregate_r
     assert proc.returncode == 7, f"{proc.returncode}\n{proc.stdout}"
     assert "CHƯA CHỨNG THỰC KHOA HỌC" in proc.stdout, proc.stdout
     assert "KẾT LUẬN: SẴN SÀNG CHO PILOT" not in proc.stdout, proc.stdout
+    # F-1: the report must not contradict itself. The evidence line said "aggregate evidence:
+    # certified" two lines under a conclusion that said the science was NOT certified.
+    assert "Bằng chứng tổng hợp: đã chứng thực" not in proc.stdout, (
+        "the summary claims certified aggregate evidence for an uncertified run:\n" + proc.stdout)
+    assert "Bằng chứng tổng hợp: LƯỢT GỌI đã được sổ cái xác thực; khoa học CHƯA được chứng thực." \
+        in proc.stdout, proc.stdout
 
 
 def test_the_summary_exits_zero_for_a_verified_aggregate_only_run():

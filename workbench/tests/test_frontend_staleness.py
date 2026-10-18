@@ -209,3 +209,53 @@ def test_availability_claims_are_derived_from_the_selection_not_from_a_global_co
     # empty table next to a Jaccard matrix that also has no input.
     assert app.count("aggregate-only models hold none by design") == 2, (
         "both Failure Analytics and the failure pages must explain an empty result")
+
+
+def test_a_development_certificate_is_not_counted_as_a_certified_result() -> None:
+    """F-4 — `certified: true` is necessary and not sufficient.
+
+    Under a development certificate the API relaxes the EXECUTION question because there is no
+    evaluator-written proof to validate; the receipt still says `certified` when the verifier's own
+    metric and evidence-kind rules pass. A report judged that way is an execution record, not a
+    research result, and counting it made the dashboard banner claim certified results for runs whose
+    proof was never checked.
+
+    Executed through the shipping module, with receipts shaped exactly as `_development_certification`
+    returns them (`workbench/backend/main.py:563-565`).
+    """
+    import json as _json
+    import subprocess as _subprocess
+
+    program = FRONTEND / "evidence.ts"
+    compiled = Path("/tmp/cir_evidence_check")
+    compiled.mkdir(exist_ok=True)
+    emitted = _subprocess.run(
+        ["npx", "tsc", "evidence.ts", "--ignoreConfig", "--outDir", str(compiled),
+         "--module", "esnext", "--target", "es2022", "--moduleResolution", "bundler"],
+        cwd=FRONTEND, capture_output=True, text=True, timeout=180)
+    if emitted.returncode != 0:
+        pytest.skip(f"tsc unavailable for the pure module: {emitted.stderr[-200:]}")
+
+    server = compiled / "evidence.js"
+    assert server.is_file(), "the module did not compile"
+
+    development = {"run_id": "r", "verification": {
+        "certified": True, "is_research_evidence": True, "execution_authenticated": True,
+        "state": "certified", "certification_mode": "development", "development_mode": True}}
+    deployed = {"run_id": "r", "verification": {
+        "certified": True, "is_research_evidence": True, "execution_authenticated": True,
+        "state": "certified", "certification_mode": "deployment", "development_mode": False}}
+
+    script = f"""
+import {{evidenceState}} from {_json.dumps(str(server))};
+const state = evidenceState([], [{_json.dumps(development)}, {_json.dumps(deployed)}]);
+console.log(JSON.stringify({{aggregates: state.aggregateRuns, certified: state.certifiedAggregates}}));
+"""
+    result = _subprocess.run(["node", "--input-type=module", "-e", script],
+                             capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr
+    counts = _json.loads(result.stdout)
+    assert counts["aggregates"] == 2, counts
+    assert counts["certified"] == 1, (
+        "the development-certified report was counted as a certified research result: "
+        f"{counts}")

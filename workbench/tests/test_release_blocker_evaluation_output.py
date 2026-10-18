@@ -1650,3 +1650,23 @@ def test_the_evaluator_child_gets_no_operator_secrets_and_a_private_temp_dir(
     assert Path(reported["tmpdir"]) == run_temp
     assert run_temp.stat().st_mode & 0o777 == 0o700
     assert environment["TMPDIR"] == str(run_temp)
+
+
+def test_a_run_id_may_not_claim_the_reserved_development_prefix() -> None:
+    """9.3 — the `dev-` prefix is what MAKES an artifact development data.
+
+    `limn_export` derives `dev-…` when it is given no identity, and `limn_publish` reads the prefix
+    back to choose `data_kind`. An operator-supplied `dev-…` was therefore accepted and silently
+    relabelled as development data, so a naming mistake decided the classification of a real run.
+    A caller who wants a development artifact omits the id; passing one that looks like one is now
+    refused by name.
+    """
+    import workbench.scripts.evaluate_models as em
+
+    with pytest.raises(ValueError) as rejected:
+        em.validate_run_id("dev-limn-base_iter0_all_categories-fashioniq_val_split")
+    assert "reserved development prefix" in str(rejected.value), rejected.value
+
+    # The positive control: the identity the orchestrator generates is accepted unchanged.
+    generated = "20261018T101112000000Z_limn_base_iter0_all_categories_deadbeef"
+    assert em.validate_run_id(generated) == generated

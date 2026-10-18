@@ -90,6 +90,12 @@ def observation_payload(observed: list[ObservedCategory], mismatches: dict[str, 
         "run_id": run_id,
         "top_k": top_k,
         "upstream_commit": MODEL["upstream_commit_sha"],
+        # The digest the ORCHESTRATOR computed over the members it will evaluate. The publisher
+        # compares it with the members this payload staged, so a per-query artifact cannot record a
+        # bundle identity that disagrees with the aggregate run's. The observer does not compute this
+        # value; it only carries the parent's, exactly as it carries the command and environment
+        # digests.
+        "planned_bundle_manifest_digest": planned_bundle_manifest_digest,
         "checkpoint_members": {
             category: {"filename": LIMN_CHECKPOINTS[category]["filename"],
                        "checkpoint_id": LIMN_CHECKPOINTS[category]["checkpoint_id"],
@@ -106,6 +112,7 @@ def observation_payload(observed: list[ObservedCategory], mismatches: dict[str, 
 def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results_root: Path,
            top_k: int = DEFAULT_TOP_K, run_id: str | None = None,
            command_digest: str | None = None, environment_digest: str | None = None,
+           planned_bundle_manifest_digest: str | None = None,
            runtime_adaptation: str | None = None) -> int:
     """OBSERVE the per-query rankings and write a plain-JSON payload for the parent to publish.
 
@@ -137,6 +144,7 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
     payload = observation_payload(observed, mismatches, run_id=identity, top_k=top_k)
     payload["command_digest"] = command_digest
     payload["environment_digest"] = environment_digest
+    payload["planned_bundle_manifest_digest"] = planned_bundle_manifest_digest
     payload["runtime_adaptation"] = runtime_adaptation
 
     results_root.mkdir(parents=True, exist_ok=True)
@@ -174,12 +182,18 @@ def main(argv: list[str] | None = None) -> int:
                         help="the invocation's environment digest, as recorded by the orchestrator")
     parser.add_argument("--runtime-adaptation", default=None,
                         help="the declared runtime adaptation this run executed under")
+    parser.add_argument("--planned-bundle-manifest-digest", default=None,
+                        help="the bundle digest the ORCHESTRATOR computed over the members it will "
+                             "evaluate; the publisher refuses a payload whose staged members do not "
+                             "match it, so a per-query artifact cannot record a different bundle "
+                             "than the aggregate run it belongs to")
     args = parser.parse_args(argv)
     return export(args.checkpoint_root, args.dataset_root, args.source_root,
                   args.results_root, top_k=args.top_k, run_id=args.run_id,
                   command_digest=args.command_digest,
                   environment_digest=args.environment_digest,
-                  runtime_adaptation=args.runtime_adaptation)
+                  runtime_adaptation=args.runtime_adaptation,
+                  planned_bundle_manifest_digest=args.planned_bundle_manifest_digest)
 
 
 if __name__ == "__main__":

@@ -1059,14 +1059,26 @@ def validate_run_manifest(plan: EvaluationPlan, proof_path: Path, *, run_id: str
 
 
 def validate_run_id(run_id: str) -> str:
-    """Reject a run identity that could name a path outside the artifact root.
+    """Reject a run identity that could name a path outside the artifact root, or that claims to be
+    a development run.
 
-    Run ids come from the orchestrator (or, in tests, from a caller), so they are
-    validated at the entry point rather than trusted: a separator or a parent
-    reference would let a run write outside ``workbench/artifacts``.
+    Run ids come from the orchestrator (or, in tests, from a caller), so they are validated at the
+    entry point rather than trusted: a separator or a parent reference would let a run write outside
+    ``workbench/artifacts``.
+
+    The ``dev-`` prefix is reserved for a run that deliberately has NO orchestrator identity, and it
+    is what makes an artifact development data instead of an experiment. An operator-supplied
+    ``dev-...`` id used to be accepted here and then silently RELABELLED as a development run further
+    down, which turns a naming mistake into a data-classification decision. A caller that wants a
+    development artifact simply omits ``run_id``; passing one that looks like a development id is
+    refused by name.
     """
     if not run_id or any(char in run_id for char in ("/", "\\", "\0")) or ".." in run_id:
         raise ValueError(f"unsafe run id: {run_id!r}")
+    if run_id.startswith("dev-"):
+        raise ValueError(
+            f"a run id may not use the reserved development prefix: {run_id!r}; omit the run id to "
+            "record a development artifact, or pass the identity the orchestrator generated")
     return run_id
 
 
@@ -1672,6 +1684,12 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     adaptation = (getattr(plan, "variant_provenance", None) or {}).get("adapted_runtime")
     if isinstance(adaptation, dict) and adaptation.get("runtime_adaptation"):
         argv += ["--runtime-adaptation", str(adaptation["runtime_adaptation"])]
+    # The digest over the members THIS run will evaluate, recomputed exactly as the report records
+    # it. The publisher compares the observer's staged members against it, so the per-query artifact
+    # and the aggregate report cannot disagree about which bundle was evaluated.
+    planned_digest = plan.bundle_manifest_digest or manifest_digest(_plan_members(plan))
+    if planned_digest:
+        argv += ["--planned-bundle-manifest-digest", str(planned_digest)]
     try:
         completed = subprocess.run(argv, cwd=str(plan.cwd), env=child_env, text=True,
                                    capture_output=True, timeout=3600)

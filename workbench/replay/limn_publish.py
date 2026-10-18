@@ -68,12 +68,28 @@ def _observed_categories(payload: dict) -> list[ObservedCategory]:
 
 def publish_payload(path: Path, results_root: Path) -> Path:
     """Publish the staged payload. Refuses on a parity mismatch, as the artifact contract requires."""
+    # The bundle identity the artifact records must describe the SAME members the orchestrator
+    # planned and whose bytes were hashed before loading. The payload carries them, so a payload that
+    # disagrees with the plan would otherwise publish an artifact whose recorded bundle identity is
+    # self-declared -- and nothing downstream compares the per-query artifact's digest with the
+    # aggregate report's. A disagreement is refused rather than recorded, and it is checked FIRST:
+    # which bundle ran is a property of the run, not of whether the payload happens to parse.
     payload = load_payload(path)
+    members = payload.get("checkpoint_members") or {}
+    planned_digest = payload.get("planned_bundle_manifest_digest")
+    if planned_digest:
+        from workbench.scripts.evaluate_models import manifest_digest as _manifest_digest
+
+        staged_digest = _manifest_digest(members) if members else None
+        if staged_digest != planned_digest:
+            raise PayloadError(
+                "the observer staged a checkpoint bundle whose digest does not match the plan's: "
+                f"staged={staged_digest} planned={planned_digest}; a per-query artifact must record "
+                "the members the aggregate run actually evaluated")
+
     mismatches = {name: tuple(items)
                   for name, items in (payload.get("instrumentation_mismatches") or {}).items()}
     observed = _observed_categories(payload)
-
-    members = payload.get("checkpoint_members") or {}
     category_checkpoint_ids = {category: member.get("checkpoint_id")
                                for category, member in members.items()}
     # The evaluator computes the SAME digest for the same bundle from its own manifest. A second

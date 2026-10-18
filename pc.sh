@@ -1782,7 +1782,9 @@ else:
 # leaves the rebuild to `rebuild_and_verify_index`.
 verify_gate() { # verify_gate VERIFY_OUT VERIFY_RC MODEL CHECKPOINT PROTOCOL RUN_ID PROOF_UNAVAILABLE REPORT_PATH HOST_ARTIFACTS
     local verify_out="$1" verify_rc="$2" model="$3" checkpoint="$4" protocol="$5" run_id="$6"
-    VERIFY_GATE_STATE="${TMPDIR:-/tmp}/cir_verify_state.$$"
+    # The caller owns the temp path and passes it in: it creates one with `mktemp`, so the file the
+    # gate writes is the file the summary reads, and neither name is guessable in a shared /tmp.
+    VERIFY_GATE_STATE="${VERIFY_STATE_FILE:-${TMPDIR:-/tmp}/cir_verify_state.$$}"
     python3 - "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" \
              "${7:-0}" "${8:-}" "$VERIFY_GATE_STATE" "${9:-}" <<'PYGATE'
 #!/usr/bin/env python3
@@ -1962,10 +1964,14 @@ for line in reversed(out.strip().splitlines()):
     local host_artifacts
     host_artifacts="$(resolve_path "${WORKBENCH_DOCKER_DIR}" "$(env_value HOST_WORKBENCH_ARTIFACTS_ROOT ../../workbench/artifacts)")"
     local verify_state verify_message
-    # No new tool dependency: the launcher's sandbox and the container both have a shell, a PID and
-    # /tmp, and a name derived from the PID is unique for the life of this process.
-    verify_state="${TMPDIR:-/tmp}/cir_verify_state.$$"
-    verify_message="${TMPDIR:-/tmp}/cir_verify_msg.$$"
+    # `mktemp` rather than a name derived from `$$`: a PID-derived path in a shared temp directory is
+    # predictable, so another process can pre-create it as a symlink and redirect either the refusal
+    # text or the state this summary reads. In this deployment the container's /tmp is private and
+    # the worst case is a confusing message, but the file is one line of shell to make unguessable and
+    # there is no reason to leave a predictable name in place.
+    verify_state="$(mktemp "${TMPDIR:-/tmp}/cir_verify_state.XXXXXX")"
+    verify_message="$(mktemp "${TMPDIR:-/tmp}/cir_verify_msg.XXXXXX")"
+    VERIFY_STATE_FILE="$verify_state"
     if ! verify_gate "$verify_out" "$verify_rc" "$model" "$checkpoint" "$protocol" "$run_id" \
             "${FINAL_RUN_PROOF_UNAVAILABLE:-0}" "${FINAL_RUN_REPORT_PATH:-}" "$host_artifacts" >"$verify_message"; then
         # The text is CAPTURED before the file is removed. `cat` the file, `rm` it, then `cat` it
@@ -2114,7 +2120,15 @@ else:
         print("KẾT LUẬN: LƯỢT GỌI ĐÃ ĐƯỢC XÁC THỰC — CHƯA PHẢI BẰNG CHỨNG ĐÃ CHỨNG THỰC (tệp proof không còn).")
     else:
         print("KẾT LUẬN: SẴN SÀNG CHO PILOT (theo khả năng đã khai báo của mô hình).")
-    print("  Bằng chứng tổng hợp: đã chứng thực và API phục vụ được lượt chạy này.")
+    # The evidence line must agree with the conclusion two lines above it. Printing "aggregate
+    # evidence: certified" for a run whose proof is gone made the report contradict itself in the
+    # same breath -- the defect class this summary has been fixed for before, and the reason the
+    # conclusion is computed before anything is printed.
+    if _index_evidence_status == "AGGREGATE_ONLY_EXECUTION_AUTHENTICATED_PROOF_UNAVAILABLE" \
+            or _index_evidence_status.startswith("PROOF_UNAVAILABLE"):
+        print("  Bằng chứng tổng hợp: LƯỢT GỌI đã được sổ cái xác thực; khoa học CHƯA được chứng thực.")
+    else:
+        print("  Bằng chứng tổng hợp: đã chứng thực và API phục vụ được lượt chạy này.")
     if _index_evidence_status == "AGGREGATE_ONLY_EXECUTION_AUTHENTICATED_PROOF_UNAVAILABLE":
         print("  Chỉ mục DuckDB: không có bản ghi per-query (mô hình không có trình quan sát).")
         print("  Xác thực khoa học: CHƯA đạt — không có completion proof để chạy xác thực đầy đủ.")
@@ -2154,6 +2168,8 @@ if per_query_capability and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED":
     # promoted, so the full pilot is not ready and the exit code says so instead of 0.
     sys.exit(4)
 PYDOC
+    # The summary has read it; nothing else consumes the state file.
+    rm -f "$verify_state"
 }
 
 # Main Execution Flow
