@@ -1,5 +1,9 @@
 # Vendored recovery — sixteen model entries, one row each
 
+> **Superseded** by `FINAL_16_MODEL_RECOVERY_STATUS.md`, which carries the per-entry verification
+> levels reached after the delivery defects were closed and the wrappers, parsers and adapters were
+> finished. Kept for the vendoring provenance and the suggestion-disposition record it holds.
+
 **Branch**: `research/cir-failure-workbench`. **Scope**: the upstream source of all sixteen
 registered entries is now vendored as *tracked source* under `workbench/third_party/<source_dir>/`,
 nested Git metadata is removed, the fifteen distinct upstreams are recorded with an exact commit and
@@ -96,7 +100,7 @@ non-LIMN entry is additionally `GPU_VALIDATION_PENDING` on the target 5070 Ti.
 | ENCODER: inspect real CLI args, don't trust README | **ACCEPTED** | flags enumerated from `evaluate_model.py`; adapter's flags match the real parser |
 | PAIR: `MHTransformer_rev` from `MultiHeadAttentionRev` | **ACCEPTED** | reconstruction proven exact (2-line diff); the reverse-attention maths is preserved |
 | PAIR: do not alias reverse→ordinary attention | **ACCEPTED** | reconstruction uses `MultiHeadAttentionRev`, never the ordinary class |
-| HINT: verify `fashioniq.pt`; build a replay wrapper | **ACCEPTED** | Hub file verified (2 724 451 182 B, sha256); replay contract extracted; module reviewed, placement pending |
+| HINT: verify `fashioniq.pt`; build a replay wrapper | **ACCEPTED** | Hub file verified (2 724 451 182 B, sha256 `bf9c72d4…`); `workbench/replay/hint.py` is **placed and wired** (adapter + `hint_native_recall` parser + cache isolation); checkpoint unstaged |
 | HINT: do not rewrite the evaluator | **ACCEPTED** | `test.test()` is called unchanged |
 | CLVC-Net: `load_state_dict_from_url` → `torch.hub` | **ACCEPTED** | same weights URL retained; both imports tried |
 | CLVC-Net: preserve ResNet-50 weights and preprocessing | **ACCEPTED** | URL and transform untouched |
