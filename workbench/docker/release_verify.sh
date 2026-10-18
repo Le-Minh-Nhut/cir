@@ -438,6 +438,12 @@ count="$(grep -o "CAPTION THAY THẾ\|LỆCH PAPER" "${REPO}/workbench/frontend/
 if [[ "$count" != "2" ]]; then j10_bad="${j10_bad}distinct label kinds=${count} (must be exactly 2); "; fi
 if [[ ! -d "${REPO}/workbench/frontend/dist" ]]; then
     j10_bad="${j10_bad}frontend/dist missing (run vite build); "
+elif [[ -n "$(find "${REPO}/workbench/frontend" -maxdepth 1 \( -name '*.ts' -o -name '*.tsx' \) \
+                -newer "${REPO}/workbench/frontend/dist/index.html" -print -quit 2>/dev/null)" ]]; then
+    # Present is not the same as current. A stale bundle is how a fixed source ships an unfixed UI,
+    # and the release verifier used to accept any dist directory that existed. The Docker image
+    # builds the frontend from source, so this checks the OTHER served copy.
+    j10_bad="${j10_bad}frontend/dist is older than its sources (run vite build); "
 elif ! grep -rq "phán quyết audit chuẩn" "${REPO}/workbench/frontend/dist" 2>/dev/null; then
     j10_bad="${j10_bad}built bundle lacks audit-threshold copy; "
 fi

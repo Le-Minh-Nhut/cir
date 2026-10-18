@@ -20,6 +20,14 @@ DOCS = tuple(ROOT / path for path in (
     "workbench/docs/PC_REPRODUCTION_HANDOFF.md",
     "workbench/docs/AUTOMATION_RUNBOOK.md",
     "workbench/README.md",
+    # The two documents the operator is actually handed for the RTX 5070 Ti. They were outside this
+    # audit, and a command that had never been runnable survived in both: `--verify-only` was
+    # documented in remedies for work it does not do, `verify_run.py` was shown without three of
+    # its four required flags, and `limn_export` was shown with a flag it does not accept and
+    # without the publisher stage that makes its output an artifact. None of that is visible
+    # without executing the commands.
+    "workbench/docs/PC_PILOT_HANDOFF.md",
+    "workbench/docs/PC_ONE_COMMAND_GUIDE.vi.md",
 ))
 SCRIPT_DIR = ROOT / "workbench" / "scripts"
 FIXTURE = Path("/fixture")
@@ -147,6 +155,37 @@ def _fixture_config() -> WorkbenchConfig:
                            FIXTURE / "checkpoints", FIXTURE / "results", FIXTURE / "third_party")
 
 
+def test_every_document_in_the_handoff_set_has_run_commands_or_says_why_not() -> None:
+    """The audited set must be the set the operator is handed, not a subset chosen by hand.
+
+    This test exists because the two documents the RTX 5070 Ti operator actually receives were
+    outside the audit, and both contained commands that could not run. A curated `DOCS` tuple is
+    exactly the shape of that defect: adding a document is silent. Everything under
+    `workbench/docs/` that carries a bash block, plus the repository README, must therefore either
+    be audited or be named in `DOCS_EXEMPT` with a reason.
+    """
+    exempt = {
+        "AUTOMATED_DATA_PREPARATION.md", "AUTOPILOT_GUIDE.md", "AUXILIARY_ASSET_AUDIT.md",
+        "COT_OURS2_AUDIT.md", "ENGINEERING_FINAL_ACCEPTANCE.md", "FASHIONIQ_PROTOCOL_PARITY.md",
+        "FINAL_PC_READINESS.md", "FIRST_GPU_EXPERIMENT.md", "LAPTOP_RELEASE_ACCEPTANCE.md",
+        "LEGACY_CLEANUP_AUDIT.md", "LEGACY_REPRODUCTION_RUNBOOK.md", "LEGACY_SOURCE_AUDIT.md",
+        "PC_DOCKER_QUICKSTART.md", "PC_TRANSFER_CHECKLIST.md", "PROTOCOL_AUDIT.md",
+        "READINESS_MATRIX.md", "RESULT_SCHEMA.md", "UPSTREAM_SOURCE_AUDIT.md",
+    }
+    audited = {path.name for path in DOCS}
+    unclassified = []
+    for document in sorted((ROOT / "workbench" / "docs").glob("*.md")):
+        if document.name in audited or document.name in exempt:
+            continue
+        text = document.read_text(encoding="utf-8")
+        if "```bash" in text or "```sh" in text:
+            unclassified.append(document.name)
+    assert not unclassified, (
+        "these documents contain shell blocks but are neither audited nor explicitly exempt: "
+        f"{unclassified}. Add them to DOCS so their commands are executed, or to the exempt set "
+        "with a reason.")
+
+
 def test_every_documented_command_parses_and_pipeline_has_required_authorization(monkeypatch) -> None:
     registry = load_registry()
     model_ids = {model["model_id"] for model in registry["models"]}
@@ -161,9 +200,53 @@ def test_every_documented_command_parses_and_pipeline_has_required_authorization
                 continue
             if tokens[0] in non_cli:
                 continue
+            # `docker exec cir-workbench python3 <script>` is a real command of this deployment,
+            # and pc.sh uses the same form. The container is the only place the ledger key, the
+            # model environments and the canonical results root exist, so a documented verification
+            # has to go through it -- refusing the form would push the documentation back to
+            # commands that cannot work.
+            if tokens[0] == "docker" and "exec" in tokens[:3]:
+                exec_at = tokens.index("exec")
+                inner = tokens[exec_at + 1:]
+                while inner and inner[0].startswith("-") or (inner and inner[0] == "cir-workbench"):
+                    inner = inner[1:]
+                if inner and inner[0].endswith("python3"):
+                    tokens = ["python", *inner[1:]]
+                else:
+                    continue
+            # `curl` and `docker <verb>` are documented operator actions with no Python parser; what
+            # must hold is that the endpoint or subcommand they name is the one the code serves.
+            if tokens[0] == "curl":
+                assert "http://127.0.0.1:8000/api/" in " ".join(tokens), location
+                continue
+            if tokens[0] == "docker" and "exec" not in tokens[:3]:
+                continue
+            if tokens[0] in {"git", "sudo", "ls", "cd", "workbench/docker/run.sh"}:
+                continue
+            if tokens[0] == "./pc.sh":
+                # The launcher's own flags are checked by the launcher suite, against the real
+                # script; here only that the flag the document names exists at all.
+                flags = [token for token in tokens[1:] if token.startswith("--")]
+                help_text = (ROOT / "pc.sh").read_text(encoding="utf-8")
+                for flag in flags:
+                    assert re.search(rf"^\s*{re.escape(flag)}\)", help_text, re.M), \
+                        f"{location}: pc.sh does not accept {flag}"
+                continue
             if tokens[:2] == ["python", "-m"]:
-                assert len(tokens) > 2 and tokens[2] in {"pytest", "compileall"}, location
-                assert importlib.util.find_spec(tokens[2]) is not None, location
+                assert len(tokens) > 2, location
+                module_path = tokens[2]
+                if module_path in {"pytest", "compileall"}:
+                    assert importlib.util.find_spec(module_path) is not None, location
+                    continue
+                # A documented `python -m workbench.<module>` must name a module that exists and
+                # whose flags the module's own parser accepts -- the same check the `workbench/
+                # scripts/*.py` form gets. Skipping it is how `verify_run --run-id` (three required
+                # flags missing) stayed documented.
+                assert module_path.startswith("workbench."), location
+                script = Path(module_path.replace(".", "/") + ".py")
+                assert (ROOT / script).is_file(), f"{location}: no such module {module_path}"
+                namespace = _parse_real_parser(script.stem, tokens[3:], monkeypatch)
+                checked += 1
                 continue
             if tokens[:2] == ["python", "-c"]:
                 assert len(tokens) > 2, location

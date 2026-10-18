@@ -888,13 +888,17 @@ def test_a7_launcher_reuses_ledger_corroborated_run_without_proof_and_queues_whe
 
     # (c-1) Reuses completed run whose proof is gone instead of queueing duplicate
     sandbox1, env1 = setup_sandbox(tmp_path / "reused", with_env=True)
-    env1["MOCK_RUNS_STATUS"] = "corroborated"
+    env1["MOCK_RUNS_STATUS"] = "corroborated_no_proof"
     post_jobs1 = sandbox1 / "post_jobs.log"
     env1["MOCK_POST_JOBS_FILE"] = str(post_jobs1)
-    _create_corroborated_run(sandbox1, "run_limn_corr_01", omit_proof=True)
+    # The proof is gone and the per-query artifact was never published. That combination has ONE
+    # exit code, and it is 3 -- "TỔNG HỢP ĐẠT — PILOT ĐẦY ĐỦ CHƯA SẴN SÀNG", the documented outcome
+    # for a declared observer with no artifact. The assertion that matters here is the FIRST one: a
+    # corroborated run is reused instead of a duplicate job being queued.
+    _create_corroborated_run(sandbox1, "run_limn_corr_01", omit_proof=True, omit_artifact=True)
 
     proc1 = run_pc(sandbox1, [], env1)
-    assert proc1.returncode == 0
+    assert proc1.returncode == 3, proc1.stdout
     assert "Tái sử dụng kết quả có sẵn" in proc1.stdout
     assert "Phát hiện kết quả đánh giá đã hoàn thành và được sổ cái chứng thực" in proc1.stdout
     assert not post_jobs1.exists() or len(post_jobs1.read_text().strip()) == 0

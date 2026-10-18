@@ -243,6 +243,103 @@ the LIMN success path.
 
 ---
 
+## P3 — the stabilization pass after the 16-model audit
+
+A second pass audited the integrated tree again, because the fixes above changed the launcher, the
+API projection and the frontend. Five findings were reported. Two were real defects in production
+code, two were real gaps in the audit surface, one was a false claim in a summary line.
+
+### S-01 — The success gate was unreachable for 15 of the 16 registered models
+
+* **Reported by**: the release task's own defect list (A01), confirmed by an independent trace.
+* **Root cause**: `pc.sh::rebuild_and_verify_index` required the run to appear in `GET /api/runs`
+  with a non-empty `evidence_status`. That endpoint serves the DuckDB index, which is built ONLY from
+  canonical per-query `ResultRun` artifacts — and only LIMN declares an observer, so the other
+  fifteen models never write one. A correct aggregate-only evaluation therefore could not satisfy its
+  own success contract, and the launcher refused a run that was complete for what its model claims.
+* **Fix**: the gate now asks both endpoints and derives the requirement from the run's OWN report,
+  served by `/api/benchmark-runs`: the aggregate report must be present and certified for every
+  model, and the per-query artifact must additionally be `PER_QUERY_VERIFIED` exactly when that
+  report declares a `per_query_capability`. The aggregate-only outcome is named
+  `AGGREGATE_ONLY_VERIFIED` and prints why the index is empty for it.
+* **Regression**: six cases in `test_pc_launcher.py` — aggregate-only positive, unverified per-query,
+  missing per-query artifact, uncertified aggregate report, identity mismatch, and the summary claim.
+
+### S-02 — A stale per-query report could supply another run's per-query state
+
+* **Reported by**: the same trace, as a secondary finding on the path S-01 touched.
+* **Root cause**: `verify_gate` opened the report whose path the verifier's JSON named and read
+  `per_query_capability` / `per_query_state` from it without checking whose report it was. A
+  repointed or stale path would have had one execution's per-query state reported as another's, and
+  `FINAL_RUN_REPORT_PATH` was not initialised on every path into the function.
+* **Fix**: the report's `run_id`, `model_id`, `checkpoint_id` and `protocol_id` are re-checked in the
+  gate against the run it is summarising, and the variable is initialised before use.
+* **Regression**: `test_the_gate_refuses_a_report_file_that_describes_another_run`.
+
+### S-03 — `--verify-only` was recommended for work it does not do
+
+* **Reported by**: an independent audit of every documented operator command.
+* **Root cause**: three `fail_stage` remedies and the operator guides told the reader to run
+  `./pc.sh --verify-only` after an index-rebuild failure, a verification failure and a missing
+  checkpoint. The flag checks the model's GPU runtime and stops: it does not verify a recorded run,
+  does not rebuild the index, and does not download a checkpoint. Two documented commands were also
+  unrunnable as written (`verify_run.py` without its three required flags; `limn_export` with a flag
+  it does not accept and without the publisher stage that turns its payload into an artifact).
+* **Fix**: the remedies now name commands that exist and do that work; both guides gained a
+  step-by-step section whose commands are executed by the audit below; `--help` states what the flag
+  does not do.
+* **Regression**: `test_handoff_commands.py` now audits both operator documents, parses
+  `python -m workbench.<module>` invocations against the real parsers, and refuses to let a document
+  with shell blocks go unclassified. Verified by restoring the old broken command: the audit fails
+  with `the following arguments are required: --model, --checkpoint, --protocol`.
+
+### S-04 — The frontend could apply a response to state it no longer described
+
+* **Reported by**: the release task's own defect list (A02), confirmed in a real browser.
+* **Root cause**: the explorer invalidated its query request only when a run was still selected. On a
+  protocol switch to a protocol with NO compatible run, the effect returned before touching the
+  request counter, so the previous protocol's in-flight answer was applied — together with its
+  pagination and its selected query — under the new protocol.
+* **Reproduction**: the real built frontend served against a real HTTP API that delays one response.
+  Switch protocol while the request is in flight: the previous protocol's query rendered under a
+  protocol with `0 compatible runs selected`. After the fix, the same sequence shows nothing, and
+  switching back still populates.
+* **Fix**: the request identity carries the protocol as well as the run (so "valid → empty" is
+  distinguishable from "unchanged"), every family keeps its own counter and its own key, and all four
+  request families consult one pure guard.
+* **Regression**: `test_frontend_staleness.py` executes the guard's enumerated transitions, checks
+  the explorer actually calls it and that no second inline copy of the rule exists, cross-checks the
+  registry's protocols against the selector's, and fails when `frontend/dist` is older than the
+  sources — which is also now a J10 release check.
+
+### S-05 — A completed job without a run identity could inherit another run's evidence
+
+* **Reported by**: the release task's own defect list (A05), confirmed by reading.
+* **Root cause**: when a completed job's own record named no `run_id`, the launcher searched
+  `/api/benchmark-runs` for reports matching model+checkpoint+protocol and took the newest. Those
+  three fields are shared by every execution of the same model, so the summary, the verification, the
+  index gate and the success claim could all be printed for a run the job never produced.
+* **Fix**: the fallback is removed. An unrecoverable identity is a named refusal, and the remedy
+  points at the reuse path that re-verifies a corroborated run instead.
+* **Regression**: `test_a_completed_job_without_its_own_run_id_is_refused_not_guessed`, with a
+  positive control that the same job naming its run still uses exactly that run.
+
+### S-06 — Four fixture files described deployments the producers cannot emit
+
+* **Reported by**: this pass's own failures, once the gate started reading the run's own report.
+* **Root cause**: the launcher fixture's aggregate report declared LIMN's per-query state as
+  `PER_QUERY_VERIFIED` and had no canonical per-query artifact, a combination `evaluate_models.py`
+  cannot write (only the verifier promotes, and only from an artifact-digest receipt); the
+  corroborated-run fixture omitted the two per-query fields entirely, which made a LIMN run look
+  aggregate-only; and the index fixture served `evidence_status` values that disagreed with its own
+  report. Tests that assert against an impossible state cannot catch the defects of the real one.
+* **Fix**: the fixture takes the capability and the state as inputs and writes all of the report,
+  the artifact and its digest from the same condition, so one fixture describes both families; the
+  A7 proof-unavailable deployment now serves the receipt its policy implies.
+* **Regression**: the six S-01 cases and A7 run through it; a mismatch reintroduces the failures.
+
+---
+
 ## Rejected findings
 
 | Allegation | Why it is wrong |

@@ -60,6 +60,7 @@ như tiến trình con, rồi **tự đọc lại bytes** để tính digest —
 | Trạng thái | Nghĩa | Exit code của `./pc.sh` |
 |---|---|---|
 | `CAPABILITY_ABSENT` | model không khai báo observer — **aggregate-only theo thiết kế**, không phải lỗi | 0 |
+| `CAPABILITY_ABSENT_FOR_DIAGNOSTIC` | observer chỉ bao phủ bundle đầy đủ, còn lượt chạy này chủ động chọn MỘT danh mục | 0 |
 | `PER_QUERY_EXPORT_FAILED` | model CÓ khai báo observer và nó không xuất được gì | **3** |
 | `PER_QUERY_EXPORTED_UNVERIFIED` | đã xuất artifact, verifier chưa chứng thực | **4** |
 | `PER_QUERY_VERIFIED` | đã xuất + verifier đã chứng thực | 0 |
@@ -154,11 +155,72 @@ hiển thị 50 ảnh dưới nhãn Top-200. Đổi K chỉ đổi phần hiển
 
 ## 7. Cách xác minh và dựng lại chỉ mục
 
+`--verify-only` **chỉ** kiểm chứng năng lực GPU của môi trường mô hình rồi dừng. Nó **không** xác
+thực một lượt chạy đã có, **không** dựng lại chỉ mục DuckDB, và **không** tải checkpoint. (Trước đây
+một số thông báo lỗi hướng dẫn chạy `--verify-only` cho những việc đó; các thông báo ấy đã được sửa.)
+
+Muốn **xác thực một lượt chạy đã có rồi dựng lại chỉ mục**, chạy chính lệnh thường — nó **tái sử dụng**
+kết quả đã chứng thực thay vì đánh giá lại:
+
 ```bash
-python -m workbench.scripts.validate_results --all --strict-real
-python -m workbench.scripts.verify_run --run-id <run_id>      # verdict của verifier
-# dựng lại chỉ mục: POST /api/index/rebuild, hoặc khởi động backend (tự dựng nếu chỉ mục thiếu)
+./pc.sh                       # nhận diện lượt đã chứng thực -> xác thực -> dựng lại chỉ mục
 ```
+
+Từng bước, chạy trực tiếp trong container:
+
+```bash
+# 1. Kiểm chứng năng lực GPU (hardware/runtime), rồi dừng:
+./pc.sh --verify-only
+
+# 2. Kiểm tra pipeline trên mọi cờ trong pc.sh (không bịa lệnh nào):
+./pc.sh --self-check
+
+# 3. Kiểm chứng runtime GPU bên trong container cho một model cụ thể (lệnh thật của image):
+docker exec cir-workbench python -c \
+  "import sys, workbench.scripts.pipeline as p; sys.exit(p.probe_gpu_capability(sys.argv[1]))" limn
+
+# 4. Verdict của verifier cho MỘT lượt chạy. --model/--checkpoint/--protocol là BẮT BUỘC:
+docker exec cir-workbench python3 workbench/scripts/verify_run.py \
+  --run-id <run_id> --model limn \
+  --checkpoint base_iter0_all_categories --protocol fashioniq_val_split --json
+
+# 5. Kiểm tra mọi artifact canonical trong results root theo schema:
+python -m workbench.scripts.validate_results --all --strict-real
+
+# 6. Dựng lại chỉ mục DuckDB (thay cho việc khởi động lại backend):
+curl -sS -X POST http://127.0.0.1:8000/api/index/rebuild
+```
+
+**Lượt chạy của mô hình aggregate-only** (15/16 model) **không** xuất hiện trong `/api/runs`: chỉ mục
+chỉ chứa bản ghi per-query canonical, mà chỉ LIMN có observer. Lượt chạy của chúng nằm ở
+`/api/benchmark-runs` và hiển thị trong UI ở tab **Models**. Đây là đúng theo thiết kế, không phải lỗi;
+`./pc.sh` báo `AGGREGATE_ONLY_VERIFIED` cho tình huống này và **không** đòi một artifact per-query
+không tồn tại.
+
+**Xác nhận một lượt chạy hiện trên UI**: mở `http://127.0.0.1:${WORKBENCH_FRONTEND_PORT}/` (mặc định
+5173) → tab **Models** (báo cáo tổng hợp, mọi model) và tab **Evaluation Runs** (lượt có per-query).
+Nếu lượt chạy của LIMN không có ở tab Evaluation Runs, chạy lại bước 4 rồi bước 6 ở trên.
+
+## 7b. Ranh giới tin cậy của evaluator (đọc trước khi tin vào "cách ly")
+
+Evaluator mô hình chạy như tiến trình con **cùng UID/GID** với orchestrator, trên **cùng filesystem**
+bind-mount. Những gì đã làm:
+
+* Môi trường của con được **allowlist**, không copy `os.environ`: `WORKBENCH_LEDGER_KEY`,
+  `HF_TOKEN`, `GITHUB_TOKEN`, `OPENAI_API_KEY`, `HOME`, `XDG_*` và `WORKBENCH_SECRET_*` **không** được
+  truyền, nên con không suy ra được đường dẫn khoá ký.
+* Khoá HMAC được hạn chế ở 0600 và ưu tiên `$XDG_CONFIG_HOME/cir/` (trong deployment là `/artifacts/config`).
+
+Những gì **chưa** làm, và không được tuyên bố là đã làm:
+
+* Không có **cách ly OS** (không user riêng, không namespace, không seccomp cho evaluator).
+* Vì cùng UID trên cùng volume, code upstream **có thể đọc mọi tệp mà người vận hành đọc được**,
+  kể cả `/artifacts/config/cir/workbench_ledger_key`.
+
+**Kết luận thẳng thắn**: mô hình tin cậy hiện tại là **(A) code upstream đã ghim và checkpoint đã xác
+minh là TIN CẬY**. Hệ thống không tuyên bố chống được (B) source upstream thù địch hay (C)
+deserialization checkpoint thực thi code. Nếu cần chạy source chưa được review, phải thêm ranh giới thật
+(user OS riêng cho evaluator + signer chạy ở tiến trình tách biệt) trước khi tin vào chứng thực.
 
 ## 8. Trạng thái GPU mong đợi lúc bàn giao
 

@@ -845,6 +845,15 @@ def _gate_fields(report: dict) -> dict:
         "observed_metrics": (report.get("observed_metrics")
                              if isinstance(report.get("observed_metrics"), dict) else None),
         "execution_status": report.get("execution_status"),
+        # The two claims the LAUNCHER needs to tell "this model offered no observer, and that is
+        # the whole of its success contract" apart from "this model declared an observer and the
+        # per-query artifact is missing". The launcher used to require a canonical per-query
+        # `ResultRun` in the DuckDB index for EVERY model, and only LIMN ever writes one -- so a
+        # correct aggregate-only run could not satisfy its own success gate. Serving the
+        # capability here keeps one source of truth: the run's own report.
+        "per_query_capability": report.get("per_query_capability"),
+        "per_query_state": report.get("per_query_state"),
+        "per_query_export_reason": report.get("per_query_export_reason"),
         # A registry-declared synthetic-output model has no published output format; its numbers
         # are evidence of a different kind and the UI must be able to say so.
         "is_synthetic": bool(report.get("is_synthetic")),

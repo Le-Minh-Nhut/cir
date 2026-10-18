@@ -82,6 +82,31 @@ if not url:
 body = ""
 status_code = "200"
 
+# The recorded API surface, served from a directory when `MOCK_API_STATE` names one.
+#
+# The environments below express ONE endpoint at a time, which cannot describe a deployment that
+# holds both artifact families at once -- a per-query run in the DuckDB index and an aggregate-only
+# run beside it. The launcher's index gate has to consult both endpoints together, so the fixtures
+# for those tests are files: `runs.json` and `benchmark-runs.json`, generated from the real
+# producers and served verbatim. A recorded body cannot drift from the schema the way a
+# hand-written `json.dumps` in this shim can.
+_api_state = os.environ.get("MOCK_API_STATE")
+if _api_state:
+    _state_dir = Path(_api_state)
+    for _endpoint, _filename in (("/api/benchmark-runs", "benchmark-runs.json"),
+                                 ("/api/runs", "runs.json")):
+        if _endpoint in url and not url.endswith("/api/runs/gate"):
+            _file = _state_dir / _filename
+            if not _file.exists():
+                sys.stderr.write("curl: mock state has no %s\n" % _filename)
+                sys.exit(7)
+            body = _file.read_text()
+            if has_w:
+                print(f"{body}\n{status_code}")
+            else:
+                print(body)
+            sys.exit(0)
+
 if "/api/models" in url:
     fixtures_dir = Path(__file__).resolve().parent.parent
     models_file = fixtures_dir / "models.json"
@@ -207,6 +232,18 @@ elif url.endswith("/api/jobs") or url.endswith("/api/jobs/"):
                 "return_code": 0,
                 "provenance": {"run_id": "run_limn_corr_01"}
             }])
+        elif job_status == "completed_no_run_id":
+            # A terminal job whose OWN record names no execution identity. The launcher must refuse
+            # rather than search for a report that merely shares its model/checkpoint/protocol.
+            body = json.dumps([{
+                "job_id": "job_limn_new_999",
+                "model_id": "limn",
+                "checkpoint_id": "base_iter0_all_categories",
+                "protocol_id": "fashioniq_val_split",
+                "status": "completed",
+                "return_code": 0,
+                "provenance": {}
+            }])
         elif job_status == "failed":
             body = json.dumps([{
                 "job_id": "job_limn_new_999",
@@ -279,6 +316,16 @@ elif "/api/jobs/" in url:
             "protocol_id": "fashioniq_val_split",
             "status": "queued"
         })
+    elif job_status == "completed_no_run_id":
+        body = json.dumps({
+            "job_id": "job_limn_new_999",
+            "model_id": "limn",
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "status": "completed",
+            "return_code": 0,
+            "provenance": {}
+        })
     else:
         body = json.dumps({
             "job_id": "job_limn_new_999",
@@ -309,6 +356,14 @@ elif "/api/runs" in url:
             }.get(variant, "PER_QUERY_VERIFIED")
         body = json.dumps([row])
     elif os.environ.get("MOCK_RUNS_STATUS") == "corroborated":
+        # The per-query column AFTER the reader promoted it. Two facts pin this value:
+        #   * the run's own report says EXPORTED, never VERIFIED (only the verifier promotes, and
+        #     the promotion lives in the launcher's reader, from the receipt that binds the
+        #     artifact digest); and
+        #   * `pc.sh` cross-checks the reader's conclusion against this column in BOTH directions.
+        # So a coherent deployment that has just been verified serves VERIFIED here while the file
+        # still says EXPORTED. Serving EXPORTED here instead describes a deployment where the
+        # promotion never happened, which the launcher refuses by design.
         body = json.dumps([{
             "run_id": "run_limn_corr_01",
             "model_id": "limn",
@@ -319,16 +374,59 @@ elif "/api/runs" in url:
             "official": True,
             "created_at": "2026-10-16T00:00:00Z"
         }])
-    else:
-        body = "[]"
-elif "/api/benchmark-runs" in url:
-    if os.environ.get("MOCK_RUNS_STATUS") == "corroborated":
+    elif os.environ.get("MOCK_RUNS_STATUS") == "corroborated_no_proof":
+        # A real deployment whose completion proof is gone: the run stays in the index, because a
+        # run that happened is still a run that happened, while the aggregate view reports the
+        # proof-unavailable policy. Both halves are served so the launcher sees the state it is
+        # written for instead of an uncorroborated one it would reject.
         body = json.dumps([{
             "run_id": "run_limn_corr_01",
             "model_id": "limn",
             "checkpoint_id": "base_iter0_all_categories",
             "protocol_id": "fashioniq_val_split",
+            "evidence_status": "PER_QUERY_EXPORTED_UNVERIFIED",
+            "created_at": "2026-10-16T00:00:00Z"
+        }])
+    else:
+        body = "[]"
+elif "/api/benchmark-runs" in url:
+    if os.environ.get("MOCK_RUNS_STATUS") == "corroborated_no_proof":
+        # The receipt the API serves for this state, with the two fields the launcher's reuse
+        # check reads to distinguish "the proof is gone, so full verification cannot run but the
+        # invocation IS authenticated" from "this run was never corroborated".
+        body = json.dumps([{
+            "run_id": "run_limn_corr_01",
+            "model_id": "limn",
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "execution_status": "EXECUTION_COMPLETED",
+            "verification": {
+                "certified": False,
+                "is_research_evidence": False,
+                "execution_authenticated": True,
+                "state": "proof_unavailable",
+                "certification_mode": "proof_unavailable",
+                "reasons": [],
+                "evidence_reasons": ["declared output missing: completion proof"],
+            },
+            "created_at": "2026-10-16T00:00:00Z"
+        }])
+    elif os.environ.get("MOCK_RUNS_STATUS") == "corroborated":
+        # The launcher reads its index gate from THIS endpoint as well as /api/runs. A fixture
+        # that serves the run here but omits the verifier's receipt describes a report the API
+        # refused to certify, so the gate would (correctly) refuse it -- and the test would be
+        # asserting against a state the real API cannot produce. The receipt and its two claims
+        # are therefore part of the fixture.
+        body = json.dumps([{
+            "run_id": "run_limn_corr_01",
+            "model_id": "limn",
+            "checkpoint_id": "base_iter0_all_categories",
+            "protocol_id": "fashioniq_val_split",
+            "per_query_capability": "LIMN_QUERY_OBSERVER_V1",
+            "per_query_state": "PER_QUERY_VERIFIED",
             "benchmark_gate": {"status": "PASS_WITHIN_5_PERCENT"},
+            "verification": {"certified": True, "is_research_evidence": True,
+                             "state": "certified", "report_digest": "fixture"},
             "created_at": "2026-10-16T00:00:00Z"
         }])
     else:

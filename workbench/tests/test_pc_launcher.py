@@ -336,6 +336,19 @@ def run_pc(
     return proc
 
 
+def _write_api_state(sandbox: Path, *, runs: object, reports: object) -> str:
+    """Record the two endpoints the launcher's index gate reads, and return the state directory.
+
+    Written as files because the shim's inline environments can express one endpoint at a time,
+    and the gate has to see both families at once.
+    """
+    state = sandbox / "api_state"
+    state.mkdir(parents=True, exist_ok=True)
+    (state / "runs.json").write_text(json.dumps(runs))
+    (state / "benchmark-runs.json").write_text(json.dumps(reports))
+    return str(state)
+
+
 def _read_tool_logs(sandbox: Path) -> list[dict[str, Any]]:
     log_file = sandbox / "mock_tools.log"
     if not log_file.exists():
@@ -816,6 +829,9 @@ def _create_corroborated_run(
     omit_report: bool = False,
     omit_ledger: bool = False,
     omit_proof: bool = False,
+    per_query_capability: str | None = "LIMN_QUERY_OBSERVER_V1",
+    per_query_state: str = "PER_QUERY_EXPORTED_UNVERIFIED",
+    omit_artifact: bool = False,
 ) -> None:
     reports_dir = sandbox / "workbench" / "artifacts" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
@@ -859,6 +875,52 @@ def _create_corroborated_run(
         "dress": {"r10": 25.5, "r50": 55.2}, "shirt": {"r10": 28.1, "r50": 58.4},
         "toptee": {"r10": 30.2, "r50": 60.1}})
 
+    # The canonical per-query artifact a successful LIMN run publishes. It is written BEFORE the
+    # report, because the report's per-query fields are a claim about it: `per_query_state` can only
+    # be PER_QUERY_EXPORTED_UNVERIFIED when an artifact exists, and `per_query_artifact_digest` must
+    # be the digest of THESE bytes or the reader's promotion (which binds the receipt to a digest)
+    # cannot happen and the index will never say PER_QUERY_VERIFIED. Omitting the artifact made the
+    # fixture describe a deployment the workbench cannot produce.
+    results_dir = sandbox / "workbench" / "artifacts" / "results" / protocol_id / model_id
+    results_dir.mkdir(parents=True, exist_ok=True)
+    artifact_file = results_dir / f"{run_id}.json"
+    if not per_query_capability or omit_artifact:
+        # No observer means no artifact; `omit_artifact` means the observer declared one and it was
+        # never published. Both are states the evaluator itself produces, and the report's fields
+        # are written from the same condition, so one fixture describes both without describing a
+        # state neither can produce.
+        artifact_digest = None
+    else:
+        artifact_file.write_text(json.dumps({
+        "schema_version": 2,
+        "run": {
+            "run_id": run_id, "dataset": "FashionIQ", "split": "val",
+            "protocol_id": protocol_id,
+            "literature_split_label": ("val" if protocol_id == "fashioniq_val_split"
+                                       else "original"),
+            "evaluation_noise_pct": 0, "model_id": model_id, "method_name": "LIMN",
+            "checkpoint_id": checkpoint_id, "top_k_saved": 200, "gallery_size": 260,
+            "category_checkpoint_ids": {
+                "dress": "base_iter0_dress", "shirt": "base_iter0_shirt",
+                "toptee": "base_iter0_toptee"},
+            "timestamp": "2026-10-16T00:00:00Z", "data_kind": "experiment",
+            "reproduced_metrics": {"r10": 27.9333, "r50": 57.9, "mean": 42.9167},
+        },
+        "queries": [
+            {"query_id": f"{category}:{index}:ref-{category}-{index}:tgt-{category}-{index}",
+             "category": category, "annotation_index": index,
+             "reference_id": f"ref-{category}-{index}",
+             "target_id": f"tgt-{category}-{index}",
+             "raw_captions": [f"caption {category} {index}"],
+             "model_input_text": f"input {category} {index}",
+             "target_rank": 1 + index,
+             "top_results": [{"rank": rank, "image_id": f"img-{category}-{index}-{rank}",
+                              "score": round(1 / rank, 6)} for rank in range(1, 11)]}
+            for category, index in (("dress", 0), ("shirt", 1), ("toptee", 2))
+        ],
+        }, indent=2), encoding="utf-8")
+        artifact_digest = hashlib.sha256(artifact_file.read_bytes()).hexdigest()
+
     report_file = reports_dir / f"{model_id}_{checkpoint_id}_{run_id}_aggregate.json"
     report_data = {
         "run_id": run_id,
@@ -868,6 +930,25 @@ def _create_corroborated_run(
         "execution_status": "EXECUTION_COMPLETED",
         "return_code": 0,
         "invocation_status": "INVOCATION_COMPLETED",
+        # A real report always carries these two, and their values here are the only ones a LIMN
+        # run without a published per-query artifact can have. `evaluate_models.py` writes the
+        # capability from the registry and computes the state from whether an artifact exists --
+        # `PER_QUERY_VERIFIED` is NOT writable by the run at all: only the verifier promotes it, in
+        # the reader (`verify_gate`), from a receipt that binds the artifact's digest. A fixture
+        # that declared `PER_QUERY_VERIFIED` here would describe a file the evaluator cannot
+        # produce, and one that omitted the fields entirely made a LIMN run look aggregate-only.
+        "per_query_capability": per_query_capability,
+        # The two axes are independent ON DISK as well: an artifact can exist and still not have been
+        # published, which is what `omit_artifact` describes. The report's claim must then be the
+        # one the producer itself would compute from the artifact's absence.
+        "per_query_state": ("PER_QUERY_EXPORT_FAILED" if omit_artifact else per_query_state),
+        "per_query_export_reason": "",
+        "per_query_export_available": per_query_capability is not None and not omit_artifact,
+        "per_query_artifact": (str(artifact_file)
+                               if per_query_capability and not omit_artifact else None),
+        "per_query_artifact_digest": (artifact_digest
+                                      if per_query_capability and not omit_artifact else None),
+        "instrumentation_parity": "PARITY_VERIFIED" if per_query_capability else None,
         "source_actual_commit": pin,
         "runtime_adaptation": "sm_120",
         "bundle_manifest_digest": md,
@@ -1807,3 +1888,248 @@ def test_a_container_built_from_another_commit_is_not_reused(tmp_path: Path):
     combined = proc2.stdout + proc2.stderr
     assert "Image đang chạy được dựng từ commit" in combined
     assert "chạy code cũ" in combined
+
+
+# ---------------------------------------------------------------------------
+# A01 — the success gate must be reachable for BOTH artifact families
+# ---------------------------------------------------------------------------
+
+def test_the_aggregate_api_serves_the_per_query_capability_of_each_run():
+    """A01's fix rests on the launcher reading this from the API, so the API must serve it.
+
+    The launcher talks to the running container and cannot read the registry itself. If this field
+    ever stops being served, the gate silently degrades to demanding a per-query artifact from
+    every model again -- the original defect, returning with no test failing.
+    """
+    import json as _json
+    from workbench.backend import main as backend_main
+
+    gate = backend_main._gate_fields({
+        "run_id": "r", "model_id": "limn", "checkpoint_id": "c", "protocol_id": "p",
+        "per_query_capability": "LIMN_QUERY_OBSERVER_V1",
+        "per_query_state": "PER_QUERY_VERIFIED",
+        "per_query_export_reason": ""})
+    assert gate["per_query_capability"] == "LIMN_QUERY_OBSERVER_V1", _json.dumps(gate)
+    assert gate["per_query_state"] == "PER_QUERY_VERIFIED"
+    # And an aggregate-only report must project its ABSENCE, not a default that would travel to
+    # the launcher as "an observer exists".
+    assert backend_main._gate_fields(
+        {"run_id": "r", "model_id": "csmcir", "checkpoint_id": "c", "protocol_id": "p"}
+    )["per_query_capability"] is None
+
+
+def _index_gate_output(
+    sandbox: Path,
+    env: dict[str, str],
+    *,
+    report_capability: str | None,
+    report_state: str,
+    runs: list[dict[str, Any]],
+    certified: bool = True,
+    checkpoint_id: str = "base_iter0_all_categories",
+    report_checkpoint_id: str | None = None,
+) -> str:
+    """Run the real launcher with a recorded API state and return what its index gate said.
+
+    The sandbox's own corroborated run is created first, so the launcher takes the reuse path and
+    reaches the index gate on a run that the on-disk evidence really does corroborate. The test
+    then replaces ONLY the two served endpoints, which is the surface the gate reads. Handing the
+    gate a run whose files do not exist would refuse it at the verifier instead -- a different
+    refusal, testing a different thing.
+    """
+    # The on-disk state is the SUCCESSFUL one: an artifact exists on disk and the run's own report
+    # says EXPORTED. Everything else is served, because the gate reads the API and the API is what
+    # the operator sees. The identity-mismatch test varies the served identity only.
+    del report_checkpoint_id
+    # One fixture, both families: with no capability declared it produces no artifact and a report
+    # that says so, which is exactly what an aggregate-only model's run looks like on disk.
+    _create_corroborated_run(sandbox, run_id="run_limn_corr_01", checkpoint_id=checkpoint_id,
+                             per_query_capability=report_capability,
+                             per_query_state=report_state)
+    served_report = {
+        "run_id": "run_limn_corr_01", "model_id": "limn",
+        "checkpoint_id": checkpoint_id, "protocol_id": "fashioniq_val_split",
+        "per_query_capability": report_capability, "per_query_state": report_state,
+        "verification": {"certified": certified, "is_research_evidence": certified,
+                         "state": "certified" if certified else "refused",
+                         "evidence_reasons": ([] if certified else [
+                             "the evidence ledger holds no entry for this run"])}}
+    env = {**env, "MOCK_RUNS_STATUS": "corroborated",
+           "MOCK_API_STATE": _write_api_state(sandbox, runs=runs, reports=[served_report])}
+    proc = run_pc(sandbox, [], env, timeout=60)
+    return proc.stdout + proc.stderr
+
+
+def _index_gate_output_with_mismatched_report(sandbox: Path, env: dict[str, str]) -> str:
+    """The same gate, with the on-disk report belonging to a DIFFERENT run than the one served."""
+    _create_corroborated_run(sandbox, run_id="run_limn_corr_01")
+    _create_corroborated_run(sandbox, run_id="run_limn_OTHER_02")
+    reports = sandbox / "workbench" / "artifacts" / "reports"
+    decoy = reports / "limn_base_iter0_all_categories_run_limn_OTHER_02_aggregate.json"
+    payload = json.loads(decoy.read_text())
+    # A report that WOULD be read as this run's, with an aggregate-only state: if the gate trusted
+    # the path instead of the identity, this state would be reported for run_limn_corr_01.
+    payload["per_query_capability"] = None
+    payload["per_query_state"] = "CAPABILITY_ABSENT"
+    decoy.write_text(json.dumps(payload, indent=2))
+    env = {**env, "MOCK_RUNS_STATUS": "corroborated", "MOCK_API_STATE": _write_api_state(
+        sandbox,
+        runs=[{"run_id": "run_limn_corr_01", "model_id": "limn",
+               "checkpoint_id": "base_iter0_all_categories",
+               "protocol_id": "fashioniq_val_split",
+               "evidence_status": "PER_QUERY_VERIFIED"}],
+        reports=[{"run_id": "run_limn_corr_01", "model_id": "limn",
+                  "checkpoint_id": "base_iter0_all_categories",
+                  "protocol_id": "fashioniq_val_split",
+                  "per_query_capability": "LIMN_QUERY_OBSERVER_V1",
+                  "per_query_state": "PER_QUERY_VERIFIED",
+                  "verification": {"certified": True, "is_research_evidence": True,
+                                   "state": "certified"}}])}
+    proc = run_pc(sandbox, [], env, timeout=60)
+    return proc.stdout + proc.stderr
+
+
+def test_an_aggregate_only_run_satisfies_the_index_gate(tmp_path: Path):
+    """A01 positive path — a model that declares NO observer.
+
+    Fifteen of the sixteen registered models write no canonical per-query `ResultRun`, because
+    only LIMN declares an observer. The gate required the run to appear in `/api/runs` for EVERY
+    model, so a correct aggregate-only evaluation could not satisfy its own success contract.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    output = _index_gate_output(
+        sandbox, env, report_capability=None, report_state="CAPABILITY_ABSENT", runs=[])
+
+    assert "INDEX_VERIFY" not in output, output
+    assert "INDEX_REBUILD" not in output, output
+    assert "KHÔNG có trong" not in output, output
+
+
+def test_the_aggregate_only_summary_does_not_claim_the_index_holds_the_run(tmp_path: Path):
+    """A01, second half — the summary must not contradict the index it just consulted.
+
+    The DuckDB index holds canonical PER-QUERY records. A model with no observer has none, so the
+    index genuinely does not hold its run, and a summary that printed "the DuckDB index contains
+    this run" would send the operator to a page that will be empty.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    output = _index_gate_output(
+        sandbox, env, report_capability=None, report_state="CAPABILITY_ABSENT", runs=[])
+
+    assert "AGGREGATE_ONLY_VERIFIED" in output, output
+    assert "KHÔNG chứa lượt chạy này" in output, output
+    assert "đã chứa lượt chạy này (API và UI đọc được" not in output, output
+
+
+def test_the_gate_refuses_a_report_file_that_describes_another_run(tmp_path: Path):
+    """A path is not an identity.
+
+    `verify_gate` opens the report whose path the verifier's JSON named. Reading whichever file a
+    path happens to point at, and then reporting ITS per-query state as this run's, is how one
+    execution's state gets attributed to another.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    output = _index_gate_output_with_mismatched_report(sandbox, env)
+    assert "KHÔNG HỖ TRỢ CHO MÔ HÌNH NÀY" not in output, output
+
+
+def test_the_index_gate_refuses_a_per_query_run_that_is_not_verified(tmp_path: Path):
+    """A01 negative control — a declared observer whose artifact exists but was not corroborated.
+
+    Relaxing the gate for aggregate-only models must not accept a LIMN run whose per-query
+    artifact never reached PER_QUERY_VERIFIED.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    output = _index_gate_output(
+        sandbox, env, report_capability="LIMN_QUERY_OBSERVER_V1",
+        report_state="PER_QUERY_EXPORTED_UNVERIFIED",
+        runs=[{"run_id": "run_limn_corr_01", "model_id": "limn",
+               "checkpoint_id": "base_iter0_all_categories",
+               "protocol_id": "fashioniq_val_split",
+               "evidence_status": "PER_QUERY_UNVERIFIED"}])
+
+    assert "INDEX_VERIFY" in output, output
+    assert "PER_QUERY_UNVERIFIED" in output, output
+
+
+def test_the_index_gate_refuses_a_per_query_run_the_index_never_saw(tmp_path: Path):
+    """A01 negative control — a declared observer whose artifact is absent entirely."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    output = _index_gate_output(
+        sandbox, env, report_capability="LIMN_QUERY_OBSERVER_V1",
+        report_state="PER_QUERY_EXPORT_FAILED", runs=[])
+
+    assert "INDEX_VERIFY" in output, output
+    assert "KHÔNG có trong" in output, output
+
+
+def test_the_index_gate_refuses_an_aggregate_only_run_the_api_does_not_certify(tmp_path: Path):
+    """A01 negative control — aggregate-only is not a licence to skip corroboration.
+
+    An aggregate-only model is exempt from the PER-QUERY requirement, and from nothing else.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    output = _index_gate_output(
+        sandbox, env, report_capability=None, report_state="CAPABILITY_ABSENT", runs=[],
+        certified=False)
+
+    assert "INDEX_VERIFY" in output, output
+    assert "bằng chứng nghiên cứu đã chứng thực" in output, output
+
+
+def test_the_index_gate_refuses_a_run_the_api_cannot_certify(tmp_path: Path):
+    """The gate follows the API, so an uncertified aggregate report is refused there.
+
+    `per_query_state` cannot be varied into a report whose artifact does not exist: the value is
+    COMPUTED from whether one does. This case therefore varies the state through the receipt the
+    API serves, which is what the gate actually reads.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    output = _index_gate_output(
+        sandbox, env, report_capability=None, report_state="CAPABILITY_ABSENT", runs=[],
+        certified=False)
+
+    assert "INDEX_VERIFY" in output, output
+    assert "bằng chứng nghiên cứu đã chứng thực" in output, output
+
+
+# ---------------------------------------------------------------------------
+# A05 — a completed job without its own run identity is refused, never replaced
+# ---------------------------------------------------------------------------
+
+def test_a_completed_job_without_its_own_run_id_is_refused_not_guessed(tmp_path: Path):
+    """A05 — the removed fallback, and why it had to go.
+
+    When a job's own record carried no `run_id`, the launcher searched `/api/benchmark-runs` for a
+    report matching model+checkpoint+protocol and adopted the newest match. Two different
+    executions share those three fields whenever the same model is evaluated twice, so the summary,
+    the verification, the gate and the success claim could all be printed for a run the job never
+    produced. The state that makes the fallback reachable is reproduced here: the run directory
+    already exists (so the reuse path cannot help) and the job record names no run.
+    """
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_JOB_STATUS"] = "completed_no_run_id"
+    env["MOCK_RUNS_STATUS"] = "corroborated"
+
+    proc = run_pc(sandbox, [], env, timeout=40)
+    output = proc.stdout + proc.stderr
+
+    assert proc.returncode != 0, output
+    assert "EVALUATION_IDENTITY" in output, output
+    assert "run_limn_corr_01" not in output, (
+        "the launcher adopted another execution's run identity:\n" + output)
+
+
+def test_a_completed_job_naming_its_run_uses_exactly_that_run(tmp_path: Path):
+    """A05 positive control — the legitimate path must be unaffected."""
+    sandbox, env = setup_sandbox(tmp_path, with_env=True)
+    env["MOCK_JOB_STATUS"] = "completed"
+    env["MOCK_RUNS_STATUS"] = "corroborated"
+    _create_corroborated_run(sandbox, run_id="run_limn_corr_01")
+
+    proc = run_pc(sandbox, [], env, timeout=60)
+    output = proc.stdout + proc.stderr
+
+    assert proc.returncode == 0, output
+    assert "run_limn_corr_01" in output, output
+    assert "EVALUATION_IDENTITY" not in output, output

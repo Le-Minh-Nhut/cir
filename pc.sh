@@ -177,7 +177,11 @@ GPU runtime verification, evaluation, validation, and Vietnamese summary.
 Options:
   --model <id>       Model to evaluate (default: limn; e.g. csmcir)
   --doctor           Run host and runtime preflight checks only (read-only)
-  --verify-only      Verify model GPU runtime in container and report (no evaluation)
+  --verify-only      Verify the model's GPU RUNTIME inside the container and stop. It does NOT
+                     verify a recorded run, does NOT rebuild the DuckDB index, and does NOT
+                     download checkpoints. To verify an existing run and refresh the index, run
+                     ./pc.sh without this flag: it reuses a corroborated run instead of
+                     re-evaluating.
   --force            Force re-evaluation even if completed corroborated run exists
   --timeout <sec>    Maximum wait time for evaluation job in seconds (default: 3600)
   --no-gpu           Disable GPU override (WORKBENCH_ENABLE_GPU=0)
@@ -1131,7 +1135,9 @@ execute_evaluation() {
     local model_info=""
     local attempt
     for attempt in 1 2; do
-        if model_info="$(curl -fsS --max-time 300 "${base}/api/models" 2>/dev/null | python3 -c "
+        local models_program
+        models_program="$(cat <<'PYMODELS'
+
 import json, sys
 
 model_id = sys.argv[1]
@@ -1220,7 +1226,9 @@ ckpt = next((c for c in checkpoints if c.get('checkpoint_id') == requested), Non
 if ckpt is None:
     sys.exit('checkpoint ' + requested + ' không có trong registry của ' + model_id)
 _emit(requested, _member_reasons(ckpt), 'sẵn sàng')
-" "$MODEL" "$CHECKPOINT_REQUEST" 2>/dev/null)"; then
+PYMODELS
+)"
+        if model_info="$(curl -fsS --max-time 300 "${base}/api/models" 2>/dev/null | python3 -c "$models_program" "$MODEL" "$CHECKPOINT_REQUEST" 2>/dev/null)"; then
             if [[ -n "$model_info" ]]; then
                 break
             fi
@@ -1243,7 +1251,7 @@ _emit(requested, _member_reasons(ckpt), 'sẵn sàng')
         fail_stage "CHECKPOINT_SELECTION" \
             "Không thể chạy đánh giá đầy đủ cho ${MODEL} với checkpoint '${checkpoint}': ${bundle_detail}" \
             "workbench/artifacts/checkpoints/" \
-            "Tải và xác thực checkpoint trước: ./pc.sh --verify-only (hoặc ./pc.sh <...> --checkpoint <id> để chủ động chạy một danh mục đơn lẻ, KHÔNG phải tái lập đầy đủ)"
+            "Tải và xác thực checkpoint trước — '--verify-only' KHÔNG tải checkpoint; chạy giai đoạn chuẩn bị bằng ./pc.sh (hoặc ./pc.sh --checkpoint <id> để chủ động chạy một danh mục đơn lẻ, KHÔNG phải tái lập đầy đủ)"
     fi
     if [[ -n "$CHECKPOINT_REQUEST" && -n "$bundle_detail" ]]; then
         say "Lưu ý: đã chọn checkpoint '${checkpoint}' theo yêu cầu; đây KHÔNG phải tái lập đầy đủ nếu chỉ gồm một danh mục."
@@ -1512,27 +1520,20 @@ except Exception:
     fi
 
     if [[ -z "$run_id_from_job" ]]; then
-        run_id_from_job="$(curl -s --max-time 10 "${base}/api/benchmark-runs" 2>/dev/null | python3 -c "
-import json, sys
-
-# The fallback for a job whose own record did not name its run. It must match the identity this
-# job was submitted for: taking the last report on disk regardless of model/checkpoint/protocol
-# would hand the summary -- and so the verification, the gate and the success claim -- whatever run
-# happened to be newest, which is how a certificate about one artifact gets printed for another.
-model_id, checkpoint_id, protocol_id = sys.argv[1], sys.argv[2], sys.argv[3]
-try:
-    runs = json.load(sys.stdin)
-except Exception:
-    runs = []
-if isinstance(runs, list):
-    matches = [r for r in runs if isinstance(r, dict)
-               and str(r.get('model_id')) == model_id
-               and str(r.get('checkpoint_id')) == checkpoint_id
-               and str(r.get('protocol_id')) == protocol_id
-               and r.get('run_id')]
-    if matches:
-        print(matches[-1]['run_id'])
-" "$MODEL" "$checkpoint" "$protocol" 2>/dev/null || true)"
+        # There is deliberately NO fallback here.
+        #
+        # A search of /api/benchmark-runs by model+checkpoint+protocol was tried and removed. The
+        # job that just completed already ran a commit with NO `cir.commit` label and no
+        # `--run-id`; the currently checked-out source is a DIFFERENT commit, and the job just
+        # completed against a source that has since changed. A search that selected *any*
+        # corroborated report with those three fields would therefore bind the summary -- and so
+        # the verification, the gate, the index gate and the success claim -- to whatever previous
+        # execution happened to be newest, which is how a certificate about one artifact gets
+        # printed for another. Refusing costs one re-run; inheriting costs the science.
+        fail_stage "EVALUATION_IDENTITY" \
+            "Job ${job_id} báo hoàn tất nhưng hồ sơ của chính nó KHÔNG ghi run_id, nên không có danh tính thực thi nào để xác thực." \
+            "${base}/api/jobs" \
+            "Không suy đoán lượt chạy này là lượt nào: một báo cáo cùng model/checkpoint/protocol có thể thuộc lần chạy KHÁC. Kiểm tra 'docker logs cir-workbench' và ${base}/api/jobs; nếu có lượt chạy hợp lệ đã chứng thực, xác nhận danh tính của nó rồi chạy lại ./pc.sh (script sẽ tái sử dụng kết quả đã chứng thực thay vì đánh giá lại)."
     fi
 
     FINAL_RUN_ID="$run_id_from_job"
@@ -1560,7 +1561,7 @@ rebuild_and_verify_index() { # rebuild_and_verify_index RUN_ID MODEL CHECKPOINT 
         fail_stage "INDEX_REBUILD" \
             "Tái xây dựng chỉ mục DuckDB thất bại (HTTP ${code:-không có mã}): ${body:-không có phản hồi}" \
             "${base}/api/index/rebuild" \
-            "Chỉ mục là thứ API và UI đọc; lượt chạy đã đánh giá vẫn còn trên đĩa nhưng CHƯA hiển thị được. Kiểm tra log backend rồi chạy lại ./pc.sh --verify-only."
+            "Chỉ mục là thứ API và UI đọc; lượt chạy đã đánh giá vẫn còn trên đĩa nhưng CHƯA hiển thị được. Kiểm tra log backend (docker logs cir-workbench), thử lại POST ${base}/api/index/rebuild, rồi chạy lại ./pc.sh."
     fi
 
     # An HTTP 200 is not enough: the rebuild must actually contain THIS run with the evidence state
@@ -1568,13 +1569,31 @@ rebuild_and_verify_index() { # rebuild_and_verify_index RUN_ID MODEL CHECKPOINT 
     # before the verifier spoke -- returns 200 and would be reported as success.
     # The reader lives in a variable because a here-document and a pipe cannot both feed one
     # interpreter: the document wins and the JSON would be lost.
-    local runs_check checked
+    local runs_check reports_check checked
     runs_check="$(curl -fsS --max-time 60 "${base}/api/runs" 2>/dev/null || echo "__API_UNREACHABLE__")"
+    # The aggregate view is the one that carries runs with no per-query export, so the gate has to
+    # ask BOTH endpoints. An aggregate-only run is in the second and not the first.
+    reports_check="$(curl -fsS --max-time 60 "${base}/api/benchmark-runs" 2>/dev/null || echo "__API_UNREACHABLE__")"
     local idx_program
     idx_program="$(cat <<'PYIDX'
 import json, sys
-run_id, model, checkpoint, protocol = sys.argv[1:5]
-raw = sys.stdin.read()
+
+# The success contract, read from the API the operator will actually look at.
+#
+# Two artifact families exist and they answer different questions. The DuckDB index holds the
+# canonical PER-QUERY records, and only a model that declares an observer ever writes one;
+# aggregate reports live beside it, are served by /api/benchmark-runs, and are the whole result
+# for the other fifteen models. Requiring every model to appear in /api/runs therefore made a
+# correct aggregate-only run unable to satisfy its own gate.
+#
+# What is required is now derived from the SAME run, by identity: its aggregate report must be
+# present in /api/benchmark-runs and certified. Its per-query artifact must be recorded in
+# /api/runs exactly when the report DECLARES an observer -- checked against the report's own
+# `per_query_capability`, never assumed from the model id here.
+#
+# A per-query run whose artifact is missing or unverified keeps its report in the aggregate view
+# (a real execution happened) but is refused, so this gate can never present one as full.
+raw, reports_raw, run_id, model, checkpoint, protocol = sys.argv[1:7]
 if raw.strip() == "__API_UNREACHABLE__" or not raw.strip():
     sys.exit("không gọi được /api/runs")
 try:
@@ -1583,26 +1602,88 @@ except Exception as error:
     sys.exit("không đọc được /api/runs: %s" % type(error).__name__)
 if not isinstance(runs, list):
     sys.exit("phản hồi /api/runs không phải danh sách")
-match = [r for r in runs if isinstance(r, dict) and r.get("run_id") == run_id]
-if not match:
-    sys.exit("run %s KHÔNG có trong chỉ mục sau khi tái xây dựng" % run_id)
-run = match[0]
+
+if reports_raw.strip() == "__API_UNREACHABLE__" or not reports_raw.strip():
+    sys.exit("không gọi được /api/benchmark-runs")
+try:
+    reports = json.loads(reports_raw)
+except Exception as error:
+    sys.exit("không đọc được /api/benchmark-runs: %s" % type(error).__name__)
+if not isinstance(reports, list):
+    sys.exit("phản hồi /api/benchmark-runs không phải danh sách")
+
+report = None
+for candidate in reports:
+    if isinstance(candidate, dict) and candidate.get("run_id") == run_id:
+        report = candidate
+        break
+if report is None:
+    sys.exit("báo cáo tổng hợp của lượt chạy %s KHÔNG được API phục vụ: chưa có trong sổ cái, "
+             "danh tính không khớp, hoặc tệp không đọc được" % run_id)
 for field, expected in (("model_id", model), ("checkpoint_id", checkpoint), ("protocol_id", protocol)):
-    if run.get(field) != expected:
-        sys.exit("chỉ mục gắn %s=%r, không phải %r" % (field, run.get(field), expected))
-status = run.get("evidence_status")
+    if report.get(field) != expected:
+        sys.exit("báo cáo tổng hợp gắn %s=%r, không phải %r" % (field, report.get(field), expected))
+receipt = report.get("verification") if isinstance(report.get("verification"), dict) else {}
+if not (receipt.get("is_research_evidence") and receipt.get("certified")):
+    # ONE policy is an honest not-a-pass rather than a refusal: the deployment's completion proof
+    # is gone, so the heavy verifier cannot run, and the API says so by name --
+    # `certification_mode == "proof_unavailable"` with `execution_authenticated` still true, which
+    # is what the launcher's own verify gate accepts for exactly this state. Its reasons are then
+    # the proof's absence, which the gate re-checks against its own verifier output below; a run
+    # refused for any OTHER reason does not reach it.
+    proof_policy = (
+        receipt.get("certification_mode") == "proof_unavailable"
+        and receipt.get("execution_authenticated") is True
+        and receipt.get("state") in ("proof_unavailable", "refused"))
+    if not proof_policy:
+        reasons = "; ".join(str(r) for r in (receipt.get("evidence_reasons") or receipt.get("reasons") or []))
+        sys.exit("API không công bố lượt chạy này là bằng chứng nghiên cứu đã chứng thực "
+                 "(trạng thái %r)%s" % (receipt.get("state") or "không xác định",
+                                        (": " + reasons) if reasons else ""))
+    print("PROOF_UNAVAILABLE")
+
+capability = report.get("per_query_capability")
+state = report.get("per_query_state")
+indexed = None
+for candidate in runs:
+    if isinstance(candidate, dict) and candidate.get("run_id") == run_id:
+        indexed = candidate
+        break
+
+if not capability:
+    # Aggregate-only by declaration. There is no per-query artifact to look for, and demanding
+    # one would refuse a run that is complete for what its model claims to be able to do.
+    if state in (None, "", "CAPABILITY_ABSENT"):
+        print("AGGREGATE_ONLY_VERIFIED")
+    else:
+        print("AGGREGATE_ONLY_VERIFIED (khai báo %r cho mô hình không có trình quan sát)" % state)
+    sys.exit(0)
+
+if indexed is None:
+    sys.exit("mô hình %s khai báo trình quan sát theo truy vấn, nhưng lượt chạy %s KHÔNG có trong "
+             "chỉ mục /api/runs: artifact Top-K chưa được xuất, hoặc chưa được chứng thực"
+             % (model, run_id))
+for field, expected in (("model_id", model), ("checkpoint_id", checkpoint), ("protocol_id", protocol)):
+    if indexed.get(field) != expected:
+        sys.exit("chỉ mục gắn %s=%r, không phải %r" % (field, indexed.get(field), expected))
+status = indexed.get("evidence_status")
 if not isinstance(status, str) or not status:
     sys.exit("chỉ mục không công bố trạng thái bằng chứng cho lượt chạy này")
+if status != "PER_QUERY_VERIFIED":
+    sys.exit("mô hình %s khai báo trình quan sát theo truy vấn và artifact Top-K của nó đang ở "
+             "trạng thái %r, không phải PER_QUERY_VERIFIED" % (model, status))
 print(status)
 PYIDX
 )"
-    checked="$(printf '%s' "$runs_check" | python3 -c "$idx_program" "$run_id" "$model" "$checkpoint" "$protocol" 2>&1)" \
+    # The reader is handed its inputs as ARGUMENTS, never on stdin: a here-document and a pipe
+    # cannot both feed one interpreter, and this script has a here-document immediately below.
+    checked="$(python3 -c "$idx_program" "$runs_check" "$reports_check" "$run_id" "$model" "$checkpoint" "$protocol" 2>&1)" \
         || checked="__INDEX_CHECK_FAILED__: ${checked:-không xác định}"
     if [[ "$checked" == __INDEX_CHECK_FAILED__* ]]; then
         fail_stage "INDEX_VERIFY" \
             "Lượt chạy không hiện diện trong chỉ mục với đúng danh tính và trạng thái bằng chứng: ${checked#__INDEX_CHECK_FAILED__: }" \
             "${base}/api/runs" \
-            "Không tuyên bố hoàn tất: một lượt chạy không có trong chỉ mục thì API và UI không đọc được. Xem workbench/docs/PC_ONE_COMMAND_GUIDE.vi.md (chỉ mục DuckDB)."
+            "Không tuyên bố hoàn tất: API phải phục vụ được lượt chạy này với đúng danh tính và đúng trạng thái bằng chứng mà nó khai. Xem workbench/docs/PC_ONE_COMMAND_GUIDE.vi.md (chỉ mục DuckDB)."
     fi
     INDEX_EVIDENCE_STATUS="$checked"
 }
@@ -1669,12 +1750,24 @@ if _report_path:
     try:
         with open(_report_path, "r", encoding="utf-8") as fh:
             _report = json.load(fh)
+        # The path comes from the verifier's own JSON, but a report is a FILE: reading whichever
+        # one a path happens to name, without checking whose it is, is how one run's per-query
+        # state gets attributed to another. The identity is re-checked here rather than trusted.
+        if str(_report.get("run_id") or "") != run_id:
+            raise ValueError(
+                "report %s describes run %r, not %r" % (_report_path, _report.get("run_id"), run_id))
+        for _field, _expected in (("model_id", model_id), ("checkpoint_id", checkpoint_id),
+                                  ("protocol_id", protocol_id)):
+            if str(_report.get(_field) or "") != _expected:
+                raise ValueError(
+                    "report %s names %s=%r, not %r"
+                    % (_report_path, _field, _report.get(_field), _expected))
         per_query_capability = _report.get("per_query_capability")
         per_query_state = _report.get("per_query_state")
         _per_query_reason = _report.get("per_query_export_reason") or ""
         _report_read = True
     except Exception as error:
-        _per_query_reason = f"không đọc được report của lượt chạy: {type(error).__name__}"
+        _per_query_reason = f"không đọc được report của lượt chạy: {type(error).__name__}: {error}"
 
 # The verification the launcher just ran IS the corroboration the run could not report about itself.
 if verified and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED" \
@@ -1754,6 +1847,10 @@ validate_and_summarize() {
     say "Xác thực bằng chứng thực thi khoa học và đối chiếu sổ cái qua verify_run.py..."
 
     local verify_out verify_rc=0
+    # Initialised on every path: this carried a value from a previous evaluation in any shell that
+    # called the function twice, and the gate would then have read the wrong run's report. Not
+    # `local` because the caller reads it after this function returns.
+    FINAL_RUN_REPORT_PATH=""
     verify_out="$(run_verifier_in_container --run-id "$run_id" --model "$model" --checkpoint "$checkpoint" --protocol "$protocol" --json 2>&1)" || verify_rc=$?
     # The run's own report is the only place its per-query state is recorded, so the summary reads it
     # rather than inferring readiness from the aggregate verdict alone.
@@ -1783,7 +1880,7 @@ for line in reversed(out.strip().splitlines()):
         cat "$verify_message"
         rm -f "$verify_state" "$verify_message"
         fail_stage "VERIFICATION" "$(cat "$verify_message")" "verify_run.py (trong container)" \
-            "Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh --verify-only"
+            "Đọc phần 'Chi tiết' ở trên, sửa nguyên nhân, rồi chạy lại ./pc.sh (dùng ./pc.sh --verify-only nếu bạn chỉ muốn kiểm chứng lại năng lực GPU trước khi tốn thời gian đánh giá)"
     fi
     rm -f "$verify_message"
 
@@ -1828,7 +1925,8 @@ if per_query_state == "PER_QUERY_VERIFIED" and _index_evidence_status != "PER_QU
     print(f"LỖI: phần tổng hợp kết luận ĐÃ CHỨNG THỰC nhưng chỉ mục đang công bố "
           f"{_index_evidence_status!r} cho đúng lượt chạy này.")
     print("      API và UI đọc chỉ mục, nên hai nơi đang nói hai điều khác nhau về cùng một lượt chạy.")
-    print("      Hành động: chạy './pc.sh --verify-only' để dựng lại chỉ mục sau khi xác thực.")
+    print("      Hành động: chạy lại './pc.sh' — thao tác đó XÁC THỰC rồi DỰNG LẠI chỉ mục.")
+    print("      '--verify-only' chỉ kiểm chứng GPU: nó KHÔNG xác thực lượt chạy và KHÔNG dựng lại chỉ mục.")
     sys.exit(6)
 if per_query_state in ("PER_QUERY_EXPORT_FAILED", "PER_QUERY_EXPORTED_UNVERIFIED") \
         and _index_evidence_status == "PER_QUERY_VERIFIED":
@@ -1888,7 +1986,16 @@ else:
     print(f"Phân tích theo truy vấn  : THẤT BẠI — {per_query_capability} được khai báo nhưng không")
     print(f"                           có artifact Top-K nào được xuất. Lý do: {_per_query_reason}")
     print(f"                           Kết quả TỔNG HỢP ở trên vẫn hợp lệ và đã được lưu.")
-print(f"Trạng thái chỉ mục: {_index_evidence_status or 'KHÔNG XÁC ĐỊNH ĐƯỢC'}")
+if _index_evidence_status == "PROOF_UNAVAILABLE":
+    print("Trạng thái chỉ mục: PROOF_UNAVAILABLE — tệp completion proof không còn tồn tại, nên")
+    print("                   xác thực đầy đủ không chạy được; API vẫn xác thực được LƯỢT GỌI")
+    print("                   (execution_authenticated) và đã phục vụ báo cáo tổng hợp.")
+elif _index_evidence_status == "AGGREGATE_ONLY_VERIFIED":
+    print("Trạng thái chỉ mục: AGGREGATE_ONLY_VERIFIED — mô hình này không khai báo trình quan sát,")
+    print("                   nên KHÔNG có bản ghi per-query nào để chỉ mục nắm giữ (đúng theo thiết kế).")
+    print("                   Báo cáo tổng hợp đã được API chứng thực tại /api/benchmark-runs.")
+else:
+    print(f"Trạng thái chỉ mục: {_index_evidence_status or 'KHÔNG XÁC ĐỊNH ĐƯỢC'}")
 print(f"File báo cáo     : {report_path}")
 print("-" * 80)
 if per_query_capability and per_query_state in (None, "PER_QUERY_EXPORT_FAILED"):
@@ -1900,8 +2007,18 @@ elif per_query_capability and per_query_state == "PER_QUERY_EXPORTED_UNVERIFIED"
     print("KẾT LUẬN: TỔNG HỢP ĐẠT — PILOT ĐẦY ĐỦ chờ chứng thực artifact Top-K.")
 else:
     print("KẾT LUẬN: SẴN SÀNG CHO PILOT (theo khả năng đã khai báo của mô hình).")
-    print("  Bằng chứng tổng hợp: đã chứng thực. Chỉ mục DuckDB: đã chứa lượt chạy này")
-    print("  (API và UI đọc được kết quả). Trạng thái bằng chứng per-query ở trên.")
+    print("  Bằng chứng tổng hợp: đã chứng thực và API phục vụ được lượt chạy này.")
+    if _index_evidence_status == "AGGREGATE_ONLY_VERIFIED":
+        # Saying "the DuckDB index holds this run" here would be false: the index holds canonical
+        # PER-QUERY records, and this model declares no observer, so there is nothing of its kind
+        # to hold. The aggregate view is where its evidence lives, and the summary must send the
+        # operator there rather than to a page that will be empty.
+        print("  Chỉ mục DuckDB: KHÔNG chứa lượt chạy này, và đúng là như vậy — xem báo cáo tổng hợp")
+        print("  tại /api/benchmark-runs (tab Models của UI). Phân tích theo truy vấn không áp dụng")
+        print("  cho mô hình này: không có Top-K nào được lưu.")
+    else:
+        print("  Chỉ mục DuckDB: đã chứa lượt chạy này (API và UI đọc được kết quả).")
+        print("  Trạng thái bằng chứng per-query ở trên.")
 print("Ghi chú khoa học :")
 print("  Độ lệch số học so với bài báo gốc (nếu có) phản ánh kết quả đo đạc thực")
 print("  nghiệm trên runtime của thiết bị, là phát hiện nghiên cứu (research finding).")

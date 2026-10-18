@@ -228,7 +228,7 @@ Mặc định `./pc.sh` chạy mô hình LIMN. Để đánh giá mô hình khác
 - `./pc.sh`: Chạy luồng chuẩn mặc định cho LIMN.
 - `./pc.sh --model <tên_model>`: Chọn mô hình cần đánh giá (ví dụ `csmcir`).
 - `./pc.sh --doctor`: Chỉ thực hiện kiểm tra chẩn đoán hệ thống host và cấu hình, hoàn toàn không làm thay đổi hệ thống, không khởi động container.
-- `./pc.sh --verify-only`: Chỉ thực hiện kiểm chứng năng lực GPU trên môi trường mô hình rồi dừng lại, không chạy đánh giá.
+- `./pc.sh --verify-only`: Chỉ thực hiện kiểm chứng năng lực GPU trên môi trường mô hình rồi dừng lại, không chạy đánh giá. Cờ này **KHÔNG** xác thực một lượt chạy đã có, **KHÔNG** dựng lại chỉ mục DuckDB và **KHÔNG** tải checkpoint. Muốn xác thực lượt đã có rồi dựng lại chỉ mục, chạy `./pc.sh` không kèm cờ (nó tái sử dụng kết quả đã chứng thực thay vì đánh giá lại). Xem mục 11 để có lệnh cụ thể từng bước.
 - `./pc.sh --force`: Buộc chạy lại toàn bộ quy trình đánh giá ngay cả khi đã có kết quả hoàn tất hợp lệ từ trước.
 - `./pc.sh --timeout <số_giây>`: Đặt giới hạn thời gian chạy cho tác vụ đánh giá (tính bằng giây).
 - `./pc.sh --no-gpu`: Chạy ở chế độ không dùng GPU (chỉ dùng cho kiểm tra tích hợp hoặc môi trường không có GPU).
@@ -362,6 +362,33 @@ CIR Failure Analysis Workbench được xây dựng theo nguyên tắc bảo to�
 
   Khi đó script nói rõ đây **KHÔNG** phải tái lập đầy đủ, và UI cũng gắn nhãn
   `Single-category (partial evaluation — NOT complete reproduction)`.
+
+- **Lệnh xác thực và dựng lại chỉ mục (từng bước, chạy được thật)**
+
+  ```bash
+  # 1. Kiểm chứng năng lực GPU của môi trường mô hình, rồi DỪNG.
+  #    KHÔNG xác thực lượt chạy, KHÔNG dựng lại chỉ mục, KHÔNG tải checkpoint.
+  ./pc.sh --verify-only
+
+  # 2. Xác thực lại một lượt chạy đã có (các cờ --model/--checkpoint/--protocol là BẮT BUỘC),
+  #    chạy bên trong container vì đó là nơi có môi trường và khoá sổ cái:
+  docker exec cir-workbench python3 workbench/scripts/verify_run.py \
+    --run-id <run_id> --model limn \
+    --checkpoint base_iter0_all_categories --protocol fashioniq_val_split --json
+
+  # 3. Kiểm tra mọi artifact canonical theo schema:
+  python -m workbench.scripts.validate_results --all --strict-real
+
+  # 4. Dựng lại chỉ mục DuckDB mà không cần khởi động lại container:
+  curl -sS -X POST http://127.0.0.1:8000/api/index/rebuild
+
+  # 5. Xác nhận lượt chạy đã hiện trên API/UI:
+  curl -sS http://127.0.0.1:8000/api/runs | python3 -c "import json,sys; print([r['run_id'] for r in json.load(sys.stdin)])"
+  curl -sS http://127.0.0.1:8000/api/benchmark-runs | python3 -c "import json,sys; print([r['run_id'] for r in json.load(sys.stdin)])"
+  ```
+
+  `/api/runs` là **chỉ mục per-query** (chỉ LIMN có); `/api/benchmark-runs` là **báo cáo tổng hợp** (mọi
+  model). Một lượt aggregate-only **không** có mặt ở endpoint thứ nhất — đó là đúng theo thiết kế.
 
 - **Kết quả đã chứng thực thì không tự "cũ đi"**
 
@@ -497,15 +524,18 @@ truy vấn nào thất bại ở mọi mô hình, ảnh nhiễu nào bị lấy 
 bại. Đường đánh giá chính thức của LIMN (`./pc.sh`) **không** sinh ra dữ liệu đó — hàm `test()` gốc
 tính ranking rồi **vứt đi**, chỉ giữ lại Recall tổng hợp.
 
-Lệnh xuất artifact per-query:
+Việc xuất artifact per-query là **tự động** bên trong `./pc.sh` cho LIMN — không có cờ nào để bật, và
+**không cần chạy tay**. Nó là **hai tầng**, cả hai chạy dưới cùng một `run_id` do orchestrator sinh:
 
-```bash
-python -m workbench.replay.limn_export \
-  --checkpoint-root "$WORKBENCH_CHECKPOINT_ROOT" \
-  --dataset-root    "$FASHIONIQ_ROOT" \
-  --source-root     "$WORKBENCH_THIRD_PARTY_ROOT" \
-  --results-root    "$WORKBENCH_RESULTS_ROOT"
-```
+1. `python -m workbench.replay.limn_export` — chạy dưới **interpreter của model**; quan sát ranking và
+   ghi ra **một payload JSON thuần** (không import schema canonical, vì môi trường model không có
+   pydantic). Tham số bắt buộc: `--checkpoint-root`, `--dataset-root`, `--source-root`, `--results-root`.
+2. `python -m workbench.replay.limn_publish --payload <payload>` — chạy dưới **interpreter workbench**;
+   validate payload, kiểm chính sách admission, công bố artifact canonical atomic.
+
+Hai tầng phải chạy cùng nhau: `limn_export` mới chỉ ghi payload trung gian, **chưa** tạo artifact
+canonical. Chạy mỗi tầng 1 bằng tay sẽ để lại một payload chưa được công bố, và `/api/runs` sẽ không
+thấy gì. Nếu buộc phải chạy tay để điều tra, chạy đúng cả hai như trên, với `--run-id` do bạn chọn.
 
 Đây là một **entry point riêng**, cố ý tách khỏi `workbench/replay/limn.py`. Lý do kỹ thuật: bộ lập
 kế hoạch môi trường truy vết import từ `limn.py` để quyết định interpreter của LIMN, nên mọi thứ
