@@ -115,21 +115,81 @@ non-LIMN entry is additionally `GPU_VALIDATION_PENDING` on the target 5070 Ti.
 
 ## 5. Files changed
 
-- Vendored: `workbench/third_party/<15 source dirs>` (7 387 files) plus `provenance.json` each.
-- New: `workbench/backend/vendored_source.py`, `workbench/scripts/vendor_upstreams.py`.
-- Shared: `workbench/backend/runtime.py`, `workbench/scripts/sync_upstreams.py`,
-  `workbench/backend/registry.py` (asset destination resolution), `workbench/registry/models.yaml`
-  (`ptha_mtst`), `workbench/registry/auxiliary_assets.yaml`, `.gitignore`, this file,
-  `workbench/tests/test_download_auxiliary_assets.py`.
+Vendored: `workbench/third_party/<15 source dirs>` — **7 375 files** in the delivered tree, plus a
+`provenance.json` in each.
+
+New:
+- `workbench/backend/vendored_source.py` — the vendored-source contract (pin + digest manifest).
+- `workbench/scripts/vendor_upstreams.py` — the clone → pin → copy → metadata-removal step.
+- `workbench/replay/hint.py` — the missing evaluation shell for HINT.
+- `workbench/tests/test_vendored_source_integrity.py` — 13 tests for the contract above.
+- `workbench/docs/reviews/VENDORED_RECOVERY_16_MODEL_STATUS.md` — this file.
+
+Shared:
+- `workbench/backend/runtime.py` — routes source checks through the vendored contract; a nested
+  checkout keeps precedence over a manifest beside it.
+- `workbench/backend/adapters/models.py` — builds the HINT replay command.
+- `workbench/replay/common.py` — pin check via the vendored contract.
+- `workbench/scripts/sync_upstreams.py` — reports a vendored checkout as clean-and-pinned.
+- `workbench/registry/models.yaml` — `ptha_mtst` gains a source, a pin and its protocol.
+- `workbench/registry/auxiliary_assets.yaml` — COT_ours2 captions become a published asset; the
+  encoder backbone, HINT checkpoint, and AirKnow/CSMCIR BLAS-2 and EVA-ViT-g caches are declared.
+- `.gitignore`, `.gitattributes` — vendored source is tracked; its bytes are never normalized.
+- `workbench/tests/test_download_auxiliary_assets.py`,
+  `workbench/tests/test_release_blocker_source_integrity.py` — restated in terms of the mechanisms
+  they exercise rather than the disproven "captions unavailable" claim.
+
+Four commits on `research/cir-failure-workbench`:
+`5e6e284` vendoring + recovery fixes · `07f7d3a` keep the bytes pinned but the diff readable ·
+`8eb9c6c` correct a CRLF count · `e894dbd` nested checkout takes precedence over a manifest.
 
 ## 6. Running a recovered workflow
 
+The pinned source arrives with the branch, so the first step is a normal checkout:
+
 ```bash
-git fetch origin research/cir-failure-workbench
+git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git checkout research/cir-failure-workbench
-grep -n "upstream_commit" workbench/third_party/*/provenance.json   # pin + resolved URL each
+grep -H upstream_commit workbench/third_party/*/provenance.json   # pin, resolved URL, local fixes
 ```
 
-Everything else is unchanged from `PC_ONE_COMMAND_GUIDE.vi.md`: provision the per-model environment
-from the registry's declared pins, stage checkpoints/auxiliary assets, then run the official
-evaluator. The source no longer has to be fetched to do it.
+**LIMN** (the one workflow with a launcher, evaluator, protocol, ranking and observer already wired):
+
+```bash
+python workbench/replay/limn.py \
+  --checkpoint-root <dir with 0_dress_best_model.pt, 0_shirt_best_model.pt, 0_toptee_best_model.pt> \
+  --dataset-root    <canonical FashionIQ root> \
+  --source-root     workbench/third_party/LIMN \
+  --preflight-only          # drop this flag to evaluate, and it will run the pinned test.py:test()
+# or the whole gated pipeline:  ./workbench/run.sh autopilot --config <pc_autopilot.yaml> --apply --resume
+```
+
+**HINT** (its evaluator has no CLI at all; the wrapper supplies one and calls `test.py:test()`):
+
+```bash
+python workbench/replay/hint.py \
+  --checkpoint-root <dir containing fashioniq.pt> \
+  --dataset-root    <canonical FashionIQ root> \
+  --source-root     workbench/third_party/HINT \
+  --preflight-only
+# fetches its checkpoint via the registry asset:
+python workbench/scripts/download_auxiliary_assets.py --model hint
+```
+
+**Any other model** — stage its assets, then call the official evaluator from its checkout:
+
+```bash
+python workbench/scripts/download_auxiliary_assets.py --all --dry-run   # then drop --dry-run
+python workbench/scripts/download_checkpoints.py        --all --dry-run  # then drop --dry-run
+cd workbench/third_party/<source_dir> && python <the registry's script for that model>
+```
+
+**CSMCIR** additionally needs its approved patch, which is declared in the registry and applied to a
+derived copy rather than in place:
+
+```bash
+patch -p1 -d workbench/third_party/CSMCIR < workbench/patches/csmcir_models_init_compat.patch
+```
+
+Every command above uses registry-declared paths only; no laptop-specific absolute path is required.
+Readiness, per-model environment pins and asset URLs all come from `workbench/registry/`.
