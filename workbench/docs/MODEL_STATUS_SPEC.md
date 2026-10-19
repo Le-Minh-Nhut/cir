@@ -8,10 +8,11 @@ service, database hay dashboard mới.
 |---|---|
 | Cập nhật | 2026-10-19 |
 | Branch | `research/cir-failure-workbench` |
-| Source SHA đã kiểm | `914703ecd42dbb6a0054bc8a5811dcb4dae88cbd` + các sửa của lượt R9 (ghi ở `workbench/docs/reviews/r9/R9_FINAL_REPORT.md`) |
+| Source SHA đã kiểm | `e46ad65aa792b01461cc5319b2b8511b4714df41` + các sửa của lượt R10 (ghi ở `workbench/docs/reviews/r10/R10_REMEDIATION.md`) |
 | Môi trường kiểm | laptop: Linux x64, `.venv` Python 3.13 + torch CPU, RTX 3050 4 GiB; **không có checkpoint nào staged** |
-| Phạm vi đã chạy | static + fixture + parser/unit + native constructor (fixture) + native LAVIS processor (pinned source). **Không có inference nào chạy.** |
-| Lượt R9 | 4 lỗi tái hiện được ở `914703e` đã sửa (F08/F09/F04/F05), F06 áp dụng, test hồi quy mới thay các test chỉ kiểm bản sao |
+| Phạm vi đã chạy | static + fixture + parser/unit + native constructor + native LAVIS processor + **native DCNet ConfigParser** + venv thật. **Không có inference nào chạy.** |
+| Lượt R9 | 4 lỗi tái hiện được ở `914703e` đã sửa (F08/F09/F04/F05), F06 áp dụng |
+| Lượt R10 | 6 finding độc lập đã tái hiện và sửa: R10-01/02 (DCNet binding + staging), R10-03 (lifecycle processor→checkpoint), R10-04 (source_blocker lỗi thời), R10-05 (profile dependency + scanner đọc sai chương trình), R10-06 (venv cô lập mượn package của base) |
 
 ---
 
@@ -271,6 +272,12 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | F14 | `FIXED` | `backbone` khai báo theo variant; không khai báo ⇒ refuse | `test_verified_declarations.py` (3 test) | `PUBLIC_ASSET_SETUP` + `SCIENTIFIC_VARIANT` |
 | F15 | `BLOCKED_EXTERNAL` | tái xác minh Hub: vẫn **không có** FashionIQ weight | agent report + HF API | `AUTHOR_ONLY_INFORMATION` |
 | F16 | `ALREADY_FIXED` | 176 test LIMN/export/replay/fresh-clone pass; không sửa code LIMN | agent report + coordinator run | `ENVIRONMENT_RESOURCE_LIMIT` |
+| R10-01 | `FIXED` | Bỏ `WORKBENCH_DCNET_DATA_DIR` khỏi quyết định binding — evaluator native không đọc biến đó, nên nó chỉ làm validator tin sai. Quyết định nay chỉ đọc `config.json` + CWD evaluator | ConfigParser **native thật**: link→selected đọc selected; link→wrong đọc `['WRONG']`; override không cứu được | — |
+| R10-02 | `FIXED` | Khai `canonical_dataset_link: dataset/fashioniq`; stager tạo thư mục cha khi ghi thật; `validate_source` nhận contract đầy đủ; preflight dùng CWD checkout | Bản sao checkout: verified `True` trước/sau staging, `unauthorized_untracked == []`; dry-run không tạo parent | — |
+| R10-03 | `FIXED` | `prepare()` giữ context suốt đời process; `register_path` idempotent khi cùng giá trị (khác giá trị vẫn raise); `reset()` cho tool nhiều checkout | Fixture `lavis/__init__.py` + checkpoint `torch.save` thật: load thành công, digest sai vẫn bị refuse | — |
+| R10-04 | `FIXED` | Xoá 3 `source_blocker` lỗi thời (`airknow`/`conesep`/`intent`) | `preflight_blockers` thật: 3→2, 1→0, 1→0; blocker asset/runtime còn nguyên | — |
+| R10-05 | `FIXED` | Bỏ `salesforce-lavis` (không thể đồng thời thoả `timm==0.9.16` của vendored `eva_vit.py`); **thêm `Adapter.launcher`/`launcher_roots`** và cho `_evaluator_imports` đi theo chương trình chạy thật thay vì `script` | Wheel sha256 khớp PyPI; scanner `hint` từ `{numpy,torch,tqdm}` thành có cả `transformers`/`timm`/`omegaconf` | 6 môi trường cài thật chưa chạy (xem §2 của `R10_REMEDIATION.md`) |
+| R10-06 | `FIXED` | `inspect_environment_distributions` chỉ đọc base inventory khi interpreter **thực sự kế thừa** (`include-system-site-packages=true`, hoặc `conda-meta`); mặc định là không | Venv thật: cô lập ⇒ `packaging` biến khỏi inventory; `--system-site-packages` ⇒ còn; version sai vẫn bị chặn | — |
 
 ---
 
@@ -291,6 +298,15 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 ## 6. Việc cần làm trên PC, theo thứ tự
 
 ```bash
+# 0. Môi trường cho chính workbench (KHÁC môi trường của từng model ở bước 4).
+#    Danh sách này là mức tối thiểu để chạy được các lệnh bên dưới: pytest cho bước 2,
+#    pyyaml cho registry, omegaconf cho preflight/wrapper, torch cho loader/parser,
+#    fastapi+uvicorn cho API, packaging cho runtime verifier. opencv-python-headless là
+#    dependency của chính các evaluator LAVIS (không có nó thì import closure của chúng thiếu),
+#    nên nó thuộc MÔI TRƯỜNG CỦA MODEL, và được khai trong registry — bước 4 cài nó.
+python -m venv .venv && . .venv/bin/activate
+pip install pytest pyyaml omegaconf "torch" torchvision fastapi uvicorn pydantic httpx packaging
+
 # 1. Lấy source đã kiểm
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git checkout research/cir-failure-workbench      # hoặc fetch + checkout đúng SHA đã ghi ở đầu file
@@ -306,6 +322,15 @@ python workbench/scripts/download_auxiliary_assets.py --all --dry-run
 # 4. Stage assets (theo model đang làm)
 python workbench/scripts/download_checkpoints.py --model limn
 python workbench/scripts/download_auxiliary_assets.py --model csmcir
+
+# 4b. DCNet: evaluator của nó KHÔNG có cờ dataset-root — nó đọc `dataset/fashioniq` tính từ CWD
+#     của chính nó. Link đó phải được stage (và đã được khai trong registry nên integrity gate
+#     chấp nhận). Lệnh này tự tạo thư mục cha khi cần; --check-only/--dry-run không ghi gì.
+python workbench/scripts/prepare_dataset.py --model dcnet --dataset-root "$FASHIONIQ_ROOT"
+#     rồi xác nhận binding khớp với cái evaluator thật sẽ mở:
+python -c "import sys; sys.path.insert(0,'.'); from pathlib import Path; \
+from workbench.replay.dcnet import binding_mismatch; \
+print(binding_mismatch(Path('<run_dir>'), Path('$FASHIONIQ_ROOT'), Path('workbench/third_party/DCNet')) or 'BOUND OK')"
 
 # 5. Preflight (không load model) — phải báo blocker đúng, không crash
 python workbench/replay/hint.py  --checkpoint-root <dir> --dataset-root <FIQ> \

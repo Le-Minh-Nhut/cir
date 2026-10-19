@@ -364,6 +364,46 @@ def _pyvenv_home(pyvenv: Path) -> str:
     return ""
 
 
+def _inherits_base_site_packages(prefix: Path, base_prefix: Path) -> bool:
+    """Whether an interpreter at *prefix* can actually import from *base_prefix*.
+
+    `sys.base_prefix != sys.prefix` is not that answer. An isolated virtual environment
+    (`python -m venv isolated` with the default or an explicit
+    ``include-system-site-packages = false``) has exactly that relationship and cannot see a
+    single base package: its `site.py` never adds the base `site-packages` to `sys.path`.
+    Reading the base inventory anyway let the verifier certify a model whose dependency the
+    selected interpreter cannot import -- a false `RUNTIME_READY`, not a missing fixture.
+
+    Three shapes have to be told apart, and each is read from evidence rather than assumed:
+
+    * a virtual environment (`pyvenv.cfg` present): its own ``include-system-site-packages``
+      decides, and anything other than an explicit ``true`` means isolated;
+    * a Conda environment: ``conda-meta`` present, base inventory reachable regardless of
+      whether the two prefixes are strings-equal (`sys.base_prefix` is the *base* install for
+      Conda, and `sys.prefix` the environment);
+    * anything else that reports two different prefixes: no `pyvenv.cfg` and no `conda-meta`
+      means the relationship is unexplained, so nothing is inherited from the base. Inheritance
+      has to be shown, never defaulted into.
+    """
+    pyvenv = prefix / "pyvenv.cfg"
+    if pyvenv.is_file():
+        try:
+            for line in pyvenv.read_text(encoding="utf-8", errors="replace").splitlines():
+                if "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                if key.strip() == "include-system-site-packages":
+                    return value.strip().lower() == "true"
+        except OSError:
+            return False
+        # The key is absent in some hand-written files; `venv` always writes it, and its
+        # default is isolated, so an unstated value is not consent to inherit.
+        return False
+    if (prefix / "conda-meta").is_dir():
+        return True
+    return False
+
+
 def _is_native_executable(interpreter: Path) -> bool:
     """True when the invocation path resolves to a native executable, not a script.
 
@@ -574,7 +614,9 @@ def inspect_environment_distributions(prefix: str | None,
 
     Nothing is executed: no ``.pth`` is run, no module is imported, and no directory is
     added to ``sys.path``. ``base_prefix`` covers a ``system_site_packages`` environment,
-    which resolves requirements from its base interpreter.
+    which resolves requirements from its base interpreter -- and *only* such an environment:
+    an isolated venv reports a different ``base_prefix`` too, and reading the base inventory
+    for it certifies packages its interpreter cannot import.
     """
     from importlib.metadata import PackageNotFoundError, distributions
 
@@ -590,8 +632,9 @@ def inspect_environment_distributions(prefix: str | None,
     if prefix:
         primary_roots = _site_packages_dirs(Path(prefix))
     if base_prefix and str(base_prefix) != str(prefix):
-        base_roots = [root for root in _site_packages_dirs(Path(base_prefix))
-                      if root not in primary_roots]
+        if _inherits_base_site_packages(Path(prefix), Path(base_prefix)):
+            base_roots = [root for root in _site_packages_dirs(Path(base_prefix))
+                          if root not in primary_roots]
     roots: list[Path] = primary_roots + base_roots
 
     for site_packages in roots:

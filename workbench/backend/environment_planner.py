@@ -247,8 +247,22 @@ def _evaluator_imports(model: dict, third_party_root: Path | None = None) -> set
     if adapter is None or not issubclass(adapter, OfficialScriptAdapter):
         return None
     source = resolve_third_party_root(third_party_root) / str(source_dir)
-    if model.get("model_id") == "limn":
-        entry, roots = WORKBENCH_ROOT / "replay" / "limn.py", [WORKBENCH_ROOT.parent, source / "LIMN", source]
+    # Which program actually runs, from the adapter's own declaration. `script` names the upstream
+    # file whose presence is part of the source contract; for a model whose pinned evaluator has no
+    # `__main__`, the program that runs is the replay wrapper, and its imports are the ones the
+    # environment has to satisfy. Reading `script` here described upstream *training* code the run
+    # never reaches -- which is how a profile came to declare packages the wrapper does not import
+    # and omit ones it does.
+    launcher = getattr(adapter, "launcher", "script")
+    if launcher == "replay":
+        entry = WORKBENCH_ROOT / "replay" / f"{model['model_id']}.py"
+        # The roots the wrapper resolves the pinned modules against, declared by the adapter rather
+        # than guessed here: `workbench/replay/limn.py:151` puts `<source>/LIMN` on `sys.path`, while
+        # the LAVIS wrappers put the checkout and its `lavis` directory there. Guessing from a
+        # directory listing would make this scanner's answer depend on the filesystem instead of the
+        # declaration.
+        roots = [WORKBENCH_ROOT.parent, source]
+        roots += [source / extra for extra in getattr(adapter, "launcher_roots", ())]
     else:
         script = getattr(adapter, "script", None)
         if not script:

@@ -246,9 +246,14 @@ def test_the_normal_workflow_stages_every_declared_link(tmp_path: Path, monkeypa
 
     third_party = tmp_path / "third_party"
     data = fashioniq_root(tmp_path)
-    checkouts = {"csmcir": "CSMCIR", "sprc": "SPRC",
-                 "combiner_rn50x4_noft": "CLIP4Cir", "clip4cir_rn50x4_fullft": "CLIP4Cir"}
-    for checkout in set(checkouts.values()):
+    # model_id -> (checkout, the link it declares). DCNet's is NESTED (`dataset/fashioniq`) because
+    # its evaluator resolves that literal against its own CWD; the others are single names.
+    checkouts = {"csmcir": ("CSMCIR", "fashionIQ_dataset"),
+                 "sprc": ("SPRC", "fashionIQ_dataset"),
+                 "combiner_rn50x4_noft": ("CLIP4Cir", "fashionIQ_dataset"),
+                 "clip4cir_rn50x4_fullft": ("CLIP4Cir", "fashionIQ_dataset"),
+                 "dcnet": ("DCNet", "dataset/fashioniq")}
+    for checkout in {value[0] for value in checkouts.values()}:
         (third_party / checkout).mkdir(parents=True)
 
     env = {**os.environ, "CIR_REPO_ROOT": str(tmp_path), "FASHIONIQ_ROOT": str(data),
@@ -258,14 +263,14 @@ def test_the_normal_workflow_stages_every_declared_link(tmp_path: Path, monkeypa
                 if model.get("canonical_dataset_link")}
     assert declared == set(checkouts), declared
 
-    for model_id, checkout in checkouts.items():
+    for model_id, (checkout, declared_link) in checkouts.items():
         result = subprocess.run(
             [_sys.executable, str(REPOSITORY / "workbench" / "scripts" / "prepare_model.py"),
              "--model", model_id, "--execute", "--allow-preparation",
              "--dataset-root", str(data)],
             env=env, capture_output=True, text=True, cwd=str(REPOSITORY))
         assert result.returncode == 0, (model_id, result.stdout, result.stderr)
-        link = third_party / checkout / "fashionIQ_dataset"
+        link = third_party / checkout / declared_link
         assert link.is_symlink(), model_id
         assert link.resolve() == data.resolve(), model_id
 

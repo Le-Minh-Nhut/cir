@@ -62,6 +62,16 @@ def prepare_canonical_link(root: Path, source: Path, link_name: str, *, check_on
         messages.append(f"[OK] dry-run: would link {destination} -> {root}")
         return True, messages
 
+    # A declared link may be nested (`dataset/fashioniq` is what DCNet's own config resolves), and a
+    # fresh checkout has no `dataset/` directory. The parent is part of the artifact being staged, so
+    # it is created here -- after every refusal above has had its say -- and never anywhere else, so
+    # check-only and dry-run stay write-free and an unexpected occupant is still refused.
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        return False, [f"[BLOCKED] cannot create the link's parent directory "
+                       f"{destination.parent}: {error}"]
+
     destination.symlink_to(root, target_is_directory=True)
     messages.append(f"[OK] dataset link created: {destination} -> {root}")
     return True, messages

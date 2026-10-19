@@ -101,7 +101,6 @@ models:
         status: URL_VERIFIED
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: airknow
-    source_blocker: "no runnable evaluation path is registered for this model: the pinned evaluator is a callable with no CLI or checkpoint loader, the adapter deliberately declines to build a command, and the required correction dictionaries and resized images have no published source; the paper row is the 0%-noise row and no 0% checkpoint is published (see workbench/docs/reviews/models for the model's audit). An earlier note in this registry claimed a tensor-shape failure in the similarity computation; that claim was WRONG and is withdrawn - np.matmul broadcasts and the ranking matrix has the shape the indexing expects"
     environment:
       python_env_var: WORKBENCH_AIRKNOW_PYTHON
       confidence: VERIFIED_README
@@ -109,7 +108,17 @@ models:
       pytorch: '2.1.0'
       torchvision: '0.16.0'
       cuda: '12.6'
-      packages: [scikit-learn==1.3.2, transformers==4.25.0, salesforce-lavis==1.0.2, timm==0.9.16]
+      # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
+      # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
+      # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
+      # vendored `eva_vit.py:15-16` imports `timm.models.layers`/`timm.models.registry`, which this
+      # tree reaches through `timm==0.9.16`; the wheel's own `lavis/` tree also lacks files this
+      # checkout has (no `datasets/datasets/audio_classification_datasets.py`), so it is not a
+      # drop-in for it. `transformers` and `timm` are declared directly, which is what the code
+      # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
+      # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
+      # launcher this adapter declares, so this list is not a second copy of that answer.
+      packages: [opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, numpy, omegaconf==2.3.0, packaging, pandas==2.2.0, Pillow, pyyaml, regex, requests, tqdm, transformers==4.25.0, timm==0.9.16]
     method_name: Air-Know
     research_generation: recent
     publication_year: 2026
@@ -160,7 +169,6 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: conesep
-    source_blocker: "no runnable evaluation path is registered for this model: the pinned evaluator is a callable with no CLI or checkpoint loader, the adapter deliberately declines to build a command, and the required correction dictionaries and resized images have no published source; the paper row is the 0%-noise row and no 0% checkpoint is published (see workbench/docs/reviews/models for the model's audit). An earlier note in this registry claimed a tensor-shape failure in the similarity computation; that claim was WRONG and is withdrawn - np.matmul broadcasts and the ranking matrix has the shape the indexing expects"
     environment:
       python_env_var: WORKBENCH_CONESEP_PYTHON
       confidence: VERIFIED_README
@@ -168,7 +176,17 @@ models:
       pytorch: '2.1.0'
       torchvision: '0.16.0'
       cuda: '12.6'
-      packages: [scikit-learn==1.3.2, transformers==4.25.0, salesforce-lavis==1.0.2, timm==0.9.16]
+      # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
+      # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
+      # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
+      # vendored `eva_vit.py:15-16` imports `timm.models.layers`/`timm.models.registry`, which this
+      # tree reaches through `timm==0.9.16`; the wheel's own `lavis/` tree also lacks files this
+      # checkout has (no `datasets/datasets/audio_classification_datasets.py`), so it is not a
+      # drop-in for it. `transformers` and `timm` are declared directly, which is what the code
+      # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
+      # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
+      # launcher this adapter declares, so this list is not a second copy of that answer.
+      packages: [opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, numpy, omegaconf==2.3.0, packaging, pandas==2.2.0, Pillow, pyyaml, regex, requests, tqdm, transformers==4.25.0, timm==0.9.16]
     method_name: ConeSep
     research_generation: recent
     publication_year: 2026
@@ -276,7 +294,17 @@ models:
       pytorch: '2.1.0'
       torchvision: '0.16.0'
       cuda: '12.6'
-      packages: [open-clip-torch==2.24.0, scikit-learn==1.3.2, transformers==4.25.0, salesforce-lavis==1.0.2, timm==0.9.16]
+      # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
+      # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
+      # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
+      # vendored `eva_vit.py:15-16` imports `timm.models.layers`/`timm.models.registry`, which this
+      # tree reaches through `timm==0.9.16`; the wheel's own `lavis/` tree also lacks files this
+      # checkout has (no `datasets/datasets/audio_classification_datasets.py`), so it is not a
+      # drop-in for it. `transformers` and `timm` are declared directly, which is what the code
+      # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
+      # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
+      # launcher this adapter declares, so this list is not a second copy of that answer.
+      packages: [transformers==4.25.0, timm==0.9.16, omegaconf==2.3.0, opencv-python-headless==4.5.5.64, pandas==2.2.0, scikit-image==0.22.0, decord==0.6.0, einops==0.7.0, fairscale==0.4.13, ftfy, iopath==0.1.10, peft, pycocoevalcap==1.2, webdataset==0.2.86]
     method_name: HABIT
     research_generation: recent
     publication_year: 2026
@@ -337,7 +365,6 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: intent
-    source_blocker: "no runnable evaluation path is registered for this model: the pinned evaluator is a callable with no CLI or checkpoint loader, the adapter deliberately declines to build a command, and the required correction dictionaries and resized images have no published source; the paper row is the 0%-noise row and no 0% checkpoint is published (see workbench/docs/reviews/models for the model's audit). An earlier note in this registry claimed a tensor-shape failure in the similarity computation; that claim was WRONG and is withdrawn - np.matmul broadcasts and the ranking matrix has the shape the indexing expects"
     environment:
       python_env_var: WORKBENCH_INTENT_PYTHON
       confidence: VERIFIED_README
@@ -345,7 +372,17 @@ models:
       pytorch: '2.1.0'
       torchvision: '0.16.0'
       cuda: '12.6'
-      packages: [open-clip-torch==2.24.0, scikit-learn==1.3.2, transformers==4.25.0, salesforce-lavis==1.0.2, timm==0.9.16]
+      # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
+      # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
+      # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
+      # vendored `eva_vit.py:15-16` imports `timm.models.layers`/`timm.models.registry`, which this
+      # tree reaches through `timm==0.9.16`; the wheel's own `lavis/` tree also lacks files this
+      # checkout has (no `datasets/datasets/audio_classification_datasets.py`), so it is not a
+      # drop-in for it. `transformers` and `timm` are declared directly, which is what the code
+      # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
+      # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
+      # launcher this adapter declares, so this list is not a second copy of that answer.
+      packages: [transformers==4.25.0, timm==0.9.16, omegaconf==2.3.0, opencv-python-headless==4.5.5.64, pandas==2.2.0, scikit-image==0.22.0, decord==0.6.0, einops==0.7.0, fairscale==0.4.13, ftfy, iopath==0.1.10, peft, pycocoevalcap==1.2, webdataset==0.2.86]
     method_name: INTENT
     research_generation: recent
     publication_year: 2026
@@ -413,7 +450,17 @@ models:
       pytorch: '2.1.0'
       torchvision: '0.16.0'
       cuda: '12.6'
-      packages: [open-clip-torch==2.24.0, scikit-learn==1.3.2, transformers==4.25.0, salesforce-lavis==1.0.2, timm==0.9.16]
+      # `lavis` is the checkout's OWN copy, put on `sys.path` by the wrapper (`replay/<model>.py`,
+      # `_load_replay_modules`), so it shadows any installed distribution of the same name. The
+      # `salesforce-lavis` PyPI pin is therefore NOT installed: it requires `timm==0.4.12` while the
+      # vendored `eva_vit.py:15-16` imports `timm.models.layers`/`timm.models.registry`, which this
+      # tree reaches through `timm==0.9.16`; the wheel's own `lavis/` tree also lacks files this
+      # checkout has (no `datasets/datasets/audio_classification_datasets.py`), so it is not a
+      # drop-in for it. `transformers` and `timm` are declared directly, which is what the code
+      # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
+      # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
+      # launcher this adapter declares, so this list is not a second copy of that answer.
+      packages: [transformers==4.25.0, timm==0.9.16, omegaconf==2.3.0, opencv-python-headless==4.5.5.64, pandas==2.2.0, scikit-image==0.22.0, decord==0.6.0, einops==0.7.0, fairscale==0.4.13, ftfy, iopath==0.1.10, peft, pycocoevalcap==1.2, webdataset==0.2.86]
     method_name: HINT
     research_generation: recent
     publication_year: 2026
@@ -665,6 +712,14 @@ models:
     source_dir: DCNet
     fashioniq_layout: fashioniq_dcnet
     fashioniq_image_extensions: [".jpg"]
+    # DCNet's evaluator has no dataset-root option: `parse_config.py:28` reads
+    # `config.json:data_loader.args.data_dir` (the shipped configs say `dataset/fashioniq`) and
+    # `CE_dataset.py:22,27,34` joins it against the *process* CWD, which the adapter sets to this
+    # checkout. The link is therefore part of the source contract, not a caller choice: declaring it
+    # is what authorizes `prepare_dataset.py` to create it and what stops the source-integrity gate
+    # from reporting a sanctioned staging as an undeclared file. The path is nested, so the stager
+    # creates its parent; nothing about the author's own files changes.
+    canonical_dataset_link: dataset/fashioniq
     preparation_contract: manual_dcnet
     preparation_id: dcnet_fashioniq
     literature_split_label: original
@@ -928,9 +983,12 @@ models:
       pytorch: '2.0.1'
       torchvision: '0.15.2'
       cuda: UNKNOWN
-      # `lavis` is vendored at src/lavis, not a pip distribution; `salesforce-lavis` is what the
-      # sibling models pin and what an operator would install if the vendored copy were bypassed.
-      packages: [transformers==4.36.2, timm==0.9.12, spacy==3.7.2, salesforce-lavis==1.0.2]
+      # `lavis` is vendored at src/lavis, and the evaluator runs from `src/` with the checkout on
+      # `sys.path`, so the checkout's own copy is what resolves -- the pinned sibling profile that
+      # listed `salesforce-lavis` was unsatisfiable (see the LAVIS-family note above) and is gone.
+      # `transformers` and `timm` are declared directly, matching both the vendored imports and the
+      # versions SPRC's own `requirements.txt` names.
+      packages: [spacy==3.7.2, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33, opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, numpy, omegaconf==2.3.0, packaging, pandas==2.2.0, Pillow, pyyaml, regex, requests, tqdm, transformers==4.25.0, timm==0.9.16]
     strict_clean_checkpoint_available: null
     notes: The evaluator's argparse default `--blip-model-name blip2_cir_rerank_learn` names a class the pinned repo does not register (only an argparse default; no @registry.register_model); the checkpoint class-key mapping remains unverified and loads non-strictly.
     checkpoint_variants:

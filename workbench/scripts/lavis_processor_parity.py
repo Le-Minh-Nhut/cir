@@ -55,7 +55,7 @@ def declared_configs(class_file: Path) -> dict[str, str]:
 
 def main(argv: list[str]) -> int:
     selected = argv or sorted(CHECKOUTS)
-    from workbench.replay.lavis_processors import text_processors
+    from workbench.replay import lavis_processors
 
     report: dict[str, object] = {}
     for model_id in selected:
@@ -67,7 +67,11 @@ def main(argv: list[str]) -> int:
                                     "declared_configs": declared,
                                     "wrapper_config": config}
         try:
-            processors, boundary = text_processors(source_root, config)
+            # Each model has its OWN vendored `lavis`, and the pinned package names are global to a
+            # process, so a comparison across models has to drop the previous checkout's modules.
+            # A production run never does this: one model, one subprocess.
+            lavis_processors.reset()
+            processors, boundary = lavis_processors.text_processors(source_root, config)
             entry["loaded_via"] = boundary
             entry["processor_class"] = type(processors["eval"]).__name__
             entry["outputs"] = {caption: processors["eval"](caption) for caption in CAPTIONS}

@@ -217,14 +217,21 @@ def test_source_requirements_and_registry_declarations_are_read_from_real_checko
     assert sprc["cuda"] == "UNKNOWN"
 
 
-def _write_import_fixture(monkeypatch, tmp_path, script):
+def _write_import_fixture(monkeypatch, tmp_path, script, *, launcher="script"):
+    """A fixture checkout whose adapter declares which program runs.
+
+    `launcher` has to be set explicitly, exactly as the real adapters do: a subclass that inherits
+    the base `launcher = "script"` while its command actually launches a replay wrapper would be
+    describing a different program than it runs, and the scanner would follow the wrong file.
+    """
     from workbench.backend.adapters.models import ADAPTERS
 
     source = tmp_path / "third_party" / "ENCODER"
     source.mkdir(parents=True)
     (source / "evaluate_model.py").write_text(script, encoding="utf-8")
     monkeypatch.setattr(planner, "WORKBENCH_ROOT", tmp_path)
-    adapter = type("FixtureEncoderAdapter", (ADAPTERS["encoder"],), {"script": "evaluate_model.py"})
+    adapter = type("FixtureEncoderAdapter", (ADAPTERS["encoder"],),
+                   {"script": "evaluate_model.py", "launcher": launcher})
     monkeypatch.setitem(ADAPTERS, "encoder", adapter)
     return source
 
@@ -682,6 +689,8 @@ def test_only_real_interpreters_count_as_prefix_pythons():
     assert planner._INTERPRETER_NAME.fullmatch("python-config") is None
 
 
+@pytest.mark.skipif(shutil.which("conda") is None,
+                    reason="REAL conda integration: the conda binary is not on PATH")
 def test_a_renamed_conda_prefix_is_detected_as_stale(tmp_path):
     """REAL conda: a prefix that has been moved must fail verification.
 
@@ -731,6 +740,8 @@ def test_a_real_conda_prefix_shell_helpers_are_not_rejected(tmp_path):
     assert ok is True, reason
 
 
+@pytest.mark.skipif(shutil.which("conda") is None,
+                    reason="REAL conda integration: the conda binary is not on PATH")
 def test_real_conda_cold_start_shared_environment_and_reuse(tmp_path, monkeypatch):
     # REAL package-manager test: real conda cold-start shared environment and reuse.
     # These stand-in models have no adapter, so the evaluator-import trace cannot resolve an entry

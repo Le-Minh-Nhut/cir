@@ -23,11 +23,13 @@ MODEL = model_by_id("dcnet")
 REQUIRED_RUN_FILES = ("config.json", "trained_model.pth")
 DATASET_LABEL = "fashioniq"
 PROTOCOL = "fashioniq_full_gallery_ref_excluded"
-DATASET_ENV_VAR = "WORKBENCH_DCNET_DATA_DIR"
 
 
 def validate_source(source_root: Path) -> list[str]:
-    ok, reason = source_pin_status(source_root, MODEL["upstream_commit_sha"])
+    # The full model contract, so the declared `canonical_dataset_link` is authorized here too: the
+    # standalone preflight has to accept the same sanctioned staging the orchestrator creates, and
+    # without the contract a correctly staged link reads as an undeclared file.
+    ok, reason = source_pin_status(source_root, MODEL["upstream_commit_sha"], MODEL)
     return [] if ok else [f"DCNet source pin invalid: {reason}"]
 
 
@@ -49,9 +51,11 @@ def configured_data_dir(config_file: Path, dataset_root: Path,
     dataset root and the binding is exact. A plain directory at that path resolves inside the checkout
     and is refused, and so is an absolute literal naming another tree.
 
-    `WORKBENCH_DCNET_DATA_DIR` is an explicit, recorded override for an operator whose evaluator
-    CWD is not the checkout. It is a claim about the process that launches `test.py`, not about the
-    author's file, and the evaluator does not read it -- see `binding_mismatch`.
+    The decision reads the author's field and nothing else. An environment override used to be
+    accepted here, which made this function disagree with the evaluator it exists to predict: the
+    native `ConfigParser` never looks at the environment, so a run could pass validation while
+    `ExpertDataLoader`/`CE` opened the wrong root. A validator that answers a different question than
+    the consumer is worse than no validator, so the override is gone and the field is the only input.
     """
     blockers: list[str] = []
     cwd = Path(evaluator_cwd) if evaluator_cwd is not None else Path(os.getcwd())
@@ -70,12 +74,8 @@ def configured_data_dir(config_file: Path, dataset_root: Path,
             "resolves its dataset from that field, so the tree it reads cannot be verified.")
         return None, blockers
 
-    override = os.environ.get(DATASET_ENV_VAR) or None
-    literal = declared
-    if override:
-        declared = override
     relative = not Path(declared).is_absolute()
-    resolved = (Path(declared) if not relative else cwd / declared).resolve()
+    resolved = (cwd / declared if relative else Path(declared)).resolve()
     # Compared in every case, including an absolute path: the field is the evaluator's own input, and
     # an absolute value that names a different tree is exactly the mismatch a `--dataset-root` on the
     # command line cannot repair.
@@ -84,12 +84,13 @@ def configured_data_dir(config_file: Path, dataset_root: Path,
         where = (f"DCNet joins that literal against the process working directory ({cwd})"
                  if relative else "that path is absolute, so the evaluator opens it directly")
         blockers.append(
-            f"DCNet dataset binding mismatch: the evaluator resolves "
-            f"{DATASET_ENV_VAR + ' ' if override else ''}{literal!r} to {resolved}, not the verified "
-            f"dataset root {expected}. {where} and opens <data_dir>/image_splits, <data_dir>/captions "
-            "and <data_dir>/resized_images itself, so passing --dataset-root does not redirect it. "
-            f"Stage the canonical dataset at {cwd / literal if relative else literal} as a symlink to "
-            f"{expected}, or set {DATASET_ENV_VAR} to the directory the evaluator will open.")
+            f"DCNet dataset binding mismatch: the evaluator resolves {declared!r} to {resolved}, not "
+            f"the verified dataset root {expected}. {where} and opens <data_dir>/image_splits, "
+            "<data_dir>/captions and <data_dir>/resized_images itself, so passing --dataset-root does "
+            "not redirect it. Stage the canonical dataset at "
+            f"{cwd / declared if relative else declared} as a symlink to {expected} (the declared "
+            "`canonical_dataset_link` is what makes that staging authorized), or point the run "
+            "directory's own config.json at the tree to be evaluated.")
     return resolved, blockers
 
 
@@ -158,10 +159,14 @@ def preflight(
     categories: tuple[str, ...] = CATEGORIES,
     evaluator_cwd: Path | None = None,
 ) -> list[str]:
+    # The evaluator runs with its CWD set by `source_cwd` (`evaluate_models.py:214-215`), which is
+    # the checkout itself for DCNet. Defaulting to that rather than to the caller's CWD keeps the
+    # standalone preflight and the launched run answering the same question.
+    cwd = Path(evaluator_cwd) if evaluator_cwd is not None else source_root
     return (
         validate_source(source_root)
         + validate_run_directory(checkpoint_root)
-        + validate_dataset_binding(checkpoint_root, dataset_root, evaluator_cwd)
+        + validate_dataset_binding(checkpoint_root, dataset_root, cwd)
         + validate_dataset(dataset_root, categories)
     )
 

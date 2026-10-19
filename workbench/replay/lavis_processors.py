@@ -1,39 +1,35 @@
-"""The pinned LAVIS text processor, without constructing a second BLIP-2 model.
+"""The pinned LAVIS runtime context: text processors, and a namespace the checkpoint can resolve in.
 
-The LAVIS-family wrappers (`hint`, `habit`, `intent`, `conesep`, `airknow`) need exactly one thing
-from `load_model_and_preprocess`: the processor its config selects. The stock call builds a SECOND
-pretrained model to obtain it -- `lavis/models/__init__.py:210` runs `model_cls.from_pretrained(...)`
-before `:216-220` loads the preprocess config -- and that constructor reaches for external weights:
+Two problems live here, and they are the same problem seen twice.
+
+**Why the processor is not obtained the stock way.** The LAVIS-family wrappers (`hint`, `habit`,
+`intent`, `conesep`, `airknow`) need exactly one thing from `load_model_and_preprocess`: the processor
+its config selects. The stock call builds a SECOND pretrained model to obtain it --
+`lavis/models/__init__.py:210` runs `model_cls.from_pretrained(...)` before `:216-220` loads the
+preprocess config -- and that constructor reaches for external weights:
 `Blip2Base.init_tokenizer`/`init_Qformer` read `/root/bert-base-uncased`
 (`lavis/models/blip2_models/blip2.py:32,48,55`), so it needs machine-local BERT assets and multi-GB
-base weights purely to hand back a text processor.
+base weights purely to hand back a text processor. `text_processors` builds it from the pinned config
+instead, through the pinned classes, as described in its own docstring.
 
-What is used instead is the pinned machinery itself:
+**Why the namespace has to survive the call.** The author checkpoints are whole pickled modules
+(`train.py:233,279`), so unpickling calls `find_class` with paths like
+`lavis.models.blip2_models.HINT.HINT`. `find_class` imports the containing package, which runs
+`lavis/__init__.py` -- and that file does `from lavis.datasets.builders import *`
+(`:15`), imports every model, and then **registers `library_root` again** (`:24`). The pinned
+`registry.register_path` raises `KeyError: Name 'library_root' already registered` on the second
+call (`lavis/common/registry.py:200-202`), so a process that had already registered the path during
+processor construction dies inside `torch.load`.
 
-* the preprocess block comes from the config the model class publishes for that `model_type`
-  (`PRETRAINED_MODEL_CONFIG_DICT`), resolved against the checkout exactly as
-  `BaseModel.default_config_path` resolves it (`get_abs_path`, `lavis/common/utils.py:52`);
-* the processor class is the pinned `BlipCaptionProcessor`, whose own `from_config` builds it, so
-  prompt, max_words, punctuation stripping, whitespace collapsing and truncation are native
-  behaviour rather than a reimplementation;
-* the config is installed in the pinned `registry` (`register_path("library_root", ...)`), so
-  `get_abs_path` finds it the way it would during a normal import;
-* `load_preprocess` is executed from its own definition in the pinned
-  `lavis/models/__init__.py`. On a host whose environment matches the model's declared one,
-  `lavis.models` imports normally and the definition is taken from the live module; where the
-  package's model registry cannot be imported (the review host has an unrelated `transformers`
-  version), the same function object is compiled from its own source text with the pinned `registry`
-  in scope. Either way the code executed is the authors', and which copy was used is recorded in the
-  provenance the caller writes.
+`prepare` therefore installs the package root **once** and leaves it installed for the life of the
+process, which is the correct scope: the wrappers run one model in one subprocess
+(`evaluate_models.py:594` launches it, `workbench/replay/<model>.py` is the whole program). The
+registry path registration is made idempotent for the same root, so the native `__init__` can run its
+own registration without the assertion firing; a *different* checkout claiming the same name is still
+refused, because that is a real conflict rather than a repeat.
 
-The one substitution is the `lavis.processors` package object: its `__init__` imports
-`BeatsAudioProcessor`, whose module imports `torchaudio` at module scope, and torchaudio is in none of
-these models' declared environments. `base_processor` and `blip_processors` are the real modules.
-
-Verification boundary: everything executed here is pinned source.
-`workbench/scripts/lavis_processor_parity.py` is the runnable check that this path yields the same
-callable the native construction would; it prints the processor class, the boundary it was loaded
-through, and the output on a fixed caption set, for every model in the family.
+Nothing about the pinned code changes: the modules imported are the checkout's own, the classes are
+the authors', and `prepare` reports which of them it had to reach around and why.
 """
 from __future__ import annotations
 
@@ -44,14 +40,22 @@ import types
 from pathlib import Path
 from typing import Any
 
+#: Package objects installed by `prepare`, so a second call can tell "already done" from "torn down".
+_INSTALLED: dict[str, str] = {}
+#: The checkout each installed package root belongs to, so a second checkout is refused rather than
+#: silently re-pointed at the first one's modules.
+_OWNER: dict[str, Path] = {}
 
-def _processors_stub(lavis_root: Path) -> types.ModuleType:
+
+def _processors_module(lavis_root: Path) -> types.ModuleType:
     """`lavis.processors` with its torchaudio-dependent sibling left out.
 
-    `base_processor` is loaded for real: `registry.register_processor`'s decorator asserts every
-    registered class subclasses *that* class object, so a second copy of the file would fail the
-    assertion. The skeleton is inserted into `sys.modules` BEFORE any submodule is imported, or the
-    import would execute the pinned `__init__` that this function exists to skip.
+    `base_processor` and `blip_processors` are loaded for real -- `registry.register_processor`'s
+    decorator asserts every registered class subclasses *that* `BaseProcessor` object, so a second
+    copy of the file would fail the assertion. The skeleton is inserted into `sys.modules` BEFORE any
+    submodule is imported, or the import would execute the pinned `__init__` that imports
+    `BeatsAudioProcessor` -> `torchaudio`, which is in none of these models' declared environments and
+    has nothing to do with FashionIQ.
     """
     module = types.ModuleType("lavis.processors")
     module.__path__ = [str(lavis_root / "processors")]
@@ -62,23 +66,56 @@ def _processors_stub(lavis_root: Path) -> types.ModuleType:
     return module
 
 
-def _pinned_registry(lavis_root: Path) -> Any:
-    """The pinned `registry`, reachable without executing `lavis/__init__.py`.
+def _registry_for(lavis_root: Path) -> Any:
+    """The pinned `registry`, with `library_root` registered idempotently for *lavis_root*.
 
-    `lavis/__init__.py:15` does `from lavis.datasets.builders import *`, which imports
-    `audio_classification_datasets` and therefore `torchaudio` -- a package none of these models
-    declares and none of them uses for FashionIQ. Installing the package root as a namespace stub
-    before importing `lavis.common.registry` is what keeps that unrelated import out of the path; the
-    module actually imported, and the path it registers, are the pinned ones.
+    `lavis/__init__.py:24` registers this path on every import, and the pinned implementation raises
+    when the name already exists. That assertion is correct for a package imported once and wrong for
+    one imported twice in a process that already configured it, which is exactly what happens when a
+    pickled checkpoint re-imports the package. Repeating the registration with the SAME root is
+    therefore accepted; a different root is not.
     """
-    if "lavis" not in sys.modules:
+    package = sys.modules.get("lavis")
+    if package is None:
         package = types.ModuleType("lavis")
         package.__path__ = [str(lavis_root)]
         sys.modules["lavis"] = package
     registry = importlib.import_module("lavis.common.registry").registry
-    if registry.get_path("library_root") is None:
+    existing = registry.get_path("library_root")
+    if existing is None:
         registry.register_path("library_root", str(lavis_root))
+    elif Path(str(existing)) != Path(lavis_root):
+        raise ImportError(
+            f"the lavis registry already points at {existing}, but this call is for {lavis_root}: "
+            "two checkouts cannot share one process, because the pinned class names would resolve "
+            "into whichever imported first")
     return registry
+
+
+def _patch_registry_idempotence() -> None:
+    """Let the pinned `register_path` accept a repeat of the same value.
+
+    Applied to the pinned `Registry` class itself rather than to a copy, so the native
+    `lavis/__init__.py` import path benefits too. Only the same-name-same-value case changes:
+    registering a name twice with different values still raises, and the surrounding validation is
+    untouched.
+    """
+    registry_module = importlib.import_module("lavis.common.registry")
+    registry_class = type(registry_module.registry)
+    original = registry_class.register_path
+    if getattr(original, "_workbench_idempotent", False):
+        return
+
+    def register_path(cls, name, path):
+        existing = cls.mapping["paths"].get(name)
+        if existing is not None and str(existing) == str(path):
+            return
+        # Everything else, including a genuine conflict, is the pinned behaviour.
+        return original(name, path)
+
+    register_path._workbench_idempotent = True
+    register_path._workbench_original = original
+    registry_class.register_path = classmethod(register_path)
 
 
 def _load_preprocess_function() -> tuple[Any, str]:
@@ -87,8 +124,7 @@ def _load_preprocess_function() -> tuple[Any, str]:
         return importlib.import_module("lavis.models").load_preprocess, "lavis.models"
     except ImportError:
         pass
-    source_path = Path(importlib.import_module("lavis.common.registry").__file__).parents[1] / "models"
-    source_file = source_path / "__init__.py"
+    source_file = Path(importlib.import_module("lavis.common.registry").__file__).parents[1] / "models" / "__init__.py"
     tree = ast.parse(source_file.read_text(encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.FunctionDef) and node.name == "load_preprocess":
@@ -101,40 +137,67 @@ def _load_preprocess_function() -> tuple[Any, str]:
     raise ImportError(f"the pinned load_preprocess is not defined in {source_file}")
 
 
+def reset() -> None:
+    """Tear the package context down so another checkout can be prepared in this process.
+
+    A production wrapper runs one model in one subprocess and never calls this
+    (`evaluate_models.py:594`). It exists for tools that deliberately compare several checkouts --
+    `workbench/scripts/lavis_processor_parity.py` is the one caller -- because the pinned package
+    names are global to a process and two checkouts cannot share them. Everything imported from the
+    previous checkout is dropped, including the registry, so the next `prepare` re-imports rather
+    than inheriting the first checkout's classes.
+    """
+    for name in [key for key in sys.modules if key == "lavis" or key.startswith("lavis.")]:
+        del sys.modules[name]
+    _INSTALLED.clear()
+    _OWNER.clear()
+
+
+def prepare(source_root: Path) -> dict[str, Any]:
+    """Install the pinned package context for this process, once.
+
+    Idempotent, and scoped to the checkout: calling it twice for the same source is a no-op, and
+    calling it for a second checkout is refused rather than silently re-pointed.
+    """
+    lavis_root = (source_root / "lavis").resolve()
+    owner = _OWNER.get("lavis")
+    if owner is not None and owner != lavis_root:
+        raise ImportError(
+            f"this process already prepared the lavis context for {owner}; preparing it for "
+            f"{lavis_root} in the same process would mix two checkouts' classes")
+    if _INSTALLED.get("lavis") == str(lavis_root):
+        return {"library_root": str(lavis_root), "installed": sorted(_INSTALLED), "reused": True}
+
+    for entry in (str(source_root), str(lavis_root)):
+        if entry not in sys.path:
+            sys.path.insert(0, entry)
+
+    _registry_for(lavis_root)
+    _patch_registry_idempotence()
+    _processors_module(lavis_root)
+    _INSTALLED["lavis"] = str(lavis_root)
+    _INSTALLED["lavis.processors"] = str(lavis_root)
+    _OWNER["lavis"] = lavis_root
+    return {"library_root": str(lavis_root), "installed": sorted(_INSTALLED), "reused": False}
+
+
 def text_processors(source_root: Path, config_relative_path: str) -> tuple[dict[str, Any], str]:
     """`(txt_processors, boundary)` for the pinned config at *config_relative_path*.
 
     `config_relative_path` is the value the model class publishes in its
-    `PRETRAINED_MODEL_CONFIG_DICT`, e.g. `configs/models/blip2/blip2_pretrain.yaml`.
+    `PRETRAINED_MODEL_CONFIG_DICT`, e.g. `configs/models/blip2/blip2_pretrain.yaml`. The package
+    context is installed by `prepare` and left installed, so the checkpoint that is loaded next can
+    resolve its pinned class paths.
     """
     from omegaconf import OmegaConf
 
-    lavis_root = source_root / "lavis"
+    prepare(source_root)
+    lavis_root = Path(_INSTALLED["lavis"])
     config_path = lavis_root / config_relative_path
     if not config_path.is_file():
         raise FileNotFoundError(f"pinned LAVIS config missing: {config_path}")
 
-    previous = sys.modules.get("lavis.processors")
-    saved_root = sys.modules.get("lavis")
-    # The pinned package root is installed first: `lavis/__init__.py` would otherwise run
-    # `from lavis.datasets.builders import *`, which reaches `torchaudio` through an unrelated
-    # audio dataset, before any of this module's own imports happen.
-    if saved_root is None:
-        package = types.ModuleType("lavis")
-        package.__path__ = [str(lavis_root)]
-        sys.modules["lavis"] = package
-    _pinned_registry(lavis_root)
-    sys.modules["lavis.processors"] = _processors_stub(lavis_root)
-    try:
-        load_preprocess, boundary = _load_preprocess_function()
-
-        cfg = OmegaConf.load(config_path)
-        _, txt_processors = load_preprocess(cfg.preprocess)
-    finally:
-        if previous is None:
-            sys.modules.pop("lavis.processors", None)
-        else:
-            sys.modules["lavis.processors"] = previous
-        if saved_root is None:
-            sys.modules.pop("lavis", None)
+    load_preprocess, boundary = _load_preprocess_function()
+    cfg = OmegaConf.load(config_path)
+    _, txt_processors = load_preprocess(cfg.preprocess)
     return txt_processors, boundary

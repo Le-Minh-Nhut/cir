@@ -56,9 +56,14 @@ def load_registry(path: Path | None = None) -> dict[str, Any]:
         link = model.get("canonical_dataset_link")
         if link is not None:
             link_path = PurePosixPath(link)
-            if link_path.is_absolute() or ".." in link_path.parts or len(link_path.parts) != 1:
+            if link_path.is_absolute() or ".." in link_path.parts:
                 raise ValueError(
-                    f"canonical_dataset_link must be a single in-checkout name for {model['model_id']}")
+                    f"canonical_dataset_link must be a relative in-checkout path for "
+                    f"{model['model_id']}")
+            if len(link_path.parts) > 2:
+                raise ValueError(
+                    f"canonical_dataset_link must name a path at most one directory deep for "
+                    f"{model['model_id']}: {link!r}")
         extensions = model.get("fashioniq_image_extensions")
         if extensions is not None:
             if not isinstance(extensions, list) or not extensions:

@@ -12,6 +12,19 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 
 class OfficialScriptAdapter(ModelAdapter):
     script: str
+    #: Set when the adapter launches a workbench replay wrapper instead of `script`.
+    #:
+    #: `script` stays the *upstream* file whose absence means the checkout is broken, so the
+    #: integrity check keeps meaning what it says. But `script` is not always the program that
+    #: runs: several pinned evaluators ship only `test(params, model, testset, category)` with no
+    #: `__main__`, so the wrapper is the real entry point. Consumers that reason about *which
+    #: programs run* -- `environment_planner._evaluator_imports` is the one that matters -- have to
+    #: read that from a declaration rather than guess it from a command list, because guessing is
+    #: how the dependency profile came to describe upstream training code instead of the wrapper's
+    #: real imports.
+    launcher: str = "script"
+    #: Extra source roots, relative to the checkout, that the launcher resolves modules against.
+    launcher_roots: tuple[str, ...] = ()
 
     def build_command(self, request: EvalRequest) -> list[str]:
         from workbench.backend.operator_config import resolve_config
@@ -60,6 +73,7 @@ def _replay_command(adapter: OfficialScriptAdapter, checkpoint: Path, request: E
 class CSMCIRAdapter(OfficialScriptAdapter):
     model_id = "csmcir"
     script = "src/validate_blip_csmcir.py"
+    launcher = "script"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         return [_runtime.python_executable(self.model), str(source / self.script), "--dataset", "fashionIQ", "--blip-model-path", str(checkpoint)]
@@ -68,6 +82,8 @@ class CSMCIRAdapter(OfficialScriptAdapter):
 class EncoderAdapter(OfficialScriptAdapter):
     model_id = "encoder"
     script = "evaluate_model.py"
+    launcher = "replay"
+    launcher_roots = ()
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # `evaluate_model.py` is importable but is not a script: it reads `args` at module scope and
@@ -80,6 +96,8 @@ class EncoderAdapter(OfficialScriptAdapter):
 class HintAdapter(OfficialScriptAdapter):
     model_id = "hint"
     script = "test.py"
+    launcher = "replay"
+    launcher_roots = ("lavis",)
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # The pinned evaluator has no `__main__`, no argument parser and no checkpoint loader, so
@@ -102,6 +120,8 @@ class HintAdapter(OfficialScriptAdapter):
 class PairAdapter(OfficialScriptAdapter):
     model_id = "pair"
     script = "test.py"
+    launcher = "replay"
+    launcher_roots = ()
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # `test.py:6` is `test(params, model, testset, category)` — a callable with no CLI, so the
@@ -112,6 +132,8 @@ class PairAdapter(OfficialScriptAdapter):
 class AirKnowAdapter(OfficialScriptAdapter):
     model_id = "airknow"
     script = "test_BLIP2.py"
+    launcher = "replay"
+    launcher_roots = ("lavis",)
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # `test_BLIP2.py` has no `__main__` and no checkpoint loader, and one of its branches calls
@@ -130,6 +152,8 @@ class AirKnowAdapter(OfficialScriptAdapter):
 class ConeSepAdapter(OfficialScriptAdapter):
     model_id = "conesep"
     script = "test.py"
+    launcher = "replay"
+    launcher_roots = ("lavis",)
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # Single checkpoint shared across the three categories, and a callable-only evaluator: the
@@ -142,6 +166,8 @@ class ConeSepAdapter(OfficialScriptAdapter):
 class HabitAdapter(OfficialScriptAdapter):
     model_id = "habit"
     script = "test.py"
+    launcher = "replay"
+    launcher_roots = ("lavis",)
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # As with conesep: the selected variant is recorded so a noisy-trained checkpoint can never be
@@ -153,6 +179,8 @@ class HabitAdapter(OfficialScriptAdapter):
 class IntentAdapter(OfficialScriptAdapter):
     model_id = "intent"
     script = "test.py"
+    launcher = "replay"
+    launcher_roots = ("lavis",)
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         return _replay_command(self, checkpoint, request, source,
@@ -162,6 +190,8 @@ class IntentAdapter(OfficialScriptAdapter):
 class CLVCNetAdapter(OfficialScriptAdapter):
     model_id = "clvc_net"
     script = "test.py"
+    launcher = "replay"
+    launcher_roots = ()
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # `test.py:6` is `test(params, local_model, global_model, testset, dataname)`: this evaluator
@@ -172,6 +202,7 @@ class CLVCNetAdapter(OfficialScriptAdapter):
 class DCNetAdapter(OfficialScriptAdapter):
     model_id = "dcnet"
     script = "test.py"
+    launcher = "script"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         return [_runtime.python_executable(self.model), str(source / self.script), "--resume", str(checkpoint)]
@@ -179,6 +210,7 @@ class DCNetAdapter(OfficialScriptAdapter):
 class CombinerNoftAdapter(OfficialScriptAdapter):
     model_id = "combiner_rn50x4_noft"
     script = "src/validate.py"
+    launcher = "script"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         return [_runtime.python_executable(self.model), str(source / self.script), "--dataset", "fashionIQ",
@@ -190,6 +222,7 @@ class CombinerNoftAdapter(OfficialScriptAdapter):
 class CLIP4CirFullftAdapter(OfficialScriptAdapter):
     model_id = "clip4cir_rn50x4_fullft"
     script = "src/validate.py"
+    launcher = "script"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # A bundle_placeholder path IS the bundle directory (registry.checkpoint_missing_paths
@@ -207,6 +240,8 @@ class CLIP4CirFullftAdapter(OfficialScriptAdapter):
 class TGCIRAdapter(OfficialScriptAdapter):
     model_id = "tgcir"
     script = "test.py"
+    launcher = "replay"
+    launcher_roots = ()
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # `test.py:6` is `test(params, model, testset, category)` with no CLI and no checkpoint
@@ -219,6 +254,7 @@ class TGCIRAdapter(OfficialScriptAdapter):
 class SPRCAdapter(OfficialScriptAdapter):
     model_id = "sprc"
     script = "src/blip_validate.py"
+    launcher = "script"
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         """The real evaluator, with the two flags its own defaults get wrong.
@@ -264,6 +300,8 @@ class SPRCAdapter(OfficialScriptAdapter):
 class LIMNAdapter(OfficialScriptAdapter):
     model_id = "limn"
     script = "LIMN/test.py"
+    launcher = "replay"
+    launcher_roots = ("LIMN",)
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         command = [

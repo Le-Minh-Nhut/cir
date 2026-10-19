@@ -120,19 +120,36 @@ def test_a_config_without_the_field_is_refused(tmp_path: Path) -> None:
     assert any("declares no data_loader.args.data_dir" in blocker for blocker in blockers)
 
 
-def test_the_override_changes_what_is_opened_and_is_named_in_the_refusal(
+def test_no_environment_override_can_change_what_the_evaluator_opens(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    source = tmp_path / "source"
-    (source / "dataset" / "fashioniq").mkdir(parents=True)
-    selected = tmp_path / "selected"
-    selected.mkdir()
+    """R10-01: the decision reads the author's config, because that is what the evaluator reads.
+
+    An override used to be honoured here, which made the validator answer a question the native
+    `ConfigParser` never asks: a run could be certified against `selected` while the loader opened
+    `wrong`. Both are exercised here, and the environment must move neither.
+    """
+    checkout = tmp_path / "checkout"
+    (checkout / "dataset").mkdir(parents=True)
+    wrong = tmp_path / "wrong"
+    correct = tmp_path / "correct"
+    for root in (wrong, correct):
+        root.mkdir()
+    # The config says `dataset/fashioniq`; the checkout's link is what decides where that lands.
+    (checkout / "dataset" / "fashioniq").symlink_to(wrong)
     run = _run_directory(tmp_path / "run", DCNET_RUN)
 
-    monkeypatch.setenv("WORKBENCH_DCNET_DATA_DIR", str(selected))
-    assert binding_mismatch(run, selected, source) is None
-    monkeypatch.setenv("WORKBENCH_DCNET_DATA_DIR", str(tmp_path / "elsewhere"))
-    refusal = binding_mismatch(run, selected, source)
-    assert refusal and "WORKBENCH_DCNET_DATA_DIR" in refusal
+    # The override claims the run targets `correct`. The link says otherwise, and the link wins.
+    monkeypatch.setenv("WORKBENCH_DCNET_DATA_DIR", str(correct))
+    refusal = binding_mismatch(run, correct, checkout)
+    assert refusal and "binding mismatch" in refusal
+    assert str(wrong) in refusal
+
+    # And with the link pointing where the override claimed, the binding is exact with no override
+    # present -- so the environment variable was never load-bearing for a correct staging.
+    monkeypatch.delenv("WORKBENCH_DCNET_DATA_DIR", raising=False)
+    (checkout / "dataset" / "fashioniq").unlink()
+    (checkout / "dataset" / "fashioniq").symlink_to(correct)
+    assert binding_mismatch(run, correct, checkout) is None
 
 
 def test_preflight_reports_the_mismatch_for_a_relative_literal(tmp_path: Path) -> None:
@@ -475,16 +492,40 @@ def test_the_declared_config_is_the_one_the_model_class_publishes(wrapper: str) 
 @pytest.mark.parametrize("wrapper", sorted(LAVIS_MODELS))
 def test_the_pinned_processor_loads_without_root_bert_assets(wrapper: str) -> None:
     """The processor must not depend on `/root/bert-base-uncased`, which no operator has."""
-    from workbench.replay.lavis_processors import text_processors
+    from workbench.replay import lavis_processors
 
     directory, _ = LAVIS_MODELS[wrapper]
     source_root = REPO / "workbench" / "third_party" / directory
-    processors, boundary = text_processors(source_root, "configs/models/blip2/blip2_pretrain.yaml")
+    # Each model owns a vendored `lavis`, and the pinned package names are global to a process, so
+    # this comparison drops the previous checkout's modules. A production run never needs to: one
+    # model, one subprocess -- which `test_one_process_prepares_one_checkout` asserts separately.
+    lavis_processors.reset()
+    processors, boundary = lavis_processors.text_processors(
+        source_root, "configs/models/blip2/blip2_pretrain.yaml")
     assert type(processors["eval"]).__name__ == "BlipCaptionProcessor"
     # Native punctuation and whitespace behaviour, observed rather than assumed.
     assert processors["eval"]("  A dog, running!  ") == "a dog, running"
     assert processors["eval"]("Dress.") == "dress"
     assert boundary
+
+
+def test_one_process_prepares_one_checkout() -> None:
+    """The property the wrappers rely on: a second checkout in the same process is refused.
+
+    `evaluate_models.py` launches one model per subprocess, so this refusal is what keeps a run from
+    silently resolving another checkout's class names. It is asserted here rather than left to the
+    parity tool's `reset`, which exists precisely because a comparison tool does want to switch.
+    """
+    from workbench.replay import lavis_processors
+
+    lavis_processors.reset()
+    lavis_processors.prepare(REPO / "workbench" / "third_party" / "HINT")
+    with pytest.raises(ImportError, match="already prepared the lavis context"):
+        lavis_processors.prepare(REPO / "workbench" / "third_party" / "HABIT")
+    # And the same checkout is a no-op rather than an error, so a second call is safe.
+    again = lavis_processors.prepare(REPO / "workbench" / "third_party" / "HINT")
+    assert again["reused"] is True
+    lavis_processors.reset()
 
 
 def test_the_integrated_loader_returns_the_native_processor(tmp_path: Path) -> None:
@@ -500,6 +541,9 @@ def test_the_integrated_loader_returns_the_native_processor(tmp_path: Path) -> N
     from workbench.replay import hint
 
     source_root = REPO / "workbench" / "third_party" / "HINT"
+    from workbench.replay import lavis_processors
+
+    lavis_processors.reset()
     real_import = __builtins__["__import__"] if isinstance(__builtins__, dict) else __builtins__.__import__
 
     def pinned_import(name, *args, **kwargs):
