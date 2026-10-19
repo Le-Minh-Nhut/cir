@@ -162,6 +162,74 @@ def test_two_different_sources_for_one_name_cannot_share_an_environment() -> Non
     assert error is None and planner._reference_of(combined["packages"][name]) == CLIP_REFERENCE
 
 
+def test_a_reference_and_a_version_conflict_in_either_order() -> None:
+    """The conflict must be reported whichever one arrives first.
+
+    An independent audit of this change found both halves missing: with the reference first, the
+    version branch called `.extend()` on a string and raised `AttributeError`; with the version
+    first, a list was not recognised as a version constraint and the reference silently overwrote
+    it, so two models that cannot share an installation were grouped together. A conflict that is
+    only detected in one order is not detected.
+    """
+    name, spec = planner._parse_requirement(CLIP_REFERENCE)
+    base = {"python": "3.9", "torch": "UNKNOWN", "torchvision": "UNKNOWN", "cuda": "UNKNOWN",
+            "ranges": {}, "pip_only": [name], "evidence": []}
+    reference_spec = {**base, "packages": {name: spec}}
+    version_spec = {**base, "packages": {name: "==0.2.0"}}
+
+    for order, pair in (("reference first", [reference_spec, version_spec]),
+                        ("version first", [version_spec, reference_spec])):
+        try:
+            combined, error = planner._constraints(pair)
+        except Exception as exc:  # noqa: BLE001
+            raise AssertionError(f"{order}: raised {type(exc).__name__} instead of refusing: {exc}")
+        assert combined is None and error, f"{order}: the conflict was accepted: {combined}"
+        assert "cannot describe the same installation" in error, f"{order}: {error}"
+
+
+def test_the_conda_solve_builder_skips_a_source_requirement() -> None:
+    """`_solver_solve` must not concatenate a reference with version terms.
+
+    `_conda_constraints` removes references before the solver sees them, so this only bites a caller
+    that hands the raw constraints straight through -- which is exactly the kind of latent break the
+    audit looked for and found. The guard belongs in the builder, not only in its usual caller.
+    """
+    name, spec = planner._parse_requirement(
+        "custom-pkg @ git+https://example.invalid/repo.git@1.0.0")
+    constraints = {"python": [("==", "3.9")], "packages": {name: spec, "pyyaml": [("==", "6.0")]},
+                   "ranges": {}}
+    try:
+        # A binary that does not exist: the point is that it must not raise while BUILDING the spec
+        # list, before any process is started.
+        planner._solver_solve("definitely-not-a-real-solver", constraints)
+    except TypeError as exc:
+        raise AssertionError(f"the solve builder mishandled the reference: {exc}")
+    except Exception:  # noqa: BLE001
+        pass  # a missing solver binary is expected and irrelevant here
+
+
+def test_the_pin_scan_does_not_parse_a_reference_as_a_version() -> None:
+    """`_terms` would read the URL as a version, so a source is diverted before it is scanned."""
+    model = {"model_id": "fixture", "source_available": True,
+             "environment": {"python": "3.9",
+                             "packages": [CLIP_REFERENCE, "timm==0.9.16"]}}
+    constraints = planner.model_constraints(model)
+    assert planner._is_reference(constraints["packages"].get("clip")), constraints["packages"]
+    assert "clip" in constraints["pip_only"], constraints["pip_only"]
+    assert not planner._is_reference(constraints["packages"].get("timm")), constraints["packages"]
+
+
+def test_source_identity_requires_the_repository_and_the_revision() -> None:
+    """A revision match alone would accept the same commit from a different repository."""
+    import inspect
+
+    source = inspect.getsource(planner._verify_group_interpreter)
+    assert "the source repository differs" in source, (
+        "identity is the URL and the revision together; checking only the revision accepts a "
+        "different repository that happens to hold the same commit")
+    assert "declared_revision" in source
+
+
 def test_a_conflicting_reference_and_version_are_refused() -> None:
     """A source and a version constraint cannot describe the same installation."""
     packages: dict[str, object] = {}

@@ -26,7 +26,7 @@ Ma trận đầy đủ: `workbench/docs/MODEL_STATUS_SPEC.md` §2.
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
 **SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `cd2de4b`** — mọi test, acceptance, mutation và release_verify mô
-tả trên trang này đã chạy trên đúng cây đó (1740 passed, 0 failed, 11 skipped; acceptance, mutation và release_verify đều
+tả trên trang này đã chạy trên đúng cây đó (1754 passed, 0 failed, 11 skipped; acceptance, mutation và release_verify đều
 chạy lại trên cùng commit). `119df5f` đã bị **thay thế**: lượt R9 sửa production (DCNet binding và
 thứ tự category, tập patch CSMCIR, tập input của constructor, processor BLIP-2), nên số test và kết
 quả gate ghi ở các bản trước không còn mô tả cây này.

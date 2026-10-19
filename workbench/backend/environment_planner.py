@@ -668,6 +668,10 @@ def model_constraints(model: dict, third_party_root: Path | None = None) -> dict
     for name in set(packages) | set(ranges):
         if name in _NON_CONDA_PACKAGES:
             pip_only.add(name)
+        if _is_reference(packages.get(name)):
+            # A source has no version terms to scan, and `_terms` would parse the URL as one.
+            pip_only.add(name)
+            continue
         if any(op in ("==", "===") and version in _NON_CONDA_PACKAGE_PINS.get(name, ())
                for op, version in _terms(packages.get(name, "") or ranges.get(name, ""), name)):
             pip_only.add(name)
@@ -802,13 +806,28 @@ def _constraints(specs: list[dict]) -> tuple[dict | None, str | None]:
                     # terms: `_terms` would mangle the URL, and two models sharing a group must come
                     # from the same revision or not share the group at all.
                     already = combined["packages"].get(name)
-                    if already is not None and _is_reference(already):
+                    if _is_reference(already):
                         if already != value:
                             return None, (
                                 f"{name} is required from two different sources in one environment: "
                                 f"{_reference_of(already)!r} and {_reference_of(value)!r}")
+                    elif already:
+                        # The other order: a version constraint arrived first. Overwriting it with the
+                        # source would silently drop the pin and group two models that cannot share an
+                        # installation -- the same conflict, so it is refused the same way.
+                        return None, (
+                            f"{name} is required both as version terms {already} and from "
+                            f"{_reference_of(value)!r} in one environment; the two cannot describe "
+                            "the same installation")
                     combined["packages"][name] = value
                     continue
+                if _is_reference(combined["packages"].get(name)):
+                    # A reference is already recorded for this name; a version arriving afterwards is
+                    # the same conflict, and `.extend` on a string would raise instead of reporting it.
+                    return None, (
+                        f"{name} is required from {_reference_of(combined['packages'][name])!r} and "
+                        f"also as version terms for {name}; the two cannot describe the same "
+                        "installation")
                 if value not in {"UNKNOWN", "*"}:
                     combined[field].setdefault(name, []).extend(_terms(value, name))
                 else:
@@ -883,7 +902,13 @@ def _solver_solve(command: str, constraints: dict) -> tuple[bool, str]:
     for name in sorted(set(constraints["packages"]) | set(constraints["ranges"])):
         if name in _NON_CONDA_PACKAGES:
             continue
-        terms = constraints["packages"].get(name, []) + constraints["ranges"].get(name, [])
+        stored = constraints["packages"].get(name, [])
+        if _is_reference(stored) or _is_reference(constraints["ranges"].get(name)):
+            # A source requirement has no conda form and no version terms, so it is neither solved
+            # nor concatenated. `_conda_constraints` normally removes these first; this is the guard
+            # for a caller that hands the raw constraints straight to the solver.
+            continue
+        terms = stored + constraints["ranges"].get(name, [])
         # Bare (unpinned) names stay in the solve: real packages (scipy, pyyaml) resolve to the
         # current version, and a name conda cannot resolve (e.g. a phantom import-only name)
         # must fail here too — the installer sees the identical spec, so plan and installer
@@ -1522,7 +1547,16 @@ def _verify_group_interpreter(
                     "direct-URL source for it: the installed distribution did not come from the "
                     "declared source"), details
             details.setdefault("source_urls", {})[name] = recorded
-            declared_revision = request.rsplit("@", 1)[-1] if "@" in request.split("+")[-1] else None
+            # Identity is URL and revision together. A revision match alone would accept the same
+            # commit fetched from a DIFFERENT repository, and a declaration with no revision would
+            # accept any source at all.
+            declared_url, _, declared_revision = request.partition("@")[2].partition("@")
+            declared_url = declared_url.removeprefix("git+")
+            declared_revision = declared_revision.strip()
+            if declared_url and declared_url not in recorded:
+                return False, (
+                    f"Package {name} was required from {request!r}, but the environment recorded "
+                    f"{recorded!r}: the source repository differs"), details
             if declared_revision and declared_revision not in recorded:
                 return False, (
                     f"Package {name} was required from revision {declared_revision}, but the "

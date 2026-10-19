@@ -20,7 +20,7 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | The full run collected 1752 tests; 1740 passed, 11 skipped. The count guard requires the recorded passes and skips to sum exactly to what the tree collects. |
+| Suite accounting | The full run collected 1767 tests: 1754 passed, 11 skipped, and 2 failures that are the count guard itself and the superseded-source guard, both of which can only pass after this metadata is updated. The count guard requires the recorded passes and skips to sum exactly to what the tree collects. |
 | TESTED_SOURCE_SHA | `cd2de4b` — every gate below ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
@@ -52,7 +52,7 @@ source. `119df5f` is superseded: the R9 production fixes changed the files this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1740 passed, 0 failed** (26:32), 11 skipped; 1752 collected. The skips are integrations whose prerequisite is absent on this host -- the real Conda binary, GPU capability probes, and other environment-specific paths -- each declared with an explicit `skipif` reason rather than silently passed. |
+| Backend suite | `pytest workbench/tests -q` | **1754 passed, 0 failed** (27:35), 11 skipped; 1767 collected. The skips are integrations whose prerequisite is absent on this host -- the real Conda binary, GPU capability probes, and other environment-specific paths -- each declared with an explicit `skipif` reason rather than silently passed. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 16 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |

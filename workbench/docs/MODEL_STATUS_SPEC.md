@@ -81,6 +81,17 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | 16 | `ptha_mtst` | zyinan99/MTST_PTHA | `fashioniq_original_split` | **không có FashionIQ ckpt** | vendored + 3 local fix | không có weights | preflight-only | không | không | `PREFLIGHT_IMPLEMENTED_BLOCKED` | `AUTHOR_ONLY_INFORMATION` |
 
 
+> **Ảnh hưởng của R12** (20/10/2026): R12 sửa hai lỗi contract **không** đổi mức khoa học của model nào.
+> (1) `scikit-learn` bị loại khỏi plan của `habit`, `intent`, `conesep`, `airknow` vì một census sai —
+> census import `lavis.models`, import này **vỡ giữa đường** khi thiếu dependency, nên mọi module cần
+> sau điểm vỡ đều không được đếm. Bốn class file native import `sklearn` ở module scope không guard,
+> và INTENT import thêm `matplotlib.pyplot`; nay chúng được khai và plan cài chúng.
+> (2) `clip @ git+https://github.com/openai/CLIP.git@a1d071...` của `tgcir` và `sprc` bị biến thành
+> `clip` trần, nên installer cài `clip==0.2.0` — một package clipboard không có `load`/`tokenize`
+> mà evaluator gọi. Nay source được giữ nguyên suốt parse → merge → grouping → lệnh cài → verify.
+> Cả hai đều là lỗi **engineering**; không model nào được nâng lên `CHECKPOINT_LOADED`,
+> `GPU_SMOKE_VERIFIED` hay `PAPER_PARITY_CHECKED`, vì mọi blocker còn lại vẫn là asset tác giả/GPU.
+
 > **Ảnh hưởng của R11 lên bảng này** (20/10/2026): R11 sửa contract *môi trường* của `hint`, `habit`,
 > `conesep`, `airknow` (Python 3.8 không cài được `pandas==2.2.0`/`scikit-image==0.22.0`) và của
 > `sprc` (planner và verifier đọc hai nguồn version khác nhau). Các mức trong bảng **không** thay đổi
