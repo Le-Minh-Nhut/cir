@@ -80,6 +80,17 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | 15 | `sprc` | chunmeifeng/SPRC | `fashioniq_original_split` | ViT-g (paper) / ViT-L (variant) | vendored, pin OK | ViT-g OneDrive 403; ViT-L reachable | script CLI | `csmcir_stdout_json` | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` + `SCIENTIFIC_VARIANT` |
 | 16 | `ptha_mtst` | zyinan99/MTST_PTHA | `fashioniq_original_split` | **không có FashionIQ ckpt** | vendored + 3 local fix | không có weights | preflight-only | không | không | `PREFLIGHT_IMPLEMENTED_BLOCKED` | `AUTHOR_ONLY_INFORMATION` |
 
+
+> **Ảnh hưởng của R11 lên bảng này** (20/10/2026): R11 sửa contract *môi trường* của `hint`, `habit`,
+> `conesep`, `airknow` (Python 3.8 không cài được `pandas==2.2.0`/`scikit-image==0.22.0`) và của
+> `sprc` (planner và verifier đọc hai nguồn version khác nhau). Các mức trong bảng **không** thay đổi
+> vì chúng vẫn bị chặn bởi asset tác giả, không phải bởi environment: sửa R11 làm cho bước
+> provisioning *có thể thành công*, chứ không tự sinh ra checkpoint hay GPU. Riêng cột
+> `ckpt/data/env readiness` của 5 model LAVIS nay đúng hơn ở tầng dependency: profile đã cài được,
+> và đường processor → checkpoint của cả 5 wrapper đã có bằng chứng chạy thật trong hai tiến trình
+> riêng (`workbench/tests/test_r11_lavis_lifecycle.py`) — nhưng đó là **fixture**, không phải
+> weight tác giả. Không model nào được nâng lên `CHECKPOINT_LOADED` hay `GPU_SMOKE_VERIFIED`.
+
 **Không model nào** đạt `CHECKPOINT_LOADED`, `GPU_SMOKE_VERIFIED`, `FULL_VAL_VERIFIED` hay
 `PAPER_PARITY_CHECKED`. Mọi số trong registry là số paper, không phải số đo.
 
