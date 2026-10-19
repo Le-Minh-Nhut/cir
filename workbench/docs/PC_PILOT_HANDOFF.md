@@ -12,18 +12,24 @@ hoặc mức fixture.
 **`PC_PILOT_HANDOFF_READY`** — đường pilot chạy được trên máy đích.
 **`GPU_SCIENTIFIC_VALIDATION_PENDING`** — toàn bộ phần khoa học còn chờ GPU.
 
-**Chỉ LIMN sẵn sàng cho lượt PC pilot đầu tiên.** 15 model còn lại **chưa** sẵn sàng và vẫn cần việc
-bổ sung: `encoder` cần một bản sửa nhỏ (alias import, asset LAION ViT-B/32, parser metric);
-`clip4cir_rn50x4_noft` và `clip4cir_rn50x4_fullft` cần map checkpoint thành viên;
-`dcnet` cần asset thượng nguồn; `ptha_mtst` cần tác giả cung cấp source/checkpoint;
-10 model còn lại cần wrapper. Ma trận đầy đủ ở `workbench/docs/reviews/r8/R8_16_MODEL_STATUS.md`.
+**Chỉ LIMN sẵn sàng cho lượt PC pilot đầu tiên.** 15 model còn lại **chưa** sẵn sàng, nhưng **không
+phải vì thiếu wrapper**: `workbench/backend/adapters/models.py:294` đăng ký 15 adapter và
+`workbench/replay/` có 16 wrapper — mọi model trừ `ptha_mtst` đều có entrypoint chạy được. Lý do
+thật, theo từng model: `encoder` thiếu asset LAION ViT-B/32;
+`clip4cir_rn50x4_noft`/`clip4cir_rn50x4_fullft` cần đúng member của archive và cặp CLIP/Combiner khớp;
+`dcnet` thiếu run directory của tác giả; `tgcir` chỉ có preflight (chưa xác minh member của
+`TG-CIR.zip`); `sprc` chỉ có ViT-L public (variant khác paper); `clvc_net` cần map sáu file
+local/global; `pair` cần nhãn B1/B2 từ tác giả; `ptha_mtst` không có weight FashionIQ.
+Ma trận đầy đủ: `workbench/docs/MODEL_STATUS_SPEC.md` §2.
 
 **Trạng thái 16 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `119df5f`** — mọi test, acceptance, mutation và release_verify mô
-tả trên trang này đã chạy trên đúng cây đó (1609 passed; acceptance, mutation và release_verify đều
-chạy lại trên cùng commit).
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `23dca02`** — mọi test, acceptance, mutation và release_verify mô
+tả trên trang này đã chạy trên đúng cây đó (1665 passed; acceptance, mutation và release_verify đều
+chạy lại trên cùng commit). `119df5f` đã bị **thay thế**: lượt R9 sửa production (DCNet binding và
+thứ tự category, tập patch CSMCIR, tập input của constructor, processor BLIP-2), nên số test và kết
+quả gate ghi ở các bản trước không còn mô tả cây này.
 
 Lưu ý: các bản ghi cũ `59949ff`, `9a53ee1` và `5567bc7` đã bị **thay thế**. Công việc vendoring và phục hồi
 model đã thay đổi file production (`workbench/backend/runtime.py`, `workbench/replay/common.py`,
@@ -53,7 +59,7 @@ git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
 # Nguồn đã kiểm thử (revision cố định; đây là cái đã chạy 1609 test):
-git checkout 119df5f
+git checkout 23dca02
 # Nhánh đang phát triển thêm tài liệu. Dùng nó nếu muốn bản mới nhất:
 #   git checkout research/cir-failure-workbench
 ```

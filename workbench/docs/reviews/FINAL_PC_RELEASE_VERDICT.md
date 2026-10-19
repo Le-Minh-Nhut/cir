@@ -6,9 +6,9 @@
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`119df5f`** (production source; every gate below ran on it) |
+| **TESTED_SOURCE_SHA** | **`23dca02`** (production source; every gate below ran on it) |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | identical in `119df5f` and the branch tip (verified: `git diff 119df5f HEAD -- . ':(exclude)workbench/docs'` is empty) — the successors changed documentation only |
+| Production tree | identical in `23dca02` and the branch tip (verified: `git diff 23dca02 HEAD -- . ':(exclude)workbench/docs'` is empty) — the successors changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 
@@ -20,7 +20,7 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| TESTED_SOURCE_SHA | `119df5f` — every gate below ran on it |
+| TESTED_SOURCE_SHA | `23dca02` — every gate below ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 16 model entries; **16 `source_available`** (every entry now has vendored source); **15 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc` with protocol `fashioniq_original_split`, and stays blocked only because no FashionIQ checkpoint is published for it |
@@ -33,10 +33,12 @@ root, the model's provisioned interpreter, and exactly one ledger key file.
 
 ## What was tested
 
-The full verification ran against `119df5f`. Commits after it on
+The full verification ran against `23dca02` (the R9 pass: DCNet dataset binding and category
+order, the CSMCIR patch set, the constructor input set, and the F06 text processor — see
+`workbench/docs/reviews/r9/R9_FINAL_REPORT.md`). Commits after it on
 `research/cir-failure-workbench` changed **documentation only** — a tracked document cannot name the
 commit that contains it, so the metadata commit that records this verdict is itself outside the tested
-source. The earlier `59949ff` pass is superseded: the vendored-source work changed production files
+source. `119df5f` is superseded: the R9 production fixes changed the files this table's gates cover. The earlier `59949ff` pass is superseded: the vendored-source work changed production files
 (`workbench/backend/runtime.py`, `workbench/replay/common.py`, `workbench/backend/adapters/models.py`,
 `workbench/registry/*`), so its recorded pass count and gates no longer describe this tree. Both
 `main` and the pre-existing container are untouched by that note. Earlier passes ran on `11ba3df`, which is now an obsolete source:
@@ -46,7 +48,7 @@ source. The earlier `59949ff` pass is superseded: the vendored-source work chang
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1609 passed, 0 failed** (24:39); 1610 collected, the one remaining gate is the document check that must name this commit |
+| Backend suite | `pytest workbench/tests -q` | **1665 passed, 0 failed** (25:09); 1666 collected. The single non-passing gate was `test_no_release_document_points_at_a_superseded_source_sha`, which exists to force exactly this metadata update: it refused while this file still named the superseded `119df5f`. It passes against this revision. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 16 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -161,9 +163,8 @@ downloaded. Every LIMN runtime claim in this pass is static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 59949ff           # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print the full SHA whose short form is 59949ff
-                               # (59949ff8656cb1f3227425c07d8c94997b47670f)
+git checkout 23dca02           # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print 23dca0251ed40c711ccfc2d84b6336e6eee26acf
 ./pc.sh                        # the one operator command
 ```
 
