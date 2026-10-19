@@ -202,9 +202,20 @@ mọi task đều chạy ở đó, trừ hai auditor hẹp.
 | Lượt | Kết quả thật |
 |---|---|
 | Regression vùng thay đổi (10 file) | **292 passed, 5 skipped** |
+| Sau khi hoàn tất mọi sửa (7 file trọng tâm) | **179 passed, 5 skipped** |
 | Lifecycle 5 wrapper (2 tiến trình, interpreter model) | **6 passed** |
-| Full suite + JUnit | xem `FINAL_PC_RELEASE_VERDICT.md` |
-| Mutations / release verifier / acceptance | xem cùng chỗ |
+| Full suite + JUnit | **1740 passed, 0 failed, 11 skipped** — 1752 collected (`/tmp/r11probe/full_r11b.log`) |
+| 45 test từng fail vì hết đĩa | **298 passed** khi chạy lại đủ chỗ |
+| 12 test fail vì assembler hết đĩa | **12 passed** khi chạy lại đủ chỗ |
+| Mutation checks | **PASSED** M1 M2 M3 M4 M5 |
+| release_verify --offline | 0 tiêu chí chưa đạt, 5 pending |
+| Frontend build | `✓ built in 177ms` |
+| Fresh clone từ GitHub | **172 passed, 10 skipped**; production tree = tested source |
+
+**Về 45 + 12 test fail trong lượt full suite:** chúng không phải lỗi sản phẩm mà là hệ quả của đĩa
+đầy giữa lượt chạy — assembler không ghi được `.o`, và `TemporaryDirectory` không tạo được file.
+Chạy lại từng nhóm khi đủ chỗ: **tất cả pass**. Ghi rõ ở đây để con số 1740 không bị đọc như thể
+lượt chạy đầu đã sạch.
 
 ## 8. Việc còn lại trên PC
 
