@@ -365,7 +365,12 @@ def test_scenario_g_grandchild_ignoring_sigterm_is_still_stopped(master, monkeyp
     # The evaluator must be in the job's group for a group signal to reach it: a child that
     # detaches into its own session is outside the documented boundary.
     job_group = module.JOBS._process_groups.get(job_id)
-    evaluator_group = int(Path(f"/proc/{evaluator_pid}/stat").read_text().split()[4])
+    # `os.getpgid` reads the kernel's own process-group id for that pid. Parsing
+    # `/proc/<pid>/stat` field 5 reads the same number in most containers, but the field is the
+    # group id *in the reader's pid namespace*, and a nested namespace can make the two disagree
+    # for reasons that say nothing about the evaluator's group -- which is why the assertion is
+    # made through the syscall rather than through a file whose layout is a host detail.
+    evaluator_group = os.getpgid(evaluator_pid)
     assert evaluator_group == job_group, (
         f"the evaluator left the job's process group: {evaluator_group} != {job_group}")
 

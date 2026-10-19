@@ -91,12 +91,27 @@ EOF
 STUB_PID=$!
 for _ in $(seq 1 50); do curl -fsS "http://127.0.0.1:${STUB_PORT}/api/models" >/dev/null 2>&1 && break; sleep 0.1; done
 
+# M1/M2 drive the real pilot launcher, which refuses to start without the operator's
+# `docker/.env` (gitignored, host-specific paths). That is a prerequisite, not a mutant, so its
+# absence is a skip with a stated reason rather than a "NOT DETECTED" failure -- the same shape the
+# docker checks below use. The mutation is still injected and restored either way, so a host that
+# HAS the file exercises it unchanged.
+if [[ ! -f "${HERE}/.env" ]]; then
+    SKIP_PILOT_MUTANTS=1
+    say "== M1/M2 pilot mutants: SKIP NOT VERIFIED (${HERE}/.env absent; the pilot launcher refuses to start without it)"
+    say "   reason: M1/M2 need a running pilot; copy .env.example to .env and set the host paths to exercise them"
+else
+    SKIP_PILOT_MUTANTS=0
+fi
+
 say "== M1 BUG 1: pilot JSON parse discards the fetched response =="
 backup "${HERE}/run.sh"
 mutate M1 "${HERE}/run.sh" 'printf '"'"'%s'"'"' "${response}" | python3 -c' \
     'printf '"'"'%s'"'"' "${response}" >/dev/null && python3 -c'
 OUT="$(WORKBENCH_BACKEND_PORT=${STUB_PORT} bash "${HERE}/run.sh" pilot limn 2>&1 || true)"
-if echo "$OUT" | grep -q "malformed JSON"; then
+if (( SKIP_PILOT_MUTANTS )); then
+    say "  SKIP M1: NOT VERIFIED (pilot launcher has no .env to start from)"
+elif echo "$OUT" | grep -q "malformed JSON"; then
     say "  DETECTED: pilot fails with a clear malformed-JSON error (BUG 1 regression caught)"
     PASSED+=(M1)
 else
@@ -112,7 +127,9 @@ mutate M2 "${HERE}/run.sh" "bundles[0].get('bundle_id') or m['checkpoints'][0]['
 OUT="$(WORKBENCH_BACKEND_PORT=${STUB_PORT} bash "${HERE}/run.sh" pilot limn 2>&1 || true)"
 # With the mutation the launcher would queue the DRESS-only checkpoint; the guarded plan
 # answers 409 evaluation_blocked naming the bundle requirement, which is the detectable delta.
-if echo "$OUT" | grep -q "checkpoint=base_iter0_dress"; then
+if (( SKIP_PILOT_MUTANTS )); then
+    say "  SKIP M2: NOT VERIFIED (pilot launcher has no .env to start from)"
+elif echo "$OUT" | grep -q "checkpoint=base_iter0_dress"; then
     say "  DETECTED: launcher degraded to dress-only selection (BUG 6 regression caught)"
     PASSED+=(M2)
 else
