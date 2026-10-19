@@ -53,6 +53,24 @@ Báo cáo điều tra đi kèm trong cùng thư mục:
 
 ---
 
-## 3. Việc còn phải làm trên PC
+## 3. Bằng chứng E2E trên cây đã push
+
+Chạy trên **fresh clone** (`/tmp/r10clone`, clone từ remote, không có file untracked của máy này),
+backend khởi động từ chính clone đó:
+
+| Bước | Kết quả |
+|---|---|
+| `pytest` 7 file vùng thay đổi (R10 + R9 regression + staging + handoff + fresh-clone + integrity + planner) | **193 passed, 1 skipped** |
+| `pytest` 4 file runtime/output-path (`release_blocker_evaluation_output/interpreter/mutations`, `evaluate_models`) | **177 passed** |
+| `pytest` 4 file launch/status/cancel/ownership | **67 passed** |
+| `pytest` `test_e2e_release_chain` + `test_release_gate_scenarios` | **10 passed** |
+| `acceptance.sh` với backend từ clone | **ACCEPTANCE PASSED** (2 skip có lý do: queue rỗng, `frontend/dist` không có trong clone) |
+| Dark API thật: `POST /api/jobs` | **refuse đúng** khi thiếu dataset (`FashionIQ … requirement missing`), khi thiếu checkpoint (`checkpoint missing`), và khi checkpoint là placeholder (`checkpoint hash mismatch`). Không tạo job giả. |
+
+**Không** có job nào chạy hết tới evaluator trên máy này. Lý do nằm ở §2: không có checkpoint tác
+giả, không GPU. Cái chứng minh được là **scheduler từ chối đúng và nêu đúng lý do**, và đường
+launch/status/cancel đã có test chạy qua subprocess thật ở trên.
+
+## 4. Việc còn phải làm trên PC
 
 Xem `MODEL_STATUS_SPEC.md` §6 cho danh sách lệnh đầy đủ và artifact cần stage.
