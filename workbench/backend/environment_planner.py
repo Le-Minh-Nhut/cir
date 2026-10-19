@@ -198,7 +198,30 @@ def _package_name(value: str) -> str:
     return re.sub(r"[-_.]+", "-", value.strip().lower())
 
 
+#: A direct reference -- `name @ <url>`, optionally with `@<rev>` -- is a requirement with a SOURCE,
+#: not a version constraint. It is kept verbatim and carried through as `spec` so the generated
+#: install command asks for the same source the registry declared. Collapsing it to `UNKNOWN` (which
+#: is what this parser used to do) silently substituted a same-named distribution from PyPI: the
+#: pinned `clip @ git+https://github.com/openai/CLIP.git@a1d071...` became a bare `clip`, and pip
+#: installed `clip==0.2.0` -- an unrelated clipboard package with none of the OpenAI CLIP API the
+#: evaluator calls. The marker keeps a reference distinguishable from a version specifier everywhere
+#: downstream, because the two cannot be compared or merged by version.
+_REFERENCE_PREFIX = "@ref:"
+
+def _is_reference(spec: str | None) -> bool:
+    return bool(spec) and str(spec).startswith(_REFERENCE_PREFIX)
+
+def _reference_of(spec: str) -> str:
+    """The `name @ url@rev` request a spec carries, or the spec itself when it carries none."""
+    return str(spec)[len(_REFERENCE_PREFIX):] if _is_reference(spec) else str(spec)
+
 def _parse_requirement(line: str) -> tuple[str, str] | None:
+    """`(distribution, spec)` for one requirement line.
+
+    A direct reference keeps its source: the returned spec is `@ref:<name> @ <url>@<rev>`, which
+    `_pip_specs_for_group` passes to the installer unchanged so the installed distribution is the one
+    the registry declared rather than a same-named stranger.
+    """
     line = line.split(" #", 1)[0].split(";", 1)[0].strip()
     if not line or line.startswith(("#", "-")):
         return None
@@ -207,7 +230,8 @@ def _parse_requirement(line: str) -> tuple[str, str] | None:
         return None
     name, spec = _package_name(match.group(1)), match.group(2).strip()
     if spec.startswith("@"):
-        return name, "UNKNOWN"
+        # `name @ url` with no revision is still a source identity; keep it whole.
+        return name, f"{_REFERENCE_PREFIX}{name} {spec}"
     return name, spec or "*"
 
 
@@ -465,6 +489,30 @@ def _distribution_names(module: str, available: set[str]) -> set[str]:
 
 
 def _add_package(packages: dict[str, str], ranges: dict[str, str], name: str, spec: str) -> None:
+    # A direct reference is not a version and cannot be merged with one. It is stored verbatim, and a
+    # second, DIFFERENT reference for the same name is a conflict rather than a last-writer-wins
+    # overwrite: two models sharing a group must not silently end up on whichever source was seen
+    # second, because that is how an evaluator loses the revision it was validated against.
+    if _is_reference(spec):
+        request = _reference_of(spec)
+        previous = packages.get(name)
+        if previous is not None and previous != request:
+            if _is_reference(previous):
+                raise ValueError(
+                    f"{name} is required from two different sources in one environment: "
+                    f"{_reference_of(previous)!r} and {request!r}. Split the models into separate "
+                    "environments or align the declared source.")
+            raise ValueError(
+                f"{name} is required both as {previous!r} and from {request!r} in one environment; "
+                "the two cannot describe the same installation.")
+        packages[name] = f"{_REFERENCE_PREFIX}{request}"
+        return
+    # The reverse direction of the check above: a version arriving after a source requirement is
+    # the same contradiction, and overwriting here would silently drop the declared source.
+    if _is_reference(packages.get(name)):
+        raise ValueError(
+            f"{name} is required from {_reference_of(packages[name])!r} and also as version "
+            f"{spec!r} in one environment; the two cannot describe the same installation.")
     exact, bounded = [], []
     for part in spec.split(","):
         part = part.strip()
@@ -552,13 +600,22 @@ def model_constraints(model: dict, third_party_root: Path | None = None) -> dict
                     if (parsed := _parse_requirement(line))]
     registry_pins = [parsed for declaration in declarations
                      if (parsed := _parse_requirement(str(declaration)))]
+    # A checkout's `requirements.txt` is the authoritative VERSION source, but it is not the whole
+    # SOURCE contract: a registry declaration the manifest does not mention still says where a
+    # dependency must come from. Dropping those is how SPRC -- whose manifest never mentions `clip`
+    # -- lost the pinned `clip @ git+https://github.com/openai/CLIP.git@a1d071...` and ended up with
+    # a bare `clip`, for which pip installed the unrelated `clip==0.2.0`. Registry declarations for
+    # names the manifest does not cover are therefore carried alongside it, and a declared reference
+    # always wins over an invented bare name because a source cannot be reconstructed from a name.
+    manifest_names = {name for name, _ in manifest}
+    carried = [(name, spec) for name, spec in registry_pins if name not in manifest_names]
     traced = _evaluator_imports(model, third_party_root)
     imports, guarded_modules = traced if traced is not None else (None, set())
     guard_evidence: list[str] = []
     if imports is None:
-        selected = manifest if requirements else registry_pins
+        selected = (manifest + carried) if requirements else registry_pins
     else:
-        source_pins = manifest if requirements else registry_pins
+        source_pins = (manifest + carried) if requirements else registry_pins
         available = {name for name, _ in source_pins}
         modules = imports - {"torch", "torchvision"}
         selected_names = {name for module in modules for name in _distribution_names(module, available)}
@@ -573,14 +630,22 @@ def model_constraints(model: dict, third_party_root: Path | None = None) -> dict
         # the source, not a reason to omit the package. Guarded imports are deliberately NOT
         # converted: the pinned code carries a fallback for their absence, so installing them
         # provisions code the run never reaches.
+        declared_sources = {name: spec for name, spec in source_pins if _is_reference(spec)}
         for module in modules:
             names = _distribution_names(module, available)
             if not names:
                 names = {_package_name(name) for name in _IMPORT_DISTRIBUTIONS.get(module.lower(), (module,))}
             for name in names:
-                if name not in selected_names:
+                if name in selected_names:
+                    continue
+                if name in declared_sources:
+                    # The registry already says where this import's distribution comes from. An
+                    # UNKNOWN entry would ask the installer for whatever PyPI calls it, which is a
+                    # different package for `clip`, so the declared source is used instead.
+                    selected.append((name, declared_sources[name]))
+                else:
                     selected.append((name, "UNKNOWN"))
-                    selected_names.add(name)
+                selected_names.add(name)
         # The guarded names are still auditable, and the plan says which ones they were and what
         # provides them, so a reader can see the trace and provision one deliberately if a chosen
         # code path needs it. They are never auto-installed.
@@ -732,6 +797,18 @@ def _constraints(specs: list[dict]) -> tuple[dict | None, str | None]:
                 combined[field].extend(_terms(spec[field], field))
         for field in ("packages", "ranges"):
             for name, value in spec[field].items():
+                if _is_reference(value):
+                    # A source requirement is merged by SOURCE IDENTITY, never converted to version
+                    # terms: `_terms` would mangle the URL, and two models sharing a group must come
+                    # from the same revision or not share the group at all.
+                    already = combined["packages"].get(name)
+                    if already is not None and _is_reference(already):
+                        if already != value:
+                            return None, (
+                                f"{name} is required from two different sources in one environment: "
+                                f"{_reference_of(already)!r} and {_reference_of(value)!r}")
+                    combined["packages"][name] = value
+                    continue
                 if value not in {"UNKNOWN", "*"}:
                     combined[field].setdefault(name, []).extend(_terms(value, name))
                 else:
@@ -741,7 +818,12 @@ def _constraints(specs: list[dict]) -> tuple[dict | None, str | None]:
         if not _has_solution(combined[field]):
             return None, f"{field} constraints do not intersect"
     for name in sorted(set(combined["packages"]) | set(combined["ranges"])):
-        combined["packages"][name] = sorted(set(combined["packages"].get(name, [])))
+        stored = combined["packages"].get(name)
+        if _is_reference(stored):
+            # Nothing to intersect: a source is a single identity, already checked above.
+            combined["ranges"].pop(name, None)
+            continue
+        combined["packages"][name] = sorted(set(stored or []))
         combined["ranges"][name] = sorted(set(combined["ranges"].get(name, [])))
         if not _has_solution(combined["packages"][name] + combined["ranges"][name]):
             return None, f"{name} constraints do not intersect"
@@ -776,7 +858,12 @@ def _conda_constraints(constraints: dict) -> dict:
     """Keep only constraints conda's configured channels can resolve."""
     pip_only = set(constraints.get("pip_only", ())) | _NON_CONDA_PACKAGES
     for name in set(constraints["packages"]) | set(constraints["ranges"]):
-        value = constraints["packages"].get(name, []) or constraints["ranges"].get(name, [])
+        stored_value = constraints["packages"].get(name, [])
+        if _is_reference(stored_value):
+            # A source requirement is pip-only and has no conda form.
+            pip_only.add(name)
+            continue
+        value = stored_value or constraints["ranges"].get(name, [])
         terms = _terms(" ".join(f"{op}{val}" for op, val in value), name)
         if any(op in ("==", "===") and version in _NON_CONDA_PACKAGE_PINS.get(name, ())
                for op, version in terms):
@@ -1119,9 +1206,11 @@ def plan_environments(models: list[dict], *, solver=None,
                               for name, value in spec["packages"].items() if value == "UNKNOWN")
             unresolved.extend(f"{mid}: {name} is unversioned in source"
                               for name, value in spec["packages"].items() if value == "*")
-        group_packages = {name: _display(constraints["packages"].get(name, []) +
-                                         constraints["ranges"].get(name, [])) or "*"
-                          for name in sorted(set(constraints["packages"]) | set(constraints["ranges"]))}
+        # A reference is displayed with its source; a versioned entry with its terms.
+        group_packages = {name: (_reference_of(stored) if _is_reference(stored)
+                                 else _display(stored + constraints["ranges"].get(name, [])) or "*")
+                          for name in sorted(set(constraints["packages"]) | set(constraints["ranges"]))
+                          for stored in [constraints["packages"].get(name, [])]}
         group_packages.update({"torch": _display(constraints["torch"]) or "*",
                                "torchvision": _display(constraints["torchvision"]) or "*",
                                "cuda-version": _display(constraints["cuda"]) or "*"})
@@ -1276,22 +1365,95 @@ def _pip_specs_for_group(group: dict, models: dict[str, dict]) -> list[str]:
             specs.append(f"torchvision{'' if any(vision_spec.startswith(op) for op in ('==', '>=', '<=', '>', '<', '~=', '!=')) else '=='}{vision_spec}")
 
     pip_only_names = set(constraints.get("pip_only", [])) | _NON_CONDA_PACKAGES
-    pip_only_names.update(name for name in set(constraints.get("packages", {})) |
-                          set(constraints.get("ranges", {}))
-                          if any(op in ("==", "===") and version in _NON_CONDA_PACKAGE_PINS.get(name, ())
-                                 for op, version in constraints.get("packages", {}).get(name, []) +
-                                 constraints.get("ranges", {}).get(name, [])))
+    # A reference is a source, never a pin, and it is stored as a plain string rather than a term
+    # list -- so it is skipped here explicitly instead of being concatenated as if it were terms.
+    for name in set(constraints.get("packages", {})) | set(constraints.get("ranges", {})):
+        stored = constraints.get("packages", {}).get(name, [])
+        if _is_reference(stored):
+            # A source requirement is pip-only by construction and has no version terms to scan.
+            pip_only_names.add(name)
+            continue
+        terms = stored + constraints.get("ranges", {}).get(name, [])
+        if any(op in ("==", "===") and version in _NON_CONDA_PACKAGE_PINS.get(name, ())
+               for op, version in terms):
+            pip_only_names.add(name)
     for name in sorted(set(constraints.get("packages", {})) | set(constraints.get("ranges", {}))):
         if name in ("cuda-version", "torch", "torchvision"):
             continue
         if name in pip_only_names:
-            terms = constraints.get("packages", {}).get(name, []) + constraints.get("ranges", {}).get(name, [])
+            # A reference is stored whole, not as terms, so it is read before any concatenation.
+            stored = constraints.get("packages", {}).get(name, [])
+            if _is_reference(stored):
+                specs.append(_reference_of(stored))
+                continue
+            terms = stored + constraints.get("ranges", {}).get(name, [])
             disp = _display(terms)
-            if disp and not _unknown(disp):
+            if _is_reference(disp):
+                # The registry declared a SOURCE. Emitting the bare name here is what let pip pick a
+                # same-named distribution from PyPI instead, so the request is passed through whole
+                # and the installer fetches exactly the declared URL and revision.
+                specs.append(_reference_of(disp))
+            elif disp and not _unknown(disp):
                 specs.append(f"{name}{'' if any(disp.startswith(op) for op in ('==', '>=', '<=', '>', '<', '~=', '!=')) else '=='}{disp}")
             else:
                 specs.append(name)
     return specs
+
+
+def _installed_direct_url(interpreter: Path, distribution: str) -> str | None:
+    """The source a distribution was installed from, read from its own `direct_url.json`.
+
+    `pip` and `uv` write this file into `<dist>.dist-info/` when a requirement was a URL or VCS
+    reference. Its absence means the distribution came from an index, which for a requirement
+    declared as a direct reference is a different package than the one that was asked for.
+    """
+    probe = (
+        "import json, sys\n"
+        "from importlib.metadata import distribution, PackageNotFoundError\n"
+        "try:\n"
+        "    meta = distribution(sys.argv[1])\n"
+        "except PackageNotFoundError:\n"
+        "    print(''); raise SystemExit\n"
+        "raw = meta.read_text('direct_url.json')\n"
+        "if not raw:\n"
+        "    print(''); raise SystemExit\n"
+        "data = json.loads(raw)\n"
+        "vcs = data.get('vcs_info') or {}\n"
+        "commit = vcs.get('resolved_commit_id') or vcs.get('commit_id') or ''\n"
+        "print((data.get('url') or '') + ' ' + commit)\n")
+    try:
+        result = subprocess.run([str(interpreter), "-c", probe, distribution],
+                                capture_output=True, text=True, check=False, timeout=60)
+    except Exception:
+        return None
+    recorded = result.stdout.strip()
+    return recorded or None
+
+
+#: Upstream packaging defects whose complaint is matched EXACTLY. Each entry needs both the message
+#: and a demonstration that the module itself is importable in the same interpreter, because the
+#: point of the exception is that the metadata is wrong, not that the dependency is absent.
+def _is_known_pip_check_defect(line: str, interpreter: Path) -> bool:
+    """True only for a measured upstream metadata defect that does not affect the module."""
+    match = re.fullmatch(r"(decord) (\S+) is not supported on this platform", line)
+    if not match:
+        return False
+    distribution, declaration = match.groups()
+    expected = _KNOWN_PLATFORM_TAG_DEFECTS.get(distribution)
+    if expected is None or expected != declaration:
+        return False
+    # The claim is "the metadata is wrong", so the module must actually import.
+    probe = subprocess.run(
+        [str(interpreter), "-c", f"import {distribution}"],
+        capture_output=True, text=True, check=False, timeout=60)
+    return probe.returncode == 0
+
+
+#: Distribution -> the version whose wheel metadata is known to carry a wrong platform tag.
+#: `decord==0.6.0`: the manylinux wheel declares `Tag: cp36-cp36m-manylinux2010_x86_64` while
+#: shipping a `py3-none-` filename, so Python 3.8 environments are refused by `pip check` even
+#: though the extension imports and runs.
+_KNOWN_PLATFORM_TAG_DEFECTS = {"decord": "0.6.0"}
 
 
 def _verify_group_interpreter(
@@ -1316,9 +1478,23 @@ def _verify_group_interpreter(
                                  capture_output=True, text=True, check=False, timeout=60)
     except Exception as exc:
         return False, f"pip check invocation failed: {exc}", details
-    details["pip_check"] = {"returncode": pip_res.returncode, "stdout": pip_res.stdout.strip(), "stderr": pip_res.stderr.strip()}
+    details["pip_check"] = {"returncode": pip_res.returncode, "stdout": pip_res.stdout.strip(),
+                            "stderr": pip_res.stderr.strip()}
     if pip_res.returncode != 0:
-        return False, f"pip check failed: {pip_res.stdout.strip()} {pip_res.stderr.strip()}", details
+        # `pip check` is a precondition, not a formality, so a failure blocks unless it is a KNOWN
+        # UPSTREAM PACKAGING DEFECT that has been measured. `decord==0.6.0` publishes
+        # `decord-0.6.0-py3-none-manylinux2010_x86_64.whl` whose own WHEEL metadata declares
+        # `Tag: cp36-cp36m-manylinux2010_x86_64`, so on Python 3.8 the checker reports
+        # "not supported on this platform" while `import decord` and `VideoReader` work. Editing the
+        # installed wheel metadata is not acceptable, and dropping the check would hide real
+        # breakage, so the complaint is matched EXACTLY and only for the distribution and message
+        # that were measured; anything else still blocks.
+        remaining = [line for line in pip_res.stdout.strip().splitlines()
+                     if line.strip() and not _is_known_pip_check_defect(line.strip(), interpreter)]
+        if remaining:
+            return False, f"pip check failed: {' '.join(remaining)} {pip_res.stderr.strip()}", details
+        details["pip_check_known_defects"] = [line for line in pip_res.stdout.strip().splitlines()
+                                              if line.strip()]
 
     prefix = str(Path(group["conda_env_path"]).resolve())
     try:
@@ -1330,7 +1506,29 @@ def _verify_group_interpreter(
     for name in sorted(set(constraints.get("packages", {})) | set(constraints.get("ranges", {}))):
         if name == "cuda-version":
             continue
-        terms = constraints.get("packages", {}).get(name, []) + constraints.get("ranges", {}).get(name, [])
+        stored = constraints.get("packages", {}).get(name, [])
+        if _is_reference(stored):
+            # A source requirement cannot be checked by version. It is checked by SOURCE IDENTITY:
+            # a distribution installed from a URL or VCS records that in its own `direct_url.json`
+            # metadata, which is what `pip` itself uses. Installing the same import name from PyPI
+            # instead -- `clip==0.2.0` for the pinned OpenAI CLIP -- leaves no such record, and this
+            # is the check that refuses it. Matching the name, or a version string, is not identity.
+            request = _reference_of(stored)
+            details.setdefault("source_references", {})[name] = request
+            recorded = _installed_direct_url(interpreter, name)
+            if recorded is None:
+                return False, (
+                    f"Package {name} was required from {request!r}, but the environment records no "
+                    "direct-URL source for it: the installed distribution did not come from the "
+                    "declared source"), details
+            details.setdefault("source_urls", {})[name] = recorded
+            declared_revision = request.rsplit("@", 1)[-1] if "@" in request.split("+")[-1] else None
+            if declared_revision and declared_revision not in recorded:
+                return False, (
+                    f"Package {name} was required from revision {declared_revision}, but the "
+                    f"environment recorded {recorded!r}"), details
+            continue
+        terms = stored + constraints.get("ranges", {}).get(name, [])
         spec_str = ",".join(f"{op}{val}" for op, val in terms)
         norm_name = runtime.normalize_distribution_name(name)
         inst_ver = installed.get(norm_name)
@@ -1451,9 +1649,11 @@ def _build_group_dict(
                           for name, value in spec["packages"].items() if value == "UNKNOWN")
         unresolved.extend(f"{mid}: {name} is unversioned in source"
                           for name, value in spec["packages"].items() if value == "*")
-    group_packages = {name: _display(constraints["packages"].get(name, []) +
-                                     constraints["ranges"].get(name, [])) or "*"
-                      for name in sorted(set(constraints["packages"]) | set(constraints["ranges"]))}
+    # A reference is displayed with its source; a versioned entry with its terms.
+    group_packages = {name: (_reference_of(stored) if _is_reference(stored)
+                             else _display(stored + constraints["ranges"].get(name, [])) or "*")
+                      for name in sorted(set(constraints["packages"]) | set(constraints["ranges"]))
+                      for stored in [constraints["packages"].get(name, [])]}
     group_packages.update({"torch": _display(constraints["torch"]) or "*",
                            "torchvision": _display(constraints["torchvision"]) or "*",
                            "cuda-version": _display(constraints["cuda"]) or "*"})

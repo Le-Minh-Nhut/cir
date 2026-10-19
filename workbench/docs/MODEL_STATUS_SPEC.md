@@ -385,14 +385,29 @@ export WORKBENCH_HINT_PYTHON=/path/to/hint-env/bin/python
 export WORKBENCH_HABIT_PYTHON=/path/to/habit-env/bin/python
 #    ... v.v. cho intent, conesep, airknow, sprc, limn, encoder, ...
 
-# 7. Chạy thật — bằng interpreter CỦA MODEL, không phải venv workbench.
-#    Wrapper tự đọc `python_env_var` qua `runtime.python_executable`, nên lệnh dưới đây
-#    phải chạy bằng venv workbench (nó chỉ điều phối), và nó sẽ spawn đúng interpreter model:
-python -m workbench.cli replay --model hint --checkpoint-root <dir> --dataset-root <FIQ>
-#    Hoặc gọi trực tiếp wrapper bằng interpreter CỦA MODEL:
+# 7. Chạy thật. Repo KHÔNG có `workbench.cli` — dùng đúng entrypoint bên dưới.
+#    Đặt các biến đường dẫn thật, có dấu ngoặc kép (đừng để placeholder `<...>` trong shell):
+FIQ="/path/to/FashionIQ"                       # canonical FashionIQ root
+CKPT="/path/to/checkpoints/hint"               # run directory có fashioniq.pt
+SRC="$PWD/workbench/third_party/HINT"
+
+# 7a. Kiểm trước, không load model — chạy được bằng venv workbench:
+"$WORKBENCH_HINT_PYTHON" workbench/replay/hint.py --preflight-only \
+  --checkpoint-root "$CKPT" --dataset-root "$FIQ" --source-root "$SRC"
+
+# 7b. Chạy thật — bằng interpreter CỦA MODEL, đúng ba cờ bắt buộc của wrapper:
 "$WORKBENCH_HINT_PYTHON" workbench/replay/hint.py \
-  --checkpoint-root <dir> --dataset-root <FIQ --source-root workbench/third_party/HINT
+  --checkpoint-root "$CKPT" --dataset-root "$FIQ" --source-root "$SRC"
+
+#    Wrapper hỗ trợ thêm: --batch-size, --backbone, --device, --category (một category),
+#    --preflight-only, --output. Chạy `--help` để xem đúng tham số của từng model:
+"$WORKBENCH_HINT_PYTHON" workbench/replay/hint.py --help
+python workbench/replay/limn.py --help     # LIMN dùng các cờ riêng của nó
 ```
+> **Đã sửa ở R12:** bản trước ghi `python -m workbench.cli replay ...`; module đó **không tồn tại**
+> trong repo, nên lệnh không chạy được. Câu giải thích kèm theo ("wrapper spawn interpreter đúng qua
+> CLI này") cũng mô tả code không có. Wrapper đọc `python_env_var` qua `runtime.python_executable`
+> khi nó tự spawn, nhưng bản thân nó phải được gọi bằng interpreter của model.
 
 > **Đính chính (R11):** các đoạn cũ của tài liệu này mô tả `conda-meta` như bằng chứng một môi
 > trường kế thừa package của base, và mô tả `WORKBENCH_DCNET_DATA_DIR` như một override còn hiệu

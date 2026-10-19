@@ -20,7 +20,7 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | The full run collected 1752 tests; 1740 passed, 11 skipped. The count guard compares the result line below against what this tree collects. |
+| Suite accounting | The full run collected 1752 tests; 1740 passed, 11 skipped. The count guard requires the recorded passes and skips to sum exactly to what the tree collects. |
 | TESTED_SOURCE_SHA | `cd2de4b` — every gate below ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |

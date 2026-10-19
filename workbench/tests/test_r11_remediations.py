@@ -7,6 +7,7 @@ specs for the discovery defect, the stager's real filesystem effects, and the DC
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import subprocess
@@ -242,26 +243,63 @@ def test_an_import_namespace_is_not_assumed_to_be_a_distribution() -> None:
             f"{model_id}: `lavis` resolves inside the checkout, so it is not an external import")
 
 
-def test_the_plan_never_installs_a_module_the_run_provably_does_not_load() -> None:
-    """The census that settled R11-03, asserted so the plan cannot drift back.
+def test_the_plan_installs_what_the_native_class_module_imports() -> None:
+    """The dependency contract is the pinned class file's own imports, not a do-not-install list.
 
-    Importing `lavis.models` in a real 3.8 environment with the pinned checkout on the path and
-    recording which top-level modules enter `sys.modules` showed that `torchaudio`, `knn_cuda`,
-    `sklearn`, `nltk`, `h5py`, `matplotlib` and `termcolor` never load, while `decord`,
-    `webdataset`, `IPython`, `easydict`, `peft`, `diffusers` and `pycocoevalcap` do. The first group
-    is what a text scan cannot decide (`if torch.cuda.is_available(): from knn_cuda import KNN`), so
-    the adapters declare it and the scanner honours the declaration.
+    This test previously asserted that `scikit-learn` was ABSENT from all five plans. That was a
+    false invariant built on a broken census: the census imported `lavis.models`, which fails partway
+    when a dependency is missing, so everything needed after the failure point was never counted.
+    `HABIT.py:24-27`, `INTENT/.../blip2_cir.py:30`, `ConeSep.py:24` and `AirKnow/.../blip2_cir.py:19`
+    import `sklearn` at module scope with no guard, and `INTENT/.../blip2_cir.py:14` imports
+    `matplotlib.pyplot`; a clean environment built from the old plan could not import the checkpoint
+    class at all.
+
+    The property asserted here is the one that matters and cannot be satisfied by matching an
+    internal list: every module the model's OWN native class file imports at module scope must be
+    provided by the plan.
     """
-    never_loaded = {"torchaudio", "knn-cuda", "scikit-learn", "nltk", "h5py", "matplotlib",
-                    "mpl-toolkits", "termcolor", "tensorflow", "apex", "horovod", "spacy", "moviepy"}
-    for model_id in ("hint", "habit", "intent", "conesep", "airknow"):
+    # The class module each wrapper loads for its checkpoint. Read from the registry's own file
+    # layout rather than from a shared assumption, so a model that gains an import is caught here.
+    class_files = {
+        "habit": ("HABIT", "lavis/models/blip2_models/HABIT.py"),
+        "intent": ("INTENT", "lavis/models/blip2_models/blip2_cir.py"),
+        "conesep": ("ConeSep", "lavis/models/blip2_models/ConeSep.py"),
+        "airknow": ("AirKnow", "lavis/models/blip2_models/blip2_cir.py"),
+        "hint": ("HINT", "lavis/models/blip2_models/HINT.py"),
+    }
+    for model_id, (checkout, relative) in class_files.items():
+        source_file = REPO / "workbench" / "third_party" / checkout / relative
+        if not source_file.is_file():
+            pytest.skip(f"{model_id}: pinned class file absent: {source_file}")
+        tree = ast.parse(source_file.read_text(encoding="utf-8", errors="replace"))
+        imported = set()
+        for node in tree.body:  # module scope only: a lazy import inside a function is not a requirement
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                imported.add(node.module.split(".")[0])
         model = model_by_id(model_id)
         constraints = planner.model_constraints({**model, "source_available": True})
         installed = set(constraints["packages"]) | set(constraints["ranges"])
-        offenders = sorted(installed & never_loaded)
-        assert not offenders, (
-            f"{model_id}: the plan installs {offenders}, which the module census showed never "
-            "enter sys.modules on this evaluation path")
+        declared = {planner._package_name(d.split("==")[0].split("@")[0].strip())
+                    for d in (model.get("environment") or {}).get("packages") or []}
+        provided = installed | declared
+        for module in sorted(imported):
+            # Only the checkpoint-class path is asserted: stdlib and the checkout's own package are
+            # not distributions, and torch/torchvision are carried as their own constraints.
+            if module in sys.stdlib_module_names or module in ("lavis", "torch", "torchvision"):
+                continue
+            # The distribution that provides the module: the project's map first (`sklearn` ->
+            # `scikit-learn`, `mpl_toolkits` -> `matplotlib`), then the name itself. Comparing the
+            # module name directly to the plan would report a provided dependency as missing, which
+            # is the opposite failure of the one this test exists to catch.
+            distribution = {planner._package_name(name)
+                            for name in planner._IMPORT_DISTRIBUTIONS.get(module.lower(), (module,))}
+            if not (distribution & provided):
+                raise AssertionError(
+                    f"{model_id}: its native class file {relative} imports {module} at module scope, "
+                    f"but no plan or registry entry provides {sorted(distribution)}. "
+                    f"Installed: {sorted(installed)}")
 
 
 def test_the_required_trace_still_names_what_the_evaluation_imports() -> None:

@@ -110,15 +110,20 @@ class HintAdapter(OfficialScriptAdapter):
     # `__import__("datasets")` and `importlib.import_module("test")` resolve to the checkout's own
     # top-level modules, which the launcher puts on `sys.path`. Neither is a PyPI distribution.
     provided_modules = ("datasets", "test", "data_utils", "utils")
-    # Measured, not assumed: importing `lavis.models` in a real 3.8 environment with the pinned
-    # checkout on the path and recording which top-level modules enter `sys.modules` leaves these
-    # absent. A text scan cannot see `if torch.cuda.is_available(): from knn_cuda import KNN`
-    # (`ulip_models/pointbert/dvae.py:6-7`), an audio encoder only a video task imports
-    # (`beats/BEATs.py:14`), or a re-export whose module the evaluation never reaches. Leaving them
-    # as requirements installed torchaudio, knn-cuda, matplotlib, scikit-learn, nltk, h5py and
-    # termcolor into every image-retrieval profile.
-    unreachable_modules = ("torchaudio", "knn_cuda", "sklearn", "nltk", "h5py",
-                           "matplotlib", "mpl_toolkits", "termcolor")
+    # Names a text scan reaches but the evaluation does not load. The earlier version of this list
+    # was taken from a census that called `importlib.import_module("lavis.models")` -- an import that
+    # FAILS PARTWAY when a dependency is missing, so every module needed after the failure point was
+    # never counted and five of these were classified from an incomplete import. `sklearn` and
+    # `matplotlib` in particular are imported at module scope by native class files
+    # (`HABIT.py:24-27`, `INTENT/.../blip2_cir.py:14,30`, `ConeSep.py:24`,
+    # `AirKnow/.../blip2_cir.py:19`), so they are REQUIRED, not unreachable, and excluding them made
+    # a clean install unable to import the checkpoint class at all.
+    #
+    # What remains excluded is genuinely out of reach on this path: `torchaudio` and `knn_cuda` sit
+    # behind `if torch.cuda.is_available():` (`ulip_models/pointbert/dvae.py:6-7`) or in the audio
+    # encoder only a video task imports (`beats/BEATs.py:14`); `termcolor` is reached through the
+    # same unused PointBERT module; `nltk` and `h5py` through unused instruction/ULIP processors.
+    unreachable_modules = ("torchaudio", "knn_cuda", "termcolor", "nltk", "h5py")
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # The pinned evaluator has no `__main__`, no argument parser and no checkpoint loader, so
@@ -168,15 +173,20 @@ class AirKnowAdapter(OfficialScriptAdapter):
     # `__import__("datasets")` and `importlib.import_module("test")` resolve to the checkout's own
     # top-level modules, which the launcher puts on `sys.path`. Neither is a PyPI distribution.
     provided_modules = ("datasets", "test", "data_utils", "utils")
-    # Measured, not assumed: importing `lavis.models` in a real 3.8 environment with the pinned
-    # checkout on the path and recording which top-level modules enter `sys.modules` leaves these
-    # absent. A text scan cannot see `if torch.cuda.is_available(): from knn_cuda import KNN`
-    # (`ulip_models/pointbert/dvae.py:6-7`), an audio encoder only a video task imports
-    # (`beats/BEATs.py:14`), or a re-export whose module the evaluation never reaches. Leaving them
-    # as requirements installed torchaudio, knn-cuda, matplotlib, scikit-learn, nltk, h5py and
-    # termcolor into every image-retrieval profile.
-    unreachable_modules = ("torchaudio", "knn_cuda", "sklearn", "nltk", "h5py",
-                           "matplotlib", "mpl_toolkits", "termcolor")
+    # Names a text scan reaches but the evaluation does not load. The earlier version of this list
+    # was taken from a census that called `importlib.import_module("lavis.models")` -- an import that
+    # FAILS PARTWAY when a dependency is missing, so every module needed after the failure point was
+    # never counted and five of these were classified from an incomplete import. `sklearn` and
+    # `matplotlib` in particular are imported at module scope by native class files
+    # (`HABIT.py:24-27`, `INTENT/.../blip2_cir.py:14,30`, `ConeSep.py:24`,
+    # `AirKnow/.../blip2_cir.py:19`), so they are REQUIRED, not unreachable, and excluding them made
+    # a clean install unable to import the checkpoint class at all.
+    #
+    # What remains excluded is genuinely out of reach on this path: `torchaudio` and `knn_cuda` sit
+    # behind `if torch.cuda.is_available():` (`ulip_models/pointbert/dvae.py:6-7`) or in the audio
+    # encoder only a video task imports (`beats/BEATs.py:14`); `termcolor` is reached through the
+    # same unused PointBERT module; `nltk` and `h5py` through unused instruction/ULIP processors.
+    unreachable_modules = ("torchaudio", "knn_cuda", "termcolor", "nltk", "h5py")
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # `test_BLIP2.py` has no `__main__` and no checkpoint loader, and one of its branches calls
@@ -210,15 +220,20 @@ class ConeSepAdapter(OfficialScriptAdapter):
     # `__import__("datasets")` and `importlib.import_module("test")` resolve to the checkout's own
     # top-level modules, which the launcher puts on `sys.path`. Neither is a PyPI distribution.
     provided_modules = ("datasets", "test", "data_utils", "utils")
-    # Measured, not assumed: importing `lavis.models` in a real 3.8 environment with the pinned
-    # checkout on the path and recording which top-level modules enter `sys.modules` leaves these
-    # absent. A text scan cannot see `if torch.cuda.is_available(): from knn_cuda import KNN`
-    # (`ulip_models/pointbert/dvae.py:6-7`), an audio encoder only a video task imports
-    # (`beats/BEATs.py:14`), or a re-export whose module the evaluation never reaches. Leaving them
-    # as requirements installed torchaudio, knn-cuda, matplotlib, scikit-learn, nltk, h5py and
-    # termcolor into every image-retrieval profile.
-    unreachable_modules = ("torchaudio", "knn_cuda", "sklearn", "nltk", "h5py",
-                           "matplotlib", "mpl_toolkits", "termcolor")
+    # Names a text scan reaches but the evaluation does not load. The earlier version of this list
+    # was taken from a census that called `importlib.import_module("lavis.models")` -- an import that
+    # FAILS PARTWAY when a dependency is missing, so every module needed after the failure point was
+    # never counted and five of these were classified from an incomplete import. `sklearn` and
+    # `matplotlib` in particular are imported at module scope by native class files
+    # (`HABIT.py:24-27`, `INTENT/.../blip2_cir.py:14,30`, `ConeSep.py:24`,
+    # `AirKnow/.../blip2_cir.py:19`), so they are REQUIRED, not unreachable, and excluding them made
+    # a clean install unable to import the checkpoint class at all.
+    #
+    # What remains excluded is genuinely out of reach on this path: `torchaudio` and `knn_cuda` sit
+    # behind `if torch.cuda.is_available():` (`ulip_models/pointbert/dvae.py:6-7`) or in the audio
+    # encoder only a video task imports (`beats/BEATs.py:14`); `termcolor` is reached through the
+    # same unused PointBERT module; `nltk` and `h5py` through unused instruction/ULIP processors.
+    unreachable_modules = ("torchaudio", "knn_cuda", "termcolor", "nltk", "h5py")
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # Single checkpoint shared across the three categories, and a callable-only evaluator: the
@@ -246,15 +261,20 @@ class HabitAdapter(OfficialScriptAdapter):
     # `__import__("datasets")` and `importlib.import_module("test")` resolve to the checkout's own
     # top-level modules, which the launcher puts on `sys.path`. Neither is a PyPI distribution.
     provided_modules = ("datasets", "test", "data_utils", "utils")
-    # Measured, not assumed: importing `lavis.models` in a real 3.8 environment with the pinned
-    # checkout on the path and recording which top-level modules enter `sys.modules` leaves these
-    # absent. A text scan cannot see `if torch.cuda.is_available(): from knn_cuda import KNN`
-    # (`ulip_models/pointbert/dvae.py:6-7`), an audio encoder only a video task imports
-    # (`beats/BEATs.py:14`), or a re-export whose module the evaluation never reaches. Leaving them
-    # as requirements installed torchaudio, knn-cuda, matplotlib, scikit-learn, nltk, h5py and
-    # termcolor into every image-retrieval profile.
-    unreachable_modules = ("torchaudio", "knn_cuda", "sklearn", "nltk", "h5py",
-                           "matplotlib", "mpl_toolkits", "termcolor")
+    # Names a text scan reaches but the evaluation does not load. The earlier version of this list
+    # was taken from a census that called `importlib.import_module("lavis.models")` -- an import that
+    # FAILS PARTWAY when a dependency is missing, so every module needed after the failure point was
+    # never counted and five of these were classified from an incomplete import. `sklearn` and
+    # `matplotlib` in particular are imported at module scope by native class files
+    # (`HABIT.py:24-27`, `INTENT/.../blip2_cir.py:14,30`, `ConeSep.py:24`,
+    # `AirKnow/.../blip2_cir.py:19`), so they are REQUIRED, not unreachable, and excluding them made
+    # a clean install unable to import the checkpoint class at all.
+    #
+    # What remains excluded is genuinely out of reach on this path: `torchaudio` and `knn_cuda` sit
+    # behind `if torch.cuda.is_available():` (`ulip_models/pointbert/dvae.py:6-7`) or in the audio
+    # encoder only a video task imports (`beats/BEATs.py:14`); `termcolor` is reached through the
+    # same unused PointBERT module; `nltk` and `h5py` through unused instruction/ULIP processors.
+    unreachable_modules = ("torchaudio", "knn_cuda", "termcolor", "nltk", "h5py")
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # As with conesep: the selected variant is recorded so a noisy-trained checkpoint can never be
@@ -281,15 +301,20 @@ class IntentAdapter(OfficialScriptAdapter):
     # `__import__("datasets")` and `importlib.import_module("test")` resolve to the checkout's own
     # top-level modules, which the launcher puts on `sys.path`. Neither is a PyPI distribution.
     provided_modules = ("datasets", "test", "data_utils", "utils")
-    # Measured, not assumed: importing `lavis.models` in a real 3.8 environment with the pinned
-    # checkout on the path and recording which top-level modules enter `sys.modules` leaves these
-    # absent. A text scan cannot see `if torch.cuda.is_available(): from knn_cuda import KNN`
-    # (`ulip_models/pointbert/dvae.py:6-7`), an audio encoder only a video task imports
-    # (`beats/BEATs.py:14`), or a re-export whose module the evaluation never reaches. Leaving them
-    # as requirements installed torchaudio, knn-cuda, matplotlib, scikit-learn, nltk, h5py and
-    # termcolor into every image-retrieval profile.
-    unreachable_modules = ("torchaudio", "knn_cuda", "sklearn", "nltk", "h5py",
-                           "matplotlib", "mpl_toolkits", "termcolor")
+    # Names a text scan reaches but the evaluation does not load. The earlier version of this list
+    # was taken from a census that called `importlib.import_module("lavis.models")` -- an import that
+    # FAILS PARTWAY when a dependency is missing, so every module needed after the failure point was
+    # never counted and five of these were classified from an incomplete import. `sklearn` and
+    # `matplotlib` in particular are imported at module scope by native class files
+    # (`HABIT.py:24-27`, `INTENT/.../blip2_cir.py:14,30`, `ConeSep.py:24`,
+    # `AirKnow/.../blip2_cir.py:19`), so they are REQUIRED, not unreachable, and excluding them made
+    # a clean install unable to import the checkpoint class at all.
+    #
+    # What remains excluded is genuinely out of reach on this path: `torchaudio` and `knn_cuda` sit
+    # behind `if torch.cuda.is_available():` (`ulip_models/pointbert/dvae.py:6-7`) or in the audio
+    # encoder only a video task imports (`beats/BEATs.py:14`); `termcolor` is reached through the
+    # same unused PointBERT module; `nltk` and `h5py` through unused instruction/ULIP processors.
+    unreachable_modules = ("torchaudio", "knn_cuda", "termcolor", "nltk", "h5py")
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         return _replay_command(self, checkpoint, request, source,

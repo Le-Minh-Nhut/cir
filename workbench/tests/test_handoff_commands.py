@@ -344,6 +344,65 @@ def _production_tree(rev: str) -> str | None:
     return hashlib.sha256("\n".join(kept).encode("utf-8")).hexdigest()
 
 
+def _spec_commands() -> list[str]:
+    """Every command line inside a fenced block of the PC spec, with continuations joined."""
+    spec = ROOT / "workbench" / "docs" / "MODEL_STATUS_SPEC.md"
+    commands: list[str] = []
+    inside = False
+    current: list[str] = []
+    for raw in spec.read_text(encoding="utf-8").splitlines():
+        if raw.strip().startswith("```"):
+            if inside and current:
+                commands.append(" ".join(current))
+                current = []
+            inside = not inside
+            continue
+        if not inside:
+            continue
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            if current:
+                commands.append(" ".join(current))
+                current = []
+            continue
+        current.append(line[:-1].rstrip() if line.endswith("\\") else line)
+        if not line.endswith("\\"):
+            commands.append(" ".join(current))
+            current = []
+    if current:
+        commands.append(" ".join(current))
+    return commands
+
+
+def test_the_pc_runbook_names_only_entrypoints_that_exist() -> None:
+    """Syntax and entrypoint checks need no GPU, checkpoint or network, so the spec is not exempt.
+
+    The spec used to be excluded from the command audit because running a model needs multi-GB assets
+    and a GPU. That is true of RUNNING and false of the command itself: a documented
+    `python -m workbench.cli replay ...` pointed at a module the repository does not contain, and an
+    unterminated `<FIQ` placeholder made a second example unusable, neither of which the exemption
+    could ever catch. Resource-dependent parts stay `NOT_CHECKED`; the commands are checkable here.
+    """
+    commands = _spec_commands()
+    assert commands, "the PC spec must contain runnable commands"
+    problems = []
+    for command in commands:
+        # A python module target must exist: `python -m a.b` is resolvable without running it.
+        for target in re.findall(r"python[0-9.]* -m (workbench[A-Za-z0-9_.]*)", command):
+            path = ROOT / Path(*target.split("."))
+            if not (path.with_suffix(".py").is_file() or (path / "__init__.py").is_file()):
+                problems.append(f"names a module the repository does not contain: -m {target}")
+        # A script reference must exist on disk.
+        for script in re.findall(r"(workbench/[A-Za-z0-9_./-]+\.py)", command):
+            if not (ROOT / script).is_file():
+                problems.append(f"names a script that does not exist: {script}")
+        # An unterminated placeholder is a syntax error the operator would hit immediately.
+        for placeholder in re.findall(r"<[A-Za-z0-9_]+", command):
+            if f"{placeholder}>" not in command:
+                problems.append(f"has an unterminated placeholder: {placeholder}")
+    assert not problems, "the PC spec contains commands that cannot run: " + "; ".join(sorted(set(problems)))
+
+
 def test_no_release_document_points_at_a_superseded_source_sha() -> None:
     """The SHA the documents tell you to check out must install the code that was tested.
 
@@ -554,13 +613,15 @@ def test_the_release_documents_quote_the_test_count_they_actually_ran() -> None:
     assert skipped_counts, (
         "the verdict must record how many tests were skipped, so the pass count can be reconciled "
         "with what the tree collects")
-    assert recorded + recorded_skips <= collected, (
-        f"the verdict records {recorded} passing and {recorded_skips} skipped tests, but this tree "
-        f"only collects {collected}: the numbers cannot describe this suite")
-    assert collected - recorded - recorded_skips <= 5, (
-        f"the verdict records {recorded} passed + {recorded_skips} skipped while the tree collects "
-        f"{collected}; a difference of more than a few unaccounted tests means the recorded numbers "
-        "are stale. Update them to what the current suite reports.")
+    # Exact accounting, not a tolerance. The suite's own runner distinguishes collected, passed,
+    # failed, skipped, deselected, xfailed/xpassed and errors, and the documents must account for
+    # every collected test through those fields -- an allowance of "a few unaccounted cases" is not
+    # evidence of anything, because it would pass while several tests were silently unexplained.
+    assert recorded + recorded_skips == collected, (
+        f"the verdict records {recorded} passed + {recorded_skips} skipped = "
+        f"{recorded + recorded_skips}, but this tree collects {collected}. Every collected test must "
+        "be accounted for as passed, skipped, or explicitly deselected/xfailed with its own field; "
+        "update the recorded numbers to what the suite actually reports.")
 
 def test_no_release_document_describes_verify_only_as_verifying_a_run() -> None:
     """A-05: the flag's meaning is one sentence, and every document must repeat that sentence.
