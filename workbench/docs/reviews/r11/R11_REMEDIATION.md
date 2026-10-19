@@ -188,9 +188,25 @@ cùng một loại lỗi với các finding gốc:
 | Điều tra closure import | `ag/gemini-3.8-flash-high` | `effort: "hi"` (= `thinkingLevel: high`) | 3 task đầu |
 | Phiên bản SPRC | `ag/gemini-3.8-flash-high` | `effort: "hi"` | |
 | Guard filesystem + shape | `ag/gemini-3.8-flash-high` | `effort: "hi"` | |
-| Cross-review dependency | `gemini-audit` → `ag/gemini-3.8-flash-high` | `effort: "hi"` | |
-| Cross-review guard | `qwen-audit` | `effort: "hi"` | |
-| Cross-review bằng chứng | `glm-audit` | `effort: "hi"` | tìm ra 4 sai lệch |
+| Cross-review dependency | `gemini-audit` → `ag/gemini-3.8-flash-high` | `effort: "hi"` | hợp lệ |
+| Cross-review guard | `qwen-audit` | `effort: "hi"` | **VI PHẠM chính sách** — xem dưới |
+| Cross-review bằng chứng | `glm-audit` | `effort: "hi"` | **VI PHẠM chính sách** — xem dưới |
+
+**Đính chính (R12 kiểm lại):** hai alias `qwen-audit` và `glm-audit` **không** trỏ về model ưu tiên 1.
+Định nghĩa trong `~/.omp/agent/agents/`:
+
+```text
+gemini-audit.md: model: 9router/ag/gemini-3.8-flash-high:high    <- ưu tiên 1, hợp lệ
+qwen-audit.md:   model: 9router/wdb/Qwen/Qwen3.8-27B:high        <- NGOÀI danh sách
+glm-audit.md:    model: 9router/wdb/zai-org/GLM-5.3-Flash:high   <- NGOÀI danh sách
+```
+
+R11 đã dùng hai model ngoài danh sách cho hai auditor, và lý do "task hẹp" **không** phải lý do hợp lệ
+để bỏ thứ tự ưu tiên. Bảng ở §6 bản gốc ghi "cross-review guard/evidence" mà không nêu model thực, và
+đó là thiếu sót. Phần kết luận của hai auditor vẫn được kiểm chứng độc lập bằng tay trước khi áp dụng,
+nhưng **việc chọn model là vi phạm** và được ghi nhận ở đây thay vì sửa lại cho đẹp.
+
+R12 đã sửa cách làm: cả ba reviewer của lượt R12 đều là `gemini-audit` (ưu tiên 1).
 
 **Fallback có thật:** `cx/gpt-6-luna` (ưu tiên 2) **không tồn tại** trong `models.yml` — provider `cx`
 chỉ có `gpt-5.6-terra`; `wdb/deepseek-ai/DeepSeek-V4.1-Flash` cũng không đăng ký. Đây là unavailability
