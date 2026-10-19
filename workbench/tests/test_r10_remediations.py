@@ -116,10 +116,19 @@ def test_inheritance_is_read_from_evidence_not_assumed(tmp_path: Path) -> None:
     assert runtime._inherits_base_site_packages(inherited, base) is True
     # No `pyvenv.cfg` and no `conda-meta`: the relationship is unexplained, so nothing is inherited.
     assert runtime._inherits_base_site_packages(tmp_path, base) is False
-    # A declared Conda environment inherits, which is how a Conda env reaches its base packages.
-    conda = tmp_path / "conda-env"
-    (conda / "conda-meta").mkdir(parents=True)
-    assert runtime._inherits_base_site_packages(conda, base) is True
+    # `conda-meta` is a DIRECTORY NAME, not evidence of inheritance: a Conda environment is
+    # isolated by design, so reading the base inventory for a prefix that merely contains that
+    # directory would certify packages the interpreter cannot import -- the same defect this
+    # predicate exists to prevent.
+    conda_lookalike = tmp_path / "conda-env"
+    (conda_lookalike / "conda-meta").mkdir(parents=True)
+    assert runtime._inherits_base_site_packages(conda_lookalike, base) is False
+    versions, _modules, _unconfirmed = runtime.inspect_environment_distributions(
+        str(conda_lookalike), str(base))
+    # The prefix holds no site-packages at all, so nothing about it may come from the base.
+    assert versions == {}, (
+        f"a prefix with no pyvenv.cfg and no installed distributions reported {len(versions)} "
+        "packages, which can only have come from the base")
 
 
 def test_a_wrong_declared_version_still_blocks_in_an_isolated_venv(tmp_path: Path) -> None:
@@ -397,14 +406,30 @@ def test_the_declared_profile_is_coherent_with_the_traced_imports() -> None:
         traced = _evaluator_imports(model) or set()
         constraints = model_constraints({**model, "source_available": True})
         known = set(constraints.get("packages", {})) | set(constraints.get("ranges", {}))
-        # What the planner will demand is exactly the traced set, resolved through the registry's
-        # declaration where one exists -- so a traced import with no declaration becomes an
-        # UNKNOWN-version requirement rather than a silent omission.
-        assert constraints.get("packages") is not None
-        assert known, model_id
-        for module in sorted(traced):
-            assert module or True  # the loop documents the comparison; the assertion is below
+        # What the planner demands is the traced set, resolved through the registry wherever a
+        # declaration exists. A traced import with no declaration must still be NAMED -- as an
+        # UNKNOWN requirement -- rather than silently dropped, because dropping it is how the
+        # provisioned environment ends up missing something the evaluator imports.
+        assert known, f"{model_id}: the planner demands nothing at all"
         declared = model["environment"]["packages"]
+        # A declared PIN is a distribution name; the planner's set holds IMPORT names for everything
+        # it resolves from the trace, and distribution names for everything the registry declares.
+        # The project's own map bridges the two, so a declared pin is coherent when the planner
+        # names either it or an import that resolves to it.
+        from workbench.backend.environment_planner import _IMPORT_DISTRIBUTIONS
+
+        pip_to_distribution = {dist.lower(): dist.lower()
+                               for dists in _IMPORT_DISTRIBUTIONS.values() for dist in dists}
+        normalized_known = set(known)
+        for import_name, dists in _IMPORT_DISTRIBUTIONS.items():
+            if import_name in known:
+                normalized_known.update(dist.lower() for dist in dists)
+        for package in (item for item in declared if "==" in item):
+            name = package.split("==", 1)[0].lower()
+            assert name in normalized_known or name in pip_to_distribution, (
+                f"{model_id} declares {package}, which the planner's constraint set does not name: "
+                f"the two must describe one environment (known: {sorted(known)[:8]}...)")
+        # The pins the vendored code needs are present, in the family whose checkpoints load it.
         assert any(package.startswith("transformers==") for package in declared), model_id
         assert any(package.startswith("timm==") for package in declared), model_id
 
@@ -589,5 +614,51 @@ def test_processor_setup_is_repeatable_and_checkout_scoped(tmp_path: Path) -> No
         # After a reset the second checkout is usable, which is what the parity tool relies on.
         lavis_processors.reset()
         assert lavis_processors.prepare(second)["library_root"].endswith("lavis")
+    finally:
+        lavis_processors.reset()
+
+
+# ------------------------------------------------------------------- reviewer-hardening cases
+
+def test_a_directory_where_the_config_belongs_is_reported_not_ignored(tmp_path: Path) -> None:
+    """`is_file()` alone returned no blockers for a path that cannot be a config.
+
+    The native `ConfigParser` raises `IsADirectoryError` on this input, so a validator that reported
+    nothing would be a silent pass on a run that cannot start.
+    """
+    run = tmp_path / "run"
+    (run / "config.json").mkdir(parents=True)
+    (run / "trained_model.pth").write_bytes(b"w")
+    resolved, blockers = configured_data_dir(run / "config.json", tmp_path, tmp_path)
+    assert resolved is None
+    assert blockers and "is not a file" in blockers[0]
+    assert binding_mismatch(run, tmp_path, tmp_path) is not None
+
+
+@pytest.mark.parametrize("declared", [[1, 2], 3, {"a": 1}, ["dataset/fashioniq"]])
+def test_a_non_string_data_dir_is_reported_rather_than_raising(tmp_path: Path, declared) -> None:
+    """The native loader joins this field, so a non-string is unusable config, not a crash."""
+    run = _run_directory(tmp_path / "run", {"data_loader": {"args": {"data_dir": declared}}})
+    resolved, blockers = configured_data_dir(run / "config.json", tmp_path, tmp_path)
+    assert resolved is None
+    assert blockers and "not a path string" in blockers[0], blockers
+    # And the readiness view must survive it, since that is what a report calls.
+    assert binding_mismatch(run, tmp_path, tmp_path) is not None
+
+
+def test_a_prepared_context_can_be_fully_undone(tmp_path: Path) -> None:
+    """`reset` must remove the paths `prepare` added, or the next checkout is shadowed."""
+    from workbench.replay import lavis_processors
+
+    checkout = _checkpoint_fixture(tmp_path)
+    lavis_processors.reset()
+    before = list(sys.path)
+    try:
+        lavis_processors.prepare(checkout)
+        assert sys.path != before, "prepare must put the checkout on the path for its imports"
+        lavis_processors.reset()
+        assert sys.path == before, "reset must restore the path it changed"
+        assert not any(name == "lavis" or name.startswith("lavis.") for name in sys.modules), (
+            "no module from the previous checkout may survive a reset")
     finally:
         lavis_processors.reset()

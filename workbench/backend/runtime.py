@@ -374,33 +374,38 @@ def _inherits_base_site_packages(prefix: Path, base_prefix: Path) -> bool:
     Reading the base inventory anyway let the verifier certify a model whose dependency the
     selected interpreter cannot import -- a false `RUNTIME_READY`, not a missing fixture.
 
-    Three shapes have to be told apart, and each is read from evidence rather than assumed:
+    A virtual environment is the only shape this predicate can answer for, and it answers from the
+    file the `venv` module writes:
 
-    * a virtual environment (`pyvenv.cfg` present): its own ``include-system-site-packages``
-      decides, and anything other than an explicit ``true`` means isolated;
-    * a Conda environment: ``conda-meta`` present, base inventory reachable regardless of
-      whether the two prefixes are strings-equal (`sys.base_prefix` is the *base* install for
-      Conda, and `sys.prefix` the environment);
-    * anything else that reports two different prefixes: no `pyvenv.cfg` and no `conda-meta`
-      means the relationship is unexplained, so nothing is inherited from the base. Inheritance
-      has to be shown, never defaulted into.
+    * ``include-system-site-packages = true`` -- inherits;
+    * anything else that a `pyvenv.cfg` exists for -- isolated, including a file where the key is
+      absent, because `venv` always writes it and its default is isolated.
+
+    A Conda environment is deliberately NOT treated as inheriting. An earlier revision of this
+    function returned True for a directory containing `conda-meta`, on the theory that Conda
+    environments resolve from their base install. They do not: a Conda environment is isolated, its
+    `sys.prefix` is the environment and its site-packages does not reach the base's, which is the
+    whole point of creating one. Worse, `conda-meta` is a *directory name* -- anything can create
+    one -- so that branch certified the base interpreter's packages for any prefix that happened to
+    contain it. Both readings are the R10-06 false positive, and the branch is gone.
+
+    Everything else that reports two different prefixes has no evidence of inheritance, so nothing
+    is inherited from the base. Inheritance has to be shown, never defaulted into.
     """
     pyvenv = prefix / "pyvenv.cfg"
-    if pyvenv.is_file():
-        try:
-            for line in pyvenv.read_text(encoding="utf-8", errors="replace").splitlines():
-                if "=" not in line:
-                    continue
-                key, value = line.split("=", 1)
-                if key.strip() == "include-system-site-packages":
-                    return value.strip().lower() == "true"
-        except OSError:
-            return False
-        # The key is absent in some hand-written files; `venv` always writes it, and its
-        # default is isolated, so an unstated value is not consent to inherit.
+    if not pyvenv.is_file():
         return False
-    if (prefix / "conda-meta").is_dir():
-        return True
+    try:
+        for line in pyvenv.read_text(encoding="utf-8", errors="replace").splitlines():
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            if key.strip() == "include-system-site-packages":
+                return value.strip().lower() == "true"
+    except OSError:
+        return False
+    # The key is absent in some hand-written files; `venv` always writes it, and its default is
+    # isolated, so an unstated value is not consent to inherit.
     return False
 
 

@@ -173,9 +173,33 @@ def test_the_gpu_pending_state_asks_about_the_model_not_the_host(monkeypatch):
     assert entry["gpu_required"] is True and entry["gpu_verified"] is False
 
 def test_the_cli_accepts_the_autopilot_config(capsys, tmp_path):
-    """`--config` must build the same configuration the autopilot run will use."""
+    """`--config` must build the same configuration the autopilot run will use.
+
+    The profile is the SHIPPED example with its paths re-pointed at this test's own directories.
+    Loading the example verbatim would resolve `dataset_root: ../../data/FashionIQ` against the
+    operator's checkout, which a fresh clone does not have, so a failure would describe the host
+    rather than the CLI. The keys, budgets and checkpoint policy under test are the shipped ones.
+    """
     import json
-    code = pcr.main(["--json", "--config", str(REPO / "workbench" / "configs" / "pc_autopilot.example.yaml")])
+
+    import yaml
+
+    example = REPO / "workbench" / "configs" / "pc_autopilot.example.yaml"
+    document = yaml.safe_load(example.read_text(encoding="utf-8"))
+    data = tmp_path / "data" / "FashionIQ"
+    (data / "images").mkdir(parents=True)
+    document["paths"].update({
+        "registry": str(REPO / "workbench" / "registry" / "models.yaml"),
+        "dataset_root": str(data),
+        "artifacts": str(tmp_path / "artifacts"),
+        "checkpoints": str(tmp_path / "artifacts" / "checkpoints"),
+        "results": str(tmp_path / "artifacts" / "results"),
+        "third_party": str(REPO / "workbench" / "third_party"),
+    })
+    profile = tmp_path / "pc_autopilot.yaml"
+    profile.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+    code = pcr.main(["--json", "--config", str(profile)])
     assert code == 0
     payload = json.loads(capsys.readouterr().out)
     assert "limn" in payload["models"]

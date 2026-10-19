@@ -53,7 +53,24 @@ Báo cáo điều tra đi kèm trong cùng thư mục:
 
 ---
 
-## 3. Bằng chứng E2E trên cây đã push
+## 3. Sửa sau review độc lập
+
+Hai review độc lập chạy trên cây đã push và **tìm ra lỗi thật trong chính các bản sửa này**. Đã sửa:
+
+| Phát hiện | Xử lý |
+|---|---|
+| **R10-06**: nhánh Conda của `_inherits_base_site_packages` trả `True` cho **bất kỳ** thư mục nào có `conda-meta` — mà đó chỉ là một tên thư mục, ai cũng tạo được. Conda environment vốn **cô lập**, nên nó KHÔNG kế thừa base; nhánh này tái tạo đúng lỗi R10-06 ở dạng khác | Xoá nhánh Conda. Chỉ `pyvenv.cfg` với `include-system-site-packages=true` mới là bằng chứng kế thừa |
+| **R10-03**: `reset()` xoá module nhưng **không** gỡ `sys.path` mà `prepare` đã thêm, nên checkout trước vẫn shadow checkout sau | `prepare` ghi lại đúng các entry nó thêm; `reset` gỡ đúng chúng; kiểm bằng `sys.path == before` và `import lavis` phải fail |
+| **R10-01**: `config.json` là **thư mục** ⇒ `is_file()` sai nên trả về "không blocker" (pass im lặng); `data_dir` không phải string ⇒ `TypeError` thoát ra từ readiness view | Báo cả hai: "is not a file", và "not a path string" |
+| **R10-05**: test "profile coherence" chứa `assert module or True` — một assertion rỗng | Thay bằng so thật: mọi pin đã khai phải có tên trong tập constraint của planner, qua chính `_IMPORT_DISTRIBUTIONS` của dự án |
+| **P1 tài liệu**: commit `3a91870` sửa `mutation_checks.sh` (không nằm trong `docs`/`tests`), nên câu "production tree identical to `cf84cfa`" trở thành **sai** | Metadata release được nâng lên revision mới ở commit kế tiếp; câu đó phải đọc lại theo revision đang ghi |
+
+Các phát hiện **không** sửa vì không đúng: `launcher`/`launcher_roots` bị gọi là "hai attribute cho một
+trạng thái nhị phân" — đo được là **tất cả 15 adapter** dùng `launcher`, và 6 trong số đó cần
+`launcher_roots` (thư mục `lavis`/`LIMN` mà wrapper tự đẩy vào `sys.path`). Gộp chúng thành một field
+tuỳ chọn sẽ làm mất khả năng phân biệt "không có root phụ" với "quên khai".
+
+## 4. Bằng chứng E2E trên cây đã push
 
 Chạy trên **fresh clone** (`/tmp/r10clone`, clone từ remote, không có file untracked của máy này),
 backend khởi động từ chính clone đó:
@@ -71,6 +88,6 @@ backend khởi động từ chính clone đó:
 giả, không GPU. Cái chứng minh được là **scheduler từ chối đúng và nêu đúng lý do**, và đường
 launch/status/cancel đã có test chạy qua subprocess thật ở trên.
 
-## 4. Việc còn phải làm trên PC
+## 5. Việc còn phải làm trên PC
 
 Xem `MODEL_STATUS_SPEC.md` §6 cho danh sách lệnh đầy đủ và artifact cần stage.

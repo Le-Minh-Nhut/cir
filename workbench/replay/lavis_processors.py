@@ -45,6 +45,8 @@ _INSTALLED: dict[str, str] = {}
 #: The checkout each installed package root belongs to, so a second checkout is refused rather than
 #: silently re-pointed at the first one's modules.
 _OWNER: dict[str, Path] = {}
+#: The `sys.path` entries `prepare` added, so `reset` removes exactly those and nothing else.
+_ADDED_PATHS: list[str] = []
 
 
 def _processors_module(lavis_root: Path) -> types.ModuleType:
@@ -143,12 +145,24 @@ def reset() -> None:
     A production wrapper runs one model in one subprocess and never calls this
     (`evaluate_models.py:594`). It exists for tools that deliberately compare several checkouts --
     `workbench/scripts/lavis_processor_parity.py` is the one caller -- because the pinned package
-    names are global to a process and two checkouts cannot share them. Everything imported from the
-    previous checkout is dropped, including the registry, so the next `prepare` re-imports rather
-    than inheriting the first checkout's classes.
+    names are global to a process and two checkouts cannot share them.
+
+    A reset has to undo everything `prepare` did, or the next checkout inherits state from the
+    previous one:
+
+    * the modules imported from that checkout, and the registry they registered into;
+    * the `sys.path` entries `prepare` added, because leaving them means the previous checkout's
+      `lavis` package is still the first thing an import finds -- the second checkout's modules
+      would be shadowed by the first's, which is precisely the contamination this call exists to
+      prevent. Only entries `prepare` itself added are removed, so a caller's own path setup is
+      left alone.
     """
     for name in [key for key in sys.modules if key == "lavis" or key.startswith("lavis.")]:
         del sys.modules[name]
+    for entry in _ADDED_PATHS:
+        while entry in sys.path:
+            sys.path.remove(entry)
+    _ADDED_PATHS.clear()
     _INSTALLED.clear()
     _OWNER.clear()
 
@@ -171,6 +185,7 @@ def prepare(source_root: Path) -> dict[str, Any]:
     for entry in (str(source_root), str(lavis_root)):
         if entry not in sys.path:
             sys.path.insert(0, entry)
+            _ADDED_PATHS.append(entry)
 
     _registry_for(lavis_root)
     _patch_registry_idempotence()

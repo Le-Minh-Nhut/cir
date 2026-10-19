@@ -59,6 +59,13 @@ def configured_data_dir(config_file: Path, dataset_root: Path,
     """
     blockers: list[str] = []
     cwd = Path(evaluator_cwd) if evaluator_cwd is not None else Path(os.getcwd())
+    # `is_file()` alone is not enough: a DIRECTORY at this path is not a config, and returning no
+    # blockers for it would be a silent pass on a run that cannot start. The native
+    # `ConfigParser` raises `IsADirectoryError` here, so the two must not disagree about whether
+    # this file is readable.
+    if config_file.exists() and not config_file.is_file():
+        blockers.append(f"DCNet config is not a file: {config_file}")
+        return None, blockers
     if not config_file.is_file() or config_file.stat().st_size == 0:
         return None, blockers  # already reported by validate_run_directory
     try:
@@ -72,6 +79,14 @@ def configured_data_dir(config_file: Path, dataset_root: Path,
         blockers.append(
             f"DCNet config declares no data_loader.args.data_dir: {config_file}. The evaluator "
             "resolves its dataset from that field, so the tree it reads cannot be verified.")
+        return None, blockers
+    # The field is passed straight to `os.path.join` by the native loader, so anything but a string
+    # is a config the evaluator itself cannot use. Reporting it beats raising a `TypeError` out of
+    # a readiness view.
+    if not isinstance(declared, str):
+        blockers.append(
+            f"DCNet config data_dir is not a path string: {config_file} declares "
+            f"{type(declared).__name__} ({declared!r}), which the evaluator cannot join")
         return None, blockers
 
     relative = not Path(declared).is_absolute()
