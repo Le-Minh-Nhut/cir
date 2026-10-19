@@ -1,5 +1,28 @@
 # Adversarial Audit: R9 Candidate Defect Fixes and F06 Processor Reconstruction
 
+> **Disposition (lead, after this review).** Every defect this report lists was fixed before the
+> production commit, and the fix was re-verified by execution. In order of the report's numbering:
+>
+> * Defect 1 (`evaluator_cwd` omitted) — fixed: `preflight_blockers` passes `evaluator_cwd=source`,
+>   and the check no longer skips when a caller supplies no `dataset_root` (it falls back to the
+>   canonical root those callers target).
+> * Defect 2 (entry points omit `dataset_root`) — fixed by the same change; `pc_readiness`,
+>   `doctor` and `prepare_model` now run the DCNet comparison.
+> * Defect 3 (`encoder` not wired to `constructor_input_blockers`) — fixed: all seven wrappers call
+>   it, and `encoder.validate_dataset(root, ('dress',))` now reports 10 blockers on a dress-only
+>   root instead of none.
+> * Defect 4 (untracked files break a clean checkout) — resolved by the commit; the fresh clone was
+>   re-verified: the new test file, the parity script and the vendored checkouts are all present and
+>   the checks pass there.
+> * Defect 5 (stale paths and the superseded source SHA) — fixed: the doc paths are corrected and
+>   the release metadata now names the tested revision.
+> * The report's Question 5 finding that `conesep`/`airknow` rows claimed verified hashes the
+>   registry does not carry is corrected in `MODEL_STATUS_SPEC.md`.
+>
+> Two findings from the sibling adversarial review were fixed in the same pass and are recorded in
+> `R9_ADVERSARIAL_FIXES.md`: the symlinked-patch-target crash, and the four `fashioniq_layout`
+> declarations that understated the inputs their constructor opens.
+
 **Document**: `workbench/docs/reviews/r9/R9_ADVERSARIAL_FIXES.md`  
 **Date**: 2026-10-19  
 **Target Git Tree**: `914703e` with working-tree changes  
