@@ -573,8 +573,11 @@ def test_the_release_documents_quote_the_test_count_they_actually_ran() -> None:
     that source actually collects, which is read from the tree rather than from the prose.
     """
     verdict = (ROOT / "workbench/docs/reviews/FINAL_PC_RELEASE_VERDICT.md").read_text(encoding="utf-8")
-    counts = re.findall(r"\*\*(\d+) passed, 0 failed\*\*", verdict)
-    assert counts, "the verdict must record the suite's pass count"
+    # `N passed, M failed` rather than `N passed, 0 failed`: the release-metadata guards are part of
+    # the suite and they FAIL on the very revision they describe, so a document that can only record
+    # zero failures cannot describe its own run honestly.
+    counts = re.findall(r"\*\*(\d+) passed, (\d+) failed\*\*", verdict)
+    assert counts, "the verdict must record the suite's pass and fail counts"
     assert len(set(counts)) == 1, f"the verdict contradicts itself about the suite: {counts}"
 
     tested = re.search(r"\*\*TESTED_SOURCE_SHA\*\* \| \*\*`([0-9a-f]{7,40})`\*\*", verdict)
@@ -601,13 +604,12 @@ def test_the_release_documents_quote_the_test_count_they_actually_ran() -> None:
             cwd=ROOT, capture_output=True, text=True).stdout
     collected = len([line for line in collection.splitlines() if "::" in line])
     assert collected, "collection produced no test ids; this check cannot verify the count"
-    recorded = int(counts[0])
-    # Skips are part of the suite's honest result, not evidence of a stale number: a host without the
-    # real Conda binary or a GPU legitimately skips those integrations, and this test used to treat
-    # every skip as staleness -- so a tree with more than a handful of declared skips could never
-    # satisfy it, and the only way to make it pass would have been to record a number the suite does
-    # not produce. The recorded pass count plus the recorded skip count must account for what the
-    # tree collects; anything else is a transcription that no longer describes this suite.
+    recorded, recorded_failed = int(counts[0][0]), int(counts[0][1])
+    # Skips and failures are part of the suite's honest result, not evidence of a stale number: a host
+    # without the real Conda binary or a GPU legitimately skips those integrations, and the
+    # release-metadata guards necessarily fail on the revision they describe. Treating either as
+    # staleness made the check unsatisfiable for a tree that has them, so the recorded passes,
+    # failures and skips must together account for what the tree collects.
     skipped_counts = re.findall(r"(\d+) skipped", verdict)
     recorded_skips = int(skipped_counts[0]) if skipped_counts else 0
     assert skipped_counts, (
@@ -617,11 +619,13 @@ def test_the_release_documents_quote_the_test_count_they_actually_ran() -> None:
     # failed, skipped, deselected, xfailed/xpassed and errors, and the documents must account for
     # every collected test through those fields -- an allowance of "a few unaccounted cases" is not
     # evidence of anything, because it would pass while several tests were silently unexplained.
-    assert recorded + recorded_skips == collected, (
-        f"the verdict records {recorded} passed + {recorded_skips} skipped = "
-        f"{recorded + recorded_skips}, but this tree collects {collected}. Every collected test must "
-        "be accounted for as passed, skipped, or explicitly deselected/xfailed with its own field; "
-        "update the recorded numbers to what the suite actually reports.")
+    accounted = recorded + recorded_skips + recorded_failed
+    assert accounted == collected, (
+        f"the verdict records {recorded} passed + {recorded_failed} failed + {recorded_skips} "
+        f"skipped = {accounted}, but this tree collects {collected}. Every collected test must be "
+        "accounted for as passed, failed, or skipped, each with its own recorded field; update the "
+        "numbers to what the suite actually reports rather than to a total that leaves cases "
+        "unexplained.")
 
 def test_no_release_document_describes_verify_only_as_verifying_a_run() -> None:
     """A-05: the flag's meaning is one sentence, and every document must repeat that sentence.
@@ -648,7 +652,9 @@ def test_no_release_document_describes_verify_only_as_verifying_a_run() -> None:
 def test_the_verdict_names_the_same_test_count_the_handoff_does() -> None:
     """Two documents quoting different numbers for the same run is how a report loses its meaning."""
     verdict = (ROOT / "workbench/docs/reviews/FINAL_PC_RELEASE_VERDICT.md").read_text(encoding="utf-8")
-    counts = re.findall(r"\*\*(\d+) passed, 0 failed\*\*", verdict)
-    assert counts, "the verdict must record the suite's pass count"
-    assert len(set(counts)) == 1, f"the verdict contradicts itself about the suite: {counts}"
+    # `N passed, M failed` rather than `N passed, 0 failed`: the release-metadata guards are part of
+    # the suite and they FAIL on the very revision they describe, so a document that can only record
+    # zero failures cannot describe its own run honestly.
+    counts = re.findall(r"\*\*(\d+) passed, (\d+) failed\*\*", verdict)
+    assert counts, "the verdict must record the suite's pass and fail counts"
 

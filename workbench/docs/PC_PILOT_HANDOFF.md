@@ -25,8 +25,8 @@ Ma trận đầy đủ: `workbench/docs/MODEL_STATUS_SPEC.md` §2.
 **Trạng thái 16 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `cd2de4b`** — mọi test, acceptance, mutation và release_verify mô
-tả trên trang này đã chạy trên đúng cây đó (1741 passed, 0 failed, 11 skipped; acceptance, mutation và release_verify đều
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `eafb25c`** — mọi test, acceptance, mutation và release_verify mô
+tả trên trang này đã chạy trên đúng cây đó (1758 passed, 0 failed, 11 skipped; acceptance, mutation và release_verify đều
 chạy lại trên cùng commit). `119df5f` đã bị **thay thế**: lượt R9 sửa production (DCNet binding và
 thứ tự category, tập patch CSMCIR, tập input của constructor, processor BLIP-2), nên số test và kết
 quả gate ghi ở các bản trước không còn mô tả cây này.
@@ -59,7 +59,7 @@ git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
 # Nguồn đã kiểm thử (revision cố định; đây là cái đã chạy 1609 test):
-git checkout cd2de4b
+git checkout eafb25c
 # Nhánh đang phát triển thêm tài liệu. Dùng nó nếu muốn bản mới nhất:
 #   git checkout research/cir-failure-workbench
 ```

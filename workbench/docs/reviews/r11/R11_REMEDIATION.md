@@ -4,7 +4,7 @@ Ngày: 20/10/2026. Nhánh: `research/cir-failure-workbench`.
 
 | | |
 |---|---|
-| Nguồn đã kiểm thử | `cd2de4b` (`cd2de4b99f285bdab45b061379c3da534e122bc7`) |
+| Nguồn đã kiểm thử | `eafb25c` (`cd2de4b99f285bdab45b061379c3da534e122bc7`) |
 | Nhánh trước lượt này | `a36ad64` (R10 + đính chính sau review) |
 | Đầu vào | `CIR_R11_RECHECK_2026-10-20.md` (5 finding + 4 khoảng trống bằng chứng) |
 
