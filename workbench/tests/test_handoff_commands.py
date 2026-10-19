@@ -472,19 +472,29 @@ def test_a_release_document_cannot_quote_a_production_tree_that_never_ran_the_ga
         assert token in newer_launcher, f"the tested launcher must still contain {token}"
 
 
-def _collected_at(sha: str, destination: Path) -> str:
+def _collected_at(sha: str, destination: Path) -> str | None:
     """How many tests the *named revision's own* tree collects, in a worktree of that revision.
 
     A real worktree, not a flattened copy of the test files: the suite imports `workbench.*` and reads
     the pinned checkouts, so a set of files without their package collects a fraction of the suite or
     not at all. `destination` is a scratch directory; the worktree is added inside it and removed with
     it, so the repository's own working tree is never touched.
+
+    Returns None when the checkout cannot be materialised here -- the scratch filesystem may refuse
+    the write (a tmpfs with a per-user quota, for one). The caller falls back to the working tree,
+    which is the STRICTER of the two: the working tree contains the revision under test plus any
+    later documentation commit, so a count check against it cannot pass by accident. A refusal must
+    not silently become a skip, which is why the caller still asserts on the fallback.
     """
     worktree = destination / "tree"
     added = subprocess.run(["git", "worktree", "add", "--detach", str(worktree), sha],
                            cwd=ROOT, capture_output=True, text=True)
     if added.returncode != 0:
-        raise AssertionError(f"could not add a worktree at {sha}: {added.stderr.strip()}")
+        # Not an assertion failure of this check: it is about the NUMBER, and that question can be
+        # asked of the working tree. Leave the reason in the output so a real regression is visible.
+        print(f"note: could not materialise {sha} here, falling back to the working tree: "
+              f"{added.stderr.strip().splitlines()[-1] if added.stderr.strip() else 'no stderr'}")
+        return None
     try:
         return subprocess.run(
             [sys.executable, "-m", "pytest", "workbench/tests", "--collect-only", "-q",
@@ -521,10 +531,11 @@ def test_the_release_documents_quote_the_test_count_they_actually_ran() -> None:
     # falls back to the working tree, which is the stricter of the two.
     source = subprocess.run(["git", "rev-parse", tested.group(1)], cwd=ROOT,
                             capture_output=True, text=True)
+    collection = None
     if source.returncode == 0:
         with tempfile.TemporaryDirectory(prefix="cir-count-") as temporary:
             collection = _collected_at(source.stdout.strip(), Path(temporary))
-    else:
+    if collection is None:
         collection = subprocess.run(
             [sys.executable, "-m", "pytest", "workbench/tests", "--collect-only", "-q",
              "-p", "no:cacheprovider"],
@@ -532,15 +543,24 @@ def test_the_release_documents_quote_the_test_count_they_actually_ran() -> None:
     collected = len([line for line in collection.splitlines() if "::" in line])
     assert collected, "collection produced no test ids; this check cannot verify the count"
     recorded = int(counts[0])
-    assert recorded <= collected, (
-        f"the verdict records {recorded} passing tests, but this tree only collects {collected}: the "
-        "number cannot describe this suite")
-    # A count far below what the suite collects is a stale transcription rather than a subset, and a
-    # subset is not what the documents claim -- they claim the whole suite's result.
-    assert collected - recorded <= 5, (
-        f"the verdict records {recorded} passing tests while the tree collects {collected}; a "
-        f"difference of more than a few means the recorded number is stale, not a subset. Update it "
-        "to the count the current suite reports.")
+    # Skips are part of the suite's honest result, not evidence of a stale number: a host without the
+    # real Conda binary or a GPU legitimately skips those integrations, and this test used to treat
+    # every skip as staleness -- so a tree with more than a handful of declared skips could never
+    # satisfy it, and the only way to make it pass would have been to record a number the suite does
+    # not produce. The recorded pass count plus the recorded skip count must account for what the
+    # tree collects; anything else is a transcription that no longer describes this suite.
+    skipped_counts = re.findall(r"(\d+) skipped", verdict)
+    recorded_skips = int(skipped_counts[0]) if skipped_counts else 0
+    assert skipped_counts, (
+        "the verdict must record how many tests were skipped, so the pass count can be reconciled "
+        "with what the tree collects")
+    assert recorded + recorded_skips <= collected, (
+        f"the verdict records {recorded} passing and {recorded_skips} skipped tests, but this tree "
+        f"only collects {collected}: the numbers cannot describe this suite")
+    assert collected - recorded - recorded_skips <= 5, (
+        f"the verdict records {recorded} passed + {recorded_skips} skipped while the tree collects "
+        f"{collected}; a difference of more than a few unaccounted tests means the recorded numbers "
+        "are stale. Update them to what the current suite reports.")
 
 def test_no_release_document_describes_verify_only_as_verifying_a_run() -> None:
     """A-05: the flag's meaning is one sentence, and every document must repeat that sentence.
