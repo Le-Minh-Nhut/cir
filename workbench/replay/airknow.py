@@ -35,6 +35,17 @@ from workbench.replay.common import (
 
 MODEL = model_by_id("airknow")
 CHECKPOINTS = {variant["checkpoint_id"]: variant for variant in MODEL["checkpoint_variants"]}
+# The processor config each `model_type` selects, taken from the pinned model class's own
+# `PRETRAINED_MODEL_CONFIG_DICT`
+# (`lavis/models/blip2_models/Blip2QformerCir.py`). Kept as the published mapping rather than a path
+# invented here. Only `pretrain` is reachable through the adapter, which passes no other
+# model_type, but the whole mapping is carried so a divergence is visible.
+PROCESSOR_CONFIGS = {
+    "pretrain": "configs/models/blip2/blip2_pretrain.yaml",
+    "pretrain_vitL": "configs/models/blip2/blip2_pretrain_vitL.yaml",
+    "coco": "configs/models/blip2/blip2_coco.yaml",
+}
+
 DEFAULT_VARIANT = "fiq_n05"
 DATASET_LABEL = "fashioniq"
 PROTOCOL = "fashioniq_full_gallery_ref_excluded"
@@ -94,7 +105,13 @@ def validate_dataset(dataset_root: Path, categories: tuple[str, ...] = CATEGORIE
                 blockers.append(f"Air-Know dataset requirement missing: {dataset_root / relative}")
         if not (dataset_root / "resized_image" / category).is_dir():
             blockers.append(f"Air-Know dataset requirement missing: {dataset_root / 'resized_image' / category}")
-    return blockers
+    # The evaluated subset and the constructor's input set are different questions: the native
+    # `datasets.FashionIQ(...)` opens every category's files regardless of `--category`.
+    from workbench.replay.common import constructor_input_blockers
+
+    return list(dict.fromkeys(
+        blockers + constructor_input_blockers(
+            dataset_root, lambda path: f"Air-Know dataset requirement missing: {path}")))
 
 
 def preflight(
@@ -120,9 +137,11 @@ def _load_replay_modules(source_root: Path) -> tuple[Any, Any, Any, Any, Any]:
     datasets = __import__("datasets")
     data_utils = __import__("data_utils")
     test_blip2 = __import__("test_BLIP2")
-    from lavis.models import load_model_and_preprocess
+    from workbench.replay.lavis_processors import text_processors
 
-    return torch, datasets, data_utils, test_blip2, load_model_and_preprocess
+    txt_processors, boundary = text_processors(source_root, PROCESSOR_CONFIGS["pretrain"])
+
+    return torch, datasets, data_utils, test_blip2, (txt_processors, boundary)
 
 
 def evaluate_categories(
@@ -135,7 +154,8 @@ def evaluate_categories(
     device: str | None = None,
     eval_mode: bool = False,
 ) -> tuple[list[ReplayResult], dict[str, Any]]:
-    torch, datasets, data_utils, test_module, load_model_and_preprocess = _load_replay_modules(source_root)
+    torch, datasets, data_utils, test_module, processors = _load_replay_modules(source_root)
+    txt_processors, processor_boundary = processors
     variant = CHECKPOINTS[variant_id]
     target_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     model_path = checkpoint_root / variant["filename"]
@@ -150,10 +170,6 @@ def evaluate_categories(
     else:
         # Native behavior: test_BLIP2.py:10 calls model.train()
         model.train()
-
-    _, _, txt_processors = load_model_and_preprocess(
-        name="Blip2QformerCir", model_type="pretrain", is_eval=True, device=target_device
-    )
 
     transform = data_utils.targetpad_transform(1.25, 224)
     params = SimpleNamespace(batch_size=batch_size, dataset=DATASET_LABEL)
@@ -186,6 +202,13 @@ def evaluate_categories(
                         ),
                         "checkpoint_size_bytes": model_path.stat().st_size if model_path.is_file() else None,
                         "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224",
+                        "text_processor": {
+                            "config": PROCESSOR_CONFIGS["pretrain"],
+                            "loaded_via": processor_boundary,
+                            "note": "the pinned BlipCaptionProcessor from the model class's own "
+                                    "config; no second BLIP-2 model is constructed and no "
+                                    "/root/bert-base-uncased asset is read",
+                        },
                     },
                 )
             )

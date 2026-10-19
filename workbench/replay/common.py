@@ -7,7 +7,7 @@ import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 CATEGORIES = ("dress", "shirt", "toptee")
 
@@ -97,6 +97,42 @@ def isolated_cache_root(dataset_root: Path, directory_names: tuple[str, ...] = (
                 raise FileNotFoundError(f"native replay input missing: {source}")
             (cache_root / name).symlink_to(source.resolve(), target_is_directory=source.is_dir())
         yield cache_root
+
+
+def constructor_input_blockers(dataset_root: Path, message: Callable[[Path], str],
+                               categories: tuple[str, ...] = CATEGORIES,
+                               train_captions: bool = True) -> list[str]:
+    """The inputs the native FashionIQ constructor opens, independent of the evaluated categories.
+
+    Every wrapper in this family calls `datasets.FashionIQ(...)`, whose `__init__` runs
+    `train_init_process()` and then `get_test_data()` for **all three** categories
+    (`HINT/datasets.py:35-47,59-73`) with no category argument anywhere in its signature. So
+    `--category dress` selects what is *scored*, never what is *opened*: a root that satisfies the
+    dress files alone loads a checkpoint and only then dies on `cap.shirt.train.json`.
+
+    `isolated_cache_root` makes this reachable on every run -- it yields an empty cache root, so
+    `fashion_iq_data.json` never exists there and the constructor always takes the cold path. The
+    evaluated subset and the constructor's input set are therefore two different questions, and this
+    is the second one; the caller keeps asking the first about the categories it will score.
+
+    `message` is the caller's own phrasing for one missing path, so the two questions produce
+    identical text for the paths both of them cover and the caller can deduplicate.
+    """
+    blockers: list[str] = []
+    for category in categories:
+        required = [f"captions/cap.{category}.val.json",
+                    f"captions/correction_dict_{category}.json",
+                    f"image_splits/split.{category}.val.json"]
+        if train_captions:
+            required.append(f"captions/cap.{category}.train.json")
+        for relative in required:
+            path = dataset_root / relative
+            if not path.is_file():
+                blockers.append(message(path))
+        image_directory = dataset_root / "resized_image" / category
+        if not image_directory.is_dir():
+            blockers.append(message(image_directory))
+    return blockers
 
 
 def macro_aggregate(results: list[ReplayResult]) -> dict[str, float | None]:

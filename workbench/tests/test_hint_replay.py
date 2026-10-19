@@ -53,10 +53,11 @@ def test_hint_stale_cache_in_canonical_root_not_reused(dummy_dataset_root: Path)
     mock_data_utils = MagicMock()
     mock_test_module = MagicMock()
     mock_test_module.test.return_value = [("dress_r1", 10.0), ("dress_r10", 20.0), ("dress_r50", 30.0)]
+    mock_txt_processors = MagicMock()
     mock_load_model = MagicMock(return_value=(MagicMock(), MagicMock(), MagicMock()))
 
     with (
-        patch("workbench.replay.hint._load_replay_modules", return_value=(mock_torch, mock_datasets, (mock_data_utils, mock_test_module), mock_load_model)),
+        patch("workbench.replay.hint._load_replay_modules", return_value=(mock_torch, mock_datasets, (mock_data_utils, mock_test_module), (mock_txt_processors, "patched:test-fixture"))),
         patch("workbench.replay.hint.load_trusted_whole_model", return_value=MagicMock()),
     ):
         results, agg = evaluate_categories(
@@ -97,10 +98,11 @@ def test_hint_canonical_root_left_unmodified(dummy_dataset_root: Path):
     mock_data_utils = MagicMock()
     mock_test_module = MagicMock()
     mock_test_module.test.return_value = [("dress_r1", 10.0), ("dress_r10", 20.0), ("dress_r50", 30.0)]
+    mock_txt_processors = MagicMock()
     mock_load_model = MagicMock(return_value=(MagicMock(), MagicMock(), MagicMock()))
 
     with (
-        patch("workbench.replay.hint._load_replay_modules", return_value=(mock_torch, mock_datasets, (mock_data_utils, mock_test_module), mock_load_model)),
+        patch("workbench.replay.hint._load_replay_modules", return_value=(mock_torch, mock_datasets, (mock_data_utils, mock_test_module), (mock_txt_processors, "patched:test-fixture"))),
         patch("workbench.replay.hint.load_trusted_whole_model", return_value=MagicMock()),
     ):
         evaluate_categories(
@@ -136,10 +138,11 @@ def test_hint_isolated_root_lives_through_evaluation(dummy_dataset_root: Path):
     mock_data_utils = MagicMock()
     mock_test_module = MagicMock()
     mock_test_module.test = fake_test
+    mock_txt_processors = MagicMock()
     mock_load_model = MagicMock(return_value=(MagicMock(), MagicMock(), MagicMock()))
 
     with (
-        patch("workbench.replay.hint._load_replay_modules", return_value=(mock_torch, mock_datasets, (mock_data_utils, mock_test_module), mock_load_model)),
+        patch("workbench.replay.hint._load_replay_modules", return_value=(mock_torch, mock_datasets, (mock_data_utils, mock_test_module), (mock_txt_processors, "patched:test-fixture"))),
         patch("workbench.replay.hint.load_trusted_whole_model", return_value=MagicMock()),
     ):
         results, agg = evaluate_categories(

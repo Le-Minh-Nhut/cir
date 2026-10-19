@@ -298,7 +298,7 @@ def _variant_provenance(model: dict, config: WorkbenchConfig) -> dict[str, Any]:
     approved_patch = None
     if patch is not None and patch.get("applied"):
         approved_patch = {key: patch[key] for key in
-                          ("patch_file", "patch_sha256", "applied") if key in patch}
+                          ("patch_file", "patch_sha256", "applied", "patches") if key in patch}
     from workbench.backend.runtime import runtime_adaptation
 
     try:
@@ -472,6 +472,25 @@ def parser_for(registry: dict) -> argparse.ArgumentParser:
     return parser
 
 
+def read_executed_config(plan: EvaluationPlan) -> dict | None:
+    """The config the evaluator actually read, when its artifact is a run directory.
+
+    DCNet prints six anonymous `comb:` cells in the order of
+    `config['data_loader']['args']['categories']`, so the parser cannot attribute them without this
+    file. It is the run directory's own `config.json` -- the same file the native `parse_config.py:28`
+    reads -- and never a re-derived or edited copy. A missing or malformed file returns None, which
+    makes the parser refuse rather than assume an order.
+    """
+    if plan.model_id != "dcnet":
+        return None
+    config_file = plan.checkpoint if plan.checkpoint.is_file() else plan.checkpoint / "config.json"
+    try:
+        payload = json.loads(config_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def make_run_id(plan: EvaluationPlan, timestamp: datetime) -> str:
     """Collision-resistant run identity: time + model + checkpoint + random suffix."""
     return f"{timestamp:%Y%m%dT%H%M%S%fZ}_{plan.model_id}_{plan.checkpoint_id}_{uuid.uuid4().hex[:8]}"
@@ -579,6 +598,16 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
         raise RuntimeError(
             f"refusing to overwrite existing run directory for run id {run_id}: {directory}"
         ) from error
+    # Evidence that the corroborator has to be able to re-read, not a convenience copy: DCNet's six
+    # anonymous `comb:` cells can only be attributed through the category order in the run directory's
+    # own `config.json` (the file `parse_config.py:28` read), and `verify_run` re-parses the recorded
+    # stdout with the same parser. A run whose config is missing makes that re-extraction refuse,
+    # which is how a transposed category would be caught rather than trusted.
+    if plan.model_id == "dcnet":
+        source_config = (plan.checkpoint if plan.checkpoint.is_file()
+                         else plan.checkpoint / "config.json")
+        if source_config.is_file():
+            shutil.copyfile(source_config, directory / "config.json")
 
     # Private temp space per run, created before the process so the child's TMPDIR is fixed at
     # launch. The host temp dir is world-readable, so anything the evaluator writes there
@@ -1872,6 +1901,7 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         stderr_content,
         code,
         paper_metrics=plan.paper_metrics,
+        executed_config=read_executed_config(plan),
     )
     # A model the registry marks as synthetic has no published output format, so its evaluator's own
     # JSON aggregate is the evidence. This is an explicit registry declaration, not a guess from the

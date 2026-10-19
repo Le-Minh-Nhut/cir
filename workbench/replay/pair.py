@@ -104,7 +104,14 @@ def validate_dataset(dataset_root: Path, categories: tuple[str, ...] = CATEGORIE
         ):
             if not (dataset_root / relative).is_file():
                 blockers.append(f"PAIR dataset input missing: {dataset_root / relative}")
-    return blockers
+    # The evaluated subset and the constructor's input set are different questions: the native
+    # `data/datasets.py:34-41` builds its cache and reads all three categories whatever `--category`
+    # scores.
+    from workbench.replay.common import constructor_input_blockers
+
+    return list(dict.fromkeys(
+        blockers + constructor_input_blockers(
+            dataset_root, lambda path: f"PAIR dataset input missing: {path}")))
 
 
 def preflight(

@@ -8,9 +8,10 @@ service, database hay dashboard mới.
 |---|---|
 | Cập nhật | 2026-10-19 |
 | Branch | `research/cir-failure-workbench` |
-| Source SHA đã kiểm | `c3d747791417db29aa8c4cc5ab27fa3ac19e70ad` |
+| Source SHA đã kiểm | `914703ecd42dbb6a0054bc8a5811dcb4dae88cbd` + các sửa của lượt R9 (ghi ở `workbench/docs/reviews/r9/R9_FINAL_REPORT.md`) |
 | Môi trường kiểm | laptop: Linux x64, `.venv` Python 3.13 + torch CPU, RTX 3050 4 GiB; **không có checkpoint nào staged** |
-| Phạm vi đã chạy | static + fixture + parser/unit. **Không có inference nào chạy.** |
+| Phạm vi đã chạy | static + fixture + parser/unit + native constructor (fixture) + native LAVIS processor (pinned source). **Không có inference nào chạy.** |
+| Lượt R9 | 4 lỗi tái hiện được ở `914703e` đã sửa (F08/F09/F04/F05), F06 áp dụng, test hồi quy mới thay các test chỉ kiểm bản sao |
 
 ---
 
@@ -23,6 +24,7 @@ Các tầng **độc lập**; một tầng đạt không suy ra tầng sau:
 | `SOURCE_READY` | source vendored, pin + digest manifest khớp, không nested `.git` | `test_fresh_clone_delivery.py`, `test_vendored_source_integrity.py` |
 | `ENTRYPOINT_EXISTS` | có file entrypoint thật (CLI hoặc wrapper) | đọc source, `--help` chạy được |
 | `PREFLIGHT_PASS` | preflight chạy và **báo blocker đúng** trên input thiếu | test per-model + `test_component_boundaries.py` |
+| `PREFLIGHT_IMPLEMENTED_BLOCKED` | có đường preflight thật nhưng model **đang** bị chặn đúng, nên chưa lần nào chạy hết | test preflight + blocker list hiện tại |
 | `CHECKPOINT_MAPPING_VERIFIED` | file/biến thể được bind bởi metadata tác giả (revision + size + hash) | HF LFS oid, digest archive |
 | `CHECKPOINT_LOADED` | checkpoint thật đã `load_state_dict`/unpickle thành công | **NOT_CHECKED toàn bộ** — không có file local |
 | `CODE_TESTED` | đường code (adapter→argparse→serializer→parser) có test hồi quy | pytest |
@@ -65,17 +67,17 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | 3 | `hint` | iLearn-Lab/ICASSP26-HINT | `fashioniq_val_split` | `fashioniq.pt` 2 724 451 182 B | vendored, pin OK | size/hash VERIFIED; chưa stage | wrapper + cache isolation | `hint_native_recall` | không | `AGGREGATE_PARSED` | `PUBLIC_ASSET_SETUP` |
 | 4 | `pair` | iLearn-Lab/ICASSP25-PAIR | `fashioniq_val_split` | `pair-B1.pt`/`pair-B2.pt` | vendored + 1 local fix + `data/datasets.py` recovered | mapping **UNRESOLVED** | wrapper | shared replay | không | `CODE_TESTED` | `AUTHOR_ONLY_INFORMATION` + `SCIENTIFIC_VARIANT` |
 | 5 | `clvc_net` | iLearn-Lab/SIGIR21-CLVC-Net | `fashioniq_val_split` | 6 whole models (2/category) | vendored + torch.hub fix | archive `CLVCNET.zip` interior chưa xác minh | wrapper | shared replay | không | `CODE_TESTED` | `AUTHOR_ONLY_INFORMATION` |
-| 6 | `tgcir` | iLearn-Lab/MM23-TG-CIR | `fashioniq_val_split` | `TG-CIR.zip` (Drive) | vendored, pin OK | archive member/hash chưa xác minh; pin clip đã sửa | **preflight-only** | không | không | `PREFLIGHT_PASS` | `AUTHOR_ONLY_INFORMATION` |
+| 6 | `tgcir` | iLearn-Lab/MM23-TG-CIR | `fashioniq_val_split` | `TG-CIR.zip` (Drive) | vendored, pin OK | archive member/hash chưa xác minh; pin clip đã sửa | **preflight-only** | không | không | `PREFLIGHT_IMPLEMENTED_BLOCKED` | `AUTHOR_ONLY_INFORMATION` |
 | 7 | `habit` | iLearn-Lab/AAAI26-HABIT | `fashioniq_full_gallery_ref_excluded` | N0.2/N0.5/N0.8, clean eval | vendored, pin OK | hash VERIFIED; chưa stage; **không có bản clean** | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` + `SCIENTIFIC_VARIANT` |
 | 8 | `intent` | iLearn-Lab/AAAI26-INTENT | `fashioniq_full_gallery_ref_excluded` | N0.2/N0.5/N0.8 | vendored, pin OK | hash VERIFIED; chưa stage | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` |
-| 9 | `conesep` | Lee-zixu/ConeSep (redirect) | `fashioniq_full_gallery_ref_excluded` | N0.2/N0.5/N0.8 | vendored, pin OK | hash VERIFIED; chưa stage | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` |
-| 10 | `airknow` | iLearn-Lab/CVPR26-Air-Know | `fashioniq_full_gallery_ref_excluded` | 0.5/0.8, clean eval | vendored + 2 local fix | hash VERIFIED; chưa stage | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` + `SCIENTIFIC_VARIANT` (train mode) |
-| 11 | `dcnet` | ozmig77/dcnet | `fashioniq_full_gallery_ref_excluded` | `trained_model.pth` (Drive) | vendored, pin OK | GloVe pkl chưa công bố; data_dir binding đã kiểm | preflight + CLI | `dcnet_native_logger` | không | `AGGREGATE_PARSED` | `AUTHOR_ONLY_INFORMATION` |
-| 12 | `csmcir` | qzp2018/CSMCIR | `fashioniq_original_split` | `fashioniq_tuned_clip_best.pt` 2 720 615 859 B | vendored + **2 approved patches** | ckpt hash VERIFIED; CoT captions đã có; chưa stage | script CLI (`__main__`) | `csmcir_stdout_json` | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` |
+| 9 | `conesep` | Lee-zixu/ConeSep (redirect) | `fashioniq_full_gallery_ref_excluded` | N0.2/N0.5/N0.8 | vendored, pin OK | hash **chưa có** (`expected_sha256: null` trong registry); chưa stage | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` |
+| 10 | `airknow` | iLearn-Lab/CVPR26-Air-Know | `fashioniq_full_gallery_ref_excluded` | 0.5/0.8, clean eval | vendored + 2 local fix | hash **chưa có** (`expected_sha256: null` trong registry); chưa stage | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` + `SCIENTIFIC_VARIANT` (train mode) |
+| 11 | `dcnet` | ozmig77/dcnet | `fashioniq_full_gallery_ref_excluded` | `trained_model.pth` (Drive) | vendored, pin OK | GloVe pkl chưa công bố; **data_dir binding kiểm trên cả launch path** | preflight + CLI | `dcnet_native_logger` (đọc thứ tự category) | không | `AGGREGATE_PARSED` | `AUTHOR_ONLY_INFORMATION` |
+| 12 | `csmcir` | qzp2018/CSMCIR | `fashioniq_original_split` | `fashioniq_tuned_clip_best.pt` 2 720 615 859 B | vendored + **2 approved patches (cả hai bắt buộc)** | ckpt hash VERIFIED; CoT captions đã có; chưa stage | script CLI (`__main__`) | `csmcir_stdout_json` | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` |
 | 13 | `combiner_rn50x4_noft` | ABaldrati/CLIP4Cir | `fashioniq_original_split` | RN50x4 noft Combiner | vendored, pin OK | archive 5 parts, digest công bố, **chưa tải** | script CLI | `combiner_stdout_recall` | không | `SOURCE_READY` | `PUBLIC_ASSET_SETUP` |
 | 14 | `clip4cir_rn50x4_fullft` | ABaldrati/CLIP4Cir | `fashioniq_original_split` | fullft CLIP + Combiner (cùng config) | vendored, pin OK | như trên; cần **cặp** khớp | script CLI | `combiner_stdout_recall` | không | `SOURCE_READY` | `PUBLIC_ASSET_SETUP` |
 | 15 | `sprc` | chunmeifeng/SPRC | `fashioniq_original_split` | ViT-g (paper) / ViT-L (variant) | vendored, pin OK | ViT-g OneDrive 403; ViT-L reachable | script CLI | `csmcir_stdout_json` | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` + `SCIENTIFIC_VARIANT` |
-| 16 | `ptha_mtst` | zyinan99/MTST_PTHA | `fashioniq_original_split` | **không có FashionIQ ckpt** | vendored + 3 local fix | không có weights | preflight-only | không | không | `PREFLIGHT_PASS` | `AUTHOR_ONLY_INFORMATION` |
+| 16 | `ptha_mtst` | zyinan99/MTST_PTHA | `fashioniq_original_split` | **không có FashionIQ ckpt** | vendored + 3 local fix | không có weights | preflight-only | không | không | `PREFLIGHT_IMPLEMENTED_BLOCKED` | `AUTHOR_ONLY_INFORMATION` |
 
 **Không model nào** đạt `CHECKPOINT_LOADED`, `GPU_SMOKE_VERIFIED`, `FULL_VAL_VERIFIED` hay
 `PAPER_PARITY_CHECKED`. Mọi số trong registry là số paper, không phải số đo.
@@ -113,7 +115,17 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
   `[('dress_r10', v), ...]` (`test.py:103-108`). Macro tính lại.
 - Hub: `iLearn-Lab/HINT` (không phải `ICASSP26-HINT` — trả 401). `fashioniq.pt` 2 724 451 182 B,
   LFS `bf9c72d4…`.
-- Đã chạy: `test_hint_replay.py` (4), `test_hint_metric_parser.py` (11).
+- Đã chạy: `test_hint_replay.py` (4), `test_hint_metric_parser.py` (11),
+  `test_r9_defect_regressions.py` (F05 train-inputs + F06 processor).
+- **F05 đã sửa (lượt R9)**: `validate_dataset(root, categories=('dress',))` từng trả `[]` trên root
+  chỉ có dress, nhưng constructor native (`datasets.py:35-47,59-73`) mở **cả ba** category bất kể
+  `--category`, và `isolated_cache_root` luôn rỗng nên nhánh cold luôn chạy ⇒ checkpoint được load
+  xong mới chết ở `cap.shirt.train.json`. Nay tập input của constructor là câu hỏi **riêng**, kiểm
+  bằng `workbench/replay/common.py:constructor_input_blockers`, dùng chung cho `hint`, `habit`,
+  `intent`, `conesep`, `airknow`, `pair`.
+- **F06 đã sửa (lượt R9)**: `txt_processors` lấy từ config pinned qua
+  `workbench/replay/lavis_processors.py`; không còn dựng model BLIP-2 thứ hai, không cần
+  `/root/bert-base-uncased`. `--backbone pretrain_vitL` chọn đúng config ViT-L mà model class công bố.
 
 ### 4. `pair`
 - Upstream @ `bfb0b98cdb4c`. Local fix: `models/MHTransformer_rev.py` =
@@ -124,6 +136,8 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 - Checkpoint: `pair-B1.pt` / `pair-B2.pt` công bố nhưng **không có nhãn dataset/variant** ⇒ mapping
   `UNVERIFIED`. Không chọn dataset/architecture thay tác giả.
 - Đã chạy: `test_pair_replay.py` (5). Blocker: `AUTHOR_ONLY_INFORMATION`.
+- **F05 đã sửa (lượt R9)**: `data/datasets.py:34-42` dựng cache và đọc cả ba category; validator
+  từng chỉ kiểm category được chọn. Nay dùng chung `constructor_input_blockers`.
 
 ### 5. `clvc_net`
 - Upstream @ `bd9b68894898`. Local fix `resnet.py` dùng `torch.hub.load_state_dict_from_url`
@@ -150,6 +164,9 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
   checkpoint noisy như clean-trained.
 - Adapter truyền `--variant <checkpoint_id>` ⇒ biến thể được chọn chính là biến thể load.
 - Parser: shared replay (đọc `categories` — F02).
+- **F05 + F06 đã sửa (lượt R9)**, cùng cách như `hint`: tập input của constructor native được kiểm
+  độc lập với `--variant`/`--category`, và `txt_processors` lấy từ config pinned thay vì dựng model
+  BLIP-2 thứ hai (3 model này từng chạm `/root/bert-base-uncased` qua `Blip2Base.init_tokenizer`).
 
 ### 10. `airknow`
 - Upstream @ `6ab6fa95b746`. Local fix: guard 2 import vắng + `.png` fallback (không đổi hành vi khi
@@ -158,15 +175,29 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
   argparse exit 2 trước khi chạm model). Test ép cả `fiq_n05` và `fiq_n08`.
 - Native gọi `model.train()` ở `test_BLIP2.py:10` cho nhánh FashionIQ ⇒ giữ nguyên, ghi là
   `SCIENTIFIC_VARIANT`; `--eval-mode` là biến thể thí nghiệm được label riêng.
+- **F05 + F06 đã sửa (lượt R9)**: như `hint`. `--variant` (F01) và `eval_mode` không đổi; chỉ đường
+  lấy `txt_processors` và tập input preflight thay đổi.
 
 ### 11. `dcnet`
 - Upstream @ `68c79d38569f`. CLI thật: `python test.py --resume <run_dir>`.
-- **F08 đã thêm**: evaluator đọc `config.json:data_loader.args.data_dir`, config mẫu dùng literal
-  tương đối `dataset/fashioniq` ⇒ resolve theo CWD. Preflight báo mismatch (kể cả thiếu field) thay vì
-  sửa config tác giả.
-- **F09 đã thêm**: parser `dcnet_native_logger`. `model/metric.py:5-21` trả **fraction 0..1** ⇒ đổi
-  % đúng một lần. Đọc nhánh `comb:` (nhánh mà `paper_benchmarks/papers.yaml` mô tả là "mean of the six
-  printed cells"); composition/correction giữ **riêng**; `comb_avg` đối chiếu ⇒ lệch thì từ chối.
+- **F08 đã sửa (lượt R9)**: evaluator đọc `config.json:data_loader.args.data_dir` và `CE_dataset`
+  join literal đó vào **CWD của tiến trình** (không có `chdir` nào trong DCNet; `evaluate_models.py`
+  launch với `cwd=source_cwd(...)` = checkout). Bản trước chỉ từ chối *relative* và chỉ nằm trong
+  `dcnet.preflight` — một helper mà `DCNetAdapter` **không** gọi, nên official path không được bảo vệ.
+  Nay: resolve theo CWD, so với `--dataset-root` cho **cả** absolute lẫn relative, **và** chạy trong
+  `backend/preflight.preflight_blockers` — danh sách mà `doctor`, `pc_readiness`, `prepare_model` và
+  `evaluate_models` đều đọc. Symlink canonical (dataset stage đúng cách) pass; thư mục thường trong
+  checkout hoặc path absolute trỏ nơi khác ⇒ **refuse** kèm đường dẫn cụ thể. Override tường minh:
+  `WORKBENCH_DCNET_DATA_DIR` — là khai báo về tiến trình launch, không sửa file tác giả.
+  Run directory giờ chép `config.json` vào evidence dir để `verify_run` re-parse được stdout.
+- **F09 đã sửa (lượt R9)**: parser `dcnet_native_logger`. `model/metric.py:5-21` trả **fraction 0..1**
+  ⇒ đổi % đúng một lần. `test.py:74-84` in cả `recall` lẫn `comb` bằng **cùng** vòng
+  `trainer.categories` (`base_trainer.py:32` = `config['data_loader']['args']['categories']`); sáu ô
+  `comb:` không có tên, nên bản trước map theo tuple cứng `(dress, shirt, toptee)` và **transpose im
+  lặng** khi config dùng thứ tự khác (`comb_avg` không phát hiện được vì tổng bất biến với hoán vị).
+  Nay: thứ tự lấy từ chính stream (`[cat] comp corr r@10`), config là **nhân chứng thứ hai** — lệch
+  nhau ⇒ từ chối; thiếu config ⇒ vẫn đúng, vì stream tự nó xác định thứ tự. composition/correction
+  giữ **riêng**.
 - Blocker: `cap.{cat}.glove.val.pkl` chưa công bố; OOV embedding chưa seed ⇒ reconstruction
   deterministic là **biến thể tuỳ chọn**, không phải mặc định.
 
@@ -177,6 +208,12 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
      `vis_fiq`, nơi `labels.append(data[1])` là target-id string nhưng bị xử như tensor ⇒
      AttributeError, exit ≠ 0 **sau khi metric đã tính**. Patch đặt dump sau cờ `--visualize` mặc định
      tắt; công cụ vẽ không bị đụng.
+- **F04 đã sửa (lượt R9)**: `approved_patch_state` **return ngay trong vòng lặp**, nên chỉ cần patch
+  #1 ⇒ `applied=True` trong khi patch #2 chưa áp; và không consumer nào phân biệt partial với complete.
+  Nay hàm kiểm **mọi** patch đã khai báo, trả thêm `patches[]` (từng mục một), và `detail` nói rõ
+  "*N* of *M* required patches are not applied". Một checkout nửa vời vì vậy bị báo là
+  `source repair incomplete` ngay trong `model_requirements`, và `source_blocker` vẫn còn hiệu lực.
+  Cả hai patch đều cần cho workflow benchmark mặc định; `--visualize` vẫn **off** khi chạy benchmark.
 - CoT captions **có công bố** tại Hub `peng12138/CSMCIR` (`fashioniq_qwen_captions/qwen_captions/`),
   byte-identical với bản local (sha256 từng category đã verify). Blocker "captions unavailable" đã
   **rút lại**.
@@ -222,8 +259,8 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | F02 | `FIXED` | parser đọc cả `categories` và `results`; cả hai mà mâu thuẫn ⇒ từ chối | `test_component_boundaries.py` (4+3 model + abuse cases) | — |
 | F03 | `FIXED` | `clvc_net.py` dùng `Resize(256)` theo nhánh FashionIQ native | `test_component_boundaries.py` so tensor thật | — |
 | F04 | `FIXED` | `--visualize` off-by-default, qua approved patch thứ 2 | `test_component_boundaries.py` (4 test patch + gate) | — |
-| F05 | `FIXED` | validator HINT/ENCODER/PAIR yêu cầu train; layout → `ilearn_resized_training` | `test_verified_declarations.py` | — |
-| F06 | `DEFERRED_WITH_REASON` | Thay `load_model_and_preprocess` bằng processor trực tiếp: **chưa áp**. Đã chứng minh được 5 model resolve **cùng** khai báo processor (`prompt=""`, `max_words=50`) từ config pinned (`test_blip2_text_processor_parity.py`), nhưng chưa chứng minh được **output parity** vì `lavis.processors` kéo `torchaudio` — không cài được trên host này; mọi assertion kiểu đó sẽ là test một stub. Điều kiện áp: chứng minh prompt/max_words/punctuation/spaces/truncation không đổi **trên runtime có torchaudio**. | `test_blip2_text_processor_parity.py` (6) | `UNFINISHED_ENGINEERING` |
+| F05 | `FIXED` | validator HINT/ENCODER/PAIR yêu cầu train; layout → `ilearn_resized_training`. **Lượt R9**: tập input của constructor native được kiểm bằng `constructor_input_blockers` cho **cả bảy** wrapper (`hint`, `encoder`, `pair`, `habit`, `intent`, `conesep`, `airknow`) thay vì chỉ theo category được chọn; bốn khai báo `fashioniq_layout` của habit/intent/conesep/airknow được nâng lên `[..._training]` vì layout cũ bỏ `cap.*.train.json` mà constructor vẫn mở | `test_r9_defect_regressions.py` (D1–D3, 19 test) + `test_verified_declarations.py` | — |
+| F06 | `UNFINISHED_ENGINEERING` | Thay `load_model_and_preprocess` bằng processor lấy trực tiếp từ config pinned: **đã áp** cho `hint`, `habit`, `intent`, `conesep`, `airknow`. `lavis.processors` trong repo là bản pinned; `BeatsAudioProcessor` (module import `torchaudio`) bị bỏ khỏi import graph vì torchaudio không có trong môi trường khai báo của **bất kỳ** model nào và không liên quan tới text preprocessing — đây là một dòng import chết, không phải một bản thay thế hành vi. Đường code `load_model_and_preprocess` không còn được gọi (assert bằng AST), và `BlipCaptionProcessor` thật trả `'  A dog, running!  '` → `'a dog, running'`, `'Dress.'` → `'dress'`. Vẫn **không** có output parity so với invocation native đầy đủ, vì bản native cần `model_cls.from_pretrained` → `/root/bert-base-uncased` + trọng số BLIP-2 gốc mà host này không có; biên đó ghi trong docstring `workbench/replay/lavis_processors.py` và trong provenance của mỗi run (`text_processor.loaded_via`). | `test_r9_defect_regressions.py` (E1–E4, 15 test) + `workbench/scripts/lavis_processor_parity.py` (chạy được) | `FIXED_WITH_RECORDED_BOUNDARY` |
 | F07 | `FIXED` | pin OpenAI CLIP revision thay `clip==0.2.0` | `test_verified_declarations.py` | — |
 | F08 | `FIXED` | preflight báo `data_dir` mismatch/relative/missing | `dcnet.validate_dataset_binding` + test | — |
 | F09 | `FIXED` | parser DCNet, fraction→% một lần, nhánh `comb:`, tách comp/corr | `test_verified_declarations.py` (6 test) | — |

@@ -26,19 +26,20 @@ def _model(model_id: str) -> dict:
 
 
 def _derived_checkout(tmp_path: Path) -> Path:
-    """A minimal derived checkout: the pinned file the patch touches, at its published bytes.
+    """A minimal derived checkout: every patched file, at its published bytes.
 
     The full pinned tree carries roughly a gigabyte of dataset links, so the fixture copies only what
-    the patch and the provenance check read. That is enough because the command under test never
+    the patches and the provenance check read. That is enough because the command under test never
     touches the evaluator.
     """
     import shutil
 
     root = tmp_path / "third_party"
     target = root / "CSMCIR"
-    relative = _model("csmcir")["approved_source_patches"][0]["path"]
-    (target / Path(relative).parent).mkdir(parents=True)
-    shutil.copyfile(REPO / "workbench/third_party/CSMCIR" / relative, target / relative)
+    for patch in _model("csmcir")["approved_source_patches"]:
+        relative = patch["path"]
+        (target / Path(relative).parent).mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO / "workbench/third_party/CSMCIR" / relative, target / relative)
     return root
 
 
@@ -99,9 +100,11 @@ def test_repairing_the_checkout_clears_the_source_blocker_and_moves_to_the_next_
     assert before["state"] == pcr.BLOCKED_SOURCE
     assert "lavis" in before["reason"]
 
-    patch = REPO / model["approved_source_patches"][0]["patch_file"]
-    subprocess.run(["patch", "-p1", "--directory", str(root / "CSMCIR"), "-i", str(patch)],
-                   check=True, capture_output=True)
+    # The declared set is what makes a checkout a repaired one: applying the first patch alone leaves
+    # a partial repair, which is reported as such rather than as an approved variant.
+    for patch in model["approved_source_patches"]:
+        subprocess.run(["patch", "-p1", "--directory", str(root / "CSMCIR"), "-i",
+                        str(REPO / patch["patch_file"])], check=True, capture_output=True)
 
     after = pcr.model_section(model, config)
     assert after["state"] != pcr.BLOCKED_SOURCE, after["reason"]

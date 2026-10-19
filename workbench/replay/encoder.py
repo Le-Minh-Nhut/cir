@@ -111,7 +111,14 @@ def validate_dataset(dataset_root: Path, categories: tuple[str, ...] = CATEGORIE
         ):
             if not (dataset_root / relative).is_file():
                 blockers.append(f"{'ENCODER'} dataset input missing: {dataset_root / relative}")
-    return blockers
+    # The evaluated subset and the constructor's input set are different questions:
+    # `datasets.py:95-107` (the module `datasets1.py` restores) runs `train_init_process` and then
+    # `get_test_data` for all three categories, with no category argument in its signature.
+    from workbench.replay.common import constructor_input_blockers
+
+    return list(dict.fromkeys(
+        blockers + constructor_input_blockers(
+            dataset_root, lambda path: f"ENCODER dataset input missing: {path}")))
 
 
 def preflight(

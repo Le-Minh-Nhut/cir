@@ -49,6 +49,15 @@ from workbench.replay.common import (
 
 MODEL = model_by_id("hint")
 CHECKPOINT = MODEL["checkpoint_variants"][0]
+# The processor config each `model_type` selects, taken from the pinned model class's own
+# `PRETRAINED_MODEL_CONFIG_DICT` (`lavis/models/blip2_models/HINT.py:237-241`). Kept as the published
+# mapping rather than a path invented here, so `--backbone pretrain_vitL` reads the ViT-L config the
+# authors declared for it.
+PROCESSOR_CONFIGS = {
+    "pretrain": "configs/models/blip2/blip2_pretrain.yaml",
+    "pretrain_vitL": "configs/models/blip2/blip2_pretrain_vitL.yaml",
+    "coco": "configs/models/blip2/blip2_coco.yaml",
+}
 # `params.dataset` only reaches the recall label (`test.py:107` `'{}_r{}'.format(name, k)`), so it is
 # recorded as the protocol's dataset name rather than being invented.
 DATASET_LABEL = "fashioniq"
@@ -110,7 +119,13 @@ def validate_dataset(dataset_root: Path, categories: tuple[str, ...] = CATEGORIE
         ):
             if not (dataset_root / relative).is_file():
                 blockers.append(f"{'HINT'} dataset input missing: {dataset_root / relative}")
-    return blockers
+    # The evaluated subset and the constructor's input set are different questions: the native
+    # `datasets.FashionIQ(...)` prints all three categories' data whatever `--category` scores.
+    from workbench.replay.common import constructor_input_blockers
+
+    return list(dict.fromkeys(
+        blockers + constructor_input_blockers(
+            dataset_root, lambda path: f"HINT dataset input missing: {path}")))
 
 
 def preflight(checkpoint_root: Path, dataset_root: Path, source_root: Path,
@@ -119,8 +134,15 @@ def preflight(checkpoint_root: Path, dataset_root: Path, source_root: Path,
             + validate_dataset(dataset_root, categories))
 
 
-def _load_replay_modules(source_root: Path) -> tuple[Any, Any, Any, Any]:
-    """Import the pinned modules and the pinned evaluator from the checkout itself."""
+def _load_replay_modules(source_root: Path, model_type: str = "pretrain") -> tuple[Any, Any, Any, Any]:
+    """Import the pinned modules, the pinned evaluator and the pinned text processor.
+
+    The processor is built from the model class's own `PRETRAINED_MODEL_CONFIG_DICT` entry rather
+    than by `load_model_and_preprocess`, which constructs a SECOND pretrained BLIP-2 model to obtain
+    it -- a construction that reads `/root/bert-base-uncased`
+    (`lavis/models/blip2_models/blip2.py:32,48,55`) and multi-GB base weights. See
+    `workbench/replay/lavis_processors.py` for what is executed and what is not.
+    """
     import torch
 
     for entry in (str(source_root), str(source_root / "lavis")):
@@ -129,25 +151,32 @@ def _load_replay_modules(source_root: Path) -> tuple[Any, Any, Any, Any]:
     datasets = __import__("datasets")
     data_utils = __import__("data_utils")
     test_module = __import__("test")
-    from lavis.models import load_model_and_preprocess
+    from workbench.replay.lavis_processors import text_processors
 
-    return torch, datasets, (data_utils, test_module), load_model_and_preprocess
+    try:
+        config_relative_path = PROCESSOR_CONFIGS[model_type]
+    except KeyError:
+        raise ValueError(
+            f"HINT publishes no {model_type!r} processor config; the model class declares "
+            f"{sorted(PROCESSOR_CONFIGS)}") from None
+    txt_processors, boundary = text_processors(source_root, config_relative_path)
+
+    return torch, datasets, (data_utils, test_module), (txt_processors, boundary)
 
 
 def evaluate_categories(checkpoint_root: Path, dataset_root: Path, source_root: Path,
                         categories: tuple[str, ...] = CATEGORIES,
                         batch_size: int = 64, backbone: str = "pretrain",
                         device: str | None = None) -> tuple[list[ReplayResult], dict[str, Any]]:
-    torch, datasets, pinned, load_model_and_preprocess = _load_replay_modules(source_root)
+    torch, datasets, pinned, processors = _load_replay_modules(source_root, backbone)
     data_utils, test_module = pinned
+    txt_processors, processor_boundary = processors
 
     target_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     model_path = checkpoint_root / CHECKPOINT["filename"]
     # Whole pickled module (train.py:233,279): the author digest is verified before unpickling.
     model = load_trusted_whole_model(model_path, CHECKPOINT.get("expected_sha256"), torch)
 
-    _, _, txt_processors = load_model_and_preprocess(
-        name="HINT", model_type=backbone, is_eval=True, device=target_device)
     model = model.to(target_device)
     model.eval()
 
@@ -180,6 +209,13 @@ def evaluate_categories(checkpoint_root: Path, dataset_root: Path, source_root: 
                     "checkpoint_size_bytes": (model_path.stat().st_size
                                               if model_path.is_file() else None),
                     "preprocessing": "targetpad transform, target_ratio 1.25, input_dim 224 (blip_validate.py equivalent path)",
+                    "text_processor": {
+                        "config": PROCESSOR_CONFIGS[backbone],
+                        "loaded_via": processor_boundary,
+                        "note": "the pinned BlipCaptionProcessor from the model class's own config; "
+                                "no second BLIP-2 model is constructed and no /root/bert-base-uncased "
+                                "asset is read",
+                    },
                 },
             ))
     return results, macro_aggregate(results)

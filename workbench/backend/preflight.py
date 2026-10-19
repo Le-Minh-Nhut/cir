@@ -48,10 +48,19 @@ def model_requirements(
     if model.get("source_blocker"):
         repair = approved_patch_state(model, source)
         if repair is not None and repair["applied"]:
-            note = (f"source repaired by the approved patch {repair['patch_file']} "
+            applied = ", ".join(str(state["patch_file"]) for state in repair["patches"])
+            note = (f"source repaired by the approved patch set [{applied}] "
                     f"(sha256={repair['patch_sha256']}); the published-source blocker no longer applies "
                     f"and the run is an approved compatibility variant, not official parity")
             notes.append(note)
+        elif repair is not None:
+            # A half-repaired checkout is neither the published source nor the approved variant, and
+            # saying nothing here is how a partial repair came to look complete: the blocker text
+            # alone does not say how much of the set is missing.
+            missing = [state["path"] for state in repair["patches"] if not state["applied"]]
+            notes.append(
+                f"source repair incomplete: {len(missing)} of {len(repair['patches'])} required "
+                f"patches are not applied ({', '.join(missing)}); {repair['detail']}")
 
     auxiliary = []
     for asset in auxiliary_assets_for_model(model["model_id"]):
@@ -119,44 +128,82 @@ def model_requirements(
 
 
 def approved_patch_state(model: dict, source: Path | None) -> dict[str, Any] | None:
-    """Whether a model's declared approved patch is applied to the checkout at *source*.
+    """Whether EVERY declared approved patch is applied to the checkout at *source*.
 
     Returns `None` when the model declares no approved patch. Otherwise `applied` says whether the
-    checkout's file carries the recorded post-patch digest, and `detail` explains a checkout that is
-    neither the published original nor the approved variant.
+    checkout carries the recorded post-patch digest for every required patch. `detail` explains a
+    checkout that is neither the published original nor the full approved variant, and it names the
+    patch that is missing rather than only the first one — a model may declare several required
+    repairs (CSMCIR declares an import repair and a diagnostic-dump repair), and stopping at the first
+    one reported a half-repaired checkout as fully approved.
+
+    `patches` lists each declaration with its own state, in declaration order, so a consumer can see
+    which member of the set is missing without re-hashing the tree.
     """
     patches = model.get("approved_source_patches") or []
     if not patches:
         return None
     if source is None or not source.is_dir():
-        return {"applied": False, "patch_file": None, "patch_sha256": None,
+        return {"applied": False, "patch_file": None, "patch_sha256": None, "patches": [],
                 "detail": "the source checkout is not present, so no patch state can be observed"}
 
     from workbench.backend.registry import sha256_file
 
+    states: list[dict[str, Any]] = []
     for patch in patches:
+        state = {"path": patch["path"], "patch_file": patch.get("patch_file"),
+                 "patch_sha256": patch.get("patch_sha256")}
         target = source / patch["path"]
-        if not target.is_file():
-            return {"applied": False, "patch_file": patch.get("patch_file"),
-                    "patch_sha256": patch.get("patch_sha256"),
-                    "detail": f"the target file is missing: {target}"}
-        digest = sha256_file(target)
-        if digest == patch.get("derived_sha256"):
-            return {"applied": True, "patch_file": patch.get("patch_file"),
-                    "patch_sha256": patch.get("patch_sha256"),
-                    "detail": f"{patch['path']} matches the recorded post-patch digest"}
-        if digest == patch.get("base_sha256"):
-            return {"applied": False, "patch_file": patch.get("patch_file"),
-                    "patch_sha256": patch.get("patch_sha256"),
-                    "detail": (f"{patch['path']} is the unmodified published file; apply "
-                               f"{patch.get('patch_file')} to a derived checkout of the pinned "
-                               f"revision and register that checkout as the model source")}
-        return {"applied": False, "patch_file": patch.get("patch_file"),
-                "patch_sha256": patch.get("patch_sha256"),
-                "detail": (f"{patch['path']} matches neither the published file nor the approved "
-                           f"variant (sha256={digest[:16]}...); an unexpected modification is not "
-                           f"covered by the approved patch")}
-    return None
+        base, derived = patch.get("base_sha256"), patch.get("derived_sha256")
+        if base is not None and base == derived:
+            # A declaration whose two digests are equal states no delta at all: the published file
+            # would be indistinguishable from the repaired one. That is a registry error, and
+            # treating the base digest as "applied" would report every pristine checkout as repaired.
+            state.update(applied=False, detail=(
+                f"{patch['path']} declares the same base and derived digest "
+                f"({str(base)[:16]}...), so the declaration proves nothing about this checkout; fix "
+                "the registry entry before trusting the patch state"))
+        elif target.is_symlink():
+            # `sha256_file` refuses symlinks (they are how an artifact is smuggled past a digest
+            # check), and a symlinked target is not the published file under any reading. Report it
+            # rather than letting the ValueError escape a readiness report.
+            state.update(applied=False, detail=(
+                f"{patch['path']} is a symlink; an approved patch target must be the real file"))
+        elif not target.is_file():
+            state.update(applied=False, detail=f"the target file is missing: {target}")
+        else:
+            digest = sha256_file(target)
+            if digest == derived:
+                state.update(applied=True,
+                             detail=f"{patch['path']} matches the recorded post-patch digest")
+            elif digest == base:
+                state.update(applied=False, detail=(
+                    f"{patch['path']} is the unmodified published file; apply "
+                    f"{patch.get('patch_file')} to a derived checkout of the pinned revision and "
+                    f"register that checkout as the model source"))
+            else:
+                state.update(applied=False, detail=(
+                    f"{patch['path']} matches neither the published file nor the approved variant "
+                    f"(sha256={digest[:16]}...); an unexpected modification is not covered by the "
+                    f"approved patch"))
+        states.append(state)
+
+    missing = [state for state in states if not state["applied"]]
+    summary = {
+        "applied": not missing,
+        "patch_file": (missing[0]["patch_file"] if missing
+                       else ", ".join(str(state["patch_file"]) for state in states)),
+        "patch_sha256": (missing[0]["patch_sha256"] if missing
+                         else ", ".join(str(state["patch_sha256"]) for state in states)),
+        "patches": states,
+        "detail": (missing[0]["detail"] if missing else "; ".join(
+            f"{state['path']} matches the recorded post-patch digest" for state in states)),
+    }
+    if missing:
+        summary["detail"] = (
+            f"{len(missing)} of {len(states)} required patches are not applied. "
+            f"{missing[0]['detail']}")
+    return summary
 
 
 def preflight_blockers(
@@ -206,6 +253,31 @@ def preflight_blockers(
         blockers.append(f"command not runnable: {model.get('command_status') or 'COMMAND_UNAUDITED'}")
     elif source is not None and getattr(adapter, "script", None) and not (source / adapter.script).is_file():
         blockers.append(f"official evaluator missing: {source / adapter.script}")
+
+    if model_id == "dcnet" and source is not None:
+        # The official evaluator is launched as `test.py --resume <run_dir>` with `cwd` set by
+        # `source_cwd` (`evaluate_models.py:214-215`), which is the checkout for every model except
+        # csmcir -- and it takes its dataset from the config's own `data_loader.args.data_dir` rather
+        # than from the dataset root the operator passed. Nothing else on this path compares the two.
+        #
+        # Both arguments matter, and leaving either implicit is how this check was absent from three
+        # of the four entry points:
+        #   * the evaluator's working directory is the checkout, not this process's cwd, so a
+        #     correctly staged `dataset/fashioniq` symlink resolves to the dataset root;
+        #   * a caller that passes no dataset root (`pc_readiness`, `doctor`, `prepare_model`) still
+        #     gets the comparison, against the canonical root those callers treat as the target.
+        from workbench.backend.registry import checkpoint_path
+        from workbench.replay.dcnet import binding_mismatch
+
+        requested = Path(dataset_root) if dataset_root is not None else Path(config.FASHIONIQ_ROOT)
+        # Every declared run directory, not just the first: each carries its own config, and a
+        # registry with two variants would otherwise have one of them unchecked.
+        for variant in model.get("checkpoint_variants") or []:
+            mismatch = binding_mismatch(
+                checkpoint_path(model["model_id"], variant, config.WORKBENCH_CHECKPOINT_ROOT),
+                requested, evaluator_cwd=source)
+            if mismatch:
+                blockers.append(f"{variant.get('checkpoint_id')}: {mismatch}")
 
     blockers.extend(environment_blockers(model))
     if model_id == "encoder" and source is not None:

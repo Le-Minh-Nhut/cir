@@ -9,6 +9,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -471,6 +472,29 @@ def test_a_release_document_cannot_quote_a_production_tree_that_never_ran_the_ga
         assert token in newer_launcher, f"the tested launcher must still contain {token}"
 
 
+def _collected_at(sha: str, destination: Path) -> str:
+    """How many tests the *named revision's own* tree collects, in a worktree of that revision.
+
+    A real worktree, not a flattened copy of the test files: the suite imports `workbench.*` and reads
+    the pinned checkouts, so a set of files without their package collects a fraction of the suite or
+    not at all. `destination` is a scratch directory; the worktree is added inside it and removed with
+    it, so the repository's own working tree is never touched.
+    """
+    worktree = destination / "tree"
+    added = subprocess.run(["git", "worktree", "add", "--detach", str(worktree), sha],
+                           cwd=ROOT, capture_output=True, text=True)
+    if added.returncode != 0:
+        raise AssertionError(f"could not add a worktree at {sha}: {added.stderr.strip()}")
+    try:
+        return subprocess.run(
+            [sys.executable, "-m", "pytest", "workbench/tests", "--collect-only", "-q",
+             "-p", "no:cacheprovider"],
+            cwd=worktree, capture_output=True, text=True).stdout
+    finally:
+        subprocess.run(["git", "worktree", "remove", "--force", str(worktree)],
+                       cwd=ROOT, capture_output=True)
+
+
 def test_the_release_documents_quote_the_test_count_they_actually_ran() -> None:
     """A count nobody can reproduce is a claim, not a record.
 
@@ -486,17 +510,25 @@ def test_the_release_documents_quote_the_test_count_they_actually_ran() -> None:
 
     tested = re.search(r"\*\*TESTED_SOURCE_SHA\*\* \| \*\*`([0-9a-f]{7,40})`\*\*", verdict)
     assert tested, "the verdict must name a TESTED_SOURCE_SHA"
-    # The recorded count must be OBSERVABLE: the suite as it stands must contain at least that many
-    # collected tests. Counting `def test_` in the sources is not the same quantity -- a
-    # parametrized test is one function and many tests -- and a threshold that only needs to be
-    # exceeded cannot tell a stale number from a current one. The collection is the quantity the
-    # documents are quoting, so it is the quantity this compares against.
+    # The quantity to compare against is the count of the revision the documents NAME as tested, not
+    # of the working tree. The two differ whenever production work has moved on, and comparing
+    # against the tree conflates two separate claims: "the recorded run passed N" and "the tree here
+    # collects N+delta". The first is what the documents assert; the second is what
+    # `test_no_release_document_points_at_a_superseded_source_sha` already refuses. Reading the
+    # named revision's own test tree keeps this check about the number and that one about the bytes.
     #
-    # A full collection is a few seconds and does not run anything.
-    collection = subprocess.run(
-        [sys.executable, "-m", "pytest", "workbench/tests", "--collect-only", "-q",
-         "-p", "no:cacheprovider"],
-        cwd=ROOT, capture_output=True, text=True).stdout
+    # When the named revision is not present in this clone (a shallow or filtered fetch) the check
+    # falls back to the working tree, which is the stricter of the two.
+    source = subprocess.run(["git", "rev-parse", tested.group(1)], cwd=ROOT,
+                            capture_output=True, text=True)
+    if source.returncode == 0:
+        with tempfile.TemporaryDirectory(prefix="cir-count-") as temporary:
+            collection = _collected_at(source.stdout.strip(), Path(temporary))
+    else:
+        collection = subprocess.run(
+            [sys.executable, "-m", "pytest", "workbench/tests", "--collect-only", "-q",
+             "-p", "no:cacheprovider"],
+            cwd=ROOT, capture_output=True, text=True).stdout
     collected = len([line for line in collection.splitlines() if "::" in line])
     assert collected, "collection produced no test ids; this check cannot verify the count"
     recorded = int(counts[0])

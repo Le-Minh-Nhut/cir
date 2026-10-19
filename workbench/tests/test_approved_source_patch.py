@@ -68,8 +68,17 @@ def test_the_approved_patch_makes_the_checkout_an_approved_variant(tmp_path: Pat
     assert result.returncode == 0, result.stderr
     digest = hashlib.sha256((target / patch["path"]).read_bytes()).hexdigest()
     assert digest == patch["derived_sha256"]
+    # The declared set is what makes a checkout an approved variant; this one is now complete.
+    for remaining in _csmcir()["approved_source_patches"][1:]:
+        destination = target / remaining["path"]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO / "workbench/third_party/CSMCIR" / remaining["path"], destination)
+        applied = subprocess.run(["patch", "-p1", "--directory", str(target), "-i",
+                                  str(REPO / remaining["patch_file"])], capture_output=True, text=True)
+        assert applied.returncode == 0, applied.stderr
     state = approved_patch_state(_csmcir(), target)
     assert state["applied"] is True
+    assert all(entry["applied"] for entry in state["patches"])
 
 
 def test_an_extra_edit_to_the_patched_file_is_not_covered(tmp_path: Path):
@@ -115,6 +124,17 @@ def test_the_runtime_accepts_the_derived_file_and_rejects_other_bytes(tmp_path: 
     assert reason and "has not been applied" in reason
 
 
+def _stage_whole_patch_set(target: Path) -> None:
+    """Every declared patch, applied in declaration order -- the definition of a repaired checkout."""
+    for patch in _csmcir()["approved_source_patches"]:
+        destination = target / patch["path"]
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO / "workbench/third_party/CSMCIR" / patch["path"], destination)
+    for patch in _csmcir()["approved_source_patches"]:
+        subprocess.run(["patch", "-p1", "--directory", str(target), "-i",
+                        str(REPO / patch["patch_file"])], check=True, capture_output=True)
+
+
 def test_the_blocker_is_reported_only_while_the_checkout_is_unrepaired(monkeypatch, tmp_path: Path):
     """A repaired checkout must not be blocked by a claim about its unrepaired original."""
     config = replace(resolve_config(), WORKBENCH_THIRD_PARTY_ROOT=tmp_path)
@@ -128,11 +148,9 @@ def test_the_blocker_is_reported_only_while_the_checkout_is_unrepaired(monkeypat
     absent = blockers_for_checkout()
     assert any("source cannot run" in b and "lavis" in b for b in absent), absent
 
-    # Now place a checkout holding the approved delta.
-    (target / "src/lavis/models").mkdir(parents=True)
-    shutil.copyfile(_published_file(), target / "src/lavis/models/__init__.py")
-    subprocess.run(["patch", "-p1", "--directory", str(target), "-i",
-                    str(REPO / _declared()["patch_file"])], check=True, capture_output=True)
+    # Now place a checkout holding the approved delta -- the whole set, because a checkout repaired
+    # by only its first patch is not the approved variant and must still be reported as unrepaired.
+    _stage_whole_patch_set(target)
     repaired = blockers_for_checkout()
     assert not any("source cannot run" in b and "lavis" in b for b in repaired), repaired
 

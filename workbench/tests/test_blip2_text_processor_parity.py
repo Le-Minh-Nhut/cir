@@ -1,4 +1,17 @@
-"""Test proving F06: five BLIP-2 wrappers only need BlipCaptionProcessor, not a 2nd model."""
+"""Superseded F06 test: kept only as the record of the config-level question it answered.
+
+F06 is applied now, so the executed check lives in `workbench/tests/test_r9_defect_regressions.py`
+(the AST assertion that no wrapper calls `load_model_and_preprocess`, the pinned-config assertion,
+and the real `BlipCaptionProcessor` output) plus `workbench/scripts/lavis_processor_parity.py`.
+
+The execution half was deferred here because `lavis.processors` appeared to pull `torchaudio` and be
+uninstallable. That diagnosis was incomplete: the `torchaudio` import is a single dead line in
+`lavis/processors/audio_processors.py`, reachable only through `lavis/processors/__init__.py`, and the
+pinned processor itself needs nothing from it. `workbench/replay/lavis_processors.py` loads the real
+pinned package with that one module left out, which is what made the executed check possible.
+
+What remains in this file is the config-level resolution, which is still true and still cheap.
+"""
 import re
 from pathlib import Path
 import pytest
@@ -37,13 +50,11 @@ def test_all_five_models_resolve_identical_blip_caption_eval_processor(model_dir
 
 
 def test_the_five_wrappers_agree_on_the_text_processor_the_configs_declare():
-    """What F06 turns on: all five models resolve the SAME text preprocessing.
+    """All five models resolve the SAME text preprocessing.
 
-    The configs are read from the pinned checkouts, so this is what the wrappers would construct if
-    they built the processor directly. The execution half of F06 -- proving the resolved processor
-    produces identical output -- needs the `lavis` import graph, which pulls torchaudio and is not
-    installable on this host; that test is therefore NOT included rather than being stubbed. F06 stays
-    a proposal in the spec for exactly that reason.
+    The configs are read from the pinned checkouts. The executed half of F06 -- the processor's own
+    output, and the absence of any `load_model_and_preprocess` call -- is in
+    `test_r9_defect_regressions.py`; see this file's module docstring for why it was moved.
     """
     import re
     from pathlib import Path

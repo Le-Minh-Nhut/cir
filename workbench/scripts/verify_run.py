@@ -328,6 +328,23 @@ def _has_usable_metric(report: dict | None) -> bool:
     return False
 
 
+def _recorded_executed_config(model_id: str, directory: Path) -> dict | None:
+    """The run's own `config.json`, when the evaluator read one.
+
+    Re-parsing is only as meaningful as the parser's inputs: DCNet's six anonymous `comb:` cells are
+    attributed through the category order in this file, so the corroboration has to feed the parser
+    the same config the evaluator read. Absent or malformed returns None, and the parser then refuses
+    instead of assuming an order -- which is a reported disagreement, not a silent pass.
+    """
+    if model_id != "dcnet":
+        return None
+    try:
+        payload = json.loads((directory / "config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def _reextraction_reasons(model_id: str, report: dict | None,
                           run_directory: str | None) -> list[str]:
     """Why the report's own numbers are not what its recorded output contains.
@@ -358,7 +375,8 @@ def _reextraction_reasons(model_id: str, report: dict | None,
 
     try:
         extracted = metrics_extraction.extract_aggregate_metrics(
-            model_id, stdout_text, stderr_text, int(report.get("return_code") or 0))
+            model_id, stdout_text, stderr_text, int(report.get("return_code") or 0),
+            executed_config=_recorded_executed_config(model_id, directory))
     except Exception as error:                 # a parser that cannot answer is not a pass
         return [f"re-extracting this run's metrics from its own output failed: "
                 f"{type(error).__name__}: {error}"]

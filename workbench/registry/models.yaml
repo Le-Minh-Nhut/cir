@@ -121,7 +121,13 @@ models:
     upstream_commit_sha: 6ab6fa95b746f85b08eea4cb66eb51448bce99b7
     source_available: true
     source_dir: AirKnow
-    fashioniq_layout: fashioniq_ilearn_resized
+    # The wrapper constructs the native `datasets.FashionIQ`, whose `__init__` runs
+    # `train_init_process` and `get_test_data` for all three categories
+    # (`datasets.py:95-107` / `:59-73`), so the TRAIN captions are opened on every run -- and
+    # `isolated_cache_root` always starts cold, so that path is always taken. The layout
+    # therefore has to declare them: `fashioniq_ilearn_resized` omits `cap.*.train.json`, which
+    # made the layout check and the runtime check disagree.
+    fashioniq_layout: fashioniq_ilearn_resized_training
     fashioniq_image_extensions: [".jpg"]
     literature_split_label: original
     native_protocol: fashioniq_full_gallery_ref_excluded
@@ -178,7 +184,13 @@ models:
     upstream_commit_sha: bd4bf629ebe68045c1a54dcc61e4a3ea65f8759b
     source_available: true
     source_dir: ConeSep
-    fashioniq_layout: fashioniq_ilearn_resized
+    # The wrapper constructs the native `datasets.FashionIQ`, whose `__init__` runs
+    # `train_init_process` and `get_test_data` for all three categories
+    # (`datasets.py:95-107` / `:59-73`), so the TRAIN captions are opened on every run -- and
+    # `isolated_cache_root` always starts cold, so that path is always taken. The layout
+    # therefore has to declare them: `fashioniq_ilearn_resized` omits `cap.*.train.json`, which
+    # made the layout check and the runtime check disagree.
+    fashioniq_layout: fashioniq_ilearn_resized_training
     fashioniq_image_extensions: [".jpg"]
     literature_split_label: original
     native_protocol: fashioniq_full_gallery_ref_excluded
@@ -276,7 +288,13 @@ models:
     upstream_commit_sha: 6ddc2cd63eac1f65693f4e821c34fb3b42aee306
     source_available: true
     source_dir: HABIT
-    fashioniq_layout: fashioniq_ilearn_resized
+    # The wrapper constructs the native `datasets.FashionIQ`, whose `__init__` runs
+    # `train_init_process` and `get_test_data` for all three categories
+    # (`datasets.py:95-107` / `:59-73`), so the TRAIN captions are opened on every run -- and
+    # `isolated_cache_root` always starts cold, so that path is always taken. The layout
+    # therefore has to declare them: `fashioniq_ilearn_resized` omits `cap.*.train.json`, which
+    # made the layout check and the runtime check disagree.
+    fashioniq_layout: fashioniq_ilearn_resized_training
     fashioniq_image_extensions: [".jpg"]
     literature_split_label: original
     native_protocol: fashioniq_full_gallery_ref_excluded
@@ -339,7 +357,13 @@ models:
     upstream_commit_sha: 2a75fc6f57d1a036bf3167a7fe1d2cee072f51f3
     source_available: true
     source_dir: INTENT
-    fashioniq_layout: fashioniq_ilearn_resized
+    # The wrapper constructs the native `datasets.FashionIQ`, whose `__init__` runs
+    # `train_init_process` and `get_test_data` for all three categories
+    # (`datasets.py:95-107` / `:59-73`), so the TRAIN captions are opened on every run -- and
+    # `isolated_cache_root` always starts cold, so that path is always taken. The layout
+    # therefore has to declare them: `fashioniq_ilearn_resized` omits `cap.*.train.json`, which
+    # made the layout check and the runtime check disagree.
+    fashioniq_layout: fashioniq_ilearn_resized_training
     fashioniq_image_extensions: [".jpg"]
     literature_split_label: original
     native_protocol: fashioniq_full_gallery_ref_excluded

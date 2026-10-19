@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from workbench.backend import paper_gate
+from workbench.backend.fashioniq_layout import CATEGORIES as FASHIONIQ_CATEGORIES
 
 
 @dataclass(frozen=True)
@@ -580,7 +581,27 @@ def parse_workbench_replay_output(model_id: str, stdout_text: str,
         raw_output=document,
     )
 
-def parse_dcnet_output(stdout_text: str, paper_metrics: dict[str, float | None] | None = None) -> MetricExtractionResult:
+def _dcnet_category_order(config: dict[str, Any] | None) -> tuple[str, ...] | None:
+    """The categories the evaluator iterated, in the order it printed them.
+
+    `trainer_joint.py:133-138` builds `metric['recall']` and `metric['comb']` by looping
+    `config['data_loader']['args']['categories']`, and `test.py:74-84` zips BOTH lists against
+    `trainer.categories`, which is that same config key (`base_trainer.py:32`). So the executed
+    config's category list is the mapping for a `comb:` line that carries no names -- and reading it
+    from the config is what makes the mapping evidence rather than a guess. Returns `None` when the
+    config does not declare exactly the three FashionIQ categories: an unknown order is a refusal,
+    never a default.
+    """
+    if not config:
+        return None
+    categories = ((config.get("data_loader") or {}).get("args") or {}).get("categories")
+    if not isinstance(categories, list) or sorted(categories) != sorted(FASHIONIQ_CATEGORIES):
+        return None
+    return [str(category) for category in categories]
+
+
+def parse_dcnet_output(stdout_text: str, paper_metrics: dict[str, float | None] | None = None,
+                       config: dict[str, Any] | None = None) -> MetricExtractionResult:
     """Parse the metrics DCNet's own evaluator logs.
 
     `test.py:65-84` prints, per epoch of validation:
@@ -615,15 +636,20 @@ def parse_dcnet_output(stdout_text: str, paper_metrics: dict[str, float | None] 
         metric_source="stdout",
     )
 
-    # The category ORDER is the evaluator's, taken from the config it ran with, so each combined pair
-    # is mapped by the name in the per-category line rather than by position. Position alone would
-    # silently transpose dress/shirt/toptee if a config ordered them differently, which is exactly the
-    # class of error the paper row's "mean of the six cells" cannot detect.
+    # The category ORDER is the evaluator's, taken from the config it ran with (`trainer_joint.py:133`
+    # loops `config['data_loader']['args']['categories']`), so each combined pair is mapped by the
+    # name in that config rather than by position. Position alone silently transposes
+    # dress/shirt/toptee when a config orders them differently -- and the paper row's "mean of the six
+    # cells" cannot detect it, because the sum is invariant under permutation.
+    executed_order = _dcnet_category_order(config)
     combined_pairs: dict[str, tuple[float, float]] = {}
+    named_order: list[str] = []
     for match in re.finditer(
             r"\[(dress|shirt|toptee)\]\s+comp\s+corr\s+r@10,\s*r@50:\s*"
             r"([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)", stdout_text):
         category = match.group(1)
+        if category not in named_order:
+            named_order.append(category)
         # `i[0..3]` is comp10, comp50, corr10, corr50 (trainer_joint.py:231 `metric['recall'][i] =`).
         comp10, comp50, corr10, corr50 = (float(match.group(n)) * 100.0 for n in (2, 3, 4, 5))
         combined_pairs[category] = (comp10, comp50)
@@ -642,13 +668,23 @@ def parse_dcnet_output(stdout_text: str, paper_metrics: dict[str, float | None] 
 
     if comb_line:
         cells = [float(value) * 100.0 for value in comb_line.groups()]
-        # The `comb:` line carries no names, so it is only usable when the named per-category lines
-        # are present to establish the order and the count.
-        named = [c for c in ("dress", "shirt", "toptee") if c in combined_pairs]
-        if len(named) != 3:
+        # The `comb:` line carries no names, so its six cells are attributed by the order the
+        # evaluator printed the NAMED per-category lines in. That order is not a convention: both
+        # blocks come from the same `trainer.categories` loop (`test.py:74-80` for `recall`, then
+        # `:81-84` for `comb`), so the sequence of `[...] comp corr r@10` lines *is* the order of the
+        # anonymous cells. Sorting the names into the literal tuple (dress, shirt, toptee) was the
+        # defect: a config ordering them differently silently swapped the per-category rows, and the
+        # `[comb_avg]` cross-check below cannot see it because a sum is invariant under permutation.
+        if len(named_order) != 3:
             return unparsed
-        for index, category in enumerate(named):
+        # A second, independent statement of the same order: the config the evaluator ran with. When
+        # it declares the three FashionIQ categories it must agree, or the attribution is refused
+        # rather than resolved by preferring one witness.
+        if executed_order is not None and named_order != executed_order:
+            return unparsed
+        for index, category in enumerate(named_order):
             combined_pairs[category] = (cells[index * 2], cells[index * 2 + 1])
+
     elif single_pairs:
         # The two-cell shape reports the same combined metric; accept it only when all three
         # categories appear, so a truncated stream cannot look complete.
@@ -659,7 +695,7 @@ def parse_dcnet_output(stdout_text: str, paper_metrics: dict[str, float | None] 
         return unparsed
 
     category_metrics: dict[str, dict[str, float | None]] = {}
-    for category in ("dress", "shirt", "toptee"):
+    for category in FASHIONIQ_CATEGORIES:
         pair = combined_pairs.get(category)
         if pair is None:
             return unparsed
@@ -670,7 +706,7 @@ def parse_dcnet_output(stdout_text: str, paper_metrics: dict[str, float | None] 
 
     # The composition/correction splits are kept beside the combined result, never merged into it.
     for variant in ("__composition", "__correction"):
-        for category in ("dress", "shirt", "toptee"):
+        for category in FASHIONIQ_CATEGORIES:
             pair = combined_pairs.get(f"{category}{variant}")
             if pair and _is_valid_recall(pair[0]) and _is_valid_recall(pair[1]):
                 category_metrics[f"{category}{variant}"] = {"r10": round(pair[0], 4),
@@ -778,8 +814,14 @@ def extract_aggregate_metrics(
     stderr_text: str,
     return_code: int,
     paper_metrics: dict[str, float | None] | None = None,
+    executed_config: dict[str, Any] | None = None,
 ) -> MetricExtractionResult:
-    """Model-specific source-backed aggregate metric extraction."""
+    """Model-specific source-backed aggregate metric extraction.
+
+    `executed_config` is the `<run_dir>/config.json` the evaluator actually read. Only the DCNet
+    parser needs it, and it needs it because that evaluator prints six anonymous `comb:` cells whose
+    category order lives in that file: without it the parser can only refuse, never guess.
+    """
     if return_code != 0:
         return MetricExtractionResult(
             extraction_status="EVALUATION_FAILED",
@@ -798,7 +840,7 @@ def extract_aggregate_metrics(
     if model_id in ("combiner_rn50x4_noft", "clip4cir_rn50x4_fullft"):
         return parse_combiner_output(stdout_text, paper_metrics)
     if model_id == "dcnet":
-        return parse_dcnet_output(stdout_text, paper_metrics)
+        return parse_dcnet_output(stdout_text, paper_metrics, executed_config)
     if model_id == "hint":
         return parse_hint_output(stdout_text, paper_metrics)
     if model_id in _WORKBENCH_REPLAY_PARSED_MODELS:
