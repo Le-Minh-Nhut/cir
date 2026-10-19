@@ -229,15 +229,35 @@ def _requirements_path(model: dict, third_party_root: Path | None = None) -> Pat
 
 _IMPORT_DISTRIBUTIONS = {
     "attr": ("attrs",), "bs4": ("beautifulsoup4",), "cv2": ("opencv-python", "opencv-python-headless"),
-    "dateutil": ("python-dateutil",), "fitz": ("pymupdf",), "lavis": ("salesforce-lavis",),
+    "dateutil": ("python-dateutil",), "fitz": ("pymupdf",),
+    # `mpl_toolkits` is a MODULE of the matplotlib distribution -- `from mpl_toolkits.mplot3d import
+    # axes3d` is how the pinned PointBERT code reaches it. Without this entry the scan derived the
+    # package name from the import name and sent `mpl-toolkits` to the installer, which is not a
+    # distribution that exists.
+    "mpl_toolkits": ("matplotlib",), "lavis": ("salesforce-lavis",),
     "open_clip": ("open-clip-torch",), "pil": ("pillow",), "skimage": ("scikit-image",),
     "sklearn": ("scikit-learn",), "yaml": ("pyyaml",),
 }
 
 
 
-def _evaluator_imports(model: dict, third_party_root: Path | None = None) -> set[str] | None:
-    """Return third-party top-level imports reachable from the pinned evaluator."""
+def _evaluator_imports(model: dict, third_party_root: Path | None = None) -> tuple[set[str], set[str]] | None:
+    """Third-party top-level imports reachable from the pinned evaluator.
+
+    Returns ``(required, guarded)``. ``required`` are modules the run imports with no fallback: the
+    evaluator cannot start without them, so they belong in the install contract. ``guarded`` are
+    modules reached only through a ``try`` whose handler tolerates the failure, so their absence is
+    a supported state.
+
+    The split is not cosmetic. Treating the two alike installed `tensorflow`, `apex`, `horovod`,
+    `torchaudio` and `knn-cuda` -- guarded, unused code on the FashionIQ path -- into every LAVIS
+    profile, and it re-created the `salesforce-lavis` PyPI requirement that R10 removed from the
+    registry: the vendored checkout has an unguarded `lavis.common -> dist_utils` import, and R10's
+    `_processors_module` REWRITES `sys.modules["lavis"]` so that importing the package never pulls
+    `lavis/common/__init__.py`. The scan failed at `lavis.common`, never descended into the pinned
+    `lavis` directory, and the name fell through to `_IMPORT_DISTRIBUTIONS` -- installing the PyPI
+    distribution whose own requirements are unsatisfiable against `timm==0.9.16`.
+    """
     source_dir = model.get("source_dir")
     if not source_dir:
         return None
@@ -273,8 +293,68 @@ def _evaluator_imports(model: dict, third_party_root: Path | None = None) -> set
         return None
 
     standard = sys.stdlib_module_names | set(sys.builtin_module_names) | {"__future__"}
+    # Packages whose `__init__.py` the RUN does not execute, because the replay context replaces it
+    # with a skeleton whose `__path__` is the real directory -- so any module under it can still be
+    # imported, but the package's own initializer cannot pull anything in. Modelling this is what
+    # keeps the scan honest: without it the scan read `lavis/processors/__init__.py`, decided the
+    # evaluator needed `moviepy`/`torchaudio`/`nltk`/`h5py`, and installed audio, video and 3D point
+    # cloud libraries into an image-retrieval environment. `workbench/replay/lavis_processors.py:52`
+    # documents the same replacement for one of these; it is declared here as a property of the
+    # launcher, not re-derived from that file's source.
+    stubbed_packages = (set(getattr(adapter, "stubbed_packages", ()))
+                        if launcher == "replay" else set())
+    # Names the launcher provides by itself rather than by installing anything: the wrapper binds
+    # `__import__("datasets")` and `importlib.import_module("test")` to the pinned checkout's own
+    # top-level modules, which share a name with popular PyPI distributions.
+    provided_modules = set(getattr(adapter, "provided_modules", ()))
+    # Names the launcher's own run provably does not load, measured rather than argued: the census
+    # imports `lavis.models` in a real model interpreter and records which top-level modules enter
+    # `sys.modules`. Everything listed by the adapters here was absent from that census. They stay
+    # in the trace as evidence of what the source text contains, but they are not install
+    # requirements -- a text scan cannot see `if torch.cuda.is_available():` or a re-export whose
+    # module is never reached, and treating those as requirements shipped audio, 3D-point-cloud and
+    # plotting libraries into an image-retrieval environment.
+    unreachable_modules = set(getattr(adapter, "unreachable_modules", ()))
+    # Resolved here rather than lazily so the set is a stable fact about the checkout, not about the
+    # order in which files happen to be visited.
+    stubbed_initializers: set[Path] = set()
+    for package in stubbed_packages:
+        for root in roots:
+            candidate = root / Path(*package.split(".")) / "__init__.py"
+            if candidate.is_file():
+                stubbed_initializers.add(candidate.resolve())
+                break
     seen: set[Path] = set()
     external: set[str] = set()
+    guarded_external: set[str] = set()
+
+    def guarded_import_lines(tree: ast.AST) -> set[int]:
+        """Line numbers of imports inside a try whose handler tolerates an import failure.
+
+        `import librosa` under `except ImportError` and `import librosa` at module scope are the
+        same statement with opposite meaning for a caller: the first says the module may be absent.
+        A bare `except`, `except Exception` and `except BaseException` count as well -- each is a
+        fallback for the same failure and still means the author did not require the module.
+        """
+        tolerated = {"ImportError", "ModuleNotFoundError", "Exception", "BaseException"}
+        guarded: set[int] = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Try):
+                continue
+            catches = any(
+                handler.type is None
+                or (isinstance(handler.type, ast.Name) and handler.type.id in tolerated)
+                or (isinstance(handler.type, ast.Tuple) and any(
+                    isinstance(element, ast.Name) and element.id in tolerated
+                    for element in handler.type.elts))
+                for handler in node.handlers)
+            if not catches:
+                continue
+            for statement in node.body:
+                for sub in ast.walk(statement):
+                    if isinstance(sub, (ast.Import, ast.ImportFrom)):
+                        guarded.add(sub.lineno)
+        return guarded
 
     def local_path(module: str) -> Path | None:
         parts = module.split(".")
@@ -294,6 +374,7 @@ def _evaluator_imports(model: dict, third_party_root: Path | None = None) -> set
         except (OSError, SyntaxError):
             return False
         seen.add(path)
+        guarded_lines = guarded_import_lines(tree)
         module_package = ""
         for root in roots:
             try:
@@ -304,10 +385,10 @@ def _evaluator_imports(model: dict, third_party_root: Path | None = None) -> set
             module_package = ".".join(parts)
             break
 
-        imports: list[tuple[str, str]] = []
+        imports: list[tuple[str, str, int]] = []
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                imports.extend((alias.name, "") for alias in node.names)
+                imports.extend((alias.name, "", node.lineno) for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
                 module = node.module or ""
                 if node.level:
@@ -315,37 +396,68 @@ def _evaluator_imports(model: dict, third_party_root: Path | None = None) -> set
                     parts = parts[:max(0, len(parts) - node.level + 1)]
                     module = ".".join(parts + ([module] if node.module else []))
                 if module:
-                    imports.append((module, ""))
-                imports.extend((module, alias.name) for alias in node.names if alias.name != "*")
+                    imports.append((module, "", node.lineno))
+                imports.extend((module, alias.name, node.lineno) for alias in node.names if alias.name != "*")
             elif isinstance(node, ast.Call):
                 function = node.func
                 dynamic = (isinstance(function, ast.Name) and function.id == "__import__") or (
                     isinstance(function, ast.Attribute) and function.attr == "import_module")
                 if dynamic and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                    imports.append((node.args[0].value, ""))
+                    imports.append((node.args[0].value, "", node.lineno))
 
-        for module, member in imports:
+        for module, member, line in imports:
             if not module:
+                continue
+            if module.split(".", 1)[0] in provided_modules:
+                # The launcher binds this import itself, to the pinned checkout's own module.
                 continue
             local = local_path(module)
             member_path = local_path(f"{module}.{member}") if member else None
             if local:
+                if stubbed_initializers and local in stubbed_initializers:
+                    # The run never executes this package's `__init__.py`: the replay context
+                    # replaces it with a skeleton. Its modules are still importable, so a reference
+                    # to one of them that resolves is followed normally -- only the initializer's own
+                    # imports are out of reach, which is the whole point of the replacement.
+                    continue
                 if not visit(local):
                     return False
                 if member_path and not visit(member_path):
                     return False
             elif member_path:
+                if stubbed_initializers and member_path in stubbed_initializers:
+                    continue
                 if not visit(member_path):
                     return False
             elif module.startswith("."):
                 return False
             elif any((root / Path(*module.split("."))).is_dir() for root in roots):
                 continue
+            elif module.split(".", 1)[0] in unreachable_modules:
+                continue
             elif module.split(".", 1)[0] not in standard:
-                external.add(module.split(".", 1)[0])
+                top = module.split(".", 1)[0]
+                if local_path(top) is not None:
+                    # The TOP-LEVEL package resolves inside the checkout, so this dotted import is
+                    # a reference to the checkout's own package and never a request for an external
+                    # distribution that happens to share the name. `lavis.models.blip_models.blip_cir`
+                    # is absent from AirKnow's pinned tree and its own `models/__init__.py` guards the
+                    # import; without this test the failure fell through to
+                    # `_IMPORT_DISTRIBUTIONS["lavis"]`, re-adding the PyPI `salesforce-lavis`
+                    # distribution whose requirements contradict the pinned `timm`.
+                    continue
+                # A module seen both ways is required: one unguarded import is enough to make the
+                # run fail without it, and a guard on another line does not repair that.
+                if line in guarded_lines and top not in external:
+                    guarded_external.add(top)
+                else:
+                    guarded_external.discard(top)
+                    external.add(top)
         return True
 
-    return external if visit(entry) else None
+    if not visit(entry):
+        return None
+    return external, guarded_external
 
 def _distribution_names(module: str, available: set[str]) -> set[str]:
     candidates = _IMPORT_DISTRIBUTIONS.get(module.lower(), (module,))
@@ -440,7 +552,9 @@ def model_constraints(model: dict, third_party_root: Path | None = None) -> dict
                     if (parsed := _parse_requirement(line))]
     registry_pins = [parsed for declaration in declarations
                      if (parsed := _parse_requirement(str(declaration)))]
-    imports = _evaluator_imports(model, third_party_root)
+    traced = _evaluator_imports(model, third_party_root)
+    imports, guarded_modules = traced if traced is not None else (None, set())
+    guard_evidence: list[str] = []
     if imports is None:
         selected = manifest if requirements else registry_pins
     else:
@@ -454,6 +568,11 @@ def model_constraints(model: dict, third_party_root: Path | None = None) -> dict
             selected_names.update(available & {"torch", "torchvision"})
         selected = [item for item in source_pins if item[0] in selected_names]
         selected_names.update(name for name, _ in selected)
+        # A required import with no declaration is named as an UNKNOWN requirement rather than
+        # dropped: the environment has to provide it, and the absence of a version is a fact about
+        # the source, not a reason to omit the package. Guarded imports are deliberately NOT
+        # converted: the pinned code carries a fallback for their absence, so installing them
+        # provisions code the run never reaches.
         for module in modules:
             names = _distribution_names(module, available)
             if not names:
@@ -462,6 +581,22 @@ def model_constraints(model: dict, third_party_root: Path | None = None) -> dict
                 if name not in selected_names:
                     selected.append((name, "UNKNOWN"))
                     selected_names.add(name)
+        # The guarded names are still auditable, and the plan says which ones they were and what
+        # provides them, so a reader can see the trace and provision one deliberately if a chosen
+        # code path needs it. They are never auto-installed.
+        if guarded_modules:
+            guard_evidence = [
+                f"imports guarded by a fallback (not installed): {', '.join(sorted(guarded_modules))}"]
+        else:
+            guard_evidence = []
+        if guarded_modules:
+            guard_evidence.extend(
+                f"guarded import {module} would be provided by "
+                f"{', '.join(sorted(_distribution_names(module, set())
+                                    or _package_name(name)
+                                    for name in _IMPORT_DISTRIBUTIONS.get(module.lower(), (module,))))}"
+                for module in sorted(guarded_modules)
+                if module not in available)
     for name, spec in selected:
         _add_package(packages, ranges, name, "UNKNOWN" if spec == "*" else spec)
 
@@ -514,6 +649,7 @@ def model_constraints(model: dict, third_party_root: Path | None = None) -> dict
             evidence.append(f"registry environment {key}={value}")
     if not requirements and not env:
         evidence.append("no pinned requirements.txt or registry environment declaration")
+    evidence.extend(guard_evidence)
     if env.get("_adapted_runtime"):
         evidence.append(f"adapted runtime selected: {env['_adapted_runtime']} "
                         f"(historical pins replaced by the declared adapted_runtime block)")
@@ -1249,7 +1385,11 @@ def _verify_group_interpreter(
         if model is None:
             continue
         spec = specs.get(mid) or {}
-        eval_imports = _evaluator_imports(model, third_party_root)
+        traced = _evaluator_imports(model, third_party_root)
+        # The real interpreter is asked to import the REQUIRED names only. A guarded import is not
+        # this probe's business: the code that reaches it tolerates its absence, so demanding it here
+        # would refuse an environment the evaluator can actually run in.
+        eval_imports = traced[0] if traced is not None else None
         if eval_imports is None:
             # `None` means the trace could not run, which in practice means the pinned checkout is
             # not present yet. Treating that as "nothing to check" would mark an environment

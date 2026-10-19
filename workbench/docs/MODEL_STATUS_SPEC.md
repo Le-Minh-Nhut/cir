@@ -188,8 +188,14 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
   Nay: resolve theo CWD, so với `--dataset-root` cho **cả** absolute lẫn relative, **và** chạy trong
   `backend/preflight.preflight_blockers` — danh sách mà `doctor`, `pc_readiness`, `prepare_model` và
   `evaluate_models` đều đọc. Symlink canonical (dataset stage đúng cách) pass; thư mục thường trong
-  checkout hoặc path absolute trỏ nơi khác ⇒ **refuse** kèm đường dẫn cụ thể. Override tường minh:
-  `WORKBENCH_DCNET_DATA_DIR` — là khai báo về tiến trình launch, không sửa file tác giả.
+  checkout hoặc path absolute trỏ nơi khác ⇒ **refuse** kèm đường dẫn cụ thể.
+  **ĐÃ BỎ (R10-01, xác nhận lại ở R11):** override `WORKBENCH_DCNET_DATA_DIR`. Evaluator native
+  (`ConfigParser`) không đọc biến môi trường, nên override chỉ khiến validator trả lời một câu hỏi
+  khác với consumer — tức là nó *gây ra* đúng loại lỗi mà validator tồn tại để chặn. Quyết định
+  binding nay chỉ đọc `config.json` của run và CWD của evaluator. Đừng set biến này.
+  **R11 bổ sung:** mọi cấp JSON của config nay được kiểm shape trước khi `.get()` — `[]`,
+  `{"data_loader": ["x"]}`, `{"data_loader": {"args": null}}` đều trả blocker nêu tên field thay vì
+  ném `AttributeError` ra khỏi readiness view.
   Run directory giờ chép `config.json` vào evidence dir để `verify_run` re-parse được stdout.
 - **F09 đã sửa (lượt R9)**: parser `dcnet_native_logger`. `model/metric.py:5-21` trả **fraction 0..1**
   ⇒ đổi % đúng một lần. `test.py:74-84` in cả `recall` lẫn `comb` bằng **cùng** vòng
@@ -277,7 +283,7 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | R10-03 | `FIXED` | `prepare()` giữ context suốt đời process; `register_path` idempotent khi cùng giá trị (khác giá trị vẫn raise); `reset()` cho tool nhiều checkout | Fixture `lavis/__init__.py` + checkpoint `torch.save` thật: load thành công, digest sai vẫn bị refuse | — |
 | R10-04 | `FIXED` | Xoá 3 `source_blocker` lỗi thời (`airknow`/`conesep`/`intent`) | `preflight_blockers` thật: 3→2, 1→0, 1→0; blocker asset/runtime còn nguyên | — |
 | R10-05 | `FIXED` | Bỏ `salesforce-lavis` (không thể đồng thời thoả `timm==0.9.16` của vendored `eva_vit.py`); **thêm `Adapter.launcher`/`launcher_roots`** và cho `_evaluator_imports` đi theo chương trình chạy thật thay vì `script` | Wheel sha256 khớp PyPI; scanner `hint` từ `{numpy,torch,tqdm}` thành có cả `transformers`/`timm`/`omegaconf` | 6 môi trường cài thật chưa chạy (xem §2 của `R10_REMEDIATION.md`) |
-| R10-06 | `FIXED` | `inspect_environment_distributions` chỉ đọc base inventory khi interpreter **thực sự kế thừa** (`include-system-site-packages=true`, hoặc `conda-meta`); mặc định là không | Venv thật: cô lập ⇒ `packaging` biến khỏi inventory; `--system-site-packages` ⇒ còn; version sai vẫn bị chặn | — |
+| R10-06 | `FIXED` (đã đính chính ở R11) | `inspect_environment_distributions` chỉ đọc base inventory khi interpreter **thực sự kế thừa**: `pyvenv.cfg` có `include-system-site-packages = true`. Nhánh `conda-meta` **đã bị xoá** — đó chỉ là một tên thư mục, ai cũng tạo được, và Conda env vốn cô lập nên nó tái tạo đúng lỗi R10-06 ở dạng khác | Venv thật: cô lập ⇒ `packaging` biến khỏi inventory; `--system-site-packages` ⇒ còn; prefix chỉ có `conda-meta/` ⇒ inventory **rỗng**; version sai vẫn bị chặn | — |
 
 ---
 
@@ -333,17 +339,54 @@ from workbench.replay.dcnet import binding_mismatch; \
 print(binding_mismatch(Path('<run_dir>'), Path('$FASHIONIQ_ROOT'), Path('workbench/third_party/DCNet')) or 'BOUND OK')"
 
 # 5. Preflight (không load model) — phải báo blocker đúng, không crash
+#    Preflight chỉ đọc registry + config, không import model, nên venv workbench là đủ.
 python workbench/replay/hint.py  --checkpoint-root <dir> --dataset-root <FIQ> \
   --source-root workbench/third_party/HINT --preflight-only
 python workbench/replay/pair.py  --checkpoint-root <dir> --dataset-root <FIQ> \
   --source-root workbench/third_party/PAIR --preflight-only
 
-# 6. Chạy thật (theo thứ tự khuyến nghị: model mapping đã VERIFIED trước)
-python workbench/replay/limn.py  --checkpoint-root <dir> --dataset-root <FIQ> \
-  --source-root workbench/third_party/LIMN
-python workbench/replay/encoder.py --checkpoint-root <dir> --dataset-root <FIQ> \
-  --source-root workbench/third_party/ENCODER
+# 6. Tạo/chọn MÔI TRƯỜNG CỦA MODEL — bước này KHÔNG được bỏ.
+#
+#    Bước 4b ở trên chỉ TẢI asset. Nó không cài dependency, và chạy model bằng python của
+#    venv workbench là SAI: mỗi model khai một `python_env_var` riêng (WORKBENCH_<MODEL>_PYTHON)
+#    trỏ tới interpreter của chính nó, và runtime verifier chỉ chấp nhận interpreter đó.
+#    Venv workbench cố ý mỏng (xem bước 0); nó KHÔNG có torch/timm/transformers/diffusers/peft
+#    mà checkpoint class của các model LAVIS cần để unpickle.
+#
+#    Dùng flow provisioning có sẵn — nó đọc profile đã kiểm trong registry, tạo môi trường
+#    CÁCH LY, rồi verify bằng interpreter thật của môi trường đó:
+python workbench/scripts/manage_environment.py --list                 # xem trạng thái mọi model
+python workbench/scripts/manage_environment.py --model hint --create \
+  --allow-env-install --allow-network --dry-run                      # xem trước, chưa cài
+python workbench/scripts/manage_environment.py --model hint --create \
+  --allow-env-install --allow-network                                # tạo thật
+
+#    Sau khi tạo, xác nhận trạng thái trước khi chạy (in ra tier/status/reason thật):
+python -c "import sys; sys.path.insert(0,'.'); \
+from workbench.backend.registry import model_by_id; \
+from workbench.backend.runtime import verify_environment; \
+r = verify_environment(model_by_id('hint'), probe=True); \
+print(r.tier, r.status, r.reason)"
+
+#    Chỉ khi tự cài tay (đã có interpreter riêng), export biến tương ứng. Ghi bằng đường dẫn
+#    TUYỆT ĐỐI tới interpreter của môi trường model, KHÔNG phải `python` của venv workbench:
+export WORKBENCH_HINT_PYTHON=/path/to/hint-env/bin/python
+export WORKBENCH_HABIT_PYTHON=/path/to/habit-env/bin/python
+#    ... v.v. cho intent, conesep, airknow, sprc, limn, encoder, ...
+
+# 7. Chạy thật — bằng interpreter CỦA MODEL, không phải venv workbench.
+#    Wrapper tự đọc `python_env_var` qua `runtime.python_executable`, nên lệnh dưới đây
+#    phải chạy bằng venv workbench (nó chỉ điều phối), và nó sẽ spawn đúng interpreter model:
+python -m workbench.cli replay --model hint --checkpoint-root <dir> --dataset-root <FIQ>
+#    Hoặc gọi trực tiếp wrapper bằng interpreter CỦA MODEL:
+"$WORKBENCH_HINT_PYTHON" workbench/replay/hint.py \
+  --checkpoint-root <dir> --dataset-root <FIQ --source-root workbench/third_party/HINT
 ```
+
+> **Đính chính (R11):** các đoạn cũ của tài liệu này mô tả `conda-meta` như bằng chứng một môi
+> trường kế thừa package của base, và mô tả `WORKBENCH_DCNET_DATA_DIR` như một override còn hiệu
+> lực. Cả hai đã bị bỏ: Conda env vốn cô lập, và override đó không được evaluator native đọc nên
+> chỉ tạo ra một validator trả lời khác câu hỏi của consumer. Đừng cấu hình theo chúng.
 
 **Thứ tự chuẩn bị artifact:**
 

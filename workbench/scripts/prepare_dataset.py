@@ -25,6 +25,38 @@ def validate_fashioniq(root: Path) -> list[str]:
 
 
 
+def _blocked_parent(source: Path, parent: Path) -> str | None:
+    """Refuse a link parent that would send the staged link outside the checkout.
+
+    A declared link may be nested, and only the checkout is authorized to be written. A parent that
+    is itself a symlink -- to a directory outside the checkout, or dangling -- redirects the write
+    to wherever it points: `source/dataset -> elsewhere` plus a staged `dataset/fashioniq` created
+    `elsewhere/fashioniq` and returned success. There is no other way for a path below the source
+    to leave it, so every component is required to be a real directory that the step can create.
+
+    Returns a `[BLOCKED]` message, or None when the parent is safe to create.
+    """
+    try:
+        relative = parent.relative_to(source)
+    except ValueError:
+        return f"[BLOCKED] dataset link parent is outside the source checkout: {parent}"
+    if ".." in relative.parts:
+        return f"[BLOCKED] dataset link parent escapes the source checkout: {parent}"
+
+    current = source
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            return (f"[BLOCKED] dataset link parent is a symlink: {current} -> "
+                    f"{os.readlink(current)}; only paths inside the checkout may be staged")
+        if current.exists() and not current.is_dir():
+            return f"[BLOCKED] dataset link parent is not a directory: {current}"
+        if not current.exists():
+            # The remaining components do not exist yet and will be created inside this directory,
+            # which has just been established as a real directory of the checkout.
+            break
+    return None
+
 def prepare_canonical_link(root: Path, source: Path, link_name: str, *, check_only: bool,
                            dry_run: bool) -> tuple[bool, list[str]]:
     """Stage (or verify) a pinned evaluator's hard-coded dataset root.
@@ -62,10 +94,18 @@ def prepare_canonical_link(root: Path, source: Path, link_name: str, *, check_on
         messages.append(f"[OK] dry-run: would link {destination} -> {root}")
         return True, messages
 
+    # The parent is part of the artifact being staged, so it is checked before anything is created.
+    # Without this, a parent that is itself a symlink sends the new link to wherever it points:
+    # `source/dataset -> elsewhere` plus `dataset/fashioniq` created `elsewhere/fashioniq` and
+    # reported success, writing outside the checkout the step is authorized to stage.
+    blocked = _blocked_parent(source, destination.parent)
+    if blocked:
+        return False, [blocked]
+
     # A declared link may be nested (`dataset/fashioniq` is what DCNet's own config resolves), and a
-    # fresh checkout has no `dataset/` directory. The parent is part of the artifact being staged, so
-    # it is created here -- after every refusal above has had its say -- and never anywhere else, so
-    # check-only and dry-run stay write-free and an unexpected occupant is still refused.
+    # fresh checkout has no `dataset/` directory. It is created here -- after every refusal above has
+    # had its say -- and never anywhere else, so check-only and dry-run stay write-free and an
+    # unexpected occupant is still refused.
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
     except OSError as error:

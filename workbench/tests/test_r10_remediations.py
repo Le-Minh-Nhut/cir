@@ -384,12 +384,19 @@ def test_the_scanner_follows_the_program_that_actually_runs() -> None:
     # The discriminating signal: the wrapper loads the PINNED `datasets`/`lavis` modules, so their
     # dependencies appear. `test.py` alone imports only numpy, torch and tqdm, and tracing it is
     # exactly what made the profile omit these.
-    traced = _evaluator_imports(model_by_id("hint")) or set()
+    _traced = _evaluator_imports(model_by_id("hint"))
+    traced = _traced[0] if _traced is not None else set()
     assert "torch" in traced, sorted(traced)
-    for from_the_pinned_modules in ("transformers", "timm", "omegaconf"):
+    # `transformers` is imported by the pinned `lavis/models/blip2_models/blip2.py`, which the run
+    # reaches only when it loads the checkpoint's class -- not at processor setup, which is where the
+    # trace of the wrapper stops. `timm` and `omegaconf` are on the path the trace does cover: timm
+    # through `lavis/common/dist_utils.py` and `eva_vit`, omegaconf through the YAML config the
+    # wrapper parses. The distinction matters, because the declared profile must keep `transformers`
+    # even though this scanner cannot see it from the wrapper alone.
+    for from_the_pinned_modules in ("timm", "omegaconf", "cv2", "pandas"):
         assert from_the_pinned_modules in traced, (
-            f"{from_the_pinned_modules} arrives through the vendored `datasets`/`lavis` modules the "
-            f"wrapper loads, so a scan of `test.py` cannot find it: {sorted(traced)}")
+            f"{from_the_pinned_modules} arrives through the pinned modules the wrapper loads, so a "
+            f"scan of the evaluator alone cannot find it: {sorted(traced)}")
 
 
 def test_the_declared_profile_is_coherent_with_the_traced_imports() -> None:
@@ -403,7 +410,8 @@ def test_the_declared_profile_is_coherent_with_the_traced_imports() -> None:
 
     for model_id in ("hint", "habit", "intent", "conesep", "airknow", "sprc"):
         model = model_by_id(model_id)
-        traced = _evaluator_imports(model) or set()
+        _traced = _evaluator_imports(model)
+        traced = _traced[0] if _traced is not None else set()
         constraints = model_constraints({**model, "source_available": True})
         known = set(constraints.get("packages", {})) | set(constraints.get("ranges", {}))
         # What the planner demands is the traced set, resolved through the registry wherever a
@@ -470,9 +478,26 @@ def test_the_qformer_transformers_bound_is_satisfiable() -> None:
         declared = next(package for package in model_by_id(model_id)["environment"]["packages"]
                         if package.startswith("transformers=="))
         version = declared.split("==", 1)[1]
-        assert version == "4.25.0", (
-            f"{model_id} declares {declared}; the vendored Qformer needs the 4.25/4.26 line, which "
-            "is where `apply_chunking_to_forward` still lives in `modeling_utils`")
+        # The property is NOT "the 4.25 line". This test used to assert `version == "4.25.0"` with
+        # `apply_chunking_to_forward` as its justification, and that justification does not hold:
+        # the symbol is imported into `transformers.modeling_utils` from `pytorch_utils` in BOTH
+        # 4.25.0 and 4.36.2, verified by extracting each wheel and reading the import block. What
+        # the declaration must satisfy is the checkout's OWN pin where it publishes one, because
+        # that is the version its authors wrote the code against.
+        manifest = REPO / "workbench" / "third_party" / checkout / "requirements.txt"
+        if manifest.is_file():
+            pinned = next((line.strip().split("==", 1)[1]
+                           for line in manifest.read_text(encoding="utf-8").splitlines()
+                           if line.strip().startswith("transformers==")), None)
+            assert pinned is not None, f"{model_id}: no transformers pin in {manifest}"
+            assert version == pinned, (
+                f"{model_id} declares transformers=={version}, but its own requirements.txt pins "
+                f"{pinned}; the planner and the checkout must describe one environment")
+        else:
+            assert version == "4.25.0", (
+                f"{model_id} declares {declared}. This checkout publishes no requirements.txt, so "
+                "the version is inherited from the LAVIS-family profile the replay wrapper was "
+                "validated against; changing it needs its own evidence.")
 
 
 # --------------------------------------------------------------------------------------- R10-03

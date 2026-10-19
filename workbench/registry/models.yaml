@@ -118,7 +118,7 @@ models:
       # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
       # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
       # launcher this adapter declares, so this list is not a second copy of that answer.
-      packages: [opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, numpy, omegaconf==2.3.0, packaging, pandas==2.2.0, Pillow, pyyaml, regex, requests, tqdm, transformers==4.25.0, timm==0.9.16]
+      packages: [opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, peft==0.6.2, diffusers==0.19.3, huggingface-hub==0.19.4, accelerate==0.25.0, numpy, omegaconf==2.3.0, packaging, pandas==2.0.3, Pillow, pyyaml, regex, requests, tqdm, transformers==4.25.0, timm==0.9.16]
     method_name: Air-Know
     research_generation: recent
     publication_year: 2026
@@ -186,7 +186,7 @@ models:
       # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
       # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
       # launcher this adapter declares, so this list is not a second copy of that answer.
-      packages: [opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, numpy, omegaconf==2.3.0, packaging, pandas==2.2.0, Pillow, pyyaml, regex, requests, tqdm, transformers==4.25.0, timm==0.9.16]
+      packages: [opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, peft==0.6.2, diffusers==0.19.3, huggingface-hub==0.19.4, accelerate==0.25.0, numpy, omegaconf==2.3.0, packaging, pandas==2.0.3, Pillow, pyyaml, regex, requests, tqdm, transformers==4.25.0, timm==0.9.16]
     method_name: ConeSep
     research_generation: recent
     publication_year: 2026
@@ -304,7 +304,7 @@ models:
       # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
       # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
       # launcher this adapter declares, so this list is not a second copy of that answer.
-      packages: [transformers==4.25.0, timm==0.9.16, omegaconf==2.3.0, opencv-python-headless==4.5.5.64, pandas==2.2.0, scikit-image==0.22.0, decord==0.6.0, einops==0.7.0, fairscale==0.4.13, ftfy, iopath==0.1.10, peft, pycocoevalcap==1.2, webdataset==0.2.86]
+      packages: [transformers==4.25.0, timm==0.9.16, omegaconf==2.3.0, opencv-python-headless==4.5.5.64, pandas==2.0.3, scikit-image==0.21.0, decord==0.6.0, einops==0.7.0, fairscale==0.4.13, ftfy, iopath==0.1.10, peft==0.6.2, diffusers==0.19.3, huggingface-hub==0.19.4, accelerate==0.25.0, pycocoevalcap==1.2, pycocotools, webdataset==0.2.86]
     method_name: HABIT
     research_generation: recent
     publication_year: 2026
@@ -382,7 +382,7 @@ models:
       # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
       # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
       # launcher this adapter declares, so this list is not a second copy of that answer.
-      packages: [transformers==4.25.0, timm==0.9.16, omegaconf==2.3.0, opencv-python-headless==4.5.5.64, pandas==2.2.0, scikit-image==0.22.0, decord==0.6.0, einops==0.7.0, fairscale==0.4.13, ftfy, iopath==0.1.10, peft, pycocoevalcap==1.2, webdataset==0.2.86]
+      packages: [transformers==4.25.0, timm==0.9.16, omegaconf==2.3.0, opencv-python-headless==4.5.5.64, pandas==2.0.3, scikit-image==0.21.0, decord==0.6.0, einops==0.7.0, fairscale==0.4.13, ftfy, iopath==0.1.10, peft==0.6.2, diffusers==0.19.3, huggingface-hub==0.19.4, accelerate==0.25.0, pycocoevalcap==1.2, pycocotools, webdataset==0.2.86]
     method_name: INTENT
     research_generation: recent
     publication_year: 2026
@@ -460,7 +460,7 @@ models:
       # imports. The declared list is the AUTHOR-pinned core; the packages the reachable program
       # actually imports are computed by `environment_planner._evaluator_imports`, which walks the
       # launcher this adapter declares, so this list is not a second copy of that answer.
-      packages: [transformers==4.25.0, timm==0.9.16, omegaconf==2.3.0, opencv-python-headless==4.5.5.64, pandas==2.2.0, scikit-image==0.22.0, decord==0.6.0, einops==0.7.0, fairscale==0.4.13, ftfy, iopath==0.1.10, peft, pycocoevalcap==1.2, webdataset==0.2.86]
+      packages: [transformers==4.25.0, timm==0.9.16, omegaconf==2.3.0, opencv-python-headless==4.5.5.64, pandas==2.0.3, scikit-image==0.21.0, decord==0.6.0, einops==0.7.0, fairscale==0.4.13, ftfy, iopath==0.1.10, peft==0.6.2, diffusers==0.19.3, huggingface-hub==0.19.4, accelerate==0.25.0, pycocoevalcap==1.2, pycocotools, webdataset==0.2.86]
     method_name: HINT
     research_generation: recent
     publication_year: 2026
@@ -986,9 +986,20 @@ models:
       # `lavis` is vendored at src/lavis, and the evaluator runs from `src/` with the checkout on
       # `sys.path`, so the checkout's own copy is what resolves -- the pinned sibling profile that
       # listed `salesforce-lavis` was unsatisfiable (see the LAVIS-family note above) and is gone.
-      # `transformers` and `timm` are declared directly, matching both the vendored imports and the
-      # versions SPRC's own `requirements.txt` names.
-      packages: [spacy==3.7.2, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33, opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, numpy, omegaconf==2.3.0, packaging, pandas==2.2.0, Pillow, pyyaml, regex, requests, tqdm, transformers==4.25.0, timm==0.9.16]
+      #
+      # `transformers` and `timm` are SPRC's own versions, not the LAVIS-family ones. The evaluator
+      # is `src/blip_validate.py`, which loads `Blip2QformerCirAlignPrompt`
+      # (`blip2_qformer_cir_align_prompt.py:25`) and therefore `blip2.py`, `Qformer.py` and `med.py`
+      # -- never `blip_models/blip.py`, whose `transformers_version < 4.27` assertion applies to
+      # BLIP-1's `BlipBase` and not to this BLIP-2 class. Every symbol the evaluation path imports
+      # (`transformers.activations.ACT2FN`, `file_utils.ModelOutput`,
+      # `modeling_utils.PreTrainedModel`/`apply_chunking_to_forward`/`find_pruneable_heads_and_indices`/
+      # `prune_linear_layer`, `models.bert.configuration_bert.BertConfig`, `timm.models.layers.*`,
+      # `timm.models.registry.register_model`) exists in 4.36.2/0.9.12, and those are the versions the
+      # pinned checkout's own `requirements.txt` declares. Declaring 4.25.0/0.9.16 here made the
+      # planner install one pair while the runtime verifier demanded the other, so a correctly
+      # installed environment could never reach DEPENDENCIES_OK.
+      packages: [spacy==3.7.2, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33, opencv-python-headless==4.5.5.64, fairscale==0.4.13, iopath==0.1.10, numpy, omegaconf==2.3.0, packaging, pandas==2.2.0, Pillow, pyyaml, regex, requests, tqdm, transformers==4.36.2, timm==0.9.12]
     strict_clean_checkpoint_available: null
     notes: The evaluator's argparse default `--blip-model-name blip2_cir_rerank_learn` names a class the pinned repo does not register (only an argparse default; no @registry.register_model); the checkpoint class-key mapping remains unverified and loads non-strictly.
     checkpoint_variants:

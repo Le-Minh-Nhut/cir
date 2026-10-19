@@ -98,6 +98,27 @@ class HintAdapter(OfficialScriptAdapter):
     script = "test.py"
     launcher = "replay"
     launcher_roots = ("lavis",)
+    # `workbench/replay/lavis_processors.py:52` builds `lavis.processors` as a skeleton whose
+    # `__path__` is the real directory and inserts it before any submodule import, so the pinned
+    # `processors/__init__.py` never runs -- that is verified by running the wrapper and reading
+    # `sys.modules`. `lavis.models` is deliberately NOT stubbed: it is attempted, and once its
+    # dependencies are present it really is executed, so its transitive imports are requirements.
+    # Stubbing it looked plausible and was wrong -- it dropped `peft`, `diffusers`, `easydict`,
+    # `matplotlib` and `nltk`, and an environment provisioned from that plan could not unpickle the
+    # checkpoint classes those very re-exports install.
+    stubbed_packages = ("lavis.processors",)
+    # `__import__("datasets")` and `importlib.import_module("test")` resolve to the checkout's own
+    # top-level modules, which the launcher puts on `sys.path`. Neither is a PyPI distribution.
+    provided_modules = ("datasets", "test", "data_utils", "utils")
+    # Measured, not assumed: importing `lavis.models` in a real 3.8 environment with the pinned
+    # checkout on the path and recording which top-level modules enter `sys.modules` leaves these
+    # absent. A text scan cannot see `if torch.cuda.is_available(): from knn_cuda import KNN`
+    # (`ulip_models/pointbert/dvae.py:6-7`), an audio encoder only a video task imports
+    # (`beats/BEATs.py:14`), or a re-export whose module the evaluation never reaches. Leaving them
+    # as requirements installed torchaudio, knn-cuda, matplotlib, scikit-learn, nltk, h5py and
+    # termcolor into every image-retrieval profile.
+    unreachable_modules = ("torchaudio", "knn_cuda", "sklearn", "nltk", "h5py",
+                           "matplotlib", "mpl_toolkits", "termcolor")
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # The pinned evaluator has no `__main__`, no argument parser and no checkpoint loader, so
@@ -135,6 +156,28 @@ class AirKnowAdapter(OfficialScriptAdapter):
     launcher = "replay"
     launcher_roots = ("lavis",)
 
+    # `workbench/replay/lavis_processors.py:52` builds `lavis.processors` as a skeleton whose
+    # `__path__` is the real directory and inserts it before any submodule import, so the pinned
+    # `processors/__init__.py` never runs -- that is verified by running the wrapper and reading
+    # `sys.modules`. `lavis.models` is deliberately NOT stubbed: it is attempted, and once its
+    # dependencies are present it really is executed, so its transitive imports are requirements.
+    # Stubbing it looked plausible and was wrong -- it dropped `peft`, `diffusers`, `easydict`,
+    # `matplotlib` and `nltk`, and an environment provisioned from that plan could not unpickle the
+    # checkpoint classes those very re-exports install.
+    stubbed_packages = ("lavis.processors",)
+    # `__import__("datasets")` and `importlib.import_module("test")` resolve to the checkout's own
+    # top-level modules, which the launcher puts on `sys.path`. Neither is a PyPI distribution.
+    provided_modules = ("datasets", "test", "data_utils", "utils")
+    # Measured, not assumed: importing `lavis.models` in a real 3.8 environment with the pinned
+    # checkout on the path and recording which top-level modules enter `sys.modules` leaves these
+    # absent. A text scan cannot see `if torch.cuda.is_available(): from knn_cuda import KNN`
+    # (`ulip_models/pointbert/dvae.py:6-7`), an audio encoder only a video task imports
+    # (`beats/BEATs.py:14`), or a re-export whose module the evaluation never reaches. Leaving them
+    # as requirements installed torchaudio, knn-cuda, matplotlib, scikit-learn, nltk, h5py and
+    # termcolor into every image-retrieval profile.
+    unreachable_modules = ("torchaudio", "knn_cuda", "sklearn", "nltk", "h5py",
+                           "matplotlib", "mpl_toolkits", "termcolor")
+
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # `test_BLIP2.py` has no `__main__` and no checkpoint loader, and one of its branches calls
         # `load_obj("")` with an empty path, so it cannot be launched as published.
@@ -155,6 +198,28 @@ class ConeSepAdapter(OfficialScriptAdapter):
     launcher = "replay"
     launcher_roots = ("lavis",)
 
+    # `workbench/replay/lavis_processors.py:52` builds `lavis.processors` as a skeleton whose
+    # `__path__` is the real directory and inserts it before any submodule import, so the pinned
+    # `processors/__init__.py` never runs -- that is verified by running the wrapper and reading
+    # `sys.modules`. `lavis.models` is deliberately NOT stubbed: it is attempted, and once its
+    # dependencies are present it really is executed, so its transitive imports are requirements.
+    # Stubbing it looked plausible and was wrong -- it dropped `peft`, `diffusers`, `easydict`,
+    # `matplotlib` and `nltk`, and an environment provisioned from that plan could not unpickle the
+    # checkpoint classes those very re-exports install.
+    stubbed_packages = ("lavis.processors",)
+    # `__import__("datasets")` and `importlib.import_module("test")` resolve to the checkout's own
+    # top-level modules, which the launcher puts on `sys.path`. Neither is a PyPI distribution.
+    provided_modules = ("datasets", "test", "data_utils", "utils")
+    # Measured, not assumed: importing `lavis.models` in a real 3.8 environment with the pinned
+    # checkout on the path and recording which top-level modules enter `sys.modules` leaves these
+    # absent. A text scan cannot see `if torch.cuda.is_available(): from knn_cuda import KNN`
+    # (`ulip_models/pointbert/dvae.py:6-7`), an audio encoder only a video task imports
+    # (`beats/BEATs.py:14`), or a re-export whose module the evaluation never reaches. Leaving them
+    # as requirements installed torchaudio, knn-cuda, matplotlib, scikit-learn, nltk, h5py and
+    # termcolor into every image-retrieval profile.
+    unreachable_modules = ("torchaudio", "knn_cuda", "sklearn", "nltk", "h5py",
+                           "matplotlib", "mpl_toolkits", "termcolor")
+
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # Single checkpoint shared across the three categories, and a callable-only evaluator: the
         # `--variant` flag records WHICH published noise level this run evaluates, because the Hub
@@ -169,6 +234,28 @@ class HabitAdapter(OfficialScriptAdapter):
     launcher = "replay"
     launcher_roots = ("lavis",)
 
+    # `workbench/replay/lavis_processors.py:52` builds `lavis.processors` as a skeleton whose
+    # `__path__` is the real directory and inserts it before any submodule import, so the pinned
+    # `processors/__init__.py` never runs -- that is verified by running the wrapper and reading
+    # `sys.modules`. `lavis.models` is deliberately NOT stubbed: it is attempted, and once its
+    # dependencies are present it really is executed, so its transitive imports are requirements.
+    # Stubbing it looked plausible and was wrong -- it dropped `peft`, `diffusers`, `easydict`,
+    # `matplotlib` and `nltk`, and an environment provisioned from that plan could not unpickle the
+    # checkpoint classes those very re-exports install.
+    stubbed_packages = ("lavis.processors",)
+    # `__import__("datasets")` and `importlib.import_module("test")` resolve to the checkout's own
+    # top-level modules, which the launcher puts on `sys.path`. Neither is a PyPI distribution.
+    provided_modules = ("datasets", "test", "data_utils", "utils")
+    # Measured, not assumed: importing `lavis.models` in a real 3.8 environment with the pinned
+    # checkout on the path and recording which top-level modules enter `sys.modules` leaves these
+    # absent. A text scan cannot see `if torch.cuda.is_available(): from knn_cuda import KNN`
+    # (`ulip_models/pointbert/dvae.py:6-7`), an audio encoder only a video task imports
+    # (`beats/BEATs.py:14`), or a re-export whose module the evaluation never reaches. Leaving them
+    # as requirements installed torchaudio, knn-cuda, matplotlib, scikit-learn, nltk, h5py and
+    # termcolor into every image-retrieval profile.
+    unreachable_modules = ("torchaudio", "knn_cuda", "sklearn", "nltk", "h5py",
+                           "matplotlib", "mpl_toolkits", "termcolor")
+
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # As with conesep: the selected variant is recorded so a noisy-trained checkpoint can never be
         # presented as a clean-trained one.
@@ -181,6 +268,28 @@ class IntentAdapter(OfficialScriptAdapter):
     script = "test.py"
     launcher = "replay"
     launcher_roots = ("lavis",)
+
+    # `workbench/replay/lavis_processors.py:52` builds `lavis.processors` as a skeleton whose
+    # `__path__` is the real directory and inserts it before any submodule import, so the pinned
+    # `processors/__init__.py` never runs -- that is verified by running the wrapper and reading
+    # `sys.modules`. `lavis.models` is deliberately NOT stubbed: it is attempted, and once its
+    # dependencies are present it really is executed, so its transitive imports are requirements.
+    # Stubbing it looked plausible and was wrong -- it dropped `peft`, `diffusers`, `easydict`,
+    # `matplotlib` and `nltk`, and an environment provisioned from that plan could not unpickle the
+    # checkpoint classes those very re-exports install.
+    stubbed_packages = ("lavis.processors",)
+    # `__import__("datasets")` and `importlib.import_module("test")` resolve to the checkout's own
+    # top-level modules, which the launcher puts on `sys.path`. Neither is a PyPI distribution.
+    provided_modules = ("datasets", "test", "data_utils", "utils")
+    # Measured, not assumed: importing `lavis.models` in a real 3.8 environment with the pinned
+    # checkout on the path and recording which top-level modules enter `sys.modules` leaves these
+    # absent. A text scan cannot see `if torch.cuda.is_available(): from knn_cuda import KNN`
+    # (`ulip_models/pointbert/dvae.py:6-7`), an audio encoder only a video task imports
+    # (`beats/BEATs.py:14`), or a re-export whose module the evaluation never reaches. Leaving them
+    # as requirements installed torchaudio, knn-cuda, matplotlib, scikit-learn, nltk, h5py and
+    # termcolor into every image-retrieval profile.
+    unreachable_modules = ("torchaudio", "knn_cuda", "sklearn", "nltk", "h5py",
+                           "matplotlib", "mpl_toolkits", "termcolor")
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         return _replay_command(self, checkpoint, request, source,

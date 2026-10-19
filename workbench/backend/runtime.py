@@ -636,7 +636,10 @@ def inspect_environment_distributions(prefix: str | None,
     base_roots: list[Path] = []
     if prefix:
         primary_roots = _site_packages_dirs(Path(prefix))
-    if base_prefix and str(base_prefix) != str(prefix):
+    if base_prefix and prefix and str(base_prefix) != str(prefix):
+        # Without a prefix there is no environment to compare against, and the inheritance question
+        # has no answer: passing None here raised a TypeError out of a function whose own signature
+        # accepts `str | None`. Nothing is inherited from a base that was never named.
         if _inherits_base_site_packages(Path(prefix), Path(base_prefix)):
             base_roots = [root for root in _site_packages_dirs(Path(base_prefix))
                           if root not in primary_roots]

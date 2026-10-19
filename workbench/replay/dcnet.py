@@ -74,7 +74,29 @@ def configured_data_dir(config_file: Path, dataset_root: Path,
         blockers.append(f"DCNet config unreadable: {config_file}: {error}")
         return None, blockers
 
-    declared = (config.get("data_loader") or {}).get("args", {}).get("data_dir")
+    # Each level is checked before `.get()` is called on it. `[]`, `{"data_loader": ["x"]}` and
+    # `{"data_loader": {"args": null}}` are all valid JSON that the native `ConfigParser` accepts and
+    # then fails on, and an AttributeError escaping this function crashed the readiness view instead
+    # of naming the field -- a config the evaluator cannot use must read as a refusal, not a traceback.
+    if not isinstance(config, dict):
+        blockers.append(
+            f"DCNet config is not a JSON object: {config_file} declares {type(config).__name__} "
+            f"({config!r}); the evaluator reads `data_loader.args.data_dir` from it.")
+        return None, blockers
+    loader = config.get("data_loader")
+    if loader is not None and not isinstance(loader, dict):
+        blockers.append(
+            f"DCNet config data_loader is not a JSON object: {config_file} declares "
+            f"{type(loader).__name__} ({loader!r}), so no `args.data_dir` can be read from it.")
+        return None, blockers
+    args = (loader or {}).get("args")
+    if args is not None and not isinstance(args, dict):
+        blockers.append(
+            f"DCNet config data_loader.args is not a JSON object: {config_file} declares "
+            f"{type(args).__name__} ({args!r}), so `data_dir` cannot be read from it.")
+        return None, blockers
+
+    declared = (args or {}).get("data_dir")
     if not declared:
         blockers.append(
             f"DCNet config declares no data_loader.args.data_dir: {config_file}. The evaluator "

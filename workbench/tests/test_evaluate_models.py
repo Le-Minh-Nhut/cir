@@ -860,7 +860,8 @@ def test_the_evaluation_module_does_not_widen_limns_traced_environment() -> None
     from workbench.backend.environment_planner import _evaluator_imports
     from workbench.backend.registry import model_by_id
 
-    traced = _evaluator_imports(model_by_id("limn"), _Path("workbench/third_party")) or set()
+    _traced = _evaluator_imports(model_by_id("limn"), _Path("workbench/third_party"))
+    traced = _traced[0] if _traced is not None else set()
     # pydantic is not a LIMN runtime dependency: it arrives only through the canonical result schema.
     assert "pydantic" not in traced, f"pydantic leaked into LIMN's traced imports: {sorted(traced)}"
     # And the modules that must remain reachable still are.
@@ -1116,7 +1117,8 @@ def test_the_evaluation_module_does_not_widen_limns_traced_environment() -> None
     from workbench.backend.environment_planner import _evaluator_imports
     from workbench.backend.registry import model_by_id
 
-    traced = _evaluator_imports(model_by_id("limn"), _Path("workbench/third_party")) or set()
+    _traced = _evaluator_imports(model_by_id("limn"), _Path("workbench/third_party"))
+    traced = _traced[0] if _traced is not None else set()
     assert "pydantic" not in traced, f"pydantic leaked into LIMN's traced imports: {sorted(traced)}"
     assert {"torch", "open_clip", "numpy"} <= set(traced), sorted(traced)
 

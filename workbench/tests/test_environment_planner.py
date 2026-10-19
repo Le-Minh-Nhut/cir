@@ -747,7 +747,7 @@ def test_real_conda_cold_start_shared_environment_and_reuse(tmp_path, monkeypatc
     # These stand-in models have no adapter, so the evaluator-import trace cannot resolve an entry
     # point; that refusal has its own regression. Here the models stand in for ones whose evaluator
     # imports exactly the distributions they declare, so the constraint set under test is built.
-    monkeypatch.setattr(planner, "_evaluator_imports", lambda *a, **k: {"yaml", "packaging"})
+    monkeypatch.setattr(planner, "_evaluator_imports", lambda *a, **k: ({"yaml", "packaging"}, set()))
     m1 = {
         "model_id": "real-cold-a",
         "source_available": True,
@@ -1178,7 +1178,7 @@ def test_real_provisioning_children_withhold_ledger_key(tmp_path, monkeypatch):
 
 
 def test_p1_03_range_constraint_enforced_against_installed(tmp_path, monkeypatch):
-    monkeypatch.setattr(planner, "_evaluator_imports", lambda *a, **k: set())
+    monkeypatch.setattr(planner, "_evaluator_imports", lambda *a, **k: (set(), set()))
     # Declared as a pip package so the constraint survives import tracing: this test is about the
     # range check itself, and a `packages` declaration is filtered to what the evaluator actually
     # imports (which is nothing here, since the model has no adapter).
@@ -1262,7 +1262,8 @@ def test_evaluator_imports_excludes_checkout_subpackages(monkeypatch, tmp_path):
     (source / "internal" / "__init__.py").write_text("import nested\n", encoding="utf-8")
     (source / "internal" / "nested.py").write_text("value = 1\n", encoding="utf-8")
 
-    imports = planner._evaluator_imports({"model_id": "encoder", "source_dir": "ENCODER"})
+    traced = planner._evaluator_imports({"model_id": "encoder", "source_dir": "ENCODER"})
+    imports = traced[0] if traced is not None else set()
 
     assert imports is not None
     assert not any((source / name).is_dir() for name in imports)
@@ -1363,7 +1364,7 @@ def test_unpinned_declared_package_routes_to_exact_spec_set_and_verifies_ready(t
     assert ("clip" in pip_conda_specs) ^ ("clip" in pip_pip_specs)
 
     monkeypatch.setattr(planner, "_solver_command", lambda: "conda")
-    monkeypatch.setattr(planner, "_evaluator_imports", lambda *a, **k: set())
+    monkeypatch.setattr(planner, "_evaluator_imports", lambda *a, **k: (set(), set()))
     monkeypatch.setattr(planner.runtime, "inspect_environment_distributions",
                         lambda prefix: ({"scipy": "1.11.4"}, {"scipy"}, set()))
     monkeypatch.setattr(planner.runtime, "verify_environment",
