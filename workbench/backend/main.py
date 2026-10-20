@@ -80,7 +80,7 @@ def _ensure_index() -> None:
     def _build() -> None:
         global _index_build_error
         try:
-            rebuild_index(results_root=results_dir, database_path=db_path)
+            rebuild_index(results_root=results_dir, database_path=db_path, config=config)
         except Exception as exc:
             logging.getLogger("workbench").exception("Startup index build failed: %s", exc)
             _index_build_error = exc
@@ -633,7 +633,7 @@ def _checkpoint_digest_or_refuse(path: Path, payload) -> str:
             {"model_id": payload.model_id, "checkpoint_id": payload.checkpoint_id,
              "checkpoint_path": str(path)}) from error
 
-def _aggregate_reports() -> list[dict]:
+def _aggregate_reports(config=None) -> list[dict]:
     """Read every official aggregate report the evaluator has written, ignoring malformed files.
 
     These reports live outside the DuckDB index by design: the index holds per-query `ResultRun`
@@ -653,7 +653,12 @@ def _aggregate_reports() -> list[dict]:
         LedgerKeyError, ledger_hmac_key, read_evidence_ledger, reports_root,
         sha256_file as report_digest_of)
 
-    config = resolve_config()
+    # `config` is passed by callers that already resolved one (the startup index build), so the
+    # reports read here belong to the SAME root the caller is indexing. Resolving again inside made
+    # an isolated workspace read the deployment's reports instead of its own: a startup index build
+    # in a test or a second workspace scanned the real artifacts directory, which is both wrong and
+    # slow enough to blow a startup timeout once real artifacts exist.
+    config = config if config is not None else resolve_config()
     if not reports_root(config).is_dir():
         return []
     # A ledger that cannot be *READ AT ALL* is a different answer from "no report is

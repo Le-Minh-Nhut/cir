@@ -143,7 +143,7 @@ def verifier_verdicts(config=None) -> dict[str, dict]:
         return {}
     verdicts: dict[str, dict] = {}
     try:
-        reports = _aggregate_reports() or []
+        reports = _aggregate_reports(config) or []
     except Exception:
         # A ledger that cannot be read corroborates nothing. The index must still build: refusing to
         # index would hide every run from the API because of an unrelated ledger problem, and the
@@ -158,7 +158,15 @@ def verifier_verdicts(config=None) -> dict[str, dict]:
     return verdicts
 
 
-def rebuild_index(results_root: Path | None = None, database_path: Path | None = None) -> int:
+def rebuild_index(results_root: Path | None = None, database_path: Path | None = None,
+                  config=None) -> int:
+    """Rebuild the serving index from canonical result files.
+
+    ``config`` is threaded to the verifier receipts so the receipts describe the SAME root the
+    results came from. Without it an isolated workspace read the deployment's aggregate reports
+    while indexing its own results, which both mixed two roots and made a startup build scan the
+    real artifacts directory.
+    """
     import duckdb
 
     database_path = database_path or configured_database_path()
@@ -166,7 +174,7 @@ def rebuild_index(results_root: Path | None = None, database_path: Path | None =
     loaded = load_runs_with_digests(results_root)
     runs = [result for _, result in loaded]
     digests = {result.run.run_id: digest for digest, result in loaded}
-    verdicts = verifier_verdicts()
+    verdicts = verifier_verdicts(config)
     database_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = database_path.with_name(f".{database_path.name}.{uuid4().hex}.tmp")
     connection = duckdb.connect(str(temporary))

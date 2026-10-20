@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 from pathlib import Path
 
 from workbench.backend.operator_config import WorkbenchConfig
@@ -234,7 +236,12 @@ def test_gpu_verification_stage_state_machine(tmp_path: Path, monkeypatch) -> No
     site.mkdir(parents=True, exist_ok=True)
     interp = prefix / "bin" / "python"
     interp.parent.mkdir(parents=True, exist_ok=True)
-    interp.write_text("#!/bin/sh\n")
+    # A REAL interpreter, not a `#!/bin/sh` stub. The capability gate corroborates the reported
+    # torch core by loading it in a child of THIS interpreter, and `install_probe` below compiles
+    # that core for the orchestrator's Python. A shell stub cannot load a CPython extension, so the
+    # corroboration fails and the probe is refused -- the stub only worked while the loader ignored
+    # the environment's own interpreter, which was the defect.
+    interp.symlink_to(sys.executable)
 
     model = {
         "model_id": "csmcir",
