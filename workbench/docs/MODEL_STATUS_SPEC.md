@@ -81,6 +81,18 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | 16 | `ptha_mtst` | zyinan99/MTST_PTHA | `fashioniq_original_split` | **không có FashionIQ ckpt** | vendored + 3 local fix | không có weights | preflight-only | không | không | `PREFLIGHT_IMPLEMENTED_BLOCKED` | `AUTHOR_ONLY_INFORMATION` |
 
 
+> **Ảnh hưởng của R13** (21/10/2026): R13 sửa **năm** lỗi, tất cả ở tầng dependency/verifier, không đổi mức
+> khoa học của model nào. (1) Verifier từ chối **nguồn đúng** vì khoảng trắng hợp lệ trước `git+` bị dính
+> vào URL; (2) cùng lúc đó `runtime` **bỏ** `Requirement.url`, nên PyPI `clip==0.2.0` thoả một khai báo
+> OpenAI CLIP và được `RUNTIME_READY` rồi được **reuse**; (3) hai entry CLIP4Cir vẫn khai `clip` trần;
+> (4) `pip check` fail với stdout rỗng (interpreter không có pip) vẫn được coi là pass; (5) cùng một
+> direct reference khai hai lần bị coi là hai nguồn khác nhau. Thêm hai giả thuyết đã kiểm và đóng:
+> venv hợp lệ bị từ chối khi `bin/python` là symlink tới binary nền (nay so **environment identity**
+> = `sys.prefix`, không so đường dẫn binary), và nguồn bị chặn không thể mượn readiness từ record GPU
+> cũ (cache khoá theo contract digest, có `packages`).
+> R13-02 chọn revision `a1d0717` cho CLIP4Cir: README upstream **không pin revision**, nên đây là
+> **adaptation được ghi rõ**, không phải pin của tác giả.
+
 > **Ảnh hưởng của R12** (20/10/2026): R12 sửa hai lỗi contract **không** đổi mức khoa học của model nào.
 > (1) `scikit-learn` bị loại khỏi plan của `habit`, `intent`, `conesep`, `airknow` vì một census sai —
 > census import `lavis.models`, import này **vỡ giữa đường** khi thiếu dependency, nên mọi module cần
