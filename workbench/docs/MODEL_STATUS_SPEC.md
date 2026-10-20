@@ -63,8 +63,8 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 
 | # | model_id | upstream | protocol native | checkpoint variant / noise | source+patch integrity | ckpt/data/env readiness | replay capability | parser | per-query | mức thực tế | blocker |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | `limn` | iLearn-Lab/TPAMI24-LIMN | `fashioniq_val_split` | 3 ckpt category, clean eval, training noise unstated | vendored, pin OK | 3 ckpt ~5.4 GB chưa stage; env declared | native wrapper | `limn_structured_json` | **có** exporter+observer+publish | `PER_QUERY_EXPORT_VERIFIED` (offline) | `PUBLIC_ASSET_SETUP` |
-| 2 | `encoder` | iLearn-Lab/AAAI25-ENCODER | `fashioniq_val_split` | `fashioniq.pt` @rev `dd9b0865` | vendored + 2 local fix | size/hash VERIFIED; file chưa stage | wrapper | shared replay | không | `CHECKPOINT_MAPPING_VERIFIED` | `PUBLIC_ASSET_SETUP` |
+| 1 | `limn` | iLearn-Lab/TPAMI24-LIMN | `fashioniq_val_split` | 3 ckpt category, clean eval, training noise unstated | vendored, pin OK | **3 ckpt staged, size+sha256 VERIFIED**; env provisioned (torch 1.12.1+cu113) | native wrapper | `limn_structured_json` | **có** exporter+observer+publish, parity 0 mismatch | **`FULL_VAL_VERIFIED` + `PAPER_PARITY_CHECKED`** | — (blocker engineering đã đóng) |
+| 2 | `encoder` | iLearn-Lab/AAAI25-ENCODER | `fashioniq_val_split` | `fashioniq.pt` @rev `dd9b0865` | vendored + 2 local fix | **ckpt staged, size 631 879 365 + sha256 `0f31c501…` VERIFIED**; LAION aux staged; env CHƯA provision | wrapper | shared replay | không | `CHECKPOINT_MAPPING_VERIFIED` | `ENV_NOT_PROVISIONED` |
 | 3 | `hint` | iLearn-Lab/ICASSP26-HINT | `fashioniq_val_split` | `fashioniq.pt` 2 724 451 182 B | vendored, pin OK | size/hash VERIFIED; chưa stage | wrapper + cache isolation | `hint_native_recall` | không | `AGGREGATE_PARSED` | `PUBLIC_ASSET_SETUP` |
 | 4 | `pair` | iLearn-Lab/ICASSP25-PAIR | `fashioniq_val_split` | `pair-B1.pt`/`pair-B2.pt` | vendored + 1 local fix + `data/datasets.py` recovered | mapping **UNRESOLVED** | wrapper | shared replay | không | `CODE_TESTED` | `AUTHOR_ONLY_INFORMATION` + `SCIENTIFIC_VARIANT` |
 | 5 | `clvc_net` | iLearn-Lab/SIGIR21-CLVC-Net | `fashioniq_val_split` | 6 whole models (2/category) | vendored + torch.hub fix | archive `CLVCNET.zip` interior chưa xác minh | wrapper | shared replay | không | `CODE_TESTED` | `AUTHOR_ONLY_INFORMATION` |
@@ -80,6 +80,24 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | 15 | `sprc` | chunmeifeng/SPRC | `fashioniq_original_split` | ViT-g (paper) / ViT-L (variant) | vendored, pin OK | ViT-g OneDrive 403; ViT-L reachable | script CLI | `csmcir_stdout_json` | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` + `SCIENTIFIC_VARIANT` |
 | 16 | `ptha_mtst` | zyinan99/MTST_PTHA | `fashioniq_original_split` | **không có FashionIQ ckpt** | vendored + 3 local fix | không có weights | preflight-only | không | không | `PREFLIGHT_IMPLEMENTED_BLOCKED` | `AUTHOR_ONLY_INFORMATION` |
 
+
+> **Ảnh hưởng của R14** (21/10/2026): R14 chạy **thật** LIMN end-to-end và sửa **ba** lỗi chặn đường
+> chạy, tất cả ở tầng hạ tầng — không đổi ranking, preprocessing, reference policy hay semantics
+> khoa học của model nào. (1) `pc.sh` truyền `-T` cho `docker exec` trực tiếp; CLI thật từ chối
+> (`unknown shorthand flag: 'T'`, exit 125), nên nhánh preparation (mọi model **trừ** `limn`/`csmcir`)
+> và **verifier dùng chung** không bao giờ chạy được. (2) `runtime._exports_python_init` chạy con
+> `dlopen` bằng `sys.executable` (Python của orchestrator); extension CPython gắn cứng ABI, nên
+> `_C.cpython-310-*.so` báo `undefined symbol` và bị coi là **không load được** — khiến cổng GPU
+> `capability` từ chối **mọi** model có interpreter riêng, và lỗi hiện ra như "CUDA unavailable".
+> (3) `pinned_revision` chạy `git rev-parse HEAD` trong checkout đã bị gỡ `.git` lồng, nên Git đi
+> ngược lên repo workbench và trả về **commit của workbench**; completion proof so nó với
+> `upstream_commit_sha` của model rồi từ chối — không model vendored nào tạo được proof hợp lệ.
+> Cả ba nay đã sửa và có regression bắt được khi revert.
+>
+> LIMN là model **đầu tiên** đạt `CHECKPOINT_LOADED`, `GPU_SMOKE_VERIFIED`, `FULL_VAL_VERIFIED` và
+> `PAPER_PARITY_CHECKED`. `encoder` và `hint` vẫn dừng ở mức cũ: checkpoint của `encoder` đã stage và
+> verify trên PC này, nhưng interpreter của nó **chưa** được provision, và cả hai **không** khai
+> `per_query_observer` nên chưa có per-query để so cross-model.
 
 > **Ảnh hưởng của R13** (21/10/2026): R13 sửa **năm** lỗi, tất cả ở tầng dependency/verifier, không đổi mức
 > khoa học của model nào. (1) Verifier từ chối **nguồn đúng** vì khoảng trắng hợp lệ trước `git+` bị dính
@@ -114,8 +132,9 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 > riêng (`workbench/tests/test_r11_lavis_lifecycle.py`) — nhưng đó là **fixture**, không phải
 > weight tác giả. Không model nào được nâng lên `CHECKPOINT_LOADED` hay `GPU_SMOKE_VERIFIED`.
 
-**Không model nào** đạt `CHECKPOINT_LOADED`, `GPU_SMOKE_VERIFIED`, `FULL_VAL_VERIFIED` hay
-`PAPER_PARITY_CHECKED`. Mọi số trong registry là số paper, không phải số đo.
+**`limn` đạt `CHECKPOINT_LOADED`, `GPU_SMOKE_VERIFIED`, `FULL_VAL_VERIFIED` và
+`PAPER_PARITY_CHECKED`** trên PC này (số đo ở §3.1). **15 model còn lại** chưa đạt mức nào trong bốn
+mức đó: mọi số trong registry cho chúng vẫn là số paper, không phải số đo.
 
 ---
 
@@ -126,13 +145,37 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
   `test.py:test()`), exporter `limn_export.py`, observer `limn_observer.py`, publish `limn_publish.py`.
 - Checkpoint: 3 whole-model `0_{dress,shirt,toptee}_best_model.pt`, Hub LFS sha256 đã ghi trong registry.
   Training noise chưa nêu trong paper ⇒ `null` (không gán 0). Evaluation noise 0.
-- Dataset: `fashioniq_ilearn_resized_training`, `.jpg`, correction dicts ở canonical
-  `captions/correction_dict_{cat}.json` (**byte-identical** với `LIMN/correct_files` và
-  `TGCIR/correction_dict`).
+- Dataset: `fashioniq_ilearn_resized_training`, `.jpg`. Trên PC này dùng `data/fashionIQ_dataset`
+  (`FashionIQ` là symlink cùng thư mục): `resized_image/{dress,shirt,toptee}` =
+  3817 / 6346 / 5373 ảnh `.jpg`, khớp đúng layout native yêu cầu.
 - Protocol `fashioniq_val_split`; ranking native `np.argsort(-sims)` + mask reference `-10e10`.
   Cache isolation: có. Per-query: **có**, parity so với native aggregate.
-- Đã chạy: 176 test LIMN/export/replay/fresh-clone **pass**. **Không** inference.
-- Blocker: 3 ckpt ~5.4 GB chưa stage. Command PC: xem §4.
+- **ĐÃ CHẠY THẬT (21/10/2026)** — checkpoint tác giả, dữ liệu tác giả, GPU thật (RTX 3050, sm_86):
+
+| hạng mục | kết quả đo |
+|---|---|
+| checkpoint integrity | cả 3 file: size **OK**, sha256 **OK** |
+| checkpoint load | `model.LIMN`, 440.26 M tham số, `cuda:0` |
+| GPU probe | `cuda_available=true`, `computed=true`, cc **8.6** |
+| **dress** | R1 **18.6911** · R10 **50.7685** · R50 **74.0208** |
+| **shirt** | R1 **25.5152** · R10 **55.5447** · R50 **76.7910** |
+| **toptee** | R1 **26.2111** · R10 **60.5813** · R50 **81.6930** |
+| **macro** | R10 **55.6315** · R50 **77.5016** · mean **66.5665** |
+| paper (làm tham chiếu) | R10 55.91 · R50 77.82 · mean 66.87 |
+
+  Độ lệch so với paper: R10 **−0.28**, R50 **−0.32**, mean **−0.30** điểm. Sai số này nằm trong
+  khoảng của một lần chạy lại hợp lệ (không cắt tỉa, không đổi ranking, không đổi reference policy).
+- Per-query: exporter chạy thật trên cả 3 category, **6016 query**, `top_k=50`,
+  `INSTRUMENTATION_PARITY_VERIFIED`, `instrumentation_mismatches: {}` — tức ranking do observer
+  dựng lại **khớp tuyệt đối** với aggregate native. Artifact canonical đã publish:
+  `workbench/artifacts/results/fashioniq_val_split/limn/20261021T040000000000Z_limn_base_iter0_all_categories_fashioniq_val_split.json`
+- Hạ tầng: index rebuild → `/api/runs` trả run `data_kind: experiment` → `/api/queries` trả
+  `total: 6016` kèm `top_results` → UI Sample Explorer hiển thị `1–20 of 6016` với ảnh thật.
+- `WORKBENCH_LIMN_BATCH_SIZE` (mặc định 32 = thiết lập paper) là knob vận hành cho GPU nhỏ; nó chỉ
+  đổi số ảnh mỗi lượt forward, không đổi thứ hạng (`test()` concat rồi chuẩn hoá sau). Lượt đo này
+  dùng 4; provenance ghi rõ `batch_size_source: operator override`.
+- **Còn thiếu để hoàn tất khoa học**: xác nhận trên GPU đích `sm_120` (RTX 5070 Ti). Lượt này chạy
+  profile **historical pins** trên `sm_86`; profile `adapted_runtime: sm_120` vẫn chưa được đo.
 
 ### 2. `encoder`
 - Upstream @ `29a2a31d6a56`. Local fix: `datasets1.py` + `import datasets as datasets1`.
@@ -436,6 +479,51 @@ python workbench/replay/limn.py --help     # LIMN dùng các cờ riêng của n
 > trường kế thừa package của base, và mô tả `WORKBENCH_DCNET_DATA_DIR` như một override còn hiệu
 > lực. Cả hai đã bị bỏ: Conda env vốn cô lập, và override đó không được evaluator native đọc nên
 > chỉ tạo ra một validator trả lời khác câu hỏi của consumer. Đừng cấu hình theo chúng.
+
+### 6b. LIMN — quy trình ĐÃ CHẠY THẬT trên PC này
+
+Dùng đúng chuỗi lệnh dưới đây; nó đã tạo ra số đo ở §3.1 và artifact per-query đã publish.
+
+```bash
+cd /path/to/cir
+FIQ="$PWD/data/fashionIQ_dataset"          # `FashionIQ` là symlink cùng thư mục
+CKPT="$PWD/workbench/artifacts/checkpoints/limn"
+
+# (1) Interpreter của LIMN: pin lịch sử torch 1.12.1 + open_clip 2.20.0, KHÔNG dùng venv workbench.
+uv venv --python 3.10 workbench/envs/limn-historical
+uv pip install --python workbench/envs/limn-historical/bin/python \
+  --index-url https://download.pytorch.org/whl/cu113 "torch==1.12.1+cu113" "torchvision==0.13.1+cu113"
+uv pip install --python workbench/envs/limn-historical/bin/python \
+  "open_clip_torch==2.20.0" "numpy<2" ftfy regex tqdm
+
+# (2) PHẢI chạy bước này một lần: wheel torch 1.12.1 khai GNU_STACK RWE, kernel/loader hiện đại
+#     từ chối và `import torch` chết với "cannot enable executable stack". Xoá cờ đó trên
+#     libtorch_cpu.so. Bản đã sửa nằm trong workbench/envs/limn-historical, nên bước này chỉ cần
+#     khi tạo lại môi trường từ đầu.
+workbench/envs/limn-historical/bin/patchelf --clear-execstack \
+  workbench/envs/limn-historical/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so
+
+export WORKBENCH_LIMN_PYTHON="$PWD/workbench/envs/limn-historical/bin/python"
+
+# (3) Preflight (không load model) rồi chạy that qua entrypoint có audit.
+"$WORKBENCH_LIMN_PYTHON" workbench/replay/limn.py --preflight-only \
+  --checkpoint-root "$CKPT" --dataset-root "$FIQ" --source-root "$PWD/workbench/third_party/LIMN"
+
+export WORKBENCH_LIMN_BATCH_SIZE=4                       # GPU 4 GiB; 32 là thiết lập paper
+export WORKBENCH_EVALUATOR_ENV_PASSTHROUGH=WORKBENCH_LIMN_BATCH_SIZE
+python -m workbench.scripts.evaluate_models --model limn \
+  --run-id "$(date -u +%Y%m%dT%H%M%SZ)_limn_base_iter0_all_categories_fashioniq_val_split"
+```
+
+- `--run-id` phải **mới**: orchestrator từ chối ghi đè artifact của một run id đã tồn tại.
+- `WORKBENCH_EVALUATOR_ENV_PASSTHROUGH` là cơ chế có sẵn để chuyển biến vận hành qua allowlist;
+  đừng nới `_EVALUATOR_ENV_ALLOWLIST` và **đừng** đưa `WORKBENCH_LEDGER_KEY` vào đó.
+- Sau khi chạy: rebuild index rồi xem UI.
+```bash
+python -c "import sys;sys.path.insert(0,'.');from workbench.backend.index import rebuild_index;print(rebuild_index())"
+```
+Trong UI: chọn protocol **FashionIQ - Val Split (Pair-Union Gallery, Reference Excluded)**,
+vào **Sample Explorer** — 6016 query sẽ hiện kèm Top-K.
 
 **Thứ tự chuẩn bị artifact:**
 
