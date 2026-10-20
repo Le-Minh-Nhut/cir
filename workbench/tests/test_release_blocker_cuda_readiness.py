@@ -8,8 +8,12 @@ the ordinary acceptance suite never runs it.
 """
 from __future__ import annotations
 
+import glob
 import json
+import shutil
+import subprocess
 import sys
+import sysconfig
 from dataclasses import replace
 from pathlib import Path
 
@@ -975,3 +979,59 @@ def test_gpu_capability_synthetic_record_not_served_when_seam_off(workspace, mon
     monkeypatch.setenv(runtime.GPU_PROBE_OVERRIDE_ENV, "1")
     assert runtime._cached_gpu_capability(model, report, authoritative=True) is not None
     assert runtime._cached_gpu_capability(model, report, authoritative=False) is not None
+
+def test_the_core_probe_loads_the_extension_with_its_own_interpreter():
+    """A CPython extension must be probed by the interpreter it was built for.
+
+    ``_exports_python_init`` ran its ``dlopen`` child under ``sys.executable`` (the orchestrator's
+    Python), so a valid ``_C.cpython-310-*.so`` resolved its symbols against a 3.13 ABI, failed
+    with ``undefined symbol: ...``, and was reported unloadable. The capability gate then refused
+    every model whose interpreter is not the orchestrator's own -- which is every model with an
+    environment -- and the failure surfaced as "CUDA unavailable", not as a version mismatch.
+
+    The assertion that matters is the SECOND one: with a foreign interpreter supplied, the answer
+    must be False. An implementation that ignored its ``interpreter`` argument and always used
+    ``sys.executable`` returns True there and fails this test -- which is exactly the regression.
+    """
+    import glob
+    import sysconfig
+
+    from workbench.backend import runtime
+
+    tag = f"{sys.version_info.major}{sys.version_info.minor}"
+    native = None
+    for directory in (sysconfig.get_config_var("DESTSHARED") or "",
+                      sysconfig.get_paths().get("stdlib", "") + "/lib-dynload"):
+        if not directory:
+            continue
+        found = sorted(glob.glob(f"{directory}/*.cpython-{tag}-*.so"))
+        if found:
+            native = Path(found[0])
+            break
+    assert native is not None, "no same-ABI extension to probe on this host"
+    symbol = "PyInit_" + native.name.split(".")[0]
+
+    # The owning interpreter loads it: the file really does export its init symbol.
+    assert runtime._exports_python_init(native, symbol, sys.executable) is True
+
+    # A different CPython minor version cannot resolve this ABI, and saying so is the whole point.
+    # Search for any other interpreter on the host; if the extension loads under it, the test would
+    # not be measuring ABI mismatch and is skipped rather than asserted vacuously.
+    foreign = None
+    for candidate in ("python3.10", "python3.9", "python3.11", "python3.12", "python3.14"):
+        found = shutil.which(candidate)
+        if found and Path(found).resolve() != Path(sys.executable).resolve():
+            foreign = found
+            break
+    if foreign is None:
+        pytest.skip("no second interpreter available to prove ABI mismatch")
+    version = subprocess.run([foreign, "-c", "import sys;print(f'{sys.version_info.major}{sys.version_info.minor}')"],
+                             capture_output=True, text=True).stdout.strip()
+    if version == tag:
+        pytest.skip(f"only same-ABI interpreter {foreign} available")
+    assert runtime._exports_python_init(native, symbol, foreign) is False, (
+        "a foreign interpreter must not be credited with loading this extension")
+
+    # Non-extensions and unusable interpreters are refused outright.
+    assert runtime._exports_python_init(Path("/bin/true"), "PyInit__C", sys.executable) is False
+    assert runtime._exports_python_init(native, symbol, Path("/nonexistent/python")) is False

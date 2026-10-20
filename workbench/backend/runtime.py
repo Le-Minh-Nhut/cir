@@ -2094,21 +2094,35 @@ print(json.dumps(out))
 """
 
 
-def _exports_python_init(path: Path, symbol: str = "PyInit__C") -> bool:
+def _exports_python_init(path: Path, symbol: str = "PyInit__C",
+                         interpreter: Path | str | None = None) -> bool:
     """True when *path* is a loadable extension exporting CPython's ``PyInit__C``.
 
-    The load happens in a child process running *this* interpreter, never in the orchestrator:
-    dlopen executes the library's initialisers, and the library belongs to an environment this
-    workbench does not trust. The child receives a filtered environment (no operator secrets).
+    The load happens in a child process, never in the orchestrator: dlopen executes the library's
+    initialisers, and the library belongs to an environment this workbench does not trust. The child
+    receives a filtered environment (no operator secrets).
+
+    The child MUST run the interpreter that owns the extension. A CPython extension is bound to the
+    ``pythonX.Y`` it was built for -- `_C.cpython-310-*.so` resolves
+    ``_PyThreadState_UncheckedGet`` against the 3.10 ABI -- so loading it under a different
+    interpreter fails with an undefined symbol and reports "not loadable" for a perfectly valid
+    torch. That made the capability gate unsatisfiable on every model whose interpreter is not the
+    orchestrator's own Python, which is every model with an environment. ``interpreter`` is the
+    verified interpreter from the environment report; when it is absent or unusable the answer is
+    False rather than a silent retry under a Python that cannot load the file, because that retry is
+    the bug this parameter exists to remove.
     """
     try:
         import subprocess
     except Exception:  # pragma: no cover - stdlib import cannot fail
         return False
+    runner = Path(interpreter) if interpreter else Path(sys.executable)
+    if not runner.is_file():
+        return False
     child_env = _probe_child_env()
     try:
         completed = subprocess.run(
-            [sys.executable, "-I", "-c", _CORE_PROBE_CODE, str(path), symbol],
+            [str(runner), "-I", "-c", _CORE_PROBE_CODE, str(path), symbol],
             capture_output=True, text=True, timeout=60, env=child_env, cwd="/")
     except (OSError, ValueError):
         return False
@@ -2201,7 +2215,7 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
             core_loadable = bool(
                 core_candidate.is_file()
                 and core_candidate.is_relative_to(environment_root.resolve())
-                and _exports_python_init(core_candidate, "PyInit__C"))
+                and _exports_python_init(core_candidate, "PyInit__C", interpreter))
         except (OSError, ValueError):
             core_loadable = False
         if not core_loadable:
