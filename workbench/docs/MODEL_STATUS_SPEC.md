@@ -494,7 +494,7 @@ uv venv --python 3.10 workbench/envs/limn-historical
 uv pip install --python workbench/envs/limn-historical/bin/python \
   --index-url https://download.pytorch.org/whl/cu113 "torch==1.12.1+cu113" "torchvision==0.13.1+cu113"
 uv pip install --python workbench/envs/limn-historical/bin/python \
-  "open_clip_torch==2.20.0" "numpy<2" ftfy regex tqdm
+  "open_clip_torch==2.20.0" "numpy==1.26.4" ftfy regex tqdm
 
 # (2) PHẢI chạy bước này một lần: wheel torch 1.12.1 khai GNU_STACK RWE, kernel/loader hiện đại
 #     từ chối và `import torch` chết với "cannot enable executable stack". Xoá cờ đó trên

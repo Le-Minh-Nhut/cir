@@ -9,8 +9,10 @@ hoặc mức fixture.
 
 ## Phán quyết
 
-**`PC_PILOT_HANDOFF_READY`** — đường pilot chạy được trên máy đích.
-**`GPU_SCIENTIFIC_VALIDATION_PENDING`** — toàn bộ phần khoa học còn chờ GPU.
+**`LIMN_MEASURED`** — LIMN đã chạy thật trên checkpoint tác giả, dữ liệu tác giả và GPU thật, và số đo
+khớp paper trong 0.3 điểm. Per-query đã publish và hiển thị được trên UI.
+**`SECOND_MODEL_PENDING`** — chưa có model thứ hai, nên phân tích cross-model chưa chạy được.
+**`TARGET_GPU_PENDING`** — lượt đo này trên `sm_86`; GPU đích `sm_120` chưa được đo.
 
 **Chỉ LIMN sẵn sàng cho lượt PC pilot đầu tiên.** 15 model còn lại **chưa** sẵn sàng, nhưng **không
 phải vì thiếu wrapper**: `workbench/backend/adapters/models.py:294` đăng ký 15 adapter và
@@ -25,9 +27,8 @@ Ma trận đầy đủ: `workbench/docs/MODEL_STATUS_SPEC.md` §2.
 **Trạng thái 16 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**
 [`workbench/docs/MODEL_STATUS_SPEC.md`](MODEL_STATUS_SPEC.md)
 
-**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `87978b0`** — mọi test, acceptance, mutation và release_verify mô
-tả trên trang này đã chạy trên đúng cây đó (1758 passed, 0 failed, 11 skipped; acceptance, mutation và release_verify đều
-chạy lại trên cùng commit). `119df5f` đã bị **thay thế**: lượt R9 sửa production (DCNet binding và
+**SHA ĐÃ KIỂM THỬ (nguồn sản xuất): `2a94d1e`** — mọi test, acceptance, mutation và release_verify mô
+tả trên trang này đã chạy trên đúng cây đó (xem §Kết quả test ở cuối trang cho số đo trên đúng cây đó). `119df5f` đã bị **thay thế**: lượt R9 sửa production (DCNet binding và
 thứ tự category, tập patch CSMCIR, tập input của constructor, processor BLIP-2), nên số test và kết
 quả gate ghi ở các bản trước không còn mô tả cây này.
 
@@ -59,7 +60,7 @@ git fetch origin research/cir-failure-workbench
 # Checkout tường minh. KHÔNG dùng `git reset --hard`: trên máy đã có việc đang làm, nó xoá sạch
 # không hỏi. Muốn đúng cây đã kiểm thử thì checkout đúng commit đó.
 # Nguồn đã kiểm thử (revision cố định; đây là cái đã chạy 1609 test):
-git checkout 87978b0
+git checkout 2a94d1e
 # Nhánh đang phát triển thêm tài liệu. Dùng nó nếu muốn bản mới nhất:
 #   git checkout research/cir-failure-workbench
 ```
@@ -309,3 +310,48 @@ ngược lại.
 | `checkpoint bundle incomplete` | thiếu member category; tên member được nêu trong thông báo |
 | `QUERY_EXPORT_PARITY_MISMATCH` | xếp hạng quan sát lệch native — **điều tra, không bỏ qua**; aggregate native vẫn đúng |
 | `AGGREGATE_PARSER_UNAVAILABLE` | model chưa có parser metric; cần output thật của evaluator |
+
+---
+
+## Kết quả R14 — đo thật trên PC này (21/10/2026)
+
+Lượt này **chạy thật**, không phải mô phỏng: checkpoint tác giả (đã verify size + sha256), dữ liệu
+FashionIQ đầy đủ, GPU RTX 3050 Laptop (`sm_86`, 4 GiB), interpreter Python 3.10 với pin lịch sử.
+
+| hạng mục | kết quả |
+|---|---|
+| checkpoint load | `model.LIMN`, 440.26 M tham số, `cuda:0` |
+| dress | R1 18.6911 · R10 50.7685 · R50 74.0208 |
+| shirt | R1 25.5152 · R10 55.5447 · R50 76.7910 |
+| toptee | R1 26.2111 · R10 60.5813 · R50 81.6930 |
+| **macro** | **R10 55.6315 · R50 77.5016 · mean 66.5665** |
+| paper | R10 55.91 · R50 77.82 · mean 66.87 |
+| lệch | R10 −0.28 · R50 −0.32 · mean −0.30 điểm |
+| per-query | 6016 query; `INSTRUMENTATION_PARITY_VERIFIED`; **0 mismatch** vs aggregate native |
+
+Chuỗi đầu-cuối đã chạy: aggregate → per-query export/observer → publish canonical → rebuild index →
+`/api/runs` → `/api/queries` → UI Sample Explorer (`1–20 of 6016`, ảnh thật render).
+
+**Ba lỗi hạ tầng đã sửa ở R14** (mỗi lỗi có regression, đã kiểm là fail khi revert):
+
+1. `pc.sh` truyền `-T` cho `docker exec` trực tiếp — CLI thật trả exit 125. Nhánh preparation (mọi
+   model trừ `limn`/`csmcir`) và verifier dùng chung không chạy được.
+2. `runtime._exports_python_init` chạy con `dlopen` bằng Python của orchestrator, nên extension
+   `_C.cpython-310-*.so` báo `undefined symbol` và bị coi là không load được ⇒ cổng GPU từ chối
+   **mọi** model có interpreter riêng, hiện ra như "CUDA unavailable".
+3. `pinned_revision` chạy `git rev-parse HEAD` trong checkout đã gỡ `.git` lồng ⇒ Git đi ngược lên
+   repo workbench, completion proof so commit của **workbench** với `upstream_commit_sha` của model
+   rồi từ chối ⇒ không model vendored nào tạo được proof hợp lệ.
+
+**Việc còn lại, theo thứ tự:**
+
+1. **Model thứ hai cho phân tích cross-model.** `encoder` và `hint` cùng khai protocol
+   `fashioniq_val_split`, nên so sánh được với LIMN. `encoder` là lựa chọn rẻ hơn: checkpoint
+   631 879 365 B **đã stage và verify** trên PC này (`workbench/artifacts/checkpoints/encoder/fashioniq.pt`,
+   sha256 `0f31c501…`), chỉ còn thiếu interpreter. Lưu ý cả hai **không** khai `per_query_observer`
+   trong registry, nên cần thêm integration per-query **nhỏ nhất** theo format `ResultRun` sẵn có
+   trước khi cross-model chạy được.
+2. **Đo trên GPU đích `sm_120`.** Lượt này dùng profile historical pins trên `sm_86`. Profile
+   `adapted_runtime: sm_120` (torch ≥2.7 + cu128) chưa được đo lần nào.
+3. **15 model còn lại**: xem `MODEL_STATUS_SPEC.md` §2 cho blocker và điều kiện chuyển trạng thái
+   của từng model.
