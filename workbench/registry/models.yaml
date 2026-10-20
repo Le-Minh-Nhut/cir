@@ -796,7 +796,16 @@ models:
       pytorch: '1.11.0'
       torchvision: '0.12.0'
       cuda: UNKNOWN
-      packages: [pandas==1.4.2, comet-ml==3.21.0, clip]
+      # The pinned README (`CLIP4Cir/README.md:118`) installs OpenAI CLIP from its Git source,
+      # and `src/validate.py:8,12` uses `import clip` and `from clip.model import CLIP` -- an API
+      # PyPI's same-named `clip==0.2.0` does not have. Declared as a direct reference so the
+      # installer fetches the source the evaluator was written against.
+      #
+      # The revision: the README pins none, so this is NOT an author-provided pin. It is the same
+      # revision the sibling LAVIS-family entries use (`a1d0717`), chosen so one environment can
+      # satisfy both families without two copies of the same distribution, and documented as an
+      # adaptation rather than as upstream intent.
+      packages: [pandas==1.4.2, comet-ml==3.21.0, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33]
     strict_clean_checkpoint_available: null
     notes: Native full-gallery reference-eligible evaluator verified. RN50x4 noft Combiner state mapping is unverified; base OpenAI CLIP RN50x4 remains an evaluation asset.
     checkpoint_variants:
@@ -861,7 +870,16 @@ models:
       pytorch: '1.11.0'
       torchvision: '0.12.0'
       cuda: UNKNOWN
-      packages: [pandas==1.4.2, comet-ml==3.21.0, clip]
+      # The pinned README (`CLIP4Cir/README.md:118`) installs OpenAI CLIP from its Git source,
+      # and `src/validate.py:8,12` uses `import clip` and `from clip.model import CLIP` -- an API
+      # PyPI's same-named `clip==0.2.0` does not have. Declared as a direct reference so the
+      # installer fetches the source the evaluator was written against.
+      #
+      # The revision: the README pins none, so this is NOT an author-provided pin. It is the same
+      # revision the sibling LAVIS-family entries use (`a1d0717`), chosen so one environment can
+      # satisfy both families without two copies of the same distribution, and documented as an
+      # adaptation rather than as upstream intent.
+      packages: [pandas==1.4.2, comet-ml==3.21.0, clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33]
     strict_clean_checkpoint_available: null
     notes: Native full-gallery reference-eligible evaluator verified. RN50x4 fullft needs separately loaded Combiner and fine-tuned CLIP states; author pairing is unverified.
     checkpoint_variants:

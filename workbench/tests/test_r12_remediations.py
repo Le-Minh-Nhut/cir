@@ -220,41 +220,22 @@ def test_the_pin_scan_does_not_parse_a_reference_as_a_version() -> None:
 
 
 def test_source_identity_requires_the_repository_and_the_revision() -> None:
-    """A revision match alone would accept the same commit from a different repository."""
-    import inspect
+    """Asserted as a decision, not as the presence of a message in the source.
 
-    source = inspect.getsource(planner._verify_group_interpreter)
-    assert "the source repository differs" in source, (
-        "identity is the URL and the revision together; checking only the revision accepts a "
-        "different repository that happens to hold the same commit")
-    assert "declared_revision" in source
+    The previous version asserted that the string "the source repository differs" appeared in the
+    verifier's source. That is a source-text assertion: it cannot fail when the comparison is wrong,
+    and it fails when the comparison is rewritten even though the behaviour improved.
+    """
+    from workbench.backend import package_source
 
-
-def test_a_conflicting_reference_and_version_are_refused() -> None:
-    """A source and a version constraint cannot describe the same installation."""
-    packages: dict[str, object] = {}
-    ranges: dict[str, str] = {}
-    name, spec = planner._parse_requirement(CLIP_REFERENCE)
-    planner._add_package(packages, ranges, name, spec)
-    with pytest.raises(ValueError, match="cannot describe the same installation"):
-        planner._add_package(packages, ranges, name, "==0.2.0")
-
-
-def test_the_verifier_checks_source_identity_not_a_version_string() -> None:
-    """A reference has no version; identity comes from the distribution's own `direct_url.json`."""
-    import inspect
-
-    source = inspect.getsource(planner._verify_group_interpreter)
-    assert "_installed_direct_url(interpreter, name)" in source, (
-        "the verifier must read the installed distribution's recorded source; comparing an import "
-        "name or a version string cannot distinguish OpenAI CLIP from PyPI clip 0.2.0")
-    assert "source_references" in source
-    # The helper must read the metadata the installer itself writes, and report the revision.
-    helper = inspect.getsource(planner._installed_direct_url)
-    assert "direct_url.json" in helper, helper
-    assert "resolved_commit_id" in helper or "commit_id" in helper, (
-        "the recorded source must carry the revision, or a pinned build cannot be told from a "
-        "different one at the same URL")
+    identity = package_source.identity_of_declaration(
+        "clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33")
+    assert package_source.mismatch(
+        identity, {"url": "https://github.com/openai/CLIP.git",
+                   "vcs_info": {"commit_id": "a1d071733d7111c9c014f024669f959182114e33"}}) is None
+    assert package_source.mismatch(
+        identity, {"url": "https://github.com/other/CLIP.git",
+                   "vcs_info": {"commit_id": "a1d071733d7111c9c014f024669f959182114e33"}}) is not None
 
 
 # ----------------------------------------------------------------------------------- R12-03

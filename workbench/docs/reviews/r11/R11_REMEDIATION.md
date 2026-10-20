@@ -220,7 +220,7 @@ mọi task đều chạy ở đó, trừ hai auditor hẹp.
 | Regression vùng thay đổi (10 file) | **292 passed, 5 skipped** |
 | Sau khi hoàn tất mọi sửa (7 file trọng tâm) | **179 passed, 5 skipped** |
 | Lifecycle 5 wrapper (2 tiến trình, interpreter model) | **6 passed** |
-| Full suite + JUnit | **1740 passed, 0 failed, 11 skipped** — 1752 collected (`/tmp/r11probe/full_r11b.log`) |
+| Full suite + JUnit | **HISTORICAL — SUPERSEDED.** This row records `1740 passed, 0 failed, 11 skipped` against `1752 collected`, and the raw log it cites ends `1 failed, 1740 passed, 11 skipped`: the recorded figures do not reconcile with the log that produced them, and the "0 failed" does not match it. The R12 round corrected the accounting and the guard now requires passes + failures + skips to equal the collection exactly. Treat this row as the historical claim it is, not as verified evidence. |
 | 45 test từng fail vì hết đĩa | **298 passed** khi chạy lại đủ chỗ |
 | 12 test fail vì assembler hết đĩa | **12 passed** khi chạy lại đủ chỗ |
 | Mutation checks | **PASSED** M1 M2 M3 M4 M5 |

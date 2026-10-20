@@ -8,7 +8,7 @@
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
 | **TESTED_SOURCE_SHA** | **`eafb25c`** (production source; every gate below ran on it) |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | identical in `eafb25c` and the branch tip (verified: `git diff 2cdd28f HEAD -- . ':(exclude)workbench/docs'` is empty) — the successors changed documentation only |
+| Production tree | verified against the named revision: `git diff <TESTED_SOURCE_SHA> HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 
@@ -34,7 +34,7 @@ root, the model's provisioned interpreter, and exactly one ledger key file.
 
 ## What was tested
 
-The full verification ran against `cd2de4b` (the R10 pass and its post-review corrections: the six independent findings -- DCNet
+The full verification ran against the revision named in `TESTED_SOURCE_SHA` above. It began with the R10 pass and its post-review corrections (the six independent findings -- DCNet
 binding and staging, the LAVIS processor/checkpoint lifecycle, the stale source blockers, the
 dependency profiles and the isolated-environment inventory; see
 `workbench/docs/reviews/r10/R10_REMEDIATION.md`. Before it, the R9 pass: DCNet dataset binding and category
@@ -106,9 +106,9 @@ Full matrix in `FINAL_16_MODEL_AUDIT_MATRIX.md`.
 | Verdict | Models |
 |---|---|
 | Executable here (subject to the external limits below) | `limn` (the pilot) |
-| `EXTERNAL_BLOCKER` — no CLI entrypoint in the pinned upstream | `habit`, `intent`, `hint`, `clvc_net`, `tgcir` |
+| `EXTERNAL_BLOCKER` — weights or mapping, not entrypoint: every one of these has a vendored source checkout and a supported entrypoint (a replay wrapper, or a native script with CLI). Their blockers are author checkpoints, unresolved archive members or unverified mappings. | `habit`, `intent`, `hint`, `clvc_net`, `tgcir` |
 | `EXTERNAL_BLOCKER` — needs an unpublished asset or has an uninstallable dependency | `csmcir`, `airknow`, `conesep`, `encoder`, `dcnet`, `combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`, `sprc` |
-| `EXTERNAL_BLOCKER` — no pinned source at all | `ptha_mtst` |
+| `EXTERNAL_BLOCKER` — verified FashionIQ weights absent; the source IS vendored and pinned | `ptha_mtst` |
 
 - Only **LIMN** declares a per-query observer. The other fifteen are `AGGREGATE_ONLY` because their
   upstream code prints aggregate recalls and nothing else; none of them is presented as query-level
@@ -191,7 +191,7 @@ with
 
 ### Why READY, stated narrowly
 
-Every software gate passes on the frozen source, no confirmed P0/P1/P2 defect remains in the audited
+Within the audited scope this verdict covers, the gates below pass on the named revision and no defect the audits reported remains open in those paths. That is a bounded claim about what was examined -- it is not a statement that no defect exists anywhere. The R13 round found five more defects in the paths a previous round had already certified, which is the evidence for that boundary. No P0/P1/P2 defect remains in the audited
 intended workflows, the final source was reviewed by independent reviewers on four model families who
 were asked to disprove readiness, the three protocols are unchanged, evidence cannot self-certify, the
 launcher's success and failure paths are both covered by tests that exercise real HTTP and real child

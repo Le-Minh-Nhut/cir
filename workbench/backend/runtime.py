@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from workbench.backend import package_source
 from workbench.backend.vendored_source import (
     PROVENANCE_FILENAME,
     source_clean_and_pinned as vendor_source_clean_and_pinned,
@@ -826,6 +827,71 @@ def _required_packages(model: dict[str, Any]) -> dict[str, str | None]:
         required.setdefault(req.name, declared_requirement(req.name, str(req.specifier) or None))
     return required
 
+
+def required_packages(model: dict[str, Any]) -> dict[str, str | None]:
+    """`_required_packages` plus the SOURCE each requirement must come from.
+
+    A direct reference (`name @ git+url@rev`) is not a version constraint, so it cannot be carried in
+    the version map -- and dropping it, which is what reading only `req.name` and `req.specifier` did,
+    means the requirement collapses to a presence check. An environment with PyPI `clip==0.2.0` then
+    satisfied a declaration for OpenAI CLIP and was reported `RUNTIME_READY`, after which reuse took
+    that interpreter for the model. `Requirement.url` is kept here so verification can compare source
+    identity the same way provisioning does.
+    """
+    return _required_packages(model)
+
+
+def environment_identity(interpreter: str | Path) -> str | None:
+    """A stable identity for the ENVIRONMENT an interpreter runs in, or None if it cannot be asked.
+
+    The interpreter's own `sys.prefix` is the answer: it is what distinguishes one virtual
+    environment from another, and two different environments routinely share a base executable (a
+    venv's `bin/python` is a symlink to it). Resolving the binary paths and comparing those therefore
+    compares the wrong thing -- it reports two isolated environments as one, and a caller that
+    refuses "the system Python" then refuses a legitimate venv.
+    """
+    probe = ("import sys\n"
+             "sys.stdout.write(getattr(sys, 'prefix', '') or '')\n")
+    try:
+        result = subprocess.run([str(interpreter), "-c", probe],
+                                capture_output=True, text=True, check=False, timeout=30)
+    except Exception:
+        return None
+    prefix = result.stdout.strip()
+    if result.returncode != 0 or not prefix:
+        return None
+    try:
+        return str(Path(prefix).resolve())
+    except OSError:
+        return prefix
+
+
+def _environment_interpreter(prefix: str) -> Path | None:
+    """The interpreter inside an environment prefix, or None when there is none.
+
+    A prefix is a directory; the metadata probe needs the executable that owns it, because
+    `importlib.metadata` answers for the interpreter that runs it.
+    """
+    root = Path(prefix)
+    for candidate in (root / "bin" / "python", root / "Scripts" / "python.exe",
+                      root / "bin" / "python3"):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def required_sources(model: dict[str, Any]) -> dict[str, Any]:
+    """`{distribution: SourceIdentity}` for the requirements that declare a source."""
+    env = model.get("environment") or {}
+    sources: dict[str, Any] = {}
+    for package in env.get("packages") or []:
+        if not isinstance(package, str):
+            continue
+        identity = package_source.identity_of_declaration(package)
+        if identity is not None and identity.requires_source:
+            sources[identity.name] = identity
+    return sources
+
 #: Operator-selected runtime adaptation. Set to the registry's `adapted_runtime`
 #: `target_compute_capability` (e.g. ``sm_120_blackwell``) to verify a model against its declared
 #: adapted package constraints instead of the historical pins. The value must match a declared
@@ -845,8 +911,6 @@ def runtime_adaptation(model: dict[str, Any], *, undeclared_is_error: bool = Tru
     requested = os.environ.get(ADAPTATION_ENV, "").strip()
     if not requested:
         return None
-    from workbench.backend.errors import WorkbenchError
-
     declared = (model.get("environment") or {}).get("adapted_runtime") or {}
     target = str(declared.get("target_compute_capability") or "").strip()
     if requested != target:
@@ -1464,6 +1528,32 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
                 report.tier = TIER_BLOCKED
                 report.status = "DEPENDENCY_VERSION_MISMATCH"
                 report.reason = f"{pkg}: expected {want}, found {got}"
+                _remember(model, require_cuda, report)
+                return report
+        # Source identity, for every requirement that declared one. This is the check the reuse path
+        # was missing: `_required_packages` carries only a name and a version, so a direct reference
+        # collapsed to a presence check and PyPI `clip==0.2.0` satisfied a declaration for OpenAI
+        # CLIP. A source declaration without a matching recorded source is therefore NOT verified --
+        # the environment has the wrong package, whatever its version.
+        # `report.prefix` is an environment PREFIX, not an executable: the metadata has to be read
+        # by that environment's own interpreter, or the probe runs against the orchestrator's
+        # installation and either finds nothing (a correct source reported as missing) or finds the
+        # orchestrator's own packages (a wrong source reported as correct).
+        source_interpreter = _environment_interpreter(report.prefix) if report.prefix else None
+        for pkg, identity in required_sources(model).items():
+            if source_interpreter is None:
+                report.tier = TIER_REQUIREMENTS_UNVERIFIED
+                report.status = "DEPENDENCY_SOURCE_UNVERIFIED"
+                report.reason = (f"{pkg} declares a source, but this environment has no interpreter "
+                                 "to read the installed metadata with")
+                _remember(model, require_cuda, report)
+                return report
+            recorded = package_source.recorded_source(source_interpreter, pkg)
+            problem = package_source.mismatch(identity, recorded)
+            if problem:
+                report.tier = TIER_BLOCKED
+                report.status = "DEPENDENCY_SOURCE_MISMATCH"
+                report.reason = problem
                 _remember(model, require_cuda, report)
                 return report
         report.tier = "DEPENDENCIES_VERIFIED"

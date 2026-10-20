@@ -24,7 +24,7 @@ from typing import Any, Callable
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
-from workbench.backend import runtime
+from workbench.backend import package_source, runtime
 from workbench.backend.errors import WorkbenchError
 
 WORKBENCH_ROOT = Path(__file__).resolve().parents[1]
@@ -496,11 +496,20 @@ def _add_package(packages: dict[str, str], ranges: dict[str, str], name: str, sp
     if _is_reference(spec):
         request = _reference_of(spec)
         previous = packages.get(name)
-        if previous is not None and previous != request:
-            if _is_reference(previous):
+        if previous is not None:
+            # Compared in ONE representation. `previous` may hold the stored `@ref:` form while
+            # `request` has already been decoded, so a direct text comparison made the SAME source
+            # declared twice (once in `packages`, once in `pip_packages`) look like two different
+            # ones and refused a legal model. The conflict is real only when the sources differ.
+            previous_request = _reference_of(previous) if _is_reference(previous) else None
+            if previous_request == request:
+                # Declaring the same source twice is idempotent, not a conflict.
+                packages[name] = f"{_REFERENCE_PREFIX}{request}"
+                return
+            if previous_request is not None:
                 raise ValueError(
                     f"{name} is required from two different sources in one environment: "
-                    f"{_reference_of(previous)!r} and {request!r}. Split the models into separate "
+                    f"{previous_request!r} and {request!r}. Split the models into separate "
                     "environments or align the declared source.")
             raise ValueError(
                 f"{name} is required both as {previous!r} and from {request!r} in one environment; "
@@ -1085,7 +1094,13 @@ def _group_status(group: dict, models: dict[str, dict], specs: dict[str, dict], 
             reports.append(None)
             group["unresolved"].append(f"{mid}: interrupted staging environment cannot be reused")
             continue
-        if Path(path).resolve() == Path(sys.executable).resolve():
+        if runtime.environment_identity(path) == runtime.environment_identity(sys.executable):
+            # Compared by ENVIRONMENT identity (the interpreter's own `sys.prefix`), not by resolved
+            # binary path. A venv whose `bin/python` is a symlink to the same base interpreter still
+            # reports its OWN prefix -- `sys.prefix` is derived from the executable's location, so the
+            # symlink is what makes it a venv -- while `Path(...).resolve()` on both sides collapses
+            # to the shared base binary and rejected a perfectly isolated environment as "system
+            # Python". Sharing an interpreter binary is not sharing an environment.
             reports.append(None)
             group["unresolved"].append(f"{mid}: system Python cannot be a model environment target")
             continue
@@ -1506,20 +1521,34 @@ def _verify_group_interpreter(
     details["pip_check"] = {"returncode": pip_res.returncode, "stdout": pip_res.stdout.strip(),
                             "stderr": pip_res.stderr.strip()}
     if pip_res.returncode != 0:
-        # `pip check` is a precondition, not a formality, so a failure blocks unless it is a KNOWN
-        # UPSTREAM PACKAGING DEFECT that has been measured. `decord==0.6.0` publishes
+        # A nonzero exit is a refusal by default. The previous version filtered stdout and continued
+        # when nothing remained, which made a HARNESS failure -- an interpreter with no pip at all,
+        # whose stderr says "No module named pip" -- report "All checks passed", because its stdout
+        # was empty. A gate that passes when the checker could not run is worse than no gate.
+        #
+        # An exception is allowed only when it is POSITIVELY identified: every reported line is a
+        # measured upstream packaging defect, at least one such line exists, and stderr carries no
+        # separate failure. `decord==0.6.0` publishes
         # `decord-0.6.0-py3-none-manylinux2010_x86_64.whl` whose own WHEEL metadata declares
         # `Tag: cp36-cp36m-manylinux2010_x86_64`, so on Python 3.8 the checker reports
         # "not supported on this platform" while `import decord` and `VideoReader` work. Editing the
         # installed wheel metadata is not acceptable, and dropping the check would hide real
-        # breakage, so the complaint is matched EXACTLY and only for the distribution and message
-        # that were measured; anything else still blocks.
-        remaining = [line for line in pip_res.stdout.strip().splitlines()
-                     if line.strip() and not _is_known_pip_check_defect(line.strip(), interpreter)]
-        if remaining:
-            return False, f"pip check failed: {' '.join(remaining)} {pip_res.stderr.strip()}", details
-        details["pip_check_known_defects"] = [line for line in pip_res.stdout.strip().splitlines()
-                                              if line.strip()]
+        # breakage, so that one message is matched exactly and nothing else is.
+        stdout_lines = [line.strip() for line in pip_res.stdout.strip().splitlines() if line.strip()]
+        stderr_text = pip_res.stderr.strip()
+        known = [line for line in stdout_lines if _is_known_pip_check_defect(line, interpreter)]
+        unknown = [line for line in stdout_lines if line not in known]
+        if not stdout_lines:
+            return False, (f"pip check failed with no diagnostics: returncode {pip_res.returncode}, "
+                           f"stdout empty, stderr {stderr_text or 'empty'}"), details
+        if unknown or stderr_text or not known:
+            return False, f"pip check failed: {' '.join(unknown or stdout_lines)} {stderr_text}", details
+        # Reported as a NAMED accepted exception with the raw result preserved, never as a clean
+        # `pip check` pass: `returncode` above still records the failure it actually was.
+        details["pip_check_known_defects"] = known
+        details["pip_check_accepted_exception"] = (
+            "the only reported problem is a measured upstream packaging defect; the raw pip check "
+            "returned nonzero and that is what pip_check.returncode records")
 
     prefix = str(Path(group["conda_env_path"]).resolve())
     try:
@@ -1540,27 +1569,23 @@ def _verify_group_interpreter(
             # is the check that refuses it. Matching the name, or a version string, is not identity.
             request = _reference_of(stored)
             details.setdefault("source_references", {})[name] = request
-            recorded = _installed_direct_url(interpreter, name)
-            if recorded is None:
+            # One shared rule, shared with the runtime verifier: parse the declaration structurally
+            # and compare it against the recorded metadata as STRUCTURE. The previous text surgery
+            # left the whitespace of a legal `name @ git+URL@rev` attached to the URL, so a correct
+            # install was refused; comparing .partition("@") fragments also cannot tell a repository
+            # difference from a revision difference.
+            identity = package_source.identity_of_declaration(request)
+            if identity is None:
+                # The declaration carries no usable source. Treating it as "nothing to check" would
+                # let a malformed reference pass as verified, so it is reported as unverifiable.
                 return False, (
-                    f"Package {name} was required from {request!r}, but the environment records no "
-                    "direct-URL source for it: the installed distribution did not come from the "
-                    "declared source"), details
+                    f"Package {name} was declared as {request!r}, which does not name a usable "
+                    "source; the installed distribution cannot be verified against it"), details
+            recorded = package_source.recorded_source(interpreter, name)
             details.setdefault("source_urls", {})[name] = recorded
-            # Identity is URL and revision together. A revision match alone would accept the same
-            # commit fetched from a DIFFERENT repository, and a declaration with no revision would
-            # accept any source at all.
-            declared_url, _, declared_revision = request.partition("@")[2].partition("@")
-            declared_url = declared_url.removeprefix("git+")
-            declared_revision = declared_revision.strip()
-            if declared_url and declared_url not in recorded:
-                return False, (
-                    f"Package {name} was required from {request!r}, but the environment recorded "
-                    f"{recorded!r}: the source repository differs"), details
-            if declared_revision and declared_revision not in recorded:
-                return False, (
-                    f"Package {name} was required from revision {declared_revision}, but the "
-                    f"environment recorded {recorded!r}"), details
+            problem = package_source.mismatch(identity, recorded)
+            if problem:
+                return False, problem, details
             continue
         terms = stored + constraints.get("ranges", {}).get(name, [])
         spec_str = ",".join(f"{op}{val}" for op, val in terms)
