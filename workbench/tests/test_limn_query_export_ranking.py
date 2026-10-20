@@ -431,3 +431,46 @@ def test_expected_model_input_matches_the_pinned_composition() -> None:
     assert expected_model_input(["a shirt", "is long"], {"shirt": "dress"}) == "a dress and is long"
     # Punctuation becomes whitespace, then tokens are rejoined with single spaces.
     assert expected_model_input(["a,b", "c-d"], {}) == "a b and c d"
+
+def test_the_encoder_observer_reuses_the_same_ranking_core() -> None:
+    """ENCODER and LIMN must rank identically given identical features.
+
+    Both pinned evaluators do `np.argsort(-sims[i, :])` after masking the reference with `-10e10`,
+    so the shared core must reproduce ENCODER's own arithmetic exactly. If the two ever diverge, a
+    LIMN-vs-ENCODER failure comparison would be comparing rankings produced two different ways.
+    """
+    import numpy as np
+
+    from workbench.replay import encoder_observer, limn_observer
+
+    # It is the SAME function object, not a second copy that could drift.
+    assert encoder_observer.rank_queries is limn_observer.rank_queries
+    assert encoder_observer.assert_alignment is limn_observer.assert_alignment
+    assert encoder_observer.cross_check_with_native is limn_observer.cross_check_with_native
+    rank_queries = limn_observer.rank_queries
+
+    rng = np.random.default_rng(11)
+    queries, gallery = 6, 15
+    qf = rng.normal(size=(queries, 8)).astype("float32")
+    gf = rng.normal(size=(gallery, 8)).astype("float32")
+    references = [0, 2, 4, 6, 8, 10]
+    targets = [1, 3, 5, 7, 9, 11]
+
+    # The native ENCODER sequence, written out the way `test.py::test` performs it.
+    normalized_q = qf.copy()
+    normalized_g = gf.copy()
+    for row in range(queries):
+        normalized_q[row] /= np.linalg.norm(normalized_q[row])
+    for row in range(gallery):
+        normalized_g[row] /= np.linalg.norm(normalized_g[row])
+    sims = normalized_q.dot(normalized_g.T)
+    for row, position in enumerate(references):
+        sims[row, position] = -10e10
+    native_order = [list(np.argsort(-sims[row, :])[:50]) for row in range(queries)]
+
+    ranks, top = rank_queries(qf, gf, references, targets, top_k=50)
+    shared_order = [[gallery_index for _rank, gallery_index, _score in row] for row in top]
+
+    assert shared_order == native_order
+    for row, position in enumerate(targets):
+        assert ranks[row] == native_order[row].index(position) + 1
