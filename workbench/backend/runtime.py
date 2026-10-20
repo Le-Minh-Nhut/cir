@@ -15,6 +15,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from workbench.backend import package_source
+from workbench.backend.errors import WorkbenchError
 from workbench.backend.vendored_source import (
     PROVENANCE_FILENAME,
     source_clean_and_pinned as vendor_source_clean_and_pinned,
