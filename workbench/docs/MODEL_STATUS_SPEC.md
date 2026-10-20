@@ -480,6 +480,24 @@ python workbench/replay/limn.py --help     # LIMN dùng các cờ riêng của n
 > lực. Cả hai đã bị bỏ: Conda env vốn cô lập, và override đó không được evaluator native đọc nên
 > chỉ tạo ra một validator trả lời khác câu hỏi của consumer. Đừng cấu hình theo chúng.
 
+### 6a. Bước 0 — dựng frontend (BẮT BUỘC trên clone mới)
+
+`workbench/frontend/dist/` **không** được commit (0 file tracked), nhưng cả bộ test launcher lẫn UI
+đều cần nó: `test_pc_launcher.py` đọc trực tiếp bundle đã build để xác nhận nhãn COMPLETE của bundle
+official, và launcher phục vụ UI từ `dist/`. Clone mới mà chưa build sẽ fail ở bước đó với
+
+    AssertionError: Built frontend bundle missing under workbench/frontend/dist/assets
+
+nên đây là việc đầu tiên phải làm:
+
+```bash
+cd workbench/frontend
+npm ci          # ~4s với cache, ~1 phút lần đầu
+npm run build   # sinh dist/assets/index-*.js + index-*.css
+```
+
+`vite build` chạy trong ~0.2s; dist là artifact dẫn xuất, đừng commit nó.
+
 ### 6b. LIMN — quy trình ĐÃ CHẠY THẬT trên PC này
 
 Dùng đúng chuỗi lệnh dưới đây; nó đã tạo ra số đo ở §3.1 và artifact per-query đã publish.
