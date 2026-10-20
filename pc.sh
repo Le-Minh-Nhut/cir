@@ -1093,7 +1093,7 @@ run_model_preparation() {
             sanitize_exec "${RUN_SH}" prepare "$MODEL"
             ;;
         *)
-            sanitize_exec docker exec -T cir-workbench python workbench/scripts/pipeline.py setup \
+            sanitize_exec docker exec cir-workbench python workbench/scripts/pipeline.py setup \
                 --model "${MODEL}" \
                 --dataset-root "$(env_value WORKBENCH_DATASET_ROOT /data/FashionIQ)" \
                 --sync-sources --download-checkpoints --apply \
@@ -1141,7 +1141,7 @@ run_verifier_in_container() {
         [[ -n "$declared" ]] && exec_env+=(-e "$declared")
     done < <(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' cir-workbench 2>/dev/null \
              | grep -E '^(XDG_CONFIG_HOME|WORKBENCH_[A-Z_]+|CIR_REPO_ROOT|CIR_DATA_ROOT|FASHIONIQ_ROOT)=' || true)
-    docker exec -T "${exec_env[@]}" cir-workbench python3 workbench/scripts/verify_run.py "$@"
+    docker exec "${exec_env[@]}" cir-workbench python3 workbench/scripts/verify_run.py "$@"
 }
 
 # Behaviour 7: Evaluation

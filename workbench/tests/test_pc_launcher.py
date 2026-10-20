@@ -1248,7 +1248,10 @@ def test_verification_attempted_inside_container_not_on_host(tmp_path: Path):
     for call in docker_verify_calls:
         args = call.get("args", [])
         assert args[0] == "exec", f"Expected exec call, got {args}"
-        assert "-T" in args, f"Expected -T flag in docker exec, got {args}"
+        # A direct `docker exec` has no `-T`: the real CLI exits 125 with
+        # `unknown shorthand flag: 'T'`, which blocked the verifier before it ever ran. `-T` belongs
+        # to `docker compose exec` only, and this call is not that.
+        assert "-T" not in args, f"the direct docker exec takes no -T flag (it exits 125), got {args}"
         assert "cir-workbench" in args, f"Expected cir-workbench container target, got {args}"
         assert any("verify_run.py" in a for a in args)
 

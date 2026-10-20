@@ -174,7 +174,49 @@ if len(sys.argv) > 1 and sys.argv[1] == "ps":
         print("CONTAINER ID   IMAGE           COMMAND                  CREATED        STATUS        PORTS     NAMES\n123456789abc   cir-workbench   \"python3 -m workbenc…\"   2 hours ago    Up 2 hours              cir-workbench")
     sys.exit(0)
 
+def _reject_unknown_exec_flags():
+    """Reject flags the real `docker exec` does not accept.
+
+    The earlier fixture ignored every flag, so `docker exec -T ...` -- which the real CLI refuses
+    with `unknown shorthand flag: 'T'` and exit 125 -- exited 0 here and the defect was invisible.
+    This mirrors the real parser narrowly: `exec` accepts the flags listed below and nothing else.
+    `-T` is the interesting case, because `docker compose exec` DOES accept it; a direct
+    `docker exec -T` is the mistake this guards.
+    """
+    takes_value = {"-e", "--env", "--env-file", "-u", "--user", "-w", "--workdir", "--detach-keys"}
+    boolean = {"-d", "--detach", "-i", "--interactive", "-t", "--tty", "--privileged"}
+    argv = sys.argv[2:]
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if not arg.startswith("-"):
+            # The container name ends the flag region.
+            return
+        if "=" in arg and arg.startswith("--"):
+            flag = arg.split("=", 1)[0]
+            if flag in takes_value:
+                index += 1
+                continue
+            sys.stderr.write(f"unknown flag: {flag}\n")
+            sys.exit(125)
+        if arg in takes_value:
+            index += 2
+            continue
+        if arg in boolean:
+            index += 1
+            continue
+        if arg.startswith("--"):
+            sys.stderr.write(f"unknown flag: {arg}\n")
+            sys.exit(125)
+        # A cluster of short flags, e.g. `-it`.
+        for char in arg[1:]:
+            if f"-{char}" not in boolean and f"-{char}" not in takes_value:
+                sys.stderr.write(f"unknown shorthand flag: '{char}' in {arg}\n")
+                sys.exit(125)
+        index += 1
+
 if len(sys.argv) > 1 and sys.argv[1] == "exec":
+    _reject_unknown_exec_flags()
     if "test -d" in args_str:
         sys.exit(0)
     if "probe_gpu_capability" in args_str or "nvidia_smi" in args_str or "torch" in args_str:
