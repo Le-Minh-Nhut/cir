@@ -204,7 +204,27 @@ def _benchmark_gate_verdict(plan, extraction, return_code: int) -> dict[str, Any
     return payload
 
 
-def pinned_revision(source: Path) -> str | None:
+def pinned_revision(source: Path, model: dict | None = None) -> str | None:
+    """The revision actually on disk for *source*, for either checkout layout.
+
+    A bare `git -C <source> rev-parse HEAD` is wrong for a vendored checkout. `third_party/<MODEL>`
+    is delivered with its nested `.git` removed and a `provenance.json` recording the upstream
+    commit, so Git walks UP to the enclosing workbench repository and answers with the WORKBENCH's
+    HEAD. The completion proof then compared the workbench's own commit against the model's
+    `upstream_commit_sha`, refused with
+
+        declared output source commit is '<workbench sha>', expected '<model sha>'
+
+    and no evaluation could ever produce a valid proof -- the two values are different projects and
+    can never agree. Passing `model` delegates to `runtime.source_provenance`, which already answers
+    this correctly for both layouts (recorded manifest for a vendored checkout, nested Git for one
+    that carries it) and which the replay path has always used. Without `model` the git answer is
+    still returned for callers that hold only a path.
+    """
+    if model is not None:
+        from workbench.backend.runtime import source_provenance as runtime_source_provenance
+
+        return runtime_source_provenance(model, source).get("actual_commit")
     try:
         return subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
     except (OSError, subprocess.CalledProcessError):
@@ -342,7 +362,7 @@ def _bundle_blocker_names(reason: str) -> str | None:
 
 def blockers(model: dict, checkpoint: dict, protocol: str, dataset_root: Path | None, config: WorkbenchConfig) -> tuple[Path, Path, str | None, list[str]]:
     source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"] if model.get("source_dir") else config.WORKBENCH_THIRD_PARTY_ROOT
-    actual_pin = pinned_revision(source) if source.is_dir() else None
+    actual_pin = pinned_revision(source, model) if source.is_dir() else None
     checkpoint_file = checkpoint_path(model["model_id"], checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
     reasons = runtime_plan_blockers(model, checkpoint, config, protocol, dataset_root)
     # A bundle-incomplete blocker is advisory for a *non-bundle* selection: it states that some

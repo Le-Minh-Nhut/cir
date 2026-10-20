@@ -132,7 +132,7 @@ def test_scenario_a_complete_synthetic_execution_and_extraction(synthetic_harnes
     """Scenario A: Complete synthetic eligible model runs real subprocess and extracts metrics."""
     h = synthetic_harness
     monkeypatch.setattr(evaluate_models, "resolve_config", lambda: h.config)
-    monkeypatch.setattr(evaluate_models, "pinned_revision", lambda _: h.csmcir_head)
+    monkeypatch.setattr(evaluate_models, "pinned_revision", lambda source, _model=None: h.csmcir_head)
     import workbench.backend.runtime as runtime
     monkeypatch.setattr(runtime, "source_clean_and_pinned", lambda model, _: (True, h.csmcir_head, None))
 

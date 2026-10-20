@@ -142,7 +142,7 @@ def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Pa
         checkpoint["expected_size_bytes"] = len(payload)
     checkpoint_file.write_bytes(payload)
     monkeypatch.setattr(module, "resolve_config", lambda: settings)
-    monkeypatch.setattr(module, "pinned_revision", lambda _: model["upstream_commit_sha"])
+    monkeypatch.setattr(module, "pinned_revision", lambda source, _model=None: model["upstream_commit_sha"])
     import workbench.backend.runtime as runtime
 
     monkeypatch.setattr(runtime, "source_clean_and_pinned", lambda model, _: (True, model["upstream_commit_sha"], None))
@@ -335,7 +335,7 @@ def test_missing_checkpoint_is_blocked(monkeypatch, tmp_path: Path) -> None:
     source = settings.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
     (source / "fashionIQ_dataset").mkdir(parents=True)
     monkeypatch.setattr(module, "resolve_config", lambda: settings)
-    monkeypatch.setattr(module, "pinned_revision", lambda _: model["upstream_commit_sha"])
+    monkeypatch.setattr(module, "pinned_revision", lambda source, _model=None: model["upstream_commit_sha"])
     import workbench.backend.runtime as runtime
 
     monkeypatch.setattr(runtime, "source_clean_and_pinned", lambda model, _: (True, model["upstream_commit_sha"], None))
@@ -738,7 +738,7 @@ def _limn_bundle_environment(monkeypatch, module, tmp_path: Path):
     monkeypatch.setattr(runtime, "source_clean_and_pinned",
                         lambda _model, _source: (True, model["upstream_commit_sha"], None))
     monkeypatch.setattr(module, "resolve_config", lambda: settings)
-    monkeypatch.setattr(module, "pinned_revision", lambda _: model["upstream_commit_sha"])
+    monkeypatch.setattr(module, "pinned_revision", lambda source, _model=None: model["upstream_commit_sha"])
     # The fold `POST /api/jobs` performs: the bundle record, keeping the bundle identity. The
     # bundle must stay ONE selection with `checkpoint_id == bundle_id`. Resolved through the
     # registry so this fixture builds exactly the record production builds -- a hand-rebuilt fold
@@ -1260,3 +1260,45 @@ def test_the_plan_and_the_observer_agree_before_the_weights_exist(tmp_path: Path
     for category in ("dress", "shirt", "toptee"):
         (absent / f"0_{category}_best_model.pt").write_bytes(b"w")
     assert checkpoint_member_root(absent) == absent == observer_root
+
+def test_a_vendored_checkout_reports_its_own_pin_not_the_workbench_commit(tmp_path, monkeypatch):
+    """The completion proof must name the MODEL's revision, not the workbench's.
+
+    `pinned_revision` ran a bare `git -C <source> rev-parse HEAD`. A vendored `third_party/<MODEL>`
+    is delivered with its nested `.git` removed, so Git walks up to the enclosing workbench
+    repository and answers with the WORKBENCH's HEAD. The completion proof then compared that
+    against the model's `upstream_commit_sha`, refused with
+
+        declared output source commit is '<workbench sha>', expected '<model sha>'
+
+    and no evaluation of any vendored model could produce a valid proof. The two values belong to
+    different repositories and can never agree. Passing the model delegates to the canonical
+    provenance answer, which reads the recorded manifest for this layout.
+    """
+    import json
+    from pathlib import Path
+
+    from workbench.scripts import evaluate_models
+
+    source = tmp_path / "third_party" / "LIMN"
+    source.mkdir(parents=True)
+    model_commit = "7d7bc9b116f594a65ac22457491edf28a88d3c3e"
+    (source / "provenance.json").write_text(json.dumps({
+        "model_ids": ["limn"], "upstream_commit": model_commit,
+        "file_manifest": {}, "local_fixes": [],
+    }))
+    model = {"model_id": "limn", "upstream_commit_sha": model_commit}
+
+    assert evaluate_models.pinned_revision(source, model) == model_commit
+    # Without the model there is no declaration to read, so the legacy path answer stands -- the
+    # parameter is what fixes this, and the difference is the defect.
+    assert evaluate_models.pinned_revision(source, model) != evaluate_models.pinned_revision(source)
+
+def test_a_vendored_checkout_with_no_recorded_pin_does_not_borrow_the_workbench_commit(tmp_path):
+    """A missing manifest must not silently fall back to the enclosing repository's HEAD."""
+    from workbench.scripts import evaluate_models
+
+    source = tmp_path / "third_party" / "NOPIN"
+    source.mkdir(parents=True)
+    model = {"model_id": "nopin", "upstream_commit_sha": "deadbeef" * 5}
+    assert evaluate_models.pinned_revision(source, model) is None
