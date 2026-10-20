@@ -32,16 +32,21 @@ from workbench.replay.limn_observer import ObservedCategory, cross_check_with_na
 # `limn_observer_io` for the interchange format.
 
 DEFAULT_TOP_K = 200
+# The batch size is the same operator knob the aggregate replay uses; importing the resolver
+# keeps the two forward passes on one setting, so the observer cannot observe a differently
+# batched run than the aggregate it is cross-checked against.
+from workbench.replay.limn import resolved_batch_size as _resolved_batch_size
 
 
 def observe_and_verify(category: str, checkpoint_root: Path, dataset_root: Path, source_root: Path,
-                       top_k: int = DEFAULT_TOP_K, batch_size: int = 32
+                       top_k: int = DEFAULT_TOP_K, batch_size: int | None = None
                        ) -> tuple[float | None, ObservedCategory, tuple[str, ...]]:
     """Run the native test AND the observer on the SAME loaded objects, then cross-check.
 
     Returns ``(native_r1, observed, mismatches)``. ``mismatches`` empty is the only state in which
     the caller may publish. The native aggregate is never modified to make them agree.
     """
+    batch_size = _resolved_batch_size() if batch_size is None else batch_size
     with native_category(category, checkpoint_root, dataset_root, source_root) as loaded:
         native_test, model, dataset = loaded["native_test"], loaded["model"], loaded["dataset"]
         metrics = dict(native_test.test(SimpleNamespace(local_rank=0, batch_size=batch_size),

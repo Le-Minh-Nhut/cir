@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.metadata
+import os
 import re
 import json
 import sys
@@ -20,6 +21,15 @@ from workbench.backend.registry import model_by_id
 from workbench.replay.common import ReplayResult, isolated_cache_root, load_trusted_whole_model, macro_aggregate, sha256_file, source_pin_status
 
 MODEL = model_by_id("limn")
+# The author's native `test()` reads `params.batch_size`; the pinned harness used a literal 32.
+# 32 is the paper setting, but LIMN's whole model is 440M parameters and this runs on a 4 GiB
+# laptop GPU, where 32 query images at once exhausted the card. Batch size changes only how many
+# images are stacked per forward pass: `test()` concatenates every batch's features and normalizes
+# them afterwards, so a smaller batch yields the same rankings with a lower peak allocation. The
+# knob is for fitting the declared protocol onto the available device; it does not alter what the
+# protocol computes, and 32 remains the default.
+LIMN_BATCH_SIZE_ENV = "WORKBENCH_LIMN_BATCH_SIZE"
+LIMN_BATCH_SIZE_DEFAULT = 32
 LIMN_CHECKPOINTS = {
     category: {
         "checkpoint_id": f"base_iter0_{category}",
@@ -195,6 +205,23 @@ def native_category(category: str, checkpoint_root: Path, dataset_root: Path, so
 
     return _open()
 
+def resolved_batch_size() -> int:
+    """The batch size for the native forward pass, from the operator override or the default.
+
+    Refuses anything that is not a positive integer rather than silently falling back to a
+    different protocol setting than the one the operator asked for.
+    """
+    raw = os.environ.get(LIMN_BATCH_SIZE_ENV, "").strip()
+    if not raw:
+        return LIMN_BATCH_SIZE_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"{LIMN_BATCH_SIZE_ENV} must be a positive integer, got {raw!r}") from None
+    if value < 1:
+        raise ValueError(f"{LIMN_BATCH_SIZE_ENV} must be a positive integer, got {raw!r}")
+    return value
+
 def replay_category(category: str, checkpoint_root: Path, dataset_root: Path,
                     source_root: Path) -> ReplayResult:
     """Load one verified category model and call pinned native test()."""
@@ -202,13 +229,18 @@ def replay_category(category: str, checkpoint_root: Path, dataset_root: Path,
         checkpoint = loaded["checkpoint"]
         native_test, model, dataset = loaded["native_test"], loaded["model"], loaded["dataset"]
         checkpoint_path = loaded["checkpoint_path"]
-        metrics = dict(native_test.test(SimpleNamespace(local_rank=0, batch_size=32), model, dataset, category))
+        metrics = dict(native_test.test(SimpleNamespace(local_rank=0,
+                                                        batch_size=resolved_batch_size()),
+                                        model, dataset, category))
     return ReplayResult(
         model_id="limn", checkpoint_id=checkpoint["checkpoint_id"], category=category,
         protocol="fashioniq_val_split", r1=metrics[f"{category}_r1"],
         r10=metrics[f"{category}_r10"], r50=metrics[f"{category}_r50"], complete=True,
         provenance={"checkpoint": str(checkpoint_path), "checkpoint_sha256": checkpoint["expected_sha256"],
-                    "source_commit": MODEL["upstream_commit_sha"]},
+                    "source_commit": MODEL["upstream_commit_sha"],
+                    "batch_size": resolved_batch_size(),
+                    "batch_size_source": ("operator override" if os.environ.get(LIMN_BATCH_SIZE_ENV, "").strip()
+                                          else "protocol default")},
     )
 
 

@@ -538,3 +538,32 @@ def test_the_publisher_refuses_a_parity_mismatch(monkeypatch, tmp_path, capsys):
     staged = _json.loads(capsys.readouterr().out)["payload"]
     with _pytest.raises(Exception):
         limn_publish.publish_payload(Path(staged), results_root)
+
+def test_limn_batch_size_defaults_to_the_protocol_setting(monkeypatch: pytest.MonkeyPatch):
+    """The native `test()` reads `params.batch_size`; 32 is the author's setting.
+
+    A batch size is how many images are stacked per forward pass, not what the protocol computes:
+    `test()` concatenates every batch's features and normalizes afterwards. The override exists so
+    the declared protocol can run on a GPU smaller than the one the paper used, and it must default
+    to 32 when the operator says nothing.
+    """
+    from workbench.replay import limn
+
+    monkeypatch.delenv(limn.LIMN_BATCH_SIZE_ENV, raising=False)
+    assert limn.LIMN_BATCH_SIZE_DEFAULT == 32
+    assert limn.resolved_batch_size() == 32
+
+    monkeypatch.setenv(limn.LIMN_BATCH_SIZE_ENV, "4")
+    assert limn.resolved_batch_size() == 4
+
+def test_limn_batch_size_refuses_a_value_that_is_not_a_positive_integer(monkeypatch: pytest.MonkeyPatch):
+    """A malformed override must refuse, not silently fall back to a different setting."""
+    from workbench.replay import limn
+
+    for bad in ("0", "-1", "abc", "4.5", " "):
+        monkeypatch.setenv(limn.LIMN_BATCH_SIZE_ENV, bad)
+        if not bad.strip():
+            assert limn.resolved_batch_size() == limn.LIMN_BATCH_SIZE_DEFAULT
+            continue
+        with pytest.raises(ValueError):
+            limn.resolved_batch_size()
