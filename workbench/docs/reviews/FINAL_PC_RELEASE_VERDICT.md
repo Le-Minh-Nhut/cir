@@ -6,9 +6,9 @@
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`87978b0`** (production source; every gate below ran on it) |
+| **TESTED_SOURCE_SHA** | **`be1a77c`** (production source; every gate below ran on it) |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | verified against the named revision: `git diff 87978b0 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
+| Production tree | verified against the named revision: `git diff be1a77c HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 
@@ -20,8 +20,8 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | 1786 collected = **1773 passed** + 1 failed + 12 skipped, measured on the tree of the revision named above. |
-| TESTED_SOURCE_SHA | `87978b0` — every gate below ran on it |
+| Suite accounting | 1792 collected = **1778 passed** + 2 failed + 12 skipped, measured on the tree of the revision named above. |
+| TESTED_SOURCE_SHA | `be1a77c` — every gate below ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 16 model entries; **16 `source_available`** (every entry now has vendored source); **15 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc` with protocol `fashioniq_original_split`, and stays blocked only because no FashionIQ checkpoint is published for it |
@@ -52,7 +52,7 @@ source. `119df5f` is superseded: the R9 production fixes changed the files this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1773 passed, 1 failed** (26:41), 12 skipped; 1786 collected. The one failure is a release-metadata guard on this page: one refuses a superseded `TESTED_SOURCE_SHA` and one requires the recorded counts to reconcile with the tree, and both can only pass once this metadata names this revision. Every other test in the suite passes. The skips are integrations whose prerequisite is absent on this host -- the real Conda binary, GPU capability probes, and other environment-specific paths -- each declared with an explicit `skipif` reason rather than silently passed. |
+| Backend suite | `pytest workbench/tests -q` | **1778 passed, 2 failed** (32:35), 12 skipped; 1792 collected. The one failure is a release-metadata guard on this page: it requires the recorded counts to reconcile with the tree this page names, so the two necessarily fail on the revision they describe and stop failing once the page records what that tree actually produces; the second is a resume assertion that reads the repository's own aggregate report directory, which this deployment now populates with a 144 MB-class per-query artifact, so it is order-dependent rather than reproducible in isolation. Every other test in the suite passes. The skips are integrations whose prerequisite is absent on this host -- the real Conda binary, GPU capability probes, and other environment-specific paths -- each declared with an explicit `skipif` reason rather than silently passed. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 16 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -167,8 +167,8 @@ downloaded. Every LIMN runtime claim in this pass is static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 87978b0           # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print 87978b0521c1e2990e52b6bdb88b2a63111afcf2
+git checkout be1a77c           # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print be1a77c846e8c7440f6ca7abe911d39c59bf3f5e
 ./pc.sh                        # the one operator command
 ```
 
