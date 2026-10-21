@@ -111,7 +111,7 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "WORKBENCH_CHECKPOINT_ROOT": repo / "checkpoints",
         "FASHIONIQ_ROOT": repo / "FashionIQ"})())
     system = __import__("workbench.backend.runtime", fromlist=["runtime"])
-    monkeypatch.setattr(system, "require_launch_ready", lambda model: "/usr/bin/python3")
+    monkeypatch.setattr(system, "require_launch_ready", lambda model, **kwargs: "/usr/bin/python3")
     monkeypatch.setattr(module, "sha256_file", lambda path, **k: "0" * 64)
     # Aggregate reports are served only when the evidence ledger corroborates them; the API
     # fixture stands in for a healthy ledger: one entry per report on disk, carrying the

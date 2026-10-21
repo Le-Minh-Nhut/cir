@@ -123,7 +123,7 @@ def chain(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from workbench.backend import runtime as runtime_module
 
     def _ready_environment(model, *, probe=True, require_cuda=False, authoritative=None,
-                           advisory=False):
+                           advisory=False, config=None):
         report = runtime_module.EnvironmentReport(
             model.get("model_id"), (model.get("environment") or {}).get("python_env_var"),
             os.environ.get("WORKBENCH_LIMN_PYTHON"), "INTERPRETER_PRESENT", "PRESENT")

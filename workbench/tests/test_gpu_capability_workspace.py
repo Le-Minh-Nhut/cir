@@ -12,6 +12,7 @@ need no GPU and no checkpoint.
 """
 from __future__ import annotations
 
+import os
 import venv
 from dataclasses import replace
 from pathlib import Path
@@ -123,6 +124,59 @@ def test_the_reuse_check_reads_the_root_the_record_was_written_to(tmp_path, gpu_
     assert calls == 1, (
         "the reuse check re-probed the GPU: it read the capability back from the process default "
         f"instead of {config.WORKBENCH_ARTIFACTS_ROOT}")
+
+
+def test_the_launch_gate_reads_the_root_the_record_was_written_to(tmp_path, gpu_model):
+    """The gate that actually decides a launch, not just `verify_gpu_runtime`'s own reuse check.
+
+    `require_launch_ready` is what `POST /api/jobs`, the job queue's launch guard and the evaluator
+    call, and it reaches the capability through `verify_environment`. That path dropped the
+    configuration, so a record written into the caller's workspace was missed and the launch was
+    refused as unverified -- the reviewer's P1, reproduced here without `--verify-gpu`.
+    """
+    config = _workspace(tmp_path, "gate")
+    runtime.verify_gpu_runtime(gpu_model, config, authorized=True, require_cuda=True)
+    key = runtime._gpu_capability_key(gpu_model)
+    assert runtime.gpu_capability_path(config, key).is_file()
+
+    # A fresh process holds no in-memory verification: only the disk record can answer.
+    runtime.forget_gpu_capability()
+    runtime.forget_environment()
+    interpreter = runtime.require_launch_ready(gpu_model, config=config)
+    assert interpreter == os.environ[gpu_model["environment"]["python_env_var"]]
+
+
+def test_the_launch_gate_refuses_when_the_workspace_holds_no_record(tmp_path, gpu_model):
+    """The control: with the record absent from THIS workspace the gate must still refuse.
+
+    Without this, a gate that simply stopped checking would pass the test above.
+    """
+    mine = _workspace(tmp_path, "empty")
+    theirs = _workspace(tmp_path, "recorded")
+    runtime.verify_gpu_runtime(gpu_model, theirs, authorized=True, require_cuda=True)
+    runtime.forget_gpu_capability()
+    runtime.forget_environment()
+
+    with pytest.raises(runtime.GpuVerificationError):
+        runtime.require_launch_ready(gpu_model, config=mine)
+    # The positive control: the workspace that holds the record is authorized.
+    assert runtime.require_launch_ready(gpu_model, config=theirs)
+
+
+def test_the_environment_memo_is_scoped_by_workspace(tmp_path, gpu_model, monkeypatch):
+    """A verification performed for one workspace must not answer for another.
+
+    The memo key carried the host but not the artifacts root, so whichever workspace was verified
+    first in a process handed its GPU capability to a launch in a different one.
+    """
+    recorded = _workspace(tmp_path, "memo-recorded")
+    empty = _workspace(tmp_path, "memo-empty")
+    runtime.verify_gpu_runtime(gpu_model, recorded, authorized=True, require_cuda=True)
+
+    # No `forget_environment()`: the memo is exactly what is under test.
+    with pytest.raises(runtime.GpuVerificationError):
+        runtime.require_launch_ready(gpu_model, config=empty)
+    assert runtime.require_launch_ready(gpu_model, config=recorded)
 
 
 def test_a_record_from_another_workspace_is_not_reused(tmp_path, gpu_model):

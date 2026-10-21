@@ -484,16 +484,27 @@ three members are already staged and hash-verified in `$CKPT/limn`.
 
 The evaluator needs free space on the volume holding `WORKBENCH_ARTIFACTS_ROOT`: it creates a
 run-scoped private `tmp` directory under the run's log directory and points the child's `TMPDIR` at
-it, and the pinned LIMN `datasets.FashionIQ` constructor materializes every query it scores as raw
-pixel arrays into that directory (~400 MB per category, so ~1.2 GB for all three) before inference
-starts. The directory is removed with the run, so this is transient, but a host without room for it
-fails inside the native constructor with `OSError: [Errno 28] No space left on device` at
-`LIMN/datasets.py:60` -- which reads like a dataset problem and is a disk problem. Check
-`df -h "$WORKBENCH_ARTIFACTS_ROOT"` before launching, and point `WORKBENCH_ARTIFACTS_ROOT` at a
-volume with room if the checkout's disk is nearly full.
+it, and the pinned LIMN `datasets.FashionIQ` constructor materializes every query it scores as
+transformed image data -- `get_test_img()` applies the supplied `open_clip.image_transform`, so this
+is preprocessed tensors, not raw pixels -- and pickles it into that directory before inference
+starts. Measured on this host: **756.7 MB for dress alone**, and the peak run-scoped usage observed
+was **1692 MB**; the free space fell to 381 MB and the constructor died with
+`OSError: [Errno 28] No space left on device` at `LIMN/datasets.py:60`, which reads like a dataset
+problem and is a disk problem.
 
-`FASHIONIQ_ROOT` defaults to `data/FashionIQ`, absent in some clones; explicit `--dataset-root "$FIQ"`
-binds preflight, GPU check, and evaluation to the declared dataset. Bundle downloader receives
+The directory survives a *successful* run -- it is removed only on the launch/error cleanup paths
+(`evaluate_models.py:649,674`) -- so each run leaves its own cache behind under
+`workbench/artifacts/logs/<run>/tmp` and a host accumulates them. Check
+`df -h "$WORKBENCH_ARTIFACTS_ROOT"` before launching, point `WORKBENCH_ARTIFACTS_ROOT` at a volume
+with room when the checkout's disk is nearly full, and clear stale `logs/*/tmp` between runs: on a
+host with ~2 GB free, running the evaluator while anything else writes to the same filesystem fails
+inside the native constructor.
+
+`FASHIONIQ_ROOT` defaults to `data/FashionIQ`, absent in some clones; an explicit
+`--dataset-root "$FIQ"` binds LIMN preflight and evaluation to the declared dataset, while
+`--verify-gpu-only` returns before any plan is built (`evaluate_models.py:2391-2394`) and therefore
+consumes no dataset root at all -- it only probes and records GPU/runtime capability.
+Bundle downloader receives
 `$CKPT`; registry `checkpoint_path()` puts bundle members in `$CKPT/limn/`, same as replay's root.
 Results and DuckDB roots are exported explicitly. The backend uses `workbench/backend/requirements.txt`
 (including DuckDB); keep model packages isolated.
@@ -509,7 +520,7 @@ Results and DuckDB roots are exported explicitly. The backend uses `workbench/ba
 | Check dataset layout | Yes | Yes | `images/`, `image_splits/`, `captions/` all present under `data/fashionIQ_dataset` |
 | Download LIMN checkpoint bundle | Yes | Not run | All three members already staged and hash-verified in `$CKPT/limn`; re-downloading would move 5 GiB |
 | LIMN `--preflight-only` | Yes | Yes | Ran with the historical interpreter over the real bundle and dataset: `[READY] LIMN preflight passed` |
-| `evaluate_models --verify-gpu-only` | Yes | Yes | Ran on the real RTX 3050: `capability_verified: true`, compute capability 8.6, record written to `artifacts/gpu_capabilities/` |
+| `evaluate_models --verify-gpu-only` | Yes | Yes | Ran on the real RTX 3050: `capability_verified: true`, compute capability 8.6, record written to `artifacts/gpu_capabilities/` (it takes no `--dataset-root`, so the `FIQ` prefix is inert on this row) |
 | Full `evaluate_models` invocation | Yes | Yes | Executed on the real GPU with the three author checkpoints; see the run record for the artifact paths |
 | `verify_run.py`, `rebuild_index.py` | Yes | Yes | Ran against the completed run; index rebuilt from the configured results root |
 | `serve_workbench.py` | Yes | Not run | The already-running deployment was reused rather than restarting containers mid-session |

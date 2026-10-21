@@ -2435,7 +2435,7 @@ def main(argv: list[str] | None = None) -> int:
         # the queue validates readiness and then does not pass the flag. The launch gate below
         # is the single authority: no valid capability, no launch.
         try:
-            runtime.require_launch_ready(model)
+            runtime.require_launch_ready(model, config=config)
         except (runtime.GpuVerificationError, RuntimeError) as error:
             suffix = ("; run `--verify-gpu-only` on the GPU host to record a capability"
                       if gpu_required else "")

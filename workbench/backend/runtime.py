@@ -1075,6 +1075,19 @@ def gpu_capability_path(config: Any, capability_key: str | None = None) -> Path:
 _GPU_CAPABILITY: dict[str, dict[str, Any]] = {}
 
 
+def _gpu_memo_key(key: str, config: Any | None) -> str:
+    """The in-memory capability memo key, scoped by the workspace the record belongs to.
+
+    ``key`` is a claim about the *environment and host*; it deliberately contains no artifacts root,
+    because the same host can be verified under several workspaces. The memo, however, caches a
+    payload that was READ from (and signed under) one root, so keying it by the root-independent
+    claim alone let a verification performed for workspace A authorize a launch in workspace B
+    without touching disk. The disk lookup is root-scoped; the memo must be too.
+    """
+    artifacts = getattr(config, "WORKBENCH_ARTIFACTS_ROOT", None) if config is not None else None
+    return f"{key}|root={artifacts if artifacts is not None else ''}"
+
+
 def forget_gpu_capability() -> None:
     _GPU_CAPABILITY.clear()
 
@@ -1104,7 +1117,7 @@ def record_gpu_capability(model: dict[str, Any], result: dict[str, Any],
     signature = _gpu_capability_signature(payload, config)
     if signature:
         payload["signature"] = signature
-    _GPU_CAPABILITY[key] = payload
+    _GPU_CAPABILITY[_gpu_memo_key(key, config)] = payload
     if config is not None:
         try:
             path = gpu_capability_path(config, key)
@@ -1335,8 +1348,13 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
     expected_fingerprint = _record_environment_fingerprint(model, configured)
 
     if not authoritative:
-        for cached_payload in list(_GPU_CAPABILITY.values()):
-            if not isinstance(cached_payload, dict):
+        # Only entries read from THIS workspace's root. The payloads below are otherwise identical
+        # across workspaces -- a capability is a claim about the host -- but the memo entry was
+        # populated from one root and may be unsigned for another, so the scan must not reach into
+        # a different workspace's cached answer.
+        scope = _gpu_memo_key("", config_for_records)
+        for memo_key, cached_payload in list(_GPU_CAPABILITY.items()):
+            if not isinstance(cached_payload, dict) or not memo_key.endswith(scope):
                 continue
             probe_source = cached_payload.get("probe_source", "interpreter")
             if not (probe_source == "interpreter" or (synthetic_ok and probe_source == "override")):
@@ -1367,18 +1385,19 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
                         and (not expected_fingerprint or payload.get("interpreter_fingerprint") == expected_fingerprint)
                         and _gpu_capability_signature_valid(payload, config_for_records)):
                     if payload.get("capability_key"):
-                        _GPU_CAPABILITY[payload["capability_key"]] = payload
+                        _GPU_CAPABILITY[_gpu_memo_key(payload["capability_key"], config_for_records)] = payload
                     return payload
         return None
 
     key = _gpu_capability_key(model, authoritative=True)
-    cached = _GPU_CAPABILITY.get(key)
+    memo = _gpu_memo_key(key, config_for_records)
+    cached = _GPU_CAPABILITY.get(memo)
     if cached is not None:
         probe_source = cached.get("probe_source", "interpreter") if isinstance(cached, dict) else "interpreter"
         if not (probe_source == "interpreter" or (synthetic_ok and probe_source == "override")):
             cached = None
         elif not _gpu_capability_signature_valid(cached, config_for_records):
-            _GPU_CAPABILITY.pop(key, None)
+            _GPU_CAPABILITY.pop(memo, None)
             cached = None
     if cached is None:
         payload = None
@@ -1396,7 +1415,7 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
                 and (probe_source == "interpreter" or (synthetic_ok and probe_source == "override"))):
             if _gpu_capability_signature_valid(payload, config_for_records):
                 cached = payload
-                _GPU_CAPABILITY[key] = payload
+                _GPU_CAPABILITY[memo] = payload
     if cached is None:
         return None
     # The record must belong to THIS environment's interpreter. The comparison uses the
@@ -1411,8 +1430,17 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
     return cached
 
 def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cuda: bool = False,
-                       authoritative: bool | None = None, advisory: bool = False) -> EnvironmentReport:
-    """Return a truthful environment report. Never claims RUNTIME_READY without proof."""
+                       authoritative: bool | None = None, advisory: bool = False,
+                       config: Any | None = None) -> EnvironmentReport:
+    """Return a truthful environment report. Never claims RUNTIME_READY without proof.
+
+    ``config`` scopes where a recorded GPU capability is READ from, so the gate that decides a
+    launch looks in the same workspace the record was WRITTEN to. Callers that hold a resolved
+    configuration must pass it: without it this reads the process default, which for an operator
+    whose artifacts root is elsewhere is a different tree -- so a valid record is written and then
+    missed, and the launch is refused as unverified. Optional because several advisory callers hold
+    no configuration; leaving it out resolves the process default, which is what they mean.
+    """
     model_id = model.get("model_id", "<unnamed>")
     env = model.get("environment") or {}
     variable = env.get("python_env_var")
@@ -1434,7 +1462,8 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
 
     is_authoritative = False if advisory else (True if authoritative is None else authoritative)
     if probe:
-        cached = _reuse(model, require_cuda, str(interpreter), authoritative=is_authoritative)
+        cached = _reuse(model, require_cuda, str(interpreter), authoritative=is_authoritative,
+                        config=config)
         if cached is not None:
             return cached
 
@@ -1511,14 +1540,14 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
                     report.reason = (f"{pkg} was installed by a package manager but the module "
                                      f"it provides cannot be derived from its metadata; declare "
                                      f"that module in required_imports to verify it")
-                    _remember(model, require_cuda, report)
+                    _remember(model, require_cuda, report, config)
                     return report
             if key not in report.packages:
                 report.tier = TIER_BLOCKED
                 report.status = "DEPENDENCY_MISSING"
                 report.reason = (f"missing package: {pkg} (no importable installation found "
                                  f"in the environment)")
-                _remember(model, require_cuda, report)
+                _remember(model, require_cuda, report, config)
                 return report
             got = report.packages[key]
             if want is None:
@@ -1529,13 +1558,13 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
                 report.tier = TIER_REQUIREMENTS_UNVERIFIED
                 report.status = "VERSION_CONSTRAINT_UNVERIFIED"
                 report.reason = f"{pkg}: unusable version constraint {want!r} (installed {got})"
-                _remember(model, require_cuda, report)
+                _remember(model, require_cuda, report, config)
                 return report
             if not matched:
                 report.tier = TIER_BLOCKED
                 report.status = "DEPENDENCY_VERSION_MISMATCH"
                 report.reason = f"{pkg}: expected {want}, found {got}"
-                _remember(model, require_cuda, report)
+                _remember(model, require_cuda, report, config)
                 return report
         # Source identity, for every requirement that declared one. This is the check the reuse path
         # was missing: `_required_packages` carries only a name and a version, so a direct reference
@@ -1553,7 +1582,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
                 report.status = "DEPENDENCY_SOURCE_UNVERIFIED"
                 report.reason = (f"{pkg} declares a source, but this environment has no interpreter "
                                  "to read the installed metadata with")
-                _remember(model, require_cuda, report)
+                _remember(model, require_cuda, report, config)
                 return report
             recorded = package_source.recorded_source(source_interpreter, pkg)
             problem = package_source.mismatch(identity, recorded)
@@ -1561,7 +1590,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
                 report.tier = TIER_BLOCKED
                 report.status = "DEPENDENCY_SOURCE_MISMATCH"
                 report.reason = problem
-                _remember(model, require_cuda, report)
+                _remember(model, require_cuda, report, config)
                 return report
         report.tier = "DEPENDENCIES_VERIFIED"
         report.status = "DEPENDENCIES_OK"
@@ -1582,7 +1611,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
             report.tier = TIER_BLOCKED
             report.status = "MODEL_IMPORT_FAILED"
             report.reason = f"import unavailable: {', '.join(missing)}"
-            _remember(model, require_cuda, report)
+            _remember(model, require_cuda, report, config)
             return report
         report.tier = "MODEL_IMPORT_VERIFIED"
         report.status = "IMPORTS_OK"
@@ -1593,7 +1622,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         report.tier = TIER_REQUIREMENTS_UNVERIFIED
         report.status = "REQUIREMENTS_UNVERIFIED"
         report.reason = "no dependency probe was executed for this contract"
-        _remember(model, require_cuda, report)
+        _remember(model, require_cuda, report, config)
         return report
 
     # Read-only inspection never probes CUDA: the answer can only come from running the
@@ -1604,27 +1633,28 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         # Interpreter, Python version, and dependencies are verified; GPU capability is a
         # separate question that inspection must never answer. The model is pending, and
         # verify_gpu_runtime() is the authorized path that resolves it on the GPU host.
-        cached_gpu = _cached_gpu_capability(model, report, authoritative=is_authoritative)
+        cached_gpu = _cached_gpu_capability(model, report, authoritative=is_authoritative,
+                                            config=config)
         if cached_gpu is not None and cached_gpu.get("capability_verified"):
             report.gpu_capability = cached_gpu
             report.cuda_available = bool(cached_gpu.get("cuda_available"))
             report.cuda_version = cached_gpu.get("torch_cuda_version")
             report.tier = TIER_GPU_READY
             report.status = TIER_GPU_READY
-            _remember(model, require_cuda, report)
+            _remember(model, require_cuda, report, config)
             return report
         report.tier = TIER_GPU_PENDING
         report.status = TIER_GPU_PENDING
         report.reason = ("CUDA capability must be verified on the GPU host with "
                          "verify_gpu_runtime() before this model can be launched")
-        _remember(model, require_cuda, report)
+        _remember(model, require_cuda, report, config)
         return report
 
     if not report.dependency_probe_executed and not imports:
         report.tier = TIER_REQUIREMENTS_UNVERIFIED
         report.status = "REQUIREMENTS_UNVERIFIED"
         report.reason = "no dependency probe was executed for this contract"
-        _remember(model, require_cuda, report)
+        _remember(model, require_cuda, report, config)
         return report
 
     if not required and not imports:
@@ -1632,14 +1662,14 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
         report.tier = TIER_REQUIREMENTS_UNVERIFIED
         report.status = "REQUIREMENTS_UNVERIFIED"
         report.reason = "no source-backed dependency contract declared"
-        _remember(model, require_cuda, report)
+        _remember(model, require_cuda, report, config)
         return report
 
 
 
     report.tier = "RUNTIME_READY"
     report.status = "RUNTIME_READY"
-    _remember(model, require_cuda, report)
+    _remember(model, require_cuda, report, config)
     return report
 
 
@@ -1814,7 +1844,8 @@ def _interpreter_fingerprint(interpreter: str, contract_digest: str,
 _VERIFIED_ENVIRONMENTS: dict[str, EnvironmentReport] = {}
 
 
-def _cache_key(model: dict[str, Any], require_cuda: bool) -> str:
+def _cache_key(model: dict[str, Any], require_cuda: bool,
+               config: Any | None = None) -> str:
     """Everything a cached verification's claim depends on.
 
     The host identity is part of it because a *GPU capability* is a claim about this machine,
@@ -1824,13 +1855,23 @@ def _cache_key(model: dict[str, Any], require_cuda: bool) -> str:
     `expires_on` names exactly those conditions (``runtime.py`` `record_gpu_capability`), so
     omitting them from the key made the record's honest expiry advisory while the cache stayed
     authoritative.
+
+    The artifacts root is part of it for the same reason as the host: a report carries the GPU
+    capability it found, and that record lives in a workspace. Keyed without the root, a
+    verification performed for one workspace handed its capability to a launch in another one --
+    the disk lookup is root-scoped, but the memo was not, so the answer depended on which workspace
+    happened to be verified first in this process.
     """
     env = model.get("environment") or {}
     configured = os.environ.get(env.get("python_env_var") or "", "")
     host = hashlib.sha256(
         json.dumps(_host_identity(), sort_keys=True).encode("utf-8")).hexdigest()
+    root = ""
+    if config is not None:
+        artifacts = getattr(config, "WORKBENCH_ARTIFACTS_ROOT", None)
+        root = str(artifacts) if artifacts is not None else ""
     return (f"{model.get('model_id')}|{env.get('python_env_var')}|{configured}|"
-            f"{_environment_contract_digest(model)}|cuda={bool(require_cuda)}|host={host}")
+            f"{_environment_contract_digest(model)}|cuda={bool(require_cuda)}|host={host}|root={root}")
 
 
 def _cache_enabled() -> bool:
@@ -1838,7 +1879,7 @@ def _cache_enabled() -> bool:
 
 
 def _reuse(model: dict[str, Any], require_cuda: bool, interpreter: str,
-           authoritative: bool = True) -> EnvironmentReport | None:
+           authoritative: bool = True, config: Any | None = None) -> EnvironmentReport | None:
     """Return a still-valid cached verification, or None.
 
     A cached result is reused only when the contract, the invocation path, the
@@ -1847,7 +1888,7 @@ def _reuse(model: dict[str, Any], require_cuda: bool, interpreter: str,
     """
     if not _cache_enabled():
         return None
-    key = _cache_key(model, require_cuda)
+    key = _cache_key(model, require_cuda, config)
     cached = _VERIFIED_ENVIRONMENTS.get(key)
     if cached is None or cached.interpreter != interpreter:
         return None
@@ -1891,7 +1932,8 @@ def _reuse(model: dict[str, Any], require_cuda: bool, interpreter: str,
     return cached
 
 
-def _remember(model: dict[str, Any], require_cuda: bool, report: EnvironmentReport) -> None:
+def _remember(model: dict[str, Any], require_cuda: bool, report: EnvironmentReport,
+              config: Any | None = None) -> None:
     # The contract digest is the identity of what was just verified, not a cache artifact: a
     # GPU capability record stores it and every reader compares it against the model's current
     # contract. Only the fingerprints below are cache state, so only they are gated.
@@ -1910,7 +1952,7 @@ def _remember(model: dict[str, Any], require_cuda: bool, report: EnvironmentRepo
             authoritative=False)
         report.environment_fingerprint = None
     report.verified_at = datetime.now(timezone.utc).isoformat()
-    _VERIFIED_ENVIRONMENTS[_cache_key(model, require_cuda)] = report
+    _VERIFIED_ENVIRONMENTS[_cache_key(model, require_cuda, config)] = report
 
 
 def forget_environment(interpreter: str | None = None) -> None:
@@ -1932,7 +1974,8 @@ def inspect_environment(model: dict[str, Any]) -> EnvironmentReport:
     return verify_environment(model, probe=False)
 
 
-def require_verified_model_interpreter(model: dict[str, Any], *, require_cuda: bool = False) -> str:
+def require_verified_model_interpreter(model: dict[str, Any], *, require_cuda: bool = False,
+                                       config: Any | None = None) -> str:
     """Return the model's verified interpreter, proving the runtime first.
 
     Raises when the environment is not *verified*: an interpreter that merely exists
@@ -1943,7 +1986,7 @@ def require_verified_model_interpreter(model: dict[str, Any], *, require_cuda: b
         # could resolve to an unrelated interpreter on PATH.
         return sys.executable
     probe_environment = globals().get("verify_environment", verify_environment)
-    report = probe_environment(model, probe=True, require_cuda=require_cuda)
+    report = probe_environment(model, probe=True, require_cuda=require_cuda, config=config)
     variable = report.variable or "model-specific Python"
     if report.tier in READY_TIERS and report.interpreter:
         return report.interpreter
@@ -1953,17 +1996,23 @@ def require_verified_model_interpreter(model: dict[str, Any], *, require_cuda: b
     )
 
 
-def require_launch_ready(model: dict[str, Any], *, require_cuda: bool = True) -> str:
+def require_launch_ready(model: dict[str, Any], *, require_cuda: bool = True,
+                        config: Any | None = None) -> str:
     """Return the interpreter for a model that is ready to *launch*, GPU included.
 
     Building an evaluation *plan* only needs a verified interpreter; starting a real
     evaluation of a CUDA-declaring model additionally needs a verified GPU capability.
     This is the gate the evaluator and the pipeline use before launching.
+
+    ``config`` scopes where that capability record is read from, and the caller must pass the one
+    whose workspace the record was written into -- otherwise a valid record is written and then
+    missed, and a launch that should have been authorized is refused as unverified.
     """
-    interpreter = require_verified_model_interpreter(model, require_cuda=require_cuda)
+    interpreter = require_verified_model_interpreter(model, require_cuda=require_cuda, config=config)
     if not _requires_gpu(model):
         return interpreter
-    report = verify_environment(model, probe=True, require_cuda=require_cuda, authoritative=True)
+    report = verify_environment(model, probe=True, require_cuda=require_cuda, authoritative=True,
+                                config=config)
     if report.tier in LAUNCH_READY_TIERS:
         return interpreter
     raise GpuVerificationError(

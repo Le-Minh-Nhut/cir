@@ -132,8 +132,7 @@ def _job_launch_guard(job: object) -> None:
     if model is None:
         # A model that is no longer registered cannot be shown to be ready: refuse it.
         raise RuntimeError(f"model is not registered: {model_id}")
-    runtime.require_launch_ready(model)
-
+    runtime.require_launch_ready(model, config=resolve_config())
 
 JOBS.launch_guard = _job_launch_guard
 
@@ -1094,7 +1093,7 @@ def queue_job(payload: JobInput):
     # A plan may be built for a CUDA-declaring model whose GPU is unverified, but the queue
     # must not *start* one: the launch gate is enforced here exactly as it is in the CLI.
     try:
-        runtime.require_launch_ready(model)
+        runtime.require_launch_ready(model, config=config)
     except (runtime.GpuVerificationError, RuntimeError) as error:
         raise HTTPException(409, {"error": "gpu_verification_required",
                                   "message": "GPU runtime is not verified for this model.",

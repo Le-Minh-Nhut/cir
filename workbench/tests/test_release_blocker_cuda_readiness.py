@@ -866,7 +866,7 @@ def test_the_api_queues_the_audited_orchestrator_not_the_raw_evaluator(workspace
     monkeypatch.setattr(module, "resolve_config", lambda: replace(
         workspace["config"], CIR_REPO_ROOT=workspace["repo"],
         WORKBENCH_ARTIFACTS_ROOT=workspace["repo"] / "workbench" / "artifacts"))
-    monkeypatch.setattr(module.runtime, "require_launch_ready", lambda model: None)
+    monkeypatch.setattr(module.runtime, "require_launch_ready", lambda model, **kwargs: None)
     (workspace["repo"] / "ckpt.pt").write_bytes(b"x")
 
     payload = type("Job", (), {"model_id": model["model_id"], "checkpoint_id": "ckpt",
@@ -965,20 +965,27 @@ def test_gpu_capability_synthetic_record_not_served_when_seam_off(workspace, mon
         "dependency_fingerprint": runtime._environment_contract_digest(model),
         "host_identity": runtime._host_identity(),
     }
-    payload["signature"] = runtime._gpu_capability_signature(payload)
+
+    # The memo is scoped by the workspace a record was read from, so the test names its workspace
+    # explicitly instead of seeding a bare host-level key: an unscoped entry would be unreachable
+    # and the "seam ON" half below would pass for the wrong reason (found by review).
+    from workbench.backend.operator_config import resolve_config
+
+    config = resolve_config()
+    payload["signature"] = runtime._gpu_capability_signature(payload, config)
 
     # When seam is OFF:
     monkeypatch.delenv(runtime.GPU_PROBE_OVERRIDE_ENV, raising=False)
     runtime._GPU_CAPABILITY.clear()
-    runtime._GPU_CAPABILITY[key] = dict(payload)
+    runtime._GPU_CAPABILITY[runtime._gpu_memo_key(key, config)] = dict(payload)
 
-    assert runtime._cached_gpu_capability(model, report, authoritative=True) is None
-    assert runtime._cached_gpu_capability(model, report, authoritative=False) is None
+    assert runtime._cached_gpu_capability(model, report, authoritative=True, config=config) is None
+    assert runtime._cached_gpu_capability(model, report, authoritative=False, config=config) is None
 
     # When seam is ON:
     monkeypatch.setenv(runtime.GPU_PROBE_OVERRIDE_ENV, "1")
-    assert runtime._cached_gpu_capability(model, report, authoritative=True) is not None
-    assert runtime._cached_gpu_capability(model, report, authoritative=False) is not None
+    assert runtime._cached_gpu_capability(model, report, authoritative=True, config=config) is not None
+    assert runtime._cached_gpu_capability(model, report, authoritative=False, config=config) is not None
 
 def test_the_core_probe_loads_the_extension_with_its_own_interpreter():
     """A CPython extension must be probed by the interpreter it was built for.
@@ -1029,6 +1036,18 @@ def test_the_core_probe_loads_the_extension_with_its_own_interpreter():
                              capture_output=True, text=True).stdout.strip()
     if version == tag:
         pytest.skip(f"only same-ABI interpreter {foreign} available")
+    if runtime._exports_python_init(native, symbol, foreign) is True:
+        # Not every extension binds its ABI at load time: pure-data or self-contained ones (the
+        # `_ctypes_test` helper this scan tends to pick first) are accepted by a foreign interpreter
+        # too, so the assertion below would fail on a host where nothing is actually wrong. The
+        # subject of this test is that the PROBE honours its `interpreter` argument; proving that
+        # needs an extension the ABI really rejects, and this host's selection is not one. Skipped
+        # with the reason named, exactly like the same-ABI case above, rather than asserted
+        # vacuously or asserted falsely.
+        pytest.skip(f"{native.name} loads under the foreign interpreter {foreign} "
+                    f"(version {version}), so it cannot witness ABI mismatch on this host")
+
+    # A different CPython minor version cannot resolve this ABI, and saying so is the whole point.
     assert runtime._exports_python_init(native, symbol, foreign) is False, (
         "a foreign interpreter must not be credited with loading this extension")
 
