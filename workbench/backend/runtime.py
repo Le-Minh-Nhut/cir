@@ -1314,17 +1314,23 @@ def _record_environment_fingerprint(model: dict[str, Any],
         str(_Path(interpreter).parent.parent), authoritative=True)
 
 def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
-                           authoritative: bool = True) -> dict[str, Any] | None:
+                           authoritative: bool = True, config: Any | None = None) -> dict[str, Any] | None:
     """A previously verified capability for exactly this environment, or None.
 
     On the advisory/readiness path (`authoritative=False`), this reads existing signed
     records without unbounded content hashing. On the authoritative verification path,
     it checks the full byte-exact fingerprint.
+
+    ``config`` selects the root the records are read from, and it must be the SAME root
+    ``record_gpu_capability`` writes into: a caller that verified against its own workspace and then
+    read the process default would find no record and re-probe every launch -- or, worse, consume a
+    different workspace's record for the same host. It is optional because the advisory callers hold
+    no configuration; leaving it out resolves the process default, which is what they mean.
     """
     configured = getattr(report, "interpreter", None) or resolve_model_interpreter(model) or ""
     from workbench.backend.operator_config import resolve_config
 
-    config_for_records = resolve_config()
+    config_for_records = config if config is not None else resolve_config()
     synthetic_ok = os.environ.get(GPU_PROBE_OVERRIDE_ENV) == "1"
     expected_fingerprint = _record_environment_fingerprint(model, configured)
 
@@ -2153,7 +2159,8 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
         # A capability already verified for exactly this environment is a recorded
         # observation, not a guess: an evaluation launch consumes the record instead of
         # re-running the probe. `force=True` re-probes (the operator's explicit re-check).
-        existing = _cached_gpu_capability(model, verify_environment(model, probe=True, advisory=True))
+        existing = _cached_gpu_capability(model, verify_environment(model, probe=True, advisory=True),
+                                          config=config)
         if existing is not None and existing.get("capability_verified"):
             return existing
 

@@ -1023,7 +1023,7 @@ def index():
     config = resolve_config()
     db_path = database_path(config)
     results_dir = getattr(config, "WORKBENCH_RESULTS_ROOT", config.WORKBENCH_ARTIFACTS_ROOT / "results")
-    count = rebuild_index(results_root=results_dir, database_path=db_path)
+    count = rebuild_index(results_root=results_dir, database_path=db_path, config=config)
     _index_build_error = None
     return {"runs_indexed": count}
 

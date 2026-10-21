@@ -162,14 +162,19 @@ def rebuild_index(results_root: Path | None = None, database_path: Path | None =
                   config=None) -> int:
     """Rebuild the serving index from canonical result files.
 
-    ``config`` is threaded to the verifier receipts so the receipts describe the SAME root the
-    results came from. Without it an isolated workspace read the deployment's aggregate reports
-    while indexing its own results, which both mixed two roots and made a startup build scan the
-    real artifacts directory.
+    ``config`` is threaded to every root this function defaults, so the index, the result files it
+    reads, and the verifier receipts that promote them all describe the SAME workspace. Without it
+    an isolated workspace read the deployment's aggregate reports while indexing its own results,
+    which both mixed two roots and made a startup build scan the real artifacts directory.
+
+    ``config`` only ever fills in a default. An explicit ``results_root`` or ``database_path``
+    still wins, so the existing positional callers keep their meaning.
     """
     import duckdb
 
-    database_path = database_path or configured_database_path()
+    database_path = database_path or (
+        configured_database_path(config) if config is not None else configured_database_path())
+    results_root = results_root or (results_path(config) if config is not None else None)
 
     loaded = load_runs_with_digests(results_root)
     runs = [result for _, result in loaded]

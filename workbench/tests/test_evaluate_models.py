@@ -390,7 +390,16 @@ def test_csmcir_dry_run_constructs_official_command(monkeypatch, tmp_path: Path,
     script.write_text("")
     import workbench.backend.adapters.models as adapters
 
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.setenv("TORCH_HOME", str(tmp_path / "torch"))
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "huggingface"))
+    lavis_weights = tmp_path / "cache" / "lavis" / "blip2_pretrained.pth"
     monkeypatch.setattr(adapters, "checkpoint_path", lambda *_: checkpoint_file)
+    strict_plan, missing_reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200, settings)
+    assert strict_plan is None
+    assert any("LAVIS BLIP-2 pretrain weights missing" in reason for reason in missing_reasons)
+    lavis_weights.parent.mkdir(parents=True)
+    lavis_weights.write_bytes(b"unverified fixture weights")
     strict_plan, strict_reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200, settings)
     plan, reasons = module.guarded_plan(model, model["checkpoint_variants"][0], model["native_protocol"], dataset_root, 200, settings, dry_run=True)
     assert strict_plan is None

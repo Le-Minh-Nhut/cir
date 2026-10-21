@@ -1,0 +1,162 @@
+"""The launch gate must READ GPU capability records from the root it WRITES them to.
+
+`verify_gpu_runtime(model, config, ...)` persists the capability through `record_gpu_capability(...,
+config)`, but its reuse check called `_cached_gpu_capability(...)` with no configuration, so the read
+resolved the PROCESS default while the write went to the caller's workspace. An operator whose
+artifacts root is not the process default (a second workspace, a test, a container with the tree
+mounted somewhere else) therefore never found the record it had just written: every launch re-probed
+the GPU, and a record from a different workspace could be consumed in its place.
+
+These tests use a real interpreter created with `venv` and the runtime's own test probe hook, so they
+need no GPU and no checkpoint.
+"""
+from __future__ import annotations
+
+import venv
+from dataclasses import replace
+from pathlib import Path
+
+import pytest
+
+from workbench.backend import runtime
+from workbench.backend.operator_config import resolve_config
+
+PROBE_VARIABLE = "WORKBENCH_R15_GPU_PYTHON"
+
+
+def _model(interpreter: Path) -> dict:
+    return {
+        "model_id": "r15-gpu-model",
+        "environment_required": True,
+        # `required_imports` decides whether the environment is usable at all: an empty contract
+        # leaves the probe blocked with DEPENDENCY_MISSING before the capability logic runs, which
+        # would make these tests measure the wrong thing.
+        "environment": {"python_env_var": PROBE_VARIABLE, "pytorch": "1.12.1", "cuda": "11.7",
+                        "required_imports": ["json"]},
+    }
+
+
+@pytest.fixture
+def gpu_model(tmp_path: Path, monkeypatch) -> dict:
+    """A real interpreter plus a deterministic probe, so a record can be signed for envs that exist."""
+    from workbench.tests._core_fixture import build_core_module
+
+    environment = tmp_path / "envs" / "probe"
+    venv.EnvBuilder(with_pip=False, symlinks=True).create(environment)
+    interpreter = environment / "bin" / "python"
+    site = next((environment / "lib").glob("python*")) / "site-packages"
+    # The dependency contract is checked against the environment's real contents, so the fixture
+    # environment needs an importable `torch` with distribution metadata and a `torch._C` the
+    # orchestrator can really load -- a placeholder file is refused, which is the point of the
+    # corroboration these tests sit downstream of.
+    for name, version in (("torch", "1.12.1"), ("torchvision", "0.13.1")):
+        (site / f"{name}.py").write_text(f"__version__ = '{version}'\n")
+        dist = site / f"{name}-{version}.dist-info"
+        dist.mkdir(exist_ok=True)
+        (dist / "METADATA").write_text(f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n")
+        (dist / "RECORD").write_text(f"{name}.py,sha256=t,{(site / f'{name}.py').stat().st_size}\n")
+    build_core_module(site / "_C_fixture.so")
+    monkeypatch.setenv(PROBE_VARIABLE, str(interpreter))
+    monkeypatch.setenv(runtime.GPU_PROBE_OVERRIDE_ENV, "1")
+
+    def probe(model, report):  # noqa: ANN001 - the hook's own signature
+        # The corroboration loads `torch_core_origin` itself and requires it to live inside the
+        # environment whose dependencies were verified, so the synthetic probe reports the fixture's
+        # real module and extension paths rather than claiming success outright.
+        return {
+            "probe": "gpu_capability", "cuda_available": True, "device_count": 1,
+            "device_name": "Synthetic probe device", "capability_verified": True,
+            "allocated_tensor": True, "computed": True, "error": None,
+            "torch_has_compiled_core": True,
+            "torch_module_file": str(site / "torch.py"),
+            "torch_core_origin": str(site / "_C_fixture.so"),
+        }
+
+    runtime.set_gpu_probe_for_tests(probe)
+    runtime.forget_gpu_capability()
+    try:
+        yield _model(interpreter)
+    finally:
+        runtime.clear_gpu_probe_for_tests()
+        runtime.forget_gpu_capability()
+
+
+def _workspace(tmp_path: Path, name: str) -> object:
+    """A configuration whose artifacts root is NOT the process default."""
+    artifacts = tmp_path / name / "artifacts"
+    artifacts.mkdir(parents=True)
+    return replace(resolve_config(), WORKBENCH_ARTIFACTS_ROOT=artifacts,
+                   CIR_REPO_ROOT=tmp_path / name)
+
+
+def test_the_reuse_check_reads_the_root_the_record_was_written_to(tmp_path, gpu_model):
+    """The discriminating case: the record exists in the caller's workspace only.
+
+    The process default is left WITHOUT a record. A read that resolves the process default finds
+    nothing and re-probes; the assertion on the probe count is what makes this load-bearing.
+    """
+    config = _workspace(tmp_path, "operator")
+    calls = 0
+    original = runtime._GPU_PROBE_OVERRIDE
+
+    def counted(model, report):  # noqa: ANN001
+        nonlocal calls
+        calls += 1
+        return original(model, report)
+
+    runtime.set_gpu_probe_for_tests(counted)
+    key = runtime._gpu_capability_key(gpu_model)
+    record = runtime.gpu_capability_path(config, key)
+    if record.exists():
+        record.unlink()
+
+    first = runtime.verify_gpu_runtime(gpu_model, config, authorized=True, require_cuda=True)
+    assert first.get("capability_verified") is True
+    assert record.is_file(), "the record must be persisted into the caller's workspace"
+    assert calls == 1
+
+    # A fresh process would have an empty in-memory cache: only the disk record can answer.
+    runtime.forget_gpu_capability()
+    second = runtime.verify_gpu_runtime(gpu_model, config, authorized=True, require_cuda=True,
+                                        force=False)
+    assert second.get("capability_verified") is True
+    assert calls == 1, (
+        "the reuse check re-probed the GPU: it read the capability back from the process default "
+        f"instead of {config.WORKBENCH_ARTIFACTS_ROOT}")
+
+
+def test_a_record_from_another_workspace_is_not_reused(tmp_path, gpu_model):
+    """The inverse: a record in a DIFFERENT workspace must not certify this one.
+
+    Reads resolve the caller's workspace, so a record that a different workspace holds for the same
+    host is not evidence about this launch.
+    """
+    mine = _workspace(tmp_path, "mine")
+    theirs = _workspace(tmp_path, "theirs")
+    assert mine.WORKBENCH_ARTIFACTS_ROOT != theirs.WORKBENCH_ARTIFACTS_ROOT
+
+    runtime.verify_gpu_runtime(gpu_model, theirs, authorized=True, require_cuda=True)
+    foreign = runtime.gpu_capability_path(theirs, runtime._gpu_capability_key(gpu_model))
+    assert foreign.is_file(), "the other workspace must actually hold a signed record"
+    mine_path = runtime.gpu_capability_path(mine, runtime._gpu_capability_key(gpu_model))
+    assert not mine_path.exists()
+
+    runtime.forget_gpu_capability()
+    report = runtime.verify_environment(gpu_model, probe=True, advisory=True)
+    assert runtime._cached_gpu_capability(gpu_model, report, config=mine) is None, \
+        "a capability recorded in another workspace must not be reused here"
+    assert runtime._cached_gpu_capability(gpu_model, report, config=theirs) is not None, \
+        "the positive control: the workspace that holds the record does reuse it"
+
+
+def test_the_process_default_still_works_when_no_config_is_supplied(tmp_path, gpu_model, monkeypatch):
+    """Compatibility: callers that hold no configuration keep resolving the process default."""
+    config = _workspace(tmp_path, "default")
+    monkeypatch.setenv("WORKBENCH_ARTIFACTS_ROOT", str(config.WORKBENCH_ARTIFACTS_ROOT))
+    monkeypatch.setenv("CIR_REPO_ROOT", str(config.CIR_REPO_ROOT))
+
+    runtime.verify_gpu_runtime(gpu_model, config, authorized=True, require_cuda=True)
+    runtime.forget_gpu_capability()
+    report = runtime.verify_environment(gpu_model, probe=True, advisory=True)
+    cached = runtime._cached_gpu_capability(gpu_model, report)
+    assert cached is not None and cached.get("capability_verified") is True

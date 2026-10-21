@@ -1430,7 +1430,7 @@ def run_validation_index(config: WorkbenchConfig | None = None) -> int:
     # declared output missing, which the output contract then reported as a blocked stage.
     if not runs:
         try:
-            count = rebuild_index(results_root, db)
+            count = rebuild_index(results_root, db, config=cfg)
         except Exception as error:
             print(f"[BLOCKED] index rebuild failed: {error}", file=sys.stderr)
             return 1
@@ -1443,7 +1443,7 @@ def run_validation_index(config: WorkbenchConfig | None = None) -> int:
         return 1
 
     try:
-        count = rebuild_index(results_root, db)
+        count = rebuild_index(results_root, db, config=cfg)
         print(f"[OK] indexed {count} runs into {db}")
         return 0
     except Exception as error:

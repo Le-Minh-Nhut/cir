@@ -380,168 +380,140 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
 
 ## 6. Việc cần làm trên PC, theo thứ tự
 
-```bash
-# 0. Môi trường cho chính workbench (KHÁC môi trường của từng model ở bước 4).
-#    Danh sách này là mức tối thiểu để chạy được các lệnh bên dưới: pytest cho bước 2,
-#    pyyaml cho registry, omegaconf cho preflight/wrapper, torch cho loader/parser,
-#    fastapi+uvicorn cho API, packaging cho runtime verifier. opencv-python-headless là
-#    dependency của chính các evaluator LAVIS (không có nó thì import closure của chúng thiếu),
-#    nên nó thuộc MÔI TRƯỜNG CỦA MODEL, và được khai trong registry — bước 4 cài nó.
-python -m venv .venv && . .venv/bin/activate
-pip install pytest pyyaml omegaconf "torch" torchvision fastapi uvicorn pydantic httpx packaging
+Fresh clone requires a separate workbench environment and built frontend. Install only backend
+requirements here; `workbench/backend/requirements.txt` includes DuckDB. Model dependencies belong in
+isolated per-model environments, never the workbench environment.
 
-# 1. Lấy source đã kiểm
-git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
-git checkout research/cir-failure-workbench      # hoặc fetch + checkout đúng SHA đã ghi ở đầu file
-
-# 2. Xác nhận clone tự verify (không cần checkpoint)
-python -m pytest workbench/tests/test_fresh_clone_delivery.py \
-  workbench/tests/test_vendored_source_integrity.py -q
-
-# 3. Xem chính xác cái gì thiếu TRƯỚC khi tải gì
-python workbench/scripts/download_checkpoints.py --all --dry-run
-python workbench/scripts/download_auxiliary_assets.py --all --dry-run
-
-# 4. Stage assets (theo model đang làm)
-python workbench/scripts/download_checkpoints.py --model limn
-python workbench/scripts/download_auxiliary_assets.py --model csmcir
-
-# 4b. DCNet: evaluator của nó KHÔNG có cờ dataset-root — nó đọc `dataset/fashioniq` tính từ CWD
-#     của chính nó. Link đó phải được stage (và đã được khai trong registry nên integrity gate
-#     chấp nhận). Lệnh này tự tạo thư mục cha khi cần; --check-only/--dry-run không ghi gì.
-python workbench/scripts/prepare_dataset.py --model dcnet --dataset-root "$FASHIONIQ_ROOT"
-#     rồi xác nhận binding khớp với cái evaluator thật sẽ mở:
-python -c "import sys; sys.path.insert(0,'.'); from pathlib import Path; \
-from workbench.replay.dcnet import binding_mismatch; \
-print(binding_mismatch(Path('<run_dir>'), Path('$FASHIONIQ_ROOT'), Path('workbench/third_party/DCNet')) or 'BOUND OK')"
-
-# 5. Preflight (không load model) — phải báo blocker đúng, không crash
-#    Preflight chỉ đọc registry + config, không import model, nên venv workbench là đủ.
-python workbench/replay/hint.py  --checkpoint-root <dir> --dataset-root <FIQ> \
-  --source-root workbench/third_party/HINT --preflight-only
-python workbench/replay/pair.py  --checkpoint-root <dir> --dataset-root <FIQ> \
-  --source-root workbench/third_party/PAIR --preflight-only
-
-# 6. Tạo/chọn MÔI TRƯỜNG CỦA MODEL — bước này KHÔNG được bỏ.
-#
-#    Bước 4b ở trên chỉ TẢI asset. Nó không cài dependency, và chạy model bằng python của
-#    venv workbench là SAI: mỗi model khai một `python_env_var` riêng (WORKBENCH_<MODEL>_PYTHON)
-#    trỏ tới interpreter của chính nó, và runtime verifier chỉ chấp nhận interpreter đó.
-#    Venv workbench cố ý mỏng (xem bước 0); nó KHÔNG có torch/timm/transformers/diffusers/peft
-#    mà checkpoint class của các model LAVIS cần để unpickle.
-#
-#    Dùng flow provisioning có sẵn — nó đọc profile đã kiểm trong registry, tạo môi trường
-#    CÁCH LY, rồi verify bằng interpreter thật của môi trường đó:
-python workbench/scripts/manage_environment.py --list                 # xem trạng thái mọi model
-python workbench/scripts/manage_environment.py --model hint --create \
-  --allow-env-install --allow-network --dry-run                      # xem trước, chưa cài
-python workbench/scripts/manage_environment.py --model hint --create \
-  --allow-env-install --allow-network                                # tạo thật
-
-#    Sau khi tạo, xác nhận trạng thái trước khi chạy (in ra tier/status/reason thật):
-python -c "import sys; sys.path.insert(0,'.'); \
-from workbench.backend.registry import model_by_id; \
-from workbench.backend.runtime import verify_environment; \
-r = verify_environment(model_by_id('hint'), probe=True); \
-print(r.tier, r.status, r.reason)"
-
-#    Chỉ khi tự cài tay (đã có interpreter riêng), export biến tương ứng. Ghi bằng đường dẫn
-#    TUYỆT ĐỐI tới interpreter của môi trường model, KHÔNG phải `python` của venv workbench:
-export WORKBENCH_HINT_PYTHON=/path/to/hint-env/bin/python
-export WORKBENCH_HABIT_PYTHON=/path/to/habit-env/bin/python
-#    ... v.v. cho intent, conesep, airknow, sprc, limn, encoder, ...
-
-# 7. Chạy thật. Repo KHÔNG có `workbench.cli` — dùng đúng entrypoint bên dưới.
-#    Đặt các biến đường dẫn thật, có dấu ngoặc kép (đừng để placeholder `<...>` trong shell):
-FIQ="/path/to/FashionIQ"                       # canonical FashionIQ root
-CKPT="/path/to/checkpoints/hint"               # run directory có fashioniq.pt
-SRC="$PWD/workbench/third_party/HINT"
-
-# 7a. Kiểm trước, không load model — chạy được bằng venv workbench:
-"$WORKBENCH_HINT_PYTHON" workbench/replay/hint.py --preflight-only \
-  --checkpoint-root "$CKPT" --dataset-root "$FIQ" --source-root "$SRC"
-
-# 7b. Chạy thật — bằng interpreter CỦA MODEL, đúng ba cờ bắt buộc của wrapper:
-"$WORKBENCH_HINT_PYTHON" workbench/replay/hint.py \
-  --checkpoint-root "$CKPT" --dataset-root "$FIQ" --source-root "$SRC"
-
-#    Wrapper hỗ trợ thêm: --batch-size, --backbone, --device, --category (một category),
-#    --preflight-only, --output. Chạy `--help` để xem đúng tham số của từng model:
-"$WORKBENCH_HINT_PYTHON" workbench/replay/hint.py --help
-python workbench/replay/limn.py --help     # LIMN dùng các cờ riêng của nó
-```
-> **Đã sửa ở R12:** bản trước ghi `python -m workbench.cli replay ...`; module đó **không tồn tại**
-> trong repo, nên lệnh không chạy được. Câu giải thích kèm theo ("wrapper spawn interpreter đúng qua
-> CLI này") cũng mô tả code không có. Wrapper đọc `python_env_var` qua `runtime.python_executable`
-> khi nó tự spawn, nhưng bản thân nó phải được gọi bằng interpreter của model.
-
-> **Đính chính (R11):** các đoạn cũ của tài liệu này mô tả `conda-meta` như bằng chứng một môi
-> trường kế thừa package của base, và mô tả `WORKBENCH_DCNET_DATA_DIR` như một override còn hiệu
-> lực. Cả hai đã bị bỏ: Conda env vốn cô lập, và override đó không được evaluator native đọc nên
-> chỉ tạo ra một validator trả lời khác câu hỏi của consumer. Đừng cấu hình theo chúng.
-
-### 6a. Bước 0 — dựng frontend (BẮT BUỘC trên clone mới)
-
-`workbench/frontend/dist/` **không** được commit (0 file tracked), nhưng cả bộ test launcher lẫn UI
-đều cần nó: `test_pc_launcher.py` đọc trực tiếp bundle đã build để xác nhận nhãn COMPLETE của bundle
-official, và launcher phục vụ UI từ `dist/`. Clone mới mà chưa build sẽ fail ở bước đó với
-
-    AssertionError: Built frontend bundle missing under workbench/frontend/dist/assets
-
-nên đây là việc đầu tiên phải làm:
-
-```bash
-cd workbench/frontend
-npm ci          # ~4s với cache, ~1 phút lần đầu
-npm run build   # sinh dist/assets/index-*.js + index-*.css
-```
-
-`vite build` chạy trong ~0.2s; dist là artifact dẫn xuất, đừng commit nó.
-
-### 6b. LIMN — quy trình ĐÃ CHẠY THẬT trên PC này
-
-Dùng đúng chuỗi lệnh dưới đây; nó đã tạo ra số đo ở §3.1 và artifact per-query đã publish.
+`workbench/frontend/dist/` is NOT committed (0 tracked files), but the launcher suite reads the
+built bundle to confirm the official-bundle `COMPLETE` label and the backend serves the UI from it. A
+clone that skips the build fails with `AssertionError: Built frontend bundle missing under
+workbench/frontend/dist/assets`, so the build is the first thing to do:
 
 ```bash
 cd /path/to/cir
-FIQ="$PWD/data/fashionIQ_dataset"          # `FashionIQ` là symlink cùng thư mục
-CKPT="$PWD/workbench/artifacts/checkpoints/limn"
+python -m venv .venv && . .venv/bin/activate
+python -m pip install -r workbench/backend/requirements.txt pytest
+cd workbench/frontend && npm ci && npm run build && cd ../..
+python -m pytest workbench/tests/test_fresh_clone_delivery.py \
+  workbench/tests/test_vendored_source_integrity.py -q
+```
 
-# (1) Interpreter của LIMN: pin lịch sử torch 1.12.1 + open_clip 2.20.0, KHÔNG dùng venv workbench.
+
+### 6b. LIMN — profiles and fresh-PC procedure
+
+The reported RTX 3050 run used historical pins on `sm_86`; it does not validate adapted `sm_120`.
+Use one profile only. Historical profile: `torch==1.12.1+cu113`, `torchvision==0.13.1+cu113`,
+`open_clip_torch==2.20.0`. Adapted profile: `torch==2.7.1`, `torchvision==0.22.1`,
+`open_clip_torch==2.26.1`, CUDA 12.8 wheel index. These adapted exact pins satisfy registry
+constraints `>=2.7,<3`, `>=0.22,<1`, and `>=2.24,<2.27`; verifier, planner/installer and replay
+runner resolve same registry profile when `WORKBENCH_RUNTIME_ADAPTATION=sm_120`. This is internal
+consistency only; adapted profile has not been validated on an `sm_120` host.
+Install exactly one profile in its isolated environment. Historical profile reproduces only the
+reported RTX 3050 setup; adapted profile is the only `sm_120` selection:
+
+```bash
+# Historical RTX 3050 profile
 uv venv --python 3.10 workbench/envs/limn-historical
 uv pip install --python workbench/envs/limn-historical/bin/python \
-  --index-url https://download.pytorch.org/whl/cu113 "torch==1.12.1+cu113" "torchvision==0.13.1+cu113"
+  --index-url https://download.pytorch.org/whl/cu113 \
+  "torch==1.12.1+cu113" "torchvision==0.13.1+cu113"
 uv pip install --python workbench/envs/limn-historical/bin/python \
   "open_clip_torch==2.20.0" "numpy==1.26.4" ftfy regex tqdm
 
-# (2) PHẢI chạy bước này một lần: wheel torch 1.12.1 khai GNU_STACK RWE, kernel/loader hiện đại
-#     từ chối và `import torch` chết với "cannot enable executable stack". Xoá cờ đó trên
-#     libtorch_cpu.so. Bản đã sửa nằm trong workbench/envs/limn-historical, nên bước này chỉ cần
-#     khi tạo lại môi trường từ đầu.
-workbench/envs/limn-historical/bin/patchelf --clear-execstack \
-  workbench/envs/limn-historical/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so
-
-export WORKBENCH_LIMN_PYTHON="$PWD/workbench/envs/limn-historical/bin/python"
-
-# (3) Preflight (không load model) rồi chạy that qua entrypoint có audit.
-"$WORKBENCH_LIMN_PYTHON" workbench/replay/limn.py --preflight-only \
-  --checkpoint-root "$CKPT" --dataset-root "$FIQ" --source-root "$PWD/workbench/third_party/LIMN"
-
-export WORKBENCH_LIMN_BATCH_SIZE=4                       # GPU 4 GiB; 32 là thiết lập paper
-export WORKBENCH_EVALUATOR_ENV_PASSTHROUGH=WORKBENCH_LIMN_BATCH_SIZE
-python -m workbench.scripts.evaluate_models --model limn \
-  --run-id "$(date -u +%Y%m%dT%H%M%SZ)_limn_base_iter0_all_categories_fashioniq_val_split"
+# Adapted sm_120 profile — do not mix with historical pins or patchelf workaround
+uv venv --python 3.10 workbench/envs/limn-sm120
+uv pip install --python workbench/envs/limn-sm120/bin/python \
+  --index-url https://download.pytorch.org/whl/cu128 \
+  "torch==2.7.1" "torchvision==0.22.1"
+uv pip install --python workbench/envs/limn-sm120/bin/python \
+  "open_clip_torch==2.26.1" "numpy==1.26.4" ftfy regex tqdm
 ```
 
-- `--run-id` phải **mới**: orchestrator từ chối ghi đè artifact của một run id đã tồn tại.
-- `WORKBENCH_EVALUATOR_ENV_PASSTHROUGH` là cơ chế có sẵn để chuyển biến vận hành qua allowlist;
-  đừng nới `_EVALUATOR_ENV_ALLOWLIST` và **đừng** đưa `WORKBENCH_LEDGER_KEY` vào đó.
-- Sau khi chạy: rebuild index rồi xem UI.
+If historical torch import fails specifically with `cannot enable executable stack`, install
+`patchelf` (`sudo apt-get install patchelf`) and run `patchelf --clear-execstack` on that
+environment's `torch/lib/libtorch_cpu.so`. Do not apply to adapted runtime.
+
+Run commands below from repository root after completing §6 steps 0–2. Set `FIQ` to the actual
+FashionIQ root and keep `CKPT` at configured checkpoint root; no symlink is assumed:
+
 ```bash
-python -c "import sys;sys.path.insert(0,'.');from workbench.backend.index import rebuild_index;print(rebuild_index())"
+export FIQ="$PWD/data/fashionIQ_dataset"
+export CKPT="$PWD/workbench/artifacts/checkpoints"
+export WORKBENCH_CHECKPOINT_ROOT="$CKPT"
+export WORKBENCH_RESULTS_ROOT="$PWD/workbench/artifacts/results"
+export WORKBENCH_ARTIFACTS_ROOT="$PWD/workbench/artifacts"
+SRC="$PWD/workbench/third_party/LIMN"
+test -d "$FIQ/images" && test -d "$FIQ/image_splits" && test -d "$FIQ/captions"
+
+# Acquire all bundle members into the same checkpoint root used by preflight and evaluation.
+python workbench/scripts/download_checkpoints.py --model limn \
+  --checkpoint base_iter0_all_categories --output-root "$CKPT"
+
+# Select interpreter/profile matching chosen environment. Historical alternative:
+# unset WORKBENCH_RUNTIME_ADAPTATION
+# export WORKBENCH_LIMN_PYTHON="$PWD/workbench/envs/limn-historical/bin/python"
+export WORKBENCH_RUNTIME_ADAPTATION=sm_120
+export WORKBENCH_LIMN_PYTHON="$PWD/workbench/envs/limn-sm120/bin/python"
+
+# Model-interpreter preflight; checkpoint bundle root equals downloader's $CKPT/limn.
+"$WORKBENCH_LIMN_PYTHON" workbench/replay/limn.py --preflight-only \
+  --checkpoint-root "$CKPT/limn" --dataset-root "$FIQ" --source-root "$SRC"
+
+# Required first-host GPU record. GPU-only probe stops before checkpoint load or inference;
+# evaluation --verify-gpu can instead force a fresh probe. Matching later records may be reused.
+python -m workbench.scripts.evaluate_models --model limn --dataset-root "$FIQ" --verify-gpu-only
+
+export WORKBENCH_LIMN_BATCH_SIZE=4
+export WORKBENCH_EVALUATOR_ENV_PASSTHROUGH=WORKBENCH_LIMN_BATCH_SIZE
+RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)_limn_base_iter0_all_categories_fashioniq_val_split"
+python -m workbench.scripts.evaluate_models --model limn --dataset-root "$FIQ" \
+  --checkpoint base_iter0_all_categories --run-id "$RUN_ID"
+python workbench/scripts/verify_run.py --run-id "$RUN_ID" --model limn \
+  --checkpoint base_iter0_all_categories --protocol fashioniq_val_split
+python workbench/scripts/rebuild_index.py --results-root "$PWD/workbench/artifacts/results" \
+  --database "$PWD/workbench/artifacts/workbench.duckdb" --validate-first
+python workbench/scripts/serve_workbench.py --host 127.0.0.1
 ```
-Trong UI: chọn protocol **FashionIQ - Val Split (Pair-Union Gallery, Reference Excluded)**,
-vào **Sample Explorer** — 6016 query sẽ hiện kèm Top-K.
+
+**Syntax vs execution:** every command above was checked against the real parsers and entrypoints
+on this host, and the steps marked `Yes` in the table below were actually executed here with the
+real dataset, the three author checkpoints, the historical interpreter and the real RTX 3050. The
+`sm_120` profile was NOT executed: this host has no `sm_120` device, so no adapted-profile
+validation is claimed. Checkpoint acquisition (`download_checkpoints.py`) was not re-run because all
+three members are already staged and hash-verified in `$CKPT/limn`.
+
+The evaluator needs free space on the volume holding `WORKBENCH_ARTIFACTS_ROOT`: it creates a
+run-scoped private `tmp` directory under the run's log directory and points the child's `TMPDIR` at
+it, and the pinned LIMN `datasets.FashionIQ` constructor materializes every query it scores as raw
+pixel arrays into that directory (~400 MB per category, so ~1.2 GB for all three) before inference
+starts. The directory is removed with the run, so this is transient, but a host without room for it
+fails inside the native constructor with `OSError: [Errno 28] No space left on device` at
+`LIMN/datasets.py:60` -- which reads like a dataset problem and is a disk problem. Check
+`df -h "$WORKBENCH_ARTIFACTS_ROOT"` before launching, and point `WORKBENCH_ARTIFACTS_ROOT` at a
+volume with room if the checkout's disk is nearly full.
+
+`FASHIONIQ_ROOT` defaults to `data/FashionIQ`, absent in some clones; explicit `--dataset-root "$FIQ"`
+binds preflight, GPU check, and evaluation to the declared dataset. Bundle downloader receives
+`$CKPT`; registry `checkpoint_path()` puts bundle members in `$CKPT/limn/`, same as replay's root.
+Results and DuckDB roots are exported explicitly. The backend uses `workbench/backend/requirements.txt`
+(including DuckDB); keep model packages isolated.
+**Per-command status on this host:**
+
+| Command group | Syntax accepted by source | Could execute here | Reason not run |
+|---|---|---|---|
+| `python -m venv`, `pip install -r workbench/backend/requirements.txt pytest` | Yes | Not run | Would alter local environment; recipe only |
+| `npm ci && npm run build` | Yes | Not run | Frontend build not needed for documentation change |
+| Fresh-clone pytest commands | Yes | Not run | Not instructed to run suite |
+| `uv venv` / `uv pip install` historical and adapted profiles | Yes | Not run | Environment provisioning not requested; adapted host validation explicitly not claimed |
+| Historical `sudo apt-get install patchelf` and `patchelf --clear-execstack` | Yes, conditional | Not run | Only after specified loader error; not applicable to adapted profile |
+| Check dataset layout | Yes | Yes | `images/`, `image_splits/`, `captions/` all present under `data/fashionIQ_dataset` |
+| Download LIMN checkpoint bundle | Yes | Not run | All three members already staged and hash-verified in `$CKPT/limn`; re-downloading would move 5 GiB |
+| LIMN `--preflight-only` | Yes | Yes | Ran with the historical interpreter over the real bundle and dataset: `[READY] LIMN preflight passed` |
+| `evaluate_models --verify-gpu-only` | Yes | Yes | Ran on the real RTX 3050: `capability_verified: true`, compute capability 8.6, record written to `artifacts/gpu_capabilities/` |
+| Full `evaluate_models` invocation | Yes | Yes | Executed on the real GPU with the three author checkpoints; see the run record for the artifact paths |
+| `verify_run.py`, `rebuild_index.py` | Yes | Yes | Ran against the completed run; index rebuilt from the configured results root |
+| `serve_workbench.py` | Yes | Not run | The already-running deployment was reused rather than restarting containers mid-session |
+
 
 **Thứ tự chuẩn bị artifact:**
 
