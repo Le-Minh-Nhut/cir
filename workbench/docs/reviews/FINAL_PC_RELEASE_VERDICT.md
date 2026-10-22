@@ -6,9 +6,9 @@
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`aa2e5e9`** (production source; every gate below ran on it) |
+| **TESTED_SOURCE_SHA** | **`d6853f0`** (production source; every gate below ran on it) |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | verified against the named revision: `git diff aa2e5e9 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
+| Production tree | verified against the named revision: `git diff d6853f0 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 
@@ -21,7 +21,7 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Suite accounting | 1818 collected = **1801 passed** + 0 failed + 17 skipped, measured on the tree of the revision named above. |
-| TESTED_SOURCE_SHA | `aa2e5e9` — every gate below ran on it |
+| TESTED_SOURCE_SHA | `d6853f0` — every gate below ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 16 model entries; **16 `source_available`** (every entry now has vendored source); **15 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc` with protocol `fashioniq_original_split`, and stays blocked only because no FashionIQ checkpoint is published for it |
@@ -167,8 +167,8 @@ downloaded. Every LIMN runtime claim in this pass is static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout aa2e5e9           # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print aa2e5e9846e8c7440f6ca7abe911d39c59bf3f5e
+git checkout d6853f0           # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print d6853f0846e8c7440f6ca7abe911d39c59bf3f5e
 ./pc.sh                        # the one operator command
 ```
 
