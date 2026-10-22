@@ -1810,8 +1810,15 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             # The evaluation stage that follows carries --verify-gpu, so a GPU whose
             # authorized probe has not run yet is the state this workflow is about to change.
             preflight_args.append("--allow-gpu-pending")
-        if mid == args.model and model_obj:
-            preflight_args.extend(_checkpoint_args(args, mid, model_obj))
+        # Only the model the operator named can carry an explicit checkpoint selection, and its
+        # registry record has to be looked up HERE: `model_obj` is bound in `real_stages`, not in
+        # this one, so referencing it made every preflight stage raise `NameError` on the paths that
+        # reach this line.
+        if mid == getattr(args, "model", None):
+            selected_model = next((item for item in load_registry()["models"]
+                                   if item["model_id"] == mid), None)
+            if selected_model is not None:
+                preflight_args.extend(_checkpoint_args(args, mid, selected_model))
         stages.append(run_stage(
             "runtime-preflight",
             command("doctor.py", *preflight_args),

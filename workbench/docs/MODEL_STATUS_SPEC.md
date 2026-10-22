@@ -256,12 +256,19 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
   4. **per-query integration đã có** (`workbench/replay/encoder_export.py` +
      `encoder_publish.py` + `observers`), và registry đã khai `per_query_observer:
      ENCODER_QUERY_OBSERVER_V1` cùng `per_query_checkpoint: fashioniq`.
-     Chạy thật: observer **được gọi** (capability được nhận, gate qua) nhưng **bị OOM-kill
-     (`observer exited -9`)** vì tiến trình con đó chạy **không có `TMPDIR` riêng**, nên cache
-     ~11.9 GiB của nó rơi vào `/tmp` (tmpfs) — đã sửa bằng cách cấp `TMPDIR` riêng theo run.
-     Trạng thái: **implementation xong, chưa có lần chạy per-query hoàn tất**; đừng đọc
-     `per_query_capability` có giá trị như bằng chứng đã export được. Bằng chứng cho lỗi này:
-     `/tmp/cir-replay-cache-*` 5.3 GB còn lại sau khi tiến trình bị kill.
+     Trước khi sửa, observer **được gọi** nhưng **bị OOM-kill (`observer exited -9`)** vì tiến
+     trình con đó chạy **không có `TMPDIR` riêng**, nên cache ~11.9 GiB của nó rơi vào `/tmp`
+     (tmpfs). Bằng chứng để lại: `/tmp/cir-replay-cache-*` **5.3 GB** sau khi tiến trình bị kill.
+     Sau khi cấp `TMPDIR` riêng theo run, đã chạy lại và **export hoàn tất**:
+     `per_query_state: PER_QUERY_EXPORTED_UNVERIFIED`, `per_query_export_available: true`,
+     `instrumentation_parity: INSTRUMENTATION_PARITY_VERIFIED`, artifact canonical
+     **144 470 712 B** tại `artifacts/results/fashioniq_val_split/encoder/`.
+     `verify_run.py` trả **`[OK] … is corroborated`**, và index rebuild đưa run vào DuckDB (10 run),
+     đọc được qua `/api/runs`.
+     Trạng thái tách bạch: **export đã chạy thật**; `PER_QUERY_VERIFIED` vẫn thuộc về verifier và
+     gate paper vẫn dừng ở `PASS_METRICS_ONLY_MAPPING_UNVERIFIED` vì dòng reference của ENCODER
+     trong `paper_benchmarks/papers.yaml` ghi `checkpoint_mapping_status: UNVERIFIED` (14/14 dòng
+     paper đều vậy — mặc định fail-closed có chủ ý, không phải lỗi ở lượt này).
 
 ### 3. `hint`
 - Upstream @ `bec50b6c8c19`. Wrapper `hint.py` chạy trong `isolated_cache_root` (F03/B3):
@@ -440,6 +447,20 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
 | R10-06 | `FIXED` (đã đính chính ở R11) | `inspect_environment_distributions` chỉ đọc base inventory khi interpreter **thực sự kế thừa**: `pyvenv.cfg` có `include-system-site-packages = true`. Nhánh `conda-meta` **đã bị xoá** — đó chỉ là một tên thư mục, ai cũng tạo được, và Conda env vốn cô lập nên nó tái tạo đúng lỗi R10-06 ở dạng khác | Venv thật: cô lập ⇒ `packaging` biến khỏi inventory; `--system-site-packages` ⇒ còn; prefix chỉ có `conda-meta/` ⇒ inventory **rỗng**; version sai vẫn bị chặn | — |
 
 ---
+
+## 4b. Defect đã sửa trong lượt này (2026-10-23)
+
+| # | Defect | Bằng chứng trước khi sửa | Sửa |
+|---|---|---|---|
+| D1 | `doctor.source_state` gọi `git rev-parse HEAD` trong checkout vendored (không có `.git` lồng nhau) ⇒ Git đi lên repo CIR và trả commit của CIR | LIMN pin `7d7bc9b` bị báo `3fcf11f`/`dirty`, đổ lỗi `src/train_cirr.py` (file ở gốc CIR) | route qua `vendored_source.source_provenance`; regression dùng layout thật **không** có Git lồng nhau |
+| D2 | Variant mang `status: NO_CLEAN_CHECKPOINT` bị coi là "không dùng được", dù đó chỉ nghĩa "không có bản clean" | `habit` 20% đã cài + hash khớp vẫn báo `registry checkpoint unavailable: NO_CLEAN_CHECKPOINT` | đánh giá theo fact của chính variant; `BLOCKED*` vẫn chặn; chỉ kiểm variant được chọn ⇒ 20% chạy được khi thiếu 50%/80% |
+| D3 | Tiến trình con của observer **không có `TMPDIR` riêng**; `isolated_cache_root` dùng `tempfile` nên cache ~11.9 GiB rơi vào `/tmp` (tmpfs RAM) | `/tmp/cir-replay-cache-*` **5.3 GB** còn lại sau khi bị kill; log `observer exited -9` | cấp `TMPDIR` 0700 theo run cho observer, như evaluator |
+| D4 | Gate observation so với **đúng chuỗi bundle của LIMN**, nên ENCODER (một checkpoint, không bundle) không bao giờ khớp ⇒ observer bị bỏ im lặng | chưa từng chạy observer cho ENCODER | gate theo khai báo registry `per_query_checkpoint` |
+| D5 | 8 model khai `python_env_var` nhưng **thiếu** `environment_required` ⇒ `python_executable` trả interpreter của workbench | ENCODER chạy bằng venv workbench, chết `No module named 'open_clip'` | khai `environment_required: true` cho 8 model (chúng cần Python 3.8/3.9 + torch 2.x, workbench là 3.13) |
+| D6 | `pipeline.all_stages` tham chiếu `model_obj` chỉ tồn tại trong `real_stages` ⇒ `NameError` | 3 test suite độc lập fail (`test_authorization_policy`, `test_adversarial_orchestration`, `test_adversarial_resume`) | tra registry record tại chỗ |
+| D7 | Asset LAION backbone khai `expected_sha256: null` + `UNVERIFIED` ⇒ mọi lượt ENCODER chặn ở "operator-supplied unverified provenance" | preflight ENCODER BLOCKED | ghi `lfs.oid` **do publisher công bố** (kèm size); local hash = registry = HF oid |
+
+D6 do subagent đưa vào và **chính lượt chạy toàn bộ suite** phát hiện — bộ test hẹp của nó không phủ.
 
 ## 5. Điều kiện cập nhật về sau
 
