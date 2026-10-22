@@ -418,10 +418,16 @@ def test_scenario_j_interruption_recovery_and_artifact_integrity(tmp_path: Path)
     m = {"model_id": "interrupted-model", "environment": {"python": "3.10", "packages": []}}
     plan = planner.plan_environments([m], artifacts_root=tmp_path)
 
-    # Simulate keyboard interrupt during solver run
-    with patch("subprocess.run", side_effect=KeyboardInterrupt("user interrupt")):
-        with pytest.raises(KeyboardInterrupt):
-            planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True, network_allowed=True)
+    # The interruption this scenario describes happens while a SOLVER runs, so the test must own
+    # which solver that is: `_solver_command()` returns None on a host with no conda/mamba
+    # installed, and the provisioning path then returns without ever calling `subprocess.run`, so
+    # the patch below was never exercised and the test asserted against a code path it had not
+    # entered (found by review; it failed on exactly such a host). Naming the solver explicitly
+    # makes the scenario host-independent without weakening what it checks.
+    with patch.object(planner, "_solver_command", return_value="conda"):
+        with patch("subprocess.run", side_effect=KeyboardInterrupt("user interrupt")):
+            with pytest.raises(KeyboardInterrupt):
+                planner.provision_environment_plan([m], plan, artifacts_root=tmp_path, allowed=True, network_allowed=True)
 
     # Sentinel environment remains intact
     assert sentinel_file.is_file(), "interrupted creation must not delete existing environments"

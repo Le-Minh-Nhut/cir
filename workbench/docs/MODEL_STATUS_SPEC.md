@@ -185,6 +185,14 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
 - Loader: giữ `strict=False` (upstream) nhưng **không bỏ qua report** — missing/unexpected (ngoài
   `loss_T`) ⇒ raise. Blocker: backbone LAION ViT-B/32 + ckpt chưa stage.
 - Đã chạy: `test_encoder_replay.py` (5), `test_verified_declarations.py` (F10).
+- **Trạng thái trên máy này (kiểm tra lại 2026-10-22):** blocker đó vẫn còn nguyên và đã được đo,
+  không phải suy đoán. `workbench/artifacts/checkpoints/encoder/` **rỗng** (0 file), và
+  `workbench/third_party/ENCODER/open_clip_pytorch_model.bin` **không tồn tại**. Không có
+  `workbench/envs/encoder*` nào được tạo. Vì vậy ENCODER **không thể** chạy native evaluation ở đây:
+  thiếu checkpoint (631 879 365 B), thiếu backbone LAION ViT-B/32, và thiếu interpreter riêng
+  (`WORKBENCH_ENCODER_PYTHON`). Ngoài ra `encoder` **không khai** `per_query_observer` trong registry
+  nên nó cũng chưa có đường export per-query — đúng như thiết kế, vì khai năng lực trước khi có
+  integration là tự nhận điều chưa làm được.
 
 ### 3. `hint`
 - Upstream @ `bec50b6c8c19`. Wrapper `hint.py` chạy trong `isolated_cache_root` (F03/B3):

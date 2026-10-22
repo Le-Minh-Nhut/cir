@@ -61,6 +61,15 @@ wandb/
 *.pt
 *.pth
 *.ckpt
+# Auxiliary model weights downloaded at run time (the LAION ViT-B/32 open_clip backbone is 605 MB)
+# and the native dataset caches the pinned evaluators write next to their inputs. Those paths are
+# TRACKED vendored checkouts and dataset roots, so without these rules git offers to commit
+# half-gigabyte binaries. The registry declares each URL and the downloader verifies it; the bytes
+# belong in the operator's storage, never in the repository.
+open_clip_pytorch_model.bin
+test_queries_*.pkl
+test_targets_*.pkl
+fashion_iq_data.json
 # The pinned upstream checkouts under workbench/third_party are TRACKED SOURCE: the delivered
 # branch must carry the code it evaluates instead of a gitlink nobody can fetch, and a reader must
 # be able to check a claim against the revision it was made about. Each checkout keeps its
