@@ -186,10 +186,15 @@ def test_f10_the_loader_reports_what_strict_false_hid() -> None:
     """`strict=False` is kept, but an unmatched checkpoint must block rather than evaluate."""
     source = (REPO / "workbench" / "replay" / "encoder.py").read_text()
     assert "load_state_dict(ckpt_data, strict=False)" in source, "upstream's choice is preserved"
-    assert "getattr(report, \"missing_keys\"" in source
+    assert 'getattr(report, "missing_keys"' in source
     assert "Refusing to evaluate a partially-loaded model." in source
-    # The author's file carries the training temperature, which is not a module parameter.
-    assert '!= "loss_T"' in source
+    # The author's file carries the training temperature, which is not a module parameter, and it
+    # also carries two tensors for a layer this pinned revision does not declare. Both are tolerated
+    # only through the bound allowlist, so what this guard protects is that unmatched keys are
+    # COMPUTED AND ACTED ON rather than dropped: the subtraction from the report is still here.
+    assert "unexpected = [key for key in getattr(report" in source
+    assert "_unused_checkpoint_keys(encoder_model, variant, source_root)" in source
+    assert "if missing or unexpected:" in source
 
 
 # --------------------------------------------------------------------------------------- F14
