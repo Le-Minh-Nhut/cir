@@ -1322,3 +1322,85 @@ def test_a_vendored_checkout_with_no_recorded_pin_does_not_borrow_the_workbench_
     source.mkdir(parents=True)
     model = {"model_id": "nopin", "upstream_commit_sha": "deadbeef" * 5}
     assert evaluate_models.pinned_revision(source, model) is None
+def test_a_per_query_artifact_that_disagrees_with_the_aggregate_is_refused(monkeypatch, tmp_path: Path) -> None:
+    """The published artifact must reproduce the aggregate THIS run recorded, checked in the parent.
+
+    `cross_check_with_native` cannot establish this: it runs inside the observer and compares the
+    observation against native `test()` calls made in that SAME process, on the same model object.
+    Native `test()` batches a category's queries and reduces them on the GPU, so two passes compute
+    features whose last bits differ. On a real ENCODER run the two passes agreed on 99.8% of queries
+    -- enough for the in-process check to pass, and not enough for the published ranks to reproduce
+    the aggregate the report was certified from (30 hit-counts apart across the six Recall values,
+    with both sides recording INSTRUMENTATION_PARITY_VERIFIED). Recall@k is an exact hit count over
+    the same population, so the parent compares counts and refuses on any difference.
+
+    The artifact here is self-consistent -- each target really is at its recorded rank -- so nothing
+    the observer or the publisher could have checked would have caught it.
+    """
+    module = load_module()
+    run_id = "20260101T000000000000Z_limn_ckpt_deadbeef"
+    # All three queries have their target inside the top 10, so the artifact's reconstructed
+    # `dress_r10` is 100% while the aggregate below says 2%: a genuine disagreement. Without the check
+    # the parent publishes this artifact as the run's evidence.
+    queries = [
+        {"category": "dress", "target_rank": 1, "top_results": [{"rank": 1, "image_id": "a", "score": 1.0}]},
+        {"category": "dress", "target_rank": 5, "top_results": [{"rank": 5, "image_id": "b", "score": 0.5}]},
+        {"category": "dress", "target_rank": 7, "top_results": [{"rank": 7, "image_id": "c", "score": 0.1}]},
+    ]
+
+    def fake_invoke(plan, config, run_id_arg, root):
+        directory = tmp_path / "logs" / f"{plan.model_id}__{plan.checkpoint_id}__{run_id_arg}"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "stdout.log").write_text('{"dress_r1": 1.0, "dress_r10": 2.0, "dress_r50": 3.0}')
+        (directory / "stderr.log").write_text("")
+        return 0, directory, {"orchestrator_python": "3", "platform": "test"}
+
+    def observer_run(argv, **kwargs):
+        if "export" in " ".join(argv):
+            directory = tmp_path / "logs"
+            directory.mkdir(parents=True, exist_ok=True)
+            staged = directory / "payload.json"
+            staged.write_text("{}")
+
+            class Ok:
+                returncode = 0
+                stdout = json.dumps({"payload": str(staged)})
+                stderr = ""
+            return Ok()
+        artifact = tmp_path / "results" / "run.json"
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        artifact.write_text(json.dumps({
+            "run": {"run_id": run_id, "model_id": "limn", "protocol_id": "fashioniq_val_split",
+                    "instrumentation_parity": "INSTRUMENTATION_PARITY_VERIFIED"},
+            "queries": queries,
+        }))
+
+        class Ok2:
+            returncode = 0
+            stdout = json.dumps({"published": str(artifact)})
+            stderr = ""
+        return Ok2()
+
+    monkeypatch.setattr(module, "invoke_evaluator", fake_invoke)
+    monkeypatch.setattr(module.subprocess, "run", observer_run)
+    monkeypatch.setattr(module, "extract_aggregate_metrics",
+                        lambda *a, **k: type("E", (), {
+                            "extraction_status": "EXTRACTED_VERIFIED", "parser_id": "p",
+                            "parser_version": 1,
+                            "observed_metrics": {"r10": 1.0, "r50": 2.0, "mean": 1.5},
+                            "category_metrics": {"dress": {"r1": 1.0, "r10": 2.0, "r50": 3.0}},
+                            "parity_status": "PARITY_NOT_EVALUATED",
+                            "metric_source": "stdout"})())
+    plan = module.EvaluationPlan(
+        model_id="limn", checkpoint_id="base_iter0_all_categories", protocol="fashioniq_val_split",
+        dataset_root=tmp_path, source=tmp_path, checkpoint=tmp_path / "ckpt", cwd=tmp_path,
+        command=[sys.executable, "x"], pin="a" * 40, actual_source_commit="a" * 40,
+        paper_metrics=None)
+    assert module.execute(plan, config(tmp_path), run_id=run_id) == 0
+
+    report = json.loads(sorted(tmp_path.rglob("*_aggregate.json"))[-1].read_text())
+    reason = report.get("per_query_export_reason") or ""
+    assert "does not reproduce" in reason, (
+        f"a disagreeing artifact must be refused by the aggregate agreement check; reason={reason!r}")
+    assert report["per_query_export_available"] is False
+    assert report.get("per_query_artifact_digest") is None

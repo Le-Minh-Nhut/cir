@@ -1711,7 +1711,9 @@ def _status_object(stdout: str, field: str) -> str:
 
 def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
                      directory: Path, command_digest: str | None,
-                     environment_digest: str | None) -> tuple[Path | None, str, str | None, str | None]:
+                     environment_digest: str | None,
+                     category_metrics: dict | None = None
+                     ) -> tuple[Path | None, str, str | None, str | None]:
     """Run the per-query observer as a child of the model's interpreter, then verify its artifact.
 
     Returns ``(artifact_path, note, artifact_digest, parity)``. The artifact digest is computed HERE,
@@ -1874,6 +1876,60 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
                 "the aggregate run actually evaluated, and neither the observer nor the publisher "
                 "can be the authority for that"), None, None
     digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    # The per-query artifact must reproduce the aggregate THIS run recorded, and the check has to
+    # happen HERE, in the parent, on the artifact's own numbers.
+    #
+    # `cross_check_with_native` cannot establish this. It runs inside the observer and compares the
+    # observation against native `test()` calls made IN THAT SAME PROCESS, on the same model object.
+    # Native `test()` batches a category's queries and reduces them on the GPU, so two passes compute
+    # features whose last bits differ; the two passes agree on ~99.8% of queries, which is enough for
+    # the in-process check to pass and not enough for the published ranks to reproduce the aggregate
+    # the report was certified from. Measured on a real ENCODER run: the artifact reproduces its own
+    # ranking exactly, but disagrees with the run's aggregate by 30 hit-counts across the six
+    # category Recall values, while both sides recorded INSTRUMENTATION_PARITY_VERIFIED.
+    #
+    # Recall@k is an exact hit count over the same query population, so this is a count comparison,
+    # not a tolerance. A mismatch means the artifact and the report describe different inference, and
+    # the artifact is not published as evidence for that run.
+    try:
+        # Passed IN, not read from `aggregate_report.json`: that file is written AFTER this call, so
+        # reading it here always raised and the check silently never ran. The caller already holds
+        # the extraction it recorded in that report, which is the same value.
+        by_category: dict[str, list[dict]] = {}
+        for query in payload.get("queries") or []:
+            if query.get("category") is not None:
+                by_category.setdefault(query["category"], []).append(query)
+        disagreements = []
+        # A run whose aggregate could not be parsed has no category metrics to compare against, and
+        # that is the extraction contract's concern, not this check's.
+        for category, metrics in sorted((category_metrics or {}).items()):
+            queries = by_category.get(category) or []
+            if not queries:
+                continue
+            total = len(queries)
+            for field, k in (("r1", 1), ("r10", 10), ("r50", 50)):
+                native = metrics.get(field)
+                if native is None:
+                    continue
+                hits = sum(1 for q in queries
+                           if q.get("target_rank") is not None and q["target_rank"] <= k)
+                # Both sides are 100 * hits / total over the same population, so compare counts.
+                if round(hits - native * total / 100.0) != 0:
+                    disagreements.append(
+                        f"{category}_{field}: per-query {hits}/{total} hits, aggregate "
+                        f"{native * total / 100.0:.1f}")
+        if disagreements:
+            return None, (
+                "per-query artifact does not reproduce this run's aggregate: "
+                + "; ".join(disagreements[:3])
+                + (f" (+{len(disagreements) - 3} more)" if len(disagreements) > 3 else "")
+                + " -- the artifact and the report describe different inference, so neither is "
+                  "evidence for the other"
+            ), None, None
+    except (ValueError, KeyError, TypeError, OSError):
+        # An unreadable aggregate is handled by the caller's own contract; this check only refuses
+        # on a POSITIVE disagreement it could measure.
+        pass
     # The staging file is an interchange detail, not evidence: leaving it beside the canonical
     # artifacts would make the results directory hold two descriptions of one run.
     try:
@@ -2022,7 +2078,8 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
     if code == 0 and capability:
         per_query_artifact, observation_note, per_query_artifact_digest, instrumentation_parity = \
             _run_observation(plan, config, run_id, directory,
-                             metadata.get("command_digest"), metadata.get("environment_digest"))
+                             metadata.get("command_digest"), metadata.get("environment_digest"),
+                             category_metrics=extraction.category_metrics)
 
     paper = plan.paper_metrics or {}
     gate_verdict = _benchmark_gate_verdict(plan, extraction, code)
