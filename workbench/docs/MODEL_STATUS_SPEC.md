@@ -185,14 +185,36 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
 - Loader: giữ `strict=False` (upstream) nhưng **không bỏ qua report** — missing/unexpected (ngoài
   `loss_T`) ⇒ raise. Blocker: backbone LAION ViT-B/32 + ckpt chưa stage.
 - Đã chạy: `test_encoder_replay.py` (5), `test_verified_declarations.py` (F10).
-- **Trạng thái trên máy này (kiểm tra lại 2026-10-22):** blocker đó vẫn còn nguyên và đã được đo,
-  không phải suy đoán. `workbench/artifacts/checkpoints/encoder/` **rỗng** (0 file), và
-  `workbench/third_party/ENCODER/open_clip_pytorch_model.bin` **không tồn tại**. Không có
-  `workbench/envs/encoder*` nào được tạo. Vì vậy ENCODER **không thể** chạy native evaluation ở đây:
-  thiếu checkpoint (631 879 365 B), thiếu backbone LAION ViT-B/32, và thiếu interpreter riêng
-  (`WORKBENCH_ENCODER_PYTHON`). Ngoài ra `encoder` **không khai** `per_query_observer` trong registry
-  nên nó cũng chưa có đường export per-query — đúng như thiết kế, vì khai năng lực trước khi có
-  integration là tự nhận điều chưa làm được.
+- **Trạng thái trên máy này (đo lại 2026-10-22).** Ba thứ đã được provision và kiểm chứng:
+  checkpoint `fashioniq.pt` **đã tải và hash khớp** (631 879 365 B, sha256 `0f31c50150a7bda3495e3
+  378df13b4cec7924b52efd23b5e5dd9731459da9173`); backbone LAION ViT-B/32 **đã tải** (605 219 813 B)
+  vào `workbench/third_party/ENCODER/open_clip_pytorch_model.bin`; và một interpreter riêng
+  `workbench/envs/encoder` (Python 3.9.25, `torch 1.13.1+cu117`, `torchvision 0.14.1+cu117`,
+  `open-clip-torch 2.24.0`) chạy được CUDA trên RTX 3050 (`torch.cuda.is_available() == True`, phép
+  nhân tensor trên `cuda:0` cho kết quả đúng). Preflight của wrapper (`--preflight-only`) trả về 0.
+- **Blocker còn lại, đã đo chứ không suy đoán — và nó không phải GPU:**
+
+  1. **Không đủ dung lượng đĩa.** Constructor native (`datasets.py:75-90`) dựng và pickle **cả ba
+     category ngay từ đầu**, trước mọi inference, ghi thẳng vào dataset root; wrapper chỉ có thể
+     giảm nhẹ bằng `isolated_cache_root`. Đo trên dữ liệu thật: dress **4.40 GiB**, shirt **5.84 GiB**,
+     toptee **5.21 GiB** ⇒ **15.46 GiB** mỗi lượt chạy. Máy này còn **3.3 GiB**. Cả hai lần chạy thử
+     đều chết đúng chỗ đó (`OSError: [Errno 122] Disk quota exceeded` / `[Errno 28]`, tại
+     `datasets.py:85` khi đang pickle `shirt`). Đây là chặn **thật** và **có thể gỡ** bằng dung lượng,
+     không phải giới hạn của code.
+
+  2. **Checkpoint lệch với source đã pin.** File tác giả chứa thêm hai tensor
+     `backbone.binding_decoder.fc.0.{weight,bias}` mà `BindingDecoder` của revision đã pin
+     (`29a2a31d6a56` = HEAD của upstream, đã kiểm bằng `git log`) **không** khai báo. `missing_keys`
+     **rỗng**, `binding()` **không đọc** hai tensor đó, và chính evaluator của tác giả
+     (`evaluate_model.py:63`) load bằng `strict=False`; wrapper thì từ chối vì gate
+     "missing/unexpected ngoài `loss_T` ⇒ raise" (`workbench/replay/encoder.py:195-203`). Đây là một
+     phát hiện **chưa kết luận**: chưa đo được Recall của checkpoint dưới source đã pin (vì chặn #1
+     xảy ra trước khi inference bắt đầu), nên **không** khẳng định hai tensor đó vô hại — và **cũng
+     không** hạ gate để cho qua. Muốn kết luận phải chạy đủ trên một máy có ≥16 GiB trống: nếu Recall
+     khớp reference `r10 56.13 / r50 77.59` thì hai tensor vô hại và nên nới gate đúng hai key đó;
+     nếu không khớp thì checkpoint và source là hai model khác nhau và từ chối là đúng.
+  3. `encoder` **không khai** `per_query_observer` trong registry, nên chưa có đường export per-query —
+     đúng như thiết kế, vì khai năng lực trước khi có integration là tự nhận điều chưa làm được.
 
 ### 3. `hint`
 - Upstream @ `bec50b6c8c19`. Wrapper `hint.py` chạy trong `isolated_cache_root` (F03/B3):
