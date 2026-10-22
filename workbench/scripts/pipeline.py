@@ -1612,6 +1612,16 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
 
         # Only an actual provisioning action is side-effecting; plain verification is read-only.
         will_create_env = bool(m.get("environment_required")) and getattr(args, "allow_env_install", False) and getattr(args, "apply", False)
+        # A required environment whose interpreter is NOT configured cannot be verified, and the only
+        # remedy is provisioning it -- which needs authorization. The stage must therefore declare that
+        # capability up front, so the runner refuses it BY NAME (`BLOCKED_AUTHORIZATION_REQUIRED`,
+        # naming the flag) instead of executing a read-only check that fails with "environment exited
+        # with status 1" and leaves the operator to infer that a permission was the missing piece.
+        #
+        # Gated on the interpreter being unset so a provisioned environment still verifies read-only
+        # without this permission: requiring it unconditionally would refuse a working setup.
+        env_var = ((m.get("environment") or {}).get("python_env_var"))
+        needs_provisioning = bool(m.get("environment_required")) and bool(env_var) and not os.environ.get(env_var)
         env_cmd = ["--model", mid]
         if will_create_env:
             # `required_capabilities` below names `allow_network`, so the runner refuses to execute
@@ -1625,7 +1635,8 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             model_id=mid,
             dependencies=(sync_dep,),
             receipt=True,
-            required_capabilities=({"allow_env_install", "allow_network"} if will_create_env else frozenset()),
+            required_capabilities=({"allow_env_install", "allow_network"}
+                                   if (will_create_env or needs_provisioning) else frozenset()),
         ))
 
         prep_link = canonical_dataset_link_path(m, config.WORKBENCH_THIRD_PARTY_ROOT)
