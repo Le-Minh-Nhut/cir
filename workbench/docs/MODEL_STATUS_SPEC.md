@@ -269,6 +269,18 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
      gate paper vẫn dừng ở `PASS_METRICS_ONLY_MAPPING_UNVERIFIED` vì dòng reference của ENCODER
      trong `paper_benchmarks/papers.yaml` ghi `checkpoint_mapping_status: UNVERIFIED` (14/14 dòng
      paper đều vậy — mặc định fail-closed có chủ ý, không phải lỗi ở lượt này).
+  5. **Artifact per-query của lượt đó KHÔNG tái lập được aggregate của chính nó** — 30 hit-count
+     lệch trên sáu giá trị Recall (dress R@50: artifact 76.2023 vs report 76.5493), dù hai bên đều
+     ghi `INSTRUMENTATION_PARITY_VERIFIED`. Nguyên nhân: `cross_check_with_native` chạy **trong
+     observer** và so với các lệnh gọi native `test()` **cùng tiến trình, cùng model object**;
+     `test()` chia batch rồi reduce trên GPU, và cuDNN **không** được ghim deterministic, nên hai
+     lượt cho feature lệch bit cuối. Hai lượt khớp **99.8%** query — đủ để check nội bộ pass,
+     không đủ để rank công bố tái lập aggregate. Bản thân artifact **nhất quán nội bộ** (mọi target
+     nằm đúng rank đã ghi), nên observer/publisher không thể phát hiện.
+     Đã thêm check ở **parent** (nơi duy nhất có thể): artifact phải tái lập `category_metrics` của
+     lượt đó, so theo **số hit** chứ không theo dung sai. Đối chứng: check này **từ chối** artifact
+     ENCODER thật (6 mâu thuẫn) và **chấp nhận** artifact LIMN thật (0 mâu thuẫn).
+     Vì vậy **không** đọc lượng export của ENCODER như bằng chứng per-query đã kiểm chứng.
 
 ### 3. `hint`
 - Upstream @ `bec50b6c8c19`. Wrapper `hint.py` chạy trong `isolated_cache_root` (F03/B3):
