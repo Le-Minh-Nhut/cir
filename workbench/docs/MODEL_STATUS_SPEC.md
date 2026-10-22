@@ -64,7 +64,7 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | # | model_id | upstream | protocol native | checkpoint variant / noise | source+patch integrity | ckpt/data/env readiness | replay capability | parser | per-query | mức thực tế | blocker |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | `limn` | iLearn-Lab/TPAMI24-LIMN | `fashioniq_val_split` | 3 ckpt category, clean eval, training noise unstated | vendored, pin OK | **3 ckpt staged, size+sha256 VERIFIED**; env provisioned (torch 1.12.1+cu113) | native wrapper | `limn_structured_json` | **có** exporter+observer+publish, parity 0 mismatch | **`FULL_VAL_VERIFIED` + `PAPER_PARITY_CHECKED`** | — (blocker engineering đã đóng) |
-| 2 | `encoder` | iLearn-Lab/AAAI25-ENCODER | `fashioniq_val_split` | `fashioniq.pt` @rev `dd9b0865` | vendored + 2 local fix | **ckpt staged, size 631 879 365 + sha256 `0f31c501…` VERIFIED**; LAION aux staged; env CHƯA provision | wrapper | shared replay | không | `CHECKPOINT_MAPPING_VERIFIED` | `ENV_NOT_PROVISIONED` |
+| 2 | `encoder` | iLearn-Lab/AAAI25-ENCODER | `fashioniq_val_split` | `fashioniq.pt` @rev `dd9b0865` | vendored + 2 local fix | **ckpt staged, size 631 879 365 + sha256 `0f31c501…` VERIFIED**; LAION aux staged (605 219 813 B); env `workbench/envs/encoder` đã provision, CUDA chạy được; wrapper load được ckpt (2 key thừa đã biện luận) và **forward pass thật trên GPU OK** | wrapper | shared replay | không | `CHECKPOINT_MAPPING_VERIFIED` → **`CHECKPOINT_LOADED`** → **`GPU_SMOKE_VERIFIED`** | `EVALUATION_BLOCKED_DISK` |
 | 3 | `hint` | iLearn-Lab/ICASSP26-HINT | `fashioniq_val_split` | `fashioniq.pt` 2 724 451 182 B | vendored, pin OK | size/hash VERIFIED; chưa stage | wrapper + cache isolation | `hint_native_recall` | không | `AGGREGATE_PARSED` | `PUBLIC_ASSET_SETUP` |
 | 4 | `pair` | iLearn-Lab/ICASSP25-PAIR | `fashioniq_val_split` | `pair-B1.pt`/`pair-B2.pt` | vendored + 1 local fix + `data/datasets.py` recovered | mapping **UNRESOLVED** | wrapper | shared replay | không | `CODE_TESTED` | `AUTHOR_ONLY_INFORMATION` + `SCIENTIFIC_VARIANT` |
 | 5 | `clvc_net` | iLearn-Lab/SIGIR21-CLVC-Net | `fashioniq_val_split` | 6 whole models (2/category) | vendored + torch.hub fix | archive `CLVCNET.zip` interior chưa xác minh | wrapper | shared replay | không | `CODE_TESTED` | `AUTHOR_ONLY_INFORMATION` |
@@ -95,9 +95,11 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 > Cả ba nay đã sửa và có regression bắt được khi revert.
 >
 > LIMN là model **đầu tiên** đạt `CHECKPOINT_LOADED`, `GPU_SMOKE_VERIFIED`, `FULL_VAL_VERIFIED` và
-> `PAPER_PARITY_CHECKED`. `encoder` và `hint` vẫn dừng ở mức cũ: checkpoint của `encoder` đã stage và
-> verify trên PC này, nhưng interpreter của nó **chưa** được provision, và cả hai **không** khai
-> `per_query_observer` nên chưa có per-query để so cross-model.
+> `PAPER_PARITY_CHECKED`. `encoder` đã lên tới `CHECKPOINT_LOADED` và `GPU_SMOKE_VERIFIED`:
+> checkpoint tác giả load qua đúng gate và **forward pass thật trên GPU** chạy được (R16). Nó
+> **chưa** đạt `FULL_VAL_VERIFIED` vì constructor native cần ~12 GiB đĩa trong khi máy còn 3.3 GiB.
+> `hint` vẫn ở mức cũ. Cả hai **không** khai `per_query_observer`, nên chưa có per-query để so
+> cross-model — đó là hạn chế riêng, không phải cùng blocker với dung lượng.
 
 > **Ảnh hưởng của R13** (21/10/2026): R13 sửa **năm** lỗi, tất cả ở tầng dependency/verifier, không đổi mức
 > khoa học của model nào. (1) Verifier từ chối **nguồn đúng** vì khoảng trắng hợp lệ trước `git+` bị dính
@@ -182,8 +184,10 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
 - Checkpoint `fashioniq.pt`: **đã verify độc lập** — Hub revision `dd9b086569fe69bd9111b6114546201c97934b01`,
   size 631 879 365, LFS oid `0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173`;
   Range read trả `PK..fashioniq/data.pkl` + `OrderedDict` bắt đầu `loss_T`.
-- Loader: giữ `strict=False` (upstream) nhưng **không bỏ qua report** — missing/unexpected (ngoài
-  `loss_T`) ⇒ raise. Blocker: backbone LAION ViT-B/32 + ckpt chưa stage.
+- Loader: giữ `strict=False` (upstream) nhưng **không bỏ qua report** — missing parameter, lệch
+  shape, và key lạ đều ⇒ raise. Hai key ngoại lệ của artifact tác giả được biện luận ở mục dưới;
+  tình trạng "backbone + ckpt chưa stage" ghi ở đây **đã hết hiệu lực** (xem mục "Trạng thái trên
+  máy này").
 - Đã chạy: `test_encoder_replay.py` (5), `test_verified_declarations.py` (F10).
 - **Trạng thái trên máy này (đo lại 2026-10-22).** Ba thứ đã được provision và kiểm chứng:
   checkpoint `fashioniq.pt` **đã tải và hash khớp** (631 879 365 B, sha256 `0f31c50150a7bda3495e3
@@ -194,27 +198,49 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
   nhân tensor trên `cuda:0` cho kết quả đúng). Preflight của wrapper (`--preflight-only`) trả về 0.
 - **Blocker còn lại, đã đo chứ không suy đoán — và nó không phải GPU:**
 
-  1. **Không đủ dung lượng đĩa.** Constructor native (`datasets.py:75-90`) dựng và pickle **cả ba
+  1. **Không đủ dung lượng đĩa.** Constructor native (`datasets.py:74-88`) dựng và pickle **cả ba
      category ngay từ đầu**, trước mọi inference, ghi thẳng vào dataset root; wrapper chỉ có thể
-     giảm nhẹ bằng `isolated_cache_root`. Đo trên dữ liệu thật: dress **4.40 GiB**, shirt **5.84 GiB**,
-     toptee **5.21 GiB** ⇒ **15.46 GiB** mỗi lượt chạy. Máy này còn **3.3 GiB**. Cả hai lần chạy thử
-     đều chết đúng chỗ đó (`OSError: [Errno 122] Disk quota exceeded` / `[Errno 28]`, tại
-     `datasets.py:85` khi đang pickle `shirt`). Đây là chặn **thật** và **có thể gỡ** bằng dung lượng,
-     không phải giới hạn của code.
+     giảm nhẹ bằng `isolated_cache_root`.
+     Trọng tải mỗi tensor là `3x224x224x4` = **602 112 B** (đo bằng chính transform đã pin:
+     `open_clip.create_model_and_transforms('ViT-B-32')`, cả stage 0 và stage 1 đều ra `(3,224,224)`
+     float32). `get_test_data` lưu **2 ảnh/query** (source + target) cộng **1 tensor cho mỗi chỉ số
+     gallery phân biệt** mà hợp của các cặp nêu ra (không phải toàn bộ gallery):
 
-  2. **Checkpoint lệch với source đã pin.** File tác giả chứa thêm hai tensor
+     | category | query | gallery phân biệt | tensor payload |
+     |---|---|---|---|
+     | dress | 2 017 | 2 628 | 3.74 GiB |
+     | shirt | 2 038 | 3 089 | 4.02 GiB |
+     | toptee | 1 961 | 2 902 | 3.83 GiB |
+     | **tổng** | | | **~11.6 GiB** |
+
+     Đây là **payload tính từ annotation**, không phải kích thước pickle đo trên đĩa; overhead của
+     pickle chưa được đo. Máy này còn **3.3 GiB**. Đã chạy thử hai lần và cả hai chết đúng chỗ đó
+     (`OSError: [Errno 122] Disk quota exceeded` / `[Errno 28]`, tại `datasets.py:85` khi đang pickle
+     `shirt`). Chặn **thật**, và **có thể gỡ** bằng dung lượng: cần **≥12 GiB trống** trên volume chứa
+     `WORKBENCH_ARTIFACTS_ROOT` (khuyến nghị ≥16 GiB để có biên an toàn), không phải giới hạn của code.
+     Số **15.46 GiB** ghi ở bản trước là **sai**: nó tính trên toàn bộ gallery thay vì hợp các cặp.
+
+  2. **Checkpoint lệch với source đã pin — ĐÃ GỠ (R16).** File tác giả chứa thêm hai tensor
      `backbone.binding_decoder.fc.0.{weight,bias}` mà `BindingDecoder` của revision đã pin
-     (`29a2a31d6a56` = HEAD của upstream, đã kiểm bằng `git log`) **không** khai báo. `missing_keys`
-     **rỗng**, `binding()` **không đọc** hai tensor đó, và chính evaluator của tác giả
-     (`evaluate_model.py:63`) load bằng `strict=False`; wrapper thì từ chối vì gate
-     "missing/unexpected ngoài `loss_T` ⇒ raise" (`workbench/replay/encoder.py:195-203`). Đây là một
-     phát hiện **chưa kết luận**: chưa đo được Recall của checkpoint dưới source đã pin (vì chặn #1
-     xảy ra trước khi inference bắt đầu), nên **không** khẳng định hai tensor đó vô hại — và **cũng
-     không** hạ gate để cho qua. Muốn kết luận phải chạy đủ trên một máy có ≥16 GiB trống: nếu Recall
-     khớp reference `r10 56.13 / r50 77.59` thì hai tensor vô hại và nên nới gate đúng hai key đó;
-     nếu không khớp thì checkpoint và source là hai model khác nhau và từ chối là đúng.
-  3. `encoder` **không khai** `per_query_observer` trong registry, nên chưa có đường export per-query —
+     (`29a2a31d6a56` = HEAD của upstream) **không** khai báo. Căn cứ để cho qua là về **artifact và
+     source**, không phải về điểm số: `BindingDecoder.__init__` **không hề** tạo thuộc tính `fc`
+     (`model_try2.py:89-116`), và quét **toàn bộ** checkout pin không thấy chỗ nào đọc
+     `binding_decoder.fc`; `missing_keys` **rỗng** (mọi tham số model cần đều đã nạp), 415/417 tensor
+     khớp shape với tham số, và **đổi giá trị** hai tensor đó khiến output của `binding()` **giống hệt**
+     (chênh lệch tuyệt đối lớn nhất `0.0`). Ngoại lệ trong `_unused_checkpoint_keys`
+     (`workbench/replay/encoder.py`) chỉ mở khi **đủ bốn điều kiện**: đúng digest đã đăng ký của
+     artifact này, mapping của variant là `VERIFIED_METADATA`, source pin sạch và đúng commit, và
+     module **không** khai hai tên đó. Thiếu tham số, lệch shape, hay bất kỳ key lạ nào khác **vẫn
+     bị từ chối**; hai key bị bỏ qua được **in ra stderr**, không im lặng.
+     Đã kiểm bằng checkpoint thật: load qua đúng gate → ACCEPTED kèm log; đổi digest → REFUSED; thêm
+     key lạ → REFUSED. Và **forward pass thật trên GPU** với checkpoint tác giả chạy được: output
+     `(2, 512)`, hữu hạn, chuẩn hoá, không suy biến. Bằng chứng đầy đủ:
+     `workbench/docs/reviews/R16_ENCODER_KEY_COMPAT.md`.
+  3. **Chưa chạy được native evaluation đầy đủ** vì chặn #1 (đĩa). Đây là **blocker của native evaluation đầy đủ**
+     (việc còn lại của ENCODER còn có mục 4 bên dưới). Không có đường vòng: constructor native dựng cả ba category trước inference.
+  4. `encoder` **không khai** `per_query_observer` trong registry, nên chưa có đường export per-query —
      đúng như thiết kế, vì khai năng lực trước khi có integration là tự nhận điều chưa làm được.
+     **Không** route ENCODER qua exporter của LIMN chỉ để lấp trường capability.
 
 ### 3. `hint`
 - Upstream @ `bec50b6c8c19`. Wrapper `hint.py` chạy trong `isolated_cache_root` (F03/B3):

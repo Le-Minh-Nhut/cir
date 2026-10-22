@@ -1100,7 +1100,7 @@ def record_gpu_capability(model: dict[str, Any], result: dict[str, Any],
     identity (machine, driver, visible devices), so a changed interpreter, a changed dependency
     set, or a different host invalidates it rather than silently reusing a stale verification.
     """
-    key = _gpu_capability_key(model)
+    key = _gpu_capability_key(model, config=config)
     payload = {
         **result,
         "model_id": model.get("model_id"),
@@ -1213,10 +1213,15 @@ def resolve_model_interpreter(model: dict[str, Any], config: Any | None = None) 
 _resolve_model_interpreter = resolve_model_interpreter
 
 
-def _gpu_capability_key(model: dict[str, Any], authoritative: bool = True) -> str:
+def _gpu_capability_key(model: dict[str, Any], authoritative: bool = True,
+                       config: Any | None = None) -> str:
     import hashlib
 
-    configured = resolve_model_interpreter(model) or ""
+    # The interpreter can come from the workspace's own provisioning assignment file, so the
+    # resolution needs the caller's configuration for the same reason the capability lookup does:
+    # an unset environment variable plus a named workspace must not fall back to the default root's
+    # assignment, which would key the capability to a different interpreter than the one launched.
+    configured = resolve_model_interpreter(model, config) or ""
     interpreter = Path(configured).expanduser() if configured else None
     fingerprint = None
     if interpreter is not None and interpreter.is_file():
@@ -1340,7 +1345,8 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
     different workspace's record for the same host. It is optional because the advisory callers hold
     no configuration; leaving it out resolves the process default, which is what they mean.
     """
-    configured = getattr(report, "interpreter", None) or resolve_model_interpreter(model) or ""
+    configured = (getattr(report, "interpreter", None)
+                  or resolve_model_interpreter(model, config) or "")
     from workbench.backend.operator_config import resolve_config
 
     config_for_records = config if config is not None else resolve_config()
@@ -1389,7 +1395,7 @@ def _cached_gpu_capability(model: dict[str, Any], report: EnvironmentReport,
                     return payload
         return None
 
-    key = _gpu_capability_key(model, authoritative=True)
+    key = _gpu_capability_key(model, authoritative=True, config=config_for_records)
     memo = _gpu_memo_key(key, config_for_records)
     cached = _GPU_CAPABILITY.get(memo)
     if cached is not None:
@@ -1454,7 +1460,7 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     if not variable:
         return EnvironmentReport(model_id, None, None, TIER_UNCONFIGURED, "UNCONFIGURED",
                                  reason="no environment variable declared")
-    configured = resolve_model_interpreter(model)
+    configured = resolve_model_interpreter(model, config)
     if not configured:
         return EnvironmentReport(model_id, variable, None, TIER_UNCONFIGURED, "UNCONFIGURED",
                                  reason=f"{variable} not set")
