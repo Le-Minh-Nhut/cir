@@ -868,8 +868,10 @@ def _execution_identity(model: dict, config: WorkbenchConfig) -> dict:
             add_file(path.relative_to(root).as_posix(), path)
 
     env = model.get("environment") or {}
-    configured = os.environ.get(env.get("python_env_var") or "")
-    interpreter = configured or (sys.executable if not model.get("environment_required") else "UNCONFIGURED")
+    variable = env.get("python_env_var")
+    configured = os.environ.get(variable or "")
+    interpreter = configured or (sys.executable if not variable and not model.get("environment_required")
+                                 else "UNCONFIGURED")
     digest.update(f"INTERPRETER:{interpreter}\0".encode("utf-8"))
     if interpreter != "UNCONFIGURED":
         interpreter_path = Path(interpreter).expanduser()

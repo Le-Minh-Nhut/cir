@@ -209,6 +209,7 @@ def test_valid_vendored_manifest_remains_authority_inside_parent_git(tmp_path: P
 
 
 def test_nested_upstream_checkout_uses_its_own_git_head(tmp_path: Path) -> None:
+    from workbench.backend.runtime import source_provenance as runtime_provenance
     repo, _ = _enclosing_git_repo(tmp_path)
     third_party = repo / "third_party"
     third_party.mkdir()
@@ -223,9 +224,9 @@ def test_nested_upstream_checkout_uses_its_own_git_head(tmp_path: Path) -> None:
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=checkout, text=True).strip()
     model = {"model_id": "nested", "upstream_commit_sha": commit}
 
-    provenance = source_provenance(model, checkout)
-    assert provenance["actual_commit"] == commit
-    assert provenance["verified"] is True
+    for provenance in (source_provenance(model, checkout), runtime_provenance(model, checkout)):
+        assert provenance["actual_commit"] == commit
+        assert provenance["verified"] is True
 
 def test_manifest_digest_is_order_independent(tmp_path: Path) -> None:
     """The aggregate is what a run records; it must not depend on directory iteration order."""

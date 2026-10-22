@@ -419,7 +419,9 @@ def main(argv: list[str] | None = None) -> int:
         ok = create_env(model, s, args.dry_run, config=config, network_allowed=args.allow_network)
         return 0 if ok else 1
 
-    return 0 if s["ready"] else 1
+    # Optional provisioning must not mask later preflight or authorization blockers; status still
+    # reports a declared-but-unverified interpreter as blocked.
+    return 0 if not model.get("environment_required") else int(not s["ready"])
 
 
 if __name__ == "__main__":

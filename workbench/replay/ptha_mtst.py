@@ -1,21 +1,18 @@
-"""Read-only preflight for the pinned PTHA+MTST FashionIQ evaluator.
-
-Author-published weights on HuggingFace (`yinanzhou1/mtst_ptha`) provide only CIRR
-fine-tuned weights (`tuned_mtst_cirr.pt`). No FashionIQ checkpoint is published by the
-authors. Therefore, this module acts as a strict preflight reporting the missing
-checkpoint without loading untrusted weights or running inference.
-"""
+"""PTHA+MTST preflight and explicitly labelled CIRR-to-FashionIQ transfer replay."""
 from __future__ import annotations
 
+import json
+import os
 import sys
 from argparse import ArgumentParser
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
-from workbench.replay.common import source_pin_status
+from workbench.replay.common import source_pin_status, sha256_file
 
 MODEL = model_by_id("ptha_mtst")
 RAW_INPUTS = tuple(
@@ -28,34 +25,159 @@ RAW_INPUTS = tuple(
 )
 HF_REPO = "yinanzhou1/mtst_ptha"
 PUBLISHED_CIRR_WEIGHT = "tuned_mtst_cirr.pt"
+TRANSFER_LABEL = "PTHA+MTST | CIRR checkpoint -> FashionIQ | cross-dataset transfer | exploratory"
 
 
-def preflight(source_root: Path, dataset_root: Path, checkpoint_root: Path) -> list[str]:
-    """Return all known blockers without importing upstream code or mutating inputs."""
+def evaluator_path(source_root: Path) -> Path:
+    return source_root / "MTST_PTHA" / "src" / "validate_blip.py"
+
+
+def preflight(
+    source_root: Path,
+    dataset_root: Path,
+    checkpoint_root: Path,
+    *,
+    transfer_cirr_to_fashioniq: bool = False,
+) -> list[str]:
+    """Return blockers without importing upstream code or mutating inputs."""
     blockers: list[str] = []
     ok, reason = source_pin_status(source_root, MODEL["upstream_commit_sha"], MODEL)
     if not ok:
         blockers.append(f"pinned PTHA+MTST source unavailable: {reason}")
 
-    # Pinned entrypoint check
-    evaluator_path = source_root / "MTST_PTHA" / "src" / "blip_validate.py"
-    if not evaluator_path.is_file():
-        blockers.append(f"pinned evaluator missing at {evaluator_path}")
+    evaluator = evaluator_path(source_root)
+    if not evaluator.is_file():
+        blockers.append(f"pinned evaluator missing at {evaluator}")
 
-    # Dataset checks
     blockers.extend(
         f"FashionIQ raw input missing: {dataset_root / path}"
         for path in RAW_INPUTS
         if not (dataset_root / path).is_file()
     )
 
-    # Checkpoint checks: HF repo yinanzhou1/mtst_ptha only published CIRR checkpoint
-    blockers.append(
-        f"PTHA+MTST FashionIQ fine-tuned checkpoint missing: author repository "
-        f"https://huggingface.co/{HF_REPO} publishes only CIRR weights "
-        f"('{PUBLISHED_CIRR_WEIGHT}'), no FashionIQ checkpoint is published"
-    )
+    if transfer_cirr_to_fashioniq:
+        checkpoint = checkpoint_root / PUBLISHED_CIRR_WEIGHT
+        if not checkpoint.is_file():
+            blockers.append(f"PTHA+MTST CIRR checkpoint missing: {checkpoint}")
+        elif checkpoint.stat().st_size == 0:
+            blockers.append(f"PTHA+MTST CIRR checkpoint is an empty placeholder: {checkpoint}")
+    else:
+        blockers.append(
+            f"PTHA+MTST FashionIQ fine-tuned checkpoint missing: author repository "
+            f"https://huggingface.co/{HF_REPO} publishes only CIRR weights "
+            f"('{PUBLISHED_CIRR_WEIGHT}'); CIRR weights require explicit transfer opt-in"
+        )
     return blockers
+
+
+def _state_dict_report(model_state: dict[str, Any], checkpoint_state: dict[str, Any]) -> dict[str, Any]:
+    expected = set(model_state)
+    supplied = set(checkpoint_state)
+    missing = sorted(expected - supplied)
+    unexpected = sorted(supplied - expected)
+    mismatched_shapes = sorted(
+        (key, tuple(checkpoint_state[key].shape), tuple(model_state[key].shape))
+        for key in expected & supplied
+        if tuple(checkpoint_state[key].shape) != tuple(model_state[key].shape)
+    )
+    return {
+        "missing_keys": missing,
+        "unexpected_keys": unexpected,
+        "shape_mismatches": [
+            {"key": key, "checkpoint": source, "model": target}
+            for key, source, target in mismatched_shapes
+        ],
+        "strict_false_would_hide": {"missing_keys": missing, "unexpected_keys": unexpected},
+        "strict_false_shape_errors": [key for key, _, _ in mismatched_shapes],
+    }
+
+
+def evaluate_transfer(source_root: Path, dataset_root: Path, checkpoint: Path) -> dict[str, Any]:
+    """Load trusted tensor-only state strictly, then call pinned FashionIQ metric functions."""
+    import torch
+
+    if not torch.cuda.is_available():
+        raise RuntimeError("PTHA native inference uses CUDA-only `.cuda()` calls; CUDA is unavailable")
+
+    src = source_root / "MTST_PTHA" / "src"
+    sys.path.insert(0, str(src))
+    os.environ["MTST_DATA_ROOT"] = str(dataset_root.parent)
+
+    # Inspect tensors only. Never let torch.load execute checkpoint pickle globals.
+    payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
+    checkpoint_key = "Blip2QformerCirCat"
+    if not isinstance(payload, dict) or checkpoint_key not in payload:
+        keys = sorted(payload) if isinstance(payload, dict) else [type(payload).__name__]
+        raise ValueError(
+            f"CIRR transfer checkpoint must contain {checkpoint_key!r}; observed top-level keys: {keys}"
+        )
+    state = payload[checkpoint_key]
+    if not isinstance(state, dict) or not all(
+        isinstance(key, str) and isinstance(value, torch.Tensor) for key, value in state.items()
+    ):
+        raise ValueError(f"checkpoint entry {checkpoint_key!r} is not a tensor-only state dictionary")
+
+    from omegaconf import OmegaConf
+    from lavis.common.registry import registry
+    from lavis.models import load_preprocess
+    from data_utils import FashionIQDataset, targetpad_transform
+    from utils import extract_index_blip_features
+    from validate_blip import compute_fiq_val_metrics
+
+    model_class = registry.get_model_class("blip2_cir_cat")
+    config = OmegaConf.load(model_class.default_config_path("pretrain"))
+    # This released state dict must provide every parameter; the standard BLIP-2 initialization
+    # would otherwise introduce a large, implicit external download before we can check that.
+    config.model.load_pretrained = False
+    model = model_class.from_config(config.model)
+    model_state = model.state_dict()
+    report = _state_dict_report(model_state, state)
+    if report["missing_keys"] or report["unexpected_keys"] or report["shape_mismatches"]:
+        raise ValueError(f"checkpoint is incompatible with {checkpoint_key}: {json.dumps(report)}")
+    model.load_state_dict(state, strict=True)
+    model = model.cuda().eval()
+
+    _vis_processors, text_processors = load_preprocess(config.preprocess)
+    transform = targetpad_transform(1.25, 224)
+    category_metrics: dict[str, dict[str, float]] = {}
+    for category in CATEGORIES:
+        relative = FashionIQDataset("val", [category], "relative", transform)
+        classic = FashionIQDataset("val", [category], "classic", transform)
+        index_features, index_names = extract_index_blip_features(classic, model)
+        r10, r50 = compute_fiq_val_metrics(relative, model, index_features, index_names, text_processors)
+        category_metrics[category] = {"r10": r10, "r50": r50}
+        torch.cuda.empty_cache()
+
+    r10 = sum(values["r10"] for values in category_metrics.values()) / len(category_metrics)
+    r50 = sum(values["r50"] for values in category_metrics.values()) / len(category_metrics)
+    result = {
+        "label": TRANSFER_LABEL,
+        "train_dataset": "CIRR",
+        "evaluation_dataset": "FashionIQ",
+        "checkpoint_training_noise": "unknown",
+        "checkpoint_id": "ptha_mtst_cirr_transfer_exploratory",
+        "checkpoint_sha256": sha256_file(checkpoint),
+        "checkpoint_top_level_model_key": checkpoint_key,
+        "serialization_inspection": "torch.load(weights_only=True)",
+        "model_name": "blip2_cir_cat",
+        "backbone_config": "pretrain (EVA-CLIP ViT-g)",
+        "load_report": {**report, "strict_load": True},
+        "category_metrics": category_metrics,
+        "macro_metrics": {"r10": r10, "r50": r50, "mean": (r10 + r50) / 2},
+        "paper_fashioniq_context_only": {
+            "training_condition": "FashionIQ_MTST",
+            "r10": 54.99,
+            "r50": 76.28,
+            "mean": 65.64,
+            "mismatch": "training dataset/checkpoint differs; numerical context only, not reproduction",
+            "differences_transfer_minus_paper": {
+                "r10": r10 - 54.99,
+                "r50": r50 - 76.28,
+                "mean": (r10 + r50) / 2 - 65.64,
+            },
+        },
+    }
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -63,12 +185,34 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--dataset-root", type=Path, required=True)
     parser.add_argument("--checkpoint-root", type=Path, required=True)
+    parser.add_argument(
+        "--transfer-cirr-to-fashioniq",
+        action="store_true",
+        help="explicit exploratory transfer: CIRR-trained checkpoint evaluated on FashionIQ",
+    )
     args = parser.parse_args(argv)
 
-    blockers = preflight(args.source_root, args.dataset_root, args.checkpoint_root)
-    for blocker in blockers:
-        print(f"[BLOCKED] {blocker}", file=sys.stderr)
-    return 1 if blockers else 0
+    blockers = preflight(
+        args.source_root,
+        args.dataset_root,
+        args.checkpoint_root,
+        transfer_cirr_to_fashioniq=args.transfer_cirr_to_fashioniq,
+    )
+    if blockers:
+        for blocker in blockers:
+            print(f"[BLOCKED] {blocker}", file=sys.stderr)
+        return 1
+    if not args.transfer_cirr_to_fashioniq:
+        return 0
+
+    checkpoint = args.checkpoint_root / PUBLISHED_CIRR_WEIGHT
+    try:
+        result = evaluate_transfer(args.source_root, args.dataset_root, checkpoint)
+    except Exception as error:
+        print(f"[BLOCKED] {type(error).__name__}: {error}", file=sys.stderr)
+        return 1
+    print(json.dumps(result, indent=2))
+    return 0
 
 
 if __name__ == "__main__":

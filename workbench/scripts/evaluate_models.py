@@ -649,6 +649,17 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     os.chmod(temp_root, 0o700)
     child_env["TMPDIR"] = str(temp_root)
     environment["TMPDIR"] = str(temp_root)
+    # The native dataset cache is built ONCE per run and reused by the per-query observer, whose
+    # own process would otherwise construct it a second time: the measured peak for one
+    # three-category construction is 11.87 GB, so two of them do not fit on a host that fits one.
+    # The directory is run-scoped, so concurrent runs never share a cache. See
+    # `workbench.replay.common.run_cache_root` for why reuse is sound and what still refuses a
+    # stale cache.
+    replay_cache = directory / "replay-cache"
+    replay_cache.mkdir(mode=0o700, exist_ok=True)
+    os.chmod(replay_cache, 0o700)
+    child_env["WORKBENCH_REPLAY_CACHE_ROOT"] = str(replay_cache)
+    environment["WORKBENCH_REPLAY_CACHE_ROOT"] = str(replay_cache)
 
     try:
         process = subprocess.Popen(plan.command, cwd=plan.cwd, text=True,
@@ -1765,22 +1776,17 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     # the third category, so every ENCODER export failed with `observer exited -9` while the
     # aggregate report looked complete. The leak rationale below is the second reason -- anything
     # the observer writes would otherwise outlive the run in a world-readable directory.
-    # Each run then gets its own subdirectory, so the two children never share a cache root.
-    #
-    # The aggregate's cache is REMOVED first. Both children build the same full three-category
-    # dataset (the native constructor bakes every category's tensors before any inference), so the
-    # two caches together need twice the ~11.9 GiB. On a filesystem with enough room for one but not
-    # two, the observer aborted on `[Errno 28] No space left on device` inside the native
-    # `save_obj` -- a failure that looks like a broken export and is actually the parent leaving the
-    # first cache in place. The aggregate's outputs are already durable at this point (its stdout,
-    # its aggregate metrics and the run directory are on disk), so its scratch cache is disposable.
-    aggregate_temp = directory / "tmp"
-    if aggregate_temp.is_dir():
-        shutil.rmtree(aggregate_temp, ignore_errors=True)
+    # The observer joins the RUN's replay cache rather than building its own, so the two children
+    # need room for one cache instead of two. Its TMPDIR stays private and separate: that is where
+    # the native constructor's TemporaryDirectory-free scratch would land, and keeping it apart means
+    # an observer that dies cannot leave anything inside the shared cache.
     observer_temp = directory / "observer-tmp"
     observer_temp.mkdir(mode=0o700, exist_ok=True)
     os.chmod(observer_temp, 0o700)
     child_env["TMPDIR"] = str(observer_temp)
+    replay_cache = directory / "replay-cache"
+    if replay_cache.is_dir():
+        child_env["WORKBENCH_REPLAY_CACHE_ROOT"] = str(replay_cache)
     observer_module = f"workbench.replay.{plan.model_id}_export"
     publisher_module = f"workbench.replay.{plan.model_id}_publish"
     argv = [interpreter, "-m", observer_module,
@@ -2111,6 +2117,12 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
             _run_observation(plan, config, run_id, directory,
                              metadata.get("command_digest"), metadata.get("environment_digest"),
                              category_metrics=extraction.category_metrics)
+    # The native dataset cache is derived data, and both children that could read it have finished by
+    # this point. Leaving it in the run directory kept ~10.4 GB behind and, on a host that fits
+    # exactly one cache, that is what made the NEXT run fail with `No space left on device` -- a
+    # failure that looks like a broken evaluator and is a full disk. Everything needed to reproduce
+    # the run (command, stdout, aggregate report, digests) is already on disk.
+    shutil.rmtree(directory / "replay-cache", ignore_errors=True)
 
     paper = plan.paper_metrics or {}
     gate_verdict = _benchmark_gate_verdict(plan, extraction, code)

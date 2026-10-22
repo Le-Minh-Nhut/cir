@@ -139,3 +139,64 @@ def test_each_random_source_is_saved_and_restored(modality: str) -> None:
             pass
         torch.manual_seed(7)
         assert torch.rand(1).item() == before
+
+
+# ------------------------------------------------------------------ run-scoped cache reuse (R18)
+
+def _dataset_root(tmp_path: Path) -> Path:
+    root = tmp_path / "dataset"
+    for name in ("captions", "image_splits", "resized_image"):
+        (root / name).mkdir(parents=True)
+    return root
+
+
+def test_a_run_shares_one_cache_between_its_children(tmp_path: Path, monkeypatch) -> None:
+    """The aggregate and the observer must build the native cache ONCE between them.
+
+    `isolated_cache_root` yields a fresh directory every time, so each child built its own copy --
+    measured at an 11.87 GB peak for one three-category construction. Two of them need twice a host
+    that fits one, and the observer died with `[Errno 28] No space left on device` inside the native
+    `save_obj`, which reads as a broken export rather than as a disk the parent could have saved.
+    """
+    from workbench.replay.common import CACHE_ROOT_ENV, run_cache_root
+
+    dataset = _dataset_root(tmp_path)
+    shared = tmp_path / "replay-cache"
+    monkeypatch.setenv(CACHE_ROOT_ENV, str(shared))
+
+    with run_cache_root(dataset) as first:
+        assert first == shared
+        (first / "fashion_iq_data.json").write_text("{}")
+        (first / "test_queries_dress.pkl").write_bytes(b"cache")
+
+    with run_cache_root(dataset) as second:
+        assert second == first, "the second child did not join the run's cache"
+        assert (second / "test_queries_dress.pkl").read_bytes() == b"cache", (
+            "the second construction cannot see the first's cache, so it would rebuild it")
+
+
+def test_the_cache_root_is_fresh_when_no_parent_named_one(tmp_path: Path, monkeypatch) -> None:
+    """A directly-invoked replay keeps full isolation: there is no run to share with."""
+    from workbench.replay.common import CACHE_ROOT_ENV, run_cache_root
+
+    dataset = _dataset_root(tmp_path)
+    monkeypatch.delenv(CACHE_ROOT_ENV, raising=False)
+    with run_cache_root(dataset) as first:
+        (first / "test_queries_dress.pkl").write_bytes(b"cache")
+    with run_cache_root(dataset) as second:
+        assert second != first
+        assert not (second / "test_queries_dress.pkl").exists()
+
+
+def test_the_shared_cache_still_symlinks_the_pinned_inputs(tmp_path: Path, monkeypatch) -> None:
+    """Reuse must not replace the isolation that made the cache safe: inputs are links, not copies."""
+    from workbench.replay.common import CACHE_ROOT_ENV, run_cache_root
+
+    dataset = _dataset_root(tmp_path)
+    (dataset / "captions" / "cap.dress.val.json").write_text("[]")
+    monkeypatch.setenv(CACHE_ROOT_ENV, str(tmp_path / "replay-cache"))
+
+    with run_cache_root(dataset) as root:
+        link = root / "captions"
+        assert link.is_symlink(), "the shared cache copied an input instead of linking it"
+        assert link.resolve() == (dataset / "captions").resolve()

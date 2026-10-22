@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import os
 import subprocess
 import tempfile
 from contextlib import contextmanager
@@ -84,6 +85,62 @@ def source_pin_status(source_root: Path, expected_commit: str,
     """Pin check for replay callers; ``model`` authorizes an approved patch when supplied."""
     ok, _, reason = source_checkout_status(source_root, expected_commit, model)
     return ok, reason
+
+
+#: The parent sets this to a directory the whole RUN shares, so the aggregate and the per-query
+#: observer construct the native dataset cache once between them instead of once each. See
+#: `reusable_cache_root` for why reuse is sound and what still refuses a bad cache.
+CACHE_ROOT_ENV = "WORKBENCH_REPLAY_CACHE_ROOT"
+
+
+@contextmanager
+def run_cache_root(dataset_root: Path,
+                   directory_names: tuple[str, ...] = ("captions", "image_splits", "resized_image")) -> Iterator[Path]:
+    """The cache root for THIS run: the shared one when the parent named it, else a fresh temp root.
+
+    A replay invoked directly (an operator running the wrapper by hand, or a test) has no parent to
+    extend its lifetime, so it keeps the fully isolated behaviour.
+    """
+    shared = os.environ.get(CACHE_ROOT_ENV, "").strip()
+    if shared:
+        with reusable_cache_root(dataset_root, Path(shared), directory_names) as root:
+            yield root
+        return
+    with isolated_cache_root(dataset_root, directory_names) as root:
+        yield root
+
+
+@contextmanager
+def reusable_cache_root(dataset_root: Path, cache_root: Path,
+                        directory_names: tuple[str, ...] = ("captions", "image_splits", "resized_image")) -> Iterator[Path]:
+    """A cache root that survives between the processes of one run.
+
+    `isolated_cache_root` deliberately yields a FRESH directory every time, so the native
+    constructor always takes its cold path and writes its own cache. That is right for isolation and
+    wrong for cost: the aggregate and the per-query observer build the SAME three-category cache --
+    measured at an 11.87 GB peak for one construction -- so a run needs room for two or for the first
+    one to be deleted before the second starts.
+
+    On a host where one cache fits and two do not, neither of those is acceptable. This root is
+    scoped to ONE run instead: it is created under the run's own directory, so concurrent runs still
+    cannot see each other's caches, and the second construction reuses the first's files. The
+    constructor's own cold/warm branch decides: with `fashion_iq_data.json` present it loads the
+    pickles rather than rebuilding them.
+
+    Reuse is only sound because the inputs are pinned -- the seed, the transform and the annotation
+    files are the same for both children -- and because the callback that reads the cache is
+    `assert_alignment`, which refuses a cache whose identities do not match the annotations. A stale
+    or foreign cache is a refusal, not a silently wrong ranking.
+    """
+    cache_root.mkdir(parents=True, exist_ok=True)
+    for name in directory_names:
+        source = dataset_root / name
+        if not source.exists():
+            raise FileNotFoundError(f"native replay input missing: {source}")
+        link = cache_root / name
+        if not link.exists():
+            link.symlink_to(source.resolve(), target_is_directory=source.is_dir())
+    yield cache_root
 
 
 @contextmanager

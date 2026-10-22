@@ -1114,8 +1114,7 @@ def _group_status(group: dict, models: dict[str, dict], specs: dict[str, dict], 
         report is not None and report.tier in runtime.READY_TIERS and report.status != "MODEL_IMPORT_FAILED"
         for report in reports)
     import_failed = any(report is None or report.status == "MODEL_IMPORT_FAILED" for report in reports)
-    if not any((models[mid].get("environment") or {}).get("python_env_var")
-               for mid in group["members"]) and not paths:
+    if not any(models[mid].get("environment_required") for mid in group["members"]) and not paths:
         installation = "NOT_REQUIRED"
     elif same and ready:
         installation = "REUSED"

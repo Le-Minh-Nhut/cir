@@ -178,16 +178,17 @@ def test_int04_configured_model_interpreter_is_returned(tmp_path: Path, monkeypa
 
 def test_declared_model_interpreters_are_verified_without_provisioning_flags(
         tmp_path: Path, monkeypatch):
+    from copy import deepcopy
+
+    models = [deepcopy(model_by_id(model_id)) for model_id in ("csmcir", "airknow")]
+    variables = [model["environment"]["python_env_var"] for model in models]
+    for model, variable in zip(models, variables):
+        # Isolate interpreter routing from each model's heavier dependency contract.
+        model["environment"] = {"python_env_var": variable, "required_imports": ["json"]}
     first = make_venv(tmp_path, "first")
     second = make_venv(tmp_path, "second")
-    models = [
-        {"model_id": "first", "environment": {"python_env_var": "DECLARED_FIRST_PYTHON",
-                                                "required_imports": ["json"]}},
-        {"model_id": "second", "environment": {"python_env_var": "DECLARED_SECOND_PYTHON",
-                                                 "required_imports": ["json"]}},
-    ]
-    monkeypatch.setenv("DECLARED_FIRST_PYTHON", str(first))
-    monkeypatch.setenv("DECLARED_SECOND_PYTHON", str(second))
+    monkeypatch.setenv(variables[0], str(first))
+    monkeypatch.setenv(variables[1], str(second))
 
     assert first != second
     first_report = runtime.verify_environment(models[0], probe=True)
@@ -530,6 +531,10 @@ def test_manage_environment_requires_verification_for_declared_optional_interpre
     assert status["environment_required"] is False
     assert status["ready"] is False
     assert status["runtime_verified"] is False
+    assert module.status({"model_id": "no_declared_environment"}, config)["ready"] is True
+    model["environment"]["required_imports"] = ["json"]
+    assert module.status(model, config)["ready"] is True
+    model["environment"]["required_imports"] = ["missing_optional_dependency"]
 
 
 # ------------------------------------------- interpreter identity cannot be forged (F1/F2)

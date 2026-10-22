@@ -30,8 +30,8 @@ from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
 from workbench.replay.common import (
     ReplayResult,
-    isolated_cache_root,
     load_trusted_whole_model,
+    run_cache_root,
     macro_aggregate,
     seeded_dataset_construction,
     sha256_file,
@@ -287,7 +287,7 @@ def evaluate_categories(
     transform = [preprocess_train, preprocess_val]
 
     results: list[ReplayResult] = []
-    with isolated_cache_root(dataset_root) as cache_root:
+    with run_cache_root(dataset_root) as cache_root:
         root_str = str(cache_root).rstrip("/") + "/"
         # The query inputs are baked in HERE, through the stochastic training transform, so this
         # construction must be reproducible for the per-query export -- which rebuilds the dataset in
