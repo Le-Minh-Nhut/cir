@@ -44,6 +44,59 @@ PROTOCOL = "fashioniq_val_split"
 AUXILIARY_ASSET_NAME = "open_clip_pytorch_model.bin"
 
 
+#: Checkpoint entries the released ENCODER artifact carries but the pinned model does not declare.
+#: Evidence, all reproducible (see `docs/reviews/R16_ENCODER_KEY_COMPAT.md`):
+#:   * `BindingDecoder.__init__` declares no `fc` attribute at all (`model_try2.py:89-116`), and no
+#:     forward path in the pinned checkout reads `binding_decoder.fc` -- a whole-tree search finds
+#:     no reference;
+#:   * loading the real checkpoint reports `missing_keys: []`, so every parameter the model needs
+#:     received a value, and all 415 consumed tensors match their parameter's shape;
+#:   * perturbing these two tensors leaves `BindingDecoder.binding` output bit-identical
+#:     (max absolute difference 0.0).
+#: These are therefore weights for a layer that does not exist in this revision, which is a
+#: statement about the artifacts rather than about any score.
+_UNUSED_CHECKPOINT_KEYS = frozenset({
+    "backbone.binding_decoder.fc.0.weight",
+    "backbone.binding_decoder.fc.0.bias",
+})
+
+#: The released checkpoint those keys were observed in. They are not permitted for any other
+#: artifact: a different file could carry them for a different reason.
+_UNUSED_KEYS_CHECKPOINT_SHA = "0f31c50150a7bda3495e3378df13b4cec7924b52efd23b5e5dd9731459da9173"
+
+
+def _unused_checkpoint_keys(encoder_model, variant: dict[str, Any], source_root: Path) -> frozenset[str]:
+    """Checkpoint entries this model may ignore, or nothing.
+
+    An extra tensor is only tolerable when all four of these hold, because each one rules out a
+    different way the allowance could hide a real problem:
+
+    * the artifact is the exact released file this was observed in, by its registered digest -- so
+      an unrelated or tampered checkpoint cannot borrow the allowance;
+    * the registry's own mapping for that variant is verified metadata, not an assumption;
+    * the pinned source really is the pinned, clean checkout, so the "the model does not read it"
+      claim is about the code that will actually run;
+    * the module does not declare those names, so they are genuinely unconsumed rather than being
+      silently dropped while a real parameter goes unloaded.
+
+    Everything else keeps the strict behaviour: a missing parameter, a shape mismatch, or any other
+    unexpected key still refuses the run.
+    """
+    if variant.get("expected_sha256") != _UNUSED_KEYS_CHECKPOINT_SHA:
+        return frozenset()
+    if variant.get("checkpoint_mapping_status") != "VERIFIED_METADATA":
+        return frozenset()
+    ok, _reason = source_pin_status(source_root, MODEL["upstream_commit_sha"], MODEL)
+    if not ok:
+        return frozenset()
+    declared = set(encoder_model.state_dict())
+    if not _UNUSED_CHECKPOINT_KEYS.isdisjoint(declared):
+        # The module declares one of them: then it is not an unused extra, it is a parameter whose
+        # value this run would silently drop, and the strict path must refuse it.
+        return frozenset()
+    return _UNUSED_CHECKPOINT_KEYS
+
+
 def validate_checkpoint(checkpoint_root: Path, checkpoint_id: str | None = None) -> list[str]:
     blockers: list[str] = []
     variant = CHECKPOINTS.get(checkpoint_id) if checkpoint_id else DEFAULT_CHECKPOINT
@@ -150,6 +203,30 @@ def _load_replay_modules(source_root: Path) -> tuple[Any, Any, Any, Any, Any]:
     return torch, open_clip, datasets, test_module, model_try2
 
 
+
+def _assert_checkpoint_loaded(encoder_model, report, variant: dict[str, Any], source_root: Path) -> None:
+    """Refuse a partially-loaded model; allow only the entries known to be unused, and say so.
+
+    Split out of `evaluate_categories` so the decision is directly testable: a regression that only
+    exercised `_unused_checkpoint_keys` would still pass if the loader stopped calling it.
+    """
+    missing = [key for key in getattr(report, "missing_keys", [])]
+    permitted = _unused_checkpoint_keys(encoder_model, variant, source_root)
+    unexpected = [key for key in getattr(report, "unexpected_keys", []) if key not in permitted]
+    ignored = sorted(key for key in getattr(report, "unexpected_keys", []) if key in permitted)
+    if ignored:
+        # Recorded, never silent: a reader must be able to see which tensors were skipped and why,
+        # the same way the completion proof records the rest of the run's provenance.
+        print("[INFO] ENCODER checkpoint keys present but unused by the pinned model: "
+              f"{ignored} (justified in _unused_checkpoint_keys; every declared parameter loaded)",
+              file=sys.stderr)
+    if missing or unexpected:
+        raise ValueError(
+            "ENCODER checkpoint does not match the model: "
+            f"{len(missing)} missing parameter(s) (first: {missing[0] if missing else '-'}), "
+            f"{len(unexpected)} unexpected key(s) (first: {unexpected[0] if unexpected else '-'}). "
+            "Refusing to evaluate a partially-loaded model.")
+
 def evaluate_categories(
     checkpoint_root: Path,
     dataset_root: Path,
@@ -190,17 +267,11 @@ def evaluate_categories(
         #     `OrderedDict` of `loss_T`/`local_weight`/`backbone.*` entries (verified from the
         #     checkpoint's `fashioniq/data.pkl` header), i.e. a full state_dict, so every parameter
         #     the model declares should be present.
-        #   * `loss_T` is the training temperature and is not part of the module's forward path, so
-        #     the author's file legitimately carries that one extra entry.
+        #   * entries the module does not declare are refused, except where the released artifact is
+        #     known to carry them AND the pinned source provably never reads them (see
+        #     `_unused_checkpoint_keys`).
         report = encoder_model.load_state_dict(ckpt_data, strict=False)
-        missing = [key for key in getattr(report, "missing_keys", [])]
-        unexpected = [key for key in getattr(report, "unexpected_keys", []) if key != "loss_T"]
-        if missing or unexpected:
-            raise ValueError(
-                "ENCODER checkpoint does not match the model: "
-                f"{len(missing)} missing parameter(s) (first: {missing[0] if missing else '-'}), "
-                f"{len(unexpected)} unexpected key(s) (first: {unexpected[0] if unexpected else '-'}). "
-                "Refusing to evaluate a partially-loaded model.")
+        _assert_checkpoint_loaded(encoder_model, report, variant, source_root)
     else:
         encoder_model = ckpt_data
 

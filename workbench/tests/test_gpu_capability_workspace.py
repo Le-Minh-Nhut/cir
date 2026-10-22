@@ -203,6 +203,69 @@ def test_a_record_from_another_workspace_is_not_reused(tmp_path, gpu_model):
         "the positive control: the workspace that holds the record does reuse it"
 
 
+def test_moving_the_implicit_default_workspace_revokes_a_borrowed_capability(
+        tmp_path, gpu_model, monkeypatch):
+    """The reported defect, driven exactly as an operator hits it: the implicit default moves.
+
+    `require_launch_ready(model)` with no configuration resolves the process default itself. When
+    that resolution happened lazily at each use, the environment memo and the capability memo were
+    keyed by whatever root was current, so recording a capability with workspace A as the default
+    and then moving the default to workspace B -- which holds no record -- still authorized the
+    launch from A's memo. Scoping the key by the root is not enough on its own: the root has to be
+    resolved ONCE at the entrance and used for the key, the read and the write.
+    """
+    config_a = _workspace(tmp_path, "implicit-a")
+    config_b = _workspace(tmp_path, "implicit-b")
+
+    def point_default_at(config):
+        """Make `config`'s workspace the one the process resolves by default."""
+        monkeypatch.setenv("WORKBENCH_ARTIFACTS_ROOT", str(config.WORKBENCH_ARTIFACTS_ROOT))
+        monkeypatch.setenv("CIR_REPO_ROOT", str(config.CIR_REPO_ROOT))
+        monkeypatch.setenv("WORKBENCH_RESULTS_ROOT", str(config.WORKBENCH_RESULTS_ROOT))
+
+    point_default_at(config_a)
+    runtime.verify_gpu_runtime(gpu_model, config_a, authorized=True, require_cuda=True)
+
+    # 1. A is the default and holds the record: the gate authorizes without an explicit config.
+    assert runtime.require_launch_ready(gpu_model) == os.environ[PROBE_VARIABLE]
+
+    # 2. The default moves to B, which holds nothing. The same call must now refuse: a memo entry
+    #    read for A must never answer for B.
+    point_default_at(config_b)
+    assert not list(runtime.gpu_capability_directory(config_b).glob("*.json")), \
+        "workspace B must genuinely hold no capability record"
+    with pytest.raises(runtime.GpuVerificationError):
+        runtime.require_launch_ready(gpu_model)
+
+    # 3. Moving the default back to A re-authorizes, so the refusal above is about the workspace
+    #    and not about the process having lost the ability to reuse a record at all.
+    point_default_at(config_a)
+    assert runtime.require_launch_ready(gpu_model) == os.environ[PROBE_VARIABLE]
+
+    # 4. An explicit configuration keeps its own meaning regardless of the default.
+    with pytest.raises(runtime.GpuVerificationError):
+        runtime.require_launch_ready(gpu_model, config=config_b)
+
+
+def test_advisory_readiness_does_not_inherit_another_workspaces_gpu_status(
+        tmp_path, gpu_model, monkeypatch):
+    """A read-only readiness answer must not report another workspace's verified GPU.
+
+    The advisory path is what a dashboard renders, so a borrowed `GPU_RUNTIME_READY` would tell an
+    operator a workspace is ready when it is the neighbouring one that was probed.
+    """
+    recorded = _workspace(tmp_path, "advisory-recorded")
+    empty = _workspace(tmp_path, "advisory-empty")
+    runtime.verify_gpu_runtime(gpu_model, recorded, authorized=True, require_cuda=True)
+
+    mine = runtime.verify_environment(gpu_model, probe=True, advisory=True, config=empty)
+    theirs = runtime.verify_environment(gpu_model, probe=True, advisory=True, config=recorded)
+
+    assert mine.gpu_capability is None, "the empty workspace must not report a verified GPU"
+    assert mine.tier != "GPU_RUNTIME_READY"
+    assert theirs.gpu_capability is not None, "the positive control: the recorded workspace reports it"
+
+
 def test_the_process_default_still_works_when_no_config_is_supplied(tmp_path, gpu_model, monkeypatch):
     """Compatibility: callers that hold no configuration keep resolving the process default."""
     config = _workspace(tmp_path, "default")

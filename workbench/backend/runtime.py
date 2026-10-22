@@ -1435,12 +1435,19 @@ def verify_environment(model: dict[str, Any], *, probe: bool = True, require_cud
     """Return a truthful environment report. Never claims RUNTIME_READY without proof.
 
     ``config`` scopes where a recorded GPU capability is READ from, so the gate that decides a
-    launch looks in the same workspace the record was WRITTEN to. Callers that hold a resolved
-    configuration must pass it: without it this reads the process default, which for an operator
-    whose artifacts root is elsewhere is a different tree -- so a valid record is written and then
-    missed, and the launch is refused as unverified. Optional because several advisory callers hold
-    no configuration; leaving it out resolves the process default, which is what they mean.
+    launch looks in the same workspace the record was WRITTEN to. A caller that holds a resolved
+    configuration must pass it; a caller that does not gets the process default resolved HERE,
+    exactly once, and that same object is then used for the cache key, the capability read and the
+    write. Resolving it lazily at each use instead made the key depend on the process default being
+    unchanged for the life of the process: recording a capability with workspace A as the default
+    and then moving the default to workspace B reused A's memo, so B was authorized by a record it
+    does not hold (reproduced through the public API; the sequence is in
+    `tests/test_gpu_capability_workspace.py`).
     """
+    if config is None:
+        from workbench.backend.operator_config import resolve_config
+
+        config = resolve_config()
     model_id = model.get("model_id", "<unnamed>")
     env = model.get("environment") or {}
     variable = env.get("python_env_var")
@@ -2213,7 +2220,7 @@ def verify_gpu_runtime(model: dict[str, Any], config: Any, *, authorized: bool =
         if existing is not None and existing.get("capability_verified"):
             return existing
 
-    report = verify_environment(model, probe=True, authoritative=True)
+    report = verify_environment(model, probe=True, authoritative=True, config=config)
     if report.tier in (TIER_UNCONFIGURED, "INTERPRETER_MISSING", TIER_GPU_DEFERRED) or not report.interpreter:
         raise GpuVerificationError(
             f"cannot probe GPU before the interpreter is usable [{report.tier}/{report.status}]")
