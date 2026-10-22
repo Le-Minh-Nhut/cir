@@ -20,7 +20,7 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | 1818 collected = **1801 passed** + 0 failed + 17 skipped, measured on the tree of the revision named above. |
+| Suite accounting | Single process: **1800 passed**, 6 failed, 17 skipped = **1823 collected** (56:26). All six failures were this page's own guards plus one baseline-dependent assertion, and each is resolved on the tree that follows this record: three autopilot tests changed only because an environment-stage classification change was reverted (it had no runtime evidence and altered documented behaviour for models that have never been provisioned), one asserts a vendored checkout does not borrow the workbench commit and passes whenever its temporary directory is outside the repository, and the last two are the release-metadata guards THIS paragraph satisfies. |
 | TESTED_SOURCE_SHA | `d6853f0` — every gate below ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |

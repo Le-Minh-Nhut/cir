@@ -282,3 +282,6 @@ workbench/docker/release_verify_report.json
 
 # Runtime state from the ledger key lock, never an artifact.
 .workbench_ledger_key.lock
+
+# Local scratch space for runs whose caches exceed the tmpfs /tmp (see PC_PILOT_HANDOFF).
+.scratch-tmp/

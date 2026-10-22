@@ -19,10 +19,6 @@ protocols:
     evaluation_noise_pct: 0
 models:
   - model_id: csmcir
-    # Declared because its evaluator needs its own interpreter: without this flag
-    # `python_executable` returns the workbench interpreter and the declared
-    # environment is silently ignored.
-    environment_required: true
     environment:
       python_env_var: WORKBENCH_CSMCIR_PYTHON
       confidence: VERIFIED_README
@@ -105,10 +101,6 @@ models:
         status: URL_VERIFIED
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: airknow
-    # Declared because its evaluator needs its own interpreter: without this flag
-    # `python_executable` returns the workbench interpreter and the declared
-    # environment is silently ignored.
-    environment_required: true
     environment:
       python_env_var: WORKBENCH_AIRKNOW_PYTHON
       confidence: VERIFIED_README
@@ -177,10 +169,6 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: conesep
-    # Declared because its evaluator needs its own interpreter: without this flag
-    # `python_executable` returns the workbench interpreter and the declared
-    # environment is silently ignored.
-    environment_required: true
     environment:
       python_env_var: WORKBENCH_CONESEP_PYTHON
       confidence: VERIFIED_README
@@ -299,10 +287,6 @@ models:
     notes: No author-linked FashionIQ fine-tuned checkpoint verified. CIRR pretraining evidence is not eligible. The gallery is the complete ordered validation split with the reference ELIGIBLE (validate_blip.py:44-51 builds labels against targets only and contains no reference mask, unlike the CIRR path at :258-260), which is what makes fashioniq_original_split its protocol.
     checkpoint_variants: []
   - model_id: habit
-    # Declared because its evaluator needs its own interpreter: without this flag
-    # `python_executable` returns the workbench interpreter and the declared
-    # environment is silently ignored.
-    environment_required: true
     environment:
       python_env_var: WORKBENCH_HABIT_PYTHON
       confidence: VERIFIED_README
@@ -381,10 +365,6 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: intent
-    # Declared because its evaluator needs its own interpreter: without this flag
-    # `python_executable` returns the workbench interpreter and the declared
-    # environment is silently ignored.
-    environment_required: true
     environment:
       python_env_var: WORKBENCH_INTENT_PYTHON
       confidence: VERIFIED_README
@@ -463,10 +443,6 @@ models:
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: hint
-    # Declared because its evaluator needs its own interpreter: without this flag
-    # `python_executable` returns the workbench interpreter and the declared
-    # environment is silently ignored.
-    environment_required: true
     environment:
       python_env_var: WORKBENCH_HINT_PYTHON
       confidence: VERIFIED_README
@@ -600,10 +576,6 @@ models:
         status: URL_VERIFIED
         checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: pair
-    # Declared because its evaluator needs its own interpreter: without this flag
-    # `python_executable` returns the workbench interpreter and the declared
-    # environment is silently ignored.
-    environment_required: true
     environment:
       python_env_var: WORKBENCH_PAIR_PYTHON
       confidence: VERIFIED_README
