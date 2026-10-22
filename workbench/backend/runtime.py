@@ -1994,9 +1994,8 @@ def require_verified_model_interpreter(model: dict[str, Any], *, require_cuda: b
     Raises when the environment is not *verified*: an interpreter that merely exists
     or is isolated is not sufficient evidence to launch a real model run.
     """
-    if not model.get("environment_required"):
-        # Such a model runs in the workbench interpreter; never emit a bare name that
-        # could resolve to an unrelated interpreter on PATH.
+    if not model.get("environment_required") and not (model.get("environment") or {}).get("python_env_var"):
+        # A declared model interpreter is authoritative even when autopilot must not provision it.
         return sys.executable
     probe_environment = globals().get("verify_environment", verify_environment)
     report = probe_environment(model, probe=True, require_cuda=require_cuda, config=config)
@@ -2383,7 +2382,7 @@ def environment_status(model: dict[str, Any], probe: bool = False) -> dict[str, 
 
 def environment_blockers(model: dict[str, Any]) -> list[str]:
     """Every reason a model environment cannot be used for a real execution."""
-    if not model.get("environment_required"):
+    if not model.get("environment_required") and not (model.get("environment") or {}).get("python_env_var"):
         return []
     probe_environment = globals().get("verify_environment", verify_environment)
     report = probe_environment(model, probe=True, advisory=True)
@@ -2650,11 +2649,8 @@ def _source_dirty(source: Path, model: dict[str, Any] | None = None) -> bool | N
 
 
 def source_clean_and_pinned(model: dict[str, Any], source: Path) -> tuple[bool, str | None, str | None]:
-    if (source / PROVENANCE_FILENAME).is_file() and not (source / ".git").exists():
-        # Vendored layout: the pin is the recorded upstream commit and integrity is the content
-        # manifest, so this needs no Git call at all. A checkout that still carries nested Git
-        # metadata is NOT this layout — it falls through to the Git-backed path below, which is the
-        # authority on what that repository actually has checked out.
+    if not (source / ".git").exists():
+        # Without nested Git metadata, only the vendored manifest can establish this source revision.
         return vendor_source_clean_and_pinned(model, source)
     try:
         top_level = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=source,
@@ -2690,11 +2686,8 @@ def source_provenance(model: dict[str, Any], source: Path) -> dict[str, Any]:
     """
     import hashlib
 
-    if (source / PROVENANCE_FILENAME).is_file() and not (source / ".git").exists():
-        # Vendored layout only. A checkout that still carries nested Git metadata is answered by the
-        # Git-backed path below: that repository's own HEAD is the authority on what is checked out,
-        # and delegating to the manifest instead would let a git-based checkout — including a dirty
-        # one — be reported as a verified vendored pin.
+    if not (source / ".git").exists():
+        # Without nested Git metadata, only the vendored manifest can establish this source revision.
         return vendor_provenance(model, source)
 
     expected = model.get("upstream_commit_sha")

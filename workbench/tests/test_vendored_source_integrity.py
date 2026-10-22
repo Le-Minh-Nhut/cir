@@ -162,6 +162,71 @@ def test_missing_provenance_is_not_silently_trusted(tmp_path: Path) -> None:
     assert PROVENANCE_FILENAME in reason
 
 
+def _enclosing_git_repo(root: Path) -> tuple[Path, str]:
+    repo = root / "enclosing"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+    (repo / "tracked.txt").write_text("parent repository\n")
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "enclosing repository"], cwd=repo, check=True)
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    return repo, commit
+
+
+@pytest.mark.parametrize("manifest", [None, "not json"])
+def test_vendored_checkout_without_valid_manifest_never_borrows_parent_git(
+        tmp_path: Path, manifest: str | None) -> None:
+    """A vendored path cannot claim the enclosing workbench's unrelated Git revision."""
+    from workbench.backend.runtime import source_provenance as runtime_provenance
+
+    repo, parent_commit = _enclosing_git_repo(tmp_path)
+    third_party = repo / "third_party"
+    third_party.mkdir()
+    checkout = third_party / "NOPIN"
+    checkout.mkdir()
+    if manifest is not None:
+        (checkout / PROVENANCE_FILENAME).write_text(manifest)
+    model = {"model_id": "nopin", "upstream_commit_sha": PIN}
+
+    for provenance in (source_provenance(model, checkout), runtime_provenance(model, checkout)):
+        assert provenance["actual_commit"] is None
+        assert provenance["verified"] is False
+        assert parent_commit not in (provenance.get("error") or "")
+        assert PROVENANCE_FILENAME in (provenance.get("error") or "")
+
+
+def test_valid_vendored_manifest_remains_authority_inside_parent_git(tmp_path: Path) -> None:
+    repo, _ = _enclosing_git_repo(tmp_path)
+    third_party = repo / "third_party"
+    third_party.mkdir()
+    checkout, model = _vendor(third_party)
+
+    provenance = source_provenance(model, checkout)
+    assert provenance["actual_commit"] == PIN
+    assert provenance["verified"] is True
+
+
+def test_nested_upstream_checkout_uses_its_own_git_head(tmp_path: Path) -> None:
+    repo, _ = _enclosing_git_repo(tmp_path)
+    third_party = repo / "third_party"
+    third_party.mkdir()
+    checkout = third_party / "NESTED"
+    checkout.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=checkout, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=checkout, check=True)
+    (checkout / "model.py").write_text("VALUE = 1\n")
+    subprocess.run(["git", "add", "."], cwd=checkout, check=True)
+    subprocess.run(["git", "commit", "-qm", "upstream checkout"], cwd=checkout, check=True)
+    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=checkout, text=True).strip()
+    model = {"model_id": "nested", "upstream_commit_sha": commit}
+
+    provenance = source_provenance(model, checkout)
+    assert provenance["actual_commit"] == commit
+    assert provenance["verified"] is True
+
 def test_manifest_digest_is_order_independent(tmp_path: Path) -> None:
     """The aggregate is what a run records; it must not depend on directory iteration order."""
     assert manifest_digest({"a": "1", "b": "2"}) == manifest_digest({"b": "2", "a": "1"})

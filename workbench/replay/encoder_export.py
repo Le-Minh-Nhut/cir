@@ -17,7 +17,7 @@ from workbench.replay.encoder import (
 from workbench.replay.encoder_observer import (
     ObservedCategory, cross_check_with_native, observe_category,
 )
-from workbench.replay.common import isolated_cache_root
+from workbench.replay.common import isolated_cache_root, seeded_dataset_construction
 
 DEFAULT_TOP_K = 200
 
@@ -87,8 +87,14 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
     observed: list[ObservedCategory] = []
     mismatches: dict[str, tuple[str, ...]] = {}
     with isolated_cache_root(dataset_root) as cache_root:
-        dataset = datasets.FashionIQ(path=str(cache_root).rstrip("/") + "/",
-                                     transform=[preprocess_train, preprocess_val], split="val-split")
+        # Same seed as the aggregate's construction: the query tensors are baked in here through the
+        # stochastic training transform, so without this the export observes a DIFFERENT input
+        # population than the aggregate it reconstructs -- measured at 3994 differing query tensors of
+        # 4034 for one category. See `seeded_dataset_construction`.
+        with seeded_dataset_construction():
+            dataset = datasets.FashionIQ(path=str(cache_root).rstrip("/") + "/",
+                                         transform=[preprocess_train, preprocess_val],
+                                         split="val-split")
         params = SimpleNamespace(batch_size=batch_size, local_rank=0)
         for category in CATEGORIES:
             metrics = dict(native_test.test(params, model, dataset, category))

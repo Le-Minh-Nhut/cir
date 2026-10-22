@@ -31,9 +31,16 @@ VENDORED_STATE = "vendored_in_repo"
 
 def load_vendor_provenance(source: Path) -> dict[str, Any] | None:
     try:
-        return json.loads((source / PROVENANCE_FILENAME).read_text())
+        record = json.loads((source / PROVENANCE_FILENAME).read_text())
     except (OSError, ValueError):
         return None
+    if (not isinstance(record, dict) or not isinstance(record.get("upstream_commit"), str)
+            or not record["upstream_commit"] or not isinstance(record.get("file_manifest"), dict)
+            or not isinstance(record.get("local_fixes", []), list)
+            or any(not isinstance(fix, dict) or not isinstance(fix.get("path"), str)
+                   for fix in record.get("local_fixes", []))):
+        return None
+    return record
 
 
 def _declared_runtime_artifacts(model: dict[str, Any]) -> set[str]:
@@ -153,6 +160,9 @@ def source_provenance(model: dict[str, Any], source: Path) -> dict[str, Any]:
         # git-based checkout — including a dirty one — be reported as a verified vendored pin.
         return _git_backed_provenance(model, source, expected)
     if record is None:
+        reason = (f"{PROVENANCE_FILENAME} corrupt: invalid vendored provenance record"
+                  if (source / PROVENANCE_FILENAME).exists()
+                  else f"{PROVENANCE_FILENAME} missing: checkout is not a vendored pin")
         return {
             "expected_commit": expected,
             "actual_commit": None,
@@ -162,7 +172,7 @@ def source_provenance(model: dict[str, Any], source: Path) -> dict[str, Any]:
             "unauthorized_untracked": [],
             "approved_runtime_artifacts": [],
             "invalid_runtime_artifacts": [],
-            "error": f"{PROVENANCE_FILENAME} missing: checkout is not a vendored pin",
+            "error": reason,
             "verified": False,
             "provenance_digest": None,
             "state": "unvendored",

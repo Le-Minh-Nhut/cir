@@ -141,9 +141,8 @@ def status(model: dict, config) -> dict:
         "documented_pytorch": env_meta.get("pytorch"),
         "documented_cuda": env_meta.get("cuda"),
         "environment_confidence": env_meta.get("confidence"),
-        # "ready" means the *runtime* is verified, matching doctor and guarded_plan.
-        # A present-but-unverified interpreter is explicitly not ready.
-        "ready": bool(interp.get("verified")) or not model.get("environment_required"),
+        # Readiness follows the declared interpreter; `environment_required` only controls provisioning.
+        "ready": bool(interp.get("verified")) or not env_meta.get("python_env_var"),
     }
     shared_info = _check_shared_assignment(model_id, config)
     if shared_info:

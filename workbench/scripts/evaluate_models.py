@@ -218,13 +218,24 @@ def pinned_revision(source: Path, model: dict | None = None) -> str | None:
     and no evaluation could ever produce a valid proof -- the two values are different projects and
     can never agree. Passing `model` delegates to `runtime.source_provenance`, which already answers
     this correctly for both layouts (recorded manifest for a vendored checkout, nested Git for one
-    that carries it) and which the replay path has always used. Without `model` the git answer is
-    still returned for callers that hold only a path.
+    that carries it) and which the replay path has always used.
+
+    Without `model` there is no declaration to read, and the answer is deliberately NOT the enclosing
+    repository's HEAD. `git rev-parse` inside a vendored checkout -- one with no nested `.git` --
+    walks up and returns whatever repository happens to contain it, which for a model checkout is the
+    workbench itself. Returning that value hands the caller a revision from an unrelated project,
+    which is the defect this function exists to prevent in the `model` path; the pathless overload
+    must not reintroduce it. A checkout carrying its OWN `.git` still answers from Git, because then
+    the revision genuinely describes that directory.
     """
     if model is not None:
         from workbench.backend.runtime import source_provenance as runtime_source_provenance
 
         return runtime_source_provenance(model, source).get("actual_commit")
+    # A nested repository is this directory's own; a nested `.git` is what makes the Git answer
+    # describe `source` rather than an ancestor.
+    if not (source / ".git").exists():
+        return None
     try:
         return subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
     except (OSError, subprocess.CalledProcessError):
@@ -1755,6 +1766,17 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     # aggregate report looked complete. The leak rationale below is the second reason -- anything
     # the observer writes would otherwise outlive the run in a world-readable directory.
     # Each run then gets its own subdirectory, so the two children never share a cache root.
+    #
+    # The aggregate's cache is REMOVED first. Both children build the same full three-category
+    # dataset (the native constructor bakes every category's tensors before any inference), so the
+    # two caches together need twice the ~11.9 GiB. On a filesystem with enough room for one but not
+    # two, the observer aborted on `[Errno 28] No space left on device` inside the native
+    # `save_obj` -- a failure that looks like a broken export and is actually the parent leaving the
+    # first cache in place. The aggregate's outputs are already durable at this point (its stdout,
+    # its aggregate metrics and the run directory are on disk), so its scratch cache is disposable.
+    aggregate_temp = directory / "tmp"
+    if aggregate_temp.is_dir():
+        shutil.rmtree(aggregate_temp, ignore_errors=True)
     observer_temp = directory / "observer-tmp"
     observer_temp.mkdir(mode=0o700, exist_ok=True)
     os.chmod(observer_temp, 0o700)

@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
-from workbench.replay.common import ReplayResult, isolated_cache_root, load_trusted_whole_model, macro_aggregate, sha256_file, source_pin_status
+from workbench.replay.common import ReplayResult, isolated_cache_root, load_trusted_whole_model, macro_aggregate, seeded_dataset_construction, sha256_file, source_pin_status
 
 MODEL = model_by_id("limn")
 # The author's native `test()` reads `params.batch_size`; the pinned harness used a literal 32.
@@ -201,7 +201,13 @@ def native_category(category: str, checkpoint_root: Path, dataset_root: Path, so
     def _open():
         loaded = load_native(category, checkpoint_root, dataset_root, source_root)
         with isolated_cache_root(dataset_root) as cache_root:
-            yield {**loaded, "dataset": loaded["dataset_factory"](cache_root)}
+            # The dataset factory builds the query tensors through `preprocess_train`, whose crop is
+            # stochastic, and the aggregate and the per-query export each open their OWN
+            # `native_category`. Seeding the construction makes both observe one input population.
+            # See `common.seeded_dataset_construction`.
+            with seeded_dataset_construction():
+                dataset = loaded["dataset_factory"](cache_root)
+            yield {**loaded, "dataset": dataset}
 
     return _open()
 

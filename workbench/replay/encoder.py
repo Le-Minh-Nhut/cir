@@ -33,6 +33,7 @@ from workbench.replay.common import (
     isolated_cache_root,
     load_trusted_whole_model,
     macro_aggregate,
+    seeded_dataset_construction,
     sha256_file,
     source_pin_status,
 )
@@ -288,7 +289,11 @@ def evaluate_categories(
     results: list[ReplayResult] = []
     with isolated_cache_root(dataset_root) as cache_root:
         root_str = str(cache_root).rstrip("/") + "/"
-        dataset = datasets.FashionIQ(path=root_str, transform=transform, split="val-split")
+        # The query inputs are baked in HERE, through the stochastic training transform, so this
+        # construction must be reproducible for the per-query export -- which rebuilds the dataset in
+        # its own process -- to observe the same inputs. See `seeded_dataset_construction`.
+        with seeded_dataset_construction():
+            dataset = datasets.FashionIQ(path=root_str, transform=transform, split="val-split")
         params = SimpleNamespace(batch_size=batch_size, local_rank=0)
 
         for category in categories:

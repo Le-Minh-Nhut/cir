@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -1310,18 +1311,96 @@ def test_a_vendored_checkout_reports_its_own_pin_not_the_workbench_commit(tmp_pa
     model = {"model_id": "limn", "upstream_commit_sha": model_commit}
 
     assert evaluate_models.pinned_revision(source, model) == model_commit
-    # Without the model there is no declaration to read, so the legacy path answer stands -- the
-    # parameter is what fixes this, and the difference is the defect.
-    assert evaluate_models.pinned_revision(source, model) != evaluate_models.pinned_revision(source)
+    # Without a model there is no declaration to read, and the answer must NOT be the enclosing
+    # repository's HEAD: this checkout is vendored (no nested `.git`), so `git rev-parse` would walk
+    # up and name the workbench itself. `None` is the honest answer -- the revision is unavailable
+    # without the record that states it.
+    assert evaluate_models.pinned_revision(source) is None
 
-def test_a_vendored_checkout_with_no_recorded_pin_does_not_borrow_the_workbench_commit(tmp_path):
-    """A missing manifest must not silently fall back to the enclosing repository's HEAD."""
+def _enclosing_git_repo(root: Path) -> str:
+    """A throwaway Git repository whose HEAD can be borrowed if the walk-up fires.
+
+    The earlier version of this regression used `tmp_path`, which on most hosts is outside any Git
+    repository -- so `git rev-parse` failed and the test passed without ever exercising the walk-up it
+    exists to catch. It also FAILED, for the same reason, whenever pytest's basetemp happened to sit
+    inside a repository. Building the enclosing repository explicitly makes the test mean the same
+    thing everywhere.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    run = lambda *args: subprocess.run(["git", *args], cwd=root, check=True,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    run("init", "-q")
+    run("config", "user.email", "t@t.invalid")
+    run("config", "user.name", "T")
+    (root / ".keep").write_text("")
+    run("add", ".keep")
+    run("commit", "-q", "-m", "enclosing")
+    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True,
+                          capture_output=True, text=True).stdout.strip()
+
+
+def test_a_vendored_checkout_with_no_recorded_pin_does_not_borrow_the_enclosing_commit(tmp_path):
+    """A missing manifest must not silently fall back to the enclosing repository's HEAD.
+
+    Reproduced with a REAL enclosing repository, which is the only layout where the walk-up can
+    happen: the checkout has no nested `.git`, so `git rev-parse` run inside it resolves to the
+    repository above. Before the fix this returned that commit -- a revision from an unrelated
+    project presented as the model's own.
+    """
     from workbench.scripts import evaluate_models
 
-    source = tmp_path / "third_party" / "NOPIN"
+    enclosing = _enclosing_git_repo(tmp_path / "enclosing")
+    source = tmp_path / "enclosing" / "third_party" / "NOPIN"
     source.mkdir(parents=True)
+    assert not (source / ".git").exists(), "the fixture must be a VENDORED checkout"
+
     model = {"model_id": "nopin", "upstream_commit_sha": "deadbeef" * 5}
+    # With a model, the authoritative path answers.
     assert evaluate_models.pinned_revision(source, model) is None
+    # Without a model there is no record to read, and the enclosing commit must NOT be borrowed.
+    assert evaluate_models.pinned_revision(source) is None, (
+        "the pathless overload returned the enclosing repository's revision for a vendored checkout "
+        f"({enclosing})")
+    # Control: the walk-up WOULD have reached that commit, so the assertion above is meaningful.
+    assert enclosing == subprocess.run(["git", "-C", str(source), "rev-parse", "HEAD"],
+                                       capture_output=True, text=True).stdout.strip()
+
+
+def test_a_corrupt_vendored_record_does_not_borrow_the_enclosing_commit(tmp_path):
+    """A corrupt manifest is an unavailable state, not a licence to read an unrelated repository."""
+    from workbench.scripts import evaluate_models
+
+    _enclosing_git_repo(tmp_path / "enclosing")
+    source = tmp_path / "enclosing" / "third_party" / "BADPIN"
+    source.mkdir(parents=True)
+    (source / "provenance.json").write_text("{ this is not json")
+
+    model = {"model_id": "badpin", "upstream_commit_sha": "deadbeef" * 5}
+    assert evaluate_models.pinned_revision(source, model) is None
+    assert evaluate_models.pinned_revision(source) is None
+
+
+def test_a_checkout_with_its_own_git_still_answers_from_git(tmp_path):
+    """The guard is narrow: a genuine nested checkout's revision IS its own."""
+    import subprocess
+
+    from workbench.scripts import evaluate_models
+
+    _enclosing_git_repo(tmp_path / "enclosing")
+    source = tmp_path / "enclosing" / "third_party" / "NESTED"
+    source.mkdir(parents=True)
+    run = lambda *args: subprocess.run(["git", *args], cwd=source, check=True,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    run("init", "-q")
+    run("config", "user.email", "t@t.invalid")
+    run("config", "user.name", "T")
+    (source / ".keep").write_text("")
+    run("add", ".keep")
+    run("commit", "-q", "-m", "upstream")
+    own = subprocess.run(["git", "rev-parse", "HEAD"], cwd=source, check=True,
+                         capture_output=True, text=True).stdout.strip()
+
+    assert evaluate_models.pinned_revision(source) == own
 def test_a_per_query_artifact_that_disagrees_with_the_aggregate_is_refused(monkeypatch, tmp_path: Path) -> None:
     """The published artifact must reproduce the aggregate THIS run recorded, checked in the parent.
 

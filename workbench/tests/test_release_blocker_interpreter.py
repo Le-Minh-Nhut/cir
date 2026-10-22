@@ -176,6 +176,63 @@ def test_int04_configured_model_interpreter_is_returned(tmp_path: Path, monkeypa
     assert require_verified_model_interpreter(model) == str(interpreter)
 
 
+def test_declared_model_interpreters_are_verified_without_provisioning_flags(
+        tmp_path: Path, monkeypatch):
+    first = make_venv(tmp_path, "first")
+    second = make_venv(tmp_path, "second")
+    models = [
+        {"model_id": "first", "environment": {"python_env_var": "DECLARED_FIRST_PYTHON",
+                                                "required_imports": ["json"]}},
+        {"model_id": "second", "environment": {"python_env_var": "DECLARED_SECOND_PYTHON",
+                                                 "required_imports": ["json"]}},
+    ]
+    monkeypatch.setenv("DECLARED_FIRST_PYTHON", str(first))
+    monkeypatch.setenv("DECLARED_SECOND_PYTHON", str(second))
+
+    assert first != second
+    first_report = runtime.verify_environment(models[0], probe=True)
+    second_report = runtime.verify_environment(models[1], probe=True)
+    assert first_report.tier == second_report.tier == "RUNTIME_READY"
+    assert first_report.prefix != second_report.prefix
+    assert python_executable(models[0]) == str(first)
+    assert python_executable(models[1]) == str(second)
+
+
+def test_registry_models_with_declared_python_never_fall_back(tmp_path: Path, monkeypatch):
+    interpreter = make_venv(tmp_path)
+    for model_id in ("csmcir", "airknow", "conesep", "habit", "intent", "hint", "pair"):
+        model = model_by_id(model_id)
+        variable = model["environment"]["python_env_var"]
+        monkeypatch.setenv(variable, str(interpreter))
+        with pytest.raises(RuntimeError, match="not verified") as error:
+            python_executable(model)
+        assert variable in str(error.value)
+        assert str(interpreter) in str(error.value)
+
+
+def test_unrequired_but_declared_environment_reports_missing_and_unverified(
+        tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("DECLARED_UNVERIFIED_PYTHON", raising=False)
+    model = {"model_id": "declared_env", "environment": {
+        "python_env_var": "DECLARED_UNVERIFIED_PYTHON", "required_imports": ["json"]}}
+    with pytest.raises(RuntimeError, match="UNCONFIGURED"):
+        python_executable(model)
+
+    monkeypatch.setenv("DECLARED_UNVERIFIED_PYTHON", str(tmp_path / "missing" / "python"))
+    with pytest.raises(RuntimeError, match="INTERPRETER_MISSING"):
+        python_executable(model)
+
+    interpreter = make_venv(tmp_path)
+    monkeypatch.setenv("DECLARED_UNVERIFIED_PYTHON", str(interpreter))
+    model["environment"]["required_imports"] = ["module_that_is_not_installed"]
+    report = runtime.verify_environment(model, probe=True)
+    assert report.tier not in runtime.READY_TIERS
+    assert environment_blockers(model)
+    with pytest.raises(RuntimeError, match="not verified"):
+        python_executable(model)
+
+
+
 def test_int05_int06_adapters_use_the_verified_interpreter(tmp_path: Path, monkeypatch):
     """LIMN and DCNet commands must carry the *verified* interpreter, unpached."""
     interpreter = make_venv(tmp_path)
@@ -447,6 +504,32 @@ def test_manage_environment_reports_verified_readiness_with_real_venv(tmp_path, 
     blocked = module.status(model, config)
     assert blocked["ready"] is False
     assert blocked["interpreter_status"] == "DEPENDENCY_MISSING", blocked
+
+
+def test_manage_environment_requires_verification_for_declared_optional_interpreter(
+        tmp_path, monkeypatch):
+    import importlib.util
+
+    from dataclasses import replace
+    from workbench.backend.operator_config import resolve_config
+
+    spec = importlib.util.spec_from_file_location(
+        "manage_environment_optional_env", Path("workbench/scripts/manage_environment.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    interpreter = make_venv(tmp_path)
+    source_root = tmp_path / "third_party"
+    (source_root / "OPTIONAL_ENV").mkdir(parents=True)
+    monkeypatch.setenv("OPTIONAL_ENV_PYTHON", str(interpreter))
+    config = replace(resolve_config(), WORKBENCH_THIRD_PARTY_ROOT=source_root)
+    model = {"model_id": "optional_env", "source_dir": "OPTIONAL_ENV",
+             "environment": {"python_env_var": "OPTIONAL_ENV_PYTHON",
+                             "required_imports": ["missing_optional_dependency"]}}
+
+    status = module.status(model, config)
+    assert status["environment_required"] is False
+    assert status["ready"] is False
+    assert status["runtime_verified"] is False
 
 
 # ------------------------------------------- interpreter identity cannot be forged (F1/F2)

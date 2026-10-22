@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
 from workbench.replay.common import (
+    seeded_dataset_construction,
     ReplayResult,
     isolated_cache_root,
     load_trusted_whole_model,
@@ -167,7 +168,14 @@ def evaluate_categories(
     results: list[ReplayResult] = []
     with isolated_cache_root(dataset_root) as cache_root:
         root_str = str(cache_root).rstrip("/") + "/"
-        dataset = datasets.FashionIQ(path=root_str, transform=transform, split="val-split")
+        # Same stochastic-query-input contract as ENCODER: this constructor bakes the transformed
+        # QUERY images in at construction time through `get_img(..., stage=0)`, and `transform` is
+        # `[preprocess_train, preprocess_val]`, so the query population is drawn via
+        # `RandomResizedCrop`. Without a seed, two constructions -- an aggregate and a per-query
+        # export, or two separate runs -- observe different inputs. See
+        # `common.seeded_dataset_construction`.
+        with seeded_dataset_construction():
+            dataset = datasets.FashionIQ(path=root_str, transform=transform, split="val-split")
         params = SimpleNamespace(batch_size=batch_size, local_rank=0)
 
         for category in categories:

@@ -146,3 +146,67 @@ def macro_aggregate(results: list[ReplayResult]) -> dict[str, float | None]:
     r10 = sum(result.r10 for result in results) / len(CATEGORIES)
     r50 = sum(result.r50 for result in results) / len(CATEGORIES)
     return {"macro_r10": r10, "macro_r50": r50, "macro_mean": (r10 + r50) / 2, "complete": True}
+
+
+#: Fixed seed for the dataset constructors whose query pipeline is STOCHASTIC.
+#:
+#: The iLearn-family constructors bake the transformed query image INTO the dataset at construction
+#: time: `datasets.py::get_test_data` calls `get_img(..., stage=0)`, and the replay supplies
+#: `transform = [preprocess_train, preprocess_val]`, so the query inputs are drawn through
+#: `preprocess_train` -- whose first step is `RandomResizedCrop`. Every construction therefore draws
+#: a different crop, and a per-query export that rebuilds the dataset in its own process observes a
+#: DIFFERENT input population than the aggregate it is supposed to reconstruct.
+#:
+#: Measured on this host with the pinned transform and the real annotations: two constructions of the
+#: dress category produced 3994 differing query tensors out of 4034, while every gallery input
+#: (stage=1, the deterministic validation transform) was byte-identical. That is the whole cause of
+#: the ENCODER artifact-versus-aggregate disagreement, and it is a preprocessing-population
+#: difference, not the GPU nondeterminism it was previously attributed to: normalization, the dot
+#: product and `argsort` all happen in NumPy after the features return to CPU.
+#:
+#: Seeding global RNG immediately before construction makes each construction reproduce the same
+#: draws. It must be applied at the construction site and not merely at process start, because the
+#: constructor consumes randomness from the same global generators that a model load or a CUDA
+#: context can also touch first.
+DATASET_CONSTRUCTION_SEED = 0
+
+
+@contextmanager
+def seeded_dataset_construction(seed: int = DATASET_CONSTRUCTION_SEED) -> Iterator[None]:
+    """Make a stochastic dataset construction reproducible across processes.
+
+    Seed state is saved and restored, so seeding a construction does not leak into whatever the
+    caller does next (a differently seeded evaluation, or a caller that seeded deliberately).
+    """
+    import random
+
+    python_state = random.getstate()
+    numpy_state = None
+    try:
+        import numpy as np
+
+        numpy_state = np.random.get_state()
+    except Exception:
+        np = None  # type: ignore[assignment]
+
+    torch_state = None
+    try:
+        import torch
+
+        torch_state = torch.random.get_rng_state()
+    except Exception:
+        torch = None  # type: ignore[assignment]
+
+    random.seed(seed)
+    if numpy_state is not None:
+        np.random.seed(seed)
+    if torch_state is not None:
+        torch.manual_seed(seed)
+    try:
+        yield
+    finally:
+        random.setstate(python_state)
+        if numpy_state is not None:
+            np.random.set_state(numpy_state)
+        if torch_state is not None:
+            torch.random.set_rng_state(torch_state)
