@@ -1620,6 +1620,8 @@ def _atomic_replace(destination: Path, content: str) -> None:
 #: failed export -- it is a model whose result is aggregate-only by design, and the launcher must not
 #: treat the absence as a defect.
 PER_QUERY_CAPABILITY = "per_query_observer"
+#: The checkpoint configuration that observer exports. See `per_query_checkpoint`.
+PER_QUERY_CHECKPOINT = "per_query_checkpoint"
 
 #: The per-query outcome vocabulary, used by the report and consumed by the launcher. Distinct from
 #: the EVIDENCE states (schemas/results.py): these describe what the RUN achieved, those describe what
@@ -1656,6 +1658,35 @@ def per_query_capability(model_id: str) -> str | None:
         return model_by_id(model_id).get(PER_QUERY_CAPABILITY)
     except Exception:
         return None
+
+def per_query_checkpoint(model_id: str, checkpoint_id: str | None = None) -> str | None:
+    """The checkpoint configuration a model's observer covers.
+
+    `per_query_observer` alone cannot answer this: a model may declare MORE than one selectable
+    checkpoint, and the observer exports exactly one of them. Declaring which one lets the gate be a
+    registry fact instead of an equality test against a single model's literal id -- the previous
+    form silently skipped ENCODER's observer on every run, because ENCODER declares one `fashioniq`
+    checkpoint and no bundle, so it could never equal LIMN's bundle name.
+
+    With `checkpoint_id` given the answer is whether the observer covers it; with none it returns the
+    covered id, for the message. Absent declaration falls back to the model's only variant when there
+    is exactly one, which is the unambiguous case.
+    """
+    from workbench.backend.registry import model_by_id
+
+    try:
+        model = model_by_id(model_id)
+    except Exception:
+        return None
+    covers = model.get(PER_QUERY_CHECKPOINT)
+    if not covers:
+        variants = model.get("checkpoint_variants") or []
+        bundles = model.get("checkpoint_bundles") or []
+        if len(variants) + len(bundles) == 1:
+            covers = (variants or bundles)[0].get("checkpoint_id") or (bundles or [{}])[0].get("bundle_id")
+    if not covers:
+        return None
+    return covers if checkpoint_id is None else (covers if covers == checkpoint_id else None)
 
 
 def _status_object(stdout: str, field: str) -> str:
@@ -1709,9 +1740,26 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     # The observer is workbench code, so the repository must be importable in its child. This is the
     # one addition to the evaluator's allowlist, and it is deliberate: the evaluator gets the same
     # value through its own PYTHONPATH handling when the operator sets it, and without it the child
-    # cannot import `workbench.replay.limn_export` at all.
+    # cannot import the model's observer module at all.
     child_env["PYTHONPATH"] = str(Path(__file__).resolve().parents[2])
-    argv = [interpreter, "-m", "workbench.replay.limn_export",
+    # The observer builds the model's caches exactly as the aggregate does -- the native constructor
+    # writes the per-query pickles into whatever `tempfile` resolves to -- so it needs the same
+    # run-scoped private temp space, for the same two reasons.
+    #
+    # Correctness: without this the child inherits the operator's TMPDIR, and when that is the
+    # default `/tmp` the ~11.9 GiB of pickles land on a RAM-backed tmpfs. That is what actually
+    # happened: the aggregate succeeded (it sets TMPDIR below) and the observer was OOM-killed at
+    # the third category, so every ENCODER export failed with `observer exited -9` while the
+    # aggregate report looked complete. The leak rationale below is the second reason -- anything
+    # the observer writes would otherwise outlive the run in a world-readable directory.
+    # Each run then gets its own subdirectory, so the two children never share a cache root.
+    observer_temp = directory / "observer-tmp"
+    observer_temp.mkdir(mode=0o700, exist_ok=True)
+    os.chmod(observer_temp, 0o700)
+    child_env["TMPDIR"] = str(observer_temp)
+    observer_module = f"workbench.replay.{plan.model_id}_export"
+    publisher_module = f"workbench.replay.{plan.model_id}_publish"
+    argv = [interpreter, "-m", observer_module,
             # The plan's own recorded member root: resolved once from the DECLARED artifact type,
             # so it is the same directory whether or not the weights are on disk yet. `plan.
             # checkpoint.parent` named the whole checkpoint root for LIMN's three-category bundle
@@ -1724,6 +1772,8 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
             "--source-root", str(plan.source),
             "--results-root", str(results_root),
             "--run-id", run_id]
+    if plan.model_id == "encoder":
+        argv += ["--checkpoint-id", plan.checkpoint_id]
     # The observer runs a DIFFERENT command than the aggregate, so its own digests would describe
     # the wrong invocation. The parent passes the aggregate invocation's digests, which it owns.
     if command_digest:
@@ -1762,7 +1812,7 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     # Importing it would put the canonical schema (pydantic) on this module's import graph, and this
     # module is reachable from `workbench/replay/limn.py` -- which the environment planner traces to
     # decide LIMN's interpreter. That is the regression that broke cold start twice.
-    publish_argv = [sys.executable, "-m", "workbench.replay.limn_publish",
+    publish_argv = [sys.executable, "-m", publisher_module,
                     "--payload", str(staged), "--results-root", str(results_root)]
     try:
         published = subprocess.run(publish_argv, cwd=str(plan.cwd), env=child_env, text=True,
@@ -1946,13 +1996,20 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
     # model (one the registry gives no observer) is distinguishable from a capability that FAILED.
     # The launcher needs that distinction: only the second is a pilot blocker.
     capability = per_query_capability(plan.model_id)
-    if capability and plan.checkpoint_id != "base_iter0_all_categories":
-        # The observer exports the FULL three-category bundle. A single-category diagnostic is a
-        # legitimate run, but its per-query artifact would describe a different experiment, so it is
-        # not attempted -- and saying so is better than binding a bundle artifact to a diagnostic.
+    if capability and not per_query_checkpoint(plan.model_id, plan.checkpoint_id):
+        # The observer covers ONE specific checkpoint configuration. A run that selected something
+        # else -- a single-category diagnostic, or a different variant -- would produce a per-query
+        # artifact describing a different experiment, so it is not attempted. Saying why is better
+        # than binding a bundle artifact to a diagnostic.
+        #
+        # The registry DECLARES that checkpoint (`per_query_checkpoint`). This used to test equality
+        # with LIMN's literal bundle id, which meant ENCODER -- whose observer covers its single
+        # `fashioniq` checkpoint and which declares no bundle at all -- could never satisfy the
+        # condition, so its observer was silently skipped on every run it was supposed to serve.
         capability = None
-        observation_note = ("CAPABILITY_ABSENT_FOR_DIAGNOSTIC: the observer covers the full bundle, "
-                            "and this run selected a single category")
+        observation_note = (f"CAPABILITY_ABSENT_FOR_DIAGNOSTIC: the observer covers "
+                            f"{per_query_checkpoint(plan.model_id) or 'a different checkpoint'}, "
+                            f"and this run selected {plan.checkpoint_id}")
     elif not capability:
         observation_note = "CAPABILITY_ABSENT"
     else:

@@ -64,15 +64,15 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | # | model_id | upstream | protocol native | checkpoint variant / noise | source+patch integrity | ckpt/data/env readiness | replay capability | parser | per-query | mức thực tế | blocker |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | `limn` | iLearn-Lab/TPAMI24-LIMN | `fashioniq_val_split` | 3 ckpt category, clean eval, training noise unstated | vendored, pin OK | **3 ckpt staged, size+sha256 VERIFIED**; env provisioned (torch 1.12.1+cu113) | native wrapper | `limn_structured_json` | **có** exporter+observer+publish, parity 0 mismatch | **`FULL_VAL_VERIFIED` + `PAPER_PARITY_CHECKED`** | — (blocker engineering đã đóng) |
-| 2 | `encoder` | iLearn-Lab/AAAI25-ENCODER | `fashioniq_val_split` | `fashioniq.pt` @rev `dd9b0865` | vendored + 2 local fix | **ckpt staged, size 631 879 365 + sha256 `0f31c501…` VERIFIED**; LAION aux staged (605 219 813 B); env `workbench/envs/encoder` đã provision, CUDA chạy được; wrapper load được ckpt (2 key thừa đã biện luận) và **forward pass thật trên GPU OK** | wrapper | shared replay | không | `CHECKPOINT_MAPPING_VERIFIED` → **`CHECKPOINT_LOADED`** → **`GPU_SMOKE_VERIFIED`** | `EVALUATION_BLOCKED_DISK` |
+| 2 | `encoder` | iLearn-Lab/AAAI25-ENCODER | `fashioniq_val_split` | `fashioniq.pt` @rev `dd9b0865` | vendored + 2 local fix | **ckpt staged, size 631 879 365 + sha256 `0f31c501…` VERIFIED**; LAION aux staged (605 219 813 B); env `workbench/envs/encoder` đã provision, CUDA chạy được; wrapper load được ckpt (2 key thừa đã biện luận) và **forward pass thật trên GPU OK** | wrapper | shared replay | **có** (`ENCODER_QUERY_OBSERVER_V1`) | `CHECKPOINT_MAPPING_VERIFIED` → **`CHECKPOINT_LOADED`** → **`GPU_SMOKE_VERIFIED`** → **`FULL_VAL_VERIFIED`** | `PAPER_PARITY_CHECKED` chưa chạy; **R@10 56.076 vs paper 56.13**, **R@50 77.900 vs paper 77.59** |
 | 3 | `hint` | iLearn-Lab/ICASSP26-HINT | `fashioniq_val_split` | `fashioniq.pt` 2 724 451 182 B | vendored, pin OK | size/hash VERIFIED; chưa stage | wrapper + cache isolation | `hint_native_recall` | không | `AGGREGATE_PARSED` | `PUBLIC_ASSET_SETUP` |
 | 4 | `pair` | iLearn-Lab/ICASSP25-PAIR | `fashioniq_val_split` | `pair-B1.pt`/`pair-B2.pt` | vendored + 1 local fix + `data/datasets.py` recovered | mapping **UNRESOLVED** | wrapper | shared replay | không | `CODE_TESTED` | `AUTHOR_ONLY_INFORMATION` + `SCIENTIFIC_VARIANT` |
 | 5 | `clvc_net` | iLearn-Lab/SIGIR21-CLVC-Net | `fashioniq_val_split` | 6 whole models (2/category) | vendored + torch.hub fix | archive `CLVCNET.zip` interior chưa xác minh | wrapper | shared replay | không | `CODE_TESTED` | `AUTHOR_ONLY_INFORMATION` |
 | 6 | `tgcir` | iLearn-Lab/MM23-TG-CIR | `fashioniq_val_split` | `TG-CIR.zip` (Drive) | vendored, pin OK | archive member/hash chưa xác minh; pin clip đã sửa | **preflight-only** | không | không | `PREFLIGHT_IMPLEMENTED_BLOCKED` | `AUTHOR_ONLY_INFORMATION` |
-| 7 | `habit` | iLearn-Lab/AAAI26-HABIT | `fashioniq_full_gallery_ref_excluded` | N0.2/N0.5/N0.8, clean eval | vendored, pin OK | hash VERIFIED; chưa stage; **không có bản clean** | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` + `SCIENTIFIC_VARIANT` |
-| 8 | `intent` | iLearn-Lab/AAAI26-INTENT | `fashioniq_full_gallery_ref_excluded` | N0.2/N0.5/N0.8 | vendored, pin OK | hash VERIFIED; chưa stage | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` |
-| 9 | `conesep` | Lee-zixu/ConeSep (redirect) | `fashioniq_full_gallery_ref_excluded` | N0.2/N0.5/N0.8 | vendored, pin OK | hash **chưa có** (`expected_sha256: null` trong registry); chưa stage | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` |
-| 10 | `airknow` | iLearn-Lab/CVPR26-Air-Know | `fashioniq_full_gallery_ref_excluded` | 0.5/0.8, clean eval | vendored + 2 local fix | hash **chưa có** (`expected_sha256: null` trong registry); chưa stage | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` + `SCIENTIFIC_VARIANT` (train mode) |
+| 7 | `habit` | iLearn-Lab/AAAI26-HABIT | `fashioniq_full_gallery_ref_excluded` | **`fiq_n02` (train noise 20%, eval noise 0%)** được chọn | vendored, pin OK | hash VERIFIED; chưa stage; **không có bản clean** | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` (còn thiếu file) |
+| 8 | `intent` | iLearn-Lab/AAAI26-INTENT | `fashioniq_full_gallery_ref_excluded` | **`fiq_n02` (train noise 20%, eval noise 0%)** được chọn | vendored, pin OK | hash VERIFIED; chưa stage | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` (còn thiếu file) |
+| 9 | `conesep` | Lee-zixu/ConeSep (redirect) | `fashioniq_full_gallery_ref_excluded` | **`fiq_n02` (train noise 20%, eval noise 0%)** được chọn | vendored, pin OK | hash **chưa có** (`expected_sha256: null` trong registry); chưa stage | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` |
+| 10 | `airknow` | iLearn-Lab/CVPR26-Air-Know | `fashioniq_full_gallery_ref_excluded` | 0.5/0.8 — **hoãn**: không có checkpoint 20% đã verify, và **không** thay bằng 0.5 để lấp | vendored + 2 local fix | hash **chưa có** (`expected_sha256: null` trong registry); chưa stage | wrapper | shared replay | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` + `SCIENTIFIC_VARIANT` (train mode) |
 | 11 | `dcnet` | ozmig77/dcnet | `fashioniq_full_gallery_ref_excluded` | `trained_model.pth` (Drive) | vendored, pin OK | GloVe pkl chưa công bố; **data_dir binding kiểm trên cả launch path** | preflight + CLI | `dcnet_native_logger` (đọc thứ tự category) | không | `AGGREGATE_PARSED` | `AUTHOR_ONLY_INFORMATION` |
 | 12 | `csmcir` | qzp2018/CSMCIR | `fashioniq_original_split` | `fashioniq_tuned_clip_best.pt` 2 720 615 859 B | vendored + **2 approved patches (cả hai bắt buộc)** | ckpt hash VERIFIED; CoT captions đã có; chưa stage | script CLI (`__main__`) | `csmcir_stdout_json` | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` |
 | 13 | `combiner_rn50x4_noft` | ABaldrati/CLIP4Cir | `fashioniq_original_split` | RN50x4 noft Combiner | vendored, pin OK | archive 5 parts, digest công bố, **chưa tải** | script CLI | `combiner_stdout_recall` | không | `SOURCE_READY` | `PUBLIC_ASSET_SETUP` |
@@ -198,7 +198,18 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
   nhân tensor trên `cuda:0` cho kết quả đúng). Preflight của wrapper (`--preflight-only`) trả về 0.
 - **Blocker còn lại, đã đo chứ không suy đoán — và nó không phải GPU:**
 
-  1. **Không đủ dung lượng đĩa.** Constructor native (`datasets.py:74-88`) dựng và pickle **cả ba
+  1. ~~**Không đủ dung lượng đĩa.**~~ **Đã chạy thật (2026-10-23).** Blocker cũ là **thật** nhưng
+     nguyên nhân không phải dung lượng đĩa: `isolated_cache_root` dùng `tempfile`, nên cache
+     ~11.9 GiB rơi vào `TMPDIR`. Với `TMPDIR=/tmp` (tmpfs RAM 7.2 GB) thì constructor chết đúng
+     `datasets.py:83` với `OSError: [Errno 122]`. Trỏ `TMPDIR` sang ext4 đã gỡ được: cả ba category
+     chạy trên GPU thật —
+     **dress R@1 21.021 / R@10 51.760 / R@50 76.351**, **shirt 26.153 / 55.005 / 75.319**,
+     **toptee 29.373 / 61.703 / 81.132**, **macro R@10 56.076 / R@50 77.900 / mean 66.988**.
+     So với dòng paper của registry (`reported_r10 56.13`, `reported_r50 77.59`): **lệch trong 5%**.
+     `parity_mismatches` rỗng ở cả ba category; `checkpoint_sha256` khớp registry.
+     Cần **≥12 GiB trống** trên volume chứa `TMPDIR` (đỉnh đo được: 11.868 GB), và bộ nhớ đủ lớn
+     vì constructor giữ cả ba category trong RAM trước khi ghi.
+  2. ~~**Không đủ dung lượng đĩa (bản cũ).**~~ Constructor native (`datasets.py:74-88`) dựng và pickle **cả ba
      category ngay từ đầu**, trước mọi inference, ghi thẳng vào dataset root; wrapper chỉ có thể
      giảm nhẹ bằng `isolated_cache_root`.
      Trọng tải mỗi tensor là `3x224x224x4` = **602 112 B** (đo bằng chính transform đã pin:
@@ -219,6 +230,10 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
      `shirt`). Chặn **thật**, và **có thể gỡ** bằng dung lượng: cần **≥12 GiB trống** trên volume chứa
      `WORKBENCH_ARTIFACTS_ROOT` (khuyến nghị ≥16 GiB để có biên an toàn), không phải giới hạn của code.
      Số **15.46 GiB** ghi ở bản trước là **sai**: nó tính trên toàn bộ gallery thay vì hợp các cặp.
+     **Kích thước pickle thật đã đo được** (đỉnh trong `TMPDIR` khi chạy ba category):
+     `test_queries_dress.pkl` 2 317.8 MB, `test_queries_shirt.pkl` 2 341.9 MB,
+     `test_targets_dress.pkl` 1 509.8 MB — tổng đỉnh **11.868 GB**. Con số tính từ annotation
+     (~11.6 GiB) khớp với đo thực tế, nên ước lượng cũ là đúng; chỉ **nguyên nhân** thì sai.
 
   2. **Checkpoint lệch với source đã pin — ĐÃ GỠ (R16).** File tác giả chứa thêm hai tensor
      `backbone.binding_decoder.fc.0.{weight,bias}` mà `BindingDecoder` của revision đã pin
@@ -238,9 +253,15 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
      `workbench/docs/reviews/R16_ENCODER_KEY_COMPAT.md`.
   3. **Chưa chạy được native evaluation đầy đủ** vì chặn #1 (đĩa). Đây là **blocker của native evaluation đầy đủ**
      (việc còn lại của ENCODER còn có mục 4 bên dưới). Không có đường vòng: constructor native dựng cả ba category trước inference.
-  4. `encoder` **không khai** `per_query_observer` trong registry, nên chưa có đường export per-query —
-     đúng như thiết kế, vì khai năng lực trước khi có integration là tự nhận điều chưa làm được.
-     **Không** route ENCODER qua exporter của LIMN chỉ để lấp trường capability.
+  4. **per-query integration đã có** (`workbench/replay/encoder_export.py` +
+     `encoder_publish.py` + `observers`), và registry đã khai `per_query_observer:
+     ENCODER_QUERY_OBSERVER_V1` cùng `per_query_checkpoint: fashioniq`.
+     Chạy thật: observer **được gọi** (capability được nhận, gate qua) nhưng **bị OOM-kill
+     (`observer exited -9`)** vì tiến trình con đó chạy **không có `TMPDIR` riêng**, nên cache
+     ~11.9 GiB của nó rơi vào `/tmp` (tmpfs) — đã sửa bằng cách cấp `TMPDIR` riêng theo run.
+     Trạng thái: **implementation xong, chưa có lần chạy per-query hoàn tất**; đừng đọc
+     `per_query_capability` có giá trị như bằng chứng đã export được. Bằng chứng cho lỗi này:
+     `/tmp/cir-replay-cache-*` 5.3 GB còn lại sau khi tiến trình bị kill.
 
 ### 3. `hint`
 - Upstream @ `bec50b6c8c19`. Wrapper `hint.py` chạy trong `isolated_cache_root` (F03/B3):

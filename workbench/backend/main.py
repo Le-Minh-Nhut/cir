@@ -161,7 +161,10 @@ def models():
     registry = load_registry()
     out = []
     for model in registry["models"]:
-        entry = {**model, "checkpoints": [checkpoint_availability(model, item) for item in model["checkpoint_variants"]]}
+        entry = {**model, "checkpoints": [{**checkpoint_availability(model, item),
+                                           "checkpoint_training_noise_pct": item.get("checkpoint_training_noise_pct"),
+                                           "evaluation_noise_pct": item.get("evaluation_noise_pct")}
+                                          for item in model["checkpoint_variants"]]}
         # Bundles are first-class selections (LIMN needs all three category checkpoints for one
         # complete macro result), so a launcher or the UI must be able to see and pick them.
         bundles = model.get("checkpoint_bundles") or []
@@ -169,7 +172,9 @@ def models():
             by_id = {c["checkpoint_id"]: c for c in model["checkpoint_variants"]}
             entry["checkpoint_bundles"] = [
                 {**bundle,
-                 "members": [checkpoint_availability(model, by_id[member])
+                 "members": [{**checkpoint_availability(model, by_id[member]),
+                              "checkpoint_training_noise_pct": by_id[member].get("checkpoint_training_noise_pct"),
+                              "evaluation_noise_pct": by_id[member].get("evaluation_noise_pct")}
                              for member in bundle.get("required_checkpoint_ids", []) if member in by_id]}
                 for bundle in bundles
             ]
@@ -877,6 +882,8 @@ def benchmark_runs():
     """
     return [{"run_id": report["run_id"], "model_id": report.get("model_id"),
              "checkpoint_id": report.get("checkpoint_id"), "protocol_id": report.get("protocol_id"),
+             "checkpoint_training_noise_pct": report.get("checkpoint_training_noise_pct"),
+             "evaluation_noise_pct": report.get("evaluation_noise_pct"),
              **_gate_fields(report)} for report in _aggregate_reports()]
 
 @app.get("/api/runs/gate")

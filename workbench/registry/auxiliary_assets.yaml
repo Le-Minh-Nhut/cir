@@ -250,9 +250,18 @@ assets:
   # LAION-2B ViT-B/32 open_clip checkpoint the paper's pretrained backbone names.
   destination_path: open_clip_pytorch_model.bin
   automatic_download_available: true
-  expected_size_bytes: null
-  expected_sha256: null
-  provenance_status: UNVERIFIED
+  # The publisher's own LFS object id for this path, read from the HuggingFace tree API
+  # (`.../api/models/laion/CLIP-ViT-B-32-laion2B-s34B-b79K/tree/main`): the `lfs.oid` of
+  # `open_clip_pytorch_model.bin`. It is a real published digest, so verification is not circular --
+  # the file on disk hashes to exactly this value and is exactly this size.
+  #
+  # This replaced `expected_sha256: null` + `provenance_status: UNVERIFIED`, which made every
+  # ENCODER run block with "operator-supplied unverified provenance" even though the bytes were
+  # correct. A digest is also a stronger pin than the `main` revision above, because it survives the
+  # branch moving.
+  expected_size_bytes: 605219813
+  expected_sha256: 1bd3c7172de5b207ceac554f5ab5266166f3b9baccc9af5989bc801016d080ad
+  provenance_status: VERIFIED
 - model_id: airknow
   family: LAVIS BLIP-2 pretrain weights
   required_for: official_evaluation

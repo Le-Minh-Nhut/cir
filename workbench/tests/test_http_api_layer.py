@@ -249,6 +249,7 @@ def test_benchmark_runs_endpoint_lists_aggregate_reports_only(api, tmp_path) -> 
         "artifact_type": "official_aggregate_evaluation_report",
         "run_id": "run-1", "model_id": "synthetic_model", "checkpoint_id": "ckpt",
         "protocol_id": "fashioniq_original_split",
+        "checkpoint_training_noise_pct": 20, "evaluation_noise_pct": 0,
         "benchmark_gate": {"status": "PASS_WITHIN_5_PERCENT", "passed": True},
         "variant_provenance": {"caption_alias_staged": True},
     }
@@ -261,6 +262,8 @@ def test_benchmark_runs_endpoint_lists_aggregate_reports_only(api, tmp_path) -> 
     assert len(payload) == 1 and payload[0]["run_id"] == "run-1"
     assert payload[0]["benchmark_gate"]["passed"] is True
     assert payload[0]["variant_provenance"]["caption_alias_staged"] is True
+    assert payload[0]["checkpoint_training_noise_pct"] == 20
+    assert payload[0]["evaluation_noise_pct"] == 0
 
 def test_run_gates_endpoint_keys_by_run_id(api, tmp_path) -> None:
     reports = tmp_path / "repo" / "workbench" / "artifacts" / "reports"

@@ -1,8 +1,13 @@
 import { BASE } from "./client";
 import type { Run } from "./types";
 
+export function noiseConditionLabel(modelId: string, trainingNoise: number | null, evaluationNoise: number | null): string {
+  const model = modelId.toLowerCase() === "conesep" ? "ConeSep" : modelId.toUpperCase();
+  return `${model} · train noise ${trainingNoise == null ? "unrecorded" : `${trainingNoise}%`} · eval noise ${evaluationNoise == null ? "unrecorded" : `${evaluationNoise}%`}`;
+}
+
 export function runLabel(run: Run): string {
-  return `${run.method_name} / ${run.checkpoint_id}${run.checkpoint_training_noise_pct === null ? "" : ` / train-noise ${run.checkpoint_training_noise_pct}%`}`;
+  return `${noiseConditionLabel(run.model_id, run.checkpoint_training_noise_pct, run.evaluation_noise_pct)} · ${run.method_name} / ${run.checkpoint_id}`;
 }
 
 export function Image({ category, id, kind }: { category: string; id: string; kind: string }) {

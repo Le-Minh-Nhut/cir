@@ -38,7 +38,21 @@ checkpoint_policy: include_flagged_conditions
 # A model whose registered variants are ambiguous stays blocked unless you resolve the mapping by
 # hand and name the variant here, e.g. `pair: [pair_b1]`. Naming a checkpoint is recorded in the
 # report as an operator override rather than as a clean checkpoint.
-checkpoint_overrides: {}
+#
+# HABIT, INTENT and ConeSep publish only noise-trained FashionIQ weights, so `strict_clean` leaves
+# them blocked and the policy alone still leaves each one ambiguous between its 20/50/80 variants.
+# These three are the authorized 20% selections: exactly one variant per model, so the run is a
+# resolved operator choice rather than a guess among siblings. They are recorded as overrides, and
+# every surface that presents them is expected to show the recorded condition
+# (`train noise 20% · eval noise 0%`) rather than presenting them as clean runs.
+#
+# Air-Know is deliberately absent: its verified public checkpoints are 50% and 80% only, and
+# selecting one of those here would silently substitute a condition the operator did not authorize.
+# It stays deferred until a verified 20% checkpoint exists.
+checkpoint_overrides:
+  habit: [fiq_n02]
+  intent: [fiq_n02]
+  conesep: [fiq_n02]
 
 paths:
   registry: ../registry/models.yaml

@@ -37,6 +37,7 @@ RESULTS_ROOT = results_path()
 NON_RESULT_ARTIFACT_TYPES = frozenset({
     "official_aggregate_evaluation_report",
     "limn_observation_payload",
+    "encoder_observation_payload",
 })
 
 

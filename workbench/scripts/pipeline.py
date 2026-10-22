@@ -1269,6 +1269,7 @@ def real_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage
         # stops it, because the evaluation stage consumes a real capability.
         final_doctor_args.append("--allow-gpu-pending")
     if args.model:
+        final_doctor_args.extend(_checkpoint_args(args, args.model, model_obj))
         final_doctor_args.extend(["--model", args.model])
         strict_runtime = run_stage("runtime-preflight", command("doctor.py", *final_doctor_args), model_id=args.model, dependencies=("sync", "checkpoint")) if args.evaluate else Stage("runtime-preflight", skipped="pass --evaluate")
     else:
@@ -1809,6 +1810,8 @@ def all_stages(args: argparse.Namespace, config: WorkbenchConfig) -> list[Stage]
             # The evaluation stage that follows carries --verify-gpu, so a GPU whose
             # authorized probe has not run yet is the state this workflow is about to change.
             preflight_args.append("--allow-gpu-pending")
+        if mid == args.model and model_obj:
+            preflight_args.extend(_checkpoint_args(args, mid, model_obj))
         stages.append(run_stage(
             "runtime-preflight",
             command("doctor.py", *preflight_args),

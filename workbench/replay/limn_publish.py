@@ -37,7 +37,10 @@ def load_payload(path: Path) -> dict:
         payload = json.loads(let)
     except ValueError as error:
         raise PayloadError(f"observation payload is not JSON: {error}") from error
-    if not isinstance(payload, dict) or payload.get("artifact_type") != "limn_observation_payload":
+    expected_type = {"limn": "limn_observation_payload",
+                     "encoder": "encoder_observation_payload"}.get(
+                         payload.get("model_id") if isinstance(payload, dict) else None)
+    if not expected_type or payload.get("artifact_type") != expected_type:
         raise PayloadError(f"{path} is not an observation payload")
     _require_declared_bundle(payload, path)
     return payload

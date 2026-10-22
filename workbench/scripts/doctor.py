@@ -16,10 +16,16 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from workbench.backend.runtime import environment_blockers, environment_status, source_status
+from workbench.backend.vendored_source import source_provenance
 from workbench.backend.adapters.models import ADAPTERS, OfficialScriptAdapter
 from workbench.backend.operator_config import WorkbenchConfig, resolve_config
-from workbench.backend.registry import auxiliary_assets_for_model, auxiliary_destination, checkpoint_bundle_missing_paths, checkpoint_missing_paths, checkpoint_path, external_asset_blockers, fashioniq_required_paths, load_registry, preparation_contract_for_model, preparation_paths, required_runtime_assets, sha256_file
+from workbench.backend.checkpoint_selection import INCLUDE_FLAGGED_CONDITIONS, select_checkpoints
+from workbench.backend.runtime import environment_blockers, environment_status
+from workbench.backend.registry import (auxiliary_assets_for_model, auxiliary_destination,
+                                        checkpoint_bundle_missing_paths, checkpoint_missing_paths,
+                                        checkpoint_path, external_asset_blockers, fashioniq_required_paths,
+                                        load_registry, preparation_contract_for_model,
+                                        preparation_paths, required_runtime_assets, sha256_file)
 
 from workbench.backend.fashioniq_layout import (
     CATEGORIES, image_extension_problems, missing_paths, standard_paths,
@@ -46,26 +52,17 @@ def source_state(model: dict[str, Any], root: Path) -> dict[str, Any]:
     path = root / source_dir
     if not path.is_dir():
         return {"path": str(path), "state": "missing", "head": None, "dirty": None, "pin": model.get("upstream_commit_sha")}
-    head = git(path, "rev-parse", "HEAD")
-    if head is None:
-        return {"path": str(path), "state": "not_git", "head": None, "dirty": None, "pin": model.get("upstream_commit_sha")}
-    # Classify the checkout exactly like the execution gate: tracked edits and
-    # unauthorized untracked/ignored files are dirty, while declared runtime
-    # artifacts (the CSMCIR canonical dataset link, recorded auxiliary assets) are not.
-    entries = source_status(path)
-    if entries is None:
-        return {"path": str(path), "state": "not_git", "head": head, "dirty": None, "pin": model.get("upstream_commit_sha")}
-    dirty = bool(entries["tracked"] or entries["unauthorized"] or entries["invalid"])
-    reason = None
-    if dirty:
-        offenders = entries["tracked"] or entries["invalid"] or entries["unauthorized"]
-        reason = offenders[0] if offenders else None
-    return {"path": str(path), "state": "dirty" if dirty else "clean", "head": head, "dirty": dirty,
-            "pin": model.get("upstream_commit_sha"), "dirty_reason": reason,
-            "tracked_modifications": entries["tracked"],
-            "unauthorized_untracked": entries["unauthorized"],
-            "approved_runtime_artifacts": entries["approved"],
-            "invalid_runtime_artifacts": entries["invalid"]}
+    provenance = source_provenance(model, path)
+    dirty = provenance.get("dirty")
+    dirty_reason = provenance.get("error")
+    state = "dirty" if dirty else "clean" if provenance.get("verified") else "unavailable"
+    return {"path": str(path), "state": state, "head": provenance.get("actual_commit"),
+            "dirty": dirty, "pin": provenance.get("expected_commit"),
+            "dirty_reason": dirty_reason,
+            "tracked_modifications": provenance.get("tracked_modifications", []),
+            "unauthorized_untracked": provenance.get("unauthorized_untracked", []),
+            "approved_runtime_artifacts": provenance.get("approved_runtime_artifacts", []),
+            "invalid_runtime_artifacts": provenance.get("invalid_runtime_artifacts", [])}
 
 
 def fashioniq_base_paths(root: Path) -> tuple[Path, ...]:
@@ -142,7 +139,8 @@ def writable_path_check(name: str, path: Path) -> dict[str, Any]:
 
 
 def model_checks(model: dict[str, Any], config: WorkbenchConfig,
-                 allow_gpu_pending: bool = False) -> list[dict[str, Any]]:
+                 allow_gpu_pending: bool = False,
+                 requested_checkpoints: list[str] | None = None) -> list[dict[str, Any]]:
     model_id = model["model_id"]
     state = source_state(model, config.WORKBENCH_THIRD_PARTY_ROOT)
     source_ok = state["state"] == "clean" and (not state["pin"] or state["head"] == state["pin"])
@@ -192,15 +190,23 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig,
                     "interpreter": env_state["interpreter"], "runtime_verified": env_state["verified"],
                     "gpu_deferred": env_state["gpu_deferred"], "reason": env_state["reason"]}
     incomplete_bundles = checkpoint_bundle_missing_paths(model, config.WORKBENCH_CHECKPOINT_ROOT)
+    selection = select_checkpoints(model, policy=INCLUDE_FLAGGED_CONDITIONS,
+                                   requested=requested_checkpoints,
+                                   checkpoint_root=config.WORKBENCH_CHECKPOINT_ROOT)
+    selected_ids = set(selection.checkpoint_ids) if requested_checkpoints else None
+    selected_checkpoints = [checkpoint for checkpoint in model["checkpoint_variants"]
+                            if selected_ids is None or checkpoint["checkpoint_id"] in selected_ids]
+    selected_bundles = [bundle for bundle in model.get("checkpoint_bundles", [])
+                        if selected_ids is None or selected_ids.intersection(bundle["required_checkpoint_ids"])]
     bundle_reports = [{
         "bundle_id": bundle["bundle_id"], "required_checkpoint_ids": bundle["required_checkpoint_ids"],
         "complete": not incomplete_bundles.get(bundle["bundle_id"], []),
         "status": "READY" if not incomplete_bundles.get(bundle["bundle_id"], []) else "BLOCKED",
         "blockers": [f"checkpoint bundle member missing or invalid: {path}"
                      for path in incomplete_bundles.get(bundle["bundle_id"], [])],
-    } for bundle in model.get("checkpoint_bundles", [])]
+    } for bundle in selected_bundles]
     checkpoints = []
-    for checkpoint in model["checkpoint_variants"]:
+    for checkpoint in selected_checkpoints:
         path = checkpoint_path(model_id, checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)
         missing = checkpoint_missing_paths(path, checkpoint)
         installed = not missing
@@ -210,7 +216,7 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig,
         reasons = list(blockers)
         reasons.extend(f"checkpoint missing or invalid: {item}" for item in missing)
         registry_status = checkpoint.get("status")
-        unavailable = registry_status in {"NO_CLEAN_CHECKPOINT", "BLOCKED"} or (registry_status and registry_status.startswith("BLOCKED_"))
+        unavailable = registry_status == "BLOCKED" or (registry_status and registry_status.startswith("BLOCKED_"))
         if unavailable:
             reasons.append(f"registry checkpoint unavailable: {registry_status}")
         if not mapping:
@@ -228,6 +234,9 @@ def model_checks(model: dict[str, Any], config: WorkbenchConfig,
                             "registry_status": registry_status,
                             "readiness": "UNAVAILABLE" if unavailable else "BLOCKED" if reasons else "RUNNABLE",
                             "runtime_blockers": reasons, "command_ready": not reasons})
+    if requested_checkpoints is not None and selection.blocked:
+        checkpoints.append({"checkpoint_id": None, "readiness": "UNAVAILABLE",
+                            "runtime_blockers": [selection.reason], "command_ready": False})
     runnable = bool(checkpoints) and all(item["command_ready"] for item in checkpoints) and all(item["complete"] for item in bundle_reports)
     checks.append(record(f"runtime:{model_id}", "OK" if runnable else "BLOCKED",
                          "prerequisites present; evaluation not run" if runnable else "command unavailable",
@@ -259,7 +268,7 @@ def workbench_checks(config: WorkbenchConfig, serving: bool = False) -> list[dic
     return checks
 
 
-def collect(config: WorkbenchConfig | None = None, model_id: str | None = None, all_models: bool = False, scope: str = "workbench", serving: bool = False, allow_gpu_pending: bool = False) -> dict[str, Any]:
+def collect(config: WorkbenchConfig | None = None, model_id: str | None = None, all_models: bool = False, scope: str = "workbench", serving: bool = False, allow_gpu_pending: bool = False, requested_checkpoints: list[str] | None = None) -> dict[str, Any]:
     config = config or resolve_config()
     scope = "real" if scope == "workbench" and (model_id or all_models) else scope
     checks = workbench_checks(config, serving)
@@ -278,7 +287,8 @@ def collect(config: WorkbenchConfig | None = None, model_id: str | None = None, 
         if not models:
             return {"overall": "BLOCKED", "checks": checks + [record("selection", "BLOCKED", f"unknown model: {model_id}")]}
     for model in models if (all_models or model_id or scope == "real") else []:
-        checks.extend(model_checks(model, config, allow_gpu_pending=allow_gpu_pending))
+        checks.extend(model_checks(model, config, allow_gpu_pending=allow_gpu_pending,
+                                   requested_checkpoints=requested_checkpoints))
     overall = "BLOCKED" if any(item["status"] == "BLOCKED" for item in checks) else "WARNING" if any(item["status"] == "WARNING" for item in checks) else "READY"
     return {"overall": overall, "checks": checks}
 
@@ -292,6 +302,8 @@ def parser_for() -> argparse.ArgumentParser:
     parser.add_argument("--dataset-root", type=Path)
     parser.add_argument("--serve", action="store_true")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--checkpoint", action="append", default=None,
+                        help="inspect selected checkpoint ID(s); may be repeated")
     parser.add_argument("--allow-gpu-pending", action="store_true")
     return parser
 
@@ -301,10 +313,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.dataset_root:
         config = replace(resolve_config(), FASHIONIQ_ROOT=args.dataset_root.resolve())
         report = collect(config, model_id=args.model, all_models=args.all, scope=args.scope,
-                         serving=args.serve, allow_gpu_pending=args.allow_gpu_pending)
+                         serving=args.serve, allow_gpu_pending=args.allow_gpu_pending,
+                         requested_checkpoints=args.checkpoint)
     else:
         report = collect(model_id=args.model, all_models=args.all, scope=args.scope,
-                         serving=args.serve, allow_gpu_pending=args.allow_gpu_pending)
+                         serving=args.serve, allow_gpu_pending=args.allow_gpu_pending,
+                         requested_checkpoints=args.checkpoint)
     if args.json:
         print(json.dumps(report, sort_keys=True))
     else:

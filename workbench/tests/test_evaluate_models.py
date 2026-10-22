@@ -143,6 +143,17 @@ def prepare_source(monkeypatch, module, tmp_path: Path, model: dict) -> tuple[Pa
     checkpoint_file.write_bytes(payload)
     monkeypatch.setattr(module, "resolve_config", lambda: settings)
     monkeypatch.setattr(module, "pinned_revision", lambda source, _model=None: model["upstream_commit_sha"])
+    # The interpreter gate is part of the same stub set. A model that declares a `python_env_var` is
+    # gated on it, and this fixture builds a synthetic checkout with no provisioned environment, so
+    # leaving it unstubbed would make every plan test fail on the environment rather than on the
+    # thing it is about. It must be stubbed here rather than at each call site: while
+    # `environment_required` was missing from the registry for CSMCIR and ENCODER,
+    # `python_executable` returned the workbench interpreter and these tests passed for the wrong
+    # reason -- they exercised neither branch of the gate.
+    monkeypatch.setattr(
+        "workbench.backend.runtime.python_executable",
+        lambda _model: sys.executable,
+    )
     import workbench.backend.runtime as runtime
 
     monkeypatch.setattr(runtime, "source_clean_and_pinned", lambda model, _: (True, model["upstream_commit_sha"], None))

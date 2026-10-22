@@ -48,6 +48,8 @@ export type BenchmarkRun = {
   run_id: string;
   model_id: string | null;
   checkpoint_id: string | null;
+  checkpoint_training_noise_pct: number | null;
+  evaluation_noise_pct: number | null;
   protocol_id: string | null;
 } & RunGate;
 
