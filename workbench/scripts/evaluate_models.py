@@ -1919,6 +1919,15 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
                         f"{category}_{field}: per-query {hits}/{total} hits, aggregate "
                         f"{native * total / 100.0:.1f}")
         if disagreements:
+            # The artifact is REMOVED as well as refused. Leaving it beside the results would present
+            # a canonical-looking per-query result for a run whose report says the export failed, and
+            # the next reader -- or index rebuild -- would find the file and not the reason. The
+            # publisher already wrote it; refusing without cleaning up would make the directory
+            # disagree with the report it is supposed to describe.
+            try:
+                artifact.unlink(missing_ok=True)
+            except OSError:
+                pass
             return None, (
                 "per-query artifact does not reproduce this run's aggregate: "
                 + "; ".join(disagreements[:3])
