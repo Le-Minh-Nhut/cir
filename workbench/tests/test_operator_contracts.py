@@ -32,17 +32,28 @@ def test_doctor_selected_model_json_contract(monkeypatch: pytest.MonkeyPatch, ca
     selected: dict[str, object] = {}
 
     def collect(*, model_id: str | None = None, all_models: bool = False, scope: str = "workbench",
-                serving: bool = False, allow_gpu_pending: bool = False) -> dict:
+                serving: bool = False, allow_gpu_pending: bool = False,
+                requested_checkpoints: list[str] | None = None) -> dict:
         selected.update(model_id=model_id, all_models=all_models, scope=scope, serving=serving,
-                        allow_gpu_pending=allow_gpu_pending)
+                        allow_gpu_pending=allow_gpu_pending,
+                        requested_checkpoints=requested_checkpoints)
         return report
 
     monkeypatch.setattr(doctor, "collect", collect)
 
     assert doctor.main(["--model", "encoder", "--json"]) == 2
     assert selected == {"model_id": "encoder", "all_models": False, "scope": "workbench",
-                        "serving": False, "allow_gpu_pending": False}
+                        "serving": False, "allow_gpu_pending": False,
+                        "requested_checkpoints": None}
     assert json.loads(capsys.readouterr().out) == report
+
+    # The selection the operator names must reach `collect`, otherwise doctor would inspect every
+    # registered variant while the run it is judging selected one -- the defect this parameter
+    # exists to close.
+    assert doctor.main(["--model", "encoder", "--checkpoint", "fashioniq", "--checkpoint", "x",
+                        "--json"]) == 2
+    assert selected["requested_checkpoints"] == ["fashioniq", "x"]
+    capsys.readouterr()
 
 
 def test_doctor_reports_csmcir_and_encoder_runtime_blockers(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

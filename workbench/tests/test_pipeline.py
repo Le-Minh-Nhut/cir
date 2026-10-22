@@ -80,7 +80,11 @@ def test_real_csmcir_dry_run_orders_complete_preparation(monkeypatch, capsys) ->
     assert "prepare_dataset.py --dataset-root /configured/FashionIQ --model csmcir" in plans[3]
     assert "download_checkpoints.py --model csmcir" in plans[4]
     assert "download_auxiliary_assets.py --model csmcir" in plans[5]
-    assert "doctor.py --scope real --dataset-root /configured/FashionIQ --model csmcir" in plans[6]
+    # The preflight names the SAME checkpoint the evaluation stage will use. Without it doctor
+    # judges the model against every registered variant, so a run that selected one is refused
+    # for the siblings it deliberately did not select.
+    assert ("doctor.py --scope real --dataset-root /configured/FashionIQ --checkpoint fashioniq "
+            "--model csmcir") in plans[6]
     assert "evaluate_models.py --model csmcir --dataset-root /configured/third_party/CSMCIR/fashionIQ_dataset --canonical-dataset-root /configured/FashionIQ" in plans[7]
     assert "validate_results.py" not in output
 
@@ -198,7 +202,10 @@ def test_csmcir_plan_uses_custom_canonical_root(monkeypatch, capsys) -> None:
     assert pipeline.main(["real", "--model", "csmcir", "--dataset-root", str(custom), "--evaluate", "--dry-run"]) == 0
 
     output = capsys.readouterr().out
-    assert f"doctor.py --scope real --dataset-root {custom} --model csmcir" in output
+    # Same reason as the ordering test: the preflight must name the checkpoint the evaluation
+    # will use, or it judges variants this run did not select.
+    assert (f"doctor.py --scope real --dataset-root {custom} --checkpoint fashioniq "
+            "--model csmcir") in output
     assert f"evaluate_models.py --model csmcir --dataset-root /configured/third_party/CSMCIR/fashionIQ_dataset --canonical-dataset-root {custom}" in output
 
 def test_resume_skips_completed_stage(monkeypatch, tmp_path: Path, capsys) -> None:

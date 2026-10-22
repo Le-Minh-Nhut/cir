@@ -46,6 +46,15 @@ def test_backend_uses_current_configured_roots(monkeypatch, tmp_path: Path) -> N
     image.parent.mkdir(parents=True)
     image.write_bytes(b"image")
 
+    # CSMCIR declares `environment_required`, so building a command proves the runtime first. This
+    # fixture is about which ROOTS the command uses, not about provisioning, and it has no
+    # environment -- so the interpreter is stubbed. Notably it asserts `command[0] == sys.executable`
+    # below, which is the VALUE the stub returns; before the flag was declared,
+    # `python_executable` returned the workbench interpreter anyway and that assertion passed
+    # without the gate ever being consulted.
+    import workbench.backend.runtime as runtime
+    monkeypatch.setattr(runtime, "python_executable", lambda _model: sys.executable)
+
     availability = checkpoint_availability(model, checkpoint)
     # The adapter re-reads the registry for its model record, so hand it the fixture's view: the
     # declaration was rewritten above to describe the stub bytes, and a second load would not see it.

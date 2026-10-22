@@ -150,6 +150,7 @@ Trình quan sát và trình xuất bản nhận **môi trường đã lọc** gi
 | FashionIQ tại `FASHIONIQ_ROOT` | bắt buộc; kiểm bằng `./pc.sh --doctor` |
 | LIMN bundle ba checkpoint (`0_{dress,shirt,toptee}_best_model.pt` + SHA256) | bắt buộc; thiếu một member → từ chối **nêu tên member** |
 | `WORKBENCH_LEDGER_KEY` hoặc đúng **một** file khoá | hai file khoá khác nhau → từ chối và nêu đường dẫn |
+| **`TMPDIR` phải nằm trên đĩa thật, và còn ≥12 GiB trống** | constructor native của ENCODER/HINT/PAIR ghi cache pickle vào `TMPDIR` (**không** phải vào artifacts root). Nếu `TMPDIR` là tmpfs (mặc định `/tmp` trên nhiều máy) thì ~11.9 GiB đó nằm trong **RAM**: lượt chạy chết ở category thứ ba (`datasets.py:83`, `OSError: [Errno 122]`) hoặc bị OOM-kill. Đặt `TMPDIR=/mnt/data/tmp` (ext4, đủ trống) rồi hãy chạy. Đỉnh đo được: **11.868 GB** |
 
 ## 3. Hành vi từ chối (fail-closed)
 

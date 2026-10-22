@@ -167,9 +167,17 @@ def test_the_stale_source_blockers_are_gone_and_the_real_ones_remain() -> None:
         assert all("no runnable evaluation path" not in blocker for blocker in blockers)
 
 
-def test_the_wrapper_remains_the_registered_entrypoint() -> None:
+def test_the_wrapper_remains_the_registered_entrypoint(monkeypatch: pytest.MonkeyPatch) -> None:
     """The entrypoint the registry's own replay status describes must exist on disk."""
     from workbench.backend.adapters.models import ADAPTERS
+    import workbench.backend.runtime as runtime
+
+    # These models declare `environment_required`, so building a command proves the runtime first.
+    # This test is about which file the command launches, not about provisioning, and it has no
+    # environment to verify -- so the interpreter is stubbed, exactly as the adapter-shape tests do.
+    # Before the flag was declared, `python_executable` silently returned the workbench interpreter
+    # and this test passed without ever exercising the gate.
+    monkeypatch.setattr(runtime, "python_executable", lambda _model: sys.executable)
 
     for model_id in ("airknow", "conesep", "intent"):
         adapter = ADAPTERS[model_id]
