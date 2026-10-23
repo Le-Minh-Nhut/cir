@@ -299,8 +299,17 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
        nhau 1–2 hit.
      - `FeatureRecorder` (mới) cho phép observation dùng **chính tensor** mà native pass đã tính, thay
        vì tính lại. Đây là hướng đúng; chưa nối end-to-end.
-     ⇒ Trạng thái: observer parity **VERIFIED**, nhưng artifact vẫn `PER_QUERY_EXPORT_FAILED` ở tầng
-     parent. **Không** nới dung sai để cho nó pass.
+     ⇒ **ĐÃ XONG (2026-10-25).** Ba nguyên nhân đã gỡ, mỗi cái đo được:
+     (a) seed dựng dataset → 0/4034 tensor query khác;
+     (b) aggregate ghi **chính feature** mà lượt đánh giá duy nhất của nó tính ra
+     (`WORKBENCH_OBSERVATION_OUT`), export xếp hạng trên đó thay vì chạy lượt thứ hai;
+     (c) xếp hạng đúng **dtype float32** và đúng `np.argsort(-sims)` như native — lệch dtype làm
+     normalize round khác và R@1 lệch 1 hit ở hai category.
+     Kết quả: `per_query_state: PER_QUERY_EXPORTED_UNVERIFIED`, `export_available: true`,
+     `INSTRUMENTATION_PARITY_VERIFIED`, artifact **144 469 926 B**.
+     **Kiểm độc lập từ artifact**: dress 1040/1534, shirt 1118/1535, toptee 1207/1590 — **6/6 hit
+     count bằng đúng aggregate**. `verify_run.py` → corroborated; index có run; so LIMN–ENCODER
+     trên cùng query trả về **cả hai** model. LIMN cũ vẫn tái lập aggregate của nó.
   7. **Blocker hiện tại của lượt full 3-category: dung lượng đĩa.** Một lần dựng ba category cần
      **11 868 MB** (đo được ở đỉnh), máy còn **11 456 MB** ⇒ thiếu **~412 MB**. Hai lượt chạy thật đã
      chết đúng chỗ này (`OSError: [Errno 28] No space left on device` tại `datasets.py`). Sau khi sửa
