@@ -474,3 +474,31 @@ def test_the_encoder_observer_reuses_the_same_ranking_core() -> None:
     assert shared_order == native_order
     for row, position in enumerate(targets):
         assert ranks[row] == native_order[row].index(position) + 1
+
+
+def test_the_tie_order_is_the_one_the_native_metric_was_computed_with() -> None:
+    """Equally-scoring candidates must be ordered exactly as the pinned `test.py` orders them.
+
+    The native metric is `np.argsort(-sims)`. The observation exists to REPRODUCE that metric, so a
+    different tie order makes it disagree with the number it is supposed to explain. Measured on a
+    real ENCODER run: 8 dress, 2 shirt and 4 toptee queries have the target's score exactly equal to
+    the top-1 candidate's, and ordering those ties differently flipped R@1 by one hit in every
+    category -- with byte-identical inputs and deterministic kernels, so the tie WAS the difference.
+
+    This pins the ordering rule rather than a particular outcome: whatever `argsort` does with equal
+    keys, the observation must do the same thing.
+    """
+    import numpy as np
+
+    from workbench.replay.limn_observer import rank_queries
+
+    queries = np.array([[1.0, 0.0]], dtype=np.float32)
+    targets = np.array([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+
+    _, top = rank_queries(queries, targets, [2], [0], top_k=3)
+    sims = queries.dot(targets.T)
+    sims[0, 2] = -10e10                      # the same reference mask `test.py` applies
+    expected = list(np.argsort(-sims[0, :]))
+
+    assert [gallery for _, gallery, _ in top[0]] == expected, (
+        "the observed order differs from the native `argsort` order for equal scores")

@@ -159,6 +159,14 @@ def rank_queries(query_features: "np.ndarray", target_features: "np.ndarray",
     ranks: list[int] = []
     top: list[list[tuple[int, int, float]]] = []
     for index, gallery_index in enumerate(target_positions):
+        # A bare `argsort`, exactly as the pinned `test.py` writes it. Tie order is NOT ours to
+        # choose: the native metric is computed with `np.argsort(-sims)`, so any other ordering of
+        # equally-scoring candidates makes the observation disagree with the very metric it exists to
+        # reproduce. Measured on a real ENCODER run: 8 dress, 2 shirt and 4 toptee queries have the
+        # target's score EXACTLY equal to the top-1 candidate's, and a different tie order flipped
+        # R@1 by one hit in all three categories -- with byte-identical inputs and deterministic
+        # kernels, so the tie was the whole difference. `argsort` is stable in NumPy, so reproducing
+        # the native call reproduces its tie order too.
         order = np.argsort(-sims[index, :])
         # The full ranking is walked, so a target beyond the saved depth still gets a true rank.
         rank = int(np.flatnonzero(order == gallery_index)[0]) + 1

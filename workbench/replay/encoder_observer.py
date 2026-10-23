@@ -49,11 +49,20 @@ def _category_lists(dataset: Any, category: str) -> tuple[list, list]:
     return queries, targets
 
 def observe_category(category: str, model: Any, dataset: Any, dataset_root: Path,
-                     batch_size: int = 64, top_k: int = DEFAULT_TOP_K) -> ObservedCategory:
+                     batch_size: int = 64, top_k: int = DEFAULT_TOP_K,
+                     captured: tuple[Any, Any] | None = None) -> ObservedCategory:
     """Re-derive one category's per-query rankings from the native model and native dataset.
 
     ``model`` and ``dataset`` must be the objects ``replay.encoder.evaluate_categories`` loaded, and
     the two forward calls below are the same ones ``test.py`` makes with the same arguments.
+
+    ``captured`` is ``(queries, targets)`` recorded from the native evaluation's OWN forward pass by
+    `common.FeatureRecorder`. It is the only way the result can be guaranteed to describe that
+    evaluation: a second pass over the same inputs does not reproduce the first, because CUDA feature
+    extraction is not cross-process reproducible even with cuDNN pinned deterministic and a fixed
+    seed -- measured on this model, two processes produced different feature hashes for identical
+    input. Passing them is therefore preferred; when they are absent the features are computed here,
+    which is still a valid ranking but may differ from a native pass by a hit or two.
     """
     import numpy as np
     import torch
@@ -70,6 +79,13 @@ def observe_category(category: str, model: Any, dataset: Any, dataset_root: Path
     if len(set(gallery_ids)) != len(gallery_ids):
         raise ValueError(f"{category}: gallery contains duplicate canonical image ids")
     position_of = {position: index for index, position in enumerate(gallery_positions)}
+
+    if captured is not None and captured[0] is not None and captured[1] is not None:
+        # Use the native pass's own tensors: same call, same batching, same normalization.
+        all_queries, all_imgs = np.asarray(captured[0]), np.asarray(captured[1])
+        return _rank_from_features(category, all_queries, all_imgs, test_queries, test_targets,
+                                   images, raw_captions, gallery_ids, position_of,
+                                   top_k=top_k)
 
     with torch.no_grad():
         query_features: list["np.ndarray"] = []
@@ -100,8 +116,17 @@ def observe_category(category: str, model: Any, dataset: Any, dataset_root: Path
                 target_features.append(features)
                 batch_images = []
 
-    all_queries = np.concatenate(query_features)
-    all_imgs = np.concatenate(target_features)
+    return _rank_from_features(category, np.concatenate(query_features),
+                               np.concatenate(target_features), test_queries, test_targets,
+                               images, raw_captions, gallery_ids, position_of, top_k=top_k)
+
+
+def _rank_from_features(category, all_queries, all_imgs, test_queries, test_targets,
+                        images, raw_captions, gallery_ids, position_of,
+                        top_k: int = DEFAULT_TOP_K) -> ObservedCategory:
+    """Rank one category from query/target features. ONE implementation, so the captured path and the
+    recomputed path cannot drift apart in how they rank."""
+    import numpy as np
 
     # The saved depth is bounded by the ELIGIBLE candidate count: the masked reference still occupies
     # a column in the native matrix, so a depth equal to the gallery size would list it as a

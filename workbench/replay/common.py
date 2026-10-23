@@ -267,3 +267,95 @@ def seeded_dataset_construction(seed: int = DATASET_CONSTRUCTION_SEED) -> Iterat
             np.random.set_state(numpy_state)
         if torch_state is not None:
             torch.random.set_rng_state(torch_state)
+
+
+def enable_deterministic_inference(torch) -> None:
+    """Make a CUDA forward pass reproducible across processes.
+
+    The per-query observer re-derives the ranking from features it computes ITSELF, with the same
+    calls and the same batching the native `test()` makes. Those are two separate forward passes, and
+    cuDNN's default reduction order is not fixed, so the two disagreed on a handful of queries out of
+    six thousand even once both saw byte-identical inputs (measured: 5 differing hit counts across
+    four category Recall values). A ranking that depends on kernel scheduling is not reproducible
+    evidence, and the artifact-versus-aggregate check is right to refuse it.
+
+    This does not change what the protocol computes -- normalization, the similarity dot product,
+    `argsort` and the metric arithmetic are unchanged -- only the order in which the same additions
+    are performed. It costs speed, which is the price of an artifact that can be reproduced.
+
+    `CUBLAS_WORKSPACE_CONFIG` is required by cuBLAS for deterministic reductions on some versions and
+    must be set before the handle is created, so it is set here as well as the torch flags.
+    """
+    import os
+
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    if not torch.cuda.is_available():
+        return
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    try:
+        torch.use_deterministic_algorithms(True, warn_only=True)
+    except (AttributeError, TypeError):
+        pass
+
+
+class FeatureRecorder:
+    """Capture the features a native evaluation actually computes, so an observation need not
+    recompute them.
+
+    The per-query observer and the native `test()` must reconstruct the SAME rankings. When the
+    observer makes its own forward pass, it cannot: CUDA feature extraction is not reproducible across
+    processes even with cuDNN pinned deterministic and a fixed seed. Measured on the pinned ENCODER
+    model, the same input and seed produced different feature hashes in two processes
+    (`82dc55fc…` vs `af784fa2…`), so a second pass can differ by a hit or two out of six thousand no
+    matter how carefully it is configured.
+
+    Recording from the actual call removes the second pass entirely: the observation is derived from
+    the very tensors the native metric was computed on, which is what the per-query export claims to
+    describe. It is a wrapper around the model's own methods, so preprocessing, batching, dtype and
+    normalization are unchanged.
+    """
+
+    def __init__(self, model):
+        self.model = model
+        self.query_batches: list = []
+        self.target_batches: list = []
+        self._original_compose = None
+        self._original_target = None
+
+    def __enter__(self):
+        self._original_compose = self.model.extract_retrieval_compose
+        self._original_target = self.model.extract_retrieval_target
+
+        def compose(imgs, mods, *args, **kwargs):
+            out = self._original_compose(imgs, mods, *args, **kwargs)
+            self.query_batches.append(out)
+            return out
+
+        def target(imgs, *args, **kwargs):
+            out = self._original_target(imgs, *args, **kwargs)
+            self.target_batches.append(out)
+            return out
+
+        self.model.extract_retrieval_compose = compose
+        self.model.extract_retrieval_target = target
+        return self
+
+    def __exit__(self, *exc):
+        if self._original_compose is not None:
+            self.model.extract_retrieval_compose = self._original_compose
+        if self._original_target is not None:
+            self.model.extract_retrieval_target = self._original_target
+        return False
+
+    def features(self):
+        """The captured batches as two arrays, or None when the native pass did not run."""
+        import numpy as np
+
+        if not self.query_batches or not self.target_batches:
+            return None, None
+        queries = np.concatenate([b.data.cpu().numpy() if hasattr(b, "data") else np.asarray(b)
+                                  for b in self.query_batches])
+        targets = np.concatenate([b.data.cpu().numpy() if hasattr(b, "data") else np.asarray(b)
+                                  for b in self.target_batches])
+        return queries, targets

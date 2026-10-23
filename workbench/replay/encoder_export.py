@@ -17,7 +17,8 @@ from workbench.replay.encoder import (
 from workbench.replay.encoder_observer import (
     ObservedCategory, cross_check_with_native, observe_category,
 )
-from workbench.replay.common import run_cache_root, seeded_dataset_construction
+from workbench.replay.common import (FeatureRecorder, enable_deterministic_inference,
+                                    run_cache_root, seeded_dataset_construction)
 
 DEFAULT_TOP_K = 200
 
@@ -81,6 +82,9 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
     else:
         model = state
     model = model.cuda().eval()
+    # Same determinism as the aggregate's pass: this process re-derives the ranking from features it
+    # computes itself, and the two passes must agree exactly for the artifact to be publishable.
+    enable_deterministic_inference(torch)
     _, preprocess_train, preprocess_val = open_clip.create_model_and_transforms(
         "ViT-B-32", pretrained=str(source_root / AUXILIARY_ASSET_NAME))
 
@@ -97,9 +101,14 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
                                          split="val-split")
         params = SimpleNamespace(batch_size=batch_size, local_rank=0)
         for category in CATEGORIES:
-            metrics = dict(native_test.test(params, model, dataset, category))
+            # The native `test()` computes the features; the observation is derived from THOSE, not
+            # from a second pass. CUDA extraction is not cross-process reproducible, so a recomputed
+            # ranking would differ from the metric it is supposed to reproduce.
+            with FeatureRecorder(model) as recorder:
+                metrics = dict(native_test.test(params, model, dataset, category))
+            captured = recorder.features()
             observation = observe_category(category, model, dataset, dataset_root,
-                                           batch_size=batch_size, top_k=top_k)
+                                           batch_size=batch_size, top_k=top_k, captured=captured)
             category_mismatches = tuple(cross_check_with_native(observation, metrics))
             observed.append(observation)
             if category_mismatches:
