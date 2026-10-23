@@ -68,7 +68,15 @@ def test_the_clone_is_the_committed_commit(fresh_clone: Path) -> None:
 
 def test_every_checkout_ships_its_provenance_record(fresh_clone: Path) -> None:
     vendored = _vendored_dirs(fresh_clone)
-    assert len(vendored) == 15, f"expected 15 vendored checkouts, found {len(vendored)}"
+    # Counted from the REGISTRY rather than frozen: the number of vendored checkouts is whatever the
+    # registry declares a `source_dir` for, so adding a model (TME) does not look like a delivery
+    # failure. The assertion that matters is below, that each one carries its provenance record.
+    from workbench.backend.registry import load_registry
+
+    declared = {m["source_dir"] for m in load_registry()["models"] if m.get("source_dir")}
+    assert len(vendored) == len(declared), (
+        f"expected {len(declared)} vendored checkouts (one per registry source_dir), "
+        f"found {len(vendored)}: {sorted(p.name for p in vendored)}")
     for directory in vendored:
         record = directory / "provenance.json"
         assert record.is_file(), f"{directory.name} has no provenance.json"

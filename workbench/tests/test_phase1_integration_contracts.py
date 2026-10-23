@@ -153,7 +153,8 @@ def test_the_official_evaluator_never_receives_the_operator_key(
     # dataset-cache directory the parent gives both the aggregate and the observer: it is a path
     # inside the run's own directory, carries no secret, and exists so the two children build one
     # 11.87 GB cache instead of two. It is listed here so adding another name still fails this test.
-    permitted = {"WORKBENCH_THIRD_PARTY_ROOT", "WORKBENCH_REPLAY_CACHE_ROOT"}
+    permitted = {"WORKBENCH_THIRD_PARTY_ROOT", "WORKBENCH_REPLAY_CACHE_ROOT",
+                 "WORKBENCH_OBSERVATION_OUT"}
     assert set(reported["names"]) - set(secret_names) <= permitted, reported["names"]
     assert reported["run"] == "boundary-run"
     # The key must not be echoed into the run's own recorded environment either.
