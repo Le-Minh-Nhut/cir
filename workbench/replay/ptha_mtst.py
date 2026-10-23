@@ -28,8 +28,23 @@ PUBLISHED_CIRR_WEIGHT = "tuned_mtst_cirr.pt"
 TRANSFER_LABEL = "PTHA+MTST | CIRR checkpoint -> FashionIQ | cross-dataset transfer | exploratory"
 
 
+def source_tree(source_root: Path) -> Path:
+    """The directory that actually holds the upstream tree's `src/`.
+
+    The vendored checkout keeps the repository's own top-level directory inside the checkout, so the
+    code lives at `<source_root>/MTST_PTHA/MTST_PTHA/src` while `requirements.txt` and `provenance.json`
+    sit at `<source_root>/MTST_PTHA`. Resolving it in ONE place means the evaluator path and the
+    import path cannot disagree, which is what they did: both named `<source_root>/MTST_PTHA/src`, a
+    directory that does not exist, so every preflight reported the evaluator missing and the import
+    would have failed on `data_utils`.
+    """
+    outer = source_root / "MTST_PTHA"
+    nested = outer / "MTST_PTHA"
+    return nested if (nested / "src").is_dir() else outer
+
+
 def evaluator_path(source_root: Path) -> Path:
-    return source_root / "MTST_PTHA" / "src" / "validate_blip.py"
+    return source_tree(source_root) / "src" / "validate_blip.py"
 
 
 def preflight(
@@ -96,7 +111,7 @@ def evaluate_transfer(source_root: Path, dataset_root: Path, checkpoint: Path) -
     """Safely inspect and compare checkpoint, then run the pinned FashionIQ metrics."""
     import torch
 
-    src = source_root / "MTST_PTHA" / "src"
+    src = source_tree(source_root) / "src"
     sys.path.insert(0, str(src))
     os.environ["MTST_DATA_ROOT"] = str(dataset_root.parent)
 

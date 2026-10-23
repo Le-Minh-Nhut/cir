@@ -97,3 +97,57 @@ def test_preflight_blocks_on_missing_fashioniq_weights(tmp_path: Path) -> None:
     )
     assert any("FashionIQ fine-tuned checkpoint missing" in blocker for blocker in blockers)
     assert any("tuned_mtst_cirr.pt" in blocker for blocker in blockers)
+
+
+def test_the_nested_source_layout_resolves_to_the_directory_holding_src() -> None:
+    """The vendored checkout keeps the repository's own top directory inside itself.
+
+    `third_party/MTST_PTHA/` contains `MTST_PTHA/src/`, while `requirements.txt` and `provenance.json`
+    sit at the outer level. Both call sites used to name `<checkout>/MTST_PTHA/src` -- wait, they named
+    `<checkout>/src`, which does not exist -- so preflight reported the pinned evaluator missing for a
+    checkout that contains it, and the import path would have failed on `data_utils`. ONE resolver now
+    answers for both, and this test pins the layout it must handle: nested when the tree is nested,
+    flat when a future vendoring flattens it.
+    """
+    from pathlib import Path
+
+    from workbench.replay import ptha_mtst
+
+    real = Path("workbench/third_party/MTST_PTHA")
+    if not real.is_dir():
+        return pytest.skip("vendored MTST_PTHA checkout is not present")
+    tree = ptha_mtst.source_tree(real)
+    assert (tree / "src" / "validate_blip.py").is_file(), (
+        f"{tree} does not hold src/validate_blip.py; the resolver picked the wrong level")
+    # `evaluator_path` must agree with the resolver, since they are read by different callers.
+    assert ptha_mtst.evaluator_path(real) == tree / "src" / "validate_blip.py"
+
+
+def test_a_transfer_run_needs_the_explicit_opt_in(tmp_path: Path) -> None:
+    """The CIRR checkpoint must never be evaluated on FashionIQ by default.
+
+    The refused message names the reason (the author publishes no FashionIQ fine-tune), so an operator
+    who has not read the prompt learns why rather than seeing an empty block.
+    """
+    from pathlib import Path
+
+    from workbench.replay import ptha_mtst
+
+    source = Path("workbench/third_party/MTST_PTHA")
+    if not source.is_dir():
+        return pytest.skip("vendored MTST_PTHA checkout is not present")
+    dataset = tmp_path / "FashionIQ"
+    for relative in ptha_mtst.RAW_INPUTS:
+        (dataset / relative).parent.mkdir(parents=True, exist_ok=True)
+        (dataset / relative).write_text("[]")
+
+    checkpoint_root = tmp_path / "checkpoints"
+    model_dir = checkpoint_root / "ptha_mtst"
+    model_dir.mkdir(parents=True)
+    (model_dir / ptha_mtst.PUBLISHED_CIRR_WEIGHT).write_bytes(b"weights")
+
+    assert ptha_mtst.preflight(source, dataset, checkpoint_root,
+                               transfer_cirr_to_fashioniq=True) == []
+    refused = ptha_mtst.preflight(source, dataset, checkpoint_root,
+                                  transfer_cirr_to_fashioniq=False)
+    assert refused and "transfer opt-in" in refused[0], refused
