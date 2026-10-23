@@ -271,16 +271,26 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
      paper đều vậy — mặc định fail-closed có chủ ý, không phải lỗi ở lượt này).
   5. **Artifact per-query của lượt đó KHÔNG tái lập được aggregate của chính nó** — 30 hit-count
      lệch trên sáu giá trị Recall (dress R@50: artifact 76.2023 vs report 76.5493), dù hai bên đều
-     ghi `INSTRUMENTATION_PARITY_VERIFIED`. Nguyên nhân: `cross_check_with_native` chạy **trong
-     observer** và so với các lệnh gọi native `test()` **cùng tiến trình, cùng model object**;
-     `test()` chia batch rồi reduce trên GPU, và cuDNN **không** được ghim deterministic, nên hai
-     lượt cho feature lệch bit cuối. Hai lượt khớp **99.8%** query — đủ để check nội bộ pass,
-     không đủ để rank công bố tái lập aggregate. Bản thân artifact **nhất quán nội bộ** (mọi target
-     nằm đúng rank đã ghi), nên observer/publisher không thể phát hiện.
+     ghi `INSTRUMENTATION_PARITY_VERIFIED`.
+     **Nguyên nhân (đã xác định, thay cho giải thích cũ):** constructor iLearn **nướng tensor query
+     vào dataset lúc dựng** qua `get_img(..., stage=0)`, và replay truyền
+     `[preprocess_train, preprocess_val]` ⇒ query đi qua `RandomResizedCrop` (stochastic) còn gallery
+     dùng `stage=1`. Hai lần dựng dress cho **3994/4034** tensor query khác nhau (gallery giống hệt).
+     Giải thích cũ — "cuDNN không ghim deterministic" — là **SAI và đã bị bỏ**: normalization, dot
+     product và `argsort` đều chạy bằng NumPy sau khi feature về CPU, và check nội bộ của observer
+     pass vì nó so **hai lượt trên cùng một cache cục bộ**. Xem D11.
+     Đã sửa bằng `common.seeded_dataset_construction` (seed trước khi dựng, khôi phục RNG state) ở
+     cả bốn nơi dựng dataset; đo lại **0/4034** khác.
      Đã thêm check ở **parent** (nơi duy nhất có thể): artifact phải tái lập `category_metrics` của
-     lượt đó, so theo **số hit** chứ không theo dung sai. Đối chứng: check này **từ chối** artifact
-     ENCODER thật (6 mâu thuẫn) và **chấp nhận** artifact LIMN thật (0 mâu thuẫn).
+     lượt đó, so theo **số hit** chứ không theo dung sai, và artifact bị **xoá** khi từ chối (nếu để
+     lại, một artifact trông hợp lệ sẽ nằm cạnh report nói export thất bại). Đối chứng: check này
+     **từ chối** artifact ENCODER cũ (6 mâu thuẫn) và **chấp nhận** artifact LIMN (0 mâu thuẫn).
      Vì vậy **không** đọc lượng export của ENCODER như bằng chứng per-query đã kiểm chứng.
+  6. **Blocker hiện tại của lượt full 3-category: dung lượng đĩa.** Một lần dựng ba category cần
+     **11 868 MB** (đo được ở đỉnh), máy còn **11 456 MB** ⇒ thiếu **~412 MB**. Hai lượt chạy thật đã
+     chết đúng chỗ này (`OSError: [Errno 28] No space left on device` tại `datasets.py`). Sau khi sửa
+     D12, lượt hỏng **không còn để lại cache** (log dir 3 MB thay vì 10.4 GB), nên nó không còn tự
+     làm nặng thêm. Cần giải phóng thêm ~1 GB trên volume chứa `TMPDIR` — xem §6.
 
 ### 3. `hint`
 - Upstream @ `bec50b6c8c19`. Wrapper `hint.py` chạy trong `isolated_cache_root` (F03/B3):
@@ -309,7 +319,30 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
   `data/` nuốt).
 - Checkpoint: `pair-B1.pt` / `pair-B2.pt` công bố nhưng **không có nhãn dataset/variant** ⇒ mapping
   `UNVERIFIED`. Không chọn dataset/architecture thay tác giả.
-- Đã chạy: `test_pair_replay.py` (5). Blocker: `AUTHOR_ONLY_INFORMATION`.
+- **R18 — hai checkpoint công bố KHÔNG load được, có bằng chứng.** Cả hai file tải thật và **khớp
+  hoàn toàn metadata publisher**: `pair-B1.pt` 694 958 565 B sha256 `c4d861ec…5fbf2`,
+  `pair-B2.pt` 694 872 371 B sha256 `74346fd7…eb3f03` (HuggingFace `iLearn-Lab/ICASSP25-PAIR`).
+  Nên đây **không** phải lỗi tải hỏng.
+  - `torch.load(..., weights_only=True)` dừng ở `GLOBAL model_vssp.Encoder` — pickle tham chiếu
+    `model_vssp.Encoder` / `.Backbone` / `.FeatureWiseAffine`; loader an toàn báo
+    `ModuleNotFoundError: No module named 'model_vssp'`. Lỗi xảy ra **trước** khi có state_dict, nên
+    **không tồn tại** báo cáo key/shape — không được bịa một cái.
+  - Kiểm lịch sử upstream: tại pin `bfb0b98c` cây đầy đủ chỉ có `models/MHTransformer.py` +
+    `models/model.py`; `commits?path=model_vssp.py`, `...MHTransformer_dis.py`,
+    `...MHTransformer_rev.py` đều rỗng; bản phát hành nguồn đầu tiên `5991d554` cũng vậy. ⇒ **không
+    phải pin cũ**, mà là module **chưa từng được công bố**.
+  - Khác biệt cấu trúc (chỉ nêu cái có bằng chứng): `transformer_c`/`transformer_d`,
+    `backbone.weight_chanelImg`, `weight_chanelImg_t`, `cross_t2i` chỉ có trong pickle; `backbone.transformer`
+    8 head/1 layer; `_a` pickle 4 head/2 layer vs pinned 8/1; `_b` pickle `MHTransformer_dis` vs pinned
+    `MHTransformer_rev` (bản pinned là **reconstruction của workbench**, không phải code tác giả).
+    `local_weight=(8,)`/`local_weight_dis=(7,)` **khớp** `local_token_num=6` nên **không** dùng làm
+    bằng chứng lệch.
+  - Operator path cũng từ chối: `COMMAND_BLOCKED_SOURCE_ENTRYPOINT` + `checkpoint mapping unresolved`.
+  - **Kết luận: NOT RUN** cho cả B1 và B2 — không có metric, không GPU, không so dòng paper. Remedy tối
+    thiểu: tác giả phải công bố định nghĩa `model_vssp` và `MHTransformer_dis`; **không** alias/ăli
+    hay tự dựng lại topology.
+- Đã chạy: `test_pair_replay.py` (5). Blocker: `AUTHOR_ONLY_INFORMATION` (R18 xác nhận cụ thể hơn:
+  thiếu định nghĩa lớp, không phải thiếu file).
 - **F05 đã sửa (lượt R9)**: `data/datasets.py:34-42` dựng cache và đọc cả ba category; validator
   từng chỉ kiểm category được chọn. Nay dùng chung `constructor_input_blockers`.
 
@@ -487,6 +520,9 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
 | D6 | `pipeline.all_stages` tham chiếu `model_obj` chỉ tồn tại trong `real_stages` ⇒ `NameError` | 3 test suite độc lập fail (`test_authorization_policy`, `test_adversarial_orchestration`, `test_adversarial_resume`) | tra registry record tại chỗ |
 | D7 | Asset LAION backbone khai `expected_sha256: null` + `UNVERIFIED` ⇒ mọi lượt ENCODER chặn ở "operator-supplied unverified provenance" | preflight ENCODER BLOCKED | ghi `lfs.oid` **do publisher công bố** (kèm size); local hash = registry = HF oid |
 | D8 | Vendored checkout thiếu hoặc hỏng `provenance.json` rơi xuống Git path; Git đi lên repo CIR và mượn commit không thuộc upstream | Checkout dưới repo Git cha, không có `.git` riêng và manifest thiếu/hỏng trả commit của repo cha | `runtime.source_provenance` chỉ dùng manifest cho checkout không có Git riêng; không có record hợp lệ thì `actual_commit: null`, `verified: false` |
+| D11 | **Query image khác nhau giữa aggregate và exporter**: constructor iLearn nướng tensor query lúc dựng dataset qua `get_img(..., stage=0)`, mà replay truyền `[preprocess_train, preprocess_val]` ⇒ query đi qua `RandomResizedCrop`, còn gallery dùng `stage=1` deterministic | Hai lần dựng dress khác nhau **3994/4034** tensor query (gallery giống hệt). Đây **mới là nguyên nhân thật** của việc artifact ENCODER không tái lập aggregate; giải thích cũ "cuDNN nondeterministic" là **SAI** | `common.seeded_dataset_construction` seed ngay trước khi dựng và khôi phục RNG state; áp cho `encoder`, `encoder_export`, `limn`, `pair`. Đo lại: **0/4034** khác |
+| D12 | **Cache native dựng HAI lần mỗi run**: aggregate và observer mỗi bên dựng cache riêng trong temp root mới | Observer chết `[Errno 28] No space left on device` trong `save_obj` (đọc như lỗi export). Cache để lại trong run dir chiếm **10.4 GB** | `common.run_cache_root` + `WORKBENCH_REPLAY_CACHE_ROOT`: cả hai con dùng **một** cache theo run, và cache được xoá sau khi con cuối đọc xong |
+| D13 | **`pinned_revision` mượn revision repo bao ngoài**: không có model record thì gọi thẳng `git rev-parse`, mà trong checkout vendored Git đi lên repo chứa nó | Trả commit repo CIR cho checkout không có `provenance.json`; test cũ **pass sai** (tmp_path ngoài Git) và **fail** khi basetemp nằm trong repo | Chỉ trả lời khi checkout có `.git` riêng; regression dựng **repo bao ngoài thật** |
 
 D6 do subagent đưa vào và **chính lượt chạy toàn bộ suite** phát hiện — bộ test hẹp của nó không phủ.
 
