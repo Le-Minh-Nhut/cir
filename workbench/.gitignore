@@ -1,0 +1,5 @@
+# Provisioned model environments. They are multi-GB build products of the registry's declared
+# environment, recreated by `manage_environment.py --create` or the documented uv commands, and they
+# contain platform-specific binaries that do not belong in a reproduction. The tracked entries in
+# this directory are the README and the hand-written requirement notes only.
+envs/*/

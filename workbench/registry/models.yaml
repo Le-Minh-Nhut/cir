@@ -343,8 +343,9 @@ models:
     checkpoint_variants:
       - checkpoint_id: fiq_n02
         filename: HABIT-FIQ_N0.2.pt
-        download_url: https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/main/fiq/HABIT-FIQ_N0.2.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-HABIT/resolve/8712993b071f4668ce5b2db6070e70c856bd9174/fiq/HABIT-FIQ_N0.2.pt
         source_type: author_huggingface
+        source_revision: 8712993b071f4668ce5b2db6070e70c856bd9174
         checkpoint_training_noise_pct: 20
         evaluation_noise_pct: 0
         expected_size_bytes: 2730715930
@@ -421,8 +422,9 @@ models:
     checkpoint_variants:
       - checkpoint_id: fiq_n02
         filename: intent_fiq_0.2.pt
-        download_url: https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/main/intent_fiq_0.2.pt
+        download_url: https://huggingface.co/iLearn-Lab/AAAI26-INTENT/resolve/16ee2d31f05576bbebbad7da0530b412f5e7a1d8/intent_fiq_0.2.pt
         source_type: author_huggingface
+        source_revision: 16ee2d31f05576bbebbad7da0530b412f5e7a1d8
         checkpoint_training_noise_pct: 20
         evaluation_noise_pct: 0
         expected_size_bytes: 2722478522
