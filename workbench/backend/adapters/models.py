@@ -463,7 +463,39 @@ class LIMNAdapter(OfficialScriptAdapter):
         if request.checkpoint_id != "base_iter0_all_categories":
             command.extend(("--category", request.checkpoint_id.removeprefix("base_iter0_")))
         return command
-ADAPTERS = {adapter.model_id: adapter for adapter in (CSMCIRAdapter, EncoderAdapter, HintAdapter, PairAdapter, AirKnowAdapter, ConeSepAdapter, HabitAdapter, IntentAdapter, CLVCNetAdapter, DCNetAdapter, CombinerNoftAdapter, CLIP4CirFullftAdapter, TGCIRAdapter, SPRCAdapter, LIMNAdapter)}
+class TMEAdapter(OfficialScriptAdapter):
+    model_id = "tme"
+    script = "precompute_test.py"
+    launcher = "replay"
+    launcher_roots = ()
+
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        # The pinned `precompute_test.py` reads a local `--model-path` and its `main()` cannot serve
+        # one category at a time or take a checkpoint root, so the audited entry point is the wrapper,
+        # which calls the pinned evaluation unchanged and checks the load report the native
+        # `strict=False` would have discarded.
+        return _replay_command(self, checkpoint, request, source, checkpoint_id=True)
+
+
+class PthaMtstAdapter(OfficialScriptAdapter):
+    model_id = "ptha_mtst"
+    script = "src/validate_blip.py"
+    launcher = "replay"
+    launcher_roots = ()
+
+    def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
+        # `validate_blip.py` recommends via `clip_finetune_fiq` but its CLI dispatches only CIRR, and
+        # the author publishes no FashionIQ fine-tune, so the wrapper is the audited entry point. The
+        # transfer opt-in is passed ONLY for the variant registered as a cross-dataset transfer, which
+        # keeps the flag's meaning tied to the checkpoint's recorded training dataset instead of to a
+        # model id.
+        command = _replay_command(self, checkpoint, request, source, checkpoint_id=True)
+        if request.checkpoint_id == "cirr_transfer":
+            command.append("--transfer-cirr-to-fashioniq")
+        return command
+
+
+ADAPTERS = {adapter.model_id: adapter for adapter in (CSMCIRAdapter, EncoderAdapter, HintAdapter, PairAdapter, AirKnowAdapter, ConeSepAdapter, HabitAdapter, IntentAdapter, CLVCNetAdapter, DCNetAdapter, CombinerNoftAdapter, CLIP4CirFullftAdapter, TGCIRAdapter, SPRCAdapter, LIMNAdapter, TMEAdapter, PthaMtstAdapter)}
 
 
 def register_test_adapter(adapter_type: type[OfficialScriptAdapter]) -> None:
