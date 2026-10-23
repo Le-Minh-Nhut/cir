@@ -62,9 +62,22 @@ def test_m09_unverified_mapping_not_ready(cfg: WorkbenchConfig):
 
 # M10: Protocols cannot be mixed for analysis
 def test_m10_protocols_distinct():
+    """The original protocols stay distinct, and each keeps its own label.
+
+    Asserted as a subset: TME's `fashioniq_val_split_ref_included` was added deliberately (its
+    evaluator keeps the reference eligible on FashionIQ), and an equality check would report every
+    such addition as a regression of the originals rather than as the separate protocol it is.
+    """
     reg = load_registry()
-    assert set(reg["protocols"]) == {"fashioniq_original_split", "fashioniq_full_gallery_ref_excluded", "fashioniq_val_split"}
+    originals = {"fashioniq_original_split", "fashioniq_full_gallery_ref_excluded",
+                 "fashioniq_val_split"}
+    assert originals <= set(reg["protocols"])
     assert reg["protocols"]["fashioniq_val_split"]["literature_split_label"] == "val"
+    # A protocol that claims a DIFFERENT reference policy must be its own entry, not an alias.
+    for name, protocol in reg["protocols"].items():
+        assert protocol.get("label"), f"{name} has no label"
+    labels = [p["label"] for p in reg["protocols"].values()]
+    assert len(labels) == len(set(labels)), f"two protocols share a label: {labels}"
 
 
 # O06/O07: Workflow report exists after early failure and evaluation failure
