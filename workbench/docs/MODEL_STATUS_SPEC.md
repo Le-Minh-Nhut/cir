@@ -647,6 +647,24 @@ trong LAVIS là của LAVIS, không phải của project này ⇒ **không** kha
 - Hash của publisher cho cả ba file 20% đã **kiểm độc lập** qua Hub API và khớp registry; HABIT và
   INTENT nay được **pin theo revision** thay vì `resolve/main`.
 
+## 4e. Năm model ngoài registry — ghi chú research (không dựng stub)
+
+`§11` của prompt yêu cầu giữ ghi chú ngắn cho năm model **không** có entry trong registry, và
+**không** thêm stub không chạy được. Đây là lý do từng cái vắng mặt:
+
+| Model | Trạng thái | Căn cứ |
+|---|---|---|
+| RankVR | **không có checkpoint công khai đã xác lập** | chưa tìm được weight do tác giả công bố |
+| Css-Net | **không có checkpoint công khai đã xác lập** | như trên |
+| MAPNet | **không có checkpoint công khai đã xác lập** | như trên |
+| MPCIR | **tài nguyên công khai tìm được là DATASET, không phải checkpoint** | lượt review này xác định vậy; một dataset không đủ để chạy model |
+| ReCon | **không có checkpoint công khai đã xác lập** | chưa tìm được weight do tác giả công bố |
+
+Không entry nào trong số này được thêm vào registry: registry mô tả những gì workbench **có thể
+chạy**, và một dòng chỉ nói "supported" mà không có checkpoint thì không phải một workflow. Nếu một
+trong số chúng công bố weight có thể kiểm chứng sau này, việc thêm entry đi theo cùng đường đã dùng
+cho TME: pin revision, vendor source, khai protocol, rồi mới đăng ký.
+
 ## 5. Điều kiện cập nhật về sau
 
 1. Sửa source / checkpoint / preprocessing / protocol / runtime ⇒ phải ghi **phạm vi bằng chứng cần
