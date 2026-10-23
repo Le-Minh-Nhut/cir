@@ -1643,7 +1643,11 @@ def test_the_evaluator_child_gets_no_operator_secrets_and_a_private_temp_dir(
     secret_names = [name for name in reported["workbench"]
                     if name == "WORKBENCH_LEDGER_KEY" or name.startswith("WORKBENCH_SECRET_")]
     assert secret_names == [], secret_names
-    assert set(reported["workbench"]) - set(secret_names) <= {"WORKBENCH_THIRD_PARTY_ROOT"}, reported
+    # Same explicit allowlist as the phase-1 contract: `WORKBENCH_REPLAY_CACHE_ROOT` is the
+    # run-scoped dataset-cache directory inside the run's own log directory -- a path, not a secret,
+    # and what lets the aggregate and the observer share one 11.87 GB cache instead of building two.
+    permitted = {"WORKBENCH_THIRD_PARTY_ROOT", "WORKBENCH_REPLAY_CACHE_ROOT"}
+    assert set(reported["workbench"]) - set(secret_names) <= permitted, reported
     assert reported["run_id"] == "secret-filter-run", "the run identity must reach the child"
 
     run_temp = directory / "tmp"

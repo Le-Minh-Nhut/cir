@@ -116,18 +116,26 @@ def test_an_explicit_selection_scopes_the_planned_stages() -> None:
         planned(["not-a-registered-model"])
 
 
-def test_an_unpinned_checkout_is_not_reproducible(monkeypatch) -> None:
+def test_an_unpinned_checkout_is_not_reproducible(monkeypatch, tmp_path: Path) -> None:
     """A checkout that exists but has no recorded pin must be refused.
 
     The comparison previously ran only when a pin was present, so a registry entry with no
     `upstream_commit_sha` was accepted on whatever SHA happened to be checked out — the exact
     situation the pin exists to prevent.
+
+    The source directory is now a REAL temporary one carrying a nested `.git`, because the authority
+    branches on whether that metadata exists (`source / ".git"`). The old fixture pointed at the
+    literal path `/repo` while patching only `subprocess.run`, so the file-system predicate looked at
+    something that does not exist and the case under test was never reached — the checkout fell
+    through to the vendored branch, which is what its message said.
     """
     from workbench.backend import runtime
 
     monkeypatch.setattr(runtime, "source_status", lambda source: {"tracked": [], "unauthorized": [],
                                                                  "invalid": []})
-    source = Path("/repo")
+    source = tmp_path / "repo"
+    source.mkdir()
+    (source / ".git").mkdir()
     head = "7" * 40
 
     def git_run(*args, **kwargs):
@@ -138,7 +146,12 @@ def test_an_unpinned_checkout_is_not_reproducible(monkeypatch) -> None:
 
     clean, _, reason = runtime.source_clean_and_pinned({"upstream_commit_sha": None}, source)
     assert clean is False
-    assert "pin missing" in reason
+    # The refusal is what this test is about, and it is unchanged. The reason text named only the
+    # missing pin, which stopped being the whole truth once the vendored authority began refusing a
+    # checkout that has no provenance record AT ALL -- there a missing pin is a consequence, and
+    # "checkout is not a vendored pin" is the accurate cause. Both states must refuse; which sentence
+    # explains it depends on why the revision could not be established.
+    assert "pin missing" in reason or "not a vendored pin" in reason, reason
 
     clean, _, reason = runtime.source_clean_and_pinned({"upstream_commit_sha": head}, source)
     assert clean is True, reason
