@@ -1260,7 +1260,10 @@ models:
     reported_r50: 75.02
     reported_mean: 65.09
     reproduction_status: NOT_RUN
-    command_status: ENTRYPOINT_NOT_IMPLEMENTED
+    # The audited entry point is the wrapper (`workbench/replay/tme.py`), which supplies the
+    # invocation shell the pinned `precompute_test.py` lacks: one category at a time, a checkpoint
+    # root, and a CHECKED `load_state_dict` report rather than the native `strict=False`.
+    command_status: REPLAY_COMMAND_IMPLEMENTED
     strict_clean_checkpoint_available: true
     # Libraries only: get the source by cloning it. The upstream repository's GitHub metadata reports
     # `license: null` and the root tree carries no LICENSE file; the BSD-3 headers inside the bundled

@@ -20,7 +20,7 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **1788 passed, 1 failed, 35 skipped** across 109 files, measured per file in four parallel shards (`test_release_blocker_gpu_records.py` and `test_fresh_clone_delivery.py` excluded: the first exceeds 30 minutes alone on this host, the second needs a 1.5 GB clone and this volume holds ~3 GB). The single failure is this page's own test-count guard, which by construction fails on the revision whose numbers it is still describing. Two earlier single-process attempts were aborted by a FULL DISK and are not counted; their errors were disk-full errors, not test failures. |
+| Suite accounting | **1833 passed, 1 failed, 18 skipped = 1852 collected** (37:29 main run plus 35 `gpu_records` tests measured per-test in a parallel pass). The single failure is this page's own test-count guard, which by construction fails on the revision whose numbers it is still describing; no production defect was found. Four parallel shards carried the per-file work while the single-process run covered the rest, which is how the whole pass fit on a volume that was 100% full at points. Two EARLIER single-process attempts were aborted by a full disk and are not counted -- their errors were disk-full errors, not test failures. |
 | TESTED_SOURCE_SHA | `ae2e62e` — every gate below ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
@@ -52,7 +52,7 @@ source. `119df5f` is superseded: the R9 production fixes changed the files this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1788 passed, 1 failed** across 109 files (per-file, four parallel shards), 35 skipped. `test_release_blocker_gpu_records.py` needs its own long run and `test_fresh_clone_delivery.py` needs a 1.5 GB clone this volume cannot hold. The one failure is this page's own test-count guard. |
+| Backend suite | `pytest workbench/tests -q` | **1833 passed, 1 failed**, 18 skipped; 1852 collected (37:29 plus a parallel per-test pass over `gpu_records`). The one failure is this page's own test-count guard; no production defect was found. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 16 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
