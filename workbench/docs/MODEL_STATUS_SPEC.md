@@ -598,6 +598,22 @@ Chưa thêm entry: cần 2.53 GiB checkpoint + feature cache, mà volume đang t
 - **Blocker của HABIT/INTENT/ConeSep giờ là dung lượng đĩa, không phải model**: constructor native
   nướng toàn bộ tensor query lúc dựng dataset = **11.58 GiB** (đo bằng chính transform đã pin), máy
   còn **~2 GB**. Đây là cùng ràng buộc đã chặn ENCODER cho tới khi giải phóng được ~12 GB.
+- **PTHA: đã tải checkpoint + đã sửa 2 defect thật + đã khai environment.**
+  - Checkpoint tải thật **2 720 352 973 B**, sha256 khớp publisher (`1c4dab86…`).
+  - Inspect an toàn (`weights_only=True`): dict 2 key `['epoch','Blip2QformerCirCat']`, epoch 9,
+    **857 tensor**; module top-level `visual_encoder` (511), `Qformer` (336), `ln_vision`,
+    `vision_proj`, `text_proj`, `itm_head`, `query_tokens`, `temp`. Key **đúng class** wrapper chờ.
+  - **Defect 1**: checkout vendored giữ thư mục gốc của repo bên trong ⇒ code ở
+    `<checkout>/MTST_PTHA/src` còn `requirements.txt`/`provenance.json` ở tầng ngoài. Cả hai chỗ gọi
+    đều trỏ `<checkout>/src` (không tồn tại) ⇒ preflight báo thiếu evaluator. Đã sửa bằng **một**
+    resolver `source_tree()`, có regression.
+  - **Defect 2**: model **không khai environment** ⇒ chạy bằng interpreter workbench (Python 3.13) và
+    chết `ImportError: cannot import name 'apply_chunking_to_forward' from 'transformers.modeling_utils'`.
+    Checkout **có** `requirements.txt` + README pin `python=3.9`, `torch==2.0.1`, `torchvision==0.15.2`
+    ⇒ đã khai từ chính nguồn đó. `manage_environment.py --create` nay thấy spec
+    (`env_spec_found: true`).
+  - Preflight: **NO PROBLEMS** khi có `--transfer-cirr-to-fashioniq`, **từ chối** khi không có.
+  - **Blocker còn lại**: cần dựng env Python 3.9 + torch 2.0.1 (~5 GB) nhưng máy còn **1.4 GB**.
 - **PTHA transfer variant đã đăng ký** với điều kiện ghi thành dữ liệu
   (`checkpoint_training_dataset: CIRR`, `checkpoint_forwards_dataset: FashionIQ`,
   `transfer_condition: cross_dataset_transfer`), không phải ghi chú. Chưa tải nên **chưa** có load
