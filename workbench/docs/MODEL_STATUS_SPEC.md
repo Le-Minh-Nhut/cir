@@ -57,7 +57,7 @@ quy ước native đã xác minh (mean không trọng số theo category), khôn
 
 ---
 
-## 2. Bảng tổng quan 16 model
+## 2. Bảng tổng quan 17 model
 
 Mức kiểm chứng cao nhất thực tế đạt được (không phải mức mong đợi):
 
@@ -78,7 +78,8 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | 13 | `combiner_rn50x4_noft` | ABaldrati/CLIP4Cir | `fashioniq_original_split` | RN50x4 noft Combiner | vendored, pin OK | archive 5 parts, digest công bố, **chưa tải** | script CLI | `combiner_stdout_recall` | không | `SOURCE_READY` | `PUBLIC_ASSET_SETUP` |
 | 14 | `clip4cir_rn50x4_fullft` | ABaldrati/CLIP4Cir | `fashioniq_original_split` | fullft CLIP + Combiner (cùng config) | vendored, pin OK | như trên; cần **cặp** khớp | script CLI | `combiner_stdout_recall` | không | `SOURCE_READY` | `PUBLIC_ASSET_SETUP` |
 | 15 | `sprc` | chunmeifeng/SPRC | `fashioniq_original_split` | ViT-g (paper) / ViT-L (variant) | vendored, pin OK | ViT-g OneDrive 403; ViT-L reachable | script CLI | `csmcir_stdout_json` | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` + `SCIENTIFIC_VARIANT` |
-| 16 | `ptha_mtst` | zyinan99/MTST_PTHA | `fashioniq_original_split` | **không có FashionIQ ckpt** | vendored + 3 local fix | không có weights | preflight-only | không | không | `PREFLIGHT_IMPLEMENTED_BLOCKED` | `AUTHOR_ONLY_INFORMATION` |
+| 16 | `ptha_mtst` | zyinan99/MTST_PTHA | `fashioniq_original_split` | `cirr_transfer` (CIRR→FashionIQ, exploratory) | vendored + 3 local fix | ckpt **đã tải + hash khớp** `1c4dab86…`; env **đã khai** từ `requirements.txt` | wrapper + transfer opt-in | không | không | `PREFLIGHT_PASS` (transfer) | cần env py3.9/torch2.0.1 (~5 GB) |
+| 17 | `tme` | li-shuxian/TME | `fashioniq_val_split_ref_included` | `fashioniq_0` (noise 0%); **20% `CHECKPOINT_UNAVAILABLE`** | vendored @ `394aad79` (379 files) | chưa tải ckpt (2.5 GB) | wrapper `replay/tme.py` | không | không | `ENTRYPOINT_IMPLEMENTED` | cần tải ckpt Kaggle + env |
 
 
 > **Ảnh hưởng của R14** (21/10/2026): R14 chạy **thật** LIMN end-to-end và sửa **ba** lỗi chặn đường
@@ -550,10 +551,33 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
 
 D6 do subagent đưa vào và **chính lượt chạy toàn bộ suite** phát hiện — bộ test hẹp của nó không phủ.
 
-## 4c. TME — trinh sát nguồn/dữ liệu (chưa tích hợp, 2026-10-23)
+## 4c. TME — đã tích hợp (entry thứ 17)
 
-Chưa thêm entry: cần 2.53 GiB checkpoint + feature cache, mà volume đang thiếu chỗ cho chính ENCODER
-(xem §3.2 mục 6). Ghi lại để lượt sau không phải trinh sát lại.
+**Đã làm:** entry `tme` trong registry (pin `394aad79df2c104feb32a2c96132582012765062`), source
+vendored (379 file, `.git` lồng nhau đã bỏ, có `provenance.json`), wrapper `workbench/replay/tme.py`,
+adapter `TMEAdapter`, và **protocol riêng `fashioniq_val_split_ref_included`**.
+
+**Vì sao cần protocol riêng:** `precompute_evaluation.py:83` chỉ mask reference khi
+`category == 'CIRR'` (comment: "only for cirr, delete the reference image from current query").
+Trên FashionIQ reference **vẫn là ứng viên** và gallery là toàn bộ split val theo category — không
+khớp `fashioniq_val_split` (loại reference, gallery pair-union) cũng không khớp
+`fashioniq_original_split` (gallery train split). Khai riêng để một lượt chạy không bị báo dưới
+protocol có chính sách reference khác với cái nó thực thi.
+
+**Dòng paper (Table 2, FashionIQ validation, σ=0):** Dress R@10/R@50 **49.73/71.69**,
+Shirt **56.43/74.44**, Toptee **59.31/78.94**, Average **55.15/75.02**, AVG **65.09**.
+Paper dùng **best-validation checkpoint khi σ=0** và **final checkpoint khi σ>0** — lượt chạy phải
+nói rõ theo quy tắc nào.
+
+**20% người dùng yêu cầu: `CHECKPOINT_UNAVAILABLE`.** Kaggle `charlesneilsucian/tme` chỉ có đúng hai
+instance công khai `fashioniq-0.0-best` và `cirr-0.0-best`. **Không** thay bằng 0%, **không** tự làm
+nhiễu val, **không** mượn checkpoint model khác.
+
+**Blocker:** cần tải archive Kaggle 2 533 586 661 B (chứa `best_model.pth` 2 728 382 104 B) và sinh
+feature cache. Chưa xác lập SHA-256 công bố ⇒ **không** coi hash prefix là hash checkpoint.
+
+**Giấy phép:** GitHub metadata trả `license: null`, cây gốc không có `LICENSE`. Header BSD-3 bên
+trong LAVIS là của LAVIS, không phải của project này ⇒ **không** khai giấy phép.
 
 - **Pin:** `li-shuxian/TME` HEAD `394aad79df2c104feb32a2c96132582012765062` (nhánh `master`, cập nhật
   2026-10-19). Repo phụ `He-Changhao/2025-CVPR-TME` là fork `7fe8119928`, không có gì hơn.
