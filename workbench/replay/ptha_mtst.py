@@ -56,7 +56,7 @@ def preflight(
     )
 
     if transfer_cirr_to_fashioniq:
-        checkpoint = checkpoint_root / PUBLISHED_CIRR_WEIGHT
+        checkpoint = checkpoint_root / MODEL["model_id"] / PUBLISHED_CIRR_WEIGHT
         if not checkpoint.is_file():
             blockers.append(f"PTHA+MTST CIRR checkpoint missing: {checkpoint}")
         elif checkpoint.stat().st_size == 0:
@@ -93,29 +93,17 @@ def _state_dict_report(model_state: dict[str, Any], checkpoint_state: dict[str, 
 
 
 def evaluate_transfer(source_root: Path, dataset_root: Path, checkpoint: Path) -> dict[str, Any]:
-    """Load trusted tensor-only state strictly, then call pinned FashionIQ metric functions."""
+    """Safely inspect and compare checkpoint, then run the pinned FashionIQ metrics."""
     import torch
-
-    if not torch.cuda.is_available():
-        raise RuntimeError("PTHA native inference uses CUDA-only `.cuda()` calls; CUDA is unavailable")
 
     src = source_root / "MTST_PTHA" / "src"
     sys.path.insert(0, str(src))
     os.environ["MTST_DATA_ROOT"] = str(dataset_root.parent)
 
-    # Inspect tensors only. Never let torch.load execute checkpoint pickle globals.
+    checkpoint_sha256 = sha256_file(checkpoint)
     payload = torch.load(checkpoint, map_location="cpu", weights_only=True)
-    checkpoint_key = "Blip2QformerCirCat"
-    if not isinstance(payload, dict) or checkpoint_key not in payload:
-        keys = sorted(payload) if isinstance(payload, dict) else [type(payload).__name__]
-        raise ValueError(
-            f"CIRR transfer checkpoint must contain {checkpoint_key!r}; observed top-level keys: {keys}"
-        )
-    state = payload[checkpoint_key]
-    if not isinstance(state, dict) or not all(
-        isinstance(key, str) and isinstance(value, torch.Tensor) for key, value in state.items()
-    ):
-        raise ValueError(f"checkpoint entry {checkpoint_key!r} is not a tensor-only state dictionary")
+    if not torch.cuda.is_available():
+        raise RuntimeError("PTHA native inference uses CUDA-only `.cuda()` calls; CUDA is unavailable")
 
     from omegaconf import OmegaConf
     from lavis.common.registry import registry
@@ -124,17 +112,39 @@ def evaluate_transfer(source_root: Path, dataset_root: Path, checkpoint: Path) -
     from utils import extract_index_blip_features
     from validate_blip import compute_fiq_val_metrics
 
-    model_class = registry.get_model_class("blip2_cir_cat")
-    config = OmegaConf.load(model_class.default_config_path("pretrain"))
-    # This released state dict must provide every parameter; the standard BLIP-2 initialization
-    # would otherwise introduce a large, implicit external download before we can check that.
+    checkpoint_models = {
+        "Blip2QformerCirCat": ("blip2_cir_cat", "pretrain"),
+        "Blip2Qformer4TGIRCESIM": ("blip2_tgir_ce_sim", "pretrain_mtst"),
+    }
+    checkpoint_key = next((key for key in checkpoint_models if key in payload), None) if isinstance(payload, dict) else None
+    if checkpoint_key is None:
+        keys = sorted(map(str, payload)) if isinstance(payload, dict) else [type(payload).__name__]
+        raise ValueError(
+            f"checkpoint sha256={checkpoint_sha256}; expected one of {list(checkpoint_models)}; "
+            f"observed keys={keys}"
+        )
+    state = payload[checkpoint_key]
+    if not isinstance(state, dict) or not all(
+        isinstance(key, str) and isinstance(value, torch.Tensor) for key, value in state.items()
+    ):
+        raise ValueError(
+            f"checkpoint sha256={checkpoint_sha256}; {checkpoint_key!r} is not a tensor-only state dictionary"
+        )
+
+    model_name, model_type = checkpoint_models[checkpoint_key]
+    model_class = registry.get_model_class(model_name)
+    config = OmegaConf.load(model_class.default_config_path(model_type))
+    # The state dict must not cause the constructor to fetch an implicit BLIP-2 base checkpoint.
     config.model.load_pretrained = False
     model = model_class.from_config(config.model)
-    model_state = model.state_dict()
-    report = _state_dict_report(model_state, state)
+    report = _state_dict_report(model.state_dict(), state)
     if report["missing_keys"] or report["unexpected_keys"] or report["shape_mismatches"]:
-        raise ValueError(f"checkpoint is incompatible with {checkpoint_key}: {json.dumps(report)}")
+        raise ValueError(
+            f"checkpoint sha256={checkpoint_sha256} incompatible with "
+            f"{model_name}/{model_type}: {json.dumps(report)}"
+        )
     model.load_state_dict(state, strict=True)
+    report["strict_false_hid_anything"] = False
     model = model.cuda().eval()
 
     _vis_processors, text_processors = load_preprocess(config.preprocess)
@@ -150,17 +160,17 @@ def evaluate_transfer(source_root: Path, dataset_root: Path, checkpoint: Path) -
 
     r10 = sum(values["r10"] for values in category_metrics.values()) / len(category_metrics)
     r50 = sum(values["r50"] for values in category_metrics.values()) / len(category_metrics)
-    result = {
+    return {
         "label": TRANSFER_LABEL,
         "train_dataset": "CIRR",
         "evaluation_dataset": "FashionIQ",
         "checkpoint_training_noise": "unknown",
         "checkpoint_id": "ptha_mtst_cirr_transfer_exploratory",
-        "checkpoint_sha256": sha256_file(checkpoint),
+        "checkpoint_sha256": checkpoint_sha256,
         "checkpoint_top_level_model_key": checkpoint_key,
         "serialization_inspection": "torch.load(weights_only=True)",
-        "model_name": "blip2_cir_cat",
-        "backbone_config": "pretrain (EVA-CLIP ViT-g)",
+        "model_name": model_name,
+        "backbone_config": f"{model_type} (EVA-CLIP ViT-g; 224 px, 32 Q-Former tokens)",
         "load_report": {**report, "strict_load": True},
         "category_metrics": category_metrics,
         "macro_metrics": {"r10": r10, "r50": r50, "mean": (r10 + r50) / 2},
@@ -177,7 +187,7 @@ def evaluate_transfer(source_root: Path, dataset_root: Path, checkpoint: Path) -
             },
         },
     }
-    return result
+
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -205,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.transfer_cirr_to_fashioniq:
         return 0
 
-    checkpoint = args.checkpoint_root / PUBLISHED_CIRR_WEIGHT
+    checkpoint = args.checkpoint_root / MODEL["model_id"] / PUBLISHED_CIRR_WEIGHT
     try:
         result = evaluate_transfer(args.source_root, args.dataset_root, checkpoint)
     except Exception as error:

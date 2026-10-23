@@ -426,8 +426,23 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
   literal upstream làm fallback.
 - Hub `yinanzhou1/mtst_ptha` publish **chỉ** CIRR (`tuned_mtst_cirr.pt` 2 720 352 973 B,
   `cirr_modifier_generated_5p_completed_rev.json`, `cirr_train_modifier_rev_long.json`) — **không có**
-  FashionIQ weight. Không thay bằng CIRR, không random, không tự train.
-- Protocol nếu có weights: `fashioniq_original_split` (`validate_blip.py:44-51` không có reference mask).
+  FashionIQ weight. Không thay bằng CIRR nếu chưa bật transfer tường minh; không random, không tự train.
+- Vendored tree contains both `MTST_PTHA/src/blip_validate.py` and `src/validate_blip.py`; the wrapper now
+  checks the latter module it imports for `compute_fiq_val_metrics`.
+- `validate_blip.py` CIRR-only CLI is not transfer entrypoint. `blip_validate.py --dataset FashionIQ`
+  does dispatch `clip_finetune_fiq` (`:186-200`), but that function describes training and loads with
+  `strict=False`; wrapper is needed for explicit transfer labels and strict preflight.
+- Chỉ chạy transfer khi truyền `--transfer-cirr-to-fashioniq`; nhãn bắt buộc:
+  `PTHA+MTST | CIRR checkpoint -> FashionIQ | cross-dataset transfer | exploratory`.
+  Ghi riêng `train_dataset=CIRR`, `evaluation_dataset=FashionIQ`, training-noise=`unknown`.
+- Release format: save_model stores `epoch` plus `model.state_dict()` under the class name. Safe-load the
+  actual checkpoint before selecting class/config; expected possibilities include `Blip2QformerCirCat`
+  (`blip2_cir_cat`) and `Blip2Qformer4TGIRCESIM` (`blip2_tgir_ce_sim`). Compare full key/shape report;
+  full SHA-256 and load report remain pending download/inspection.
+- FashionIQ paper row `54.99 / 76.28 / 65.64` yêu cầu training `FashionIQ_MTST`; chỉ báo cáo
+  chênh số học như ngữ cảnh có điều kiện huấn luyện khác, không phải tái lập hàng paper.
+- CIRR sanity-check cần dữ liệu `data/cirr_dataset/cirr` mà hiện checkout không có; chưa chạy.
+  Protocol native CIRR riêng biệt khi dữ liệu sẵn có.
 
 ---
 
