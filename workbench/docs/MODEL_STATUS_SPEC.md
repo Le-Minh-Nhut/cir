@@ -526,6 +526,38 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
 
 D6 do subagent đưa vào và **chính lượt chạy toàn bộ suite** phát hiện — bộ test hẹp của nó không phủ.
 
+## 4c. TME — trinh sát nguồn/dữ liệu (chưa tích hợp, 2026-10-23)
+
+Chưa thêm entry: cần 2.53 GiB checkpoint + feature cache, mà volume đang thiếu chỗ cho chính ENCODER
+(xem §3.2 mục 6). Ghi lại để lượt sau không phải trinh sát lại.
+
+- **Pin:** `li-shuxian/TME` HEAD `394aad79df2c104feb32a2c96132582012765062` (nhánh `master`, cập nhật
+  2026-10-19). Repo phụ `He-Changhao/2025-CVPR-TME` là fork `7fe8119928`, không có gì hơn.
+  **Giấy phép: GitHub metadata trả `license: null` và cây gốc KHÔNG có `LICENSE`** — không suy ra
+  giấy phép từ header BSD-3 của LAVIS bên trong. (Kaggle model page tự khai MIT — khác nguồn.)
+- **Code cần cho FashionIQ validation:** `src/precompute_test.py`, `src/precompute_evaluation.py`,
+  `src/data.py`, `src/utility.py`, config `src/lavis/configs/models/blip2/blip2_pretrain.yaml`, và
+  dependency closure của `src/lavis`. `src/precompute_train.py` là **training-only**. Tokenizer/Q-Former
+  nạp từ `bert-base-uncased` (cần file local hoặc cache HF).
+- **Dữ liệu FashionIQ val mở đúng:** `captions/cap.{dress,shirt,toptee}.val.json`,
+  `image_splits/split.{cat}.val.json`; chế độ relative **không mở file ảnh**. Nếu phải sinh cache:
+  `precompute.py` áp `targetpad_transform(1.25, 224)`, chạy ViT đóng băng, ghi
+  `./features/FashionIQ/val_images.pt` + `val_name_to_idx.json` (đúng đường dẫn mà val loader đọc).
+- **Cache là derived asset**, không phải dataset mới; README có đường CPU tensor/dict khi thiếu đĩa.
+- **Base assets:** `blip2_pretrained.pth` (746 998 955 B, GCS MD5 `/Hph5G5SyZWDTf7dWDHYdA==`, **không**
+  có SHA-256) và `eva_vit_g.pth`. Native constructor **cần cả hai** kể cả khi sau đó nạp checkpoint TME.
+- **Checkpoint công bố:** Kaggle `charlesneilsucian/tme` chỉ có **`fashioniq-0.0-best` và `cirr-0.0-best`**
+  ⇒ **không có 20% nào được công bố**. README cũng chỉ nói cung cấp best weight "without synthetic noise".
+  ⇒ điều kiện **20% người dùng yêu cầu: `CHECKPOINT_UNAVAILABLE`**, không thay bằng 0%, không tự làm
+  nhiễu val, không mượn checkpoint model khác. Nếu sau này có checkpoint nhiễu thật: paper dùng
+  **best-checkpoint khi σ=0** và **final-checkpoint khi σ>0** — phải kiểm đúng quy tắc chọn.
+- **Dòng paper (Table 2, FashionIQ validation, trích từ PDF CVPR):** 0% — Dress R@10/R@50
+  **49.73/71.69**, Shirt **56.43/74.44**, Toptee **59.31/78.94**, Avg **55.15/75.02**, AVG **65.09**.
+  20% — **54.03/73.91**, AVG **63.97**. (Bảng CIRR/Table 1 riêng: 0% R@1 53.42.)
+- **Blocker:** cần tải `fashioniq-0.0-best` (archive nén 2 533 586 661 B, chứa `best_model.pth`
+  2 728 382 104 B) và sinh feature cache; cả hai đều cần dung lượng lớn hơn mức còn trống hiện tại.
+  Chưa xác lập SHA-256 công bố cho archive ⇒ không được coi hash một prefix là hash checkpoint.
+
 ## 5. Điều kiện cập nhật về sau
 
 1. Sửa source / checkpoint / preprocessing / protocol / runtime ⇒ phải ghi **phạm vi bằng chứng cần
