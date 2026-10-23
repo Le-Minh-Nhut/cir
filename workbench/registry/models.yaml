@@ -222,12 +222,19 @@ models:
     checkpoint_variants:
       - checkpoint_id: fiq_n02
         filename: ConeSep-FIQ-N0.2.pt
-        download_url: https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/main/fiq/ConeSep-FIQ-N0.2.pt
+        # Revision-pinned rather than `main`: the released file is 2.7 GB and the branch is a moving
+        # target, so the bytes must be named by revision. Verified against the Hub API by the
+        # workbench: repository revision cecc32deeec917d337e5d2def675b3746da7b8e6, size 2721428966
+        # bytes, LFS oid 5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2 (the
+        # pointer's own sha256). Recording it here reconciles the wrapper, which carried author-hash
+        # fallbacks while these registry fields were null -- the registry is the one authority.
+        download_url: https://huggingface.co/iLearn-Lab/CVPR26-ConeSep/resolve/cecc32deeec917d337e5d2def675b3746da7b8e6/fiq/ConeSep-FIQ-N0.2.pt
         source_type: author_huggingface
+        source_revision: cecc32deeec917d337e5d2def675b3746da7b8e6
         checkpoint_training_noise_pct: 20
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
+        expected_size_bytes: 2721428966
+        expected_sha256: 5a864ee5a78c1d249320c4f997cc7d14b529b329b2efba5577c82dbe019ed9d2
         status: NO_CLEAN_CHECKPOINT
         checkpoint_mapping_status: VERIFIED_METADATA
       - checkpoint_id: fiq_n05
