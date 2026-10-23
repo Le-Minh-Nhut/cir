@@ -6,9 +6,9 @@
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`e15f4ed`** (production source; every gate below ran on it) |
+| **TESTED_SOURCE_SHA** | **`5f091f8`** (production source; every gate below ran on it) |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | verified against the named revision: `git diff e15f4ed HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
+| Production tree | verified against the named revision: `git diff 5f091f8 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 
@@ -20,8 +20,8 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | Single process: **1829 passed**, 1 failed, 17 skipped = **1847 collected** (1:07:27). The one failure is this page's own test-count guard, which by construction fails on the revision whose numbers it is still describing and passes once this paragraph records them; no production defect was found. |
-| TESTED_SOURCE_SHA | `e15f4ed` — every gate below ran on it |
+| Suite accounting | Single process: **1830 passed**, 1 failed, 17 skipped = **1848 collected** (1:05:05). The one failure is this page's own test-count guard, which by construction fails on the revision whose numbers it is still describing and passes once this paragraph records them; no production defect was found. |
+| TESTED_SOURCE_SHA | `5f091f8` — every gate below ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 16 model entries; **16 `source_available`** (every entry now has vendored source); **15 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc` with protocol `fashioniq_original_split`, and stays blocked only because no FashionIQ checkpoint is published for it |
@@ -52,7 +52,7 @@ source. `119df5f` is superseded: the R9 production fixes changed the files this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1829 passed, 1 failed** (1:07:27), 17 skipped; 1847 collected. The one failure is this page's own test-count guard, which fails on the revision it still describes; no production defect was found. |
+| Backend suite | `pytest workbench/tests -q` | **1830 passed, 1 failed** (1:05:05), 17 skipped; 1848 collected. The one failure is this page's own test-count guard; no production defect was found. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 16 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -167,8 +167,8 @@ downloaded. Every LIMN runtime claim in this pass is static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout e15f4ed           # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print e15f4ed846e8c7440f6ca7abe911d39c59bf3f5e
+git checkout 5f091f8           # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print 5f091f8846e8c7440f6ca7abe911d39c59bf3f5e
 ./pc.sh                        # the one operator command
 ```
 

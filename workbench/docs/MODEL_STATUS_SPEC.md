@@ -286,7 +286,22 @@ mức đó: mọi số trong registry cho chúng vẫn là số paper, không ph
      lại, một artifact trông hợp lệ sẽ nằm cạnh report nói export thất bại). Đối chứng: check này
      **từ chối** artifact ENCODER cũ (6 mâu thuẫn) và **chấp nhận** artifact LIMN (0 mâu thuẫn).
      Vì vậy **không** đọc lượng export của ENCODER như bằng chứng per-query đã kiểm chứng.
-  6. **Blocker hiện tại của lượt full 3-category: dung lượng đĩa.** Một lần dựng ba category cần
+  6. **Chênh lệch per-query còn lại: ĐÃ XÁC ĐỊNH, và không phải vấn đề dung sai.** Sau khi sửa
+     thứ tự tie cho khớp native, parity nội bộ của observer là
+     `INSTRUMENTATION_PARITY_VERIFIED` với **0 mismatch**. Nhưng parent vẫn từ chối, và đúng:
+     - Native metric là `np.argsort(-sims)`. Observer từng sắp tie theo cách khác ⇒ 8 dress / 2 shirt /
+       4 toptee query có điểm target **bằng đúng** ứng viên top-1, và R@1 lệch đúng 1 hit mỗi category.
+       Đã sửa: dùng đúng lời gọi native.
+     - **Một forward pass thứ hai KHÔNG tái lập được pass thứ nhất** — đo được, không phải suy đoán:
+       hai tiến trình, cùng seed, cùng input, cùng config, cuDNN đã ghim deterministic và
+       `CUBLAS_WORKSPACE_CONFIG` đã set, vẫn cho **feature hash khác nhau** (`82dc55fc…` vs
+       `af784fa2…`). Nên `test()` ở tiến trình aggregate và ở tiến trình observer tính ra metric khác
+       nhau 1–2 hit.
+     - `FeatureRecorder` (mới) cho phép observation dùng **chính tensor** mà native pass đã tính, thay
+       vì tính lại. Đây là hướng đúng; chưa nối end-to-end.
+     ⇒ Trạng thái: observer parity **VERIFIED**, nhưng artifact vẫn `PER_QUERY_EXPORT_FAILED` ở tầng
+     parent. **Không** nới dung sai để cho nó pass.
+  7. **Blocker hiện tại của lượt full 3-category: dung lượng đĩa.** Một lần dựng ba category cần
      **11 868 MB** (đo được ở đỉnh), máy còn **11 456 MB** ⇒ thiếu **~412 MB**. Hai lượt chạy thật đã
      chết đúng chỗ này (`OSError: [Errno 28] No space left on device` tại `datasets.py`). Sau khi sửa
      D12, lượt hỏng **không còn để lại cache** (log dir 3 MB thay vì 10.4 GB), nên nó không còn tự
