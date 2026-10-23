@@ -148,7 +148,13 @@ def test_the_official_evaluator_never_receives_the_operator_key(
     secret_names = [name for name in reported["names"]
                     if name == "WORKBENCH_LEDGER_KEY" or name.startswith("WORKBENCH_SECRET_")]
     assert secret_names == [], secret_names
-    assert set(reported["names"]) - set(secret_names) <= {"WORKBENCH_THIRD_PARTY_ROOT"}, reported["names"]
+    # The allowlist is explicit, so a new non-secret name reaching model code is a deliberate
+    # contract change rather than an accident. `WORKBENCH_REPLAY_CACHE_ROOT` is the run-scoped
+    # dataset-cache directory the parent gives both the aggregate and the observer: it is a path
+    # inside the run's own directory, carries no secret, and exists so the two children build one
+    # 11.87 GB cache instead of two. It is listed here so adding another name still fails this test.
+    permitted = {"WORKBENCH_THIRD_PARTY_ROOT", "WORKBENCH_REPLAY_CACHE_ROOT"}
+    assert set(reported["names"]) - set(secret_names) <= permitted, reported["names"]
     assert reported["run"] == "boundary-run"
     # The key must not be echoed into the run's own recorded environment either.
     assert "operator-key" not in json.dumps(environment)
