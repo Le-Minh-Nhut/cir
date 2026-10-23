@@ -582,6 +582,31 @@ Chưa thêm entry: cần 2.53 GiB checkpoint + feature cache, mà volume đang t
   2 728 382 104 B) và sinh feature cache; cả hai đều cần dung lượng lớn hơn mức còn trống hiện tại.
   Chưa xác lập SHA-256 công bố cho archive ⇒ không được coi hash một prefix là hash checkpoint.
 
+## 4d. Trạng thái 20% và transfer (2026-10-23 tối)
+
+| Model | Variant | Đã tải? | Hash khớp publisher? | READY? |
+|---|---|---|---|---|
+| habit | `fiq_n02` | **có**, 2 730 715 930 B | **có** (`814d2d0c…`) | **READY** |
+| intent | `fiq_n02` | **có**, 2 722 478 522 B | **có** (`2a504cad…`) | chưa provision env |
+| conesep | `fiq_n02` | chưa | — | chưa provision env |
+| ptha_mtst | `cirr_transfer` (CIRR→FashionIQ) | chưa (2.53 GiB) | metadata đã ghi | chờ tải |
+
+- **HABIT là model nhiễu đầu tiên đạt `READY`**: checkpoint tải thật + hash khớp LFS oid, environment
+  dựng đúng **Python 3.8.10** như registry khai, GPU capability đã ghi. Env provision thủ công vì
+  checkout **không có** `environment.yml`/`requirements.txt` nên `manage_environment.py --create`
+  từ chối đoán — công thức chính xác ở `workbench/docs/MODEL_ENV_RECIPES.md`.
+- **Blocker của HABIT/INTENT/ConeSep giờ là dung lượng đĩa, không phải model**: constructor native
+  nướng toàn bộ tensor query lúc dựng dataset = **11.58 GiB** (đo bằng chính transform đã pin), máy
+  còn **~2 GB**. Đây là cùng ràng buộc đã chặn ENCODER cho tới khi giải phóng được ~12 GB.
+- **PTHA transfer variant đã đăng ký** với điều kiện ghi thành dữ liệu
+  (`checkpoint_training_dataset: CIRR`, `checkpoint_forwards_dataset: FashionIQ`,
+  `transfer_condition: cross_dataset_transfer`), không phải ghi chú. Chưa tải nên **chưa** có load
+  report và **chưa** có metric FashionIQ.
+- **PAIR vẫn NOT RUN**, xác nhận độc lập lần nữa: `models/` của repo tác giả chỉ có
+  `MHTransformer.py` + `model.py`, **không** có `model_vssp`.
+- Hash của publisher cho cả ba file 20% đã **kiểm độc lập** qua Hub API và khớp registry; HABIT và
+  INTENT nay được **pin theo revision** thay vì `resolve/main`.
+
 ## 5. Điều kiện cập nhật về sau
 
 1. Sửa source / checkpoint / preprocessing / protocol / runtime ⇒ phải ghi **phạm vi bằng chứng cần
