@@ -174,6 +174,23 @@ def select_checkpoints(model: dict[str, Any], *, policy: str = STRICT_CLEAN,
             return CheckpointSelection(model_id, policy, "SELECTED", checkpoint_ids=(strict_clean[0],),
                                        strict_clean_checkpoint_available=True, conditions=conditions,
                                        evidence={"available": options})
+        # A model may declare which of its clean variants this workbench's workflow is FOR. TME is
+        # the case that needs it: it publishes a FashionIQ-trained 0% weight and a CIRR-trained 0%
+        # weight, both clean, and without a declared preference the FashionIQ workflow is blocked as
+        # ambiguous. The declaration is not a guess among siblings -- it is a registry fact that the
+        # FashionIQ weight (its `checkpoint_training_dataset` matches the benchmark's dataset) is the
+        # one a FashionIQ run means, and CIRR weights must never silently become the FashionIQ default.
+        preference = model.get("checkpoint_selection_preference")
+        if preference is not None:
+            if preference not in variants:
+                return refused(f"declared checkpoint_selection_preference {preference!r} is not a "
+                               f"registered variant. Source-backed options: {'; '.join(options)}")
+            if preference not in strict_clean:
+                return refused(f"declared checkpoint_selection_preference {preference!r} is not "
+                               f"clean-trained and source-backed; options: {'; '.join(options)}")
+            return CheckpointSelection(model_id, policy, "SELECTED", checkpoint_ids=(preference,),
+                                       strict_clean_checkpoint_available=True, conditions=conditions,
+                                       evidence={"available": options})
         return refused("more than one clean-trained variant is registered and none is declared a "
                        f"bundle: {', '.join(sorted(strict_clean))}. Source-backed options: "
                        f"{'; '.join(options)}")

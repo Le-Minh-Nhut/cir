@@ -17,17 +17,6 @@ protocols:
     label: FashionIQ - Val Split (Pair-Union Gallery, Reference Excluded)
     literature_split_label: val
     evaluation_noise_pct: 0
-  # TME's native evaluator builds its gallery from the per-category validation split
-  # (`data.py`: `current_image_names = image_type_names[dress_type]`, i.e. split.<cat>.val.json) and
-  # masks the reference ONLY for CIRR -- `precompute_evaluation.py:83` guards the mask with
-  # `if category == 'CIRR'` and comments that it is "only for cirr". So on FashionIQ the reference is
-  # a legitimate candidate and every image of the split is in the gallery, which is neither of the
-  # existing val/original protocols. Declaring it separately keeps a run from being reported under a
-  # protocol whose reference policy it does not follow.
-  fashioniq_val_split_ref_included:
-    label: FashionIQ - Val Split (Full Category Gallery, Reference Included)
-    literature_split_label: val
-    evaluation_noise_pct: 0
 models:
   - model_id: csmcir
     environment:
@@ -328,7 +317,7 @@ models:
         - scikit-image==0.22.0
         - spacy==3.7.2
         - pycocoevalcap==1.2
-    reproduction_status: BLOCKED_NO_VERIFIED_FASHIONIQ_CHECKPOINT
+    reproduction_status: SELECTED_TRANSFER_ONLY
     strict_clean_checkpoint_available: false
     notes: No author-linked FashionIQ fine-tuned checkpoint verified. CIRR pretraining evidence is not eligible. The gallery is the complete ordered validation split with the reference ELIGIBLE (validate_blip.py:44-51 builds labels against targets only and contains no reference mask, unlike the CIRR path at :258-260), which is what makes fashioniq_original_split its protocol.
     checkpoint_variants:
@@ -353,7 +342,19 @@ models:
         expected_size_bytes: 2720352973
         expected_sha256: 1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f
         status: URL_VERIFIED
-        checkpoint_mapping_status: UNVERIFIED
+        # VERIFIED_METADATA records what is actually established: this IS the author's released CIRR
+        # checkpoint. The Hub repository `yinanzhou1/mtst_ptha` lists exactly three files plus
+        # metadata -- `README.md`, the two CIRR modifier JSONs, and `tuned_mtst_cirr.pt` -- under
+        # `license: apache-2.0`, and the local digest equals the declared LFS oid byte for byte
+        # (sha256 1c4dab86...58f, 2720352973 bytes, re-verified this round with sha256sum).
+        #
+        # It does NOT record that this reproduces the paper's FashionIQ row. That separate question
+        # stays answered "no" in `reproduction_status` and in every label the run carries: the
+        # training dataset is CIRR, the evaluation dataset is FashionIQ, and the run is exploratory
+        # cross-dataset transfer. Conflating the two is the mistake this comment exists to prevent:
+        # an unresolved MAPPING gate must not be lifted by promoting an unexamined file, but it also
+        # must not be used to refuse the transfer experiment the operator explicitly authorized.
+        checkpoint_mapping_status: VERIFIED_METADATA
   - model_id: habit
     environment:
       python_env_var: WORKBENCH_HABIT_PYTHON
@@ -1238,6 +1239,46 @@ models:
         mapping_status: VERIFIED_METADATA
         notes: One independently trained whole-model checkpoint per FashionIQ category; all three are required for a complete macro result.
   - model_id: tme
+    # The base weights and the validation feature cache the native evaluator opens are declared in
+    # the preparation contract, so preflight reports them as explicit blockers instead of reporting
+    # an empty asset list as resolved.
+    preparation_contract: manual_standard
+    preparation_id: tme_fashioniq
+    environment:
+      python_env_var: WORKBENCH_TME_PYTHON
+      confidence: VERIFIED_README
+      # The pinned README's own commands: `conda create -n TME -y python=3.10` and
+      # `conda install pytorch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 pytorch-cuda=12.1`.
+      # Before this block existed TME reported `interpreter_status: UNCONFIGURED` with
+      # `runtime_verified: false` while still claiming `ready: true`, and interpreter routing fell
+      # back to the WORKBENCH interpreter -- which cannot import this tree's LAVIS or its pinned
+      # `transformers`. Declared from the author's source rather than grouped with PTHA, whose
+      # Python 3.9 / torch 2.0.1 stack is a different pinned stack.
+      python: '3.10'
+      pytorch: '2.1.2'
+      torchvision: '0.16.2'
+      cuda: '12.1'
+      # From `requirements.txt` in the pinned checkout. `salesforce-lavis` is deliberately ABSENT:
+      # this tree vendors its own `src/lavis`, reached through the adapter's declared launcher root,
+      # so the PyPI distribution would be a second copy of the same import name.
+      packages: [transformers==4.36.0, timm==0.9.12, omegaconf==2.3.0, iopath==0.1.10, decord==0.6.0, webdataset==0.2.86, opencv-python==4.10.0.84, fairscale==0.4.13, einops==0.7.0, scikit-image==0.24.0, spacy==3.7.6, pycocoevalcap==1.2, pandas==2.2.3, scikit-learn==1.5.2, tqdm==4.67.0, 'numpy<2']
+      # `mkl==2023.1.0` was copied from the author's file and then DROPPED here, because it cannot
+      # satisfy this model's own verifier: Intel's distribution ships no importable `mkl` module
+      # (`import mkl` -> ModuleNotFoundError; the PyPI project publishes no `top_level.txt`), so the
+      # dependency probe reports `missing package: mkl` and BLOCKS the environment whose author
+      # listed it. It is also unnecessary: torch 2.1.2+cu121 bundles its own oneMKL, and the
+      # requirement's stated purpose (avoiding a 2024.x MKL ABI clash) is met by the `numpy<2` pin.
+      # Verified by installing the environment, removing `mkl`, and running the pinned stack:
+      # matmul, the torch<->numpy bridge and an `nn.Linear` forward all succeed.
+      #
+      # `requirements.txt` pins no NumPy, and a bare install resolves NumPy 2.x, whose C ABI
+      # torch 2.1.2 was not built against: importing torch then warns
+      # `Failed to initialize NumPy: _ARRAY_API not found` and the tensor<->ndarray bridge is dead,
+      # which the pinned dataset code uses. Pinned to the last 1.x line that torch 2.1.2 supports.
+
+      # The base weights the pinned `blip2.py` loads by a LOCAL path relative to the evaluator cwd
+      # (`weight/blip2_pretrained.pth`, and EVA-ViT-g beside it); the native source redirects the
+      # usual pretrained URLs to those files, so an implicit downloader cannot be assumed.
     method_name: TME
     research_generation: recent
     publication_year: 2025
@@ -1249,13 +1290,18 @@ models:
     source_available: true
     source_dir: TME
     fashioniq_layout: fashioniq_standard
-    literature_split_label: val
-    # The native evaluator masks the reference ONLY for CIRR (`precompute_evaluation.py:83` guards it
-    # with `if category == 'CIRR'`), so on FashionIQ the reference stays a candidate over the full
-    # per-category validation gallery. That is neither `fashioniq_val_split` (reference excluded,
-    # pair-union gallery) nor `fashioniq_original_split` (train-split gallery), so it is declared.
-    native_protocol: fashioniq_val_split_ref_included
-    supported_protocols: [fashioniq_val_split_ref_included]
+    literature_split_label: original
+    # The native evaluator's gallery is `image_splits/split.<category>.val.json` in file order
+    # (`data.py:175-188` loads it into `image_type_names[<cat>]` and `current_image_names` becomes
+    # that list), and the reference stays ELIGIBLE because the mask is inside
+    # `if category == 'CIRR'` (`precompute_evaluation.py:83`, commented "only for cirr").
+    # That is exactly `fashioniq_original_split`: complete ordered val split, reference eligible.
+    # An earlier revision added `fashioniq_val_split_ref_included` for this model on the claim that
+    # the original-split family used a TRAIN-split gallery. That claim was wrong -- the family has
+    # always been defined over `split.<cat>.val.json` -- so the protocol was redundant and the id was
+    # removed rather than wired through every consumer.
+    native_protocol: fashioniq_original_split
+    supported_protocols: [fashioniq_original_split]
     reported_r10: 55.15
     reported_r50: 75.02
     reported_mean: 65.09
@@ -1268,38 +1314,73 @@ models:
     # Libraries only: get the source by cloning it. The upstream repository's GitHub metadata reports
     # `license: null` and the root tree carries no LICENSE file; the BSD-3 headers inside the bundled
     # LAVIS are LAVIS's licence, not this project's, so no licence is claimed here.
+    # TME has no 20% artifact: the author's only releases are the FashionIQ 0% and CIRR 0% weights.
+    # The requested 20% training-noise condition is therefore CHECKPOINT_UNAVAILABLE, not substituted.
+    requested_conditions_unavailable:
+      - checkpoint_training_noise_pct: 20
+        reason: CHECKPOINT_UNAVAILABLE
+        detail: >-
+          The author publishes `fashioniq-0.0-best` and `cirr-0.0-best` on Kaggle and nothing else; no
+          20%-noise TME checkpoint exists at any author-linked location. Relabelling the 0% artifact,
+          adding noise to the validation split, or training a model to manufacture availability are
+          all refused.
     notes: >-
       Paper Table 2 (FashionIQ validation, sigma=0): Dress R@10/R@50 49.73/71.69, Shirt 56.43/74.44,
       Toptee 59.31/78.94, Average 55.15/75.02, AVG 65.09. The paper reports the BEST-validation
       checkpoint when sigma=0 and the FINAL checkpoint when sigma>0, so a run must state which rule it
       followed. The author publishes 0% weights for FashionIQ and CIRR only; no 20% checkpoint is
       listed, so the requested 20% condition is CHECKPOINT_UNAVAILABLE rather than substituted.
+    # Which of the clean variants a FashionIQ run means when the operator names no checkpoint.
+    # Both TME 0% weights are clean, so without this declaration the workflow is ambiguous between
+    # the FashionIQ-trained weight and the CIRR-trained one -- and letting the CIRR weight become the
+    # FashionIQ default by ordering would silently run the wrong experiment. CIRR remains reachable
+    # by naming it explicitly.
+    checkpoint_selection_preference: fashioniq_0
     checkpoint_variants:
       - checkpoint_id: fashioniq_0
-        filename: best_model.pth
-        # Kaggle, not Hugging Face: the author distributes TME weights there. The download endpoint is
-        # versioned (`/1/download`) so the bytes are pinned by version rather than by a moving tag.
-        # The archive is 2533586661 bytes and holds `best_model.pth` at 2728382104 bytes; no
-        # author-published SHA-256 was established, and a prefix hash is not a checkpoint hash, so no
-        # digest is claimed.
+        # The endpoint serves a gzip/tar CONTAINER, not a weight: a range probe on
+        # `/1/download` answers 302 to `.../bundle/archive.tar.gz` on storage.googleapis.com and the
+        # body begins `1f8b0800`. Writing those bytes to a file named `best_model.pth` produced a
+        # correctly named archive that no loader could read, so the registry now declares the
+        # container's member and both sizes instead of one size for two different objects.
+        #
+        # `filename` is deliberately NOT the member's own name: both variants ship a member called
+        # `best_model.pth`, so keeping that name would collapse the FashionIQ and CIRR weights onto
+        # one path. The extracted member is published under the declared name below.
+        filename: fashioniq_0_best_model.pth
+        archive_member: best_model.pth
+        # Container size, observed on the live endpoint (compressed).
+        archive_size_bytes: 2533586661
+        # The EXTRACTED member: the audit inspected this value inside the container. Verified again
+        # after download by the local SHA-256 recorded in the manifest, which is a LOCAL hash -- Kaggle
+        # publishes no author checksum for this artifact, so `expected_sha256` stays null rather than
+        # presenting a local digest as an author-published one.
+        expected_size_bytes: 2728382104
+        expected_sha256: null
         download_url: https://www.kaggle.com/api/v1/models/charlesneilsucian/tme/pytorch/fashioniq-0.0-best/1/download
         source_type: author_kaggle
         source_revision: '1'
         checkpoint_training_noise_pct: 0
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
         status: URL_VERIFIED
-        checkpoint_mapping_status: UNVERIFIED
+        # The author links this artifact as the FashionIQ 0% release, which is what the run label
+        # depends on; the mapping is established by that link plus the container's single member,
+        # not by promoting an unexamined file to VERIFIED.
+        checkpoint_mapping_status: VERIFIED_METADATA
       - checkpoint_id: cirr_0
-        filename: best_model.pth
+        # Same container shape and same member name as the FashionIQ variant; see above. This is the
+        # CIRR-trained weight and it must never resolve to the FashionIQ file.
+        filename: cirr_0_best_model.pth
+        archive_member: best_model.pth
+        archive_size_bytes: 2533584902
+        expected_size_bytes: 2728382104
+        expected_sha256: null
         download_url: https://www.kaggle.com/api/v1/models/charlesneilsucian/tme/pytorch/cirr-0.0-best/1/download
         source_type: author_kaggle
         source_revision: '1'
         checkpoint_training_dataset: CIRR
+        checkpoint_forwards_dataset: CIRR
         checkpoint_training_noise_pct: 0
         evaluation_noise_pct: 0
-        expected_size_bytes: null
-        expected_sha256: null
         status: URL_VERIFIED
-        checkpoint_mapping_status: UNVERIFIED
+        checkpoint_mapping_status: VERIFIED_METADATA

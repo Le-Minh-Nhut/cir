@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "download_checkpoints.py"
 
@@ -215,9 +216,16 @@ def test_limn_three_category_checkpoints_selected_and_verified(tmp_path: Path, m
     limn_dir.mkdir(parents=True)
 
     expected_map = {}
+    payload = b"synthetic valid content"
     for variant in limn["checkpoint_variants"]:
+        # A placeholder file cannot satisfy the registry's real declared size (1792010157 bytes) or its
+        # real digest, and `module.main()` reads the registry from DISK -- so the fixture's facts are
+        # written to a registry COPY and pointed at with WORKBENCH_REGISTRY_PATH, the same pattern the
+        # sibling test above uses. Closing the size to the payload makes an honest fixture: the file on
+        # disk genuinely matches what the registry declares, so no check has to be relaxed to pass.
+        variant["expected_size_bytes"] = len(payload)
         fn = limn_dir / variant["filename"]
-        fn.write_bytes(b"synthetic valid content")
+        fn.write_bytes(payload)
         expected_map[variant["filename"]] = variant["expected_sha256"]
 
     # Synthetic local files pass sha256 check
@@ -240,6 +248,11 @@ def test_limn_three_category_checkpoints_selected_and_verified(tmp_path: Path, m
     assert len(items) == 3
     selected_cids = [item[1]["checkpoint_id"] for item in items]
     assert selected_cids == ["base_iter0_dress", "base_iter0_shirt", "base_iter0_toptee"]
+
+    # `main()` re-reads the registry from disk, so the fixture's size/digest facts must exist there.
+    registry_path = tmp_path / "registry.yaml"
+    registry_path.write_text(yaml.safe_dump(reg), encoding="utf-8")
+    monkeypatch.setenv("WORKBENCH_REGISTRY_PATH", str(registry_path))
 
     code = module.main(cmd)
     assert code == 0

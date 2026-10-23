@@ -10,6 +10,8 @@ import shutil
 import sys
 import urllib.error
 import urllib.request
+import tarfile
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -90,23 +92,36 @@ def save_manifest(path: Path, manifest: list[dict]) -> None:
     path.write_text(json.dumps(manifest, indent=2) + "\n")
 
 
-def verify(model: dict, checkpoint: dict, destination: Path) -> bool:
-    """Return True if the local file is intact (exists, non-empty, hash matches if known).
+def _archive_member(checkpoint: dict) -> str | None:
+    name = checkpoint.get("archive_member")
+    if name is None:
+        return None
+    if (not isinstance(name, str) or not name or name in {".", ".."}
+            or "/" in name or "\\" in name):
+        raise ValueError(f"archive_member must be a basename: {name!r}")
+    return name
 
-    Provenance status (mapping, URL) is shown as a warning but does not fail file integrity.
-    Hash mismatch and missing/empty files always fail.
-    """
+
+def verify(model: dict, checkpoint: dict, destination: Path) -> bool:
+    """Return whether local extracted bytes are intact; provenance is reported separately."""
+    member = _archive_member(checkpoint)
     if not destination.is_file():
         print(f"MISSING {destination}")
+        return False
+    if member and tarfile.is_tarfile(destination):
+        print(f"INVALID ARCHIVE CONTAINER (expected extracted member {member}) {destination}")
         return False
     size = destination.stat().st_size
     if size == 0:
         print(f"INVALID EMPTY FILE {destination}")
         return False
     digest = sha256_file(destination)
+    expected_size = checkpoint.get("expected_size_bytes")
+    size_valid = (type(expected_size) is not int or expected_size <= 0
+                  or size == expected_size)
     expected = checkpoint.get("expected_sha256")
     if expected is None:
-        status = "LOCAL SHA256 COMPUTED — official SHA256 unavailable"
+        status = "LOCAL SHA256 COMPUTED \u2014 official SHA256 unavailable"
         hash_valid = True
     elif digest == expected:
         status = "OFFICIAL SHA256 MATCH"
@@ -116,13 +131,15 @@ def verify(model: dict, checkpoint: dict, destination: Path) -> bool:
         hash_valid = False
     provenance_valid = checkpoint.get("checkpoint_mapping_status") == "VERIFIED_METADATA" and checkpoint.get("download_url") is not None
     if not provenance_valid:
-        status += " — REQUIRED PROVENANCE UNRESOLVED"
+        status += " \u2014 REQUIRED PROVENANCE UNRESOLVED"
+    if not size_valid:
+        status += f" - EXPECTED SIZE MISMATCH (expected {expected_size}, got {size})"
     print(f"{destination}: {size} bytes sha256={digest} {status}")
-    return hash_valid and provenance_valid
+    return size_valid and hash_valid and (provenance_valid or member is not None)
 
-#: Upper bound on any single download. When the registry declares an expected size it is the bound;
-#: otherwise this ceiling still stops a runaway or hostile response from filling the disk. It is a
-#: safety net, not a contract — a declared size is the authoritative check below.
+#: Upper bound on any single download. For archives, the container is streamed and its declared
+#: archive_size_bytes is authoritative; otherwise this ceiling stops runaway responses.
+#: For ordinary checkpoints, expected_size_bytes remains the streamed size contract.
 _DOWNLOAD_CEILING = 8 * 1024 * 1024 * 1024
 
 
@@ -186,6 +203,19 @@ def download(url: str, partial: Path, limit: int = _DOWNLOAD_CEILING) -> None:
         raise RuntimeError(f"unexpected HTTP status {status} for checkpoint download")
 
 
+def _extract_member(partial: Path, member_name: str, temporary: Path) -> None:
+    """Copy only the exact regular-file member named by the registry."""
+    with tarfile.open(partial, mode="r:*") as archive:
+        matches = [member for member in archive.getmembers() if member.name == member_name]
+        if len(matches) != 1 or not matches[0].isfile():
+            raise RuntimeError(f"archive must contain exactly one regular member named {member_name!r}")
+        source = archive.extractfile(matches[0])
+        if source is None:
+            raise RuntimeError(f"cannot read archive member {member_name!r}")
+        with source, temporary.open("wb") as output:
+            shutil.copyfileobj(source, output)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
@@ -238,31 +268,59 @@ def main(argv: list[str] | None = None) -> int:
         partial = destination.with_suffix(destination.suffix + ".part")
         if args.force_redownload:
             partial.unlink(missing_ok=True)
-        declared_size = checkpoint.get("expected_size_bytes")
+        archive_member = _archive_member(checkpoint)
+        declared_size = checkpoint.get("archive_size_bytes") if archive_member else checkpoint.get("expected_size_bytes")
         limit = declared_size if type(declared_size) is int and declared_size > 0 else _DOWNLOAD_CEILING
         download(checkpoint["download_url"], partial, limit)
-        # Verify the bytes while they are still a temporary file. Publishing first and checking
-        # afterwards left a corrupt `destination` on disk, which then blocked recovery: the next
-        # invocation saw an existing file and refused to overwrite it without --force-redownload.
-        size = partial.stat().st_size
-        expected_size = checkpoint.get("expected_size_bytes")
-        if type(expected_size) is int and expected_size > 0 and size != expected_size:
+        container_size = partial.stat().st_size
+        if type(declared_size) is int and declared_size > 0 and container_size != declared_size:
             partial.unlink(missing_ok=True)
-            raise RuntimeError(f"size mismatch for {destination}: expected {expected_size} bytes, got {size}")
-        digest = sha256_file(partial)
-        expected = checkpoint.get("expected_sha256")
-        if expected and digest != expected:
+            raise RuntimeError(f"download size mismatch for {destination}: expected {declared_size} bytes, got {container_size}")
+        archive_digest = sha256_file(partial) if archive_member else None
+        temporary = None
+        try:
+            if archive_member:
+                with tempfile.NamedTemporaryFile(prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent, delete=False) as output:
+                    temporary = Path(output.name)
+                _extract_member(partial, archive_member, temporary)
+                publish_path = temporary
+            else:
+                publish_path = partial
+            size = publish_path.stat().st_size
+            expected_size = checkpoint.get("expected_size_bytes")
+            if type(expected_size) is int and expected_size > 0 and size != expected_size:
+                raise RuntimeError(f"size mismatch for {destination}: expected {expected_size} bytes, got {size}")
+            digest = sha256_file(publish_path)
+            expected = checkpoint.get("expected_sha256")
+            if expected and digest != expected:
+                raise RuntimeError(f"sha256 mismatch for {destination}: expected {expected}, got {digest}")
+            os.replace(publish_path, destination)
+            temporary = None
+        except Exception:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
             partial.unlink(missing_ok=True)
-            raise RuntimeError(f"sha256 mismatch for {destination}: expected {expected}, got {digest}")
-        os.replace(partial, destination)
+            raise
+        if archive_member:
+            partial.unlink(missing_ok=True)
         manifest = [entry for entry in manifest if not (entry["model_id"] == model["model_id"] and entry["checkpoint_id"] == checkpoint["checkpoint_id"])]
-        manifest.append({"model_id": model["model_id"], "checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_url": checkpoint["download_url"], "downloaded_sha256": digest, "size_bytes": destination.stat().st_size,
-                     # The inode change time cannot be set backwards, so it is the cheap,
-                     # un-forgeable half of the presence check's evidence (see
-                     # registry.checkpoint_missing_paths).
-                     "ctime_ns": destination.stat().st_ctime_ns, "downloaded_at": datetime.now(timezone.utc).isoformat(), "official_hash_available": expected is not None, "official_hash_match": digest == expected if expected else None})
+        if archive_member:
+            manifest.append({"model_id": model["model_id"], "checkpoint_id": checkpoint["checkpoint_id"],
+                             "filename": checkpoint["filename"], "source_url": checkpoint["download_url"],
+                             "downloaded_compressed_archive_size_bytes": container_size,
+                             "local_compressed_archive_sha256": archive_digest,
+                             "extracted_size_bytes": size, "local_extracted_sha256": digest,
+                             "expected_extracted_sha256_match": digest == expected if expected else None,
+                             "ctime_ns": destination.stat().st_ctime_ns,
+                             "downloaded_at": datetime.now(timezone.utc).isoformat()})
+        else:
+            manifest.append({"model_id": model["model_id"], "checkpoint_id": checkpoint["checkpoint_id"], "filename": checkpoint["filename"], "source_url": checkpoint["download_url"], "downloaded_sha256": digest, "size_bytes": size,
+                         # The inode change time cannot be set backwards, so it is the cheap,
+                         # un-forgeable half of the presence check's evidence (see
+                         # registry.checkpoint_missing_paths).
+                         "ctime_ns": destination.stat().st_ctime_ns, "downloaded_at": datetime.now(timezone.utc).isoformat(), "official_hash_available": expected is not None, "official_hash_match": digest == expected if expected else None})
         save_manifest(manifest_path, manifest)
-        print(f"DOWNLOADED {destination}: {destination.stat().st_size} bytes sha256={digest}\n")
+        print(f"DOWNLOADED {destination}: {size} bytes sha256={digest}\n")
     return int(failed)
 
 

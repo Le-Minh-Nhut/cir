@@ -319,7 +319,11 @@ def _enforce_download_budget(config: AutopilotConfig, rows: list[dict[str, Any]]
                     continue
             except Exception:
                 pass
-            size = checkpoint.get("expected_size_bytes")
+            # What streams over the network is the CONTAINER when the registry declares one, and the
+            # extracted member otherwise. Charging `expected_size_bytes` for an archive-understating
+            # endpoint would budget 2728382104 for a 2533586661-byte transfer, and a selection of two
+            # such variants would look affordable while holding two containers at once.
+            size = checkpoint.get("archive_size_bytes") if checkpoint.get("archive_member") else checkpoint.get("expected_size_bytes")
             if type(size) is not int or size < 0:
                 unknown = True
                 unknown_reason = "download budget cannot be verified: checkpoint size unknown"
@@ -785,6 +789,11 @@ def _resolve_evaluation_metrics(
         stderr_text,
         report_payload.get("return_code", 0),
         paper_metrics=paper_metrics,
+        # Same contract as the direct evaluate_models path: the run's own request is the expected
+        # identity, so a document describing another checkpoint or protocol is refused instead of
+        # being presented as this run's aggregate.
+        expected_checkpoint_id=report_payload.get("checkpoint_id") or proof_payload.get("checkpoint_id"),
+        expected_protocol_id=proof_payload.get("protocol_id") or report_payload.get("protocol_id"),
     )
 
     cat_metrics = None

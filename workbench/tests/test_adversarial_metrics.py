@@ -99,15 +99,21 @@ def test_v12_missing_parser_no_fabrication():
     """A model with no parser reports that, and never invents a metric.
 
     The model used here keeps moving for the right reason: `airknow` gained a parser, then `dcnet`
-    did too (its evaluator prints fractions that are now parsed). `ptha_mtst` is the current holder —
-    it has a preflight wrapper and NO metric output at all, because no FashionIQ checkpoint exists to
-    produce one. The invariant is unchanged: unreadable output yields no observed metric rather than a
-    substituted one, and a model must not borrow another model's parser.
+    did too (its evaluator prints fractions that are now parsed), then `ptha_mtst` did when its
+    transfer output contract got one. `tgcir` is the current holder: it has a preflight wrapper and
+    NO metric output at all, because its archive mapping is unresolved. The invariant is unchanged:
+    unreadable output yields no observed metric rather than a substituted one, and a model must not
+    borrow another model's parser.
     """
-    r = mx.extract_aggregate_metrics("ptha_mtst", "irrelevant output", "", 0)
+    r = mx.extract_aggregate_metrics("tgcir", "irrelevant output", "", 0)
     assert r.extraction_status == "AGGREGATE_PARSER_UNAVAILABLE"
     assert r.observed_metrics is None
     assert r.parser_id is None
+    # The same invariant stated for a model that DOES have a parser: unreadable output must still
+    # yield no observed metric. Checking only the parser-less model would let a lenient parser pass.
+    registered = mx.extract_aggregate_metrics("ptha_mtst", "irrelevant output", "", 0)
+    assert registered.observed_metrics is None
+    assert registered.parser_id is not None
 
 
 # V13: Paper score never substituted for observed

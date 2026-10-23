@@ -465,9 +465,18 @@ class LIMNAdapter(OfficialScriptAdapter):
         return command
 class TMEAdapter(OfficialScriptAdapter):
     model_id = "tme"
-    script = "precompute_test.py"
+    # Relative to the checkout, which is what `evaluate_models.guarded_plan()` tests and what the
+    # wrapper's own `evaluator_path()` resolves. Declaring the bare filename made the two disagree:
+    # the wrapper found the file and preflight passed, while the adapter-driven guard reported
+    # "official evaluator missing" and refused the run.
+    script = "src/precompute_test.py"
     launcher = "replay"
-    launcher_roots = ()
+    # The wrapper imports from the checkout's nested `src` (`precompute_evaluation`, `data`,
+    # `utility`), and the vendored LAVIS tree lives under that same root. Without this the planner
+    # traced those imports as external distributions -- requesting `data`, `utility`,
+    # `precompute-evaluation` and `salesforce-lavis` -- and stopped scanning before the real pins
+    # (`transformers`, `timm`).
+    launcher_roots = ("src",)
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # The pinned `precompute_test.py` reads a local `--model-path` and its `main()` cannot serve
@@ -479,9 +488,17 @@ class TMEAdapter(OfficialScriptAdapter):
 
 class PthaMtstAdapter(OfficialScriptAdapter):
     model_id = "ptha_mtst"
-    script = "src/validate_blip.py"
+    # The vendored MTST_PTHA checkout keeps the upstream repository's own top-level directory inside
+    # it, so the evaluator is at `MTST_PTHA/src/validate_blip.py` relative to the checkout -- the same
+    # path the wrapper's `evaluator_path()` resolves. Declaring `src/validate_blip.py` pointed one
+    # level too high and `guarded_plan` refused with "official evaluator missing" even though the
+    # wrapper's own preflight found the file.
+    script = "MTST_PTHA/src/validate_blip.py"
     launcher = "replay"
-    launcher_roots = ()
+    # Same reason as TME: the wrapper imports `data_utils`, `utils` and `validate_blip` from that
+    # nested `src`, plus the vendored LAVIS tree beside it. Without the root the planner asked for
+    # `data-utils`, `utils`, `validate-blip` and `salesforce-lavis` as distributions.
+    launcher_roots = ("MTST_PTHA/src",)
 
     def command(self, source, checkpoint, request: EvalRequest) -> list[str]:
         # `validate_blip.py` recommends via `clip_finetune_fiq` but its CLI dispatches only CIRR, and

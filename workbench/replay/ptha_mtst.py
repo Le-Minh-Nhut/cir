@@ -24,7 +24,12 @@ RAW_INPUTS = tuple(
     )
 )
 HF_REPO = "yinanzhou1/mtst_ptha"
-PUBLISHED_CIRR_WEIGHT = "tuned_mtst_cirr.pt"
+CHECKPOINT_IDS = tuple(checkpoint["checkpoint_id"] for checkpoint in MODEL["checkpoint_variants"])
+DEFAULT_CHECKPOINT_ID = CHECKPOINT_IDS[0]
+PUBLISHED_CIRR_WEIGHT = next(
+    checkpoint["filename"] for checkpoint in MODEL["checkpoint_variants"]
+    if checkpoint.get("transfer_condition") == "cross_dataset_transfer"
+)
 TRANSFER_LABEL = "PTHA+MTST | CIRR checkpoint -> FashionIQ | cross-dataset transfer | exploratory"
 
 
@@ -52,6 +57,7 @@ def preflight(
     dataset_root: Path,
     checkpoint_root: Path,
     *,
+    checkpoint_id: str = DEFAULT_CHECKPOINT_ID,
     transfer_cirr_to_fashioniq: bool = False,
 ) -> list[str]:
     """Return blockers without importing upstream code or mutating inputs."""
@@ -70,12 +76,37 @@ def preflight(
         if not (dataset_root / path).is_file()
     )
 
-    if transfer_cirr_to_fashioniq:
-        checkpoint = checkpoint_root / MODEL["model_id"] / PUBLISHED_CIRR_WEIGHT
-        if not checkpoint.is_file():
-            blockers.append(f"PTHA+MTST CIRR checkpoint missing: {checkpoint}")
-        elif checkpoint.stat().st_size == 0:
-            blockers.append(f"PTHA+MTST CIRR checkpoint is an empty placeholder: {checkpoint}")
+    checkpoint = next(
+        (item for item in MODEL["checkpoint_variants"] if item["checkpoint_id"] == checkpoint_id),
+        None,
+    )
+    if checkpoint is None:
+        blockers.append(
+            f"unknown checkpoint id {checkpoint_id!r}; valid checkpoint ids: {', '.join(CHECKPOINT_IDS)}"
+        )
+        return blockers
+
+    is_cirr_transfer = (
+        checkpoint.get("transfer_condition") == "cross_dataset_transfer"
+        and checkpoint.get("checkpoint_training_dataset") == "CIRR"
+        and checkpoint.get("checkpoint_forwards_dataset") == "FashionIQ"
+    )
+    if transfer_cirr_to_fashioniq and not is_cirr_transfer:
+        blockers.append(
+            f"checkpoint {checkpoint_id!r} is not registered as a CIRR-to-FashionIQ transfer"
+        )
+    elif is_cirr_transfer and transfer_cirr_to_fashioniq:
+        path = checkpoint_root / checkpoint["filename"]
+        if not path.is_file():
+            blockers.append(f"PTHA+MTST CIRR checkpoint missing: {path}")
+        elif path.stat().st_size == 0:
+            blockers.append(f"PTHA+MTST CIRR checkpoint is an empty placeholder: {path}")
+    elif is_cirr_transfer:
+        blockers.append(
+            f"PTHA+MTST FashionIQ fine-tuned checkpoint missing: author repository "
+            f"https://huggingface.co/{HF_REPO} publishes only CIRR weights "
+            f"('{checkpoint['filename']}'); CIRR weights require explicit transfer opt-in"
+        )
     else:
         blockers.append(
             f"PTHA+MTST FashionIQ fine-tuned checkpoint missing: author repository "
@@ -107,7 +138,9 @@ def _state_dict_report(model_state: dict[str, Any], checkpoint_state: dict[str, 
     }
 
 
-def evaluate_transfer(source_root: Path, dataset_root: Path, checkpoint: Path) -> dict[str, Any]:
+def evaluate_transfer(
+    source_root: Path, dataset_root: Path, checkpoint: Path, checkpoint_id: str
+) -> dict[str, Any]:
     """Safely inspect and compare checkpoint, then run the pinned FashionIQ metrics."""
     import torch
 
@@ -176,11 +209,13 @@ def evaluate_transfer(source_root: Path, dataset_root: Path, checkpoint: Path) -
     r10 = sum(values["r10"] for values in category_metrics.values()) / len(category_metrics)
     r50 = sum(values["r50"] for values in category_metrics.values()) / len(category_metrics)
     return {
+        "model_id": MODEL["model_id"],
+        "protocol_id": MODEL["native_protocol"],
         "label": TRANSFER_LABEL,
         "train_dataset": "CIRR",
         "evaluation_dataset": "FashionIQ",
         "checkpoint_training_noise": "unknown",
-        "checkpoint_id": "ptha_mtst_cirr_transfer_exploratory",
+        "checkpoint_id": checkpoint_id,
         "checkpoint_sha256": checkpoint_sha256,
         "checkpoint_top_level_model_key": checkpoint_key,
         "serialization_inspection": "torch.load(weights_only=True)",
@@ -210,6 +245,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--dataset-root", type=Path, required=True)
     parser.add_argument("--checkpoint-root", type=Path, required=True)
+    parser.add_argument("--checkpoint-id", choices=CHECKPOINT_IDS, default=DEFAULT_CHECKPOINT_ID)
     parser.add_argument(
         "--transfer-cirr-to-fashioniq",
         action="store_true",
@@ -221,18 +257,21 @@ def main(argv: list[str] | None = None) -> int:
         args.source_root,
         args.dataset_root,
         args.checkpoint_root,
+        checkpoint_id=args.checkpoint_id,
         transfer_cirr_to_fashioniq=args.transfer_cirr_to_fashioniq,
     )
     if blockers:
         for blocker in blockers:
             print(f"[BLOCKED] {blocker}", file=sys.stderr)
         return 1
-    if not args.transfer_cirr_to_fashioniq:
-        return 0
-
-    checkpoint = args.checkpoint_root / MODEL["model_id"] / PUBLISHED_CIRR_WEIGHT
+    checkpoint_variant = next(
+        item for item in MODEL["checkpoint_variants"] if item["checkpoint_id"] == args.checkpoint_id
+    )
+    checkpoint = args.checkpoint_root / checkpoint_variant["filename"]
     try:
-        result = evaluate_transfer(args.source_root, args.dataset_root, checkpoint)
+        result = evaluate_transfer(
+            args.source_root, args.dataset_root, checkpoint, args.checkpoint_id
+        )
     except Exception as error:
         print(f"[BLOCKED] {type(error).__name__}: {error}", file=sys.stderr)
         return 1

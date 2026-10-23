@@ -53,6 +53,12 @@ checkpoint_overrides:
   habit: [fiq_n02]
   intent: [fiq_n02]
   conesep: [fiq_n02]
+  # PTHA+MTST declares the author's released CIRR checkpoint as an explicit cross-dataset TRANSFER
+  # variant. Naming it here is what makes the authorized CIRR-to-FashionIQ experiment runnable under
+  # `include_flagged_conditions`; it is recorded as an operator override and every surface shows it
+  # as exploratory transfer (trained on CIRR, evaluated on FashionIQ), never as the paper's
+  # FashionIQ row. TME needs no override: its registry declaration names the FashionIQ 0% weight as
+  # the workflow default, so the CIRR weight cannot silently become the FashionIQ checkpoint.
 
 paths:
   registry: ../registry/models.yaml
@@ -63,9 +69,22 @@ paths:
   third_party: ../third_party
 
 budgets:
-  # Covers the LIMN bundle (5,376,030,471 bytes) plus the registered auxiliary captions, with margin
-  # for the remaining models' checkpoints. Raise it only after checking the registry sizes.
-  max_download_bytes: 21474836480
+  # Recomputed this round from the registry rather than carried forward. The cost of a variant is the
+  # bytes that actually STREAM: `archive_size_bytes` when the endpoint serves a container, otherwise
+  # `expected_size_bytes`. Charging TME the extracted member size (2,728,382,104) for a
+  # 2,533,586,661-byte container understated a transfer that holds both objects at once.
+  #
+  # The previous value (21,474,836,480) was already smaller than the artefacts it claimed to cover:
+  # the seven otherwise-selectable models plus PTHA alone came to 22,347,953,268 bytes. With TME now
+  # selectable the honest figure is higher still, so the profile states a finite number derived from
+  # the registry instead of a number that would refuse a legitimate selection mid-run:
+  #   LIMN bundle (3 x 1,792,010,157) + HABIT + INTENT + ConeSep + CSMCIR + HINT + ENCODER
+  #   + TME FashionIQ container + TME CIRR container + PTHA CIRR = 35,601,160,762 bytes for every
+  #   VERIFIED selectable variant at once.
+  # This is the ceiling for the WHOLE profile, and it still refuses a selection that does not fit:
+  # a run that names more than this is rejected before any byte is fetched. Raise it only after
+  # re-checking the registry sizes, never to "unlimited".
+  max_download_bytes: 37580963840
   max_models: 32
   top_k: 200
 

@@ -221,31 +221,34 @@ def test_an_extension_requirement_is_checked_against_every_validation_id(tmp_pat
 
 def test_registry_protocol_ids_and_internal_aliases_build_the_same_cohort(
         tmp_path: Path) -> None:
-    """A caller holding a registry protocol id must be able to evaluate that family.
-
-    The registry uses `fashioniq_original_split` / `fashioniq_val_split` while earlier callers
-    used the shorter `fashioniq_original` / `fashioniq_val`. Only the short spellings were
-    accepted, so the two registry ids raised `Unsupported FashionIQ protocol` — a gap, not a
-    naming preference. Each pair must build the identical cohort.
-    """
-    root = _split_root(tmp_path, FULL_GALLERY + ["extra-1"])
-    pairs = [("fashioniq_original", "fashioniq_original_split"),
-             ("fashioniq_val", "fashioniq_val_split")]
-
-    for internal, registry_id in pairs:
-        from_internal = build_fashioniq_gallery(internal, root, "dress", ANNOTATIONS, "val")
-        from_registry = build_fashioniq_gallery(registry_id, root, "dress", ANNOTATIONS, "val")
-        assert from_registry == from_internal, registry_id
-
-    # The registry id of the exclusion family is one name, and it is the full gallery.
-    excluded = build_fashioniq_gallery(
-        "fashioniq_full_gallery_ref_excluded", root, "dress", ANNOTATIONS, "val")
-    assert excluded == FULL_GALLERY + ["extra-1"]
-
-    # Every id the registry declares must be buildable.
+    """Every registry id and internal alias resolves to its declared cohort family."""
+    from evaluation.fashioniq import FASHIONIQ_PROTOCOLS, resolve_fashioniq_protocol
     from workbench.backend.registry import load_registry
-    for protocol_id in load_registry()["protocols"]:
-        assert build_fashioniq_gallery(protocol_id, root, "dress", ANNOTATIONS, "val")
+
+    root = _split_root(tmp_path, FULL_GALLERY + ["extra-1"])
+    registry_protocol_ids = load_registry()["protocols"]
+    family_galleries = {
+        "full_split": FULL_GALLERY + ["extra-1"],
+        "pair_union": build_pair_union_gallery(ANNOTATIONS),
+    }
+
+    assert set(registry_protocol_ids) <= set(FASHIONIQ_PROTOCOLS)
+    for protocol_id in registry_protocol_ids:
+        protocol = resolve_fashioniq_protocol(protocol_id)
+        assert build_fashioniq_gallery(
+            protocol_id, root, "dress", ANNOTATIONS, "val"
+        ) == family_galleries[protocol.gallery]
+
+    for protocol in FASHIONIQ_PROTOCOLS.values():
+        expected_gallery = family_galleries[protocol.gallery]
+        for name in (protocol.protocol_id, *protocol.aliases):
+            assert build_fashioniq_gallery(
+                name, root, "dress", ANNOTATIONS, "val"
+            ) == expected_gallery
+            assert resolve_fashioniq_protocol(name).reference_excluded == protocol.reference_excluded
+
+    original = resolve_fashioniq_protocol("fashioniq_original_split")
+    assert original.reference_excluded is False
 
 
 def test_the_image_check_looks_where_the_layout_reads(tmp_path: Path) -> None:

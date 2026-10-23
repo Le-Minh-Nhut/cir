@@ -70,10 +70,13 @@ def test_preflight_uses_pinned_validate_blip_module() -> None:
 
 
 def test_cirr_checkpoint_requires_explicit_transfer_opt_in(tmp_path: Path) -> None:
+    # The checkpoint root IS the member root: `_replay_command` passes `checkpoint_member_root` of the
+    # resolved path, which for a single file is its own directory, and every wrapper then opens
+    # `<root>/<registry filename>`. Nesting the model directory here encoded the doubled-id bug this
+    # test is supposed to catch, so the fixture now matches the real convention.
     checkpoint_root = tmp_path / "checkpoints"
-    model_root = checkpoint_root / "ptha_mtst"
-    model_root.mkdir(parents=True)
-    (model_root / "tuned_mtst_cirr.pt").write_bytes(b"placeholder")
+    checkpoint_root.mkdir(parents=True)
+    (checkpoint_root / "tuned_mtst_cirr.pt").write_bytes(b"placeholder")
     dataset_root = _dataset_root(tmp_path / "fashioniq")
 
     normal = preflight(MTST_DIR, dataset_root, checkpoint_root)
@@ -97,6 +100,9 @@ def test_preflight_blocks_on_missing_fashioniq_weights(tmp_path: Path) -> None:
     )
     assert any("FashionIQ fine-tuned checkpoint missing" in blocker for blocker in blockers)
     assert any("tuned_mtst_cirr.pt" in blocker for blocker in blockers)
+    # And the path it names must be `<root>/<filename>`, with no model directory appended twice: a
+    # doubled root made a correctly placed checkpoint unreadable, which is the defect R19-02 records.
+    assert not any("ptha_mtst/ptha_mtst/" in blocker for blocker in blockers), blockers
 
 
 def test_the_nested_source_layout_resolves_to_the_directory_holding_src() -> None:
@@ -141,10 +147,11 @@ def test_a_transfer_run_needs_the_explicit_opt_in(tmp_path: Path) -> None:
         (dataset / relative).parent.mkdir(parents=True, exist_ok=True)
         (dataset / relative).write_text("[]")
 
+    # Flat member root, matching `checkpoint_member_root` and every wrapper's `root / filename`:
+    # a nested `ptha_mtst/` here made a correctly placed checkpoint read as missing.
     checkpoint_root = tmp_path / "checkpoints"
-    model_dir = checkpoint_root / "ptha_mtst"
-    model_dir.mkdir(parents=True)
-    (model_dir / ptha_mtst.PUBLISHED_CIRR_WEIGHT).write_bytes(b"weights")
+    checkpoint_root.mkdir(parents=True)
+    (checkpoint_root / ptha_mtst.PUBLISHED_CIRR_WEIGHT).write_bytes(b"weights")
 
     assert ptha_mtst.preflight(source, dataset, checkpoint_root,
                                transfer_cirr_to_fashioniq=True) == []

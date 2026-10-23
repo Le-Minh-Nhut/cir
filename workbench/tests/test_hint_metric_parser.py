@@ -162,8 +162,12 @@ def test_adding_hint_did_not_disturb_the_existing_parsers() -> None:
     assert parse_limn_output(wrapper_output()).extraction_status != "EXTRACTED_VERIFIED"
 
     # A model with no parser still reports that honestly rather than borrowing HINT's. The holder of
-    # that state keeps moving as wrappers gain parsers (`pair`, then `dcnet`), so this uses the one
-    # that cannot gain a metric parser until an author publishes weights: `ptha_mtst`.
-    other = extract_aggregate_metrics("ptha_mtst", wrapper_output(), "", 0)
+    # that state keeps moving as wrappers gain parsers (`pair`, then `dcnet`, then `ptha_mtst` when
+    # its transfer contract got one), so this uses a model whose mapping is still unresolved: `tgcir`.
+    other = extract_aggregate_metrics("tgcir", wrapper_output(), "", 0)
     assert other.extraction_status == "AGGREGATE_PARSER_UNAVAILABLE"
     assert other.parser_id is None
+    # And a model that HAS a parser still must not borrow HINT's: unreadable output yields no metric.
+    registered = extract_aggregate_metrics("ptha_mtst", wrapper_output(), "", 0)
+    assert registered.observed_metrics is None
+    assert registered.parser_id != "hint_structured_json"

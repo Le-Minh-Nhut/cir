@@ -23,12 +23,11 @@ def test_val_split_union_order_and_reference_exclusion() -> None:
 def test_registry_exposes_the_workbench_protocols_exactly() -> None:
     """The declared protocols, in order. A new one is a deliberate contract addition.
 
-    TME's evaluator masks the reference ONLY for CIRR (`precompute_evaluation.py:83` guards the mask
-    with `if category == 'CIRR'`), so on FashionIQ the gallery is the full per-category validation
-    split with the reference ELIGIBLE. That matches neither val protocol (pair-union gallery, reference
-    excluded) nor the original-split one (train-split gallery), so
-    `fashioniq_val_split_ref_included` was added rather than reporting a run under a reference policy
-    it does not follow.
+    A fourth protocol, `fashioniq_val_split_ref_included`, was once added here for TME on the claim
+    that the original-split family used a TRAIN-split gallery. That claim was wrong: the family has
+    always been the complete ordered `split.<category>.val.json` with the reference eligible, which
+    is exactly what TME's evaluator builds. The redundant id was removed rather than wired through
+    every consumer, so the list is back to the three real families.
     """
     from workbench.backend.registry import load_registry
 
@@ -36,8 +35,11 @@ def test_registry_exposes_the_workbench_protocols_exactly() -> None:
 
     assert list(load_registry()["protocols"]) == [
         "fashioniq_original_split", "fashioniq_full_gallery_ref_excluded",
-        "fashioniq_val_split", "fashioniq_val_split_ref_included"]
+        "fashioniq_val_split"]
     assert models["csmcir"]["native_protocol"] == "fashioniq_original_split"
+    # TME's cohort is the original-split family: full ordered val split, reference eligible.
+    assert models["tme"]["native_protocol"] == "fashioniq_original_split"
+    assert models["tme"]["literature_split_label"] == "original"
     for model_id in ("airknow", "conesep", "habit", "intent"):
         assert models[model_id]["literature_split_label"] == "original"
         assert models[model_id]["native_protocol"] == "fashioniq_full_gallery_ref_excluded"
@@ -168,7 +170,13 @@ def test_limn_requires_complete_category_checkpoint_bundle(tmp_path) -> None:
     limn = next(model for model in load_registry()["models"] if model["model_id"] == "limn")
     root = tmp_path / "checkpoints"
     for checkpoint in limn["checkpoint_variants"][:2]:
+        # The fixture's bytes are a placeholder, so BOTH declared integrity fields must be dropped for
+        # it. Nulling only the digest left `expected_size_bytes` at the real 1792010157 and the file at
+        # 10 bytes, so a presence check that compares declared size correctly reported the two
+        # "present" members as missing and this test failed for the right reason. The invariant under
+        # test is the BUNDLE's completeness rule, not size enforcement.
         checkpoint["expected_sha256"] = None
+        checkpoint["expected_size_bytes"] = None
         path = root / "limn" / checkpoint["filename"]
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"checkpoint")

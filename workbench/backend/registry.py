@@ -217,7 +217,12 @@ def required_runtime_assets(model: dict[str, Any]) -> list[dict[str, Any]]:
 def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
     statuses: list[dict[str, Any]] = []
     for asset in required_runtime_assets(model):
-        configured = os.environ.get(asset.get("location_env_var", ""))
+        # `location_env_var` is optional in the contract schema and is legitimately absent for an
+        # asset that has no override variable (the tokenizer cache entry). Reading it with a default
+        # only covered a MISSING key; an explicit `null` reached `os.environ.get(None)`, which raises
+        # `TypeError: str expected, not NoneType` instead of reporting the asset's state.
+        env_var = asset.get("location_env_var")
+        configured = os.environ.get(env_var) if env_var else None
         location = configured.strip() if configured and configured.strip() else asset.get("expected_local_location")
         if location is None and asset.get("cache_path_suffix"):
             cache_root = os.environ.get(asset.get("cache_root_env_var", ""))
@@ -428,10 +433,50 @@ def checkpoint_missing_paths(path: Path, checkpoint: dict[str, Any],
     if st.st_size == 0:
         return [path]
     expected_sha = checkpoint.get("expected_sha256")
+    # A container is not a weight. When the registry declares that this artifact arrives inside an
+    # archive, its published bytes are the EXTRACTED member, so container-shaped bytes at the
+    # destination are the wrong object even though the file exists, is regular, and is non-empty.
+    # Without this, a previously mis-installed gzip/tar file satisfied every presence check and the
+    # run proceeded to a loader that could not read it.
+    if checkpoint.get("archive_member") and _is_compressed_container(path):
+        return [path]
+    # A declared size is part of the artifact's identity for a single-file artifact, not only for a
+    # download in progress. A truncated extraction publishes the right NAME with the wrong BYTES, and
+    # without this check it read as present. (Bundles already compare member sizes through their
+    # manifest; this is the same rule applied to the single-file shape.)
+    declared_size = checkpoint.get("expected_size_bytes")
+    if type(declared_size) is int and declared_size > 0 and st.st_size != declared_size:
+        return [path]
     if not expected_sha:
         return []
     actual_sha = _availability_digest(config, model_id or "", checkpoint, path)
     return [path] if actual_sha != expected_sha else []
+
+
+def _is_compressed_container(path: Path) -> bool:
+    """True for the container formats that can hide a weight, regardless of the file's name.
+
+    ZIP is deliberately NOT on this list. `torch.save` has written its own archives with the zip
+    format since PyTorch 1.6, so `PK\\x03\\x04` is the NORMAL first four bytes of a modern `.pth` or
+    `.pt` state dictionary, and treating it as a container rejected a legitimate checkpoint. Verified
+    against the real artifact: TME's extracted `fashioniq_0_best_model.pth` begins `504b0304` and is
+    2728382104 bytes, which is the declared member size - it is a valid torch zip, not an archive.
+    A zip wrapper around a weight is not a shape the author endpoints produce, and refusing one is the
+    downloader's business, not this presence check's.
+    """
+    try:
+        with path.open("rb") as handle:
+            head = handle.read(8)
+    except OSError:
+        return False
+    if head[:2] == b"\x1f\x8b" or head[:2] == b"BZ" or head[:6] == b"\xfd7zXZ\x00":
+        return True
+    # A bare tar keeps "ustar" at offset 257, which is outside an 8-byte read.
+    try:
+        with path.open("rb") as handle:
+            return handle.read(262)[257:262] == b"ustar"
+    except OSError:
+        return False
 
 def _regular_file(path: Path) -> bool:
     return not path.is_symlink() and path.is_file()

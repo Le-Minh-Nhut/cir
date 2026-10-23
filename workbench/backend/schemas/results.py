@@ -5,19 +5,13 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-#: The ONE owner of the protocol -> literature-label map. Every other module imports this; a second
-#: copy drifted silently (`replay/publication.py` had `fashioniq_full_gallery_ref_excluded` as "val"
-#: while this file had "original") because each consumer read its own. The schema owns it because it
-#: VALIDATES the pairing below, so a disagreement here is not a matter of opinion.
-#:
-#: These labels are the LITERATURE's words for the split a paper reports. They are not the protocol:
-#: two different protocols share the label "original" because both draw on the full validation
-#: split, and they differ in whether the reference stays eligible. Executable semantics come from
-#: ``protocol_id`` alone, never from this label.
+from workbench.backend.registry import load_registry
+
+#: The registry owns the protocol -> literature-label map. This schema validates the pairing below,
+#: while executable cohort semantics come from ``protocol_id`` and never from the label.
 PROTOCOL_LITERATURE_LABELS = {
-    "fashioniq_original_split": "original",
-    "fashioniq_full_gallery_ref_excluded": "original",
-    "fashioniq_val_split": "val",
+    protocol_id: protocol["literature_split_label"]
+    for protocol_id, protocol in load_registry()["protocols"].items()
 }
 PROTOCOL_IDS = frozenset(PROTOCOL_LITERATURE_LABELS)
 

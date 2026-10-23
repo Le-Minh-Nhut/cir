@@ -1,4 +1,4 @@
-# MODEL_STATUS_SPEC — trạng thái 16 model CIR
+# MODEL_STATUS_SPEC — trạng thái 17 model CIR
 
 Tài liệu trạng thái chuẩn. Registry (`workbench/registry/models.yaml`) vẫn là **nguồn tham số thực thi**;
 file này mô tả **tình trạng, bằng chứng và điều kiện chuyển trạng thái**. Không có backend status
@@ -79,7 +79,7 @@ Mức kiểm chứng cao nhất thực tế đạt được (không phải mức
 | 14 | `clip4cir_rn50x4_fullft` | ABaldrati/CLIP4Cir | `fashioniq_original_split` | fullft CLIP + Combiner (cùng config) | vendored, pin OK | như trên; cần **cặp** khớp | script CLI | `combiner_stdout_recall` | không | `SOURCE_READY` | `PUBLIC_ASSET_SETUP` |
 | 15 | `sprc` | chunmeifeng/SPRC | `fashioniq_original_split` | ViT-g (paper) / ViT-L (variant) | vendored, pin OK | ViT-g OneDrive 403; ViT-L reachable | script CLI | `csmcir_stdout_json` | không | `CODE_TESTED` | `PUBLIC_ASSET_SETUP` + `SCIENTIFIC_VARIANT` |
 | 16 | `ptha_mtst` | zyinan99/MTST_PTHA | `fashioniq_original_split` | `cirr_transfer` (CIRR→FashionIQ, exploratory) | vendored + 3 local fix | ckpt **đã tải + hash khớp** `1c4dab86…`; env **đã khai** từ `requirements.txt` | wrapper + transfer opt-in | không | không | `PREFLIGHT_PASS` (transfer) | cần env py3.9/torch2.0.1 (~5 GB) |
-| 17 | `tme` | li-shuxian/TME | `fashioniq_val_split_ref_included` | `fashioniq_0` (noise 0%); **20% `CHECKPOINT_UNAVAILABLE`** | vendored @ `394aad79` (379 files) | chưa tải ckpt (2.5 GB) | wrapper `replay/tme.py` | không | không | `ENTRYPOINT_IMPLEMENTED` | cần tải ckpt Kaggle + env |
+| 17 | `tme` | li-shuxian/TME | `fashioniq_original_split` | `fashioniq_0` (noise 0%); **20% `CHECKPOINT_UNAVAILABLE`** | vendored @ `394aad79` (379 files) | ckpt **đã tải + trích member** `fashioniq_0_best_model.pth` 2 728 382 104 B | wrapper `replay/tme.py` | `tme_native_aggregate` | không | `ENVIRONMENT_VERIFIED` | cần ≥10.47 GiB feature cache + EVA-ViT-g 2 025 249 237 B |
 
 
 > **Ảnh hưởng của R14** (21/10/2026): R14 chạy **thật** LIMN end-to-end và sửa **ba** lỗi chặn đường
@@ -555,19 +555,61 @@ D6 do subagent đưa vào và **chính lượt chạy toàn bộ suite** phát h
 
 **Đã làm:** entry `tme` trong registry (pin `394aad79df2c104feb32a2c96132582012765062`), source
 vendored (379 file, `.git` lồng nhau đã bỏ, có `provenance.json`), wrapper `workbench/replay/tme.py`,
-adapter `TMEAdapter`, và **protocol riêng `fashioniq_val_split_ref_included`**.
+adapter `TMEAdapter`, và protocol **`fashioniq_original_split`**.
 
-**Vì sao cần protocol riêng:** `precompute_evaluation.py:83` chỉ mask reference khi
-`category == 'CIRR'` (comment: "only for cirr, delete the reference image from current query").
-Trên FashionIQ reference **vẫn là ứng viên** và gallery là toàn bộ split val theo category — không
-khớp `fashioniq_val_split` (loại reference, gallery pair-union) cũng không khớp
-`fashioniq_original_split` (gallery train split). Khai riêng để một lượt chạy không bị báo dưới
-protocol có chính sách reference khác với cái nó thực thi.
+**Sửa lại lý do protocol (R19):** một revision trước đã tạo protocol riêng
+`fashioniq_val_split_ref_included` với lý do `fashioniq_original_split` dùng gallery **train split**.
+Lý do đó **sai**. Theo `workbench/docs/FASHIONIQ_PROTOCOL_PARITY.md` và source, họ
+`fashioniq_original_split` luôn được định nghĩa bằng **toàn bộ `image_splits/split.<category>.val.json`
+theo thứ tự file, reference ELIGIBLE**. TME dựng đúng cohort đó:
+`data.py:175-188` nạp `split.<cat>.val.json` vào `image_type_names[<cat>]` rồi
+`current_image_names` = danh sách đó; `precompute_evaluation.py:83` chỉ mask reference khi
+`category == 'CIRR'` (comment "only for cirr"), nên trên FashionIQ reference vẫn là ứng viên.
+Hai cohort **trùng nhau**, nên protocol mới là thừa và đã **bị xoá** khỏi registry thay vì được nối
+qua mọi consumer. ID cũ vẫn được chấp nhận như **alias** trong `src/evaluation/fashioniq.py` để các
+run record cũ đọc được thay vì lỗi.
 
 **Dòng paper (Table 2, FashionIQ validation, σ=0):** Dress R@10/R@50 **49.73/71.69**,
 Shirt **56.43/74.44**, Toptee **59.31/78.94**, Average **55.15/75.02**, AVG **65.09**.
 Paper dùng **best-validation checkpoint khi σ=0** và **final checkpoint khi σ>0** — lượt chạy phải
 nói rõ theo quy tắc nào.
+
+## 4d. TME — số đo thật (R19, 2026-10-24)
+
+Mọi số dưới đây **đo trên máy này**, không suy đoán:
+
+| Mục | Giá trị | Cách kiểm |
+|---|---|---|
+| Container Kaggle (FashionIQ 0%) | `archive.tar.gz`, magic `1f8b0800` | range probe: 302 → `storage.googleapis.com/.../bundle/archive.tar.gz` |
+| Member trong container | `best_model.pth`, 2 728 382 104 B | tar header đọc trực tiếp |
+| Weight đã trích, trên đĩa | `workbench/artifacts/checkpoints/tme/fashioniq_0_best_model.pth`, **2 728 382 104 B** | downloader thật, có verify + atomic publish |
+| sha256 local | `fea7fc08760dad1f5a66184ea7e65b45388f9781157cbd33a3b64db74103968a` | **hash LOCAL** — Kaggle không công bố checksum, nên không được gọi là checksum tác giả |
+| Cấu trúc weight | torch-zip, 862 entry, 860 tensor; `visual_encoder.*` 511 key, `Qformer.*` 336 key | `zipfile` + `torch.load(weights_only=True)` |
+| Môi trường | `workbench/envs/tme` Python 3.10.13, torch 2.1.2+cu121, torchvision 0.16.2+cu121 | `uv venv` + wheel index cu121 |
+| GPU thật trong interpreter đó | `RTX 3050 Laptop`, `sm_86`, `torch_cuda_version 12.1`, `allocated_tensor: true`, `computed: true` | `verify_gpu_runtime()` |
+| Feature cache cần | **10.47 GiB** (15 536 ảnh × 257 token × 1408 × **2 byte**) | dtype fp16 vì `precompute.py:37` dùng `autocast` và `create_eva_vit_g` mặc định `precision="fp16"` |
+| EVA-ViT-g | 2 025 249 237 B, **bắt buộc** | `eva_vit.py:446` `torch.load('weight/eva_vit_g.pth')` chạy trực tiếp trong constructor; đã chứng minh constructor chết ở file này |
+| BLIP-2 pretrain | 746 998 955 B, **KHÔNG bắt buộc** | `load_from_pretrained` không được gọi trên đường eval; đã chứng minh constructor không mở file này |
+| 20% noise | **`CHECKPOINT_UNAVAILABLE`** | tác giả chỉ công bố `fashioniq-0.0-best` và `cirr-0.0-best` |
+
+**Chưa chạy được end-to-end trên máy này**: 10.47 GiB feature + 2 025 249 237 B EVA vượt dung lượng
+trống. Preflight báo đúng cả hai, kèm số byte cần và dung lượng trống tại đích.
+
+### Lệnh trên PC
+
+```sh
+export WORKBENCH_TME_PYTHON=$PWD/workbench/envs/tme/bin/python
+export WORKBENCH_TME_ASSET_EVA_VIT_G=/path/to/eva_vit_g.pth
+mkdir -p workbench/third_party/TME/weight   # native đọc theo cwd của evaluator
+
+.venv/bin/python workbench/scripts/download_checkpoints.py --model tme --checkpoint fashioniq_0
+workbench/envs/tme/bin/python workbench/replay/tme.py \
+  --checkpoint-root workbench/artifacts/checkpoints/tme \
+  --dataset-root data/fashionIQ_dataset \
+  --source-root workbench/third_party/TME \
+  --checkpoint-id fashioniq_0 --preflight-only
+```
+
 
 **20% người dùng yêu cầu: `CHECKPOINT_UNAVAILABLE`.** Kaggle `charlesneilsucian/tme` chỉ có đúng hai
 instance công khai `fashioniq-0.0-best` và `cirr-0.0-best`. **Không** thay bằng 0%, **không** tự làm

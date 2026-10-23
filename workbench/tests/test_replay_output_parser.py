@@ -129,14 +129,25 @@ def test_models_without_a_wrapper_keep_reporting_the_honest_gap() -> None:
     """Models with no metric output must say so rather than borrow another model's parser.
 
     `dcnet` is no longer in this set: its evaluator prints fractions that the workbench now parses
-    (F09). The models below still produce nothing parseable — `tgcir` is preflight-only because its
-    archive mapping is unresolved, and `ptha_mtst` has no FashionIQ checkpoint at all.
+    (F09). `ptha_mtst` and `tme` left it too, once their own output contracts got parsers -- so the
+    set now holds only models that genuinely still produce nothing parseable (`tgcir` is
+    preflight-only because its archive mapping is unresolved).
+
+    The assertion for the remaining model is unchanged, and the two new models are asserted to be
+    PARSED rather than merely "not unavailable": a test that only checked the old string would pass
+    for a model whose parser silently returns nothing.
     """
-    for model_id in ("tgcir", "ptha_mtst"):
+    for model_id in ("tgcir",):
         result = extract_aggregate_metrics(model_id, replay_document(model_id), "", 0)
         assert result.extraction_status == "AGGREGATE_PARSER_UNAVAILABLE", (
             f"{model_id} borrowed a parser it does not have")
         assert result.parser_id is None
+    # A registered parser must not answer for output it cannot read: unrelated output is reported as
+    # unparsed with a reason, which is a DIFFERENT outcome from having no parser at all.
+    for model_id in ("ptha_mtst", "tme"):
+        result = extract_aggregate_metrics(model_id, "{}", "", 0)
+        assert result.extraction_status != "AGGREGATE_PARSER_UNAVAILABLE", (
+            f"{model_id} still reports a missing parser after one was registered")
 
 
 def test_the_model_specific_parsers_are_untouched() -> None:

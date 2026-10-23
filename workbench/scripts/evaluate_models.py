@@ -171,6 +171,24 @@ def _benchmark_gate_verdict(plan, extraction, return_code: int) -> dict[str, Any
         # certify an official reproduction of the paper's experiment.
         "checkpoint_mapping_verified": plan.checkpoint_mapping_verified,
     }
+    # A cross-dataset TRANSFER is not a reproduction of the row it is compared against, whatever its
+    # numbers are. The comparison stays visible as context, but it must not be able to mint a
+    # reproduction PASS: the checkpoint was trained on a DIFFERENT dataset than the benchmark row, so
+    # a close match is a coincidence of scale and a far one is expected. The condition is read from
+    # the plan's recorded training dataset rather than from the model id, so it follows the artifact.
+    transfer_training_dataset = (getattr(plan, "variant_provenance", None) or {}).get(
+        "checkpoint_training_dataset")
+    if transfer_training_dataset and transfer_training_dataset != "FashionIQ":
+        return {
+            "verdict": "CONTEXT_ONLY_DIFFERENT_TRAINING_CONDITION",
+            "official_reproduction": False,
+            "selection_reason": (
+                f"the selected checkpoint was trained on {transfer_training_dataset} while this "
+                "reference row describes a FashionIQ-trained model; the comparison is recorded as "
+                "context, never as a reproduction"),
+            "checkpoint_training_dataset": transfer_training_dataset,
+            "evaluation_dataset": "FashionIQ",
+        }
     try:
         reference, reason = benchmarks.select_reference(
             plan.model_id,
@@ -305,7 +323,8 @@ def list_candidates(items: Iterable[tuple[dict, dict]]) -> None:
         print(f"[OK] {model['model_id']} / {checkpoint['checkpoint_id']}: protocol={model['native_protocol'] or 'unavailable'} command={readiness}")
 
 
-def _variant_provenance(model: dict, config: WorkbenchConfig) -> dict[str, Any]:
+def _variant_provenance(model: dict, config: WorkbenchConfig,
+                        checkpoint: dict[str, Any] | None = None) -> dict[str, Any]:
     """What this run substitutes or repairs, from the preflight's own evidence.
 
     Only declared facts count: a caption alias recorded in the download manifest whose bytes match
@@ -337,7 +356,7 @@ def _variant_provenance(model: dict, config: WorkbenchConfig) -> dict[str, Any]:
     except Exception:
         adaptation = None
     adapted_profile = None
-    if adaptation:
+    if adapted_profile:
         adapted_profile = {
             "runtime_adaptation": str(adaptation.get("target_compute_capability")),
             # The declared constraints this run actually verified against. A run under an
@@ -355,6 +374,11 @@ def _variant_provenance(model: dict, config: WorkbenchConfig) -> dict[str, Any]:
         "caption_alias_staged": bool(caption_aliases),
         "approved_source_patch": approved_patch,
         "adapted_runtime": adapted_profile,
+        # The dataset the SELECTED checkpoint was trained on, when the registry records it. A
+        # cross-dataset transfer run must be identifiable from the plan alone, so the benchmark gate
+        # reads it here instead of inferring it from the model id: a FashionIQ run and a CIRR-trained
+        # checkpoint evaluated on FashionIQ are different experiments even for the same model.
+        "checkpoint_training_dataset": (checkpoint or {}).get("checkpoint_training_dataset"),
         "warnings": warnings,
     }
 
@@ -476,7 +500,7 @@ def guarded_plan(model: dict, checkpoint: dict, protocol: str, dataset_root: Pat
         checkpoint_training_noise_pct=checkpoint.get("checkpoint_training_noise_pct"),
         checkpoint_mapping_verified=checkpoint.get("checkpoint_mapping_status") == "VERIFIED_METADATA",
         synthetic_source=bool(model.get("synthetic_source")),
-        variant_provenance=_variant_provenance(model, config),
+        variant_provenance=_variant_provenance(model, config, checkpoint),
     ), []
 
 
@@ -2075,6 +2099,14 @@ def execute(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str | None = 
         code,
         paper_metrics=plan.paper_metrics,
         executed_config=read_executed_config(plan),
+        # The plan is the request. Passing its identity lets the parser REFUSE a document that
+        # describes a different checkpoint or protocol than the one this run asked for: a stale or
+        # foreign stdout file otherwise parses perfectly and is reported as this run's result.
+        expected_checkpoint_id=getattr(plan, "checkpoint_id", None),
+        # `EvaluationPlan` names this field `protocol`, not `protocol_id` (see the dataclass at the
+        # top of this module). Reading it as `protocol_id` silently passed None, which left the
+        # protocol identity UNCHECKED while looking as if it were being verified.
+        expected_protocol_id=getattr(plan, "protocol", None),
     )
     # A model the registry marks as synthetic has no published output format, so its evaluator's own
     # JSON aggregate is the evidence. This is an explicit registry declaration, not a guess from the

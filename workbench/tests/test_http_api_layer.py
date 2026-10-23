@@ -1323,19 +1323,16 @@ def test_the_served_receipt_carries_the_fields_a_promotion_needs(api) -> None:
 
 
 def test_an_annotation_must_name_a_protocol_and_a_canonical_query(api) -> None:
-    """A note is keyed by (query, protocol) and served back by both, so both must be validated.
-
-    An independent audit found that any string was accepted: a note could be stored under a protocol
-    that does not exist, or under a query id no run could contain, and then read back as though it
-    were about this workbench's data.
-    """
+    """TME's registered native protocol and canonical query identity must be accepted."""
 
     def put(payload: dict) -> tuple[int, dict]:
         status, _, body = asgi_request(api.app, "PUT", "/api/annotations",
                                        json.dumps(payload).encode())
         return status, json.loads(body or b"{}")
 
-    good = {"query_id": "dress:0:ref_img:target_img", "protocol_id": "fashioniq_val_split",
+    from workbench.backend.registry import load_registry
+    tme = next(model for model in load_registry()["models"] if model["model_id"] == "tme")
+    good = {"query_id": "dress:0:ref_img:target_img", "protocol_id": tme["native_protocol"],
             "labels": ["other"], "note": "ok"}
     assert put(good)[0] == 200
 

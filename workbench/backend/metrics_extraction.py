@@ -21,6 +21,12 @@ class MetricExtractionResult:
     parity_status: str  # "PARITY_VERIFIED", "PARITY_MISMATCH", "PARITY_NOT_EVALUATED", "PARSER_UNAVAILABLE"
     metric_source: str | None
     raw_output: dict[str, Any] | None = None
+    refusal_reason: str | None = None
+    expected_checkpoint_id: str | None = None
+    expected_protocol_id: str | None = None
+    identity_status: str | None = None
+    identity_checks: dict[str, dict[str, Any]] | None = None
+    context_label: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -33,6 +39,9 @@ class MetricExtractionResult:
 _WORKBENCH_REPLAY_PARSED_MODELS = {
     "pair", "encoder", "clvc_net", "intent", "habit", "conesep", "airknow",
 }
+
+
+
 
 
 def _check_parity(
@@ -72,13 +81,12 @@ def _check_parity(
 
 
 def _is_valid_recall(val: Any) -> bool:
-    if isinstance(val, bool):
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
         return False
-    if not isinstance(val, (int, float)):
+    try:
+        return math.isfinite(float(val)) and 0.0 <= float(val) <= 100.0
+    except (OverflowError, ValueError):
         return False
-    if not math.isfinite(val):
-        return False
-    return 0.0 <= float(val) <= 100.0
 
 
 def parse_limn_output(stdout_text: str, paper_metrics: dict[str, float | None] | None = None) -> MetricExtractionResult:
@@ -581,6 +589,356 @@ def parse_workbench_replay_output(model_id: str, stdout_text: str,
         raw_output=document,
     )
 
+
+class _DuplicateAggregateKey(ValueError):
+    pass
+
+
+def _aggregate_document(stdout_text: str) -> dict[str, Any] | None:
+    def unique_keys(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise _DuplicateAggregateKey(key)
+            result[key] = value
+        return result
+
+    try:
+        candidate = json.loads(stdout_text.strip(), object_pairs_hook=unique_keys)
+        if isinstance(candidate, dict):
+            return candidate
+    except _DuplicateAggregateKey:
+        raise
+    except (TypeError, ValueError):
+        pass
+    decoder = json.JSONDecoder(object_pairs_hook=unique_keys)
+    for start, char in enumerate(stdout_text):
+        if char != "{":
+            continue
+        try:
+            candidate, _ = decoder.raw_decode(stdout_text[start:])
+        except _DuplicateAggregateKey:
+            raise
+        except ValueError:
+            continue
+        if isinstance(candidate, dict):
+            return candidate
+    return None
+
+
+def _identity_evidence(model_id: str, document: dict[str, Any] | None,
+                       expected_checkpoint_id: str | None,
+                       expected_protocol_id: str | None) -> tuple[str, dict[str, dict[str, Any]]]:
+    """Compare IDs in evaluator JSON; invocation stdout/stderr digest binds output to the run."""
+    document = document or {}
+    observed_checkpoint = document.get("checkpoint_id") or _first_checkpoint(document)
+    observed_protocol = document.get("protocol_id", document.get("protocol"))
+    checks = {
+        "model_id": {"expected": model_id, "observed": document.get("model_id"),
+                     "status": "MATCHED" if model_id == document.get("model_id") else "MISMATCH"},
+        "checkpoint_id": {"expected": expected_checkpoint_id, "observed": observed_checkpoint,
+                           "status": "NOT_CHECKED" if expected_checkpoint_id is None else "MATCHED"},
+        "protocol_id": {"expected": expected_protocol_id, "observed": observed_protocol,
+                        "status": "NOT_CHECKED" if expected_protocol_id is None else "MATCHED"},
+        "run_id": {"expected": None, "observed": document.get("run_id"),
+                   "status": "PRESENT_BUT_NOT_REQUEST_BOUND" if document.get("run_id") else "NOT_IN_DOCUMENT"},
+    }
+    for key in ("checkpoint_id", "protocol_id"):
+        check = checks[key]
+        if check["expected"] is not None:
+            check["status"] = "MATCHED" if check["expected"] == check["observed"] else "MISMATCH"
+    run_status = "RUN_ID_NOT_IN_DOCUMENT" if checks["run_id"]["status"] == "NOT_IN_DOCUMENT" else "RUN_ID_NOT_REQUEST_BOUND"
+    if expected_checkpoint_id is not None and expected_protocol_id is not None:
+        status = f"IDENTITY_CHECKED_CHECKPOINT_PROTOCOL_{run_status}"
+    elif expected_checkpoint_id is not None or expected_protocol_id is not None:
+        status = "IDENTITY_MODEL_CHECKED_REQUEST_ID_PARTIALLY_CHECKED_RUN_ID_NOT_IN_DOCUMENT"
+    else:
+        status = "IDENTITY_MODEL_CHECKED_REQUEST_ID_NOT_CHECKED_RUN_ID_NOT_IN_DOCUMENT"
+    return status, checks
+
+
+def _first_checkpoint(document: dict[str, Any]) -> str | None:
+    records = document.get("results") or []
+    return next((record.get("checkpoint_id") for record in records
+                 if isinstance(record, dict)), None)
+
+
+def _aggregate_refusal(parser_id: str, reason: str, document: dict[str, Any] | None,
+                       expected_checkpoint_id: str | None,
+                       expected_protocol_id: str | None,
+                       context_label: str | None = None) -> MetricExtractionResult:
+    model_id = "tme" if parser_id == "tme_replay_json" else "ptha_mtst"
+    identity_status, identity_checks = _identity_evidence(
+        model_id, document, expected_checkpoint_id, expected_protocol_id)
+    return MetricExtractionResult(
+        extraction_status="EVALUATION_COMPLETED_METRICS_UNPARSED",
+        parser_id=parser_id,
+        parser_version=1,
+        observed_metrics=None,
+        category_metrics=None,
+        parity_status="PARITY_NOT_EVALUATED",
+        metric_source="stdout",
+        raw_output=document,
+        refusal_reason=reason,
+        expected_checkpoint_id=expected_checkpoint_id,
+        expected_protocol_id=expected_protocol_id,
+        identity_status=identity_status,
+        identity_checks=identity_checks,
+        context_label=context_label,
+    )
+
+def _validate_aggregate_rows(
+    records: list,
+    *,
+    model_id: str,
+    protocol_id: str,
+    checkpoint_id: str | None,
+    expected_checkpoint_id: str | None,
+    expected_protocol_id: str | None,
+    parser_id: str,
+    document: dict[str, Any],
+    label: str | None = None,
+) -> MetricExtractionResult:
+    categories = FASHIONIQ_CATEGORIES
+    by_category: dict[str, dict[str, Any]] = {}
+    for record in records:
+        if not isinstance(record, dict):
+            return _aggregate_refusal(parser_id, "invalid_category_record", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+        category = record.get("category")
+        if not isinstance(category, str):
+            return _aggregate_refusal(parser_id, "category_set_mismatch", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+        if category in by_category:
+            return _aggregate_refusal(parser_id, "duplicate_category", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+        by_category[category] = record
+    if set(by_category) != set(categories):
+        return _aggregate_refusal(parser_id, "category_set_mismatch", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+
+    for category, record in by_category.items():
+        if not isinstance(record.get("model_id"), str) or record.get("model_id") != model_id:
+            return _aggregate_refusal(parser_id, "model_identity_mismatch", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+        if not isinstance(record.get("protocol"), str) or record.get("protocol") != protocol_id:
+            return _aggregate_refusal(parser_id, "protocol_identity_mismatch", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+        if not isinstance(record.get("checkpoint_id"), str) or record.get("checkpoint_id") != checkpoint_id:
+            return _aggregate_refusal(parser_id, "checkpoint_identity_mismatch", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+        if record.get("complete") is not True:
+            return _aggregate_refusal(parser_id, "partial_category", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+    if expected_checkpoint_id is not None and checkpoint_id != expected_checkpoint_id:
+        return _aggregate_refusal(parser_id, "checkpoint_request_mismatch", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+    if expected_protocol_id is not None and protocol_id != expected_protocol_id:
+        return _aggregate_refusal(parser_id, "protocol_request_mismatch", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+
+    category_metrics: dict[str, dict[str, float | None]] = {}
+    for category in categories:
+        record = by_category[category]
+        r10, r50 = record.get("r10"), record.get("r50")
+        if not (_is_valid_recall(r10) and _is_valid_recall(r50)):
+            return _aggregate_refusal(parser_id, "invalid_recall", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+        if "r1" in record and not _is_valid_recall(record["r1"]):
+            return _aggregate_refusal(parser_id, "invalid_recall", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+        category_metrics[category] = {"r10": float(r10), "r50": float(r50)}
+
+    r10 = sum(category_metrics[c]["r10"] for c in categories) / len(categories)
+    r50 = sum(category_metrics[c]["r50"] for c in categories) / len(categories)
+    mean = (r10 + r50) / 2.0
+    identity_status, identity_checks = _identity_evidence(
+        model_id, document, expected_checkpoint_id, expected_protocol_id)
+    return MetricExtractionResult(
+        extraction_status="EXTRACTED_VERIFIED",
+        parser_id=parser_id,
+        parser_version=1,
+        observed_metrics={"r10": round(r10, 4), "r50": round(r50, 4), "mean": round(mean, 4)},
+        category_metrics=category_metrics,
+        parity_status="PARITY_NOT_EVALUATED",
+        metric_source="stdout",
+        raw_output=document,
+        expected_checkpoint_id=expected_checkpoint_id,
+        expected_protocol_id=expected_protocol_id,
+        identity_status=identity_status,
+        identity_checks=identity_checks,
+        context_label=label,
+    )
+
+
+# The wrappers emit different native schemas. Parse TME's nested ReplayResult records and PTHA's
+# transfer document directly; normalization would invent run-contract fields and blur PTHA's context.
+def parse_tme_output(stdout_text: str, paper_metrics: dict[str, float | None] | None = None,
+                     expected_checkpoint_id: str | None = None,
+                     expected_protocol_id: str | None = None) -> MetricExtractionResult:
+    """Read the TME wrapper's nested ReplayResult list, not a flat substitute."""
+    parser_id = "tme_replay_json"
+    try:
+        document = _aggregate_document(stdout_text)
+    except _DuplicateAggregateKey:
+        return _aggregate_refusal(parser_id, "duplicate_json_key", None,
+                                  expected_checkpoint_id, expected_protocol_id)
+    if document is None:
+        return _aggregate_refusal(parser_id, "malformed_or_missing_document", None,
+                                  expected_checkpoint_id, expected_protocol_id)
+    if document.get("model_id") != "tme":
+        return _aggregate_refusal(parser_id, "model_identity_mismatch", document,
+                                  expected_checkpoint_id, expected_protocol_id)
+    protocol_id = document.get("protocol")
+    if not isinstance(protocol_id, str) or not protocol_id:
+        return _aggregate_refusal(parser_id, "protocol_identity_mismatch", document,
+                                  expected_checkpoint_id, expected_protocol_id)
+    records = document.get("results")
+    if not isinstance(records, list):
+        return _aggregate_refusal(parser_id, "partial_output", document,
+                                  expected_checkpoint_id, expected_protocol_id)
+    if any(not isinstance(record, dict) or not isinstance(record.get("checkpoint_id"), str)
+           or not record.get("checkpoint_id") for record in records):
+        return _aggregate_refusal(parser_id, "checkpoint_identity_mismatch", document,
+                                  expected_checkpoint_id, expected_protocol_id)
+    checkpoints = {record["checkpoint_id"] for record in records}
+    if len(checkpoints) != 1:
+        return _aggregate_refusal(parser_id, "checkpoint_identity_mismatch", document,
+                                  expected_checkpoint_id, expected_protocol_id)
+    checkpoint_id = next(iter(checkpoints))
+    result = _validate_aggregate_rows(
+        records, model_id="tme", protocol_id=protocol_id, checkpoint_id=checkpoint_id,
+        expected_checkpoint_id=expected_checkpoint_id, expected_protocol_id=expected_protocol_id,
+        parser_id=parser_id, document=document)
+    if result.extraction_status != "EXTRACTED_VERIFIED":
+        return result
+    aggregate = document.get("aggregate")
+    if not isinstance(aggregate, dict) or aggregate.get("complete") is not True:
+        return _aggregate_refusal(parser_id, "partial_output", document,
+                                  expected_checkpoint_id, expected_protocol_id)
+    for key, metric in (("macro_r10", "r10"), ("macro_r50", "r50"), ("macro_mean", "mean")):
+        value = aggregate.get(key)
+        if not _is_valid_recall(value):
+            return _aggregate_refusal(parser_id, "invalid_macro", document,
+                                      expected_checkpoint_id, expected_protocol_id)
+        if abs(float(value) - result.observed_metrics[metric]) > 0.05:
+            return _aggregate_refusal(parser_id, "macro_mismatch", document,
+                                      expected_checkpoint_id, expected_protocol_id)
+    identity_status, identity_checks = _identity_evidence(
+        "tme", document, expected_checkpoint_id, expected_protocol_id)
+    return MetricExtractionResult(
+        extraction_status=result.extraction_status, parser_id=result.parser_id,
+        parser_version=result.parser_version, observed_metrics=result.observed_metrics,
+        category_metrics=result.category_metrics,
+        parity_status=_check_parity(result.observed_metrics, paper_metrics),
+        metric_source=result.metric_source, raw_output=document,
+        expected_checkpoint_id=expected_checkpoint_id, expected_protocol_id=expected_protocol_id,
+        identity_status=identity_status, identity_checks=identity_checks)
+
+
+def parse_ptha_mtst_output(stdout_text: str,
+                           expected_checkpoint_id: str | None = None,
+                           expected_protocol_id: str | None = None) -> MetricExtractionResult:
+    """Parse native PTHA transfer JSON; paper numbers remain contextual, never parity evidence."""
+    parser_id = "ptha_mtst_transfer_json"
+    try:
+        document = _aggregate_document(stdout_text)
+    except _DuplicateAggregateKey:
+        return _aggregate_refusal(parser_id, "duplicate_json_key", None,
+                                  expected_checkpoint_id, expected_protocol_id)
+    if document is None:
+        return _aggregate_refusal(parser_id, "malformed_or_missing_document", None,
+                                  expected_checkpoint_id, expected_protocol_id)
+    if document.get("model_id") != "ptha_mtst":
+        return _aggregate_refusal(parser_id, "model_identity_mismatch", document,
+                                  expected_checkpoint_id, expected_protocol_id)
+    protocol_id = document.get("protocol_id")
+    checkpoint_id = document.get("checkpoint_id")
+    label = document.get("label")
+    if (not isinstance(protocol_id, str) or not protocol_id
+            or not isinstance(checkpoint_id, str) or not checkpoint_id):
+        return _aggregate_refusal(parser_id, "partial_output", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+    if (document.get("train_dataset") != "CIRR"
+            or document.get("evaluation_dataset") != "FashionIQ"
+            or not isinstance(label, str) or not label.strip()
+            or not isinstance(document.get("checkpoint_sha256"), str)
+            or re.fullmatch(r"[0-9a-fA-F]{64}", document["checkpoint_sha256"]) is None):
+        return _aggregate_refusal(parser_id, "partial_output", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+    if not isinstance(protocol_id, str) or not isinstance(checkpoint_id, str):
+        return _aggregate_refusal(parser_id, "partial_output", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+    if expected_checkpoint_id is not None and checkpoint_id != expected_checkpoint_id:
+        return _aggregate_refusal(parser_id, "checkpoint_request_mismatch", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+    if expected_protocol_id is not None and protocol_id != expected_protocol_id:
+        return _aggregate_refusal(parser_id, "protocol_request_mismatch", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+    category_rows = document.get("category_metrics")
+    if not isinstance(category_rows, dict):
+        return _aggregate_refusal(parser_id, "partial_output", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+    records = []
+    for category, values in category_rows.items():
+        if not isinstance(values, dict):
+            return _aggregate_refusal(parser_id, "invalid_category_record", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+        records.append({"category": category, "model_id": "ptha_mtst",
+                        "checkpoint_id": checkpoint_id, "protocol": protocol_id,
+                        "r10": values.get("r10"), "r50": values.get("r50"),
+                        "complete": True})
+    result = _validate_aggregate_rows(
+        records, model_id="ptha_mtst", protocol_id=protocol_id, checkpoint_id=checkpoint_id,
+        expected_checkpoint_id=expected_checkpoint_id, expected_protocol_id=expected_protocol_id,
+        parser_id=parser_id, document=document, label=label)
+    if result.extraction_status != "EXTRACTED_VERIFIED":
+        return result
+    declared = document.get("macro_metrics")
+    if not isinstance(declared, dict):
+        return _aggregate_refusal(parser_id, "partial_output", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+    for key in ("r10", "r50", "mean"):
+        value = declared.get(key)
+        if not _is_valid_recall(value):
+            return _aggregate_refusal(parser_id, "invalid_macro", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+        if abs(float(value) - result.observed_metrics[key]) > 0.05:
+            return _aggregate_refusal(parser_id, "macro_mismatch", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+    context = document.get("paper_fashioniq_context_only")
+    if not isinstance(context, dict):
+        return _aggregate_refusal(parser_id, "partial_output", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+    if (context.get("training_condition") != "FashionIQ_MTST"
+            or not isinstance(context.get("mismatch"), str)
+            or "not reproduction" not in context["mismatch"].casefold()
+            or "exploratory" not in label.casefold()):
+        return _aggregate_refusal(parser_id, "invalid_exploratory_context", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+    differences = context.get("differences_transfer_minus_paper")
+    if not isinstance(differences, dict):
+        return _aggregate_refusal(parser_id, "invalid_exploratory_context", document,
+                                  expected_checkpoint_id, expected_protocol_id, label)
+    for key in ("r10", "r50", "mean"):
+        paper_value = context.get(key)
+        difference = differences.get(key)
+        if (not _is_valid_recall(paper_value) or isinstance(difference, bool)
+                or not isinstance(difference, (int, float))
+                or not math.isfinite(float(difference))
+                or abs(float(difference) - (result.observed_metrics[key] - float(paper_value))) > 0.05):
+            return _aggregate_refusal(parser_id, "invalid_exploratory_context", document,
+                                      expected_checkpoint_id, expected_protocol_id, label)
+    identity_status, identity_checks = _identity_evidence(
+        "ptha_mtst", document, expected_checkpoint_id, expected_protocol_id)
+    return MetricExtractionResult(
+        extraction_status=result.extraction_status, parser_id=result.parser_id,
+        parser_version=result.parser_version, observed_metrics=result.observed_metrics,
+        category_metrics=result.category_metrics, parity_status="PARITY_NOT_EVALUATED",
+        metric_source=result.metric_source, raw_output=document,
+        expected_checkpoint_id=expected_checkpoint_id, expected_protocol_id=expected_protocol_id,
+        identity_status=identity_status, identity_checks=identity_checks, context_label=label)
+
 def _dcnet_category_order(config: dict[str, Any] | None) -> tuple[str, ...] | None:
     """The categories the evaluator iterated, in the order it printed them.
 
@@ -815,12 +1173,15 @@ def extract_aggregate_metrics(
     return_code: int,
     paper_metrics: dict[str, float | None] | None = None,
     executed_config: dict[str, Any] | None = None,
+    *,
+    expected_checkpoint_id: str | None = None,
+    expected_protocol_id: str | None = None,
 ) -> MetricExtractionResult:
     """Model-specific source-backed aggregate metric extraction.
 
-    `executed_config` is the `<run_dir>/config.json` the evaluator actually read. Only the DCNet
-    parser needs it, and it needs it because that evaluator prints six anonymous `comb:` cells whose
-    category order lives in that file: without it the parser can only refuse, never guess.
+    ``executed_config`` is the `<run_dir>/config.json` the evaluator actually read. Optional
+    checkpoint/protocol expectations are compared when provided; when omitted, identity is
+    ``NOT_CHECKED``, never implied.
     """
     if return_code != 0:
         return MetricExtractionResult(
@@ -843,6 +1204,12 @@ def extract_aggregate_metrics(
         return parse_dcnet_output(stdout_text, paper_metrics, executed_config)
     if model_id == "hint":
         return parse_hint_output(stdout_text, paper_metrics)
+    if model_id == "tme":
+        return parse_tme_output(stdout_text, paper_metrics, expected_checkpoint_id,
+                                 expected_protocol_id)
+    if model_id == "ptha_mtst":
+        return parse_ptha_mtst_output(stdout_text, expected_checkpoint_id,
+                                      expected_protocol_id)
     if model_id in _WORKBENCH_REPLAY_PARSED_MODELS:
         return parse_workbench_replay_output(model_id, stdout_text, paper_metrics)
     if model_id == "sprc":

@@ -336,3 +336,115 @@ contracts:
   deterministic_status: DETERMINISTIC_AT_EVALUATION
   automation_policy: MANUAL_REQUIRED
   notes: The PAIR README documents no resize step; this contract makes the declared manual_ilearn_resized contract effective instead of inert (final audit C6). The caption correction dictionaries the pinned data/datasets.py requires are operator-supplied and unverified; they are deliberately NOT declared as generated artifacts because no pinned source directory provides them.
+
+- preparation_id: tme_fashioniq
+  source_family: TME (CVPR25) FashionIQ validation
+  raw_inputs:
+  - name: FashionIQ validation captions and split files
+    kind: raw_benchmark
+    scope: fashioniq_root
+    paths:
+    - captions/cap.dress.val.json
+    - captions/cap.shirt.val.json
+    - captions/cap.toptee.val.json
+    - image_splits/split.dress.val.json
+    - image_splits/split.shirt.val.json
+    - image_splits/split.toptee.val.json
+  generated_artifacts:
+  - name: native FashionIQ validation image features
+    kind: generated_repo_artifact
+    scope: fashioniq_root
+    paths:
+    - features/FashionIQ
+    generator: tme_precompute_features
+    cwd: evaluator
+    parameters:
+      source_script: src/precompute.py
+      source_evidence: >-
+        the pinned `data.py:250-255` `load_image_features()` opens
+        `./features/FashionIQ/<split>_images.pt` and `./features/FashionIQ/<split>_name_to_idx.json`
+        relative to the evaluator's working directory, and `src/precompute.py` is the pinned script
+        that writes exactly those two files; the wrapper generates them through the same native path
+        rather than reimplementing the transform
+      split: val
+      layout: fashioniq_val_split_file_order
+      # The native `vit_encode` output for this backbone: 257 tokens (CLS + 256 patches) x 1408
+      # channels, float32. Declared so the required cache size is DERIVED (gallery image count from
+      # the ordered split JSON, times tokens x width x dtype) instead of hard-coded, and so the
+      # derived figure stays true if the split or the backbone changes.
+      tokens_per_image: 257
+      feature_width: 1408
+      # fp16, not float32: the pinned precompute wraps `vit_encode` in `torch.cuda.amp.autocast()` and
+      # `create_eva_vit_g` runs `convert_weights_to_fp16(model)` under its default `precision="fp16"`
+      # (`eva_vit.py:426-455`), then saves `images_embes.cpu()` with no dtype conversion. A float32
+      # declaration would have OVERSTATED the requirement by 2x (20.94 GiB instead of a 10.47 GiB lower
+      # bound) from the metadata alone, which is the kind of error that makes an operator free a disk
+      # they did not have to.
+      feature_dtype: float16
+  external_assets:
+  - name: BLIP-2 pretrain weights
+    kind: model_weight
+    state: NOT_REQUIRED_ON_THIS_PATH
+    # NOT required, and this was verified rather than assumed. `blip2.py:85-89` contains the only
+    # local-path redirection for this file, and that code is inside `load_from_pretrained`, which the
+    # evaluation path never calls: `from_config` ends with `load_checkpoint_from_config`, whose
+    # `load_finetuned` branch loads from the SELECTED checkpoint and whose `load_pretrained=True`
+    # default is guarded by `assert "Found load_finetuned is False, but pretrain_path is None."` --
+    # reading `pretrain_path` where the author meant `assert pretrain_path is not None`, so a missing
+    # `pretrained` key raises TypeError. Either way `load_from_pretrained` is unreachable here, and
+    # the selected TME checkpoint already carries the visual encoder (511 `visual_encoder.*` keys).
+    # Confirmed empirically: constructing `blip2_cir_image_diff_features` with no base weights present
+    # fails at `FileNotFoundError: weight/eva_vit_g.pth` -- the EVA file -- and never at this one.
+    # Requiring it would have sent an operator to fetch 713 MB no code path opens.
+    required_for_evaluation: false
+    required_for_preparation: false
+    expected_local_location: null
+    location_env_var: WORKBENCH_TME_ASSET_BLIP2
+    expected_sha256: null
+    # Observed on the live object with a HEAD request this round, for reference only.
+    expected_size_bytes: 746998955
+    source: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth
+    optional: true
+    notes: >-
+      Kept as a declared, obtainable asset so the record is complete and the URL stays pinned; it is
+      NOT a precondition for a FashionIQ evaluation of this checkpoint.
+  - name: EVA-ViT-g backbone weights
+    kind: model_weight
+    state: REQUIRED
+    required_for_evaluation: true
+    required_for_preparation: false
+    expected_local_location: null
+    location_env_var: WORKBENCH_TME_ASSET_EVA_VIT_G
+    expected_sha256: null
+    # Same source of truth as the BLIP-2 row above: the object's own HEAD response.
+    expected_size_bytes: 2025249237
+    source: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/eva_vit_g.pth
+    optional: false
+    notes: >-
+      Genuinely required and genuinely file-only: `create_eva_vit_g` (`eva_vit.py:446`) executes
+      `torch.load('weight/eva_vit_g.pth', ...)` directly in the constructor with the upstream URL
+      commented out, so no implicit downloader can supply it. This is the file the model constructor
+      dies on when absent (verified by running the constructor), which is why it is staged under the
+      evaluator's cwd as `weight/eva_vit_g.pth`.
+  - name: bert-base-uncased tokenizer
+    kind: tokenizer
+    state: REQUIRED
+    required_for_evaluation: true
+    required_for_preparation: false
+    expected_local_location: null
+    location_env_var: null
+    cache_path_suffix: hub/bert-base-uncased
+    expected_sha256: null
+    source: https://huggingface.co/bert-base-uncased
+    optional: false
+    notes: >-
+      The pinned text processor loads this tokenizer; it is a small Hugging Face cache entry rather
+      than a checkpoint-sized artifact.
+  deterministic_status: UNKNOWN
+  automation_policy: MANUAL_REQUIRED
+  notes: >-
+    TME's native gallery is the complete ordered `image_splits/split.<category>.val.json` with the
+    reference eligible, and its evaluation additionally requires the precomputed validation image
+    features. Preflight reports the feature files and the base weights as explicit blockers instead
+    of letting a run reach a long forward pass and die there; the wrapper generates the features
+    through the pinned `src/precompute.py` path.

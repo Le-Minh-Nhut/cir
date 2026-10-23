@@ -41,6 +41,11 @@ def test_doctor_prepare_and_runtime_share_dataset_and_model_blockers(monkeypatch
         checkpoint = deepcopy(model["checkpoint_variants"][0])
         checkpoint["checkpoint_mapping_status"] = "VERIFIED_METADATA"
         checkpoint["expected_sha256"] = None
+        # `b"fixture"` is 7 bytes, so a registry-declared size would make every consumer report the
+        # artifact missing and this test would compare blocker SETS that all carry the same spurious
+        # entry. Closing the declared size to the fixture keeps the comparison about cross-consumer
+        # AGREEMENT, which is what it asserts.
+        checkpoint["expected_size_bytes"] = len(b"fixture")
         model["checkpoint_variants"] = [checkpoint]
         model["checkpoint_bundles"] = []
         artifact = checkpoint_path(model_id, checkpoint, config.WORKBENCH_CHECKPOINT_ROOT)

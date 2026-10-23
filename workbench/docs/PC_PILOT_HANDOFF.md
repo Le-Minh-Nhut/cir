@@ -11,17 +11,21 @@ hoặc mức fixture.
 
 **`LIMN_MEASURED`** — LIMN đã chạy thật trên checkpoint tác giả, dữ liệu tác giả và GPU thật, và số đo
 khớp paper trong 0.3 điểm. Per-query đã publish và hiển thị được trên UI.
-**`SECOND_MODEL_PENDING`** — chưa có model thứ hai, nên phân tích cross-model chưa chạy được.
-**`TARGET_GPU_PENDING`** — lượt đo này trên `sm_86`; GPU đích `sm_120` chưa được đo.
+**`TWO_MODELS_MEASURED`** — ENCODER là model thứ hai, đã chạy thật đủ 3 category trên GPU và có
+per-query parity (6/6 hit count khớp aggregate). Phân tích cross-model **đã chạy được** trên cặp
+LIMN–ENCODER ở cùng protocol `fashioniq_val_split`.
+**`TARGET_GPU_PENDING`** — các lượt đo này trên `sm_86`; GPU đích `sm_120` chưa được đo.
 
-**Chỉ LIMN sẵn sàng cho lượt PC pilot đầu tiên.** 15 model còn lại **chưa** sẵn sàng, nhưng **không
-phải vì thiếu wrapper**: `workbench/backend/adapters/models.py:294` đăng ký 15 adapter và
-`workbench/replay/` có 16 wrapper — mọi model trừ `ptha_mtst` đều có entrypoint chạy được. Lý do
-thật, theo từng model: `encoder` thiếu asset LAION ViT-B/32;
-`clip4cir_rn50x4_noft`/`clip4cir_rn50x4_fullft` cần đúng member của archive và cặp CLIP/Combiner khớp;
-`dcnet` thiếu run directory của tác giả; `tgcir` chỉ có preflight (chưa xác minh member của
-`TG-CIR.zip`); `sprc` chỉ có ViT-L public (variant khác paper); `clvc_net` cần map sáu file
-local/global; `pair` cần nhãn B1/B2 từ tác giả; `ptha_mtst` không có weight FashionIQ.
+**Sẵn sàng cho lượt PC pilot đầu tiên: LIMN (đã đo) và ENCODER (đã đo).** Trong 17 entry, 15 model
+còn lại **chưa** sẵn sàng, nhưng **không phải vì thiếu wrapper**: `workbench/backend/adapters/models.py`
+đăng ký adapter cho mọi entry và `workbench/replay/` có wrapper tương ứng. Lý do thật, theo từng model:
+`hint`/`conesep`/`intent` thiếu môi trường + dung lượng đĩa; `habit` READY nhưng cần ~12 GB cho cache;
+`airknow` chỉ có checkpoint 50%/80% nên điều kiện 20% **hoãn**; `clvc_net` cần map sáu file
+local/global; `dcnet` thiếu run directory của tác giả; `tgcir` chỉ có preflight (chưa xác minh member
+của `TG-CIR.zip`); `sprc` chờ file OneDrive người dùng tải tay; `pair` thiếu class `model_vssp`/
+`MHTransformer_dis` từ tác giả (không tồn tại ở mọi revision công khai); `ptha_mtst` và `tme` đã có
+source/environment/command nhưng thiếu dung lượng đĩa cho cache native (TME cần ≥10.47 GiB chỉ riêng
+feature cache) — xem §"TME: số đo thật" bên dưới.
 Ma trận đầy đủ: `workbench/docs/MODEL_STATUS_SPEC.md` §2.
 
 **Trạng thái 16 model (bảng chuẩn, bằng chứng + điều kiện chuyển trạng thái):**

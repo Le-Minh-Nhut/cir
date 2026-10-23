@@ -155,15 +155,11 @@ def test_protocol_c_is_stricter_than_a_and_b_at_every_shallow_k(tmp_path: Path, 
         assert while_eligible == 100.0
 
 
-def test_the_protocol_ids_are_the_three_declared_names() -> None:
-    """The workbench's own vocabulary: three ids, and no fourth invented for a special case."""
+def test_the_protocol_ids_are_exactly_the_registry_names() -> None:
+    from workbench.backend.registry import load_registry
     from workbench.backend.schemas.results import PROTOCOL_IDS
 
-    assert PROTOCOL_IDS == frozenset({
-        "fashioniq_original_split",
-        "fashioniq_full_gallery_ref_excluded",
-        "fashioniq_val_split",
-    })
+    assert PROTOCOL_IDS == frozenset(load_registry()["protocols"])
 
 
 def test_registry_membership_matches_the_declared_protocols() -> None:
@@ -182,23 +178,32 @@ def test_registry_membership_matches_the_declared_protocols() -> None:
 
 
 def test_protocol_literature_labels_have_exactly_one_owner() -> None:
-    """A second copy of this map drifted silently, so the contract is pinned.
-
-    `replay/publication.py` mapped `fashioniq_full_gallery_ref_excluded` to "val" while the schema
-    mapped it to "original". Neither consumer could notice, because each read its own module. The
-    schema owns the map (it validates the pairing); everyone else must import it, and the exact
-    three mappings are asserted here so a future divergence fails loudly.
-    """
+    """Schema labels match registry declarations; publication imports the schema mapping."""
     import workbench.backend.schemas.results as schema
     import workbench.replay.publication as publication
+    from workbench.backend.registry import load_registry
 
-    assert publication.PROTOCOL_LITERATURE_LABELS is schema.PROTOCOL_LITERATURE_LABELS, \
-        "publication must import the schema's map, not restate it"
+    assert publication.PROTOCOL_LITERATURE_LABELS is schema.PROTOCOL_LITERATURE_LABELS
     assert schema.PROTOCOL_LITERATURE_LABELS == {
-        "fashioniq_original_split": "original",
-        "fashioniq_full_gallery_ref_excluded": "original",
-        "fashioniq_val_split": "val",
+        protocol_id: protocol["literature_split_label"]
+        for protocol_id, protocol in load_registry()["protocols"].items()
     }
+
+
+def test_per_query_run_metadata_accepts_every_registry_protocol() -> None:
+    from workbench.backend.registry import load_registry
+    from workbench.backend.schemas.results import PROTOCOL_IDS, RunMetadata
+
+    for protocol_id, protocol in load_registry()["protocols"].items():
+        metadata = RunMetadata.model_validate({
+            "run_id": "run", "dataset": "FashionIQ", "split": "val",
+            "protocol_id": protocol_id,
+            "literature_split_label": protocol["literature_split_label"],
+            "evaluation_noise_pct": 0, "model_id": "model", "method_name": "method",
+            "checkpoint_id": "checkpoint", "top_k_saved": 1, "gallery_size": 1,
+            "timestamp": "2026-10-24T00:00:00Z",
+        })
+        assert metadata.protocol_id in PROTOCOL_IDS
 
 
 def test_no_other_module_restates_the_protocol_label_map() -> None:

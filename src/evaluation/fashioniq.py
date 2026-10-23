@@ -171,7 +171,13 @@ class FashionIQProtocol:
 FASHIONIQ_PROTOCOLS: dict[str, FashionIQProtocol] = {
     "fashioniq_original_split": FashionIQProtocol(
         protocol_id="fashioniq_original_split", gallery="full_split",
-        reference_excluded=False, aliases=("fashioniq_original",)),
+        reference_excluded=False,
+        # `fashioniq_val_split_ref_included` is kept as an ACCEPTED ALIAS, not as its own entry:
+        # it was briefly a registered protocol for TME, and any artifact, run record or caller that
+        # still names it means exactly this cohort -- the complete ordered val split with the
+        # reference eligible. Resolving it here keeps those records readable instead of turning each
+        # one into a hard error, while the registry declares only the three real families.
+        aliases=("fashioniq_original", "fashioniq_val_split_ref_included")),
     "fashioniq_full_gallery_ref_excluded": FashionIQProtocol(
         protocol_id="fashioniq_full_gallery_ref_excluded", gallery="full_split",
         reference_excluded=True),

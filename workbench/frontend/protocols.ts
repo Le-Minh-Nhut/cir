@@ -2,10 +2,6 @@ export const protocolDefinitions = [
   { id: "fashioniq_original_split", label: "FashionIQ - Original Split (Full Gallery, Reference Included)", defaultVisible: true },
   { id: "fashioniq_full_gallery_ref_excluded", label: "FashionIQ - Original Full Gallery, Reference Excluded", defaultVisible: false },
   { id: "fashioniq_val_split", label: "FashionIQ - Val Split (Pair-Union Gallery, Reference Excluded)", defaultVisible: true },
-  // TME's native evaluator keeps the reference eligible on FashionIQ (`precompute_evaluation.py:83`
-  // masks it only for CIRR), so its gallery is the full per-category validation split. Without this
-  // entry the selector cannot filter those runs and they would be invisible in the UI.
-  { id: "fashioniq_val_split_ref_included", label: "FashionIQ - Val Split (Full Category Gallery, Reference Included)", defaultVisible: false },
 ] as const;
 
 export type ProtocolId = (typeof protocolDefinitions)[number]["id"];
