@@ -292,7 +292,29 @@ models:
     reproduction_status: BLOCKED_NO_VERIFIED_FASHIONIQ_CHECKPOINT
     strict_clean_checkpoint_available: false
     notes: No author-linked FashionIQ fine-tuned checkpoint verified. CIRR pretraining evidence is not eligible. The gallery is the complete ordered validation split with the reference ELIGIBLE (validate_blip.py:44-51 builds labels against targets only and contains no reference mask, unlike the CIRR path at :258-260), which is what makes fashioniq_original_split its protocol.
-    checkpoint_variants: []
+    checkpoint_variants:
+      - checkpoint_id: cirr_transfer
+        filename: tuned_mtst_cirr.pt
+        # The released CIRR-trained checkpoint, verified against the Hub API: size 2720352973, LFS
+        # oid 1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f. It is registered as
+        # a TRANSFER variant, not a FashionIQ checkpoint: its training dataset is CIRR and the
+        # registry records that as a condition rather than implying the paper's FashionIQ row.
+        #
+        # `URL_VERIFIED` because the source resolves and its published digest is known; the run it
+        # enables stays labelled cross-dataset transfer, and `--transfer-cirr-to-fashioniq` is
+        # required, so it can never be mistaken for a reproduction by default.
+        download_url: https://huggingface.co/yinanzhou1/mtst_ptha/resolve/main/tuned_mtst_cirr.pt
+        source_type: author_huggingface
+        source_revision: main
+        checkpoint_training_dataset: CIRR
+        checkpoint_forwards_dataset: FashionIQ
+        transfer_condition: cross_dataset_transfer
+        checkpoint_training_noise_pct: null
+        evaluation_noise_pct: 0
+        expected_size_bytes: 2720352973
+        expected_sha256: 1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f
+        status: URL_VERIFIED
+        checkpoint_mapping_status: UNVERIFIED
   - model_id: habit
     environment:
       python_env_var: WORKBENCH_HABIT_PYTHON
