@@ -20,12 +20,23 @@ def test_val_split_union_order_and_reference_exclusion() -> None:
     assert gallery == ["ref-a", "target-a", "ref-b"]
     assert fashioniq_encoder_recall_at_k(torch.tensor([[0.99, 0.90, 0.80]]), ["target-a"], ["ref-a"], gallery, 1) == 100.0
 
-def test_registry_exposes_three_exact_workbench_protocols() -> None:
+def test_registry_exposes_the_workbench_protocols_exactly() -> None:
+    """The declared protocols, in order. A new one is a deliberate contract addition.
+
+    TME's evaluator masks the reference ONLY for CIRR (`precompute_evaluation.py:83` guards the mask
+    with `if category == 'CIRR'`), so on FashionIQ the gallery is the full per-category validation
+    split with the reference ELIGIBLE. That matches neither val protocol (pair-union gallery, reference
+    excluded) nor the original-split one (train-split gallery), so
+    `fashioniq_val_split_ref_included` was added rather than reporting a run under a reference policy
+    it does not follow.
+    """
     from workbench.backend.registry import load_registry
 
     models = {model["model_id"]: model for model in load_registry()["models"]}
 
-    assert list(load_registry()["protocols"]) == ["fashioniq_original_split", "fashioniq_full_gallery_ref_excluded", "fashioniq_val_split"]
+    assert list(load_registry()["protocols"]) == [
+        "fashioniq_original_split", "fashioniq_full_gallery_ref_excluded",
+        "fashioniq_val_split", "fashioniq_val_split_ref_included"]
     assert models["csmcir"]["native_protocol"] == "fashioniq_original_split"
     for model_id in ("airknow", "conesep", "habit", "intent"):
         assert models[model_id]["literature_split_label"] == "original"

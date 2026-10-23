@@ -167,10 +167,13 @@ def test_the_protocol_ids_are_the_three_declared_names() -> None:
 
 
 def test_registry_membership_matches_the_declared_protocols() -> None:
-    """Each registered model's native protocol must be one of the three, or explicitly none."""
+    """Each registered model's native protocol must be declared, or explicitly none."""
     from workbench.backend.registry import load_registry
 
-    declared = {"fashioniq_original_split", "fashioniq_full_gallery_ref_excluded", "fashioniq_val_split"}
+    # Read from the registry rather than keeping a second copy: `load_registry` already refuses an
+    # unknown protocol for any model, so a duplicated set here can only drift out of step with the
+    # authority it is meant to check.
+    declared = set(load_registry()["protocols"])
     for model in load_registry()["models"]:
         native = model.get("native_protocol")
         assert native is None or native in declared, (model["model_id"], native)

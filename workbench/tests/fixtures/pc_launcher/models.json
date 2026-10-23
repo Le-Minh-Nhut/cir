@@ -358,7 +358,27 @@
     "strict_clean_checkpoint_available": false,
     "notes": "No author-linked FashionIQ fine-tuned checkpoint verified. CIRR pretraining evidence is not eligible.",
     "checkpoint_variants": [],
-    "checkpoints": []
+    "checkpoints": [
+      {
+        "checkpoint_id": "cirr_transfer",
+        "filename": "tuned_mtst_cirr.pt",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "1c4dab86a9f66dfe10aff75b39790432eb6cc746cf27b6cfab74b66d93b7588f",
+        "official_sha256_known": true,
+        "official_sha256_match": true,
+        "mapping_verified": false,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/ptha_mtst/tuned_mtst_cirr.pt",
+        "blocking_reasons": []
+      }
+    ]
   },
   {
     "model_id": "habit",
@@ -1685,5 +1705,100 @@
       }
     ],
     "per_query_observer": "LIMN_QUERY_OBSERVER_V1"
+  },
+  {
+    "model_id": "tme",
+    "method_name": "TME",
+    "research_generation": "recent",
+    "publication_year": 2025,
+    "paper_title": "Learning with Noisy Triplet Correspondence for Composed Image Retrieval",
+    "paper_url": "https://openaccess.thecvf.com/content/CVPR2025/papers/Li_Learning_with_Noisy_Triplet_Correspondence_for_Composed_Image_Retrieval_CVPR_2025_paper.pdf",
+    "upstream_repo_url": "https://github.com/li-shuxian/TME",
+    "upstream_default_branch": "master",
+    "upstream_commit_sha": "394aad79df2c104feb32a2c96132582012765062",
+    "source_available": true,
+    "source_dir": "TME",
+    "fashioniq_layout": "fashioniq_standard",
+    "literature_split_label": "val",
+    "native_protocol": "fashioniq_val_split_ref_included",
+    "supported_protocols": [
+      "fashioniq_val_split_ref_included"
+    ],
+    "reported_r10": 55.15,
+    "reported_r50": 75.02,
+    "reported_mean": 65.09,
+    "reproduction_status": "NOT_RUN",
+    "command_status": "ENTRYPOINT_NOT_IMPLEMENTED",
+    "strict_clean_checkpoint_available": true,
+    "notes": "Paper Table 2 (FashionIQ validation, sigma=0): Dress R@10/R@50 49.73/71.69, Shirt 56.43/74.44, Toptee 59.31/78.94, Average 55.15/75.02, AVG 65.09. The paper reports the BEST-validation checkpoint when sigma=0 and the FINAL checkpoint when sigma>0, so a run must state which rule it followed. The author publishes 0% weights for FashionIQ and CIRR only; no 20% checkpoint is listed, so the requested 20% condition is CHECKPOINT_UNAVAILABLE rather than substituted.",
+    "checkpoint_variants": [
+      {
+        "checkpoint_id": "fashioniq_0",
+        "filename": "best_model.pth",
+        "download_url": "https://www.kaggle.com/api/v1/models/charlesneilsucian/tme/pytorch/fashioniq-0.0-best/1/download",
+        "source_type": "author_kaggle",
+        "source_revision": "1",
+        "checkpoint_training_noise_pct": 0,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "URL_VERIFIED",
+        "checkpoint_mapping_status": "UNVERIFIED"
+      },
+      {
+        "checkpoint_id": "cirr_0",
+        "filename": "best_model.pth",
+        "download_url": "https://www.kaggle.com/api/v1/models/charlesneilsucian/tme/pytorch/cirr-0.0-best/1/download",
+        "source_type": "author_kaggle",
+        "source_revision": "1",
+        "checkpoint_training_dataset": "CIRR",
+        "checkpoint_training_noise_pct": 0,
+        "evaluation_noise_pct": 0,
+        "expected_size_bytes": null,
+        "expected_sha256": null,
+        "status": "URL_VERIFIED",
+        "checkpoint_mapping_status": "UNVERIFIED"
+      }
+    ],
+    "checkpoints": [
+      {
+        "checkpoint_id": "fashioniq_0",
+        "filename": "best_model.pth",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": false,
+        "official_sha256_match": true,
+        "mapping_verified": false,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/tme/best_model.pth",
+        "blocking_reasons": []
+      },
+      {
+        "checkpoint_id": "cirr_0",
+        "filename": "best_model.pth",
+        "source_metadata": true,
+        "source_root": "/home/heheboiz/data/cir/workbench/third_party",
+        "checkpoint_root": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints",
+        "source_synced_locally": true,
+        "automatic_download_available": true,
+        "checkpoint_downloaded": true,
+        "local_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "official_sha256_known": false,
+        "official_sha256_match": true,
+        "mapping_verified": false,
+        "adapter_command_ready": true,
+        "runtime_verified": true,
+        "runnable": true,
+        "checkpoint_path": "/home/heheboiz/data/cir/workbench/artifacts/checkpoints/tme/best_model.pth",
+        "blocking_reasons": []
+      }
+    ]
   }
 ]

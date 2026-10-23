@@ -14,13 +14,19 @@ def registry_models():
     return {model["model_id"]: model for model in load_registry()["models"]}
 
 
-def test_three_protocols_unchanged():
+def test_the_original_protocols_are_unchanged():
+    """The three protocols the workbench shipped with must keep their exact identities.
+
+    Asserted as a SUBSET rather than as the whole set: a later protocol (TME's
+    `fashioniq_val_split_ref_included`) is a deliberate addition, and rewriting this assertion into an
+    equality would make every such addition look like a regression of the originals.
+    """
     protocols = load_registry()["protocols"]
-    assert set(protocols) == {
+    assert {
         "fashioniq_original_split",
         "fashioniq_full_gallery_ref_excluded",
         "fashioniq_val_split",
-    }
+    } <= set(protocols)
 
 
 def test_seven_legacy_entries_valid():

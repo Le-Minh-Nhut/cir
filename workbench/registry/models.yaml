@@ -1300,4 +1300,3 @@ models:
         expected_sha256: null
         status: URL_VERIFIED
         checkpoint_mapping_status: UNVERIFIED
-    checkpoint_bundles: []

@@ -300,13 +300,30 @@ def test_dry_run_never_mutates_state(tmp_path: Path, monkeypatch):
 
 
 # 12. A model with no registered checkpoint must not produce a run-and-fail stage (NEW-1)
-def test_model_without_checkpoint_has_no_side_effecting_checkpoint_stage():
+def test_a_model_without_a_checkpoint_variant_plans_no_download():
+    """The invariant: no variant means no download stage.
+
+    This named `ptha_mtst` when that model had no registered variant. It has one now -- the published
+    CIRR checkpoint, registered as an explicit cross-dataset transfer -- so the test asserts the RULE
+    against whichever models currently have no variant, and skips with a clear reason when every model
+    has one. Naming a model again would make this assertion expire the moment that model gains a
+    checkpoint, which says nothing about the behaviour under test.
+    """
+    from workbench.backend.registry import load_registry
+
+    model_ids = [m["model_id"] for m in load_registry()["models"]
+                 if not (m.get("checkpoint_variants") or [])]
+    if not model_ids:
+        pytest.skip("every registered model declares a checkpoint variant; the rule has no subject")
+
     cfg = pipeline.resolve_config()
-    args = pipeline.parser_for().parse_args(
-        ["all", "--model", "ptha_mtst", "--download-checkpoints"])
-    stage = next(s for s in pipeline.stages_for(args, cfg) if s.name == "checkpoint")
-    assert not stage.commands, "a model with no checkpoint variant must not plan a download"
-    assert stage.skipped
+    for model_id in model_ids:
+        args = pipeline.parser_for().parse_args(
+            ["all", "--model", model_id, "--download-checkpoints"])
+        stage = next(s for s in pipeline.stages_for(args, cfg) if s.name == "checkpoint")
+        assert not stage.commands, (
+            f"{model_id} has no checkpoint variant but planned a download: {stage.commands}")
+        assert stage.skipped
 
 
 # 13. A bare dependency must not be blocked by another model's failure (NEW-3)
