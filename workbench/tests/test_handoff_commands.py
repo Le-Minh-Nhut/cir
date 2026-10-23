@@ -187,6 +187,13 @@ def test_every_document_in_the_handoff_set_has_run_commands_or_says_why_not() ->
         # by the SPRC registry selection in MODEL_STATUS_SPEC.md, which is itself exempt for the same
         # GPU/multi-GB reason. So this document is exempt rather than silently unaudited.
         "SPRC_MANUAL_CHECKPOINTS.md",
+        # MODEL_ENV_RECIPES.md documents environment provisioning: uv/venv creation and multi-GB
+        # package installs. Auditing those as commands would install a second environment per test
+        # run, and they are host-specific by design (they name this host's CUDA wheel index and the
+        # interpreter paths the registry declares). The provisioning itself IS verified -- the HABIT
+        # environment built from these commands reports READY through doctor -- and that verification
+        # is recorded rather than re-executed here.
+        "MODEL_ENV_RECIPES.md",
     }
     audited = {path.name for path in DOCS}
     unclassified = []
