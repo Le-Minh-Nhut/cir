@@ -17,6 +17,17 @@ protocols:
     label: FashionIQ - Val Split (Pair-Union Gallery, Reference Excluded)
     literature_split_label: val
     evaluation_noise_pct: 0
+  # TME's native evaluator builds its gallery from the per-category validation split
+  # (`data.py`: `current_image_names = image_type_names[dress_type]`, i.e. split.<cat>.val.json) and
+  # masks the reference ONLY for CIRR -- `precompute_evaluation.py:83` guards the mask with
+  # `if category == 'CIRR'` and comments that it is "only for cirr". So on FashionIQ the reference is
+  # a legitimate candidate and every image of the split is in the gallery, which is neither of the
+  # existing val/original protocols. Declaring it separately keeps a run from being reported under a
+  # protocol whose reference policy it does not follow.
+  fashioniq_val_split_ref_included:
+    label: FashionIQ - Val Split (Full Category Gallery, Reference Included)
+    literature_split_label: val
+    evaluation_noise_pct: 0
 models:
   - model_id: csmcir
     environment:
@@ -1226,3 +1237,67 @@ models:
         structure: category_specific_whole_models
         mapping_status: VERIFIED_METADATA
         notes: One independently trained whole-model checkpoint per FashionIQ category; all three are required for a complete macro result.
+  - model_id: tme
+    method_name: TME
+    research_generation: recent
+    publication_year: 2025
+    paper_title: "Learning with Noisy Triplet Correspondence for Composed Image Retrieval"
+    paper_url: https://openaccess.thecvf.com/content/CVPR2025/papers/Li_Learning_with_Noisy_Triplet_Correspondence_for_Composed_Image_Retrieval_CVPR_2025_paper.pdf
+    upstream_repo_url: https://github.com/li-shuxian/TME
+    upstream_default_branch: master
+    upstream_commit_sha: 394aad79df2c104feb32a2c96132582012765062
+    source_available: true
+    source_dir: TME
+    fashioniq_layout: fashioniq_standard
+    literature_split_label: val
+    # The native evaluator masks the reference ONLY for CIRR (`precompute_evaluation.py:83` guards it
+    # with `if category == 'CIRR'`), so on FashionIQ the reference stays a candidate over the full
+    # per-category validation gallery. That is neither `fashioniq_val_split` (reference excluded,
+    # pair-union gallery) nor `fashioniq_original_split` (train-split gallery), so it is declared.
+    native_protocol: fashioniq_val_split_ref_included
+    supported_protocols: [fashioniq_val_split_ref_included]
+    reported_r10: 55.15
+    reported_r50: 75.02
+    reported_mean: 65.09
+    reproduction_status: NOT_RUN
+    command_status: ENTRYPOINT_NOT_IMPLEMENTED
+    strict_clean_checkpoint_available: true
+    # Libraries only: get the source by cloning it. The upstream repository's GitHub metadata reports
+    # `license: null` and the root tree carries no LICENSE file; the BSD-3 headers inside the bundled
+    # LAVIS are LAVIS's licence, not this project's, so no licence is claimed here.
+    notes: >-
+      Paper Table 2 (FashionIQ validation, sigma=0): Dress R@10/R@50 49.73/71.69, Shirt 56.43/74.44,
+      Toptee 59.31/78.94, Average 55.15/75.02, AVG 65.09. The paper reports the BEST-validation
+      checkpoint when sigma=0 and the FINAL checkpoint when sigma>0, so a run must state which rule it
+      followed. The author publishes 0% weights for FashionIQ and CIRR only; no 20% checkpoint is
+      listed, so the requested 20% condition is CHECKPOINT_UNAVAILABLE rather than substituted.
+    checkpoint_variants:
+      - checkpoint_id: fashioniq_0
+        filename: best_model.pth
+        # Kaggle, not Hugging Face: the author distributes TME weights there. The download endpoint is
+        # versioned (`/1/download`) so the bytes are pinned by version rather than by a moving tag.
+        # The archive is 2533586661 bytes and holds `best_model.pth` at 2728382104 bytes; no
+        # author-published SHA-256 was established, and a prefix hash is not a checkpoint hash, so no
+        # digest is claimed.
+        download_url: https://www.kaggle.com/api/v1/models/charlesneilsucian/tme/pytorch/fashioniq-0.0-best/1/download
+        source_type: author_kaggle
+        source_revision: '1'
+        checkpoint_training_noise_pct: 0
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: URL_VERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+      - checkpoint_id: cirr_0
+        filename: best_model.pth
+        download_url: https://www.kaggle.com/api/v1/models/charlesneilsucian/tme/pytorch/cirr-0.0-best/1/download
+        source_type: author_kaggle
+        source_revision: '1'
+        checkpoint_training_dataset: CIRR
+        checkpoint_training_noise_pct: 0
+        evaluation_noise_pct: 0
+        expected_size_bytes: null
+        expected_sha256: null
+        status: URL_VERIFIED
+        checkpoint_mapping_status: UNVERIFIED
+    checkpoint_bundles: []
