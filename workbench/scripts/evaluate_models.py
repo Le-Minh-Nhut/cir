@@ -660,6 +660,12 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     os.chmod(replay_cache, 0o700)
     child_env["WORKBENCH_REPLAY_CACHE_ROOT"] = str(replay_cache)
     environment["WORKBENCH_REPLAY_CACHE_ROOT"] = str(replay_cache)
+    # The per-query export ranks THESE features rather than running its own pass. A second pass over
+    # the same inputs does not reproduce the first -- measured here: same seed, same input,
+    # deterministic kernels, different feature hashes across processes -- so the artifact could
+    # otherwise never agree with the metric it is supposed to reconstruct.
+    captured = directory / "captured-features.npz"
+    child_env["WORKBENCH_OBSERVATION_OUT"] = str(captured)
 
     try:
         process = subprocess.Popen(plan.command, cwd=plan.cwd, text=True,
@@ -1787,6 +1793,10 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
     replay_cache = directory / "replay-cache"
     if replay_cache.is_dir():
         child_env["WORKBENCH_REPLAY_CACHE_ROOT"] = str(replay_cache)
+    captured = directory / "captured-features.npz"
+    if captured.is_file():
+        child_env["WORKBENCH_OBSERVATION_IN"] = str(captured)
+        child_env["WORKBENCH_OBSERVATION_OUT"] = str(captured)
     observer_module = f"workbench.replay.{plan.model_id}_export"
     publisher_module = f"workbench.replay.{plan.model_id}_publish"
     argv = [interpreter, "-m", observer_module,

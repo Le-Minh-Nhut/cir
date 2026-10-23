@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from argparse import ArgumentParser
 from pathlib import Path
+
+import numpy as np
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -88,6 +91,19 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
     _, preprocess_train, preprocess_val = open_clip.create_model_and_transforms(
         "ViT-B-32", pretrained=str(source_root / AUXILIARY_ASSET_NAME))
 
+    # Features captured by the AGGREGATE for this run. When present these are what the observation
+    # ranks: they are the tensors the run's certified metrics were computed from, so the artifact
+    # describes that evaluation by construction instead of hoping a second pass reproduces it.
+    supplied: dict[str, tuple] = {}
+    supplied_path = os.environ.get("WORKBENCH_OBSERVATION_IN", "").strip()
+    if supplied_path and Path(supplied_path).is_file():
+        with np.load(supplied_path) as archive:
+            for key in archive.files:
+                category, _, kind = key.partition(":")
+                supplied.setdefault(category, {})[kind] = archive[key]
+        supplied = {cat: (parts.get("queries"), parts.get("targets"))
+                    for cat, parts in supplied.items()}
+
     observed: list[ObservedCategory] = []
     mismatches: dict[str, tuple[str, ...]] = {}
     with run_cache_root(dataset_root) as cache_root:
@@ -101,12 +117,18 @@ def export(checkpoint_root: Path, dataset_root: Path, source_root: Path, results
                                          split="val-split")
         params = SimpleNamespace(batch_size=batch_size, local_rank=0)
         for category in CATEGORIES:
-            # The native `test()` computes the features; the observation is derived from THOSE, not
-            # from a second pass. CUDA extraction is not cross-process reproducible, so a recomputed
-            # ranking would differ from the metric it is supposed to reproduce.
-            with FeatureRecorder(model) as recorder:
-                metrics = dict(native_test.test(params, model, dataset, category))
-            captured = recorder.features()
+            if category in supplied:
+                # The aggregate ALREADY evaluated this category; its metrics are the run's certified
+                # numbers, and they were computed from exactly these tensors. Re-running `test()`
+                # here would produce a DIFFERENT number (a second pass does not reproduce the first)
+                # and the cross-check would then report the aggregate's own arithmetic as a mismatch.
+                # So the metric is derived from the supplied features, by the same protocol.
+                captured = supplied[category]
+                metrics = _metrics_from_features(category, captured, dataset, dataset_root)
+            else:
+                with FeatureRecorder(model) as recorder:
+                    metrics = dict(native_test.test(params, model, dataset, category))
+                captured = recorder.features()
             observation = observe_category(category, model, dataset, dataset_root,
                                            batch_size=batch_size, top_k=top_k, captured=captured)
             category_mismatches = tuple(cross_check_with_native(observation, metrics))
@@ -155,6 +177,53 @@ def main(argv: list[str] | None = None) -> int:
                   runtime_adaptation=args.runtime_adaptation,
                   planned_bundle_manifest_digest=args.planned_bundle_manifest_digest,
                   batch_size=args.batch_size)
+
+
+def _metrics_from_features(category: str, captured: tuple, dataset, dataset_root: Path) -> dict:
+    """The native Recall values for a category, computed from features captured elsewhere.
+
+    `test.py` computes them from the features it produced; given those same features this reproduces
+    its arithmetic exactly, which is the point -- the numbers the aggregate reported and the numbers
+    the observation reconstructs must be the same numbers, or the artifact cannot be evidence.
+    """
+    from workbench.replay.encoder_observer import _category_lists, _image_ids
+
+    import numpy as np
+
+    queries, targets = captured
+    test_queries, test_targets = _category_lists(dataset, category)
+    gallery_positions = [entry["target_img_id"] for entry in test_targets]
+    position_of = {position: index for index, position in enumerate(gallery_positions)}
+
+    # EXACTLY the native arithmetic: normalize IN PLACE on the arrays at the dtype the model
+    # produced (float32), then take the dot product. Promoting to float64 first looks harmless and is
+    # not: it rounds the normalised values differently, so a query whose target ties or nearly ties a
+    # candidate lands on the other side of the boundary. Measured: two categories' R@1 differed by
+    # one hit from the aggregate, and the only difference in the computation was this dtype.
+    query_features = np.array(queries, copy=True)
+    target_features = np.array(targets, copy=True)
+    if query_features.dtype != np.float32 or target_features.dtype != np.float32:
+        query_features = query_features.astype(np.float32)
+        target_features = target_features.astype(np.float32)
+    for row in range(query_features.shape[0]):
+        query_features[row] /= np.linalg.norm(query_features[row])
+    for row in range(target_features.shape[0]):
+        target_features[row] /= np.linalg.norm(target_features[row])
+
+    sims = query_features.dot(target_features.T)
+    for index, entry in enumerate(test_queries):
+        sims[index, position_of[entry["source_img_id"]]] = -10e10
+    order = np.argsort(-sims, axis=1)   # the native call: `np.argsort(-sims[i, :])` per row
+
+    out = {}
+    total = order.shape[0]
+    for k in (1, 10, 50):
+        hits = 0
+        for index, entry in enumerate(test_queries):
+            if position_of[entry["target_img_id"]] in order[index][:k]:
+                hits += 1
+        out[f"{category}_r{k}"] = 100.0 * hits / total
+    return out
 
 
 if __name__ == "__main__":

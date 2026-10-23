@@ -16,6 +16,7 @@ Exact attributes read by pinned `test.py:6-83`:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from argparse import ArgumentParser
 from dataclasses import asdict
@@ -29,7 +30,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from workbench.backend.fashioniq_layout import CATEGORIES
 from workbench.backend.registry import model_by_id
 from workbench.replay.common import (
+    OBSERVATION_OUT_ENV,
+    FeatureRecorder,
     ReplayResult,
+    enable_deterministic_inference,
     load_trusted_whole_model,
     run_cache_root,
     macro_aggregate,
@@ -278,6 +282,10 @@ def evaluate_categories(
 
     encoder_model = encoder_model.to(target_device)
     encoder_model.eval()
+    # The per-query export may recompute a category's features when the aggregate did not capture
+    # them, and must agree to the hit count, so the forward pass is pinned as reproducible as CUDA
+    # permits rather than merely equivalent.
+    enable_deterministic_inference(torch)
 
     clip_path = str(source_root)
     _, preprocess_train, preprocess_val = open_clip.create_model_and_transforms(
@@ -287,6 +295,12 @@ def evaluate_categories(
     transform = [preprocess_train, preprocess_val]
 
     results: list[ReplayResult] = []
+    # When the parent asked for an observation, record the features of THIS evaluation. The
+    # per-query export then ranks these instead of running a second pass, which cannot reproduce
+    # this one (measured: two processes, same seed and deterministic kernels, different feature
+    # hashes).
+    observation_out = os.environ.get(OBSERVATION_OUT_ENV, "").strip()
+    captured_features: dict[str, tuple] = {}
     with run_cache_root(dataset_root) as cache_root:
         root_str = str(cache_root).rstrip("/") + "/"
         # The query inputs are baked in HERE, through the stochastic training transform, so this
@@ -297,7 +311,10 @@ def evaluate_categories(
         params = SimpleNamespace(batch_size=batch_size, local_rank=0)
 
         for category in categories:
-            recalls = dict(test_module.test(params, encoder_model, dataset, category))
+            with FeatureRecorder(encoder_model) as recorder:
+                recalls = dict(test_module.test(params, encoder_model, dataset, category))
+            if observation_out:
+                captured_features[category] = recorder.features()
             results.append(
                 ReplayResult(
                     model_id="encoder",
@@ -315,6 +332,17 @@ def evaluate_categories(
                     },
                 )
             )
+
+    if observation_out and captured_features:
+        import numpy as np
+
+        arrays = {f"{category}:{kind}": batch
+                  for category, (queries, targets) in captured_features.items() if queries is not None
+                  for kind, batch in (("queries", queries), ("targets", targets))}
+        if arrays:
+            destination = Path(observation_out)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            np.savez(destination, **arrays)
 
     return results, macro_aggregate(results)
 

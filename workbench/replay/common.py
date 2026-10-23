@@ -92,6 +92,13 @@ def source_pin_status(source_root: Path, expected_commit: str,
 #: `reusable_cache_root` for why reuse is sound and what still refuses a bad cache.
 CACHE_ROOT_ENV = "WORKBENCH_REPLAY_CACHE_ROOT"
 
+#: Where the aggregate writes the features its ONE evaluation computed, for the per-query export to
+#: rank. Without it the export must run its own forward pass, and a second pass does not reproduce
+#: the first -- measured on this host: two processes, same seed, same input, cuDNN pinned
+#: deterministic, still produced different feature hashes. So the export can only describe the
+#: evaluation if it is handed that evaluation's own tensors.
+OBSERVATION_OUT_ENV = "WORKBENCH_OBSERVATION_OUT"
+
 
 @contextmanager
 def run_cache_root(dataset_root: Path,
