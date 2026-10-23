@@ -289,6 +289,34 @@ models:
     reported_r10: 54.99
     reported_r50: 76.28
     reported_mean: 65.64
+    # The checkout ships `requirements.txt`, and the README pins the interpreter and torch:
+    # `conda create -n mtst python=3.9` and `pip install torch==2.0.1 torchvision==0.15.2
+    # torchaudio==2.0.2`. Without this declaration the model ran on the WORKBENCH interpreter, where
+    # `transformers` no longer exports `apply_chunking_to_forward` and the run died at import:
+    # `ImportError: cannot import name 'apply_chunking_to_forward' from 'transformers.modeling_utils'`.
+    # Declaring it lets `manage_environment.py --create` provision from the source-backed spec instead
+    # of guessing.
+    environment_required: true
+    environment:
+      python_env_var: WORKBENCH_PTHA_MTST_PYTHON
+      confidence: VERIFIED_REQUIREMENTS
+      python: '3.9'
+      pytorch: '2.0.1'
+      torchvision: '0.15.2'
+      packages:
+        - tqdm==4.66.1
+        - omegaconf==2.3.0
+        - iopath==0.1.10
+        - timm==0.9.12
+        - decord==0.6.0
+        - webdataset==0.2.86
+        - opencv-python
+        - transformers==4.36.2
+        - fairscale==0.4.13
+        - einops==0.7.0
+        - scikit-image==0.22.0
+        - spacy==3.7.2
+        - pycocoevalcap==1.2
     reproduction_status: BLOCKED_NO_VERIFIED_FASHIONIQ_CHECKPOINT
     strict_clean_checkpoint_available: false
     notes: No author-linked FashionIQ fine-tuned checkpoint verified. CIRR pretraining evidence is not eligible. The gallery is the complete ordered validation split with the reference ELIGIBLE (validate_blip.py:44-51 builds labels against targets only and contains no reference mask, unlike the CIRR path at :258-260), which is what makes fashioniq_original_split its protocol.
