@@ -26,7 +26,7 @@ def model_requirements(
     source = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"] if model.get("source_dir") else None
     contract = preparation_contract_for_model(model)
     raw = preparation_paths(contract, root, "raw_inputs") if contract else fashioniq_required_paths(model, root)
-    generated = preparation_paths(contract, root, "generated_artifacts") if contract else ()
+    generated = preparation_paths(contract, root, "generated_artifacts", evaluator_root=source) if contract else ()
     paths = list(dict.fromkeys((*raw, *generated)))
     raw_missing, generated_missing = missing_paths(raw), missing_paths(generated)
     blocks: list[str] = []

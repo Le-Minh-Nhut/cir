@@ -161,7 +161,7 @@ def load_preparation_contracts(path: Path = PREPARATION_CONTRACT_REGISTRY_PATH) 
             raise ValueError("invalid preparation contract")
         for group in ("raw_inputs", "generated_artifacts"):
             for artifact in contract[group]:
-                if {"name", "kind", "scope", "paths"} - artifact.keys() or artifact["scope"] != "fashioniq_root":
+                if {"name", "kind", "scope", "paths"} - artifact.keys() or artifact["scope"] not in {"fashioniq_root", "evaluator_cwd"}:
                     raise ValueError(f"invalid preparation artifact for {contract['preparation_id']}")
                 for path_value in artifact["paths"]:
                     path = PurePosixPath(path_value)
@@ -179,6 +179,18 @@ def load_preparation_contracts(path: Path = PREPARATION_CONTRACT_REGISTRY_PATH) 
                 path = PurePosixPath(asset["cache_path_suffix"])
                 if path.is_absolute() or ".." in path.parts:
                     raise ValueError(f"unsafe external asset cache path for {contract['preparation_id']}")
+            # A directory-shaped asset (a hub repo cache) has no file to size or hash, and a
+            # `location_type` typo would silently fall through to the file branch and then report a
+            # cache directory as `INVALID_FILE_TYPE`. Validated here so the declaration is either
+            # correct or refused.
+            if asset.get("location_type") not in {None, "file", "directory"}:
+                raise ValueError(f"invalid external asset location_type for {contract['preparation_id']}")
+            if asset.get("location_type") == "directory" and (asset.get("expected_sha256") or asset.get("expected_sha256_prefix")):
+                raise ValueError(
+                    f"a directory external asset cannot carry a file digest for {contract['preparation_id']}")
+            cache_root_var = asset.get("cache_root_env_var")
+            if cache_root_var is not None and not cache_root_var.isidentifier():
+                raise ValueError(f"invalid external asset cache root variable for {contract['preparation_id']}")
             expected_sha = asset.get("expected_sha256")
             expected_prefix = asset.get("expected_sha256_prefix")
             if expected_sha and expected_prefix:
@@ -203,8 +215,25 @@ def preparation_contract_for_model(model: dict[str, Any]) -> dict[str, Any] | No
         raise ValueError(f"unknown preparation contract for {model['model_id']}") from error
 
 
-def preparation_paths(contract: dict[str, Any], root: Path, group: str) -> tuple[Path, ...]:
-    return tuple(root / path for artifact in contract[group] for path in artifact["paths"])
+def preparation_paths(contract: dict[str, Any], root: Path, group: str,
+                      evaluator_root: Path | None = None) -> tuple[Path, ...]:
+    """Resolve an artifact's paths against the root its DECLARED scope names.
+
+    `fashioniq_root` artifacts live in the dataset root, which is what `root` already means. An
+    `evaluator_cwd` artifact -- a generated cache the native code opens relative to the evaluator's
+    own working directory -- must resolve against the model checkout instead. Resolving both against
+    the dataset root made readiness inspect a path the run never opens, so a missing native input
+    passed and the failure surfaced only inside a long evaluation.
+    """
+    resolved: list[Path] = []
+    for artifact in contract[group]:
+        base = evaluator_root if artifact["scope"] == "evaluator_cwd" else root
+        if artifact["scope"] == "evaluator_cwd" and base is None:
+            # Without the checkout there is nothing to resolve against; the caller that cannot supply
+            # it must not receive a path that looks checked.
+            continue
+        resolved.extend(base / path for path in artifact["paths"])
+    return tuple(resolved)
 
 
 def required_runtime_assets(model: dict[str, Any]) -> list[dict[str, Any]]:
@@ -225,8 +254,17 @@ def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
         configured = os.environ.get(env_var) if env_var else None
         location = configured.strip() if configured and configured.strip() else asset.get("expected_local_location")
         if location is None and asset.get("cache_path_suffix"):
-            cache_root = os.environ.get(asset.get("cache_root_env_var", ""))
-            root = Path(cache_root).expanduser() if cache_root else Path(os.environ.get("XDG_CACHE_HOME", "~/.cache")).expanduser() / "torch"
+            # `cache_root_env_var` names the variable that RELOCATES this cache, and its default is the
+            # one the consumer itself uses. The tokenizer is read by Hugging Face's loader, whose root
+            # is `HF_HOME` (default `~/.cache/huggingface`), NOT `~/.cache/torch` -- resolving it under
+            # the torch root made a correctly populated cache report as missing.
+            root_var = asset.get("cache_root_env_var") or "TORCH_HOME"
+            cache_root = os.environ.get(root_var)
+            if cache_root and cache_root.strip():
+                root = Path(cache_root.strip()).expanduser()
+            else:
+                root = Path(os.environ.get("XDG_CACHE_HOME") or "~/.cache").expanduser()
+                root = root / ("huggingface" if root_var == "HF_HOME" else "torch")
             location = str(root / asset["cache_path_suffix"])
         expected_sha = asset.get("expected_sha256")
         expected_prefix = asset.get("expected_sha256_prefix")
@@ -241,6 +279,23 @@ def external_asset_statuses(model: dict[str, Any]) -> list[dict[str, Any]]:
         if not path.is_absolute():
             path = Path(__file__).resolve().parents[2] / path
         path = path.resolve()
+        if asset.get("location_type") == "directory":
+            # A directory-shaped asset (a hub repo cache) has no single file to size or hash. Its
+            # presence is the directory existing and holding something: an empty directory is a
+            # half-finished download, not a usable cache, so it is reported as a placeholder rather
+            # than accepted.
+            if not path.exists():
+                status = "CONFIGURED_MISSING"
+            elif not path.is_dir():
+                status = "INVALID_FILE_TYPE"
+            elif not any(path.iterdir()):
+                status = "EMPTY_PLACEHOLDER"
+            else:
+                status = "EXISTS_UNVERIFIED_CHECKSUM"
+            statuses.append({"name": asset["name"], "status": status, "path": str(path),
+                             "expected_sha256": None, "expected_sha256_prefix": None,
+                             "actual_sha256": None})
+            continue
         status = "CONFIGURED_MISSING"
         actual_sha = None
         if path.exists():

@@ -172,11 +172,17 @@ FASHIONIQ_PROTOCOLS: dict[str, FashionIQProtocol] = {
     "fashioniq_original_split": FashionIQProtocol(
         protocol_id="fashioniq_original_split", gallery="full_split",
         reference_excluded=False,
-        # `fashioniq_val_split_ref_included` is kept as an ACCEPTED ALIAS, not as its own entry:
-        # it was briefly a registered protocol for TME, and any artifact, run record or caller that
-        # still names it means exactly this cohort -- the complete ordered val split with the
-        # reference eligible. Resolving it here keeps those records readable instead of turning each
-        # one into a hard error, while the registry declares only the three real families.
+        # `fashioniq_val_split_ref_included` is kept as an accepted ALIAS here so an EVALUATOR or
+        # caller that still names it resolves to this cohort -- the complete ordered val split with
+        # the reference eligible -- instead of hard-erroring. It was briefly a registered protocol for
+        # TME, and the semantic identity is exact, so resolving it cannot change what a run computes.
+        #
+        # Scope, stated precisely because the broader claim would be false: this alias is
+        # evaluator-side. `PROTOCOL_IDS` in `workbench/backend/schemas/results.py` derives from the
+        # REGISTRY, so a PERSISTED result document naming the old id is still REFUSED by
+        # `RunMetadata.validate_metadata` ("unsupported protocol_id"). Nothing is silently relabelled
+        # or counted under the new family -- old artifacts need an explicit migration, and this file
+        # deliberately does not perform one.
         aliases=("fashioniq_original", "fashioniq_val_split_ref_included")),
     "fashioniq_full_gallery_ref_excluded": FashionIQProtocol(
         protocol_id="fashioniq_full_gallery_ref_excluded", gallery="full_split",

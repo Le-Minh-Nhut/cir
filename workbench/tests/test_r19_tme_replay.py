@@ -121,25 +121,48 @@ def test_tme_preflight_checks_unverified_assets_against_registry_size_and_digest
         tmp_path, monkeypatch, capsys, state, size, digest, expected, blocked):
     checkout, dataset, checkpoints, _ = _workspace(tmp_path, monkeypatch, with_features=True)
     assets = required_runtime_assets(tme.MODEL)
+    # All three of the registry's declared assets are required on the eval path. An earlier revision
+    # marked BLIP-2 optional on the reasoning that `load_from_pretrained` is unreachable; that was
+    # wrong (the pinned `blip2_pretrain.yaml` sets `load_finetuned: False` AND a `pretrained` URL, so
+    # the pretrained branch really does run), and the corrected classification is what this asserts.
     assert {asset["name"] for asset in assets} == {
-        "EVA-ViT-g backbone weights", "bert-base-uncased tokenizer"}
-    selected = assets[0]
+        "BLIP-2 pretrain weights", "EVA-ViT-g backbone weights", "bert-base-uncased tokenizer"}
+    # Pick the FILE-shaped asset to exercise size/digest enforcement: the directory-shaped tokenizer
+    # cache has no file size, and it gets its own assertion below.
+    selected = next(asset for asset in assets if asset.get("location_type") != "directory")
     selected = {**selected, "expected_size_bytes": expected, "expected_sha256": None,
                 "expected_sha256_prefix": None}
     asset_path = tmp_path / "tiny-asset.bin"
     if size is not None:
         asset_path.write_bytes(b"x" * size)
-    statuses = [
-        _asset_status(selected, asset_path, state, digest),
-        _asset_status(assets[1], tmp_path / "tokenizer", "CONFIGURED_MISSING"),
-    ]
-    # Supply an independent available tokenizer so this test isolates the selected asset.
-    statuses[1]["status"] = "VERIFIED_LOCAL_ASSET"
-    statuses[1]["path"] = str(asset_path)
-    monkeypatch.setattr(tme, "required_runtime_assets", lambda model: [selected, assets[1]])
+    # Every OTHER declared asset is supplied as genuinely available so these cases are about the
+    # SELECTED asset and cannot pass or fail because an unrelated asset was missing. Their declared
+    # size/digest are cleared for the stand-in: they are only a few bytes here, and an unrelated size
+    # mismatch would mask the case under test. A `location_type: directory` asset needs a POPULATED
+    # DIRECTORY, not a file - substituting a file for the tokenizer cache reproduced the very defect
+    # the check exists to catch.
+    populated = tmp_path / "hf-cache"
+    populated.mkdir()
+    (populated / "refs").write_text("main")
+    others: list[dict] = []
+    statuses = [_asset_status(selected, asset_path, state, digest)]
+    for other in assets:
+        if other["name"] == selected["name"]:
+            continue
+        stand_in = populated if other.get("location_type") == "directory" else asset_path
+        others.append({**other, "expected_size_bytes": None, "expected_sha256": None,
+                       "expected_sha256_prefix": None})
+        statuses.append({
+            "name": other["name"], "status": "VERIFIED_LOCAL_ASSET", "path": str(stand_in),
+            "expected_sha256": None, "expected_sha256_prefix": None, "actual_sha256": None})
+    monkeypatch.setattr(tme, "required_runtime_assets", lambda model: [selected, *others])
     monkeypatch.setattr(tme, "external_asset_statuses", lambda model: statuses)
 
-    blockers = tme.preflight(checkout, dataset, checkpoints, "fashioniq_0")
+    blockers = tme.preflight(checkout, dataset, checkpoints, "fashioniq_0",
+                             runtime_assets=([], []))
+    # `_runtime_asset_check` is what produces the asset verdicts, so it is called through the same
+    # patched decorators preflight would use.
+    blockers += tme._runtime_asset_check()[0]
     asset_blockers = [blocker for blocker in blockers if blocker.startswith("TME runtime asset")]
     stderr = capsys.readouterr().err
 
@@ -148,7 +171,8 @@ def test_tme_preflight_checks_unverified_assets_against_registry_size_and_digest
                    for blocker in asset_blockers), asset_blockers
     else:
         assert not asset_blockers, asset_blockers
-        assert "author digest unavailable; local digest recorded, not verified against a published value" in stderr
+        assert ("author digest unavailable; local digest recorded, not verified against a published value"
+                in stderr), stderr
 
 
 def test_tme_native_aggregate_runs_once_and_produces_complete_category_rows(

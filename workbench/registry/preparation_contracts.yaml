@@ -353,7 +353,11 @@ contracts:
   generated_artifacts:
   - name: native FashionIQ validation image features
     kind: generated_repo_artifact
-    scope: fashioniq_root
+    # NOT `fashioniq_root`: the native loader opens `./features/FashionIQ/...` relative to the
+    # EVALUATOR's working directory, and the wrapper chdirs to the checkout. Declaring it under the
+    # dataset root made the shared preflight inspect a path the run never opens, so a missing native
+    # input passed readiness. `cwd: evaluator` records that the path is checkout-relative.
+    scope: evaluator_cwd
     paths:
     - features/FashionIQ
     generator: tme_precompute_features
@@ -384,37 +388,46 @@ contracts:
   external_assets:
   - name: BLIP-2 pretrain weights
     kind: model_weight
-    state: NOT_REQUIRED_ON_THIS_PATH
-    # NOT required, and this was verified rather than assumed. `blip2.py:85-89` contains the only
-    # local-path redirection for this file, and that code is inside `load_from_pretrained`, which the
-    # evaluation path never calls: `from_config` ends with `load_checkpoint_from_config`, whose
-    # `load_finetuned` branch loads from the SELECTED checkpoint and whose `load_pretrained=True`
-    # default is guarded by `assert "Found load_finetuned is False, but pretrain_path is None."` --
-    # reading `pretrain_path` where the author meant `assert pretrain_path is not None`, so a missing
-    # `pretrained` key raises TypeError. Either way `load_from_pretrained` is unreachable here, and
-    # the selected TME checkpoint already carries the visual encoder (511 `visual_encoder.*` keys).
-    # Confirmed empirically: constructing `blip2_cir_image_diff_features` with no base weights present
-    # fails at `FileNotFoundError: weight/eva_vit_g.pth` -- the EVA file -- and never at this one.
-    # Requiring it would have sent an operator to fetch 713 MB no code path opens.
-    required_for_evaluation: false
+    state: REQUIRED
+    # REQUIRED. An earlier revision of this entry marked it not-required on the reasoning that
+    # `load_from_pretrained` is unreachable; that reasoning was WRONG and is recorded here so it is
+    # not re-derived. The pinned `blip2_pretrain.yaml` sets `load_finetuned: False` AND declares
+    # `pretrained: <blip2_pretrained.pth URL>`, so `load_checkpoint_from_config` (`base_model.py:89-102`)
+    # takes its `load_pretrained` branch and really does call `load_from_pretrained`, whose body
+    # (`blip2.py:87-89`) redirects that URL to the local `torch.load('weight/blip2_pretrained.pth')`.
+    # The broken author assert on the same path never runs, because the guard is false.
+    #
+    # The earlier empirical check was MISREAD, not wrong in itself: constructing the model with no
+    # base weights present fails FIRST at `weight/eva_vit_g.pth`, because `create_eva_vit_g` runs
+    # inside `init_vision_encoder` before the pretrained load. Dying at the EVA file therefore never
+    # demonstrated that the BLIP-2 file is unused - it only demonstrated that EVA is read earlier.
+    required_for_evaluation: true
     required_for_preparation: false
-    expected_local_location: null
-    location_env_var: WORKBENCH_TME_ASSET_BLIP2
+    # The same redirect names a literal cwd-relative path, and the wrapper chdirs to the checkout, so
+    # this artifact also has exactly one valid location.
+    expected_local_location: third_party/TME/weight/blip2_pretrained.pth
+    location_env_var: null
     expected_sha256: null
-    # Observed on the live object with a HEAD request this round, for reference only.
+    # Observed on the live object with a HEAD request this round.
     expected_size_bytes: 746998955
     source: https://storage.googleapis.com/sfr-vision-language-research/LAVIS/models/BLIP2/blip2_pretrained.pth
-    optional: true
+    optional: false
     notes: >-
-      Kept as a declared, obtainable asset so the record is complete and the URL stays pinned; it is
-      NOT a precondition for a FashionIQ evaluation of this checkpoint.
+      Staged as `weight/blip2_pretrained.pth` under the TME checkout, the path the pinned
+      `load_from_pretrained` redirect opens, next to `weight/eva_vit_g.pth` which the constructor
+      reads slightly earlier.
   - name: EVA-ViT-g backbone weights
     kind: model_weight
     state: REQUIRED
     required_for_evaluation: true
     required_for_preparation: false
-    expected_local_location: null
-    location_env_var: WORKBENCH_TME_ASSET_EVA_VIT_G
+    # The native constructor opens this file by a literal cwd-relative path
+    # (`eva_vit.py:446`: `torch.load('weight/eva_vit_g.pth', ...)`) and the wrapper chdirs to the
+    # checkout, so the artifact has exactly ONE valid location. Declaring the path — rather than
+    # accepting any file the operator names — is what makes preflight check the file the loader
+    # actually opens instead of a file that merely exists somewhere.
+    expected_local_location: third_party/TME/weight/eva_vit_g.pth
+    location_env_var: null
     expected_sha256: null
     # Same source of truth as the BLIP-2 row above: the object's own HEAD response.
     expected_size_bytes: 2025249237
@@ -432,14 +445,24 @@ contracts:
     required_for_evaluation: true
     required_for_preparation: false
     expected_local_location: null
-    location_env_var: null
-    cache_path_suffix: hub/bert-base-uncased
+    location_env_var: HF_HOME
+    # A DIRECTORY: the hub stores the repo as a cache directory, and `from_pretrained` needs that
+    # directory rather than one file inside it.
+    location_type: directory
+    cache_path_suffix: hub/models--bert-base-uncased
+    cache_root_env_var: HF_HOME
+    # Resolved under `HF_HOME` (default `~/.cache/huggingface`), NOT under the torch cache: the pinned
+    # code loads it through `BertTokenizer.from_pretrained("bert-base-uncased")`
+    # (`blip2.py:30-33`), which reads the Hugging Face hub cache. Declaring a `torch/hub` suffix made
+    # the checker look in a directory the loader never consults, so a correctly populated cache was
+    # reported missing.
     expected_sha256: null
     source: https://huggingface.co/bert-base-uncased
     optional: false
     notes: >-
-      The pinned text processor loads this tokenizer; it is a small Hugging Face cache entry rather
-      than a checkpoint-sized artifact.
+      A small Hugging Face cache entry rather than a checkpoint-sized artifact. The hub layout stores
+      it under `hub/models--bert-base-uncased/`; the presence check accepts the repo cache directory,
+      which is what `from_pretrained` actually needs.
   deterministic_status: UNKNOWN
   automation_policy: MANUAL_REQUIRED
   notes: >-

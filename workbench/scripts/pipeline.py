@@ -1017,7 +1017,13 @@ def model_eval_inputs(model_dict: dict, args: argparse.Namespace, config: Workbe
     contract = preparation_contract_for_model(model_dict)
     if contract is not None:
         inputs.extend(preparation_paths(contract, ds_root, "raw_inputs"))
-        inputs.extend(preparation_paths(contract, ds_root, "generated_artifacts"))
+        # An `evaluator_cwd` artifact resolves against the model checkout; without the evaluator root
+        # it would be dropped from this list, silently omitting a required input from the pipeline's
+        # view of what the run reads.
+        evaluator_root = (config.WORKBENCH_THIRD_PARTY_ROOT / model_dict["source_dir"]
+                          if model_dict.get("source_dir") else None)
+        inputs.extend(preparation_paths(contract, ds_root, "generated_artifacts",
+                                        evaluator_root=evaluator_root))
 
     # 4. Registered auxiliary assets, including the ones placed inside the model's own checkout
     #    (CSMCIR's COT captions, for example). These are evaluation inputs, not decoration.

@@ -595,7 +595,42 @@ _EVALUATOR_ENV_DENY_PREFIXES = (
 )
 
 
-def _evaluator_environment(identity: dict[str, object]) -> dict[str, str]:
+def _declared_model_env_names(model_id: str) -> tuple[str, ...]:
+    """Environment names the REGISTRY declares for this model's own run.
+
+    The allowlist above is a fixed list, so a newly declared model input was silently withheld from
+    the evaluator child: `WORKBENCH_TME_ASSET_EVA_VIT_G` resolved fine in the parent and then arrived
+    as unset, so the child's own asset check blocked a run whose input the operator HAD supplied.
+    Deriving the names from the same declarations the checks read keeps the two in step instead of
+    requiring a second list to be remembered.
+
+    Only names, never values, are decided here; `_evaluator_environment` still filters every name
+    through the deny prefixes, so a declared name cannot smuggle a secret through.
+    """
+    names: list[str] = []
+    try:
+        from workbench.backend.registry import load_preparation_contracts, model_by_id
+
+        model = model_by_id(model_id)
+        variable = (model.get("environment") or {}).get("python_env_var")
+        if isinstance(variable, str) and variable:
+            names.append(variable)
+        preparation_id = model.get("preparation_id")
+        if preparation_id:
+            contract = load_preparation_contracts().get(preparation_id) or {}
+            for asset in contract.get("external_assets") or []:
+                location_var = asset.get("location_env_var")
+                if isinstance(location_var, str) and location_var:
+                    names.append(location_var)
+    except Exception:
+        # A model without a registry entry (a synthetic fixture) declares nothing extra; refusing
+        # the run here would turn a missing declaration into a launch failure.
+        return ()
+    return tuple(dict.fromkeys(names))
+
+
+def _evaluator_environment(identity: dict[str, object],
+                           model_id: str | None = None) -> dict[str, str]:
     """Build the environment for the untrusted official evaluator, by allowlist.
 
     Copying `os.environ` and removing a few names propagated every unrelated credential the
@@ -610,7 +645,10 @@ def _evaluator_environment(identity: dict[str, object]) -> dict[str, str]:
     # whatever happened to be in the caller's shell.
     extra = os.environ.get("WORKBENCH_EVALUATOR_ENV_PASSTHROUGH", "")
     declared = [name.strip() for name in extra.split(":") if name.strip()]
-    for name in (*_EVALUATOR_ENV_ALLOWLIST, *declared):
+    # Names the registry declares for this model's own inputs, so a newly declared asset variable is
+    # forwarded without a second list to maintain.
+    registry_declared = _declared_model_env_names(model_id) if model_id else ()
+    for name in (*_EVALUATOR_ENV_ALLOWLIST, *declared, *registry_declared):
         value = os.environ.get(name)
         if value is not None:
             child_env[name] = value
@@ -640,7 +678,7 @@ def invoke_evaluator(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
         "evaluation_run_id": run_id,
         "evaluation_output_root": str(output_root),
     }
-    child_env = _evaluator_environment(environment)
+    child_env = _evaluator_environment(environment, plan.model_id)
 
     # Claim the run directory EXCLUSIVELY, before anything is launched. `exist_ok=False` is an
     # atomic filesystem claim, so of two concurrent invocations sharing a run id exactly one
@@ -1790,7 +1828,7 @@ def _run_observation(plan: EvaluationPlan, config: WorkbenchConfig, run_id: str,
         "model_interpreter": interpreter,
         "evaluation_run_id": run_id,
         "evaluation_output_root": str(artifact_root(config)),
-    })
+    }, plan.model_id)
     # The observer is workbench code, so the repository must be importable in its child. This is the
     # one addition to the evaluator's allowlist, and it is deliberate: the evaluator gets the same
     # value through its own PYTHONPATH handling when the operator sets it, and without it the child

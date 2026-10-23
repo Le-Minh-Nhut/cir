@@ -85,6 +85,17 @@ def _runtime_asset_check() -> tuple[list[str], list[dict[str, Any]]]:
         state = status["status"]
         if state in {"EXISTS_UNVERIFIED_CHECKSUM", "VERIFIED_LOCAL_ASSET", "CHECKSUM_MISMATCH"}:
             path = Path(status["path"])
+            # `location_type: directory` marks an asset that IS a directory (a Hugging Face hub repo
+            # cache). Testing `is_file()` on it reported a correctly populated cache as "not a file",
+            # which is the same class of mistake as pointing the check at the wrong root.
+            if asset.get("location_type") == "directory":
+                if not path.is_dir() or not any(path.iterdir()):
+                    blockers.append(
+                        f"TME runtime asset {asset['name']} is not a populated directory{detail}")
+                    continue
+                evidence.append({"name": asset["name"], "status": state, "path": str(path),
+                                 "verification": "directory cache present"})
+                continue
             if not path.is_file():
                 blockers.append(f"TME runtime asset {asset['name']} unreadable or not a file{detail}")
                 continue
@@ -165,8 +176,12 @@ def preflight(checkout: Path, dataset_root: Path, checkpoint_root: Path,
     feature_parameters = next(
         artifact["parameters"] for artifact in contract["generated_artifacts"]
         if artifact["generator"] == "tme_precompute_features")
+    # The scope decides the root: this artifact is `evaluator_cwd`, so it resolves against the
+    # CHECKOUT, not the dataset root. Passing the dataset root here is what made the shared preflight
+    # and this check disagree about which path they were talking about.
     feature_root = preparation_paths(
-        contract, source_root_for(checkout), "generated_artifacts")[0]
+        contract, dataset_root, "generated_artifacts",
+        evaluator_root=source_root_for(checkout))[0]
     feature_files = (feature_root / "val_images.pt", feature_root / "val_name_to_idx.json")
     try:
         dtype_bytes = struct.calcsize(
@@ -257,7 +272,8 @@ def _evaluate_categories(checkout: Path, dataset_root: Path, checkpoint_root: Pa
     artifact = next(item for item in contract["generated_artifacts"]
                     if item["generator"] == "tme_precompute_features")
     parameters = artifact["parameters"]
-    feature_root = preparation_paths(contract, source, "generated_artifacts")[0]
+    feature_root = preparation_paths(contract, dataset_root, "generated_artifacts",
+                                     evaluator_root=source)[0]
     feature_path = feature_root / f"{parameters['split']}_images.pt"
     mapping_path = feature_root / f"{parameters['split']}_name_to_idx.json"
     if not feature_path.is_file() or not mapping_path.is_file():

@@ -1261,7 +1261,11 @@ models:
       # From `requirements.txt` in the pinned checkout. `salesforce-lavis` is deliberately ABSENT:
       # this tree vendors its own `src/lavis`, reached through the adapter's declared launcher root,
       # so the PyPI distribution would be a second copy of the same import name.
-      packages: [transformers==4.36.0, timm==0.9.12, omegaconf==2.3.0, iopath==0.1.10, decord==0.6.0, webdataset==0.2.86, opencv-python==4.10.0.84, fairscale==0.4.13, einops==0.7.0, scikit-image==0.24.0, spacy==3.7.6, pycocoevalcap==1.2, pandas==2.2.3, scikit-learn==1.5.2, tqdm==4.67.0, 'numpy<2']
+      packages: [transformers==4.36.0, timm==0.9.12, omegaconf==2.3.0, iopath==0.1.10, decord==0.6.0, webdataset==0.2.86, opencv-python==4.10.0.84, fairscale==0.4.13, einops==0.7.0, scikit-image==0.24.0, spacy==3.7.6, pycocoevalcap==1.2, pandas==2.2.3, scikit-learn==1.5.2, tqdm==4.67.0, 'numpy<2', click]
+      # `click` is not named by the author but IS reached by the reachable import graph: the pinned
+      # LAVIS imports `spacy`, whose CLI module does `from click import NoSuchOption`, so blocking
+      # click makes `import lavis.models` fail. Declared because the pinned code needs it, not because
+      # the requirements file lists it - provisioning proved it by failing without it.
       # `mkl==2023.1.0` was copied from the author's file and then DROPPED here, because it cannot
       # satisfy this model's own verifier: Intel's distribution ships no importable `mkl` module
       # (`import mkl` -> ModuleNotFoundError; the PyPI project publishes no `top_level.txt`), so the
