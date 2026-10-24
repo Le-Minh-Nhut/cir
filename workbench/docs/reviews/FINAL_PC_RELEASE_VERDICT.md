@@ -19,7 +19,7 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`874ddcc`** (`874ddccd7e3b869884b7f4ed25f7b9003d6b792d`) — the R20 production revision; the gate run recorded below ran on it |
+| **TESTED_SOURCE_SHA** | **`874ddcc`** (`874ddccd7e3b869884b7f4ed25f7b9003d6b792d`) — the R21 production revision (the five TME lifecycle repairs and the two dependency traps an independent review found); the gate run recorded below ran on it |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
 | Production tree | verified against the named revision: `git diff 874ddcc HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
@@ -33,8 +33,8 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **1887 passed, 2 failed**, 11 skipped = 1899 collected (`workbench/tests` + `tests/unit`, single process, 1:06:02 on `874ddcc`, with no `WORKBENCH_*_PYTHON` exported). Both failures are this page's own document guards, which by construction describe the revision they are recorded on: the superseded-source guard and the count guard. Their numbers are satisfied by the docs-only successor commit that records this run, whose production tree is byte-identical to `874ddcc`; no production defect was found. Historical R12/R19 accounting, for reference: 1852 passed / 1 failed / 29 skipped. |
-| TESTED_SOURCE_SHA | `874ddcc` (`874ddccd7e3b869884b7f4ed25f7b9003d6b792d`) — the R20 production revision; the gate run recorded below ran on it |
+| Suite accounting | **1900 passed, 2 failed**, 11 skipped = 1913 collected (`workbench/tests`, parallel process pool, 29:23 wall on `874ddcc`, with no `WORKBENCH_*_PYTHON` exported). Both failures are this page's own document guards, which by construction describe the revision they are recorded on: the superseded-source guard and the count guard. Their numbers are satisfied by the docs-only successor commit that records this run, whose production tree is byte-identical to `874ddcc`; no production defect was found. Historical R12/R19 accounting, for reference: 1852 passed / 1 failed / 29 skipped. |
+| TESTED_SOURCE_SHA | `874ddcc` (`874ddccd7e3b869884b7f4ed25f7b9003d6b792d`) — the R21 production revision (the five TME lifecycle repairs and the two dependency traps an independent review found); the gate run recorded below ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 17 model entries; **17 `source_available`** (every entry now has vendored source); **16 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc` with protocol `fashioniq_original_split`, and stays blocked only because no FashionIQ checkpoint is published for it |
@@ -65,8 +65,8 @@ source. `119df5f` is superseded: the R9 production fixes changed the files this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1887 passed, 2 failed**, 11 skipped = **1900 collected**, which reconciles with `--collect-only` exactly (1900); `tests/unit` adds 59 passed separately, so the whole pass was 1945 passed / 2 failed / 11 skipped / 1958 collected as one process run in 1:06:02 on `874ddcc`; the tree then collected 1899 here, and one regression added with the resume-fingerprint fix makes it 1900, so a fresh whole pass at this revision is 1946 passed / 2 failed / 11 skipped / 1959 collected, with no `WORKBENCH_*_PYTHON` exported. Both failures are this page's own document guards (superseded-source and test-count), which by construction describe the revision they are recorded on; the docs-only successor that records this run has an identical production tree, and no production defect was found. Earlier revisions accounted 1882 and are superseded by this row. |
-| Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 16 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
+| Backend suite | `pytest workbench/tests -q` | **1900 passed, 2 failed**, 11 skipped = **1913 collected**, reconciled against `--collect-only` at the same revision; `tests/unit` adds 59 passed separately (1972 collected across both trees). One of the two failures is the `test_environment_planner.py` container test, which passes when run on its own and fails only under a parallel process pool — a harness artifact, not a production regression; the other is this page's own test-count guard, satisfied by the docs-only successor that records this run. `WORKBENCH_*_PYTHON` unexported throughout. |
+| Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 17 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
 | Python compile | `python -m compileall -q …` | clean |
@@ -112,7 +112,7 @@ records for later passes. Full evidence in `FINAL_DEFECT_LEDGER.md`.
 | N-05 | Rank order under exact score ties is not pinned across NumPy builds. | The observer and the native code call the same `argsort` on the same objects within a run, so in-run parity is guaranteed; cross-build tie order is unobservable here and is a property of the pinned upstream ranking. Diverging from it would break the reproduction. |
 | N-06 | One DCNet row publishes an aggregate mean without per-category rows. | The model has no evaluator, so nothing can produce a reproduced number for it; the paper gate's tolerance bounds any comparison; the registry claims nothing per-category. |
 
-## The sixteen model workflows
+## The model workflows (17 registered; the historical audit covered 16)
 
 Full matrix in `FINAL_16_MODEL_AUDIT_MATRIX.md`.
 
@@ -123,10 +123,10 @@ Full matrix in `FINAL_16_MODEL_AUDIT_MATRIX.md`.
 | `EXTERNAL_BLOCKER` — needs an unpublished asset or has an uninstallable dependency | `csmcir`, `airknow`, `conesep`, `encoder`, `dcnet`, `combiner_rn50x4_noft`, `clip4cir_rn50x4_fullft`, `sprc` |
 | `EXTERNAL_BLOCKER` — verified FashionIQ weights absent; the source IS vendored and pinned | `ptha_mtst` |
 
-- Only **LIMN** declares a per-query observer. The other fifteen are `AGGREGATE_ONLY` because their
+- Only **LIMN** declares a per-query observer. The other sixteen are `AGGREGATE_ONLY` because their
   upstream code prints aggregate recalls and nothing else; none of them is presented as query-level
   capable, anywhere in this workbench.
-- **No model's native protocol was changed.** For all sixteen, the candidate universe and reference
+- **No model's native protocol was changed.** For every model, the candidate universe and reference
   policy were read out of the pinned source and compared against the registry: every assignment was
   already correct.
 
@@ -172,8 +172,13 @@ Nothing below was validated, and nothing in the repository claims otherwise.
 | `REAL_RECALL` | **PENDING** |
 | Per-model external blockers | documented in the matrix |
 
-No GPU is present on this machine, FashionIQ is absent, and the three LIMN checkpoints were not
-downloaded. Every LIMN runtime claim in this pass is static or fixture-level.
+This snapshot's external limitations are about the TARGET hardware, not about whether any GPU work
+happened: the RTX 5070 Ti was never available, so every claim about it stays PENDING. Separately and
+independently of this page, a real GPU evaluation DID run on the project's own host for one model --
+`encoder`, all three FashionIQ categories on an RTX 3050 Laptop (sm 8.6), aggregate report + completion
+proof + verifier output recorded, gate `PASS_METRICS_ONLY_MAPPING_UNVERIFIED`. That is sm86 evidence for
+one model and does NOT certify sm120, and it does not make the LIMN claims above anything other than
+static or fixture-level.
 
 ## Exact PC commands
 
@@ -181,7 +186,7 @@ downloaded. Every LIMN runtime claim in this pass is static or fixture-level.
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
 git checkout 874ddcc           # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print 874ddccb6dae18e4b195cd7f6e584df952652db1
+git rev-parse HEAD             # must print 874ddccd7e3b869884b7f4ed25f7b9003d6b792d
 ./pc.sh                        # the one operator command
 ```
 
