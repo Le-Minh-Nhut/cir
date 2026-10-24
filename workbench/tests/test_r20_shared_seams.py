@@ -339,6 +339,36 @@ def test_declared_tme_runtime_artifacts_keep_the_checkout_pinned(tmp_path) -> No
     assert source_provenance(model, checkout)["verified"] is False
 
 
+def test_vendored_checkout_is_verified_evidence_for_resume(monkeypatch) -> None:
+    """A vendored checkout must not make a stage's fingerprint weak.
+
+    The vendored layout deliberately has no nested `.git` (the pinned tree is committed in this
+    repository). Probing `.git` and treating its absence as an I/O failure marked EVERY vendored
+    model's fingerprint weak, so `--run.sh autopilot --resume` refused every completed stage that
+    depends on source. The check is now the provenance authority's own answer, so it cannot drift
+    from it: a clean pin is content-verified evidence, and a dirty one is not.
+    """
+    from workbench.backend.registry import model_by_id
+    from workbench.backend.vendored_source import source_provenance
+    from workbench.tests.test_doctor_vendored_source_and_selection import config as fixture_config
+
+    config = resolve_config()
+    model = model_by_id("encoder")
+    checkout = config.WORKBENCH_THIRD_PARTY_ROOT / model["source_dir"]
+    assert not (checkout / ".git").exists(), "this regression is about the VENDORED layout"
+    provenance = source_provenance(model, checkout)
+    assert provenance["verified"] is True and provenance["dirty"] is False, provenance.get("error")
+
+    args = _autopilot_args(["encoder"], {"encoder": ["fashioniq"]}, config, model="encoder",
+                           selected_model_ids=["encoder"], allow_preparation=True)
+    stages = pipeline.all_stages(args, config)
+    evaluation = _stage(stages, "evaluation", "encoder")
+    info = pipeline.stage_input_fingerprint_info(evaluation, config)
+    assert info["source_provenance"]["category"] == "CONTENT_VERIFIED", info["source_provenance"]
+    assert info["weak"] is False, [
+        item for item in info["inputs"] if not pipeline._is_verified_entry(item["category"])]
+
+
 def test_every_registry_model_keeps_a_consistent_declared_command() -> None:
     """The 17 registered entries are planned through the same seam this task changed."""
     registry = load_registry()

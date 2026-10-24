@@ -477,28 +477,29 @@ def _stage_input_fingerprint_evidence(stage: Stage, config: WorkbenchConfig | No
                     if not stat.S_ISDIR(source_stat.st_mode):
                         source_info["category"] = "UNREADABLE"
                     else:
+                        # ONE call, and only the category depends on whether the checkout has
+                        # nested Git metadata. The vendored layout deliberately has NO `.git` (the
+                        # pinned tree is committed in this repository), so an absent `.git` is the
+                        # normal case and is answered by the vendored-provenance authority -- exactly
+                        # as `source_provenance` itself decides. Probing `(source_dir / ".git").stat()`
+                        # and treating its FileNotFoundError as an I/O failure was a real defect:
+                        # EVERY vendored model's fingerprint was marked weak, so `--resume` refused
+                        # every completed stage that depends on source.
                         try:
-                            (source_dir / ".git").stat()
-                        except OSError as error:
-                            source_info.update(category="UNREADABLE", error=f"{type(error).__name__}: {error}")
-                        else:
-                            try:
-                                provenance = source_provenance(model, source_dir)
-                            except Exception as error:
-                                source_info.update(category=UNREADABLE,
+                            provenance = source_provenance(model, source_dir)
+                        except Exception as error:
+                            source_info.update(category=UNREADABLE,
                                                error=f"{type(error).__name__}: {error}")
+                        else:
+                            source_info["actual_commit"] = provenance.get("actual_commit")
+                            source_info["dirty"] = provenance.get("dirty")
+                            source_info["provenance_digest"] = provenance.get("provenance_digest")
+                            if provenance.get("actual_commit") and provenance.get("dirty") is False:
+                                source_info["category"] = "CONTENT_VERIFIED"
+                            elif provenance.get("error"):
+                                source_info.update(category="UNREADABLE", error=provenance["error"])
                             else:
-                                source_info.update(
-                                    category=("CONTENT_VERIFIED"
-                                              if provenance.get("actual_commit") and provenance.get("dirty") is False
-                                              else "UNREADABLE" if provenance.get("error")
-                                              else "UNVERIFIED"),
-                                    actual_commit=provenance.get("actual_commit"),
-                                    dirty=provenance.get("dirty"),
-                                    provenance_digest=provenance.get("provenance_digest"),
-                                )
-                                if provenance.get("error"):
-                                    source_info["error"] = provenance["error"]
+                                source_info["category"] = "UNVERIFIED"
                 hasher.update(f"SOURCE:{source_info['category']}:{source_info.get('provenance_digest')}"
                               .encode("utf-8"))
                 if source_info.get("error"):
