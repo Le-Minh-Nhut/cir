@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | RAM | 16 GB total, 16 GB swap; the encoder replay's documented peak for ONE three-category construction is 11.87 GB (`evaluate_models.py:715-716`) |
-| Aggregate evaluation | **completes and verifies** on this host: encoder, all three categories, `verify_run.py` `verified=true / is_research_evidence=true` |
+| Aggregate evaluation | **completes and verifies** on this host: encoder, all three categories, `verify_run.py` `verified=true / is_research_evidence=true`. ATTRIBUTION: the run was executed at 14:16 against `0fc3563` + the then-uncommitted R20 working tree; the later `30c68ed` changed only stage-fingerprint classification (`pipeline.py`), never the replay/evaluation path that produced these metrics, so the result stands for the tested production tree as well — but the revision that ran it is `0fc3563` + the R20 tree, and that is what is recorded here |
 | Per-query observer | **host-limited**: the observer child is killed with `-9` under the same ceiling when it is scheduled alongside the aggregate. The aggregate report for that invocation is complete and the failure is recorded as `INVOCATION_FAILED` (`return_code -9`) rather than as a pass |
 | Disk | ~17 GB free at the time of that run; the ~11.9 GB replay cache fits, and `evaluate_models.py` removes it after the children finish |
 
