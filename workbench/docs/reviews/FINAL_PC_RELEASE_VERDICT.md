@@ -1,5 +1,18 @@
 # FINAL PC RELEASE VERDICT
 
+## Observed host capacity (2026-10-24, R20)
+
+| | |
+|---|---|
+| RAM | 16 GB total, 16 GB swap; the encoder replay's documented peak for ONE three-category construction is 11.87 GB (`evaluate_models.py:715-716`) |
+| Aggregate evaluation | **completes and verifies** on this host: encoder, all three categories, `verify_run.py` `verified=true / is_research_evidence=true` |
+| Per-query observer | **host-limited**: the observer child is killed with `-9` under the same ceiling when it is scheduled alongside the aggregate. The aggregate report for that invocation is complete and the failure is recorded as `INVOCATION_FAILED` (`return_code -9`) rather than as a pass |
+| Disk | ~17 GB free at the time of that run; the ~11.9 GB replay cache fits, and `evaluate_models.py` removes it after the children finish |
+
+This is a capacity observation about the machine, not a model or software defect: the same software
+produced a verified aggregate result on the same host. A 32 GB host (or a serialized observer after
+the aggregate) is the concrete unblock.
+
 ## Git state
 
 | | |
