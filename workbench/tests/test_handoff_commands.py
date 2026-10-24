@@ -213,7 +213,10 @@ def test_every_documented_command_parses_and_pipeline_has_required_authorization
     registry = load_registry()
     model_ids = {model["model_id"] for model in registry["models"]}
     checked = 0
-    non_cli = {"export", "tail", "cat"}
+    # Operator provisioning lines: filesystem and environment operations with no workbench parser.
+    # `cp`/`mkdir`/`$EDITOR` belong here for the same reason `cd`/`ls`/`git` do -- the guard exists
+    # to prove a documented WORKBENCH CLI parses, and a copy step is not one.
+    non_cli = {"export", "tail", "cat", "cp", "mkdir", "cd", "ls", "sudo", "git", "$EDITOR", "echo"}
 
     for document in DOCS:
         for line, command in _commands(document):

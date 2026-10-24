@@ -51,6 +51,18 @@ def test_digestless_auxiliary_asset_admission_and_verify(tmp_path: Path, capsys)
     wrong_size = validate_auxiliary_asset({**declaration, "expected_size_bytes": 5}, path)
     assert wrong_size.ok is False
 
+    # A file that is EXACTLY the declared length but holds no payload: a sparse or zero-filled
+    # allocation is structurally a container of zeros, and since a digest-less asset has no
+    # published value to compare against, the bytes themselves are the only evidence available.
+    # Without this check the size test above is satisfied by `truncate()`, and a placeholder would
+    # be admitted as a weight and handed to a model loader.
+    placeholder = tmp_path / "placeholder.pth"
+    placeholder.write_bytes(b"\0" * 4)
+    suspect = validate_auxiliary_asset(declaration, placeholder)
+    assert suspect.ok is False, "a uniform placeholder of the declared size is not an asset"
+    assert suspect.status == "SUSPECT_PAYLOAD"
+    assert any("SUSPECT_PAYLOAD" in issue for issue in suspect.issues)
+
     malformed = tmp_path / "captions.json"
     malformed.write_text("{broken", encoding="utf-8")
     bad_json = validate_auxiliary_asset(

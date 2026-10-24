@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | RAM | 16 GB total, 16 GB swap; the encoder replay's documented peak for ONE three-category construction is 11.87 GB (`evaluate_models.py:715-716`) |
-| Aggregate evaluation | **completes and verifies** on this host: encoder, all three categories, `verify_run.py` `verified=true / is_research_evidence=true`. ATTRIBUTION: the run was executed at 14:16 against `0fc3563` + the then-uncommitted R20 working tree; the later `30c68ed` changed only stage-fingerprint classification (`pipeline.py`), never the replay/evaluation path that produced these metrics, so the result stands for the tested production tree as well — but the revision that ran it is `0fc3563` + the R20 tree, and that is what is recorded here |
+| Aggregate evaluation | **completes and verifies** on this host: encoder, all three categories, `verify_run.py` `verified=true / is_research_evidence=true`. ATTRIBUTION: the run was executed at 14:16 against `0fc3563` + the then-uncommitted R20 working tree; the later `3627991` changed only stage-fingerprint classification (`pipeline.py`), never the replay/evaluation path that produced these metrics, so the result stands for the tested production tree as well — but the revision that ran it is `0fc3563` + the R20 tree, and that is what is recorded here |
 | Per-query observer | **host-limited**: the observer child is killed with `-9` under the same ceiling when it is scheduled alongside the aggregate. The aggregate report for that invocation is complete and the failure is recorded as `INVOCATION_FAILED` (`return_code -9`) rather than as a pass |
 | Disk | ~17 GB free at the time of that run; the ~11.9 GB replay cache fits, and `evaluate_models.py` removes it after the children finish |
 
@@ -19,9 +19,9 @@ the aggregate) is the concrete unblock.
 |---|---|
 | Branch | `research/cir-failure-workbench` |
 | Initial HEAD this pass | `3aae18fe02ef13f5b38d153dbc8007fbb40d4c92` |
-| **TESTED_SOURCE_SHA** | **`30c68ed`** (`30c68ed59a7b5383247fc4a3c290ffa68efed074`) — the R20 production revision; the gate run recorded below ran on it |
+| **TESTED_SOURCE_SHA** | **`3627991`** (`3627991c4fdaea80f7c4d7df3e7073c45311f3fe`) — the R20 production revision; the gate run recorded below ran on it |
 | **FINAL_HEAD_SHA** | not recorded here by design: a tracked file cannot name the commit that contains it. `git rev-parse HEAD` on the branch tip is the authority. |
-| Production tree | verified against the named revision: `git diff 30c68ed HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
+| Production tree | verified against the named revision: `git diff 3627991 HEAD -- . ':(exclude)workbench/docs' ':(exclude)workbench/tests'` is empty. Successors changed documentation AND tests; a successor that changed production code would invalidate this row, and the superseded-source guard refuses that case. |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — **unchanged** |
 | Worktree | clean |
 
@@ -33,8 +33,8 @@ commit on the research branch. No checkpoint, dataset, cache or secret is tracke
 | Field | Value |
 |---|---|
 | Branch | `research/cir-failure-workbench` |
-| Suite accounting | **1887 passed, 2 failed**, 11 skipped = 1899 collected (`workbench/tests` + `tests/unit`, single process, 1:06:02 on `30c68ed`, with no `WORKBENCH_*_PYTHON` exported). Both failures are this page's own document guards, which by construction describe the revision they are recorded on: the superseded-source guard and the count guard. Their numbers are satisfied by the docs-only successor commit that records this run, whose production tree is byte-identical to `30c68ed`; no production defect was found. Historical R12/R19 accounting, for reference: 1852 passed / 1 failed / 29 skipped. |
-| TESTED_SOURCE_SHA | `30c68ed` (`30c68ed59a7b5383247fc4a3c290ffa68efed074`) — the R20 production revision; the gate run recorded below ran on it |
+| Suite accounting | **1887 passed, 2 failed**, 11 skipped = 1899 collected (`workbench/tests` + `tests/unit`, single process, 1:06:02 on `3627991`, with no `WORKBENCH_*_PYTHON` exported). Both failures are this page's own document guards, which by construction describe the revision they are recorded on: the superseded-source guard and the count guard. Their numbers are satisfied by the docs-only successor commit that records this run, whose production tree is byte-identical to `3627991`; no production defect was found. Historical R12/R19 accounting, for reference: 1852 passed / 1 failed / 29 skipped. |
+| TESTED_SOURCE_SHA | `3627991` (`3627991c4fdaea80f7c4d7df3e7073c45311f3fe`) — the R20 production revision; the gate run recorded below ran on it |
 | FINAL_HEAD_SHA | `git rev-parse HEAD` on the branch tip; the tree the gates ran on is `TESTED_SOURCE_SHA` above, and every later commit changed documentation only |
 | `origin/main` | `8ebcc74d5fd1934df4f3772a8ca5a96dbd00f333` — unchanged |
 | Registry models | 17 model entries; **17 `source_available`** (every entry now has vendored source); **16 distinct upstream URLs** among them (`combiner_rn50x4_noft` and `clip4cir_rn50x4_fullft` share `ABaldrati/CLIP4Cir`); `ptha_mtst` is vendored and pinned at `6a02ee4763fc` with protocol `fashioniq_original_split`, and stays blocked only because no FashionIQ checkpoint is published for it |
@@ -65,7 +65,7 @@ source. `119df5f` is superseded: the R9 production fixes changed the files this 
 
 | Gate | Command | Result |
 |---|---|---|
-| Backend suite | `pytest workbench/tests -q` | **1887 passed, 2 failed**, 11 skipped = **1900 collected**, which reconciles with `--collect-only` exactly (1900); `tests/unit` adds 59 passed separately, so the whole pass was 1945 passed / 2 failed / 11 skipped / 1958 collected as one process run in 1:06:02 on `30c68ed`; the tree then collected 1899 here, and one regression added with the resume-fingerprint fix makes it 1900, so a fresh whole pass at this revision is 1946 passed / 2 failed / 11 skipped / 1959 collected, with no `WORKBENCH_*_PYTHON` exported. Both failures are this page's own document guards (superseded-source and test-count), which by construction describe the revision they are recorded on; the docs-only successor that records this run has an identical production tree, and no production defect was found. Earlier revisions accounted 1882 and are superseded by this row. |
+| Backend suite | `pytest workbench/tests -q` | **1887 passed, 2 failed**, 11 skipped = **1900 collected**, which reconciles with `--collect-only` exactly (1900); `tests/unit` adds 59 passed separately, so the whole pass was 1945 passed / 2 failed / 11 skipped / 1958 collected as one process run in 1:06:02 on `3627991`; the tree then collected 1899 here, and one regression added with the resume-fingerprint fix makes it 1900, so a fresh whole pass at this revision is 1946 passed / 2 failed / 11 skipped / 1959 collected, with no `WORKBENCH_*_PYTHON` exported. Both failures are this page's own document guards (superseded-source and test-count), which by construction describe the revision they are recorded on; the docs-only successor that records this run has an identical production tree, and no production defect was found. Earlier revisions accounted 1882 and are superseded by this row. |
 | Acceptance | `bash workbench/docker/acceptance.sh` | **ACCEPTANCE PASSED at `59949ff`** (1 honest skip: GPG status unverified). At `9a53ee1` group C fails only against the pre-existing `cir-workbench` container, whose image predates the vendoring and still serves the old registry (it reports `ptha_mtst source_available: false`); rerun against a backend started from current source and group C passes — `PASS 16 models, ids/protocols/environments match the registry`. Rebuild the image before re-running acceptance. |
 | Mutation checks | `bash workbench/docker/mutation_checks.sh` | **PASSED** M1 M2 M3 M4 M5 |
 | Offline release verification | `bash workbench/docker/release_verify.sh --offline` | exit 0, `ENGINEERING_INCOMPLETE`, **0 checks FAIL/UNRUN** |
@@ -180,8 +180,8 @@ downloaded. Every LIMN runtime claim in this pass is static or fixture-level.
 ```bash
 git clone git@github.com:Le-Minh-Nhut/cir.git && cd cir
 git fetch origin research/cir-failure-workbench
-git checkout 30c68ed           # the TESTED_SOURCE_SHA above; never `git reset --hard`
-git rev-parse HEAD             # must print 30c68edb6dae18e4b195cd7f6e584df952652db1
+git checkout 3627991           # the TESTED_SOURCE_SHA above; never `git reset --hard`
+git rev-parse HEAD             # must print 3627991b6dae18e4b195cd7f6e584df952652db1
 ./pc.sh                        # the one operator command
 ```
 

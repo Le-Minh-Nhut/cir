@@ -340,10 +340,17 @@ contracts:
 - preparation_id: tme_fashioniq
   source_family: TME (CVPR25) FashionIQ validation
   raw_inputs:
-  - name: FashionIQ validation captions and split files
+  - name: FashionIQ validation captions, splits, and canonical images
     kind: raw_benchmark
     scope: fashioniq_root
     paths:
+    # `images` is declared because generation CONSUMES it. TME's own preprocess
+    # (`targetpad_transform(target_ratio=1.25, dim=224)`, `src/precompute.py:23`) expects the
+    # canonical dataset images, and the wrapper binds them into the flat `images/<id>.jpg` view the
+    # native loader opens. The earlier declaration omitted `images` while the wrapper actually
+    # consumed a DIFFERENT family's generated `resized_image/` tree -- an undeclared dependency on
+    # another model's artifact, which also meant a TME-only selection could not run at all.
+    - images
     - captions/cap.dress.val.json
     - captions/cap.shirt.val.json
     - captions/cap.toptee.val.json
